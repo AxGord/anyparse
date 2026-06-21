@@ -5297,94 +5297,12 @@ expectLit(ctx, $v{trailText}));
 		// loop).
 		final sepStartsElement: Bool = branch.annotations.get('lit.sepStartsElement') == true;
 		return sepStartsElement
-			? macro {
-				skipWs(ctx);
-				expectLit(ctx, $v{leadText});
-				final _items: Array<$elemCT> = [];
-				skipWs(ctx);
-				if ($closeNotNextExpr) {
-					var _prevEndPos: Int = ctx.pos;
-					_items.push($elemCall);
-					_prevEndPos = ctx.pos;
-					skipWs(ctx);
-					while ($closeNotNextExpr) {
-						final _isBE: Bool = _prevEndPos > 0 && {
-							var _pebRew: Int = _prevEndPos - 1;
-							while (_pebRew > 0) {
-								final _bc: Int = ctx.input.charCodeAt(_pebRew);
-								if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-									_pebRew--;
-								else
-									break;
-							}
-							final _b: Int = ctx.input.charCodeAt(_pebRew);
-							_b == ';'.code || $predicateCall;
-						};
-						if (_isBE) {
-							// block-ended: sep byte at pos belongs to next element
-							_items.push($elemCall);
-							_prevEndPos = ctx.pos;
-							skipWs(ctx);
-						} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-							ctx.pos++;
-							skipWs(ctx);
-							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-							_items.push($elemCall);
-							_prevEndPos = ctx.pos;
-							skipWs(ctx);
-						} else {
-							expectLit(ctx, $v{sepText});
-						}
-					}
-				}
-				skipWs(ctx);
-				expectLit(ctx, $v{trailText});
-				return $ctorCall;
-			}
-			: macro {
-				skipWs(ctx);
-				expectLit(ctx, $v{leadText});
-				final _items: Array<$elemCT> = [];
-				skipWs(ctx);
-				if ($closeNotNextExpr) {
-					var _prevEndPos: Int = ctx.pos;
-					_items.push($elemCall);
-					_prevEndPos = ctx.pos;
-					skipWs(ctx);
-					while ($closeNotNextExpr) {
-						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-							ctx.pos++;
-							skipWs(ctx);
-							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-							_items.push($elemCall);
-							_prevEndPos = ctx.pos;
-							skipWs(ctx);
-						} else if (
-							_prevEndPos > 0 && {
-								var _pebRew: Int = _prevEndPos - 1;
-								while (_pebRew > 0) {
-									final _bc: Int = ctx.input.charCodeAt(_pebRew);
-									if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-										_pebRew--;
-									else
-										break;
-								}
-								final _b: Int = ctx.input.charCodeAt(_pebRew);
-								_b == ';'.code || $predicateCall;
-							}
-						) {
-							_items.push($elemCall);
-							_prevEndPos = ctx.pos;
-							skipWs(ctx);
-						} else {
-							expectLit(ctx, $v{sepText});
-						}
-					}
-				}
-				skipWs(ctx);
-				expectLit(ctx, $v{trailText});
-				return $ctorCall;
-			};
+			? lowerStarBlockEndedSepStarts(
+				leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText, predicateCall
+			)
+			: lowerStarBlockEndedSepLast(
+				leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText, predicateCall
+			);
 	}
 
 	/**
@@ -5543,6 +5461,118 @@ expectLit(ctx, $v{trailText}));
 			expectLit(ctx, $v{trailText});
 			final _closeTrail: Null<String> = collectTrailingFull(ctx);
 			return $ctorCallTrivia;
+		};
+	}
+
+	/**
+	 * Case 4 block-ended Star with `sepStartsElement` — the sep byte at pos
+	 * belongs to the NEXT element when the prior element is block-ended.
+	 * Extracted from `lowerStarBlockEndedBranch` so it stays under the
+	 * complexity gate.
+	 */
+	private function lowerStarBlockEndedSepStarts(
+		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
+		sepText: String, predicateCall: Expr
+	): Expr {
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{leadText});
+			final _items: Array<$elemCT> = [];
+			skipWs(ctx);
+			if ($closeNotNextExpr) {
+				var _prevEndPos: Int = ctx.pos;
+				_items.push($elemCall);
+				_prevEndPos = ctx.pos;
+				skipWs(ctx);
+				while ($closeNotNextExpr) {
+					final _isBE: Bool = _prevEndPos > 0 && {
+						var _pebRew: Int = _prevEndPos - 1;
+						while (_pebRew > 0) {
+							final _bc: Int = ctx.input.charCodeAt(_pebRew);
+							if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+								_pebRew--;
+							else
+								break;
+						}
+						final _b: Int = ctx.input.charCodeAt(_pebRew);
+						_b == ';'.code || $predicateCall;
+					};
+					if (_isBE) {
+						// block-ended: sep byte at pos belongs to next element
+						_items.push($elemCall);
+						_prevEndPos = ctx.pos;
+						skipWs(ctx);
+					} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						_items.push($elemCall);
+						_prevEndPos = ctx.pos;
+						skipWs(ctx);
+					} else {
+						expectLit(ctx, $v{sepText});
+					}
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{trailText});
+			return $ctorCall;
+		};
+	}
+
+	/**
+	 * Case 4 block-ended Star, sep-first policy — sep is consumed between
+	 * elements; block-ended exemption tolerates an omitted sep when the
+	 * prior element ended with `;`/`}` or the predicate matches. Extracted
+	 * from `lowerStarBlockEndedBranch` so it stays under the complexity gate.
+	 */
+	private function lowerStarBlockEndedSepLast(
+		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
+		sepText: String, predicateCall: Expr
+	): Expr {
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{leadText});
+			final _items: Array<$elemCT> = [];
+			skipWs(ctx);
+			if ($closeNotNextExpr) {
+				var _prevEndPos: Int = ctx.pos;
+				_items.push($elemCall);
+				_prevEndPos = ctx.pos;
+				skipWs(ctx);
+				while ($closeNotNextExpr) {
+					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						_items.push($elemCall);
+						_prevEndPos = ctx.pos;
+						skipWs(ctx);
+					} else if (
+						_prevEndPos > 0 && {
+							var _pebRew: Int = _prevEndPos - 1;
+							while (_pebRew > 0) {
+								final _bc: Int = ctx.input.charCodeAt(_pebRew);
+								if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+									_pebRew--;
+								else
+									break;
+							}
+							final _b: Int = ctx.input.charCodeAt(_pebRew);
+							_b == ';'.code || $predicateCall;
+						}
+					) {
+						_items.push($elemCall);
+						_prevEndPos = ctx.pos;
+						skipWs(ctx);
+					} else {
+						expectLit(ctx, $v{sepText});
+					}
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{trailText});
+			return $ctorCall;
 		};
 	}
 
