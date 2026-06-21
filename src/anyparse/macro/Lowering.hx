@@ -444,128 +444,8 @@ class Lowering {
 		var opChain: Expr = macro _matched = false;
 		for (i in 0...operatorBranches.length) {
 			final branch: ShapeNode = operatorBranches[operatorBranches.length - 1 - i];
-			final ctor: String = branch.annotations.get('base.ctor');
-			final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
-			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
-			final isTernary: Bool = branch.annotations.get('ternary.op') != null;
 			final opText: String = getOperatorText(branch);
-			final precValue: Int = isTernary ? (branch.annotations.get('ternary.prec'): Int) : (branch.annotations.get('pratt.prec'): Int);
-			final branchBody: Expr = if (isTernary) {
-				// Ternary branch: three operands (cond, middle, right).
-				// Both middle and right parse at minPrec=0 (full expression).
-				final sepText: String = branch.annotations.get('ternary.sep');
-				final fullExprCall: Expr = {
-					expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
-					pos: Context.currentPos(),
-				};
-				final ctorCall: Expr = {
-					expr: ECall(ctorRef, [macro left, macro _middle, macro _right]),
-					pos: Context.currentPos(),
-				};
-				macro {
-					if ($v{precValue} < minPrec) {
-						ctx.pos = _savedPos;
-						_matched = false;
-					} else {
-						$skipCall;
-						final _middle: $returnCT = $fullExprCall;
-						$skipCall;
-						expectLit(ctx, $v{sepText});
-						$skipCall;
-						final _right: $returnCT = $fullExprCall;
-						left = $ctorCall;
-					}
-				};
-			} else {
-				// Binary infix branch: two operands (left, right). The right
-				// operand normally recurses into the same Pratt loop at an
-				// elevated minPrec to enforce associativity. When the right
-				// child references a different enum than the loop's own
-				// (asymmetric infix, e.g. `x is Type` where left:HxExpr but
-				// right:HxType), recursing into the same loop is wrong — call
-				// the other type's parse function once at its default starting
-				// precedence and let outer Pratt iteration handle chaining.
-				final assocValue: String = branch.annotations.get('pratt.assoc');
-				final nextMinPrec: Int = assocValue == 'Right' ? precValue : precValue + 1;
-				final rightChildren: Array<ShapeNode> = branch.children;
-				final rightChild: ShapeNode = rightChildren[1];
-				final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
-				final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simple;
-				final rightCT: ComplexType = isAsymmetric ? ruleReturnCT(rightRef) : returnCT;
-				final rightCall: Expr = if (isAsymmetric)
-					{ expr: ECall(macro $i{parseFnName(rightRef)}, [macro ctx]), pos: Context.currentPos(), }
-				else
-					{ expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]), pos: Context.currentPos(), };
-				// ω-keep-chain (increment 2): in Trivia mode, infix ctors carrying
-				// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
-				// grow a 3rd positional `chainNewline:Bool` synth arg holding
-				// whether the source had a newline anywhere in the gap before
-				// this ctor's RIGHT operand. Two sources:
-				//  (1) `hasNewlineIn(ctx.input, _preWsPos, ctx.pos)` — the gap
-				//      [before-op .. after-op-WS] scan. Correct whenever the gap
-				//      newline is NOT pre-consumed by a higher-prec left-operand
-				//      recursion (covers `a +\n b` and any chain whose left
-				//      operand is an atom).
-				//  (2) `ctx.pendingTrivia.newlineBefore` (boolean OR, `&&`/`||`
-				//      ONLY) — when the left operand is itself an infix sub-expr
-				//      (`X == Y && …`), its right-operand recursion's no-match
-				//      already CONSUMED the `\n` before this operator and stashed
-				//      the signal into pendingTrivia (the ω-untyped-keep stash),
-				//      so the span scan misses it. Scoped to the boolean
-				//      operators because their operands are routinely
-				//      higher-precedence comparisons that pre-consume the gap;
-				//      `+`/`-` keep relies on the span scan alone to avoid the
-				//      head-leading-newline pollution that the stash carries when
-				//      an additive chain is the head of a freshly-opened paren
-				//      (`!(\n a.y + b.h …`). The flag is cleared after the read so
-				//      it does not leak to the next operand. O(1), no recursive
-				//      probe. Plain mode keeps the 2-arg ctor (synth widens only
-				//      in Trivia).
-				final captureChainNl: Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
-				final isBoolChainOp: Bool = opText == '&&' || opText == '||';
-				final ctorCall: Expr = {
-					expr: ECall(
-						ctorRef,
-						captureChainNl
-							? [
-								macro left,
-								macro _right,
-								macro _chainNl
-							]
-							: [
-								macro left,
-								macro _right
-							]
-					),
-					pos: Context.currentPos(),
-				};
-				// `_chainNl` is declared in the commit block; the right-operand
-				// parse + ctor build live in the SAME block so it stays in scope
-				// for `$ctorCall`. Non-capturing branches keep the legacy body.
-				final chainNlValue: Expr = isBoolChainOp
-					? macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || (ctx.pendingTrivia != null && ctx.pendingTrivia.newlineBefore)
-					: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
-				final commitBody: Expr = captureChainNl
-					? macro {
-						$skipCall;
-						final _chainNl: Bool = $chainNlValue;
-						if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false;
-						final _right: $rightCT = $rightCall;
-						left = $ctorCall;
-					}
-					: macro {
-						$skipCall;
-						final _right: $rightCT = $rightCall;
-						left = $ctorCall;
-					};
-				macro {
-					if ($v{precValue} < minPrec) {
-						ctx.pos = _savedPos;
-						_matched = false;
-					} else
-						$commitBody;
-				};
-			};
+			final branchBody: Expr = buildPrattBranchBody(branch, typePath, simple, skipCall);
 			final matchFnName: String = endsWithWordChar(opText) ? 'matchKw' : 'matchLit';
 			final matchCall: Expr = {
 				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{opText}]),
@@ -576,108 +456,7 @@ class Lowering {
 			else
 				$opChain;
 		}
-		// ω-trivia-sep: in Trivia mode, save pos BEFORE the per-iteration
-		// `skipWs`. On no-match, scan the consumed range for comment
-		// markers — if any are present, rewind to preserve the comment
-		// for a sibling's `collectTrailing` capture (otherwise `field: ""
-		// // some comment` loses its trailing comment). Plain whitespace
-		// and `\n` stay consumed so `@:raw` siblings (e.g. `${expr}` in
-		// string interp, where the trailing literal expects `}` directly
-		// without skipWs) keep working: no comment → no rewind.
-		// ω-pratt-comment-stash: outer per-iter skipWs swaps to skipWsAndStash
-		// so comments BEFORE an operator (`a /* c */ + b`) get captured into
-		// `pendingTrivia` when an op matches. On no-match rewind, the
-		// captured comments must also be popped from the stash — otherwise
-		// the caller's collectTrivia sees them AND re-captures from input,
-		// duplicating. `_stashCount0` snapshot lets us truncate.
-		return ctx.trivia
-			? macro {
-				var left: $returnCT = $atomCall;
-				while (true) {
-					final _preWsPos: Int = ctx.pos;
-					final _stashCount0: Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
-					skipWsAndStash(ctx);
-					final _savedPos: Int = ctx.pos;
-					var _matched: Bool = true;
-					$opChain;
-					if (!_matched) {
-						var _scanI: Int = _preWsPos;
-						var _hadComment: Bool = false;
-						var _hadNewline: Bool = false;
-						// ω-keep-pratt-blank: track a blank line (≥2 newlines with
-						// only horizontal whitespace between them) inside the
-						// Pratt-consumed run, mirroring `collectTrivia`'s `_nl >= 2`
-						// semantics so the source-blank signal survives the no-op
-						// tail loop the same way the single-newline signal does.
-						var _nlRun: Int = 0;
-						var _hadBlank: Bool = false;
-						while (_scanI < ctx.pos) {
-							final _ch: Int = ctx.input.charCodeAt(_scanI);
-							if (_ch == '\n'.code) {
-								_hadNewline = true;
-								_nlRun++;
-								if (_nlRun >= 2) _hadBlank = true;
-							} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
-								_nlRun = 0;
-							}
-							if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
-								final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
-								if (_c2 == '/'.code || _c2 == '*'.code) {
-									_hadComment = true;
-									break;
-								}
-							}
-							_scanI++;
-						}
-						if (_hadComment) {
-							ctx.pos = _preWsPos;
-							final _pt = ctx.pendingTrivia;
-							if (_pt != null) {
-								while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
-							}
-						} else if (_hadNewline) {
-							// ω-untyped-keep: when no operator matches AND the consumed
-							// WS contained a newline (no comment, no rewind), stash the
-							// newline signal into `pendingTrivia` so the next sibling's
-							// `collectTrivia` drain captures `newlineBefore=true`. Without
-							// this, Pratt silently consumes the newline and downstream
-							// `bodyBeforeNewline` slots never fire (e.g. function-body
-							// `untyped` after `:Type\n\tuntyped {…}` — the body field's
-							// pre-field collectTrivia sees pos already past the `\n`).
-							// ω-keep-pratt-blank: also carry `blankBefore` when the run
-							// held a blank line, so a `var b = function(){…}\n\nfinal a`
-							// brace-terminated `@:trailOpt(';')`-absent decl preserves
-							// its source blank line (issue_644). Without this the bit was
-							// hardcoded `false` and the blank collapsed to a single `\n`.
-							final _pt = ctx.pendingTrivia;
-							if (_pt == null) {
-								ctx.pendingTrivia = {
-									blankBefore: _hadBlank,
-									blankAfterLeadingComments: false,
-									newlineBefore: true,
-									leadingComments: [],
-								};
-							} else {
-								_pt.newlineBefore = true;
-								if (_hadBlank) _pt.blankBefore = true;
-							}
-						}
-						break;
-					}
-				}
-				return left;
-			}
-			: macro {
-				var left: $returnCT = $atomCall;
-				while (true) {
-					skipWs(ctx);
-					final _savedPos: Int = ctx.pos;
-					var _matched: Bool = true;
-					$opChain;
-					if (!_matched) break;
-				}
-				return left;
-			};
+		return buildPrattLoopExpr(returnCT, atomCall, opChain);
 	}
 
 	private function tryBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
@@ -5294,6 +5073,243 @@ expectLit(ctx, $v{trailText}));
 			case _:
 				Context.fatalError('Lowering: no decoder for underlying type "$underlying"', Context.currentPos());
 				throw 'unreachable';
+		};
+	}
+
+	private function buildPrattBranchBody(branch: ShapeNode, typePath: String, simple: String, skipCall: Expr): Expr {
+		final returnCT: ComplexType = ruleReturnCT(typePath);
+		final loopFnName: String = parseFnName(typePath);
+		final ctor: String = branch.annotations.get('base.ctor');
+		final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
+		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
+		final isTernary: Bool = branch.annotations.get('ternary.op') != null;
+		final opText: String = getOperatorText(branch);
+		final precValue: Int = isTernary ? (branch.annotations.get('ternary.prec'): Int) : (branch.annotations.get('pratt.prec'): Int);
+		return if (isTernary) {
+			// Ternary branch: three operands (cond, middle, right).
+			// Both middle and right parse at minPrec=0 (full expression).
+			final sepText: String = branch.annotations.get('ternary.sep');
+			final fullExprCall: Expr = {
+				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
+				pos: Context.currentPos(),
+			};
+			final ctorCall: Expr = {
+				expr: ECall(ctorRef, [macro left, macro _middle, macro _right]),
+				pos: Context.currentPos(),
+			};
+			macro {
+				if ($v{precValue} < minPrec) {
+					ctx.pos = _savedPos;
+					_matched = false;
+				} else {
+					$skipCall;
+					final _middle: $returnCT = $fullExprCall;
+					$skipCall;
+					expectLit(ctx, $v{sepText});
+					$skipCall;
+					final _right: $returnCT = $fullExprCall;
+					left = $ctorCall;
+				}
+			};
+		} else {
+			// Binary infix branch: two operands (left, right). The right
+			// operand normally recurses into the same Pratt loop at an
+			// elevated minPrec to enforce associativity. When the right
+			// child references a different enum than the loop's own
+			// (asymmetric infix, e.g. `x is Type` where left:HxExpr but
+			// right:HxType), recursing into the same loop is wrong — call
+			// the other type's parse function once at its default starting
+			// precedence and let outer Pratt iteration handle chaining.
+			final assocValue: String = branch.annotations.get('pratt.assoc');
+			final nextMinPrec: Int = assocValue == 'Right' ? precValue : precValue + 1;
+			final rightChildren: Array<ShapeNode> = branch.children;
+			final rightChild: ShapeNode = rightChildren[1];
+			final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+			final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simple;
+			final rightCT: ComplexType = isAsymmetric ? ruleReturnCT(rightRef) : returnCT;
+			final rightCall: Expr = if (isAsymmetric)
+				{ expr: ECall(macro $i{parseFnName(rightRef)}, [macro ctx]), pos: Context.currentPos(), }
+			else
+				{ expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{nextMinPrec}]), pos: Context.currentPos(), };
+			// ω-keep-chain (increment 2): in Trivia mode, infix ctors carrying
+			// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
+			// grow a 3rd positional `chainNewline:Bool` synth arg holding
+			// whether the source had a newline anywhere in the gap before
+			// this ctor's RIGHT operand. Two sources:
+			//  (1) `hasNewlineIn(ctx.input, _preWsPos, ctx.pos)` — the gap
+			//      [before-op .. after-op-WS] scan. Correct whenever the gap
+			//      newline is NOT pre-consumed by a higher-prec left-operand
+			//      recursion (covers `a +\n b` and any chain whose left
+			//      operand is an atom).
+			//  (2) `ctx.pendingTrivia.newlineBefore` (boolean OR, `&&`/`||`
+			//      ONLY) — when the left operand is itself an infix sub-expr
+			//      (`X == Y && …`), its right-operand recursion's no-match
+			//      already CONSUMED the `\n` before this operator and stashed
+			//      the signal into pendingTrivia (the ω-untyped-keep stash),
+			//      so the span scan misses it. Scoped to the boolean
+			//      operators because their operands are routinely
+			//      higher-precedence comparisons that pre-consume the gap;
+			//      `+`/`-` keep relies on the span scan alone to avoid the
+			//      head-leading-newline pollution that the stash carries when
+			//      an additive chain is the head of a freshly-opened paren
+			//      (`!(\n a.y + b.h …`). The flag is cleared after the read so
+			//      it does not leak to the next operand. O(1), no recursive
+			//      probe. Plain mode keeps the 2-arg ctor (synth widens only
+			//      in Trivia).
+			final captureChainNl: Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+			final isBoolChainOp: Bool = opText == '&&' || opText == '||';
+			final ctorCall: Expr = {
+				expr: ECall(
+					ctorRef,
+					captureChainNl
+						? [
+							macro left,
+							macro _right,
+							macro _chainNl
+						]
+						: [
+							macro left,
+							macro _right
+						]
+				),
+				pos: Context.currentPos(),
+			};
+			// `_chainNl` is declared in the commit block; the right-operand
+			// parse + ctor build live in the SAME block so it stays in scope
+			// for `$ctorCall`. Non-capturing branches keep the legacy body.
+			final chainNlValue: Expr = isBoolChainOp
+				? macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || (ctx.pendingTrivia != null && ctx.pendingTrivia.newlineBefore)
+				: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
+			final commitBody: Expr = captureChainNl
+				? macro {
+					$skipCall;
+					final _chainNl: Bool = $chainNlValue;
+					if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false;
+					final _right: $rightCT = $rightCall;
+					left = $ctorCall;
+				}
+				: macro {
+					$skipCall;
+					final _right: $rightCT = $rightCall;
+					left = $ctorCall;
+				};
+			macro {
+				if ($v{precValue} < minPrec) {
+					ctx.pos = _savedPos;
+					_matched = false;
+				} else
+					$commitBody;
+			};
+		};
+	}
+
+	private function buildPrattLoopExpr(returnCT: ComplexType, atomCall: Expr, opChain: Expr): Expr {
+		// ω-trivia-sep: in Trivia mode, save pos BEFORE the per-iteration
+		// `skipWs`. On no-match, scan the consumed range for comment
+		// markers — if any are present, rewind to preserve the comment
+		// for a sibling's `collectTrailing` capture (otherwise `field: ""
+		// // some comment` loses its trailing comment). Plain whitespace
+		// and `\n` stay consumed so `@:raw` siblings (e.g. `${expr}` in
+		// string interp, where the trailing literal expects `}` directly
+		// without skipWs) keep working: no comment → no rewind.
+		// ω-pratt-comment-stash: outer per-iter skipWs swaps to skipWsAndStash
+		// so comments BEFORE an operator (`a /* c */ + b`) get captured into
+		// `pendingTrivia` when an op matches. On no-match rewind, the
+		// captured comments must also be popped from the stash — otherwise
+		// the caller's collectTrivia sees them AND re-captures from input,
+		// duplicating. `_stashCount0` snapshot lets us truncate.
+		final noMatch: Expr = buildPrattNoMatchHandlerExpr();
+		return ctx.trivia
+			? macro {
+				var left: $returnCT = $atomCall;
+				while (true) {
+					final _preWsPos: Int = ctx.pos;
+					final _stashCount0: Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
+					skipWsAndStash(ctx);
+					final _savedPos: Int = ctx.pos;
+					var _matched: Bool = true;
+					$opChain;
+					$noMatch;
+				}
+				return left;
+			}
+			: macro {
+				var left: $returnCT = $atomCall;
+				while (true) {
+					skipWs(ctx);
+					final _savedPos: Int = ctx.pos;
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) break;
+				}
+				return left;
+			};
+	}
+
+	private function buildPrattNoMatchHandlerExpr(): Expr {
+		return macro if (!_matched) {
+			var _scanI: Int = _preWsPos;
+			var _hadComment: Bool = false;
+			var _hadNewline: Bool = false;
+			// ω-keep-pratt-blank: track a blank line (≥2 newlines with
+			// only horizontal whitespace between them) inside the
+			// Pratt-consumed run, mirroring `collectTrivia`'s `_nl >= 2`
+			// semantics so the source-blank signal survives the no-op
+			// tail loop the same way the single-newline signal does.
+			var _nlRun: Int = 0;
+			var _hadBlank: Bool = false;
+			while (_scanI < ctx.pos) {
+				final _ch: Int = ctx.input.charCodeAt(_scanI);
+				if (_ch == '\n'.code) {
+					_hadNewline = true;
+					_nlRun++;
+					if (_nlRun >= 2) _hadBlank = true;
+				} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
+					_nlRun = 0;
+				}
+				if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
+					final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
+					if (_c2 == '/'.code || _c2 == '*'.code) {
+						_hadComment = true;
+						break;
+					}
+				}
+				_scanI++;
+			}
+			if (_hadComment) {
+				ctx.pos = _preWsPos;
+				final _pt = ctx.pendingTrivia;
+				if (_pt != null) {
+					while (_pt.leadingComments.length > _stashCount0) _pt.leadingComments.pop();
+				}
+			} else if (_hadNewline) {
+				// ω-untyped-keep: when no operator matches AND the consumed
+				// WS contained a newline (no comment, no rewind), stash the
+				// newline signal into `pendingTrivia` so the next sibling's
+				// `collectTrivia` drain captures `newlineBefore=true`. Without
+				// this, Pratt silently consumes the newline and downstream
+				// `bodyBeforeNewline` slots never fire (e.g. function-body
+				// `untyped` after `:Type\n\tuntyped {…}` — the body field's
+				// pre-field collectTrivia sees pos already past the `\n`).
+				// ω-keep-pratt-blank: also carry `blankBefore` when the run
+				// held a blank line, so a `var b = function(){…}\n\nfinal a`
+				// brace-terminated `@:trailOpt(';')`-absent decl preserves
+				// its source blank line (issue_644). Without this the bit was
+				// hardcoded `false` and the blank collapsed to a single `\n`.
+				final _pt = ctx.pendingTrivia;
+				if (_pt == null) {
+					ctx.pendingTrivia = {
+						blankBefore: _hadBlank,
+						blankAfterLeadingComments: false,
+						newlineBefore: true,
+						leadingComments: [],
+					};
+				} else {
+					_pt.newlineBefore = true;
+					if (_hadBlank) _pt.blankBefore = true;
+				}
+			}
+			break;
 		};
 	}
 
