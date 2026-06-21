@@ -1074,31 +1074,6 @@ class Lowering {
 			// optional-Ref step to default-null in the absent branch.
 			final hasAfterTrailSlot: Bool = child.kind == Ref && !isStar && trailText != null && ctx.trivia && isTriviaBearing(typePath);
 			final afterTrailLocal: String = '_afterTrail_$fieldName';
-			if (!isStar && !isOptional && trailText != null) {
-				parseSteps.push(macro skipWs(ctx));
-				parseSteps.push(macro expectLit(ctx, $v{trailText}));
-				// ω-trivia-after-trail: in trivia-bearing rules, capture a
-				// same-line `// comment` after the trail literal into a
-				// sidecar local — pushed to the synth pair as
-				// `<field>AfterTrail:Null<String>` for the next sibling's
-				// `bodyPolicyWrap` to thread before its body emission.
-				// `collectTrailing` returns null when no same-line comment
-				// is present and does not consume any whitespace beyond
-				// the optional space + `//<body>` match.
-				if (hasAfterTrailSlot) {
-					parseSteps.push({
-						expr: EVars([
-							{
-								name: afterTrailLocal,
-								type: (macro :Null<String>),
-								expr: macro collectTrailing(ctx),
-								isFinal: true,
-							}
-						]),
-						pos: Context.currentPos(),
-					});
-				}
-			}
 			// `@:trailOpt("close")` on a struct Ref field: optional
 			// trailing literal. The required-trail block above reads the
 			// `:trail` meta only (`trailText`), so a `@:trailOpt` field
@@ -1116,51 +1091,9 @@ class Lowering {
 			final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
 				? child.annotations.get('lit.trailText')
 				: null;
-			if (!isStar && !isOptional && trailOptText != null) {
-				// ω-trailopt-rewind-on-miss-struct (BlockBody Star Session 5):
-				// trail-absence must REWIND pos to pre-trivia so trivia stays
-				// observable to the next field/Star. Bare `skipWs(ctx)` (the
-				// pre-Session-5 form) silently advances past whitespace and
-				// comments even when the optional trail literal is absent —
-				// breaking BOTH trivia-mode round-trip (statement-context
-				// hosts where the field-level `@:trailOpt(';')` sits between
-				// two statement siblings — HxIfStmt.thenBody / .elseBody /
-				// HxWhileStmt.body / HxForStmt.body / HxDoWhileStmt.body
-				// added in Session 5 Step 1) AND plain-mode block-ended Star
-				// detection (the close-peek Star at L2796-2833 reads
-				// `ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code` to
-				// decide if sep is exempt; if `skipWs` advanced `_prevEndPos`
-				// past the closing `}` to the next token, the check reads a
-				// space instead of `}` and the exemption misses). The
-				// optional-kw pattern at L2296 uses the same `ctx.pos = _wsPos`
-				// rewind on miss — this mirrors it for optional-trail. On
-				// `;` hit: advance past it normally. On miss: rewind pos so
-				// the preceding trivia is re-observable. Applied in BOTH
-				// modes — plain mode also benefits (downstream block-ended
-				// Star checks need pre-trivia pos). Existing expression-
-				// context consumers (HxIfExpr.thenBranch, HxConditionalType.type,
-				// HxConditionalTypeElse.type, HxTryCatchExpr.body,
-				// HxFnBody.ExprBody) see no observable change — their
-				// downstream parsers re-scan the same trivia via their own
-				// skipWs / collectTrivia.
-				//
-				// ω-struct-trailopt-source-track (Session 14 Phase 3): when
-				// the field's paired-T type carries a synth
-				// `<field>TrailPresent:Null<Bool>` slot, capture `matchLit`'s
-				// hit into `_trailPresent_<field>` for the writer (Phase 4
-				// will read it). Pre-declared `false` above so the miss
-				// branch leaves the local untouched. `captureTrailPresentExpr`
-				// is the shared splice — disjoint from the optional-Ref arm
-				// which feeds the same Expr into a different subCall body.
-				parseSteps.push(macro {
-					final _trailOptWsPos: Int = ctx.pos;
-					skipWs(ctx);
-					if (matchLit(ctx, $v{trailOptText}))
-						$captureTrailPresentExpr;
-					else
-						ctx.pos = _trailOptWsPos;
-				});
-			}
+			emitFieldTrail(
+				parseSteps, isStar, isOptional, trailText, hasAfterTrailSlot, afterTrailLocal, trailOptText, captureTrailPresentExpr
+			);
 			// ω-cond-comp-expr-multiline: terminal-slot newline capture for
 			// bare Ref fields opted in via `@:fmt(captureSourceNewlineAfter)`.
 			// Mirrors `hasBeforeNewlineSlot` (which captures the gap BEFORE
@@ -5704,6 +5637,90 @@ expectLit(ctx, $v{trailText}));
 		if (child.annotations.get('lit.sepText') != null && child.annotations.get('lit.trailText') != null) {
 			final trailPresentLocal: String = trailPresentLocalName(localName);
 			structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
+		}
+	}
+
+	/**
+	 * Emit the post-switch per-field trailing-literal steps for a non-Star,
+	 * non-optional Ref field: the mandatory `@:trail` close (+ trivia
+	 * `<field>AfterTrail` same-line-comment capture) and/or the `@:trailOpt`
+	 * peek-consume-rewind close (+ `_trailPresent_<field>` capture). Both are
+	 * gated `!isStar && !isOptional`; `trailText` drives the required path,
+	 * `trailOptText` the optional path. Pure — lifted from `lowerStruct`.
+	 */
+	private static function emitFieldTrail(
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, trailText: Null<String>, hasAfterTrailSlot: Bool, afterTrailLocal: String,
+		trailOptText: Null<String>, captureTrailPresentExpr: Expr
+	): Void {
+		if (!isStar && !isOptional && trailText != null) {
+			parseSteps.push(macro skipWs(ctx));
+			parseSteps.push(macro expectLit(ctx, $v{trailText}));
+			// ω-trivia-after-trail: in trivia-bearing rules, capture a
+			// same-line `// comment` after the trail literal into a
+			// sidecar local — pushed to the synth pair as
+			// `<field>AfterTrail:Null<String>` for the next sibling's
+			// `bodyPolicyWrap` to thread before its body emission.
+			// `collectTrailing` returns null when no same-line comment
+			// is present and does not consume any whitespace beyond
+			// the optional space + `//<body>` match.
+			if (hasAfterTrailSlot) {
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: afterTrailLocal,
+							type: (macro :Null<String>),
+							expr: macro collectTrailing(ctx),
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			}
+		}
+		if (!isStar && !isOptional && trailOptText != null) {
+			// ω-trailopt-rewind-on-miss-struct (BlockBody Star Session 5):
+			// trail-absence must REWIND pos to pre-trivia so trivia stays
+			// observable to the next field/Star. Bare `skipWs(ctx)` (the
+			// pre-Session-5 form) silently advances past whitespace and
+			// comments even when the optional trail literal is absent —
+			// breaking BOTH trivia-mode round-trip (statement-context
+			// hosts where the field-level `@:trailOpt(';')` sits between
+			// two statement siblings — HxIfStmt.thenBody / .elseBody /
+			// HxWhileStmt.body / HxForStmt.body / HxDoWhileStmt.body
+			// added in Session 5 Step 1) AND plain-mode block-ended Star
+			// detection (the close-peek Star at L2796-2833 reads
+			// `ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code` to
+			// decide if sep is exempt; if `skipWs` advanced `_prevEndPos`
+			// past the closing `}` to the next token, the check reads a
+			// space instead of `}` and the exemption misses). The
+			// optional-kw pattern at L2296 uses the same `ctx.pos = _wsPos`
+			// rewind on miss — this mirrors it for optional-trail. On
+			// `;` hit: advance past it normally. On miss: rewind pos so
+			// the preceding trivia is re-observable. Applied in BOTH
+			// modes — plain mode also benefits (downstream block-ended
+			// Star checks need pre-trivia pos). Existing expression-
+			// context consumers (HxIfExpr.thenBranch, HxConditionalType.type,
+			// HxConditionalTypeElse.type, HxTryCatchExpr.body,
+			// HxFnBody.ExprBody) see no observable change — their
+			// downstream parsers re-scan the same trivia via their own
+			// skipWs / collectTrivia.
+			//
+			// ω-struct-trailopt-source-track (Session 14 Phase 3): when
+			// the field's paired-T type carries a synth
+			// `<field>TrailPresent:Null<Bool>` slot, capture `matchLit`'s
+			// hit into `_trailPresent_<field>` for the writer (Phase 4
+			// will read it). Pre-declared `false` above so the miss
+			// branch leaves the local untouched. `captureTrailPresentExpr`
+			// is the shared splice — disjoint from the optional-Ref arm
+			// which feeds the same Expr into a different subCall body.
+			parseSteps.push(macro {
+				final _trailOptWsPos: Int = ctx.pos;
+				skipWs(ctx);
+				if (matchLit(ctx, $v{trailOptText}))
+					$captureTrailPresentExpr;
+				else
+					ctx.pos = _trailOptWsPos;
+			});
 		}
 	}
 
