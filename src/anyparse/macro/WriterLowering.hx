@@ -13697,9 +13697,6 @@ class WriterLowering {
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
 		final children: Array<ShapeNode> = branch.children;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
 		final refName: String = children[0].annotations.get('base.ref');
 		final subFn: String = writeFnFor(refName);
 		final isSelfRef: Bool = simpleName(refName) == simpleName(typePath);
@@ -13977,157 +13974,11 @@ class WriterLowering {
 		// inner-interp breaks / `opadd_chain_trailing_indent`.
 		if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
 
-		// When the sub-struct opens with a bare-Ref @:fmt(bodyPolicy(...)) field,
-		// the sub-struct's writer emits the header→body separator via
-		// bodyPolicyWrap (Same/Next/FitLine). Stripping the trailing
-		// space from kwLead here avoids a double space (Same) or
-		// trailing-space-before-hardline (Next/FitLine). Non-policy
-		// sub-structs keep the pre-ψ₅ `kw ` shape.
-		//
-		// Also strip when the sub-struct's first field has a tight
-		// `@:lead` (format-declared in `FormatInfo.tightLeads`, e.g.
-		// `:` for Haxe). HxDefaultBranch opens with `@:lead(':')` —
-		// without the strip we emit `default :` instead of `default:`.
-		// Non-tight leads (`(`, `{`) keep the space — `if (`, `else {`.
-		//
-		// ω-expression-try-body-break: also strip when the sub-struct's
-		// first field carries `@:fmt(bodyBreak(...))` — the field's own
-		// `bodyBreakWrap` provides the conditional space/hardline-Nest
-		// between the kw and the body, so leaving the trailing space in
-		// would yield `try  body` (`Same`) or `try \n…body` (`Next`).
-		//
-		// ω-statement-bare-break: same reasoning for `@:fmt(bareBodyBreaks)`
-		// — `bareBodyBreakWrap` provides the conditional inline-space /
-		// hardline-Nest based on body ctor shape. Statement-form
-		// `HxTryCatchStmt.body` opts into this; the parent kw `try` must
-		// drop its trailing space so the wrap is the sole separator.
-		// ω-kw-word-lead-spacing (Slice 37): a ctor-level `@:lead` whose
-		// first char is a word character is a second keyword, NOT a
-		// tight symbol delimiter. Word-word adjacency between kw and
-		// lead (e.g. `@:kw('static') @:lead('var')` → `static var`,
-		// `@:kw('inline') @:lead('function')` → `inline function`)
-		// requires a separating space on BOTH sides of the lead: kw
-		// keeps its trailing space, AND the lead emit appends a
-		// trailing space so the body's first token doesn't collide.
-		// Symbol leads (`(`, `{`, `<`, `:`, `?`, `->`, `${`, …) stay
-		// tight under the strip — `while (` vs `while(` is owned by
-		// the field-level path, and ctor-level symbol leads were the
-		// only consumers of the pre-slice `leadText != null` clause.
-		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
-		final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null || subStructStartsWithBodyPolicy(refName)
-			|| subStructStartsWithBodyBreak(refName) || subStructStartsWithBareBodyBreaks(refName) || subStructStartsWithTightLead(refName)
-			|| branch.fmtHasFlag('tightKw') || (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
-		// ω-if-policy / ω-control-flow-policies / ω-try-policy /
-		// ω-anon-fn-paren-policy: an enum branch with `@:fmt(<flag>)`
-		// whose runtime value is `WhitespacePolicy` opts into a
-		// runtime-switched trailing space after the kw. Two semantic
-		// flavours feed the SAME slot:
-		//  - kw-side (`After`/`Both` → space) for control-flow knobs
-		//    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy`
-		//    / `tryPolicy` — JSON name like `"onlyAfter"` reads as
-		//    "after the kw".
-		//  - paren-side (`Before`/`Both` → space) for `anonFuncParens`,
-		//    matching haxe-formatter's
-		//    `whitespace.parenConfig.anonFuncParamParens.openingPolicy`
-		//    naming (sibling of `funcParamParens` / `callParens`).
-		// `firstFmtFlag` partitions the lookup so a branch carries at
-		// most one of the two flag families. Both helpers return null
-		// when no flag matches, letting non-policy branches keep the
-		// pre-slice `kwLead + ' '` (or stripped) emission.
-		final kwSidePolicySpace: Null<Expr> = stripKwTrailingSpace
-			? null
-			: kwTrailingSpacePolicy(branch, [
-				'ifPolicy',
-				'forPolicy',
-				'whilePolicy',
-				'switchPolicy',
-				'tryPolicy',
-				'sharpCondParensGap'
-			]);
-		final parenSidePolicySpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
-		// ω-cast-tight-on-paren (Slice 46): `@:fmt(tightOnParenOperand('A',
-		// 'B', …))` on a kw-led single-Ref branch suppresses the kw's
-		// trailing space at runtime when the operand's enum ctor matches
-		// any name in the list. Consumed by `HxExpr.CastExpr`
-		// (alongside `@:fmt(atomOperand)`) so `cast (x)` / `cast (x:Int)`
-		// (operand = `ParenExpr` / `ECheckTypeExpr` at atom level) emit
-		// tight `cast(x)` / `cast(x : Int)` per haxe-formatter's
-		// cast-as-function-call convention, while bare `cast x` (operand
-		// = `IdentExpr`, anything not listed) keeps the existing
-		// `cast x` shape. Sub-call's `parseXxxAtom` routing ensures
-		// operand truly is the leading-`(` ctor, not a Pratt wrapper
-		// (`Is(ParenExpr, ...)`) that would slip past the ctor match.
-		final ctorTightSpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpaceOnOperandCtor(branch, argNames);
-		final kwTrailSpace: Null<Expr> = kwSidePolicySpace ?? parenSidePolicySpace ?? ctorTightSpace;
-		final parts: Array<Expr> = [];
-		if (kwLead != null) {
-			if (kwTrailSpace != null) {
-				parts.push(macro _dt($v{kwLead}));
-				parts.push(kwTrailSpace);
-			} else if (branch.fmtHasFlag('deferKwSpace') && !stripKwTrailingSpace) {
-				// ω-multivar-wrap one_line: opt-in `@:fmt(deferKwSpace)` on a
-				// kw-led single-Ref ctor emits the kw's trailing space as a
-				// deferred `_dop(' ')` (OptSpace) instead of a hard `_dt(kw ')`.
-				// The renderer flushes it as a real space before the next Text
-				// (flat / head-inline cases — byte-identical), but DROPS it when
-				// the sub-call leads with a break-mode hardline. Used by
-				// `HxStatement.VarStmt` / `FinalStmt`: when the `HxVarDecl`
-				// body routes its `more` list through `multiVarWrap` with
-				// `defaultWrap: onePerLine`, the head binding breaks too
-				// (`var\n\trawRead,…`), so the `var `
-				// trailing space must collapse into the break — mirror of the
-				// assign-op `=`→`_dop(' ')` split (ω-binop-wraprules).
-				parts.push(macro _dt($v{kwLead}));
-				parts.push(macro _dop(' '));
-			} else {
-				final kwText: String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
-				parts.push(macro _dt($v{kwText}));
-			}
-		}
-		if (leadText != null) {
-			// ω-kw-word-lead-spacing (Slice 37): word-keyword lead
-			// also gets a trailing space so it doesn't fuse with the
-			// body's first token (e.g. `static final @Test` —
-			// HxVarDecl's first field is a meta Star). Symbol leads
-			// stay tight as before — the open delim glues to whatever
-			// follows.
-			// Writer Slice 4: opt-in `@:fmt(spaceAfterLead)` on a
-			// symbol-lead enum ctor adds a trailing space — used by
-			// `HxAnonField.ExtendsField` (`@:lead('>')`) to emit
-			// `> Foo` matching haxe-formatter's structure-extension
-			// convention (`typedef Bar = { > Foo, ... }`).
-			final spaceAfterLead: Bool = branch.fmtHasFlag('spaceAfterLead');
-			final leadEmit: String = (leadIsWord || spaceAfterLead) ? leadText + ' ' : leadText;
-			parts.push(macro _dt($v{leadEmit}));
-		}
-		parts.push(bodyExpr);
-		if (trailText != null) {
-			// ω-trailopt-source-track: in trivia mode, the parser
-			// captures `matchLit`'s presence flag into the synth ctor's
-			// positional `trailPresent:Bool` arg (`argNames[1]`). The
-			// writer gates trail emission on it directly — `true` →
-			// emit literal; `false` → empty Doc. This bypasses the
-			// AST-shape gate `trailOptShapeGateWrap`, which is a Plain-
-			// mode workaround for missing source-presence info. Trivia
-			// mode preserves authored source verbatim.
-			final isTriviaTrailOpt: Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
-			// Writer Slice 9: opt-in `@:fmt(spaceBeforeTrail)` on the
-			// enum ctor inserts a leading space into the trail literal
-			// so a word-start trail (e.g. `#end`) does not fuse with
-			// the body's last word character. Mirror of Slice 4's
-			// `spaceAfterLead` for the trail emit. Used by
-			// `HxType.ConditionalType` (`@:kw('#if') @:trail('#end')`)
-			// so `#if cond WebGLContext #end` re-emits the leading
-			// space rather than `WebGLContext#end`.
-			final trailEmit: String = branch.fmtHasFlag('spaceBeforeTrail') ? ' ' + trailText : trailText;
-			final trailExpr: Expr = if (isTriviaTrailOpt) {
-				final flagAccess: Expr = macro $i{argNames[1]};
-				macro $flagAccess ? _dt($v{trailEmit}) : _de();
-			} else {
-				trailOptShapeGateWrap(branch, trailEmit, argNames[0]) ?? macro _dt($v{trailEmit});
-			};
-			parts.push(trailExpr);
-		}
+		// Resolve the kw-trailing-space behaviour (strip vs runtime-switched
+		// space) and assemble the kw / lead / body / trail parts — see
+		// kwRefKwTrailSpace and kwRefParts for the per-flag detail.
+		final kwTrail: { strip: Bool, space: Null<Expr> } = kwRefKwTrailSpace(c, refName, ctorBodyPolicyFlag);
+		final parts: Array<Expr> = kwRefParts(c, bodyExpr, kwTrail.space, kwTrail.strip);
 		// ω-paren-wrap-break: `@:wrap(open, close)` ctor (no kw, both lead
 		// and trail set) — the Group/hardline-before-close shape is built in
 		// kwRefWrapShape; null when not the wrap shape (falls through below).
@@ -14453,6 +14304,122 @@ class WriterLowering {
 				);
 		}
 		return { indentArgs: indentArgs, ifExprIndentArgs: ifExprIndentArgs };
+	}
+
+	/**
+	 * Resolves the kw-trailing-space behaviour (Case 3): whether the kw's
+	 * trailing space is stripped (sub-struct bodyPolicy / bodyBreak /
+	 * tight-lead / symbol-lead), and the runtime-switched trailing-space
+	 * Doc (control-flow / anon-fn-paren / cast-tight-on-paren policies).
+	 * Returns `{ strip, space }` for the parts assembly. Extracted from
+	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 */
+	private function kwRefKwTrailSpace(
+		c: LowerBranchCtx, refName: String, ctorBodyPolicyFlag: Null<String>
+	): { strip: Bool, space: Null<Expr> } {
+		final branch: ShapeNode = c.branch;
+		final argNames: Array<String> = c.argNames;
+		final leadText: Null<String> = branch.annotations.get('lit.leadText');
+		// ω-kw-word-lead-spacing (Slice 37): a ctor-level `@:lead` whose
+		// first char is a word character is a second keyword, NOT a tight
+		// symbol delimiter (`static var` / `inline function`) — it keeps
+		// the kw trailing space. Symbol leads (`(`, `{`, `:`, `->`, …) stay
+		// tight under the strip.
+		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
+		final stripKwTrailingSpace: Bool = ctorBodyPolicyFlag != null || subStructStartsWithBodyPolicy(refName)
+			|| subStructStartsWithBodyBreak(refName) || subStructStartsWithBareBodyBreaks(refName) || subStructStartsWithTightLead(refName)
+			|| branch.fmtHasFlag('tightKw') || (leadText != null && !leadIsWord && !branch.fmtHasFlag('spaceBeforeLead'));
+		// ω-if-policy / ω-control-flow-policies / ω-try-policy /
+		// ω-anon-fn-paren-policy: a branch with a `@:fmt(<flag>)` whose
+		// runtime value is `WhitespacePolicy` opts into a runtime-switched
+		// trailing space after the kw. kw-side knobs (control flow) feed
+		// the same slot as the paren-side `anonFuncParens`; `firstFmtFlag`
+		// partitions them so a branch carries at most one family.
+		final kwSidePolicySpace: Null<Expr> = stripKwTrailingSpace
+			? null
+			: kwTrailingSpacePolicy(branch, [
+				'ifPolicy',
+				'forPolicy',
+				'whilePolicy',
+				'switchPolicy',
+				'tryPolicy',
+				'sharpCondParensGap'
+			]);
+		final parenSidePolicySpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
+		// ω-cast-tight-on-paren (Slice 46): `@:fmt(tightOnParenOperand(...))`
+		// suppresses the kw trailing space at runtime when the operand's
+		// enum ctor matches the list (`cast(x)` vs `cast x`).
+		final ctorTightSpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpaceOnOperandCtor(branch, argNames);
+		return { strip: stripKwTrailingSpace, space: kwSidePolicySpace ?? parenSidePolicySpace ?? ctorTightSpace };
+	}
+
+	/**
+	 * Assembles the `parts` Doc array for the kw-Ref branch (Case 3): the
+	 * kw prefix (with its trailing-space / deferred-space / stripped
+	 * variants), the lead delimiter, the body, and the trail delimiter
+	 * (with the trivia trail-presence gate). Extracted from
+	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 */
+	private function kwRefParts(c: LowerBranchCtx, bodyExpr: Expr, kwTrailSpace: Null<Expr>, stripKwTrailingSpace: Bool): Array<Expr> {
+		final branch: ShapeNode = c.branch;
+		final argNames: Array<String> = c.argNames;
+		final leadText: Null<String> = branch.annotations.get('lit.leadText');
+		final trailText: Null<String> = branch.annotations.get('lit.trailText');
+		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
+		final parts: Array<Expr> = [];
+		if (kwLead != null) {
+			if (kwTrailSpace != null) {
+				parts.push(macro _dt($v{kwLead}));
+				parts.push(kwTrailSpace);
+			} else if (branch.fmtHasFlag('deferKwSpace') && !stripKwTrailingSpace) {
+				// ω-multivar-wrap one_line: opt-in `@:fmt(deferKwSpace)` on a
+				// kw-led single-Ref ctor emits the kw's trailing space as a
+				// deferred `_dop(' ')` (OptSpace) instead of a hard `_dt(kw ')`.
+				// The renderer flushes it as a real space before the next Text
+				// (flat / head-inline cases — byte-identical), but DROPS it when
+				// the sub-call leads with a break-mode hardline. Used by
+				// `HxStatement.VarStmt` / `FinalStmt`: when the `HxVarDecl`
+				// body routes its `more` list through `multiVarWrap` with
+				// `defaultWrap: onePerLine`, the head binding breaks too
+				// (`var\n\trawRead,…`), so the `var `
+				// trailing space must collapse into the break — mirror of the
+				// assign-op `=`→`_dop(' ')` split (ω-binop-wraprules).
+				parts.push(macro _dt($v{kwLead}));
+				parts.push(macro _dop(' '));
+			} else {
+				final kwText: String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
+				parts.push(macro _dt($v{kwText}));
+			}
+		}
+		if (leadText != null) {
+			// ω-kw-word-lead-spacing (Slice 37): word-keyword lead also gets
+			// a trailing space so it doesn't fuse with the body's first
+			// token. Writer Slice 4: `@:fmt(spaceAfterLead)` adds a trailing
+			// space to a symbol lead (`> Foo` structure-extension).
+			final spaceAfterLead: Bool = branch.fmtHasFlag('spaceAfterLead');
+			final leadEmit: String = (leadIsWord || spaceAfterLead) ? leadText + ' ' : leadText;
+			parts.push(macro _dt($v{leadEmit}));
+		}
+		parts.push(bodyExpr);
+		if (trailText != null) {
+			// ω-trailopt-source-track: in trivia mode the parser captures
+			// `matchLit`'s presence into `argNames[1]`; gate trail emission on
+			// it directly (bypassing the Plain-mode AST-shape gate). Writer
+			// Slice 9: `@:fmt(spaceBeforeTrail)` prepends a space so a
+			// word-start trail (`#end`) does not fuse with the body's last
+			// word character.
+			final isTriviaTrailOpt: Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
+			final trailEmit: String = branch.fmtHasFlag('spaceBeforeTrail') ? ' ' + trailText : trailText;
+			final trailExpr: Expr = if (isTriviaTrailOpt) {
+				final flagAccess: Expr = macro $i{argNames[1]};
+				macro $flagAccess ? _dt($v{trailEmit}) : _de();
+			} else {
+				trailOptShapeGateWrap(branch, trailEmit, argNames[0]) ?? macro _dt($v{trailEmit});
+			};
+			parts.push(trailExpr);
+		}
+		return parts;
 	}
 
 }
