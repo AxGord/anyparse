@@ -11774,110 +11774,15 @@ class WriterLowering {
 		}
 		final condCtor: Null<String> = condArgsResolved != null ? condArgsResolved[1] : null;
 		final bodyField: Null<String> = condArgsResolved != null ? condArgsResolved[2] : null;
-		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
-		if (elemRule == null || elemRule.kind != Seq)
-			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
-			);
-		var classifierNode: Null<ShapeNode> = null;
-		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
-			classifierNode = child;
-			break;
-		}
-		if (classifierNode == null)
-			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" not found on element rule $elemRefName',
-				Context.currentPos()
-			);
-		if (classifierNode.kind != Ref)
-			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" must be a plain Ref to an enum rule',
-				Context.currentPos()
-			);
-		final enumRuleName: Null<String> = classifierNode.annotations.get('base.ref');
-		if (enumRuleName == null)
-			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" has no base.ref annotation',
-				Context.currentPos()
-			);
-		final enumRule: Null<ShapeNode> = shape.rules.get(enumRuleName);
-		if (enumRule == null || enumRule.kind != Alt)
-			Context.fatalError(
-				'WriterLowering: @:fmt(interMemberBlankLines) classifier target $enumRuleName must be an Alt (enum)', Context.currentPos()
-			);
-		final pos: Position = Context.currentPos();
-		// Base var/fn/other kind mapping for the TOP-level classify switch:
-		// var family → `1`, fn → `2`, everything else → `0`.
-		inline function kindFor(ctorName: String): Expr {
-			return if (varCtors.contains(ctorName))
-				macro 1;
-			else if (fnCtors.contains(ctorName))
-				macro 2;
-			else
-				macro 0;
-		}
-		// `case <Ctor>(_, …):` pattern for one enum variant, binding the
-		// single ctor arg to `_inner` when `bindInner` (the look-through
-		// ctor needs the wrapper to reach its body Star).
-		inline function patternFor(branch: ShapeNode, ctorName: String, bindInner: Bool): Expr {
-			final arity: Int = branch.children.length;
-			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			return arity == 0
-				? ctorIdent
-				: {
-					expr: ECall(ctorIdent, [for (i in 0...arity) (bindInner && i == 0) ? macro _inner : macro _]),
-					pos: pos
-				};
-		}
-		// Nested classify cases for the look-through switch. The look-through
-		// is deliberately FUNCTION-ONLY: an inner `fnCtor` member yields kind
-		// `2`, EVERYTHING else (including var-family ctors and a nested
-		// `condCtor`) yields `0`. The fork's `markClassFieldEmptyLines` pairs
-		// the REAL inner fields across the `#if … #end` boundary, factoring in
-		// each field's static-ness and visibility (afterStaticVars /
-		// afterPrivateVars), and lets the doc-comment policy override the
-		// field-type blank for doc-comment-led members. anyparse classifies a
-		// whole conditional MEMBER as one outer-loop unit, so promoting a
-		// var-bearing conditional to kind `1`/`3` cannot reproduce that
-		// field-vs-field static/visibility/doc-comment arbitration and instead
-		// over-fires the static-var subdivision cascade (afterStaticVars) and
-		// the `none`-doc-comment strip. The function family carries no such
-		// subdivision at member scope (afterStaticFunctions etc. are not
-		// modelled here) and no doc-comment-strip conflict surfaced in the
-		// corpus, so fn-only is the byte-safe subset: two consecutive
-		// function-bearing conditional members get a `betweenFunctions` blank,
-		// nothing else changes.
-		final innerCases: Array<Case> = condArgsResolved == null
-			? []
-			: [
-				for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
-					final ctorName: String = branch.annotations.get('base.ctor');
-					{ values: [patternFor(branch, ctorName, false)], guard: null, expr: (fnCtors.contains(ctorName) ? macro 2 : macro 0) };
-				}
-			];
-		final cases: Array<Case> = [];
-		for (branch in enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
-			if (ctorName == null) continue;
-			final isLookThrough: Bool = condCtor != null && ctorName == condCtor;
-			final pattern: Expr = patternFor(branch, ctorName, isLookThrough);
-			final kindExpr: Expr = if (isLookThrough) {
-				// `_inner.<bodyField>[0].node.<classifierField>` — the body
-				// Star is trivia-collected so `[0]` is a trivia wrapper with
-				// a `.node` raw accessor; `.node.<classifierField>` is the
-				// inner member's classifier enum.
-				final innerBodyAccess: Expr = { expr: EField(macro _inner, bodyField), pos: pos };
-				final innerClassifier: Expr = {
-					expr: EField({ expr: EField(macro $innerBodyAccess[0], 'node'), pos: pos }, fieldName),
-					pos: pos,
-				};
-				final innerSwitch: Expr = { expr: ESwitch(innerClassifier, innerCases, null), pos: pos };
-				macro ($innerBodyAccess.length > 0 ? $innerSwitch : 0);
-			} else {
-				kindFor(ctorName);
-			}
-			cases.push({ values: [pattern], guard: null, expr: kindExpr });
-		}
+		final enumRule: ShapeNode = resolveInterMemberEnumRule(elemRefName, fieldName);
+		final cases: Array<Case> = buildInterMemberClassifyCases({
+			enumRule: enumRule,
+			varCtors: varCtors,
+			fnCtors: fnCtors,
+			condCtor: condCtor,
+			bodyField: bodyField,
+			fieldName: fieldName,
+		});
 		return {
 			classifierFieldName: fieldName,
 			classifyCases: cases,
@@ -14158,6 +14063,136 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * Resolve the classifier enum (Alt) rule reached from the element Seq
+	 * rule's `fieldName` Ref. Extracted from `buildInterMemberClassifyInfo`
+	 * — the elemRule -> classifierNode -> enumRuleName -> enumRule chain
+	 * with its validation gates.
+	 */
+	private function resolveInterMemberEnumRule(elemRefName: String, fieldName: String): ShapeNode {
+		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
+		if (elemRule == null || elemRule.kind != Seq)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
+			);
+		var classifierNode: Null<ShapeNode> = null;
+		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
+			classifierNode = child;
+			break;
+		}
+		if (classifierNode == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" not found on element rule $elemRefName',
+				Context.currentPos()
+			);
+		if (classifierNode.kind != Ref)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" must be a plain Ref to an enum rule',
+				Context.currentPos()
+			);
+		final enumRuleName: Null<String> = classifierNode.annotations.get('base.ref');
+		if (enumRuleName == null)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" has no base.ref annotation',
+				Context.currentPos()
+			);
+		final enumRule: Null<ShapeNode> = shape.rules.get(enumRuleName);
+		if (enumRule == null || enumRule.kind != Alt)
+			Context.fatalError(
+				'WriterLowering: @:fmt(interMemberBlankLines) classifier target $enumRuleName must be an Alt (enum)', Context.currentPos()
+			);
+		return enumRule;
+	}
+
+	/**
+	 * Build the top-level classify switch cases for an inter-member-blank-
+	 * lines classifier. Extracted from `buildInterMemberClassifyInfo` — the
+	 * `kindFor`/`patternFor` local builders plus the look-through `innerCases`
+	 * and the per-ctor `cases` loop.
+	 */
+	private static function buildInterMemberClassifyCases(c: InterMemberCasesCtx): Array<Case> {
+		final enumRule: ShapeNode = c.enumRule;
+		final varCtors: Array<String> = c.varCtors;
+		final fnCtors: Array<String> = c.fnCtors;
+		final condCtor: Null<String> = c.condCtor;
+		final bodyField: Null<String> = c.bodyField;
+		final fieldName: String = c.fieldName;
+		final pos: Position = Context.currentPos();
+		// Base var/fn/other kind mapping for the TOP-level classify switch:
+		// var family → `1`, fn → `2`, everything else → `0`.
+		inline function kindFor(ctorName: String): Expr {
+			return if (varCtors.contains(ctorName))
+				macro 1;
+			else if (fnCtors.contains(ctorName))
+				macro 2;
+			else
+				macro 0;
+		}
+		// `case <Ctor>(_, …):` pattern for one enum variant, binding the
+		// single ctor arg to `_inner` when `bindInner` (the look-through
+		// ctor needs the wrapper to reach its body Star).
+		inline function patternFor(branch: ShapeNode, ctorName: String, bindInner: Bool): Expr {
+			final arity: Int = branch.children.length;
+			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
+			return arity == 0
+				? ctorIdent
+				: {
+					expr: ECall(ctorIdent, [for (i in 0...arity) (bindInner && i == 0) ? macro _inner : macro _]),
+					pos: pos
+				};
+		}
+		// Nested classify cases for the look-through switch. The look-through
+		// is deliberately FUNCTION-ONLY: an inner `fnCtor` member yields kind
+		// `2`, EVERYTHING else (including var-family ctors and a nested
+		// `condCtor`) yields `0`. The fork's `markClassFieldEmptyLines` pairs
+		// the REAL inner fields across the `#if … #end` boundary, factoring in
+		// each field's static-ness and visibility (afterStaticVars /
+		// afterPrivateVars), and lets the doc-comment policy override the
+		// field-type blank for doc-comment-led members. anyparse classifies a
+		// whole conditional MEMBER as one outer-loop unit, so promoting a
+		// var-bearing conditional to kind `1`/`3` cannot reproduce that
+		// field-vs-field static/visibility/doc-comment arbitration and instead
+		// over-fires the static-var subdivision cascade (afterStaticVars) and
+		// the `none`-doc-comment strip. The function family carries no such
+		// subdivision at member scope (afterStaticFunctions etc. are not
+		// modelled here) and no doc-comment-strip conflict surfaced in the
+		// corpus, so fn-only is the byte-safe subset: two consecutive
+		// function-bearing conditional members get a `betweenFunctions` blank,
+		// nothing else changes.
+		final innerCases: Array<Case> = condCtor == null
+			? []
+			: [
+				for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
+					final ctorName: String = branch.annotations.get('base.ctor');
+					{ values: [patternFor(branch, ctorName, false)], guard: null, expr: (fnCtors.contains(ctorName) ? macro 2 : macro 0) };
+				}
+			];
+		final cases: Array<Case> = [];
+		for (branch in enumRule.children) {
+			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final isLookThrough: Bool = condCtor != null && ctorName == condCtor;
+			final pattern: Expr = patternFor(branch, ctorName, isLookThrough);
+			final kindExpr: Expr = if (isLookThrough) {
+				// `_inner.<bodyField>[0].node.<classifierField>` — the body
+				// Star is trivia-collected so `[0]` is a trivia wrapper with
+				// a `.node` raw accessor; `.node.<classifierField>` is the
+				// inner member's classifier enum.
+				final innerBodyAccess: Expr = { expr: EField(macro _inner, bodyField), pos: pos };
+				final innerClassifier: Expr = {
+					expr: EField({ expr: EField(macro $innerBodyAccess[0], 'node'), pos: pos }, fieldName),
+					pos: pos,
+				};
+				final innerSwitch: Expr = { expr: ESwitch(innerClassifier, innerCases, null), pos: pos };
+				macro ($innerBodyAccess.length > 0 ? $innerSwitch : 0);
+			} else {
+				kindFor(ctorName);
+			}
+			cases.push({ values: [pattern], guard: null, expr: kindExpr });
+		}
+		return cases;
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14311,6 +14346,21 @@ typedef InterMemberClassifyInfo = {
 	betweenVarsField: String,
 	betweenFunctionsField: String,
 	afterVarsField: String
+};
+
+/**
+ * Parameters for `buildInterMemberClassifyCases` — the enum (Alt) rule
+ * whose ctors map to classify kinds plus the var/fn ctor sets and the
+ * optional `condCtor`/`bodyField` look-through config. Bundled to keep
+ * the case-builder helper under the >5-scalar threshold.
+ */
+typedef InterMemberCasesCtx = {
+	final enumRule: ShapeNode;
+	final varCtors: Array<String>;
+	final fnCtors: Array<String>;
+	final condCtor: Null<String>;
+	final bodyField: Null<String>;
+	final fieldName: String;
 };
 
 /**
