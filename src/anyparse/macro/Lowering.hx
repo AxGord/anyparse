@@ -4595,79 +4595,13 @@ expectLit(ctx, $v{trailText}));
 		final eregVar: String = '_re_$simple';
 		_eregByRule.set(typePath, { varName: eregVar, pattern: pattern });
 
-		// `@:unescape` on a Terminal abstract generates an inline
-		// walk-and-unescape loop using the `@:schema` format's
-		// `unescapeChar`. Bare `@:unescape` strips surrounding quotes
-		// first; `@:unescape("raw")` and `@:unescape("singleQuoteRaw")`
-		// both use the matched string as-is (no quote strip) — they
-		// differ only in writer-side escape table (see WriterLowering).
-		final unescape: Bool = node.hasMeta(':unescape');
-		final unescapeMode: Null<String> = node.readMetaString(':unescape');
-
-		// `@:decode("pkg.Class.method")` on a Terminal abstract names a
-		// static function that decodes the matched string into the
-		// terminal's underlying type. The path is split on `.` and
-		// emitted as `pkg.Class.method(_matched)`.
-		final decodePath: Null<String> = node.readMetaString(':decode');
-
 		// `@:rawString` on a String-underlying Terminal means "the regex
 		// match is already the raw value" — skip decoding entirely. Used
 		// for identifier-like terminals (Haxe `HxIdentLit`) where the
 		// matched slice IS the identifier text.
 		final raw: Bool = node.hasMeta(':rawString');
 
-		if (unescape && decodePath != null)
-			Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:decode', Context.currentPos());
-		if (unescape && raw) Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:rawString', Context.currentPos());
-
-		final decodeExpr: Expr = if (unescape) {
-			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
-			final bodyExpr: Expr = if (unescapeMode == 'raw' || unescapeMode == 'singleQuoteRaw')
-				macro _matched
-			else
-				macro _matched.substring(1, _matched.length - 1);
-			macro {
-				final _body: String = $e{bodyExpr};
-				final _buf: StringBuf = new StringBuf();
-				var _i: Int = 0;
-				while (_i < _body.length) {
-					final _c: Int = StringTools.fastCodeAt(_body, _i);
-					if (_c == '\\'.code) {
-						final _res: anyparse.format.text.TextFormat.UnescapeResult = $p{fmtParts}.instance.unescapeChar(_body, _i + 1);
-						_buf.addChar(_res.char);
-						_i += 1 + _res.consumed;
-					} else {
-						_buf.addChar(_c);
-						_i++;
-					}
-				}
-				_buf.toString();
-			};
-		} else if (decodePath != null) {
-			final parts: Array<String> = decodePath.split('.');
-			{ expr: ECall(macro $p{parts}, [macro _matched]), pos: Context.currentPos() };
-		} else
-			switch underlying {
-				case 'Float': macro Std.parseFloat(_matched);
-				case 'Int':
-					macro {
-						final _v: Null<Int> = Std.parseInt(_matched);
-						if (_v == null) {
-							throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'invalid int literal');
-						}
-						_v;
-					};
-				case 'Bool': macro _matched == 'true';
-				case 'String' if (raw): macro _matched;
-				case 'String':
-					Context.fatalError(
-						'Lowering: String terminal $typePath requires @:unescape, @:decode, or @:rawString', Context.currentPos()
-					);
-					throw 'unreachable';
-				case _:
-					Context.fatalError('Lowering: no decoder for underlying type "$underlying"', Context.currentPos());
-					throw 'unreachable';
-			};
+		final decodeExpr: Expr = lowerTerminalDecodeExpr(node, typePath, underlying, raw);
 
 		// `@:captureGroup(N)` (N >= 1) picks the Nth capture group as the
 		// stored value — position still advances by the full `matched(0)`
@@ -5290,6 +5224,77 @@ expectLit(ctx, $v{trailText}));
 	private static function packOf(typePath: String): Array<String> {
 		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
+	}
+
+	private function lowerTerminalDecodeExpr(node: ShapeNode, typePath: String, underlying: String, raw: Bool): Expr {
+		// `@:unescape` on a Terminal abstract generates an inline
+		// walk-and-unescape loop using the `@:schema` format's
+		// `unescapeChar`. Bare `@:unescape` strips surrounding quotes
+		// first; `@:unescape("raw")` and `@:unescape("singleQuoteRaw")`
+		// both use the matched string as-is (no quote strip) — they
+		// differ only in writer-side escape table (see WriterLowering).
+		final unescape: Bool = node.hasMeta(':unescape');
+		final unescapeMode: Null<String> = node.readMetaString(':unescape');
+
+		// `@:decode("pkg.Class.method")` on a Terminal abstract names a
+		// static function that decodes the matched string into the
+		// terminal's underlying type. The path is split on `.` and
+		// emitted as `pkg.Class.method(_matched)`.
+		final decodePath: Null<String> = node.readMetaString(':decode');
+
+		if (unescape && decodePath != null)
+			Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:decode', Context.currentPos());
+		if (unescape && raw) Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:rawString', Context.currentPos());
+
+		if (unescape) {
+			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+			final bodyExpr: Expr = if (unescapeMode == 'raw' || unescapeMode == 'singleQuoteRaw')
+				macro _matched
+			else
+				macro _matched.substring(1, _matched.length - 1);
+			return macro {
+				final _body: String = $e{bodyExpr};
+				final _buf: StringBuf = new StringBuf();
+				var _i: Int = 0;
+				while (_i < _body.length) {
+					final _c: Int = StringTools.fastCodeAt(_body, _i);
+					if (_c == '\\'.code) {
+						final _res: anyparse.format.text.TextFormat.UnescapeResult = $p{fmtParts}.instance.unescapeChar(_body, _i + 1);
+						_buf.addChar(_res.char);
+						_i += 1 + _res.consumed;
+					} else {
+						_buf.addChar(_c);
+						_i++;
+					}
+				}
+				_buf.toString();
+			};
+		}
+		if (decodePath != null) {
+			final parts: Array<String> = decodePath.split('.');
+			return { expr: ECall(macro $p{parts}, [macro _matched]), pos: Context.currentPos() };
+		}
+		return switch underlying {
+			case 'Float': macro Std.parseFloat(_matched);
+			case 'Int':
+				macro {
+					final _v: Null<Int> = Std.parseInt(_matched);
+					if (_v == null) {
+						throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), 'invalid int literal');
+					}
+					_v;
+				};
+			case 'Bool': macro _matched == 'true';
+			case 'String' if (raw): macro _matched;
+			case 'String':
+				Context.fatalError(
+					'Lowering: String terminal $typePath requires @:unescape, @:decode, or @:rawString', Context.currentPos()
+				);
+				throw 'unreachable';
+			case _:
+				Context.fatalError('Lowering: no decoder for underlying type "$underlying"', Context.currentPos());
+				throw 'unreachable';
+		};
 	}
 
 }
