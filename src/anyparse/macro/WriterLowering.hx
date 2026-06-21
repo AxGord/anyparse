@@ -1579,14 +1579,8 @@ class WriterLowering {
 						// the knob is set to `Next` / `Keep`.
 						final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
 						if (lcSep != null && lcCtors.length > 0) {
-							final spaceCtors: Array<String> = spacePrefixCtors(refName, lcCtors);
 							final ctorExpr: Expr = macro Type.enumConstructor(_optVal);
-							var sepExpr: Expr = macro _de();
-							for (sc in spaceCtors) {
-								final scSep: Expr = ctorHasBodyPolicy(refName, sc) ? macro _de() : macro _dt(' ');
-								sepExpr = macro $ctorExpr == $v{sc} ? $scSep : $sepExpr;
-							}
-							for (lc in lcCtors) sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
+							final sepExpr: Expr = buildLeftCurlySepExpr(refName, lcCtors, ctorExpr, lcSep);
 							if (bodyPolicyForCtorPairs.length > 0) {
 								// The `<field>BeforeNewline` Keep-dispatch slot is
 								// synthesised only for NON-optional bare Refs
@@ -1822,14 +1816,8 @@ class WriterLowering {
 							// trailing space ahead of the hardline (Next). The
 							// per-sibling separator decision lives at the parent here
 							// because only the parent knows the runtime ctor.
-							final spaceCtors: Array<String> = spacePrefixCtors(refName, lcCtors);
 							final ctorExpr: Expr = macro Type.enumConstructor($fieldAccess);
-							var sepExpr: Expr = macro _de();
-							for (sc in spaceCtors) {
-								final scSep: Expr = ctorHasBodyPolicy(refName, sc) ? macro _de() : macro _dt(' ');
-								sepExpr = macro $ctorExpr == $v{sc} ? $scSep : $sepExpr;
-							}
-							for (lc in lcCtors) sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
+							final sepExpr: Expr = buildLeftCurlySepExpr(refName, lcCtors, ctorExpr, lcSep);
 							// ω-untyped-keep: `@:fmt(bodyPolicyForCtor('<ctor>',
 							// '<flagName>'))` on a struct field with leftCurly path
 							// runtime-replaces the per-ctor `sep + writeCall` pair with
@@ -15378,6 +15366,24 @@ class WriterLowering {
 		// through to canonical emit.
 		else if (hasStructFieldTrailOptSlot && trailOptText != null)
 			optParts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
+	}
+
+	/**
+	 * Build the per-ctor leftCurly separator ternary chain for a Ref-to-enum body
+	 * field: space-prefix ctors get `_dt(' ')` (or `_de()` when the ctor carries
+	 * its own bodyPolicy), leftCurly ctors get the runtime `BracePlacement`
+	 * switch, everything else stays `_de()`. Returns the folded `sepExpr`. Shared
+	 * by the mandatory and optional `case Ref` leftCurly paths in `lowerStruct`.
+	 */
+	private function buildLeftCurlySepExpr(refName: String, lcCtors: Array<String>, ctorExpr: Expr, lcSep: Expr): Expr {
+		final spaceCtors: Array<String> = spacePrefixCtors(refName, lcCtors);
+		var sepExpr: Expr = macro _de();
+		for (sc in spaceCtors) {
+			final scSep: Expr = ctorHasBodyPolicy(refName, sc) ? macro _de() : macro _dt(' ');
+			sepExpr = macro $ctorExpr == $v{sc} ? $scSep : $sepExpr;
+		}
+		for (lc in lcCtors) sepExpr = macro $ctorExpr == $v{lc} ? $lcSep : $sepExpr;
+		return sepExpr;
 	}
 
 }
