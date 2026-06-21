@@ -788,20 +788,7 @@ class Lowering {
 			final hasCondOpenNewlineSlot: Bool = child.kind == Ref && !isStar && !isOptional && leadText != null && ctx.trivia
 				&& isTriviaBearing(typePath) && child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline');
 			final condOpenNewlineLocal: String = '_condOpenNewline_$fieldName';
-			if (!isStar && !isOptional) {
-				if (kwLead != null) {
-					parseSteps.push(macro skipWs(ctx));
-					parseSteps.push(macro expectKw(ctx, $v{kwLead}));
-				}
-				if (leadText != null) {
-					parseSteps.push(macro skipWs(ctx));
-					parseSteps.push(macro expectLit(ctx, $v{leadText}));
-					// ω-condition-wrap-keep: record the byte position right
-					// after the open paren (BEFORE the pre-field `skipWs` below)
-					// so the `hasNewlineIn` probe spans exactly the `(`→cond gap.
-					if (hasCondOpenNewlineSlot) parseSteps.push(macro final _condLeadEnd: Int = ctx.pos);
-				}
-			}
+			emitFieldLeadIn(parseSteps, isStar, isOptional, kwLead, leadText, hasCondOpenNewlineSlot);
 			// Field value — by kind.
 			final localName: String = '_f_$fieldName';
 			// Suppress the pre-field `skipWs` only for a trivia-collecting
@@ -1074,58 +1061,17 @@ class Lowering {
 					}
 				});
 			}
-			structFields.push({ field: fieldName, expr: macro $i{localName} });
-			// ω-struct-trailopt-source-track (Session 14 Phase 3): push the
-			// `<field>TrailPresent` slot fed by the optional-Ref / mandatory-
-			// Ref `@:trailOpt` capture above. Phase 4 wires the writer
-			// reader; until then the populated true/false value is
-			// unobserved (the slot's `@:optional Null<Bool>` shape would
-			// also accept omission, but explicit push keeps the field
-			// shape consistent and gives the writer a defined value at
-			// every site).
-			if (hasStructFieldTrailOptSlot)
-				structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
-			if (hasAfterTrailSlot)
-				structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal} });
-			if (hasBeforeNewlineSlot)
-				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal} });
-			// ω-598-member-leading-comment: push the verbatim leading-comment
-			// run captured alongside the BeforeNewline scan above.
-			if (hasBeforeLeadingSlot)
-				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX, expr: macro $i{beforeLeadingLocal} });
-			if (hasNewlineAfterSlot)
-				structFields.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal} });
-			// ω-condition-wrap-keep: push the `<field>CondOpenNewline:Bool`
-			// slot fed by the open-paren newline probe above. Read by the
-			// writer's single-Ref condWrap emit under `WrapMode.Keep`.
-			if (hasCondOpenNewlineSlot)
-				structFields.push(
-					{ field: fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro $i{condOpenNewlineLocal} }
-				);
-			if (hasKwTriviaSlots) {
-				structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal} });
-				structFields.push({ field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal} });
-				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro $i{beforeKwNlLocal} });
-				structFields.push({ field: fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX, expr: macro $i{bodyOnSameLineLocal} });
-				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal} });
-				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal} });
-			}
-			if (ctx.trivia && isStar && child.annotations.get('trivia.starCollects') == true) {
-				pushTrailingStarSlots(child, localName, fieldName, structFields);
-			}
-			// ω-condcomp-body-leading-sep (Slice 18f): @:fmt(sepBeforeOpt)
-			// on a Star field grows a `<field>SepBefore:Bool` slot fed by
-			// the local declared inside `emitStarFieldSteps`'s
-			// @:sep+@:tryparse-no-trail branch. The slot lives on the
-			// trivia-paired typedef only (TriviaTypeSynth.buildTypeDefinition);
-			// the plain typedef shape is unchanged. Gating on `ctx.trivia`
-			// ensures plain-mode struct literals stay byte-identical to
-			// pre-slice (the captured local is still declared above and
-			// discarded — no field-shape mismatch).
-			if (ctx.trivia && isStar && child.fmtHasFlag('sepBeforeOpt')) {
-				final sepBeforeLocal: String = localName + 'SepBefore';
-				structFields.push({ field: fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX, expr: macro $i{sepBeforeLocal} });
-			}
+			pushStructFieldEntries(
+				structFields, fieldName, localName, child, hasStructFieldTrailOptSlot, trailPresentLocal, hasAfterTrailSlot,
+				afterTrailLocal, hasBeforeNewlineSlot, beforeNlLocal, hasBeforeLeadingSlot, beforeLeadingLocal, hasNewlineAfterSlot,
+				newlineAfterLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal,
+				beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
+			);
+			// pushStructFieldEntries pushes the field value + every applicable
+			// trivia/source-shape sidecar slot (TrailPresent / AfterTrail /
+			// BeforeNewline / BeforeLeading / NewlineAfter / CondOpenNewline / the
+			// kw-trivia set / TrailingStar slots / SepBefore); see there for the
+			// per-slot gating rationale.
 		}
 		// Binary: @:align — skip to next alignment boundary after all fields.
 		final align: Null<Int> = node.annotations.get('bin.align');
@@ -5749,6 +5695,101 @@ expectLit(ctx, $v{trailText}));
 			]),
 			pos: Context.currentPos(),
 		});
+	}
+
+	/**
+	 * Emit the mandatory per-field lead-in for a non-Star, non-optional field:
+	 * the `@:kw` keyword (`skipWs` + `expectKw`) and/or the `@:lead` literal
+	 * (`skipWs` + `expectLit`), in that order (D50). For an opted-in condWrap
+	 * cond field, also record `_condLeadEnd` right after the lead so the
+	 * `(`→cond newline probe in emitPreFieldWs spans the correct gap. Pure —
+	 * lifted from `lowerStruct`.
+	 */
+	private static function emitFieldLeadIn(
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
+		hasCondOpenNewlineSlot: Bool
+	): Void {
+		if (!isStar && !isOptional) {
+			if (kwLead != null) {
+				parseSteps.push(macro skipWs(ctx));
+				parseSteps.push(macro expectKw(ctx, $v{kwLead}));
+			}
+			if (leadText != null) {
+				parseSteps.push(macro skipWs(ctx));
+				parseSteps.push(macro expectLit(ctx, $v{leadText}));
+				// ω-condition-wrap-keep: record the byte position right
+				// after the open paren (BEFORE the pre-field `skipWs` below)
+				// so the `hasNewlineIn` probe spans exactly the `(`→cond gap.
+				if (hasCondOpenNewlineSlot) parseSteps.push(macro final _condLeadEnd: Int = ctx.pos);
+			}
+		}
+	}
+
+	/**
+	 * Push the parsed field value plus every applicable trivia/source-shape
+	 * sidecar slot onto the struct literal for one field. Each `<field>*`
+	 * synth slot is gated on the same `has*Slot` flag that grew it, so the
+	 * struct-literal field set matches the synth-define exactly. The flags +
+	 * capture-local names are threaded as params. Lifted from `lowerStruct`'s
+	 * per-field loop.
+	 */
+	private function pushStructFieldEntries(
+		structFields: Array<ObjectField>, fieldName: Null<String>, localName: String, child: ShapeNode, hasStructFieldTrailOptSlot: Bool,
+		trailPresentLocal: String, hasAfterTrailSlot: Bool, afterTrailLocal: String, hasBeforeNewlineSlot: Bool, beforeNlLocal: String,
+		hasBeforeLeadingSlot: Bool, beforeLeadingLocal: String, hasNewlineAfterSlot: Bool, newlineAfterLocal: String,
+		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String, hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String,
+		beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String
+	): Void {
+		structFields.push({ field: fieldName, expr: macro $i{localName} });
+		// ω-struct-trailopt-source-track (Session 14 Phase 3): push the
+		// `<field>TrailPresent` slot fed by the optional-Ref / mandatory-
+		// Ref `@:trailOpt` capture above. Phase 4 wires the writer
+		// reader; until then the populated true/false value is
+		// unobserved (the slot's `@:optional Null<Bool>` shape would
+		// also accept omission, but explicit push keeps the field
+		// shape consistent and gives the writer a defined value at
+		// every site).
+		if (hasStructFieldTrailOptSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
+		if (hasAfterTrailSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX, expr: macro $i{afterTrailLocal} });
+		if (hasBeforeNewlineSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX, expr: macro $i{beforeNlLocal} });
+		// ω-598-member-leading-comment: push the verbatim leading-comment
+		// run captured alongside the BeforeNewline scan above.
+		if (hasBeforeLeadingSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_LEADING_SUFFIX, expr: macro $i{beforeLeadingLocal} });
+		if (hasNewlineAfterSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX, expr: macro $i{newlineAfterLocal} });
+		// ω-condition-wrap-keep: push the `<field>CondOpenNewline:Bool`
+		// slot fed by the open-paren newline probe above. Read by the
+		// writer's single-Ref condWrap emit under `WrapMode.Keep`.
+		if (hasCondOpenNewlineSlot)
+			structFields.push({ field: fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro $i{condOpenNewlineLocal} });
+		if (hasKwTriviaSlots) {
+			structFields.push({ field: fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX, expr: macro $i{afterKwLocal} });
+			structFields.push({ field: fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX, expr: macro $i{kwLeadingLocal} });
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX, expr: macro $i{beforeKwNlLocal} });
+			structFields.push({ field: fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX, expr: macro $i{bodyOnSameLineLocal} });
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal} });
+			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal} });
+		}
+		if (ctx.trivia && child.kind == Star && child.annotations.get('trivia.starCollects') == true) {
+			pushTrailingStarSlots(child, localName, fieldName, structFields);
+		}
+		// ω-condcomp-body-leading-sep (Slice 18f): @:fmt(sepBeforeOpt)
+		// on a Star field grows a `<field>SepBefore:Bool` slot fed by
+		// the local declared inside `emitStarFieldSteps`'s
+		// @:sep+@:tryparse-no-trail branch. The slot lives on the
+		// trivia-paired typedef only (TriviaTypeSynth.buildTypeDefinition);
+		// the plain typedef shape is unchanged. Gating on `ctx.trivia`
+		// ensures plain-mode struct literals stay byte-identical to
+		// pre-slice (the captured local is still declared above and
+		// discarded — no field-shape mismatch).
+		if (ctx.trivia && child.kind == Star && child.fmtHasFlag('sepBeforeOpt')) {
+			final sepBeforeLocal: String = localName + 'SepBefore';
+			structFields.push({ field: fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX, expr: macro $i{sepBeforeLocal} });
+		}
 	}
 
 }
