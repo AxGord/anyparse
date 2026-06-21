@@ -3168,6 +3168,286 @@ class WriterLowering {
 		return;
 	}
 
+	/**
+	 * Trivia close-peek (`@:trail`) Star dispatch (the `if (closeText != null)`
+	 * branch of the `isTriviaStar` block in `emitWriterStarField`). Routes the
+	 * Star through `triviaSepStarExpr` (sep-bearing) or `triviaBlockStarExpr`
+	 * (block) and pushes onto `parts`. Extracted to keep the orchestrator under
+	 * the complexity gate.
+	 */
+	private function emitTriviaCloseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemFn: String = c.elemFn;
+		final elemRefName: String = c.elemRefName;
+		final isFirstField: Bool = c.isFirstField;
+		final openText: Null<String> = c.openText;
+		final closeText: Null<String> = c.closeText;
+		final sepText: Null<String> = c.sepText;
+		final trailBBAccess: Null<Expr> = c.trailBBAccess;
+		final trailNLAccess: Null<Expr> = c.trailNLAccess;
+		final trailLCAccess: Null<Expr> = c.trailLCAccess;
+		final trailCloseAccess: Null<Expr> = c.trailCloseAccess;
+		final trailOpenAccess: Null<Expr> = c.trailOpenAccess;
+		final trailPresentAccess: Null<Expr> = c.trailPresentAccess;
+		// First-field Star with knob-form `@:fmt(leftCurly('<knob>'))`
+		// (e.g. `HxObjectLit.fields`) fires the leftCurly switch
+		// even at first-field position — its outer caller already
+		// emits the inter-token space via `_dop(' ')`, so the
+		// `Same` branch is `_de()` and `Next` is `_dhl()` (drops
+		// the pending OptSpace and writes a hardline).
+		final knobLeftCurly: Null<String> = starNode.fmtReadString('leftCurly');
+		final hasKnobLeftCurly: Bool = knobLeftCurly != null;
+		// ω-objectlit-leftCurly-cascade: when the Star carries BOTH
+		// `@:fmt(wrapRules(...))` AND `@:fmt(leftCurly('<knob>'))`,
+		// leftCurly emission moves INSIDE `triviaSepStarExpr` so the
+		// no-trivia branch can wire `IfBreak(_dhl(), _de())` into the
+		// wrap engine's Group — short literals stay cuddled even when
+		// the knob is `Next`. Trivia-bearing branch keeps the
+		// pre-slice unconditional `_dhl()`/`_de()`. Outer site keeps
+		// emitting `leftCurlySeparator` for the no-wrap-rules case
+		// (legacy bare-flag callers and future knob-form callers
+		// without wrap-rules).
+		final wrapRulesField: Null<String> = starNode.fmtReadString('wrapRules');
+		final leftCurlyOwnedBySep: Bool = hasKnobLeftCurly && wrapRulesField != null;
+		if (!leftCurlyOwnedBySep && (
+			!isFirstField || hasKnobLeftCurly
+		) && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode, isFirstField && hasKnobLeftCurly));
+		// ω-trivia-sep: sep-Star with @:trivia routes to a
+		// dedicated helper that drives multi-line vs flat layout
+		// from per-element `newlineBefore` / comment trivia.
+		//
+		// ω-wraprules-objlit: when the Star carries
+		// `@:fmt(wrapRules('<field>'))`, the no-trivia branch of
+		// `triviaSepStarExpr` defers to the runtime
+		// `WrapList.emit` engine so the cascade picks the layout
+		// shape (NoWrap / OnePerLine / FillLine / …). The
+		// trivia-bearing branch still forces multi-line — when
+		// inline / leading / trailing comments are present, the
+		// list cannot collapse to a single line regardless of
+		// what the cascade would say.
+		// ω-blockended-trivia (Session 3): `@:sep('text', tailRelax,
+		// blockEnded)` on a block-mode trivia Star (HxFnBlock.stmts
+		// / HxBlockExpr.stmts / HxBlockStmt.stmts) keeps the
+		// per-element hardlined block layout — sep emit moves
+		// INSIDE `triviaBlockStarExpr` (extended), NOT through the
+		// flat-or-multi `triviaSepStarExpr`. Detect the flag here
+		// and skip the sep dispatch so the fall-through reaches
+		// the block dispatch with sepText/blockEnded threaded.
+		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		if (sepText != null && !blockEndedFlag) {
+			// ω-cascade-emits-comments: emit the funcParamParens /
+			// typeParamOpen space inside the @:trivia + sep
+			// dispatch — the @:trivia path returns BEFORE the
+			// no-trivia branch at `:3504-3510` that owns the
+			// equivalent emit, so without this mirror the
+			// `function foo ()` space (and sister knobs) is
+			// silently dropped when the Star becomes @:trivia.
+			// First-field Stars skip (matches the no-trivia path's
+			// `!isFirstField` gate).
+			if (!isFirstField) {
+				final triviaParamSpace: Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
+				if (triviaParamSpace != null) parts.push(triviaParamSpace);
+			}
+			// ω-objectlit-source-trail-comma: when the Star also
+			// carries `@:fmt(trailingComma('<knob>'))`, thread the
+			// knob's field name into `triviaSepStarExpr` so its
+			// no-trivia branch can `forceExceeds` on the wrap engine
+			// when the source had a trailing separator AND the knob
+			// is on. Null knob → behaves identically to pre-slice
+			// (cascade evaluates exceeds=false / =true symmetrically).
+			final trailingCommaField: Null<String> = starNode.fmtReadString('trailingComma');
+			// ω-objectlit-right-curly: struct-Star path now threads
+			// `@:fmt(rightCurly('<knob>'))` (e.g.
+			// `rightCurly('objectLiteralRightCurly')` on
+			// `HxObjectLit.fields`) into `triviaSepStarExpr`'s 12th
+			// param. Null (no opt-in) preserves pre-slice
+			// unconditional `_dhl()` before close.
+			final knobRightCurly: Null<String> = starNode.fmtReadString('rightCurly');
+			// ω-typedef-anon-force-multi: when the sep-Star carries
+			// `@:fmt(forceMultiInTypedef)` (currently only
+			// `HxType.Anon.fields`), thread the flag into
+			// `triviaSepStarExpr` so its no-trivia branch emits a
+			// runtime `opt._inTypedefBody ? WrapMode.OnePerLine :
+			// null` as `WrapList.emit`'s 15th `forceMode` arg.
+			// Bypasses the cascade only when the typedef-RHS
+			// context is active — non-typedef anon consumers
+			// (var-type-hint, fn-return-type) stay cascade-driven.
+			final forceMultiTypedef: Bool = starNode.fmtHasFlag('forceMultiInTypedef');
+			final bodyAware: Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
+			// ω-group-rest-probe slice 2: struct-Star path reader for
+			// `@:fmt(groupRestProbe)`. Mirrors the lowerStruct plain-
+			// path read (added at the lowerStruct dispatch site).
+			// Trivia-path dual-dispatch closure per
+			// [[feedback-wraprules-dispatch-dual-path]].
+			final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
+			// ω-cascade-emits-comments: struct-Star path reader for
+			// `@:fmt(ignoreSourceNewlinesForWrap)`. Intrinsic
+			// per-construct opt-in to fork's `Ignore` semantic —
+			// drops `Trivial<T>.newlineBefore` signal, routes
+			// per-element block-trailing + leading comments
+			// through the cascade no-trivia branch. Currently
+			// `HxFnDecl.params` (Slice 4c).
+			final ignoreSourceNewlines: Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
+			// ω-bropen-keep-sep: read `@:fmt(keepCurlyBlanks)` on the
+			// struct-Star path. Sister to the enum-Alt path's read.
+			final keepCurlyBlanksStar: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
+			// ω-array-reflow: struct-Star path reader for
+			// `@:fmt(reflowSourceMultiline)`. Sister to the enum-Alt
+			// read; threads into `triviaSepStarExpr`'s `_smlKeep`
+			// gate. No struct-Star consumer opts in yet (first
+			// consumer `HxExpr.ArrayExpr` is enum-Alt) — present for
+			// dual-dispatch symmetry.
+			final reflowSourceMultilineStar: Bool = starNode.fmtHasFlag('reflowSourceMultiline');
+			// ω-arraymatrix-wrap: struct-Star path reader for
+			// `@:fmt(arrayMatrixWrap)`. Sister to the enum-Alt read;
+			// no struct-Star consumer opts in yet (first consumer
+			// `HxExpr.ArrayExpr` is enum-Alt) — present for dual-
+			// dispatch symmetry. `bracketKindPad` is not read on this
+			// path (passed false) so matrix slots in after it.
+			final matrixWrapStar: Bool = starNode.fmtHasFlag('arrayMatrixWrap');
+			// ω-expressionif-collapse (mechanism A): the struct-Star
+			// trivia path previously passed literal `null, null` for
+			// the inside-of-delimiter spacing slots, so a Star carrying
+			// `@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose)`
+			// (HxObjectLit.fields) never produced `{ x }` padding. Read
+			// the policy Doc the same way the plain `@:sep` path
+			// (~5560) and the enum-Alt path (~2363) do —
+			// `delimInsidePolicySpace` returns null when no delim
+			// policy flag is present, so every other struct-Star stays
+			// byte-identical.
+			final openInsideStar: Null<Expr> = delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false);
+			final closeInsideStar: Null<Expr> = delimInsidePolicySpace(starNode, ['typeParamClose', 'objectLiteralBracesClose'], true);
+			// ω-expressionif-collapse (mechanism B read-site):
+			// `@:fmt(reflowInExprPosition)` (HxObjectLit.fields) opts
+			// the Star into source-newline ignore — but only at runtime
+			// when `opt._inValueIfBranch` is set (the immediate value of
+			// a value-if branch). Default false → byte-inert.
+			final reflowInExprBranchStar: Bool = starNode.fmtHasFlag('reflowInExprPosition');
+			parts.push(triviaSepStarExpr(
+				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
+				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
+				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
+				keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar
+			));
+			return;
+		}
+		// `openText ?? ''` (was `?? '{'` through ω₅) — when a
+		// close-peek Star has no `@:lead`, the surrounding Seq
+		// emits the open delimiter before this field, so the Star
+		// itself contributes nothing at the open position. Empty
+		// string → `_dt('')` is a no-op, and `emptyText = '' +
+		// closeText` stays format-neutral (invariant #5).
+		final afterDocComments: Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
+		final keepBetweenFields: Bool = starNode.fmtHasFlag('existingBetweenFields');
+		final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
+		final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
+		final emptyCurlyBreak: Bool = starNode.fmtHasFlag('emptyCurlyBreak');
+		// ω-blockempty: call-form `@:fmt(emptyCurlyBreak('<knob>'))`
+		// names a per-construct EmptyCurly opt field. The bare form
+		// returns null and falls back to `_inAnonFnBody` dispatch
+		// inside `triviaBlockStarExpr`.
+		final emptyCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
+		final emptyCurlyKnob: Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1) ? emptyCurlyKnobArgs[0] : null;
+		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
+		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
+		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
+		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
+		final interMemberArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
+		// ω-interblank-cond-lookthrough: opt-in `@:fmt(interMember
+		// CondLookThrough('<classifierField>', '<condCtor>',
+		// '<bodyField>'))` makes `buildInterMemberClassifyInfo` classify
+		// a `#if … #end` member by its FIRST inner member's kind instead
+		// of the flat `0` ("other"). Mirrors `beforeDocCondLookThrough`'s
+		// doc-comment look-through so two consecutive function-bearing
+		// conditional members get a `betweenFunctions` blank. Inert unless
+		// `interMemberBlankLines` is also present (the policy it widens).
+		final interMemberCondArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberCondLookThrough');
+		final interMemberInfo: Null<InterMemberClassifyInfo> = interMemberArgs == null
+			? null
+			: buildInterMemberClassifyInfo(elemRefName, interMemberArgs, interMemberCondArgs);
+		// `fmtHasFlag` accepts both bare-identifier (`staticVarSubdivision`)
+		// and call form (`staticVarSubdivision('modifiers', 'Static',
+		// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
+		// bare form and only carries args when the call form is used.
+		final staticVarSubdiv: Bool = starNode.fmtHasFlag('staticVarSubdivision');
+		final staticVarSubdivArgs: Null<Array<String>> = staticVarSubdiv ? starNode.fmtReadStringArgs('staticVarSubdivision') : null;
+		final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
+			? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
+			: null;
+		// ω-cond-leading-doc-lookthrough: only meaningful alongside
+		// `beforeDocCommentEmptyLines` (the policy whose doc-comment scan
+		// it widens). Inert otherwise — the resolved info is dropped.
+		final condLeadingDocArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beforeDocCondLookThrough');
+		final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = (condLeadingDocArgs != null && beforeDocComments)
+			? buildCondLeadingDocLookThroughInfo(elemRefName, condLeadingDocArgs)
+			: null;
+		final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
+		final uniformBetweenArgs: Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
+		if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
+			Context.fatalError(
+				'WriterLowering: @:fmt(uniformBetween) expects exactly 1 string arg (optField), got ${uniformBetweenArgs.length}',
+				Context.currentPos()
+			);
+		final uniformBetweenOptField: Null<String> = uniformBetweenArgs != null ? uniformBetweenArgs[0] : null;
+		final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
+		// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
+		// on a Seq-struct Star names a per-construct
+		// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
+		// — when null, dispatch falls back to unconditional
+		// `_dhl()` before close inside `triviaBlockStarExpr`.
+		final rightCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurly');
+		final rightCurlyKnob: Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1) ? rightCurlyKnobArgs[0] : null;
+		// ω-anonfunction-right-curly: call-form
+		// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
+		// Star names a RightCurlyPlacement opt field read only when
+		// `_inAnonFnBody=true`. Used by `HxFnBlock.stmts` to route
+		// anon-fn body closes through `opt.anonFunctionRightCurly`
+		// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
+		// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
+		// pre-slice `_dhl()` path.
+		final rightCurlyAnonFnArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurlyAnonFnOverride');
+		final rightCurlyAnonFnKnob: Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
+			? rightCurlyAnonFnArgs[0]
+			: null;
+		parts.push(triviaBlockStarExpr(
+			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
+			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
+			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
+			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
+			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
+			blockEndedFlag ? formatInfo.schemaTypePath : null, condLeadingDocInfo, false
+		));
+	}
+
+	/**
+	 * Trivia EOF Star dispatch (the `else if (isLastField)` branch of the
+	 * `isTriviaStar` block in `emitWriterStarField`). Reads the cascade infos and
+	 * file-header / line-comment blank flags, then pushes the `triviaEofStarExpr`
+	 * emit onto `parts`. Extracted to keep the orchestrator under the complexity
+	 * gate.
+	 */
+	private function emitTriviaEofStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemFn: String = c.elemFn;
+		final elemRefName: String = c.elemRefName;
+		final openText: Null<String> = c.openText;
+		final trailBBAccess: Null<Expr> = c.trailBBAccess;
+		final trailLCAccess: Null<Expr> = c.trailLCAccess;
+		if (openText != null) parts.push(macro _dt($v{openText}));
+		final cascadeInfos: CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
+		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
+		final lineCommentLedAddBlank: Bool = starNode.fmtHasFlag('blankBeforeLineCommentLed');
+		final afterFileHeaderCommentBlanks: Bool = starNode.fmtHasFlag('afterFileHeaderCommentBlanks');
+		final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
+		parts.push(triviaEofStarExpr(
+			fieldAccess, trailBBAccess, trailLCAccess, elemFn, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
+			cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, lineCommentTrailBlank,
+			lineCommentLedAddBlank, afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks, cascadeInfos.betweenSameCtorIfNotInfos
+		));
+	}
+
 	private function emitWriterStarField(
 		starNode: ShapeNode, fieldAccess: Expr, parts: Array<Expr>, isLastField: Bool, typePath: String, isFirstField: Bool, isRaw: Bool,
 		prevBareRefBody: Null<PrevBodyInfo> = null, prevTrailFieldName: Null<String> = null
@@ -3297,257 +3577,9 @@ class WriterLowering {
 				return;
 			}
 			if (closeText != null) {
-				// First-field Star with knob-form `@:fmt(leftCurly('<knob>'))`
-				// (e.g. `HxObjectLit.fields`) fires the leftCurly switch
-				// even at first-field position — its outer caller already
-				// emits the inter-token space via `_dop(' ')`, so the
-				// `Same` branch is `_de()` and `Next` is `_dhl()` (drops
-				// the pending OptSpace and writes a hardline).
-				final knobLeftCurly: Null<String> = starNode.fmtReadString('leftCurly');
-				final hasKnobLeftCurly: Bool = knobLeftCurly != null;
-				// ω-objectlit-leftCurly-cascade: when the Star carries BOTH
-				// `@:fmt(wrapRules(...))` AND `@:fmt(leftCurly('<knob>'))`,
-				// leftCurly emission moves INSIDE `triviaSepStarExpr` so the
-				// no-trivia branch can wire `IfBreak(_dhl(), _de())` into the
-				// wrap engine's Group — short literals stay cuddled even when
-				// the knob is `Next`. Trivia-bearing branch keeps the
-				// pre-slice unconditional `_dhl()`/`_de()`. Outer site keeps
-				// emitting `leftCurlySeparator` for the no-wrap-rules case
-				// (legacy bare-flag callers and future knob-form callers
-				// without wrap-rules).
-				final wrapRulesField: Null<String> = starNode.fmtReadString('wrapRules');
-				final leftCurlyOwnedBySep: Bool = hasKnobLeftCurly && wrapRulesField != null;
-				if (!leftCurlyOwnedBySep && (
-					!isFirstField || hasKnobLeftCurly
-				) && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode, isFirstField && hasKnobLeftCurly));
-				// ω-trivia-sep: sep-Star with @:trivia routes to a
-				// dedicated helper that drives multi-line vs flat layout
-				// from per-element `newlineBefore` / comment trivia.
-				//
-				// ω-wraprules-objlit: when the Star carries
-				// `@:fmt(wrapRules('<field>'))`, the no-trivia branch of
-				// `triviaSepStarExpr` defers to the runtime
-				// `WrapList.emit` engine so the cascade picks the layout
-				// shape (NoWrap / OnePerLine / FillLine / …). The
-				// trivia-bearing branch still forces multi-line — when
-				// inline / leading / trailing comments are present, the
-				// list cannot collapse to a single line regardless of
-				// what the cascade would say.
-				// ω-blockended-trivia (Session 3): `@:sep('text', tailRelax,
-				// blockEnded)` on a block-mode trivia Star (HxFnBlock.stmts
-				// / HxBlockExpr.stmts / HxBlockStmt.stmts) keeps the
-				// per-element hardlined block layout — sep emit moves
-				// INSIDE `triviaBlockStarExpr` (extended), NOT through the
-				// flat-or-multi `triviaSepStarExpr`. Detect the flag here
-				// and skip the sep dispatch so the fall-through reaches
-				// the block dispatch with sepText/blockEnded threaded.
-				final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-				if (sepText != null && !blockEndedFlag) {
-					// ω-cascade-emits-comments: emit the funcParamParens /
-					// typeParamOpen space inside the @:trivia + sep
-					// dispatch — the @:trivia path returns BEFORE the
-					// no-trivia branch at `:3504-3510` that owns the
-					// equivalent emit, so without this mirror the
-					// `function foo ()` space (and sister knobs) is
-					// silently dropped when the Star becomes @:trivia.
-					// First-field Stars skip (matches the no-trivia path's
-					// `!isFirstField` gate).
-					if (!isFirstField) {
-						final triviaParamSpace: Null<Expr> = openDelimPolicySpace(starNode, ['funcParamParens', 'typeParamOpen']);
-						if (triviaParamSpace != null) parts.push(triviaParamSpace);
-					}
-					// ω-objectlit-source-trail-comma: when the Star also
-					// carries `@:fmt(trailingComma('<knob>'))`, thread the
-					// knob's field name into `triviaSepStarExpr` so its
-					// no-trivia branch can `forceExceeds` on the wrap engine
-					// when the source had a trailing separator AND the knob
-					// is on. Null knob → behaves identically to pre-slice
-					// (cascade evaluates exceeds=false / =true symmetrically).
-					final trailingCommaField: Null<String> = starNode.fmtReadString('trailingComma');
-					// ω-objectlit-right-curly: struct-Star path now threads
-					// `@:fmt(rightCurly('<knob>'))` (e.g.
-					// `rightCurly('objectLiteralRightCurly')` on
-					// `HxObjectLit.fields`) into `triviaSepStarExpr`'s 12th
-					// param. Null (no opt-in) preserves pre-slice
-					// unconditional `_dhl()` before close.
-					final knobRightCurly: Null<String> = starNode.fmtReadString('rightCurly');
-					// ω-typedef-anon-force-multi: when the sep-Star carries
-					// `@:fmt(forceMultiInTypedef)` (currently only
-					// `HxType.Anon.fields`), thread the flag into
-					// `triviaSepStarExpr` so its no-trivia branch emits a
-					// runtime `opt._inTypedefBody ? WrapMode.OnePerLine :
-					// null` as `WrapList.emit`'s 15th `forceMode` arg.
-					// Bypasses the cascade only when the typedef-RHS
-					// context is active — non-typedef anon consumers
-					// (var-type-hint, fn-return-type) stay cascade-driven.
-					final forceMultiTypedef: Bool = starNode.fmtHasFlag('forceMultiInTypedef');
-					final bodyAware: Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
-					// ω-group-rest-probe slice 2: struct-Star path reader for
-					// `@:fmt(groupRestProbe)`. Mirrors the lowerStruct plain-
-					// path read (added at the lowerStruct dispatch site).
-					// Trivia-path dual-dispatch closure per
-					// [[feedback-wraprules-dispatch-dual-path]].
-					final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
-					// ω-cascade-emits-comments: struct-Star path reader for
-					// `@:fmt(ignoreSourceNewlinesForWrap)`. Intrinsic
-					// per-construct opt-in to fork's `Ignore` semantic —
-					// drops `Trivial<T>.newlineBefore` signal, routes
-					// per-element block-trailing + leading comments
-					// through the cascade no-trivia branch. Currently
-					// `HxFnDecl.params` (Slice 4c).
-					final ignoreSourceNewlines: Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
-					// ω-bropen-keep-sep: read `@:fmt(keepCurlyBlanks)` on the
-					// struct-Star path. Sister to the enum-Alt path's read.
-					final keepCurlyBlanksStar: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
-					// ω-array-reflow: struct-Star path reader for
-					// `@:fmt(reflowSourceMultiline)`. Sister to the enum-Alt
-					// read; threads into `triviaSepStarExpr`'s `_smlKeep`
-					// gate. No struct-Star consumer opts in yet (first
-					// consumer `HxExpr.ArrayExpr` is enum-Alt) — present for
-					// dual-dispatch symmetry.
-					final reflowSourceMultilineStar: Bool = starNode.fmtHasFlag('reflowSourceMultiline');
-					// ω-arraymatrix-wrap: struct-Star path reader for
-					// `@:fmt(arrayMatrixWrap)`. Sister to the enum-Alt read;
-					// no struct-Star consumer opts in yet (first consumer
-					// `HxExpr.ArrayExpr` is enum-Alt) — present for dual-
-					// dispatch symmetry. `bracketKindPad` is not read on this
-					// path (passed false) so matrix slots in after it.
-					final matrixWrapStar: Bool = starNode.fmtHasFlag('arrayMatrixWrap');
-					// ω-expressionif-collapse (mechanism A): the struct-Star
-					// trivia path previously passed literal `null, null` for
-					// the inside-of-delimiter spacing slots, so a Star carrying
-					// `@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose)`
-					// (HxObjectLit.fields) never produced `{ x }` padding. Read
-					// the policy Doc the same way the plain `@:sep` path
-					// (~5560) and the enum-Alt path (~2363) do —
-					// `delimInsidePolicySpace` returns null when no delim
-					// policy flag is present, so every other struct-Star stays
-					// byte-identical.
-					final openInsideStar: Null<Expr> =
-						delimInsidePolicySpace(starNode, ['typeParamOpen', 'objectLiteralBracesOpen'], false);
-					final closeInsideStar: Null<Expr> = delimInsidePolicySpace(
-						starNode, ['typeParamClose', 'objectLiteralBracesClose'], true
-					);
-					// ω-expressionif-collapse (mechanism B read-site):
-					// `@:fmt(reflowInExprPosition)` (HxObjectLit.fields) opts
-					// the Star into source-newline ignore — but only at runtime
-					// when `opt._inValueIfBranch` is set (the immediate value of
-					// a value-if branch). Default false → byte-inert.
-					final reflowInExprBranchStar: Bool = starNode.fmtHasFlag('reflowInExprPosition');
-					parts.push(triviaSepStarExpr(
-						fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText,
-						sepText, wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess,
-						trailingCommaField, openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe,
-						ignoreSourceNewlines, keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar, trailNLAccess, false,
-						false, reflowInExprBranchStar
-					));
-					return;
-				}
-				// `openText ?? ''` (was `?? '{'` through ω₅) — when a
-				// close-peek Star has no `@:lead`, the surrounding Seq
-				// emits the open delimiter before this field, so the Star
-				// itself contributes nothing at the open position. Empty
-				// string → `_dt('')` is a no-op, and `emptyText = '' +
-				// closeText` stays format-neutral (invariant #5).
-				final afterDocComments: Bool = starNode.fmtHasFlag('afterFieldsWithDocComments');
-				final keepBetweenFields: Bool = starNode.fmtHasFlag('existingBetweenFields');
-				final beforeDocComments: Bool = starNode.fmtHasFlag('beforeDocCommentEmptyLines');
-				final indentCaseLabelsGate: Bool = starNode.fmtHasFlag('indentCaseLabels');
-				final emptyCurlyBreak: Bool = starNode.fmtHasFlag('emptyCurlyBreak');
-				// ω-blockempty: call-form `@:fmt(emptyCurlyBreak('<knob>'))`
-				// names a per-construct EmptyCurly opt field. The bare form
-				// returns null and falls back to `_inAnonFnBody` dispatch
-				// inside `triviaBlockStarExpr`.
-				final emptyCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
-				final emptyCurlyKnob: Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1)
-					? emptyCurlyKnobArgs[0]
-					: null;
-				final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
-				final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
-				final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
-				final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
-				final interMemberArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberBlankLines');
-				// ω-interblank-cond-lookthrough: opt-in `@:fmt(interMember
-				// CondLookThrough('<classifierField>', '<condCtor>',
-				// '<bodyField>'))` makes `buildInterMemberClassifyInfo` classify
-				// a `#if … #end` member by its FIRST inner member's kind instead
-				// of the flat `0` ("other"). Mirrors `beforeDocCondLookThrough`'s
-				// doc-comment look-through so two consecutive function-bearing
-				// conditional members get a `betweenFunctions` blank. Inert unless
-				// `interMemberBlankLines` is also present (the policy it widens).
-				final interMemberCondArgs: Null<Array<String>> = starNode.fmtReadStringArgs('interMemberCondLookThrough');
-				final interMemberInfo: Null<InterMemberClassifyInfo> = interMemberArgs == null
-					? null
-					: buildInterMemberClassifyInfo(elemRefName, interMemberArgs, interMemberCondArgs);
-				// `fmtHasFlag` accepts both bare-identifier (`staticVarSubdivision`)
-				// and call form (`staticVarSubdivision('modifiers', 'Static',
-				// 'afterStaticVars')`) — `fmtReadStringArgs` is null in the
-				// bare form and only carries args when the call form is used.
-				final staticVarSubdiv: Bool = starNode.fmtHasFlag('staticVarSubdivision');
-				final staticVarSubdivArgs: Null<Array<String>> =
-					staticVarSubdiv ? starNode.fmtReadStringArgs('staticVarSubdivision') : null;
-				final staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = (staticVarSubdiv && interMemberInfo != null)
-					? buildStaticVarSubdivisionInfo(elemRefName, staticVarSubdivArgs ?? [])
-					: null;
-				// ω-cond-leading-doc-lookthrough: only meaningful alongside
-				// `beforeDocCommentEmptyLines` (the policy whose doc-comment scan
-				// it widens). Inert otherwise — the resolved info is dropped.
-				final condLeadingDocArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beforeDocCondLookThrough');
-				final condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = (condLeadingDocArgs != null && beforeDocComments)
-					? buildCondLeadingDocLookThroughInfo(elemRefName, condLeadingDocArgs)
-					: null;
-				final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
-				final uniformBetweenArgs: Null<Array<String>> = starNode.fmtReadStringArgs('uniformBetween');
-				if (uniformBetweenArgs != null && uniformBetweenArgs.length != 1)
-					Context.fatalError(
-						'WriterLowering: @:fmt(uniformBetween) expects exactly 1 string arg (optField), got ${uniformBetweenArgs.length}',
-						Context.currentPos()
-					);
-				final uniformBetweenOptField: Null<String> = uniformBetweenArgs != null ? uniformBetweenArgs[0] : null;
-				final anonFnClear: Bool = starNode.fmtHasFlag('leftCurlyAnonFnOverride');
-				// ω-blockright-curly: call-form `@:fmt(rightCurly('<knob>'))`
-				// on a Seq-struct Star names a per-construct
-				// RightCurlyPlacement opt field. Sister to `emptyCurlyKnob`
-				// — when null, dispatch falls back to unconditional
-				// `_dhl()` before close inside `triviaBlockStarExpr`.
-				final rightCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurly');
-				final rightCurlyKnob: Null<String> = (rightCurlyKnobArgs != null && rightCurlyKnobArgs.length >= 1)
-					? rightCurlyKnobArgs[0]
-					: null;
-				// ω-anonfunction-right-curly: call-form
-				// `@:fmt(rightCurlyAnonFnOverride('<knob>'))` on a Seq-struct
-				// Star names a RightCurlyPlacement opt field read only when
-				// `_inAnonFnBody=true`. Used by `HxFnBlock.stmts` to route
-				// anon-fn body closes through `opt.anonFunctionRightCurly`
-				// while keeping `HxFnDecl.body` / `HxUntypedFnBody.block`
-				// (same `HxFnBlock` Star, `_inAnonFnBody=false`) on the
-				// pre-slice `_dhl()` path.
-				final rightCurlyAnonFnArgs: Null<Array<String>> = starNode.fmtReadStringArgs('rightCurlyAnonFnOverride');
-				final rightCurlyAnonFnKnob: Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
-					? rightCurlyAnonFnArgs[0]
-					: null;
-				parts.push(triviaBlockStarExpr(
-					fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
-					afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak,
-					beginEndType, keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo,
-					betweenMultilineCommentsBlanks, uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob,
-					rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null, blockEndedFlag,
-					blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
-					blockEndedFlag ? formatInfo.schemaTypePath : null, condLeadingDocInfo, false
-				));
+				emitTriviaCloseStar(triviaCtx, parts);
 			} else if (isLastField) {
-				if (openText != null) parts.push(macro _dt($v{openText}));
-				final cascadeInfos: CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
-				final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
-				final lineCommentLedAddBlank: Bool = starNode.fmtHasFlag('blankBeforeLineCommentLed');
-				final afterFileHeaderCommentBlanks: Bool = starNode.fmtHasFlag('afterFileHeaderCommentBlanks');
-				final betweenMultilineCommentsBlanks: Bool = starNode.fmtHasFlag('betweenMultilineCommentsBlanks');
-				parts.push(triviaEofStarExpr(
-					fieldAccess, trailBBAccess, trailLCAccess, elemFn, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
-					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, lineCommentTrailBlank,
-					lineCommentLedAddBlank, afterFileHeaderCommentBlanks, betweenMultilineCommentsBlanks,
-					cascadeInfos.betweenSameCtorIfNotInfos
-				));
+				emitTriviaEofStar(triviaCtx, parts);
 			} else {
 				Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
 			}
