@@ -1156,18 +1156,7 @@ final class HaxeFormatConfigLoader {
 			opt.afterFieldsWithDocComments = commentEmptyLinesToRuntime(section.afterFieldsWithDocComments);
 		if (section.beforeDocCommentEmptyLines != null)
 			opt.beforeDocCommentEmptyLines = commentEmptyLinesToRuntime(section.beforeDocCommentEmptyLines);
-		final classSection: Null<HxFormatClassEmptyLinesConfig> = section.classEmptyLines;
-		if (classSection != null) {
-			if (classSection.existingBetweenFields != null)
-				opt.existingBetweenFields = keepEmptyLinesToRuntime(classSection.existingBetweenFields);
-			if (classSection.betweenVars != null) opt.betweenVars = classSection.betweenVars;
-			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
-			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
-			if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
-			if (classSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
-			if (classSection.beginType != null) opt.beginType = classSection.beginType;
-			if (classSection.endType != null) opt.endType = classSection.endType;
-		}
+		applyClassEmptyLines(section, opt);
 		// ω-abstract-static-fn-cascade: `abstractEmptyLines` reuses the
 		// shared `HxFormatClassEmptyLinesConfig` runtime knobs (fork shares
 		// `ClassFieldsEmptyLinesConfig` across class / abstract scopes). Only
@@ -1180,33 +1169,7 @@ final class HaxeFormatConfigLoader {
 		final externClassSection: Null<HxFormatClassEmptyLinesConfig> = section.externClassEmptyLines;
 		if (externClassSection != null && externClassSection.existingBetweenFields != null)
 			opt.externExistingBetweenFields = keepEmptyLinesToRuntime(externClassSection.existingBetweenFields);
-		final interfaceSection: Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
-		if (interfaceSection != null) {
-			if (interfaceSection.betweenVars != null) opt.interfaceBetweenVars = interfaceSection.betweenVars;
-			if (interfaceSection.betweenFunctions != null) opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
-			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
-		}
-		final enumSection: Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
-		if (enumSection != null) {
-			if (enumSection.existingBetweenFields != null)
-				opt.existingBetweenFields = keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
-			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
-			if (enumSection.beginType != null) opt.beginType = enumSection.beginType;
-			if (enumSection.endType != null) opt.endType = enumSection.endType;
-		}
-		// ω-typedef-between-fields: `typedefEmptyLines` routes the four
-		// sub-keys to the dedicated typedef-scoped knobs (no shared-knob
-		// last-write-wins, unlike `enumEmptyLines`). Drives the
-		// `HxType.Anon.fields` `@:sep`-Star force-multi blank inserts when
-		// the descendant anon body carries `_inTypedefBody == true`.
-		final typedefSection: Null<HxFormatTypedefEmptyLinesConfig> = section.typedefEmptyLines;
-		if (typedefSection != null) {
-			if (typedefSection.existingBetweenFields != null)
-				opt.typedefExistingBetweenFields = keepEmptyLinesToRuntime(typedefSection.existingBetweenFields);
-			if (typedefSection.betweenFields != null) opt.typedefBetweenFields = typedefSection.betweenFields;
-			if (typedefSection.beginType != null) opt.typedefBeginType = typedefSection.beginType;
-			if (typedefSection.endType != null) opt.typedefEndType = typedefSection.endType;
-		}
+		applyInterfaceEnumTypedefEmptyLines(section, opt);
 		if (section.afterPackage != null) opt.afterPackage = section.afterPackage;
 		if (section.beforePackage != null) opt.beforePackage = section.beforePackage;
 		if (section.afterFileHeaderComment != null) opt.afterFileHeaderComment = section.afterFileHeaderComment;
@@ -1223,19 +1186,7 @@ final class HaxeFormatConfigLoader {
 		// section runs, so here we only honour an explicit JSON override.
 		if (section.afterLeftCurly != null) opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
 		if (section.beforeRightCurly != null) opt.beforeRightCurly = keepEmptyLinesToRuntime(section.beforeRightCurly);
-		final importAndUsing: Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
-		if (importAndUsing != null) {
-			if (importAndUsing.beforeUsing != null) opt.beforeUsing = importAndUsing.beforeUsing;
-			if (importAndUsing.betweenImports != null) opt.betweenImports = importAndUsing.betweenImports;
-			final levelRaw: Null<String> = importAndUsing.betweenImportsLevel;
-			if (levelRaw != null) {
-				final mapped: Null<HxBetweenImportsLevel> = betweenImportsLevelFromString(levelRaw);
-				if (mapped != null) opt.betweenImportsLevel = mapped;
-			}
-			if (importAndUsing.beforeType != null) opt.beforeType = importAndUsing.beforeType;
-			if (importAndUsing.keepSourceBlankAcrossConditional != null)
-				opt.keepSourceBlankAcrossConditional = importAndUsing.keepSourceBlankAcrossConditional;
-		}
+		applyImportAndUsingEmptyLines(section, opt);
 	}
 
 	/**
@@ -1716,6 +1667,67 @@ final class HaxeFormatConfigLoader {
 			// `objectLiteralCurly.rightCurly` sub-key already set it.
 			if (section.objectLiteralCurly == null || section.objectLiteralCurly.rightCurly == null)
 				opt.objectLiteralRightCurly = placement;
+		}
+	}
+
+	private static function applyClassEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final classSection: Null<HxFormatClassEmptyLinesConfig> = section.classEmptyLines;
+		if (classSection != null) {
+			if (classSection.existingBetweenFields != null)
+				opt.existingBetweenFields = keepEmptyLinesToRuntime(classSection.existingBetweenFields);
+			if (classSection.betweenVars != null) opt.betweenVars = classSection.betweenVars;
+			if (classSection.betweenFunctions != null) opt.betweenFunctions = classSection.betweenFunctions;
+			if (classSection.afterVars != null) opt.afterVars = classSection.afterVars;
+			if (classSection.afterStaticVars != null) opt.afterStaticVars = classSection.afterStaticVars;
+			if (classSection.betweenStaticFunctions != null) opt.betweenStaticFunctions = classSection.betweenStaticFunctions;
+			if (classSection.beginType != null) opt.beginType = classSection.beginType;
+			if (classSection.endType != null) opt.endType = classSection.endType;
+		}
+	}
+
+	private static function applyInterfaceEnumTypedefEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final interfaceSection: Null<HxFormatInterfaceEmptyLinesConfig> = section.interfaceEmptyLines;
+		if (interfaceSection != null) {
+			if (interfaceSection.betweenVars != null) opt.interfaceBetweenVars = interfaceSection.betweenVars;
+			if (interfaceSection.betweenFunctions != null) opt.interfaceBetweenFunctions = interfaceSection.betweenFunctions;
+			if (interfaceSection.afterVars != null) opt.interfaceAfterVars = interfaceSection.afterVars;
+		}
+		final enumSection: Null<HxFormatEnumEmptyLinesConfig> = section.enumEmptyLines;
+		if (enumSection != null) {
+			if (enumSection.existingBetweenFields != null)
+				opt.existingBetweenFields = keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
+			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
+			if (enumSection.beginType != null) opt.beginType = enumSection.beginType;
+			if (enumSection.endType != null) opt.endType = enumSection.endType;
+		}
+		// ω-typedef-between-fields: `typedefEmptyLines` routes the four
+		// sub-keys to the dedicated typedef-scoped knobs (no shared-knob
+		// last-write-wins, unlike `enumEmptyLines`). Drives the
+		// `HxType.Anon.fields` `@:sep`-Star force-multi blank inserts when
+		// the descendant anon body carries `_inTypedefBody == true`.
+		final typedefSection: Null<HxFormatTypedefEmptyLinesConfig> = section.typedefEmptyLines;
+		if (typedefSection != null) {
+			if (typedefSection.existingBetweenFields != null)
+				opt.typedefExistingBetweenFields = keepEmptyLinesToRuntime(typedefSection.existingBetweenFields);
+			if (typedefSection.betweenFields != null) opt.typedefBetweenFields = typedefSection.betweenFields;
+			if (typedefSection.beginType != null) opt.typedefBeginType = typedefSection.beginType;
+			if (typedefSection.endType != null) opt.typedefEndType = typedefSection.endType;
+		}
+	}
+
+	private static function applyImportAndUsingEmptyLines(section: HxFormatEmptyLinesSection, opt: HxModuleWriteOptions): Void {
+		final importAndUsing: Null<HxFormatImportAndUsingConfig> = section.importAndUsing;
+		if (importAndUsing != null) {
+			if (importAndUsing.beforeUsing != null) opt.beforeUsing = importAndUsing.beforeUsing;
+			if (importAndUsing.betweenImports != null) opt.betweenImports = importAndUsing.betweenImports;
+			final levelRaw: Null<String> = importAndUsing.betweenImportsLevel;
+			if (levelRaw != null) {
+				final mapped: Null<HxBetweenImportsLevel> = betweenImportsLevelFromString(levelRaw);
+				if (mapped != null) opt.betweenImportsLevel = mapped;
+			}
+			if (importAndUsing.beforeType != null) opt.beforeType = importAndUsing.beforeType;
+			if (importAndUsing.keepSourceBlankAcrossConditional != null)
+				opt.keepSourceBlankAcrossConditional = importAndUsing.keepSourceBlankAcrossConditional;
 		}
 	}
 
