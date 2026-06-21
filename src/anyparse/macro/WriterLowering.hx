@@ -1138,210 +1138,30 @@ class WriterLowering {
 					// so the sep part can become a hardline (τ₁).
 					// @:fmt(bodyPolicy(...)) replaces the final ' ' before the body with
 					// a runtime-switched separator (Same/Next/FitLine, ψ₄).
-					// ω-issue-316: in Trivia mode, `@:optional @:kw(...)` Ref
-					// children grow per-parent sibling slots `<field>AfterKw`
-					// / `<field>KwLeading` holding captured trivia from the
-					// gap between the kw and the body. Read them off `value`
-					// (the parent struct) and forward to `bodyPolicyWrap`
-					// which injects them into the kw→body separator. The
-					// non-bodyPolicy kwLead path below (`_dt(kwLead + ' ')`)
-					// currently drops these slots — no grammar field exercises
-					// that combination yet, but a future `@:optional @:kw`
-					// without bodyPolicy would lose captured trivia silently.
-					final useTriviaGap: Bool = ctx.trivia && kwLead != null;
-					final afterKwExpr: Null<Expr> = useTriviaGap
-						? {
-							expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
-							pos: Context.currentPos()
-						}
-						: null;
-					final kwLeadingExpr: Null<Expr> = useTriviaGap
-						? {
-							expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX),
-							pos: Context.currentPos()
-						}
-						: null;
-					// ω-keep-policy: `<field>BodyOnSameLine:Bool` drives the
-					// `Keep` branch of `bodyPolicyWrap` / policySwitch. Only
-					// synthesised on optional-kw Ref paths in trivia mode.
-					final bodyOnSameLineExpr: Null<Expr> = useTriviaGap
-						? {
-							expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
-							pos: Context.currentPos()
-						}
-						: null;
-					// ω-trivia-before-kw: own-line comments captured between
-					// the preceding token and the kw (e.g. `} // c\nelse`)
-					// land in `<field>BeforeKwLeading`. When non-empty, the
-					// `kwBeforeDoc` runtime helper replaces the plain
-					// `sameLineSeparator` output with hardline-separated
-					// comments at the parent's indent level. When empty,
-					// the helper degrades to the unmodified separator.
-					final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
-						? {
-							expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
-							pos: Context.currentPos()
-						}
-						: null;
-					// ω-trivia-before-kw-trailing: same-line trailing comment
-					// captured between the preceding sibling's last token and
-					// the kw (e.g. `resize(); // first\nelse`) lands in
-					// `<field>BeforeKwTrailing`. When non-null, prepended
-					// before the (possibly leading-augmented) separator so
-					// the comment cuddles to the prior token; the hardline
-					// inside the sep breaks back to the parent indent before
-					// the kw. Composes with `kwBeforeDoc` cleanly: trailing
-					// first, then own-line leadings, then sep+kw.
-					final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
-						? {
-							expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
-							pos: Context.currentPos()
-						}
-						: null;
+					// ω-issue-316 / ω-keep-policy / ω-trivia-before-kw[-trailing]: the
+					// per-parent kw-trivia slots (<field>AfterKw / KwLeading /
+					// BodyOnSameLine / BeforeKwLeading / BeforeKwTrailing) are read off
+					// `value` and threaded into the kw→body separator inside
+					// emitOptionalKwBody.
 					final optParts: Array<Expr> = [];
 					// ω-N-break-after-eq: lead+RHS bundle handled in emitOptionalRefLead.
-					if (kwLead != null) {
-						final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
-						final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
-							? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
-							: sepBaseExpr;
-						final sepWithBeforeKwTrailingExpr: Expr = beforeKwTrailingExpr != null
-							? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
-							: sepWithBeforeKwExpr;
-						optParts.push(sepWithBeforeKwTrailingExpr);
-						if (bodyPolicyFlag != null) {
-							optParts.push(macro _dt($v{kwLead}));
-							// ω-expression-if-with-blocks: sister read of
-							// `@:fmt(inlineBlockBodyIfFlag(...))` on optional-kw
-							// body field path (e.g. `HxIfExpr.elseBranch`'s
-							// `@:optional @:kw('else')` form). Threaded into the
-							// same `bodyPolicyWrap` plumbing as the bare-Ref path
-							// below; the runtime override fires at writeCall-swap
-							// time before policy dispatch.
-							final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
-							optParts.push(bodyPolicyWrap({
-								flagName: bodyPolicyFlag,
-								exprFlagName: bodyPolicyExprFlag,
-								writeCall: writeCall,
-								bodyValueExpr: macro _optVal,
-								bodyTypePath: refName,
-								hasElseIf: hasElseIf,
-								elseFieldName: elseFieldName,
-								afterKwExpr: afterKwExpr,
-								kwLeadingExpr: kwLeadingExpr,
-								bodyOnSameLineExpr: bodyOnSameLineExpr,
-								indentObjArgs: indentObjArgs,
-								inlineBlockBodyArgs: inlineBlockBodyArgs,
-							}));
-						} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
-							// ω-cond-comp-expr-body-nest: optional-kw-Ref body
-							// break+nest based on the captured `<f>BodyOnSameLine`
-							// slot. When the slot is false (source had a newline
-							// between the kw and the body) the wrapper emits
-							// `Nest(_cols, [hardline, body])` so the body sits
-							// one indent step deeper than the kw line. When true
-							// the wrapper emits `' ' + body` for inline single-
-							// line shape. Plain mode and non-trivia-bearing rules
-							// see a null `bodyOnSameLineExpr` and fall through to
-							// the default `_dt(kwLead + ' ') + writeCall` below.
-							// Currently consumed by `HxConditionalExpr.elseExpr`.
-							optParts.push(macro _dt($v{kwLead}));
-							final invertedSignal: Expr = macro !$bodyOnSameLineExpr;
-							optParts.push(nestBodyOnSourceNewlineWrap(writeCall, invertedSignal));
-						} else {
-							optParts.push(macro _dt($v{kwLead + ' '}));
-							optParts.push(writeCall);
-						}
-					} else if (leadText != null) {
+					if (kwLead != null)
+						emitOptionalKwBody(
+							child, optParts, kwLead, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf,
+							elseFieldName, prevBodyField, typePath, prevPadTrailing, indentObjArgs
+						);
+					else if (leadText != null)
 						emitOptionalRefLead(
 							child, optParts, leadText, writeCall, prevBodyField, typePath, prevPadTrailing, trailText, trailOptText,
 							hasStructFieldTrailOptSlot, structTrailOptAccess
 						);
-						// (ω-optional-ref-trail / trailOpt pushes live in emitOptionalRefLead)
-					} else if (bodyPolicyFlag != null) {
-						// ω-absent-on-bodypolicy: optional Ref with no kw /
-						// lead but `@:fmt(bodyPolicy(...))`. The leftCurly
-						// branch below mirrors the mandatory-Ref `{`-ctor
-						// switch; this branch mirrors the mandatory-Ref
-						// `bodyPolicyWrap` path (the bare-Ref site below /
-						// the optional-kw site above) so the `)`→body
-						// separator survives. `bodyPolicyWrap` owns the
-						// separator AND the body emission; for the absent
-						// case the outer `_optVal != null` guard drops the
-						// whole thing to `_de()`. Present-body output is
-						// byte-identical to the pre-optional mandatory-Ref
-						// path (same wrap, same flag, no kw-trivia gap).
-						// First consumer: `HxCatchClause.body` (bodyless
-						// `catch (e:T)`).
-						final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
-						optParts.push(bodyPolicyWrap({
-							flagName: bodyPolicyFlag,
-							exprFlagName: bodyPolicyExprFlag,
-							writeCall: writeCall,
-							bodyValueExpr: macro _optVal,
-							bodyTypePath: refName,
-							hasElseIf: hasElseIf,
-							elseFieldName: elseFieldName,
-							indentObjArgs: indentObjArgs,
-							inlineBlockBodyArgs: inlineBlockBodyArgs,
-						}));
-					} else {
-						// ω-absent-on: optional Ref with no kw / lead — emit
-						// only the writeCall, but if `@:fmt(leftCurly)` is
-						// present mirror the mandatory-Ref path's runtime
-						// ctor switch so the kw→`{` transition (Allman
-						// `\n{` for BlockBody, ` ` for ExprBody) survives.
-						// Without this the absent-on body emits its
-						// payload glued to the previous token. First and
-						// only consumer so far: `HxFnExpr.body`.
-						final lcSep: Null<Expr> = child.fmtHasFlag('leftCurly') ? leftCurlySeparator(child) : null;
-						final lcCtors: Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
-						// ω-anonfnbody-keep: optional-Ref mirror of the
-						// mandatory-Ref `bodyPolicyForCtor` chain (see the
-						// `HxFnDecl.body` site below, slice ω-fnbody-keep). When
-						// `@:fmt(bodyPolicyForCtor('<ctor>', '<flagName>'))` pairs
-						// are present, route each matched runtime ctor through
-						// `bodyPolicyWrap` (which owns the signature→body
-						// separator AND the body emission) and fall through to the
-						// per-ctor `sep + writeCall` default for every other ctor.
-						// Consumer: `HxFnExpr.body` for `('ExprBody',
-						// 'anonFunctionBody')` — the bare-expr anon-fn body. The
-						// gap-at-parent rationale matches the mandatory-Ref path:
-						// the signature→body source-newline gap is consumed by the
-						// parent struct's pre-field `skipWs` before this branch's
-						// sub-rule probes, so the `Keep`-policy slot must be read
-						// at the parent (`<field>BeforeNewline`), NOT inside the
-						// kw-less `ExprBody` branch (which grows no slot). Default
-						// `anonFunctionBody=Same` reproduces the prior ExprBody
-						// `_dt(' ')` cuddle byte-for-byte, so this is inert until
-						// the knob is set to `Next` / `Keep`.
-						final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
-						if (lcSep != null && lcCtors.length > 0) {
-							final ctorExpr: Expr = macro Type.enumConstructor(_optVal);
-							final sepExpr: Expr = buildLeftCurlySepExpr(refName, lcCtors, ctorExpr, lcSep);
-							if (bodyPolicyForCtorPairs.length > 0) {
-								// The `<field>BeforeNewline` Keep-dispatch slot is
-								// synthesised only for NON-optional bare Refs
-								// (`TriviaTypeSynth.isBareNonFirstRef` excludes
-								// `@:optional`). This optional-Ref path therefore has
-								// no slot — pass `null`, so `Same` / `Next` work and
-								// `Keep` degrades to the no-slot default. Supporting
-								// `Keep` here would require extending slot synthesis
-								// to optional Refs (a separate, larger change — the
-								// `sourceMultilineKeep` wall noted in slice ω-fnbody-keep).
-								final wrapBodyOnSameLineExpr: Null<Expr> = null;
-								optParts.push(buildBodyPolicyForCtorChain(
-									bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, wrapBodyOnSameLineExpr,
-									null
-								));
-								// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
-							} else {
-								optParts.push(sepExpr);
-								optParts.push(writeCall);
-							}
-						} else
-							optParts.push(writeCall);
-					}
+					else if (bodyPolicyFlag != null)
+						emitOptionalBodyPolicyOnly(
+							child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName,
+							indentObjArgs
+						);
+					else
+						emitOptionalAbsentOnBody(child, optParts, refName, writeCall);
 					// ω-pad-trailing-ref: optional-Ref `@:fmt(padTrailing)`
 					// pushes a trailing space INSIDE optParts so the pad is
 					// emitted only when `_optVal != null` (the surrounding
@@ -15478,6 +15298,206 @@ class WriterLowering {
 			final entry: Expr = parts[i];
 			parts[i] = macro _suppressMoreEntry ? _de() : $entry;
 		}
+	}
+
+	/**
+	 * ω-absent-on: emit the optional-Ref body for a field with no `@:kw` /
+	 * `@:lead`. Pushes only the `writeCall` by default, but when
+	 * `@:fmt(leftCurly)` is present mirrors the mandatory-Ref runtime ctor
+	 * switch (Allman `\n{` for BlockBody, ` ` for ExprBody) and routes
+	 * `@:fmt(bodyPolicyForCtor(...))` pairs through `buildBodyPolicyForCtorChain`.
+	 * Pushes into `optParts`. Extracted from `lowerStruct`'s optional-Ref arm.
+	 */
+	private function emitOptionalAbsentOnBody(child: ShapeNode, optParts: Array<Expr>, refName: String, writeCall: Expr): Void {
+		final lcSep: Null<Expr> = child.fmtHasFlag('leftCurly') ? leftCurlySeparator(child) : null;
+		final lcCtors: Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
+		// ω-anonfnbody-keep: optional-Ref mirror of the
+		// mandatory-Ref `bodyPolicyForCtor` chain (see the
+		// `HxFnDecl.body` site below, slice ω-fnbody-keep). When
+		// `@:fmt(bodyPolicyForCtor('<ctor>', '<flagName>'))` pairs
+		// are present, route each matched runtime ctor through
+		// `bodyPolicyWrap` (which owns the signature→body
+		// separator AND the body emission) and fall through to the
+		// per-ctor `sep + writeCall` default for every other ctor.
+		// Consumer: `HxFnExpr.body` for `('ExprBody',
+		// 'anonFunctionBody')` — the bare-expr anon-fn body. The
+		// gap-at-parent rationale matches the mandatory-Ref path:
+		// the signature→body source-newline gap is consumed by the
+		// parent struct's pre-field `skipWs` before this branch's
+		// sub-rule probes, so the `Keep`-policy slot must be read
+		// at the parent (`<field>BeforeNewline`), NOT inside the
+		// kw-less `ExprBody` branch (which grows no slot). Default
+		// `anonFunctionBody=Same` reproduces the prior ExprBody
+		// `_dt(' ')` cuddle byte-for-byte, so this is inert until
+		// the knob is set to `Next` / `Keep`.
+		final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
+		if (lcSep != null && lcCtors.length > 0) {
+			final ctorExpr: Expr = macro Type.enumConstructor(_optVal);
+			final sepExpr: Expr = buildLeftCurlySepExpr(refName, lcCtors, ctorExpr, lcSep);
+			if (bodyPolicyForCtorPairs.length > 0) {
+				// The `<field>BeforeNewline` Keep-dispatch slot is
+				// synthesised only for NON-optional bare Refs
+				// (`TriviaTypeSynth.isBareNonFirstRef` excludes
+				// `@:optional`). This optional-Ref path therefore has
+				// no slot — pass `null`, so `Same` / `Next` work and
+				// `Keep` degrades to the no-slot default. Supporting
+				// `Keep` here would require extending slot synthesis
+				// to optional Refs (a separate, larger change — the
+				// `sourceMultilineKeep` wall noted in slice ω-fnbody-keep).
+				final wrapBodyOnSameLineExpr: Null<Expr> = null;
+				optParts.push(buildBodyPolicyForCtorChain(
+					bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, wrapBodyOnSameLineExpr, null
+				));
+				// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
+			} else {
+				optParts.push(sepExpr);
+				optParts.push(writeCall);
+			}
+		} else
+			optParts.push(writeCall);
+	}
+
+	/**
+	 * Emit the optional-kw Ref body (the `@:optional @:kw(...)` path, e.g.
+	 * `HxIfExpr.elseBranch`). Computes the leading separator (augmented with
+	 * captured before-kw trivia in trivia mode) then dispatches the kw→body
+	 * emission on `@:fmt(bodyPolicy(...))` (→ `bodyPolicyWrap`),
+	 * `@:fmt(nestBodyOnSourceNewline)` (→ source-newline break+nest), or the
+	 * default `_dt(kwLead + ' ') + writeCall`. The ω-issue-316 kw-trivia slots
+	 * (`<field>AfterKw` / `KwLeading` / `BodyOnSameLine` / `BeforeKwLeading` /
+	 * `BeforeKwTrailing`) are read off `value` here in trivia mode. Pushes into
+	 * `optParts`. Extracted from `lowerStruct`'s optional-Ref arm.
+	 */
+	private function emitOptionalKwBody(
+		child: ShapeNode, optParts: Array<Expr>, kwLead: String, fieldName: String, bodyPolicyFlag: Null<String>,
+		bodyPolicyExprFlag: Null<String>, writeCall: Expr, refName: String, hasElseIf: Bool, elseFieldName: Null<String>,
+		prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, indentObjArgs: Null<Array<String>>
+	): Void {
+		// ω-issue-316: in Trivia mode, `@:optional @:kw(...)` Ref
+		// children grow per-parent sibling slots `<field>AfterKw`
+		// / `<field>KwLeading` holding captured trivia from the
+		// gap between the kw and the body. Read them off `value`
+		// (the parent struct) and forward to `bodyPolicyWrap`
+		// which injects them into the kw→body separator.
+		final useTriviaGap: Bool = ctx.trivia;
+		final afterKwExpr: Null<Expr> = useTriviaGap
+			? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
+				pos: Context.currentPos()
+			}
+			: null;
+		final kwLeadingExpr: Null<Expr> = useTriviaGap
+			? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX),
+				pos: Context.currentPos()
+			}
+			: null;
+		// ω-keep-policy: `<field>BodyOnSameLine:Bool` drives the
+		// `Keep` branch of `bodyPolicyWrap` / policySwitch.
+		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap
+			? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
+				pos: Context.currentPos()
+			}
+			: null;
+		// ω-trivia-before-kw: own-line comments captured between
+		// the preceding token and the kw (e.g. `} // c\nelse`)
+		// land in `<field>BeforeKwLeading`. When non-empty, the
+		// `kwBeforeDoc` runtime helper replaces the plain
+		// `sameLineSeparator` output with hardline-separated
+		// comments at the parent's indent level.
+		final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
+			? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
+				pos: Context.currentPos()
+			}
+			: null;
+		// ω-trivia-before-kw-trailing: same-line trailing comment
+		// captured between the preceding sibling's last token and
+		// the kw (e.g. `resize(); // first\nelse`) lands in
+		// `<field>BeforeKwTrailing`. When non-null, prepended
+		// before the (possibly leading-augmented) separator so
+		// the comment cuddles to the prior token.
+		final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
+			? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
+				pos: Context.currentPos()
+			}
+			: null;
+		final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
+		final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
+			? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
+			: sepBaseExpr;
+		final sepWithBeforeKwTrailingExpr: Expr = beforeKwTrailingExpr != null
+			? macro kwBeforeTrailingDoc($beforeKwTrailingExpr, $sepWithBeforeKwExpr, opt)
+			: sepWithBeforeKwExpr;
+		optParts.push(sepWithBeforeKwTrailingExpr);
+		if (bodyPolicyFlag != null) {
+			optParts.push(macro _dt($v{kwLead}));
+			// ω-expression-if-with-blocks: sister read of
+			// `@:fmt(inlineBlockBodyIfFlag(...))` on optional-kw
+			// body field path (e.g. `HxIfExpr.elseBranch`'s
+			// `@:optional @:kw('else')` form). Threaded into the
+			// same `bodyPolicyWrap` plumbing as the bare-Ref path
+			// below; the runtime override fires at writeCall-swap
+			// time before policy dispatch.
+			final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
+			optParts.push(bodyPolicyWrap({
+				flagName: bodyPolicyFlag,
+				exprFlagName: bodyPolicyExprFlag,
+				writeCall: writeCall,
+				bodyValueExpr: macro _optVal,
+				bodyTypePath: refName,
+				hasElseIf: hasElseIf,
+				elseFieldName: elseFieldName,
+				afterKwExpr: afterKwExpr,
+				kwLeadingExpr: kwLeadingExpr,
+				bodyOnSameLineExpr: bodyOnSameLineExpr,
+				indentObjArgs: indentObjArgs,
+				inlineBlockBodyArgs: inlineBlockBodyArgs,
+			}));
+		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && bodyOnSameLineExpr != null) {
+			// ω-cond-comp-expr-body-nest: optional-kw-Ref body
+			// break+nest based on the captured `<f>BodyOnSameLine`
+			// slot. When the slot is false (source had a newline
+			// between the kw and the body) the wrapper emits
+			// `Nest(_cols, [hardline, body])` so the body sits
+			// one indent step deeper than the kw line. When true
+			// the wrapper emits `' ' + body` for inline single-
+			// line shape. Currently consumed by `HxConditionalExpr.elseExpr`.
+			optParts.push(macro _dt($v{kwLead}));
+			final invertedSignal: Expr = macro !$bodyOnSameLineExpr;
+			optParts.push(nestBodyOnSourceNewlineWrap(writeCall, invertedSignal));
+		} else {
+			optParts.push(macro _dt($v{kwLead + ' '}));
+			optParts.push(writeCall);
+		}
+	}
+
+	/**
+	 * ω-absent-on-bodypolicy: emit the optional-Ref body for a field with no
+	 * `@:kw` / `@:lead` but `@:fmt(bodyPolicy(...))` — mirrors the mandatory-Ref
+	 * `bodyPolicyWrap` path so the `)`→body separator survives; the surrounding
+	 * `_optVal != null` guard drops the absent case to `_de()`. First consumer:
+	 * `HxCatchClause.body` (bodyless `catch (e:T)`). Pushes into `optParts`.
+	 * Extracted from `lowerStruct`'s optional-Ref arm.
+	 */
+	private function emitOptionalBodyPolicyOnly(
+		child: ShapeNode, optParts: Array<Expr>, bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr,
+		refName: String, hasElseIf: Bool, elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>
+	): Void {
+		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
+		optParts.push(bodyPolicyWrap({
+			flagName: bodyPolicyFlag,
+			exprFlagName: bodyPolicyExprFlag,
+			writeCall: writeCall,
+			bodyValueExpr: macro _optVal,
+			bodyTypePath: refName,
+			hasElseIf: hasElseIf,
+			elseFieldName: elseFieldName,
+			indentObjArgs: indentObjArgs,
+			inlineBlockBodyArgs: inlineBlockBodyArgs,
+		}));
 	}
 
 }
