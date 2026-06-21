@@ -229,17 +229,7 @@ class WriterLowering {
 	 * for plain mode `writeHxExpr`.
 	 */
 	private function wrapWithChainDispatch(body: Expr, chainField: String, writeFnName: String, node: ShapeNode, precPostfix: Int): Expr {
-		// Locate the Call-shaped sibling (postfix Star with `methodChain`).
-		var callBranch: Null<ShapeNode> = null;
-		for (b in node.children) if (b.fmtReadString('methodChain') != null && b.children.length == 2 && b.children[1].kind == Star) {
-			callBranch = b;
-			break;
-		}
-		if (callBranch == null)
-			Context.error(
-				'WriterLowering.methodChain: expected a sibling postfix-Star ctor with @:fmt(methodChain(...))', Context.currentPos()
-			);
-		final cb: ShapeNode = callBranch;
+		final cb: ShapeNode = locateChainCallBranch(node);
 		final callOpen: String = cb.annotations.get('postfix.op');
 		final callClose: String = cb.annotations.get('postfix.close') ?? '';
 		final callSep: String = cb.annotations.get('lit.sepText') ?? ',';
@@ -322,202 +312,16 @@ class WriterLowering {
 		// `a + b.foo().bar()`. Mirrors the `lowerEnumBranch` postfix
 		// path which passes `precPostfix` for the same reason.
 		final precExpr: Expr = macro $v{precPostfix};
-		// The pattern names `Call` and `FieldAccess` resolve against the
-		// switch value's enum (`HxExprT` in trivia mode, `HxExpr` in
-		// plain mode). The macro emits the same unqualified ctor names
-		// for both modes — Haxe's typer resolves to whichever sibling
-		// ctor lives on the `value` parameter's enum.
-		//
-		// ω-postfix-call-trailing: trivia-mode Call ctor grew a
-		// positional `closeTrailing:Null<String>` slot (see
-		// `TriviaTypeSynth.isPostfixCloseTrailingBranch`); the trivia
-		// branch's pattern matches three args and embeds `_trailClose`
-		// into the segment's Doc when non-null. Plain-mode pattern stays
-		// 2-arg. Both branches share the rest of the chain walk.
-		// ω-methodchain-prev-pclose-gate: mirror fork's
-		// `MarkWrapping.markMethodChaining` chain-start rule — a Dot
-		// counts as a chain start only when it is preceded by `)` in
-		// source. In AST terms: at least one segment in the chain must
-		// have a `_prev` that is a Call ctor (which renders ending with
-		// `)`). Pure-prefix paths like `haxe.Json.parse(s)` have NO dot
-		// after `)` → fork does not mark a chain → no
-		// OnePerLineAfterFirst wrap. Without this gate we activate
-		// `MethodChainEmit` on every 2+-segment Call/FieldAccess
-		// sequence, which over-wraps short type-path chains inside a
-		// long enclosing line (the `IfFullLineExceeds` probe sees the
-		// rest-of-stack and forces BREAK mode). The gate is
-		// conservative — it matches PClose only; `(a + b).foo()` and
-		// `a[i].foo()` still fall through to default emission, matching
-		// fork's `isDotAfterPClose` PClose-only test (`MarkWrapping.hx:2299`).
-		return isCallTriviaStar
-			? macro {
-				final _segs: Array<anyparse.core.Doc> = [];
-				// ω-keep-chain (increment 9): `_breaks` is parallel to `_segs`
-				// — entry `i` is whether the source had a newline in the gap
-				// before segment `i`'s `.field` lead (the FieldAccess ctor's
-				// captured `chainNewline` synth slot). Built in lockstep with
-				// `_segs.unshift` so a `WrapMode.Keep` method-chain round-trips
-				// the source per-segment dot-boundary line breaks via
-				// `MethodChainEmit.shapeKeep`. Trivia-mode only; Plain keeps the
-				// 2-arg ctor patterns below and threads no `_breaks` (null →
-				// shapeNoWrap, byte-inert).
-				final _breaks: Array<Bool> = [];
-				var _cursor = value;
-				var _receiver = value;
-				var _hasCallPrev: Bool = false;
-				// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
-				// its operand's dot-gap trailing comment in the synth
-				// `chainLeadComment` slot. When that operand IS the chain receiver
-				// (a bare value, the `case _:` of the `switch _prev` below), stash
-				// the comment so it can be reattached to the receiver Doc after the
-				// walk — a `Keep` chain would otherwise drop it when the per-segment
-				// break replaces the source `owner // test` layout.
-				var _recTrail: Null<String> = null;
-				while (true) {
-					switch _cursor {
-						// ω-keep-callclose-newline: trivia Call ctor grew a 5th
-						// positional `argsCloseNewline`; the chain walk ignores it
-						// here (close placement is decided by the outer call's
-						// `lowerPostfixStar`, not the per-segment chain emit).
-						case Call(_op, _args, _trailClose, _, _):
-							switch _op {
-								case FieldAccess(_prev, _fld, _nl, _opTrail):
-									final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
-									final _argsDoc: anyparse.core.Doc = $argsListExpr;
-									final _segDoc: anyparse.core.Doc = _trailClose != null
-										? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
-										: _dc([_dt('.' + _fld), _argsDoc]);
-									_segs.unshift(_segDoc);
-									_breaks.unshift(_nl);
-									switch _prev {
-										case Call(_, _, _, _, _):
-											_hasCallPrev = true;
-										case _:
-											if (_opTrail != null)
-												_recTrail = _opTrail;
-									}
-									_cursor = _prev;
-								case _:
-									_receiver = _cursor;
-									break;
-							}
-						case FieldAccess(_prev, _fld, _nl, _opTrail):
-							// ω-methodchain-glue-bare-field: a bare `.field`
-							// access that precedes an already-collected segment
-							// (a Call to its right) is NOT its own chain
-							// break-item — it glues onto that segment's lead,
-							// mirroring fork `MarkWrapping.isDotAfterPClose` (a
-							// `.` counts as a chain item only when its previous
-							// token is `)`). So `holder.firstField.inner
-							// .filter(args)` stays ONE item, not three. When
-							// `_segs` is empty the bare field is a trailing
-							// access (its own item per fork's PClose-after rule
-							// for `a().b`); keep current shape. Without this glue
-							// every leading bare FieldAccess over-segments the
-							// chain and inflates the cascade item count.
-							//
-							// ω-keep-chain: when the bare field glues onto
-							// `_segs[0]` it becomes that segment's NEW leading
-							// dot, so its source-newline (`_nl`) REPLACES the
-							// existing `_breaks[0]` (the break-before now refers
-							// to the glued lead). When `_segs` is empty the bare
-							// field is its own segment → push its `_nl` parallel.
-							if (_segs.length > 0) {
-								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
-								_breaks[0] = _nl;
-							} else {
-								_segs.unshift(_dt('.' + _fld));
-								_breaks.unshift(_nl);
-							}
-							switch _prev {
-								case Call(_, _, _, _, _):
-									_hasCallPrev = true;
-								case _:
-									if (_opTrail != null)
-										_recTrail = _opTrail;
-							}
-							_cursor = _prev;
-						case _:
-							_receiver = _cursor;
-							break;
-					}
-				}
-				if (_segs.length >= 2 && _hasCallPrev) {
-					final _recBaseDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-					// ω-keep-chain-receiver-comment: glue the receiver's captured
-					// trailing comment (`owner // test`) to its Doc before the first
-					// forced segment break. `trailingCommentDocVerbatim` prepends the
-					// leading space, so `_dc([recv, ' // test'])` reproduces the source.
-					final _recDoc: anyparse.core.Doc = _recTrail != null
-						? _dc([_recBaseDoc, trailingCommentDocVerbatim(_recTrail, opt)])
-						: _recBaseDoc;
-					// ω-methodchain-reeval-after-callparam nest-suppress prereq:
-					// a chain that is itself a CALL ARGUMENT (`_callArgChainNest`)
-					// keeps its own dot-break — fork
-					// `reEvaluateMethodChainAfterCallParam` never strips chain
-					// breaks for a chain inside a breaking outer call
-					// (`method_chain_single_arg_break_parens`). Mirror the
-					// `BinaryChainEmit` `_chainNestSuppress` gate.
-					return anyparse.format.wrap.MethodChainEmit.emit(
-						_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr
-					);
-				}
-				$body;
-			}
-			: macro {
-				final _segs: Array<anyparse.core.Doc> = [];
-				var _cursor = value;
-				var _receiver = value;
-				var _hasCallPrev: Bool = false;
-				while (true) {
-					switch _cursor {
-						case Call(_op, _args):
-							switch _op {
-								case FieldAccess(_prev, _fld):
-									final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
-									final _argsDoc: anyparse.core.Doc = $argsListExpr;
-									_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
-									switch _prev {
-										case Call(_, _):
-											_hasCallPrev = true;
-										case _:
-									}
-									_cursor = _prev;
-								case _:
-									_receiver = _cursor;
-									break;
-							}
-						case FieldAccess(_prev, _fld):
-							// ω-methodchain-glue-bare-field (plain-mode twin of
-							// the trivia branch above): glue a bare leading
-							// `.field` onto the already-collected segment to its
-							// right rather than over-segmenting the chain.
-							if (_segs.length > 0)
-								_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
-							else
-								_segs.unshift(_dt('.' + _fld));
-							switch _prev {
-								case Call(_, _):
-									_hasCallPrev = true;
-								case _:
-							}
-							_cursor = _prev;
-						case _:
-							_receiver = _cursor;
-							break;
-					}
-				}
-				if (_segs.length >= 2 && _hasCallPrev) {
-					final _recDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
-					// ω-methodchain-reeval-after-callparam nest-suppress prereq
-					// (plain-mode twin): pass `sourceBreakBefore = null` then the
-					// `_callArgChainNest` gate.
-					return anyparse.format.wrap.MethodChainEmit.emit(
-						_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr
-					);
-				}
-				$body;
-			};
+		final c: ChainDispatchCtx = {
+			argsListExpr: argsListExpr,
+			argDocsExpr: argDocsExpr,
+			chainRulesExpr: chainRulesExpr,
+			writeIdent: writeIdent,
+			precExpr: precExpr,
+			segCallLeadingBreakExpr: segCallLeadingBreakExpr,
+			body: body,
+		};
+		return isCallTriviaStar ? wrapChainTriviaBody(c) : wrapChainPlainBody(c);
 	}
 
 	/**
@@ -14278,6 +14082,254 @@ class WriterLowering {
 		return { open: callInsideOpen, close: callInsideClose };
 	}
 
+	/**
+	 * Locate the Call-shaped sibling branch (a postfix Star carrying
+	 * `@:fmt(methodChain(...))`) within an enum node, erroring if absent.
+	 * Extracted from `wrapWithChainDispatch`.
+	 */
+	private static function locateChainCallBranch(node: ShapeNode): ShapeNode {
+		var callBranch: Null<ShapeNode> = null;
+		for (b in node.children) if (b.fmtReadString('methodChain') != null && b.children.length == 2 && b.children[1].kind == Star) {
+			callBranch = b;
+			break;
+		}
+		if (callBranch == null)
+			Context.error(
+				'WriterLowering.methodChain: expected a sibling postfix-Star ctor with @:fmt(methodChain(...))', Context.currentPos()
+			);
+		return callBranch;
+	}
+
+	/**
+	 * Build the trivia-mode method-chain walk body for `wrapWithChainDispatch`.
+	 * Walks the Call/FieldAccess spine right-to-left collecting per-segment
+	 * Docs (and parallel source-newline `_breaks` for `Keep` round-trip),
+	 * glues bare leading `.field` accesses, captures the receiver's dot-gap
+	 * trailing comment, and dispatches to `MethodChainEmit.emit` for a
+	 * 2+-segment chain whose receiver ends in a Call (`)`). Extracted from
+	 * `wrapWithChainDispatch`.
+	 */
+	private static function wrapChainTriviaBody(c: ChainDispatchCtx): Expr {
+		final argsListExpr: Expr = c.argsListExpr;
+		final argDocsExpr: Expr = c.argDocsExpr;
+		final chainRulesExpr: Expr = c.chainRulesExpr;
+		final writeIdent: Expr = c.writeIdent;
+		final precExpr: Expr = c.precExpr;
+		final segCallLeadingBreakExpr: Expr = c.segCallLeadingBreakExpr;
+		final body: Expr = c.body;
+		// The pattern names `Call` and `FieldAccess` resolve against the
+		// switch value's enum (`HxExprT` in trivia mode, `HxExpr` in
+		// plain mode). The macro emits the same unqualified ctor names
+		// for both modes — Haxe's typer resolves to whichever sibling
+		// ctor lives on the `value` parameter's enum.
+		//
+		// ω-postfix-call-trailing: trivia-mode Call ctor grew a
+		// positional `closeTrailing:Null<String>` slot (see
+		// `TriviaTypeSynth.isPostfixCloseTrailingBranch`); the trivia
+		// branch's pattern matches three args and embeds `_trailClose`
+		// into the segment's Doc when non-null. Plain-mode pattern stays
+		// 2-arg. Both branches share the rest of the chain walk.
+		// ω-methodchain-prev-pclose-gate: mirror fork's
+		// `MarkWrapping.markMethodChaining` chain-start rule — a Dot
+		// counts as a chain start only when it is preceded by `)` in
+		// source. In AST terms: at least one segment in the chain must
+		// have a `_prev` that is a Call ctor (which renders ending with
+		// `)`). Pure-prefix paths like `haxe.Json.parse(s)` have NO dot
+		// after `)` → fork does not mark a chain → no
+		// OnePerLineAfterFirst wrap. Without this gate we activate
+		// `MethodChainEmit` on every 2+-segment Call/FieldAccess
+		// sequence, which over-wraps short type-path chains inside a
+		// long enclosing line (the `IfFullLineExceeds` probe sees the
+		// rest-of-stack and forces BREAK mode). The gate is
+		// conservative — it matches PClose only; `(a + b).foo()` and
+		// `a[i].foo()` still fall through to default emission, matching
+		// fork's `isDotAfterPClose` PClose-only test (`MarkWrapping.hx:2299`).
+		return macro {
+			final _segs: Array<anyparse.core.Doc> = [];
+			// ω-keep-chain (increment 9): `_breaks` is parallel to `_segs`
+			// — entry `i` is whether the source had a newline in the gap
+			// before segment `i`'s `.field` lead (the FieldAccess ctor's
+			// captured `chainNewline` synth slot). Built in lockstep with
+			// `_segs.unshift` so a `WrapMode.Keep` method-chain round-trips
+			// the source per-segment dot-boundary line breaks via
+			// `MethodChainEmit.shapeKeep`. Trivia-mode only; Plain keeps the
+			// 2-arg ctor patterns below and threads no `_breaks` (null →
+			// shapeNoWrap, byte-inert).
+			final _breaks: Array<Bool> = [];
+			var _cursor = value;
+			var _receiver = value;
+			var _hasCallPrev: Bool = false;
+			// ω-keep-chain-receiver-comment: the inner-most FieldAccess carries
+			// its operand's dot-gap trailing comment in the synth
+			// `chainLeadComment` slot. When that operand IS the chain receiver
+			// (a bare value, the `case _:` of the `switch _prev` below), stash
+			// the comment so it can be reattached to the receiver Doc after the
+			// walk — a `Keep` chain would otherwise drop it when the per-segment
+			// break replaces the source `owner // test` layout.
+			var _recTrail: Null<String> = null;
+			while (true) {
+				switch _cursor {
+					// ω-keep-callclose-newline: trivia Call ctor grew a 5th
+					// positional `argsCloseNewline`; the chain walk ignores it
+					// here (close placement is decided by the outer call's
+					// `lowerPostfixStar`, not the per-segment chain emit).
+					case Call(_op, _args, _trailClose, _, _):
+						switch _op {
+							case FieldAccess(_prev, _fld, _nl, _opTrail):
+								final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
+								final _argsDoc: anyparse.core.Doc = $argsListExpr;
+								final _segDoc: anyparse.core.Doc = _trailClose != null
+									? _dc([_dt('.' + _fld), _argsDoc, trailingCommentDocVerbatim(_trailClose, opt)])
+									: _dc([_dt('.' + _fld), _argsDoc]);
+								_segs.unshift(_segDoc);
+								_breaks.unshift(_nl);
+								switch _prev {
+									case Call(_, _, _, _, _):
+										_hasCallPrev = true;
+									case _:
+										if (_opTrail != null)
+											_recTrail = _opTrail;
+								}
+								_cursor = _prev;
+							case _:
+								_receiver = _cursor;
+								break;
+						}
+					case FieldAccess(_prev, _fld, _nl, _opTrail):
+						// ω-methodchain-glue-bare-field: a bare `.field`
+						// access that precedes an already-collected segment
+						// (a Call to its right) is NOT its own chain
+						// break-item — it glues onto that segment's lead,
+						// mirroring fork `MarkWrapping.isDotAfterPClose` (a
+						// `.` counts as a chain item only when its previous
+						// token is `)`). So `holder.firstField.inner
+						// .filter(args)` stays ONE item, not three. When
+						// `_segs` is empty the bare field is a trailing
+						// access (its own item per fork's PClose-after rule
+						// for `a().b`); keep current shape. Without this glue
+						// every leading bare FieldAccess over-segments the
+						// chain and inflates the cascade item count.
+						//
+						// ω-keep-chain: when the bare field glues onto
+						// `_segs[0]` it becomes that segment's NEW leading
+						// dot, so its source-newline (`_nl`) REPLACES the
+						// existing `_breaks[0]` (the break-before now refers
+						// to the glued lead). When `_segs` is empty the bare
+						// field is its own segment → push its `_nl` parallel.
+						if (_segs.length > 0) {
+							_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
+							_breaks[0] = _nl;
+						} else {
+							_segs.unshift(_dt('.' + _fld));
+							_breaks.unshift(_nl);
+						}
+						switch _prev {
+							case Call(_, _, _, _, _):
+								_hasCallPrev = true;
+							case _:
+								if (_opTrail != null)
+									_recTrail = _opTrail;
+						}
+						_cursor = _prev;
+					case _:
+						_receiver = _cursor;
+						break;
+				}
+			}
+			if (_segs.length >= 2 && _hasCallPrev) {
+				final _recBaseDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+				// ω-keep-chain-receiver-comment: glue the receiver's captured
+				// trailing comment (`owner // test`) to its Doc before the first
+				// forced segment break. `trailingCommentDocVerbatim` prepends the
+				// leading space, so `_dc([recv, ' // test'])` reproduces the source.
+				final _recDoc: anyparse.core.Doc = _recTrail != null
+					? _dc([_recBaseDoc, trailingCommentDocVerbatim(_recTrail, opt)])
+					: _recBaseDoc;
+				// ω-methodchain-reeval-after-callparam nest-suppress prereq:
+				// a chain that is itself a CALL ARGUMENT (`_callArgChainNest`)
+				// keeps its own dot-break — fork
+				// `reEvaluateMethodChainAfterCallParam` never strips chain
+				// breaks for a chain inside a breaking outer call
+				// (`method_chain_single_arg_break_parens`). Mirror the
+				// `BinaryChainEmit` `_chainNestSuppress` gate.
+				return anyparse.format.wrap.MethodChainEmit.emit(
+					_recDoc, _segs, opt, $chainRulesExpr, _breaks, opt._callArgChainNest, $segCallLeadingBreakExpr
+				);
+			}
+			$body;
+		};
+	}
+
+	/**
+	 * Build the plain-mode method-chain walk body for `wrapWithChainDispatch`
+	 * — the no-trivia twin of `wrapChainTriviaBody` (2-arg Call/FieldAccess
+	 * ctor patterns, no `_breaks` / receiver-comment slots). Extracted from
+	 * `wrapWithChainDispatch`.
+	 */
+	private static function wrapChainPlainBody(c: ChainDispatchCtx): Expr {
+		final argsListExpr: Expr = c.argsListExpr;
+		final argDocsExpr: Expr = c.argDocsExpr;
+		final chainRulesExpr: Expr = c.chainRulesExpr;
+		final writeIdent: Expr = c.writeIdent;
+		final precExpr: Expr = c.precExpr;
+		final segCallLeadingBreakExpr: Expr = c.segCallLeadingBreakExpr;
+		final body: Expr = c.body;
+		return macro {
+			final _segs: Array<anyparse.core.Doc> = [];
+			var _cursor = value;
+			var _receiver = value;
+			var _hasCallPrev: Bool = false;
+			while (true) {
+				switch _cursor {
+					case Call(_op, _args):
+						switch _op {
+							case FieldAccess(_prev, _fld):
+								final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
+								final _argsDoc: anyparse.core.Doc = $argsListExpr;
+								_segs.unshift(_dc([_dt('.' + _fld), _argsDoc]));
+								switch _prev {
+									case Call(_, _):
+										_hasCallPrev = true;
+									case _:
+								}
+								_cursor = _prev;
+							case _:
+								_receiver = _cursor;
+								break;
+						}
+					case FieldAccess(_prev, _fld):
+						// ω-methodchain-glue-bare-field (plain-mode twin of
+						// the trivia branch above): glue a bare leading
+						// `.field` onto the already-collected segment to its
+						// right rather than over-segmenting the chain.
+						if (_segs.length > 0)
+							_segs[0] = _dc([_dt('.' + _fld), _segs[0]]);
+						else
+							_segs.unshift(_dt('.' + _fld));
+						switch _prev {
+							case Call(_, _):
+								_hasCallPrev = true;
+							case _:
+						}
+						_cursor = _prev;
+					case _:
+						_receiver = _cursor;
+						break;
+				}
+			}
+			if (_segs.length >= 2 && _hasCallPrev) {
+				final _recDoc: anyparse.core.Doc = $writeIdent(_receiver, opt, $precExpr);
+				// ω-methodchain-reeval-after-callparam nest-suppress prereq
+				// (plain-mode twin): pass `sourceBreakBefore = null` then the
+				// `_callArgChainNest` gate.
+				return anyparse.format.wrap.MethodChainEmit.emit(
+					_recDoc, _segs, opt, $chainRulesExpr, null, opt._callArgChainNest, $segCallLeadingBreakExpr
+				);
+			}
+			$body;
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14962,6 +15014,21 @@ typedef PostfixStarCtx = {
 	final wrapRulesField: Null<String>;
 	final methodChainField: Null<String>;
 	final elemCall: Expr;
+};
+
+/**
+ * Spliced sub-Exprs shared by the two `wrapWithChainDispatch` chain-walk
+ * macro bodies (`wrapChainTriviaBody` / `wrapChainPlainBody`). Bundled to
+ * keep each body helper under the >5-scalar threshold.
+ */
+typedef ChainDispatchCtx = {
+	final argsListExpr: Expr;
+	final argDocsExpr: Expr;
+	final chainRulesExpr: Expr;
+	final writeIdent: Expr;
+	final precExpr: Expr;
+	final segCallLeadingBreakExpr: Expr;
+	final body: Expr;
 };
 
 /**
