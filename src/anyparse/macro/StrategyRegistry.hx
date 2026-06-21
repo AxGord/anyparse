@@ -65,6 +65,15 @@ class StrategyRegistry {
 	 * become edges from A to B. Any cycle is a registration error.
 	 */
 	private static function topoSort(list: Array<Strategy>): Array<Strategy> {
+		final incoming: Map<String, Array<String>> = buildIncomingEdges(list);
+		final result: Array<Strategy> = drainReady(list, incoming);
+		if (result.length != list.length) {
+			Context.fatalError('strategy dependency graph has a cycle', Context.currentPos());
+		}
+		return result;
+	}
+
+	private static function buildIncomingEdges(list: Array<Strategy>): Map<String, Array<String>> {
 		final byName: Map<String, Strategy> = [];
 		for (s in list) byName.set(s.name, s);
 
@@ -81,6 +90,12 @@ class StrategyRegistry {
 			for (dep in s.runsAfter) addEdge(dep, s.name);
 			for (dep in s.runsBefore) addEdge(s.name, dep);
 		}
+		return incoming;
+	}
+
+	private static function drainReady(list: Array<Strategy>, incoming: Map<String, Array<String>>): Array<Strategy> {
+		final byName: Map<String, Strategy> = [];
+		for (s in list) byName.set(s.name, s);
 
 		final result: Array<Strategy> = [];
 		final ready: Array<String> = [];
@@ -103,10 +118,6 @@ class StrategyRegistry {
 					ready.push(other.name);
 				}
 			}
-		}
-
-		if (result.length != list.length) {
-			Context.fatalError('strategy dependency graph has a cycle', Context.currentPos());
 		}
 		return result;
 	}
