@@ -144,30 +144,7 @@ class FormatReader {
 				Context.fatalError('@:schema($typePath) must resolve to a class', Context.currentPos());
 				throw 'unreachable';
 		};
-		final isBinary: Bool = detectBinary(cl);
-		return {
-			whitespace: isBinary ? '' : readStringField(cl, 'whitespace'),
-			schemaTypePath: typePath,
-			isBinary: isBinary,
-			fieldLookup: isBinary ? FieldLookup.ByPosition : readEnumAbstractField(cl, 'fieldLookup'),
-			onUnknown: isBinary ? UnknownPolicy.Error : readEnumAbstractField(cl, 'onUnknown'),
-			onMissing: isBinary ? MissingPolicy.Error : readEnumAbstractField(cl, 'onMissing'),
-			keySyntax: isBinary ? KeySyntax.Quoted : readEnumAbstractField(cl, 'keySyntax'),
-			mappingOpen: isBinary ? '' : readStringField(cl, 'mappingOpen'),
-			mappingClose: isBinary ? '' : readStringField(cl, 'mappingClose'),
-			keyValueSep: isBinary ? '' : readStringField(cl, 'keyValueSep'),
-			entrySep: isBinary ? '' : readStringField(cl, 'entrySep'),
-			sequenceOpen: isBinary ? null : readStringFieldOpt(cl, 'sequenceOpen'),
-			sequenceClose: isBinary ? null : readStringFieldOpt(cl, 'sequenceClose'),
-			intType: isBinary ? null : readStringFieldOpt(cl, 'intType'),
-			floatType: isBinary ? null : readStringFieldOpt(cl, 'floatType'),
-			boolType: isBinary ? null : readStringFieldOpt(cl, 'boolType'),
-			stringType: isBinary ? null : readStringFieldOpt(cl, 'stringType'),
-			anyType: isBinary ? null : readStringFieldOpt(cl, 'anyType'),
-			spacedLeads: isBinary ? [] : readStringArrayField(cl, 'spacedLeads'),
-			tightLeads: isBinary ? [] : readStringArrayField(cl, 'tightLeads'),
-			commentPatterns: isBinary ? [] : readCommentPatterns(cl),
-		};
+		return detectBinary(cl) ? resolveBinary(typePath) : resolveText(cl, typePath);
 	}
 
 	/**
@@ -326,6 +303,58 @@ class FormatReader {
 			case TCast(inner, _): extractStringArray(inner);
 			case TParenthesis(inner): extractStringArray(inner);
 			case _: [];
+		};
+	}
+
+	private static function resolveBinary(typePath: String): FormatInfo {
+		return {
+			whitespace: '',
+			schemaTypePath: typePath,
+			isBinary: true,
+			fieldLookup: FieldLookup.ByPosition,
+			onUnknown: UnknownPolicy.Error,
+			onMissing: MissingPolicy.Error,
+			keySyntax: KeySyntax.Quoted,
+			mappingOpen: '',
+			mappingClose: '',
+			keyValueSep: '',
+			entrySep: '',
+			sequenceOpen: null,
+			sequenceClose: null,
+			intType: null,
+			floatType: null,
+			boolType: null,
+			stringType: null,
+			anyType: null,
+			spacedLeads: [],
+			tightLeads: [],
+			commentPatterns: [],
+		};
+	}
+
+	private static function resolveText(cl: ClassType, typePath: String): FormatInfo {
+		return {
+			whitespace: readStringField(cl, 'whitespace'),
+			schemaTypePath: typePath,
+			isBinary: false,
+			fieldLookup: readEnumAbstractField(cl, 'fieldLookup'),
+			onUnknown: readEnumAbstractField(cl, 'onUnknown'),
+			onMissing: readEnumAbstractField(cl, 'onMissing'),
+			keySyntax: readEnumAbstractField(cl, 'keySyntax'),
+			mappingOpen: readStringField(cl, 'mappingOpen'),
+			mappingClose: readStringField(cl, 'mappingClose'),
+			keyValueSep: readStringField(cl, 'keyValueSep'),
+			entrySep: readStringField(cl, 'entrySep'),
+			sequenceOpen: readStringFieldOpt(cl, 'sequenceOpen'),
+			sequenceClose: readStringFieldOpt(cl, 'sequenceClose'),
+			intType: readStringFieldOpt(cl, 'intType'),
+			floatType: readStringFieldOpt(cl, 'floatType'),
+			boolType: readStringFieldOpt(cl, 'boolType'),
+			stringType: readStringFieldOpt(cl, 'stringType'),
+			anyType: readStringFieldOpt(cl, 'anyType'),
+			spacedLeads: readStringArrayField(cl, 'spacedLeads'),
+			tightLeads: readStringArrayField(cl, 'tightLeads'),
+			commentPatterns: readCommentPatterns(cl),
 		};
 	}
 
