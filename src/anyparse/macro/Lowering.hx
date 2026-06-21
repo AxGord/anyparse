@@ -768,53 +768,7 @@ class Lowering {
 			final absentOnLits: Null<Array<String>> = child.readMetaStringArgs(':absentOn');
 			final isStar: Bool = child.kind == Star;
 			final isOptional: Bool = child.annotations.get('base.optional') == true;
-			if (isOptional && child.kind != Ref && child.kind != Star) {
-				Context.fatalError(
-					'Lowering: @:optional is only supported on Ref- or Star-shaped struct fields (field "$fieldName")',
-					Context.currentPos()
-				);
-			}
-			if (isOptional && !isStar && trailText != null && kwLead != null) {
-				// `@:trail` on an optional kw-led Ref has no consumer yet
-				// (the kw-led trivia capture path threads `_afterKw_*` /
-				// `_kwLeading_*` slots whose layout assumes no per-field
-				// trail). Defer until a grammar needs it; the lead-led
-				// shape (`@:optional @:lead('(') @:trail(')')`) is
-				// supported below — first consumer Slice 40 / `@:coreType`
-				// bare abstract via `HxAbstractDecl.underlyingType`.
-				Context.fatalError('Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")', Context.currentPos());
-			}
-			if (absentOnLits != null) {
-				// `@:absentOn` is a peek-ahead absence dispatch — it does NOT
-				// consume any literals (the listed terminators belong to the
-				// enclosing context). Combined with `@:lead`/`@:kw` it would
-				// be ambiguous (which decides absence?), and combined with
-				// `@:trail` it inherits the same "trail inside peek" gap as
-				// regular `@:optional`. Both combinations are rejected. The
-				// meta also requires the field to be an optional Ref —
-				// Stars have their own commit semantics through `@:lead` /
-				// `@:trail`; `absentOn` adds nothing there.
-				if (!isOptional || child.kind != Ref) {
-					Context.fatalError('Lowering: @:absentOn requires @:optional Ref (field "$fieldName")', Context.currentPos());
-				}
-				if (kwLead != null || leadText != null) {
-					Context.fatalError('Lowering: @:absentOn cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos());
-				}
-				if (trailText != null) {
-					Context.fatalError('Lowering: @:absentOn cannot combine with @:trail (field "$fieldName")', Context.currentPos());
-				}
-				if (absentOnLits.length == 0) {
-					Context.fatalError(
-						'Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos()
-					);
-				}
-			}
-			if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
-				Context.fatalError(
-					'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
-					Context.currentPos()
-				);
-			}
+			validateStructField(child, fieldName, isOptional, isStar, kwLead, leadText, trailText, absentOnLits);
 			// Binary @:length prefix — read an N-byte ASCII-encoded length
 			// BEFORE any field-level lead literal. The parsed integer is
 			// stored in `_lenPrefix_<field>` and consumed by the
@@ -5660,6 +5614,64 @@ expectLit(ctx, $v{trailText}));
 				]),
 				pos: Context.currentPos(),
 			});
+		}
+	}
+
+	/**
+	 * Compile-time validation of a struct field's metadata-combination
+	 * legality (`@:optional` / `@:kw` / `@:lead` / `@:trail` / `@:absentOn`).
+	 * Each illegal combination halts the build via `Context.fatalError`.
+	 * Pure — no emit, no `ctx`; lifted out of `lowerStruct`'s per-field loop.
+	 */
+	private static function validateStructField(
+		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, isStar: Bool, kwLead: Null<String>, leadText: Null<String>,
+		trailText: Null<String>, absentOnLits: Null<Array<String>>
+	): Void {
+		if (isOptional && child.kind != Ref && child.kind != Star) {
+			Context.fatalError(
+				'Lowering: @:optional is only supported on Ref- or Star-shaped struct fields (field "$fieldName")', Context.currentPos()
+			);
+		}
+		if (isOptional && !isStar && trailText != null && kwLead != null) {
+			// `@:trail` on an optional kw-led Ref has no consumer yet
+			// (the kw-led trivia capture path threads `_afterKw_*` /
+			// `_kwLeading_*` slots whose layout assumes no per-field
+			// trail). Defer until a grammar needs it; the lead-led
+			// shape (`@:optional @:lead('(') @:trail(')')`) is
+			// supported below — first consumer Slice 40 / `@:coreType`
+			// bare abstract via `HxAbstractDecl.underlyingType`.
+			Context.fatalError('Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")', Context.currentPos());
+		}
+		if (absentOnLits != null) {
+			// `@:absentOn` is a peek-ahead absence dispatch — it does NOT
+			// consume any literals (the listed terminators belong to the
+			// enclosing context). Combined with `@:lead`/`@:kw` it would
+			// be ambiguous (which decides absence?), and combined with
+			// `@:trail` it inherits the same "trail inside peek" gap as
+			// regular `@:optional`. Both combinations are rejected. The
+			// meta also requires the field to be an optional Ref —
+			// Stars have their own commit semantics through `@:lead` /
+			// `@:trail`; `absentOn` adds nothing there.
+			if (!isOptional || child.kind != Ref) {
+				Context.fatalError('Lowering: @:absentOn requires @:optional Ref (field "$fieldName")', Context.currentPos());
+			}
+			if (kwLead != null || leadText != null) {
+				Context.fatalError('Lowering: @:absentOn cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos());
+			}
+			if (trailText != null) {
+				Context.fatalError('Lowering: @:absentOn cannot combine with @:trail (field "$fieldName")', Context.currentPos());
+			}
+			if (absentOnLits.length == 0) {
+				Context.fatalError(
+					'Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos()
+				);
+			}
+		}
+		if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
+			Context.fatalError(
+				'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
+				Context.currentPos()
+			);
 		}
 	}
 
