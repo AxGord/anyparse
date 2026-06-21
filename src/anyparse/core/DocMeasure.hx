@@ -45,88 +45,7 @@ final class DocMeasure {
 		var total: Int = 0;
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
-			switch (node) {
-				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-				case Text(s):
-					total += s.length;
-				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-						// Forced hardline contributes 0 to token width
-						// (mirrors `MethodChainEmit.chainItemLength`).
-					} else {
-						total += flat.length;
-					}
-				case Nest(_, inner):
-					stack.push(inner);
-				case Concat(items):
-					var i: Int = items.length;
-					while (--i >= 0) stack.push(items[i]);
-				case Group(inner) | GroupWithRestProbe(inner):
-					stack.push(inner);
-				case BodyGroup(_):
-					// Defer like `Renderer.fitsFlat`: BG content decides
-					// its own flat/break and does not contribute to the
-					// parent list's static width.
-				case IfBreak(_, flatDoc):
-					stack.push(flatDoc);
-				case IfWidthExceeds(_, _, flatDoc):
-					// Forward to flat side: token-width measurement uses
-					// the flat shape, mirroring the `IfBreak` arm.
-					stack.push(flatDoc);
-				case IfFirstLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds`: chain consumers walk the
-					// flat side, ignoring the renderer-side first-line cap.
-					stack.push(flatDoc);
-				case IfLineExceeds(_, _, flatDoc):
-					// Mirror `IfWidthExceeds`: chain consumers walk the
-					// flat side; rest-of-stack lookahead is renderer-side
-					// (slice ω-iflineexceeds-infra).
-					stack.push(flatDoc);
-				case IfFullLineExceeds(_, _, flatDoc):
-					// Mirror `IfLineExceeds`: cascade-rule static walks
-					// see the flat shape; the asymmetric BG semantic
-					// only applies to the renderer-side rest-of-stack
-					// probe (slice ω-iffulllineexceeds-primitive). The
-					// primitive's own subtree width uses this same
-					// `flatTokenWidth` (defer BG) — sister forwarding.
-					stack.push(flatDoc);
-				case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
-					// Forward to flat side: the natural-first-line probe is a
-					// render-time decision; static token-width walks see only
-					// the flat shape (sister of the IfFirstLineExceeds arm).
-					stack.push(flatDoc);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					var k: Int = items.length;
-					while (k > 0) {
-						k--;
-						stack.push(items[k]);
-						if (k > 0)
-							stack.push(sep);
-					}
-				case OptSpace(s):
-					total += s.length;
-				case OptSpaceSkipAfterHardline:
-					total += 1;
-				case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
-					inner
-				) | CollapseChainProbe(inner):
-					// ω-force-flat-engine slice A: pass-through. All four
-					// markers are render-time state; structural token-width
-					// measurement is independent of force-flat propagation.
-					stack.push(inner);
-				case ConditionalMarkerZero(inner):
-					// ω-cond-indent-policy FixedZero: render-time marker,
-					// transparent to static token-width measurement — descend
-					// `inner`.
-					stack.push(inner);
-				case ConditionalMarkerDecrease(inner):
-					// ω-cond-indent-policy AlignedDecrease: render-time marker,
-					// transparent to static token-width measurement — descend
-					// `inner`.
-					stack.push(inner);
-			}
+			total += flatTokenWidthStep(node, stack);
 		}
 		return total;
 	}
@@ -358,6 +277,61 @@ final class DocMeasure {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Token-width contribution of a single `node`, pushing its measurable
+	 * children onto `stack` for the caller's walk to drain. Split out of
+	 * `flatTokenWidth` to keep the walk loop under the complexity threshold.
+	 */
+	private static function flatTokenWidthStep(node: Doc, stack: Array<Doc>): Int {
+		switch (node) {
+			// Zero-width: forced hardlines contribute nothing, and `BodyGroup`
+			// content is deferred (decides its own flat/break at render time and
+			// must not inflate the parent's static width — mirrors
+			// `Renderer.fitsFlat`).
+			case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | BodyGroup(_):
+				return 0;
+			case Text(s):
+				return s.length;
+			case Line(flat):
+				// A forced hardline (`'\n'`) contributes 0; an `OptSpace`-style
+				// flat string contributes its own length.
+				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code ? 0 : flat.length;
+			case Concat(items):
+				var i: Int = items.length;
+				while (--i >= 0) stack.push(items[i]);
+				return 0;
+			// Single-child descend: every wrapper and conditional `If*` kind
+			// contributes no width of its own and forwards measurement to its
+			// flat-side child. `If*` arms walk the flat shape (render-side
+			// thresholds are decided at layout, not here); the force-flat /
+			// conditional-indent markers are render-time state transparent to
+			// static token-width measurement.
+			case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
+				_, _, inner
+			) | IfLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, inner
+			) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+				inner
+			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+				inner
+			):
+				stack.push(inner);
+				return 0;
+			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				var k: Int = items.length;
+				while (k > 0) {
+					k--;
+					stack.push(items[k]);
+					if (k > 0) stack.push(sep);
+				}
+				return 0;
+			case OptSpace(s):
+				return s.length;
+			case OptSpaceSkipAfterHardline:
+				return 1;
+		}
 	}
 
 }
