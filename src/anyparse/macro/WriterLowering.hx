@@ -13124,17 +13124,7 @@ class WriterLowering {
 	 * here instead of touching every consumer.
 	 */
 	private static function altSlotAccess(branch: ShapeNode, baseIdx: Int, argNames: Array<String>, slot: AltSlot): Null<Expr> {
-		final hasSlot: Bool = switch slot {
-			case CloseTrailing: TriviaTypeSynth.isAltCloseTrailingBranch(branch);
-			case TrailOpt: TriviaTypeSynth.isAltTrailOptBranch(branch);
-			case CaptureSource: TriviaTypeSynth.isCaptureSourceBranch(branch);
-			case BodyPolicyKw: TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
-			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
-			case KwNewline: TriviaTypeSynth.isAltKwNewlineBranch(branch);
-			case ChainNewline: TriviaTypeSynth.isAltChainNewlineBranch(branch);
-			case ChainLeadComment: TriviaTypeSynth.isPostfixChainCommentBranch(branch);
-		};
-		if (!hasSlot) return null;
+		if (!altSlotHasSlot(branch, slot)) return null;
 		var idx: Int = baseIdx;
 		if (slot == CloseTrailing) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
@@ -14086,6 +14076,24 @@ class WriterLowering {
 		} else
 			c.flagBased;
 		return withPadTrailingDrop(c.prevPadTrailing, macro $isInlineExpr ? $inlineSep : ${c.shapeAwareSwitch});
+	}
+
+	/**
+	 * Whether `branch` carries the synth trivia slot for `slot`, per the
+	 * matching `TriviaTypeSynth.isAlt*Branch` predicate. Extracted from
+	 * `altSlotAccess` to keep that offset walker below the complexity gate.
+	 */
+	private static function altSlotHasSlot(branch: ShapeNode, slot: AltSlot): Bool {
+		return switch slot {
+			case CloseTrailing: TriviaTypeSynth.isAltCloseTrailingBranch(branch);
+			case TrailOpt: TriviaTypeSynth.isAltTrailOptBranch(branch);
+			case CaptureSource: TriviaTypeSynth.isCaptureSourceBranch(branch);
+			case BodyPolicyKw: TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+			case KwNewline: TriviaTypeSynth.isAltKwNewlineBranch(branch);
+			case ChainNewline: TriviaTypeSynth.isAltChainNewlineBranch(branch);
+			case ChainLeadComment: TriviaTypeSynth.isPostfixChainCommentBranch(branch);
+		};
 	}
 
 }
