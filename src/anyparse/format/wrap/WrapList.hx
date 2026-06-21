@@ -2263,24 +2263,11 @@ class WrapList {
 	 * must commit to break mode unconditionally.
 	 */
 	private static function hasLeadingHardline(d: Doc): Bool {
+		final leaf: Null<Bool> = leadingHardlineLeaf(d);
+		if (leaf != null) return leaf;
 		return switch d {
-			case Empty: false;
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: true;
-			case Line(flat):
-				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
-			case Text(_): false;
-			case OptSpace(_): false;
-			case OptSpaceSkipAfterHardline: false;
 			case Nest(_, inner): hasLeadingHardline(inner);
 			case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner): hasLeadingHardline(inner);
-			case IfBreak(_, _): false;
-			case IfWidthExceeds(_, _, _): false;
-			case IfFirstLineExceeds(_, _, _): false;
-			case IfLineExceeds(_, _, _): false;
-			case IfFullLineExceeds(_, _, _): false;
-			case IfNaturalFirstLineExceeds(_, _, _): false;
-			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
-			case IfArrowContinuationFits(_, _, _, _, _): false;
 			case Concat(items):
 				for (it in items) {
 					if (hasLeadingHardline(it)) return true;
@@ -2296,13 +2283,42 @@ class WrapList {
 				inner
 			) | CollapseChainProbe(inner):
 				hasLeadingHardline(inner);
-			// ω-cond-indent-policy FixedZero: render-time marker, transparent —
-			// leading-hardline answer matches the marker's `inner`.
-			case ConditionalMarkerZero(inner):
+			// ω-cond-indent-policy FixedZero / AlignedDecrease: render-time
+			// markers, transparent — leading-hardline answer matches `inner`.
+			case ConditionalMarkerZero(inner): hasLeadingHardline(inner);
+			case ConditionalMarkerDecrease(inner):
 				hasLeadingHardline(inner);
-			// ω-cond-indent-policy AlignedDecrease: render-time marker, transparent
-			// — leading-hardline answer matches the marker's `inner`.
-			case ConditionalMarkerDecrease(inner): hasLeadingHardline(inner);
+			// Every leaf kind is already resolved by `leadingHardlineLeaf`.
+			case _: false;
+		};
+	}
+
+	/**
+	 * Leaf arms of the `hasLeadingHardline` walk: a definitive answer
+	 * for nodes that do not recurse, or `null` for the container kinds
+	 * (`Nest` / `Group` / `Concat` / `Fill` / the render-time wrappers)
+	 * that `hasLeadingHardline` descends. Only an opt-hardline or a
+	 * `Line('\n')` leads with a hardline; the `If*` conditional nodes
+	 * report `false` (their leading hardline is renderer-side).
+	 */
+	private static function leadingHardlineLeaf(d: Doc): Null<Bool> {
+		return switch d {
+			case Empty: false;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: true;
+			case Line(flat):
+				flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
+			case Text(_): false;
+			case OptSpace(_): false;
+			case OptSpaceSkipAfterHardline: false;
+			case IfBreak(_, _): false;
+			case IfWidthExceeds(_, _, _): false;
+			case IfFirstLineExceeds(_, _, _): false;
+			case IfLineExceeds(_, _, _): false;
+			case IfFullLineExceeds(_, _, _): false;
+			case IfNaturalFirstLineExceeds(_, _, _): false;
+			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
+			case IfArrowContinuationFits(_, _, _, _, _): false;
+			case _: null;
 		};
 	}
 
