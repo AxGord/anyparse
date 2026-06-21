@@ -5303,15 +5303,7 @@ class Lowering {
 		// Sole consumer: `HxStatement.ExprStmt` (the no-keyword
 		// catch-all, where a blanket optional `;` would break boundary
 		// detection — hence the shape gate instead).
-		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
-		final parseGateCall: Null<Expr> = if (parseGate != null && parseGate.length == 1) {
-			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
-			{
-				expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
-				pos: Context.currentPos(),
-			};
-		} else
-			null;
+		final parseGateCall: Null<Expr> = buildKwRefParseGateCall(branch);
 		// ω-string-interp-noformat: ctors with `@:fmt(captureSource)` +
 		// `@:lead`/`@:trail` carry a positional `sourceText:String` arg
 		// in trivia mode. The parser captures the byte slice between
@@ -5348,13 +5340,9 @@ class Lowering {
 		// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
 		// ctor arity (head always glued to `var `).
 		final triviaKwNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltKwNewlineBranch(branch);
-		final ctorArgs: Array<Expr> = [macro _raw];
-		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
-		if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
-		if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
-		if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
-		if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
-		final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
+		final ctorCall: Expr = buildKwRefCtorCall(
+			ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline, triviaKwNewline
+		);
 		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
 		final steps: Array<Expr> = [macro skipWs(ctx)];
 		// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
@@ -5611,6 +5599,42 @@ expectLit(ctx, $v{trailText}));
 			steps.push(macro matchLit(ctx, $v{trailText}));
 		else
 			steps.push(macro expectLit(ctx, $v{trailText}));
+	}
+
+	/**
+	 * Build the synth-ctor call for a `lowerKwRefBranch` ctor, appending the
+	 * trivia-mode positional args (`_trailPresent` / `_sourceText` /
+	 * `_bodyOnSameLine` / `_wrapOpenNewline` / `_varKwNewline`) the active
+	 * capture channels carry. Extracted from `lowerKwRefBranch` so it stays
+	 * under the complexity gate.
+	 */
+	private function buildKwRefCtorCall(
+		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaBodyPolicyKw: Bool, triviaWrapOpenNewline: Bool,
+		triviaKwNewline: Bool
+	): Expr {
+		final ctorArgs: Array<Expr> = [macro _raw];
+		if (triviaTrailOpt) ctorArgs.push(macro _trailPresent);
+		if (triviaCaptureSource) ctorArgs.push(macro _sourceText);
+		if (triviaBodyPolicyKw) ctorArgs.push(macro _bodyOnSameLine);
+		if (triviaWrapOpenNewline) ctorArgs.push(macro _wrapOpenNewline);
+		if (triviaKwNewline) ctorArgs.push(macro _varKwNewline);
+		return { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Build the optional parse-gate predicate call (`@:fmt(trailOptParseGate(
+	 * '<adapter>'))`) reached via the schema instance, or `null` when the
+	 * branch carries no gate. Extracted from `lowerKwRefBranch` so it stays
+	 * under the complexity gate.
+	 */
+	private function buildKwRefParseGateCall(branch: ShapeNode): Null<Expr> {
+		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
+		if (parseGate == null || parseGate.length != 1) return null;
+		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+		return {
+			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
+			pos: Context.currentPos(),
+		};
 	}
 
 }
