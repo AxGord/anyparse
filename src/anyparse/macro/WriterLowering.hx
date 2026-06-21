@@ -1791,184 +1791,28 @@ class WriterLowering {
 		// `openDelimPolicySpace` returns null when the flag is absent so
 		// the pre-slice tight emission stays byte-identical.
 		final openSpace: Null<Expr> = openDelimPolicySpace(branch, ['callParens']);
-		// ω-call-parens-inside (Stage B): `@:fmt(callParensInside)` opts the
-		// call-arg `(`/`)` into runtime inner padding driven by
-		// `opt.callParensInsideOpen` / `opt.callParensInsideClose` (the
-		// `after`/`before` sub-policies of fork's `parenConfig.callParens`).
-		// Threaded into the WrapList.emit / fillList / sepList `openInside` /
-		// `closeInside` slots (the same slots `triviaSepStarExpr` uses for
-		// anon-type braces). Default `None` on both → `_de()`, byte-identical
-		// to the tight `bar1(x)`. Empty `()` short-circuits before padding in
-		// every emit path (`items.length == 0` guard).
-		final callInsideFlag: Bool = branch.fmtHasFlag('callParensInside');
-		var callInsideOpen: Expr = callInsideFlag ? policyInsideSpace('callParensInsideOpen', false) : macro _de();
-		final callInsideClose: Expr = callInsideFlag ? policyInsideSpace('callParensInsideClose', true) : macro _de();
-		// ω-compress-successive-paren: mirror fork's
-		// `whitespace.compressSuccessiveParenthesis` for a paren-call open
-		// `(` immediately followed by an object-literal `{` argument. The
-		// fork's `successiveParenthesis` keeps the brace's `Before` policy
-		// space (`( {`) when the knob is `false`, and removes it (`({`) when
-		// `true`. In anyparse the inter-bracket pad lives in the WrapList /
-		// fillList / sepList `openInside` slot — so when the open delim is a
-		// `(` (compile-time `postfixOp == '('`) we make `openInside` a
-		// runtime-conditional space: emit `_dt(' ')` iff
-		// `!opt.compressSuccessiveParenthesis` AND the first call argument
-		// renders as an object literal (its enum ctor is `ObjectLit`). Only
-		// the first arg can sit directly after `(` (later args are preceded
-		// by `, `), so the check is on `_args[0]`. Default `true` keeps the
-		// glued `TPath({…})` layout byte-identical. `_args` is in scope where
-		// this Expr is spliced (the emit call sits inside the
-		// `final _args = $argsAccess; …` body). Trivia mode wraps each elem in
-		// `Trivial<T>` (`.node` holds the paired enum); plain mode is the raw
-		// enum — mirror `elemRead`'s `isTriviaStar` branch.
-		if (postfixOp == '(') {
-			final firstArgNode: Expr = isTriviaStar ? macro _args[0].node : macro _args[0];
-			final firstArgObjLit: Expr = macro _args.length > 0 && Type.enumConstructor(cast $firstArgNode) == 'ObjectLit';
-			callInsideOpen = macro !opt.compressSuccessiveParenthesis && $firstArgObjLit ? _dt(' ') : $callInsideOpen;
-		}
-		// ω-fill-primitive: `@:fmt(fill)` routes the args list through the
-		// Fill helper so items pack inline as long as each fits in the
-		// remaining budget; on overflow the separator before the offending
-		// item breaks at the args' indent. Default `sepList` stays for any
-		// postfix-Star ctor that doesn't opt in.
-		//
-		// ω-wraprules-callparam: `@:fmt(wrapRules('<optionFieldName>'))`
-		// supersedes both above paths — routes the args list through the
-		// runtime `WrapList.emit` engine driven by the named `WrapRules`
-		// cascade on `opt`. Mirrors the struct-Star branch in `lowerStruct`
-		// (slice ω-wraprules-objlit). First postfix-Star consumer is
-		// `HxExpr.Call.args` (`callParameterWrap`); future slices wire
-		// other postfix-Star ctors (array-access, etc.) through the same
-		// engine. `@:fmt(fill)` / `@:fmt(fillDoubleIndent)` remain orthogonal
-		// for postfix-Star sites that opt into Wadler fillSep without a
-		// per-construct cascade.
-		final useFill: Bool = branch.fmtHasFlag('fill');
-		final fillDouble: Bool = branch.fmtHasFlag('fillDoubleIndent');
-		final sepListCall: Expr = if (wrapRulesField != null) {
-			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
-			// ω-keep-callclose-newline: keep the outer call's close `)` glued iff
-			// the chain config is Keep AND the parser saw no newline before the
-			// close (`argsCloseNewline == false`). Only a trivia Star carrying
-			// `methodChain` has the parser slot; otherwise the signal is constant
-			// `false` (byte-inert legacy close placement).
-			final keepCloseGluedExpr: Expr = (isTriviaStar && methodChainField != null)
-				? {
-					final chainRulesExpr: Expr = optFieldAccess(methodChainField);
-					final closeNlExpr: Expr = { expr: EConst(CIdent(argNames[4])), pos: Context.currentPos() };
-					macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
-				}
-				: macro false;
-			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
-				_de(), _de(), false, null, null, false, false, null, false, null, $keepCloseGluedExpr
-			);
-			if (isTriviaStar) {
-				// ω-D9A-keep-callargs: when the wrap-rules' runtime config
-				// sets `defaultMode == WrapMode.Keep`, bypass the cascade
-				// and build the args list Doc by hand — `_dhl()` between
-				// args when source had `\n` before the next arg
-				// (`Trivial<T>.newlineBefore`), `_dt(' ')` otherwise.
-				//
-				// ω-D9A-keep-callargs-v2: args[0]'s leading source-vertical
-				// signal is captured by a dedicated parser slot
-				// `argsOpenNewline` (positional `argNames[3]`, sibling of
-				// `closeTrailing` at `argNames[2]`). `Trivial<T>.newlineBefore`
-				// for args[0] is unreliable because upstream kw-Ref rules
-				// (e.g. `catch (e:E)\n\t\ttrace(e);`) drain `ctx.pendingTrivia`
-				// into the first `collectTrivia`. The slot is captured BEFORE
-				// the per-iter `skipWs(ctx)` so the post-open `\n` is
-				// preserved verbatim. Inter-arg signals (i ≥ 1) stay on
-				// `Trivial.newlineBefore` — captured by the loop's
-				// `collectTrivia(ctx)` AFTER the previous sep, where
-				// pendingTrivia is already drained.
-				//
-				// When `argsOpenNewline=true` the emit also adds a trailing
-				// `_dhl()` between the last arg and the close lit so the
-				// source-vertical fixture's `\n)` shape round-trips. Sister
-				// to `triviaSepStarExpr`'s `ω-keep-objectlit` per-element
-				// source-aware leading.
-				//
-				// JSON-driven: the loader maps `"defaultWrap": "keep"` on
-				// the named wrap-rules section → `Keep`. Default
-				// `NoWrap` cascades route to `wrapListExpr` (legacy
-				// byte-identical).
-				final argsOpenNewlineExpr: Expr = { expr: EConst(CIdent(argNames[3])), pos: Context.currentPos() };
-				final keepDoc: Expr = macro {
-					final _kArgsOpenNewline: Bool = $argsOpenNewlineExpr;
-					final _kInner: Array<anyparse.core.Doc> = [];
-					var _kj: Int = 0;
-					while (_kj < _docs.length) {
-						if (_kj > 0)
-							_kInner.push(_args[_kj].newlineBefore ? _dhl() : _dt(' '));
-						else if (_kArgsOpenNewline) _kInner.push(_dhl());
-						_kInner.push(_docs[_kj]);
-						final _kIsLast: Bool = _kj == _docs.length - 1;
-						if (!_kIsLast)
-							_kInner.push(_dt($v{elemSep}));
-						else if ($tcExpr) _kInner.push(_dt($v{elemSep}));
-						_kj++;
-					}
-					final _kCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					final _kOuter: Array<anyparse.core.Doc> = [
-						_dt($v{postfixOp}),
-						_dn(_kCols, _dc(_kInner)),
-					];
-					if (_kArgsOpenNewline) _kOuter.push(_dhl());
-					_kOuter.push(_dt($v{postfixClose}));
-					_dwb(_dc(_kOuter));
-				};
-				macro $rulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep ? $keepDoc : $wrapListExpr;
-			} else {
-				wrapListExpr;
-			}
-		} else if (useFill) {
-			macro fillList(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false,
-				$v{fillDouble}
-			);
-		} else {
-			macro sepList(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, false
-			);
+		final callInside: { open: Expr, close: Expr } = lowerPostfixCallInside(branch, postfixOp, isTriviaStar);
+		final c: PostfixStarCtx = {
+			branch: branch,
+			postfixOp: postfixOp,
+			postfixClose: postfixClose,
+			elemSep: elemSep,
+			isTriviaStar: isTriviaStar,
+			argNames: argNames,
+			tcExpr: tcExpr,
+			callInsideOpen: callInside.open,
+			callInsideClose: callInside.close,
+			wrapRulesField: wrapRulesField,
+			methodChainField: methodChainField,
+			elemCall: elemCall,
 		};
+		final sepListCall: Expr = lowerPostfixSepListCall(c);
 		final dcArgs: Array<Expr> = [operandCall];
 		if (openSpace != null) dcArgs.push(openSpace);
 		dcArgs.push(sepListCall);
 		final dcExpr: Expr = dcCall(dcArgs);
-		final pushElemExpr: Expr = isTriviaStar
-			? macro {
-				final _elem: anyparse.core.Doc = $elemCall;
-				final _tc: Null<String> = _args[_i].trailingComment;
-				// `trailingCommentDocVerbatim` already prepends ' ' to
-				// the captured content, so the per-arg Doc is just
-				// `_elem ++ trailingDoc` — no extra `_dt(' ')`.
-				_docs.push(_tc != null ? _dc([_elem, trailingCommentDocVerbatim(_tc, opt)]) : _elem);
-			}
-			: macro _docs.push($elemCall);
-		// ω-postfix-call-trailing: when the synth pair grew a
-		// `closeTrailing:Null<String>` slot (gated by `isTriviaStar`,
-		// which is the same predicate as `isPostfixCloseTrailingBranch`
-		// at this site), append `trailingCommentDocVerbatim(_trailClose,
-		// opt)` after the call's emitted Doc when non-null. The slot
-		// holds a same-line trailing `// c` / `/* c */` between `)` and
-		// the next expression boundary — captured by Lowering's
-		// `lowerPostfixLoop` Star-suffix trivia branch. For chain Calls
-		// the chain extractor (`wrapWithChainDispatch`) handles the same
-		// slot per segment via its own dispatch; this default-path
-		// emission covers non-chain single Calls.
-		final tailExpr: Expr = isTriviaStar
-			? {
-				final closeTrailRef: Expr = {
-					expr: EConst(CIdent(argNames[2])),
-					pos: Context.currentPos(),
-				};
-				macro {
-					final _dcResult: anyparse.core.Doc = $dcExpr;
-					final _trailClose: Null<String> = $closeTrailRef;
-					_trailClose != null ? _dc([_dcResult, trailingCommentDocVerbatim(_trailClose, opt)]) : _dcResult;
-				};
-			}
-			: dcExpr;
+		final pushElemExpr: Expr = lowerPostfixPushElem(c);
+		final tailExpr: Expr = lowerPostfixTailExpr(c, dcExpr);
 		return macro {
 			final _args = $argsAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
@@ -14219,6 +14063,221 @@ class WriterLowering {
 		return { expr: ECall(ctorIdent, binders), pos: pos };
 	}
 
+	/**
+	 * Build the source-faithful `Keep`-mode args-list Doc for a trivia
+	 * postfix Star. Extracted from `lowerPostfixSepListCall` — the
+	 * `ω-D9A-keep-callargs` per-arg hand-built layout (`_dhl()` where source
+	 * had a newline before the next arg, `_dt(' ')` otherwise) plus the
+	 * `argsOpenNewline` leading/trailing hardlines.
+	 */
+	private static function lowerPostfixKeepDoc(c: PostfixStarCtx): Expr {
+		final postfixOp: String = c.postfixOp;
+		final postfixClose: String = c.postfixClose;
+		final elemSep: String = c.elemSep;
+		final tcExpr: Expr = c.tcExpr;
+		// ω-D9A-keep-callargs: when the wrap-rules' runtime config
+		// sets `defaultMode == WrapMode.Keep`, bypass the cascade
+		// and build the args list Doc by hand — `_dhl()` between
+		// args when source had `\n` before the next arg
+		// (`Trivial<T>.newlineBefore`), `_dt(' ')` otherwise.
+		//
+		// ω-D9A-keep-callargs-v2: args[0]'s leading source-vertical
+		// signal is captured by a dedicated parser slot
+		// `argsOpenNewline` (positional `argNames[3]`, sibling of
+		// `closeTrailing` at `argNames[2]`). `Trivial<T>.newlineBefore`
+		// for args[0] is unreliable because upstream kw-Ref rules
+		// (e.g. `catch (e:E)\n\t\ttrace(e);`) drain `ctx.pendingTrivia`
+		// into the first `collectTrivia`. The slot is captured BEFORE
+		// the per-iter `skipWs(ctx)` so the post-open `\n` is
+		// preserved verbatim. Inter-arg signals (i ≥ 1) stay on
+		// `Trivial.newlineBefore` — captured by the loop's
+		// `collectTrivia(ctx)` AFTER the previous sep, where
+		// pendingTrivia is already drained.
+		//
+		// When `argsOpenNewline=true` the emit also adds a trailing
+		// `_dhl()` between the last arg and the close lit so the
+		// source-vertical fixture's `\n)` shape round-trips. Sister
+		// to `triviaSepStarExpr`'s `ω-keep-objectlit` per-element
+		// source-aware leading.
+		//
+		// JSON-driven: the loader maps `"defaultWrap": "keep"` on
+		// the named wrap-rules section → `Keep`. Default
+		// `NoWrap` cascades route to `wrapListExpr` (legacy
+		// byte-identical).
+		final argsOpenNewlineExpr: Expr = { expr: EConst(CIdent(c.argNames[3])), pos: Context.currentPos() };
+		return macro {
+			final _kArgsOpenNewline: Bool = $argsOpenNewlineExpr;
+			final _kInner: Array<anyparse.core.Doc> = [];
+			var _kj: Int = 0;
+			while (_kj < _docs.length) {
+				if (_kj > 0)
+					_kInner.push(_args[_kj].newlineBefore ? _dhl() : _dt(' '));
+				else if (_kArgsOpenNewline) _kInner.push(_dhl());
+				_kInner.push(_docs[_kj]);
+				final _kIsLast: Bool = _kj == _docs.length - 1;
+				if (!_kIsLast)
+					_kInner.push(_dt($v{elemSep}));
+				else if ($tcExpr) _kInner.push(_dt($v{elemSep}));
+				_kj++;
+			}
+			final _kCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _kOuter: Array<anyparse.core.Doc> = [
+				_dt($v{postfixOp}),
+				_dn(_kCols, _dc(_kInner)),
+			];
+			if (_kArgsOpenNewline) _kOuter.push(_dhl());
+			_kOuter.push(_dt($v{postfixClose}));
+			_dwb(_dc(_kOuter));
+		};
+	}
+
+	/**
+	 * Build the args-list emission call for a postfix Star — the three-way
+	 * dispatch between the runtime `WrapList.emit` cascade (`@:fmt(wrapRules)`,
+	 * with a hand-built `Keep`-mode Doc for trivia Stars), the Wadler
+	 * `fillList` (`@:fmt(fill)`), and the default `sepList`. Extracted from
+	 * `lowerPostfixStar`; instance because `optFieldAccess` reads `ctx`.
+	 */
+	private function lowerPostfixSepListCall(c: PostfixStarCtx): Expr {
+		final postfixOp: String = c.postfixOp;
+		final postfixClose: String = c.postfixClose;
+		final elemSep: String = c.elemSep;
+		final tcExpr: Expr = c.tcExpr;
+		final callInsideOpen: Expr = c.callInsideOpen;
+		final callInsideClose: Expr = c.callInsideClose;
+		if (c.wrapRulesField != null) {
+			final rulesExpr: Expr = optFieldAccess(c.wrapRulesField);
+			// ω-keep-callclose-newline: keep the outer call's close `)` glued iff
+			// the chain config is Keep AND the parser saw no newline before the
+			// close (`argsCloseNewline == false`). Only a trivia Star carrying
+			// `methodChain` has the parser slot; otherwise the signal is constant
+			// `false` (byte-inert legacy close placement).
+			final keepCloseGluedExpr: Expr = (c.isTriviaStar && c.methodChainField != null)
+				? {
+					final chainRulesExpr: Expr = optFieldAccess(c.methodChainField);
+					final closeNlExpr: Expr = { expr: EConst(CIdent(c.argNames[4])), pos: Context.currentPos() };
+					macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
+				}
+				: macro false;
+			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
+				_de(), _de(), false, null, null, false, false, null, false, null, $keepCloseGluedExpr
+			);
+			if (c.isTriviaStar) {
+				final keepDoc: Expr = lowerPostfixKeepDoc(c);
+				return macro $rulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep ? $keepDoc : $wrapListExpr;
+			}
+			return wrapListExpr;
+		} else if (c.branch.fmtHasFlag('fill')) {
+			final fillDouble: Bool = c.branch.fmtHasFlag('fillDoubleIndent');
+			return macro fillList(
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false,
+				$v{fillDouble}
+			);
+		} else {
+			return macro sepList(
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, false
+			);
+		}
+	}
+
+	/**
+	 * Build the per-iteration `_docs.push(...)` statement for a postfix Star.
+	 * In trivia mode it appends the element's verbatim `trailingComment` after
+	 * the element Doc; plain mode pushes the bare element. Extracted from
+	 * `lowerPostfixStar`.
+	 */
+	private static function lowerPostfixPushElem(c: PostfixStarCtx): Expr {
+		final elemCall: Expr = c.elemCall;
+		return c.isTriviaStar
+			? macro {
+				final _elem: anyparse.core.Doc = $elemCall;
+				final _tc: Null<String> = _args[_i].trailingComment;
+				// `trailingCommentDocVerbatim` already prepends ' ' to
+				// the captured content, so the per-arg Doc is just
+				// `_elem ++ trailingDoc` — no extra `_dt(' ')`.
+				_docs.push(_tc != null ? _dc([_elem, trailingCommentDocVerbatim(_tc, opt)]) : _elem);
+			}
+			: macro _docs.push($elemCall);
+	}
+
+	/**
+	 * Build the postfix Star's tail expression — the final Doc value of the
+	 * generated body. In trivia mode it appends the synth `closeTrailing`
+	 * slot's verbatim same-line comment after the assembled call Doc; plain
+	 * mode returns the call Doc directly. Extracted from `lowerPostfixStar`.
+	 */
+	private static function lowerPostfixTailExpr(c: PostfixStarCtx, dcExpr: Expr): Expr {
+		// ω-postfix-call-trailing: when the synth pair grew a
+		// `closeTrailing:Null<String>` slot (gated by `isTriviaStar`,
+		// which is the same predicate as `isPostfixCloseTrailingBranch`
+		// at this site), append `trailingCommentDocVerbatim(_trailClose,
+		// opt)` after the call's emitted Doc when non-null. The slot
+		// holds a same-line trailing `// c` / `/* c */` between `)` and
+		// the next expression boundary — captured by Lowering's
+		// `lowerPostfixLoop` Star-suffix trivia branch. For chain Calls
+		// the chain extractor (`wrapWithChainDispatch`) handles the same
+		// slot per segment via its own dispatch; this default-path
+		// emission covers non-chain single Calls.
+		if (!c.isTriviaStar) return dcExpr;
+		final closeTrailRef: Expr = {
+			expr: EConst(CIdent(c.argNames[2])),
+			pos: Context.currentPos(),
+		};
+		return macro {
+			final _dcResult: anyparse.core.Doc = $dcExpr;
+			final _trailClose: Null<String> = $closeTrailRef;
+			_trailClose != null ? _dc([_dcResult, trailingCommentDocVerbatim(_trailClose, opt)]) : _dcResult;
+		};
+	}
+
+	/**
+	 * Compute the call-arg `(`/`)` inner-padding Docs for a postfix Star.
+	 * Honours `@:fmt(callParensInside)` (runtime `callParensInsideOpen` /
+	 * `callParensInsideClose`) and, for a `(`-open ctor, the
+	 * compress-successive-parenthesis policy (a runtime space before a
+	 * leading object-literal arg). Extracted from `lowerPostfixStar`;
+	 * instance because `policyInsideSpace` reads `ctx`.
+	 */
+	private function lowerPostfixCallInside(branch: ShapeNode, postfixOp: String, isTriviaStar: Bool): { open: Expr, close: Expr } {
+		// ω-call-parens-inside (Stage B): `@:fmt(callParensInside)` opts the
+		// call-arg `(`/`)` into runtime inner padding driven by
+		// `opt.callParensInsideOpen` / `opt.callParensInsideClose` (the
+		// `after`/`before` sub-policies of fork's `parenConfig.callParens`).
+		// Threaded into the WrapList.emit / fillList / sepList `openInside` /
+		// `closeInside` slots (the same slots `triviaSepStarExpr` uses for
+		// anon-type braces). Default `None` on both → `_de()`, byte-identical
+		// to the tight `bar1(x)`. Empty `()` short-circuits before padding in
+		// every emit path (`items.length == 0` guard).
+		final callInsideFlag: Bool = branch.fmtHasFlag('callParensInside');
+		var callInsideOpen: Expr = callInsideFlag ? policyInsideSpace('callParensInsideOpen', false) : macro _de();
+		final callInsideClose: Expr = callInsideFlag ? policyInsideSpace('callParensInsideClose', true) : macro _de();
+		// ω-compress-successive-paren: mirror fork's
+		// `whitespace.compressSuccessiveParenthesis` for a paren-call open
+		// `(` immediately followed by an object-literal `{` argument. The
+		// fork's `successiveParenthesis` keeps the brace's `Before` policy
+		// space (`( {`) when the knob is `false`, and removes it (`({`) when
+		// `true`. In anyparse the inter-bracket pad lives in the WrapList /
+		// fillList / sepList `openInside` slot — so when the open delim is a
+		// `(` (compile-time `postfixOp == '('`) we make `openInside` a
+		// runtime-conditional space: emit `_dt(' ')` iff
+		// `!opt.compressSuccessiveParenthesis` AND the first call argument
+		// renders as an object literal (its enum ctor is `ObjectLit`). Only
+		// the first arg can sit directly after `(` (later args are preceded
+		// by `, `), so the check is on `_args[0]`. Default `true` keeps the
+		// glued `TPath({…})` layout byte-identical. `_args` is in scope where
+		// this Expr is spliced (the emit call sits inside the
+		// `final _args = $argsAccess; …` body). Trivia mode wraps each elem in
+		// `Trivial<T>` (`.node` holds the paired enum); plain mode is the raw
+		// enum — mirror `elemRead`'s `isTriviaStar` branch.
+		if (postfixOp == '(') {
+			final firstArgNode: Expr = isTriviaStar ? macro _args[0].node : macro _args[0];
+			final firstArgObjLit: Expr = macro _args.length > 0 && Type.enumConstructor(cast $firstArgNode) == 'ObjectLit';
+			callInsideOpen = macro !opt.compressSuccessiveParenthesis && $firstArgObjLit ? _dt(' ') : $callInsideOpen;
+		}
+		return { open: callInsideOpen, close: callInsideClose };
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14882,6 +14941,27 @@ typedef EnumStarCtx = {
 	final trailText: String;
 	final sepText: Null<String>;
 	final starNode: ShapeNode;
+};
+
+/**
+ * Shared setup locals bundled for the `lowerPostfixStar` emission helpers
+ * (`lowerPostfixSepListCall` / `lowerPostfixPushElem` / `lowerPostfixTailExpr`).
+ * Replaces a >5-scalar helper signature with one context struct (mirrors
+ * `EnumStarCtx`).
+ */
+typedef PostfixStarCtx = {
+	final branch: ShapeNode;
+	final postfixOp: String;
+	final postfixClose: String;
+	final elemSep: String;
+	final isTriviaStar: Bool;
+	final argNames: Array<String>;
+	final tcExpr: Expr;
+	final callInsideOpen: Expr;
+	final callInsideClose: Expr;
+	final wrapRulesField: Null<String>;
+	final methodChainField: Null<String>;
+	final elemCall: Expr;
 };
 
 /**
