@@ -13885,94 +13885,9 @@ class WriterLowering {
 			})
 			: subCall;
 
-		// ω-return-indent-objectliteral: ctor-level
-		// `@:fmt(indentValueIfCtor('<ctor>', '<optField>', '<leftCurlyField>'))`
-		// on a kw-led single-Ref branch (e.g. `HxStatement.ReturnStmt`)
-		// extends the RHS-style indent rule of `HxVarDecl.init` /
-		// `HxObjectField.value` to the ctor-arg form. When the runtime
-		// conditions match (named bool opt true AND named leftCurly opt
-		// `Next` AND `Type.enumConstructor(value) == ctorName`), bypass
-		// `bodyPolicyWrap`'s sameLayoutExpr fallback (which emits a
-		// trailing-space-before-hardline `_dt(' ') + writeCall`) and
-		// instead emit `Nest(_cols, subCall)` directly. The body's
-		// own leading `_dhl` (e.g. ObjectLit's `leftCurly=Next`) picks
-		// up `+cols` indent through the Nest so the `{` lands one step
-		// past the kw column. When the conditions don't match, falls
-		// through to `policyWrapped` unchanged. `indentArgs` is the
-		// 3-arg entry (guaranteed by the arity split above; null when
-		// only the 2-arg IfExpr form is present).
-		final indentWrapped: Expr = if (indentArgs == null)
-			policyWrapped
-		else {
-			final ctorName: String = indentArgs[0];
-			final optField: String = indentArgs[1];
-			final leftCurlyField: String = indentArgs[2];
-			final optAccess: Expr = optFieldAccess(optField);
-			final leftCurlyAccess: Expr = optFieldAccess(leftCurlyField);
-			final valueAccess: Expr = macro $i{argNames[0]};
-			macro {
-				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-				if (
-					$optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next
-					&& Type.enumConstructor($valueAccess) == $v{ctorName}
-				)
-					_dc([_dop(' '), _dn(_cols, $subCall)])
-				else
-					$policyWrapped;
-			};
-		}
-
-		// ω-string-interp-noformat: when the ctor opted into source-
-		// byte capture (`@:fmt(captureSource('<optName>'))` + trivia
-		// mode), the synth ctor's `argNames[1]` holds the verbatim
-		// slice between `@:lead` and `@:trail`. Gate emission on the
-		// named `Bool` runtime option: when `false`, emit the captured
-		// bytes via `_dt(sourceText)` instead of recursing into the
-		// parsed `expr`. The two modes are runtime-selectable per write
-		// — the same parsed AST can flip between formatted and verbatim
-		// by toggling the knob. The flag arg names the runtime field
-		// so format-neutrality is preserved (mirror of `bodyPolicy` /
-		// `wrapRules` parametric flags).
-		final captureSourceOpt: Null<String> = ctx.trivia ? branch.fmtReadString('captureSource') : null;
-		var bodyExpr: Expr = if (captureSourceOpt != null) {
-			final sourceAccess: Expr = macro $i{argNames[1]};
-			final optAccess: Expr = optFieldAccess(captureSourceOpt);
-			// Mirror haxe-formatter `MarkTokenText.printStringToken`
-			// (`MarkTokenText.hx:39-63`). Fork uses naive `text.indexOf('}',
-			// index + 2)` to find the close of `${…}`. Two failure modes
-			// both land at verbatim emission upstream:
-			//  - a literal `{` inside the body (nested string / anon
-			//    struct) trips the explicit `fragment.indexOf("{")` skip
-			//    (line 54);
-			//  - a literal `}` inside the body makes `indexOf("}")` match
-			//    too early; the truncated fragment fails `formatFragment`
-			//    tokenisation (line 110-113 catch) and the slot stays
-			//    verbatim.
-			// Our recursive-descent parser handles brace balance correctly,
-			// but to match fork's byte output we replicate both bail-outs
-			// at write time: any `{` OR `}` in the captured slice → emit
-			// verbatim. Closes `whitespace/issue_72_whitespace_in_string_interpolation`.
-			macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
-		} else
-			indentWrapped;
-
-		// ω-string-interp-noformat-flat: an interpolation `${expr}` body
-		// (the `@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
-		// re-renders the inner expression when `formatStringInterpolation`
-		// is true, but the fork NEVER wraps expressions inside string
-		// interpolations — they stay on one line regardless of the chain
-		// wrap config (`opAddSubChain`/`opBoolChain` onePerLine/fillLine).
-		// Pin the re-rendered body force-flat through `HardFlatten` so an
-		// inner `+`/`-`/`&&` chain (or any nested Group) collapses to one
-		// line: `${topRightPointX - 7.5}` instead of breaking the chain
-		// one-per-line at the operator. Mirror of fork — `printStringToken`
-		// formats the fragment in isolation with no surrounding wrap
-		// context. HardFlatten survives the chain's inner `WrapBoundary`
-		// (Renderer.hx ω-hardflatten) where plain `Flatten` would re-float.
-		// The verbatim branch (`_dt(sourceAccess)`) is a single Text —
-		// HardFlatten is a no-op there. Closes `opadd_chain_string_concat`
-		// inner-interp breaks / `opadd_chain_trailing_indent`.
-		if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
+		// Build the body Doc: indentValueIfCtor ObjectLit-indent override +
+		// captureSource verbatim/HardFlatten gate — see kwRefBodyExpr.
+		final bodyExpr: Expr = kwRefBodyExpr(c, policyWrapped, subCall, indentArgs);
 
 		// Resolve the kw-trailing-space behaviour (strip vs runtime-switched
 		// space) and assemble the kw / lead / body / trail parts — see
@@ -13985,29 +13900,9 @@ class WriterLowering {
 		final wrapDoc: Null<Expr> = kwRefWrapShape(c, parts, wrapOpenNewlineExpr);
 		if (wrapDoc != null) return wrapDoc;
 
-		final case3Doc: Expr = if (parts.length == 1)
-			parts[0]
-		else
-			dcCall(parts);
-		// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
-		// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
-		// `HxStatement`/`HxClassMember`/`HxDecl` `Conditional` ctors) wraps
-		// its whole construct Doc in a render-time marker scope:
-		//  - `FixedZero` → `_dcmz` (ConditionalMarkerZero): every `#`-leading
-		//    fresh line (`#if`/`#elseif`/`#else`/`#end`, incl. nested ones)
-		//    flushes at column 0 while body content keeps its frame indent.
-		//  - `AlignedDecrease` → `_dcmd` (ConditionalMarkerDecrease): EVERY
-		//    fresh line (markers AND body) shifts one indent level shallower,
-		//    moving the increase-style body accumulation (already applied via
-		//    `condIncreaseGateExpr`, which also fires for `AlignedDecrease`)
-		//    `-1` uniformly.
-		// Every other policy (`Aligned` default, `AlignedIncrease`, …) leaves
-		// the ctor unwrapped → byte-identical.
-		return branch.fmtHasFlag('conditionalMarkerDedent')
-			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
-				? _dcmz($case3Doc)
-				: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
-			: case3Doc;
+		// Concat the parts + apply the conditionalMarkerDedent render-scope
+		// (FixedZero / AlignedDecrease) — see kwRefFinalDoc.
+		return kwRefFinalDoc(c, parts);
 	}
 
 	/**
@@ -14420,6 +14315,84 @@ class WriterLowering {
 			parts.push(trailExpr);
 		}
 		return parts;
+	}
+
+	/**
+	 * Builds the kw-Ref body Doc (Case 3): applies the
+	 * `@:fmt(indentValueIfCtor)` 3-arg ObjectLit-indent override on top of
+	 * `policyWrapped`, then the `@:fmt(captureSource)` verbatim-source gate
+	 * (trivia mode) and its force-flat HardFlatten pin. Extracted from
+	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 */
+	private function kwRefBodyExpr(c: LowerBranchCtx, policyWrapped: Expr, subCall: Expr, indentArgs: Null<Array<String>>): Expr {
+		final branch: ShapeNode = c.branch;
+		final argNames: Array<String> = c.argNames;
+		// ω-return-indent-objectliteral: when the runtime conditions match
+		// (named bool opt true AND named leftCurly opt `Next` AND
+		// `Type.enumConstructor(value) == ctorName`), bypass `bodyPolicyWrap`'s
+		// sameLayoutExpr fallback and emit `Nest(_cols, subCall)` directly so
+		// the body's own leading `_dhl` (ObjectLit `leftCurly=Next`) picks up
+		// `+cols`. `indentArgs` is the 3-arg entry (null → no override).
+		final indentWrapped: Expr = if (indentArgs == null)
+			policyWrapped
+		else {
+			final ctorName: String = indentArgs[0];
+			final optField: String = indentArgs[1];
+			final leftCurlyField: String = indentArgs[2];
+			final optAccess: Expr = optFieldAccess(optField);
+			final leftCurlyAccess: Expr = optFieldAccess(leftCurlyField);
+			final valueAccess: Expr = macro $i{argNames[0]};
+			macro {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				if (
+					$optAccess && $leftCurlyAccess == anyparse.format.BracePlacement.Next
+					&& Type.enumConstructor($valueAccess) == $v{ctorName}
+				)
+					_dc([_dop(' '), _dn(_cols, $subCall)])
+				else
+					$policyWrapped;
+			};
+		}
+		// ω-string-interp-noformat: when the ctor opted into source-byte
+		// capture (`@:fmt(captureSource('<optName>'))` + trivia mode),
+		// `argNames[1]` holds the verbatim slice. Gate on the named Bool opt:
+		// `false` → emit captured bytes via `_dt(sourceText)`. Match fork's
+		// `printStringToken` bail-outs: any `{`/`}` in the slice → verbatim.
+		final captureSourceOpt: Null<String> = ctx.trivia ? branch.fmtReadString('captureSource') : null;
+		var bodyExpr: Expr = if (captureSourceOpt != null) {
+			final sourceAccess: Expr = macro $i{argNames[1]};
+			final optAccess: Expr = optFieldAccess(captureSourceOpt);
+			macro $optAccess && $sourceAccess.indexOf('{') < 0 && $sourceAccess.indexOf('}') < 0 ? $indentWrapped : _dt($sourceAccess);
+		} else
+			indentWrapped;
+		// ω-string-interp-noformat-flat: pin the re-rendered interpolation
+		// body force-flat through `HardFlatten` so an inner chain collapses to
+		// one line (the fork never wraps expressions inside interpolations).
+		// The verbatim branch is a single Text → HardFlatten is a no-op.
+		if (branch.fmtHasFlag('captureSource')) bodyExpr = macro _dhf($bodyExpr);
+		return bodyExpr;
+	}
+
+	/**
+	 * Finalises the kw-Ref Doc (Case 3): concats the parts, then wraps the
+	 * whole construct in the `@:fmt(conditionalMarkerDedent)` render-time
+	 * marker scope (`#if … #end` FixedZero / AlignedDecrease policies);
+	 * every other policy leaves it unwrapped (byte-identical). Extracted
+	 * from `lowerKwRefBranch` so each stays under the complexity gate.
+	 */
+	private function kwRefFinalDoc(c: LowerBranchCtx, parts: Array<Expr>): Expr {
+		final case3Doc: Expr = parts.length == 1 ? parts[0] : dcCall(parts);
+		// ω-cond-indent-policy FixedZero/AlignedDecrease: a cond-comp ctor
+		// opting into `@:fmt(conditionalMarkerDedent)` (the `#if … #end`
+		// Conditional ctors) wraps its whole construct Doc in a render-time
+		// marker scope — FixedZero flushes `#`-leading lines at column 0;
+		// AlignedDecrease shifts every fresh line one level shallower. Every
+		// other policy leaves the ctor unwrapped → byte-identical.
+		return c.branch.fmtHasFlag('conditionalMarkerDedent')
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
+				? _dcmz($case3Doc)
+				: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
+			: case3Doc;
 	}
 
 }
