@@ -1190,141 +1190,14 @@ class WriterLowering {
 				case Ref:
 					final refName: String = child.annotations.get('base.ref');
 					final writeFn: String = writeFnFor(refName);
-					// ω-issue-423-mech-a: when the Ref carries
-					// `@:fmt(propagateExprPosition)`, wrap the opt arg in
-					// `_setExprPosition` so the descendant writer (and ANY
-					// further recursive descent through it) sees
-					// `_inExprPosition=true`. Idempotent — already-true opt
-					// passes through without re-allocating. Consumers:
-					// `HxVarDecl.init`, `HxObjectField.value`,
-					// `HxParenLambda.body`, `HxThinParenLambda.body` — every
-					// expression-position-yielding Ref parent that ANY case-
-					// body descendant might see.
-					final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
-					// ω-arrow-lambda-body-context: sister opt-fanout to
-					// `propagateExprPosition` — when the mandatory Ref carries
-					// `@:fmt(propagateAnonFnContext)`, wrap opt in
-					// `_setAnonFnBody` so the descendant writer sees
-					// `_inAnonFnBody=true`. Used by `HxParenLambda.body` and
-					// `HxThinParenLambda.body` so the inner `HxExpr.BlockExpr`
-					// reads `opt.anonFunctionLeftCurly` for its `{` placement
-					// instead of the global `opt.blockLeftCurly`. Mirrors the
-					// optional-Ref site above (consumer: `HxFnExpr.body`).
-					final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
-					// ω-typedef-anon-force-multi: sister opt-fanout — when the
-					// mandatory Ref carries `@:fmt(propagateTypedefContext)`,
-					// wrap opt in `_setTypedefBody` so the descendant writer
-					// sees `_inTypedefBody=true`. Used by `HxTypedefDecl.type`
-					// so the inner `HxType.Anon.fields` Star reads
-					// `opt._inTypedefBody=true` and forces multi-line via
-					// `WrapList.emit(..., forceMode = WrapMode.OnePerLine)`.
-					// Composes with sister flags by stacked wrapping.
-					final propagateTypedef: Bool = child.fmtHasFlag('propagateTypedefContext');
-					// ω-extern-class-no-blanks:
-					// `@:fmt(setBoolFlagFromStarCtor(optField, starField,
-					// ctorName))` allocates a fresh opt copy
-					// (`_wo = _copyOpt(opt)`) and sets `_wo.<optField> = true`
-					// iff the parent struct's sibling `<starField>` Star
-					// contains an element matching `<ctorName>`. Used by
-					// `HxTopLevelDecl.decl` to propagate `_classExtern` from
-					// the presence of `Extern` in `modifiers`, so descendants
-					// (`HxClassDecl.members`) can suppress
-					// `interMemberBlankLines`-driven blanks. Trivia-bearing
-					// path probes `_m.node.match(<ctorName>)` because Star
-					// elements wrap the underlying enum in `Trivial<...>`;
-					// plain mode probes `_m.match(<ctorName>)` directly.
-					// Composes with `propagateExprPosition` — when both metas
-					// fire on the same field, `_wo._inExprPosition = true` is
-					// set inline alongside the bool-flag assignment so a
-					// single opt copy carries both modifications.
-					final boolFlagArgs: Null<Array<String>> = child.fmtReadStringArgs('setBoolFlagFromStarCtor');
-					if (boolFlagArgs != null && boolFlagArgs.length != 3)
-						Context.fatalError(
-							'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got ${boolFlagArgs.length}',
-							Context.currentPos()
-						);
-					// ω-switch-subject-nowrap (condition_wrapping_switch): the
-					// fork NEVER wraps a switch subject — `markPWrapping`'s
-					// `case SwitchCondition:` falls through with an empty body
-					// (no `wrapCondition` / `wrapExpressionParen`), unlike
-					// `IfCondition` / `WhileCondition` / `ForLoop`. Thread
-					// `_setChainModeOverride(opt, NoWrap)` into the subject
-					// `expr` sub-call so a top-level `+`/`-`/`&&`/`||` chain in
-					// the subject stays flat regardless of the
-					// `opAddSubChain` / `opBoolChain` config. Mirror of the
-					// string-interp `captureSource`→NoWrap site (above): the
-					// override swaps ONLY `opBoolChainWrap` / `opAddSubChainWrap`
-					// to a degenerate `{rules: [], defaultMode: NoWrap}` cascade,
-					// so nested `Call` / `ArrayLiteral` parens inside the subject
-					// keep their own wrap config (matching the fork's per-`Call`
-					// `markPWrapping` recursion). `NoWrap` is distinct from the
-					// `FillLineWithLeadingBreak` cond-wrap mode, so the chain
-					// dispatch's `_condWrapForced` gate (== FLWLB) stays false —
-					// no interaction with the inc6 chain-unwrap path. Carried by
-					// `HxSwitchStmt.expr` / `HxSwitchStmtBare.expr`.
-					final switchSubjectNoWrap: Bool = child.fmtHasFlag('switchSubjectNoWrap');
-					// ω-expressionif-collapse (mechanism B set-site):
-					// `@:fmt(propagateValueIfBranch)` on a mandatory Ref
-					// (HxIfExpr.thenBranch) opts into the value-if-branch frame.
-					final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
-					final optArgExpr: Expr = if (boolFlagArgs != null) {
-						macro _wo;
-					} else {
-						var e: Expr = macro opt;
-						if (propagateExpr) e = macro _setExprPosition($e);
-						if (propagateAnonFn) e = macro _setAnonFnBody($e);
-						if (propagateTypedef) e = macro _setTypedefBody($e);
-						if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap);
-						// ω-expressionif-collapse (mechanism B set-site): wrap opt
-						// in `_setValueIfBranch` when the mandatory Ref carries
-						// `@:fmt(propagateValueIfBranch)` (HxIfExpr.thenBranch). The
-						// helper gates on `opt._inExprPosition` so only a value-if
-						// branch (not a statement-`if`) flips the narrow flag.
-						if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
-						e;
-					};
-					final baseRawWriteCall: Expr = {
-						expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
-						pos: Context.currentPos(),
-					};
-					final rawWriteCall: Expr = buildBoolFlagRawWriteCall(boolFlagArgs, baseRawWriteCall, typePath, propagateExpr);
-					// ω-indent-objectliteral: `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))`
-					// wrap on mandatory Ref — currently used by
-					// `HxObjectField.value` so a nested ObjectLit on a `:` RHS
-					// gets the same extra-indent as the outer `=` site
-					// (`HxVarDecl.init`).
-					//
-					// ω-expr-body-indent-objectliteral: when the same field
-					// also carries `@:fmt(bodyPolicy(...))` (e.g.
-					// `HxIfExpr.thenBranch`), the additive Nest of
-					// `maybeIndentValueIfCtor` would compound with
-					// `bodyPolicyWrap`'s default `Nest(_cols, [_dhl, body])` and
-					// produce double-indent on `indentObjectLiteral=true`. The
-					// bare-Ref bodyPolicy path therefore SKIPS the additive
-					// wrap here and instead routes the same meta through
-					// `bodyPolicyWrap`'s `indentObjArgs` channel as a
-					// SUBTRACTIVE rule — the rule fires the inverse direction
-					// (`indentObjectLiteral=false` drops the default Nest
-					// when the body is a multi-line ObjectLit, leaving `{`
-					// at parent indent).
+					// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 					final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-					// ω-condition-parens (Stage C): `@:fmt(sharpCondParensInside(
-					// '<insideOpenKnob>', '<insideCloseKnob>'))` on the verbatim
-					// `#if (cond)` condition (`HxConditionalStmt.cond`, a
-					// `@:rawString HxPpCondLit` whose capture INCLUDES the outer
-					// parens). The cond writer emits the captured string verbatim,
-					// so the inner pad cannot ride the lead/trail path — it
-					// rewrites the opaque string at write time. When the string is
-					// wrapped in matching outer parens (`(…)`), inject inner spaces
-					// per `opt.<knob>` (`After`/`Both` → open pad, `Before`/`Both`
-					// → close pad); non-parenthesised conds (`#if php`) pass
-					// through unchanged. Null policies → no pad → byte-identical
-					// to the verbatim capture.
-					final sharpInsideArgs: Null<Array<String>> = child.fmtReadStringArgs('sharpCondParensInside');
-					final effRawWriteCall: Expr = buildSharpInsideWriteCall(sharpInsideArgs, fieldAccess, rawWriteCall);
-					final writeCall: Expr = bodyPolicyFlag != null && indentObjArgs != null
-						? effRawWriteCall
-						: maybeIndentValueIfCtor(effRawWriteCall, fieldAccess, child);
+					final writeCall: Expr = buildMandatoryRefWriteCall(child, fieldAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs);
+					// (opt-fanout flags — propagateExprPosition / propagateAnonFnContext /
+					// propagateTypedefContext / switchSubjectNoWrap / propagateValueIfBranch /
+					// setBoolFlagFromStarCtor — plus sharpCondParensInside and the
+					// indentValueIfCtor additive-vs-subtractive wrap live in
+					// buildMandatoryRefWriteCall.)
 					// bodyPolicy on a first field: the parent enum-branch
 					// Case 3 strips its kwLead trailing space so the
 					// separator here is the sole transition token. Non-
@@ -15493,6 +15366,76 @@ class WriterLowering {
 			parts.push(sepExpr);
 			parts.push(writeCall);
 		}
+	}
+
+	/**
+	 * Build the mandatory-Ref body field's runtime `writeCall` Expr. Reads the
+	 * opt-fanout flags (`propagateExprPosition` / `propagateAnonFnContext` /
+	 * `propagateTypedefContext` / `switchSubjectNoWrap` / `propagateValueIfBranch`
+	 * / `setBoolFlagFromStarCtor`) to assemble the descendant writer's `opt`
+	 * argument, then layers `@:fmt(sharpCondParensInside)` and the
+	 * `@:fmt(indentValueIfCtor)` additive-Nest wrap (skipped when a same-field
+	 * `@:fmt(bodyPolicy)` routes it through the subtractive channel instead).
+	 * Extracted from `lowerStruct`'s mandatory-Ref arm.
+	 */
+	private function buildMandatoryRefWriteCall(
+		child: ShapeNode, fieldAccess: Expr, typePath: String, writeFn: String, bodyPolicyFlag: Null<String>,
+		indentObjArgs: Null<Array<String>>
+	): Expr {
+		// ω-issue-423-mech-a / ω-arrow-lambda-body-context /
+		// ω-typedef-anon-force-multi: opt-fanout flags wrapping the descendant
+		// writer's `opt` arg in `_setExprPosition` / `_setAnonFnBody` /
+		// `_setTypedefBody` so the descendant sees the matching context flag.
+		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
+		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
+		final propagateTypedef: Bool = child.fmtHasFlag('propagateTypedefContext');
+		// ω-extern-class-no-blanks: `@:fmt(setBoolFlagFromStarCtor(optField,
+		// starField, ctorName))` allocates a fresh opt copy and sets
+		// `_wo.<optField> = true` iff the sibling `<starField>` Star contains
+		// `<ctorName>`. Consumer: `HxTopLevelDecl.decl` (`_classExtern`).
+		final boolFlagArgs: Null<Array<String>> = child.fmtReadStringArgs('setBoolFlagFromStarCtor');
+		if (boolFlagArgs != null && boolFlagArgs.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(setBoolFlagFromStarCtor) expects 3 string args (optField, starField, ctorName), got ${boolFlagArgs.length}',
+				Context.currentPos()
+			);
+		// ω-switch-subject-nowrap: the fork never wraps a switch subject —
+		// thread `_setChainModeOverride(opt, NoWrap)` so a top-level chain in
+		// the subject stays flat. Carried by `HxSwitchStmt(Bare).expr`.
+		final switchSubjectNoWrap: Bool = child.fmtHasFlag('switchSubjectNoWrap');
+		// ω-expressionif-collapse (mechanism B set-site): `@:fmt(propagateValueIfBranch)`
+		// on a mandatory Ref (HxIfExpr.thenBranch) opts into the value-if-branch frame.
+		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
+		final optArgExpr: Expr = if (boolFlagArgs != null) {
+			macro _wo;
+		} else {
+			var e: Expr = macro opt;
+			if (propagateExpr) e = macro _setExprPosition($e);
+			if (propagateAnonFn) e = macro _setAnonFnBody($e);
+			if (propagateTypedef) e = macro _setTypedefBody($e);
+			if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap);
+			// The helper gates on `opt._inExprPosition` so only a value-if
+			// branch (not a statement-`if`) flips the narrow flag.
+			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+			e;
+		};
+		final baseRawWriteCall: Expr = {
+			expr: ECall(macro $i{writeFn}, [fieldAccess, optArgExpr]),
+			pos: Context.currentPos(),
+		};
+		final rawWriteCall: Expr = buildBoolFlagRawWriteCall(boolFlagArgs, baseRawWriteCall, typePath, propagateExpr);
+		// ω-condition-parens (Stage C): `@:fmt(sharpCondParensInside('<openKnob>',
+		// '<closeKnob>'))` injects inner-paren pad into the verbatim `#if (cond)`
+		// capture (`HxConditionalStmt.cond`). Null policies → byte-identical.
+		final sharpInsideArgs: Null<Array<String>> = child.fmtReadStringArgs('sharpCondParensInside');
+		final effRawWriteCall: Expr = buildSharpInsideWriteCall(sharpInsideArgs, fieldAccess, rawWriteCall);
+		// ω-indent-objectliteral / ω-expr-body-indent-objectliteral: the additive
+		// `maybeIndentValueIfCtor` Nest is SKIPPED when a same-field
+		// `@:fmt(bodyPolicy)` routes `indentValueIfCtor` through the subtractive
+		// `bodyPolicyWrap.indentObjArgs` channel instead (avoids double-indent).
+		return bodyPolicyFlag != null && indentObjArgs != null
+			? effRawWriteCall
+			: maybeIndentValueIfCtor(effRawWriteCall, fieldAccess, child);
 	}
 
 }
