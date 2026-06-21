@@ -1051,33 +1051,7 @@ class WriterLowering {
 				// path); both consume the same macro-time `prevPadTrailing`
 				// signal at struct-field boundaries.
 				if (isBareTryparseStar(child) && !isFirstField && prevAnyStarNonEmpty != null) {
-					final prev: Expr = prevAnyStarNonEmpty;
-					final baseExpr: Expr = ctx.trivia
-						? macro {
-							final _next = $fieldAccess;
-							if ($prev && _next.length > 0) {
-								if (_next[0].newlineBefore) {
-									// ω-meta-leading-doc-no-blank: when the next bare-
-									// tryparse Star's first element carries a leading
-									// comment (e.g. a `/** */` doc-comment) directly after
-									// the prior Star with NO source blank line between
-									// them, suppress this inter-Star separator hardline.
-									// The Star's own leading-comment emit already pushes a
-									// single `_dhl()` before the comment; emitting both
-									// here produces a spurious blank line (issue_578:
-									// `@:jsRequire(...)\n/**` → `@:jsRequire(...)\n\n/**`).
-									// Source-faithful: a real authored blank
-									// (`blankBefore`) keeps the separator so the blank
-									// round-trips. No leading comment → unchanged
-									// `_dhl()` (the common meta→modifiers newline path).
-									(_next[0].leadingComments.length > 0 && !_next[0].blankBefore) ? _de() : _dhl();
-								} else
-									_dt(' ');
-							} else
-								_de();
-						}
-						: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
-					parts.push(withPadTrailingDrop(prevPadTrailing, baseExpr));
+					parts.push(buildInterStarSep(prevAnyStarNonEmpty, fieldAccess, prevPadTrailing));
 				}
 				// ω-multivar-wrap: gate the `<moreField>` Star emit on the
 				// runtime `_suppressMore` entry flag. A recursive head-only
@@ -15402,6 +15376,44 @@ class WriterLowering {
 					_de();
 			});
 		}
+	}
+
+	/**
+	 * ω-member-meta: build the inter-Star leading separator Doc for a non-first
+	 * bare-tryparse Star that follows another bare-tryparse Star. Gated at runtime
+	 * on `prev && this.length > 0`; in trivia mode picks `_dhl()` / `_dt(' ')`
+	 * from the first element's `newlineBefore` (suppressing a doubled hardline
+	 * before a leading doc-comment), plain mode emits a space. Wrapped via
+	 * `withPadTrailingDrop`. Extracted from `lowerStruct`.
+	 */
+	private function buildInterStarSep(prevAnyStarNonEmpty: Expr, fieldAccess: Expr, prevPadTrailing: Null<Expr>): Expr {
+		final prev: Expr = prevAnyStarNonEmpty;
+		final baseExpr: Expr = ctx.trivia
+			? macro {
+				final _next = $fieldAccess;
+				if ($prev && _next.length > 0) {
+					if (_next[0].newlineBefore) {
+						// ω-meta-leading-doc-no-blank: when the next bare-
+						// tryparse Star's first element carries a leading
+						// comment (e.g. a `/** */` doc-comment) directly after
+						// the prior Star with NO source blank line between
+						// them, suppress this inter-Star separator hardline.
+						// The Star's own leading-comment emit already pushes a
+						// single `_dhl()` before the comment; emitting both
+						// here produces a spurious blank line (issue_578:
+						// `@:jsRequire(...)\n/**` → `@:jsRequire(...)\n\n/**`).
+						// Source-faithful: a real authored blank
+						// (`blankBefore`) keeps the separator so the blank
+						// round-trips. No leading comment → unchanged
+						// `_dhl()` (the common meta→modifiers newline path).
+						(_next[0].leadingComments.length > 0 && !_next[0].blankBefore) ? _de() : _dhl();
+					} else
+						_dt(' ');
+				} else
+					_de();
+			}
+			: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
+		return withPadTrailingDrop(prevPadTrailing, baseExpr);
 	}
 
 }
