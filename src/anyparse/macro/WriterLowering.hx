@@ -2863,6 +2863,311 @@ class WriterLowering {
 	}
 
 	/** Emit writer steps for a Star struct field. */
+	/**
+	 * Trivia `@:tryparse` Star dispatch (the `if (starNode.hasMeta(':tryparse'))`
+	 * branch of `emitWriterStarField`). Reads the per-construct `@:fmt` flags and
+	 * sep-override switches, then pushes the `triviaTryparseStarExpr` emit onto
+	 * `parts`. Extracted so the orchestrator stays under the complexity gate.
+	 */
+	private function emitTriviaTryparseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+		final starNode: ShapeNode = c.starNode;
+		final fieldAccess: Expr = c.fieldAccess;
+		final elemFn: String = c.elemFn;
+		final elemRefName: String = c.elemRefName;
+		final isLastField: Bool = c.isLastField;
+		final openText: Null<String> = c.openText;
+		final closeText: Null<String> = c.closeText;
+		final prevBareRefBody: Null<PrevBodyInfo> = c.prevBareRefBody;
+		final prevTrailFieldName: Null<String> = c.prevTrailFieldName;
+		final trailBBAccess: Null<Expr> = c.trailBBAccess;
+		final trailLCAccess: Null<Expr> = c.trailLCAccess;
+		final trailBAAccess: Null<Expr> = c.trailBAAccess;
+		if (closeText != null) Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
+		// Non-last-field @:trivia @:tryparse is supported only when
+		// the Star is bare (no `@:lead`). The emitted Doc then
+		// stands alone (empty array → `_de()`), and the next
+		// sibling's leading separator in `lowerStruct` already gates
+		// on `prevAnyStarNonEmpty` via the bare-tryparse-Star
+		// tracker, so the space between Star output and next
+		// field never leaks when the Star was empty. Required by
+		// `HxMemberDecl.modifiers` (not last — `member` follows).
+		//
+		// `@:lead` on a non-last bare-tryparse Star would emit the
+		// lead text unconditionally even on empty input, leaking
+		// the literal across an otherwise-empty member position.
+		// Reject loudly until a grammar needs it AND the empty-
+		// input case is gated.
+		if (!isLastField && openText != null)
+			Context.fatalError('WriterLowering: non-last @:trivia @:tryparse Star must be bare (no @:lead)', Context.currentPos());
+		if (openText != null) parts.push(macro _dt($v{openText}));
+		// sameLine-annotated Stars (catches against try body) emit
+		// the separator before EVERY element — it's the boundary
+		// with the preceding struct field. Non-sameLine Stars
+		// (case / default bodies) emit it only between elements,
+		// matching the plain-mode tryparse writer.
+		final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
+		final sepExpr: Expr = if (sameLineName != null) {
+			final optFlag: Expr = optFieldAccess(sameLineName);
+			sameLinePolicySwitch(optFlag, macro _dt(' '));
+		} else {
+			macro _dt(' ');
+		};
+		final nestBody: Bool = starNode.fmtHasFlag('nestBody');
+		// Trailing slots only carry orphan trivia when nestBody is
+		// on (parser gates capture on the same flag). For catches
+		// the slots remain zero — forward null to keep the writer
+		// path byte-identical to the pre-nestBody shape.
+		final tryparseTrailBB: Null<Expr> = nestBody ? trailBBAccess : null;
+		final tryparseTrailLC: Null<Expr> = nestBody ? trailLCAccess : null;
+		final tryparseTrailBA: Null<Expr> = nestBody ? trailBAAccess : null;
+		// ω-close-trailing-alt: when prev field was a bare-Ref to a
+		// trivia-bearing type whose Alt has close-trailing branches
+		// (currently `HxStatement.BlockStmt`), build a runtime
+		// override on the FIRST element's separator. `BlockStmt(_, ct)`
+		// with `ct != null` means the body's writer already
+		// terminated its output with `\n` after the trailing line
+		// comment — the normal space sep would leak ` ` between the
+		// indent and the next sibling (e.g. `catch`). The override
+		// emits `_de()` instead; non-matching ctors fall through.
+		final closeTrailingFirstOverride: Null<Expr> = sameLineName != null
+			? buildCloseTrailingFirstSepOverride(prevBareRefBody, sepExpr)
+			: null;
+		// ω-block-shape-aware: when the Star carries
+		// `@:fmt(blockBodyKeepsInline)` AND the prev body's enum has
+		// block ctors, force the leading sep before each catch
+		// element to `_dt(' ')` whenever the previous body (struct
+		// field for the first iteration, prev element's body for
+		// subsequent iterations) was a block ctor. Composes with the
+		// close-trailing override above by using it as the non-block
+		// fallback on the first iteration.
+		//
+		// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
+		// flips the cases — block bodies fall through to the policy-
+		// driven `sepExpr` (or close-trailing override on the first
+		// iteration) and bare bodies force `_dhl()`. Both
+		// `HxTryCatchStmt.catches` (block-form ctor with non-block
+		// body via `ExprStmt(...)`) and `HxTryCatchStmtBare.catches`
+		// (bare-form, body=HxExpr) opt in — non-block prev-body
+		// pairs with `tryBody=Next` to keep the multi-line layout
+		// coherent: `try\n\tBARE;\ncatch (...)`. Block bodies stay
+		// under policy control (`sameLineCatch=Next` still breaks
+		// `} catch` to `}\ncatch`). The block-ctor predicate is
+		// `isBlockShapeEquivalentBranch` (sister of
+		// `isBlockCtorBranch` that also accepts `@:fmt(blockShape)`
+		// opt-in ctors like `UntypedBlockStmt(body:HxUntypedFnBody)`,
+		// which emits `untyped { … }` — visually a block).
+		final blockShapeAware: Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
+		final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
+		final shapeAware: Bool = blockShapeAware || bareShapeAware;
+		// `bareBodyBreaks` includes blockShape opt-in ctors (e.g.
+		// `UntypedBlockStmt`) — they end with `}` and should be
+		// treated as block for the catch-separator decision while
+		// staying non-block in `bodyPolicyWrap`'s strict block-ctor
+		// override path.
+		final blockPatterns: Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
+			? (bareShapeAware
+				? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
+				: collectBlockCtorPatterns(prevBareRefBody.typePath))
+			: [];
+		final elemBodyField: Null<String> = sameLineName != null && blockPatterns.length > 0
+			? findElementBodyField(elemRefName, prevBareRefBody.typePath)
+			: null;
+		final blockKeepsInlineBranch: Expr = blockBodyKeepsInlineBranch(starNode);
+		final firstSepOverride: Null<Expr> = if (blockPatterns.length == 0)
+			closeTrailingFirstOverride;
+		else {
+			final fallback: Expr = closeTrailingFirstOverride ?? sepExpr;
+			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : fallback;
+			final bareBranch: Expr = blockShapeAware ? fallback : (macro _dhl());
+			final cases: Array<Case> = [
+				{ values: blockPatterns, expr: blockBranch, guard: null },
+				{ values: [macro _], expr: bareBranch, guard: null },
+			];
+			{ expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos() };
+		};
+		final subsequentSepOverride: Null<Expr> = if (elemBodyField == null)
+			null;
+		else {
+			final prevElemBodyAccess: Expr = {
+				expr: EField(macro _arr[_si - 1].node, elemBodyField),
+				pos: Context.currentPos(),
+			};
+			final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
+			final bareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
+			final cases: Array<Case> = [
+				{ values: blockPatterns, expr: blockBranch, guard: null },
+				{ values: [macro _], expr: bareBranch, guard: null },
+			];
+			{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
+		};
+		// ω-case-body-policy / ω-case-body-keep:
+		// `@:fmt(bodyPolicy('flag1', 'flag2', ...))` on a
+		// `nestBody` Star opts the body field into runtime
+		// single-stmt-flat emission. The runtime ORs all named
+		// `BodyPolicy` flags across two predicates:
+		//  - ANY flag == `Same` → flatten unconditionally (override).
+		//  - ANY flag == `Keep` → flatten IFF the source had the
+		//    body's first element on the same line as the lead
+		//    (read off `Trivial<T>.newlineBefore`).
+		// Either path gates on the body holding exactly one element
+		// with no leading / orphan-trailing trivia; multi-stmt and
+		// trivia-bearing bodies stay multiline. Consumed by
+		// `HxCaseBranch.body` and `HxDefaultBranch.stmts` to
+		// switch between `case X:\n\tstmt;` (Next) and
+		// `case X: stmt;` (Same / Keep+sameLine).
+		final caseBodyFlagNames: Array<String> = starNode.fmtReadStringArgs('bodyPolicy') ?? [];
+		// ω-expression-case-flat-fanout: when `@:fmt(flatChildOpt('A=B', …))`
+		// is present, parse each `'from=to'` arg into a [from, to] pair so
+		// `triviaTryparseStarExpr` can emit a `Reflect.copy(opt)` + per-pair
+		// override block in the runtime flat-case branch.
+		final flatChildOptRaw: Null<Array<String>> = starNode.fmtReadStringArgs('flatChildOpt');
+		final flatChildOptPairs: Array<Array<String>> = if (flatChildOptRaw == null)
+			[]
+		else {
+			final out: Array<Array<String>> = [];
+			for (raw in flatChildOptRaw) {
+				final eq: Int = raw.indexOf('=');
+				if (eq <= 0 || eq >= raw.length - 1)
+					Context.fatalError('WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos());
+				out.push([raw.substr(0, eq), raw.substr(eq + 1)]);
+			}
+			out;
+		};
+		// ω-cond-mod-pad: `@:fmt(padLeading)`/`@:fmt(padTrailing)` on
+		// a `@:trivia @:tryparse` Star emit a leading/trailing space
+		// when non-empty (matches the non-trivia padLeading/padTrailing
+		// branch), with the leading slot SWITCHING to `_dhl()` when
+		// the source had a newline before the first element. Used by
+		// `HxConditionalMod.body` so V1–V3 (single-line `#if X mods #end`)
+		// stay on one line and V4 (newline-separated cond/mods/`#end`)
+		// breaks all three pad slots together — the trail-side pad
+		// follows the leading-side decision because the parser does
+		// not capture a body→`#end` newline slot, but in legal source
+		// shapes the two newlines are correlated.
+		final tryparsePadLeading: Bool = starNode.fmtHasFlag('padLeading');
+		final tryparsePadTrailing: Bool = starNode.fmtHasFlag('padTrailing');
+		// ω-cond-indent-policy: `@:fmt(conditionalBodyIndent)` on a
+		// `@:trivia @:tryparse` cond-comp body / elseBody / elseif-body
+		// Star opts the body content into the runtime
+		// `opt.conditionalPolicy` indent rule. When the policy is
+		// `AlignedIncrease`, the body content (leading pad hardline +
+		// each body element) is wrapped in `_dn(_cols, …)` so it sits
+		// one level deeper than the `#if`/`#else`/`#end` markers, while
+		// the trailing pad hardline (the `\n` before `#else`/`#end`)
+		// is emitted OUTSIDE the nest so the close marker stays at the
+		// surrounding statement indent. Nesting accumulates per
+		// conditional depth (a nested `#if` body re-enters the same
+		// `_dn`). DEFAULT `Aligned` → the runtime gate is false → the
+		// pre-policy `else` branch fires → byte-identical. Only the
+		// cond-comp body Stars carry this flag, so every other tryparse
+		// Star consumer is untouched.
+		final tryparseCondBodyIndent: Bool = starNode.fmtHasFlag('conditionalBodyIndent');
+		// ω-issue-423-mech-a: `@:fmt(propagateExprPosition)` on a
+		// `@:trivia @:tryparse` Star marks the body as an expression-
+		// position frame for descendants. The runtime block emits an
+		// always-copy of `opt` with `_inExprPosition = true` set, so
+		// the dual-flag `bodyPolicy('A','B')` flat-gate in nested
+		// case-body sites picks the expression-position policy
+		// (`expressionCase`) instead of the statement-position one
+		// (`caseBody`). Mirrors fork's `isReturnExpression` walk-up
+		// heuristic — currently wired only by `HxCaseBranch.body` /
+		// `HxDefaultBranch.stmts` so a case nested in another case's
+		// body inherits expression context.
+		final propagateExprPosition: Bool = starNode.fmtHasFlag('propagateExprPosition');
+		// ω-value-yielded-if-tail-barrier (case-body extension of SI-2):
+		// `@:fmt(clearExprPositionNonTail)` on a case / default body Star
+		// (paired with `propagateExprPosition`) clears `_inExprPosition`
+		// for every NON-tail body statement, so a discarded statement-if
+		// reverts to the statement-position `ifBody` policy while the
+		// body's yielded tail keeps the expression frame. False → byte-
+		// identical (every other tryparse-Star consumer is untouched).
+		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
+		// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` AND-s the
+		// runtime `_flatCase` gate with `!opt.caseBodyRefusesFlat(_arr[0].node)`,
+		// dispatching through the plugin-supplied adapter on
+		// `WriteOptions` (Haxe wires it to `HxExprUtil.refusesCaseFlat`).
+		// Engine never references the grammar plugin by name —
+		// mirrors the `endsWithCloseBrace` adapter pattern. Null
+		// adapter falls through (no refusal). Wired on
+		// `HxCaseBranch.body` / `HxDefaultBranch.stmts` to mirror
+		// fork's `MarkSameLine.markExpressionCase` body-shape check.
+		final refuseFlatOnComplex: Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
+		// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
+		// on a `@:trivia @:tryparse` Star wires inter-element + post-Star
+		// separator dispatch through `opt.<optField>:MetadataLineEndPolicy`.
+		// Default `None` (and absent flag) is byte-identical to pre-slice.
+		final metaLineEndOptField: Null<String> = starNode.fmtReadString('metaLineEndPolicy');
+		// ω-bug-2c-inner-star — read the same cascade `@:fmt(blankLines*)`
+		// metas that the EOF-Star branch reads, so an inner Star (e.g.
+		// `HxConditionalDecl.body`) opted in via the metas drives the
+		// blank-line cascade between its sibling elements.
+		final cascadeInfos: CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
+		// ω-trivia-tryparse-linelength: when the Star carries
+		// `@:fmt(lineLengthAwareSeps)`, swap inter-element + padLeading
+		// hard spaces for `_dile` probes + wrap in `_dn(_cols, ...)`.
+		// Sister to the non-trivia bare-Star `padLeading||padTrailing`
+		// branch's lineLengthAware path.
+		final tryparseLineLengthAware: Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
+		// B4 ω-implements-extends-wrap: `@:fmt(heritageWrap)` on a
+		// `@:trivia @:tryparse` Star (HxClassDecl.heritage /
+		// HxInterfaceDecl.heritage) routes a MULTI-clause heritage list
+		// (`extends A implements B …`) through the fork's
+		// `wrapping.implementsExtends` FillLine layout: when the full
+		// glued decl line is long, pack clauses from the front and break
+		// the overflow clause(s) at additionalIndent 2 (8 spaces). The
+		// single-clause path stays on the existing `lineLengthAwareSeps`
+		// 1-tab break-before-keyword (matches fork single-clause +
+		// `extends_break_before_keyword_not_type_params`). Abstract
+		// `clauses` (from/to) never carries this flag — its
+		// `lineLengthAwareSeps` behaviour is untouched.
+		final tryparseHeritageWrap: Bool = starNode.fmtHasFlag('heritageWrap');
+		// ω-slice-45 / issue_626: `@:fmt(forceInlineSep)` on a `@:trivia
+		// @:tryparse` Star collapses every source linebreak between
+		// consecutive elements to a single space. First consumers are
+		// the modifier Stars on `HxMemberDecl.modifiers` and
+		// `HxTopLevelDecl.modifiers` so multi-line `static\n\toverload`
+		// round-trips as `static overload`. Comment trivia between
+		// elements is out of scope — flag's contract is "treat
+		// inter-element whitespace trivia as one space".
+		final tryparseForceInlineSep: Bool = starNode.fmtHasFlag('forceInlineSep');
+		// ω-typedef-intersection-operand-break: `@:fmt(
+		// operandBreakAfterMultilineBrace)` on a `@:trivia @:tryparse`
+		// Star makes each element whose PRECEDING element rendered
+		// multi-line and ended with a close brace receive a per-element
+		// opt copy with `_intersectionOperandBreak = true`. Consumer:
+		// `HxTypedefDecl.intersections` (the `& Type` clause Star).
+		final tryparseOperandBreakAfterMultilineBrace: Bool = starNode.fmtHasFlag('operandBreakAfterMultilineBrace');
+		// ω-trivia-tryparse-prior-after-trail: when the PREV sibling
+		// field has a synthesised `<priorField>AfterTrail:Null<String>`
+		// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
+		// thread its access so the Star can inline-emit the captured
+		// trail-of-prev-field comment cuddled to the prev token.
+		final tryparsePriorAfterTrailExpr: Null<Expr> = prevTrailFieldName == null
+			? null
+			: {
+				expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+				pos: Context.currentPos()
+			};
+		// ω-blockended-trivia-tryparse (Session 3): thread the Star's
+		// `@:sep('text', tailRelax, blockEnded)` annotation into
+		// `triviaTryparseStarExpr` so the helper can inject `;`
+		// between two non-`}`-ending elements. Non-blockEnded
+		// tryparse Stars (every existing consumer) pass null sepText
+		// and the helper splices a no-op.
+		final tryparseSepText: Null<String> = starNode.annotations.get('lit.sepText');
+		final tryparseBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		parts.push(triviaTryparseStarExpr(
+			fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
+			firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
+			propagateExprPosition, refuseFlatOnComplex, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
+			cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, metaLineEndOptField,
+			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
+			tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded, tryparseHeritageWrap, tryparseCondBodyIndent,
+			tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail
+		));
+		return;
+	}
+
 	private function emitWriterStarField(
 		starNode: ShapeNode, fieldAccess: Expr, parts: Array<Expr>, isLastField: Bool, typePath: String, isFirstField: Bool, isRaw: Bool,
 		prevBareRefBody: Null<PrevBodyInfo> = null, prevTrailFieldName: Null<String> = null
@@ -2965,293 +3270,30 @@ class WriterLowering {
 					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
 					pos: Context.currentPos()
 				};
+			final triviaCtx: TriviaStarCtx = {
+				starNode: starNode,
+				fieldAccess: fieldAccess,
+				elemFn: elemFn,
+				elemRefName: elemRefName,
+				isFirstField: isFirstField,
+				isLastField: isLastField,
+				typePath: typePath,
+				openText: openText,
+				closeText: closeText,
+				sepText: sepText,
+				prevBareRefBody: prevBareRefBody,
+				prevTrailFieldName: prevTrailFieldName,
+				fieldName: fieldName,
+				trailBBAccess: trailBBAccess,
+				trailNLAccess: trailNLAccess,
+				trailLCAccess: trailLCAccess,
+				trailCloseAccess: trailCloseAccess,
+				trailOpenAccess: trailOpenAccess,
+				trailBAAccess: trailBAAccess,
+				trailPresentAccess: trailPresentAccess,
+			};
 			if (starNode.hasMeta(':tryparse')) {
-				if (closeText != null)
-					Context.fatalError('WriterLowering: @:trivia + @:tryparse must not have @:trail', Context.currentPos());
-				// Non-last-field @:trivia @:tryparse is supported only when
-				// the Star is bare (no `@:lead`). The emitted Doc then
-				// stands alone (empty array → `_de()`), and the next
-				// sibling's leading separator in `lowerStruct` already gates
-				// on `prevAnyStarNonEmpty` via the bare-tryparse-Star
-				// tracker, so the space between Star output and next
-				// field never leaks when the Star was empty. Required by
-				// `HxMemberDecl.modifiers` (not last — `member` follows).
-				//
-				// `@:lead` on a non-last bare-tryparse Star would emit the
-				// lead text unconditionally even on empty input, leaking
-				// the literal across an otherwise-empty member position.
-				// Reject loudly until a grammar needs it AND the empty-
-				// input case is gated.
-				if (!isLastField && openText != null)
-					Context.fatalError('WriterLowering: non-last @:trivia @:tryparse Star must be bare (no @:lead)', Context.currentPos());
-				if (openText != null) parts.push(macro _dt($v{openText}));
-				// sameLine-annotated Stars (catches against try body) emit
-				// the separator before EVERY element — it's the boundary
-				// with the preceding struct field. Non-sameLine Stars
-				// (case / default bodies) emit it only between elements,
-				// matching the plain-mode tryparse writer.
-				final sameLineName: Null<String> = starNode.fmtReadString('sameLine');
-				final sepExpr: Expr = if (sameLineName != null) {
-					final optFlag: Expr = optFieldAccess(sameLineName);
-					sameLinePolicySwitch(optFlag, macro _dt(' '));
-				} else {
-					macro _dt(' ');
-				};
-				final nestBody: Bool = starNode.fmtHasFlag('nestBody');
-				// Trailing slots only carry orphan trivia when nestBody is
-				// on (parser gates capture on the same flag). For catches
-				// the slots remain zero — forward null to keep the writer
-				// path byte-identical to the pre-nestBody shape.
-				final tryparseTrailBB: Null<Expr> = nestBody ? trailBBAccess : null;
-				final tryparseTrailLC: Null<Expr> = nestBody ? trailLCAccess : null;
-				final tryparseTrailBA: Null<Expr> = nestBody ? trailBAAccess : null;
-				// ω-close-trailing-alt: when prev field was a bare-Ref to a
-				// trivia-bearing type whose Alt has close-trailing branches
-				// (currently `HxStatement.BlockStmt`), build a runtime
-				// override on the FIRST element's separator. `BlockStmt(_, ct)`
-				// with `ct != null` means the body's writer already
-				// terminated its output with `\n` after the trailing line
-				// comment — the normal space sep would leak ` ` between the
-				// indent and the next sibling (e.g. `catch`). The override
-				// emits `_de()` instead; non-matching ctors fall through.
-				final closeTrailingFirstOverride: Null<Expr> = sameLineName != null
-					? buildCloseTrailingFirstSepOverride(prevBareRefBody, sepExpr)
-					: null;
-				// ω-block-shape-aware: when the Star carries
-				// `@:fmt(blockBodyKeepsInline)` AND the prev body's enum has
-				// block ctors, force the leading sep before each catch
-				// element to `_dt(' ')` whenever the previous body (struct
-				// field for the first iteration, prev element's body for
-				// subsequent iterations) was a block ctor. Composes with the
-				// close-trailing override above by using it as the non-block
-				// fallback on the first iteration.
-				//
-				// ω-statement-bare-break: dual flag `@:fmt(bareBodyBreaks)`
-				// flips the cases — block bodies fall through to the policy-
-				// driven `sepExpr` (or close-trailing override on the first
-				// iteration) and bare bodies force `_dhl()`. Both
-				// `HxTryCatchStmt.catches` (block-form ctor with non-block
-				// body via `ExprStmt(...)`) and `HxTryCatchStmtBare.catches`
-				// (bare-form, body=HxExpr) opt in — non-block prev-body
-				// pairs with `tryBody=Next` to keep the multi-line layout
-				// coherent: `try\n\tBARE;\ncatch (...)`. Block bodies stay
-				// under policy control (`sameLineCatch=Next` still breaks
-				// `} catch` to `}\ncatch`). The block-ctor predicate is
-				// `isBlockShapeEquivalentBranch` (sister of
-				// `isBlockCtorBranch` that also accepts `@:fmt(blockShape)`
-				// opt-in ctors like `UntypedBlockStmt(body:HxUntypedFnBody)`,
-				// which emits `untyped { … }` — visually a block).
-				final blockShapeAware: Bool = starNode.fmtHasFlag('blockBodyKeepsInline');
-				final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
-				final shapeAware: Bool = blockShapeAware || bareShapeAware;
-				// `bareBodyBreaks` includes blockShape opt-in ctors (e.g.
-				// `UntypedBlockStmt`) — they end with `}` and should be
-				// treated as block for the catch-separator decision while
-				// staying non-block in `bodyPolicyWrap`'s strict block-ctor
-				// override path.
-				final blockPatterns: Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
-					? (bareShapeAware
-						? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
-						: collectBlockCtorPatterns(prevBareRefBody.typePath))
-					: [];
-				final elemBodyField: Null<String> = sameLineName != null && blockPatterns.length > 0
-					? findElementBodyField(elemRefName, prevBareRefBody.typePath)
-					: null;
-				final blockKeepsInlineBranch: Expr = blockBodyKeepsInlineBranch(starNode);
-				final firstSepOverride: Null<Expr> = if (blockPatterns.length == 0)
-					closeTrailingFirstOverride;
-				else {
-					final fallback: Expr = closeTrailingFirstOverride ?? sepExpr;
-					final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : fallback;
-					final bareBranch: Expr = blockShapeAware ? fallback : (macro _dhl());
-					final cases: Array<Case> = [
-						{ values: blockPatterns, expr: blockBranch, guard: null },
-						{ values: [macro _], expr: bareBranch, guard: null },
-					];
-					{ expr: ESwitch(prevBareRefBody.access, cases, null), pos: Context.currentPos() };
-				};
-				final subsequentSepOverride: Null<Expr> = if (elemBodyField == null)
-					null;
-				else {
-					final prevElemBodyAccess: Expr = {
-						expr: EField(macro _arr[_si - 1].node, elemBodyField),
-						pos: Context.currentPos(),
-					};
-					final blockBranch: Expr = blockShapeAware ? blockKeepsInlineBranch : sepExpr;
-					final bareBranch: Expr = blockShapeAware ? sepExpr : (macro _dhl());
-					final cases: Array<Case> = [
-						{ values: blockPatterns, expr: blockBranch, guard: null },
-						{ values: [macro _], expr: bareBranch, guard: null },
-					];
-					{ expr: ESwitch(prevElemBodyAccess, cases, null), pos: Context.currentPos() };
-				};
-				// ω-case-body-policy / ω-case-body-keep:
-				// `@:fmt(bodyPolicy('flag1', 'flag2', ...))` on a
-				// `nestBody` Star opts the body field into runtime
-				// single-stmt-flat emission. The runtime ORs all named
-				// `BodyPolicy` flags across two predicates:
-				//  - ANY flag == `Same` → flatten unconditionally (override).
-				//  - ANY flag == `Keep` → flatten IFF the source had the
-				//    body's first element on the same line as the lead
-				//    (read off `Trivial<T>.newlineBefore`).
-				// Either path gates on the body holding exactly one element
-				// with no leading / orphan-trailing trivia; multi-stmt and
-				// trivia-bearing bodies stay multiline. Consumed by
-				// `HxCaseBranch.body` and `HxDefaultBranch.stmts` to
-				// switch between `case X:\n\tstmt;` (Next) and
-				// `case X: stmt;` (Same / Keep+sameLine).
-				final caseBodyFlagNames: Array<String> = starNode.fmtReadStringArgs('bodyPolicy') ?? [];
-				// ω-expression-case-flat-fanout: when `@:fmt(flatChildOpt('A=B', …))`
-				// is present, parse each `'from=to'` arg into a [from, to] pair so
-				// `triviaTryparseStarExpr` can emit a `Reflect.copy(opt)` + per-pair
-				// override block in the runtime flat-case branch.
-				final flatChildOptRaw: Null<Array<String>> = starNode.fmtReadStringArgs('flatChildOpt');
-				final flatChildOptPairs: Array<Array<String>> = if (flatChildOptRaw == null)
-					[]
-				else {
-					final out: Array<Array<String>> = [];
-					for (raw in flatChildOptRaw) {
-						final eq: Int = raw.indexOf('=');
-						if (eq <= 0 || eq >= raw.length - 1)
-							Context.fatalError(
-								'WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos()
-							);
-						out.push([raw.substr(0, eq), raw.substr(eq + 1)]);
-					}
-					out;
-				};
-				// ω-cond-mod-pad: `@:fmt(padLeading)`/`@:fmt(padTrailing)` on
-				// a `@:trivia @:tryparse` Star emit a leading/trailing space
-				// when non-empty (matches the non-trivia padLeading/padTrailing
-				// branch), with the leading slot SWITCHING to `_dhl()` when
-				// the source had a newline before the first element. Used by
-				// `HxConditionalMod.body` so V1–V3 (single-line `#if X mods #end`)
-				// stay on one line and V4 (newline-separated cond/mods/`#end`)
-				// breaks all three pad slots together — the trail-side pad
-				// follows the leading-side decision because the parser does
-				// not capture a body→`#end` newline slot, but in legal source
-				// shapes the two newlines are correlated.
-				final tryparsePadLeading: Bool = starNode.fmtHasFlag('padLeading');
-				final tryparsePadTrailing: Bool = starNode.fmtHasFlag('padTrailing');
-				// ω-cond-indent-policy: `@:fmt(conditionalBodyIndent)` on a
-				// `@:trivia @:tryparse` cond-comp body / elseBody / elseif-body
-				// Star opts the body content into the runtime
-				// `opt.conditionalPolicy` indent rule. When the policy is
-				// `AlignedIncrease`, the body content (leading pad hardline +
-				// each body element) is wrapped in `_dn(_cols, …)` so it sits
-				// one level deeper than the `#if`/`#else`/`#end` markers, while
-				// the trailing pad hardline (the `\n` before `#else`/`#end`)
-				// is emitted OUTSIDE the nest so the close marker stays at the
-				// surrounding statement indent. Nesting accumulates per
-				// conditional depth (a nested `#if` body re-enters the same
-				// `_dn`). DEFAULT `Aligned` → the runtime gate is false → the
-				// pre-policy `else` branch fires → byte-identical. Only the
-				// cond-comp body Stars carry this flag, so every other tryparse
-				// Star consumer is untouched.
-				final tryparseCondBodyIndent: Bool = starNode.fmtHasFlag('conditionalBodyIndent');
-				// ω-issue-423-mech-a: `@:fmt(propagateExprPosition)` on a
-				// `@:trivia @:tryparse` Star marks the body as an expression-
-				// position frame for descendants. The runtime block emits an
-				// always-copy of `opt` with `_inExprPosition = true` set, so
-				// the dual-flag `bodyPolicy('A','B')` flat-gate in nested
-				// case-body sites picks the expression-position policy
-				// (`expressionCase`) instead of the statement-position one
-				// (`caseBody`). Mirrors fork's `isReturnExpression` walk-up
-				// heuristic — currently wired only by `HxCaseBranch.body` /
-				// `HxDefaultBranch.stmts` so a case nested in another case's
-				// body inherits expression context.
-				final propagateExprPosition: Bool = starNode.fmtHasFlag('propagateExprPosition');
-				// ω-value-yielded-if-tail-barrier (case-body extension of SI-2):
-				// `@:fmt(clearExprPositionNonTail)` on a case / default body Star
-				// (paired with `propagateExprPosition`) clears `_inExprPosition`
-				// for every NON-tail body statement, so a discarded statement-if
-				// reverts to the statement-position `ifBody` policy while the
-				// body's yielded tail keeps the expression frame. False → byte-
-				// identical (every other tryparse-Star consumer is untouched).
-				final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
-				// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` AND-s the
-				// runtime `_flatCase` gate with `!opt.caseBodyRefusesFlat(_arr[0].node)`,
-				// dispatching through the plugin-supplied adapter on
-				// `WriteOptions` (Haxe wires it to `HxExprUtil.refusesCaseFlat`).
-				// Engine never references the grammar plugin by name —
-				// mirrors the `endsWithCloseBrace` adapter pattern. Null
-				// adapter falls through (no refusal). Wired on
-				// `HxCaseBranch.body` / `HxDefaultBranch.stmts` to mirror
-				// fork's `MarkSameLine.markExpressionCase` body-shape check.
-				final refuseFlatOnComplex: Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
-				// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
-				// on a `@:trivia @:tryparse` Star wires inter-element + post-Star
-				// separator dispatch through `opt.<optField>:MetadataLineEndPolicy`.
-				// Default `None` (and absent flag) is byte-identical to pre-slice.
-				final metaLineEndOptField: Null<String> = starNode.fmtReadString('metaLineEndPolicy');
-				// ω-bug-2c-inner-star — read the same cascade `@:fmt(blankLines*)`
-				// metas that the EOF-Star branch reads, so an inner Star (e.g.
-				// `HxConditionalDecl.body`) opted in via the metas drives the
-				// blank-line cascade between its sibling elements.
-				final cascadeInfos: CascadeInfos = readCascadeInfosFromStar(starNode, elemRefName);
-				// ω-trivia-tryparse-linelength: when the Star carries
-				// `@:fmt(lineLengthAwareSeps)`, swap inter-element + padLeading
-				// hard spaces for `_dile` probes + wrap in `_dn(_cols, ...)`.
-				// Sister to the non-trivia bare-Star `padLeading||padTrailing`
-				// branch's lineLengthAware path.
-				final tryparseLineLengthAware: Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
-				// B4 ω-implements-extends-wrap: `@:fmt(heritageWrap)` on a
-				// `@:trivia @:tryparse` Star (HxClassDecl.heritage /
-				// HxInterfaceDecl.heritage) routes a MULTI-clause heritage list
-				// (`extends A implements B …`) through the fork's
-				// `wrapping.implementsExtends` FillLine layout: when the full
-				// glued decl line is long, pack clauses from the front and break
-				// the overflow clause(s) at additionalIndent 2 (8 spaces). The
-				// single-clause path stays on the existing `lineLengthAwareSeps`
-				// 1-tab break-before-keyword (matches fork single-clause +
-				// `extends_break_before_keyword_not_type_params`). Abstract
-				// `clauses` (from/to) never carries this flag — its
-				// `lineLengthAwareSeps` behaviour is untouched.
-				final tryparseHeritageWrap: Bool = starNode.fmtHasFlag('heritageWrap');
-				// ω-slice-45 / issue_626: `@:fmt(forceInlineSep)` on a `@:trivia
-				// @:tryparse` Star collapses every source linebreak between
-				// consecutive elements to a single space. First consumers are
-				// the modifier Stars on `HxMemberDecl.modifiers` and
-				// `HxTopLevelDecl.modifiers` so multi-line `static\n\toverload`
-				// round-trips as `static overload`. Comment trivia between
-				// elements is out of scope — flag's contract is "treat
-				// inter-element whitespace trivia as one space".
-				final tryparseForceInlineSep: Bool = starNode.fmtHasFlag('forceInlineSep');
-				// ω-typedef-intersection-operand-break: `@:fmt(
-				// operandBreakAfterMultilineBrace)` on a `@:trivia @:tryparse`
-				// Star makes each element whose PRECEDING element rendered
-				// multi-line and ended with a close brace receive a per-element
-				// opt copy with `_intersectionOperandBreak = true`. Consumer:
-				// `HxTypedefDecl.intersections` (the `& Type` clause Star).
-				final tryparseOperandBreakAfterMultilineBrace: Bool = starNode.fmtHasFlag('operandBreakAfterMultilineBrace');
-				// ω-trivia-tryparse-prior-after-trail: when the PREV sibling
-				// field has a synthesised `<priorField>AfterTrail:Null<String>`
-				// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
-				// thread its access so the Star can inline-emit the captured
-				// trail-of-prev-field comment cuddled to the prev token.
-				final tryparsePriorAfterTrailExpr: Null<Expr> = prevTrailFieldName == null
-					? null
-					: {
-						expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-						pos: Context.currentPos()
-					};
-				// ω-blockended-trivia-tryparse (Session 3): thread the Star's
-				// `@:sep('text', tailRelax, blockEnded)` annotation into
-				// `triviaTryparseStarExpr` so the helper can inject `;`
-				// between two non-`}`-ending elements. Non-blockEnded
-				// tryparse Stars (every existing consumer) pass null sepText
-				// and the helper splices a no-op.
-				final tryparseSepText: Null<String> = starNode.annotations.get('lit.sepText');
-				final tryparseBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-				parts.push(triviaTryparseStarExpr(
-					fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
-					firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
-					propagateExprPosition, refuseFlatOnComplex, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
-					cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, metaLineEndOptField,
-					cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
-					tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded, tryparseHeritageWrap, tryparseCondBodyIndent,
-					tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail
-				));
+				emitTriviaTryparseStar(triviaCtx, parts);
 				return;
 			}
 			if (closeText != null) {
@@ -15947,6 +15989,34 @@ typedef TriviaAltSlots = {
 	final trailBBAccess: Null<Expr>;
 	final trailLCAccess: Null<Expr>;
 	final sepTrailPresentAccess: Null<Expr>;
+};
+/**
+ * Shared trivia-Star setup locals bundled for the `emitTrivia*Star`
+ * dispatch helpers split out of `emitWriterStarField`. Replaces a >5-param
+ * helper signature with one context struct (mirrors the static `*StarCtx`
+ * structs the per-helper emit code consumes).
+ */
+typedef TriviaStarCtx = {
+	final starNode: ShapeNode;
+	final fieldAccess: Expr;
+	final elemFn: String;
+	final elemRefName: String;
+	final isFirstField: Bool;
+	final isLastField: Bool;
+	final typePath: String;
+	final openText: Null<String>;
+	final closeText: Null<String>;
+	final sepText: Null<String>;
+	final prevBareRefBody: Null<PrevBodyInfo>;
+	final prevTrailFieldName: Null<String>;
+	final fieldName: Null<String>;
+	final trailBBAccess: Null<Expr>;
+	final trailNLAccess: Null<Expr>;
+	final trailLCAccess: Null<Expr>;
+	final trailCloseAccess: Null<Expr>;
+	final trailOpenAccess: Null<Expr>;
+	final trailBAAccess: Null<Expr>;
+	final trailPresentAccess: Null<Expr>;
 };
 
 /**
