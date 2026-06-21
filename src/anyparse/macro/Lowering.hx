@@ -1243,49 +1243,7 @@ class Lowering {
 				structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal} });
 			}
 			if (ctx.trivia && isStar && child.annotations.get('trivia.starCollects') == true) {
-				final trailBBLocal: String = trailingBlankBeforeLocalName(localName);
-				final trailNLLocal: String = trailingNewlineBeforeLocalName(localName);
-				final trailLCLocal: String = trailingLeadingLocalName(localName);
-				structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro $i{trailBBLocal} });
-				// ω-keep-fnsig-newline: sibling close-newline push, unconditional
-				// next to TrailingBlankBefore so the struct-literal field set
-				// matches the synth-define exactly.
-				structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro $i{trailNLLocal} });
-				structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro $i{trailLCLocal} });
-				// ω-close-trailing: the synth slot exists only for close-peek
-				// Stars (see `TriviaTypeSynth.buildStarTrailingSlots`). Gate
-				// the push on the Star's own `lit.trailText` annotation so
-				// EOF-mode Stars (e.g. `HxModule.decls`) skip the field.
-				if (child.annotations.get('lit.trailText') != null) {
-					final trailCloseLocal: String = trailingCloseLocalName(localName);
-					structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX, expr: macro $i{trailCloseLocal} });
-				}
-				// ω-open-trailing: synth slot exists only for Stars with
-				// `@:lead` AND not `@:tryparse` (the tryparse writer helper
-				// does not consume the slot — see TriviaTypeSynth gate +
-				// `emitTriviaStarFieldSteps`'s open-text capture gate).
-				if (child.annotations.get('lit.leadText') != null && !child.hasMeta(':tryparse')) {
-					final trailOpenLocal: String = trailingOpenLocalName(localName);
-					structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX, expr: macro $i{trailOpenLocal} });
-				}
-				// ω-trail-blank-after: synth slot exists only for `@:tryparse +
-				// @:fmt(nestBody)` Stars (see TriviaTypeSynth gate). Gate the
-				// push the same way; emitTriviaStarFieldSteps's tryparse+nestBody
-				// branch is the sole producer of `trailBALocal`.
-				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
-					final trailBALocal: String = trailingBlankAfterLocalName(localName);
-					structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX, expr: macro $i{trailBALocal} });
-				}
-				// ω-objectlit-source-trail-comma: synth slot exists only for
-				// sep-Stars with a close literal (see TriviaTypeSynth gate).
-				// Both `lit.sepText` and `lit.trailText` are populated by the
-				// Lit strategy before Lowering runs, so reading from
-				// annotations here mirrors the close-trailing / open-trailing
-				// gates above.
-				if (child.annotations.get('lit.sepText') != null && child.annotations.get('lit.trailText') != null) {
-					final trailPresentLocal: String = trailPresentLocalName(localName);
-					structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
-				}
+				pushTrailingStarSlots(child, localName, fieldName, structFields);
 			}
 			// ω-condcomp-body-leading-sep (Slice 18f): @:fmt(sepBeforeOpt)
 			// on a Star field grows a `<field>SepBefore:Bool` slot fed by
@@ -5690,6 +5648,63 @@ expectLit(ctx, $v{trailText}));
 			hasBeforeLeadingSlot: hasBeforeLeadingSlot,
 			optStarWithLead: optStarWithLead,
 		};
+	}
+
+	/**
+	 * Push the trivia-Star sidecar slots (`<field>TrailingBlankBefore` /
+	 * `TrailingNewlineBefore` / `TrailingLeading` / `TrailingClose` /
+	 * `TrailingOpen` / `TrailingBlankAfter` / `TrailPresent`) onto the struct
+	 * literal for a `@:trivia`-collecting Star field. Each slot is gated on the
+	 * same annotation that `TriviaTypeSynth` uses to grow it, so the field set
+	 * matches the synth-define exactly. Pure — lifted from `lowerStruct`'s
+	 * per-field loop.
+	 */
+	private function pushTrailingStarSlots(
+		child: ShapeNode, localName: String, fieldName: Null<String>, structFields: Array<ObjectField>
+	): Void {
+		final trailBBLocal: String = trailingBlankBeforeLocalName(localName);
+		final trailNLLocal: String = trailingNewlineBeforeLocalName(localName);
+		final trailLCLocal: String = trailingLeadingLocalName(localName);
+		structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX, expr: macro $i{trailBBLocal} });
+		// ω-keep-fnsig-newline: sibling close-newline push, unconditional
+		// next to TrailingBlankBefore so the struct-literal field set
+		// matches the synth-define exactly.
+		structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX, expr: macro $i{trailNLLocal} });
+		structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX, expr: macro $i{trailLCLocal} });
+		// ω-close-trailing: the synth slot exists only for close-peek
+		// Stars (see `TriviaTypeSynth.buildStarTrailingSlots`). Gate
+		// the push on the Star's own `lit.trailText` annotation so
+		// EOF-mode Stars (e.g. `HxModule.decls`) skip the field.
+		if (child.annotations.get('lit.trailText') != null) {
+			final trailCloseLocal: String = trailingCloseLocalName(localName);
+			structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX, expr: macro $i{trailCloseLocal} });
+		}
+		// ω-open-trailing: synth slot exists only for Stars with
+		// `@:lead` AND not `@:tryparse` (the tryparse writer helper
+		// does not consume the slot — see TriviaTypeSynth gate +
+		// `emitTriviaStarFieldSteps`'s open-text capture gate).
+		if (child.annotations.get('lit.leadText') != null && !child.hasMeta(':tryparse')) {
+			final trailOpenLocal: String = trailingOpenLocalName(localName);
+			structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX, expr: macro $i{trailOpenLocal} });
+		}
+		// ω-trail-blank-after: synth slot exists only for `@:tryparse +
+		// @:fmt(nestBody)` Stars (see TriviaTypeSynth gate). Gate the
+		// push the same way; emitTriviaStarFieldSteps's tryparse+nestBody
+		// branch is the sole producer of `trailBALocal`.
+		if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody')) {
+			final trailBALocal: String = trailingBlankAfterLocalName(localName);
+			structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX, expr: macro $i{trailBALocal} });
+		}
+		// ω-objectlit-source-trail-comma: synth slot exists only for
+		// sep-Stars with a close literal (see TriviaTypeSynth gate).
+		// Both `lit.sepText` and `lit.trailText` are populated by the
+		// Lit strategy before Lowering runs, so reading from
+		// annotations here mirrors the close-trailing / open-trailing
+		// gates above.
+		if (child.annotations.get('lit.sepText') != null && child.annotations.get('lit.trailText') != null) {
+			final trailPresentLocal: String = trailPresentLocalName(localName);
+			structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
+		}
 	}
 
 }
