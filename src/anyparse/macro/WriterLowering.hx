@@ -6002,94 +6002,12 @@ class WriterLowering {
 		// `clearExprPositionNonTail` tail-barrier wrap).
 		final triviaElemCall: Expr = triviaBlockElemCallExpr(elemFn, clearAnonFnBodyOnElems, clearExprPositionNonTail);
 		final emptyText: String = openText + closeText;
-		// ω-empty-curly-break: when the call site opts in via
-		// `@:fmt(emptyCurlyBreak)`, the empty-body branch dispatches at
-		// runtime on `opt.emptyCurly`. `Break` emits the open lit, a
-		// hardline at the parent's indent, and the close lit on its own
-		// line (`{\n}`); `Same` keeps the pre-slice flat `{}`. Mirrors
-		// haxe-formatter's `lineEnds.emptyCurly: same|break`. The flag
-		// is opt-in per Star — formats / grammars that don't expose the
-		// knob skip the branch entirely.
-		// ω-anonfunction-empty-curly: when the call site descends through
-		// an anonymous-function-expression body (`HxFnExpr.body` flagged
-		// via `@:fmt(propagateAnonFnContext)` + `_setAnonFnBody`
-		// opt-fanout), read `opt.anonFunctionEmptyCurly` instead of the
-		// global `opt.emptyCurly`. Lets `lineEnds.anonFunctionCurly.emptyCurly`
-		// flip empty `function() {}` bodies to two-line Allman
-		// (`function()\n{\n}`) without affecting class/iface/abstract/enum
-		// bodies (which keep reading `opt.emptyCurly`). Pre-slice behaviour
-		// for HxFnDecl body (NOT in anon-fn context) is preserved:
-		// `_inAnonFnBody` defaults false so dispatch falls through to
-		// `opt.emptyCurly`. Emitted unconditionally — every grammar that
-		// opts into `@:fmt(emptyCurlyBreak)` on a body Star also needs
-		// `_inAnonFnBody` and `anonFunctionEmptyCurly` on its options
-		// typedef. Currently only Haxe grammar uses `emptyCurlyBreak`.
-		// ω-blockempty: when the call site opts into the call-form
-		// `@:fmt(emptyCurlyBreak('<knob>'))` instead of the bare
-		// `@:fmt(emptyCurlyBreak)`, the dispatch reads `opt.<knob>` directly
-		// — bypassing the `_inAnonFnBody` ternary. Used by `BlockStmt` /
-		// `BlockExpr` / `HxSwitchStmt.cases` / `HxSwitchStmtBare.cases` to
-		// route to `opt.blockEmptyCurly` (driven by `lineEnds.blockCurly.emptyCurly`
-		// sub-key). Bare-flag callers (`HxFnBlock.stmts`, class/iface/abstract
-		// member-Star bodies, `HxEnumDecl.ctors`) keep the pre-slice
-		// `_inAnonFnBody`-based dispatch.
-		final emptyCurlyAccess: Expr = emptyCurlyKnob != null
-			? {
-				expr: EField(macro opt, emptyCurlyKnob),
-				pos: Context.currentPos()
-			}
-			: macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
-		final emptyDocExpr: Expr = emptyCurlyBreak
-			? macro ($emptyCurlyAccess == anyparse.format.EmptyCurly.Break
-				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
-				: _dt($v{emptyText}))
-			: macro _dt($v{emptyText});
-		// ω-blockright-curly: when the call site opts into the call-form
-		// `@:fmt(rightCurly('<knob>'))`, the non-empty-body branch reads
-		// `opt.<knob>:RightCurlyPlacement` and drops the hardline before
-		// `}` when the knob is `Inline`. `Same` (default) keeps the
-		// pre-slice `_dhl()` so `}` lands on its own line at the parent
-		// indent. The empty-body branch is unaffected — empty-body
-		// dispatch is owned by `emptyCurlyBreak` + `emptyCurlyKnob`.
-		// Bare-flag callers without `rightCurlyKnob` keep pre-slice
-		// behaviour (knob is null → `_dhl()` emitted unconditionally).
-		// Mirrors haxe-formatter's `lineEnds.rightCurly: before|both`
-		// (-> `Same`) vs `after|none` (-> `Inline`) -- the trailing
-		// newline after `}` is contributed by the outer sibling sep, so
-		// fork's 4-value surface collapses to 2 here.
-		// ω-anonfunction-right-curly: when the call site opts into the
-		// call-form `@:fmt(rightCurlyAnonFnOverride('<knob>'))`, the
-		// dispatch fires only when `opt._inAnonFnBody=true` (set by a
-		// parent's `@:fmt(propagateAnonFnContext)` via `_setAnonFnBody`)
-		// — `Inline` drops the hardline before `}`, `Same` falls through
-		// to `_dhl()`. When `_inAnonFnBody=false`, the dispatch falls
-		// through to `_dhl()` regardless of the knob value. Used by
-		// `HxFnBlock.stmts` to apply `anonFunctionRightCurly` to anon-fn
-		// bodies (`HxFnExpr.body`) while preserving pre-slice `_dhl()`
-		// for function declarations (`HxFnDecl.body`) and untyped blocks
-		// (`HxUntypedFnBody.block`) that share the same `HxFnBlock`
-		// typedef. `rightCurlyKnob` (direct dispatch) takes precedence
-		// over `rightCurlyAnonFnKnob` when both are set — but in
-		// practice no Star opts into both. Sister to
-		// `leftCurlyAnonFnOverride` precedent.
-		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null
-			? {
-				expr: EField(macro opt, rightCurlyKnob),
-				pos: Context.currentPos()
-			}
-			: null;
-		final rightCurlyAnonFnAccess: Null<Expr> = (rightCurlyKnob == null && rightCurlyAnonFnKnob != null)
-			? {
-				expr: EField(macro opt, rightCurlyAnonFnKnob),
-				pos: Context.currentPos()
-			}
-			: null;
-		final beforeCloseHardlineExpr: Expr = if (rightCurlyAccess != null)
-			macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
-		else if (rightCurlyAnonFnAccess != null)
-			macro (opt._inAnonFnBody && $rightCurlyAnonFnAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
-		else
-			macro _dhl();
+		// ω-empty-curly-break / ω-anonfunction-empty-curly / ω-blockempty:
+		// empty-body Doc dispatch moved to `triviaBlockEmptyDocExpr`.
+		final emptyDocExpr: Expr = triviaBlockEmptyDocExpr(openText, closeText, emptyText, emptyCurlyBreak, emptyCurlyKnob);
+		// ω-blockright-curly / ω-anonfunction-right-curly: before-`}` hardline
+		// dispatch moved to `triviaBlockBeforeCloseHardlineExpr`.
+		final beforeCloseHardlineExpr: Expr = triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob, rightCurlyAnonFnKnob);
 		// ω-orphan-trivia: Alt-branch Star call sites (BlockStmt) have no
 		// synth trailing slots — the null branch drops trailing trivia,
 		// matching pre-slice behaviour. Seq-struct call sites forward the
@@ -14710,6 +14628,57 @@ class WriterLowering {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
 			pos: Context.currentPos(),
 		};
+	}
+
+	/**
+	 * Block-Star empty-body Doc build (ω-empty-curly-break / ω-anonfunction-
+	 * empty-curly / ω-blockempty). Resolves the empty-curly access (named knob
+	 * vs `_inAnonFnBody`-dispatched default) and dispatches `Break` vs flat
+	 * `{}`. Extracted from `triviaBlockStarExpr` so the orchestrator stays
+	 * under the complexity gate.
+	 */
+	private static function triviaBlockEmptyDocExpr(
+		openText: String, closeText: String, emptyText: String, emptyCurlyBreak: Bool, emptyCurlyKnob: Null<String>
+	): Expr {
+		final emptyCurlyAccess: Expr = emptyCurlyKnob != null
+			? {
+				expr: EField(macro opt, emptyCurlyKnob),
+				pos: Context.currentPos()
+			}
+			: macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
+		return emptyCurlyBreak
+			? macro ($emptyCurlyAccess == anyparse.format.EmptyCurly.Break
+				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
+				: _dt($v{emptyText}))
+			: macro _dt($v{emptyText});
+	}
+
+	/**
+	 * Block-Star before-`}` hardline build (ω-blockright-curly / ω-anonfunction-
+	 * right-curly). Reads the optional `rightCurly` / `rightCurlyAnonFn` knobs
+	 * and drops the hardline before `}` when the resolved placement is `Inline`.
+	 * Both knobs null → unconditional `_dhl()` (pre-slice). Extracted from
+	 * `triviaBlockStarExpr`.
+	 */
+	private static function triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob: Null<String>, rightCurlyAnonFnKnob: Null<String>): Expr {
+		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null
+			? {
+				expr: EField(macro opt, rightCurlyKnob),
+				pos: Context.currentPos()
+			}
+			: null;
+		final rightCurlyAnonFnAccess: Null<Expr> = (rightCurlyKnob == null && rightCurlyAnonFnKnob != null)
+			? {
+				expr: EField(macro opt, rightCurlyAnonFnKnob),
+				pos: Context.currentPos()
+			}
+			: null;
+		return if (rightCurlyAccess != null)
+			macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
+		else if (rightCurlyAnonFnAccess != null)
+			macro (opt._inAnonFnBody && $rightCurlyAnonFnAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
+		else
+			macro _dhl();
 	}
 
 }
