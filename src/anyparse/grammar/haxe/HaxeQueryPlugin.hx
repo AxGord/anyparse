@@ -677,27 +677,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
-				final ctor: String = Type.enumConstructor(value);
-				final params: Array<Dynamic> = Type.enumParameters(value);
-				var span: Null<Span> = fallbackSpan;
-				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
-				switch ctor {
-					case 'Anon':
-						// handled by the decl-host descent, not here
-					case 'Named' | 'DollarType':
-						for (p in params) {
-							if (Std.isOfType(p, Span)) continue;
-							final nm: Null<String> = extractName(p);
-							if (nm != null && span != null) into.push(new QueryNode('TypeRef', nm, [], span));
-							// recurse type parameters (`Array<HxVarMore>`)
-							appendTypeRefs(p, into, span);
-							break;
-						}
-					case _:
-						// Arrow / ArrowFn / Parens / … — recurse operands
-						for (p in params) if (!Std.isOfType(p, Span))
-							appendTypeRefs(p, into, span);
-				}
+				appendTypeRefsEnum(value, into, fallbackSpan);
 			case TObject:
 				if (Reflect.hasField(value, 'node')) {
 					appendTypeRefs(Reflect.field(value, 'node'), into, fallbackSpan);
@@ -716,6 +696,44 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 					for (e in arr) appendTypeRefs(e, into, fallbackSpan);
 				}
 			case _:
+		}
+	}
+
+	/**
+	 * Surfaces type-ref nodes from an `HxType` enum value: the `Named` /
+	 * `DollarType` name slot becomes a `TypeRef`, and every operand is
+	 * recursed for nested type parameters. `Anon` is skipped (handled by
+	 * the decl-host descent in `appendNodes`).
+	 */
+	private function appendTypeRefsEnum(value: Dynamic, into: Array<QueryNode>, fallbackSpan: Null<Span>): Void {
+		final ctor: String = Type.enumConstructor(value);
+		final params: Array<Dynamic> = Type.enumParameters(value);
+		var span: Null<Span> = fallbackSpan;
+		for (p in params) if (Std.isOfType(p, Span)) span = cast p;
+		switch ctor {
+			case 'Anon':
+				// handled by the decl-host descent, not here
+			case 'Named' | 'DollarType':
+				appendNamedTypeRef(params, into, span);
+			case _:
+				// Arrow / ArrowFn / Parens / … — recurse operands
+				for (p in params) if (!Std.isOfType(p, Span))
+					appendTypeRefs(p, into, span);
+		}
+	}
+
+	/**
+	 * Emits the `TypeRef` node for a `Named` / `DollarType` head and
+	 * recurses its type parameters. Reads the first non-`Span` operand.
+	 */
+	private function appendNamedTypeRef(params: Array<Dynamic>, into: Array<QueryNode>, span: Null<Span>): Void {
+		for (p in params) {
+			if (Std.isOfType(p, Span)) continue;
+			final nm: Null<String> = extractName(p);
+			if (nm != null && span != null) into.push(new QueryNode('TypeRef', nm, [], span));
+			// recurse type parameters (`Array<HxVarMore>`)
+			appendTypeRefs(p, into, span);
+			break;
 		}
 	}
 
