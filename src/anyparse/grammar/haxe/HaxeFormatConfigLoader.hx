@@ -783,33 +783,9 @@ final class HaxeFormatConfigLoader {
 	}
 
 	private static function applyWrapping(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
-		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
-		if (section.arrayMatrixWrap != null) {
-			final resolved: Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
-			if (resolved != null) opt.arrayMatrixWrap = resolved;
-		}
-		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
-		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
-		if (section.casePattern != null) opt.casePatternWrap = wrapRulesFromConfig(section.casePattern, opt.casePatternWrap);
-		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
-		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
-		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap, true);
-		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap, true);
-		if (section.callParameter != null) opt.callParameterWrap = wrapRulesFromConfig(section.callParameter, opt.callParameterWrap);
-		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
-		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
-		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
-		if (section.functionSignature != null)
-			opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
-		if (section.anonFunctionSignature != null)
-			opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
-		if (section.metadataCallParameter != null)
-			opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
-		if (section.typeParameter != null) opt.typeParameterWrap = wrapRulesFromConfig(section.typeParameter, opt.typeParameterWrap);
-		if (section.expressionWrapping != null)
-			opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
-		if (section.implementsExtends != null)
-			opt.implementsExtendsWrap = wrapRulesFromConfig(section.implementsExtends, opt.implementsExtendsWrap, true);
+		applyWrappingScalars(section, opt);
+		applyWrappingRulesA(section, opt);
+		applyWrappingRulesB(section, opt);
 	}
 
 	/**
@@ -1686,6 +1662,42 @@ final class HaxeFormatConfigLoader {
 	private static function isAllSpaces(s: String): Bool {
 		for (i in 0...s.length) if (s.charCodeAt(i) != ' '.code) return false;
 		return true;
+	}
+
+	private static function applyWrappingScalars(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
+		if (section.maxLineLength != null) opt.lineWidth = section.maxLineLength;
+		if (section.arrayMatrixWrap != null) {
+			final resolved: Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
+			if (resolved != null) opt.arrayMatrixWrap = resolved;
+		}
+	}
+
+	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
+		if (section.arrayWrap != null) opt.arrayLiteralWrap = wrapRulesFromConfig(section.arrayWrap, opt.arrayLiteralWrap);
+		if (section.multiVar != null) opt.multiVarWrap = wrapRulesFromConfig(section.multiVar, opt.multiVarWrap);
+		if (section.casePattern != null) opt.casePatternWrap = wrapRulesFromConfig(section.casePattern, opt.casePatternWrap);
+		if (section.anonType != null) opt.anonTypeWrap = wrapRulesFromConfig(section.anonType, opt.anonTypeWrap);
+		if (section.methodChain != null) opt.methodChainWrap = wrapRulesFromConfig(section.methodChain, opt.methodChainWrap);
+		if (section.opBoolChain != null) opt.opBoolChainWrap = wrapRulesFromConfig(section.opBoolChain, opt.opBoolChainWrap, true);
+		if (section.opAddSubChain != null) opt.opAddSubChainWrap = wrapRulesFromConfig(section.opAddSubChain, opt.opAddSubChainWrap, true);
+		if (section.callParameter != null) opt.callParameterWrap = wrapRulesFromConfig(section.callParameter, opt.callParameterWrap);
+		if (section.objectLiteral != null) opt.objectLiteralWrap = wrapRulesFromConfig(section.objectLiteral, opt.objectLiteralWrap);
+		if (section.conditionWrapping != null) opt.conditionWrap = wrapRulesFromConfig(section.conditionWrapping, opt.conditionWrap);
+		if (section.ternaryExpression != null) opt.ternaryWrap = wrapRulesFromConfig(section.ternaryExpression, opt.ternaryWrap);
+	}
+
+	private static function applyWrappingRulesB(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {
+		if (section.functionSignature != null)
+			opt.functionSignatureWrap = wrapRulesFromConfig(section.functionSignature, opt.functionSignatureWrap);
+		if (section.anonFunctionSignature != null)
+			opt.anonFunctionSignatureWrap = wrapRulesFromConfig(section.anonFunctionSignature, opt.anonFunctionSignatureWrap);
+		if (section.metadataCallParameter != null)
+			opt.metadataCallParameterWrap = wrapRulesFromConfig(section.metadataCallParameter, opt.metadataCallParameterWrap);
+		if (section.typeParameter != null) opt.typeParameterWrap = wrapRulesFromConfig(section.typeParameter, opt.typeParameterWrap);
+		if (section.expressionWrapping != null)
+			opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
+		if (section.implementsExtends != null)
+			opt.implementsExtendsWrap = wrapRulesFromConfig(section.implementsExtends, opt.implementsExtendsWrap, true);
 	}
 
 }
