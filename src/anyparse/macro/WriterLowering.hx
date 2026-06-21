@@ -810,47 +810,7 @@ class WriterLowering {
 		// `)` from iterable.@:trail. Fork's `markPWrapping` dispatches
 		// `ForLoop` to the same `wrapCondition` path as `WhileCondition`
 		// / `IfCondition`.
-		var spanInfo: Null<{
-			startIdx: Int,
-			endIdx: Int,
-			leadText: String,
-			trailText: String,
-			knob: String
-		}> = null;
-		{
-			var startIdx: Int = -1;
-			var startKnob: Null<String> = null;
-			var startLead: Null<String> = null;
-			for (i in 0...node.children.length) {
-				final c: ShapeNode = node.children[i];
-				final cw: Null<Array<String>> = c.fmtReadStringArgs('condWrap');
-				if (cw != null && startIdx == -1) {
-					startIdx = i;
-					startKnob = cw[0];
-					startLead = c.readMetaString(':lead');
-				} else if (c.fmtHasFlag('condWrapEnd') && startIdx != -1) {
-					final endTrail: Null<String> = c.readMetaString(':trail');
-					if (startLead == null || endTrail == null)
-						Context.fatalError(
-							'WriterLowering: @:fmt(condWrap)/@:fmt(condWrapEnd) span requires @:lead on the start field and @:trail on the end field',
-							Context.currentPos()
-						);
-					if (startKnob == null) Context.fatalError('WriterLowering: @:fmt(condWrap) requires a knob arg', Context.currentPos());
-					if (c.kind != Ref || c.annotations.get('base.optional') == true)
-						Context.fatalError(
-							'WriterLowering: @:fmt(condWrapEnd) is supported only on bare mandatory Ref fields', Context.currentPos()
-						);
-					spanInfo = {
-						startIdx: startIdx,
-						endIdx: i,
-						leadText: startLead,
-						trailText: endTrail,
-						knob: startKnob,
-					};
-					break;
-				}
-			}
-		}
+		final spanInfo = detectCondWrapSpan(node);
 		var fieldIdx: Int = -1;
 		var spanStartPartsIdx: Int = -1;
 
@@ -15439,6 +15399,56 @@ class WriterLowering {
 				'switchCondParensInsideOpen',
 				'whileCondParensInsideOpen'
 			]));
+	}
+
+	/**
+	 * ω-condwrap-forstmt: scan a struct's children for a span-mode condWrap
+	 * pair — `@:fmt(condWrap('<knob>'))` on a starting field plus a later
+	 * sibling carrying the `@:fmt(condWrapEnd)` sentinel flag. Returns the
+	 * matched span (start/end indices, the `(` / `)` literals from the start
+	 * field's `@:lead` and the end field's `@:trail`, and the knob) or `null`
+	 * when no end-field sentinel pairs with a start condWrap (single-Ref
+	 * consumers run the existing path). Extracted verbatim from `lowerStruct`.
+	 */
+	private function detectCondWrapSpan(node: ShapeNode): Null<{
+		startIdx: Int,
+		endIdx: Int,
+		leadText: String,
+		trailText: String,
+		knob: String
+	}> {
+		var startIdx: Int = -1;
+		var startKnob: Null<String> = null;
+		var startLead: Null<String> = null;
+		for (i in 0...node.children.length) {
+			final c: ShapeNode = node.children[i];
+			final cw: Null<Array<String>> = c.fmtReadStringArgs('condWrap');
+			if (cw != null && startIdx == -1) {
+				startIdx = i;
+				startKnob = cw[0];
+				startLead = c.readMetaString(':lead');
+			} else if (c.fmtHasFlag('condWrapEnd') && startIdx != -1) {
+				final endTrail: Null<String> = c.readMetaString(':trail');
+				if (startLead == null || endTrail == null)
+					Context.fatalError(
+						'WriterLowering: @:fmt(condWrap)/@:fmt(condWrapEnd) span requires @:lead on the start field and @:trail on the end field',
+						Context.currentPos()
+					);
+				if (startKnob == null) Context.fatalError('WriterLowering: @:fmt(condWrap) requires a knob arg', Context.currentPos());
+				if (c.kind != Ref || c.annotations.get('base.optional') == true)
+					Context.fatalError(
+						'WriterLowering: @:fmt(condWrapEnd) is supported only on bare mandatory Ref fields', Context.currentPos()
+					);
+				return {
+					startIdx: startIdx,
+					endIdx: i,
+					leadText: startLead,
+					trailText: endTrail,
+					knob: startKnob,
+				};
+			}
+		}
+		return null;
 	}
 
 }
