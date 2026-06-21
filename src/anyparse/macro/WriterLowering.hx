@@ -9213,379 +9213,83 @@ class WriterLowering {
 		final cascadeInitCurr: Expr = cascadeEmit.initCurr;
 		final cascadeCurrCompute: Expr = cascadeEmit.currCompute;
 		final cascadeTrackPrev: Expr = cascadeEmit.trackPrev;
-		// ω-meta-strip-blanks: meta Stars (marked via `@:fmt(metaLineEndPolicy(...))`)
-		// cap inter-element separator at a single hardline regardless of source
-		// blank-line count. Mirrors fork's `MarkLineEnds.determineMetadataPolicy`:
-		// all four AtLineEndPolicy values (None/After/AfterLast/ForceAfterLast)
-		// emit at most one newline between consecutive `@:meta` tokens, and
-		// `MarkEmptyLines` has no rule that adds blanks between At tokens.
-		// Non-meta Stars keep the cascade-driven source-blank pass through.
-		//
-		// ω-slice-45: `forceInlineSep` Stars short-circuit cascade blanks too
-		// — the dedicated inter-element branch (below) always emits a single
-		// space, so source blank-line trivia must NOT leak through via the
-		// `_t.newlineBefore` fallback.
+		// ω-meta-strip-blanks: meta Stars cap inter-element separator at a single
+		// hardline (metaLineEndOptField); ω-slice-45: forceInlineSep Stars short-
+		// circuit cascade blanks too. Both ⇒ macro 0; else the cascade count.
 		final cascadeBlanksCount: Expr = metaLineEndOptField != null || forceInlineSep ? macro 0 : cascadeEmit.blanksCount;
-		// ω-before-package — head-of-Star override (e.g. `beforePackage`).
-		// Spliced once at the start of the inner Star body (after `_docs`
-		// init / `_padLeading`, before the while loop). With no
-		// `blankLinesAtHeadIfCtor` meta on this inner Star — the typical
-		// case for body-Stars — `headEmit` is `macro {}`, byte-identical.
+		// ω-before-package — head-of-Star override; `macro {}` when no
+		// `blankLinesAtHeadIfCtor` meta on this inner Star (byte-identical).
 		final cascadeHeadEmit: Expr = cascadeEmit.headEmit;
-		// ω-expression-case-flat-fanout: when the body's element call should
-		// receive a copy-on-flat opt with named fields swapped, build the
-		// per-pair override block. The caller-side helper has already parsed
-		// `'from=to'` args into [from, to] pairs.
-		// ω-value-yielded-if-tail-barrier (case-body extension): the per-element
-		// opt argument. When `clearExprPositionNonTail` is set (case / default
-		// body Star), every body statement EXCEPT the tail gets
-		// `_clearExprPosition` so a discarded statement-if reverts to the
-		// statement-position `ifBody` policy; only the body's last statement
-		// (the switch's yielded value at expression position) keeps the
-		// inherited frame. `_si` / `_arr` are in scope at the element-call
-		// splice. Flag off ⇒ the IDENTICAL `_writerOpt` Doc as before.
-		final caseTailOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1 ? _writerOpt : _clearExprPosition(_writerOpt))
-			: macro _writerOpt;
-		final triviaElemCall: Expr = {
-			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
-			pos: Context.currentPos(),
-		};
-		// ω-typedef-intersection-operand-break: per-iteration element call for
-		// the MAIN inter-element loop only (the heritage/wrap fast paths keep
-		// `triviaElemCall`/`_writerOpt`). Flag off (every Star but
-		// `HxTypedefDecl.intersections`) ⇒ identical to `triviaElemCall`,
-		// byte-inert. Flag on ⇒ when the prior element rendered multi-line AND
-		// ended with a close delim, hand the element a `_copyOpt` with
-		// `_intersectionOperandBreak = true` so its
-		// `@:fmt(typedefIntersectionBreak)` lead breaks `&\n\t` before the
-		// operand; otherwise the shared `_writerOpt` (stays glued — no copy,
-		// no mutation of the shared opt).
-		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace
-			? {
-				expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
-				pos: Context.currentPos(),
-			}
-			: triviaElemCall;
-		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
-		// nested EBlock — that would isolate `_elemOpt` from the element call).
-		// Flag on ⇒ when the prior element rendered multi-line AND ended with a
-		// close delim, fan the opt through `_setIntersectionBreak` (idempotent
-		// `_copyOpt` + flag set), else the shared `_writerOpt` (no copy, shared
-		// opt untouched). Flag off ⇒ `macro {}` (no local — `triviaElemCall`
-		// uses `_writerOpt` directly, byte-identical to the pre-slice loop).
-		final elemOptInit: Expr = operandBreakAfterMultilineBrace
-			? macro final _elemOpt = (_priorElemDoc != null && anyparse.format.wrap.WrapList.flatLength(_priorElemDoc) < 0
-				&& anyparse.format.wrap.WrapList.endsWithCloseDelim(_priorElemDoc))
-				? _setIntersectionBreak(_writerOpt)
-				: _writerOpt
-			: macro {};
+		final elemCallExprs = triviaTryparseElemCallExprs(elemFn, clearExprPositionNonTail, operandBreakAfterMultilineBrace);
+		final triviaElemCall: Expr = elemCallExprs.triviaElemCall;
+		final triviaElemCallMaybeBreak: Expr = elemCallExprs.triviaElemCallMaybeBreak;
+		final elemOptInit: Expr = elemCallExprs.elemOptInit;
 		final sepBeforeFirstExpr: Expr = macro $v{sepBeforeFirst};
 		final nestBodyExpr: Expr = macro $v{nestBody};
 		final trailBB: Expr = trailBBAccess ?? macro false;
 		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
-		// ω-trail-blank-after: source had a blank line between the stashed
-		// orphan trail comment and the next outer-Star sibling. Emit an
-		// extra hardline at the end of `_trailDocs` so the gap survives
-		// round-trip. Null when slot is absent (non-tryparse-or-non-nestBody
-		// callers); falls back to `false` like trailBB.
+		// ω-trail-blank-after: extra hardline at trail tail when source had a
+		// blank between orphan trail and next outer sibling. Null ⇒ false.
 		final trailBA: Expr = trailBAAccess ?? macro false;
-		// ω-close-trailing-alt: the FIRST element's separator picks
-		// `firstSepOverride` (a runtime switch on the prev body's ctor)
-		// when supplied; otherwise it falls back to `sepExpr` like
-		// every subsequent iteration. Subsequent elements use
-		// `subsequentSepOverride` when supplied (ω-block-shape-aware:
-		// switch on prev element's body ctor) — closeTrailing was a
-		// property of the prev STRUCT FIELD only, but block-shape-
-		// awareness applies symmetrically across the chain (each catch
-		// follows another body whose shape decides `} catch` inline vs
-		// `\ncatch`).
+		// ω-close-trailing-alt / ω-block-shape-aware: first / subsequent element
+		// separators pick their override when supplied, else fall back to sepExpr.
 		final firstSepExpr: Expr = firstSepOverride ?? sepExpr;
 		final subsequentSepExpr: Expr = subsequentSepOverride ?? sepExpr;
-		// ω-case-body-policy / ω-case-body-keep: when the Star carries
-		// `@:fmt(bodyPolicy('<flag>'))` (single-flag) or
-		// `@:fmt(bodyPolicy('<stmtFlag>', '<exprFlag>'))` (dual form
-		// for case bodies), build a runtime gate over `opt.<flag>`:
-		//  - `Same` → flatten unconditionally (override).
-		//  - `Keep` → flatten IFF the body's first element has no
-		//    preceding source newline (`!_arr[0].newlineBefore`).
-		//  - `Next` / `FitLine` → gate stays `false`, wrap stays
-		//    multiline.
-		// `_arr[0]` access is safe — the outer `_flatCase` short-
-		// circuits via `_arr.length == 1` BEFORE this gate runs.
-		//
-		// ω-issue-423-mech-a: dual-flag case-body form dispatches at
-		// runtime on `opt._inExprPosition`. Convention: `flag[0]` is
-		// the statement-position policy (used when descending through
-		// non-expression-position parents — top-level switch in a
-		// function body picks `caseBody=Next` → break), `flag[1]` is
-		// the expression-position policy (used when an
-		// expression-position parent set `_inExprPosition=true` via
-		// `@:fmt(propagateExprPosition)` — case-in-case body picks
-		// `expressionCase=Keep` → flatten on same-line source).
-		// Mirrors fork's `isReturnExpression` walk-up heuristic in
-		// `MarkSameLine.markCase`. Single-flag callers stay byte-
-		// identical (no dispatch).
-		if (caseBodyFlagNames != null && caseBodyFlagNames.length > 2)
-			Context.fatalError(
-				'WriterLowering: @:fmt(bodyPolicy(...)) takes at most 2 args (stmtFlag, exprFlag), got ${caseBodyFlagNames.length}',
-				Context.currentPos()
-			);
-		final flatGateExpr: Expr = if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
-			macro false;
-		else if (caseBodyFlagNames.length == 1)
-			buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
-		else {
-			final stmtPred: Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
-			final exprPred: Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[1]);
-			macro (opt._inExprPosition ? $exprPred : $stmtPred);
-		};
-		// ω-expression-case-flat-fanout: when `flatChildOptPairs` is non-empty,
-		// the `_writerOpt` emitted into the runtime block is a `Reflect.copy(opt)`
-		// + per-pair field override on the flat path, falling back to `opt`
-		// itself everywhere else. The triviaElemCall reads `_writerOpt` so the
-		// child writer sees the swapped knobs (statement-position
-		// `ifBody`/`elseBody`/`forBody` → expression-position counterparts) and
-		// propagates them through subsequent recursive calls. Default is plain
-		// `opt` (no copy) — non-flat-fanout consumers stay byte-identical.
-		//
-		// ω-issue-423-mech-a: when `propagateExprPosition` is true, the copy
-		// fires on BOTH paths (flat AND break) and unconditionally sets
-		// `_wo._inExprPosition = true` so descendants see the expression-
-		// position frame regardless of whether the case body itself flattens.
-		// `flatChildOpt` per-pair overrides remain gated on `_flatCase`. When
-		// the propagation flag is off, the existing flat-only path is preserved
-		// byte-identically (copy only on flat, plain `opt` otherwise).
-		final hasFlatChildOpt: Bool = flatChildOptPairs != null && flatChildOptPairs.length > 0;
-		final writerOptExpr: Expr = if (!hasFlatChildOpt && !propagateExprPosition)
-			macro opt;
-		else if (!propagateExprPosition) {
-			final block: Array<Expr> = [macro final _wo = _copyOpt(opt)];
-			for (pair in flatChildOptPairs) {
-				final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
-				final toAccess: Expr = optFieldAccess(pair[1]);
-				block.push(macro $fromAccess = $toAccess);
-			}
-			block.push(macro _wo);
-			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
-			macro (_flatCase ? $overrideBlock : opt);
-		} else {
-			// Wrap each `macro` expression in parens — array-literal `,` after
-			// a `macro final ... = ...` reification fragment otherwise mis-parses
-			// (the parser treats `macro` as a variable name in the next element).
-			final block: Array<Expr> = [
-				(macro final _wo = _copyOpt(opt)),
-				(macro _wo._inExprPosition = true),
-			];
-			if (hasFlatChildOpt) {
-				final flatOnlyParts: Array<Expr> = [
-					for (pair in flatChildOptPairs) {
-						final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
-						final toAccess: Expr = optFieldAccess(pair[1]);
-						macro $fromAccess = $toAccess;
-					}
-				];
-				final flatOnlyExpr: Expr = { expr: EBlock(flatOnlyParts), pos: Context.currentPos() };
-				block.push(macro if (_flatCase) $flatOnlyExpr);
-			}
-			block.push(macro _wo);
-			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
-			overrideBlock;
-		};
+		final flatGateExpr: Expr = triviaTryparseFlatGateExpr(caseBodyFlagNames);
+		final writerOptExpr: Expr = triviaTryparseWriterOptExpr(flatChildOptPairs, propagateExprPosition);
 		final padLeadingExpr: Expr = macro $v{padLeading};
 		final padTrailingExpr: Expr = macro $v{padTrailing};
-		// ω-trivia-tryparse-linelength: when the Star carries
-		// `@:fmt(lineLengthAwareSeps)`, swap hard `_dt(' ')` separators
-		// (padLeading + inter-element default sep) for `_dile(opt.lineWidth,
-		// _dhl(), _dt(' '))` probes that decide flat-vs-break per the
-		// enclosing Group's line-length verdict, and wrap the final `_docs`
-		// in `_dn(_cols, _dc(_docs))` so break-mode hardlines indent +1.
-		// Mirrors the non-trivia bare-Star `padLeading||padTrailing` branch
-		// (WriterLowering.hx:3684-3708). First consumer: HxAbstractDecl.clauses
-		// after the @:trivia @:tryparse flip — closes wrap regressions
-		// (issue_364) under the trivia path that the non-trivia branch
-		// already handled via lineLengthAwareSeps.
+		// ω-trivia-tryparse-linelength: swap hard `_dt(' ')` separators for
+		// `_dile(...)` line-length probes when the Star carries
+		// `@:fmt(lineLengthAwareSeps)`.
 		final padLeadingSpaceDoc: Expr = lineLengthAwareSeps ? macro _dile(opt.lineWidth, _dhl(), _dt(' ')) : macro _dt(' ');
 		final subsequentSepDoc: Expr = lineLengthAwareSeps ? macro _dile(opt.lineWidth, _dhl(), _dt(' ')) : subsequentSepExpr;
-		// ω-trivia-tryparse-prior-after-trail: when the Star's PREVIOUS
-		// sibling field was a mandatory Ref carrying `@:trail` in trivia-
-		// bearing mode, its synth `<priorField>AfterTrail:Null<String>`
-		// slot holds the same-line `// comment` (stripped delimiters)
-		// that landed right after the trail literal. The non-trivia bare-
-		// Star path discards this — only `bodyPolicyWrap`-tagged Refs
-		// previously consumed it (WriterLowering.hx:2379). Inline-emit
-		// before padLeading so the trail-of-prev-field comment cuddles to
-		// the prev token visually. Null when caller did not thread the
-		// slot (default no-op).
-		final priorAfterTrailEmit: Expr = priorAfterTrailExpr == null
-			? macro {}
-			: macro {
-				final _pat: Null<String> = $priorAfterTrailExpr;
-				if (_pat != null) _docs.push(trailingCommentDoc(_pat, opt));
-			};
-		// ω-trivia-tryparse-linelength: when the LAST element carries a
-		// same-line `// trail`, the line comment runs until next physical
-		// `\n` — without a terminator the next field's lead literal would
-		// inline INSIDE the comment. Emit `_dhl()` OUTSIDE the Nest wrap
-		// (else next field's `{` lands at +1 indent). The terminator sits
-		// at base indent so the next field's leftCurlySeparator decides
-		// placement independently. Gated by `lineLengthAwareSeps` — non-
-		// opt-in callers stay byte-identical (`_de()` no-op).
-		final finalWrapDocs: Expr = lineLengthAwareSeps
-			? macro _dc([
-				_dn(_cols, _dc(_docs)),
-				(_arr.length > 0 && _arr[_arr.length - 1].trailingComment != null) ? _dhl() : _de()
-			])
-			: macro _dc(_docs);
-		// ω-cond-indent-policy: runtime gate — the Star carries
-		// `@:fmt(conditionalBodyIndent)` (compile-time `condBodyIndent`)
-		// AND the active `opt.conditionalPolicy` is `AlignedIncrease` OR
-		// `AlignedDecrease`. Both layouts accumulate the body `+1` per nesting
-		// depth identically (`_dn(_cols, …)`); `AlignedDecrease` then shifts the
-		// whole construct `-1` uniformly at render time via the
-		// `ConditionalMarkerDecrease` wrap (see `case3Doc` gate below). When
-		// false (default `Aligned`, `FixedZero`, every non-cond Star) the body
-		// assembly stays byte-identical. The enum is `Int`-backed so the
-		// comparison is a plain integer test in the hot path.
-		final condIncreaseGateExpr: Expr = condBodyIndent
-			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
-				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease)
-			: macro false;
-		// ω-cond-indent-policy AlignedNestedIncrease: distinct from the
-		// `condIncreaseGateExpr` body-nest above. Here the body assembly
-		// stays byte-identical to the default `Aligned` layout (the gate
-		// above is FALSE for AlignedNestedIncrease), and instead each body
-		// element that is ITSELF a nested `Conditional` is wrapped — markers
-		// AND guarded body together, plus its leading inter-element
-		// separator — one indent step deeper at the per-element splice site
-		// below. Recursion through each nested conditional's own body Star
-		// accumulates the shift per conditional depth, mirroring fork's
-		// `Indenter.calcConsecutiveConditionalLevel`. Only the cond-comp
-		// body Stars carry `condBodyIndent`, so every other tryparse Star
-		// consumer keeps the gate false → byte-identical.
-		final condNestedIncreaseGateExpr: Expr = condBodyIndent
-			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedNestedIncrease)
-			: macro false;
+		final priorAfterTrailEmit: Expr = triviaTryparsePriorAfterTrailEmit(priorAfterTrailExpr);
+		final finalWrapDocs: Expr = triviaTryparseFinalWrapDocs(lineLengthAwareSeps);
+		final condIncreaseGateExpr: Expr = triviaTryparseCondIncreaseGateExpr(condBodyIndent);
+		final condNestedIncreaseGateExpr: Expr = triviaTryparseCondNestedIncreaseGateExpr(condBodyIndent);
 		final lastTrailTerminatorEmit: Expr = macro {};
-		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` read from
-		// `opt.<metaLineEndOptField>` (default 0 = None when the flag is
-		// absent, byte-identical to pre-slice). Drives inter-element sep
-		// override AND post-Star hardline. Values mirror
-		// `anyparse.format.MetadataLineEndPolicy`:
-		//   0 = None (source-driven, default)
-		//   1 = After (every inter-meta sep → hardline)
-		//   2 = AfterLast (source-driven inter-meta, force trailing hardline)
-		//   3 = ForceAfterLast (collapse inter-meta to space, force trailing hardline)
+		// ω-metadata-line-end-function: runtime `_metaPolicy:Int` from
+		// `opt.<metaLineEndOptField>` (0 = None default, byte-identical).
 		final metaPolicyExpr: Expr = metaLineEndOptField != null ? optFieldAccess(metaLineEndOptField) : macro 0;
-		// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` adds an extra
-		// AND-clause to `_flatCase` that defers to the plugin-supplied
-		// `WriteOptions.caseBodyRefusesFlat` adapter (mirrors the
-		// `endsWithCloseBrace` pattern — engine never references the
-		// grammar plugin by name; the plugin's `defaultWriteOptions`
-		// wires its own predicate). Null adapter → no refusal (the gate
-		// short-circuits to `true`, preserving the dual flat-gate's
-		// verdict). Default `refuseFlatOnComplex=false` → predicate
-		// omitted entirely (other Star consumers stay byte-identical).
-		final shapeRefusalExpr: Expr = refuseFlatOnComplex
-			? (macro {
-				final _refuseFn: Null<Dynamic -> Bool> = opt.caseBodyRefusesFlat;
-				_refuseFn == null || !_refuseFn(_arr[0].node);
-			})
-			: (macro true);
-		// ω-blockended-trivia-tryparse (Session 3): inject `;` between two
-		// not-yet-statement-terminated elements. Null sepText /
-		// non-blockEnded → no-op.
-		//
-		// ω-phase-g (Session 4): source-fidelity OR `_arr[_si - 1].sepAfter`.
-		// Trust the parser: if it consumed a sep after the prior element,
-		// preserve it on output even when the prior already ends with `}`
-		// or `;` (covers source like `case x: if(c){body}; foo();` where
-		// the author wrote the redundant `;` after the brace). The
-		// `endsWithStmtTerminator` arm stays as a safety net for raw /
-		// programmatic AST inputs whose `Trivial<T>` defaults leave
-		// `sepAfter=false` even when the source shape demands a sep.
-		// ω-cond-indent-policy / nested-conditional-no-semi: a prior element
-		// that is itself a preprocessor `Conditional` (`#if … #end`) closes
-		// on `#end`, which `endsWithStmtTerminator` (a `}`/`;` right-spine
-		// byte check) cannot see — so the between-element `;` was injected
-		// after a nested conditional's `#end` (e.g. `#if x return a(); #end;
-		// a();`). Suppress it via the same plugin-supplied
-		// `opt.elementIsConditional` adapter: a `#end`-closed region needs no
-		// statement separator. Source-driven `sepAfter` still wins (an author
-		// who wrote a redundant `;` keeps it). Adapter-null formats fall back
-		// to the pre-existing byte-shape gate unchanged.
-		final tryparseBlockEndedSepEmit: Expr = (sepText != null && blockEnded)
-			? macro {
-				if (_si > 0 && _priorElemDoc != null && (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(
-					_priorElemDoc
-				) && !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node))))) {
-					_docs.push(_dt($v{sepText}));
-				}
-			}
-			: macro {};
-		// ω-blockended-trivia-tryparse-trail (Session 3): post-loop tail
-		// sep emit so the last element of a case-body keeps its source
-		// `;` (e.g. `case X: foo();` survives round-trip). `endsWithSemi`
-		// (not `endsWithStmtTerminator`) — see `blockTrailSepEmitExpr`
-		// rationale: under BlockBody Star sep-ownership a trailing `}`
-		// is the inner value's, not the stmt's terminator.
-		final tryparseBlockEndedTrailEmit: Expr = (sepText != null && blockEnded)
-			? macro {
-				if (
-					_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-					&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
-				) {
-					_docs.push(_dt($v{sepText}));
-				}
-			}
-			: macro {};
-		// B4 ω-implements-extends-wrap: dedicated heritage emit bypassing
-		// the shared incremental loop. MULTI-clause heritage packs clauses
-		// from the front via `Fill` and breaks the overflow clause(s) at
-		// additionalIndent 2 (8 spaces) — the fork `wrapping.implementsExtends`
-		// default FillLine layout. SINGLE-clause heritage stays byte-identical
-		// to the `lineLengthAwareSeps` path (`_dile` leading break at 1 tab,
-		// type params intact) so `extends_break_before_keyword_not_type_params`
-		// and the meta-priority single-clause cases hold. Falls back to a plain
-		// space-join when any clause carries leading/trailing comments (no
-		// fork-corpus heritage fixture exercises that path).
-		return {
-			final c: TryparseStarCtx = {
-				fieldAccess: fieldAccess,
-				trailBB: trailBB,
-				trailLC: trailLC,
-				trailBA: trailBA,
-				sepBeforeFirstExpr: sepBeforeFirstExpr,
-				nestBodyExpr: nestBodyExpr,
-				shapeRefusalExpr: shapeRefusalExpr,
-				flatGateExpr: flatGateExpr,
-				writerOptExpr: writerOptExpr,
-				padLeadingExpr: padLeadingExpr,
-				padTrailingExpr: padTrailingExpr,
-				metaPolicyExpr: metaPolicyExpr,
-				condIncreaseGateExpr: condIncreaseGateExpr,
-				condNestedIncreaseGateExpr: condNestedIncreaseGateExpr,
-				cascadeInitPrev: cascadeInitPrev,
-				cascadeInitCurr: cascadeInitCurr,
-				cascadeCurrCompute: cascadeCurrCompute,
-				cascadeTrackPrev: cascadeTrackPrev,
-				cascadeHeadEmit: cascadeHeadEmit,
-				cascadeBlanksCount: cascadeBlanksCount,
-				priorAfterTrailEmit: priorAfterTrailEmit,
-				padLeadingSpaceDoc: padLeadingSpaceDoc,
-				subsequentSepDoc: subsequentSepDoc,
-				firstSepExpr: firstSepExpr,
-				triviaElemCall: triviaElemCall,
-				triviaElemCallMaybeBreak: triviaElemCallMaybeBreak,
-				elemOptInit: elemOptInit,
-				tryparseBlockEndedSepEmit: tryparseBlockEndedSepEmit,
-				tryparseBlockEndedTrailEmit: tryparseBlockEndedTrailEmit,
-				lastTrailTerminatorEmit: lastTrailTerminatorEmit,
-				finalWrapDocs: finalWrapDocs,
-				forceInlineSep: forceInlineSep,
-			};
-			heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
-		}
+		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
+		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded);
+		final tryparseBlockEndedTrailEmit: Expr = triviaTryparseBlockEndedTrailEmit(sepText, blockEnded);
+		final c: TryparseStarCtx = {
+			fieldAccess: fieldAccess,
+			trailBB: trailBB,
+			trailLC: trailLC,
+			trailBA: trailBA,
+			sepBeforeFirstExpr: sepBeforeFirstExpr,
+			nestBodyExpr: nestBodyExpr,
+			shapeRefusalExpr: shapeRefusalExpr,
+			flatGateExpr: flatGateExpr,
+			writerOptExpr: writerOptExpr,
+			padLeadingExpr: padLeadingExpr,
+			padTrailingExpr: padTrailingExpr,
+			metaPolicyExpr: metaPolicyExpr,
+			condIncreaseGateExpr: condIncreaseGateExpr,
+			condNestedIncreaseGateExpr: condNestedIncreaseGateExpr,
+			cascadeInitPrev: cascadeInitPrev,
+			cascadeInitCurr: cascadeInitCurr,
+			cascadeCurrCompute: cascadeCurrCompute,
+			cascadeTrackPrev: cascadeTrackPrev,
+			cascadeHeadEmit: cascadeHeadEmit,
+			cascadeBlanksCount: cascadeBlanksCount,
+			priorAfterTrailEmit: priorAfterTrailEmit,
+			padLeadingSpaceDoc: padLeadingSpaceDoc,
+			subsequentSepDoc: subsequentSepDoc,
+			firstSepExpr: firstSepExpr,
+			triviaElemCall: triviaElemCall,
+			triviaElemCallMaybeBreak: triviaElemCallMaybeBreak,
+			elemOptInit: elemOptInit,
+			tryparseBlockEndedSepEmit: tryparseBlockEndedSepEmit,
+			tryparseBlockEndedTrailEmit: tryparseBlockEndedTrailEmit,
+			lastTrailTerminatorEmit: lastTrailTerminatorEmit,
+			finalWrapDocs: finalWrapDocs,
+			forceInlineSep: forceInlineSep,
+		};
+		return heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
 	}
 
 	/** Build `_dc([elem1, elem2, ...])` from a macro-time array of Exprs. */
@@ -14306,6 +14010,240 @@ class WriterLowering {
 				_dwb($finalWrapDocs);
 			}
 		};
+	}
+
+	/**
+	 * Tryparse-Star `writerOptExpr` builder (ω-expression-case-flat-fanout /
+	 * ω-issue-423-mech-a). Builds the `_writerOpt` Expr: plain `opt`, a
+	 * flat-only `_copyOpt` + per-pair field override, or (when
+	 * `propagateExprPosition`) an unconditional copy setting
+	 * `_inExprPosition = true`. Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseWriterOptExpr(flatChildOptPairs: Null<Array<Array<String>>>, propagateExprPosition: Bool): Expr {
+		final hasFlatChildOpt: Bool = flatChildOptPairs != null && flatChildOptPairs.length > 0;
+		return if (!hasFlatChildOpt && !propagateExprPosition)
+			macro opt;
+		else if (!propagateExprPosition) {
+			final block: Array<Expr> = [macro final _wo = _copyOpt(opt)];
+			for (pair in flatChildOptPairs) {
+				final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
+				final toAccess: Expr = optFieldAccess(pair[1]);
+				block.push(macro $fromAccess = $toAccess);
+			}
+			block.push(macro _wo);
+			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
+			macro (_flatCase ? $overrideBlock : opt);
+		} else {
+			// Wrap each `macro` expression in parens — array-literal `,` after
+			// a `macro final ... = ...` reification fragment otherwise mis-parses
+			// (the parser treats `macro` as a variable name in the next element).
+			final block: Array<Expr> = [
+				(macro final _wo = _copyOpt(opt)),
+				(macro _wo._inExprPosition = true),
+			];
+			if (hasFlatChildOpt) {
+				final flatOnlyParts: Array<Expr> = [
+					for (pair in flatChildOptPairs) {
+						final fromAccess: Expr = { expr: EField(macro _wo, pair[0]), pos: Context.currentPos() };
+						final toAccess: Expr = optFieldAccess(pair[1]);
+						macro $fromAccess = $toAccess;
+					}
+				];
+				final flatOnlyExpr: Expr = { expr: EBlock(flatOnlyParts), pos: Context.currentPos() };
+				block.push(macro if (_flatCase) $flatOnlyExpr);
+			}
+			block.push(macro _wo);
+			final overrideBlock: Expr = { expr: EBlock(block), pos: Context.currentPos() };
+			overrideBlock;
+		};
+	}
+
+	/**
+	 * Tryparse-Star `flatGateExpr` builder (ω-case-body-policy /
+	 * ω-issue-423-mech-a). Builds the runtime flatten gate from the
+	 * `@:fmt(bodyPolicy(...))` flag names: single-flag, dual-flag (dispatch
+	 * on `opt._inExprPosition`), or `false`. Extracted from
+	 * `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseFlatGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
+		if (caseBodyFlagNames != null && caseBodyFlagNames.length > 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(bodyPolicy(...)) takes at most 2 args (stmtFlag, exprFlag), got ${caseBodyFlagNames.length}',
+				Context.currentPos()
+			);
+		return if (caseBodyFlagNames == null || caseBodyFlagNames.length == 0)
+			macro false;
+		else if (caseBodyFlagNames.length == 1)
+			buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
+		else {
+			final stmtPred: Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[0]);
+			final exprPred: Expr = buildCaseBodyFlagPredicate(caseBodyFlagNames[1]);
+			macro (opt._inExprPosition ? $exprPred : $stmtPred);
+		};
+	}
+
+	/**
+	 * Tryparse-Star element-call Expr group (caseTailOptArg / triviaElemCall /
+	 * triviaElemCallMaybeBreak / elemOptInit). Builds the per-element writer
+	 * call and the operand-break opt init. Extracted from
+	 * `triviaTryparseStarExpr` so the orchestrator stays under the
+	 * complexity gate.
+	 */
+	private static function triviaTryparseElemCallExprs(
+		elemFn: String, clearExprPositionNonTail: Bool, operandBreakAfterMultilineBrace: Bool
+	): { triviaElemCall: Expr, triviaElemCallMaybeBreak: Expr, elemOptInit: Expr } {
+		// ω-value-yielded-if-tail-barrier (case-body extension): the per-element
+		// opt argument. When `clearExprPositionNonTail` is set (case / default
+		// body Star), every body statement EXCEPT the tail gets
+		// `_clearExprPosition` so a discarded statement-if reverts to the
+		// statement-position `ifBody` policy; only the body's last statement
+		// (the switch's yielded value at expression position) keeps the
+		// inherited frame. `_si` / `_arr` are in scope at the element-call
+		// splice. Flag off ⇒ the IDENTICAL `_writerOpt` Doc as before.
+		final caseTailOptArg: Expr = clearExprPositionNonTail
+			? macro (_si == _arr.length - 1 ? _writerOpt : _clearExprPosition(_writerOpt))
+			: macro _writerOpt;
+		final triviaElemCall: Expr = {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
+			pos: Context.currentPos(),
+		};
+		// ω-typedef-intersection-operand-break: per-iteration element call for
+		// the MAIN inter-element loop only (the heritage/wrap fast paths keep
+		// `triviaElemCall`/`_writerOpt`). Flag off (every Star but
+		// `HxTypedefDecl.intersections`) ⇒ identical to `triviaElemCall`,
+		// byte-inert. Flag on ⇒ when the prior element rendered multi-line AND
+		// ended with a close delim, hand the element a `_copyOpt` with
+		// `_intersectionOperandBreak = true` so its
+		// `@:fmt(typedefIntersectionBreak)` lead breaks `&\n\t` before the
+		// operand; otherwise the shared `_writerOpt` (stays glued — no copy,
+		// no mutation of the shared opt).
+		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace
+			? {
+				expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
+				pos: Context.currentPos(),
+			}
+			: triviaElemCall;
+		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
+		// nested EBlock — that would isolate `_elemOpt` from the element call).
+		// Flag on ⇒ when the prior element rendered multi-line AND ended with a
+		// close delim, fan the opt through `_setIntersectionBreak` (idempotent
+		// `_copyOpt` + flag set), else the shared `_writerOpt` (no copy, shared
+		// opt untouched). Flag off ⇒ `macro {}` (no local — `triviaElemCall`
+		// uses `_writerOpt` directly, byte-identical to the pre-slice loop).
+		final elemOptInit: Expr = operandBreakAfterMultilineBrace
+			? macro final _elemOpt = (_priorElemDoc != null && anyparse.format.wrap.WrapList.flatLength(_priorElemDoc) < 0
+				&& anyparse.format.wrap.WrapList.endsWithCloseDelim(_priorElemDoc))
+				? _setIntersectionBreak(_writerOpt)
+				: _writerOpt
+			: macro {};
+		return { triviaElemCall: triviaElemCall, triviaElemCallMaybeBreak: triviaElemCallMaybeBreak, elemOptInit: elemOptInit };
+	}
+
+	/**
+	 * Tryparse-Star `priorAfterTrailEmit` builder
+	 * (ω-trivia-tryparse-prior-after-trail): inline-emit the prev-field's
+	 * same-line trail comment before padLeading. Null slot ⇒ no-op.
+	 * Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparsePriorAfterTrailEmit(priorAfterTrailExpr: Null<Expr>): Expr {
+		return priorAfterTrailExpr == null
+			? macro {}
+			: macro {
+				final _pat: Null<String> = $priorAfterTrailExpr;
+				if (_pat != null) _docs.push(trailingCommentDoc(_pat, opt));
+			};
+	}
+
+	/**
+	 * Tryparse-Star `finalWrapDocs` builder (ω-trivia-tryparse-linelength):
+	 * the default-branch terminal Doc — `_dc(_docs)` plus, when
+	 * `lineLengthAwareSeps`, a `_dn` nest and a last-element trail
+	 * terminator. Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseFinalWrapDocs(lineLengthAwareSeps: Bool): Expr {
+		return lineLengthAwareSeps
+			? macro _dc([
+				_dn(_cols, _dc(_docs)),
+				(_arr.length > 0 && _arr[_arr.length - 1].trailingComment != null) ? _dhl() : _de()
+			])
+			: macro _dc(_docs);
+	}
+
+	/**
+	 * Tryparse-Star `shapeRefusalExpr` builder (ω-issue-423-mech-b): the
+	 * extra `_flatCase` AND-clause deferring to the plugin-supplied
+	 * `caseBodyRefusesFlat` adapter. Default `false` ⇒ `macro true`.
+	 * Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseShapeRefusalExpr(refuseFlatOnComplex: Bool): Expr {
+		return refuseFlatOnComplex
+			? (macro {
+				final _refuseFn: Null<Dynamic -> Bool> = opt.caseBodyRefusesFlat;
+				_refuseFn == null || !_refuseFn(_arr[0].node);
+			})
+			: (macro true);
+	}
+
+	/**
+	 * Tryparse-Star `tryparseBlockEndedSepEmit` builder
+	 * (ω-blockended-trivia-tryparse): inject `sepText` between two not-yet-
+	 * statement-terminated elements. Null sepText / non-blockEnded ⇒ no-op.
+	 * Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseBlockEndedSepEmit(sepText: Null<String>, blockEnded: Bool): Expr {
+		return (sepText != null && blockEnded)
+			? macro {
+				if (_si > 0 && _priorElemDoc != null && (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(
+					_priorElemDoc
+				) && !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node))))) {
+					_docs.push(_dt($v{sepText}));
+				}
+			}
+			: macro {};
+	}
+
+	/**
+	 * Tryparse-Star `tryparseBlockEndedTrailEmit` builder
+	 * (ω-blockended-trivia-tryparse-trail): post-loop tail sep so the last
+	 * element keeps its source `;`. Null sepText / non-blockEnded ⇒ no-op.
+	 * Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseBlockEndedTrailEmit(sepText: Null<String>, blockEnded: Bool): Expr {
+		return (sepText != null && blockEnded)
+			? macro {
+				if (
+					_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
+					&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
+				) {
+					_docs.push(_dt($v{sepText}));
+				}
+			}
+			: macro {};
+	}
+
+	/**
+	 * Tryparse-Star `condIncreaseGateExpr` builder (ω-cond-indent-policy):
+	 * runtime gate true when `condBodyIndent` AND the active
+	 * `opt.conditionalPolicy` is AlignedIncrease / AlignedDecrease.
+	 * Extracted from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseCondIncreaseGateExpr(condBodyIndent: Bool): Expr {
+		return condBodyIndent
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedIncrease
+				|| opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease)
+			: macro false;
+	}
+
+	/**
+	 * Tryparse-Star `condNestedIncreaseGateExpr` builder (ω-cond-indent-policy
+	 * AlignedNestedIncrease): per-element gate true when `condBodyIndent` AND
+	 * the active `opt.conditionalPolicy` is AlignedNestedIncrease. Extracted
+	 * from `triviaTryparseStarExpr`.
+	 */
+	private static function triviaTryparseCondNestedIncreaseGateExpr(condBodyIndent: Bool): Expr {
+		return condBodyIndent
+			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedNestedIncrease)
+			: macro false;
 	}
 
 }
