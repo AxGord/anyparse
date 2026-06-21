@@ -90,6 +90,8 @@ class D {
 	 * limitation, mirroring fork's behaviour).
 	 */
 	public static function flatten(d: Doc): Doc {
+		final conditional: Null<Doc> = flattenConditional(d);
+		if (conditional != null) return conditional;
 		return switch d {
 			case Empty: Empty;
 			case Text(_): d;
@@ -98,21 +100,11 @@ class D {
 			case Group(inner) | GroupWithRestProbe(inner): flatten(inner);
 			case BodyGroup(inner): flatten(inner);
 			case Concat(items): Concat([for (i in items) flatten(i)]);
-			case IfBreak(_, fl): flatten(fl);
-			case IfWidthExceeds(_, _, fl): flatten(fl);
-			case IfFirstLineExceeds(_, _, fl): flatten(fl);
-			case IfLineExceeds(_, _, fl): flatten(fl);
-			case IfFullLineExceeds(_, _, fl): flatten(fl);
-			case IfNaturalFirstLineExceeds(_, _, fl): flatten(fl);
-			case IfNaturalFirstLineFitsOpenDelim(_, _, fl): flatten(fl);
-			case IfArrowContinuationFits(_, _, _, _, fl): flatten(fl);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 				final flatSep: Doc = flatten(sep);
 				Concat(intersperse([for (i in items) flatten(i)], flatSep));
 			case OptSpace(s): Text(s);
-			case OptHardline: Empty;
-			case OptHardlineSkipAtOpenDelim: Empty;
-			case OptHardlineSkipBeforeHardline: Empty;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline: Empty;
 			case OptSpaceSkipAfterHardline:
 				Text(' ');
 			// ω-force-flat-engine slice A: all four markers collapse —
@@ -135,6 +127,32 @@ class D {
 			// `inner`. The uniform -1 re-indent is render-only and moot under a
 			// forced-flat collapse.
 			case ConditionalMarkerDecrease(inner): flatten(inner);
+			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(
+				_, _, _
+			) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
+				// Handled above by `flattenConditional`; unreachable here, kept
+				// only for switch exhaustiveness.
+				Empty;
+		};
+	}
+
+	/**
+	 * Flatten a conditional `If*` kind by descending into its flat branch, or
+	 * `null` when `d` is not an `If*`. Every variant forwards to its flat side —
+	 * the broken branch is moot once an outer `flatten` commits to flat shape.
+	 * Split out of `flatten` to keep it under the complexity threshold.
+	 */
+	private static function flattenConditional(d: Doc): Null<Doc> {
+		return switch d {
+			case IfBreak(_, fl): flatten(fl);
+			case IfWidthExceeds(_, _, fl): flatten(fl);
+			case IfFirstLineExceeds(_, _, fl): flatten(fl);
+			case IfLineExceeds(_, _, fl): flatten(fl);
+			case IfFullLineExceeds(_, _, fl): flatten(fl);
+			case IfNaturalFirstLineExceeds(_, _, fl): flatten(fl);
+			case IfNaturalFirstLineFitsOpenDelim(_, _, fl): flatten(fl);
+			case IfArrowContinuationFits(_, _, _, _, fl): flatten(fl);
+			case _: null;
 		};
 	}
 
