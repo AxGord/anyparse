@@ -4099,78 +4099,42 @@ final class Cli {
 	 * note (the precise `uses`/`refs` sections still print).
 	 */
 	private static function runBlast(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var limit: Int = -1;
-		var showAll: Bool = false;
-		var name: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '--all':
-					showAll = true;
-				case '-h', '--help':
-					printBlastUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq blast: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (name == null)
-						name = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: BlastOpts = parseBlastArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final name: Null<String> = o.name;
 		if (name == null) {
 			stderr('apq blast: missing <type-name> argument\n');
 			printBlastUsage();
 			return EXIT_USAGE;
 		}
-		if (inputSpecs.length == 0) {
+		if (o.inputSpecs.length == 0) {
 			stderr('apq blast: missing <file-or-dir-or-glob> argument\n');
 			printBlastUsage();
 			return EXIT_USAGE;
 		}
 		final typeName: String = name;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final refShape: RefShape = plugin.refShape();
 		final typeShape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq blast: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq blast: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
 		// Pass 1: learn the type's member names + the spans of its own
 		// declaration(s) (to exclude the decl's internals from the
 		// heuristic). Walks the value-AST of every file once; cached for
-		// pass 2.
+		// the section passes below. NOT pre-filtered on `typeName`: the
+		// heuristic field-access section matches MEMBER names, which can
+		// occur in files that never name the type textually
+		// (`obj.someField` with no mention of the type).
 		final memberNames: Array<String> = [];
 		final declSpans: Array<Span> = [];
 		final valueTrees: Array<{ path: String, source: String, tree: QueryNode }> = [];
-		// Pass 1 is NOT pre-filtered on `typeName`: the heuristic
-		// field-access section (Section 3) matches MEMBER names, which
-		// can occur in files that never name the type textually
-		// (`obj.someField` with no mention of the type). Dropping such a
-		// file would lose a heuristic hit, so every file is parsed here.
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = readSourceForParse(path);
@@ -4185,42 +4149,13 @@ final class Cli {
 		}
 
 		var any: Bool = false;
+		// Section 1 — type-position references (precise). Section 2 —
+		// value-binding references (precise). Section 3 — heuristic
+		// member-name field-access (superset). Order is fixed (precise
+		// before heuristic); each section returns whether it printed a hit.
+		if (blastUsesSection(valueTrees, typeName, typeShape, plugin, expanded.singleFile, o.flat)) any = true;
+		if (blastRefsSection(valueTrees, typeName, refShape, o.flat)) any = true;
 
-		// Section 1 — type-position references (precise). The header is
-		// emitted once, before the first file with a hit. The type-refs
-		// re-parse IS pre-filtered on `typeName`: a type-position match
-		// always names the type verbatim, so a file lacking that
-		// substring cannot contribute a `uses` hit.
-		var usesHeader: Bool = false;
-		for (entry in valueTrees) {
-			final typeTree: Null<QueryNode> = parseWalked(
-				'blast', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile, null, typeName
-			);
-			if (typeTree == null) continue;
-			final hits: Array<UsesHit> = Uses.find(typeName, typeTree, typeShape);
-			if (hits.length == 0) continue;
-			any = true;
-			if (!usesHeader) {
-				sysPrint('# uses (type positions)\n');
-				usesHeader = true;
-			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
-		}
-
-		// Section 2 — value-binding references (precise).
-		var refsHeader: Bool = false;
-		for (entry in valueTrees) {
-			final hits: Array<RefHit> = Refs.find(typeName, entry.tree, refShape);
-			if (hits.length == 0) continue;
-			any = true;
-			if (!refsHeader) {
-				sysPrint('# refs (value bindings)\n');
-				refsHeader = true;
-			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
-		}
-
-		// Section 3 — heuristic member-name field-access (superset).
 		if (memberNames.length == 0) {
 			stderr(
 				'apq blast: no declaration of "$typeName" in the scanned set — '
@@ -4229,32 +4164,7 @@ final class Cli {
 			if (!any) stderr('apq blast: no uses / refs of "$typeName" found\n');
 			return emptyExit(!any);
 		}
-		final heur: Array<{ loc: String, line: String }> = [];
-		for (entry in valueTrees) collectMemberAccess(entry.tree, memberNames, declSpans, entry.path, entry.source, heur);
-		if (heur.length > 0) {
-			// Smart-default cap on the heuristic section — the typical
-			// transcript pain is `blast` flooding hundreds of `.member`
-			// lines when the type's member names are common identifiers
-			// (`.name`, `.type`, `.value`). Without `--limit` the
-			// heuristic now caps at HEUR_DEFAULT_CAP and prints a hint
-			// pointing at `--all` (no cap) or `--limit N` (explicit).
-			// Precise `uses` / `refs` sections above stay uncapped — they
-			// are name-bound and rarely flood.
-			final defaultCap: Int = showAll ? -1 : HEUR_DEFAULT_CAP;
-			final effectiveLimit: Int = limit >= 0 ? limit : defaultCap;
-			final capped: Array<{ loc: String, line: String }> = (effectiveLimit >= 0 && heur.length > effectiveLimit)
-				? heur.slice(0, effectiveLimit)
-				: heur;
-			final hint: String = (capped.length < heur.length)
-				? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap')
-				: '';
-			sysPrint(
-				'# heuristic field-access (member-name superset of "$typeName" — VERIFY each; '
-				+ 'name-based, over-matches; ${capped.length}/${heur.length} shown$hint)\n'
-			);
-			for (h in capped) sysPrint('${h.line}\n');
-			any = true;
-		}
+		if (blastHeuristicSection(valueTrees, memberNames, declSpans, typeName, o.showAll, o.limit)) any = true;
 
 		if (!any) stderr('apq blast: no uses / refs / member-access of "$typeName" found\n');
 		return emptyExit(!any);
@@ -11308,6 +11218,139 @@ final class Cli {
 		return allEntries;
 	}
 
+	private static inline function blastParseExit(code: Int): BlastOpts {
+		return {
+			lang: '',
+			flat: false,
+			limit: -1,
+			showAll: false,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseBlastArgs(args: Array<String>): BlastOpts {
+		var lang: String = 'haxe';
+		var flat: Bool = false;
+		var limit: Int = -1;
+		var showAll: Bool = false;
+		var name: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return blastParseExit(EXIT_USAGE);
+					}
+				case '--all':
+					showAll = true;
+				case '-h', '--help':
+					printBlastUsage();
+					return blastParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq blast: unknown option "$a"\n');
+						return blastParseExit(EXIT_USAGE);
+					}
+					if (name == null)
+						name = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			flat: flat,
+			limit: limit,
+			showAll: showAll,
+			name: name,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function blastUsesSection(
+		valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, typeName: String, typeShape: TypeRefShape,
+		plugin: GrammarPlugin, singleFile: Bool, flat: Bool
+	): Bool {
+		var any: Bool = false;
+		var usesHeader: Bool = false;
+		for (entry in valueTrees) {
+			final typeTree: Null<QueryNode> = parseWalked(
+				'blast', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, typeName
+			);
+			if (typeTree == null) continue;
+			final hits: Array<UsesHit> = Uses.find(typeName, typeTree, typeShape);
+			if (hits.length == 0) continue;
+			any = true;
+			if (!usesHeader) {
+				sysPrint('# uses (type positions)\n');
+				usesHeader = true;
+			}
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
+		}
+		return any;
+	}
+
+	private static function blastRefsSection(
+		valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, typeName: String, refShape: RefShape, flat: Bool
+	): Bool {
+		var any: Bool = false;
+		var refsHeader: Bool = false;
+		for (entry in valueTrees) {
+			final hits: Array<RefHit> = Refs.find(typeName, entry.tree, refShape);
+			if (hits.length == 0) continue;
+			any = true;
+			if (!refsHeader) {
+				sysPrint('# refs (value bindings)\n');
+				refsHeader = true;
+			}
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
+		}
+		return any;
+	}
+
+	private static function blastHeuristicSection(
+		valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, memberNames: Array<String>, declSpans: Array<Span>,
+		typeName: String, showAll: Bool, limit: Int
+	): Bool {
+		final heur: Array<{ loc: String, line: String }> = [];
+		for (entry in valueTrees) collectMemberAccess(entry.tree, memberNames, declSpans, entry.path, entry.source, heur);
+		if (heur.length == 0) return false;
+		// Smart-default cap on the heuristic section — the typical
+		// transcript pain is `blast` flooding hundreds of `.member`
+		// lines when the type's member names are common identifiers
+		// (`.name`, `.type`, `.value`). Without `--limit` the
+		// heuristic caps at HEUR_DEFAULT_CAP and prints a hint
+		// pointing at `--all` (no cap) or `--limit N` (explicit).
+		// Precise `uses` / `refs` sections stay uncapped — they
+		// are name-bound and rarely flood.
+		final defaultCap: Int = showAll ? -1 : HEUR_DEFAULT_CAP;
+		final effectiveLimit: Int = limit >= 0 ? limit : defaultCap;
+		final capped: Array<{ loc: String, line: String }> = (effectiveLimit >= 0 && heur.length > effectiveLimit)
+			? heur.slice(0, effectiveLimit)
+			: heur;
+		final hint: String = (
+			capped.length < heur.length
+		) ? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap') : '';
+		sysPrint(
+			'# heuristic field-access (member-name superset of "$typeName" — VERIFY each; '
+			+ 'name-based, over-matches; ${capped.length}/${heur.length} shown$hint)\n'
+		);
+		for (h in capped) sysPrint('${h.line}\n');
+		return true;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11387,6 +11430,18 @@ typedef MetaOpts = {
 	var flat: Bool;
 	var limit: Int;
 	var positionals: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef BlastOpts = {
+	var lang: String;
+	var flat: Bool;
+	var limit: Int;
+	var showAll: Bool;
+	var name: Null<String>;
+	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
