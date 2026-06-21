@@ -1195,63 +1195,8 @@ class Renderer {
 			final inner: Array<{ doc: Doc, mode: Mode }> = [{ doc: f.doc, mode: f.mode }];
 			while (inner.length > 0) {
 				final nd: { doc: Doc, mode: Mode } = inner.pop();
-				switch nd.doc {
-					case Empty | OptSpace(_) | OptSpaceSkipAfterHardline:
-					case Text(s):
-						for (ci in 0...s.length) {
-							final c: Int = StringTools.fastCodeAt(s, ci);
-							if (c == ' '.code || c == '\t'.code) continue;
-							if (c == ')'.code || c == ']'.code || c == '}'.code || c == ';'.code || c == ','.code) continue;
-							return true;
-						}
-					case Line(flat):
-						// Only a FORCED hardline (`\n` flat-replacement) terminates
-						// the trailing-content scan — a soft `Line` is mode-decided
-						// by an enclosing Group whose break verdict is NOT yet made
-						// at the paren's render point (single-pass commit). Whether
-						// the trailing chain (`/ 2 - X`) ultimately rides the close
-						// line or wraps is irrelevant to the STRUCTURAL question the
-						// fork's `collapseChainBreaksAfter` asks: "is there a binary
-						// continuation after the close `)` at all". So descend PAST a
-						// soft Line and keep scanning for a real token.
-						if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)
-							return false;
-					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-						return false;
-					case Nest(_, innerDoc):
-						inner.push({ doc: innerDoc, mode: nd.mode });
-					case Concat(items):
-						var k: Int = items.length;
-						while (--k >= 0) inner.push({ doc: items[k], mode: nd.mode });
-					case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
-						inner.push({ doc: innerDoc, mode: MFlat });
-					case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfFullLineExceeds(
-						_, _, fl
-					) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
-						_, _, _, _, fl
-					):
-						inner.push({ doc: fl, mode: MFlat });
-					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-						var k: Int = items.length;
-						while (k > 0) {
-							k--;
-							inner.push({ doc: items[k], mode: MFlat });
-							if (k > 0)
-								inner.push({ doc: sep, mode: MFlat });
-						}
-					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(
-						innerDoc
-					) | CollapseBoolProbe(innerDoc) | CollapseChainProbe(innerDoc):
-						inner.push({ doc: innerDoc, mode: nd.mode });
-					case ConditionalMarkerZero(innerDoc):
-						// ω-cond-indent-policy FixedZero: render-time marker,
-						// transparent to the trailing-content scan — descend `inner`.
-						inner.push({ doc: innerDoc, mode: nd.mode });
-					case ConditionalMarkerDecrease(innerDoc):
-						// ω-cond-indent-policy AlignedDecrease: render-time marker,
-						// transparent to the trailing-content scan — descend `inner`.
-						inner.push({ doc: innerDoc, mode: nd.mode });
-				}
+				final step: Null<Bool> = trailingScanStep(nd, inner);
+				if (step != null) return step;
 			}
 		}
 		return false;
@@ -2556,6 +2501,87 @@ class Renderer {
 			}
 		}
 		return total;
+	}
+
+	/**
+	 * One step of `restStackHasTrailingContent`'s inner-doc scan. Pushes any
+	 * structural children onto `inner` for continued scanning. Returns `null`
+	 * to keep scanning, `true` when a non-trivial trailing token was found,
+	 * `false` when a hardline boundary terminates the scan.
+	 */
+	private static function trailingScanStep(nd: { doc: Doc, mode: Mode }, inner: Array<{ doc: Doc, mode: Mode }>): Null<Bool> {
+		switch nd.doc {
+			case Empty | OptSpace(_) | OptSpaceSkipAfterHardline:
+				return null;
+			case Text(s):
+				return textHasTrailingContent(s) ? true : null;
+			case Line(flat):
+				// Only a FORCED hardline (`\n` flat-replacement) terminates
+				// the trailing-content scan — a soft `Line` is mode-decided
+				// by an enclosing Group whose break verdict is NOT yet made
+				// at the paren's render point (single-pass commit). Whether
+				// the trailing chain (`/ 2 - X`) ultimately rides the close
+				// line or wraps is irrelevant to the STRUCTURAL question the
+				// fork's `collapseChainBreaksAfter` asks: "is there a binary
+				// continuation after the close `)` at all". So descend PAST a
+				// soft Line and keep scanning for a real token.
+				return (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) ? false : null;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				return false;
+			case Nest(_, innerDoc):
+				inner.push({ doc: innerDoc, mode: nd.mode });
+				return null;
+			case Concat(items):
+				var k: Int = items.length;
+				while (--k >= 0) inner.push({ doc: items[k], mode: nd.mode });
+				return null;
+			case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
+				inner.push({ doc: innerDoc, mode: MFlat });
+				return null;
+			case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfFullLineExceeds(
+				_, _, fl
+			) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(_, _, _, _, fl):
+				inner.push({ doc: fl, mode: MFlat });
+				return null;
+			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+				var k: Int = items.length;
+				while (k > 0) {
+					k--;
+					inner.push({ doc: items[k], mode: MFlat });
+					if (k > 0) inner.push({ doc: sep, mode: MFlat });
+				}
+				return null;
+			case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(innerDoc) | CollapseBoolProbe(
+				innerDoc
+			) | CollapseChainProbe(innerDoc):
+				inner.push({ doc: innerDoc, mode: nd.mode });
+				return null;
+			case ConditionalMarkerZero(innerDoc):
+				// ω-cond-indent-policy FixedZero: render-time marker,
+				// transparent to the trailing-content scan — descend `inner`.
+				inner.push({ doc: innerDoc, mode: nd.mode });
+				return null;
+			case ConditionalMarkerDecrease(innerDoc):
+				// ω-cond-indent-policy AlignedDecrease: render-time marker,
+				// transparent to the trailing-content scan — descend `inner`.
+				inner.push({ doc: innerDoc, mode: nd.mode });
+				return null;
+		}
+	}
+
+	/**
+	 * `true` when `s` contains any character that counts as trailing content
+	 * after a close `)` — i.e. a non-whitespace char other than a closing
+	 * delimiter / `;` / `,`.
+	 */
+	private static function textHasTrailingContent(s: String): Bool {
+		for (ci in 0...s.length) {
+			final c: Int = StringTools.fastCodeAt(s, ci);
+			if (c == ' '.code || c == '\t'.code) continue;
+			if (c == ')'.code || c == ']'.code || c == '}'.code || c == ';'.code || c == ','.code) continue;
+			return true;
+		}
+		return false;
 	}
 
 }
