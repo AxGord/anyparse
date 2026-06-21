@@ -12403,120 +12403,39 @@ class WriterLowering {
 			);
 		final fieldName: String = args[0];
 		final countOptField: String = args[args.length - 1];
-		final pipeIdx: Int = args.indexOf('|');
-		if (pipeIdx < 2 || pipeIdx > args.length - 3)
-			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires a "|" separator between subset A and subset B (with at least one ctor on each side); got args ${args}',
-				Context.currentPos()
-			);
-		final ctorNamesA: Array<String> = args.slice(1, pipeIdx);
-		final ctorNamesB: Array<String> = args.slice(pipeIdx + 1, args.length - 1);
-		if (ctorNamesA.length == 0 || ctorNamesB.length == 0)
-			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires at least one ctor on each side of "|"', Context.currentPos()
-			);
-		for (name in ctorNamesA) if (ctorNamesB.indexOf(name) >= 0)
-			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears in both subset A and subset B — must be in exactly one',
-				Context.currentPos()
-			);
-		for (name in ctorNamesA) if (transparentCtorNames.indexOf(name) >= 0)
-			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears both as a matched (subset A) and transparent ctor on the same Star — must be one or the other',
-				Context.currentPos()
-			);
-		for (name in ctorNamesB) if (transparentCtorNames.indexOf(name) >= 0)
-			Context.fatalError(
-				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears both as a matched (subset B) and transparent ctor on the same Star — must be one or the other',
-				Context.currentPos()
-			);
+		final split: TransitionAcrossSplit = splitTransitionAcrossCtors(args, transparentCtorNames);
+		final ctorNamesA: Array<String> = split.ctorNamesA;
+		final ctorNamesB: Array<String> = split.ctorNamesB;
 		final r: { enumRule: ShapeNode, enumRuleName: String } = resolveClassifierEnum(
 			elemRefName, fieldName, 'blankLinesOnTransitionAcross'
 		);
 		final enumRule: ShapeNode = r.enumRule;
 		final enumRuleName: String = r.enumRuleName;
-		final pos: Position = Context.currentPos();
-		final patterns: Array<TransitionAcrossPattern> = [];
-		final matchedA: Array<String> = [];
-		final matchedB: Array<String> = [];
-		final transparentMatched: Array<String> = [];
-		for (branch in enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
-			if (ctorName == null) continue;
-			final shapeArity: Int = branch.children.length;
-			// In trivia mode, ctors with `@:trailOpt` / `@:lead` close-trailing /
-			// `@:fmt(captureSource)` carry a synthesized positional arg appended
-			// to the synth ctor (`HxDeclT.TypedefDecl(decl, trailPresent)`). The
-			// pattern arity must match the synth ctor's full arity, otherwise
-			// the generated switch fails with "Not enough arguments". Helper
-			// returns 0 outside trivia mode or for non-bearing enums.
-			final arity: Int = shapeArity + branchSynthExtraArity(enumRuleName, branch);
-			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final inA: Bool = ctorNamesA.indexOf(ctorName) >= 0;
-			final inB: Bool = !inA && ctorNamesB.indexOf(ctorName) >= 0;
-			final isTransparent: Bool = !inA && !inB && transparentCtorNames.indexOf(ctorName) >= 0;
-			if (inA) {
-				matchedA.push(ctorName);
-				final binders: Array<Expr> = arity == 0
-					? []
-					: [
-						for (i in 0...arity) i == 0 ? macro _v0 : macro _
-					];
-				patterns.push({
-					pattern: arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, binders), pos: pos },
-					subset: 1,
-				});
-			} else if (inB) {
-				matchedB.push(ctorName);
-				final binders: Array<Expr> = arity == 0
-					? []
-					: [
-						for (i in 0...arity) i == 0 ? macro _v0 : macro _
-					];
-				patterns.push({
-					pattern: arity == 0 ? ctorIdent : { expr: ECall(ctorIdent, binders), pos: pos },
-					subset: 2,
-				});
-			} else if (isTransparent) {
-				if (shapeArity < 1)
-					Context.fatalError(
-						'WriterLowering: @:fmt(blankLinesOnTransitionAcross) transparent ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf classifier adapters); got arity $shapeArity',
-						Context.currentPos()
-					);
-				transparentMatched.push(ctorName);
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
-				patterns.push({
-					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
-					subset: 3,
-				});
-			} else {
-				final pattern: Expr = arity == 0
-					? ctorIdent
-					: {
-						expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-						pos: pos
-					};
-				patterns.push({ pattern: pattern, subset: 0 });
-			}
-		}
-		for (name in ctorNamesA) if (matchedA.indexOf(name) < 0)
+		final built: TransitionAcrossPatterns = buildTransitionAcrossPatterns({
+			enumRule: enumRule,
+			enumRuleName: enumRuleName,
+			ctorNamesA: ctorNamesA,
+			ctorNamesB: ctorNamesB,
+			transparentCtorNames: transparentCtorNames,
+		});
+		for (name in ctorNamesA) if (built.matchedA.indexOf(name) < 0)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) subset A ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
-		for (name in ctorNamesB) if (matchedB.indexOf(name) < 0)
+		for (name in ctorNamesB) if (built.matchedB.indexOf(name) < 0)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) subset B ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
-		for (name in transparentCtorNames) if (transparentMatched.indexOf(name) < 0)
+		for (name in transparentCtorNames) if (built.transparentMatched.indexOf(name) < 0)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
 		return {
 			classifierFieldName: fieldName,
-			ctorPatterns: patterns,
+			ctorPatterns: built.patterns,
 			matchedCtorNamesA: ctorNamesA.copy(),
 			matchedCtorNamesB: ctorNamesB.copy(),
 			countOptField: countOptField,
@@ -14193,6 +14112,113 @@ class WriterLowering {
 		return cases;
 	}
 
+	/**
+	 * Split the `@:fmt(blankLinesOnTransitionAcross)` arg list into subset A
+	 * and subset B around the `"|"` separator and run the pre-loop validation
+	 * gates (separator position, non-empty sides, A/B disjointness, and
+	 * matched-vs-transparent disjointness). Extracted from
+	 * `buildTransitionAcrossInfo`.
+	 */
+	private static function splitTransitionAcrossCtors(args: Array<String>, transparentCtorNames: Array<String>): TransitionAcrossSplit {
+		final pipeIdx: Int = args.indexOf('|');
+		if (pipeIdx < 2 || pipeIdx > args.length - 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires a "|" separator between subset A and subset B (with at least one ctor on each side); got args ${args}',
+				Context.currentPos()
+			);
+		final ctorNamesA: Array<String> = args.slice(1, pipeIdx);
+		final ctorNamesB: Array<String> = args.slice(pipeIdx + 1, args.length - 1);
+		if (ctorNamesA.length == 0 || ctorNamesB.length == 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) requires at least one ctor on each side of "|"', Context.currentPos()
+			);
+		for (name in ctorNamesA) if (ctorNamesB.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears in both subset A and subset B — must be in exactly one',
+				Context.currentPos()
+			);
+		for (name in ctorNamesA) if (transparentCtorNames.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears both as a matched (subset A) and transparent ctor on the same Star — must be one or the other',
+				Context.currentPos()
+			);
+		for (name in ctorNamesB) if (transparentCtorNames.indexOf(name) >= 0)
+			Context.fatalError(
+				'WriterLowering: @:fmt(blankLinesOnTransitionAcross) ctor "$name" appears both as a matched (subset B) and transparent ctor on the same Star — must be one or the other',
+				Context.currentPos()
+			);
+		return { ctorNamesA: ctorNamesA, ctorNamesB: ctorNamesB };
+	}
+
+	/**
+	 * Build the per-ctor switch patterns for a transition-across classifier.
+	 * Extracted from `buildTransitionAcrossInfo` — the per-branch loop that
+	 * assigns each enum ctor to subset 1 (A) / 2 (B) / 3 (transparent) / 0
+	 * (other), binding the first synth arg to `_v0` for matched/transparent
+	 * ctors. Instance because `branchSynthExtraArity` reads `isTriviaBearing`.
+	 */
+	private function buildTransitionAcrossPatterns(c: TransitionAcrossPatternsCtx): TransitionAcrossPatterns {
+		final pos: Position = Context.currentPos();
+		final patterns: Array<TransitionAcrossPattern> = [];
+		final matchedA: Array<String> = [];
+		final matchedB: Array<String> = [];
+		final transparentMatched: Array<String> = [];
+		for (branch in c.enumRule.children) {
+			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final shapeArity: Int = branch.children.length;
+			// In trivia mode, ctors with `@:trailOpt` / `@:lead` close-trailing /
+			// `@:fmt(captureSource)` carry a synthesized positional arg appended
+			// to the synth ctor (`HxDeclT.TypedefDecl(decl, trailPresent)`). The
+			// pattern arity must match the synth ctor's full arity, otherwise
+			// the generated switch fails with "Not enough arguments". Helper
+			// returns 0 outside trivia mode or for non-bearing enums.
+			final arity: Int = shapeArity + branchSynthExtraArity(c.enumRuleName, branch);
+			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
+			final inA: Bool = c.ctorNamesA.indexOf(ctorName) >= 0;
+			final inB: Bool = !inA && c.ctorNamesB.indexOf(ctorName) >= 0;
+			final isTransparent: Bool = !inA && !inB && c.transparentCtorNames.indexOf(ctorName) >= 0;
+			if (inA) {
+				matchedA.push(ctorName);
+				patterns.push({ pattern: transitionPattern(ctorIdent, arity, true, pos), subset: 1 });
+			} else if (inB) {
+				matchedB.push(ctorName);
+				patterns.push({ pattern: transitionPattern(ctorIdent, arity, true, pos), subset: 2 });
+			} else if (isTransparent) {
+				if (shapeArity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesOnTransitionAcross) transparent ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the head/tail-leaf classifier adapters); got arity $shapeArity',
+						Context.currentPos()
+					);
+				transparentMatched.push(ctorName);
+				patterns.push({
+					pattern: { expr: ECall(ctorIdent, [for (i in 0...arity) i == 0 ? macro _v0 : macro _]), pos: pos },
+					subset: 3
+				});
+			} else {
+				patterns.push({ pattern: transitionPattern(ctorIdent, arity, false, pos), subset: 0 });
+			}
+		}
+		return {
+			patterns: patterns,
+			matchedA: matchedA,
+			matchedB: matchedB,
+			transparentMatched: transparentMatched
+		};
+	}
+
+	/**
+	 * Build one transition-across switch pattern: a bare ctor ident for arity
+	 * 0, else `Ctor(<arg0>, _, …)` where `arg0` is `_v0` when `bindFirst`
+	 * (matched subsets A/B bind the first payload) and `_` otherwise (subset
+	 * 0 ignores it). Extracted from `buildTransitionAcrossInfo`.
+	 */
+	private static function transitionPattern(ctorIdent: Expr, arity: Int, bindFirst: Bool, pos: Position): Expr {
+		if (arity == 0) return ctorIdent;
+		final binders: Array<Expr> = [for (i in 0...arity) (bindFirst && i == 0) ? macro _v0 : macro _];
+		return { expr: ECall(ctorIdent, binders), pos: pos };
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14791,6 +14817,41 @@ typedef TransitionAcrossInfo = {
 typedef TransitionAcrossPattern = {
 	pattern: Expr,
 	subset: Int
+};
+
+/**
+ * The two ctor subsets split out of the `@:fmt(blankLinesOnTransitionAcross)`
+ * arg list (around the `"|"` separator) after pre-loop validation, returned
+ * by `splitTransitionAcrossCtors`.
+ */
+typedef TransitionAcrossSplit = {
+	final ctorNamesA: Array<String>;
+	final ctorNamesB: Array<String>;
+};
+
+/**
+ * Parameters for `buildTransitionAcrossPatterns` — the classifier enum
+ * (Alt) plus the three ctor-name subsets that drive the per-branch
+ * pattern build. Bundled to keep the helper under the >5-scalar threshold.
+ */
+typedef TransitionAcrossPatternsCtx = {
+	final enumRule: ShapeNode;
+	final enumRuleName: String;
+	final ctorNamesA: Array<String>;
+	final ctorNamesB: Array<String>;
+	final transparentCtorNames: Array<String>;
+};
+
+/**
+ * Result of `buildTransitionAcrossPatterns` — the assembled switch
+ * patterns plus the ctor-name sets actually matched in each subset
+ * (used by the orchestrator's post-loop "not found in enum" validation).
+ */
+typedef TransitionAcrossPatterns = {
+	final patterns: Array<TransitionAcrossPattern>;
+	final matchedA: Array<String>;
+	final matchedB: Array<String>;
+	final transparentMatched: Array<String>;
 };
 
 /**
