@@ -3353,74 +3353,21 @@ final class Cli {
 	 * inside doc-comments or `'$ident'` interpolation segments.
 	 */
 	private static function runLit(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var exact: Bool = false;
-		var flat: Bool = false;
-		var limit: Int = -1;
-		// `null` = use smart default (resolved from <text> shape AFTER parsing
-		// — camelCase / snake_case → Literal+IdentExpr, otherwise Literal).
-		// Empty array = explicit `--any-kind`. Non-empty = explicit `--kind`.
-		var kindFilter: Null<Array<String>> = null;
-		// `--include-comments` shorthand: widens the effective kind filter
-		// to ALSO match against the source's comments (line `//…` and block
-		// `/* … */` / `/** … */`). Comments are NOT in the parse tree
-		// (`parseFile` returns the plain projection that drops trivia), so
-		// matching them takes a separate pass over the raw source. When
-		// explicit `--kind Comment` (or any list containing `Comment`) is
-		// set, or `--any-kind`, the same pass fires — `--include-comments`
-		// is sugar for "AST kinds AS DEFAULTED PLUS comments" without
-		// having to spell out the AST kinds.
-		var includeComments: Bool = false;
-		var target: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--exact':
-					exact = true;
-				case '--kind':
-					kindFilter = expectValue(args, ++i, '--kind').split(',');
-				case '--any-kind':
-					kindFilter = [];
-				case '--include-comments':
-					includeComments = true;
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printLitUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq lit: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (target == null)
-						target = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: LitOpts = parseLitArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final target: Null<String> = o.target;
 		if (target == null) {
 			stderr('apq lit: missing <text> argument\n');
 			printLitUsage();
 			return EXIT_USAGE;
 		}
-		if (inputSpecs.length == 0) {
+		if (o.inputSpecs.length == 0) {
 			stderr('apq lit: missing <file-or-dir-or-glob> argument\n');
 			printLitUsage();
 			return EXIT_USAGE;
 		}
 		final targetStr: String = target;
+		final kindFilter: Null<Array<String>> = o.kindFilter;
 		// Resolve smart-default kind filter from <text> shape:
 		// `trailOptShapeGate` / `MAX_LEN` / `endsWith_close_brace` look like
 		// identifiers, the default `Literal`-only would silently miss the
@@ -3438,71 +3385,40 @@ final class Cli {
 		// Comment scan fires when the user explicitly opted in (`--include-comments`),
 		// when the kind filter is the catch-all (`--any-kind` ⇒ empty array),
 		// or when `Comment` appears in an explicit `--kind` list. The
-		// catch-all `--any-kind` is opt-in too (the user asked for "every
-		// leaf"), but the default kind filter (smart-resolved Literal or
-		// Literal+IdentExpr) deliberately stays comment-free — silent
-		// `--include-comments`-by-default would flood doc-comment-heavy
-		// queries with noise the AST walk was designed to skip.
-		final scanComments: Bool = includeComments || (kindFilter != null && kindFilter.length == 0)
+		// default kind filter (smart-resolved Literal or Literal+IdentExpr)
+		// deliberately stays comment-free — silent `--include-comments`-by-
+		// default would flood doc-comment-heavy queries with noise.
+		final scanComments: Bool = o.includeComments || (kindFilter != null && kindFilter.length == 0)
 			|| effectiveKindFilter.contains('Comment');
+		// `lit` matches DECODED literal values; the raw file holds the
+		// ESCAPED form, so a raw-substring pre-filter can false-negative
+		// when the searched key carries a backslash. Opt the pre-filter OUT
+		// for backslash-bearing keys; for plain keys the decoded value and
+		// the raw bytes coincide, so the pre-filter is safe.
+		final litPrefilterKey: Null<String> = targetStr.indexOf('\\') < 0 ? targetStr : null;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq lit: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq lit: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
-		final singleFile: Bool = expanded.singleFile;
-		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
-		// Cache parsed trees so the auto-widen retry path doesn't reparse.
-		final trees: Array<{ path: String, source: String, tree: QueryNode }> = [];
-		// `lit` matches DECODED literal values; the raw file holds the
-		// ESCAPED form, so a raw-substring pre-filter can false-negative
-		// when the searched key carries a backslash (an escape sequence).
-		// Opt the pre-filter OUT for backslash-bearing keys — for plain
-		// keys (identifiers, annotation keys, prose without escapes) the
-		// decoded value and the raw bytes coincide, so the pre-filter is
-		// a strict necessary condition and safe.
-		final litPrefilterKey: Null<String> = targetStr.indexOf('\\') < 0 ? targetStr : null;
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries, litPrefilterKey);
-			streamProgress('lit', ++scanned, paths.length, singleFile);
-			if (tree == null) {
-				if (singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			trees.push({ path: path, source: source, tree: tree });
-			final hits: Array<LitHit> = Lit.find(targetStr, tree, exact, effectiveKindFilter);
-			if (scanComments) appendCommentHits(targetStr, source, exact, hits);
-			if (hits.length == 0) continue;
-			// AST walk emits in depth-first source order; comment hits are
-			// appended after. Sort by span.from so the rendered file group
-			// stays in source order regardless of which pass produced the hit.
-			if (scanComments) hits.sort((a, b) -> a.span.from - b.span.from);
-			allEntries.push({ file: path, source: source, hits: hits });
-		}
-
-		// Auto-widen on 0-hit when kind was the smart-default (user didn't
-		// pass --kind / --any-kind). Retry with --any-kind; if THAT finds
-		// hits, show them with a stderr note so the next reflex is to add
-		// `--any-kind` explicitly. Common case: CamelCase TypeName queries
-		// that live as `ImportDecl` / `NewExpr` only (e.g. test-runner
-		// imports) — default kind set (Literal,IdentExpr or Literal alone)
-		// misses both. Silent on real 0-hits — the wider walk also empty.
-		var autoWidened: Bool = false;
-		if (allEntries.length == 0 && kindFilter == null) {
-			for (entry in trees) {
-				final hits: Array<LitHit> = Lit.find(targetStr, entry.tree, exact, []);
-				if (hits.length == 0) continue;
-				allEntries.push({ file: entry.path, source: entry.source, hits: hits });
-			}
-			if (allEntries.length > 0) autoWidened = true;
-		}
+		final collected: Null<{
+			entries: Array<{ file: String, source: String, hits: Array<LitHit> }>,
+			autoWidened: Bool
+		}> = collectLitEntries(paths, plugin, expanded.singleFile, skipEntries, {
+			target: targetStr,
+			exact: o.exact,
+			kinds: effectiveKindFilter,
+			kindWasDefault: kindFilter == null,
+			scanComments: scanComments,
+			prefilterKey: litPrefilterKey
+		});
+		if (collected == null) return EXIT_RUNTIME;
+		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = collected.entries;
 
 		if (allEntries.length == 0) {
 			// DX v10: regex-like query → emit the regex-not-supported note
@@ -3516,7 +3432,7 @@ final class Cli {
 				);
 			else
 				stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
-		} else if (autoWidened) {
+		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
 			stderr(
 				'apq lit: NOTE auto-widened to --any-kind (default kind=$tried returned 0 hits). Pass `--any-kind` explicitly to silence this notice.\n'
@@ -3525,12 +3441,12 @@ final class Cli {
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('lit', limit, totalHits);
+		final cappedLimit: Int = effectiveAutoLimit('lit', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
 			limitEntries(
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
-		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
+		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
 		return emptyExit(allEntries.length == 0);
 	}
 
@@ -11351,6 +11267,129 @@ final class Cli {
 		return true;
 	}
 
+	private static inline function litParseExit(code: Int): LitOpts {
+		return {
+			lang: '',
+			exact: false,
+			flat: false,
+			limit: -1,
+			kindFilter: null,
+			includeComments: false,
+			target: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseLitArgs(args: Array<String>): LitOpts {
+		var lang: String = 'haxe';
+		var exact: Bool = false;
+		var flat: Bool = false;
+		var limit: Int = -1;
+		var kindFilter: Null<Array<String>> = null;
+		var includeComments: Bool = false;
+		var target: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--exact':
+					exact = true;
+				case '--kind':
+					kindFilter = expectValue(args, ++i, '--kind').split(',');
+				case '--any-kind':
+					kindFilter = [];
+				case '--include-comments':
+					includeComments = true;
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return litParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printLitUsage();
+					return litParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq lit: unknown option "$a"\n');
+						return litParseExit(EXIT_USAGE);
+					}
+					if (target == null)
+						target = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			exact: exact,
+			flat: flat,
+			limit: limit,
+			kindFilter: kindFilter,
+			includeComments: includeComments,
+			target: target,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function collectLitEntries(
+		paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool, skipEntries: Array<SkipEntry>, query: {
+			target: String,
+			exact: Bool,
+			kinds: Array<String>,
+			kindWasDefault: Bool,
+			scanComments: Bool,
+			prefilterKey: Null<String>
+		}
+	): Null<{ entries: Array<{ file: String, source: String, hits: Array<LitHit> }>, autoWidened: Bool }> {
+		final allEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
+		// Cache parsed trees so the auto-widen retry path doesn't reparse.
+		final trees: Array<{ path: String, source: String, tree: QueryNode }> = [];
+		var scanned: Int = 0;
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('lit', plugin.parseFile, path, source, singleFile, skipEntries, query.prefilterKey);
+			streamProgress('lit', ++scanned, paths.length, singleFile);
+			if (tree == null) {
+				if (singleFile) return null;
+				continue;
+			}
+			trees.push({ path: path, source: source, tree: tree });
+			final hits: Array<LitHit> = Lit.find(query.target, tree, query.exact, query.kinds);
+			if (query.scanComments) appendCommentHits(query.target, source, query.exact, hits);
+			if (hits.length == 0) continue;
+			// AST walk emits in depth-first source order; comment hits are
+			// appended after. Sort by span.from so the rendered file group
+			// stays in source order regardless of which pass produced the hit.
+			if (query.scanComments) hits.sort((a, b) -> a.span.from - b.span.from);
+			allEntries.push({ file: path, source: source, hits: hits });
+		}
+
+		// Auto-widen on 0-hit when kind was the smart-default (user didn't
+		// pass --kind / --any-kind). Retry with --any-kind; if THAT finds
+		// hits, flag autoWidened so the caller emits a note. Common case:
+		// CamelCase TypeName queries that live as `ImportDecl` / `NewExpr`
+		// only — default kind set misses both. Silent on real 0-hits.
+		var autoWidened: Bool = false;
+		if (allEntries.length == 0 && query.kindWasDefault) {
+			for (entry in trees) {
+				final hits: Array<LitHit> = Lit.find(query.target, entry.tree, query.exact, []);
+				if (hits.length == 0) continue;
+				allEntries.push({ file: entry.path, source: entry.source, hits: hits });
+			}
+			if (allEntries.length > 0) autoWidened = true;
+		}
+		return { entries: allEntries, autoWidened: autoWidened };
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11441,6 +11480,20 @@ typedef BlastOpts = {
 	var limit: Int;
 	var showAll: Bool;
 	var name: Null<String>;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef LitOpts = {
+	var lang: String;
+	var exact: Bool;
+	var flat: Bool;
+	var limit: Int;
+	var kindFilter: Null<Array<String>>;
+	var includeComments: Bool;
+	var target: Null<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
