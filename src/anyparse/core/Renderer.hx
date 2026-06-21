@@ -2134,79 +2134,9 @@ class Renderer {
 			final inner: Array<{ doc: Doc, mode: Mode }> = [{ doc: f.doc, mode: f.mode }];
 			while (inner.length > 0 && !aborted) {
 				final node: { doc: Doc, mode: Mode } = inner.pop();
-				switch node.doc {
-					case Empty:
-					case Text(s):
-						total += s.length;
-					case Line(flat):
-						if (node.mode == MBreak) {
-							aborted = true;
-						} else if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) {
-							aborted = true;
-						} else {
-							total += flat.length;
-						}
-					case Nest(_, innerDoc):
-						inner.push({ doc: innerDoc, mode: node.mode });
-					case Concat(items):
-						var k: Int = items.length;
-						while (--k >= 0) inner.push({ doc: items[k], mode: node.mode });
-					case Group(innerDoc) | GroupWithRestProbe(innerDoc):
-						// Static walk: descend in MFlat. Runtime Group
-						// decision is unknowable here; flat-side measurement
-						// matches the cascade rule semantic. GroupWithRestProbe
-						// shares semantic at static walk — the rest-probe
-						// affects render-time fit decision only.
-						inner.push({ doc: innerDoc, mode: MFlat });
-					case BodyGroup(_):
-						// Deferred — BG decides own layout (Departure 2).
-					case IfBreak(_, flatDoc):
-						inner.push({ doc: flatDoc, mode: MFlat });
-					case IfWidthExceeds(_, _, flatDoc):
-						inner.push({ doc: flatDoc, mode: MFlat });
-					case IfFirstLineExceeds(_, _, flatDoc):
-						inner.push({ doc: flatDoc, mode: MFlat });
-					case IfLineExceeds(_, _, flatDoc):
-						inner.push({ doc: flatDoc, mode: MFlat });
-					case IfFullLineExceeds(_, _, flatDoc):
-						inner.push({ doc: flatDoc, mode: MFlat });
-					case IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-						_, _, _, _, flatDoc
-					):
-						// Forward to flat side: the natural-first-line
-						// probe is a render-time decision; this static
-						// rest-of-stack walk sees only the flat shape.
-						inner.push({ doc: flatDoc, mode: MFlat });
-					case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-						var k: Int = items.length;
-						while (k > 0) {
-							k--;
-							inner.push({ doc: items[k], mode: MFlat });
-							if (k > 0)
-								inner.push({ doc: sep, mode: MFlat });
-						}
-					case OptSpace(s):
-						total += s.length;
-					case OptSpaceSkipAfterHardline:
-						total += 1;
-					case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-						aborted = true;
-					case Flatten(innerDoc) | WrapBoundary(innerDoc) | HardFlatten(innerDoc) | CollapseProbe(innerDoc) | CollapseAddProbe(
-						innerDoc
-					) | CollapseBoolProbe(innerDoc) | CollapseChainProbe(innerDoc):
-						// ω-force-flat-engine slice A: pass-through. The
-						// rest-of-stack probe measures structural width;
-						// force-flat markers add no width.
-						inner.push({ doc: innerDoc, mode: node.mode });
-					case ConditionalMarkerZero(innerDoc):
-						// ω-cond-indent-policy FixedZero: render-time marker,
-						// transparent to the rest-of-stack width walk — descend `inner`.
-						inner.push({ doc: innerDoc, mode: node.mode });
-					case ConditionalMarkerDecrease(innerDoc):
-						// ω-cond-indent-policy AlignedDecrease: render-time marker,
-						// transparent to the rest-of-stack width walk — descend `inner`.
-						inner.push({ doc: innerDoc, mode: node.mode });
-				}
+				final step: { add: Int, aborted: Bool } = restNodeWidth(node, inner, false);
+				total += step.add;
+				aborted = step.aborted;
 			}
 		}
 		return total;
