@@ -6645,779 +6645,35 @@ class WriterLowering {
 	 * macro-time enum resolution against the `BodyPolicy` abstract.
 	 */
 	private function bodyPolicyWrap(opts: WrapBodyOpts): Expr {
-		// ω-bodyPolicyWrap-struct-arg: 17-positional-arg signature collapsed
-		// into a single struct (`WrapBodyOpts`) so call sites no longer thread
-		// `null, null, null` runs for forwarding-only fields. Aliasing back to
-		// the original local names keeps the body diff-free; the typedef
-		// definition lives at the bottom of this file alongside `PrevBodyInfo`.
-		final flagName: String = opts.flagName;
-		final bodyValueExpr: Expr = opts.bodyValueExpr;
-		final bodyTypePath: String = opts.bodyTypePath;
-		final hasElseIf: Bool = opts.hasElseIf;
-		final elseFieldName: Null<String> = opts.elseFieldName;
-		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
-		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
-		final bodyOnSameLineExpr: Null<Expr> = opts.bodyOnSameLineExpr;
-		final kwPolicyFlagName: Null<String> = opts.kwPolicyFlagName;
-		final afterTrailExpr: Null<Expr> = opts.afterTrailExpr;
-		final beforeLeadingExpr: Null<Expr> = opts.beforeLeadingExpr;
-		final indentObjArgs: Null<Array<String>> = opts.indentObjArgs;
-		final policyOverrides: Null<Array<Array<String>>> = opts.policyOverrides;
-		final bodyAllmanIndentArgs: Null<Array<String>> = opts.bodyAllmanIndentArgs;
-		final widthAware: Null<Bool> = opts.widthAware;
-		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
-		final fallbackFlagName: Null<String> = opts.fallbackFlagName;
-		final inlineBlockBodyArgs: Null<Array<String>> = opts.inlineBlockBodyArgs;
-		// ω-expression-if-with-blocks: when the field carries
-		// `@:fmt(inlineBlockBodyIfFlag('<flagName>'))`, swap the body's
-		// writeCall for a runtime-conditional Doc that flattens block
-		// bodies inline when `opt.<flagName>` is true AND the body's
-		// runtime ctor is `BlockExpr`. Done at the entry of bodyPolicyWrap
-		// so the flattened body propagates through every downstream
-		// policy / override layout (Same / Next / Keep / FitLine / etc.).
-		// Non-BlockExpr bodies and flag-false invocations get the original
-		// writeCall result unchanged.
-		//
-		// Note: ctor literal `'BlockExpr'` is hardcoded by-definition —
-		// the meta's semantic IS "block-shaped body collapse" (mirrors
-		// fork's `markBlockBody`). If a future grammar wants the same
-		// override on a different block-shaped ctor, extend the meta to
-		// `inlineBlockBodyIfFlag('<flag>', '<ctorName>')` and read both
-		// args here.
-		final writeCall: Expr = if (inlineBlockBodyArgs == null)
-			opts.writeCall
-		else {
-			if (inlineBlockBodyArgs.length != 1)
-				Context.fatalError(
-					'WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args',
-					Context.currentPos()
-				);
-			final inlineFlag: Expr = optFieldAccess(inlineBlockBodyArgs[0]);
-			final origWriteCall: Expr = opts.writeCall;
-			macro {
-				final _bodyDoc: anyparse.core.Doc = $origWriteCall;
-				($inlineFlag && Type.enumConstructor($bodyValueExpr) == 'BlockExpr') ? anyparse.core.D.flatten(_bodyDoc) : _bodyDoc;
-			};
+		final writeCall: Expr = buildBodyWriteCall(opts);
+		final optFlag: Expr = resolveBodyOptFlag(opts);
+		final hasKwSlots: Bool = opts.afterKwExpr != null && opts.kwLeadingExpr != null;
+		final kwSep: { kwPolicyInlineSep: Null<Expr>, sameSepNb: Expr } = buildBodyKwSep(opts, hasKwSlots);
+		final shared: BodyWrapShared = {
+			writeCall: writeCall,
+			sameSepNb: kwSep.sameSepNb,
+			kwPolicyInlineSep: kwSep.kwPolicyInlineSep,
+			hasKwSlots: hasKwSlots,
 		};
-		// ω-untyped-body-stmt-override: parent-side body-policy override.
-		// When the field carries `@:fmt(bodyPolicyOverride('<ctor>',
-		// '<flag>'))` (one entry per call, repeatable), the parent's own
-		// `flagName` knob is overridden at runtime by the named replacement
-		// flag whenever the body's runtime ctor matches. Mirrors haxe-
-		// formatter's "applies sameLine.untypedBody to the gap before
-		// `untyped` whenever the parent token is not a Block-typed BrOpen"
-		// rule: in non-block parents (e.g. `try` body), the inner-shape
-		// knob (`untypedBody`) wins over the parent-shape knob (`tryBody`).
-		// Block-stmt Star context has no such override and uses its own
-		// `\n<indent>` separator unchanged. Reads via `Type.enumConstructor`
-		// so multiple overrides cascade through a ternary chain. Used by
-		// `HxTryCatchStmt.body` to flip `tryBody` → `untypedBody` when the
-		// body is `UntypedBlockStmt`.
-		// ω-issue-257-else-in-return-switch: when the field carries a
-		// dual-flag `bodyPolicy('<stmtFlag>', '<exprFlag>')`, the
-		// resolved policy depends on `opt._inExprPosition` — stmt
-		// position reads the first flag, expr position reads the
-		// second. Mirrors the dual-flag dispatch in
-		// `triviaTryparseStarExpr` for case-body Star fields. Single-
-		// flag form (`exprFlagName == null`) keeps the byte-identical
-		// pre-slice access. First consumers: `HxIfStmt.thenBody`
-		// (`bodyPolicy('ifBody', 'expressionIfBody')`) and
-		// `HxIfStmt.elseBody` (`bodyPolicy('elseBody',
-		// 'expressionElseBody')`) — flatten in/else inside
-		// `case POpen: if(c) a; else b;` of a return-switch when
-		// `expressionIf=Same`.
-		final exprFlagName: Null<String> = opts.exprFlagName;
-		final baseOptFlag: Expr = if (exprFlagName == null)
-			optFieldAccess(flagName)
-		else {
-			final stmtAccess: Expr = optFieldAccess(flagName);
-			final exprAccess: Expr = optFieldAccess(exprFlagName);
-			macro (opt._inExprPosition ? $exprAccess : $stmtAccess);
+		final sameLayoutExpr: Expr = buildBodySameLayout(opts, shared);
+		final nextLayoutExpr: Expr = buildBodyNextLayout(opts, shared);
+		final blockLayoutExpr: Expr = buildBodyBlockLayout(opts, shared);
+		final fitExpr: Expr = buildBodyFitExpr(opts, shared);
+		final layouts: BodyLayouts = {
+			sameLayoutExpr: sameLayoutExpr,
+			nextLayoutExpr: nextLayoutExpr,
+			blockLayoutExpr: blockLayoutExpr,
+			fitExpr: fitExpr,
 		};
-		// ω-return-body-single-line: when the field carries
-		// `@:fmt(bodyPolicySingleLine('<flagName>', '<multiCtor>'...))` (e.g.
-		// `HxStatement.ReturnStmt`), the resolved policy splits on the value's
-		// AST shape — mirroring haxe-formatter's `shouldReturnBeSameLine` /
-		// `shouldReturnChildsBeSameLine` (MarkSameLine.hx): a value whose ctor
-		// is a control-flow / block construct (`if` / `switch` / `for` /
-		// `while` / `try` / `{ … }`, listed verbatim as the trailing meta args)
-		// keeps the base `returnBody` policy; every other value (literal,
-		// ident, ternary, array/object/comprehension, call …) reads the
-		// `opt.<singleLineFlag>` (`returnBodySingleLine`) knob. The control-flow
-		// ctor names are passed declaratively from the grammar so the writer
-		// macro stays format-neutral. Orthogonal to the expr-position dual-flag
-		// above: expr-position picks stmt-vs-expr knob, this picks
-		// singleLine-vs-multiLine. With no multi-ctor args the value always
-		// resolves to the single-line knob.
-		final singleLineFlagName: Null<String> = opts.singleLineFlagName;
-		final singleLineMultiCtors: Null<Array<String>> = opts.singleLineMultiCtors;
-		// ω-keep-chain (increment: opadd_chain_keep): the ctor's captured
-		// `return`→value source newline; drives the FitLine head-break when the
-		// body is an already-multiline keep-chain. Null → no head-break (legacy).
-		final kwNewlineExpr: Null<Expr> = opts.kwNewlineExpr;
-		// ω-fnbody-meta-block-glue: ctor-name triple `(ExprBody, MetaExpr,
-		// BlockExpr)` declaratively naming the runtime descent for the
-		// meta-wrapped-block discriminator. Null → byte-inert.
-		final metaBlockGlueArgs: Null<Array<String>> = opts.metaBlockGlueArgs;
-		final defaultOptFlag: Expr = if (singleLineFlagName == null)
-			baseOptFlag
-		else {
-			final singleLineAccess: Expr = optFieldAccess(singleLineFlagName);
-			final ctors: Array<String> = singleLineMultiCtors ?? [];
-			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
-			var isMultiLine: Expr = macro false;
-			for (ctorName in ctors) isMultiLine = macro $isMultiLine || $ctorExpr == $v{ctorName};
-			macro ($isMultiLine ? $baseOptFlag : $singleLineAccess);
-		};
-		final ctorOverriddenOptFlag: Expr = if (policyOverrides == null || policyOverrides.length == 0)
-			defaultOptFlag
-		else {
-			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
-			var chain: Expr = defaultOptFlag;
-			var i: Int = policyOverrides.length - 1;
-			while (i >= 0) {
-				final pair: Array<String> = policyOverrides[i];
-				if (pair.length != 2)
-					Context.fatalError(
-						'WriterLowering: bodyPolicyWrap policyOverrides entry requires (ctorName, flagName), got ${pair.length} args',
-						Context.currentPos()
-					);
-				final ctorName: String = pair[0];
-				final overrideFlag: String = pair[1];
-				final overrideField: Expr = optFieldAccess(overrideFlag);
-				chain = macro $ctorExpr == $v{ctorName} ? $overrideField : $chain;
-				i--;
-			}
-			chain;
-		};
-		// ω-expression-if-next-with-fitline-body: outermost runtime swap on
-		// `optFlag`. When the field carries `@:fmt(noSiblingFallback(
-		// '<fallbackFlagName>'))` AND the next optional sibling field is null
-		// at runtime AND the resolved policy is `Next` / `FitLine`, the body
-		// policy is read from `opt.<fallbackFlagName>` instead of
-		// `opt.<flagName>`. Wraps OUTSIDE the ctor-override chain because no-
-		// sibling implies "fall back to the simpler shape" — the body's ctor
-		// is irrelevant when the fallback policy applies.
-		//
-		// `Same` / `Keep` are NOT swapped: the original semantic is "flatten /
-		// preserve source" which is independent of sibling presence, and the
-		// fallback flag (e.g. `opt.ifBody=Next` default) would force-break
-		// short bodies that the user's config explicitly asked to keep flat.
-		// The fallback exists to undo the force-break of `Next/FitLine`, not
-		// to override every policy.
-		//
-		// Consumed by `HxIfExpr.thenBranch` (`fallbackFlagName='ifBody'`,
-		// elseFieldName='elseBranch'): when `else` is absent AND
-		// `opt.expressionIfBody` is `Next` / `FitLine`, the body uses
-		// `opt.ifBody` instead, preserving inline shape for arrow-body and
-		// comprehension-filter `if (cond) body` cases under `expressionIf=
-		// next`. With `expressionIf=same/keep` the original policy applies.
-		final optFlag: Expr = if (fallbackFlagName == null || elseFieldName == null)
-			ctorOverriddenOptFlag
-		else {
-			final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
-			final fallbackAccess: Expr = optFieldAccess(fallbackFlagName);
-			final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
-			final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
-			final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
-			macro {
-				final _resolvedBP: anyparse.format.BodyPolicy = $ctorOverriddenOptFlag;
-				($elseAccess == null && _resolvedBP != $samePat && _resolvedBP != $keepPat) ? $fallbackAccess : _resolvedBP;
-			};
-		};
-		// ω-issue-316: when the caller forwarded kw-trivia slot accesses,
-		// the "Same" separator (`_dt(' ')`) becomes a runtime `kwGapDoc`
-		// call that renders any captured after-kw trailing / own-line
-		// leading comments and closes with a hardline. When slots are
-		// absent, fall back to the byte-identical pre-slice `_dt(' ')`.
-		//
-		// ω-tryBody (kwOwnsInlineSpace mode): when the field carries a
-		// `@:fmt(kwPolicy('<name>'))` companion meta, `kwPolicyFlagName`
-		// names a sibling `WhitespacePolicy:After`/`Both` knob on the
-		// parent ctor. The `Same` inline separator is then NOT a fixed
-		// `_dt(' ')` — it routes through a runtime switch on
-		// `opt.<kwPolicyFlagName>` so the parent kw-policy controls
-		// whether the inline gap is a space or empty (mirrors the
-		// architecturally orthogonal split between "is body inline?" and
-		// "is there a space after the kw?"). The strip predicate at the
-		// parent Case 3 still fires (kw-trail-space slot is null), so the
-		// kw-policy logic lives entirely inside this wrap. Parent ctors
-		// with no kw-policy knob skip the meta and get the legacy
-		// `_dt(' ')`. Mutually exclusive with `hasKwSlots` —
-		// `HxTryCatchStmt.body` is the only consumer today and the `try`
-		// kw-trivia is captured at the parent ctor level, not threaded.
-		final hasKwSlots: Bool = afterKwExpr != null && kwLeadingExpr != null;
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final wpAfter: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final wpBoth: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final kwPolicyInlineSep: Null<Expr> = kwPolicyFlagName == null
-			? null
-			: {
-				final kwOpt: Expr = optFieldAccess(kwPolicyFlagName);
-				{
-					expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },], macro _de()),
-					pos: Context.currentPos(),
-				};
-			};
-		// ω-keep-degraded-optspace: default kw→body separator is `_dop(' ')`
-		// (OptSpace, drops before break-mode hardline) instead of `_dt(' ')`
-		// (Text). When `Keep` policy degrades to `sameLayoutExpr` (no
-		// `bodyOnSameLineExpr` slot — Case 3 enum-branch path) and the body's
-		// own emission opens with a hardline (e.g. ObjectLit + leftCurly=Next),
-		// the OptSpace drops, yielding `return\n{...}` instead of the spurious
-		// `return \n{...}`. For Same policy with non-hardline-opening body
-		// (Ident, Call, block ctor `{...}`), OptSpace renders as `' '`,
-		// preserving pre-slice byte output.
-		final sameSepNb: Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
-			: kwPolicyInlineSep ?? macro _dop(' ');
-		// ω-returnbody-widthaware + ω-issue-257-firstline: when the field
-		// carries `@:fmt(widthAware)`, wrap the Same-mode emission with a
-		// `Doc.IfFirstLineExceeds(opt.lineWidth, brk, flat)` probe. The
-		// renderer chooses `brk` (next-line + indent) when `col +
-		// flatTokenWidthFirstLine(flat) >= opt.lineWidth`, else `flat`
-		// (inline). The first-line cap matters for multi-line bodies whose
-		// first rendered line fits but whose total flat width would
-		// overflow — e.g. `return <multi-line if-expr>` where the if-expr's
-		// head fits inline with `return` while subsequent `else` branches
-		// keep their own hardlines (haxe-formatter's
-		// `sameLine.returnBody: same` semantic). The earlier
-		// `IfWidthExceeds` variant over-fired on such shapes and forced
-		// the body onto its own line.
-		//
-		// `_bodyW` is bound once so the writer call emits a single Doc
-		// subtree shared between both sides of the IfFirstLineExceeds; the
-		// renderer materialises only the chosen branch. The flat-shape
-		// sibling (`flatTokenWidth` in chain consumers) is unchanged —
-		// only the renderer-side probe descends with the first-line cap.
-		//
-		// Affects `Same` policy unconditionally and the `Keep`-fallback
-		// path when no `bodyOnSameLineExpr` slot is forwarded. With the
-		// slot threaded (ctor-level capture in `Lowering.lowerEnumBranch`
-		// Case 3 — see `triviaBodyPolicyKw` gate — and forwarded by the
-		// Case 3 writer call site below), `Keep` dispatches source-shape-
-		// aware: `true` → `sameLayoutExpr` (still width-probed via the
-		// first-line cap), `false` → `nextLayoutExpr` (unconditional
-		// break).
-		//
-		// Trade-off: when both `widthAware` AND `indentValueIfCtor` fire on
-		// the same field AND the width-aware brk path triggers, the brk path
-		// uses the plain `_dn(_cols, [_dhl(), _bodyW])` shape — the
-		// `indentObjGuardedNext` outer-Nest-drop is reachable only via
-		// explicit `Next` policy. ReturnStmt's only consumer today.
-		//
-		// ω-issue-257-return-same-indent-value-expr: when `ifExprIndentArgs`
-		// names a 2-arg `indentValueIfCtor(ctorName, optField)` entry, build
-		// a conditional `Nest(_cols, body)` wrapper and apply it ONLY in the
-		// Same flat-path (widthAware flat branch + non-widthAware Same).
-		// Mirrors the struct-field `HxVarDecl.init` semantic
-		// (`@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`)
-		// for ctor-level kw-led single-Ref branches like
-		// `HxStatement.ReturnStmt`. Without the gate, multi-branch IfExpr
-		// values inside `return <if-expr>` (Same policy, body inline with
-		// `return`) emit their internal `else` hardlines at the ambient
-		// indent — expected is `+cols` (one extra step beyond the kw
-		// column). The `nextLayoutExpr`, `blockLayoutExpr`, `fitExpr`, and
-		// widthAware-brk paths already apply their own outer Nest, so
-		// double-Nest = over-indent — the wrap fires only in flat-path.
-		// Same-policy `Keep` fallback (no `bodyOnSameLineExpr` slot) routes
-		// through `sameLayoutExpr`, so it inherits the wrap; `Keep`-with-
-		// `bodyOnSameLineExpr=true` also routes through `sameLayoutExpr`.
-		// `Keep`-with-`bodyOnSameLineExpr=false` routes through
-		// `nextLayoutExpr` (no wrap, body already on its own indent step).
-		if (ifExprIndentArgs != null && ifExprIndentArgs.length != 2)
-			Context.fatalError(
-				'WriterLowering: bodyPolicyWrap ifExprIndentArgs requires (ctorName, optField), got ${ifExprIndentArgs.length} args',
-				Context.currentPos()
-			);
-		inline function wrapIfExprNest(bodyExpr: Expr): Expr {
-			if (ifExprIndentArgs == null) return bodyExpr;
-			final ifCtorName: String = ifExprIndentArgs[0];
-			final ifOptAccess: Expr = optFieldAccess(ifExprIndentArgs[1]);
-			// ω-value-if-block-body-no-indent: a value-position `if (…) { … }`
-			// whose then-branch is a real `BlockExpr` already owns its body indent
-			// via the block's `{ }` Nest. Mirror the fork `Indenter`
-			// `case Kwd(KwdIf): … case Block: continue;` arm — a block-typed if-body
-			// makes the indenter SKIP the value-expr indent step (before the
-			// knob/field-level check). The then-branch lives at
-			// `Reflect.field(enumParameters(value)[0], 'thenBranch')` (same
-			// `enumParameters[0]` + `Reflect.field` descent as the `metaBlockGlue`
-			// precedent); Trivia mode wraps it in `Trivial<HxExpr>` (unwrap via
-			// `node`), Plain mode holds the raw enum. Gated on `ifCtorName ==
-			// 'IfExpr'` so non-if entries stay byte-identical.
-			return macro {
-				final _bIfn: anyparse.core.Doc = $bodyExpr;
-				var _ifBlockBody: Bool = false;
-				if ($v{ifCtorName} == 'IfExpr' && Type.enumConstructor($bodyValueExpr) == 'IfExpr') {
-					var _then: Dynamic = Reflect.field(Type.enumParameters($bodyValueExpr)[0], 'thenBranch');
-					if (Reflect.hasField(_then, 'node')) _then = Reflect.field(_then, 'node');
-					_ifBlockBody = Type.enumConstructor(_then) == 'BlockExpr';
-				}
-				($ifOptAccess && Type.enumConstructor($bodyValueExpr) == $v{ifCtorName} && !_ifBlockBody) ? _dn(_cols, _bIfn) : _bIfn;
-			};
-		}
-		final sameLayoutExpr: Expr = if (widthAware == true) {
-			final flatBody: Expr = wrapIfExprNest(macro _bodyW);
-			macro {
-				final _bodyW: anyparse.core.Doc = $writeCall;
-				_difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _dc([$sameSepNb, $flatBody]));
-			};
-		} else {
-			final flatBody: Expr = wrapIfExprNest(writeCall);
-			macro _dc([$sameSepNb, $flatBody]);
-		};
-		// ω-trivia-after-kw-next-layout (bug #3 of issue_45): when the
-		// caller forwarded kw-trivia slot accesses, the Next-layout body
-		// also threads `afterKw` (cuddled to the kw, before the hardline)
-		// and `kwLeading` (own-line comments at body indent inside the
-		// Nest). Without this, default-Next non-block bodies like
-		// `else // c\n\tbody` silently drop the `// c` because the
-		// kw-trivia slots only fed the Same-layout's `kwGapDoc`. The
-		// runtime helper `nextLayoutKwGapDoc` builds the threaded shape;
-		// when both slots are empty it degrades to the pre-slice
-		// `_dn(_cols, [_dhl(), body])` shape so existing fixtures stay
-		// byte-identical.
-		// ω-expr-body-indent-objectliteral: when the bare-Ref body field
-		// carries `@:fmt(indentValueIfCtor('<ctor>', '<optField>',
-		// '<leftCurlyField>'))` AND the runtime conditions match
-		// (named bool opt FALSE — the inverse of the additive RHS rule
-		// — AND named leftCurly opt `Next` AND value's enum ctor matches
-		// `ctorName` AND the body's `flatLength` is `-1` i.e. anyHardline),
-		// drop the outer Nest from the Next-layout. The body's own
-		// leftCurly hardline then lands at the parent's indent
-		// (`{` cuddled to the surrounding kw column) and only the body's
-		// internal Nest contributes the `+cols` step for the contents.
-		// Mirrors haxe-formatter's `indentation.indentObjectLiteral=false`
-		// rule for `if (cond)\n{...}` / `for (...) <obj-lit>` style sites
-		// where the obj-lit acts as the body anchor itself. Single-line
-		// obj-lit values fall through to the default `_dn(_cols, …)` so
-		// short cases keep the per-stmt nesting (`if (cond)\n\t{a:1}`).
-		//
-		// TODO: the `!hasKwSlots` gate silently disables the rule on
-		// trivia-mode kw-slot paths (`@:optional @:kw` Ref + bodyPolicy +
-		// indentValueIfCtor — would target a future `HxIfExpr.elseBranch`
-		// extension). Threading `indentObjArgs` into `nextLayoutKwGapDoc`
-		// would lift the limit but is deferred until a consumer needs it.
-		if (indentObjArgs != null && indentObjArgs.length != 3)
-			Context.fatalError(
-				'WriterLowering: bodyPolicyWrap indentObjArgs requires (ctorName, optField, leftCurlyField), got ${indentObjArgs.length} args',
-				Context.currentPos()
-			);
-		final indentObjGuardedNext: Null<Expr> = if (indentObjArgs != null && !hasKwSlots) {
-			final ctorName: String = indentObjArgs[0];
-			final optAccess: Expr = optFieldAccess(indentObjArgs[1]);
-			final lcAccess: Expr = optFieldAccess(indentObjArgs[2]);
-			macro {
-				final _body: anyparse.core.Doc = $writeCall;
-				if (
-					!$optAccess && $lcAccess == anyparse.format.BracePlacement.Next && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
-					&& anyparse.format.wrap.WrapList.flatLength(_body) == -1
-				)
-					_dc([_dhl(), _body])
-				else
-					_dn(_cols, _dc([_dhl(), _body]));
-			};
-		}
-		else
-			null;
-		final nextLayoutExpr: Expr = if (indentObjGuardedNext != null)
-			indentObjGuardedNext
-		else if (hasKwSlots)
-			macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
-		else
-			macro _dn(_cols, _dc([_dhl(), $writeCall]));
-		// ω-issue-316-curly-both: block-ctor variant — when the body's
-		// writeCall opens with `{`, the separator before it must honour
-		// `opt.leftCurly`. For kw-slot sites, threaded through
-		// `kwGapDoc`'s `nextCurly` parameter (only affects the no-trivia
-		// path; trivia already emits a trailing hardline). For non-slot
-		// sites, a runtime switch picks between `_dhl()` and `_dt(' ')`.
-		// Under `kwOwnsInlineSpace` mode the leftCurly=Same branch routes
-		// through the same kw-policy switch as `sameSepNb` so kw-policy
-		// drives whether the inline gap before a same-line `{` is empty
-		// or one space (`try{` vs `try {`).
-		final bpPathLC: Array<String> = ['anyparse', 'format', 'BracePlacement'];
-		final nextPatLC: Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
-		final isNextExpr: Expr = {
-			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro true, guard: null },], macro false),
-			pos: Context.currentPos(),
-		};
-		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
-		final sameSepBlock: Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
-			: {
-				expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null },], sameSepBlockSameLayout),
-				pos: Context.currentPos(),
-			};
-		final blockLayoutExpr: Expr = macro _dc([$sameSepBlock, $writeCall]);
-		final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
-		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
-		final nextPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
-		final fitPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
-		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
-		// ω-fitline-multiline-anti-wrap: when the body's writeCall
-		// produces a Doc with internal hardlines (multi-line single-expr
-		// like `return foo(\n\t...)`), the canonical
-		// `BodyGroup(Nest(_cols, [Line(' '), body]))` shape over-wraps:
-		// (a) the outer BodyGroup sees fitsFlat=false because of the
-		// inner hardline → soft `_dl()` breaks to `\n`, forcing a
-		// kw-side wrap that haxe-formatter does NOT emit; (b) the Nest
-		// adds `_cols` to every internal hardline on top of the body's
-		// own Nest, double-indenting the multi-line operand. The fix
-		// runtime-peeks `flatLength(body)`: when -1 (anyHardline), emit
-		// `Concat[OptSpace(' '), body]` (kw inline + body wraps
-		// internally with its own indent). Width-driven break path is
-		// preserved for single-line bodies that don't fit `lineWidth`.
-		// ω-optspace-leading-break: `_dop(' ')` instead of `_dt(' ')` —
-		// when the body's leading shape is itself a hardline (e.g. a
-		// long op-add chain whose `shapeOnePerLine` opens with
-		// `OptHardlineSkipAtOpenDelim`), the OptSpace drops cleanly via
-		// renderer's `pendingOptSpace = null` on the inner hardline emit,
-		// yielding `return\n\t<chain>` instead of `return \n\t<chain>`.
-		// For bodies whose leading shape is plain Text (e.g. `return
-		// foo(\narg)` — multi-line call with leading `foo(`), the
-		// OptSpace flushes normally as a space — byte-identical to the
-		// pre-slice `_dt(' ')` emission. Sister fix to the kw-led
-		// optional-Ref lead-value split at line 2129 which uses the same
-		// idiom for `var x =\n{...}` object-literal-leftCurly-Next.
-		// ω-return-fitline-natural-glue (inc8): for return-style FitLine bodies
-		// (`singleLineFlagName != null` = `ReturnStmt`), keep `return <head>`
-		// GLUED iff the body's NATURAL first line fits at the `return ` column,
-		// letting a binary chain / call SELF-break its operators / args at
-		// +1cols — mirroring fork's `shouldWrapReturnExpr`. A body that
-		// CANNOT self-break (atomic long literal / ident) has a natural first
-		// line == its whole flat width → overflows → wholesale next-line break
-		// (`return\n\t<body>`), matching `HxReturnBodySliceTest.
-		// testFitLineBreaksLongValue`. The `_dinfle` (`IfNaturalFirstLineExceeds`,
-		// inc1 downward probe) resolves the body's inner Groups by their own
-		// `fitsFlat`, so a chain whose operand-Group breaks reports its short
-		// natural first line (`return prefix`) and glues; the chain's own
-		// `Nest(cols)` then supplies the single +1 continuation indent (no
-		// double-Nest, because the glue branch adds no Nest of its own). The
-		// `flatLength == -1` already-multiline case glues unconditionally
-		// (the body owns its layout). if/for/while/etc. FitLine bodies
-		// (`singleLineFlagName == null`) keep the legacy `BodyGroup` wholesale
-		// break — fork treats their body as one atomic unit
-		// (`sameline/fitline_{if,for}`, `if_for_chain_*`).
-		// ω-keep-chain (increment: opadd_chain_keep): for an already-multiline
-		// body (`flatLength == -1`) the inc8 return path glues `return <body>`
-		// ("body owns its layout"). But when the source placed a newline after
-		// `return` (`kwNewlineExpr` true — a `WrapMode.Keep` chain nested in
-		// `1 * (…)` whose own `_headBreak` was suppressed by the enclosing
-		// ParenExpr) the head newline must be reproduced at the VALUE level:
-		// break `return\n\t<body>` so `1 * (…)` lands at +1cols and the chain's
-		// operators continue at that same indent. Mirrors fork keep2 preserving
-		// the `return`→`1` source newline. `kwNewlineExpr` null (plain / non-
-		// bearing) keeps the legacy unconditional glue → byte-inert.
-		// The head-break fires ONLY when (a) the source placed a newline after
-		// `return` (`kwNewlineExpr`), (b) a chain KEEP config is active
-		// (`opAddSubChain`/`opBoolChain` defaultWrap=keep) — so the whole gate is
-		// byte-inert under every non-keep config, and (c) the body does NOT already
-		// start with a hardline. A BARE chain return value (opbool case-2)
-		// self-breaks its head (`shapeKeep` headBreak → leading `\n`), so
-		// `startsWithHardline(_body)` is true and we keep the legacy glue (the chain
-		// owns the head break — no double `\n`). A chain nested in `1 * (…)` (opadd)
-		// had its headBreak suppressed (`_keepChainInParen`) and starts with
-		// `1 * (` (Text), so the value-level head-break fires. The chain keep-config
-		// fields are referenced only inside the `kwNewlineExpr != null` branch,
-		// which is spliced solely for the Haxe trivia `ReturnStmt` ctor (the only
-		// opt carrying those fields) — format-neutral for every other grammar.
-		//
-		// ω-return-value-expr-if-indent: in the return-style FitLine glue
-		// path (`singleLineFlagName != null` = `ReturnStmt`) the body is
-		// emitted INLINE with `return` (no FitLine break) when it is already
-		// multi-line (`flatLength == -1`) or when its natural first line fits
-		// (`_dinfle` flat branch). For a value-expression `if`/`else` written
-		// across source lines under `expressionIf=keep`, that glue path
-		// previously emitted the body at the ambient indent — dropping the
-		// value-expression indent step that `wrapIfExprNest`
-		// (`@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`)
-		// already applies on the Same flat-path. Route the glued body through
-		// `wrapIfExprNest` so the internal then/else hardlines pick up `+cols`,
-		// matching the struct-field `HxVarDecl.init` semantic (which wraps the
-		// whole if-expr write via `maybeIndentValueIfCtor`). The wrap is
-		// ctor-gated (`Type.enumConstructor(value) == 'IfExpr'`) AND opt-gated
-		// (`indentComplexValueExpressions`, default `false`), so it is byte-
-		// inert for every non-IfExpr value and every config that does not opt
-		// in. On a single-line if-expr (`_dinfle` flat) the Nest has no
-		// hardlines to indent and is inert. The chain-keep branch
-		// (`kwNewlineExpr` true) keeps the bare `_body` — chains are not
-		// `IfExpr` so the wrap would be inert there anyway.
-		final gluedBody: Expr = wrapIfExprNest(macro _body);
-		final multilineGlue: Expr = kwNewlineExpr != null
-			? macro ($kwNewlineExpr
-				&& (opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
-					|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep)
-				&& !anyparse.format.wrap.WrapList.startsWithHardline(_body)
-				? _dn(_cols, _dc([_dhl(), _body]))
-				: _dc([_dop(' '), $gluedBody]))
-			: macro _dc([_dop(' '), $gluedBody]);
-		final fitInnerExpr: Expr = if (singleLineFlagName != null)
-			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
-				? $multilineGlue
-				: _dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));
-		else
-			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1 ? _dc([_dop(' '), _body]) : _dbg(_dn(_cols, _dc([_dl(), _body])));
-		final fitExpr: Expr = if (elseFieldName == null)
-			macro {
-				final _body: anyparse.core.Doc = $writeCall;
-				$fitInnerExpr;
-			};
-		else {
-			final elseAccess: Expr = {
-				expr: EField(macro value, elseFieldName),
-				pos: Context.currentPos(),
-			};
-			macro {
-				final _body: anyparse.core.Doc = $writeCall;
-				(opt.fitLineIfWithElse || $elseAccess == null) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
-			}
-		}
-		// ω-D8-keep-block-trivia: hoisted out of the bodySwitch construction
-		// below so the Keep next-layout arm (see `keepNextLayoutExpr` below)
-		// can route block ctors through `blockLayoutExpr`. The previous
-		// declaration site at the head of `bodySwitch` worked for the non-
-		// Keep dispatch but was too late for the Keep arm. No behavioural
-		// change — same value computed once, consumed by both `bodySwitch`
-		// and `keepNextLayoutExpr`.
-		final blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> } = collectBlockCtorPatternsByLeftCurly(bodyTypePath);
-		// ω-D8-keep-elseif-override: hoisted so the Keep arm can apply the
-		// `opt.elseIf == Next` override for `else if (…)` bodies (mirrors
-		// the non-Keep `bodySwitch` arm at the existing `outerCases` push
-		// below). Without the hoist + Keep dispatch, Keep would short-
-		// circuit the elseIf override — user-set `elseIf=Next` would lose
-		// to `elseBody=Keep`'s source-preservation. Same value also
-		// consumed by the existing non-Keep dispatch (one read site each).
-		final ifStmtPattern: Null<Expr> = hasElseIf
-			? (findCtorPattern(bodyTypePath, 'IfStmt') ?? findCtorPattern(bodyTypePath, 'IfExpr'))
+		final blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> } = collectBlockCtorPatternsByLeftCurly(opts.bodyTypePath);
+		final ifStmtPattern: Null<Expr> = opts.hasElseIf
+			? (findCtorPattern(opts.bodyTypePath, 'IfStmt') ?? findCtorPattern(opts.bodyTypePath, 'IfExpr'))
 			: null;
-		// ω-keep-policy: `Keep` dispatches at runtime between same and
-		// next layouts based on the trivia-mode parser's captured
-		// `<field>BodyOnSameLine:Bool` slot. When the caller did not
-		// forward a slot access (non-kw paths, plain mode), degrade to
-		// `sameLayoutExpr` (matches the pre-slice behaviour when the
-		// loader lossy-mapped `keep` to `Same`). Handled by the outer
-		// `keepPat` case below; a `_` catch-all in `policyCases` would
-		// be unreachable because the outer switch short-circuits Keep.
-		// ω-D8-keep-block-trivia: when Keep dispatches into the
-		// next-layout arm (body NOT on same line as kw) AND the body is
-		// a block ctor, route through `blockLayoutExpr` instead of
-		// `nextLayoutExpr`. `nextLayoutExpr` wraps body in
-		// `Nest(_cols, [hardline, body])` which is correct for non-block
-		// stmt bodies (`else // c\n\tb();` — body wants +cols indent)
-		// but adds an extra +cols step to a block-ctor `{`, putting it
-		// one indent below parent col instead of Allman-aligned with the
-		// kw. The `outerKeepCases` arm short-circuits the block-aware
-		// `bodySwitch` below, so Keep never sees the existing block
-		// split — replicate the split here. `blockLayoutExpr` uses
-		// `sameSepBlock` (= `kwGapDoc(_, _, _cols, isNextExpr, opt)` when
-		// hasKwSlots) which emits captured trivia + trailing hardline at
-		// parent col, then body emits its `{` at parent col — Allman
-		// shape, byte-identical to the non-Keep block path. When
-		// `blockSplit.tagged` is empty, `keepNextLayoutExpr` collapses to
-		// `nextLayoutExpr` (no behavioural change for body types without
-		// block ctors).
-		final keepNextLayoutExpr: Expr = if (blockSplit.tagged.length > 0) {
-			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null },];
-			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
-			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
-		}
-		else
-			nextLayoutExpr;
-		final keepBaseExpr: Expr = bodyOnSameLineExpr != null
-			? macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $keepNextLayoutExpr)
-			: sameLayoutExpr;
-		// ω-D8-keep-elseif-override: when body is an `IfStmt` / `IfExpr`
-		// (else-if shape) AND `opt.elseIf == Next`, force the nested
-		// `if` onto the next line by routing through `nextLayoutExpr` —
-		// matches the non-Keep `elseIfSwitch` semantics below. User-set
-		// `elseIf=Next` is an explicit override and must beat Keep's
-		// source-shape preservation, same way `elseIf=Same` is already
-		// observable over `elseBody=Next` via the non-Keep `bodySwitch`
-		// arm. Default (`elseIf=Same`) falls through to `keepBaseExpr`
-		// so inline source `else if` shapes are preserved verbatim.
-		final keepLayoutExpr: Expr = if (ifStmtPattern != null) {
-			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
-			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
-			final elseIfSwitchForKeep: Expr = {
-				expr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),
-				pos: Context.currentPos(),
-			};
-			final outerKeepBodyCases: Array<Case> = [{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null },];
-			outerKeepBodyCases.push({ values: [macro _], expr: keepBaseExpr, guard: null });
-			{ expr: ESwitch(bodyValueExpr, outerKeepBodyCases, null), pos: Context.currentPos() };
-		}
-		else
-			keepBaseExpr;
-		final policyCases: Array<Case> = [
-			{ values: [samePat], expr: sameLayoutExpr, guard: null },
-			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
-			{ values: [fitPat], expr: fitExpr, guard: null },
-		];
-		final policySwitch: Expr = { expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos() };
-
-		// ω-expression-if-next-with-fitline-body: `hasElseIf` with body type
-		// HxStatement matches `IfStmt`; with body type HxExpr matches `IfExpr`
-		// (HxIfExpr.elseBranch). The override fires when the else-body is
-		// itself an if-construct so `else if` cuddles via opt.elseIf semantics.
-		// `ifStmtPattern` declared above near `blockSplit` so it's also
-		// available to `keepLayoutExpr`.
-		final outerCases: Array<Case> = [];
-		if (ifStmtPattern != null) {
-			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
-			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
-			final elseIfSwitch: Expr = {
-				expr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),
-				pos: Context.currentPos(),
-			};
-			outerCases.push({ values: [ifStmtPattern], expr: elseIfSwitch, guard: null });
-		}
-		if (blockSplit.untagged.length > 0) outerCases.push({ values: blockSplit.untagged, expr: sameLayoutExpr, guard: null });
-		if (blockSplit.tagged.length > 0) outerCases.push({ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null });
-		final bodySwitch: Expr = if (outerCases.length == 0)
-			policySwitch
-		else {
-			outerCases.push({ values: [macro _], expr: policySwitch, guard: null });
-			{ expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos() };
-		};
-		// ω-keep-policy: `Keep` takes precedence over block-ctor and
-		// elseIf overrides — "keep" means preserve source, so the
-		// policy-driven layout shortcuts do not apply. Route the whole
-		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
-		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null },];
-		final coreWrapExpr: Expr = { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
-		// ω-trivia-after-trail: when a synth slot access was forwarded
-		// from `lowerStruct` (i.e. the IMMEDIATELY preceding sibling was
-		// a mandatory Ref with `@:trail` in trivia-bearing mode), runtime-
-		// gate the whole wrap on the slot's value. Non-null slot →
-		// override every layout (Same / Next / FitLine / block / elseIf)
-		// with a forced Next-layout that prepends ` //<comment>` cuddled
-		// to the prior trail token. The line comment forces a hardline
-		// regardless of the policy axis, so the body lands at +cols
-		// indent on the next line — matching haxe-formatter's
-		// `if (cond) // comment\n\tbody` shape. Null slot → run the
-		// pre-slice wrap unchanged. The ternary evaluates `$writeCall`
-		// only on its taken branch, mirroring how the policy switch
-		// already evaluates a single layout per call.
-		//
-		// ω-556-then-body-leading-comment: own-line comments captured BEFORE
-		// a bare-Ref body (`<field>BeforeLeading:Array<String>`, the
-		// `isBareNonFirstRef` host — currently `HxIfStmt.thenBody`) compose on
-		// the SAME forced Next-layout. The kw-led else-body path threads its
-		// own `kwLeadingExpr` into `bodyPolicyWrap`, so its leading `//`
-		// survives; the bare-Ref then-body had no leading-comment channel and
-		// dropped them at write (the parser captured them — round-trip-
-		// identical AST — but the writer never read the slot). When the slot
-		// is non-empty, each comment renders on its own line at +cols indent
-		// (after any cuddled `afterTrail` prefix), then the body. Empty slot
-		// AND null `afterTrail` → fall through to `coreWrapExpr` (byte-inert).
-		final wrapExpr: Expr = if (afterTrailExpr == null && beforeLeadingExpr == null)
-			coreWrapExpr
-		else {
-			// Runtime guard: fire the forced Next-layout iff there is an
-			// after-trail comment OR at least one own-line leading comment.
-			final afterTrailRt: Expr = afterTrailExpr ?? macro null;
-			final beforeLeadingRt: Expr = beforeLeadingExpr ?? macro ([]: Array<String>);
-			macro {
-				final _at556: Null<String> = $afterTrailRt;
-				final _bl556: Array<String> = $beforeLeadingRt;
-				if (_at556 == null && _bl556.length == 0)
-					$coreWrapExpr;
-				else {
-					final _outer556: Array<anyparse.core.Doc> = [];
-					if (_at556 != null) _outer556.push(trailingCommentDoc(_at556, opt));
-					final _inner556: Array<anyparse.core.Doc> = [_dhl()];
-					for (_c556 in _bl556) {
-						_inner556.push(leadingCommentDoc(_c556, opt));
-						_inner556.push(_dhl());
-					}
-					_inner556.push($writeCall);
-					_outer556.push(_dn(_cols, _dc(_inner556)));
-					_dc(_outer556);
-				}
-			};
-		};
-		// ω-issue-168: outermost runtime override — when the field carries
-		// `@:fmt(bodyAllmanIndentForCtor('<ctor>', '<optField>',
-		// '<lcField>'))` AND the runtime conditions match (named bool opt
-		// TRUE, named leftCurly opt `Next`, value's ctor matches, body's
-		// `flatLength` is `-1` i.e. anyHardline), bypass the policy-decided
-		// layout entirely and emit `_dn(_cols, [_dhl(), _dn(_cols, body)])`
-		// — `{` on its own line at +cols, body's contents at +2cols, `}` at
-		// +cols. The wrap-with-extra-Nest matches haxe-formatter's per-
-		// construct rule for `[for (x in xs) {<multi-line obj-lit>}]`
-		// comprehensions where the body is broken from the `for` head and
-		// indented one extra step. Single-line obj-lit bodies, non-
-		// ObjectLit values, or `objectLiteralLeftCurly == Same` configs
-		// fall through to the policy-decided `wrapExpr`. The override
-		// stays outside `coreWrapExpr` so it stacks above Keep's source-
-		// shape preservation as well as the explicit policy axes.
-		final finalWrapExpr: Expr = if (bodyAllmanIndentArgs == null)
-			wrapExpr
-		else {
-			if (bodyAllmanIndentArgs.length != 2)
-				Context.fatalError(
-					'WriterLowering: bodyPolicyWrap bodyAllmanIndentArgs requires (ctorName, optField), got ${bodyAllmanIndentArgs.length} args',
-					Context.currentPos()
-				);
-			final ctorName: String = bodyAllmanIndentArgs[0];
-			final optAccess: Expr = optFieldAccess(bodyAllmanIndentArgs[1]);
-			macro {
-				final _bodyForAllman: anyparse.core.Doc = $writeCall;
-				if (
-					$optAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
-					&& anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1
-				)
-					_dn(_cols, _dc([_dhl(), _bodyForAllman]))
-				else
-					$wrapExpr;
-			};
-		};
-
-		// ω-fnbody-meta-block-glue: outermost runtime override. When the body
-		// is an `ExprBody` whose inner expression is a metadata-wrapped BLOCK
-		// (`@:meta { … }`, nested metas unwrapped), the metadata + block must
-		// stay cuddled to the signature line — `):Ret @:privateAccess {` — with
-		// the block's own internal Nest supplying the single body-indent step.
-		// Route such bodies to the glued `sameLayoutExpr` (` ` + body), which
-		// bypasses both the `functionBody`/`untypedBody` policy break AND the
-		// extra body Nest. A meta-wrapped non-block body (`@:meta return x`)
-		// keeps the policy dispatch (`functionBody:next` → metadata on its own
-		// line); a plain block body never reaches `ExprBody` (it parses as
-		// `BlockBody`). The descent reads `MetaExpr`'s HxMetaExpr struct via
-		// `Reflect.field(_, 'expr')` for the next ctor check, mirroring the
-		// `indentComplexValueExpressions` wrapper-unwrap loop. Sits OUTSIDE
-		// `finalWrapExpr` so it stacks above every policy axis — a meta-block
-		// IS a block body, always glued.
-		final mbgWrapExpr: Expr = if (metaBlockGlueArgs == null)
-			finalWrapExpr
-		else {
-			if (metaBlockGlueArgs.length != 3)
-				Context.fatalError(
-					'WriterLowering: bodyPolicyWrap metaBlockGlueArgs requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args',
-					Context.currentPos()
-				);
-			final exprBodyCtor: String = metaBlockGlueArgs[0];
-			final metaCtor: String = metaBlockGlueArgs[1];
-			final blockCtor: String = metaBlockGlueArgs[2];
-			macro {
-				final _mbgIsMetaBlock: Bool = if (Type.enumConstructor($bodyValueExpr) != $v{exprBodyCtor})
-					false
-				else {
-					var _mbgInner: Dynamic = Type.enumParameters($bodyValueExpr)[0];
-					var _mbgSawMeta: Bool = false;
-					while (Type.enumConstructor(_mbgInner) == $v{metaCtor}) {
-						_mbgSawMeta = true;
-						_mbgInner = Reflect.field(Type.enumParameters(_mbgInner)[0], 'expr');
-					}
-					_mbgSawMeta && Type.enumConstructor(_mbgInner) == $v{blockCtor};
-				};
-				_mbgIsMetaBlock ? $sameLayoutExpr : $finalWrapExpr;
-			};
-		};
-
+		final keepLayoutExpr: Expr = buildBodyKeepLayout(opts, layouts, blockSplit, ifStmtPattern);
+		final coreWrapExpr: Expr = buildBodyCoreWrap(opts, optFlag, layouts, keepLayoutExpr, blockSplit, ifStmtPattern);
+		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall);
+		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall);
+		final mbgWrapExpr: Expr = wrapBodyMetaBlockGlue(opts, finalWrapExpr, sameLayoutExpr);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			$mbgWrapExpr;
@@ -14420,6 +13676,497 @@ class WriterLowering {
 			});
 	}
 
+	/**
+	 * Build the body's writeCall, optionally wrapping it in the
+	 * `inlineBlockBodyIfFlag` runtime flatten (ω-expression-if-with-blocks).
+	 * Extracted from `bodyPolicyWrap`.
+	 */
+	private function buildBodyWriteCall(opts: WrapBodyOpts): Expr {
+		final inlineBlockBodyArgs: Null<Array<String>> = opts.inlineBlockBodyArgs;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		// ω-expression-if-with-blocks: when the field carries
+		// `@:fmt(inlineBlockBodyIfFlag('<flagName>'))`, swap the body's
+		// writeCall for a runtime-conditional Doc that flattens block
+		// bodies inline when `opt.<flagName>` is true AND the body's
+		// runtime ctor is `BlockExpr`. Done at the entry of bodyPolicyWrap
+		// so the flattened body propagates through every downstream
+		// policy / override layout (Same / Next / Keep / FitLine / etc.).
+		// Non-BlockExpr bodies and flag-false invocations get the original
+		// writeCall result unchanged.
+		//
+		// Note: ctor literal `'BlockExpr'` is hardcoded by-definition —
+		// the meta's semantic IS "block-shaped body collapse" (mirrors
+		// fork's `markBlockBody`). If a future grammar wants the same
+		// override on a different block-shaped ctor, extend the meta to
+		// `inlineBlockBodyIfFlag('<flag>', '<ctorName>')` and read both
+		// args here.
+		if (inlineBlockBodyArgs == null) return opts.writeCall;
+		if (inlineBlockBodyArgs.length != 1)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args',
+				Context.currentPos()
+			);
+		final inlineFlag: Expr = optFieldAccess(inlineBlockBodyArgs[0]);
+		final origWriteCall: Expr = opts.writeCall;
+		return macro {
+			final _bodyDoc: anyparse.core.Doc = $origWriteCall;
+			($inlineFlag && Type.enumConstructor($bodyValueExpr) == 'BlockExpr') ? anyparse.core.D.flatten(_bodyDoc) : _bodyDoc;
+		};
+	}
+
+	/**
+	 * Resolve the runtime body-policy flag Expr — the four-stage chain:
+	 * expr-position dual-flag (ω-issue-257), single-line-vs-multi (ω-return-
+	 * body-single-line), per-ctor policy overrides (ω-untyped-body-stmt-
+	 * override), and the no-sibling fallback (ω-expression-if-next). Extracted
+	 * from `bodyPolicyWrap`.
+	 */
+	private function resolveBodyOptFlag(opts: WrapBodyOpts): Expr {
+		final flagName: String = opts.flagName;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		final exprFlagName: Null<String> = opts.exprFlagName;
+		final baseOptFlag: Expr = if (exprFlagName == null)
+			optFieldAccess(flagName)
+		else {
+			final stmtAccess: Expr = optFieldAccess(flagName);
+			final exprAccess: Expr = optFieldAccess(exprFlagName);
+			macro (opt._inExprPosition ? $exprAccess : $stmtAccess);
+		};
+		final singleLineFlagName: Null<String> = opts.singleLineFlagName;
+		final singleLineMultiCtors: Null<Array<String>> = opts.singleLineMultiCtors;
+		final defaultOptFlag: Expr = if (singleLineFlagName == null)
+			baseOptFlag
+		else {
+			final singleLineAccess: Expr = optFieldAccess(singleLineFlagName);
+			final ctors: Array<String> = singleLineMultiCtors ?? [];
+			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
+			var isMultiLine: Expr = macro false;
+			for (ctorName in ctors) isMultiLine = macro $isMultiLine || $ctorExpr == $v{ctorName};
+			macro ($isMultiLine ? $baseOptFlag : $singleLineAccess);
+		};
+		final policyOverrides: Null<Array<Array<String>>> = opts.policyOverrides;
+		final ctorOverriddenOptFlag: Expr = if (policyOverrides == null || policyOverrides.length == 0)
+			defaultOptFlag
+		else {
+			final ctorExpr: Expr = macro Type.enumConstructor($bodyValueExpr);
+			var chain: Expr = defaultOptFlag;
+			var i: Int = policyOverrides.length - 1;
+			while (i >= 0) {
+				final pair: Array<String> = policyOverrides[i];
+				if (pair.length != 2)
+					Context.fatalError(
+						'WriterLowering: bodyPolicyWrap policyOverrides entry requires (ctorName, flagName), got ${pair.length} args',
+						Context.currentPos()
+					);
+				final ctorName: String = pair[0];
+				final overrideFlag: String = pair[1];
+				final overrideField: Expr = optFieldAccess(overrideFlag);
+				chain = macro $ctorExpr == $v{ctorName} ? $overrideField : $chain;
+				i--;
+			}
+			chain;
+		};
+		final fallbackFlagName: Null<String> = opts.fallbackFlagName;
+		final elseFieldName: Null<String> = opts.elseFieldName;
+		if (fallbackFlagName == null || elseFieldName == null) return ctorOverriddenOptFlag;
+		final elseAccess: Expr = { expr: EField(macro value, elseFieldName), pos: Context.currentPos() };
+		final fallbackAccess: Expr = optFieldAccess(fallbackFlagName);
+		final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
+		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
+		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
+		return macro {
+			final _resolvedBP: anyparse.format.BodyPolicy = $ctorOverriddenOptFlag;
+			($elseAccess == null && _resolvedBP != $samePat && _resolvedBP != $keepPat) ? $fallbackAccess : _resolvedBP;
+		};
+	}
+
+	/**
+	 * Wrap a body Expr in the conditional value-expr `Nest(_cols, body)` per
+	 * `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))` — the ω-issue-257
+	 * return-same-indent-value-expr / ω-value-if-block-body-no-indent rule.
+	 * Returns `bodyExpr` unchanged when `ifExprIndentArgs` is null. Extracted
+	 * from `bodyPolicyWrap`.
+	 */
+	private function wrapIfExprNest(bodyExpr: Expr, ifExprIndentArgs: Null<Array<String>>, bodyValueExpr: Expr): Expr {
+		if (ifExprIndentArgs == null) return bodyExpr;
+		final ifCtorName: String = ifExprIndentArgs[0];
+		final ifOptAccess: Expr = optFieldAccess(ifExprIndentArgs[1]);
+		// ω-value-if-block-body-no-indent: a value-position `if (…) { … }`
+		// whose then-branch is a real `BlockExpr` already owns its body indent
+		// via the block's `{ }` Nest. Mirror the fork `Indenter`
+		// `case Kwd(KwdIf): … case Block: continue;` arm — a block-typed if-body
+		// makes the indenter SKIP the value-expr indent step (before the
+		// knob/field-level check). The then-branch lives at
+		// `Reflect.field(enumParameters(value)[0], 'thenBranch')` (same
+		// `enumParameters[0]` + `Reflect.field` descent as the `metaBlockGlue`
+		// precedent); Trivia mode wraps it in `Trivial<HxExpr>` (unwrap via
+		// `node`), Plain mode holds the raw enum. Gated on `ifCtorName ==
+		// 'IfExpr'` so non-if entries stay byte-identical.
+		return macro {
+			final _bIfn: anyparse.core.Doc = $bodyExpr;
+			var _ifBlockBody: Bool = false;
+			if ($v{ifCtorName} == 'IfExpr' && Type.enumConstructor($bodyValueExpr) == 'IfExpr') {
+				var _then: Dynamic = Reflect.field(Type.enumParameters($bodyValueExpr)[0], 'thenBranch');
+				if (Reflect.hasField(_then, 'node')) _then = Reflect.field(_then, 'node');
+				_ifBlockBody = Type.enumConstructor(_then) == 'BlockExpr';
+			}
+			($ifOptAccess && Type.enumConstructor($bodyValueExpr) == $v{ifCtorName} && !_ifBlockBody) ? _dn(_cols, _bIfn) : _bIfn;
+		};
+	}
+
+	/**
+	 * Build the `Same`-policy kw→body inline separator (ω-issue-316 / ω-tryBody
+	 * kwOwnsInlineSpace). Returns the `kwPolicyInlineSep` (null when no
+	 * `kwPolicy` knob) and `sameSepNb` (kwGapDoc with kw-trivia slots, the
+	 * kw-policy switch, or the default `_dop(' ')`). Extracted from
+	 * `bodyPolicyWrap`.
+	 */
+	private function buildBodyKwSep(opts: WrapBodyOpts, hasKwSlots: Bool): { kwPolicyInlineSep: Null<Expr>, sameSepNb: Expr } {
+		final kwPolicyFlagName: Null<String> = opts.kwPolicyFlagName;
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final wpAfter: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final wpBoth: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final kwPolicyInlineSep: Null<Expr> = kwPolicyFlagName == null
+			? null
+			: {
+				final kwOpt: Expr = optFieldAccess(kwPolicyFlagName);
+				{
+					expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },], macro _de()),
+					pos: Context.currentPos(),
+				};
+			};
+		// ω-keep-degraded-optspace: default kw→body separator is `_dop(' ')`
+		// (OptSpace, drops before break-mode hardline) instead of `_dt(' ')`
+		// (Text). When `Keep` policy degrades to `sameLayoutExpr` (no
+		// `bodyOnSameLineExpr` slot — Case 3 enum-branch path) and the body's
+		// own emission opens with a hardline (e.g. ObjectLit + leftCurly=Next),
+		// the OptSpace drops, yielding `return\n{...}` instead of the spurious
+		// `return \n{...}`. For Same policy with non-hardline-opening body
+		// (Ident, Call, block ctor `{...}`), OptSpace renders as `' '`,
+		// preserving pre-slice byte output.
+		final sameSepNb: Expr = hasKwSlots
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, false, opt)
+			: kwPolicyInlineSep ?? macro _dop(' ');
+		return { kwPolicyInlineSep: kwPolicyInlineSep, sameSepNb: sameSepNb };
+	}
+
+	/**
+	 * Build the `Same`-policy layout Expr (ω-returnbody-widthaware + the
+	 * value-expr Nest wrap). Extracted from `bodyPolicyWrap`.
+	 */
+	private function buildBodySameLayout(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
+		final writeCall: Expr = shared.writeCall;
+		final sameSepNb: Expr = shared.sameSepNb;
+		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		if (opts.widthAware == true) {
+			final flatBody: Expr = wrapIfExprNest(macro _bodyW, ifExprIndentArgs, bodyValueExpr);
+			return macro {
+				final _bodyW: anyparse.core.Doc = $writeCall;
+				_difle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _bodyW])), _dc([$sameSepNb, $flatBody]));
+			};
+		}
+		final flatBody: Expr = wrapIfExprNest(writeCall, ifExprIndentArgs, bodyValueExpr);
+		return macro _dc([$sameSepNb, $flatBody]);
+	}
+
+	/**
+	 * Build the `Next`-policy layout Expr — the `indentObjGuardedNext` outer-
+	 * Nest-drop (ω-expr-body-indent-objectliteral), the kw-slot threaded
+	 * `nextLayoutKwGapDoc`, or the default `Nest(_cols, [hardline, body])`.
+	 * Extracted from `bodyPolicyWrap`.
+	 */
+	private function buildBodyNextLayout(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
+		final writeCall: Expr = shared.writeCall;
+		final hasKwSlots: Bool = shared.hasKwSlots;
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		final indentObjArgs: Null<Array<String>> = opts.indentObjArgs;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		if (indentObjArgs != null && indentObjArgs.length != 3)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap indentObjArgs requires (ctorName, optField, leftCurlyField), got ${indentObjArgs.length} args',
+				Context.currentPos()
+			);
+		final indentObjGuardedNext: Null<Expr> = if (indentObjArgs != null && !hasKwSlots) {
+			final ctorName: String = indentObjArgs[0];
+			final optAccess: Expr = optFieldAccess(indentObjArgs[1]);
+			final lcAccess: Expr = optFieldAccess(indentObjArgs[2]);
+			macro {
+				final _body: anyparse.core.Doc = $writeCall;
+				if (
+					!$optAccess && $lcAccess == anyparse.format.BracePlacement.Next && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
+					&& anyparse.format.wrap.WrapList.flatLength(_body) == -1
+				)
+					_dc([_dhl(), _body])
+				else
+					_dn(_cols, _dc([_dhl(), _body]));
+			};
+		}
+		else
+			null;
+		if (indentObjGuardedNext != null) return indentObjGuardedNext;
+		if (hasKwSlots) return macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt);
+		return macro _dn(_cols, _dc([_dhl(), $writeCall]));
+	}
+
+	/**
+	 * Build the block-ctor layout Expr — the `Same`/`Next` leftCurly switch on
+	 * the separator before a `{`-opening body (ω-issue-316-curly-both),
+	 * threaded through `kwGapDoc` for kw-slot sites. Extracted from
+	 * `bodyPolicyWrap`.
+	 */
+	private function buildBodyBlockLayout(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
+		final writeCall: Expr = shared.writeCall;
+		final hasKwSlots: Bool = shared.hasKwSlots;
+		final kwPolicyInlineSep: Null<Expr> = shared.kwPolicyInlineSep;
+		final afterKwExpr: Null<Expr> = opts.afterKwExpr;
+		final kwLeadingExpr: Null<Expr> = opts.kwLeadingExpr;
+		final bpPathLC: Array<String> = ['anyparse', 'format', 'BracePlacement'];
+		final nextPatLC: Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
+		final isNextExpr: Expr = {
+			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro true, guard: null },], macro false),
+			pos: Context.currentPos(),
+		};
+		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
+		final sameSepBlock: Expr = hasKwSlots
+			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
+			: {
+				expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null },], sameSepBlockSameLayout),
+				pos: Context.currentPos(),
+			};
+		return macro _dc([$sameSepBlock, $writeCall]);
+	}
+
+	/**
+	 * Build the `FitLine`-policy layout Expr — the return-style natural-first-
+	 * line glue (ω-return-fitline-natural-glue), the keep-chain head-break
+	 * (ω-keep-chain), and the if/for/while wholesale `BodyGroup` break.
+	 * Extracted from `bodyPolicyWrap`.
+	 */
+	private function buildBodyFitExpr(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
+		final writeCall: Expr = shared.writeCall;
+		final singleLineFlagName: Null<String> = opts.singleLineFlagName;
+		final kwNewlineExpr: Null<Expr> = opts.kwNewlineExpr;
+		final elseFieldName: Null<String> = opts.elseFieldName;
+		final ifExprIndentArgs: Null<Array<String>> = opts.ifExprIndentArgs;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		final gluedBody: Expr = wrapIfExprNest(macro _body, ifExprIndentArgs, bodyValueExpr);
+		final multilineGlue: Expr = kwNewlineExpr != null
+			? macro ($kwNewlineExpr
+				&& (opt.opAddSubChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep
+					|| opt.opBoolChainWrap.defaultMode == anyparse.format.wrap.WrapMode.Keep)
+				&& !anyparse.format.wrap.WrapList.startsWithHardline(_body)
+				? _dn(_cols, _dc([_dhl(), _body]))
+				: _dc([_dop(' '), $gluedBody]))
+			: macro _dc([_dop(' '), $gluedBody]);
+		final fitInnerExpr: Expr = if (singleLineFlagName != null)
+			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
+				? $multilineGlue
+				: _dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));
+		else
+			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1 ? _dc([_dop(' '), _body]) : _dbg(_dn(_cols, _dc([_dl(), _body])));
+		if (elseFieldName == null) return macro {
+			final _body: anyparse.core.Doc = $writeCall;
+			$fitInnerExpr;
+		};
+		final elseAccess: Expr = {
+			expr: EField(macro value, elseFieldName),
+			pos: Context.currentPos(),
+		};
+		return macro {
+			final _body: anyparse.core.Doc = $writeCall;
+			(opt.fitLineIfWithElse || $elseAccess == null) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
+		};
+	}
+
+	/**
+	 * Build the `Keep`-policy layout Expr (ω-keep-policy) — runtime-dispatched
+	 * between same and next layouts via the parser's `bodyOnSameLine` slot,
+	 * with the block-ctor `blockLayoutExpr` route (ω-D8-keep-block-trivia) and
+	 * the `elseIf == Next` override (ω-D8-keep-elseif-override). Extracted from
+	 * `bodyPolicyWrap`.
+	 */
+	private function buildBodyKeepLayout(
+		opts: WrapBodyOpts, layouts: BodyLayouts, blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }, ifStmtPattern: Null<Expr>
+	): Expr {
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		final bodyOnSameLineExpr: Null<Expr> = opts.bodyOnSameLineExpr;
+		final sameLayoutExpr: Expr = layouts.sameLayoutExpr;
+		final nextLayoutExpr: Expr = layouts.nextLayoutExpr;
+		final blockLayoutExpr: Expr = layouts.blockLayoutExpr;
+		final keepNextLayoutExpr: Expr = if (blockSplit.tagged.length > 0) {
+			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null },];
+			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
+			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
+		}
+		else
+			nextLayoutExpr;
+		final keepBaseExpr: Expr = bodyOnSameLineExpr != null
+			? macro ($bodyOnSameLineExpr ? $sameLayoutExpr : $keepNextLayoutExpr)
+			: sameLayoutExpr;
+		if (ifStmtPattern == null) return keepBaseExpr;
+		final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
+		final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
+		final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
+		final elseIfSwitchForKeep: Expr = {
+			expr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),
+			pos: Context.currentPos(),
+		};
+		final outerKeepBodyCases: Array<Case> = [{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null },];
+		outerKeepBodyCases.push({ values: [macro _], expr: keepBaseExpr, guard: null });
+		return { expr: ESwitch(bodyValueExpr, outerKeepBodyCases, null), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Build the core body-wrap Expr — the policy switch (Same/Next/FitLine),
+	 * the block-ctor + elseIf outer overrides (bodySwitch), and the outer Keep
+	 * dispatch (ω-keep-policy). Extracted from `bodyPolicyWrap`.
+	 */
+	private function buildBodyCoreWrap(
+		opts: WrapBodyOpts, optFlag: Expr, layouts: BodyLayouts, keepLayoutExpr: Expr,
+		blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }, ifStmtPattern: Null<Expr>
+	): Expr {
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		final sameLayoutExpr: Expr = layouts.sameLayoutExpr;
+		final nextLayoutExpr: Expr = layouts.nextLayoutExpr;
+		final blockLayoutExpr: Expr = layouts.blockLayoutExpr;
+		final bpPath: Array<String> = ['anyparse', 'format', 'BodyPolicy'];
+		final samePat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Same']));
+		final nextPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Next']));
+		final fitPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['FitLine']));
+		final keepPat: Expr = MacroStringTools.toFieldExpr(bpPath.concat(['Keep']));
+		final policyCases: Array<Case> = [
+			{ values: [samePat], expr: sameLayoutExpr, guard: null },
+			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
+			{ values: [fitPat], expr: layouts.fitExpr, guard: null },
+		];
+		final policySwitch: Expr = { expr: ESwitch(optFlag, policyCases, sameLayoutExpr), pos: Context.currentPos() };
+		final outerCases: Array<Case> = [];
+		if (ifStmtPattern != null) {
+			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
+			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
+			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
+			final elseIfSwitch: Expr = {
+				expr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),
+				pos: Context.currentPos(),
+			};
+			outerCases.push({ values: [ifStmtPattern], expr: elseIfSwitch, guard: null });
+		}
+		if (blockSplit.untagged.length > 0) outerCases.push({ values: blockSplit.untagged, expr: sameLayoutExpr, guard: null });
+		if (blockSplit.tagged.length > 0) outerCases.push({ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null });
+		final bodySwitch: Expr = if (outerCases.length == 0)
+			policySwitch
+		else {
+			outerCases.push({ values: [macro _], expr: policySwitch, guard: null });
+			{ expr: ESwitch(bodyValueExpr, outerCases, null), pos: Context.currentPos() };
+		};
+		// ω-keep-policy: `Keep` takes precedence over block-ctor and
+		// elseIf overrides — "keep" means preserve source, so the
+		// policy-driven layout shortcuts do not apply. Route the whole
+		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
+		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null },];
+		return { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Wrap the core body Expr with the after-trail / before-leading comment
+	 * forced-Next-layout (ω-issue-316-then-trail / ω-556-then-body-leading-
+	 * comment). Returns `coreWrapExpr` unchanged when neither slot was
+	 * forwarded. Extracted from `bodyPolicyWrap`.
+	 */
+	private function wrapBodyAfterTrail(opts: WrapBodyOpts, coreWrapExpr: Expr, writeCall: Expr): Expr {
+		final afterTrailExpr: Null<Expr> = opts.afterTrailExpr;
+		final beforeLeadingExpr: Null<Expr> = opts.beforeLeadingExpr;
+		if (afterTrailExpr == null && beforeLeadingExpr == null) return coreWrapExpr;
+		// Runtime guard: fire the forced Next-layout iff there is an
+		// after-trail comment OR at least one own-line leading comment.
+		final afterTrailRt: Expr = afterTrailExpr ?? macro null;
+		final beforeLeadingRt: Expr = beforeLeadingExpr ?? macro ([]: Array<String>);
+		return macro {
+			final _at556: Null<String> = $afterTrailRt;
+			final _bl556: Array<String> = $beforeLeadingRt;
+			if (_at556 == null && _bl556.length == 0)
+				$coreWrapExpr;
+			else {
+				final _outer556: Array<anyparse.core.Doc> = [];
+				if (_at556 != null) _outer556.push(trailingCommentDoc(_at556, opt));
+				final _inner556: Array<anyparse.core.Doc> = [_dhl()];
+				for (_c556 in _bl556) {
+					_inner556.push(leadingCommentDoc(_c556, opt));
+					_inner556.push(_dhl());
+				}
+				_inner556.push($writeCall);
+				_outer556.push(_dn(_cols, _dc(_inner556)));
+				_dc(_outer556);
+			}
+		};
+	}
+
+	/**
+	 * Wrap the body Expr with the ω-issue-168 Allman-indent-for-ctor override
+	 * (`@:fmt(bodyAllmanIndentForCtor(...))`). Returns `wrapExpr` unchanged
+	 * when no args. Extracted from `bodyPolicyWrap`.
+	 */
+	private function wrapBodyAllman(opts: WrapBodyOpts, wrapExpr: Expr, writeCall: Expr): Expr {
+		final bodyAllmanIndentArgs: Null<Array<String>> = opts.bodyAllmanIndentArgs;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		if (bodyAllmanIndentArgs == null) return wrapExpr;
+		if (bodyAllmanIndentArgs.length != 2)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap bodyAllmanIndentArgs requires (ctorName, optField), got ${bodyAllmanIndentArgs.length} args',
+				Context.currentPos()
+			);
+		final ctorName: String = bodyAllmanIndentArgs[0];
+		final optAccess: Expr = optFieldAccess(bodyAllmanIndentArgs[1]);
+		return macro {
+			final _bodyForAllman: anyparse.core.Doc = $writeCall;
+			if (
+				$optAccess && Type.enumConstructor($bodyValueExpr) == $v{ctorName}
+				&& anyparse.format.wrap.WrapList.flatLength(_bodyForAllman) == -1
+			)
+				_dn(_cols, _dc([_dhl(), _bodyForAllman]))
+			else
+				$wrapExpr;
+		};
+	}
+
+	/**
+	 * Wrap the body Expr with the ω-fnbody-meta-block-glue override — a
+	 * meta-wrapped block body (`@:meta { … }`) routes to the glued
+	 * `sameLayoutExpr`. Returns `finalWrapExpr` unchanged when no args.
+	 * Extracted from `bodyPolicyWrap`.
+	 */
+	private function wrapBodyMetaBlockGlue(opts: WrapBodyOpts, finalWrapExpr: Expr, sameLayoutExpr: Expr): Expr {
+		final metaBlockGlueArgs: Null<Array<String>> = opts.metaBlockGlueArgs;
+		final bodyValueExpr: Expr = opts.bodyValueExpr;
+		if (metaBlockGlueArgs == null) return finalWrapExpr;
+		if (metaBlockGlueArgs.length != 3)
+			Context.fatalError(
+				'WriterLowering: bodyPolicyWrap metaBlockGlueArgs requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args',
+				Context.currentPos()
+			);
+		final exprBodyCtor: String = metaBlockGlueArgs[0];
+		final metaCtor: String = metaBlockGlueArgs[1];
+		final blockCtor: String = metaBlockGlueArgs[2];
+		return macro {
+			final _mbgIsMetaBlock: Bool = if (Type.enumConstructor($bodyValueExpr) != $v{exprBodyCtor})
+				false
+			else {
+				var _mbgInner: Dynamic = Type.enumParameters($bodyValueExpr)[0];
+				var _mbgSawMeta: Bool = false;
+				while (Type.enumConstructor(_mbgInner) == $v{metaCtor}) {
+					_mbgSawMeta = true;
+					_mbgInner = Reflect.field(Type.enumParameters(_mbgInner)[0], 'expr');
+				}
+				_mbgSawMeta && Type.enumConstructor(_mbgInner) == $v{blockCtor};
+			};
+			_mbgIsMetaBlock ? $sameLayoutExpr : $finalWrapExpr;
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14547,6 +14294,31 @@ typedef WrapBodyOpts = {
 	// are passed declaratively from the grammar flag to keep the macro
 	// format-neutral. Null/false → byte-inert.
 	?metaBlockGlueArgs: Null<Array<String>>
+};
+
+/**
+ * Runtime-built Exprs shared across the `bodyPolicyWrap` layout-primitive
+ * helpers (`buildBodySameLayout` etc.): the resolved writeCall, the
+ * `Same`-mode kw→body separator, the kw-policy inline separator, and
+ * whether kw-trivia slots were forwarded.
+ */
+typedef BodyWrapShared = {
+	final writeCall: Expr;
+	final sameSepNb: Expr;
+	final kwPolicyInlineSep: Null<Expr>;
+	final hasKwSlots: Bool;
+};
+
+/**
+ * The five resolved body-layout Exprs (one per `BodyPolicy` axis plus the
+ * block-ctor variant) threaded into `bodyPolicyWrap`'s policy/outer
+ * dispatch and Keep arm.
+ */
+typedef BodyLayouts = {
+	final sameLayoutExpr: Expr;
+	final nextLayoutExpr: Expr;
+	final blockLayoutExpr: Expr;
+	final fitExpr: Expr;
 };
 
 /**
