@@ -743,153 +743,8 @@ class Lowering {
 			// after each element via `matchLit`, before `collectTrailing`,
 			// so a same-line `// comment` after `,` attaches to the
 			// just-pushed element.
-			if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
-				final wrappedCT: ComplexType = TPath({
-					pack: ['anyparse', 'runtime'],
-					name: 'Trivial',
-					params: [TPType(elemCT)]
-				});
-				// ω-close-trailing-alt: synth ctor of close-peek `@:trivia`
-				// Alt branches (e.g. `HxStatementT.BlockStmt`) carries an
-				// extra positional `closeTrailing:Null<String>` arg captured
-				// here by `collectTrailingFull(ctx)` right after the close
-				// literal. The Full variant keeps comment delimiters so the
-				// writer can round-trip block-vs-line style (ω-trailing-
-				// block-style). Plain mode keeps the 1-arg ctor.
-				//
-				// ω-open-trailing-alt: when the branch carries `@:lead`,
-				// append `_openTrail` as a 3rd positional arg. Captured
-				// via `collectTrailingFull` right after the open literal
-				// (mirror of Seq-struct's `<field>TrailingOpen` slot).
-				// Without this, an inline `[ /* foo */ ]` would lose the
-				// comment — the loop's terminal `_lead` is dropped on
-				// the close-peek break, and same-line comments after `[`
-				// don't show up in `collectTrivia`'s newline-anchored
-				// scan anyway.
-				final hasOpenTrail: Bool = branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
-				final ctorArgsTrivia: Array<Expr> = [macro _items, macro _closeTrail];
-				if (hasOpenTrail) {
-					ctorArgsTrivia.push(macro _openTrail);
-					// ω-orphan-trivia-alt: parallel to the Seq-struct
-					// trail-orphan capture in `emitTriviaStarFieldSteps`.
-					// Captured into mutable locals on the close-peek break
-					// (see loop body below) so trivia between the last Star
-					// element and the close literal survives round-trip.
-					ctorArgsTrivia.push(macro _trailBB);
-					ctorArgsTrivia.push(macro _trailLC);
-					// ω-arraylit-source-trail-comma: sep+trail+lead+@:trivia
-					// branches additionally forward whether the source had a
-					// trailing separator before the close literal. The synth
-					// ctor's 6th positional `trailPresent:Bool` (gated on
-					// `:sep` in `TriviaTypeSynth.buildEnumCtor`) holds the
-					// last-iteration `matchLit(sepText)` result captured by
-					// `sepMatchExpr` below. Same `:sep` gate keeps the
-					// positional count in sync between parser-emit and synth-
-					// define for non-sep branches (BlockStmt, BlockExpr).
-					if (sepText != null) {
-						ctorArgsTrivia.push(macro _trailPresent);
-					}
-				}
-				final ctorCallTrivia: Expr = {
-					expr: ECall(ctorRef, ctorArgsTrivia),
-					pos: Context.currentPos(),
-				};
-				final sepMatchExpr: Expr = if (sepText != null) {
-					// Same horizontal-whitespace-only skip as the struct-field
-					// trivia+sep path — avoids `skipWs` consuming the trailing
-					// `// comment` before `collectTrailing` runs.
-					//
-					// ω-arraylit-source-trail-comma: capture matchLit result
-					// into `_trailPresent`. After the close-peek loop exits,
-					// the local holds the LAST iteration's sep result — `true`
-					// iff the source committed to a trailing `,` before the
-					// close literal. Forwarded as the 6th positional ctor arg
-					// when both `:lead` and `:sep` are present (see ctorArgs
-					// build above). Mirror of the struct-Star-side capture at
-					// `emitTriviaStarFieldSteps`'s `$i{trailPresentLocal} =
-					// matchLit(...)` (Lowering.hx around line 2859).
-					//
-					// ω-objectlit-source-inter-sep: additionally capture per-
-					// iteration into `_sepAfter` for the per-element
-					// `Trivial.sepAfter` slot. The writer's trivia-branch sep
-					// gate (`triviaSepStarExpr` :6592) consults this to
-					// suppress inter-element seps the source intentionally
-					// omitted (lineends/issue_111). For sep-less branches the
-					// loop body sets `_sepAfter = true` (always-emit default).
-					macro {
-						while (ctx.pos < ctx.input.length) {
-							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-								ctx.pos++;
-							else
-								break;
-						}
-						_sepAfter = matchLit(ctx, $v{sepText});
-						_trailPresent = _sepAfter;
-					}
-				} else {
-					macro {};
-				};
-				return macro {
-					skipWs(ctx);
-					expectLit(ctx, $v{leadText});
-					final _openTrail: Null<String> = collectTrailingFull(ctx);
-					final _items: Array<$wrappedCT> = [];
-					var _trailBB: Bool = false;
-					var _trailLC: Array<String> = [];
-					// ω-arraylit-source-trail-comma: declared unconditionally to
-					// keep the macro body shape stable; only assigned when
-					// `sepText != null` (see `sepMatchExpr` above) and only
-					// forwarded to the ctor when both `:lead` AND `:sep` apply
-					// (see `ctorArgsTrivia` build above). For sep-less branches
-					// the var is unused; Haxe does not warn on unused locals.
-					var _trailPresent: Bool = false;
-					while (true) {
-						final _lead = collectTrivia(ctx);
-						if ($closeNextOrEofExpr) {
-							_trailBB = _lead.blankBefore;
-							_trailLC = _lead.leadingComments;
-							break;
-						}
-						final _node: $elemCT = $elemCall;
-						// ω-trivia-trailing-before-sep (Slice 50 mirror of
-						// emitStarFieldSteps :3339): probe a same-line trailing
-						// comment BEFORE the sep-match so `elem /*c*/ , next`
-						// shape parses. Without this, the pre-sep horizontal-ws
-						// skip stops at `/`, sep-match fails, the next iteration
-						// tries to parse `,` as element start → SKIP_PARSE.
-						// Captured into the existing `trailingComment` slot via
-						// coalescing — the synth wrapper's `trailingBeforeSep`
-						// flag records the position so the writer can emit at
-						// the source position instead of always after sep.
-						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-						var _sepAfter: Bool = true;
-						$sepMatchExpr;
-						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-						_items.push({
-							blankBefore: _lead.blankBefore,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: _trailingBeforeSep != null,
-							sepAfter: _sepAfter,
-							// ω-643-leading-block-glue: the last leading comment
-							// sat on the same source line as the element (no
-							// newline between the comment and the element's first
-							// token). The writer keeps a same-line BLOCK comment
-							// glued; line-style is filtered at emit. Empty
-							// leadingComments → false (nothing to glue).
-							leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,
-							node: _node,
-						});
-					}
-					skipWs(ctx);
-					expectLit(ctx, $v{trailText});
-					final _closeTrail: Null<String> = collectTrailingFull(ctx);
-					return $ctorCallTrivia;
-				};
-			}
+			if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true)
+				return lowerTriviaStarBranch(branch, ctorRef, leadText, trailText, sepText, elemCT, elemCall, closeNextOrEofExpr);
 			if (sepText != null) {
 				final sepCharCode: Int = sepText.charCodeAt(0);
 				// Opt-in (@:sepAlt) tolerant variant: a close-driven loop that
@@ -899,26 +754,10 @@ class Lowering {
 				// non-trivia HaxeParser / HaxeModuleSpanParser builds. Only the
 				// @:sepAlt branch (HxType.Anon) reaches this; the strict loop
 				// below stays byte-identical for every other @:sep Star.
-				if (sepAltText != null) {
-					final sepAltCharCode: Int = sepAltText.charCodeAt(0);
-					return macro {
-						skipWs(ctx);
-						expectLit(ctx, $v{leadText});
-						final _items: Array<$elemCT> = [];
-						skipWs(ctx);
-						while ($closeNotNextExpr) {
-							_items.push($elemCall);
-							skipWs(ctx);
-							if (ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode} || ctx.input.charCodeAt(ctx.pos) == $v{sepAltCharCode}) {
-								ctx.pos++;
-								skipWs(ctx);
-							}
-						}
-						skipWs(ctx);
-						expectLit(ctx, $v{trailText});
-						return $ctorCall;
-					};
-				}
+				if (sepAltText != null)
+					return lowerStarSepAltBranch(
+						leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepAltText.charCodeAt(0)
+					);
 				// Block-ended exemption (Session 2 pilot — mirror of
 				// `emitStarFieldSteps`). When the enum branch carries
 				// `@:sep('text', tailRelax, blockEnded)`, sep between two
@@ -931,143 +770,13 @@ class Lowering {
 				// opt-in: when `lit.sepBlockEnded` is absent the
 				// byte-identical pre-existing path runs.
 				final blockEnded: Bool = branch.annotations.get('lit.sepBlockEnded') == true;
-				if (blockEnded) {
-					final predicateName: Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
-					final accumRefForPred: Expr = macro _items;
-					final predicateCall: Expr = predicateName != null
-						? buildBlockEndedPredicateCall(predicateName, accumRefForPred)
-						: macro false;
-					// sepStartsElement (Session 9 BlockBody Star) — when block-ended is
-					// TRUE, the sep byte at pos belongs to the NEXT element, never a
-					// separator. Required for grammars where the sep char can ALSO be a
-					// valid element body (Haxe `EmptyStmt`). When the flag is absent the
-					// default permissive-sep semantics applies (sep-first branch in the
-					// loop).
-					final sepStartsElement: Bool = branch.annotations.get('lit.sepStartsElement') == true;
-					return sepStartsElement
-						? macro {
-							skipWs(ctx);
-							expectLit(ctx, $v{leadText});
-							final _items: Array<$elemCT> = [];
-							skipWs(ctx);
-							if ($closeNotNextExpr) {
-								var _prevEndPos: Int = ctx.pos;
-								_items.push($elemCall);
-								_prevEndPos = ctx.pos;
-								skipWs(ctx);
-								while ($closeNotNextExpr) {
-									final _isBE: Bool = _prevEndPos > 0 && {
-										var _pebRew: Int = _prevEndPos - 1;
-										while (_pebRew > 0) {
-											final _bc: Int = ctx.input.charCodeAt(_pebRew);
-											if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-												_pebRew--;
-											else
-												break;
-										}
-										final _b: Int = ctx.input.charCodeAt(_pebRew);
-										_b == ';'.code || $predicateCall;
-									};
-									if (_isBE) {
-										// block-ended: sep byte at pos belongs to next element
-										_items.push($elemCall);
-										_prevEndPos = ctx.pos;
-										skipWs(ctx);
-									} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-										ctx.pos++;
-										skipWs(ctx);
-										if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-										_items.push($elemCall);
-										_prevEndPos = ctx.pos;
-										skipWs(ctx);
-									} else {
-										expectLit(ctx, $v{sepText});
-									}
-								}
-							}
-							skipWs(ctx);
-							expectLit(ctx, $v{trailText});
-							return $ctorCall;
-						}
-						: macro {
-							skipWs(ctx);
-							expectLit(ctx, $v{leadText});
-							final _items: Array<$elemCT> = [];
-							skipWs(ctx);
-							if ($closeNotNextExpr) {
-								var _prevEndPos: Int = ctx.pos;
-								_items.push($elemCall);
-								_prevEndPos = ctx.pos;
-								skipWs(ctx);
-								while ($closeNotNextExpr) {
-									if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-										ctx.pos++;
-										skipWs(ctx);
-										if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-										_items.push($elemCall);
-										_prevEndPos = ctx.pos;
-										skipWs(ctx);
-									} else if (
-										_prevEndPos > 0 && {
-											var _pebRew: Int = _prevEndPos - 1;
-											while (_pebRew > 0) {
-												final _bc: Int = ctx.input.charCodeAt(_pebRew);
-												if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
-													_pebRew--;
-												else
-													break;
-											}
-											final _b: Int = ctx.input.charCodeAt(_pebRew);
-											_b == ';'.code || $predicateCall;
-										}
-									) {
-										_items.push($elemCall);
-										_prevEndPos = ctx.pos;
-										skipWs(ctx);
-									} else {
-										expectLit(ctx, $v{sepText});
-									}
-								}
-							}
-							skipWs(ctx);
-							expectLit(ctx, $v{trailText});
-							return $ctorCall;
-						};
-				}
-				return macro {
-					skipWs(ctx);
-					expectLit(ctx, $v{leadText});
-					final _items: Array<$elemCT> = [];
-					skipWs(ctx);
-					if ($closeNotNextExpr) {
-						_items.push($elemCall);
-						skipWs(ctx);
-						while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-							ctx.pos++;
-							skipWs(ctx);
-							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-							_items.push($elemCall);
-							skipWs(ctx);
-						}
-					}
-					skipWs(ctx);
-					expectLit(ctx, $v{trailText});
-					return $ctorCall;
-				};
+				if (blockEnded)
+					return lowerStarBlockEndedBranch(
+						branch, leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText
+					);
+				return lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
 			}
-			return macro {
-				skipWs(ctx);
-				expectLit(ctx, $v{leadText});
-				final _items: Array<$elemCT> = [];
-				skipWs(ctx);
-				while ($closeNotNextExpr) {
-					_items.push($elemCall);
-					skipWs(ctx);
-				}
-				skipWs(ctx);
-				expectLit(ctx, $v{trailText});
-				return $ctorCall;
-			};
+			return lowerStarNoSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall);
 		}
 
 		// Case 3 (extended): single-arg ctor wrapping a Ref, with optional
@@ -5477,6 +5186,364 @@ expectLit(ctx, $v{trailText}));
 		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
 		final body: Array<Expr> = [macro skipWs(ctx)].concat(attempts).concat([failExpr]);
 		return macro $b{body};
+	}
+
+	/**
+	 * Case 4 (no-sep): `@:lead`/`@:trail` Star with no separator. The loop
+	 * terminates by peeking at the close literal instead of consuming a
+	 * separator between items. Extracted from `lowerEnumBranch` so the
+	 * dispatcher stays under the complexity gate.
+	 */
+	private function lowerStarNoSepBranch(
+		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr
+	): Expr {
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{leadText});
+			final _items: Array<$elemCT> = [];
+			skipWs(ctx);
+			while ($closeNotNextExpr) {
+				_items.push($elemCall);
+				skipWs(ctx);
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{trailText});
+			return $ctorCall;
+		};
+	}
+
+	/**
+	 * Case 4 (plain @:sep): close-driven Star loop that consumes one
+	 * separator between elements and tolerates a trailing sep before the
+	 * close literal. Extracted from `lowerEnumBranch` so the dispatcher
+	 * stays under the complexity gate.
+	 */
+	private function lowerStarSepBranch(
+		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int
+	): Expr {
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{leadText});
+			final _items: Array<$elemCT> = [];
+			skipWs(ctx);
+			if ($closeNotNextExpr) {
+				_items.push($elemCall);
+				skipWs(ctx);
+				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+					ctx.pos++;
+					skipWs(ctx);
+					if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+					_items.push($elemCall);
+					skipWs(ctx);
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{trailText});
+			return $ctorCall;
+		};
+	}
+
+	/**
+	 * Case 4 (@:sepAlt): tolerant close-driven loop that consumes an
+	 * OPTIONAL separator (sepText or sepAltText) between elements. Mirrors
+	 * the trivia-build close-peek loop in plain mode so multi `;`-separated
+	 * anon fields parse under the non-trivia builds. Sole consumer:
+	 * `HxType.Anon`. Extracted from `lowerEnumBranch` so the dispatcher
+	 * stays under the complexity gate.
+	 */
+	private function lowerStarSepAltBranch(
+		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
+		sepAltCharCode: Int
+	): Expr {
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{leadText});
+			final _items: Array<$elemCT> = [];
+			skipWs(ctx);
+			while ($closeNotNextExpr) {
+				_items.push($elemCall);
+				skipWs(ctx);
+				if (ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode} || ctx.input.charCodeAt(ctx.pos) == $v{sepAltCharCode}) {
+					ctx.pos++;
+					skipWs(ctx);
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{trailText});
+			return $ctorCall;
+		};
+	}
+
+	/**
+	 * Case 4 (block-ended @:sep): sep between two elements may be omitted
+	 * when the prior element ended with `}`/`;` (byte-check) or a schema
+	 * predicate matches; `sepStartsElement` flips the byte-ambiguity policy
+	 * so the sep char belongs to the NEXT element. Strictly opt-in via
+	 * `lit.sepBlockEnded`. Extracted from `lowerEnumBranch` so the
+	 * dispatcher stays under the complexity gate.
+	 */
+	private function lowerStarBlockEndedBranch(
+		branch: ShapeNode, leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr,
+		ctorCall: Expr, sepCharCode: Int, sepText: String
+	): Expr {
+		final predicateName: Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
+		final accumRefForPred: Expr = macro _items;
+		final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRefForPred) : macro false;
+		// sepStartsElement (Session 9 BlockBody Star) — when block-ended is
+		// TRUE, the sep byte at pos belongs to the NEXT element, never a
+		// separator. Required for grammars where the sep char can ALSO be a
+		// valid element body (Haxe `EmptyStmt`). When the flag is absent the
+		// default permissive-sep semantics applies (sep-first branch in the
+		// loop).
+		final sepStartsElement: Bool = branch.annotations.get('lit.sepStartsElement') == true;
+		return sepStartsElement
+			? macro {
+				skipWs(ctx);
+				expectLit(ctx, $v{leadText});
+				final _items: Array<$elemCT> = [];
+				skipWs(ctx);
+				if ($closeNotNextExpr) {
+					var _prevEndPos: Int = ctx.pos;
+					_items.push($elemCall);
+					_prevEndPos = ctx.pos;
+					skipWs(ctx);
+					while ($closeNotNextExpr) {
+						final _isBE: Bool = _prevEndPos > 0 && {
+							var _pebRew: Int = _prevEndPos - 1;
+							while (_pebRew > 0) {
+								final _bc: Int = ctx.input.charCodeAt(_pebRew);
+								if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+									_pebRew--;
+								else
+									break;
+							}
+							final _b: Int = ctx.input.charCodeAt(_pebRew);
+							_b == ';'.code || $predicateCall;
+						};
+						if (_isBE) {
+							// block-ended: sep byte at pos belongs to next element
+							_items.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+							_items.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else {
+							expectLit(ctx, $v{sepText});
+						}
+					}
+				}
+				skipWs(ctx);
+				expectLit(ctx, $v{trailText});
+				return $ctorCall;
+			}
+			: macro {
+				skipWs(ctx);
+				expectLit(ctx, $v{leadText});
+				final _items: Array<$elemCT> = [];
+				skipWs(ctx);
+				if ($closeNotNextExpr) {
+					var _prevEndPos: Int = ctx.pos;
+					_items.push($elemCall);
+					_prevEndPos = ctx.pos;
+					skipWs(ctx);
+					while ($closeNotNextExpr) {
+						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+							_items.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else if (
+							_prevEndPos > 0 && {
+								var _pebRew: Int = _prevEndPos - 1;
+								while (_pebRew > 0) {
+									final _bc: Int = ctx.input.charCodeAt(_pebRew);
+									if (_bc == ' '.code || _bc == '\t'.code || _bc == '\n'.code || _bc == '\r'.code)
+										_pebRew--;
+									else
+										break;
+								}
+								final _b: Int = ctx.input.charCodeAt(_pebRew);
+								_b == ';'.code || $predicateCall;
+							}
+						) {
+							_items.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else {
+							expectLit(ctx, $v{sepText});
+						}
+					}
+				}
+				skipWs(ctx);
+				expectLit(ctx, $v{trailText});
+				return $ctorCall;
+			};
+	}
+
+	/**
+	 * Case 4 (@:trivia Star): replaces the plain element-push loop with a
+	 * collectTrivia -> parseElement -> collectTrailing pipeline that feeds
+	 * `Trivial<T>` structs into the accumulator, so leading/trailing
+	 * comments and blank-line signals survive round-trip. Supports `@:sep`
+	 * alongside `@:trivia` for close-peek Alt branches. Extracted from
+	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 */
+	private function lowerTriviaStarBranch(
+		branch: ShapeNode, ctorRef: Expr, leadText: String, trailText: String, sepText: Null<String>, elemCT: ComplexType, elemCall: Expr,
+		closeNextOrEofExpr: Expr
+	): Expr {
+		final wrappedCT: ComplexType = TPath({
+			pack: ['anyparse', 'runtime'],
+			name: 'Trivial',
+			params: [TPType(elemCT)]
+		});
+		// ω-close-trailing-alt: synth ctor of close-peek `@:trivia`
+		// Alt branches (e.g. `HxStatementT.BlockStmt`) carries an
+		// extra positional `closeTrailing:Null<String>` arg captured
+		// here by `collectTrailingFull(ctx)` right after the close
+		// literal. The Full variant keeps comment delimiters so the
+		// writer can round-trip block-vs-line style (ω-trailing-
+		// block-style). Plain mode keeps the 1-arg ctor.
+		//
+		// ω-open-trailing-alt: when the branch carries `@:lead`,
+		// append `_openTrail` as a 3rd positional arg. Captured
+		// via `collectTrailingFull` right after the open literal
+		// (mirror of Seq-struct's `<field>TrailingOpen` slot).
+		// Without this, an inline `[ /* foo */ ]` would lose the
+		// comment — the loop's terminal `_lead` is dropped on
+		// the close-peek break, and same-line comments after `[`
+		// don't show up in `collectTrivia`'s newline-anchored
+		// scan anyway.
+		final hasOpenTrail: Bool = branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
+		final ctorArgsTrivia: Array<Expr> = [macro _items, macro _closeTrail];
+		if (hasOpenTrail) {
+			ctorArgsTrivia.push(macro _openTrail);
+			// ω-orphan-trivia-alt: parallel to the Seq-struct
+			// trail-orphan capture in `emitTriviaStarFieldSteps`.
+			// Captured into mutable locals on the close-peek break
+			// (see loop body below) so trivia between the last Star
+			// element and the close literal survives round-trip.
+			ctorArgsTrivia.push(macro _trailBB);
+			ctorArgsTrivia.push(macro _trailLC);
+			// ω-arraylit-source-trail-comma: sep+trail+lead+@:trivia
+			// branches additionally forward whether the source had a
+			// trailing separator before the close literal. The synth
+			// ctor's 6th positional `trailPresent:Bool` (gated on
+			// `:sep` in `TriviaTypeSynth.buildEnumCtor`) holds the
+			// last-iteration `matchLit(sepText)` result captured by
+			// `sepMatchExpr` below. Same `:sep` gate keeps the
+			// positional count in sync between parser-emit and synth-
+			// define for non-sep branches (BlockStmt, BlockExpr).
+			if (sepText != null) {
+				ctorArgsTrivia.push(macro _trailPresent);
+			}
+		}
+		final ctorCallTrivia: Expr = {
+			expr: ECall(ctorRef, ctorArgsTrivia),
+			pos: Context.currentPos(),
+		};
+		final sepMatchExpr: Expr = if (sepText != null) {
+			// Same horizontal-whitespace-only skip as the struct-field
+			// trivia+sep path — avoids `skipWs` consuming the trailing
+			// `// comment` before `collectTrailing` runs.
+			//
+			// ω-arraylit-source-trail-comma: capture matchLit result
+			// into `_trailPresent`. After the close-peek loop exits,
+			// the local holds the LAST iteration's sep result — `true`
+			// iff the source committed to a trailing `,` before the
+			// close literal. Forwarded as the 6th positional ctor arg
+			// when both `:lead` and `:sep` are present (see ctorArgs
+			// build above). Mirror of the struct-Star-side capture at
+			// `emitTriviaStarFieldSteps`'s `$i{trailPresentLocal} =
+			// matchLit(...)` (Lowering.hx around line 2859).
+			//
+			// ω-objectlit-source-inter-sep: additionally capture per-
+			// iteration into `_sepAfter` for the per-element
+			// `Trivial.sepAfter` slot. The writer's trivia-branch sep
+			// gate (`triviaSepStarExpr` :6592) consults this to
+			// suppress inter-element seps the source intentionally
+			// omitted (lineends/issue_111). For sep-less branches the
+			// loop body sets `_sepAfter = true` (always-emit default).
+			macro {
+				while (ctx.pos < ctx.input.length) {
+					final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+						ctx.pos++;
+					else
+						break;
+				}
+				_sepAfter = matchLit(ctx, $v{sepText});
+				_trailPresent = _sepAfter;
+			}
+		} else {
+			macro {};
+		};
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{leadText});
+			final _openTrail: Null<String> = collectTrailingFull(ctx);
+			final _items: Array<$wrappedCT> = [];
+			var _trailBB: Bool = false;
+			var _trailLC: Array<String> = [];
+			// ω-arraylit-source-trail-comma: declared unconditionally to
+			// keep the macro body shape stable; only assigned when
+			// `sepText != null` (see `sepMatchExpr` above) and only
+			// forwarded to the ctor when both `:lead` AND `:sep` apply
+			// (see `ctorArgsTrivia` build above). For sep-less branches
+			// the var is unused; Haxe does not warn on unused locals.
+			var _trailPresent: Bool = false;
+			while (true) {
+				final _lead = collectTrivia(ctx);
+				if ($closeNextOrEofExpr) {
+					_trailBB = _lead.blankBefore;
+					_trailLC = _lead.leadingComments;
+					break;
+				}
+				final _node: $elemCT = $elemCall;
+				// ω-trivia-trailing-before-sep (Slice 50 mirror of
+				// emitStarFieldSteps :3339): probe a same-line trailing
+				// comment BEFORE the sep-match so `elem /*c*/ , next`
+				// shape parses. Without this, the pre-sep horizontal-ws
+				// skip stops at `/`, sep-match fails, the next iteration
+				// tries to parse `,` as element start → SKIP_PARSE.
+				// Captured into the existing `trailingComment` slot via
+				// coalescing — the synth wrapper's `trailingBeforeSep`
+				// flag records the position so the writer can emit at
+				// the source position instead of always after sep.
+				final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+				var _sepAfter: Bool = true;
+				$sepMatchExpr;
+				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+				_items.push({
+					blankBefore: _lead.blankBefore,
+					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+					newlineBefore: _lead.newlineBefore,
+					leadingComments: _lead.leadingComments,
+					trailingComment: _trailing,
+					trailingBeforeSep: _trailingBeforeSep != null,
+					sepAfter: _sepAfter,
+					// ω-643-leading-block-glue: the last leading comment
+					// sat on the same source line as the element (no
+					// newline between the comment and the element's first
+					// token). The writer keeps a same-line BLOCK comment
+					// glued; line-style is filtered at emit. Empty
+					// leadingComments → false (nothing to glue).
+					leadingCommentsGlued: _lead.leadingComments.length > 0 && !_lead.newlineAfterLeadingComments,
+					node: _node,
+				});
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{trailText});
+			final _closeTrail: Null<String> = collectTrailingFull(ctx);
+			return $ctorCallTrivia;
+		};
 	}
 
 }
