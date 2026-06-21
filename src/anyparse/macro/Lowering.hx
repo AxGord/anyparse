@@ -708,76 +708,8 @@ class Lowering {
 		// Case 4: single-arg ctor wrapping Array<Ref> with @:lead/@:trail and
 		// optional @:sep. No-sep variant terminates the loop by peeking at
 		// the close character instead of consuming a separator between items.
-		if (leadText != null && trailText != null && children.length == 1 && children[0].kind == Star) {
-			final starNode: ShapeNode = children[0];
-			final inner: ShapeNode = starNode.children[0];
-			if (inner.kind != Ref) {
-				Context.fatalError('Lowering: Star child must be a Ref in Phase 2', Context.currentPos());
-			}
-			final elemRefName: String = inner.annotations.get('base.ref');
-			final elemFn: String = parseFnName(elemRefName);
-			final elemCT: ComplexType = ruleReturnCT(elemRefName);
-			final elemCall: Expr = {
-				expr: ECall(macro $i{elemFn}, [macro ctx]),
-				pos: Context.currentPos(),
-			};
-			// See struct-field close-peek (emitStarFieldSteps) for why
-			// we flip to full-string `peekLit` when close is multi-byte.
-			final closeCharCode: Int = trailText.charCodeAt(0);
-			final closeNotNextExpr: Expr = trailText.length == 1
-				? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
-				: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{trailText});
-			final closeNextOrEofExpr: Expr = trailText.length == 1
-				? macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}
-				: macro ctx.pos >= ctx.input.length || peekLit(ctx, $v{trailText});
-			final ctorCall: Expr = { expr: ECall(ctorRef, [macro _items]), pos: Context.currentPos() };
-			// Trivia-mode @:trivia Star in an enum branch (e.g. HxStatement.BlockStmt
-			// marks its stmts Star via the branch-level @:trivia meta propagated to
-			// the Star by TriviaAnalysis). Replace the plain element-push loop with
-			// a collectTrivia → parseElement → collectTrailing pipeline that feeds
-			// Trivial<T> structs into the accumulator.
-			//
-			// ω-trivia-sep: `@:sep` is supported alongside `@:trivia` for
-			// close-peek Alt branches (e.g. `HxExpr.ArrayExpr` with
-			// `@:lead('[') @:trail(']') @:sep(',')`). The sep is matched
-			// after each element via `matchLit`, before `collectTrailing`,
-			// so a same-line `// comment` after `,` attaches to the
-			// just-pushed element.
-			if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true)
-				return lowerTriviaStarBranch(branch, ctorRef, leadText, trailText, sepText, elemCT, elemCall, closeNextOrEofExpr);
-			if (sepText != null) {
-				final sepCharCode: Int = sepText.charCodeAt(0);
-				// Opt-in (@:sepAlt) tolerant variant: a close-driven loop that
-				// consumes an OPTIONAL separator (sepText or sepAltText) between
-				// elements. Mirrors the trivia-build close-peek loop in plain
-				// mode so multi `;`-separated anon fields parse under the
-				// non-trivia HaxeParser / HaxeModuleSpanParser builds. Only the
-				// @:sepAlt branch (HxType.Anon) reaches this; the strict loop
-				// below stays byte-identical for every other @:sep Star.
-				if (sepAltText != null)
-					return lowerStarSepAltBranch(
-						leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepAltText.charCodeAt(0)
-					);
-				// Block-ended exemption (Session 2 pilot — mirror of
-				// `emitStarFieldSteps`). When the enum branch carries
-				// `@:sep('text', tailRelax, blockEnded)`, sep between two
-				// elements may be omitted when the prior element ended
-				// with `}` or `;` (byte-check). The optional
-				// `blockEnded('<predicate>')` form additionally consults a
-				// schema-instance predicate on the just-pushed element to
-				// decide sep-elision based on AST shape (Session 6 option
-				// b2 — see `buildBlockEndedPredicateCall`). Strictly
-				// opt-in: when `lit.sepBlockEnded` is absent the
-				// byte-identical pre-existing path runs.
-				final blockEnded: Bool = branch.annotations.get('lit.sepBlockEnded') == true;
-				if (blockEnded)
-					return lowerStarBlockEndedBranch(
-						branch, leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText
-					);
-				return lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
-			}
-			return lowerStarNoSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall);
-		}
+		if (leadText != null && trailText != null && children.length == 1 && children[0].kind == Star)
+			return lowerStarBranch(branch, ctorRef, leadText, trailText, sepText, sepAltText);
 
 		// Case 3 (extended): single-arg ctor wrapping a Ref, with optional
 		// kw/lit lead and optional lit trail. No separator loop — that's
@@ -5635,6 +5567,86 @@ expectLit(ctx, $v{trailText}));
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
 			pos: Context.currentPos(),
 		};
+	}
+
+	/**
+	 * Case 4 dispatch: compute the shared close-peek locals (element call,
+	 * close-not-next / close-or-eof probes, ctor call) for a `@:lead`/
+	 * `@:trail` Star branch, then route to the trivia / sepAlt / block-ended
+	 * / plain-sep / no-sep arm. Extracted from `lowerEnumBranch` so the
+	 * dispatcher stays under the complexity gate.
+	 */
+	private function lowerStarBranch(
+		branch: ShapeNode, ctorRef: Expr, leadText: String, trailText: String, sepText: Null<String>, sepAltText: Null<String>
+	): Expr {
+		final starNode: ShapeNode = branch.children[0];
+		final inner: ShapeNode = starNode.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError('Lowering: Star child must be a Ref in Phase 2', Context.currentPos());
+		}
+		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemFn: String = parseFnName(elemRefName);
+		final elemCT: ComplexType = ruleReturnCT(elemRefName);
+		final elemCall: Expr = {
+			expr: ECall(macro $i{elemFn}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		// See struct-field close-peek (emitStarFieldSteps) for why
+		// we flip to full-string `peekLit` when close is multi-byte.
+		final closeCharCode: Int = trailText.charCodeAt(0);
+		final closeNotNextExpr: Expr = trailText.length == 1
+			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{trailText});
+		final closeNextOrEofExpr: Expr = trailText.length == 1
+			? macro ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) == $v{closeCharCode}
+			: macro ctx.pos >= ctx.input.length || peekLit(ctx, $v{trailText});
+		final ctorCall: Expr = { expr: ECall(ctorRef, [macro _items]), pos: Context.currentPos() };
+		// Trivia-mode @:trivia Star in an enum branch (e.g. HxStatement.BlockStmt
+		// marks its stmts Star via the branch-level @:trivia meta propagated to
+		// the Star by TriviaAnalysis). Replace the plain element-push loop with
+		// a collectTrivia → parseElement → collectTrailing pipeline that feeds
+		// Trivial<T> structs into the accumulator.
+		//
+		// ω-trivia-sep: `@:sep` is supported alongside `@:trivia` for
+		// close-peek Alt branches (e.g. `HxExpr.ArrayExpr` with
+		// `@:lead('[') @:trail(']') @:sep(',')`). The sep is matched
+		// after each element via `matchLit`, before `collectTrailing`,
+		// so a same-line `// comment` after `,` attaches to the
+		// just-pushed element.
+		if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true)
+			return lowerTriviaStarBranch(branch, ctorRef, leadText, trailText, sepText, elemCT, elemCall, closeNextOrEofExpr);
+		if (sepText != null) {
+			final sepCharCode: Int = sepText.charCodeAt(0);
+			// Opt-in (@:sepAlt) tolerant variant: a close-driven loop that
+			// consumes an OPTIONAL separator (sepText or sepAltText) between
+			// elements. Mirrors the trivia-build close-peek loop in plain
+			// mode so multi `;`-separated anon fields parse under the
+			// non-trivia HaxeParser / HaxeModuleSpanParser builds. Only the
+			// @:sepAlt branch (HxType.Anon) reaches this; the strict loop
+			// below stays byte-identical for every other @:sep Star.
+			if (sepAltText != null)
+				return lowerStarSepAltBranch(
+					leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepAltText.charCodeAt(0)
+				);
+			// Block-ended exemption (Session 2 pilot — mirror of
+			// `emitStarFieldSteps`). When the enum branch carries
+			// `@:sep('text', tailRelax, blockEnded)`, sep between two
+			// elements may be omitted when the prior element ended
+			// with `}` or `;` (byte-check). The optional
+			// `blockEnded('<predicate>')` form additionally consults a
+			// schema-instance predicate on the just-pushed element to
+			// decide sep-elision based on AST shape (Session 6 option
+			// b2 — see `buildBlockEndedPredicateCall`). Strictly
+			// opt-in: when `lit.sepBlockEnded` is absent the
+			// byte-identical pre-existing path runs.
+			final blockEnded: Bool = branch.annotations.get('lit.sepBlockEnded') == true;
+			if (blockEnded)
+				return lowerStarBlockEndedBranch(
+					branch, leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText
+				);
+			return lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
+		}
+		return lowerStarNoSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall);
 	}
 
 }
