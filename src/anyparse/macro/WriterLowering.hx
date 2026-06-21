@@ -376,356 +376,7 @@ class WriterLowering {
 		if (ternaryOp != null) return lowerTernaryBranch(c);
 
 		// ---- Infix ----
-		if (prattPrec != null) {
-			final prec: Int = (prattPrec: Int);
-			final assoc: String = prattAssoc ?? 'Left';
-			final opText: String = getOperatorText(branch);
-			final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
-			final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
-			// `@:fmt(tight)` on the ctor suppresses the default surrounding
-			// spaces. Used by Haxe's interval `...` where `0...n` is the
-			// idiomatic shape — the policy is grammar-level (per-operator),
-			// not format-level, because tightness is a property of the
-			// specific operator literal, not the language as a whole.
-			// ω-arrow-fn-type-haxe3: a per-ctor whitespace-policy flag
-			// (e.g. `@:fmt(functionTypeHaxe3)` on `HxType.Arrow`) puts the
-			// op literal under a runtime switch on `opt.<flag>` so the
-			// spacing follows the user's `hxformat.json` config. Default
-			// `WhitespacePolicy.None` preserves the historic tight shape
-			// without `@:fmt(tight)` needed in tandem.
-			final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3']);
-			final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
-			// Assignment-class operators (prec=0: `=`, `+=`, `<<=`, `??=`, …)
-			// keep flat emission. The break point for a long assignment lives
-			// inside its RHS chain (which has its own Group), not at the `=`
-			// itself — haxe-formatter expects `dirty = dirty\n\t|| ...`, i.e.
-			// `lhs = first-of-rhs` on the lead line and breaks ONLY at the
-			// inner binary chain. Wrapping `=` in a Group would force a break
-			// before `=` once the full flat width exceeds the line, producing
-			// `dirty\n\t= ...` — wrong indent and wrong shape.
-			final isAssign: Bool = prec == 0;
-			final opWithSpaces: String = isTight ? opText : ' ' + opText + ' ';
-			// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
-			// right child references a different enum (e.g. `Is(left:HxExpr,
-			// right:HxType)`), the right operand uses that type's own writer
-			// at its default ctxPrec (no precedence parenthesisation cross-
-			// type). Self-symmetric branches keep the existing same-fn path.
-			final rightChild: ShapeNode = children[1];
-			final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
-			final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
-			// ω-value-yielded-if-tail-barrier (SI-1): when the infix ctor carries
-			// `@:fmt(propagateExprPosition)` (e.g. `HxExpr.ThinArrow` `->` /
-			// `Arrow` `=>`), wrap the `.right` operand's opt arg in
-			// `_setExprPosition` so the arrow body inherits the expression-
-			// position frame (its value IS the arrow's yielded value). The `.left`
-			// operand stays on `macro opt` (default null). Null when the flag is
-			// absent → byte-identical to the pre-slice call.
-			final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-			final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
-			final rightCall: Expr = isAsymmetric
-				? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
-				: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
-			if (isTight || isAssign) {
-				// Assign / arrow ops (prec 0, non-tight): split the trailing
-				// space into `_dop(' ')` (OptSpace) so the renderer drops it
-				// when the RHS emits a leading break-mode hardline (e.g.
-				// `dirty =\n\t\t\tdirty || ...` from a OnePerLine wrapping
-				// chain on the RHS), avoiding a spurious `dirty = \n…`
-				// trailing-space-before-newline. Flat emission is unchanged
-				// — the next Text from `$rightCall` flushes the OptSpace.
-				// Tight ops keep the original single-Text shape (no spaces).
-				final opEmitExpr: Expr = infixPolicyFlag != null
-					? whitespacePolicyInfix(opText, infixPolicyFlag)
-					: macro _dt($v{opWithSpaces});
-				final innerExpr: Expr = isAssign && !isTight
-					? macro _dc([
-						$leftCall,
-						_dt(' '),
-						_dt($v{opText}),
-						_dop(' '),
-						$rightCall,
-					])
-					: macro _dc([
-						$leftCall,
-						$opEmitExpr,
-						$rightCall,
-					]);
-				return macro {
-					final _inner: anyparse.core.Doc = $innerExpr;
-					if ($v{prec} < ctxPrec)
-						_dc([_dt('('), _inner, _dt(')')])
-					else
-						_inner;
-				};
-			}
-			// Slice ω-binop-wraprules: `||` / `&&` (opBoolChain) and
-			// `+` / `-` (opAddSubChain) dispatch to a chain-level emit
-			// that gathers the full same-class subtree into a flat
-			// `(items, ops)` pair, runs the cascade once, and emits one
-			// `BinaryChainEmit` shape (NoWrap / OnePerLineAfterFirst /
-			// OnePerLine / FillLine). Inner same-class `BinOp` nodes are
-			// consumed by the AST walk — they never re-enter the writer
-			// through their own ctor branch, so the cascade evaluates
-			// exactly once per chain regardless of depth. Mirror of
-			// `wrapWithChainDispatch` for postfix method chains.
-			//
-			// Extraction is inline (vs an external helper) so the
-			// `case Or(...)` / `case And(...)` patterns resolve against
-			// the current writer's value type — `HxExpr` in plain mode,
-			// `HxExprT` in trivia mode (paired type carries the same
-			// ctor names). A typed external helper would force a
-			// `(_e:HxExpr)` parameter that fails compile in trivia
-			// writers.
-			final isChainBool: Bool = opText == '||' || opText == '&&';
-			final isChainAddSub: Bool = opText == '+' || opText == '-';
-			if (isChainBool || isChainAddSub) {
-				final chainRulesField: String = isChainBool ? 'opBoolChainWrap' : 'opAddSubChainWrap';
-				final chainRulesExpr: Expr = optFieldAccess(chainRulesField);
-				final argTypeCT: ComplexType = ruleValueCT(typePath);
-				// Leaf operands render at the chain's own precedence. A
-				// sub-expression with strictly lower prec (ternary inside
-				// `||`, assign inside `+`) gets the parens it needs;
-				// same-class operators are consumed by the extractor.
-				final leafCall: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec);
-				// ω-keep-chain (increment 2): in Trivia mode the chain ctors
-				// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
-				// per-operand source-newline). Bind it (`_nl`) and push into the
-				// `_breaks` array parallel to `_ops` so `BinaryChainEmit.emit`'s
-				// `WrapMode.Keep` shaper can reproduce the source line breaks. In
-				// Plain mode the ctors keep 2-operand arity and no `_breaks` is
-				// threaded (chain stays glued via shapeNoWrap) → byte-inert.
-				// Outer-ctor chainNewline (read via altSlotAccess; null in Plain)
-				// — the gap before THIS branch's right operand (`argNames[1]`),
-				// pushed between the two top-level gathers to stay parallel to
-				// the outer `_ops.push(opText)`.
-				final outerChainNl: Null<Expr> = ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainNewline) : null;
-				// All four chain ctors (Or/And/Add/Sub) carry `captureChainNewline`,
-				// so `outerChainNl` is non-null in Trivia mode; the `!= null` guard
-				// keeps `_breaks` declaration and the gatherSwitch's `_breaks.push`
-				// strictly in lockstep (no half-wired state).
-				final threadBreaks: Bool = ctx.trivia && outerChainNl != null;
-				final gatherSwitch: Expr = if (threadBreaks) {
-					isChainBool
-						? macro switch _e {
-							case Or(_l, _r, _nl):
-								_gather(_l);
-								_ops.push('||');
-								_breaks.push(_nl);
-								_gather(_r);
-							case And(_l, _r, _nl):
-								_gather(_l);
-								_ops.push('&&');
-								_breaks.push(_nl);
-								_gather(_r);
-							case _: _items.push($leafCall);
-						}
-						: macro switch _e {
-							case Add(_l, _r, _nl):
-								_gather(_l);
-								_ops.push('+');
-								_breaks.push(_nl);
-								_gather(_r);
-							case Sub(_l, _r, _nl):
-								_gather(_l);
-								_ops.push('-');
-								_breaks.push(_nl);
-								_gather(_r);
-							case _: _items.push($leafCall);
-						};
-				} else {
-					isChainBool
-						? macro switch _e {
-							case Or(_l, _r):
-								_gather(_l);
-								_ops.push('||');
-								_gather(_r);
-							case And(_l, _r):
-								_gather(_l);
-								_ops.push('&&');
-								_gather(_r);
-							case _: _items.push($leafCall);
-						}
-						: macro switch _e {
-							case Add(_l, _r):
-								_gather(_l);
-								_ops.push('+');
-								_gather(_r);
-							case Sub(_l, _r):
-								_gather(_l);
-								_ops.push('-');
-								_gather(_r);
-							case _: _items.push($leafCall);
-						};
-				}
-				// `_breaks` (parallel to `_ops`) only exists in Trivia mode.
-				// ω-keep-chain head break (increment 2): a `return`→head source
-				// newline is delivered via the shared `opt._varKwNewline` channel
-				// (set by the `ReturnStmt` Case-3 `_setVarKwNewline` threading;
-				// the same field VarStmt uses). Read it as the chain head break
-				// (single `EVars` → declared at the outer block scope) and CLEAR
-				// it on `opt` (folded into the `_clearCallArgChainNest` re-bind
-				// below) so it does not leak to a nested chain / the multiVar
-				// fold. Trivia-keep only; in Plain / non-keep the field is false
-				// and untouched → byte-inert.
-				// ω-keep-chain (increment: opadd_chain_keep): drop the chain
-				// `_headBreak` when this Keep chain is wrapped by a return-context
-				// `ParenExpr` (`_keepChainInParen`, declared just above) — the
-				// `return`→value source newline is reproduced at the value level
-				// (`returnBody` FitLine), NOT inside the paren. A bare-value chain
-				// (opbool case-2) has `_keepChainInParen == false` → keeps headBreak.
-				final headDecl: Expr = threadBreaks ? macro final _headBreak: Bool = opt._varKwNewline && !_keepChainInParen : macro {};
-				// Fold `_clearVarKwNewline` into the `_clearCallArgChainNest`
-				// re-bind so the head-break flag is consumed once at the
-				// outermost chain (leaf/nested chains see it cleared).
-				// ω-keep-chain (increment: opadd_chain_keep): additionally mark
-				// `_keepFlatInner` on the leaf-operand opt when THIS chain's config
-				// resolves to `WrapMode.Keep` (`$chainRulesExpr.defaultMode == Keep`).
-				// A kept chain preserves source line structure verbatim (operand
-				// lines may exceed `lineWidth`), so its operands' inner `ParenExpr`
-				// must stay GLUED — the flag flips the `expressionParenHardFlatten`
-				// emit to the unconditional-glue branch. Runtime-gated so a non-keep
-				// chain (NoWrap / FillLine / OnePerLine) passes the flag through false
-				// → byte-inert. The `_setKeepFlatInner` re-bind wraps the existing
-				// clear chain so the flag rides the SAME opt the leaf `makeWriteCall`s
-				// thread. Trivia+chain-only (`threadBreaks`); Plain keeps the legacy form.
-				final clearOptExpr: Expr = threadBreaks
-					? macro _setKeepFlatInner(
-						_clearKeepChainInParen(_clearVarKwNewline(_clearCallArgChainNest(opt))),
-						$chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep
-					)
-					: macro _clearCallArgChainNest(opt);
-				final breaksDecl: Expr = threadBreaks ? macro final _breaks: Array<Bool> = [] : macro {};
-				// Top-level gather: head operand, the outer operator, the outer
-				// ctor's source-newline (parallel to that operator), tail operand.
-				final outerBreakPush: Expr = threadBreaks ? macro _breaks.push(${outerChainNl}) : macro {};
-				final gatherInvoke: Expr = macro {
-					_gather($i{argNames[0]});
-					_ops.push($v{opText});
-					$outerBreakPush;
-					_gather($i{argNames[1]});
-				};
-				// Thread `_breaks` (sourceBreakBefore) + `_headBreak` only in
-				// Trivia mode; Plain keeps the legacy 6-arg call (chain glues).
-				final emitCall: Expr = threadBreaks
-					? macro anyparse.format.wrap.BinaryChainEmit.emit(
-						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak
-					)
-					: macro anyparse.format.wrap.BinaryChainEmit.emit(
-						_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced
-					);
-				return macro {
-					final _items: Array<anyparse.core.Doc> = [];
-					final _ops: Array<String> = [];
-					$breaksDecl;
-					// ω-condwrap-call-arg-nest + ω-callarg-chain-nest: suppress
-					// the chain's OWN continuation `Nest(cols, …)` when an outer
-					// context already supplied the `+cols` indent — either a
-					// condWrap `FillLineWithLeadingBreak` brkShape
-					// (`_chainModeOverride`, set at the `@:fmt(condWrap)` site via
-					// `_setChainModeOverride`; only that mode expands
-					// `WrapList.emitCondition` to `Nest(cols, [Line('\n'),
-					// condDoc])`), or a leading-break call argument
-					// (`_callArgChainNest`, set at the call's per-arg writer call
-					// when `callParameterWrap.defaultMode == FLWLB`, whose
-					// `shapeFillLineWithLeadingBreak` Nests the arg at +cols).
-					// Read the flag from the inbound opt, then CLEAR
-					// `_callArgChainNest` so only the OUTERMOST chain consumes it
-					// — leaf operands / nested chains (written via `makeWriteCall`,
-					// which threads this same `opt`) keep their own Nest.
-					// `_chainModeOverride` is deliberately NOT cleared: condWrap
-					// collapses every chain in the condition. Safe to read both
-					// fields directly: only Haxe declares `||`/`&&`/`+`/`-` chain
-					// infix (HxModuleWriteOptions carries the fields).
-					// `_condWrapForced` distinguishes the cond-wrap collapse
-					// (`_chainModeOverride == FLWLB`, set at the `@:fmt(condWrap)`
-					// site) from a leading-break CALL-ARG (`_callArgChainNest`):
-					// both suppress the chain's own Nest, but only the cond-wrap
-					// case is a chain-UNWRAP candidate (ω-chain-keep-flat). A
-					// call-arg chain must keep its configured break shape (fork
-					// `unwrapBoolOps` fires inside `applyArrowWrapping`, never for
-					// a chain that is itself a call argument — `opbool_in_call_
-					// leading_break_preserved`, `opsub_chain_in_single_param_call`).
-					final _condWrapForced: Bool = opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
-					// ω-keep-chain (increment: opadd_chain_keep): a `WrapMode.Keep`
-					// chain wrapped by an enclosing `ParenExpr` in a return-head-break
-					// context (`opt._keepChainInParen`, set at the paren's inner opt)
-					// suppresses its OWN continuation `Nest` — the value-level break
-					// already supplied the +cols, so the chain operators co-indent
-					// with the head (no +2cols compounding). The `$headDecl` below
-					// likewise drops the chain `_headBreak`. Gated on the chain config
-					// being Keep so non-keep chains in a paren are byte-inert.
-					final _keepChainInParen: Bool = opt._keepChainInParen
-						&& $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep;
-					final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
-					$headDecl;
-					final opt = $clearOptExpr;
-					function _gather(_e: $argTypeCT): Void $gatherSwitch;
-					$gatherInvoke;
-					final _inner: anyparse.core.Doc = $emitCall;
-					if ($v{prec} < ctxPrec)
-						_dc([_dt('('), _inner, _dt(')')])
-					else
-						_inner;
-				};
-			}
-			// Group/Line/Nest wrap for non-tight non-assign non-chain
-			// infix (compare, shift, bitwise, `is`, `??`, `*`/`/`/`%`): lets
-			// the renderer pick flat (Line(' ') → space) when the chain's
-			// full flat width fits in the remaining columns, else break.
-			// Per-binary Group cascading from G.1 (ω-binop-group-wrap).
-			//
-			// ω-binop-open-delim-glue (opadd_chain* B1-remainder): these
-			// operators are NOT wrap-points in the fork — `MarkWrapping`
-			// wrap-marks ONLY `Binop(OpAdd)` / `Binop(OpLt)` (type param) /
-			// `Binop(OpArrow)`; `*`/`/`/`%`/`>`/`<<`/`&`/`is`/`??`/compare
-			// never break at the operator, only their bracketed operands
-			// break. The legacy `Group(Concat([left, Nest(cols, [Line, op,
-			// right])]))` breaks the soft `Line` whenever the content carries
-			// a committed hardline — which happens when the RIGHT operand is
-			// a paren-wrapped chain that wraps one-per-line (e.g.
-			// `return 1 * (a + b + c + …)`). The enclosing `Mul` Group then
-			// over-breaks `1\n\t* (…` where the fork keeps `1 * (` glued and
-			// lets ONLY the inner paren's chain wrap. When the right operand
-			// STARTS WITH an open delimiter (`(`/`[`/`{` — a paren-expr /
-			// call / array / object whose bracket absorbs the break),
-			// emit the operator GLUED (flat `left op right`, no Group/Line):
-			// the bracketed operand carries the wrap inside its own delims.
-			// `startsWithOpenDelim` is an O(left-spine) structural check
-			// (NO render-time re-measure) so it is exponential-safe even on
-			// deeply nested same-class binary trees (`(a * (b * (c …)))`) —
-			// each level just glues, no probe nesting. Non-delim right
-			// operands (leaf idents, prefix-op exprs) keep the legacy Group
-			// break unchanged. Byte-inert when the bracketed operand does
-			// not wrap (no hardline → the legacy Group never broke → glued
-			// shape is byte-identical to the flat Group resolution).
-			final opAfterText: String = opText + ' ';
-			return macro {
-				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-				final _left: anyparse.core.Doc = $leftCall;
-				final _right: anyparse.core.Doc = $rightCall;
-				// ω-binop-close-delim-glue (cond-paren-OPEN sibling): when the
-				// LEFT operand ENDS with a close delim (`[…].indexOf(x)`,
-				// `(chain)`), the bracketed operand wraps inside its own brackets
-				// and the never-wrap-marked operator (`<`/`>`/`*`/`/`/compare)
-				// must RIDE the close-delim line (`].indexOf(x) < 0`), not break
-				// onto its own line. The right-spine mirror of the existing
-				// `startsWithOpenDelim(_right)` head-glue; both keep the operator
-				// glued so only the bracketed operand carries the break. Byte-
-				// inert when the left operand does not wrap (no committed hardline
-				// → the legacy Group never broke → glued shape is byte-identical).
-				final _inner: anyparse.core.Doc = anyparse.format.wrap.WrapList.startsWithOpenDelim(_right)
-					|| anyparse.format.wrap.WrapList.endsWithCloseDelim(_left)
-					? _dc([_left, _dt($v{opWithSpaces}), _right])
-					: _dg(_dc([
-						_left,
-						_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
-					]));
-				if ($v{prec} < ctxPrec)
-					_dc([_dt('('), _inner, _dt(')')])
-				else
-					_inner;
-			};
-		}
+		if (prattPrec != null) return lowerInfixBranch(c);
 
 		// ---- Prefix ----
 		if (prefixOp != null) return lowerPrefixBranch(c);
@@ -14364,6 +14015,381 @@ class WriterLowering {
 		}
 		Context.fatalError('WriterLowering: unsupported postfix shape', Context.currentPos());
 		throw 'unreachable';
+	}
+
+	/**
+	 * Infix branch (`pratt.prec`): binary operator emit. Resolves the
+	 * operator shape (tight / assign / chain / group-wrap) and dispatches
+	 * to the matching sub-builder; the group/line/nest fallback stays
+	 * inline. Extracted from `lowerEnumBranch` so the dispatcher stays
+	 * under the complexity gate.
+	 */
+	private function lowerInfixBranch(c: LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final typePath: String = c.typePath;
+		final writeFnName: String = c.writeFnName;
+		final hasPratt: Bool = c.hasPratt;
+		final argNames: Array<String> = c.argNames;
+		final children: Array<ShapeNode> = branch.children;
+		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
+		final assoc: String = (branch.annotations.get('pratt.assoc'): Null<String>) ?? 'Left';
+		final opText: String = getOperatorText(branch);
+		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
+		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
+		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3']);
+		final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
+		final isAssign: Bool = prec == 0;
+		final opWithSpaces: String = isTight ? opText : ' ' + opText + ' ';
+		final isChainBool: Bool = opText == '||' || opText == '&&';
+		final isChainAddSub: Bool = opText == '+' || opText == '-';
+		if (isTight || isAssign) return lowerInfixTightAssign(c);
+		if (isChainBool || isChainAddSub) return lowerInfixChain(c);
+		// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
+		// right child references a different enum (e.g. `Is(left:HxExpr,
+		// right:HxType)`), the right operand uses that type's own writer
+		// at its default ctxPrec (no precedence parenthesisation cross-
+		// type). Self-symmetric branches keep the existing same-fn path.
+		final rightChild: ShapeNode = children[1];
+		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
+		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
+		final rightCall: Expr = isAsymmetric
+			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
+			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
+		// Group/Line/Nest wrap for non-tight non-assign non-chain
+		// infix (compare, shift, bitwise, `is`, `??`, `*`/`/`/`%`): lets
+		// the renderer pick flat (Line(' ') → space) when the chain's
+		// full flat width fits in the remaining columns, else break.
+		// Per-binary Group cascading from G.1 (ω-binop-group-wrap).
+		//
+		// ω-binop-open-delim-glue (opadd_chain* B1-remainder): these
+		// operators are NOT wrap-points in the fork — `MarkWrapping`
+		// wrap-marks ONLY `Binop(OpAdd)` / `Binop(OpLt)` (type param) /
+		// `Binop(OpArrow)`; `*`/`/`/`%`/`>`/`<<`/`&`/`is`/`??`/compare
+		// never break at the operator, only their bracketed operands
+		// break. The legacy `Group(Concat([left, Nest(cols, [Line, op,
+		// right])]))` breaks the soft `Line` whenever the content carries
+		// a committed hardline — which happens when the RIGHT operand is
+		// a paren-wrapped chain that wraps one-per-line (e.g.
+		// `return 1 * (a + b + c + …)`). The enclosing `Mul` Group then
+		// over-breaks `1\n\t* (…` where the fork keeps `1 * (` glued and
+		// lets ONLY the inner paren's chain wrap. When the right operand
+		// STARTS WITH an open delimiter (`(`/`[`/`{` — a paren-expr /
+		// call / array / object whose bracket absorbs the break),
+		// emit the operator GLUED (flat `left op right`, no Group/Line):
+		// the bracketed operand carries the wrap inside its own delims.
+		// `startsWithOpenDelim` is an O(left-spine) structural check
+		// (NO render-time re-measure) so it is exponential-safe even on
+		// deeply nested same-class binary trees (`(a * (b * (c …)))`) —
+		// each level just glues, no probe nesting. Non-delim right
+		// operands (leaf idents, prefix-op exprs) keep the legacy Group
+		// break unchanged. Byte-inert when the bracketed operand does
+		// not wrap (no hardline → the legacy Group never broke → glued
+		// shape is byte-identical to the flat Group resolution).
+		final opAfterText: String = opText + ' ';
+		return macro {
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			final _left: anyparse.core.Doc = $leftCall;
+			final _right: anyparse.core.Doc = $rightCall;
+			// ω-binop-close-delim-glue (cond-paren-OPEN sibling): when the
+			// LEFT operand ENDS with a close delim (`[…].indexOf(x)`,
+			// `(chain)`), the bracketed operand wraps inside its own brackets
+			// and the never-wrap-marked operator (`<`/`>`/`*`/`/`/compare)
+			// must RIDE the close-delim line (`].indexOf(x) < 0`), not break
+			// onto its own line. The right-spine mirror of the existing
+			// `startsWithOpenDelim(_right)` head-glue; both keep the operator
+			// glued so only the bracketed operand carries the break. Byte-
+			// inert when the left operand does not wrap (no committed hardline
+			// → the legacy Group never broke → glued shape is byte-identical).
+			final _inner: anyparse.core.Doc = anyparse.format.wrap.WrapList.startsWithOpenDelim(_right)
+				|| anyparse.format.wrap.WrapList.endsWithCloseDelim(_left)
+				? _dc([_left, _dt($v{opWithSpaces}), _right])
+				: _dg(_dc([
+					_left,
+					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
+				]));
+			if ($v{prec} < ctxPrec)
+				_dc([_dt('('), _inner, _dt(')')])
+			else
+				_inner;
+		};
+	}
+
+	/**
+	 * Infix tight / assign sub-builder: tight operators (`...`, arrow
+	 * type) and assignment-class operators (prec 0) keep flat emission.
+	 * Extracted from `lowerInfixBranch` so each stays under the gate.
+	 */
+	private function lowerInfixTightAssign(c: LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final typePath: String = c.typePath;
+		final writeFnName: String = c.writeFnName;
+		final hasPratt: Bool = c.hasPratt;
+		final argNames: Array<String> = c.argNames;
+		final children: Array<ShapeNode> = branch.children;
+		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
+		final assoc: String = (branch.annotations.get('pratt.assoc'): Null<String>) ?? 'Left';
+		final opText: String = getOperatorText(branch);
+		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
+		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
+		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3']);
+		final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
+		final isAssign: Bool = prec == 0;
+		final opWithSpaces: String = isTight ? opText : ' ' + opText + ' ';
+		final rightChild: ShapeNode = children[1];
+		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
+		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
+		final rightCall: Expr = isAsymmetric
+			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
+			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
+		// Assign / arrow ops (prec 0, non-tight): split the trailing
+		// space into `_dop(' ')` (OptSpace) so the renderer drops it
+		// when the RHS emits a leading break-mode hardline (e.g.
+		// `dirty =\n\t\t\tdirty || ...` from a OnePerLine wrapping
+		// chain on the RHS), avoiding a spurious `dirty = \n…`
+		// trailing-space-before-newline. Flat emission is unchanged
+		// — the next Text from `$rightCall` flushes the OptSpace.
+		// Tight ops keep the original single-Text shape (no spaces).
+		final opEmitExpr: Expr = infixPolicyFlag != null ? whitespacePolicyInfix(opText, infixPolicyFlag) : macro _dt($v{opWithSpaces});
+		final innerExpr: Expr = isAssign && !isTight
+			? macro _dc([
+				$leftCall,
+				_dt(' '),
+				_dt($v{opText}),
+				_dop(' '),
+				$rightCall,
+			])
+			: macro _dc([
+				$leftCall,
+				$opEmitExpr,
+				$rightCall,
+			]);
+		return macro {
+			final _inner: anyparse.core.Doc = $innerExpr;
+			if ($v{prec} < ctxPrec)
+				_dc([_dt('('), _inner, _dt(')')])
+			else
+				_inner;
+		};
+	}
+
+	/**
+	 * Infix chain sub-builder (ω-binop-wraprules): `||`/`&&`
+	 * (opBoolChain) and `+`/`-` (opAddSubChain) gather the full
+	 * same-class subtree into a flat `(items, ops)` pair, run the cascade
+	 * once, and emit one `BinaryChainEmit` shape. The `_gather` switch is
+	 * built inline (vs an external helper) so its `case Or(...)` /
+	 * `case Add(...)` patterns resolve against the current writer's value
+	 * type (`HxExpr` plain / `HxExprT` trivia). Extracted from
+	 * `lowerInfixBranch` so each stays under the gate.
+	 */
+	private function lowerInfixChain(c: LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final typePath: String = c.typePath;
+		final writeFnName: String = c.writeFnName;
+		final hasPratt: Bool = c.hasPratt;
+		final argNames: Array<String> = c.argNames;
+		final children: Array<ShapeNode> = branch.children;
+		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
+		final opText: String = getOperatorText(branch);
+		final isChainBool: Bool = opText == '||' || opText == '&&';
+		final chainRulesField: String = isChainBool ? 'opBoolChainWrap' : 'opAddSubChainWrap';
+		final chainRulesExpr: Expr = optFieldAccess(chainRulesField);
+		final argTypeCT: ComplexType = ruleValueCT(typePath);
+		// Leaf operands render at the chain's own precedence. A
+		// sub-expression with strictly lower prec (ternary inside
+		// `||`, assign inside `+`) gets the parens it needs;
+		// same-class operators are consumed by the extractor.
+		final leafCall: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec);
+		// ω-keep-chain (increment 2): in Trivia mode the chain ctors
+		// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
+		// per-operand source-newline). Bind it (`_nl`) and push into the
+		// `_breaks` array parallel to `_ops` so `BinaryChainEmit.emit`'s
+		// `WrapMode.Keep` shaper can reproduce the source line breaks. In
+		// Plain mode the ctors keep 2-operand arity and no `_breaks` is
+		// threaded (chain stays glued via shapeNoWrap) → byte-inert.
+		// Outer-ctor chainNewline (read via altSlotAccess; null in Plain)
+		// — the gap before THIS branch's right operand (`argNames[1]`),
+		// pushed between the two top-level gathers to stay parallel to
+		// the outer `_ops.push(opText)`.
+		final outerChainNl: Null<Expr> = ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainNewline) : null;
+		// All four chain ctors (Or/And/Add/Sub) carry `captureChainNewline`,
+		// so `outerChainNl` is non-null in Trivia mode; the `!= null` guard
+		// keeps `_breaks` declaration and the gatherSwitch's `_breaks.push`
+		// strictly in lockstep (no half-wired state).
+		final threadBreaks: Bool = ctx.trivia && outerChainNl != null;
+		final gatherSwitch: Expr = infixChainGatherSwitch(isChainBool, threadBreaks, leafCall);
+		// `_breaks` (parallel to `_ops`) only exists in Trivia mode.
+		// ω-keep-chain head break (increment 2): a `return`→head source
+		// newline is delivered via the shared `opt._varKwNewline` channel
+		// (set by the `ReturnStmt` Case-3 `_setVarKwNewline` threading;
+		// the same field VarStmt uses). Read it as the chain head break
+		// (single `EVars` → declared at the outer block scope) and CLEAR
+		// it on `opt` (folded into the `_clearCallArgChainNest` re-bind
+		// below) so it does not leak to a nested chain / the multiVar
+		// fold. Trivia-keep only; in Plain / non-keep the field is false
+		// and untouched → byte-inert.
+		// ω-keep-chain (increment: opadd_chain_keep): drop the chain
+		// `_headBreak` when this Keep chain is wrapped by a return-context
+		// `ParenExpr` (`_keepChainInParen`, declared just above) — the
+		// `return`→value source newline is reproduced at the value level
+		// (`returnBody` FitLine), NOT inside the paren. A bare-value chain
+		// (opbool case-2) has `_keepChainInParen == false` → keeps headBreak.
+		final headDecl: Expr = threadBreaks ? macro final _headBreak: Bool = opt._varKwNewline && !_keepChainInParen : macro {};
+		// Fold `_clearVarKwNewline` into the `_clearCallArgChainNest`
+		// re-bind so the head-break flag is consumed once at the
+		// outermost chain (leaf/nested chains see it cleared).
+		// ω-keep-chain (increment: opadd_chain_keep): additionally mark
+		// `_keepFlatInner` on the leaf-operand opt when THIS chain's config
+		// resolves to `WrapMode.Keep` (`$chainRulesExpr.defaultMode == Keep`).
+		// A kept chain preserves source line structure verbatim (operand
+		// lines may exceed `lineWidth`), so its operands' inner `ParenExpr`
+		// must stay GLUED — the flag flips the `expressionParenHardFlatten`
+		// emit to the unconditional-glue branch. Runtime-gated so a non-keep
+		// chain (NoWrap / FillLine / OnePerLine) passes the flag through false
+		// → byte-inert. The `_setKeepFlatInner` re-bind wraps the existing
+		// clear chain so the flag rides the SAME opt the leaf `makeWriteCall`s
+		// thread. Trivia+chain-only (`threadBreaks`); Plain keeps the legacy form.
+		final clearOptExpr: Expr = threadBreaks
+			? macro _setKeepFlatInner(
+				_clearKeepChainInParen(_clearVarKwNewline(_clearCallArgChainNest(opt))),
+				$chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep
+			)
+			: macro _clearCallArgChainNest(opt);
+		final breaksDecl: Expr = threadBreaks ? macro final _breaks: Array<Bool> = [] : macro {};
+		// Top-level gather: head operand, the outer operator, the outer
+		// ctor's source-newline (parallel to that operator), tail operand.
+		final outerBreakPush: Expr = threadBreaks ? macro _breaks.push(${outerChainNl}) : macro {};
+		final gatherInvoke: Expr = macro {
+			_gather($i{argNames[0]});
+			_ops.push($v{opText});
+			$outerBreakPush;
+			_gather($i{argNames[1]});
+		};
+		// Thread `_breaks` (sourceBreakBefore) + `_headBreak` only in
+		// Trivia mode; Plain keeps the legacy 6-arg call (chain glues).
+		final emitCall: Expr = threadBreaks
+			? macro anyparse.format.wrap.BinaryChainEmit.emit(
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak
+			)
+			: macro anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced);
+		return macro {
+			final _items: Array<anyparse.core.Doc> = [];
+			final _ops: Array<String> = [];
+			$breaksDecl;
+			// ω-condwrap-call-arg-nest + ω-callarg-chain-nest: suppress
+			// the chain's OWN continuation `Nest(cols, …)` when an outer
+			// context already supplied the `+cols` indent — either a
+			// condWrap `FillLineWithLeadingBreak` brkShape
+			// (`_chainModeOverride`, set at the `@:fmt(condWrap)` site via
+			// `_setChainModeOverride`; only that mode expands
+			// `WrapList.emitCondition` to `Nest(cols, [Line('\n'),
+			// condDoc])`), or a leading-break call argument
+			// (`_callArgChainNest`, set at the call's per-arg writer call
+			// when `callParameterWrap.defaultMode == FLWLB`, whose
+			// `shapeFillLineWithLeadingBreak` Nests the arg at +cols).
+			// Read the flag from the inbound opt, then CLEAR
+			// `_callArgChainNest` so only the OUTERMOST chain consumes it
+			// — leaf operands / nested chains (written via `makeWriteCall`,
+			// which threads this same `opt`) keep their own Nest.
+			// `_chainModeOverride` is deliberately NOT cleared: condWrap
+			// collapses every chain in the condition. Safe to read both
+			// fields directly: only Haxe declares `||`/`&&`/`+`/`-` chain
+			// infix (HxModuleWriteOptions carries the fields).
+			// `_condWrapForced` distinguishes the cond-wrap collapse
+			// (`_chainModeOverride == FLWLB`, set at the `@:fmt(condWrap)`
+			// site) from a leading-break CALL-ARG (`_callArgChainNest`):
+			// both suppress the chain's own Nest, but only the cond-wrap
+			// case is a chain-UNWRAP candidate (ω-chain-keep-flat). A
+			// call-arg chain must keep its configured break shape (fork
+			// `unwrapBoolOps` fires inside `applyArrowWrapping`, never for
+			// a chain that is itself a call argument — `opbool_in_call_
+			// leading_break_preserved`, `opsub_chain_in_single_param_call`).
+			final _condWrapForced: Bool = opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak;
+			// ω-keep-chain (increment: opadd_chain_keep): a `WrapMode.Keep`
+			// chain wrapped by an enclosing `ParenExpr` in a return-head-break
+			// context (`opt._keepChainInParen`, set at the paren's inner opt)
+			// suppresses its OWN continuation `Nest` — the value-level break
+			// already supplied the +cols, so the chain operators co-indent
+			// with the head (no +2cols compounding). The `$headDecl` below
+			// likewise drops the chain `_headBreak`. Gated on the chain config
+			// being Keep so non-keep chains in a paren are byte-inert.
+			final _keepChainInParen: Bool = opt._keepChainInParen && $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep;
+			final _chainNestSuppress: Bool = _condWrapForced || opt._callArgChainNest || _keepChainInParen;
+			$headDecl;
+			final opt = $clearOptExpr;
+			function _gather(_e: $argTypeCT): Void $gatherSwitch;
+			$gatherInvoke;
+			final _inner: anyparse.core.Doc = $emitCall;
+			if ($v{prec} < ctxPrec)
+				_dc([_dt('('), _inner, _dt(')')])
+			else
+				_inner;
+		};
+	}
+
+	/**
+	 * Builds the `_gather` switch body for `lowerInfixChain`: walks the
+	 * same-class chain ctors (Or/And or Add/Sub), pushing operators (and
+	 * per-operand source-newline breaks in Trivia mode) and recursing on
+	 * operands. Leaf operands fall through to `$leafCall`. Inlined as a
+	 * macro Expr so its `case Or(...)` patterns resolve against the
+	 * current writer's value type.
+	 */
+	private function infixChainGatherSwitch(isChainBool: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
+		if (threadBreaks) return isChainBool
+			? macro switch _e {
+				case Or(_l, _r, _nl):
+					_gather(_l);
+					_ops.push('||');
+					_breaks.push(_nl);
+					_gather(_r);
+				case And(_l, _r, _nl):
+					_gather(_l);
+					_ops.push('&&');
+					_breaks.push(_nl);
+					_gather(_r);
+				case _: _items.push($leafCall);
+			}
+			: macro switch _e {
+				case Add(_l, _r, _nl):
+					_gather(_l);
+					_ops.push('+');
+					_breaks.push(_nl);
+					_gather(_r);
+				case Sub(_l, _r, _nl):
+					_gather(_l);
+					_ops.push('-');
+					_breaks.push(_nl);
+					_gather(_r);
+				case _: _items.push($leafCall);
+			};
+		return isChainBool
+			? macro switch _e {
+				case Or(_l, _r):
+					_gather(_l);
+					_ops.push('||');
+					_gather(_r);
+				case And(_l, _r):
+					_gather(_l);
+					_ops.push('&&');
+					_gather(_r);
+				case _: _items.push($leafCall);
+			}
+			: macro switch _e {
+				case Add(_l, _r):
+					_gather(_l);
+					_ops.push('+');
+					_gather(_r);
+				case Sub(_l, _r):
+					_gather(_l);
+					_ops.push('-');
+					_gather(_r);
+				case _: _items.push($leafCall);
+			};
 	}
 
 }
