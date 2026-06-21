@@ -363,39 +363,17 @@ class WriterLowering {
 		final ternaryOp: Null<String> = branch.annotations.get('ternary.op');
 		final ternaryPrec: Null<Int> = branch.annotations.get('ternary.prec');
 		final ternarySep: Null<String> = branch.annotations.get('ternary.sep');
+		final c: LowerBranchCtx = {
+			branch: branch,
+			typePath: typePath,
+			writeFnName: writeFnName,
+			hasPratt: hasPratt,
+			argNames: argNames,
+			precPostfix: precPostfix,
+		};
 
 		// ---- Ternary ----
-		if (ternaryOp != null) {
-			final tPrec: Int = (ternaryPrec: Int);
-			final sep: String = (ternarySep: String);
-			final condCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1);
-			final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1);
-			final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1);
-			// ω-ternary-wrap: dispatch to the chain-emit engine with a
-			// degenerate 3-item / 2-op chain (items = [cond, then, else],
-			// ops = [ternaryOp, sep]). `BinaryChainEmit.shapeNoWrap`
-			// produces `cond ? then : else` with `' op '` spacing —
-			// byte-equivalent to the prior flat emit when the cascade
-			// resolves to NoWrap (default). `OnePerLineAfterFirst` +
-			// BeforeLast (haxe-formatter `ternaryExpression` canonical
-			// break shape) yields `cond\n\t? then\n\t: else`. The chain
-			// extractor is intentionally NOT applied here: nested ternary
-			// `Ternary(a, b, Ternary(c, d, e))` renders the inner ternary
-			// as a self-contained leaf Doc through the standard writer
-			// path — each `?:` node runs the cascade independently.
-			// Collapsing nested ternaries into a single chain is a future
-			// slice (no current fixture demands it).
-			final rulesExpr: Expr = optFieldAccess('ternaryWrap');
-			return macro {
-				final _items: Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
-				final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
-				final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $rulesExpr, false);
-				if ($v{tPrec} < ctxPrec)
-					_dc([_dt('('), _inner, _dt(')')])
-				else
-					_inner;
-			};
-		}
+		if (ternaryOp != null) return lowerTernaryBranch(c);
 
 		// ---- Infix ----
 		if (prattPrec != null) {
@@ -750,56 +728,10 @@ class WriterLowering {
 		}
 
 		// ---- Prefix ----
-		if (prefixOp != null) {
-			final operandCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, precPostfix);
-			return macro _dc([_dt($v{prefixOp}), $operandCall]);
-		}
+		if (prefixOp != null) return lowerPrefixBranch(c);
 
 		// ---- Postfix ----
-		if (postfixOp != null) {
-			final operandCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, precPostfix);
-			if (children.length == 1) {
-				final text: String = postfixOp + (postfixClose ?? '');
-				return macro _dc([$operandCall, _dt($v{text})]);
-			}
-			if (children.length == 2 && children[1].kind == Star)
-				return lowerPostfixStar(branch, typePath, writeFnName, hasPratt, argNames, operandCall);
-			if (children.length == 2) {
-				final suffixRef: String = children[1].annotations.get('base.ref');
-				final suffixFn: String = writeFnFor(suffixRef);
-				final suffixCall: Expr = {
-					expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
-					pos: Context.currentPos(),
-				};
-				final close: String = postfixClose ?? '';
-				if (close.length > 0) {
-					// ω-bracket-config: `HxExpr.IndexAccess` (`@:postfix('[',
-					// ']') @:fmt(accessBrackets)`) is the sole close-bearing
-					// two-child postfix ctor. With the flag, pad the inside of
-					// the subscript brackets per `accessBracketsOpen` /
-					// `accessBracketsClose` (`arr[ i ]`); without it, the slots
-					// collapse to `_de()` so the default `arr[i]` stays byte-
-					// identical. The `index` is a mandatory Ref (never empty),
-					// so no empty-bracket guard is needed here.
-					if (branch.fmtHasFlag('accessBrackets')) {
-						final openInside: Expr = policyInsideSpace('accessBracketsOpen', false);
-						final closeInside: Expr = policyInsideSpace('accessBracketsClose', true);
-						return macro _dc([
-							$operandCall,
-							_dt($v{postfixOp}),
-							$openInside,
-							$suffixCall,
-							$closeInside,
-							_dt($v{close})
-						]);
-					}
-					return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall, _dt($v{close})]);
-				}
-				return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall]);
-			}
-			Context.fatalError('WriterLowering: unsupported postfix shape', Context.currentPos());
-			throw 'unreachable';
-		}
+		if (postfixOp != null) return lowerPostfixBranch(c);
 
 		// ---- Case 0: zero-arg kw ----
 		if (kwLead != null && children.length == 0 && litList == null) {
@@ -14323,6 +14255,117 @@ class WriterLowering {
 			: macro false;
 	}
 
+	/**
+	 * Ternary branch (`@:fmt`-driven `ternary.op`): dispatch to the
+	 * chain-emit engine with a degenerate 3-item / 2-op chain. Extracted
+	 * from `lowerEnumBranch` so the dispatcher stays under the complexity
+	 * gate.
+	 */
+	private function lowerTernaryBranch(c: LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final writeFnName: String = c.writeFnName;
+		final hasPratt: Bool = c.hasPratt;
+		final argNames: Array<String> = c.argNames;
+		final ternaryOp: String = branch.annotations.get('ternary.op');
+		final tPrec: Int = (branch.annotations.get('ternary.prec'): Int);
+		final sep: String = (branch.annotations.get('ternary.sep'): String);
+		final condCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1);
+		final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1);
+		final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1);
+		// ω-ternary-wrap: dispatch to the chain-emit engine with a
+		// degenerate 3-item / 2-op chain (items = [cond, then, else],
+		// ops = [ternaryOp, sep]). `BinaryChainEmit.shapeNoWrap`
+		// produces `cond ? then : else` with `' op '` spacing —
+		// byte-equivalent to the prior flat emit when the cascade
+		// resolves to NoWrap (default). `OnePerLineAfterFirst` +
+		// BeforeLast (haxe-formatter `ternaryExpression` canonical
+		// break shape) yields `cond\n\t? then\n\t: else`. The chain
+		// extractor is intentionally NOT applied here: nested ternary
+		// `Ternary(a, b, Ternary(c, d, e))` renders the inner ternary
+		// as a self-contained leaf Doc through the standard writer
+		// path — each `?:` node runs the cascade independently.
+		// Collapsing nested ternaries into a single chain is a future
+		// slice (no current fixture demands it).
+		final rulesExpr: Expr = optFieldAccess('ternaryWrap');
+		return macro {
+			final _items: Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
+			final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
+			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $rulesExpr, false);
+			if ($v{tPrec} < ctxPrec)
+				_dc([_dt('('), _inner, _dt(')')])
+			else
+				_inner;
+		};
+	}
+
+	/**
+	 * Prefix branch (`prefix.op`): `op operand`. Extracted from
+	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 */
+	private function lowerPrefixBranch(c: LowerBranchCtx): Expr {
+		final prefixOp: String = c.branch.annotations.get('prefix.op');
+		final operandCall: Expr = makeWriteCall(c.writeFnName, macro $i{c.argNames[0]}, c.hasPratt, c.precPostfix);
+		return macro _dc([_dt($v{prefixOp}), $operandCall]);
+	}
+
+	/**
+	 * Postfix branch (`postfix.op`): unary postfix (`x++`), bracketed
+	 * access (`arr[i]`), suffix-Ref, or Star-suffix forms. Extracted from
+	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 */
+	private function lowerPostfixBranch(c: LowerBranchCtx): Expr {
+		final branch: ShapeNode = c.branch;
+		final typePath: String = c.typePath;
+		final writeFnName: String = c.writeFnName;
+		final hasPratt: Bool = c.hasPratt;
+		final argNames: Array<String> = c.argNames;
+		final children: Array<ShapeNode> = branch.children;
+		final postfixOp: String = branch.annotations.get('postfix.op');
+		final postfixClose: Null<String> = branch.annotations.get('postfix.close');
+		final operandCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, c.precPostfix);
+		if (children.length == 1) {
+			final text: String = postfixOp + (postfixClose ?? '');
+			return macro _dc([$operandCall, _dt($v{text})]);
+		}
+		if (children.length == 2 && children[1].kind == Star)
+			return lowerPostfixStar(branch, typePath, writeFnName, hasPratt, argNames, operandCall);
+		if (children.length == 2) {
+			final suffixRef: String = children[1].annotations.get('base.ref');
+			final suffixFn: String = writeFnFor(suffixRef);
+			final suffixCall: Expr = {
+				expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
+				pos: Context.currentPos(),
+			};
+			final close: String = postfixClose ?? '';
+			if (close.length > 0) {
+				// ω-bracket-config: `HxExpr.IndexAccess` (`@:postfix('[',
+				// ']') @:fmt(accessBrackets)`) is the sole close-bearing
+				// two-child postfix ctor. With the flag, pad the inside of
+				// the subscript brackets per `accessBracketsOpen` /
+				// `accessBracketsClose` (`arr[ i ]`); without it, the slots
+				// collapse to `_de()` so the default `arr[i]` stays byte-
+				// identical. The `index` is a mandatory Ref (never empty),
+				// so no empty-bracket guard is needed here.
+				if (branch.fmtHasFlag('accessBrackets')) {
+					final openInside: Expr = policyInsideSpace('accessBracketsOpen', false);
+					final closeInside: Expr = policyInsideSpace('accessBracketsClose', true);
+					return macro _dc([
+						$operandCall,
+						_dt($v{postfixOp}),
+						$openInside,
+						$suffixCall,
+						$closeInside,
+						_dt($v{close})
+					]);
+				}
+				return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall, _dt($v{close})]);
+			}
+			return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall]);
+		}
+		Context.fatalError('WriterLowering: unsupported postfix shape', Context.currentPos());
+		throw 'unreachable';
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14697,6 +14740,20 @@ typedef BetweenSameCtorIfNotInfo = {
 	classifierFieldName: String,
 	classifyCases: Array<Case>,
 	optField: String
+};
+/**
+ * Shared parser-context locals bundled for the `lowerEnumBranch`
+ * per-shape emission helpers (ternary / infix / prefix / postfix /
+ * kw-Ref). Replaces a >5-scalar helper signature with one context
+ * struct, mirroring `TryparseStarCtx`.
+ */
+typedef LowerBranchCtx = {
+	final branch: ShapeNode;
+	final typePath: String;
+	final writeFnName: String;
+	final hasPratt: Bool;
+	final argNames: Array<String>;
+	final precPostfix: Int;
 };
 
 /**
