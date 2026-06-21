@@ -5301,10 +5301,9 @@ expectLit(ctx, $v{trailText}));
 		// dispatch. Currently consumed by `HxTryCatchStmt.body` to
 		// preserve `try\n\tuntyped {…}` source shape under
 		// `untypedBody=Keep`.
-		final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && ctx.trivia
-			&& isTriviaBearing(typePath);
-		final isFirstField: Bool = child == node.children[0];
-		final isFirstFieldNlOptIn: Bool = isBareTriviaRefNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final _beforeSlots = computeBeforeSlots(child, node, typePath, isStar, isOptional, kwLead, leadText);
+		final hasBeforeNewlineSlot: Bool = _beforeSlots.hasBeforeNewlineSlot;
+		final hasBeforeLeadingSlot: Bool = _beforeSlots.hasBeforeLeadingSlot;
 		// ω-casepattern-keep: extend the first-field source-newline-before
 		// capture to a bare (lead-less, non-optional) trivia Star whose
 		// parent omits its post-kw `skipWs` via `forwardNewlineForBody`.
@@ -5314,10 +5313,6 @@ expectLit(ctx, $v{trailText}));
 		// the bare-Ref first-field case (`HxTryCatchStmt.body`). Gated on
 		// the `beforeNewlineSlotFirst` opt-in so every other bare trivia
 		// Star (no opt-in) keeps the plain pre-field `skipWs`.
-		final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && ctx.trivia
-			&& isTriviaBearing(typePath);
-		final isFirstFieldStarNlOptIn: Bool = isBareTriviaStarNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-		final hasBeforeNewlineSlot: Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn)) || isFirstFieldStarNlOptIn;
 		// ω-598-member-leading-comment: the bare non-first Ref host (e.g.
 		// `HxMemberDecl.member`) additionally captures the `collectTrivia`
 		// run's `leadingComments` into a `<field>BeforeLeading` slot. Gated
@@ -5326,7 +5321,6 @@ expectLit(ctx, $v{trailText}));
 		// sitting between the last modifier and the member keyword (rejected
 		// by the modifier Star's `collectTrailingFull` for its internal
 		// newline) is scanned here but discarded.
-		final hasBeforeLeadingSlot: Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
 		// ω-optional-star-rewind: when the field is `@:optional Star`
 		// with `@:lead` (e.g. `HxTypeRef.params:Array<HxType>` —
 		// `<...>`), defer the pre-field `skipWs` into the emit so the
@@ -5901,6 +5895,29 @@ expectLit(ctx, $v{trailText}));
 	 */
 	private function hasAfterTrailSlotField(child: ShapeNode, typePath: String, isStar: Bool, trailText: Null<String>): Bool {
 		return child.kind == Ref && !isStar && trailText != null && ctx.trivia && isTriviaBearing(typePath);
+	}
+
+	/**
+	 * Compute the two bare-trivia-Ref/Star BeforeNewline / BeforeLeading slot
+	 * flags for a struct field. `hasBeforeNewlineSlot` captures the source
+	 * newline in the gap before the field's first token (bare non-first Ref, or
+	 * an opted-in first Ref/Star); `hasBeforeLeadingSlot` additionally captures
+	 * the verbatim leading-comment run on the bare-Ref host. Pure — split out of
+	 * `computeStructFieldFlags`.
+	 */
+	private function computeBeforeSlots(
+		child: ShapeNode, node: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>
+	): { hasBeforeNewlineSlot: Bool, hasBeforeLeadingSlot: Bool } {
+		final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && ctx.trivia
+			&& isTriviaBearing(typePath);
+		final isFirstField: Bool = child == node.children[0];
+		final isFirstFieldNlOptIn: Bool = isBareTriviaRefNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && ctx.trivia
+			&& isTriviaBearing(typePath);
+		final isFirstFieldStarNlOptIn: Bool = isBareTriviaStarNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final hasBeforeNewlineSlot: Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn)) || isFirstFieldStarNlOptIn;
+		final hasBeforeLeadingSlot: Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
+		return { hasBeforeNewlineSlot: hasBeforeNewlineSlot, hasBeforeLeadingSlot: hasBeforeLeadingSlot };
 	}
 
 }
