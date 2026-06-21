@@ -5742,92 +5742,15 @@ class WriterLowering {
 			{ values: [macro _], expr: macro _dhl(), guard: null },
 		];
 		final shapeAwareSwitch: Expr = { expr: ESwitch(prevBody.access, cases, null), pos: Context.currentPos() };
-		// ω-expression-case-flat-fanout: shape-aware-break for `else` is
-		// correct only when the child body actually lays out on its own
-		// line. The child's runtime layout is driven by `opt.<bodyPolicy>`:
-		//  - `Same` — body is forced inline → else-break is wrong, fall to
-		//    flagBased (sameLineElse drives the gap).
-		//  - `Keep` + slot says source had body inline (`!BeforeKwNewline`)
-		//    → body is inline → suppress, fall to flagBased.
-		//  - `Next` / `FitLine` / `Keep`+slot=broken — body sits on its own
-		//    line → keep the pre-slice shape-break.
-		// Default `elseBody=Next` keeps existing behaviour. Without this
-		// gate, fanning `elseBody` to `expressionCase` inside a flat case
-		// body would still produce `if (cond) body;\n\telse elseBody;`
-		// because shape-aware would force `else` to its own line
-		// regardless of the runtime body decision. Children without a
-		// `bodyPolicy` meta (no current consumers, but defensive) keep the
-		// pre-slice unconditional shape-aware switch.
-		// ω-issue-257-else-in-return-switch: dual-flag bodyPolicy on the
-		// child propagates here too — the inline-shape probe must
-		// dispatch on `opt._inExprPosition` so an expr-position parent
-		// (e.g. inner `if/else` in the case body of a return-switch
-		// when `expressionIf=Same`) reads the expr-side knob and
-		// suppresses the shape-aware else-break consistently with the
-		// dispatched body layout in `bodyPolicyWrap`. Single-flag
-		// callers (no second arg) keep the byte-identical pre-slice
-		// access.
-		final childBodyPolicy: { stmt: Null<String>, expr: Null<String> } = readBodyPolicyDual(child);
-		final childBodyPolicyFlag: Null<String> = childBodyPolicy.stmt;
-		if (childBodyPolicyFlag == null) return withPadTrailingDrop(prevPadTrailing, shapeAwareSwitch);
-		final stmtBpAccess: Expr = optFieldAccess(childBodyPolicyFlag);
-		final bpAccess: Expr = if (childBodyPolicy.expr == null)
-			stmtBpAccess
-		else {
-			final exprBpAccess: Expr = optFieldAccess(childBodyPolicy.expr);
-			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
-		};
-		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
-		final keepPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
-		final isInlineExpr: Expr = if (hasKeepSlot) {
-			final slotAccess: Expr = {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
-				pos: Context.currentPos(),
-			};
-			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
-		} else
-			macro $bpAccess == $samePat;
-		// ω-ifelse-semicolon-next-line: when the body is forced inline
-		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
-		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a
-		// `;`-terminated non-block then-body. Mirror fork's
-		// `MarkSameLine.markElse` Semicolon branch: when the rendered
-		// then-body ends with a `;` (the token immediately before `else`)
-		// AND `opt.ifElseSemicolonNextLine` is set, break `else` onto its
-		// own line instead. The discriminator is the then-body's RENDERED
-		// Doc, re-derived by re-rendering the then-body value through its
-		// own write fn and inspecting the right-spine tail via
-		// `DocMeasure.endsWithSemi` (a bounded right-spine walk — NOT a
-		// layout probe). `endsWithSemi` treats ONLY `;` as a terminator,
-		// not `}`, so block then-bodies (`if (c) {…} else …`) keep gluing
-		// and `;`-omitting non-blocks (`if (c) foo else …`) keep gluing —
-		// matching the fixtures' rows. Re-rendering is pure (no state
-		// mutation, INVARIANT #1) and produces the same Doc as the actual
-		// emit, so the tail byte is authoritative.
-		//
-		// Gated on the opt-in `@:fmt(semicolonNextLineElse)` flag, present
-		// ONLY on `HxIfStmt.elseBody`. The fork's `ifElseSemicolonNextLine`
-		// is a statement-`if` rule, so two more gates pin it tightly:
-		//   - macro-time `ctx.trivia`: source-`;`-presence is only knowable
-		//     in the trivia pipeline (the corpus harness). The plain writer
-		//     canonicalises `;`, so "did the source have `;`" is meaningless
-		//     there — plain mode stays byte-identical (falls to `flagBased`).
-		//   - runtime `!opt._inExprPosition`: value-position `if`
-		//     (`return switch … case A: if (c) a(); else b()`, or
-		//     `final x = if (a) b; else c`) is governed by
-		//     `sameLineExpressionElse`, not the statement rule — keep `else`
-		//     glued there. Mirrors fork's `MarkSameLine.markElse` (statement
-		//     `if` only).
-		final inlineSep: Expr = if (ctx.trivia && child.fmtHasFlag('semicolonNextLineElse')) {
-			final prevWriteFn: String = writeFnFor(prevBody.typePath);
-			final prevAccess: Expr = prevBody.access;
-			final prevDoc: Expr = { expr: ECall(macro $i{prevWriteFn}, [prevAccess, macro opt]), pos: Context.currentPos() };
-			macro (!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)
-				? _dhl()
-				: $flagBased);
-		} else
-			flagBased;
-		return withPadTrailingDrop(prevPadTrailing, macro $isInlineExpr ? $inlineSep : $shapeAwareSwitch);
+		return sameLineSeparatorShapeAware({
+			child: child,
+			prevBody: prevBody,
+			prevPadTrailing: prevPadTrailing,
+			flagBased: flagBased,
+			shapeAwareSwitch: shapeAwareSwitch,
+			hasKeepSlot: hasKeepSlot,
+			fieldName: fieldName,
+		});
 	}
 
 	/**
@@ -14069,6 +13992,102 @@ class WriterLowering {
 		return { patterns: patterns, matched: matched, transparentMatched: transparentMatched };
 	}
 
+	/**
+	 * Shape-aware tail of `sameLineSeparator`: given the shape-aware
+	 * switch and `flagBased` sep, layer the body-policy inline probe and
+	 * the `semicolonNextLineElse` `;`-tail discriminator on top, then wrap
+	 * via `withPadTrailingDrop`. Extracted to keep `sameLineSeparator`
+	 * below the complexity gate.
+	 */
+	private function sameLineSeparatorShapeAware(c: SameLineShapeAwareCtx): Expr {
+		// ω-expression-case-flat-fanout: shape-aware-break for `else` is
+		// correct only when the child body actually lays out on its own
+		// line. The child's runtime layout is driven by `opt.<bodyPolicy>`:
+		//  - `Same` — body is forced inline → else-break is wrong, fall to
+		//    flagBased (sameLineElse drives the gap).
+		//  - `Keep` + slot says source had body inline (`!BeforeKwNewline`)
+		//    → body is inline → suppress, fall to flagBased.
+		//  - `Next` / `FitLine` / `Keep`+slot=broken — body sits on its own
+		//    line → keep the pre-slice shape-break.
+		// Default `elseBody=Next` keeps existing behaviour. Without this
+		// gate, fanning `elseBody` to `expressionCase` inside a flat case
+		// body would still produce `if (cond) body;\n\telse elseBody;`
+		// because shape-aware would force `else` to its own line
+		// regardless of the runtime body decision. Children without a
+		// `bodyPolicy` meta (no current consumers, but defensive) keep the
+		// pre-slice unconditional shape-aware switch.
+		// ω-issue-257-else-in-return-switch: dual-flag bodyPolicy on the
+		// child propagates here too — the inline-shape probe must
+		// dispatch on `opt._inExprPosition` so an expr-position parent
+		// (e.g. inner `if/else` in the case body of a return-switch
+		// when `expressionIf=Same`) reads the expr-side knob and
+		// suppresses the shape-aware else-break consistently with the
+		// dispatched body layout in `bodyPolicyWrap`. Single-flag
+		// callers (no second arg) keep the byte-identical pre-slice
+		// access.
+		final childBodyPolicy: { stmt: Null<String>, expr: Null<String> } = readBodyPolicyDual(c.child);
+		final childBodyPolicyFlag: Null<String> = childBodyPolicy.stmt;
+		if (childBodyPolicyFlag == null) return withPadTrailingDrop(c.prevPadTrailing, c.shapeAwareSwitch);
+		final stmtBpAccess: Expr = optFieldAccess(childBodyPolicyFlag);
+		final bpAccess: Expr = if (childBodyPolicy.expr == null)
+			stmtBpAccess
+		else {
+			final exprBpAccess: Expr = optFieldAccess(childBodyPolicy.expr);
+			macro (opt._inExprPosition ? $exprBpAccess : $stmtBpAccess);
+		};
+		final samePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Same']);
+		final keepPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BodyPolicy', 'Keep']);
+		final isInlineExpr: Expr = if (c.hasKeepSlot) {
+			final slotAccess: Expr = {
+				expr: EField(macro value, c.fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
+				pos: Context.currentPos(),
+			};
+			macro ($bpAccess == $samePat || ($bpAccess == $keepPat && !$slotAccess));
+		} else
+			macro $bpAccess == $samePat;
+		// ω-ifelse-semicolon-next-line: when the body is forced inline
+		// (`isInlineExpr` — e.g. `sameLine.ifBody:same`) the pre-slice
+		// shape obeyed `flagBased` (`sameLineElse`), gluing `else` after a
+		// `;`-terminated non-block then-body. Mirror fork's
+		// `MarkSameLine.markElse` Semicolon branch: when the rendered
+		// then-body ends with a `;` (the token immediately before `else`)
+		// AND `opt.ifElseSemicolonNextLine` is set, break `else` onto its
+		// own line instead. The discriminator is the then-body's RENDERED
+		// Doc, re-derived by re-rendering the then-body value through its
+		// own write fn and inspecting the right-spine tail via
+		// `DocMeasure.endsWithSemi` (a bounded right-spine walk — NOT a
+		// layout probe). `endsWithSemi` treats ONLY `;` as a terminator,
+		// not `}`, so block then-bodies (`if (c) {…} else …`) keep gluing
+		// and `;`-omitting non-blocks (`if (c) foo else …`) keep gluing —
+		// matching the fixtures' rows. Re-rendering is pure (no state
+		// mutation, INVARIANT #1) and produces the same Doc as the actual
+		// emit, so the tail byte is authoritative.
+		//
+		// Gated on the opt-in `@:fmt(semicolonNextLineElse)` flag, present
+		// ONLY on `HxIfStmt.elseBody`. The fork's `ifElseSemicolonNextLine`
+		// is a statement-`if` rule, so two more gates pin it tightly:
+		//   - macro-time `ctx.trivia`: source-`;`-presence is only knowable
+		//     in the trivia pipeline (the corpus harness). The plain writer
+		//     canonicalises `;`, so "did the source have `;`" is meaningless
+		//     there — plain mode stays byte-identical (falls to `flagBased`).
+		//   - runtime `!opt._inExprPosition`: value-position `if`
+		//     (`return switch … case A: if (c) a(); else b()`, or
+		//     `final x = if (a) b; else c`) is governed by
+		//     `sameLineExpressionElse`, not the statement rule — keep `else`
+		//     glued there. Mirrors fork's `MarkSameLine.markElse` (statement
+		//     `if` only).
+		final inlineSep: Expr = if (ctx.trivia && c.child.fmtHasFlag('semicolonNextLineElse')) {
+			final prevWriteFn: String = writeFnFor(c.prevBody.typePath);
+			final prevAccess: Expr = c.prevBody.access;
+			final prevDoc: Expr = { expr: ECall(macro $i{prevWriteFn}, [prevAccess, macro opt]), pos: Context.currentPos() };
+			macro (!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)
+				? _dhl()
+				: ${c.flagBased});
+		} else
+			c.flagBased;
+		return withPadTrailingDrop(c.prevPadTrailing, macro $isInlineExpr ? $inlineSep : ${c.shapeAwareSwitch});
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14091,6 +14110,20 @@ typedef WriterRule = {
 typedef PrevBodyInfo = {
 	access: Expr,
 	typePath: String
+};
+/**
+ * Shared inputs for `sameLineSeparatorShapeAware` — the shape-aware
+ * tail extracted from `sameLineSeparator`. Bundles the >5 scalars the
+ * tail needs into one context struct.
+ */
+typedef SameLineShapeAwareCtx = {
+	final child: ShapeNode;
+	final prevBody: PrevBodyInfo;
+	final prevPadTrailing: Null<Expr>;
+	final flagBased: Expr;
+	final shapeAwareSwitch: Expr;
+	final hasKeepSlot: Bool;
+	final fieldName: Null<String>;
 };
 
 /**
