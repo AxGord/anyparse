@@ -584,45 +584,60 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				final kindVal: Dynamic = Reflect.hasField(value, '_kind') ? Reflect.field(value, '_kind') : null;
 				final spanVal: Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
 				if (kindVal is String && Std.isOfType(spanVal, Span)) {
-					final kindStr: String = kindVal;
-					final spanObj: Span = cast spanVal;
-					final children: Array<QueryNode> = [];
-					for (field in Reflect.fields(value)) {
-						if (field == 'name' || field == '_span' || field == '_kind') continue;
-						// Mirror the generic branch: descend an anon-struct
-						// `type` (decl-host members), skip name-slot type-refs.
-						if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
-							if (withTypeRefs) appendTypeRefs(Reflect.field(value, 'type'), children, spanObj);
-							continue;
-						}
-						appendNodes(Reflect.field(value, field), children, withTypeRefs);
-					}
-					into.push(new QueryNode(kindStr, extractName(value), orderBySpan(children), spanObj));
+					appendSpannedStruct(value, into, withTypeRefs, kindVal, cast spanVal);
 					return;
 				}
-				for (field in Reflect.fields(value)) {
-					if (field == 'name') continue;
-					// `type` is normally a name-slot leaf (`new T(...)`,
-					// `var x:Foo`) and skipped — but an anon struct type
-					// (`typedef T = {…}`, `var x:{…}`) carries decl-host
-					// members + their metadata, so descend it. `HxType` is
-					// an enum; the `Anon` ctor gate keeps `Named` type-refs
-					// skipped (no phantom child per typed binding) — unless
-					// `withTypeRefs` (the `parseFileTypeRefs` projection for
-					// `apq uses`), where the skipped name-slot type is
-					// surfaced as `TypeRef` node(s) instead.
-					if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
-						if (withTypeRefs) appendTypeRefs(Reflect.field(value, 'type'), into, null);
-						continue;
-					}
-					appendNodes(Reflect.field(value, field), into, withTypeRefs);
-				}
+				appendObjectFields(value, into, withTypeRefs);
 			case TClass(_):
 				if (Std.isOfType(value, Array)) {
 					final arr: Array<Dynamic> = cast value;
 					for (e in arr) appendNodes(e, into, withTypeRefs);
 				}
 			case _:
+		}
+	}
+
+	/**
+	 * Emits one addressable node for a `@:spanned('<Kind>')` Seq struct
+	 * (`kindStr` + `spanObj` lifted from its `_kind` / `_span` fields),
+	 * descending its non-meta fields into the node's children.
+	 */
+	private function appendSpannedStruct(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool, kindStr: String, spanObj: Span): Void {
+		final children: Array<QueryNode> = [];
+		for (field in Reflect.fields(value)) {
+			if (field == 'name' || field == '_span' || field == '_kind') continue;
+			// Mirror the generic branch: descend an anon-struct
+			// `type` (decl-host members), skip name-slot type-refs.
+			if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
+				if (withTypeRefs) appendTypeRefs(Reflect.field(value, 'type'), children, spanObj);
+				continue;
+			}
+			appendNodes(Reflect.field(value, field), children, withTypeRefs);
+		}
+		into.push(new QueryNode(kindStr, extractName(value), orderBySpan(children), spanObj));
+	}
+
+	/**
+	 * Descends the fields of a plain (non-`node`, non-spanned) anon
+	 * struct into `into`, applying the name-slot / type-ref skip rules.
+	 */
+	private function appendObjectFields(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool): Void {
+		for (field in Reflect.fields(value)) {
+			if (field == 'name') continue;
+			// `type` is normally a name-slot leaf (`new T(...)`,
+			// `var x:Foo`) and skipped — but an anon struct type
+			// (`typedef T = {…}`, `var x:{…}`) carries decl-host
+			// members + their metadata, so descend it. `HxType` is
+			// an enum; the `Anon` ctor gate keeps `Named` type-refs
+			// skipped (no phantom child per typed binding) — unless
+			// `withTypeRefs` (the `parseFileTypeRefs` projection for
+			// `apq uses`), where the skipped name-slot type is
+			// surfaced as `TypeRef` node(s) instead.
+			if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
+				if (withTypeRefs) appendTypeRefs(Reflect.field(value, 'type'), into, null);
+				continue;
+			}
+			appendNodes(Reflect.field(value, field), into, withTypeRefs);
 		}
 	}
 
