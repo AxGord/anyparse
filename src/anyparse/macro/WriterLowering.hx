@@ -1124,58 +1124,7 @@ class WriterLowering {
 			// further separator before its writeCall, so pushing leftCurlySeparator
 			// here owns the kw→`{` transition fully.
 			if (kwLead != null && !isOptional) {
-				if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
-				if (child.fmtHasFlag('leftCurly')) {
-					// `leftCurlySeparator` (default `optSpaceUpstream=false`)
-					// handles both forms identically at this site: bare-flag
-					// reads `opt.leftCurly`, knob-form reads
-					// `opt.<knobName>` — `Same` emits `_dt(' ')`
-					// (byte-identical to the unsplit `kwLead + ' '` form) and
-					// `Next` emits `_dhl()`. First knob-form consumer here:
-					// `HxUntypedFnBody.block` with
-					// `leftCurly('blockLeftCurly')` (slice
-					// ω-blockcurly-broader) so the kw→`{` gap honors the
-					// per-construct `Block` knob alongside the global
-					// cascade.
-					parts.push(macro _dt($v{kwLead}));
-					parts.push(leftCurlySeparator(child));
-				} else if (child.fmtHasFlag('anonFuncParens')) {
-					// `@:fmt(anonFuncParens)` on a kw-led mandatory Ref
-					// routes the kw-trailing space slot through the
-					// runtime `WhitespacePolicy` knob (paren-side
-					// semantics — `Before` / `Both` emit a space, `None`
-					// / `After` collapse it). First consumer is
-					// `HxExpr.FnExpr` (`@:kw('function')` Ref to
-					// `HxFnExpr`) — default `None` keeps
-					// `function<T>(...)` / `function(...)` tight, and
-					// `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
-					// "before"` flips both to `function <T>(...)` /
-					// `function (...)`. Mirrors the haxe-formatter
-					// convention where `function`-led parens (also when
-					// reached inside an `@:overload(...)` metadata arg)
-					// track `anonFuncParamParens` (see
-					// `MarkWhitespace.determinePOpenPolicy` default
-					// fall-through).
-					parts.push(macro _dt($v{kwLead}));
-					final policySpace: Null<Expr> = kwTrailingSpacePolicyParenSide(child, ['anonFuncParens']);
-					if (policySpace != null) parts.push(policySpace);
-				} else if (firstFmtFlag(child, ['catchParensGap', 'whilePolicy']) != null) {
-					// ω-condition-parens (Stage C): kw-led struct-field cond
-					// whose `kw`→`(` gap tracks a kw-after `WhitespacePolicy`
-					// knob. `catchParensGap` (`HxCatchClause.param`,
-					// `@:kw('catch')`) and `whilePolicy` (`HxDoWhileStmt.cond`,
-					// `@:kw('while')` — the trailing `while` of a `do … while`)
-					// both use kw-after semantics (`After`/`Both` → space,
-					// `None` → tight). Defaults keep `catch (` / `} while (`
-					// byte-identical; fed from
-					// `parenConfig.{catch|while}ConditionParens.openingPolicy`
-					// (flipped to the kw-after axis) in `applyConditionParens`.
-					parts.push(macro _dt($v{kwLead}));
-					final policySpace: Null<Expr> = kwTrailingSpacePolicy(child, ['catchParensGap', 'whilePolicy']);
-					if (policySpace != null) parts.push(policySpace);
-				} else {
-					parts.push(macro _dt($v{kwLead + ' '}));
-				}
+				emitKwPrefix(child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing);
 			}
 
 			// D61: non-optional lead — no space before lead.
@@ -15414,6 +15363,72 @@ class WriterLowering {
 			}
 			: macro ($prev && $fieldAccess.length > 0) ? _dt(' ') : _de();
 		return withPadTrailingDrop(prevPadTrailing, baseExpr);
+	}
+
+	/**
+	 * D61: emit the kw prefix for a kw-led mandatory struct field — leading
+	 * separator (unless first / raw) then the kw token. `@:fmt(leftCurly)`,
+	 * `@:fmt(anonFuncParens)`, and the `catchParensGap` / `whilePolicy` kw-after
+	 * knobs each split the kw-trailing space into a runtime policy switch;
+	 * otherwise the kw carries a literal trailing space. Pushes onto `parts`.
+	 * Extracted from `lowerStruct`.
+	 */
+	private function emitKwPrefix(
+		child: ShapeNode, parts: Array<Expr>, kwLead: String, isFirstField: Bool, isRaw: Bool, prevBodyField: Null<PrevBodyInfo>,
+		typePath: String, prevPadTrailing: Null<Expr>
+	): Void {
+		if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
+		if (child.fmtHasFlag('leftCurly')) {
+			// `leftCurlySeparator` (default `optSpaceUpstream=false`)
+			// handles both forms identically at this site: bare-flag
+			// reads `opt.leftCurly`, knob-form reads
+			// `opt.<knobName>` — `Same` emits `_dt(' ')`
+			// (byte-identical to the unsplit `kwLead + ' '` form) and
+			// `Next` emits `_dhl()`. First knob-form consumer here:
+			// `HxUntypedFnBody.block` with
+			// `leftCurly('blockLeftCurly')` (slice
+			// ω-blockcurly-broader) so the kw→`{` gap honors the
+			// per-construct `Block` knob alongside the global
+			// cascade.
+			parts.push(macro _dt($v{kwLead}));
+			parts.push(leftCurlySeparator(child));
+		} else if (child.fmtHasFlag('anonFuncParens')) {
+			// `@:fmt(anonFuncParens)` on a kw-led mandatory Ref
+			// routes the kw-trailing space slot through the
+			// runtime `WhitespacePolicy` knob (paren-side
+			// semantics — `Before` / `Both` emit a space, `None`
+			// / `After` collapse it). First consumer is
+			// `HxExpr.FnExpr` (`@:kw('function')` Ref to
+			// `HxFnExpr`) — default `None` keeps
+			// `function<T>(...)` / `function(...)` tight, and
+			// `whitespace.parenConfig.anonFuncParamParens.openingPolicy:
+			// "before"` flips both to `function <T>(...)` /
+			// `function (...)`. Mirrors the haxe-formatter
+			// convention where `function`-led parens (also when
+			// reached inside an `@:overload(...)` metadata arg)
+			// track `anonFuncParamParens` (see
+			// `MarkWhitespace.determinePOpenPolicy` default
+			// fall-through).
+			parts.push(macro _dt($v{kwLead}));
+			final policySpace: Null<Expr> = kwTrailingSpacePolicyParenSide(child, ['anonFuncParens']);
+			if (policySpace != null) parts.push(policySpace);
+		} else if (firstFmtFlag(child, ['catchParensGap', 'whilePolicy']) != null) {
+			// ω-condition-parens (Stage C): kw-led struct-field cond
+			// whose `kw`→`(` gap tracks a kw-after `WhitespacePolicy`
+			// knob. `catchParensGap` (`HxCatchClause.param`,
+			// `@:kw('catch')`) and `whilePolicy` (`HxDoWhileStmt.cond`,
+			// `@:kw('while')` — the trailing `while` of a `do … while`)
+			// both use kw-after semantics (`After`/`Both` → space,
+			// `None` → tight). Defaults keep `catch (` / `} while (`
+			// byte-identical; fed from
+			// `parenConfig.{catch|while}ConditionParens.openingPolicy`
+			// (flipped to the kw-after axis) in `applyConditionParens`.
+			parts.push(macro _dt($v{kwLead}));
+			final policySpace: Null<Expr> = kwTrailingSpacePolicy(child, ['catchParensGap', 'whilePolicy']);
+			if (policySpace != null) parts.push(policySpace);
+		} else {
+			parts.push(macro _dt($v{kwLead + ' '}));
+		}
 	}
 
 }
