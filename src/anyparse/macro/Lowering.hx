@@ -1057,72 +1057,10 @@ class Lowering {
 			// Ref post-switch matchLit (mutually exclusive per field).
 			final captureTrailPresentExpr: Expr = hasStructFieldTrailOptSlot ? macro $i{trailPresentLocal} = true : macro {};
 			if (hasKwTriviaSlots) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: afterKwLocal,
-							type: (macro :Null<String>),
-							expr: macro null,
-							isFinal: false
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: kwLeadingLocal,
-							type: (macro :Array<String>),
-							expr: macro [],
-							isFinal: false
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeKwNlLocal,
-							type: (macro :Bool),
-							expr: macro false,
-							isFinal: false
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: bodyOnSameLineLocal,
-							type: (macro :Bool),
-							expr: macro false,
-							isFinal: false
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeKwLeadingLocal,
-							type: (macro :Array<String>),
-							expr: macro [],
-							isFinal: false
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeKwTrailingLocal,
-							type: (macro :Null<String>),
-							expr: macro null,
-							isFinal: false
-						}
-					]),
-					pos: Context.currentPos(),
-				});
+				emitKwTriviaSlotDecls(
+					afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal,
+					parseSteps
+				);
 			}
 			switch child.kind {
 				case Ref if (isOptional):
@@ -5673,6 +5611,38 @@ expectLit(ctx, $v{trailText}));
 				Context.currentPos()
 			);
 		}
+	}
+
+	/**
+	 * Pre-declare the six `@:optional @:kw(...)` trivia sidecar locals
+	 * (`_afterKw_*` / `_kwLeading_*` / `_beforeKwNl_*` / `_bodyOnSameLine_*` /
+	 * `_beforeKwLeading_*` / `_beforeKwTrailing_*`) that the optional-Ref /
+	 * optional-kw-Star commit path assigns into. Pushes one `EVars` per local.
+	 * Pure — lifted from `lowerStruct`'s per-field loop.
+	 */
+	private static function emitKwTriviaSlotDecls(
+		afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
+		beforeKwTrailingLocal: String, parseSteps: Array<Expr>
+	): Void {
+		inline function pushVar(name: String, type: ComplexType, init: Expr): Void {
+			parseSteps.push({
+				expr: EVars([
+					{
+						name: name,
+						type: type,
+						expr: init,
+						isFinal: false
+					}
+				]),
+				pos: Context.currentPos(),
+			});
+		}
+		pushVar(afterKwLocal, macro :Null<String>, macro null);
+		pushVar(kwLeadingLocal, macro :Array<String>, macro []);
+		pushVar(beforeKwNlLocal, macro :Bool, macro false);
+		pushVar(bodyOnSameLineLocal, macro :Bool, macro false);
+		pushVar(beforeKwLeadingLocal, macro :Array<String>, macro []);
+		pushVar(beforeKwTrailingLocal, macro :Null<String>, macro null);
 	}
 
 }
