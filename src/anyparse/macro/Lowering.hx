@@ -834,64 +834,10 @@ class Lowering {
 			// `typedef Foo = Int` and the next decl) that the pre-field
 			// `skipWs` would otherwise silently consume — closes
 			// issue_216 / issue_321 cluster's parser-side bug.
-			if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
-				if (hasBeforeLeadingSlot) {
-					// ω-598-member-leading-comment: capture the full
-					// `collectTrivia` result once, then split into the
-					// `newlineBefore` bool (BeforeNewline slot) and the
-					// verbatim `leadingComments` array (BeforeLeading slot).
-					// The array holds a comment dropped in the gap between the
-					// last modifier and the member keyword; emitted by the
-					// writer's bare-Ref non-first separator. Empty in the
-					// common case (no inter-modifier comment) → byte-inert.
-					final arrayStrCT: ComplexType = TPath({
-						pack: [],
-						name: 'Array',
-						params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-					});
-					parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
-					parseSteps.push({
-						expr: EVars([
-							{
-								name: beforeNlLocal,
-								type: (macro :Bool),
-								expr: macro _beforeTrivia.newlineBefore,
-								isFinal: true,
-							}
-						]),
-						pos: Context.currentPos(),
-					});
-					parseSteps.push({
-						expr: EVars([
-							{
-								name: beforeLeadingLocal,
-								type: arrayStrCT,
-								expr: macro _beforeTrivia.leadingComments,
-								isFinal: true,
-							}
-						]),
-						pos: Context.currentPos(),
-					});
-				} else if (hasBeforeNewlineSlot) {
-					// Route through `collectTrivia` — drains any
-					// `pendingTrivia` stash from a preceding empty
-					// bare-tryparse Star and captures `newlineBefore` into
-					// the local that the struct literal writes onto the
-					// synth slot. `skipWs` would silently discard both.
-					parseSteps.push({
-						expr: EVars([
-							{
-								name: beforeNlLocal,
-								type: (macro :Bool),
-								expr: macro collectTrivia(ctx).newlineBefore,
-								isFinal: true,
-							}
-						]),
-						pos: Context.currentPos(),
-					});
-				} else
-					parseSteps.push(macro skipWs(ctx));
-			}
+			emitPreFieldWs(
+				parseSteps, triviaEofStar, isOptionalRef, isOptionalKwStar, optStarWithLead, hasBeforeLeadingSlot, hasBeforeNewlineSlot,
+				beforeNlLocal, beforeLeadingLocal, hasCondOpenNewlineSlot, condOpenNewlineLocal
+			);
 			// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
 			// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
 			// `[_condLeadEnd, ctx.pos)` answers "did the source break right
@@ -899,17 +845,6 @@ class Lowering {
 			// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
 			// only for the opted-in condWrap cond field; `_condLeadEnd` was
 			// declared right after the lead `expectLit` above.
-			if (hasCondOpenNewlineSlot) parseSteps.push({
-				expr: EVars([
-					{
-						name: condOpenNewlineLocal,
-						type: (macro :Bool),
-						expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
-						isFinal: true,
-					}
-				]),
-				pos: Context.currentPos(),
-			});
 			// ω-issue-316: for `@:optional @:kw(...)` Ref fields in Trivia
 			// mode, declare per-field locals that capture (a) a same-line
 			// trailing comment after the kw and (b) own-line leading comments
@@ -5722,6 +5657,98 @@ expectLit(ctx, $v{trailText}));
 					ctx.pos = _trailOptWsPos;
 			});
 		}
+	}
+
+	/**
+	 * Emit the pre-field whitespace / trivia handling for one struct field
+	 * (skipped for the optional-Ref / optional-kw-Star / EOF-Star / optional-
+	 * Star-with-lead paths that own their own ws). Three modes: capture
+	 * `collectTrivia` into BeforeLeading+BeforeNewline slots, or just
+	 * BeforeNewline, or a plain `skipWs`. Then, for an opted-in condWrap cond
+	 * field, probe the `(`→cond newline gap into the CondOpenNewline slot.
+	 * Pure — lifted from `lowerStruct`'s per-field loop.
+	 */
+	private static function emitPreFieldWs(
+		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
+		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
+		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String
+	): Void {
+		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
+			if (hasBeforeLeadingSlot) {
+				// ω-598-member-leading-comment: capture the full
+				// `collectTrivia` result once, then split into the
+				// `newlineBefore` bool (BeforeNewline slot) and the
+				// verbatim `leadingComments` array (BeforeLeading slot).
+				// The array holds a comment dropped in the gap between the
+				// last modifier and the member keyword; emitted by the
+				// writer's bare-Ref non-first separator. Empty in the
+				// common case (no inter-modifier comment) → byte-inert.
+				final arrayStrCT: ComplexType = TPath({
+					pack: [],
+					name: 'Array',
+					params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
+				});
+				parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeNlLocal,
+							type: (macro :Bool),
+							expr: macro _beforeTrivia.newlineBefore,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeLeadingLocal,
+							type: arrayStrCT,
+							expr: macro _beforeTrivia.leadingComments,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			} else if (hasBeforeNewlineSlot) {
+				// Route through `collectTrivia` — drains any
+				// `pendingTrivia` stash from a preceding empty
+				// bare-tryparse Star and captures `newlineBefore` into
+				// the local that the struct literal writes onto the
+				// synth slot. `skipWs` would silently discard both.
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeNlLocal,
+							type: (macro :Bool),
+							expr: macro collectTrivia(ctx).newlineBefore,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			} else
+				parseSteps.push(macro skipWs(ctx));
+		}
+		// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
+		// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
+		// `[_condLeadEnd, ctx.pos)` answers "did the source break right
+		// after `(`?". Captured into the local that the struct literal
+		// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
+		// only for the opted-in condWrap cond field; `_condLeadEnd` was
+		// declared right after the lead `expectLit` above.
+		if (hasCondOpenNewlineSlot) parseSteps.push({
+			expr: EVars([
+				{
+					name: condOpenNewlineLocal,
+					type: (macro :Bool),
+					expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
 	}
 
 }
