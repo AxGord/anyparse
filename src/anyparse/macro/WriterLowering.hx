@@ -6985,6 +6985,18 @@ class WriterLowering {
 		final _matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
 			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
 		);
+		final _dispatchCtx: SepStarDispatchCtx = {
+			reflowSourceMultiline: reflowSourceMultiline,
+			matrixWrap: matrixWrap,
+			keepCheckExpr: keepCheckExpr,
+			ignoreCheckExpr: ignoreCheckExpr,
+			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
+			predicateScanExpr: _predicateScan,
+			matrixSucceedsExpr: _matrixSucc,
+			keepMatrixComputeExpr: keepMatrixComputeExpr,
+			forceMultiExpr: triviaSepForceMultiExpr(_sepCtx),
+			noTriviaBranch: noTriviaBranch,
+		}
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -7012,172 +7024,7 @@ class WriterLowering {
 				else
 					_dt($v{emptyText});
 			} else {
-				// ω-keep-predicate-split + ω-cascade-emits-comments: decompose
-				// `_hasTrivia` into three orthogonal predicates so the
-				// Ignore-mode cascade can ingest per-element block comments
-				// and the Keep emit path can stay gated on physical hardline
-				// requirements alone.
-				//
-				//  - `_requiresHardline` — physical hardline requirement:
-				//    `_trailLC`/`_trailOpen` on the open/close boundary, any
-				//    blank line before an element, leading comments (when
-				//    NOT in ignore mode), and trailing LINE comments (any
-				//    mode — engine inserts the sep AFTER the item, which
-				//    would land inside `// ...`). Anything in this bucket
-				//    MUST route through the force-multi branch.
-				//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
-				//    least one element. Independent axis. Under
-				//    `_ignoreEmit` this signal is DROPPED (fork's `Ignore`
-				//    policy ignores source newlines and lets width drive
-				//    layout); legacy default still flips `_hasTrivia=true`.
-				//  - `_hasInlineableTrivia` — at least one element carries a
-				//    leading comment OR a block-style trailing comment, AND
-				//    `_ignoreEmit` is live. These are cascade-emittable: the
-				//    no-trivia branch wraps each item Doc with its leading
-				//    comments + inline block trailing before passing to
-				//    `WrapList.emit`. Routes the item to cascade (not
-				//    force-multi) when no `_requiresHardline` blocker fires.
-				//
-				// Byte-identity for `_ignoreEmit=false`: comments still set
-				// `_requiresHardline=true` (legacy bucket); cascade rewrite
-				// at the no-trivia branch collapses to `_docs.push(_elem)`
-				// because `_parts.length==1` on no-comment elements.
-				// ω-keep-fnsig-newline: `_keepEmit` is read FIRST so the
-				// `_ignoreEmit` gate below can yield to it. The only Star
-				// carrying the intrinsic `@:fmt(ignoreSourceNewlinesForWrap)`
-				// flag (so `ignoreCheckExpr == macro true`) is `HxFnDecl.params`;
-				// it ALSO reads `wrapRules('functionSignatureWrap')`. When the
-				// JSON config sets that rule to `keep`, the author opted into
-				// source-newline preservation explicitly, so Keep must win over
-				// the per-construct Ignore default. For every JSON-config consumer
-				// `defaultMode` is a single value — Keep and Ignore are mutually
-				// exclusive — so `!_keepEmit` only ever flips the params-in-Keep
-				// case; all other Stars (Ignore-mode object-literals / arrays,
-				// default-mode params) keep the prior `_ignoreEmit` value byte-
-				// for-byte. The force-multi per-element swap further below reads
-				// this same `_keepEmit` for the source-`newlineBefore` dispatch.
-				final _keepEmit: Bool = $keepCheckExpr;
-				final _ignoreEmit: Bool = $ignoreCheckExpr && !_keepEmit;
-				// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
-				// to Keep/Ignore (mutually exclusive `defaultMode`s, so this
-				// only ever flips for an actual NoWrap config). Scoped to the
-				// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
-				// flag (the only Star carrying it). The fork flattens noWrap
-				// arrays (`arrayLiteralWrapping` → `applyWrappingPlace`) but
-				// does NOT flatten a source-multiline OBJECT literal under
-				// noWrap — `objectLiteralWrapping` force-one-per-lines any
-				// `!isOriginalSameLine` body BEFORE consulting the rule. Object
-				// literals (no `reflowSourceMultiline`) therefore keep their
-				// legacy source-multiline force-multi shape. Drives the fork's
-				// `noWrap()` flat-with-comment-break layout below.
-				final _noWrapFlat: Bool = $v{reflowSourceMultiline} && $noWrapFlatCheckExpr && !_keepEmit && !_ignoreEmit;
-				// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
-				// entirely — like the `Ignore` policy it DROPS source newlines
-				// so the cascade (not the force-multi path) drives layout: a
-				// short matrix-shaped array collapses flat, a wide one width-
-				// packs. Only meaningful on a matrix-eligible Star (`matrixWrap`
-				// compile-time flag); every other consumer leaves it false.
-				final _matrixOff: Bool = $v{matrixWrap} && opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
-				var _requiresHardline: Bool = _trailLC.length > 0 || _trailOpen != null;
-				var _hasSourceNewlines: Bool = false;
-				var _hasInlineableTrivia: Bool = false;
-				// ω-nowrap-flat: the noWrap-flatten path applies only to a plain
-				// element list. Two kinds of item make a list NON-flattenable,
-				// mirroring the fork (`MarkWrapping.arrayLiteralWrapping`):
-				//  - a `for`/`while` ARRAY-COMPREHENSION item: the fork returns
-				//    early from `arrayLiteralWrapping` when the first item is
-				//    `Kwd(KwdFor)`/`Kwd(KwdWhile)` under `comprehensionFor: keep`,
-				//    leaving the comprehension's layout to the sameLine/forBody
-				//    policy — so the noWrap arrayWrap rule never touches it.
-				//  - an item that renders with its own forced hardline (block
-				//    body, etc.): cannot be cuddled flat (the inner construct
-				//    keeps its mandatory breaks). Probed via
-				//    `WrapList.flatLength(item) < 0`, the same "has forced
-				//    hardline" signal the cascade's `HasMultilineItems` uses.
-				// Both flow into `_anyMultilineItem`, which gates the flatten
-				// off → such lists keep the legacy `_smlKeep`/force-multi shape.
-				// Only computed under `_noWrapFlat` (every other path leaves it
-				// false → no extra per-element render / reflection).
-				var _anyMultilineItem: Bool = false;
-				$_predicateScan;
-				final _hasTrivia: Bool = _requiresHardline || _hasSourceNewlines;
-				// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
-				// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
-				// `applyWrappingPlace`). Probe whether the source rows form a
-				// uniform grid; if so, leave `_noWrapFlatten` off so the array
-				// flows to the existing `_smlKeep` / no-trivia matrix path
-				// (column-aligned grid). Only computed for a matrix-eligible
-				// Star (`matrixWrap`) under noWrap with no comment/blank
-				// hardline; every other path leaves it false.
-				final _matrixSucceeds: Bool = $_matrixSucc;
-				// ω-keep-relax-gate: Keep emit gate. Fires whenever the
-				// wrap-rules runtime mode is Keep — comments and blanks no
-				// longer block Keep semantics. The force-multi loop below
-				// emits leadingComments/trailingComment + blanks per
-				// element, and the per-element swap honours source
-				// `newlineBefore` for inter-element breaks. Syntactic
-				// invariant: a line-trailing `// ...` comment ends the
-				// source line, so the next element always carries
-				// `newlineBefore=true` and gets `_dhl()` from the swap —
-				// no risk of `_dt(' ')` cuddling content after a `//`.
-				// The cascade-emits-comments path remains reserved for
-				// Ignore mode (`_hasInlineableTrivia` bucket).
-				// `_keepEmit` itself is declared above (hoisted so the
-				// `_ignoreEmit` gate can yield to it — ω-keep-fnsig-newline).
-				// ω-array-reflow: when the Star opted into
-				// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
-				// signal is bare source newlines (no hardline-requiring
-				// trivia, no Keep / Ignore policy), divert away from the
-				// force-multi (one-`_dhl()`-per-element) path and let the
-				// wrap cascade re-flow the list. `_smlKeep` gates that
-				// diversion; `WrapList.emit`'s `sourceMultilineKeep` floor
-				// then guarantees the cascade never collapses such a list
-				// fully flat (NoWrap → OnePerLine), so the source's
-				// "stay multi-line" intent is honoured while width-driven
-				// packing (FillLine / FillLineWithLeadingBreak) applies.
-				// Under `NoMatrixWrap` (`_matrixOff`) `_hasSourceNewlines` was
-				// already forced false above, so `_smlKeep` collapses here and
-				// the cascade drives layout — no extra gate needed.
-				// ω-nowrap-flat: under an explicit pure-`noWrap` array config a
-				// source-multiline list whose items carry NO intrinsic hardline
-				// (`_anyMultilineItem`: a `for`/`while` comprehension or a
-				// hardline-bearing item) AND that is not a uniform matrix grid
-				// (`_matrixSucceeds`) must collapse to the fork's `noWrap()` flat
-				// shape — every element cuddled, the close glued, and the only
-				// break the one a `//` line-comment forces. Both the comment
-				// case (`_requiresHardline` via a line-comment) and the plain
-				// case route through the FORCE-MULTI per-element loop below: its
-				// `_noWrapFlatten` branch
-				// lays the list out flat AND preserves the source trailing comma
-				// (`appendTrailingCommaExpr`) — which the no-trivia cascade's
-				// `shapeNoWrap` would have dropped. A comprehension / multi-line
-				// item or a matrix-grid array keeps the legacy `_smlKeep` reflow
-				// (its layout is owned by another path).
-				final _noWrapFlatten: Bool = _noWrapFlat && !_anyMultilineItem && !_matrixSucceeds;
-				// ω-nowrap-flat: `_smlKeep` reflow stays ON for a comprehension /
-				// multi-line-item / matrix noWrap array — those keep their HEAD
-				// source-multiline shape. It is disabled ONLY when the array
-				// actually flattens (`_noWrapFlatten`), so the flatten routes
-				// through the force-multi flat loop below instead of reflow.
-				final _smlKeep: Bool = $v{reflowSourceMultiline} && _hasSourceNewlines && !_requiresHardline && !_keepEmit && !_ignoreEmit
-					&& !_noWrapFlatten;
-				final _forceMulti: Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
-				// ω-arraymatrix-keep: attempt the matrix grid BEFORE the keep
-				// force-multi emit. `_keepMatrixDoc` is non-null only for a
-				// matrix-eligible Star (`matrixWrap`) under Keep with a
-				// uniform source grid; otherwise null → fall through to the
-				// existing force-multi / cascade dispatch byte-identically.
-				// Wrapped in `_dwb(_dbg(...))` like the force-multi path so a
-				// matrix nested inside a force-flat region keeps its indent
-				// and an enclosing Group defers the grid's hardlines.
-				final _keepMatrixDoc: Null<anyparse.core.Doc> = $keepMatrixComputeExpr;
-				if (_keepMatrixDoc != null) {
-					_dwb(_dbg(_keepMatrixDoc));
-				} else if (_forceMulti) {
-					${triviaSepForceMultiExpr(_sepCtx)};
-				} else {
-					$noTriviaBranch;
-				}
+				${triviaSepDispatchExpr(_dispatchCtx)};
 			}
 		};
 	}
@@ -14627,6 +14474,193 @@ class WriterLowering {
 			false;
 	}
 
+	/**
+	 * Sep-Star non-empty-list dispatch block: derives the keep/ignore/noWrap/
+	 * forceMulti predicates (via the predicate-split machinery) and routes the
+	 * list to the keep-matrix grid, the force-multi loop, or the no-trivia
+	 * cascade. References the runtime `_arr`/`_trailLC`/`_trailOpen` locals.
+	 * Extracted from `triviaSepStarExpr` so the orchestrator stays under the
+	 * complexity gate; behaviour byte-identical.
+	 */
+	private static function triviaSepDispatchExpr(c: SepStarDispatchCtx): Expr {
+		final keepCheckExpr: Expr = c.keepCheckExpr;
+		final ignoreCheckExpr: Expr = c.ignoreCheckExpr;
+		final noWrapFlatCheckExpr: Expr = c.noWrapFlatCheckExpr;
+		final predicateScanExpr: Expr = c.predicateScanExpr;
+		final matrixSucceedsExpr: Expr = c.matrixSucceedsExpr;
+		final keepMatrixComputeExpr: Expr = c.keepMatrixComputeExpr;
+		final forceMultiExpr: Expr = c.forceMultiExpr;
+		final noTriviaBranch: Expr = c.noTriviaBranch;
+		return macro {
+			// ω-keep-predicate-split + ω-cascade-emits-comments: decompose
+			// `_hasTrivia` into three orthogonal predicates so the
+			// Ignore-mode cascade can ingest per-element block comments
+			// and the Keep emit path can stay gated on physical hardline
+			// requirements alone.
+			//
+			//  - `_requiresHardline` — physical hardline requirement:
+			//    `_trailLC`/`_trailOpen` on the open/close boundary, any
+			//    blank line before an element, leading comments (when
+			//    NOT in ignore mode), and trailing LINE comments (any
+			//    mode — engine inserts the sep AFTER the item, which
+			//    would land inside `// ...`). Anything in this bucket
+			//    MUST route through the force-multi branch.
+			//  - `_hasSourceNewlines` — bare `newlineBefore=true` on at
+			//    least one element. Independent axis. Under
+			//    `_ignoreEmit` this signal is DROPPED (fork's `Ignore`
+			//    policy ignores source newlines and lets width drive
+			//    layout); legacy default still flips `_hasTrivia=true`.
+			//  - `_hasInlineableTrivia` — at least one element carries a
+			//    leading comment OR a block-style trailing comment, AND
+			//    `_ignoreEmit` is live. These are cascade-emittable: the
+			//    no-trivia branch wraps each item Doc with its leading
+			//    comments + inline block trailing before passing to
+			//    `WrapList.emit`. Routes the item to cascade (not
+			//    force-multi) when no `_requiresHardline` blocker fires.
+			//
+			// Byte-identity for `_ignoreEmit=false`: comments still set
+			// `_requiresHardline=true` (legacy bucket); cascade rewrite
+			// at the no-trivia branch collapses to `_docs.push(_elem)`
+			// because `_parts.length==1` on no-comment elements.
+			// ω-keep-fnsig-newline: `_keepEmit` is read FIRST so the
+			// `_ignoreEmit` gate below can yield to it. The only Star
+			// carrying the intrinsic `@:fmt(ignoreSourceNewlinesForWrap)`
+			// flag (so `ignoreCheckExpr == macro true`) is `HxFnDecl.params`;
+			// it ALSO reads `wrapRules('functionSignatureWrap')`. When the
+			// JSON config sets that rule to `keep`, the author opted into
+			// source-newline preservation explicitly, so Keep must win over
+			// the per-construct Ignore default. For every JSON-config consumer
+			// `defaultMode` is a single value — Keep and Ignore are mutually
+			// exclusive — so `!_keepEmit` only ever flips the params-in-Keep
+			// case; all other Stars (Ignore-mode object-literals / arrays,
+			// default-mode params) keep the prior `_ignoreEmit` value byte-
+			// for-byte. The force-multi per-element swap further below reads
+			// this same `_keepEmit` for the source-`newlineBefore` dispatch.
+			final _keepEmit: Bool = $keepCheckExpr;
+			final _ignoreEmit: Bool = $ignoreCheckExpr && !_keepEmit;
+			// ω-nowrap-flat: pure-`noWrap` config (empty cascade) — yields
+			// to Keep/Ignore (mutually exclusive `defaultMode`s, so this
+			// only ever flips for an actual NoWrap config). Scoped to the
+			// ARRAY-LITERAL Star via the `reflowSourceMultiline` compile
+			// flag (the only Star carrying it). The fork flattens noWrap
+			// arrays (`arrayLiteralWrapping` → `applyWrappingPlace`) but
+			// does NOT flatten a source-multiline OBJECT literal under
+			// noWrap — `objectLiteralWrapping` force-one-per-lines any
+			// `!isOriginalSameLine` body BEFORE consulting the rule. Object
+			// literals (no `reflowSourceMultiline`) therefore keep their
+			// legacy source-multiline force-multi shape. Drives the fork's
+			// `noWrap()` flat-with-comment-break layout below.
+			final _noWrapFlat: Bool = $v{c.reflowSourceMultiline} && $noWrapFlatCheckExpr && !_keepEmit && !_ignoreEmit;
+			// ω-arraymatrix-wrap: `NoMatrixWrap` ignores the source grid
+			// entirely — like the `Ignore` policy it DROPS source newlines
+			// so the cascade (not the force-multi path) drives layout: a
+			// short matrix-shaped array collapses flat, a wide one width-
+			// packs. Only meaningful on a matrix-eligible Star (`matrixWrap`
+			// compile-time flag); every other consumer leaves it false.
+			final _matrixOff: Bool = $v{c.matrixWrap} && opt.arrayMatrixWrap == anyparse.format.ArrayMatrixWrap.NoMatrixWrap;
+			var _requiresHardline: Bool = _trailLC.length > 0 || _trailOpen != null;
+			var _hasSourceNewlines: Bool = false;
+			var _hasInlineableTrivia: Bool = false;
+			// ω-nowrap-flat: the noWrap-flatten path applies only to a plain
+			// element list. Two kinds of item make a list NON-flattenable,
+			// mirroring the fork (`MarkWrapping.arrayLiteralWrapping`):
+			//  - a `for`/`while` ARRAY-COMPREHENSION item: the fork returns
+			//    early from `arrayLiteralWrapping` when the first item is
+			//    `Kwd(KwdFor)`/`Kwd(KwdWhile)` under `comprehensionFor: keep`,
+			//    leaving the comprehension's layout to the sameLine/forBody
+			//    policy — so the noWrap arrayWrap rule never touches it.
+			//  - an item that renders with its own forced hardline (block
+			//    body, etc.): cannot be cuddled flat (the inner construct
+			//    keeps its mandatory breaks). Probed via
+			//    `WrapList.flatLength(item) < 0`, the same "has forced
+			//    hardline" signal the cascade's `HasMultilineItems` uses.
+			// Both flow into `_anyMultilineItem`, which gates the flatten
+			// off → such lists keep the legacy `_smlKeep`/force-multi shape.
+			// Only computed under `_noWrapFlat` (every other path leaves it
+			// false → no extra per-element render / reflection).
+			var _anyMultilineItem: Bool = false;
+			$predicateScanExpr;
+			final _hasTrivia: Bool = _requiresHardline || _hasSourceNewlines;
+			// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
+			// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
+			// `applyWrappingPlace`). Probe whether the source rows form a
+			// uniform grid; if so, leave `_noWrapFlatten` off so the array
+			// flows to the existing `_smlKeep` / no-trivia matrix path
+			// (column-aligned grid). Only computed for a matrix-eligible
+			// Star (`matrixWrap`) under noWrap with no comment/blank
+			// hardline; every other path leaves it false.
+			final _matrixSucceeds: Bool = $matrixSucceedsExpr;
+			// ω-keep-relax-gate: Keep emit gate. Fires whenever the
+			// wrap-rules runtime mode is Keep — comments and blanks no
+			// longer block Keep semantics. The force-multi loop below
+			// emits leadingComments/trailingComment + blanks per
+			// element, and the per-element swap honours source
+			// `newlineBefore` for inter-element breaks. Syntactic
+			// invariant: a line-trailing `// ...` comment ends the
+			// source line, so the next element always carries
+			// `newlineBefore=true` and gets `_dhl()` from the swap —
+			// no risk of `_dt(' ')` cuddling content after a `//`.
+			// The cascade-emits-comments path remains reserved for
+			// Ignore mode (`_hasInlineableTrivia` bucket).
+			// `_keepEmit` itself is declared above (hoisted so the
+			// `_ignoreEmit` gate can yield to it — ω-keep-fnsig-newline).
+			// ω-array-reflow: when the Star opted into
+			// `@:fmt(reflowSourceMultiline)` AND its only "multi-line"
+			// signal is bare source newlines (no hardline-requiring
+			// trivia, no Keep / Ignore policy), divert away from the
+			// force-multi (one-`_dhl()`-per-element) path and let the
+			// wrap cascade re-flow the list. `_smlKeep` gates that
+			// diversion; `WrapList.emit`'s `sourceMultilineKeep` floor
+			// then guarantees the cascade never collapses such a list
+			// fully flat (NoWrap → OnePerLine), so the source's
+			// "stay multi-line" intent is honoured while width-driven
+			// packing (FillLine / FillLineWithLeadingBreak) applies.
+			// Under `NoMatrixWrap` (`_matrixOff`) `_hasSourceNewlines` was
+			// already forced false above, so `_smlKeep` collapses here and
+			// the cascade drives layout — no extra gate needed.
+			// ω-nowrap-flat: under an explicit pure-`noWrap` array config a
+			// source-multiline list whose items carry NO intrinsic hardline
+			// (`_anyMultilineItem`: a `for`/`while` comprehension or a
+			// hardline-bearing item) AND that is not a uniform matrix grid
+			// (`_matrixSucceeds`) must collapse to the fork's `noWrap()` flat
+			// shape — every element cuddled, the close glued, and the only
+			// break the one a `//` line-comment forces. Both the comment
+			// case (`_requiresHardline` via a line-comment) and the plain
+			// case route through the FORCE-MULTI per-element loop below: its
+			// `_noWrapFlatten` branch
+			// lays the list out flat AND preserves the source trailing comma
+			// (`appendTrailingCommaExpr`) — which the no-trivia cascade's
+			// `shapeNoWrap` would have dropped. A comprehension / multi-line
+			// item or a matrix-grid array keeps the legacy `_smlKeep` reflow
+			// (its layout is owned by another path).
+			final _noWrapFlatten: Bool = _noWrapFlat && !_anyMultilineItem && !_matrixSucceeds;
+			// ω-nowrap-flat: `_smlKeep` reflow stays ON for a comprehension /
+			// multi-line-item / matrix noWrap array — those keep their HEAD
+			// source-multiline shape. It is disabled ONLY when the array
+			// actually flattens (`_noWrapFlatten`), so the flatten routes
+			// through the force-multi flat loop below instead of reflow.
+			final _smlKeep: Bool = $v{c.reflowSourceMultiline} && _hasSourceNewlines && !_requiresHardline && !_keepEmit && !_ignoreEmit
+				&& !_noWrapFlatten;
+			final _forceMulti: Bool = (_hasTrivia && !_smlKeep) || _noWrapFlatten;
+			// ω-arraymatrix-keep: attempt the matrix grid BEFORE the keep
+			// force-multi emit. `_keepMatrixDoc` is non-null only for a
+			// matrix-eligible Star (`matrixWrap`) under Keep with a
+			// uniform source grid; otherwise null → fall through to the
+			// existing force-multi / cascade dispatch byte-identically.
+			// Wrapped in `_dwb(_dbg(...))` like the force-multi path so a
+			// matrix nested inside a force-flat region keeps its indent
+			// and an enclosing Group defers the grid's hardlines.
+			final _keepMatrixDoc: Null<anyparse.core.Doc> = $keepMatrixComputeExpr;
+			if (_keepMatrixDoc != null) {
+				_dwb(_dbg(_keepMatrixDoc));
+			} else if (_forceMulti) {
+				$forceMultiExpr;
+			} else {
+				$noTriviaBranch;
+			}
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -15107,6 +15141,23 @@ typedef SepStarBlanks = {
 	final typedefBetweenExpr: Expr;
 	final blankBeforeExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
+};
+/**
+ * Input bundle for `triviaSepDispatchExpr` — the spliced Expr fragments +
+ * compile-time flags the non-empty-list dispatch block needs to derive the
+ * keep/ignore/noWrap/forceMulti predicates and pick the emit branch.
+ */
+typedef SepStarDispatchCtx = {
+	final reflowSourceMultiline: Bool;
+	final matrixWrap: Bool;
+	final keepCheckExpr: Expr;
+	final ignoreCheckExpr: Expr;
+	final noWrapFlatCheckExpr: Expr;
+	final predicateScanExpr: Expr;
+	final matrixSucceedsExpr: Expr;
+	final keepMatrixComputeExpr: Expr;
+	final forceMultiExpr: Expr;
+	final noTriviaBranch: Expr;
 };
 /**
  * Input bundle for `triviaSepNoTriviaBranch` — the spliced Expr fragments +
