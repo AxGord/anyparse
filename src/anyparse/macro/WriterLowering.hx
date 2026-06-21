@@ -1685,34 +1685,11 @@ class WriterLowering {
 								// to optional Refs (a separate, larger change — the
 								// `sourceMultilineKeep` wall noted in slice ω-fnbody-keep).
 								final wrapBodyOnSameLineExpr: Null<Expr> = null;
-								final defaultPair: Expr = macro _dc([$sepExpr, $writeCall]);
-								// Fold the pairs into a ternary chain. Iterate in
-								// reverse so the first-declared pair sits at the
-								// chain head (tested first at runtime).
-								var chain: Expr = defaultPair;
-								var i: Int = bodyPolicyForCtorPairs.length - 1;
-								while (i >= 0) {
-									final pair: Array<String> = bodyPolicyForCtorPairs[i];
-									if (pair.length != 2)
-										Context.fatalError(
-											'WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${pair.length} args',
-											Context.currentPos()
-										);
-									final wrapCtorName: String = pair[0];
-									final wrapFlagName: String = pair[1];
-									final wrapOutput: Expr = bodyPolicyWrap({
-										flagName: wrapFlagName,
-										writeCall: writeCall,
-										bodyValueExpr: macro _optVal,
-										bodyTypePath: refName,
-										hasElseIf: false,
-										elseFieldName: null,
-										bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
-									});
-									chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
-									i--;
-								}
-								optParts.push(chain);
+								optParts.push(buildBodyPolicyForCtorChain(
+									bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, wrapBodyOnSameLineExpr,
+									null
+								));
+								// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
 							} else {
 								optParts.push(sepExpr);
 								optParts.push(writeCall);
@@ -2184,39 +2161,11 @@ class WriterLowering {
 										'WriterLowering: @:fmt(metaBlockGlue(...)) requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args',
 										Context.currentPos()
 									);
-								final defaultPair: Expr = macro _dc([$sepExpr, $writeCall]);
-								// Fold the pairs into a ternary chain. Iterate in reverse
-								// so the first-declared pair sits at the chain head
-								// (tested first at runtime).
-								var chain: Expr = defaultPair;
-								var i: Int = bodyPolicyForCtorPairs.length - 1;
-								while (i >= 0) {
-									final pair: Array<String> = bodyPolicyForCtorPairs[i];
-									if (pair.length != 2)
-										Context.fatalError(
-											'WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${pair.length} args',
-											Context.currentPos()
-										);
-									final wrapCtorName: String = pair[0];
-									final wrapFlagName: String = pair[1];
-									final wrapMetaBlockGlue: Null<Array<String>> = metaBlockGlueArgs != null
-										&& metaBlockGlueArgs[0] == wrapCtorName
-										? metaBlockGlueArgs
-										: null;
-									final wrapOutput: Expr = bodyPolicyWrap({
-										flagName: wrapFlagName,
-										writeCall: writeCall,
-										bodyValueExpr: fieldAccess,
-										bodyTypePath: refName,
-										hasElseIf: false,
-										elseFieldName: null,
-										bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
-										metaBlockGlueArgs: wrapMetaBlockGlue,
-									});
-									chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
-									i--;
-								}
-								parts.push(chain);
+								parts.push(buildBodyPolicyForCtorChain(
+									bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, wrapBodyOnSameLineExpr,
+									metaBlockGlueArgs
+								));
+								// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
 							} else {
 								parts.push(sepExpr);
 								parts.push(writeCall);
@@ -15330,6 +15279,54 @@ class WriterLowering {
 				$v{leadText}, $v{trailText}, $writeCall, opt, $condKnobAccess, $condInsideOpen, $condInsideClose, $condOpenNewlineExpr
 			);
 		});
+	}
+
+	/**
+	 * ω-fnbody-keep: fold a repeatable `@:fmt(bodyPolicyForCtor('<ctor>',
+	 * '<flagName>'))` pair list into a runtime ternary chain — each pair routes
+	 * its matched runtime ctor to a `bodyPolicyWrap`, falling through to the
+	 * `_dc([sepExpr, writeCall])` default for every unpaired ctor. Iterates in
+	 * reverse so the first-declared pair sits at the chain head. Shared by the
+	 * mandatory `case Ref` leftCurly path (with metaBlockGlue / BeforeNewline
+	 * slot) and the optional-Ref leftCurly path (null both). Extracted from
+	 * `lowerStruct`.
+	 */
+	private function buildBodyPolicyForCtorChain(
+		pairs: Array<Array<String>>, ctorExpr: Expr, sepExpr: Expr, writeCall: Expr, bodyValueExpr: Expr, refName: String,
+		wrapBodyOnSameLineExpr: Null<Expr>, metaBlockGlueArgs: Null<Array<String>>
+	): Expr {
+		final defaultPair: Expr = macro _dc([$sepExpr, $writeCall]);
+		// Fold the pairs into a ternary chain. Iterate in reverse
+		// so the first-declared pair sits at the chain head
+		// (tested first at runtime).
+		var chain: Expr = defaultPair;
+		var i: Int = pairs.length - 1;
+		while (i >= 0) {
+			final pair: Array<String> = pairs[i];
+			if (pair.length != 2)
+				Context.fatalError(
+					'WriterLowering: @:fmt(bodyPolicyForCtor(...)) requires (ctorName, flagName), got ${pair.length} args',
+					Context.currentPos()
+				);
+			final wrapCtorName: String = pair[0];
+			final wrapFlagName: String = pair[1];
+			final wrapMetaBlockGlue: Null<Array<String>> = metaBlockGlueArgs != null && metaBlockGlueArgs[0] == wrapCtorName
+				? metaBlockGlueArgs
+				: null;
+			final wrapOutput: Expr = bodyPolicyWrap({
+				flagName: wrapFlagName,
+				writeCall: writeCall,
+				bodyValueExpr: bodyValueExpr,
+				bodyTypePath: refName,
+				hasElseIf: false,
+				elseFieldName: null,
+				bodyOnSameLineExpr: wrapBodyOnSameLineExpr,
+				metaBlockGlueArgs: wrapMetaBlockGlue,
+			});
+			chain = macro $ctorExpr == $v{wrapCtorName} ? $wrapOutput : $chain;
+			i--;
+		}
+		return chain;
 	}
 
 }
