@@ -12599,65 +12599,24 @@ class WriterLowering {
 		final enumRule: ShapeNode = r.enumRule;
 		final enumRuleName: String = r.enumRuleName;
 		final pos: Position = Context.currentPos();
-		final patterns: Array<BetweenCtorPattern> = [];
-		final matched: Array<String> = [];
-		final transparentMatched: Array<String> = [];
-		for (branch in enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
-			if (ctorName == null) continue;
-			final arity: Int = branch.children.length;
-			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
-			final isTransparent: Bool = !isMatch && transparentCtorNames.indexOf(ctorName) >= 0;
-			if (isMatch) {
-				if (arity < 1)
-					Context.fatalError(
-						'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$ctorName" must have arity ≥ 1 (first arg is the path payload bound to _v0); got arity $arity',
-						Context.currentPos()
-					);
-				matched.push(ctorName);
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
-				patterns.push({
-					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
-					isMatch: true,
-					isTransparent: false,
-				});
-			} else if (isTransparent) {
-				if (arity < 1)
-					Context.fatalError(
-						'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
-						Context.currentPos()
-					);
-				transparentMatched.push(ctorName);
-				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
-				patterns.push({
-					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
-					isMatch: false,
-					isTransparent: true,
-				});
-			} else {
-				final pattern: Expr = arity == 0
-					? ctorIdent
-					: {
-						expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-						pos: pos
-					};
-				patterns.push({ pattern: pattern, isMatch: false, isTransparent: false });
-			}
-		}
-		for (name in ctorNames) if (matched.indexOf(name) < 0)
+		final built: {
+			patterns: Array<BetweenCtorPattern>,
+			matched: Array<String>,
+			transparentMatched: Array<String>
+		} = buildBetweenCtorPatterns(enumRule, ctorNames, transparentCtorNames, pos);
+		for (name in ctorNames) if (built.matched.indexOf(name) < 0)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
-		for (name in transparentCtorNames) if (transparentMatched.indexOf(name) < 0)
+		for (name in transparentCtorNames) if (built.transparentMatched.indexOf(name) < 0)
 			Context.fatalError(
 				'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$name" not found in enum $enumRuleName',
 				Context.currentPos()
 			);
 		return {
 			classifierFieldName: fieldName,
-			ctorPatterns: patterns,
+			ctorPatterns: built.patterns,
 			matchedCtorNames: ctorNames.copy(),
 			levelOptField: levelOptField,
 			countOptField: countOptField,
@@ -14047,6 +14006,67 @@ class WriterLowering {
 				'WriterLowering: @:fmt(staticVarSubdivision) static ctor "$staticCtor" not found on enum $modifierEnumName',
 				Context.currentPos()
 			);
+	}
+
+	/**
+	 * Build the per-branch `BetweenCtorPattern` list for
+	 * `@:fmt(blankLinesBetweenSameCtorByLevel)`, classifying each enum
+	 * branch as matched / tail-transparent / inert and binding `_v0` on
+	 * the payload arg. Returns the patterns plus the matched and
+	 * transparent-matched ctor-name sets the caller verifies against.
+	 * Extracted from `buildBetweenCtorBlankInfo` to keep that builder
+	 * below the complexity gate.
+	 */
+	private static function buildBetweenCtorPatterns(
+		enumRule: ShapeNode, ctorNames: Array<String>, transparentCtorNames: Array<String>, pos: Position
+	): { patterns: Array<BetweenCtorPattern>, matched: Array<String>, transparentMatched: Array<String> } {
+		final patterns: Array<BetweenCtorPattern> = [];
+		final matched: Array<String> = [];
+		final transparentMatched: Array<String> = [];
+		for (branch in enumRule.children) {
+			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			if (ctorName == null) continue;
+			final arity: Int = branch.children.length;
+			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
+			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
+			final isTransparent: Bool = !isMatch && transparentCtorNames.indexOf(ctorName) >= 0;
+			if (isMatch) {
+				if (arity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesBetweenSameCtorByLevel) ctor "$ctorName" must have arity ≥ 1 (first arg is the path payload bound to _v0); got arity $arity',
+						Context.currentPos()
+					);
+				matched.push(ctorName);
+				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
+					isMatch: true,
+					isTransparent: false,
+				});
+			} else if (isTransparent) {
+				if (arity < 1)
+					Context.fatalError(
+						'WriterLowering: @:fmt(blankLinesBetweenSameCtorTailTransparent) ctor "$ctorName" must have arity ≥ 1 (first arg is the wrapper payload bound to _v0 and passed to the tail-leaf classifier adapter); got arity $arity',
+						Context.currentPos()
+					);
+				transparentMatched.push(ctorName);
+				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
+				patterns.push({
+					pattern: { expr: ECall(ctorIdent, binders), pos: pos },
+					isMatch: false,
+					isTransparent: true,
+				});
+			} else {
+				final pattern: Expr = arity == 0
+					? ctorIdent
+					: {
+						expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
+						pos: pos
+					};
+				patterns.push({ pattern: pattern, isMatch: false, isTransparent: false });
+			}
+		}
+		return { patterns: patterns, matched: matched, transparentMatched: transparentMatched };
 	}
 
 }
