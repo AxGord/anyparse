@@ -2698,45 +2698,11 @@ final class Cli {
 	}
 
 	private static function runMeta(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var json: Bool = false;
-		var argContains: Null<String> = null;
-		var onKind: Null<String> = null;
-		var flat: Bool = false;
-		var limit: Int = -1;
-		final positionals: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--json':
-					json = true;
-				case '--arg-contains':
-					argContains = expectValue(args, ++i, '--arg-contains');
-				case '--on':
-					onKind = expectValue(args, ++i, '--on');
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printMetaUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq meta: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					positionals.push(a);
-			}
-			i++;
-		}
+		final o: MetaOpts = parseMetaArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final argContains: Null<String> = o.argContains;
+		final onKind: Null<String> = o.onKind;
+		final positionals: Array<String> = o.positionals;
 
 		// Positional grammar: [<annotation>[(<arg>)]] <file-or-dir-or-glob>...
 		// The annotation, when present, is the leading positional and is
@@ -2770,7 +2736,7 @@ final class Cli {
 			printMetaUsage();
 			return EXIT_USAGE;
 		}
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: MetaShape = plugin.metaShape();
 
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
@@ -2780,39 +2746,30 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
-		final singleFile: Bool = expanded.singleFile;
-		final allEntries: Array<{ file: String, source: String, hits: Array<MetaHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile, skipEntries);
-			if (tree == null) {
-				if (singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
-			final filtered: Array<MetaHit> = raw.filter(
-				h -> (annotation == null || h.annotation == annotation) && argMatches(h.args, argContains)
-				&& argFilterMatches(h.args, argFilter) && (onKind == null || h.declKind == onKind)
-			);
-			if (filtered.length == 0) continue;
-			allEntries.push({ file: path, source: source, hits: filtered });
-		}
+		final allEntries: Null<Array<{ file: String, source: String, hits: Array<MetaHit> }>> =
+			collectMetaEntries(paths, plugin, shape, expanded.singleFile, skipEntries, {
+				annotation: annotation,
+				argContains: argContains,
+				argFilter: argFilter,
+				onKind: onKind
+			});
+		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('meta', limit, totalHits);
+		final cappedLimit: Int = effectiveAutoLimit('meta', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> =
 			limitEntries(
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
-		if (json) {
+		if (o.json) {
 			sysPrint(Json.renderMeta(shown));
 		} else {
-			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, flat));
+			for (entry in shown) sysPrint(Text.renderMeta(entry.file, entry.source, entry.hits, o.flat));
 		}
 		return emptyExit(allEntries.length == 0);
 	}
@@ -11256,6 +11213,101 @@ final class Cli {
 		return EXIT_OK;
 	}
 
+	private static inline function metaParseExit(code: Int): MetaOpts {
+		return {
+			lang: '',
+			json: false,
+			argContains: null,
+			onKind: null,
+			flat: false,
+			limit: -1,
+			positionals: [],
+			errExit: code
+		};
+	}
+
+	private static function parseMetaArgs(args: Array<String>): MetaOpts {
+		var lang: String = 'haxe';
+		var json: Bool = false;
+		var argContains: Null<String> = null;
+		var onKind: Null<String> = null;
+		var flat: Bool = false;
+		var limit: Int = -1;
+		final positionals: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--json':
+					json = true;
+				case '--arg-contains':
+					argContains = expectValue(args, ++i, '--arg-contains');
+				case '--on':
+					onKind = expectValue(args, ++i, '--on');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return metaParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printMetaUsage();
+					return metaParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq meta: unknown option "$a"\n');
+						return metaParseExit(EXIT_USAGE);
+					}
+					positionals.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			json: json,
+			argContains: argContains,
+			onKind: onKind,
+			flat: flat,
+			limit: limit,
+			positionals: positionals,
+			errExit: null
+		};
+	}
+
+	private static function collectMetaEntries(
+		paths: Array<String>, plugin: GrammarPlugin, shape: MetaShape, singleFile: Bool, skipEntries: Array<SkipEntry>, filter: {
+			annotation: Null<String>,
+			argContains: Null<String>,
+			argFilter: Null<String>,
+			onKind: Null<String>
+		}
+	): Null<Array<{ file: String, source: String, hits: Array<MetaHit> }>> {
+		final allEntries: Array<{ file: String, source: String, hits: Array<MetaHit> }> = [];
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('meta', plugin.parseFile, path, source, singleFile, skipEntries);
+			if (tree == null) {
+				// In single-file mode a parse failure is fatal; signal the
+				// caller (null) to return EXIT_RUNTIME. In multi-file mode the
+				// file is recorded in skipEntries and the walk continues.
+				if (singleFile) return null;
+				continue;
+			}
+			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
+			final filtered: Array<MetaHit> = raw.filter(
+				h -> (filter.annotation == null || h.annotation == filter.annotation) && argMatches(h.args, filter.argContains)
+				&& argFilterMatches(h.args, filter.argFilter) && (filter.onKind == null || h.declKind == filter.onKind)
+			);
+			if (filtered.length == 0) continue;
+			allEntries.push({ file: path, source: source, hits: filtered });
+		}
+		return allEntries;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11324,5 +11376,18 @@ typedef AstOpts = {
 	var stdinFlag: Bool;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / validation
 	// failure -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef MetaOpts = {
+	var lang: String;
+	var json: Bool;
+	var argContains: Null<String>;
+	var onKind: Null<String>;
+	var flat: Bool;
+	var limit: Int;
+	var positionals: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
