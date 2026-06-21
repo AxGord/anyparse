@@ -9412,84 +9412,20 @@ final class Cli {
 	 * path is refused. Without `--write` the source goes to stdout.
 	 */
 	private static function runNew(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var asClass: Bool = false;
-		var open: Bool = false;
-		var raw: Bool = false;
-		var kind: String = 'class';
-		var iface: Null<String> = null;
-		var underlying: Null<String> = null;
-		var bodiesArg: Null<String> = null;
-		var bodiesFromFile: Null<String> = null;
-		final extendsList: Array<String> = [];
-		final fromList: Array<String> = [];
-		final toList: Array<String> = [];
-		final fields: Array<String> = [];
-		var path: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--class':
-					asClass = true;
-				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
-				case '--extends':
-					extendsList.push(expectValue(args, ++i, '--extends'));
-				case '--underlying':
-					underlying = expectValue(args, ++i, '--underlying');
-				case '--from':
-					fromList.push(expectValue(args, ++i, '--from'));
-				case '--to':
-					toList.push(expectValue(args, ++i, '--to'));
-				case '--open':
-					open = true;
-				case '--raw':
-					raw = true;
-					if (i + 1 < args.length && args[i + 1] == '-')
-						i++;
-
-				case '--implements':
-					iface = expectValue(args, ++i, '--implements');
-				case '--field':
-					fields.push(expectValue(args, ++i, '--field'));
-				case '--bodies':
-					bodiesArg = expectValue(args, ++i, '--bodies');
-				case '--from-file':
-					bodiesFromFile = expectValue(args, ++i, '--from-file');
-				case '--write':
-					write = true;
-				case '-h', '--help':
-					printNewUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq new: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (path == null)
-						path = a;
-					else {
-						stderr('apq new: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
+		final o: NewOpts = parseNewArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final path: Null<String> = o.path;
 		if (path == null) {
 			stderr('apq new: expected <path>\n');
 			printNewUsage();
 			return EXIT_USAGE;
 		}
-		if (!raw && ['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(kind) < 0) {
-			stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "$kind")\n');
+		if (!o.raw && ['class', 'interface', 'enum', 'typedef', 'abstract'].indexOf(o.kind) < 0) {
+			stderr('apq new: --kind must be class|interface|enum|typedef|abstract (got "${o.kind}")\n');
 			return EXIT_USAGE;
 		}
-		final hasIntent: Bool = raw || asClass || iface != null || kind != 'class' || extendsList.length > 0 || fields.length > 0;
+		final hasIntent: Bool = o.raw || o.asClass || o.iface != null || o.kind != 'class' || o.extendsList.length > 0 || o.fields.length
+			> 0;
 		if (!hasIntent) {
 			stderr('apq new: specify --class / --implements <iface> / --kind <k> / --raw -\n');
 			return EXIT_USAGE;
@@ -9500,55 +9436,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-
-		if (raw) {
-			final content: Null<String> = resolveCodeArg('new', '-', null);
-			return content == null ? EXIT_RUNTIME : emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], write);
-		}
-
-		var bodiesRaw: Null<String> = null;
-		if (bodiesArg == '-' || bodiesFromFile != null) {
-			final resolved: Null<String> = resolveCodeArg('new', bodiesArg == '-' ? '-' : null, bodiesFromFile);
-			if (resolved == null) return EXIT_RUNTIME;
-			bodiesRaw = resolved;
-		} else if (bodiesArg != null) bodiesRaw = bodiesArg;
-
-		final className: String = newFileClassName(filePath);
-		final pkg: String = derivePackage(filePath);
-
-		var ifaceSimple: Null<String> = null;
-		var ifaceModule: Null<String> = null;
-		var ifaceSource: Null<String> = null;
-		if (iface != null) {
-			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
-			if (resolved == null) {
-				stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
-				return EXIT_RUNTIME;
-			}
-			ifaceSimple = resolved.simple;
-			ifaceModule = resolved.ifaceModule;
-			ifaceSource = resolved.source;
-		}
-
-		final spec: NewFileSpec = {
-			className: className,
-			pkg: pkg,
-			fields: fields,
-			kind: kind,
-			isFinal: !open,
-			extendsList: extendsList,
-			underlying: underlying,
-			fromList: fromList,
-			toList: toList,
-			ifaceSimple: ifaceSimple,
-			ifaceModule: ifaceModule,
-			ifaceSource: ifaceSource,
-			bodiesRaw: bodiesRaw,
-		};
-		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
-		return emitNew(filePath, res.result, res.stubbed, write);
+		return executeNew(o, filePath, plugin, optsJson);
 	}
 
 	/** Shared tail for `apq new`: report stub warnings, then write the file or emit to stdout. */
@@ -11390,6 +11280,166 @@ final class Cli {
 		return { entries: allEntries, autoWidened: autoWidened };
 	}
 
+	private static inline function newParseExit(code: Int): NewOpts {
+		return {
+			lang: '',
+			write: false,
+			asClass: false,
+			open: false,
+			raw: false,
+			kind: 'class',
+			iface: null,
+			underlying: null,
+			bodiesArg: null,
+			bodiesFromFile: null,
+			extendsList: [],
+			fromList: [],
+			toList: [],
+			fields: [],
+			path: null,
+			errExit: code
+		};
+	}
+
+	private static function parseNewArgs(args: Array<String>): NewOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var asClass: Bool = false;
+		var open: Bool = false;
+		var raw: Bool = false;
+		var kind: String = 'class';
+		var iface: Null<String> = null;
+		var underlying: Null<String> = null;
+		var bodiesArg: Null<String> = null;
+		var bodiesFromFile: Null<String> = null;
+		final extendsList: Array<String> = [];
+		final fromList: Array<String> = [];
+		final toList: Array<String> = [];
+		final fields: Array<String> = [];
+		var path: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--class':
+					asClass = true;
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--extends':
+					extendsList.push(expectValue(args, ++i, '--extends'));
+				case '--underlying':
+					underlying = expectValue(args, ++i, '--underlying');
+				case '--from':
+					fromList.push(expectValue(args, ++i, '--from'));
+				case '--to':
+					toList.push(expectValue(args, ++i, '--to'));
+				case '--open':
+					open = true;
+				case '--raw':
+					raw = true;
+					if (i + 1 < args.length && args[i + 1] == '-')
+						i++;
+
+				case '--implements':
+					iface = expectValue(args, ++i, '--implements');
+				case '--field':
+					fields.push(expectValue(args, ++i, '--field'));
+				case '--bodies':
+					bodiesArg = expectValue(args, ++i, '--bodies');
+				case '--from-file':
+					bodiesFromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printNewUsage();
+					return newParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq new: unknown option "$a"\n');
+						return newParseExit(EXIT_USAGE);
+					}
+					if (path == null)
+						path = a;
+					else {
+						stderr('apq new: unexpected extra argument "$a"\n');
+						return newParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			asClass: asClass,
+			open: open,
+			raw: raw,
+			kind: kind,
+			iface: iface,
+			underlying: underlying,
+			bodiesArg: bodiesArg,
+			bodiesFromFile: bodiesFromFile,
+			extendsList: extendsList,
+			fromList: fromList,
+			toList: toList,
+			fields: fields,
+			path: path,
+			errExit: null
+		};
+	}
+
+	private static function executeNew(o: NewOpts, filePath: String, plugin: GrammarPlugin, optsJson: Null<String>): Int {
+		if (o.raw) {
+			final content: Null<String> = resolveCodeArg('new', '-', null);
+			return content == null ? EXIT_RUNTIME : emitNew(filePath, NewFile.createRaw(content, plugin, optsJson), [], o.write);
+		}
+
+		var bodiesRaw: Null<String> = null;
+		if (o.bodiesArg == '-' || o.bodiesFromFile != null) {
+			final resolved: Null<String> = resolveCodeArg('new', o.bodiesArg == '-' ? '-' : null, o.bodiesFromFile);
+			if (resolved == null) return EXIT_RUNTIME;
+			bodiesRaw = resolved;
+		} else if (o.bodiesArg != null) bodiesRaw = o.bodiesArg;
+
+		final className: String = newFileClassName(filePath);
+		final pkg: String = derivePackage(filePath);
+
+		var ifaceSimple: Null<String> = null;
+		var ifaceModule: Null<String> = null;
+		var ifaceSource: Null<String> = null;
+		final iface: Null<String> = o.iface;
+		if (iface != null) {
+			final resolved: Null<{ source: String, ifaceModule: String, simple: String }> = resolveInterface(iface, filePath);
+			if (resolved == null) {
+				stderr('apq new: could not locate interface "$iface" (expected a .hx beside the new file or at its package path)\n');
+				return EXIT_RUNTIME;
+			}
+			ifaceSimple = resolved.simple;
+			ifaceModule = resolved.ifaceModule;
+			ifaceSource = resolved.source;
+		}
+
+		final spec: NewFileSpec = {
+			className: className,
+			pkg: pkg,
+			fields: o.fields,
+			kind: o.kind,
+			isFinal: !o.open,
+			extendsList: o.extendsList,
+			underlying: o.underlying,
+			fromList: o.fromList,
+			toList: o.toList,
+			ifaceSimple: ifaceSimple,
+			ifaceModule: ifaceModule,
+			ifaceSource: ifaceSource,
+			bodiesRaw: bodiesRaw,
+		};
+		final res: NewFileResult = NewFile.create(spec, plugin, optsJson);
+		return emitNew(filePath, res.result, res.stubbed, o.write);
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11495,6 +11545,27 @@ typedef LitOpts = {
 	var includeComments: Bool;
 	var target: Null<String>;
 	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef NewOpts = {
+	var lang: String;
+	var write: Bool;
+	var asClass: Bool;
+	var open: Bool;
+	var raw: Bool;
+	var kind: String;
+	var iface: Null<String>;
+	var underlying: Null<String>;
+	var bodiesArg: Null<String>;
+	var bodiesFromFile: Null<String>;
+	var extendsList: Array<String>;
+	var fromList: Array<String>;
+	var toList: Array<String>;
+	var fields: Array<String>;
+	var path: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
