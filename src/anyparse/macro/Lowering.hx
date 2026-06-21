@@ -560,15 +560,7 @@ class Lowering {
 		// HxVarDecl/HxClassMember/… chain. Collecting ALL op literals on
 		// the enum lets us emit a `!peekLit(longer)` guard per conflict so
 		// the postfix dispatch declines and Pratt picks up the longer op.
-		final allOps: Array<String> = [];
-		for (b in node.children) {
-			final po: Null<String> = b.annotations.get('postfix.op');
-			if (po != null) allOps.push(po);
-			final pr: Null<String> = b.annotations.get('pratt.op');
-			if (pr != null) allOps.push(pr);
-			final tr: Null<String> = b.annotations.get('ternary.op');
-			if (tr != null) allOps.push(tr);
-		}
+		final allOps: Array<String> = collectAllOps(node);
 		// Fold the dispatch chain right-to-left, mirroring lowerPrattLoop.
 		var opChain: Expr = macro _matched = false;
 		for (i in 0...postfixBranches.length) {
@@ -594,331 +586,11 @@ class Lowering {
 			final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
 			final branchBody: Expr = if (children.length == 1) {
-				final ctorCall: Expr = { expr: ECall(ctorRef, [macro left]), pos: Context.currentPos() };
-				if (close == null) {
-					// ω-postfix-single-literal: bare single-token postfix
-					// (`x++`, `x--`). The op literal is already consumed by
-					// the outer matchExpr dispatch; there is no close
-					// delimiter and no suffix child, so the branch only
-					// rewraps the accumulated `left` operand.
-					macro {
-						left = $ctorCall;
-					};
-				} else {
-					macro {
-						skipWs(ctx);
-						expectLit(ctx, $v{close});
-						left = $ctorCall;
-					};
-				}
+				buildPostfixSingleBranch(close, ctorRef);
 			} else if (children.length == 2 && children[1].kind == Star) {
-				// Star-suffix form: `Call(operand:T, args:Array<T>)` with
-				// @:postfix('(', ')') @:sep(','). The Star child wraps
-				// a Ref to the element type. After the open literal is
-				// consumed by the outer matchLit, this branch emits a
-				// sep-peek array loop (same pattern as Case 4 in
-				// lowerEnumBranch) and then expects the close literal.
-				if (close == null) {
-					Context.fatalError(
-						'Lowering: @:postfix Star-suffix branch "$ctor" requires @:postfix(open, close) pair form', Context.currentPos()
-					);
-					throw 'unreachable';
-				}
-				final starNode: ShapeNode = children[1];
-				final inner: ShapeNode = starNode.children[0];
-				if (inner.kind != Ref) {
-					Context.fatalError('Lowering: @:postfix Star child must be a Ref', Context.currentPos());
-					throw 'unreachable';
-				}
-				final elemRefName: String = inner.annotations.get('base.ref');
-				final elemFn: String = simpleName(elemRefName) == enumSimple ? selfFnName : parseFnName(elemRefName);
-				final elemCall: Expr = {
-					expr: ECall(macro $i{elemFn}, [macro ctx]),
-					pos: Context.currentPos(),
-				};
-				final elemCT: ComplexType = ruleReturnCT(elemRefName);
-				// See struct-field close-peek (emitStarFieldSteps) for why
-				// we flip to full-string `peekLit` when close is multi-byte.
-				final closeCharCode: Int = close.charCodeAt(0);
-				final closeNotNextExpr: Expr = close.length == 1
-					? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
-					: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
-				final sepText: Null<String> = branch.annotations.get('lit.sepText');
-				final ctorCall: Expr = { expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos() };
-				// ω-postfix-call-trailing: when the synth pair grew a
-				// `closeTrailing:Null<String>` slot (see
-				// `TriviaTypeSynth.isPostfixCloseTrailingBranch`), the trivia
-				// branch's ctor call grows a third positional arg. The slot
-				// is filled by `collectTrailingFull` after `expectLit(close)`
-				// — capturing same-line `// c` / `/* c */` between `)` and
-				// the next postfix step's leading-trivia. Without the slot,
-				// the inner `skipWs(ctx)` of the next postfix iteration eats
-				// the comment.
-				//
-				// ω-D9A-keep-callargs-v2: alongside `_trailClose`, the ctor
-				// call grows a fourth positional `_argsOpenNewline:Bool`
-				// captured BEFORE the per-iter `skipWs`/`collectTrivia` (see
-				// macro block below). The signal feeds `lowerPostfixStar`'s
-				// Keep-mode args[0] hardline; `Trivial.newlineBefore` for
-				// args[0] is unreliable due to upstream `ctx.pendingTrivia`
-				// leak so a separate parser-side capture is required.
-				final ctorCallTrivia: Expr = {
-					expr: ECall(ctorRef, [
-						macro left,
-						macro _args,
-						macro _trailClose,
-						macro _argsOpenNewline,
-						macro _argsCloseNewline
-					]),
-					pos: Context.currentPos(),
-				};
-				// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
-				// this Star with `trivia.starCollects=true` (auto-set for
-				// postfix Star-suffix branches), the synth wraps the
-				// args type as `Array<Trivial<elemCT>>` and the parser
-				// captures per-arg trailing comments. Mirrors lowerStruct's
-				// trivia-Star pattern (line 985-1009): horizontal-only-skip
-				// before sep match so an inline `// comment` or `/* x */`
-				// after each arg lands in `collectTrailing` instead of
-				// being eaten by `skipWs`. Without this path, inline
-				// trailing comments inside Call args / IndexAccess
-				// brackets are silently dropped at parse time.
-				final triviaCollect: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
-				if (triviaCollect && sepText != null) {
-					final wrappedCT: ComplexType = TPath({
-						pack: ['anyparse', 'runtime'],
-						name: 'Trivial',
-						params: [TPType(elemCT)]
-					});
-					final sepCharCode: Int = sepText.charCodeAt(0);
-					// Per-element loop: leading-trivia → close-peek break →
-					// parse → multi-line trailing scan → matchLit(sep).
-					//
-					// Trailing comments are captured up to the next sep
-					// or close, even across newlines (mirrors fork's
-					// `arg \n /* c */, b` interpretation: the comment is
-					// trailing-of-arg, not leading-of-next). Implementation:
-					// save pos, run `collectTrivia` (multi-line), check if
-					// we're at sep — if so, the swept trivia was trailing.
-					// Otherwise rewind so the trivia stays available for
-					// the next iter's `_lead` capture.
-					//
-					// Multi-comment trailing (rare) is concatenated with
-					// `\n` between captures — `trailingCommentDocVerbatim`
-					// emits as a verbatim run.
-					//
-					// Sep-after-newline (`arg\n,bar`) tolerance: when the
-					// post-sweep position landed past `\n` whitespace and
-					// no comments need preserving (sweep yielded none, or
-					// they were attached as trailing), we KEEP that swept
-					// position so `matchLit(sep)` finds the sep. Only when
-					// the sweep yielded comments NOT at sep do we rewind
-					// — preserving them for the next iter's `_lead`.
-					macro {
-						// ω-D9A-keep-callargs-v2: capture source-vertical signal
-						// BEFORE per-iter `skipWs`/`collectTrivia` so the
-						// post-open `\n` is preserved as a dedicated bool slot.
-						// Reading `Trivial.newlineBefore` for args[0] would be
-						// polluted by `ctx.pendingTrivia` drained from upstream
-						// kw-Ref rules (see project_phase3_slice_d9a_revert).
-						// `_openPos` sits right after the outer postfix
-						// dispatch consumed the open lit (e.g. `(`); after
-						// `skipWs(ctx)` `ctx.pos` lands at the first
-						// non-whitespace byte, so the byte range covers exactly
-						// the post-open inter-token whitespace.
-						final _openPos: Int = ctx.pos;
-						skipWs(ctx);
-						final _argsOpenNewline: Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
-						final _args: Array<$wrappedCT> = [];
-						// ω-keep-callclose-newline: source-vertical signal for the
-						// gap before the postfix close literal. `collectTrivia`'s
-						// final iteration (the close-peek break) reports whether a
-						// newline preceded the close in `_lead.newlineBefore`
-						// (`arg\n)` vs `arg)`). Captured on the break and threaded
-						// to the writer's Keep-mode chain close placement. Default
-						// `false` for the never-iterated impossible path.
-						var _argsCloseNewline: Bool = false;
-						while (true) {
-							final _lead = collectTrivia(ctx);
-							if (!($closeNotNextExpr)) {
-								_argsCloseNewline = _lead.newlineBefore;
-								break;
-							}
-							final _node: $elemCT = $elemCall;
-							var _trailing: Null<String> = null;
-							// Step 1: same-line trail capture. Returns
-							// captured slice with delimiters or null.
-							final _sameLine: Null<String> = collectTrailingFull(ctx);
-							if (_sameLine != null) _trailing = _sameLine;
-							// Step 2: multi-line trail look-ahead.
-							final _preSweepPos: Int = ctx.pos;
-							final _swept = collectTrivia(ctx);
-							final _atSep: Bool = ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode};
-							if (_atSep && _swept.leadingComments.length > 0) {
-								final _addl: String = _swept.leadingComments.join('\n');
-								_trailing = _trailing != null ? _trailing + '\n' + _addl : _addl;
-							} else if (_swept.leadingComments.length > 0) {
-								// Comments belong to next iter's _lead —
-								// rewind so they're re-captured (and to
-								// avoid losing them through `matchLit`'s
-								// no-skip behaviour).
-								ctx.pos = _preSweepPos;
-							}
-							// Else: no comments swept — keep cursor at
-							// post-sweep pos. This crosses `\n` and any
-							// horizontal ws, so `matchLit(sep)` finds a
-							// sep on a different line than the arg
-							// (`arg\n,bar`) — fork-supported pattern.
-							final _sepAfter: Bool = matchLit(ctx, $v{sepText});
-							_args.push({
-								blankBefore: _lead.blankBefore,
-								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-								newlineBefore: _lead.newlineBefore,
-								leadingComments: _lead.leadingComments,
-								trailingComment: _trailing,
-								trailingBeforeSep: false,
-								sepAfter: _sepAfter,
-								node: _node,
-							});
-						}
-						skipWs(ctx);
-						expectLit(ctx, $v{close});
-						// Capture trailing comment between `close` and the
-						// next postfix iteration's leading trivia. Same-line
-						// only — multi-line look-ahead would steal comments
-						// belonging to the next chain segment's `_lead` slot
-						// (or to the enclosing statement's trailing slot
-						// when the chain ends here). The Pratt loop's
-						// outer skipWs-rewind handles the chain-end case
-						// (no postfix matches → rewind on `_hadComment`).
-						final _trailClose: Null<String> = collectTrailingFull(ctx);
-						left = $ctorCallTrivia;
-					};
-				} else if (sepText != null) {
-					final sepCharCode: Int = sepText.charCodeAt(0);
-					macro {
-						skipWs(ctx);
-						final _args: Array<$elemCT> = [];
-						if ($closeNotNextExpr) {
-							_args.push($elemCall);
-							skipWs(ctx);
-							while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-								ctx.pos++;
-								skipWs(ctx);
-								if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-								_args.push($elemCall);
-								skipWs(ctx);
-							}
-						}
-						skipWs(ctx);
-						expectLit(ctx, $v{close});
-						left = $ctorCall;
-					};
-				} else if (triviaCollect) {
-					// triviaCollect is auto-set only on `@:postfix(...)
-					// @:sep(...)` branches by `TriviaAnalysis.markPostfixStarSuffix`,
-					// so this branch is unreachable today. Surface the
-					// invariant loud rather than carrying dead code that
-					// silently mishandles a future no-sep variant.
-					Context.fatalError(
-						'Lowering: postfix Star-suffix branch "$ctor" has trivia.starCollects=true without @:sep — TriviaAnalysis should not auto-mark this shape; needs explicit support',
-						Context.currentPos()
-					);
-					throw 'unreachable';
-				} else {
-					// No separator — peek-close loop (same as Case 4 no-sep).
-					macro {
-						skipWs(ctx);
-						final _args: Array<$elemCT> = [];
-						while ($closeNotNextExpr) {
-							_args.push($elemCall);
-							skipWs(ctx);
-						}
-						skipWs(ctx);
-						expectLit(ctx, $v{close});
-						left = $ctorCall;
-					};
-				}
+				buildPostfixStarSuffixBranch(branch, children, close, ctor, ctorRef, enumSimple, selfFnName);
 			} else if (children.length == 2) {
-				final suffix: ShapeNode = children[1];
-				if (suffix.kind != Ref) {
-					Context.fatalError('Lowering: @:postfix branch "$ctor" second argument must be a Ref', Context.currentPos());
-					throw 'unreachable';
-				}
-				final suffixRef: String = suffix.annotations.get('base.ref');
-				// For the wrap-with-recurse form, the inner Ref typically points
-				// at SelfType — to force a full expression parse reset we call
-				// `parseXxx` directly (via its public entry) rather than the
-				// atom wrapper. This lets a `[a + b]` index expression contain
-				// arbitrary infix operators. For the single-Ref-suffix form,
-				// the suffix is usually a Terminal like HxIdentLit and the
-				// `parseXxxSuffix` call is just a terminal call.
-				final suffixFn: String = simpleName(suffixRef) == enumSimple ? selfFnName : parseFnName(suffixRef);
-				final suffixCall: Expr = {
-					expr: ECall(macro $i{suffixFn}, [macro ctx]),
-					pos: Context.currentPos(),
-				};
-				final suffixCT: ComplexType = ruleReturnCT(suffixRef);
-				// ω-keep-chain (increment 9): a `@:postfix('.')` ctor carrying
-				// `@:fmt(captureChainNewline)` (`HxExpr.FieldAccess`) grows a 3rd
-				// positional `chainNewline:Bool` synth arg in Trivia mode holding
-				// whether the source had a newline in the gap BEFORE the `.`
-				// dispatch. `_preWsPos` (the trivia while-loop's pre-skipWs save)
-				// to `ctx.pos` (just past the matched `.`) spans exactly the
-				// dot-leading gap; the `.` is a single non-newline char so the
-				// scan is equivalent to the gap before it. The writer's chain
-				// dispatch reads it into a `_breaks` array parallel to `_segs`
-				// and threads it to `MethodChainEmit.emit(..., sourceBreakBefore)`
-				// so a `WrapMode.Keep` method-chain round-trips the source per-
-				// segment dot-boundary line breaks. Plain mode keeps the original
-				// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
-				final captureChainNl: Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
-				// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
-				// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
-				// It reads `_opTrailComment` — the operand's trailing comment captured
-				// at the loop's pre-skipWs site (see the trivia postfix loop below).
-				// The slot lets the writer's keep-mode chain dispatch reattach a bare
-				// receiver's trailing comment (`owner // test`) that the per-iteration
-				// `skipWs` would otherwise eat.
-				final ctorCall: Expr = {
-					expr: ECall(
-						ctorRef,
-						captureChainNl
-							? [
-								macro left,
-								macro _suffix,
-								macro _chainNl,
-								macro _opTrailComment
-							]
-							: [
-								macro left,
-								macro _suffix
-							]
-					),
-					pos: Context.currentPos(),
-				};
-				if (close == null) {
-					captureChainNl
-						? macro {
-							final _chainNl: Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
-							skipWs(ctx);
-							final _suffix: $suffixCT = $suffixCall;
-							left = $ctorCall;
-						}
-						: macro {
-							skipWs(ctx);
-							final _suffix: $suffixCT = $suffixCall;
-							left = $ctorCall;
-						};
-				} else {
-					macro {
-						skipWs(ctx);
-						final _suffix: $suffixCT = $suffixCall;
-						skipWs(ctx);
-						expectLit(ctx, $v{close});
-						left = $ctorCall;
-					};
-				}
+				buildPostfixSuffixBranch(children, ctor, ctorRef, close, branch, enumSimple, selfFnName);
 			} else {
 				Context.fatalError(
 					'Lowering: @:postfix branch "$ctor" has ${children.length} arguments; expected 1 (pair-lit), 2 (suffix/Star form)',
@@ -929,12 +601,7 @@ class Lowering {
 			// Prepend `!peekLit(longerOp)` guards for every op literal that
 			// strictly starts with `op`. Short-circuits so matchLit is not
 			// called when a longer op is about to match.
-			var matchExpr: Expr = macro matchLit(ctx, $v{op});
-			for (other in allOps) {
-				if (other.length > op.length && StringTools.startsWith(other, op)) {
-					matchExpr = macro !peekLit(ctx, $v{other}) && $matchExpr;
-				}
-			}
+			final matchExpr: Expr = buildPostfixOpMatchExpr(op, allOps);
 			opChain = macro if ($matchExpr)
 				$branchBody
 			else
@@ -966,76 +633,7 @@ class Lowering {
 		final opTrailCapture: Expr = wantOpTrail
 			? macro final _opTrailComment: Null<String> = collectTrailingFull(ctx)
 			: macro final _opTrailComment: Null<String> = null;
-		return ctx.trivia
-			? macro {
-				var left: $returnCT = $coreCall;
-				while (true) {
-					final _preWsPos: Int = ctx.pos;
-					$opTrailCapture;
-					skipWs(ctx);
-					var _matched: Bool = true;
-					$opChain;
-					if (!_matched) {
-						var _scanI: Int = _preWsPos;
-						var _hadComment: Bool = false;
-						var _hadNewline: Bool = false;
-						// ω-keep-pratt-blank: mirror the Pratt-loop blank tracking —
-						// a blank line (≥2 newlines separated only by horizontal
-						// whitespace) inside the postfix-consumed run must survive
-						// the no-op tail so a brace-terminated value followed by a
-						// blank line (`var b = function(){…}\n\nfinal a`, issue_644)
-						// carries `blankBefore` to the next decl's `collectTrivia`.
-						var _nlRun: Int = 0;
-						var _hadBlank: Bool = false;
-						while (_scanI < ctx.pos) {
-							final _ch: Int = ctx.input.charCodeAt(_scanI);
-							if (_ch == '\n'.code) {
-								_hadNewline = true;
-								_nlRun++;
-								if (_nlRun >= 2) _hadBlank = true;
-							} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
-								_nlRun = 0;
-							}
-							if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
-								final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
-								if (_c2 == '/'.code || _c2 == '*'.code) {
-									_hadComment = true;
-									break;
-								}
-							}
-							_scanI++;
-						}
-						if (_hadComment) {
-							ctx.pos = _preWsPos;
-						} else if (_hadNewline) {
-							final _pt = ctx.pendingTrivia;
-							if (_pt == null) {
-								ctx.pendingTrivia = {
-									blankBefore: _hadBlank,
-									blankAfterLeadingComments: false,
-									newlineBefore: true,
-									leadingComments: [],
-								};
-							} else {
-								_pt.newlineBefore = true;
-								if (_hadBlank) _pt.blankBefore = true;
-							}
-						}
-						break;
-					}
-				}
-				return left;
-			}
-			: macro {
-				var left: $returnCT = $coreCall;
-				while (true) {
-					skipWs(ctx);
-					var _matched: Bool = true;
-					$opChain;
-					if (!_matched) break;
-				}
-				return left;
-			};
+		return buildPostfixLoopExpr(returnCT, coreCall, opTrailCapture, opChain);
 	}
 
 	private function lowerEnumBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
@@ -5378,6 +4976,453 @@ expectLit(ctx, $v{trailText}));
 				}
 				if (_bpRew >= 0 && ctx.input.charCodeAt(_bpRew) == '}'.code) ctx.pendingTrivia = _savedPending;
 			}
+		};
+	}
+
+	private function buildPostfixStarSuffixBranch(
+		branch: ShapeNode, children: Array<ShapeNode>, close: Null<String>, ctor: String, ctorRef: Expr, enumSimple: String,
+		selfFnName: String
+	): Expr {
+		// Star-suffix form: `Call(operand:T, args:Array<T>)` with
+		// @:postfix('(', ')') @:sep(','). The Star child wraps a Ref to the
+		// element type. After the open literal is consumed by the outer
+		// matchLit, this emits a sep-peek array loop and then expects close.
+		if (close == null) {
+			Context.fatalError(
+				'Lowering: @:postfix Star-suffix branch "$ctor" requires @:postfix(open, close) pair form', Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final starNode: ShapeNode = children[1];
+		final inner: ShapeNode = starNode.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError('Lowering: @:postfix Star child must be a Ref', Context.currentPos());
+			throw 'unreachable';
+		}
+		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemFn: String = simpleName(elemRefName) == enumSimple ? selfFnName : parseFnName(elemRefName);
+		final elemCall: Expr = {
+			expr: ECall(macro $i{elemFn}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final elemCT: ComplexType = ruleReturnCT(elemRefName);
+		// See struct-field close-peek (emitStarFieldSteps) for why
+		// we flip to full-string `peekLit` when close is multi-byte.
+		final closeCharCode: Int = close.charCodeAt(0);
+		final closeNotNextExpr: Expr = close.length == 1
+			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
+			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
+		final sepText: Null<String> = branch.annotations.get('lit.sepText');
+		final ctorCall: Expr = { expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos() };
+		// ω-postfix-call-trailing: when the synth pair grew a
+		// `closeTrailing:Null<String>` slot (see
+		// `TriviaTypeSynth.isPostfixCloseTrailingBranch`), the trivia
+		// branch's ctor call grows a third positional arg. The slot
+		// is filled by `collectTrailingFull` after `expectLit(close)`
+		// — capturing same-line `// c` / `/* c */` between `)` and
+		// the next postfix step's leading-trivia. Without the slot,
+		// the inner `skipWs(ctx)` of the next postfix iteration eats
+		// the comment.
+		//
+		// ω-D9A-keep-callargs-v2: alongside `_trailClose`, the ctor
+		// call grows a fourth positional `_argsOpenNewline:Bool`
+		// captured BEFORE the per-iter `skipWs`/`collectTrivia` (see
+		// macro block below). The signal feeds `lowerPostfixStar`'s
+		// Keep-mode args[0] hardline; `Trivial.newlineBefore` for
+		// args[0] is unreliable due to upstream `ctx.pendingTrivia`
+		// leak so a separate parser-side capture is required.
+		final ctorCallTrivia: Expr = {
+			expr: ECall(ctorRef, [
+				macro left,
+				macro _args,
+				macro _trailClose,
+				macro _argsOpenNewline,
+				macro _argsCloseNewline
+			]),
+			pos: Context.currentPos(),
+		};
+		// ω-postfix-starsuffix-trivia: when TriviaAnalysis marks
+		// this Star with `trivia.starCollects=true` (auto-set for
+		// postfix Star-suffix branches), the synth wraps the
+		// args type as `Array<Trivial<elemCT>>` and the parser
+		// captures per-arg trailing comments. Mirrors lowerStruct's
+		// trivia-Star pattern: horizontal-only-skip before sep match
+		// so an inline `// comment` or `/* x */` after each arg lands
+		// in `collectTrailing` instead of being eaten by `skipWs`.
+		final triviaCollect: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		if (triviaCollect && sepText != null) {
+			final wrappedCT: ComplexType = TPath({
+				pack: ['anyparse', 'runtime'],
+				name: 'Trivial',
+				params: [TPType(elemCT)]
+			});
+			final sepCharCode: Int = sepText.charCodeAt(0);
+			return buildPostfixCallArgsTriviaLoop(
+				elemCT, elemCall, wrappedCT, closeNotNextExpr, sepCharCode, sepText, close, ctorCallTrivia
+			);
+		}
+		if (sepText != null) {
+			final sepCharCode: Int = sepText.charCodeAt(0);
+			return macro {
+				skipWs(ctx);
+				final _args: Array<$elemCT> = [];
+				if ($closeNotNextExpr) {
+					_args.push($elemCall);
+					skipWs(ctx);
+					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						_args.push($elemCall);
+						skipWs(ctx);
+					}
+				}
+				skipWs(ctx);
+				expectLit(ctx, $v{close});
+				left = $ctorCall;
+			};
+		}
+		if (triviaCollect) {
+			// triviaCollect is auto-set only on `@:postfix(...) @:sep(...)`
+			// branches by `TriviaAnalysis.markPostfixStarSuffix`, so this
+			// branch is unreachable today. Surface the invariant loud rather
+			// than carrying dead code that silently mishandles a future
+			// no-sep variant.
+			Context.fatalError(
+				'Lowering: postfix Star-suffix branch "$ctor" has trivia.starCollects=true without @:sep — TriviaAnalysis should not auto-mark this shape; needs explicit support',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		// No separator — peek-close loop (same as Case 4 no-sep).
+		return macro {
+			skipWs(ctx);
+			final _args: Array<$elemCT> = [];
+			while ($closeNotNextExpr) {
+				_args.push($elemCall);
+				skipWs(ctx);
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{close});
+			left = $ctorCall;
+		};
+	}
+
+	private function buildPostfixCallArgsTriviaLoop(
+		elemCT: ComplexType, elemCall: Expr, wrappedCT: ComplexType, closeNotNextExpr: Expr, sepCharCode: Int, sepText: String,
+		close: String, ctorCallTrivia: Expr
+	): Expr {
+		// Per-element loop: leading-trivia → close-peek break → parse →
+		// multi-line trailing scan → matchLit(sep). Trailing comments are
+		// captured up to the next sep or close, even across newlines
+		// (mirrors fork's `arg \n /* c */, b` interpretation: the comment
+		// is trailing-of-arg, not leading-of-next). Sep-after-newline
+		// (`arg\n,bar`) tolerance: when the post-sweep position landed past
+		// `\n` whitespace and no comments need preserving, KEEP that swept
+		// position so `matchLit(sep)` finds the sep; only when the sweep
+		// yielded comments NOT at sep do we rewind for the next iter's `_lead`.
+		return macro {
+			// ω-D9A-keep-callargs-v2: capture source-vertical signal
+			// BEFORE per-iter `skipWs`/`collectTrivia` so the
+			// post-open `\n` is preserved as a dedicated bool slot.
+			// Reading `Trivial.newlineBefore` for args[0] would be
+			// polluted by `ctx.pendingTrivia` drained from upstream
+			// kw-Ref rules (see project_phase3_slice_d9a_revert).
+			// `_openPos` sits right after the outer postfix
+			// dispatch consumed the open lit (e.g. `(`); after
+			// `skipWs(ctx)` `ctx.pos` lands at the first
+			// non-whitespace byte, so the byte range covers exactly
+			// the post-open inter-token whitespace.
+			final _openPos: Int = ctx.pos;
+			skipWs(ctx);
+			final _argsOpenNewline: Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
+			final _args: Array<$wrappedCT> = [];
+			// ω-keep-callclose-newline: source-vertical signal for the
+			// gap before the postfix close literal. `collectTrivia`'s
+			// final iteration (the close-peek break) reports whether a
+			// newline preceded the close in `_lead.newlineBefore`
+			// (`arg\n)` vs `arg)`). Captured on the break and threaded
+			// to the writer's Keep-mode chain close placement. Default
+			// `false` for the never-iterated impossible path.
+			var _argsCloseNewline: Bool = false;
+			while (true) {
+				final _lead = collectTrivia(ctx);
+				if (!($closeNotNextExpr)) {
+					_argsCloseNewline = _lead.newlineBefore;
+					break;
+				}
+				final _node: $elemCT = $elemCall;
+				var _trailing: Null<String> = null;
+				// Step 1: same-line trail capture. Returns
+				// captured slice with delimiters or null.
+				final _sameLine: Null<String> = collectTrailingFull(ctx);
+				if (_sameLine != null) _trailing = _sameLine;
+				// Step 2: multi-line trail look-ahead.
+				final _preSweepPos: Int = ctx.pos;
+				final _swept = collectTrivia(ctx);
+				final _atSep: Bool = ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode};
+				if (_atSep && _swept.leadingComments.length > 0) {
+					final _addl: String = _swept.leadingComments.join('\n');
+					_trailing = _trailing != null ? _trailing + '\n' + _addl : _addl;
+				} else if (_swept.leadingComments.length > 0) {
+					// Comments belong to next iter's _lead —
+					// rewind so they're re-captured (and to
+					// avoid losing them through `matchLit`'s
+					// no-skip behaviour).
+					ctx.pos = _preSweepPos;
+				}
+				// Else: no comments swept — keep cursor at
+				// post-sweep pos. This crosses `\n` and any
+				// horizontal ws, so `matchLit(sep)` finds a
+				// sep on a different line than the arg
+				// (`arg\n,bar`) — fork-supported pattern.
+				final _sepAfter: Bool = matchLit(ctx, $v{sepText});
+				_args.push({
+					blankBefore: _lead.blankBefore,
+					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+					newlineBefore: _lead.newlineBefore,
+					leadingComments: _lead.leadingComments,
+					trailingComment: _trailing,
+					trailingBeforeSep: false,
+					sepAfter: _sepAfter,
+					node: _node,
+				});
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{close});
+			// Capture trailing comment between `close` and the
+			// next postfix iteration's leading trivia. Same-line
+			// only — multi-line look-ahead would steal comments
+			// belonging to the next chain segment's `_lead` slot
+			// (or to the enclosing statement's trailing slot
+			// when the chain ends here). The Pratt loop's
+			// outer skipWs-rewind handles the chain-end case
+			// (no postfix matches → rewind on `_hadComment`).
+			final _trailClose: Null<String> = collectTrailingFull(ctx);
+			left = $ctorCallTrivia;
+		};
+	}
+
+	private function buildPostfixSuffixBranch(
+		children: Array<ShapeNode>, ctor: String, ctorRef: Expr, close: Null<String>, branch: ShapeNode, enumSimple: String,
+		selfFnName: String
+	): Expr {
+		final suffix: ShapeNode = children[1];
+		if (suffix.kind != Ref) {
+			Context.fatalError('Lowering: @:postfix branch "$ctor" second argument must be a Ref', Context.currentPos());
+			throw 'unreachable';
+		}
+		final suffixRef: String = suffix.annotations.get('base.ref');
+		// For the wrap-with-recurse form, the inner Ref typically points
+		// at SelfType — to force a full expression parse reset we call
+		// `parseXxx` directly (via its public entry) rather than the
+		// atom wrapper. This lets a `[a + b]` index expression contain
+		// arbitrary infix operators. For the single-Ref-suffix form,
+		// the suffix is usually a Terminal like HxIdentLit and the
+		// `parseXxxSuffix` call is just a terminal call.
+		final suffixFn: String = simpleName(suffixRef) == enumSimple ? selfFnName : parseFnName(suffixRef);
+		final suffixCall: Expr = {
+			expr: ECall(macro $i{suffixFn}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final suffixCT: ComplexType = ruleReturnCT(suffixRef);
+		// ω-keep-chain (increment 9): a `@:postfix('.')` ctor carrying
+		// `@:fmt(captureChainNewline)` (`HxExpr.FieldAccess`) grows a 3rd
+		// positional `chainNewline:Bool` synth arg in Trivia mode holding
+		// whether the source had a newline in the gap BEFORE the `.`
+		// dispatch. `_preWsPos` (the trivia while-loop's pre-skipWs save)
+		// to `ctx.pos` (just past the matched `.`) spans exactly the
+		// dot-leading gap; the `.` is a single non-newline char so the
+		// scan is equivalent to the gap before it. The writer's chain
+		// dispatch reads it into a `_breaks` array parallel to `_segs`
+		// and threads it to `MethodChainEmit.emit(..., sourceBreakBefore)`
+		// so a `WrapMode.Keep` method-chain round-trips the source per-
+		// segment dot-boundary line breaks. Plain mode keeps the original
+		// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
+		final captureChainNl: Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+		// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
+		// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
+		// It reads `_opTrailComment` — the operand's trailing comment captured
+		// at the loop's pre-skipWs site (see the trivia postfix loop below).
+		// The slot lets the writer's keep-mode chain dispatch reattach a bare
+		// receiver's trailing comment (`owner // test`) that the per-iteration
+		// `skipWs` would otherwise eat.
+		final ctorCall: Expr = {
+			expr: ECall(
+				ctorRef,
+				captureChainNl
+					? [
+						macro left,
+						macro _suffix,
+						macro _chainNl,
+						macro _opTrailComment
+					]
+					: [
+						macro left,
+						macro _suffix
+					]
+			),
+			pos: Context.currentPos(),
+		};
+		if (close == null) {
+			return captureChainNl
+				? macro {
+					final _chainNl: Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
+					skipWs(ctx);
+					final _suffix: $suffixCT = $suffixCall;
+					left = $ctorCall;
+				}
+				: macro {
+					skipWs(ctx);
+					final _suffix: $suffixCT = $suffixCall;
+					left = $ctorCall;
+				};
+		}
+		return macro {
+			skipWs(ctx);
+			final _suffix: $suffixCT = $suffixCall;
+			skipWs(ctx);
+			expectLit(ctx, $v{close});
+			left = $ctorCall;
+		};
+	}
+
+	private function buildPostfixNoMatchScanback(): Expr {
+		// ω-cond-comp-expr-multiline / ω-keep-pratt-blank: when no postfix op
+		// matched, scan the `[_preWsPos, ctx.pos)` run consumed by the last
+		// skipWs. A comment rewinds to `_preWsPos` so the enclosing loop
+		// re-captures it; a bare newline (or a blank line, ≥2 newlines) is
+		// stashed into `ctx.pendingTrivia` so downstream `collectTrivia` reads
+		// the source-vertical signal the postfix loop otherwise drops.
+		return macro {
+			var _scanI: Int = _preWsPos;
+			var _hadComment: Bool = false;
+			var _hadNewline: Bool = false;
+			// ω-keep-pratt-blank: mirror the Pratt-loop blank tracking —
+			// a blank line (≥2 newlines separated only by horizontal
+			// whitespace) inside the postfix-consumed run must survive
+			// the no-op tail so a brace-terminated value followed by a
+			// blank line (`var b = function(){…}\n\nfinal a`, issue_644)
+			// carries `blankBefore` to the next decl's `collectTrivia`.
+			var _nlRun: Int = 0;
+			var _hadBlank: Bool = false;
+			while (_scanI < ctx.pos) {
+				final _ch: Int = ctx.input.charCodeAt(_scanI);
+				if (_ch == '\n'.code) {
+					_hadNewline = true;
+					_nlRun++;
+					if (_nlRun >= 2) _hadBlank = true;
+				} else if (_ch != ' '.code && _ch != '\t'.code && _ch != '\r'.code) {
+					_nlRun = 0;
+				}
+				if (_ch == '/'.code && _scanI + 1 < ctx.pos) {
+					final _c2: Int = ctx.input.charCodeAt(_scanI + 1);
+					if (_c2 == '/'.code || _c2 == '*'.code) {
+						_hadComment = true;
+						break;
+					}
+				}
+				_scanI++;
+			}
+			if (_hadComment) {
+				ctx.pos = _preWsPos;
+			} else if (_hadNewline) {
+				final _pt = ctx.pendingTrivia;
+				if (_pt == null) {
+					ctx.pendingTrivia = {
+						blankBefore: _hadBlank,
+						blankAfterLeadingComments: false,
+						newlineBefore: true,
+						leadingComments: [],
+					};
+				} else {
+					_pt.newlineBefore = true;
+					if (_hadBlank) _pt.blankBefore = true;
+				}
+			}
+		};
+	}
+
+	private function buildPostfixLoopExpr(returnCT: ComplexType, coreCall: Expr, opTrailCapture: Expr, opChain: Expr): Expr {
+		// Trivia mode adds the per-iteration operand-trail capture and the
+		// no-match scan-back (comment-rewind / newline-stash); plain mode is
+		// the bare matchExpr dispatch loop.
+		final scanback: Expr = buildPostfixNoMatchScanback();
+		return ctx.trivia
+			? macro {
+				var left: $returnCT = $coreCall;
+				while (true) {
+					final _preWsPos: Int = ctx.pos;
+					$opTrailCapture;
+					skipWs(ctx);
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) {
+						$scanback;
+						break;
+					}
+				}
+				return left;
+			}
+			: macro {
+				var left: $returnCT = $coreCall;
+				while (true) {
+					skipWs(ctx);
+					var _matched: Bool = true;
+					$opChain;
+					if (!_matched) break;
+				}
+				return left;
+			};
+	}
+
+	private function collectAllOps(node: ShapeNode): Array<String> {
+		// Cross-category longer-prefix resolution: a postfix op that is a
+		// strict prefix of another op in the same enum (postfix, infix, or
+		// ternary) must lose to that longer op. Collecting ALL op literals on
+		// the enum lets us emit a `!peekLit(longer)` guard per conflict so the
+		// postfix dispatch declines and Pratt picks up the longer op.
+		final allOps: Array<String> = [];
+		for (b in node.children) {
+			final po: Null<String> = b.annotations.get('postfix.op');
+			if (po != null) allOps.push(po);
+			final pr: Null<String> = b.annotations.get('pratt.op');
+			if (pr != null) allOps.push(pr);
+			final tr: Null<String> = b.annotations.get('ternary.op');
+			if (tr != null) allOps.push(tr);
+		}
+		return allOps;
+	}
+
+	private function buildPostfixOpMatchExpr(op: String, allOps: Array<String>): Expr {
+		// Prepend `!peekLit(longerOp)` guards for every op literal that
+		// strictly starts with `op`. Short-circuits so matchLit is not
+		// called when a longer op is about to match.
+		var matchExpr: Expr = macro matchLit(ctx, $v{op});
+		for (other in allOps) {
+			if (other.length > op.length && StringTools.startsWith(other, op)) {
+				matchExpr = macro !peekLit(ctx, $v{other}) && $matchExpr;
+			}
+		}
+		return matchExpr;
+	}
+
+	private function buildPostfixSingleBranch(close: Null<String>, ctorRef: Expr): Expr {
+		final ctorCall: Expr = { expr: ECall(ctorRef, [macro left]), pos: Context.currentPos() };
+		if (close == null) {
+			// ω-postfix-single-literal: bare single-token postfix
+			// (`x++`, `x--`). The op literal is already consumed by
+			// the outer matchExpr dispatch; there is no close
+			// delimiter and no suffix child, so the branch only
+			// rewraps the accumulated `left` operand.
+			return macro {
+				left = $ctorCall;
+			};
+		}
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{close});
+			left = $ctorCall;
 		};
 	}
 
