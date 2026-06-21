@@ -353,16 +353,11 @@ class WriterLowering {
 		final litList: Null<Array<String>> = branch.annotations.get('lit.litList');
 		final leadText: Null<String> = branch.annotations.get('lit.leadText');
 		final trailText: Null<String> = branch.annotations.get('lit.trailText');
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
 
 		final prefixOp: Null<String> = branch.annotations.get('prefix.op');
 		final postfixOp: Null<String> = branch.annotations.get('postfix.op');
-		final postfixClose: Null<String> = branch.annotations.get('postfix.close');
 		final prattPrec: Null<Int> = branch.annotations.get('pratt.prec');
-		final prattAssoc: Null<String> = branch.annotations.get('pratt.assoc');
 		final ternaryOp: Null<String> = branch.annotations.get('ternary.op');
-		final ternaryPrec: Null<Int> = branch.annotations.get('ternary.prec');
-		final ternarySep: Null<String> = branch.annotations.get('ternary.sep');
 		final c: LowerBranchCtx = {
 			branch: branch,
 			typePath: typePath,
@@ -13714,7 +13709,6 @@ class WriterLowering {
 		// `_setExprPosition` so the `value:HxExpr` descendant sees the
 		// expression-position frame. Idempotent — already-true opt
 		// passes through.
-		final propagateExpr: Bool = branch.fmtHasFlag('propagateExprPosition');
 		// ω-value-yielded-if-tail-barrier (macro-block clear): when this kw-
 		// Ref ctor carries `@:fmt(clearExprPosition)` (HxExpr.MacroExpr), the
 		// sub-call's opt arg is wrapped in `_clearExprPosition` ONLY when the
@@ -13725,7 +13719,6 @@ class WriterLowering {
 		// statements revert to statement-position body policy (dropping the
 		// SI-2 block-tail frame). Null adapter (non-opt-in formats) → never
 		// fires. Idempotent helper; allocation-free when already cleared.
-		final clearExpr: Bool = branch.fmtHasFlag('clearExprPosition');
 		// ω-string-interp-noformat-flat: the interpolation `${expr}` body
 		// (`@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
 		// threads `_setChainModeOverride(opt, NoWrap)` into the sub-call
@@ -13747,7 +13740,6 @@ class WriterLowering {
 		// carries the chain-override channel) — mirrors the `@:fmt(condWrap)`
 		// site (L3592), which calls `_setChainModeOverride` ungated for the
 		// same reason: the flag's presence implies the grammar's channel.
-		final interpFlat: Bool = branch.fmtHasFlag('captureSource');
 		// ω-expr-paren-in-condition (cond F2): the `ParenExpr`
 		// (`@:fmt(expressionParenHardFlatten)`) inner chain is HardFlatten-
 		// collapsed by default. When this paren sits inside a condition
@@ -13758,7 +13750,6 @@ class WriterLowering {
 		// expr paren inside this one does not re-trigger. Runtime-gated so a
 		// standalone expr paren (flag false, e.g. `expression_paren_wrapping`)
 		// is byte-identical (`opt` passed through unchanged).
-		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
 		// ω-fieldlevel-var-value-expr-indent: when this kw-Ref ctor carries
 		// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` —
 		// `HxClassMember.VarMember` / `FinalMember`), wrap the sub-call's opt
@@ -13768,7 +13759,6 @@ class WriterLowering {
 		// inits route through `HxStatement.VarStmt` / `HxExpr.VarExpr` — never
 		// this ctor — so the flag stays false there and they remain
 		// knob-gated. Idempotent helper; allocation-free when already set.
-		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
 		// ω-keep-kw-newline (increment 1b): when this VarStmt-family ctor
 		// captured a `var`→head newline (the synth `kwNewline:Bool` slot),
 		// thread `_setVarKwNewline(opt, true)` into the inner `decl`
@@ -13781,39 +13771,7 @@ class WriterLowering {
 		final kwNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
 			? altSlotAccess(branch, children.length, argNames, KwNewline)
 			: null;
-		final ctorOptArg: Expr = {
-			var _o: Expr = macro opt;
-			if (propagateExpr) _o = macro _setExprPosition($_o);
-			if (clearExpr) {
-				final _operandAccess: Expr = macro $i{argNames[0]};
-				_o = macro (opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
-			}
-			if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
-			if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
-			if (parenHardFlatten)
-				_o = macro (opt._parenInCondition
-					? _setChainModeOverride(
-						_clearParenInCondition($_o), anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
-					)
-					: $_o);
-			// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
-			// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
-			// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
-			// (a) SUPPRESS its own `_headBreak` — the `return`→value source
-			// newline is reproduced at the VALUE level (`returnBody` FitLine
-			// breaks `return\n\tvalue`), not inside the paren (`(\n head`); and
-			// (b) SUPPRESS its continuation `Nest` — the value-level break Nest
-			// already supplies the +cols, so the chain operators continue at that
-			// SAME indent (no compounding to +2cols). Mirrors fork keep2 keeping
-			// the `return`→`1` newline at the value and the chain ops co-indented
-			// with the head. Non-keep chains ignore the flag (gated on `isKeep`)
-			// → byte-inert. A BARE chain return value (opbool case-2) has NO
-			// enclosing `ParenExpr`, so the flag stays false and its chain keeps
-			// its own headBreak + Nest. Trivia-only.
-			if (parenHardFlatten && ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
-			if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
-			_o;
-		};
+		final ctorOptArg: Expr = kwRefCtorOptArg(c, kwNewlineExpr);
 		final subCall: Expr = if (isSelfRef && hasPratt)
 			{ expr: ECall(macro $i{subFn}, [macro $i{argNames[0]}, ctorOptArg, macro -1]), pos: Context.currentPos() }
 		else
@@ -13908,29 +13866,9 @@ class WriterLowering {
 		//     `HxVarDecl.init` semantic). At most one entry per ctor.
 		// Mirrors the multi-entry pattern in `maybeIndentValueIfCtor`
 		// for struct-field path.
-		var indentArgs: Null<Array<String>> = null;
-		var ifExprIndentArgs: Null<Array<String>> = null;
-		final indentEntries: Array<Array<String>> = branch.fmtReadStringArgsAll('indentValueIfCtor');
-		for (entry in indentEntries) switch entry.length {
-			case 3:
-				if (indentArgs != null)
-					Context.fatalError(
-						'WriterLowering: at most one 3-arg @:fmt(indentValueIfCtor(ctorName, optField, leftCurlyField)) per ctor',
-						Context.currentPos()
-					);
-				indentArgs = entry;
-			case 2:
-				if (ifExprIndentArgs != null)
-					Context.fatalError(
-						'WriterLowering: at most one 2-arg @:fmt(indentValueIfCtor(ctorName, optField)) per ctor', Context.currentPos()
-					);
-				ifExprIndentArgs = entry;
-			case _:
-				Context.fatalError(
-					'WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}',
-					Context.currentPos()
-				);
-		}
+		final indentEntries: { indentArgs: Null<Array<String>>, ifExprIndentArgs: Null<Array<String>> } = kwRefIndentEntries(branch);
+		final indentArgs: Null<Array<String>> = indentEntries.indentArgs;
+		final ifExprIndentArgs: Null<Array<String>> = indentEntries.ifExprIndentArgs;
 		final policyWrapped: Expr = ctorBodyPolicyFlag != null
 			? bodyPolicyWrap({
 				flagName: ctorBodyPolicyFlag,
@@ -14431,6 +14369,90 @@ class WriterLowering {
 					? _dg(_dib(_dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]), _dc([$leadDoc, _wrapInner, _wrapTrail])))
 					: _dc([$leadDoc, _wrapInner, _wrapTrail]);
 			};
+	}
+
+	/**
+	 * Builds the kw-Ref sub-call's opt-frame arg (Case 3): folds the
+	 * per-ctor `@:fmt` opt-threading flags (propagateExprPosition /
+	 * clearExprPosition / propagateFieldLevelVar / captureSource /
+	 * expressionParenHardFlatten / keep-chain-in-paren / var-kw-newline)
+	 * onto `macro opt`. Extracted from `lowerKwRefBranch` so each stays
+	 * under the complexity gate.
+	 */
+	private function kwRefCtorOptArg(c: LowerBranchCtx, kwNewlineExpr: Null<Expr>): Expr {
+		final branch: ShapeNode = c.branch;
+		final argNames: Array<String> = c.argNames;
+		final propagateExpr: Bool = branch.fmtHasFlag('propagateExprPosition');
+		final clearExpr: Bool = branch.fmtHasFlag('clearExprPosition');
+		final interpFlat: Bool = branch.fmtHasFlag('captureSource');
+		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
+		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
+		var _o: Expr = macro opt;
+		if (propagateExpr) _o = macro _setExprPosition($_o);
+		if (clearExpr) {
+			final _operandAccess: Expr = macro $i{argNames[0]};
+			_o = macro (opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
+		}
+		if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
+		if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
+		if (parenHardFlatten)
+			_o = macro (opt._parenInCondition
+				? _setChainModeOverride(
+					_clearParenInCondition($_o), anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
+				)
+				: $_o);
+		// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
+		// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
+		// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
+		// (a) SUPPRESS its own `_headBreak` — the `return`→value source
+		// newline is reproduced at the VALUE level (`returnBody` FitLine
+		// breaks `return\n\tvalue`), not inside the paren (`(\n head`); and
+		// (b) SUPPRESS its continuation `Nest` — the value-level break Nest
+		// already supplies the +cols, so the chain operators continue at that
+		// SAME indent (no compounding to +2cols). Mirrors fork keep2 keeping
+		// the `return`→`1` newline at the value and the chain ops co-indented
+		// with the head. Non-keep chains ignore the flag (gated on `isKeep`)
+		// → byte-inert. A BARE chain return value (opbool case-2) has NO
+		// enclosing `ParenExpr`, so the flag stays false and its chain keeps
+		// its own headBreak + Nest. Trivia-only.
+		if (parenHardFlatten && ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
+		if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
+		return _o;
+	}
+
+	/**
+	 * Reads + arity-splits the ctor's `@:fmt(indentValueIfCtor(...))`
+	 * entries (Case 3): the 3-arg form `(ctorName, optField,
+	 * leftCurlyField)` feeds the ObjectLit-indent path, the 2-arg form
+	 * `(ctorName, optField)` feeds the IfExpr-indent path. At most one of
+	 * each per ctor (else a macro fatalError). Extracted from
+	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 */
+	private function kwRefIndentEntries(branch: ShapeNode): { indentArgs: Null<Array<String>>, ifExprIndentArgs: Null<Array<String>> } {
+		var indentArgs: Null<Array<String>> = null;
+		var ifExprIndentArgs: Null<Array<String>> = null;
+		final indentEntries: Array<Array<String>> = branch.fmtReadStringArgsAll('indentValueIfCtor');
+		for (entry in indentEntries) switch entry.length {
+			case 3:
+				if (indentArgs != null)
+					Context.fatalError(
+						'WriterLowering: at most one 3-arg @:fmt(indentValueIfCtor(ctorName, optField, leftCurlyField)) per ctor',
+						Context.currentPos()
+					);
+				indentArgs = entry;
+			case 2:
+				if (ifExprIndentArgs != null)
+					Context.fatalError(
+						'WriterLowering: at most one 2-arg @:fmt(indentValueIfCtor(ctorName, optField)) per ctor', Context.currentPos()
+					);
+				ifExprIndentArgs = entry;
+			case _:
+				Context.fatalError(
+					'WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}',
+					Context.currentPos()
+				);
+		}
+		return { indentArgs: indentArgs, ifExprIndentArgs: ifExprIndentArgs };
 	}
 
 }
