@@ -1267,60 +1267,99 @@ class WrapList {
 		// byte-identical.
 		flatTrailingComma: Bool = false
 	): Doc {
-		// ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
-		// arrow lambda whose body wraps gets the SAME close-on-own-line +
-		// params-glued-to-open shape regardless of the cascade-resolved wrap
-		// mode. Without this intercept, FillLine routes to `shapeFillLine`
-		// (close glued to body) and FillLineWithLeadingBreak to
-		// `shapeFillLineWithLeadingBreak` (paren OPENS, arrow onto its own
-		// line) — both wrong. Mirrors fork's `applyArrowWrapping` (MarkWrapping
-		// .hx:1962), a late dedicated pass that overrides the generic call-arg
-		// wrap: arrow params + `->` stay glued to the open paren, body breaks,
-		// and `lineEndBefore(pClose)` puts the close paren on its own line.
-		//
-		// NoWrap path already did this via `shapeNoWrap`; this lifts the same
-		// `Group(IfBreak)` decision to the auto-overflow break modes FillLine
-		// and FillLineWithLeadingBreak. `applyArrowWrapping` overrides the
-		// config-driven call-arg wrap uniformly — even a `callParameter:
-		// fillLineWithLeadingBreak` config keeps the sole arrow glued to the
-		// open paren (`condition_chain_in_arrow_lambda`).
-		//
-		// Gates:
-		//  - NoWrap is excluded (already handled by `shapeNoWrap`; preserves the
-		//    baseline open-vs-glue split for `condition_wrapping_nested` /
-		//    `paren_indent_call`, both NoWrap).
-		//  - FillLineWithLeadingBreak additionally requires the body to
-		//    STRUCTURALLY break (`arrowBodyBreaks`): a single-expression body
-		//    that fits one continuation line keeps the generic open-paren shape,
-		//    mirroring fork `preferLambdaSignatureInlineOverWrap` (2986-2992,
-		//    cites `condition_wrapping_nested`/`paren_indent_call` by name).
-		//  - Block-body lambdas (`() -> { … }`) are excluded (`arrowBodyIsBlock`):
-		//    the block owns its own multi-line layout, close stays glued (`})`),
-		//    matching fork `applyArrowWrapping`'s `bodyFirst.match(BrOpen)` skip
-		//    (`issue_538`).
+		final soleArrowUniform: Null<Doc> = shapeSoleArrowUniform(mode, open, close, openInside, closeInside, items);
+		if (soleArrowUniform != null) return soleArrowUniform;
+		final soleArrowContGlue: Null<Doc> = shapeSoleArrowContGlue(
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, lineWidth
+		);
+		if (soleArrowContGlue != null) return soleArrowContGlue;
+		final singleArgGlue: Null<Doc> = shapeSingleArgGlue(
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, lineWidth
+		);
+		if (singleArgGlue != null) return singleArgGlue;
+		final multiArgBlockLambda: Null<Doc> = shapeMultiArgBlockLambda(
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, sepBeforeFlags, lineWidth
+		);
+		if (multiArgBlockLambda != null) return multiArgBlockLambda;
+		final multiArgCollection: Null<Doc> = shapeMultiArgCollection(
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
+			keepCloseGlued, lineWidth
+		);
+		if (multiArgCollection != null) return multiArgCollection;
+		return shapeByMode(
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
+			sourceBreakBefore, keepCloseGlued, flatTrailingComma
+		);
+	}
+
+	/**
+	 * ω-inc5 sole-arrow uniform escalation: a call whose SOLE arg is an
+	 * arrow lambda whose body wraps gets the SAME close-on-own-line +
+	 * params-glued-to-open shape regardless of the cascade-resolved wrap
+	 * mode. Without this intercept, FillLine routes to `shapeFillLine`
+	 * (close glued to body) and FillLineWithLeadingBreak to
+	 * `shapeFillLineWithLeadingBreak` (paren OPENS, arrow onto its own
+	 * line) — both wrong. Mirrors fork's `applyArrowWrapping` (MarkWrapping
+	 * .hx:1962), a late dedicated pass that overrides the generic call-arg
+	 * wrap: arrow params + `->` stay glued to the open paren, body breaks,
+	 * and `lineEndBefore(pClose)` puts the close paren on its own line.
+	 *
+	 * NoWrap path already did this via `shapeNoWrap`; this lifts the same
+	 * `Group(IfBreak)` decision to the auto-overflow break modes FillLine
+	 * and FillLineWithLeadingBreak. `applyArrowWrapping` overrides the
+	 * config-driven call-arg wrap uniformly — even a `callParameter:
+	 * fillLineWithLeadingBreak` config keeps the sole arrow glued to the
+	 * open paren (`condition_chain_in_arrow_lambda`).
+	 *
+	 * Gates:
+	 *  - NoWrap is excluded (already handled by `shapeNoWrap`; preserves the
+	 *    baseline open-vs-glue split for `condition_wrapping_nested` /
+	 *    `paren_indent_call`, both NoWrap).
+	 *  - FillLineWithLeadingBreak additionally requires the body to
+	 *    STRUCTURALLY break (`arrowBodyBreaks`): a single-expression body
+	 *    that fits one continuation line keeps the generic open-paren shape,
+	 *    mirroring fork `preferLambdaSignatureInlineOverWrap` (2986-2992,
+	 *    cites `condition_wrapping_nested`/`paren_indent_call` by name).
+	 *  - Block-body lambdas (`() -> { … }`) are excluded (`arrowBodyIsBlock`):
+	 *    the block owns its own multi-line layout, close stays glued (`})`),
+	 *    matching fork `applyArrowWrapping`'s `bodyFirst.match(BrOpen)` skip
+	 *    (`issue_538`).
+	 */
+	private static function shapeSoleArrowUniform(
+		mode: WrapMode, open: String, close: String, openInside: Doc, closeInside: Doc, items: Array<Doc>
+	): Null<Doc> {
 		if (items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0]) && (
 			mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0]))
 		)) return arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
-		// ω-inc5-cont sole-arrow head-glue on continuation OVERFLOW: a FLWLB sole-
-		// arrow whose body does NOT structurally break (single expression) but
-		// would OVERFLOW its continuation line. inc5 only glued the head for
-		// structurally-multiline bodies (`arrowBodyBreaks`); a single-expression
-		// body that fits one continuation line keeps the OPEN-paren shape
-		// (`f(\n\t(p) -> body\n)` — `paren_indent_call`, `condition_wrapping_nested`),
-		// but one that overflows must glue the arrow head to the open paren and
-		// break the body (`f((p) ->\n\tbody\n)` — `lambda_wrapped_after_single_arg_collapse`).
-		// The discriminator is a CONTINUATION-INDENT width probe: the arrow's flat
-		// `(params) -> body` measured at `f.indent + cols` (NOT the open-paren
-		// column). `IfArrowContinuationFits` re-bases the measure there; flatWidth
-		// is the arrow item's column-independent flat token width (>= 0 since the
-		// body has no structural hardline here). Mirrors fork
-		// `preferLambdaSignatureInlineOverWrap`.
-		// The arrow BODY must not be a top-level binary chain (opBool / opAddSub /
-		// ternary): such a body, when it overflows, is the fork's condition-chain
-		// case (`condition_wrapping_nested_with_opbool` — the C1 family deferred
-		// from inc5) where fork OPENS the paren and puts the arrow on its own
-		// continuation line regardless of width. Head-glue is fork-correct only
-		// for a single non-chain body (call / method chain).
+		return null;
+	}
+
+	/**
+	 * ω-inc5-cont sole-arrow head-glue on continuation OVERFLOW: a FLWLB sole-
+	 * arrow whose body does NOT structurally break (single expression) but
+	 * would OVERFLOW its continuation line. inc5 only glued the head for
+	 * structurally-multiline bodies (`arrowBodyBreaks`); a single-expression
+	 * body that fits one continuation line keeps the OPEN-paren shape
+	 * (`f(\n\t(p) -> body\n)` — `paren_indent_call`, `condition_wrapping_nested`),
+	 * but one that overflows must glue the arrow head to the open paren and
+	 * break the body (`f((p) ->\n\tbody\n)` — `lambda_wrapped_after_single_arg_collapse`).
+	 * The discriminator is a CONTINUATION-INDENT width probe: the arrow's flat
+	 * `(params) -> body` measured at `f.indent + cols` (NOT the open-paren
+	 * column). `IfArrowContinuationFits` re-bases the measure there; flatWidth
+	 * is the arrow item's column-independent flat token width (>= 0 since the
+	 * body has no structural hardline here). Mirrors fork
+	 * `preferLambdaSignatureInlineOverWrap`.
+	 * The arrow BODY must not be a top-level binary chain (opBool / opAddSub /
+	 * ternary): such a body, when it overflows, is the fork's condition-chain
+	 * case (`condition_wrapping_nested_with_opbool` — the C1 family deferred
+	 * from inc5) where fork OPENS the paren and puts the arrow on its own
+	 * continuation line regardless of width. Head-glue is fork-correct only
+	 * for a single non-chain body (call / method chain).
+	 */
+	private static function shapeSoleArrowContGlue(
+		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
+		appendTrailingComma: Bool, lineWidth: Int
+	): Null<Doc> {
 		if (
 			mode == FillLineWithLeadingBreak && items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
 			&& !arrowBodyBreaks(items[0])
@@ -1335,44 +1374,62 @@ class WrapList {
 				return IfArrowContinuationFits(cols, arrowFlatWidth, lineWidth, glueShape, openShape);
 			}
 		}
-		// ω-callparam-single-arg-glue PROTOTYPE: a FLWLB call whose SOLE arg is a
-		// non-arrow head ending at an open delim (`new X(` / `f(`) keeps the outer
-		// open paren GLUED to that head iff the arg's natural first line both fits
-		// and ends at an open delim; the inner construct self-breaks its own args.
-		// Method-chain args are EXCLUDED — their break is at a `.` dot (not an open
-		// delim), and the natural-first-line measurer diverges from render for a
-		// chain operand (the documented inc6/inc7 wall): glue would mis-keep the
-		// outer paren glued when the fork breaks it (`method_chain_single_arg_break_parens`).
+		return null;
+	}
+
+	/**
+	 * ω-callparam-single-arg-glue PROTOTYPE: a FLWLB call whose SOLE arg is a
+	 * non-arrow head ending at an open delim (`new X(` / `f(`) keeps the outer
+	 * open paren GLUED to that head iff the arg's natural first line both fits
+	 * and ends at an open delim; the inner construct self-breaks its own args.
+	 * Method-chain args are EXCLUDED — their break is at a `.` dot (not an open
+	 * delim), and the natural-first-line measurer diverges from render for a
+	 * chain operand (the documented inc6/inc7 wall): glue would mis-keep the
+	 * outer paren glued when the fork breaks it (`method_chain_single_arg_break_parens`).
+	 */
+	private static function shapeSingleArgGlue(
+		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
+		appendTrailingComma: Bool, lineWidth: Int
+	): Null<Doc> {
 		if (mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0]) && !isMethodChainItem(items[0])) {
 			final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
 			final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
 			return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		}
-		// ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call whose LAST arg
-		// is a block-bodied paren-param lambda (`f(x, () -> { … })`) keeps ALL args
-		// GLUED to the open paren iff the glued flat first line (up to the block
-		// `{`) fits `lineWidth`; the lambda's block body self-breaks at its `{` and
-		// the enclosing `)` glues to the block close (`});`). Without this, the
-		// cascade-resolved FLWLB shape OPENS the outer paren (`f(\n\tx, () -> {…`),
-		// pushing every arg + the whole body one indent deeper. Mirrors fork
-		// `applyArrowWrapping` (MarkWrapping.hx:2336-2356): the arrow head is
-		// collapsed (no break after `->`) when the head line fits, and the block
-		// body's own brace layout supplies the only break — the enclosing call paren
-		// is never opened. The `reEvaluateMultiArgCallParamAfterContextWraps` pass
-		// (713-748) then leaves the collapsed multi-arg call as-is.
-		//
-		// DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow,
-		// all `items.length == 1`): this gates on `items.length > 1`, so sole-arrow
-		// handling is untouched. The block-body discriminator is STRUCTURAL
-		// (`arrowBodyIsBlock` — the body's first visible Text is `{`), needing no
-		// post-layout "did it break" fact: a block with statements always carries
-		// hardlines.
-		//
-		// Render-time first-line probe (O(1) `flatTokenWidthFirstLine`, capped at
-		// the block-open hardline — NO recursive spine probe, PERF safe):
-		//  - `IfFirstLineExceeds(lineWidth, openShape, glueShape)`: glue iff the
-		//    GLUED head line `f(x, () -> {` fits; else fall back to the generic
-		//    open-paren FLWLB shape (`firstLineLen > maxLen → continue` in fork).
+		return null;
+	}
+
+	/**
+	 * ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call whose LAST arg
+	 * is a block-bodied paren-param lambda (`f(x, () -> { … })`) keeps ALL args
+	 * GLUED to the open paren iff the glued flat first line (up to the block
+	 * `{`) fits `lineWidth`; the lambda's block body self-breaks at its `{` and
+	 * the enclosing `)` glues to the block close (`});`). Without this, the
+	 * cascade-resolved FLWLB shape OPENS the outer paren (`f(\n\tx, () -> {…`),
+	 * pushing every arg + the whole body one indent deeper. Mirrors fork
+	 * `applyArrowWrapping` (MarkWrapping.hx:2336-2356): the arrow head is
+	 * collapsed (no break after `->`) when the head line fits, and the block
+	 * body's own brace layout supplies the only break — the enclosing call paren
+	 * is never opened. The `reEvaluateMultiArgCallParamAfterContextWraps` pass
+	 * (713-748) then leaves the collapsed multi-arg call as-is.
+	 *
+	 * DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow,
+	 * all `items.length == 1`): this gates on `items.length > 1`, so sole-arrow
+	 * handling is untouched. The block-body discriminator is STRUCTURAL
+	 * (`arrowBodyIsBlock` — the body's first visible Text is `{`), needing no
+	 * post-layout "did it break" fact: a block with statements always carries
+	 * hardlines.
+	 *
+	 * Render-time first-line probe (O(1) `flatTokenWidthFirstLine`, capped at
+	 * the block-open hardline — NO recursive spine probe, PERF safe):
+	 *  - `IfFirstLineExceeds(lineWidth, openShape, glueShape)`: glue iff the
+	 *    GLUED head line `f(x, () -> {` fits; else fall back to the generic
+	 *    open-paren FLWLB shape (`firstLineLen > maxLen → continue` in fork).
+	 */
+	private static function shapeMultiArgBlockLambda(
+		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
+		appendTrailingComma: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
+	): Null<Doc> {
 		if (
 			mode == FillLineWithLeadingBreak && items.length > 1 && isArrowBodyMarker(items[items.length - 1])
 			&& arrowBodyIsBlock(items[items.length - 1])
@@ -1383,49 +1440,58 @@ class WrapList {
 			);
 			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 		}
-		// ω-callparam-multiarg-collection-glue: a `FillLine` / FLWLB MULTI-arg call
-		// whose SOLE multi-line arg is a BREAKING collection literal (array `[…]` /
-		// object `{…}` whose first visible Text is `[`/`{` AND that carries an
-		// internal hardline → renders multi-line) keeps ALL args GLUED to the open
-		// paren iff the glued flat first line (up to the collection's own break)
-		// fits `lineWidth`; the collection self-breaks at its `[`/`{` and every
-		// other arg stays inline — the args before it on the open-paren line, the
-		// args after it glued onto the collection's close line (`f(a, [\n…\n], b)`).
-		//
-		// Without this, `shapeFillLine`'s outer `Group` aborts `fitsFlat` on the
-		// collection's internal hardline and commits MBreak, so the `Fill` breaks
-		// EVERY soft sep — ALL args open onto their own lines (`f(\n\ta,\n\t[\n…`).
-		// The glued fixed point (head + flat args inline, only the collection self-
-		// breaks) is only reached on a LATER write once the source already broke
-		// (the collection arg's own Doc shifts), so the writer OSCILLATES — write 1
-		// ≠ write 2. The break decision is SOURCE-DEPENDENT (incoming layout changes
-		// the collection arg's internal Doc → flips the outer Group), which is
-		// exactly the non-idempotence. This intercept replaces that source-blind
-		// Group decision with the deterministic `IfFirstLineExceeds` width probe, so
-		// the FIRST write already produces the glued fixed point.
-		//
-		// Sibling of the block-lambda intercept above: same
-		// `IfFirstLineExceeds(lineWidth, openShape, glueShape)` O(1) first-line
-		// width probe + reused `multiArgBlockLambdaGlueShape` (glue all items
-		// inline with `sep + ' '`; the lone multi-line collection self-breaks).
-		// `openShape` is the mode's own break shape (`shapeFillLine` /
-		// `shapeFillLineWithLeadingBreak`) — the unchanged fallback for a too-wide
-		// glued head. The discriminator is STRUCTURAL + spine-bounded:
-		//  - `items.length > 1` (DISJOINT from the single-arg / sole-arrow paths,
-		//    all `items.length == 1`);
-		//  - EXACTLY ONE arg renders multi-line (`flatLength(...) < 0`), and it is
-		//    a collection literal (first visible Text `[`/`{`, NOT `(` — a paren-
-		//    expr / call arg is excluded), NOT an arrow (block-lambda owns the
-		//    FLWLB gate above) and NOT a method chain (a chain breaks at a `.` dot,
-		//    not at an open delim — gluing would keep the paren glued where the
-		//    fork opens it, the documented inc6/inc7 chain-operand wall). Requiring
-		//    the collection to be the SOLE multi-line arg keeps the all-inline glue
-		//    a valid fixed point: every OTHER arg is flat, so it rides either the
-		//    open-paren line (before the collection) or the collection-close line
-		//    (after it). `flatLength` short-circuits on the first hardline per arg —
-		//    no full re-measure. The collection may sit at ANY position
-		//    (`docHelper('_dib', [\n…\n], macro …)` — the canonical churning site —
-		//    has it in the MIDDLE, not last).
+		return null;
+	}
+
+	/**
+	 * ω-callparam-multiarg-collection-glue: a `FillLine` / FLWLB MULTI-arg call
+	 * whose SOLE multi-line arg is a BREAKING collection literal (array `[…]` /
+	 * object `{…}` whose first visible Text is `[`/`{` AND that carries an
+	 * internal hardline → renders multi-line) keeps ALL args GLUED to the open
+	 * paren iff the glued flat first line (up to the collection's own break)
+	 * fits `lineWidth`; the collection self-breaks at its `[`/`{` and every
+	 * other arg stays inline — the args before it on the open-paren line, the
+	 * args after it glued onto the collection's close line (`f(a, [\n…\n], b)`).
+	 *
+	 * Without this, `shapeFillLine`'s outer `Group` aborts `fitsFlat` on the
+	 * collection's internal hardline and commits MBreak, so the `Fill` breaks
+	 * EVERY soft sep — ALL args open onto their own lines (`f(\n\ta,\n\t[\n…`).
+	 * The glued fixed point (head + flat args inline, only the collection self-
+	 * breaks) is only reached on a LATER write once the source already broke
+	 * (the collection arg's own Doc shifts), so the writer OSCILLATES — write 1
+	 * ≠ write 2. The break decision is SOURCE-DEPENDENT (incoming layout changes
+	 * the collection arg's internal Doc → flips the outer Group), which is
+	 * exactly the non-idempotence. This intercept replaces that source-blind
+	 * Group decision with the deterministic `IfFirstLineExceeds` width probe, so
+	 * the FIRST write already produces the glued fixed point.
+	 *
+	 * Sibling of the block-lambda intercept above: same
+	 * `IfFirstLineExceeds(lineWidth, openShape, glueShape)` O(1) first-line
+	 * width probe + reused `multiArgBlockLambdaGlueShape` (glue all items
+	 * inline with `sep + ' '`; the lone multi-line collection self-breaks).
+	 * `openShape` is the mode's own break shape (`shapeFillLine` /
+	 * `shapeFillLineWithLeadingBreak`) — the unchanged fallback for a too-wide
+	 * glued head. The discriminator is STRUCTURAL + spine-bounded:
+	 *  - `items.length > 1` (DISJOINT from the single-arg / sole-arrow paths,
+	 *    all `items.length == 1`);
+	 *  - EXACTLY ONE arg renders multi-line (`flatLength(...) < 0`), and it is
+	 *    a collection literal (first visible Text `[`/`{`, NOT `(` — a paren-
+	 *    expr / call arg is excluded), NOT an arrow (block-lambda owns the
+	 *    FLWLB gate above) and NOT a method chain (a chain breaks at a `.` dot,
+	 *    not at an open delim — gluing would keep the paren glued where the
+	 *    fork opens it, the documented inc6/inc7 chain-operand wall). Requiring
+	 *    the collection to be the SOLE multi-line arg keeps the all-inline glue
+	 *    a valid fixed point: every OTHER arg is flat, so it rides either the
+	 *    open-paren line (before the collection) or the collection-close line
+	 *    (after it). `flatLength` short-circuits on the first hardline per arg —
+	 *    no full re-measure. The collection may sit at ANY position
+	 *    (`docHelper('_dib', [\n…\n], macro …)` — the canonical churning site —
+	 *    has it in the MIDDLE, not last).
+	 */
+	private static function shapeMultiArgCollection(
+		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
+		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, keepCloseGlued: Bool, lineWidth: Int
+	): Null<Doc> {
 		if ((mode == FillLine || mode == FillLineWithLeadingBreak) && items.length > 1 && soleMultilineCollectionArg(items) >= 0) {
 			final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			final openShape: Doc = mode == FillLineWithLeadingBreak
@@ -1436,6 +1502,23 @@ class WrapList {
 				);
 			return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 		}
+		return null;
+	}
+
+	/**
+	 * The cascade-resolved `WrapMode` dispatch — the tail of `shape` once
+	 * every special-case glue intercept declined. Each mode routes to its
+	 * dedicated `shape*` layout builder. `Keep` / `Ignore` are normally
+	 * pre-empted by the writer's trivia branch (`triviaSepStarExpr`) and
+	 * collapse to a sensible single-line fallback here; the `multiVar`
+	 * `Keep` fold is the one path that threads `sourceBreakBefore` to
+	 * reproduce each comma-link's source break via `shapeKeep`.
+	 */
+	private static function shapeByMode(
+		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
+		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>,
+		sourceBreakBefore: Null<Array<Bool>>, keepCloseGlued: Bool, flatTrailingComma: Bool
+	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(open, close, sep, items, openInside, closeInside, sepBeforeFlags, flatTrailingComma);
 			case OnePerLine: shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
