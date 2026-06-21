@@ -1005,21 +1005,8 @@ class WriterLowering {
 					child, fieldAccess, parts, child == node.children[node.children.length - 1], typePath, isFirstField, isRaw,
 					stalePrevBareRefBody, prevTrailFieldName
 				);
-				if (isMultiVarMoreField) for (i in multiVarPartsStart...parts.length) {
-					final entry: Expr = parts[i];
-					parts[i] = macro _suppressMoreEntry ? _de() : $entry;
-				}
-				if (isBareTryparseStar(child)) {
-					final thisNonEmpty: Expr = macro $fieldAccess.length > 0;
-					prevAnyStarNonEmpty = prevAnyStarNonEmpty == null
-						? thisNonEmpty
-						: {
-							final prev: Expr = prevAnyStarNonEmpty;
-							macro $prev || $thisNonEmpty;
-						};
-				} else {
-					prevAnyStarNonEmpty = null;
-				}
+				if (isMultiVarMoreField) gateMultiVarMoreParts(parts, multiVarPartsStart);
+				prevAnyStarNonEmpty = isBareTryparseStar(child) ? orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess) : null;
 				// ω-pad-trailing-ref: non-optional Star with @:fmt(padTrailing)
 				// fires its trailing-pad when `_arr.length > 0` (the helper's
 				// empty branch returns `_de()`). Non-opt Star is transparent
@@ -1032,15 +1019,7 @@ class WriterLowering {
 				// channel so the next field's inter-Star sep
 				// (`withPadTrailingDrop`) drops its own emit, avoiding a
 				// double-hardline at the meta→modifiers boundary.
-				if (child.fmtHasFlag('padTrailing'))
-					thisPadTrailing = macro $fieldAccess.length > 0;
-				else {
-					final metaLineEndField: Null<String> = child.fmtReadString('metaLineEndPolicy');
-					if (metaLineEndField != null) {
-						final optAccess: Expr = optFieldAccess(metaLineEndField);
-						thisPadTrailing = macro $fieldAccess.length > 0 && $optAccess != 0;
-					}
-				}
+				thisPadTrailing = starPadTrailing(child, fieldAccess);
 				thisTransparent = macro $fieldAccess.length == 0;
 				prevBodyField = null;
 				prevTrailFieldName = null;
@@ -15458,6 +15437,47 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(condWrap) (single-Ref mode) does not support @:kw on the same field', Context.currentPos()
 			);
+	}
+
+	/**
+	 * ω-pad-trailing-ref / ω-metadata-line-end-function: compute the
+	 * non-optional Star field's `thisPadTrailing` runtime expr (or `null`
+	 * when the field fires no trailing pad). A `@:fmt(padTrailing)` Star
+	 * pads when `_arr.length > 0`; a `@:fmt(metaLineEndPolicy('<optField>'))`
+	 * Star pads when the array is non-empty AND the runtime knob is non-None.
+	 * Extracted from `lowerStruct`'s non-optional Star branch.
+	 */
+	private function starPadTrailing(child: ShapeNode, fieldAccess: Expr): Null<Expr> {
+		if (child.fmtHasFlag('padTrailing')) return macro $fieldAccess.length > 0;
+		final metaLineEndField: Null<String> = child.fmtReadString('metaLineEndPolicy');
+		if (metaLineEndField == null) return null;
+		final optAccess: Expr = optFieldAccess(metaLineEndField);
+		return macro $fieldAccess.length > 0 && $optAccess != 0;
+	}
+
+	/**
+	 * ω-member-meta: OR this bare-tryparse Star's `_arr.length > 0` runtime
+	 * check into the cumulative `prevAnyStarNonEmpty` signal (or seed it when
+	 * no prior Star contributed). Extracted from `lowerStruct`.
+	 */
+	private function orStarNonEmpty(prev: Null<Expr>, fieldAccess: Expr): Expr {
+		final thisNonEmpty: Expr = macro $fieldAccess.length > 0;
+		if (prev == null) return thisNonEmpty;
+		final prevExpr: Expr = prev;
+		return macro $prevExpr || $thisNonEmpty;
+	}
+
+	/**
+	 * ω-multivar-wrap: gate every `parts` entry pushed for the `<moreField>`
+	 * Star (indices `[start, parts.length)`) on the runtime `_suppressMore`
+	 * entry flag, so a head-only recursive self-call drops the Star to
+	 * `_de()`. Rewrites the slice in place. Extracted from `lowerStruct`.
+	 */
+	private function gateMultiVarMoreParts(parts: Array<Expr>, start: Int): Void {
+		for (i in start...parts.length) {
+			final entry: Expr = parts[i];
+			parts[i] = macro _suppressMoreEntry ? _de() : $entry;
+		}
 	}
 
 }
