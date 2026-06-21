@@ -49,19 +49,8 @@ final class MatrixWrap {
 		final n: Int = items.length;
 		if (n < 2) return null;
 
-		// Column count = run length of the first source row. All
-		// subsequent rows (including the final one) must match.
-		var lineRun: Int = 0;
-		for (i in 0...n) {
-			if (rowStart[i] && lineRun == 0 && i > 0) lineRun = i;
-			if (isMultiline(items[i])) return null;
-		}
-		// Single row (no interior break) → not a matrix.
-		if (lineRun <= 1) return null;
-		// Total must split into whole rows of `lineRun` columns, and
-		// every interior break must land exactly on a row boundary.
-		if (n % lineRun != 0) return null;
-		for (i in 0...n) if (rowStart[i] != (i % lineRun == 0)) return null;
+		final lineRun: Null<Int> = matrixColumnCount(items, rowStart, n);
+		if (lineRun == null) return null;
 
 		// Per-column max bare width (no separator).
 		final widths: Array<Int> = [for (i in 0...n) DocMeasure.flatTokenWidth(items[i])];
@@ -133,6 +122,31 @@ final class MatrixWrap {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The matrix column count for `items`, or `null` when the elements do not
+	 * form a uniform grid (single row, ragged rows, or any multi-line cell).
+	 * The column count is the run length of the first source row; every later
+	 * row — including the last — must match it, and each interior break must
+	 * land on a row boundary. Split out of `tryLayout` for the complexity
+	 * threshold.
+	 */
+	private static function matrixColumnCount(items: Array<Doc>, rowStart: Array<Bool>, n: Int): Null<Int> {
+		// Column count = run length of the first source row. All
+		// subsequent rows (including the final one) must match.
+		var lineRun: Int = 0;
+		for (i in 0...n) {
+			if (rowStart[i] && lineRun == 0 && i > 0) lineRun = i;
+			if (isMultiline(items[i])) return null;
+		}
+		// Single row (no interior break) → not a matrix.
+		if (lineRun <= 1) return null;
+		// Total must split into whole rows of `lineRun` columns, and
+		// every interior break must land exactly on a row boundary.
+		if (n % lineRun != 0) return null;
+		for (i in 0...n) if (rowStart[i] != (i % lineRun == 0)) return null;
+		return lineRun;
 	}
 
 }
