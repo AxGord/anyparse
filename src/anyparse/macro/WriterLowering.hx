@@ -849,21 +849,7 @@ class WriterLowering {
 			// loop block, where `composePadTrailing` folds it into
 			// `prevPadTrailing`.
 			var thisPadTrailing: Null<Expr> = null;
-			// ω-pad-trailing-ref: per-iteration scratch holding THIS
-			// field's "transparent at runtime" runtime expr — i.e. the
-			// guard under which the field emits NO visible content (and
-			// therefore can be skipped over when propagating an earlier
-			// field's pad signal across an intervening empty/absent
-			// middle field). `null` means "always emits content" (e.g.
-			// mandatory bare Ref). Set per branch:
-			//   bare Ref:        null (never transparent)
-			//   optional Ref:    `$fieldAccess == null`
-			//   non-opt Star:    `$fieldAccess.length == 0`
-			//   optional Star:   `$fieldAccess == null || $fieldAccess.length == 0`
-			// Folded into `prevPadTrailing` via `composePadTrailing` —
-			// closes the empty-middle-Star window where a static reset
-			// would lose the signal across `expr → empty Star → elseExpr`.
-			var thisTransparent: Null<Expr> = null;
+			// (the per-field transparent-at-runtime guard is now computed inside finalizeNonStarField / emitStarField.)
 			final kwLead: Null<String> = child.readMetaString(':kw');
 			final leadText: Null<String> = child.readMetaString(':lead');
 			final trailText: Null<String> = child.readMetaString(':trail');
@@ -1052,60 +1038,18 @@ class WriterLowering {
 					Context.fatalError('WriterLowering: struct field kind ${child.kind} not supported', Context.currentPos());
 			}
 
-			// Trail
-			// ω-condition-parens (Stage C): `@:fmt(catchParensInsideClose)` on
-			// a mandatory-Ref `@:trail(')')` field routes the close literal
-			// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
-			// ` )` pad). No flag → tight `_dt(trailText)` byte-identical.
-			emitMandatoryRefTrail(
-				child, parts, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd, hasStructFieldTrailOptSlot,
-				structTrailOptAccess
+			// Trail + per-field finalize (accumulator fold) — see finalizeNonStarField.
+			final finalizeResult = finalizeNonStarField(
+				child, parts, node, typePath, fieldName, fieldAccess, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd,
+				hasStructFieldTrailOptSlot, structTrailOptAccess, thisPadTrailing, prevPadTrailing, justWrappedBody, spanInfo,
+				spanStartPartsIdx
 			);
-			// (the @:trailOpt source-presence gate lives in emitMandatoryRefTrail.)
-			if (!isStar && !isOptional && child.fmtHasFlag('padTrailing')) {
-				parts.push(padTrailingDoc(node, child, typePath));
-				thisPadTrailing = macro true;
-			}
-			if (isStar) {
-				// Star kinds already updated `prevPadTrailing` via their
-				// early-continue path; Star branches never reach this
-				// shared end-of-loop block, so `thisTransparent` is moot.
-			} else if (isOptional) {
-				thisTransparent = macro $fieldAccess == null;
-			}
-
 			prevAnyStarNonEmpty = null;
-			prevBodyField = justWrappedBody;
-			prevPadTrailing = composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent);
-			// `prevBareRefBody` was either set above for trivia-bearing
-			// bare-Ref fields (the only case the next sibling can usefully
-			// inspect) or untouched here when the field was a non-Ref kind.
-			// A subsequent Star resets it through the early-continue path,
-			// so non-Star non-bearing fields just fall through with the
-			// stale value cleared in the next loop iteration's bare-Ref
-			// branch (which always assigns) or via the Star reset.
-			// ω-trivia-after-trail: a mandatory Ref with `@:trail` in
-			// trivia-bearing mode publishes its name so the NEXT field's
-			// `bodyPolicyWrap` can read `value.<name>AfterTrail`. Other
-			// field shapes (Star, optional, no-trail, plain mode, non-
-			// bearing rule) clear the signal so downstream emission does
-			// not reference a synth slot that was never populated.
-			// Slice 40: optional Refs with `@:lead + @:trail` ALSO publish
-			// the slot (mirror of the parser-side `hasAfterTrailSlot`
-			// extension). The lead-led commit branch captures the
-			// post-trail `// comment` and the absent branch leaves the
-			// slot null — both feed the downstream tryparse Star's
-			// `tryparsePriorAfterTrailExpr` read uniformly.
-			prevTrailFieldName = (!isStar && trailText != null && ctx.trivia && isTriviaBearing(typePath)) ? fieldName : null;
+			prevBodyField = finalizeResult.prevBodyField;
+			prevPadTrailing = finalizeResult.prevPadTrailing;
+			prevTrailFieldName = finalizeResult.prevTrailFieldName;
 			isFirstField = false;
-
-			// ω-condwrap-forstmt: end of span-mode iteration — splice the
-			// accumulated cond-span Doc parts and wrap them in a single
-			// `WrapList.emitCondition` call, mirroring the single-Ref
-			// engine's emit at line ~2480 but with a runtime-built
-			// composite condDoc (`_dc([...])`) instead of one writeCall.
-			if (hasCondWrapEnd && spanInfo != null)
-				spliceCondWrapEnd(parts, spanStartPartsIdx, spanInfo.knob, spanInfo.leadText, spanInfo.trailText);
+			// (trail emit + padTrailing / transparent fold + AfterTrail publish + condWrap-end splice live in finalizeNonStarField.)
 		}
 
 		// ω-multivar-wrap: `@:fmt(multiVarWrap('<knob>', '<moreField>'))` (sole
@@ -15381,6 +15325,63 @@ class WriterLowering {
 				_de();
 		});
 		return thisPadTrailing;
+	}
+
+	/**
+	 * Finalise a non-Star struct field after its body emission: push the trail
+	 * (`emitMandatoryRefTrail`), fold the mandatory-Ref `@:fmt(padTrailing)` pad
+	 * and the optional-Ref transparent guard into `prevPadTrailing`, publish the
+	 * `@:trail` field name for the next sibling's `AfterTrail` slot, and splice a
+	 * span-mode condWrap end. Pushes into `parts`; returns the recomputed loop
+	 * accumulators (`prevBodyField` / `prevPadTrailing` / `prevTrailFieldName`).
+	 * The caller resets `prevAnyStarNonEmpty` to null and `isFirstField` to false.
+	 * Extracted from `lowerStruct`. `isStar` is always false here (Star fields
+	 * early-continue before this block).
+	 */
+	private function finalizeNonStarField(
+		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr, isOptional: Bool,
+		trailText: Null<String>, trailOptText: Null<String>, hasCondWrap: Bool, hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool,
+		structTrailOptAccess: Null<Expr>, thisPadTrailing: Null<Expr>, prevPadTrailing: Null<Expr>, justWrappedBody: Null<PrevBodyInfo>,
+		spanInfo: Null<{
+			startIdx: Int,
+			endIdx: Int,
+			leadText: String,
+			trailText: String,
+			knob: String
+		}>,
+		spanStartPartsIdx: Int
+	): { prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, prevTrailFieldName: Null<String> } {
+		emitMandatoryRefTrail(
+			child, parts, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd, hasStructFieldTrailOptSlot,
+			structTrailOptAccess
+		);
+		// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory Ref
+		// always fires, so push a trailing space unconditionally and set the
+		// tracker to a constant `true`. (Optional-Ref padTrailing was pushed
+		// inside the optParts wrap; Star fields early-continue.)
+		final thisPad: Null<Expr> = if (!isOptional && child.fmtHasFlag('padTrailing')) {
+			parts.push(padTrailingDoc(node, child, typePath));
+			macro true;
+		} else
+			thisPadTrailing;
+		// `thisTransparent` is null for mandatory bare Ref (always emits visible
+		// content), `$fieldAccess == null` for optional Ref (transparent when
+		// absent — lets a prev pad signal propagate across an absent middle field).
+		final thisTransparent: Null<Expr> = isOptional ? (macro $fieldAccess == null) : null;
+		// ω-trivia-after-trail: a mandatory Ref with `@:trail` in trivia-bearing
+		// mode publishes its name so the NEXT field's `bodyPolicyWrap` can read
+		// `value.<name>AfterTrail`. Slice 40: optional Refs with `@:lead + @:trail`
+		// also publish (mirror of the parser-side `hasAfterTrailSlot` extension).
+		final newPrevTrailFieldName: Null<String> = (trailText != null && ctx.trivia && isTriviaBearing(typePath)) ? fieldName : null;
+		// ω-condwrap-forstmt: end of span-mode iteration — splice the accumulated
+		// cond-span Doc parts into a single `WrapList.emitCondition`.
+		if (hasCondWrapEnd && spanInfo != null)
+			spliceCondWrapEnd(parts, spanStartPartsIdx, spanInfo.knob, spanInfo.leadText, spanInfo.trailText);
+		return {
+			prevBodyField: justWrappedBody,
+			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPad, thisTransparent),
+			prevTrailFieldName: newPrevTrailFieldName,
+		};
 	}
 
 }
