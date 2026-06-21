@@ -1139,43 +1139,7 @@ class WriterLowering {
 			// puts `@:lead` on the end field, but mirror the trail gate so a
 			// future end-field with `@:lead` does not silently leak the lead
 			// literal into the spanned cond Doc.
-			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) {
-				// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
-				// (`@:lead('&') @:fmt(typedefIntersection, typedefIntersectionBreak)`)
-				// makes the `&`→operand whitespace a runtime decision. When the
-				// consuming Star (`HxTypedefDecl.intersections`) sets
-				// `opt._intersectionOperandBreak == true` — this clause follows a
-				// multi-line brace-closed operand (`A & {\n…\n} & B`) — emit the
-				// `&` glued to the preceding `}` line, then a hardline + one-tab
-				// nest before the operand value (`} &\n\tB`). The `Nest(cols, …)`
-				// wraps only the hardline so the newline's trailing indent is
-				// bumped one level; the operand renders right after at base+cols.
-				// Mirrors fork `MarkLineEnds`'s `lineEndAfter` on the `&` that
-				// follows a `BrClose`. Flag false (every single-line intersection)
-				// falls through to the `typedefIntersection` After space, byte-
-				// identical to the pre-slice layout.
-				if (child.fmtHasFlag('typedefIntersectionBreak')) {
-					final gluedLead: Expr = whitespacePolicyLead(child, leadText, ['typedefIntersection']);
-					parts.push(macro opt._intersectionOperandBreak
-						? _dc([
-							_dt($v{leadText}),
-							_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
-						])
-						: $gluedLead);
-				} else
-					parts.push(whitespacePolicyLead(child, leadText, [
-						'objectFieldColon',
-						'typeHintColon',
-						'typeCheckColon',
-						'typedefAssign',
-						'typedefIntersection',
-						'functionTypeHaxe4',
-						'arrowFunctions',
-						'catchParensInsideOpen',
-						'switchCondParensInsideOpen',
-						'whileCondParensInsideOpen'
-					]));
-			}
+			if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText);
 
 			// Field value
 			// ω-issue-257-else-in-return-switch: same dual-flag form as
@@ -15429,6 +15393,52 @@ class WriterLowering {
 		} else {
 			parts.push(macro _dt($v{kwLead + ' '}));
 		}
+	}
+
+	/**
+	 * D61: emit a mandatory (non-optional, non-condWrap) `@:lead` literal — tight
+	 * by default, routed through `whitespacePolicyLead` for the configurable-
+	 * spacing leads (objectFieldColon / typeHintColon / typedefAssign / …). The
+	 * `@:fmt(typedefIntersectionBreak)` field makes the `&`→operand whitespace a
+	 * runtime `opt._intersectionOperandBreak` decision. Pushes onto `parts`.
+	 * Extracted from `lowerStruct`.
+	 */
+	private function emitMandatoryLead(child: ShapeNode, parts: Array<Expr>, leadText: String): Void {
+		// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
+		// (`@:lead('&') @:fmt(typedefIntersection, typedefIntersectionBreak)`)
+		// makes the `&`→operand whitespace a runtime decision. When the
+		// consuming Star (`HxTypedefDecl.intersections`) sets
+		// `opt._intersectionOperandBreak == true` — this clause follows a
+		// multi-line brace-closed operand (`A & {\n…\n} & B`) — emit the
+		// `&` glued to the preceding `}` line, then a hardline + one-tab
+		// nest before the operand value (`} &\n\tB`). The `Nest(cols, …)`
+		// wraps only the hardline so the newline's trailing indent is
+		// bumped one level; the operand renders right after at base+cols.
+		// Mirrors fork `MarkLineEnds`'s `lineEndAfter` on the `&` that
+		// follows a `BrClose`. Flag false (every single-line intersection)
+		// falls through to the `typedefIntersection` After space, byte-
+		// identical to the pre-slice layout.
+		if (child.fmtHasFlag('typedefIntersectionBreak')) {
+			final gluedLead: Expr = whitespacePolicyLead(child, leadText, ['typedefIntersection']);
+			parts.push(macro opt._intersectionOperandBreak
+				? _dc([
+					_dt($v{leadText}),
+					_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
+				])
+				: $gluedLead);
+		} else
+			parts.push(whitespacePolicyLead(child, leadText, [
+				'objectFieldColon',
+				'typeHintColon',
+				'typeCheckColon',
+				'typedefAssign',
+				'typedefIntersection',
+				'functionTypeHaxe4',
+				'arrowFunctions',
+				'catchParensInsideOpen',
+				'switchCondParensInsideOpen',
+				'whileCondParensInsideOpen'
+			]));
 	}
 
 }
