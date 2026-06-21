@@ -835,8 +835,21 @@ class WriterLowering {
 
 		for (child in node.children) {
 			fieldIdx++;
-			final fieldName: Null<String> = child.annotations.get('base.fieldName');
-			if (fieldName == null) Context.fatalError('WriterLowering: struct field missing base.fieldName', Context.currentPos());
+			final meta: FieldMeta = readFieldMeta(child, spanInfo, fieldIdx, typePath);
+			final fieldName: String = meta.fieldName;
+			final kwLead: Null<String> = meta.kwLead;
+			final leadText: Null<String> = meta.leadText;
+			final trailText: Null<String> = meta.trailText;
+			final trailOptText: Null<String> = meta.trailOptText;
+			final isStar: Bool = meta.isStar;
+			final isOptional: Bool = meta.isOptional;
+			final hasElseIf: Bool = meta.hasElseIf;
+			final condWrapArgs: Null<Array<String>> = meta.condWrapArgs;
+			final hasCondWrapEnd: Bool = meta.hasCondWrapEnd;
+			final hasCondWrap: Bool = meta.hasCondWrap;
+			final fieldAccess: Expr = meta.fieldAccess;
+			final hasStructFieldTrailOptSlot: Bool = meta.hasStructFieldTrailOptSlot;
+			final structTrailOptAccess: Null<Expr> = meta.structTrailOptAccess;
 			// Tracker is "prev" — clear at the start so a non-bearing-Ref
 			// field doesn't leak the value set two iterations back.
 			final stalePrevBareRefBody: Null<PrevBodyInfo> = prevBareRefBody;
@@ -849,71 +862,10 @@ class WriterLowering {
 			// loop block, where `composePadTrailing` folds it into
 			// `prevPadTrailing`.
 			var thisPadTrailing: Null<Expr> = null;
-			// (the per-field transparent-at-runtime guard is now computed inside finalizeNonStarField / emitStarField.)
-			final kwLead: Null<String> = child.readMetaString(':kw');
-			final leadText: Null<String> = child.readMetaString(':lead');
-			final trailText: Null<String> = child.readMetaString(':trail');
-			// `@:trailOpt(LIT)` sets `lit.trailText`+`lit.trailOptional=true`
-			// in `strategy/Lit.hx` (uniform with `@:trail`). The writer reads
-			// it as a separate `trailOptText` to keep the existing `trailText`
-			// (raw `@:trail` only) consumers untouched — `condWrap` requires
-			// `@:trail` semantics, `prevTrailFieldName` synthesises an
-			// `AfterTrail` slot only for `@:trail` (`TriviaTypeSynth.isTrailRef`),
-			// and span-mode condWrap pulls from `:trail` directly. The trail-
-			// emit branches below treat `trailText` (always-emit) and
-			// `trailOptText` (source-tracked via Phase 4 gate) as parallel
-			// sources for the trail literal Doc push.
-			final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
-				? (child.annotations.get('lit.trailText'): Null<String>)
-				: null;
-			final isStar: Bool = child.kind == Star;
-			final isOptional: Bool = child.annotations.get('base.optional') == true;
-			final hasElseIf: Bool = child.fmtHasFlag('elseIf');
-			// ω-condition-wrap-wiring: `@:fmt(condWrap('<knob>'))` on a
-			// bare mandatory Ref carrying `@:lead('(') @:trail(')')` (or
-			// any open/close literal pair) routes lead+value+trail through
-			// the runtime `WrapList.emitCondition` cascade instead of
-			// pushing the three pieces independently. The cascade fits
-			// flat `(cond)` when the column has room and breaks to
-			// `(\n\tcond\n)` otherwise — driven by `opt.<knob>:WrapRules`.
-			// First consumers: `HxIfStmt.cond`, `HxWhileStmt.cond`. The
-			// lead push at line ~1756 and the trail push at line ~2463
-			// are skipped when this meta fires, and the bare-Ref Case's
-			// `parts.push(writeCall)` default path emits the wrapped Doc
-			// via the runtime helper instead.
-			final condWrapArgs: Null<Array<String>> = child.fmtReadStringArgs('condWrap');
-			final isSpanStart: Bool = spanInfo != null && fieldIdx == spanInfo.startIdx;
-			final hasCondWrapEnd: Bool = spanInfo != null && fieldIdx == spanInfo.endIdx;
-			if (condWrapArgs != null)
-				validateCondWrap(condWrapArgs, leadText, trailText, kwLead, spanInfo != null, isOptional, isStar, child.kind);
-			final hasCondWrap: Bool = condWrapArgs != null;
-			if (isSpanStart) spanStartPartsIdx = parts.length;
+			// (per-field literal / condWrap / trailOpt-slot facts are read by readFieldMeta into `meta`.)
+			if (meta.isSpanStart) spanStartPartsIdx = parts.length;
 
-			final fieldAccess: Expr = {
-				expr: EField(macro value, fieldName),
-				pos: Context.currentPos(),
-			};
-
-			// ω-struct-trailopt-source-track (Session 14 Phase 4): trivia-
-			// bearing struct-typedef Ref field carrying `@:trailOpt(LIT)`
-			// reads `value.<field>TrailPresent:Null<Bool>` (slot synthesised
-			// by `TriviaTypeSynth.buildStructFieldTrailPresentSlot` Phase 2,
-			// populated by `Lowering.lowerStruct`'s `_trailPresent_<field>`
-			// capture Phase 3). The writer gates trail re-emission on the
-			// captured value: `true` -> emit, `false` -> suppress, `null` ->
-			// fall through to canonical emit (covers raw->paired upcasts
-			// from `Converters.rawToPaired_*` where preWrite plugins don't
-			// preserve source presence). Gate fires on BOTH the mandatory-
-			// Ref trail-push (~L3085) and the optional-Ref + lead + trail
-			// push (~L2458), mirroring the two Lowering capture paths.
-			final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref && child.annotations.get('lit.trailOptional') == true
-				&& ctx.trivia && isTriviaBearing(typePath);
-			final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot
-				? {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
-					pos: Context.currentPos()
-				}
-				: null;
+			// (the @:trailOpt source-presence slot facts live in readFieldMeta.)
 
 			if (isStar) {
 				final starResult = emitStarField(
@@ -15384,6 +15336,76 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * Read one struct field's per-iteration metadata (literal / kind / condWrap /
+	 * trailOpt-slot facts) used by the field-emit branches of `lowerStruct`.
+	 * Validates a `@:fmt(condWrap)` field via `validateCondWrap` (throws on
+	 * violation). Pure w.r.t. loop state — the caller applies `isSpanStart` to
+	 * `spanStartPartsIdx`. Extracted from `lowerStruct`.
+	 */
+	private function readFieldMeta(
+		child: ShapeNode, spanInfo: Null<{
+			startIdx: Int,
+			endIdx: Int,
+			leadText: String,
+			trailText: String,
+			knob: String
+		}>,
+		fieldIdx: Int, typePath: String
+	): FieldMeta {
+		final fieldName: Null<String> = child.annotations.get('base.fieldName');
+		if (fieldName == null) Context.fatalError('WriterLowering: struct field missing base.fieldName', Context.currentPos());
+		final kwLead: Null<String> = child.readMetaString(':kw');
+		final leadText: Null<String> = child.readMetaString(':lead');
+		final trailText: Null<String> = child.readMetaString(':trail');
+		// `@:trailOpt(LIT)` sets `lit.trailText` + `lit.trailOptional=true` in
+		// `strategy/Lit.hx`; the writer reads it as a separate `trailOptText` to
+		// keep the raw-`@:trail`-only consumers untouched.
+		final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
+			? (child.annotations.get('lit.trailText'): Null<String>)
+			: null;
+		final isStar: Bool = child.kind == Star;
+		final isOptional: Bool = child.annotations.get('base.optional') == true;
+		// ω-condition-wrap-wiring: `@:fmt(condWrap('<knob>'))` on a bare mandatory
+		// Ref routes lead+value+trail through the runtime `WrapList.emitCondition`
+		// cascade. First consumers: `HxIfStmt.cond`, `HxWhileStmt.cond`.
+		final condWrapArgs: Null<Array<String>> = child.fmtReadStringArgs('condWrap');
+		final isSpanStart: Bool = spanInfo != null && fieldIdx == spanInfo.startIdx;
+		final hasCondWrapEnd: Bool = spanInfo != null && fieldIdx == spanInfo.endIdx;
+		if (condWrapArgs != null)
+			validateCondWrap(condWrapArgs, leadText, trailText, kwLead, spanInfo != null, isOptional, isStar, child.kind);
+		final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
+		// ω-struct-trailopt-source-track (Session 14 Phase 4): a trivia-bearing
+		// struct-typedef Ref field carrying `@:trailOpt(LIT)` reads
+		// `value.<field>TrailPresent:Null<Bool>` (synth slot) so the writer
+		// preserves source presence of the trail rather than always re-emitting it.
+		final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref && child.annotations.get('lit.trailOptional') == true
+			&& ctx.trivia && isTriviaBearing(typePath);
+		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot
+			? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
+				pos: Context.currentPos()
+			}
+			: null;
+		return {
+			fieldName: fieldName,
+			kwLead: kwLead,
+			leadText: leadText,
+			trailText: trailText,
+			trailOptText: trailOptText,
+			isStar: isStar,
+			isOptional: isOptional,
+			hasElseIf: child.fmtHasFlag('elseIf'),
+			condWrapArgs: condWrapArgs,
+			isSpanStart: isSpanStart,
+			hasCondWrapEnd: hasCondWrapEnd,
+			hasCondWrap: condWrapArgs != null,
+			fieldAccess: fieldAccess,
+			hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
+			structTrailOptAccess: structTrailOptAccess,
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -15406,6 +15428,27 @@ typedef WriterRule = {
 typedef PrevBodyInfo = {
 	access: Expr,
 	typePath: String
+};
+/**
+ * One struct field's per-iteration metadata, produced by `readFieldMeta` and
+ * consumed by `lowerStruct`'s field-emit branches.
+ */
+typedef FieldMeta = {
+	fieldName: String,
+	kwLead: Null<String>,
+	leadText: Null<String>,
+	trailText: Null<String>,
+	trailOptText: Null<String>,
+	isStar: Bool,
+	isOptional: Bool,
+	hasElseIf: Bool,
+	condWrapArgs: Null<Array<String>>,
+	isSpanStart: Bool,
+	hasCondWrapEnd: Bool,
+	hasCondWrap: Bool,
+	fieldAccess: Expr,
+	hasStructFieldTrailOptSlot: Bool,
+	structTrailOptAccess: Null<Expr>
 };
 /**
  * Per-classifier transparent-ctor accumulator used while reading
