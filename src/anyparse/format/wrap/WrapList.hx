@@ -128,90 +128,12 @@ class WrapList {
 		final trailBreakDoc: Doc = trailBreak ?? Line('\n');
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
-		// Decoupled measurement (ω-flatlength-decouple-tokenwidth):
-		//   - `flatLength(item) < 0` retains its legacy semantic and
-		//     drives `anyHardline` — preserves the (b) break-commit
-		//     shortcut on items with hardlines anywhere (including
-		//     inside `BodyGroup`).
-		//   - `DocMeasure.flatTokenWidth(item)` feeds clean widths to
-		//     cascade rule conditions — mirrors `Renderer.fitsFlat`'s
-		//     BG-defer so `LineLengthLargerThan` /
-		//     `TotalItemLengthLargerThan` / `AnyItemLengthLargerThan` see
-		//     the same widths the renderer would lay out flat. Replaces
-		//     the old `HARDLINE_LEN` (~1M) inflation that conflated "has
-		//     hardline anywhere" with "rule-bound widths".
-		var total: Int = 0;
-		var maxLen: Int = 0;
-		var anyHardline: Bool = false;
-		// Mirror fork's `firstLineLength` (MarkWrappingBase.collectWrappableItems):
-		// fork extends each non-last item's `endToken` to include the trailing
-		// comma, and `calcLengthUntilNewline` then sums the comma's `spacesAfter`
-		// — so each non-last item contributes `name + sep + space`. Our `sep`
-		// param is the bare separator (`","`); the renderer always pairs it with
-		// a flat-mode space (`Text(sep + ' ')` in `shapeNoWrap`, `Concat([Text(sep),
-		// Line(' ')])` in `shapeFillLine` softSep), so the effective per-gap width
-		// is `sep.length + 1`. Without this addition the cascade thresholds
-		// (`totalItemLength`, `anyItemLength`) undershoot fork's measurement,
-		// silently leaving long argument/typeParam lists flat past `maxLineLength`.
-		// Closes `wrapping/issue_494_type_parameter` for typeParam cascades: 6
-		// type params totaling `7+9+17+7+9+17 = 66` plus `5*2 = 10` sep widths
-		// = 76 ≥ `totalItemLength >= 70` rule.
 		final sepWidth: Int = sep.length + 1;
-		final lastIdx: Int = items.length - 1;
-		for (i in 0...items.length) {
-			final item: Doc = items[i];
-			if (flatLength(item) < 0) anyHardline = true;
-			final rawW: Int = DocMeasure.flatTokenWidth(item);
-			final w: Int = i < lastIdx ? rawW + sepWidth : rawW;
-			total += w;
-			if (w > maxLen) maxLen = w;
-		}
-
-		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
-		// Continuation-indent depth for break-mode shapes
-		// (`Nest(cols, …)`). Two indent regimes coexist:
-		//   - **Cascade-forced break** (`OnePerLine`,
-		//     `OnePerLineAfterFirst`, `FillLineWithLeadingBreak`): the
-		//     cascade injects its own hardlines between items. Fork's
-		//     `calcIndent(firstToken) + additionalIndent` lands at
-		//     `outer-block-indent + N` tabs, so our `Nest` must add
-		//     `additional` units only (our outer `Nest` stack already
-		//     contributes the `calcIndent` portion).
-		//   - **Fit-driven / trivia-driven** (`NoWrap`, `FillLine`):
-		//     cascade emits items flat; any hardlines come from
-		//     trivia-preserved source breaks (or `Fill`'s built-in
-		//     break-on-overflow). Fork's token-tree positions those at
-		//     `calcIndent + 1 + additionalIndent` (the extra `+1` from
-		//     paren-bumped `calcIndent` of inner tokens), which our
-		//     renderer matches with `baseCols * (1 + additional)`.
-		// Probe mode at `exceeds=true / firing=∅` before threshold
-		// enumeration. The result is a heuristic — cascades with
-		// `LineLengthLargerThan` thresholds that flip the mode at
-		// runtime aren't covered, but no current consumer combines
-		// `defaultAdditionalIndent > 0` with such thresholds.
-		final additional: Int = rules.defaultAdditionalIndent ?? 0;
-		final probeMode: WrapMode = floorSourceMultiline(
-			decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false), sourceMultilineKeep
-		);
-		final cascadeForcesBreak: Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst
-			|| probeMode == FillLineWithLeadingBreak;
-		// ω-functionsignature-body-aware-indent: fork drops the paren-bump
-		// `+1` from FillLine / NoWrap continuation when the wrapped signature
-		// is followed by an empty / absent body (`function foo(...) {}` or
-		// `function foo(...);`). Continuation lands at `member+additional` (=
-		// 1 tab) instead of `member+1+additional` (= 2 tabs). Mirrors fork's
-		// `paren_indent_function_signature` token-tree `calcIndent` rule that
-		// reduces inner-token indent when no body content follows the close-
-		// paren. The signal is threaded via the `compactContinuation` param —
-		// callers (WriterLowering's `@:fmt(wrapRules)` dispatch on
-		// `HxFnDecl.params`) read `opt._fnSigBodyEmpty` and pass it here so
-		// the engine stays format-neutral. Cascade-forced break (OPL / OPLAF
-		// / FLWLB) already took the `additional`-only branch — body-empty
-		// extends FillLine / NoWrap to the same regime when the signal is
-		// live. Default `false` keeps every other wrap-site (call args,
-		// object lit, anon-type, anon-fn-sig) at the legacy `1 + additional`.
-		final compactCont: Bool = cascadeForcesBreak || compactContinuation;
-		final cols: Int = baseCols * (compactCont && additional > 0 ? additional : 1 + additional);
+		final measure: { total: Int, maxLen: Int, anyHardline: Bool } = measureItems(items, sepWidth);
+		final total: Int = measure.total;
+		final maxLen: Int = measure.maxLen;
+		final anyHardline: Bool = measure.anyHardline;
+		final cols: Int = continuationCols(rules, opt, items, maxLen, total, anyHardline, sourceMultilineKeep, compactContinuation);
 
 		// Column-aware `LineLengthLargerThan` thresholds (slice
 		// ω-ifwidthexceeds-infra). Cascade rules with `lineLength >= n`
@@ -288,136 +210,259 @@ class WrapList {
 		//     leaves at runtime, so the extra Doc shapes are inert.
 		//     None of the current default cascades use N≥2 — this
 		//     branch is correctness insurance for future cascades.
-		if (extraThresholds.length == 0) {
-			final modeFlat: WrapMode = evalAt(false, []);
-			final modeBreak: WrapMode = evalAt(true, []);
-			if (modeFlat == modeBreak) {
-				// ω-iffirstline-callarg: both states resolve to `NoWrap`
-				// (the cascade's NoWrap rules shadow a break `defaultMode`),
-				// so the legacy collapse commits flat — blind to the call-
-				// prefix column. A short single arg whose flat width fits
-				// the cascade's `noWrap` rule still overflows `maxLineLength`
-				// at its actual column, leaving the call paren glued
-				// (under-wrap). When the shadowed default is a break mode,
-				// probe the first rendered line instead: break the paren
-				// (default-mode shape) iff the glued flat line exceeds
-				// `lineWidth`, else keep it glued. Mirrors fork's
-				// `MarkWrappingBase.determineWrapType2` — break the call
-				// paren iff the collapsed flat line at its column exceeds
-				// `maxLineLength`, keeping the inner arg flat. Arrow lambdas
-				// own a dedicated wrap path (`isArrowBodyMarker`), so the
-				// sole-arrow case is excluded — the generic paren-break
-				// shape conflicts with `applyArrowWrapping`'s break-after-
-				// `->` layout. `forceMode != null` already bypasses the
-				// cascade, so it is excluded too.
-				final dm: WrapMode = rules.defaultMode;
-				final dmBreak: Bool = dm == OnePerLine || dm == OnePerLineAfterFirst || dm == FillLine || dm == FillLineWithLeadingBreak;
-				final soleArrow: Bool = items.length == 1 && isArrowBodyMarker(items[0]);
-				if (modeFlat == NoWrap && dmBreak && forceMode == null && !soleArrow) {
-					// ω-thinarrow-break leg-3: a sole bare-ident infix arrow
-					// (`call(item -> body)`) whose body chain BREAKS (leg-2
-					// `bareArrowBodyBreaks` — e.g. an `||` opBoolChain configured to
-					// fillLine on overflow) glues the arrow HEAD to the open paren
-					// and breaks AFTER `->`, instead of the generic open-paren shape
-					// (`call(\n\titem -> body\n)`). The INVERSE of `isArrowBodyMarker`
-					// (paren-param) handling above — paren-param arrows are excluded
-					// (`isArrowBodyMarker(items[0])` ⇒ `soleArrow`), so only the
-					// bare-ident infix path reaches here. Mirrors fork
-					// `applyArrowWrapping` (MarkWrapping.hx:2336-2378) + the single-
-					// arg call `hasInnerBreak` gate.
-					//
-					// Block-body bare arrows are excluded (body's first visible Text is
-					// `{`): the block owns its own multi-line layout, matching fork's
-					// BrOpen skip in `applyArrowWrapping`'s collapse loop.
-					//
-					// Two nested render-time first-line probes (both O(1)
-					// `flatTokenWidthFirstLine`, no recursive spine probe across the
-					// chain — PERF safe):
-					//  - OUTER `IfFirstLineExceeds(lineWidth, brk, flat)`: break iff
-					//    the whole-flat `call(item -> body)` first line overflows.
-					//  - INNER `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
-					//    within the break branch, fall back to the generic open-paren
-					//    shape iff the GLUED head line `call(item ->` itself overflows
-					//    (fork `firstLineLen > maxLen → continue`); else GLUE.
-					if (items.length == 1) {
-						final split: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
-						if (split != null && !firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
-							final openShape: Doc = shapeAt(dm, leadBreak);
-							final flatShape: Doc = shapeAt(NoWrap, leadFlat);
-							final glueShape: Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
-							final brk: Doc = IfFirstLineExceeds(opt.lineWidth, openShape, glueShape);
-							return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, brk, flatShape));
-						}
-					}
-					return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
-				}
-				return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
-			}
-			final flatWithLead: Doc = shapeAt(modeFlat, leadFlat);
-			final breakWithLead: Doc = shapeAt(modeBreak, leadBreak);
-			// ω-group-rest-probe cascade-disagree: when the cascade resolves
-			// to different modes at flat (`exceeds=false`) vs break
-			// (`exceeds=true`), the outer Group's own `fitsFlat` decides
-			// which branch the renderer commits to. A plain `Group` measures
-			// only the wrap construct's flat width from its column — blind to
-			// same-line content trailing AFTER the close delim. When the
-			// Star opted into `@:fmt(groupRestProbe)`, route through
-			// `GroupWithRestProbe` so the fit decision subtracts
-			// `flatTokenWidthOfRestStack` (the trailing `):Void {}` after a
-			// wrapped anon param type, etc.) — matching fork's `lengthAfter`
-			// bias at the cascade-Group layer. Sister to the agree-path
-			// `groupOrRestProbe` in `shapeFillLine`. Every current
-			// `groupRestProbe` consumer (functionSignatureWrap empty-rules /
-			// typeParameterWrap exceeds-independent rules) resolves both
-			// states identically and never reaches this branch, so the only
-			// behavioural change is for cascades whose NoWrap rule is gated
-			// on `ExceedsMaxLineLength` (anonTypeWrap) — byte-inert elsewhere.
-			return WrapBoundary(groupOrRestProbe(IfBreak(breakWithLead, flatWithLead), groupRestProbe));
-		}
+		if (extraThresholds.length == 0)
+			return emitZeroThreshold(
+				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe, leadFlat, leadBreak, evalAt,
+				shapeAt, leadFor
+			);
 
-		if (extraThresholds.length == 1) {
-			final t: Int = extraThresholds[0];
-			if (t < opt.lineWidth) {
-				// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
-				//   (firing=∅,    exceeds=no)  → modeNN
-				//   (firing={t},  exceeds=no)  → modeYN
-				//   (firing={t},  exceeds=yes) → modeYY
-				final modeNN: WrapMode = evalAt(false, []);
-				final modeYN: WrapMode = evalAt(false, [t]);
-				final modeYY: WrapMode = evalAt(true, [t]);
-				final shapeNN: Doc = shapeAt(modeNN, leadFor(modeNN));
-				final shapeYN: Doc = shapeAt(modeYN, leadFor(modeYN));
-				final shapeYY: Doc = shapeAt(modeYY, leadFor(modeYY));
-				if (modeNN == modeYN && modeYN == modeYY) return WrapBoundary(shapeNN);
-				// Inner IfBreak picks between exceeds-yes and exceeds-no
-				// when the column has already crossed `t`. Outer
-				// IfWidthExceeds picks the column-vs-t answer first; the
-				// flat side bypasses the IfBreak entirely (only one
-				// valid state below `t`).
-				final brk: Doc = (modeYY == modeYN) ? shapeYY : Group(IfBreak(shapeYY, shapeYN));
-				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeNN)));
-			}
-			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
-			//   (firing=∅,    exceeds=no)  → modeNN
-			//   (firing=∅,    exceeds=yes) → modeNY
-			//   (firing={t},  exceeds=yes) → modeYY
-			final modeNN: WrapMode = evalAt(false, []);
-			final modeNY: WrapMode = evalAt(true, []);
-			final modeYY: WrapMode = evalAt(true, [t]);
-			final shapeNN: Doc = shapeAt(modeNN, leadFor(modeNN));
-			final shapeNY: Doc = shapeAt(modeNY, leadFor(modeNY));
-			final shapeYY: Doc = shapeAt(modeYY, leadFor(modeYY));
-			if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeNN);
-			// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
-			// further partitions the exceeds=yes side around `t`.
-			final brk: Doc = (modeNY == modeYY) ? shapeYY : Group(IfWidthExceeds(t, shapeYY, shapeNY));
-			return WrapBoundary(Group(IfBreak(brk, shapeNN)));
-		}
+		if (extraThresholds.length == 1) return emitOneThreshold(extraThresholds[0], opt, leadFlat, leadBreak, evalAt, shapeAt, leadFor);
 
 		// 2+ extra thresholds — full enumeration without impossibility
 		// filtering. Renderer's column-aware probe at each
 		// IfWidthExceeds layer picks the correct leaf at runtime.
 		return WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
+	}
+
+	/**
+	 * Normal-path 0-extra-threshold tree: the cascade collapses to the
+	 * legacy 2-state shape. When flat (`exceeds=false`) and break
+	 * (`exceeds=true`) resolve to the SAME mode, `emitZeroThresholdAgree`
+	 * picks the unconditional shape (with the sole-arrow paren-break
+	 * probe); when they disagree, the outer `Group(IfBreak(...))` lets
+	 * the renderer's own `fitsFlat` choose (routed through
+	 * `groupOrRestProbe` for `@:fmt(groupRestProbe)` consumers).
+	 */
+	private static function emitZeroThreshold(
+		rules: WrapRules, items: Array<Doc>, opt: WriteOptions, cols: Int, open: String, close: String, openInside: Doc, closeInside: Doc,
+		forceMode: Null<WrapMode>, groupRestProbe: Bool, leadFlat: Doc, leadBreak: Doc, evalAt: (Bool, Array<Int>) -> WrapMode,
+		shapeAt: (WrapMode, Doc) -> Doc, leadFor: WrapMode -> Doc
+	): Doc {
+		final modeFlat: WrapMode = evalAt(false, []);
+		final modeBreak: WrapMode = evalAt(true, []);
+		if (modeFlat == modeBreak)
+			return emitZeroThresholdAgree(
+				modeFlat, rules, items, opt, cols, open, close, openInside, closeInside, forceMode, leadFlat, leadBreak, shapeAt, leadFor
+			);
+		final flatWithLead: Doc = shapeAt(modeFlat, leadFlat);
+		final breakWithLead: Doc = shapeAt(modeBreak, leadBreak);
+		// ω-group-rest-probe cascade-disagree: when the cascade resolves
+		// to different modes at flat (`exceeds=false`) vs break
+		// (`exceeds=true`), the outer Group's own `fitsFlat` decides
+		// which branch the renderer commits to. A plain `Group` measures
+		// only the wrap construct's flat width from its column — blind to
+		// same-line content trailing AFTER the close delim. When the
+		// Star opted into `@:fmt(groupRestProbe)`, route through
+		// `GroupWithRestProbe` so the fit decision subtracts
+		// `flatTokenWidthOfRestStack` (the trailing `):Void {}` after a
+		// wrapped anon param type, etc.) — matching fork's `lengthAfter`
+		// bias at the cascade-Group layer. Sister to the agree-path
+		// `groupOrRestProbe` in `shapeFillLine`. Every current
+		// `groupRestProbe` consumer (functionSignatureWrap empty-rules /
+		// typeParameterWrap exceeds-independent rules) resolves both
+		// states identically and never reaches this branch, so the only
+		// behavioural change is for cascades whose NoWrap rule is gated
+		// on `ExceedsMaxLineLength` (anonTypeWrap) — byte-inert elsewhere.
+		return WrapBoundary(groupOrRestProbe(IfBreak(breakWithLead, flatWithLead), groupRestProbe));
+	}
+
+	/**
+	 * 0-threshold AGREE case (`modeFlat == modeBreak`): the cascade
+	 * commits to one mode. The legacy collapse returns it
+	 * unconditionally — except when both states resolve to `NoWrap`
+	 * while the cascade `defaultMode` is a break mode, in which case the
+	 * flat collapse is blind to the call-prefix column: a short arg that
+	 * fits the `noWrap` rule may still overflow `maxLineLength` at its
+	 * actual column. There the first rendered line is probed instead —
+	 * break the call paren (default-mode shape) iff the glued flat line
+	 * exceeds `lineWidth`, else keep it glued (fork
+	 * `MarkWrappingBase.determineWrapType2`). Paren-param arrows
+	 * (`isArrowBodyMarker`) and `forceMode` callers are excluded; a sole
+	 * bare-ident infix arrow whose body chain breaks glues its head and
+	 * breaks after `->` (ω-thinarrow-break leg-3).
+	 */
+	private static function emitZeroThresholdAgree(
+		modeFlat: WrapMode, rules: WrapRules, items: Array<Doc>, opt: WriteOptions, cols: Int, open: String, close: String,
+		openInside: Doc, closeInside: Doc, forceMode: Null<WrapMode>, leadFlat: Doc, leadBreak: Doc, shapeAt: (WrapMode, Doc) -> Doc,
+		leadFor: WrapMode -> Doc
+	): Doc {
+		// ω-iffirstline-callarg: both states resolve to `NoWrap`
+		// (the cascade's NoWrap rules shadow a break `defaultMode`),
+		// so the legacy collapse commits flat — blind to the call-
+		// prefix column. A short single arg whose flat width fits
+		// the cascade's `noWrap` rule still overflows `maxLineLength`
+		// at its actual column, leaving the call paren glued
+		// (under-wrap). When the shadowed default is a break mode,
+		// probe the first rendered line instead: break the paren
+		// (default-mode shape) iff the glued flat line exceeds
+		// `lineWidth`, else keep it glued. Mirrors fork's
+		// `MarkWrappingBase.determineWrapType2` — break the call
+		// paren iff the collapsed flat line at its column exceeds
+		// `maxLineLength`, keeping the inner arg flat. Arrow lambdas
+		// own a dedicated wrap path (`isArrowBodyMarker`), so the
+		// sole-arrow case is excluded — the generic paren-break
+		// shape conflicts with `applyArrowWrapping`'s break-after-
+		// `->` layout. `forceMode != null` already bypasses the
+		// cascade, so it is excluded too.
+		final dm: WrapMode = rules.defaultMode;
+		final dmBreak: Bool = dm == OnePerLine || dm == OnePerLineAfterFirst || dm == FillLine || dm == FillLineWithLeadingBreak;
+		final soleArrow: Bool = items.length == 1 && isArrowBodyMarker(items[0]);
+		if (modeFlat == NoWrap && dmBreak && forceMode == null && !soleArrow) {
+			// ω-thinarrow-break leg-3: a sole bare-ident infix arrow
+			// (`call(item -> body)`) whose body chain BREAKS (leg-2
+			// `bareArrowBodyBreaks` — e.g. an `||` opBoolChain configured to
+			// fillLine on overflow) glues the arrow HEAD to the open paren
+			// and breaks AFTER `->`, instead of the generic open-paren shape
+			// (`call(\n\titem -> body\n)`). The INVERSE of `isArrowBodyMarker`
+			// (paren-param) handling above — paren-param arrows are excluded
+			// (`isArrowBodyMarker(items[0])` ⇒ `soleArrow`), so only the
+			// bare-ident infix path reaches here. Mirrors fork
+			// `applyArrowWrapping` (MarkWrapping.hx:2336-2378) + the single-
+			// arg call `hasInnerBreak` gate.
+			//
+			// Block-body bare arrows are excluded (body's first visible Text is
+			// `{`): the block owns its own multi-line layout, matching fork's
+			// BrOpen skip in `applyArrowWrapping`'s collapse loop.
+			//
+			// Two nested render-time first-line probes (both O(1)
+			// `flatTokenWidthFirstLine`, no recursive spine probe across the
+			// chain — PERF safe):
+			//  - OUTER `IfFirstLineExceeds(lineWidth, brk, flat)`: break iff
+			//    the whole-flat `call(item -> body)` first line overflows.
+			//  - INNER `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
+			//    within the break branch, fall back to the generic open-paren
+			//    shape iff the GLUED head line `call(item ->` itself overflows
+			//    (fork `firstLineLen > maxLen → continue`); else GLUE.
+			if (items.length == 1) {
+				final split: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
+				if (split != null && !firstVisibleTextStartsWith(split.body, '{'.code) && bareArrowBodyBreaks(split.body)) {
+					final openShape: Doc = shapeAt(dm, leadBreak);
+					final flatShape: Doc = shapeAt(NoWrap, leadFlat);
+					final glueShape: Doc = bareArrowGlueShape(open, close, openInside, closeInside, split.head, split.body, cols);
+					final brk: Doc = IfFirstLineExceeds(opt.lineWidth, openShape, glueShape);
+					return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, brk, flatShape));
+				}
+			}
+			return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(dm, leadBreak), shapeAt(NoWrap, leadFlat)));
+		}
+		return WrapBoundary(shapeAt(modeFlat, leadFor(modeFlat)));
+	}
+
+	/**
+	 * Normal-path 1-extra-threshold tree (impossibility-filtered, 3
+	 * shapes). `t < lineWidth`: `col+w<t` implies `!exceeds`, so the
+	 * only valid states are (∅,no) / ({t},no) / ({t},yes) → outer
+	 * `IfWidthExceeds` then an `IfBreak` on the crossed side. `t >
+	 * lineWidth`: `col+w>=t` implies `exceeds`, so the valid states are
+	 * (∅,no) / (∅,yes) / ({t},yes) → outer `IfBreak` then an inner
+	 * `IfWidthExceeds` on the exceeds side.
+	 */
+	private static function emitOneThreshold(
+		t: Int, opt: WriteOptions, leadFlat: Doc, leadBreak: Doc, evalAt: (Bool, Array<Int>) -> WrapMode, shapeAt: (WrapMode, Doc) -> Doc,
+		leadFor: WrapMode -> Doc
+	): Doc {
+		if (t < opt.lineWidth) {
+			// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
+			//   (firing=∅,    exceeds=no)  → modeNN
+			//   (firing={t},  exceeds=no)  → modeYN
+			//   (firing={t},  exceeds=yes) → modeYY
+			final modeNN: WrapMode = evalAt(false, []);
+			final modeYN: WrapMode = evalAt(false, [t]);
+			final modeYY: WrapMode = evalAt(true, [t]);
+			final shapeNN: Doc = shapeAt(modeNN, leadFor(modeNN));
+			final shapeYN: Doc = shapeAt(modeYN, leadFor(modeYN));
+			final shapeYY: Doc = shapeAt(modeYY, leadFor(modeYY));
+			if (modeNN == modeYN && modeYN == modeYY) return WrapBoundary(shapeNN);
+			// Inner IfBreak picks between exceeds-yes and exceeds-no
+			// when the column has already crossed `t`. Outer
+			// IfWidthExceeds picks the column-vs-t answer first; the
+			// flat side bypasses the IfBreak entirely (only one
+			// valid state below `t`).
+			final brk: Doc = (modeYY == modeYN) ? shapeYY : Group(IfBreak(shapeYY, shapeYN));
+			return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeNN)));
+		}
+		// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
+		//   (firing=∅,    exceeds=no)  → modeNN
+		//   (firing=∅,    exceeds=yes) → modeNY
+		//   (firing={t},  exceeds=yes) → modeYY
+		final modeNN: WrapMode = evalAt(false, []);
+		final modeNY: WrapMode = evalAt(true, []);
+		final modeYY: WrapMode = evalAt(true, [t]);
+		final shapeNN: Doc = shapeAt(modeNN, leadFor(modeNN));
+		final shapeNY: Doc = shapeAt(modeNY, leadFor(modeNY));
+		final shapeYY: Doc = shapeAt(modeYY, leadFor(modeYY));
+		if (modeNN == modeNY && modeNY == modeYY) return WrapBoundary(shapeNN);
+		// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
+		// further partitions the exceeds=yes side around `t`.
+		final brk: Doc = (modeNY == modeYY) ? shapeYY : Group(IfWidthExceeds(t, shapeYY, shapeNY));
+		return WrapBoundary(Group(IfBreak(brk, shapeNN)));
+	}
+
+	/**
+	 * Decoupled flat-width measurement of the item list
+	 * (ω-flatlength-decouple-tokenwidth). `flatLength(item) < 0` retains
+	 * its legacy semantic and drives `anyHardline` — preserving the
+	 * break-commit shortcut on items with a hardline anywhere (including
+	 * inside `BodyGroup`). `DocMeasure.flatTokenWidth(item)` feeds clean
+	 * widths to the cascade rule conditions, mirroring `Renderer.fitsFlat`'s
+	 * BG-defer so `LineLengthLargerThan` / `TotalItemLengthLargerThan` /
+	 * `AnyItemLengthLargerThan` see the same widths the renderer lays out
+	 * flat. Each non-last item adds `sepWidth` (`sep.length + 1`): fork
+	 * extends each non-last `endToken` to include the trailing comma and
+	 * its `spacesAfter`, and the renderer always pairs the bare `sep` with
+	 * a flat-mode space — so the effective per-gap width is `sep.length + 1`
+	 * (closes `wrapping/issue_494_type_parameter`).
+	 */
+	private static function measureItems(items: Array<Doc>, sepWidth: Int): { total: Int, maxLen: Int, anyHardline: Bool } {
+		var total: Int = 0;
+		var maxLen: Int = 0;
+		var anyHardline: Bool = false;
+		final lastIdx: Int = items.length - 1;
+		for (i in 0...items.length) {
+			final item: Doc = items[i];
+			if (flatLength(item) < 0) anyHardline = true;
+			final rawW: Int = DocMeasure.flatTokenWidth(item);
+			final w: Int = i < lastIdx ? rawW + sepWidth : rawW;
+			total += w;
+			if (w > maxLen) maxLen = w;
+		}
+		return { total: total, maxLen: maxLen, anyHardline: anyHardline };
+	}
+
+	/**
+	 * Continuation-indent depth (in columns) for break-mode shapes
+	 * (`Nest(cols, …)`). Two indent regimes coexist:
+	 *   - **Cascade-forced break** (`OnePerLine` / `OnePerLineAfterFirst`
+	 *     / `FillLineWithLeadingBreak`): the cascade injects its own
+	 *     hardlines; fork's `calcIndent + additionalIndent` lands at
+	 *     `outer-block-indent + additional` tabs, so `Nest` adds
+	 *     `additional` units only (the outer `Nest` stack contributes the
+	 *     `calcIndent` portion).
+	 *   - **Fit-driven / trivia-driven** (`NoWrap` / `FillLine`): hardlines
+	 *     come from trivia-preserved source breaks or `Fill`'s break-on-
+	 *     overflow; fork positions those at `calcIndent + 1 + additional`
+	 *     (the paren-bump `+1`), matched by `baseCols * (1 + additional)`.
+	 * The probe mode is evaluated at `exceeds=true / firing=∅` before
+	 * threshold enumeration — a heuristic that does not cover cascades
+	 * combining `defaultAdditionalIndent > 0` with `LineLengthLargerThan`
+	 * thresholds (no current consumer does). ω-functionsignature-body-aware-
+	 * indent: `compactContinuation` (from `opt._fnSigBodyEmpty`) extends the
+	 * `additional`-only regime to FillLine / NoWrap when the wrapped
+	 * signature is followed by an empty / absent body.
+	 */
+	private static function continuationCols(
+		rules: WrapRules, opt: WriteOptions, items: Array<Doc>, maxLen: Int, total: Int, anyHardline: Bool, sourceMultilineKeep: Bool,
+		compactContinuation: Bool
+	): Int {
+		final baseCols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final additional: Int = rules.defaultAdditionalIndent ?? 0;
+		final probeMode: WrapMode = floorSourceMultiline(
+			decideWithLineLengthState(rules, items.length, maxLen, total, true, anyHardline, _ -> false), sourceMultilineKeep
+		);
+		final cascadeForcesBreak: Bool = probeMode == OnePerLine || probeMode == OnePerLineAfterFirst
+			|| probeMode == FillLineWithLeadingBreak;
+		final compactCont: Bool = cascadeForcesBreak || compactContinuation;
+		return baseCols * (compactCont && additional > 0 ? additional : 1 + additional);
 	}
 
 	/**
