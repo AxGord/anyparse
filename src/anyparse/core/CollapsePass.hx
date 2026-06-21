@@ -909,10 +909,20 @@ final class CollapsePass {
 	 * structure-preserving map (no decision logic here).
 	 */
 	private static function mapChildren(d: Doc, f: Doc -> Doc): Doc {
+		final wrapper: Null<Doc> = mapWrapperChild(d, f);
+		if (wrapper != null) return wrapper;
+		final conditional: Null<Doc> = mapConditionalChildren(d, f);
+		if (conditional != null) return conditional;
+		return mapCollectionChildren(d, f);
+	}
+
+	/**
+	 * Map the child of a single-child wrapper kind, or `null` when `d` is not a
+	 * wrapper. Split out of `mapChildren` to keep each dispatcher under the
+	 * cyclomatic-complexity threshold.
+	 */
+	private static function mapWrapperChild(d: Doc, f: Doc -> Doc): Null<Doc> {
 		return switch d {
-			case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
-				| OptSpaceSkipAfterHardline:
-				d;
 			case Nest(n, inner): Nest(n, f(inner));
 			case Group(inner): Group(f(inner));
 			case GroupWithRestProbe(inner): GroupWithRestProbe(f(inner));
@@ -926,7 +936,16 @@ final class CollapsePass {
 			case CollapseChainProbe(inner): CollapseChainProbe(f(inner));
 			case ConditionalMarkerZero(inner): ConditionalMarkerZero(f(inner));
 			case ConditionalMarkerDecrease(inner): ConditionalMarkerDecrease(f(inner));
-			case Concat(items): Concat([for (it in items) f(it)]);
+			case _: null;
+		};
+	}
+
+	/**
+	 * Map the break / flat branches of a conditional `If*` kind, or `null` when
+	 * `d` is not one. Split out of `mapChildren` for the complexity threshold.
+	 */
+	private static function mapConditionalChildren(d: Doc, f: Doc -> Doc): Null<Doc> {
+		return switch d {
 			case IfBreak(brk, fl): IfBreak(f(brk), f(fl));
 			case IfWidthExceeds(n, brk, fl): IfWidthExceeds(n, f(brk), f(fl));
 			case IfFirstLineExceeds(n, brk, fl): IfFirstLineExceeds(n, f(brk), f(fl));
@@ -935,9 +954,22 @@ final class CollapsePass {
 			case IfNaturalFirstLineExceeds(n, brk, fl): IfNaturalFirstLineExceeds(n, f(brk), f(fl));
 			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));
 			case IfArrowContinuationFits(ei, fw, n, brk, fl): IfArrowContinuationFits(ei, fw, n, f(brk), f(fl));
+			case _: null;
+		};
+	}
+
+	/**
+	 * Map the items of a collection kind (`Concat` / `Fill*`), falling back to the
+	 * structurally-transparent leaf kinds (returned unchanged). The guaranteed
+	 * non-null tail of `mapChildren`'s dispatch chain.
+	 */
+	private static function mapCollectionChildren(d: Doc, f: Doc -> Doc): Doc {
+		return switch d {
+			case Concat(items): Concat([for (it in items) f(it)]);
 			case Fill(items, sep, tr): Fill([for (it in items) f(it)], f(sep), tr);
 			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
 			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([for (it in items) f(it)], f(sep), tr);
+			case _: d;
 		};
 	}
 
