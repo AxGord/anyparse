@@ -812,71 +812,18 @@ class Lowering {
 			// the outer skipWs belongs before the lead — comments between
 			// the lead `{` and the first member are captured by
 			// `collectTrivia` inside the loop regardless.
-			final triviaEofStar: Bool = isStar && child.annotations.get('trivia.starCollects') == true
-				&& child.readMetaString(':lead') == null && child.readMetaString(':kw') == null && ctx.trivia;
-			// Slice ω₆a: an @:optional Ref field takes ownership of its own
-			// pre-field ws handling so the commit-check can rewind over the
-			// just-consumed whitespace (and any comments inside it, in trivia
-			// mode) when the kw/lead miss — that trivia belongs to the next
-			// outer @:trivia Star loop, not to this discarded optional slot.
-			final isOptionalRef: Bool = child.kind == Ref && isOptional;
-			// ω-cond-comp-engine: `@:optional @:kw + tryparse Star` — kw-led
-			// commit point on a Star field. Splices the kw commit + miss-rewind
-			// machinery from the optional-Ref path with the tryparse Star loop
-			// body. Mirrors `isOptionalRef`'s pre-field ws ownership: the
-			// commit-check below performs its own ws scan + rewind so trivia
-			// stays visible to the next outer @:trivia Star on commit miss.
-			// First consumer: `HxConditionalDecl.elseBody` (`#if … #else <decls>
-			// #end`). Replaces the pre-slice Ref-wrapper companion typedef
-			// pattern (extra fn frame + wrapper struct alloc per `#else` hit).
-			final isOptionalKwStar: Bool = child.kind == Star && isOptional && kwLead != null;
-			// ω-issue-48-v2: a bare non-first Ref field (no `@:optional`, no
-			// `@:kw`, no `@:lead`) in a trivia-bearing Seq captures the
-			// `newlineBefore` signal in the gap between preceding content
-			// and the sub-rule's first token. Needed when the preceding
-			// bare-tryparse Star is empty (e.g. `HxMemberDecl.modifiers`
-			// empty → `member` follows an `@:allow(...)\n` meta element):
-			// the Star's rewind stashes trivia back to `ctx.pendingTrivia`,
-			// and the pre-Ref `collectTrivia` here drains it, preserving
-			// the newline on the synth `<field>BeforeNewline:Bool` slot.
-			//
-			// ω-untyped-keep-trybody: opt-in `@:fmt(beforeNewlineSlotFirst)`
-			// extends the slot to FIRST Ref fields when the parent Alt-branch
-			// carries `@:fmt(forwardNewlineForBody)` (which omits the parent's
-			// post-kw `skipWs`). The first-field `collectTrivia` then scans
-			// the gap between the parent kw and the field's first token
-			// itself, capturing `newlineBefore` for the writer's `Keep`
-			// dispatch. Currently consumed by `HxTryCatchStmt.body` to
-			// preserve `try\n\tuntyped {…}` source shape under
-			// `untypedBody=Keep`.
-			final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && ctx.trivia
-				&& isTriviaBearing(typePath);
-			final isFirstField: Bool = child == node.children[0];
-			final isFirstFieldNlOptIn: Bool = isBareTriviaRefNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-			// ω-casepattern-keep: extend the first-field source-newline-before
-			// capture to a bare (lead-less, non-optional) trivia Star whose
-			// parent omits its post-kw `skipWs` via `forwardNewlineForBody`.
-			// The condition Star (`HxCaseBranch.patterns`, `@:sep(',')
-			// @:trail(':')`) then captures `newlineBefore` for the `case`→
-			// pattern gap onto a `<field>BeforeNewline:Bool` slot, mirroring
-			// the bare-Ref first-field case (`HxTryCatchStmt.body`). Gated on
-			// the `beforeNewlineSlotFirst` opt-in so every other bare trivia
-			// Star (no opt-in) keeps the plain pre-field `skipWs`.
-			final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && ctx.trivia
-				&& isTriviaBearing(typePath);
-			final isFirstFieldStarNlOptIn: Bool = isBareTriviaStarNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-			final hasBeforeNewlineSlot: Bool = (isBareTriviaRefNoLead && (
-				!isFirstField || isFirstFieldNlOptIn
-			)) || isFirstFieldStarNlOptIn;
-			// ω-598-member-leading-comment: the bare non-first Ref host (e.g.
-			// `HxMemberDecl.member`) additionally captures the `collectTrivia`
-			// run's `leadingComments` into a `<field>BeforeLeading` slot. Gated
-			// on the bare-Ref host (matches `TriviaTypeSynth.isBareNonFirstRef`),
-			// NOT the Star-opt-in host. Without it, a multiline block comment
-			// sitting between the last modifier and the member keyword (rejected
-			// by the modifier Star's `collectTrailingFull` for its internal
-			// newline) is scanned here but discarded.
-			final hasBeforeLeadingSlot: Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
+			final _fieldFlags = computeStructFieldFlags(child, node, typePath, isStar, isOptional, kwLead, leadText);
+			final triviaEofStar: Bool = _fieldFlags.triviaEofStar;
+			final isOptionalRef: Bool = _fieldFlags.isOptionalRef;
+			final isOptionalKwStar: Bool = _fieldFlags.isOptionalKwStar;
+			final hasBeforeNewlineSlot: Bool = _fieldFlags.hasBeforeNewlineSlot;
+			final hasBeforeLeadingSlot: Bool = _fieldFlags.hasBeforeLeadingSlot;
+			final optStarWithLead: Bool = _fieldFlags.optStarWithLead;
+			// The pre-emit dispatch flags above are computed in computeStructFieldFlags;
+			// see there for the per-flag rationale (ω₆a optional-Ref ws ownership,
+			// ω-cond-comp-engine optional-kw Star, ω-issue-48-v2 / ω-untyped-keep-trybody
+			// / ω-casepattern-keep BeforeNewline slot, ω-598-member-leading-comment
+			// BeforeLeading slot).
 			final beforeNlLocal: String = '_beforeNl_$fieldName';
 			final beforeLeadingLocal: String = '_beforeLeadCm_$fieldName';
 			// ω-optional-star-rewind: when the field is `@:optional Star`
@@ -887,7 +834,6 @@ class Lowering {
 			// `typedef Foo = Int` and the next decl) that the pre-field
 			// `skipWs` would otherwise silently consume — closes
 			// issue_216 / issue_321 cluster's parser-side bug.
-			final optStarWithLead: Bool = isStar && isOptional && kwLead == null;
 			if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
 				if (hasBeforeLeadingSlot) {
 					// ω-598-member-leading-comment: capture the full
@@ -5643,6 +5589,107 @@ expectLit(ctx, $v{trailText}));
 		pushVar(bodyOnSameLineLocal, macro :Bool, macro false);
 		pushVar(beforeKwLeadingLocal, macro :Array<String>, macro []);
 		pushVar(beforeKwTrailingLocal, macro :Null<String>, macro null);
+	}
+
+	/**
+	 * Compute the per-field pre-emit dispatch booleans for one struct field.
+	 * These gate the pre-field whitespace/trivia handling and the
+	 * `<field>BeforeNewline` / `<field>BeforeLeading` synth-slot captures.
+	 * The intermediate flags (`isBareTriviaRefNoLead`, `isFirstField`, …) stay
+	 * internal; only the six downstream-read flags are returned. Lifted from
+	 * `lowerStruct`'s per-field loop to keep its decision points out of the
+	 * orchestrator.
+	 */
+	private function computeStructFieldFlags(
+		child: ShapeNode, node: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>
+	): {
+		triviaEofStar: Bool,
+		isOptionalRef: Bool,
+		isOptionalKwStar: Bool,
+		hasBeforeNewlineSlot: Bool,
+		hasBeforeLeadingSlot: Bool,
+		optStarWithLead: Bool
+	} {
+		final triviaEofStar: Bool = isStar && child.annotations.get('trivia.starCollects') == true && child.readMetaString(':lead') == null
+			&& child.readMetaString(':kw') == null && ctx.trivia;
+		// Slice ω₆a: an @:optional Ref field takes ownership of its own
+		// pre-field ws handling so the commit-check can rewind over the
+		// just-consumed whitespace (and any comments inside it, in trivia
+		// mode) when the kw/lead miss — that trivia belongs to the next
+		// outer @:trivia Star loop, not to this discarded optional slot.
+		final isOptionalRef: Bool = child.kind == Ref && isOptional;
+		// ω-cond-comp-engine: `@:optional @:kw + tryparse Star` — kw-led
+		// commit point on a Star field. Splices the kw commit + miss-rewind
+		// machinery from the optional-Ref path with the tryparse Star loop
+		// body. Mirrors `isOptionalRef`'s pre-field ws ownership: the
+		// commit-check below performs its own ws scan + rewind so trivia
+		// stays visible to the next outer @:trivia Star on commit miss.
+		// First consumer: `HxConditionalDecl.elseBody` (`#if … #else <decls>
+		// #end`). Replaces the pre-slice Ref-wrapper companion typedef
+		// pattern (extra fn frame + wrapper struct alloc per `#else` hit).
+		final isOptionalKwStar: Bool = child.kind == Star && isOptional && kwLead != null;
+		// ω-issue-48-v2: a bare non-first Ref field (no `@:optional`, no
+		// `@:kw`, no `@:lead`) in a trivia-bearing Seq captures the
+		// `newlineBefore` signal in the gap between preceding content
+		// and the sub-rule's first token. Needed when the preceding
+		// bare-tryparse Star is empty (e.g. `HxMemberDecl.modifiers`
+		// empty → `member` follows an `@:allow(...)\n` meta element):
+		// the Star's rewind stashes trivia back to `ctx.pendingTrivia`,
+		// and the pre-Ref `collectTrivia` here drains it, preserving
+		// the newline on the synth `<field>BeforeNewline:Bool` slot.
+		//
+		// ω-untyped-keep-trybody: opt-in `@:fmt(beforeNewlineSlotFirst)`
+		// extends the slot to FIRST Ref fields when the parent Alt-branch
+		// carries `@:fmt(forwardNewlineForBody)` (which omits the parent's
+		// post-kw `skipWs`). The first-field `collectTrivia` then scans
+		// the gap between the parent kw and the field's first token
+		// itself, capturing `newlineBefore` for the writer's `Keep`
+		// dispatch. Currently consumed by `HxTryCatchStmt.body` to
+		// preserve `try\n\tuntyped {…}` source shape under
+		// `untypedBody=Keep`.
+		final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && ctx.trivia
+			&& isTriviaBearing(typePath);
+		final isFirstField: Bool = child == node.children[0];
+		final isFirstFieldNlOptIn: Bool = isBareTriviaRefNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		// ω-casepattern-keep: extend the first-field source-newline-before
+		// capture to a bare (lead-less, non-optional) trivia Star whose
+		// parent omits its post-kw `skipWs` via `forwardNewlineForBody`.
+		// The condition Star (`HxCaseBranch.patterns`, `@:sep(',')
+		// @:trail(':')`) then captures `newlineBefore` for the `case`→
+		// pattern gap onto a `<field>BeforeNewline:Bool` slot, mirroring
+		// the bare-Ref first-field case (`HxTryCatchStmt.body`). Gated on
+		// the `beforeNewlineSlotFirst` opt-in so every other bare trivia
+		// Star (no opt-in) keeps the plain pre-field `skipWs`.
+		final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && ctx.trivia
+			&& isTriviaBearing(typePath);
+		final isFirstFieldStarNlOptIn: Bool = isBareTriviaStarNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final hasBeforeNewlineSlot: Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn)) || isFirstFieldStarNlOptIn;
+		// ω-598-member-leading-comment: the bare non-first Ref host (e.g.
+		// `HxMemberDecl.member`) additionally captures the `collectTrivia`
+		// run's `leadingComments` into a `<field>BeforeLeading` slot. Gated
+		// on the bare-Ref host (matches `TriviaTypeSynth.isBareNonFirstRef`),
+		// NOT the Star-opt-in host. Without it, a multiline block comment
+		// sitting between the last modifier and the member keyword (rejected
+		// by the modifier Star's `collectTrailingFull` for its internal
+		// newline) is scanned here but discarded.
+		final hasBeforeLeadingSlot: Bool = isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn);
+		// ω-optional-star-rewind: when the field is `@:optional Star`
+		// with `@:lead` (e.g. `HxTypeRef.params:Array<HxType>` —
+		// `<...>`), defer the pre-field `skipWs` into the emit so the
+		// emit can rewind cursor on `matchLit` miss. The miss-rewind
+		// preserves any trivia (notably doc-comments between
+		// `typedef Foo = Int` and the next decl) that the pre-field
+		// `skipWs` would otherwise silently consume — closes
+		// issue_216 / issue_321 cluster's parser-side bug.
+		final optStarWithLead: Bool = isStar && isOptional && kwLead == null;
+		return {
+			triviaEofStar: triviaEofStar,
+			isOptionalRef: isOptionalRef,
+			isOptionalKwStar: isOptionalKwStar,
+			hasBeforeNewlineSlot: hasBeforeNewlineSlot,
+			hasBeforeLeadingSlot: hasBeforeLeadingSlot,
+			optStarWithLead: optStarWithLead,
+		};
 	}
 
 }
