@@ -47,155 +47,10 @@ class WriterCodegen {
 			// emitted unconditionally so triviaTryparseStarExpr's flat-fanout
 			// path can call it without per-grammar gating.
 			fields.push(copyOptField(optionsCT));
-			// ω-issue-423-mech-a: opt-fanout helper for `propagateExprPosition`.
-			// Returns the input opt unchanged when `_inExprPosition` is already
-			// true (no allocation on already-propagating descendants); otherwise
-			// returns a `_copyOpt` with the flag flipped on. Emitted only when
-			// the opt typedef carries the `_inExprPosition:Bool` field —
-			// grammars whose options struct doesn't declare it (e.g. Json,
-			// Bin) skip the helper to avoid a compile-time field-resolution
-			// error. Per-grammar opt-in lives in the typedef itself.
-			// ω-value-yielded-if-tail-barrier: `_clearExprPosition` is the
-			// sister reset, consumed by `triviaBlockStarExpr`'s per-element
-			// call for `@:fmt(clearExprPositionNonTail)` Stars (BlockExpr /
-			// BlockStmt) so only the block's tail statement keeps the
-			// expression-position frame. Gated on the same field as
-			// `_setExprPosition`.
-			// ω-expressionif-collapse: `_setExprPosition` additionally clears
-			// the narrow `_inValueIfBranch` flag when the opt typedef carries
-			// it (consumed-once discipline). The `_setValueIfBranch` setter +
-			// `_clearValueIfBranch` reset are emitted alongside, gated on the
-			// same field presence. `_clearValueIfBranch` is consumed by the
-			// block-Star barrier (an object literal inside a `{ … }`-shaped
-			// branch is the block's value, not the branch's immediate value).
-			final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
-			if (optionsHasInExprPosition(optionsTypePath)) {
-				fields.push(setExprPositionField(optionsCT, hasValueIfBranch));
-				fields.push(clearExprPositionField(optionsCT));
-			}
-			if (hasValueIfBranch) {
-				fields.push(setValueIfBranchField(optionsCT));
-				fields.push(clearValueIfBranchField(optionsCT));
-			}
-			// ω-anonfunction-empty-curly: opt-fanout helper for
-			// `propagateAnonFnContext`. Returns the input opt unchanged when
-			// `_inAnonFnBody` is already true; otherwise returns a `_copyOpt`
-			// with the flag flipped on. Sister to `_setExprPosition`. Emitted
-			// only when the opt typedef carries `_inAnonFnBody:Bool` —
-			// currently declared on `HxModuleWriteOptions` only.
-			if (optionsHasField(optionsTypePath, '_inAnonFnBody')) {
-				fields.push(setAnonFnBodyField(optionsCT));
-				fields.push(clearAnonFnBodyField(optionsCT));
-			}
-			// ω-typedef-anon-force-multi: opt-fanout helper pair for
-			// `propagateTypedefContext` (typedef-RHS Ref dispatch) and
-			// `forceMultiInTypedef` (Anon-body Star per-element clear).
-			// Sister to `_setAnonFnBody`/`_clearAnonFnBody`. Gated on
-			// `_inTypedefBody:Bool` field presence on the opt typedef.
-			if (optionsHasField(optionsTypePath, '_inTypedefBody')) {
-				fields.push(setTypedefBodyField(optionsCT));
-				fields.push(clearTypedefBodyField(optionsCT));
-			}
-			// ω-typedef-intersection-operand-break: opt-fanout helper for the
-			// per-element `& Type`-clause break in `HxTypedefDecl.intersections`.
-			// Idempotent sister to `_setTypedefBody`. Gated on
-			// `_intersectionOperandBreak:Bool` field presence on the opt typedef.
-			if (optionsHasField(optionsTypePath, '_intersectionOperandBreak')) fields.push(setIntersectionBreakField(optionsCT));
-			// ω-fieldlevel-var-value-expr-indent: opt-fanout helper pair for
-			// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` ctor
-			// init dispatch) and the function-body clear. `_setFieldLevelVar`
-			// flags the descendant `HxVarDecl.init` write so the
-			// `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')`
-			// entry forces its indent (fork's `isFieldLevelVar`);
-			// `_clearFieldLevelVar` resets the flag at a function-body boundary
-			// so a nested local var inside a member initializer stays
-			// knob-gated. Sister to `_setAnonFnBody`/`_clearAnonFnBody`. Gated
-			// on `_inFieldLevelVar:Bool` field presence on the opt typedef.
-			if (optionsHasField(optionsTypePath, '_inFieldLevelVar')) {
-				fields.push(setFieldLevelVarField(optionsCT));
-				fields.push(clearFieldLevelVarField(optionsCT));
-			}
-			// ω-chain-fillline-in-condwrap: opt-fanout helper for
-			// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
-			// cascade to a single mode by swapping `opBoolChainWrap` /
-			// `opAddSubChainWrap` to a degenerate `{rules: [],
-			// defaultMode: mode}` cascade. Sister to `_setAnonFnBody` —
-			// idempotent, null-mode short-circuit avoids allocation on
-			// the default path. Emitted only when the opt typedef
-			// declares `_chainModeOverride:Null<WrapMode>` AND carries
-			// both `opBoolChainWrap` and `opAddSubChainWrap`.
-			if (
-				optionsHasField(optionsTypePath, '_chainModeOverride') && optionsHasField(optionsTypePath, 'opBoolChainWrap')
-				&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')
-			) {
-				fields.push(setChainModeOverrideField(optionsCT));
-				fields.push(resolveChainLocField());
-			}
-			// ω-callarg-chain-nest: opt-fanout helper pair for the
-			// `@:fmt(callArgChainNest)` opt-in on a call-arg Star (currently
-			// `HxExpr.Call`). `_setCallArgChainNest` flags a chain arg of a
-			// leading-break call so its own continuation Nest collapses to the
-			// inherited indent (the call-arg Nest already supplies +cols);
-			// `_clearCallArgChainNest` consumes the flag at the outermost chain
-			// so nested chains keep their own Nest. Sister to
-			// `_setAnonFnBody`/`_clearAnonFnBody`. Gated on `_callArgChainNest:Bool`.
-			if (optionsHasField(optionsTypePath, '_callArgChainNest')) {
-				fields.push(setCallArgChainNestField(optionsCT));
-				fields.push(clearCallArgChainNestField(optionsCT));
-			}
-			// ω-multivar-wrap: opt-fanout helper pair for the multi-var
-			// declaration head-only emit (`HxVarDecl.more` wrapping).
-			// `_setSuppressMore` flags a recursive `writeHxVarDeclT` self-call
-			// so it emits only the head binding (the `more` Star degrades to
-			// `_de()`); `_clearSuppressMore` resets the flag before the head's
-			// own nested-init writes so a var decl inside an initializer keeps
-			// its own `more`. Sister to `_setCallArgChainNest`/
-			// `_clearCallArgChainNest`. Gated on `_suppressMore:Bool`.
-			if (optionsHasField(optionsTypePath, '_suppressMore')) {
-				fields.push(setSuppressMoreField(optionsCT));
-				fields.push(clearSuppressMoreField(optionsCT));
-			}
-			// ω-expr-paren-in-condition (cond F2): opt-fanout helper pair for
-			// the `@:fmt(condWrap)` site. `_setParenInCondition` marks the
-			// condition content so an expression paren inside it routes its
-			// inner chain through `expressionWrapping` (fillLine);
-			// `_clearParenInCondition` consumes the flag at the paren's inner
-			// writeCall so a nested expr paren does not re-trigger. Gated on
-			// `_parenInCondition:Bool`.
-			if (optionsHasField(optionsTypePath, '_parenInCondition')) {
-				fields.push(setParenInConditionField(optionsCT));
-				fields.push(clearParenInConditionField(optionsCT));
-			}
-			// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
-			// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`
-			// records the source `var`→head newline so the `HxVarDecl` multiVar
-			// fold can break the head binding under `WrapMode.Keep`;
-			// `_clearVarKwNewline` resets it at the fold so recursive head/link
-			// self-calls do not re-trigger. Sister to `_setParenInCondition` /
-			// `_clearParenInCondition`. Gated on `_varKwNewline:Bool`.
-			if (optionsHasField(optionsTypePath, '_varKwNewline')) {
-				fields.push(setVarKwNewlineField(optionsCT));
-				fields.push(clearVarKwNewlineField(optionsCT));
-			}
-			// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
-			// for the opAddSub / opBool chain emit. `_setKeepFlatInner` marks the
-			// leaf-operand opt so an inner `ParenExpr` stays GLUED (no width-driven
-			// re-open) under `WrapMode.Keep`; `_clearKeepFlatInner` resets it.
-			// Sister to `_setVarKwNewline` / `_setParenInCondition`. Gated on
-			// `_keepFlatInner:Bool`.
-			if (optionsHasField(optionsTypePath, '_keepFlatInner')) {
-				fields.push(setKeepFlatInnerField(optionsCT));
-				fields.push(clearKeepFlatInnerField(optionsCT));
-			}
-			// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
-			// for the enclosing-`ParenExpr` → keep-chain signal. `_setKeepChainInParen`
-			// marks the inner opt so a `WrapMode.Keep` chain suppresses its headBreak
-			// + Nest; `_clearKeepChainInParen` resets it at the chain emit so nested
-			// chains / leaf operands don't re-trigger. Gated on `_keepChainInParen:Bool`.
-			if (optionsHasField(optionsTypePath, '_keepChainInParen')) {
-				fields.push(setKeepChainInParenField(optionsCT));
-				fields.push(clearKeepChainInParenField(optionsCT));
-			}
+			// Per-grammar opt-fanout context helpers — each set/clear pair is
+			// emitted only when the opt typedef declares the gating field, so
+			// grammars whose options struct omits it skip the helper.
+			pushOptFanoutHelpers(fields, optionsTypePath, optionsCT);
 			// Layout helpers
 			fields.push(blockBodyField());
 			fields.push(sepListField());
@@ -2011,6 +1866,137 @@ class WriterCodegen {
 	private static function simpleName(typePath: String): String {
 		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? typePath : typePath.substring(idx + 1);
+	}
+
+	private static function pushOptFanoutHelpers(fields: Array<Field>, optionsTypePath: String, optionsCT: ComplexType): Void {
+		final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
+		if (optionsHasInExprPosition(optionsTypePath)) {
+			fields.push(setExprPositionField(optionsCT, hasValueIfBranch));
+			fields.push(clearExprPositionField(optionsCT));
+		}
+		if (hasValueIfBranch) {
+			fields.push(setValueIfBranchField(optionsCT));
+			fields.push(clearValueIfBranchField(optionsCT));
+		}
+		// ω-anonfunction-empty-curly: opt-fanout helper for
+		// `propagateAnonFnContext`. Returns the input opt unchanged when
+		// `_inAnonFnBody` is already true; otherwise returns a `_copyOpt`
+		// with the flag flipped on. Sister to `_setExprPosition`. Emitted
+		// only when the opt typedef carries `_inAnonFnBody:Bool` —
+		// currently declared on `HxModuleWriteOptions` only.
+		if (optionsHasField(optionsTypePath, '_inAnonFnBody')) {
+			fields.push(setAnonFnBodyField(optionsCT));
+			fields.push(clearAnonFnBodyField(optionsCT));
+		}
+		// ω-typedef-anon-force-multi: opt-fanout helper pair for
+		// `propagateTypedefContext` (typedef-RHS Ref dispatch) and
+		// `forceMultiInTypedef` (Anon-body Star per-element clear).
+		// Sister to `_setAnonFnBody`/`_clearAnonFnBody`. Gated on
+		// `_inTypedefBody:Bool` field presence on the opt typedef.
+		if (optionsHasField(optionsTypePath, '_inTypedefBody')) {
+			fields.push(setTypedefBodyField(optionsCT));
+			fields.push(clearTypedefBodyField(optionsCT));
+		}
+		// ω-typedef-intersection-operand-break: opt-fanout helper for the
+		// per-element `& Type`-clause break in `HxTypedefDecl.intersections`.
+		// Idempotent sister to `_setTypedefBody`. Gated on
+		// `_intersectionOperandBreak:Bool` field presence on the opt typedef.
+		if (optionsHasField(optionsTypePath, '_intersectionOperandBreak')) fields.push(setIntersectionBreakField(optionsCT));
+		// ω-fieldlevel-var-value-expr-indent: opt-fanout helper pair for
+		// `@:fmt(propagateFieldLevelVar)` (class-member `var`/`final` ctor
+		// init dispatch) and the function-body clear. `_setFieldLevelVar`
+		// flags the descendant `HxVarDecl.init` write so the
+		// `indentValueIfCtor('IfExpr', 'indentComplexValueExpressions')`
+		// entry forces its indent (fork's `isFieldLevelVar`);
+		// `_clearFieldLevelVar` resets the flag at a function-body boundary
+		// so a nested local var inside a member initializer stays
+		// knob-gated. Sister to `_setAnonFnBody`/`_clearAnonFnBody`. Gated
+		// on `_inFieldLevelVar:Bool` field presence on the opt typedef.
+		if (optionsHasField(optionsTypePath, '_inFieldLevelVar')) {
+			fields.push(setFieldLevelVarField(optionsCT));
+			fields.push(clearFieldLevelVarField(optionsCT));
+		}
+		// ω-chain-fillline-in-condwrap: opt-fanout helper for
+		// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
+		// cascade to a single mode by swapping `opBoolChainWrap` /
+		// `opAddSubChainWrap` to a degenerate `{rules: [],
+		// defaultMode: mode}` cascade. Sister to `_setAnonFnBody` —
+		// idempotent, null-mode short-circuit avoids allocation on
+		// the default path. Emitted only when the opt typedef
+		// declares `_chainModeOverride:Null<WrapMode>` AND carries
+		// both `opBoolChainWrap` and `opAddSubChainWrap`.
+		if (
+			optionsHasField(optionsTypePath, '_chainModeOverride') && optionsHasField(optionsTypePath, 'opBoolChainWrap')
+			&& optionsHasField(optionsTypePath, 'opAddSubChainWrap')
+		) {
+			fields.push(setChainModeOverrideField(optionsCT));
+			fields.push(resolveChainLocField());
+		}
+		// ω-callarg-chain-nest: opt-fanout helper pair for the
+		// `@:fmt(callArgChainNest)` opt-in on a call-arg Star (currently
+		// `HxExpr.Call`). `_setCallArgChainNest` flags a chain arg of a
+		// leading-break call so its own continuation Nest collapses to the
+		// inherited indent (the call-arg Nest already supplies +cols);
+		// `_clearCallArgChainNest` consumes the flag at the outermost chain
+		// so nested chains keep their own Nest. Sister to
+		// `_setAnonFnBody`/`_clearAnonFnBody`. Gated on `_callArgChainNest:Bool`.
+		if (optionsHasField(optionsTypePath, '_callArgChainNest')) {
+			fields.push(setCallArgChainNestField(optionsCT));
+			fields.push(clearCallArgChainNestField(optionsCT));
+		}
+		// ω-multivar-wrap: opt-fanout helper pair for the multi-var
+		// declaration head-only emit (`HxVarDecl.more` wrapping).
+		// `_setSuppressMore` flags a recursive `writeHxVarDeclT` self-call
+		// so it emits only the head binding (the `more` Star degrades to
+		// `_de()`); `_clearSuppressMore` resets the flag before the head's
+		// own nested-init writes so a var decl inside an initializer keeps
+		// its own `more`. Sister to `_setCallArgChainNest`/
+		// `_clearCallArgChainNest`. Gated on `_suppressMore:Bool`.
+		if (optionsHasField(optionsTypePath, '_suppressMore')) {
+			fields.push(setSuppressMoreField(optionsCT));
+			fields.push(clearSuppressMoreField(optionsCT));
+		}
+		// ω-expr-paren-in-condition (cond F2): opt-fanout helper pair for
+		// the `@:fmt(condWrap)` site. `_setParenInCondition` marks the
+		// condition content so an expression paren inside it routes its
+		// inner chain through `expressionWrapping` (fillLine);
+		// `_clearParenInCondition` consumes the flag at the paren's inner
+		// writeCall so a nested expr paren does not re-trigger. Gated on
+		// `_parenInCondition:Bool`.
+		if (optionsHasField(optionsTypePath, '_parenInCondition')) {
+			fields.push(setParenInConditionField(optionsCT));
+			fields.push(clearParenInConditionField(optionsCT));
+		}
+		// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
+		// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`
+		// records the source `var`→head newline so the `HxVarDecl` multiVar
+		// fold can break the head binding under `WrapMode.Keep`;
+		// `_clearVarKwNewline` resets it at the fold so recursive head/link
+		// self-calls do not re-trigger. Sister to `_setParenInCondition` /
+		// `_clearParenInCondition`. Gated on `_varKwNewline:Bool`.
+		if (optionsHasField(optionsTypePath, '_varKwNewline')) {
+			fields.push(setVarKwNewlineField(optionsCT));
+			fields.push(clearVarKwNewlineField(optionsCT));
+		}
+		// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
+		// for the opAddSub / opBool chain emit. `_setKeepFlatInner` marks the
+		// leaf-operand opt so an inner `ParenExpr` stays GLUED (no width-driven
+		// re-open) under `WrapMode.Keep`; `_clearKeepFlatInner` resets it.
+		// Sister to `_setVarKwNewline` / `_setParenInCondition`. Gated on
+		// `_keepFlatInner:Bool`.
+		if (optionsHasField(optionsTypePath, '_keepFlatInner')) {
+			fields.push(setKeepFlatInnerField(optionsCT));
+			fields.push(clearKeepFlatInnerField(optionsCT));
+		}
+		// ω-keep-chain (increment: opadd_chain_keep): opt-fanout helper pair
+		// for the enclosing-`ParenExpr` → keep-chain signal. `_setKeepChainInParen`
+		// marks the inner opt so a `WrapMode.Keep` chain suppresses its headBreak
+		// + Nest; `_clearKeepChainInParen` resets it at the chain emit so nested
+		// chains / leaf operands don't re-trigger. Gated on `_keepChainInParen:Bool`.
+		if (optionsHasField(optionsTypePath, '_keepChainInParen')) {
+			fields.push(setKeepChainInParenField(optionsCT));
+			fields.push(clearKeepChainInParenField(optionsCT));
+		}
 	}
 
 }
