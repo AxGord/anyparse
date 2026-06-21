@@ -6894,161 +6894,22 @@ class WriterLowering {
 		final trailClose: Expr = trailCloseAccess ?? macro (null: Null<String>);
 		final trailOpen: Expr = trailOpenAccess ?? macro (null: Null<String>);
 		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
-		// ω-keep-objectlit: when the Star carries
-		// `@:fmt(wrapRules('<rulesField>'))` AND the runtime config sets
-		// `opt.<rulesField>.defaultMode == WrapMode.Keep`, the trivia
-		// branch's per-element loop swaps the unconditional leading
-		// `_dhl()` for a per-element source-aware decision (hardline if
-		// `Trivial<T>.newlineBefore`, space if glued). Mirrors fork's
-		// `MarkWrappingBase.keep2` per-token `isOriginalNewlineBefore`
-		// dispatch. `_keepEmit=false` (default — null `wrapRulesField`
-		// OR rules' defaultMode != Keep OR any comment forces hardline)
-		// preserves the legacy force-multi shape byte-identically.
-		//
-		// JSON-driven: the loader maps `"defaultWrap": "keep"` → `Keep`;
-		// `BinaryChainEmit` and `MethodChainEmit` route `Keep` to their
-		// `shapeNoWrap` arms to preserve baseline for chain-config Keep
-		// cases (e.g. `issue_187_multi_line_wrapped_assignment_oneline`)
-		// where the JSON-config Keep slipped past loader's silent-drop
-		// previously. Real chain-Keep semantics is a follow-up slice.
-		// ω-keep-fnsig-newline: detect Keep from the FULL cascade, not just
-		// `defaultMode`. A function-signature keep config can select Keep via
-		// either `defaultWrap: keep` (→ `defaultMode == Keep`, e.g.
-		// `issue_238_keep_wrapping_function_signature`) OR a width-independent
-		// cascade rule (`itemCount >= 0 -> keep`, e.g.
-		// `wrapping_of_function_signature_keep`). `cascadeIsKeep` resolves the
-		// cascade for the runtime element count across both fit/exceed states
-		// and returns true only when EVERY state yields Keep — equivalent to
-		// the bare `defaultMode == Keep` read for the `rules: []` case, and
-		// additively true for the always-firing structural rule. Width-gated
-		// keep rules (`lineLength >= n`) disagree across states → false, so the
-		// trivia path stays on the legacy cascade for them.
-		final keepCheckExpr: Expr = wrapRulesField != null
-			? {
-				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
-				macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
-			}
-			: macro false;
-		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
-		// `keepCheckExpr`. Fires when the wrap-rules JSON config sets
-		// `"defaultWrap": "ignore"` (case-2, user-driven) OR the grammar
-		// annotation `@:fmt(ignoreSourceNewlinesForWrap)` is set (case-1,
-		// intrinsic per-construct semantic — currently `HxFnDecl.params`).
-		// Architecture per [[feedback-grammar-annotation-keep-too-aggressive]]:
-		// intrinsic flags + JSON checks are disjoined here, no separate
-		// override channel.
-		//
-		// ω-expressionif-collapse (mechanism B): `@:fmt(reflowInExprPosition)`
-		// adds a THIRD, runtime-gated disjunct — Ignore fires when
-		// `opt._inValueIfBranch` is set, i.e. the object literal is the direct
-		// value of a value-if branch. Combined with mechanism A's `{ x }`
-		// padding this collapses `{\n width: …\n}` to `{ width: … }` only in
-		// that one context (var-init / call-arg object literals keep their
-		// source-multiline shape because the flag is cleared on every
-		// expression-position descent).
-		final ignoreBase: Expr = ignoreSourceNewlinesForWrap
-			? macro true
-			: (wrapRulesField != null
-				? {
-					final rulesAccess: Expr = optFieldAccess(wrapRulesField);
-					macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
-				}
-				: macro false);
-		final ignoreCheckExpr: Expr = reflowInExprPosition ? macro ($ignoreBase) || opt._inValueIfBranch : ignoreBase;
-		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
-		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
-		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an
-		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — the shape
-		// the loader builds for a user `arrayWrap.defaultWrap: noWrap` block,
-		// see `Loader.wrapRulesFromConfig`). This is the fork's `noWrap()`
-		// policy (`MarkWrappingBase.noWrap` → `noWrappingBetween`): every
-		// element cuddles flat, and the ONLY break is the unsuppressible
-		// `lineEndAfter` a `//` line-comment forces. Distinct from the
-		// built-in `defaultArrayLiteralWrap` cascade (non-empty `rules`), so
-		// the gate stays false for the default config → byte-inert there.
-		// Used to (a) defeat the `reflowSourceMultiline` floor so a
-		// source-multiline list collapses fully flat under explicit noWrap,
-		// and (b) swap the force-multi per-element hardline for a space
-		// (break only after a line-comment) when a mid-list `//` forced the
-		// list into the trivia branch.
-		final noWrapFlatCheckExpr: Expr = wrapRulesField != null
-			? {
-				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
-				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap && $rulesAccess.rules.length == 0;
-			}
-			: macro false;
-		// ω-objectlit-leftCurly-cascade: when the call site delegates
-		// leftCurly emission to this helper (knob-form leftCurly + wrap-
-		// rules), build runtime accessors for the knob value that:
-		//  - in the trivia branch: pick `_dhl()` (Next) or `_de()` (Same)
-		//    as a single Doc prepended to the BodyGroup's parts.
-		//  - in the no-trivia branch: feed `(leadFlat, leadBreak)` into
-		//    `WrapList.emit` so the engine's Group(IfBreak) picks the
-		//    right shape per the wrap-cascade's flat/break decision.
-		final knobExpr: Null<Expr> = leftCurlyKnob == null ? null : optFieldAccess(leftCurlyKnob);
-		final nextPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
-		// Doc that selects `_doh()` for `BracePlacement.Next`, `_de()`
-		// otherwise. `_doh()` is `OptHardline` — drops when the previous
-		// emit was already a hardline (e.g. wrap-engine sep `\n`
-		// between call args). Avoids the `,\n\n{` newline-collision
-		// bug when an outer wrap-engine sep and an inner leftCurly Next
-		// independently push a leading newline at the same insertion
-		// point (slice ω-opthardline).
-		//
-		// `wrapLeadFlatDoc` is always `_de()` — flat layout never wants
-		// a hardline before the open brace, regardless of knob value.
-		final knobNextOrEmpty: Expr = knobExpr == null
-			? macro _de()
-			: {
-				expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
-				pos: Context.currentPos(),
-			};
-		final triviaLeadDoc: Expr = knobNextOrEmpty;
-		final wrapLeadFlatDoc: Expr = macro _de();
-		final wrapLeadBreakDoc: Expr = knobNextOrEmpty;
-		// ω-anontype-right-curly: when the call site reads
-		// `@:fmt(rightCurly('<knob>'))`, build a Doc that picks `_de()`
-		// for `RightCurlyPlacement.Inline` (close glued to last body
-		// token) and `_dhl()` otherwise. Null knob → unconditional
-		// `_dhl()` (legacy). Substituted for the unconditional `_dhl()`
-		// emitted immediately before `_dt(closeText)` in the trivia
-		// branch. The wrap-engine branch reads the same expression
-		// through `WrapList.emit`'s `trailBreak` param (slice
-		// ω-wraplist-trailbreakdoc) — both branches honour the same
-		// `RightCurlyPlacement.{Inline,Same}` semantic.
-		final rightCurlyKnobExpr: Null<Expr> = rightCurlyKnob == null ? null : optFieldAccess(rightCurlyKnob);
-		final inlinePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
-		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null
-			? macro _dhl()
-			: {
-				expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
-				pos: Context.currentPos(),
-			};
-		// ω-wraplist-trailbreakdoc: wrap-engine close placement reads
-		// the same knob as the trivia branch's `triviaTrailDoc`.
-		// `WrapList.shapeOnePerLine` substitutes the result for the
-		// hardcoded `Line('\n')` before `Text(close)` — `_de()` glues
-		// the close to the last body token (Inline), `_dhl()` keeps
-		// it on its own line (Same).
-		final wrapTrailBreakDoc: Expr = triviaTrailDoc;
-		// ω-keep-fnsig-newline: close-delimiter placement for the trivia
-		// force-multi KEEP path. Function signatures (the only Star carrying
-		// `@:fmt(ignoreSourceNewlinesForWrap)`) preserve the SOURCE close
-		// placement under keep: the close `)` stays glued to the last
-		// parameter (`param7:Int)` — `wrapping_of_function_signature_keep`) when
-		// the source had no newline before it, but drops to its own indented
-		// line (`\n\t):FastMatrix3` — `issue_238_keep_wrapping_function_signature`)
-		// when the author put one there. `_trailNL` carries that source signal
-		// (captured at the Star's close-peek into the `TrailingNewlineBefore`
-		// slot). When `_keepEmit` is live: `_dhl()` if the source broke before
-		// close, `_de()` (glued) otherwise. Object-literals / arrays (no
-		// intrinsic flag) keep their own-line close unchanged, and non-keep
-		// params (`_keepEmit == false`) stay on the legacy break — both byte-
-		// inert. Only consumed at the trivia branch's `_parts` assembly; the
-		// no-trivia cascade reads `wrapTrailBreakDoc`.
-		final triviaTrailDocKeepAware: Expr = ignoreSourceNewlinesForWrap
-			? macro (_keepEmit ? (_trailNL ? _dhl() : _de()) : $triviaTrailDoc)
-			: triviaTrailDoc;
+		// ω-keep-objectlit / ω-cascade-emits-comments / ω-nowrap-flat /
+		// ω-objectlit-leftCurly-cascade / ω-anontype-right-curly: the keep/ignore/
+		// noWrap runtime checks + leftCurly/rightCurly placement Docs the sep-Star
+		// tail consumes. Extracted to `triviaSepCheckExprs` so the orchestrator
+		// stays under the complexity gate; behaviour byte-identical.
+		final _checks: SepStarChecks = triviaSepCheckExprs(
+			wrapRulesField, ignoreSourceNewlinesForWrap, reflowInExprPosition, leftCurlyKnob, rightCurlyKnob
+		);
+		final keepCheckExpr: Expr = _checks.keepCheckExpr;
+		final ignoreCheckExpr: Expr = _checks.ignoreCheckExpr;
+		final noWrapFlatCheckExpr: Expr = _checks.noWrapFlatCheckExpr;
+		final triviaLeadDoc: Expr = _checks.triviaLeadDoc;
+		final wrapLeadFlatDoc: Expr = _checks.wrapLeadFlatDoc;
+		final wrapLeadBreakDoc: Expr = _checks.wrapLeadBreakDoc;
+		final wrapTrailBreakDoc: Expr = _checks.wrapTrailBreakDoc;
+		final triviaTrailDocKeepAware: Expr = _checks.triviaTrailDocKeepAware;
 		// ω-wraprules-objlit: when the Star carries
 		// `@:fmt(wrapRules('<field>'))`, defer the no-trivia branch's
 		// layout decision to the runtime `WrapList.emit` engine. The
@@ -14525,6 +14386,156 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * Sep-Star keep/ignore/noWrap runtime checks + leftCurly/rightCurly
+	 * placement Doc builders. Bundles the eight spliced Expr fragments the
+	 * sep-Star tail consumes, keeping the knob/pattern intermediates
+	 * (`ignoreBase`/`knobExpr`/`nextPat`/`knobNextOrEmpty`/`rightCurlyKnobExpr`/
+	 * `inlinePat`/`triviaTrailDoc`) local. Extracted from `triviaSepStarExpr`
+	 * so the orchestrator stays under the complexity gate; byte-identical.
+	 */
+	private static function triviaSepCheckExprs(
+		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
+		rightCurlyKnob: Null<String>
+	): SepStarChecks {
+		final keepCheckExpr: Expr = wrapRulesField != null
+			? {
+				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
+				macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
+			}
+			: macro false;
+		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
+		// `keepCheckExpr`. Fires when the wrap-rules JSON config sets
+		// `"defaultWrap": "ignore"` (case-2, user-driven) OR the grammar
+		// annotation `@:fmt(ignoreSourceNewlinesForWrap)` is set (case-1,
+		// intrinsic per-construct semantic — currently `HxFnDecl.params`).
+		// Architecture per [[feedback-grammar-annotation-keep-too-aggressive]]:
+		// intrinsic flags + JSON checks are disjoined here, no separate
+		// override channel.
+		//
+		// ω-expressionif-collapse (mechanism B): `@:fmt(reflowInExprPosition)`
+		// adds a THIRD, runtime-gated disjunct — Ignore fires when
+		// `opt._inValueIfBranch` is set, i.e. the object literal is the direct
+		// value of a value-if branch. Combined with mechanism A's `{ x }`
+		// padding this collapses `{\n width: …\n}` to `{ width: … }` only in
+		// that one context (var-init / call-arg object literals keep their
+		// source-multiline shape because the flag is cleared on every
+		// expression-position descent).
+		final ignoreBase: Expr = ignoreSourceNewlinesForWrap
+			? macro true
+			: (wrapRulesField != null
+				? {
+					final rulesAccess: Expr = optFieldAccess(wrapRulesField);
+					macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
+				}
+				: macro false);
+		final ignoreCheckExpr: Expr = reflowInExprPosition ? macro ($ignoreBase) || opt._inValueIfBranch : ignoreBase;
+		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
+		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
+		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an
+		// EMPTY rule cascade (`{rules: [], defaultMode: NoWrap}` — the shape
+		// the loader builds for a user `arrayWrap.defaultWrap: noWrap` block,
+		// see `Loader.wrapRulesFromConfig`). This is the fork's `noWrap()`
+		// policy (`MarkWrappingBase.noWrap` → `noWrappingBetween`): every
+		// element cuddles flat, and the ONLY break is the unsuppressible
+		// `lineEndAfter` a `//` line-comment forces. Distinct from the
+		// built-in `defaultArrayLiteralWrap` cascade (non-empty `rules`), so
+		// the gate stays false for the default config → byte-inert there.
+		// Used to (a) defeat the `reflowSourceMultiline` floor so a
+		// source-multiline list collapses fully flat under explicit noWrap,
+		// and (b) swap the force-multi per-element hardline for a space
+		// (break only after a line-comment) when a mid-list `//` forced the
+		// list into the trivia branch.
+		final noWrapFlatCheckExpr: Expr = wrapRulesField != null
+			? {
+				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
+				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap && $rulesAccess.rules.length == 0;
+			}
+			: macro false;
+		// ω-objectlit-leftCurly-cascade: when the call site delegates
+		// leftCurly emission to this helper (knob-form leftCurly + wrap-
+		// rules), build runtime accessors for the knob value that:
+		//  - in the trivia branch: pick `_dhl()` (Next) or `_de()` (Same)
+		//    as a single Doc prepended to the BodyGroup's parts.
+		//  - in the no-trivia branch: feed `(leadFlat, leadBreak)` into
+		//    `WrapList.emit` so the engine's Group(IfBreak) picks the
+		//    right shape per the wrap-cascade's flat/break decision.
+		final knobExpr: Null<Expr> = leftCurlyKnob == null ? null : optFieldAccess(leftCurlyKnob);
+		final nextPat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'BracePlacement', 'Next']);
+		// Doc that selects `_doh()` for `BracePlacement.Next`, `_de()`
+		// otherwise. `_doh()` is `OptHardline` — drops when the previous
+		// emit was already a hardline (e.g. wrap-engine sep `\n`
+		// between call args). Avoids the `,\n\n{` newline-collision
+		// bug when an outer wrap-engine sep and an inner leftCurly Next
+		// independently push a leading newline at the same insertion
+		// point (slice ω-opthardline).
+		//
+		// `wrapLeadFlatDoc` is always `_de()` — flat layout never wants
+		// a hardline before the open brace, regardless of knob value.
+		final knobNextOrEmpty: Expr = knobExpr == null
+			? macro _de()
+			: {
+				expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
+				pos: Context.currentPos(),
+			};
+		final triviaLeadDoc: Expr = knobNextOrEmpty;
+		final wrapLeadFlatDoc: Expr = macro _de();
+		final wrapLeadBreakDoc: Expr = knobNextOrEmpty;
+		// ω-anontype-right-curly: when the call site reads
+		// `@:fmt(rightCurly('<knob>'))`, build a Doc that picks `_de()`
+		// for `RightCurlyPlacement.Inline` (close glued to last body
+		// token) and `_dhl()` otherwise. Null knob → unconditional
+		// `_dhl()` (legacy). Substituted for the unconditional `_dhl()`
+		// emitted immediately before `_dt(closeText)` in the trivia
+		// branch. The wrap-engine branch reads the same expression
+		// through `WrapList.emit`'s `trailBreak` param (slice
+		// ω-wraplist-trailbreakdoc) — both branches honour the same
+		// `RightCurlyPlacement.{Inline,Same}` semantic.
+		final rightCurlyKnobExpr: Null<Expr> = rightCurlyKnob == null ? null : optFieldAccess(rightCurlyKnob);
+		final inlinePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
+		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null
+			? macro _dhl()
+			: {
+				expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
+				pos: Context.currentPos(),
+			};
+		// ω-wraplist-trailbreakdoc: wrap-engine close placement reads
+		// the same knob as the trivia branch's `triviaTrailDoc`.
+		// `WrapList.shapeOnePerLine` substitutes the result for the
+		// hardcoded `Line('\n')` before `Text(close)` — `_de()` glues
+		// the close to the last body token (Inline), `_dhl()` keeps
+		// it on its own line (Same).
+		final wrapTrailBreakDoc: Expr = triviaTrailDoc;
+		// ω-keep-fnsig-newline: close-delimiter placement for the trivia
+		// force-multi KEEP path. Function signatures (the only Star carrying
+		// `@:fmt(ignoreSourceNewlinesForWrap)`) preserve the SOURCE close
+		// placement under keep: the close `)` stays glued to the last
+		// parameter (`param7:Int)` — `wrapping_of_function_signature_keep`) when
+		// the source had no newline before it, but drops to its own indented
+		// line (`\n\t):FastMatrix3` — `issue_238_keep_wrapping_function_signature`)
+		// when the author put one there. `_trailNL` carries that source signal
+		// (captured at the Star's close-peek into the `TrailingNewlineBefore`
+		// slot). When `_keepEmit` is live: `_dhl()` if the source broke before
+		// close, `_de()` (glued) otherwise. Object-literals / arrays (no
+		// intrinsic flag) keep their own-line close unchanged, and non-keep
+		// params (`_keepEmit == false`) stay on the legacy break — both byte-
+		// inert. Only consumed at the trivia branch's `_parts` assembly; the
+		// no-trivia cascade reads `wrapTrailBreakDoc`.
+		final triviaTrailDocKeepAware: Expr = ignoreSourceNewlinesForWrap
+			? macro (_keepEmit ? (_trailNL ? _dhl() : _de()) : $triviaTrailDoc)
+			: triviaTrailDoc;
+		return {
+			keepCheckExpr: keepCheckExpr,
+			ignoreCheckExpr: ignoreCheckExpr,
+			noWrapFlatCheckExpr: noWrapFlatCheckExpr,
+			triviaLeadDoc: triviaLeadDoc,
+			wrapLeadFlatDoc: wrapLeadFlatDoc,
+			wrapLeadBreakDoc: wrapLeadBreakDoc,
+			wrapTrailBreakDoc: wrapTrailBreakDoc,
+			triviaTrailDocKeepAware: triviaTrailDocKeepAware,
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -15005,6 +15016,22 @@ typedef SepStarBlanks = {
 	final typedefBetweenExpr: Expr;
 	final blankBeforeExpr: Expr;
 	final initCurrDocCommentExpr: Expr;
+};
+/**
+ * Output bundle of `triviaSepCheckExprs` — the keep/ignore/noWrap runtime
+ * checks plus the leftCurly/rightCurly placement Docs the sep-Star tail
+ * consumes (`_keepEmit`/`_ignoreEmit`/`_noWrapFlat`, `_sepCtx`'s lead/trail
+ * Docs, and `WrapList.emit`'s lead-flat/lead-break/trail-break args).
+ */
+typedef SepStarChecks = {
+	final keepCheckExpr: Expr;
+	final ignoreCheckExpr: Expr;
+	final noWrapFlatCheckExpr: Expr;
+	final triviaLeadDoc: Expr;
+	final wrapLeadFlatDoc: Expr;
+	final wrapLeadBreakDoc: Expr;
+	final wrapTrailBreakDoc: Expr;
+	final triviaTrailDocKeepAware: Expr;
 };
 /**
  * Shared setup locals bundled for the `triviaTryparseStarExpr` emission
