@@ -785,8 +785,7 @@ class Lowering {
 			// pre-field `skipWs` at L~2224). Trivia+bearing only — plain mode
 			// keeps the original struct shape (no slot synthesised). Read by
 			// the writer's single-Ref condWrap emit under `WrapMode.Keep`.
-			final hasCondOpenNewlineSlot: Bool = child.kind == Ref && !isStar && !isOptional && leadText != null && ctx.trivia
-				&& isTriviaBearing(typePath) && child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline');
+			final hasCondOpenNewlineSlot: Bool = hasCondOpenNewlineField(child, typePath, isStar, isOptional, leadText);
 			final condOpenNewlineLocal: String = '_condOpenNewline_$fieldName';
 			emitFieldLeadIn(parseSteps, isStar, isOptional, kwLead, leadText, hasCondOpenNewlineSlot);
 			// Field value — by kind.
@@ -859,7 +858,7 @@ class Lowering {
 			// conditional branch in the codegen (`parseFnName`, `ruleReturnCT`,
 			// `ruleCtorPath` all return the plain form for non-bearing refs in
 			// trivia mode).
-			final hasKwTriviaSlots: Bool = (isOptionalRef || isOptionalKwStar) && kwLead != null && ctx.trivia && isTriviaBearing(typePath);
+			final hasKwTriviaSlots: Bool = hasKwTriviaSlotsField(typePath, isOptionalRef, isOptionalKwStar, kwLead);
 			final afterKwLocal: String = '_afterKw_$fieldName';
 			final kwLeadingLocal: String = '_kwLeading_$fieldName';
 			final beforeKwNlLocal: String = '_beforeKwNl_$fieldName';
@@ -905,7 +904,7 @@ class Lowering {
 			// to the struct literal via the post-switch `hasAfterTrailSlot`
 			// branch below — `_afterTrail_<field>` is pre-declared in the
 			// optional-Ref step to default-null in the absent branch.
-			final hasAfterTrailSlot: Bool = child.kind == Ref && !isStar && trailText != null && ctx.trivia && isTriviaBearing(typePath);
+			final hasAfterTrailSlot: Bool = hasAfterTrailSlotField(child, typePath, isStar, trailText);
 			final afterTrailLocal: String = '_afterTrail_$fieldName';
 			// `@:trailOpt("close")` on a struct Ref field: optional
 			// trailing literal. The required-trail block above reads the
@@ -5871,6 +5870,37 @@ expectLit(ctx, $v{trailText}));
 			});
 		}
 		return { hasNewlineAfterSlot: hasNewlineAfterSlot, newlineAfterLocal: newlineAfterLocal };
+	}
+
+	/**
+	 * A mandatory-Ref condition field of a `@:fmt(condWrap)` struct opted in via
+	 * `@:fmt(captureCondOpenNewline)` grows a `<field>CondOpenNewline:Bool` slot
+	 * (trivia+bearing only). True for exactly that field shape. Pure predicate
+	 * lifted from `lowerStruct`.
+	 */
+	private function hasCondOpenNewlineField(
+		child: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, leadText: Null<String>
+	): Bool {
+		return child.kind == Ref && !isStar && !isOptional && leadText != null && ctx.trivia && isTriviaBearing(typePath)
+			&& child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline');
+	}
+
+	/**
+	 * An `@:optional @:kw(...)` Ref (or optional-kw Star) field in trivia mode
+	 * on a bearing rule grows the kw-trivia sidecar slots (`<field>AfterKw` etc.).
+	 * True for exactly that shape. Pure predicate lifted from `lowerStruct`.
+	 */
+	private function hasKwTriviaSlotsField(typePath: String, isOptionalRef: Bool, isOptionalKwStar: Bool, kwLead: Null<String>): Bool {
+		return (isOptionalRef || isOptionalKwStar) && kwLead != null && ctx.trivia && isTriviaBearing(typePath);
+	}
+
+	/**
+	 * A mandatory-Ref field with `@:trail` in trivia mode on a bearing rule
+	 * grows the `<field>AfterTrail` same-line-comment slot. True for exactly that
+	 * shape. Pure predicate lifted from `lowerStruct`.
+	 */
+	private function hasAfterTrailSlotField(child: ShapeNode, typePath: String, isStar: Bool, trailText: Null<String>): Bool {
+		return child.kind == Ref && !isStar && trailText != null && ctx.trivia && isTriviaBearing(typePath);
 	}
 
 }
