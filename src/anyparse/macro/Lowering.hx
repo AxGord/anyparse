@@ -676,22 +676,8 @@ class Lowering {
 		// VoidReturnStmt`), the trail literal is emitted unconditionally
 		// after the keyword (D48).
 		final kwLeadBranch: Null<String> = branch.annotations.get('kw.leadText');
-		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get('lit.litList') == null) {
-			final trailBranch: Null<String> = branch.annotations.get('lit.trailText');
-			return trailBranch != null
-				? macro {
-					skipWs(ctx);
-					expectKw(ctx, $v{kwLeadBranch});
-					skipWs(ctx);
-					expectLit(ctx, $v{trailBranch});
-					return $ctorRef;
-				}
-				: macro {
-					skipWs(ctx);
-					expectKw(ctx, $v{kwLeadBranch});
-					return $ctorRef;
-				};
-		}
+		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get('lit.litList') == null)
+			return lowerKwZeroArgBranch(branch, ctorRef, kwLeadBranch);
 
 		// Classify branch shape.
 		final litList: Null<Array<String>> = branch.annotations.get('lit.litList');
@@ -709,15 +695,7 @@ class Lowering {
 		// rolls back to the next branch. Symbolic literals (`;`, `=`, `{`)
 		// route through plain `expectLit` — a word boundary after them
 		// would falsely reject sequences like `;foo`.
-		if (litList != null && litList.length == 1 && children.length == 0) {
-			final lit: String = litList[0];
-			final expectCall: Expr = endsWithWordChar(lit) ? macro expectKw(ctx, $v{lit}) : macro expectLit(ctx, $v{lit});
-			return macro {
-				skipWs(ctx);
-				$expectCall;
-				return $ctorRef;
-			};
-		}
+		if (litList != null && litList.length == 1 && children.length == 0) return lowerSingleLitBranch(ctorRef, litList[0]);
 
 		// Case 2: single-arg ctor with @:lit(multi) — literals map to
 		// ident values of the field type. When the first literal ends
@@ -725,30 +703,7 @@ class Lowering {
 		// for every dispatch; mixed symbolic / word-like literal sets
 		// inside the same `@:lit(...)` are rejected at macro time since
 		// their dispatch semantics would be inconsistent.
-		if (litList != null && litList.length > 1 && children.length == 1) {
-			final wordLike: Bool = endsWithWordChar(litList[0]);
-			for (lit in litList) {
-				if (endsWithWordChar(lit) != wordLike) {
-					Context.fatalError(
-						'Lowering: multi-@:lit set mixes word-like and symbolic literals: ${litList.join(', ')}', Context.currentPos()
-					);
-				}
-			}
-			final matchFnName: String = wordLike ? 'matchKw' : 'matchLit';
-			final attempts: Array<Expr> = [];
-			for (lit in litList) {
-				final valueExpr: Expr = { expr: EConst(CIdent(lit)), pos: Context.currentPos() };
-				final call: Expr = { expr: ECall(ctorRef, [valueExpr]), pos: Context.currentPos() };
-				final matchCall: Expr = {
-					expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{lit}]),
-					pos: Context.currentPos(),
-				};
-				attempts.push(macro if ($matchCall) return $call);
-			}
-			final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
-			final body: Array<Expr> = [macro skipWs(ctx)].concat(attempts).concat([failExpr]);
-			return macro $b{body};
-		}
+		if (litList != null && litList.length > 1 && children.length == 1) return lowerMultiLitBranch(ctorRef, litList);
 
 		// Case 4: single-arg ctor wrapping Array<Ref> with @:lead/@:trail and
 		// optional @:sep. No-sep variant terminates the loop by peeking at
@@ -5452,6 +5407,76 @@ expectLit(ctx, $v{trailText}));
 			final _operand: $operandCT = $recurseCall;
 			return $ctorCall;
 		};
+	}
+
+	/**
+	 * Case 0: zero-arg ctor with `@:kw` (no `@:lit`). Emits `expectKw` with
+	 * word-boundary enforcement; when `@:trail` is present the trail literal
+	 * is emitted unconditionally after the keyword (D48). Extracted from
+	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 */
+	private function lowerKwZeroArgBranch(branch: ShapeNode, ctorRef: Expr, kwLeadBranch: String): Expr {
+		final trailBranch: Null<String> = branch.annotations.get('lit.trailText');
+		return trailBranch != null
+			? macro {
+				skipWs(ctx);
+				expectKw(ctx, $v{kwLeadBranch});
+				skipWs(ctx);
+				expectLit(ctx, $v{trailBranch});
+				return $ctorRef;
+			}
+			: macro {
+				skipWs(ctx);
+				expectKw(ctx, $v{kwLeadBranch});
+				return $ctorRef;
+			};
+	}
+
+	/**
+	 * Case 1: zero-arg ctor with `@:lit(single)`. A word-ending literal
+	 * routes through the word-boundary-checking `expectKw`; a symbolic
+	 * literal through plain `expectLit`. Extracted from `lowerEnumBranch` so
+	 * the dispatcher stays under the complexity gate.
+	 */
+	private function lowerSingleLitBranch(ctorRef: Expr, lit: String): Expr {
+		final expectCall: Expr = endsWithWordChar(lit) ? macro expectKw(ctx, $v{lit}) : macro expectLit(ctx, $v{lit});
+		return macro {
+			skipWs(ctx);
+			$expectCall;
+			return $ctorRef;
+		};
+	}
+
+	/**
+	 * Case 2: single-arg ctor with `@:lit(multi)` — literals map to ident
+	 * values of the field type. Each literal dispatches via `matchKw` (word-
+	 * like set) or `matchLit` (symbolic set); a mixed set is rejected at
+	 * macro time. Extracted from `lowerEnumBranch` so the dispatcher stays
+	 * under the complexity gate.
+	 */
+	private function lowerMultiLitBranch(ctorRef: Expr, litList: Array<String>): Expr {
+		final wordLike: Bool = endsWithWordChar(litList[0]);
+		for (lit in litList) {
+			if (endsWithWordChar(lit) != wordLike) {
+				Context.fatalError(
+					'Lowering: multi-@:lit set mixes word-like and symbolic literals: ${litList.join(', ')}', Context.currentPos()
+				);
+			}
+		}
+		final matchFnName: String = wordLike ? 'matchKw' : 'matchLit';
+		final attempts: Array<Expr> = [];
+		for (lit in litList) {
+			final valueExpr: Expr = { expr: EConst(CIdent(lit)), pos: Context.currentPos() };
+			final call: Expr = { expr: ECall(ctorRef, [valueExpr]), pos: Context.currentPos() };
+			final matchCall: Expr = {
+				expr: ECall(macro $i{matchFnName}, [macro ctx, macro $v{lit}]),
+				pos: Context.currentPos(),
+			};
+			attempts.push(macro if ($matchCall) return $call);
+		}
+		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
+		final body: Array<Expr> = [macro skipWs(ctx)].concat(attempts).concat([failExpr]);
+		return macro $b{body};
 	}
 
 }
