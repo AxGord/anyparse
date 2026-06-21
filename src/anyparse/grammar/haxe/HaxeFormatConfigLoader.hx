@@ -1589,52 +1589,11 @@ final class HaxeFormatConfigLoader {
 		final gap: Null<WhitespacePolicy> = opening != null ? parenGapToKwAfter(opening) : null;
 		final insideOpen: Null<WhitespacePolicy> = opening != null ? parenOpeningToInnerPad(opening) : null;
 		final insideClose: Null<WhitespacePolicy> = closing != null ? whitespaceToRuntime(closing) : null;
-		inline function applyIf(): Void {
-			if (gap != null) opt.ifPolicy = gap;
-			if (insideOpen != null) opt.ifCondParensInsideOpen = insideOpen;
-			if (insideClose != null) opt.ifCondParensInsideClose = insideClose;
-		}
-		inline function applyWhile(): Void {
-			if (gap != null) opt.whilePolicy = gap;
-			if (insideOpen != null) opt.whileCondParensInsideOpen = insideOpen;
-			if (insideClose != null) opt.whileCondParensInsideClose = insideClose;
-		}
-		inline function applySwitch(): Void {
-			if (gap != null) opt.switchPolicy = gap;
-			if (insideOpen != null) opt.switchCondParensInsideOpen = insideOpen;
-			if (insideClose != null) opt.switchCondParensInsideClose = insideClose;
-		}
-		inline function applyCatch(): Void {
-			if (gap != null) opt.catchParensGap = gap;
-			if (insideOpen != null) opt.catchParensInsideOpen = insideOpen;
-			if (insideClose != null) opt.catchParensInsideClose = insideClose;
-		}
-		inline function applySharp(): Void {
-			if (gap != null) opt.sharpCondParensGap = gap;
-			if (insideOpen != null) opt.sharpCondParensInsideOpen = insideOpen;
-			if (insideClose != null) opt.sharpCondParensInsideClose = insideClose;
-		}
 		if (isCatchAll) {
-			applyIf();
-			applyWhile();
-			applySwitch();
-			applyCatch();
-			applySharp();
+			for (c in ['if', 'while', 'switch', 'catch', 'sharp']) applyParenTriple(opt, c, gap, insideOpen, insideClose);
 			return;
 		}
-		switch category {
-			case 'if':
-				applyIf();
-			case 'while':
-				applyWhile();
-			case 'switch':
-				applySwitch();
-			case 'catch':
-				applyCatch();
-			case 'sharp':
-				applySharp();
-			case _:
-		}
+		if (category != null) applyParenTriple(opt, category, gap, insideOpen, insideClose);
 	}
 
 	private static function keywordPlacementToRuntime(policy: HxFormatKeywordPlacement): KeywordPlacement {
@@ -1698,6 +1657,50 @@ final class HaxeFormatConfigLoader {
 			opt.expressionWrappingWrap = wrapRulesFromConfig(section.expressionWrapping, opt.expressionWrappingWrap);
 		if (section.implementsExtends != null)
 			opt.implementsExtendsWrap = wrapRulesFromConfig(section.implementsExtends, opt.implementsExtendsWrap, true);
+	}
+
+	private static function applyParenTriple(
+		opt: HxModuleWriteOptions, category: String, gap: Null<WhitespacePolicy>, insideOpen: Null<WhitespacePolicy>,
+		insideClose: Null<WhitespacePolicy>
+	): Void {
+		switch category {
+			case 'if':
+				if (gap != null) opt.ifPolicy = gap;
+				if (insideOpen != null) opt.ifCondParensInsideOpen = insideOpen;
+				if (insideClose != null)
+					opt.ifCondParensInsideClose = insideClose;
+			case 'while':
+				if (gap != null) opt.whilePolicy = gap;
+				if (insideOpen != null) opt.whileCondParensInsideOpen = insideOpen;
+				if (insideClose != null)
+					opt.whileCondParensInsideClose = insideClose;
+			case 'switch':
+				if (gap != null) opt.switchPolicy = gap;
+				if (insideOpen != null) opt.switchCondParensInsideOpen = insideOpen;
+				if (insideClose != null)
+					opt.switchCondParensInsideClose = insideClose;
+			case _:
+				applyParenTripleCatchSharp(opt, category, gap, insideOpen, insideClose);
+		}
+	}
+
+	private static function applyParenTripleCatchSharp(
+		opt: HxModuleWriteOptions, category: String, gap: Null<WhitespacePolicy>, insideOpen: Null<WhitespacePolicy>,
+		insideClose: Null<WhitespacePolicy>
+	): Void {
+		switch category {
+			case 'catch':
+				if (gap != null) opt.catchParensGap = gap;
+				if (insideOpen != null) opt.catchParensInsideOpen = insideOpen;
+				if (insideClose != null)
+					opt.catchParensInsideClose = insideClose;
+			case 'sharp':
+				if (gap != null) opt.sharpCondParensGap = gap;
+				if (insideOpen != null) opt.sharpCondParensInsideOpen = insideOpen;
+				if (insideClose != null)
+					opt.sharpCondParensInsideClose = insideClose;
+			case _:
+		}
 	}
 
 }
