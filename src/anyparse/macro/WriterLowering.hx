@@ -6949,9 +6949,7 @@ class WriterLowering {
 		// width is identical (1) so layout decisions stay byte-identical
 		// outside the after-hardline state; `Next` branch unaffected.
 		final defaultExpr: Expr = optSpaceUpstream ? macro _de() : macro _dossh();
-		final cases: Array<Case> = [
-			{ values: [nextPat], expr: macro _dhl(), guard: null },
-		];
+		final cases: Array<Case> = [{ values: [nextPat], expr: macro _dhl(), guard: null },];
 		return { expr: ESwitch(knobExpr, cases, defaultExpr), pos: Context.currentPos() };
 	}
 
@@ -7084,9 +7082,7 @@ class WriterLowering {
 		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [
-			{ values: [beforePat, bothPat], expr: macro _dt(' '), guard: null },
-		];
+		final cases: Array<Case> = [{ values: [beforePat, bothPat], expr: macro _dt(' '), guard: null },];
 		final optAccess: Expr = optFieldAccess(flagName);
 		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
 	}
@@ -7128,9 +7124,7 @@ class WriterLowering {
 		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [
-			{ values: [afterPat, bothPat], expr: macro _dt(' '), guard: null },
-		];
+		final cases: Array<Case> = [{ values: [afterPat, bothPat], expr: macro _dt(' '), guard: null },];
 		final optAccess: Expr = optFieldAccess(flagName);
 		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
 	}
@@ -7160,9 +7154,7 @@ class WriterLowering {
 		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
 		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [
-			{ values: [beforePat, bothPat], expr: macro _dt(' '), guard: null },
-		];
+		final cases: Array<Case> = [{ values: [beforePat, bothPat], expr: macro _dt(' '), guard: null },];
 		final optAccess: Expr = optFieldAccess(flagName);
 		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
 	}
@@ -7266,9 +7258,7 @@ class WriterLowering {
 		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final matchValues: Array<Expr> = isClose ? [beforePat, bothPat] : [afterPat, bothPat];
-		final cases: Array<Case> = [
-			{ values: matchValues, expr: macro _dt(' '), guard: null },
-		];
+		final cases: Array<Case> = [{ values: matchValues, expr: macro _dt(' '), guard: null },];
 		final optAccess: Expr = optFieldAccess(optFieldName);
 		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
 	}
@@ -7300,9 +7290,7 @@ class WriterLowering {
 		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final matchValues: Array<Expr> = isClose ? [beforePat, bothPat] : [afterPat, bothPat];
-		final spaceCases: Array<Case> = [
-			{ values: matchValues, expr: macro _dt(' '), guard: null },
-		];
+		final spaceCases: Array<Case> = [{ values: matchValues, expr: macro _dt(' '), guard: null },];
 		final suffix: String = isClose ? 'Close' : 'Open';
 		final mapField: Expr = optFieldAccess('mapLiteralBrackets' + suffix);
 		final comprField: Expr = optFieldAccess('comprehensionBrackets' + suffix);
@@ -7746,9 +7734,7 @@ class WriterLowering {
 			: {
 				final kwOpt: Expr = optFieldAccess(kwPolicyFlagName);
 				{
-					expr: ESwitch(kwOpt, [
-						{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },
-					], macro _de()),
+					expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },], macro _de()),
 					pos: Context.currentPos(),
 				};
 			};
@@ -7932,18 +7918,14 @@ class WriterLowering {
 		final bpPathLC: Array<String> = ['anyparse', 'format', 'BracePlacement'];
 		final nextPatLC: Expr = MacroStringTools.toFieldExpr(bpPathLC.concat(['Next']));
 		final isNextExpr: Expr = {
-			expr: ESwitch(macro opt.leftCurly, [
-				{ values: [nextPatLC], expr: macro true, guard: null },
-			], macro false),
+			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro true, guard: null },], macro false),
 			pos: Context.currentPos(),
 		};
 		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
 		final sameSepBlock: Expr = hasKwSlots
 			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
 			: {
-				expr: ESwitch(macro opt.leftCurly, [
-					{ values: [nextPatLC], expr: macro _dhl(), guard: null },
-				], sameSepBlockSameLayout),
+				expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null },], sameSepBlockSameLayout),
 				pos: Context.currentPos(),
 			};
 		final blockLayoutExpr: Expr = macro _dc([$sameSepBlock, $writeCall]);
@@ -8115,9 +8097,7 @@ class WriterLowering {
 		// `nextLayoutExpr` (no behavioural change for body types without
 		// block ctors).
 		final keepNextLayoutExpr: Expr = if (blockSplit.tagged.length > 0) {
-			final cases: Array<Case> = [
-				{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null },
-			];
+			final cases: Array<Case> = [{ values: blockSplit.tagged, expr: blockLayoutExpr, guard: null },];
 			cases.push({ values: [macro _], expr: nextLayoutExpr, guard: null });
 			{ expr: ESwitch(bodyValueExpr, cases, null), pos: Context.currentPos() };
 		}
@@ -8138,16 +8118,12 @@ class WriterLowering {
 		final keepLayoutExpr: Expr = if (ifStmtPattern != null) {
 			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-			final elseIfCases: Array<Case> = [
-				{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },
-			];
+			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
 			final elseIfSwitchForKeep: Expr = {
 				expr: ESwitch(macro opt.elseIf, elseIfCases, keepBaseExpr),
 				pos: Context.currentPos(),
 			};
-			final outerKeepBodyCases: Array<Case> = [
-				{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null },
-			];
+			final outerKeepBodyCases: Array<Case> = [{ values: [ifStmtPattern], expr: elseIfSwitchForKeep, guard: null },];
 			outerKeepBodyCases.push({ values: [macro _], expr: keepBaseExpr, guard: null });
 			{ expr: ESwitch(bodyValueExpr, outerKeepBodyCases, null), pos: Context.currentPos() };
 		}
@@ -8170,9 +8146,7 @@ class WriterLowering {
 		if (ifStmtPattern != null) {
 			final kpPath: Array<String> = ['anyparse', 'format', 'KeywordPlacement'];
 			final kpNextPat: Expr = MacroStringTools.toFieldExpr(kpPath.concat(['Next']));
-			final elseIfCases: Array<Case> = [
-				{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },
-			];
+			final elseIfCases: Array<Case> = [{ values: [kpNextPat], expr: nextLayoutExpr, guard: null },];
 			final elseIfSwitch: Expr = {
 				expr: ESwitch(macro opt.elseIf, elseIfCases, sameLayoutExpr),
 				pos: Context.currentPos(),
@@ -8191,9 +8165,7 @@ class WriterLowering {
 		// elseIf overrides — "keep" means preserve source, so the
 		// policy-driven layout shortcuts do not apply. Route the whole
 		// wrap through `keepLayoutExpr` when `opt.<flag> == Keep`.
-		final outerKeepCases: Array<Case> = [
-			{ values: [keepPat], expr: keepLayoutExpr, guard: null },
-		];
+		final outerKeepCases: Array<Case> = [{ values: [keepPat], expr: keepLayoutExpr, guard: null },];
 		final coreWrapExpr: Expr = { expr: ESwitch(optFlag, outerKeepCases, bodySwitch), pos: Context.currentPos() };
 		// ω-trivia-after-trail: when a synth slot access was forwarded
 		// from `lowerStruct` (i.e. the IMMEDIATELY preceding sibling was
