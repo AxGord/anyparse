@@ -1926,132 +1926,13 @@ class WriterLowering {
 					// `)` trail): the trail emits the token literally and
 					// bodyPolicyWrap replaces the default ` ` separator.
 					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
-						// ω-tryBody: optional `@:fmt(kwPolicy('<flag>'))` companion
-						// names a sibling `WhitespacePolicy` knob on the parent
-						// ctor (e.g. `tryPolicy` on `HxStatement.TryCatchStmt`).
-						// The `Same` inline separator inside `bodyPolicyWrap`
-						// then routes through `opt.<flag>` so the parent kw-
-						// policy controls the inline gap (empty under `None`,
-						// space under `After`/`Both`). Without the companion
-						// the wrap defaults to `_dt(' ')` and the parent ctor
-						// is responsible for stripping its kw-trail-space (as
-						// before).
-						final kwPolicyFlag: Null<String> = child.fmtReadString('kwPolicy');
-						// ω-trivia-after-trail: when the IMMEDIATELY preceding
-						// sibling is a mandatory Ref carrying `@:trail` in
-						// trivia-bearing mode, read its synth slot
-						// `value.<priorField>AfterTrail:Null<String>` and
-						// thread it into `bodyPolicyWrap`. The wrap prepends
-						// ` //<comment>` (cuddled to the prior trail token) +
-						// forces the body onto its own line at +cols indent
-						// regardless of the runtime bodyPolicy. Currently
-						// fired by `HxIfStmt.thenBody` after `cond`'s `)`
-						// trail. Plain mode and non-bearing rules see a null
-						// `prevTrailFieldName` and skip the threading.
-						final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
-							? null
-							: {
-								expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-								pos: Context.currentPos()
-							};
-						// ω-556-then-body-leading-comment: the bare non-first Ref
-						// body grows a `<field>BeforeLeading:Array<String>` slot
-						// (`isBareNonFirstRef`, same host as the BeforeNewline
-						// signal below). Thread it into `bodyPolicyWrap` so own-line
-						// comments captured between the preceding token (the cond's
-						// `)` trail / the prior body terminator) and the body's
-						// first token survive round-trip. The kw-led else-body path
-						// already has this via `kwLeadingExpr`; this closes the
-						// bare-Ref then-body asymmetry. Gated on the same
-						// `(!isFirstField || firstFieldNlOptIn)` predicate the parser
-						// uses for `hasBeforeLeadingSlot`; null off the slot path →
-						// byte-inert. (`firstFieldNlOptIn` is declared just below
-						// alongside `bodyOnSameLineExpr` — both share the gate.)
-						// Slice ω-expr-body-keep: `BodyPolicy.Keep` on bare-Ref
-						// body fields reads the source-shape signal from the
-						// existing `<field>BeforeNewline:Bool` synth slot
-						// (created by `isBareNonFirstRef` in TriviaTypeSynth) —
-						// `BodyOnSameLine` is its inverse, no separate slot
-						// needed. First-field bodyPolicy paths (Case 3) have no
-						// BeforeNewline slot, so the !isFirstField gate keeps
-						// the pre-slice null fallback there. Without ctx.trivia
-						// the slot doesn't exist either; null falls back to the
-						// `Same` layout inside `bodyPolicyWrap` (matches the
-						// pre-slice plain-mode behaviour for Keep).
-						//
-						// ω-untyped-keep-trybody: `@:fmt(beforeNewlineSlotFirst)`
-						// opt-in extends slot reading to first-field bodyPolicy
-						// paths. Pairs with parent Alt-branch
-						// `@:fmt(forwardNewlineForBody)` (Case 3 omits post-kw
-						// `skipWs`) and `TriviaTypeSynth.isBareNonFirstRef` /
-						// `Lowering.hasBeforeNewlineSlot` first-field allowances.
-						// Currently consumed by `HxTryCatchStmt.body` for
-						// `untypedBody=Keep` source-shape preservation.
-						final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-						final bodyOnSameLineExpr: Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn)
-							? beforeNewlineNotAccess(fieldName)
-							: null;
-						// ω-556-then-body-leading-comment: own-line leading-comment
-						// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
-						// sibling shares the `isBareNonFirstRef` host).
-						final beforeLeadingExpr: Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn)
-							? beforeLeadingAccess(fieldName)
-							: null;
-						// ω-untyped-body-stmt-override: forward all
-						// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
-						// entries on this field to bodyPolicyWrap. Each entry
-						// flips the parent's own bodyPolicy flag to the named
-						// replacement when the body's runtime ctor matches —
-						// e.g. `HxTryCatchStmt.body` reads `untypedBody`
-						// instead of `tryBody` when the value is
-						// `HxStatement.UntypedBlockStmt`. Multiple entries
-						// cascade through a runtime ternary chain.
-						final policyOverrides: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyOverride');
-						// ω-issue-168: `@:fmt(bodyAllmanIndentForCtor('<ctor>',
-						// '<optField>', '<lcField>'))` runtime-overrides the
-						// policy-decided layout when the body's runtime ctor
-						// matches `<ctor>` AND `opt.<optField>` is true AND
-						// `opt.<lcField>` is `Next` AND the body's writeCall
-						// emits internal hardlines (multi-line). The override
-						// places the body in Allman position with extra
-						// `+cols` indent on contents, regardless of Keep/Same/
-						// Next/FitLine policy. Currently consumed by
-						// `HxForExpr.body` for the `[for (x in xs) {<multi>}]`
-						// shape; HxIfExpr.thenBranch deliberately does NOT
-						// carry this meta because fork keeps `if (cond) {`
-						// cuddled.
-						final bodyAllmanIndentArgs: Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
-						// ω-expression-if-with-blocks: `@:fmt(inlineBlockBodyIfFlag(
-						// '<flagName>'))` reads `opt.<flagName>:Bool` at runtime;
-						// when true AND body's runtime ctor is `BlockExpr`, wrap
-						// the body's writeCall result in `D.flatten(…)` to collapse
-						// `{<hardline>stmt;<hardline>}` to `{stmt;}` regardless of
-						// width. Mirrors fork's `expressionIfWithBlocks` knob
-						// (`MarkSameLine.markBody` with `includeBrOpen=true` →
-						// `markBlockBody` Same-policy collapse). Currently consumed
-						// by `HxIfExpr.thenBranch` / `elseBranch`. Non-BlockExpr
-						// bodies and flag-false fall through to the regular policy
-						// cascade.
-						final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
-						parts.push(bodyPolicyWrap({
-							flagName: bodyPolicyFlag,
-							exprFlagName: bodyPolicyExprFlag,
-							writeCall: writeCall,
-							bodyValueExpr: fieldAccess,
-							bodyTypePath: refName,
-							hasElseIf: hasElseIf,
-							elseFieldName: elseFieldName,
-							bodyOnSameLineExpr: bodyOnSameLineExpr,
-							kwPolicyFlagName: kwPolicyFlag,
-							afterTrailExpr: afterTrailExpr,
-							beforeLeadingExpr: beforeLeadingExpr,
-							indentObjArgs: indentObjArgs,
-							policyOverrides: policyOverrides,
-							bodyAllmanIndentArgs: bodyAllmanIndentArgs,
-							fallbackFlagName: fallbackFlag,
-							inlineBlockBodyArgs: inlineBlockBodyArgs,
-						}));
-						justWrappedBody = { access: fieldAccess, typePath: refName };
+						// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
+						justWrappedBody = emitBodyPolicyBareRef(
+							child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall,
+							fieldAccess, refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag
+						);
+						// (after-trail / before-leading / before-newline / policy-override / allman /
+						// inline-block companion metas live in emitBodyPolicyBareRef)
 					} else {
 						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
 						// `HxFnDecl.body:HxFnBody`) routes the inter-field
@@ -15327,6 +15208,135 @@ class WriterLowering {
 			i--;
 		}
 		return chain;
+	}
+
+	/**
+	 * Emit a bare-Ref body field carrying `@:fmt(bodyPolicy(...))` (kw-less,
+	 * lead-less, non-raw — the `case Ref` non-first / first-field body site).
+	 * Reads the kwPolicy / after-trail / before-leading / before-newline /
+	 * policy-override / allman / inline-block companion metas, threads them into a
+	 * single `bodyPolicyWrap`, pushes onto `parts`, and returns the
+	 * `justWrappedBody` PrevBodyInfo. Extracted from `lowerStruct`.
+	 */
+	private function emitBodyPolicyBareRef(
+		child: ShapeNode, parts: Array<Expr>, prevTrailFieldName: Null<String>, isFirstField: Bool, fieldName: String,
+		bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr, fieldAccess: Expr, refName: String, hasElseIf: Bool,
+		elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, fallbackFlag: Null<String>
+	): PrevBodyInfo {
+		final kwPolicyFlag: Null<String> = child.fmtReadString('kwPolicy');
+		// ω-trivia-after-trail: when the IMMEDIATELY preceding
+		// sibling is a mandatory Ref carrying `@:trail` in
+		// trivia-bearing mode, read its synth slot
+		// `value.<priorField>AfterTrail:Null<String>` and
+		// thread it into `bodyPolicyWrap`. The wrap prepends
+		// ` //<comment>` (cuddled to the prior trail token) +
+		// forces the body onto its own line at +cols indent
+		// regardless of the runtime bodyPolicy. Currently
+		// fired by `HxIfStmt.thenBody` after `cond`'s `)`
+		// trail. Plain mode and non-bearing rules see a null
+		// `prevTrailFieldName` and skip the threading.
+		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
+			? null
+			: {
+				expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+				pos: Context.currentPos()
+			};
+		// ω-556-then-body-leading-comment: the bare non-first Ref
+		// body grows a `<field>BeforeLeading:Array<String>` slot
+		// (`isBareNonFirstRef`, same host as the BeforeNewline
+		// signal below). Thread it into `bodyPolicyWrap` so own-line
+		// comments captured between the preceding token (the cond's
+		// `)` trail / the prior body terminator) and the body's
+		// first token survive round-trip. The kw-led else-body path
+		// already has this via `kwLeadingExpr`; this closes the
+		// bare-Ref then-body asymmetry. Gated on the same
+		// `(!isFirstField || firstFieldNlOptIn)` predicate the parser
+		// uses for `hasBeforeLeadingSlot`; null off the slot path →
+		// byte-inert. (`firstFieldNlOptIn` is declared just below
+		// alongside `bodyOnSameLineExpr` — both share the gate.)
+		// Slice ω-expr-body-keep: `BodyPolicy.Keep` on bare-Ref
+		// body fields reads the source-shape signal from the
+		// existing `<field>BeforeNewline:Bool` synth slot
+		// (created by `isBareNonFirstRef` in TriviaTypeSynth) —
+		// `BodyOnSameLine` is its inverse, no separate slot
+		// needed. First-field bodyPolicy paths (Case 3) have no
+		// BeforeNewline slot, so the !isFirstField gate keeps
+		// the pre-slice null fallback there. Without ctx.trivia
+		// the slot doesn't exist either; null falls back to the
+		// `Same` layout inside `bodyPolicyWrap` (matches the
+		// pre-slice plain-mode behaviour for Keep).
+		//
+		// ω-untyped-keep-trybody: `@:fmt(beforeNewlineSlotFirst)`
+		// opt-in extends slot reading to first-field bodyPolicy
+		// paths. Pairs with parent Alt-branch
+		// `@:fmt(forwardNewlineForBody)` (Case 3 omits post-kw
+		// `skipWs`) and `TriviaTypeSynth.isBareNonFirstRef` /
+		// `Lowering.hasBeforeNewlineSlot` first-field allowances.
+		// Currently consumed by `HxTryCatchStmt.body` for
+		// `untypedBody=Keep` source-shape preservation.
+		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
+		final bodyOnSameLineExpr: Null<Expr> = ctx.trivia && (
+			!isFirstField || firstFieldNlOptIn
+		) ? beforeNewlineNotAccess(fieldName) : null;
+		// ω-556-then-body-leading-comment: own-line leading-comment
+		// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
+		// sibling shares the `isBareNonFirstRef` host).
+		final beforeLeadingExpr: Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn) ? beforeLeadingAccess(fieldName) : null;
+		// ω-untyped-body-stmt-override: forward all
+		// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
+		// entries on this field to bodyPolicyWrap. Each entry
+		// flips the parent's own bodyPolicy flag to the named
+		// replacement when the body's runtime ctor matches —
+		// e.g. `HxTryCatchStmt.body` reads `untypedBody`
+		// instead of `tryBody` when the value is
+		// `HxStatement.UntypedBlockStmt`. Multiple entries
+		// cascade through a runtime ternary chain.
+		final policyOverrides: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyOverride');
+		// ω-issue-168: `@:fmt(bodyAllmanIndentForCtor('<ctor>',
+		// '<optField>', '<lcField>'))` runtime-overrides the
+		// policy-decided layout when the body's runtime ctor
+		// matches `<ctor>` AND `opt.<optField>` is true AND
+		// `opt.<lcField>` is `Next` AND the body's writeCall
+		// emits internal hardlines (multi-line). The override
+		// places the body in Allman position with extra
+		// `+cols` indent on contents, regardless of Keep/Same/
+		// Next/FitLine policy. Currently consumed by
+		// `HxForExpr.body` for the `[for (x in xs) {<multi>}]`
+		// shape; HxIfExpr.thenBranch deliberately does NOT
+		// carry this meta because fork keeps `if (cond) {`
+		// cuddled.
+		final bodyAllmanIndentArgs: Null<Array<String>> = child.fmtReadStringArgs('bodyAllmanIndentForCtor');
+		// ω-expression-if-with-blocks: `@:fmt(inlineBlockBodyIfFlag(
+		// '<flagName>'))` reads `opt.<flagName>:Bool` at runtime;
+		// when true AND body's runtime ctor is `BlockExpr`, wrap
+		// the body's writeCall result in `D.flatten(…)` to collapse
+		// `{<hardline>stmt;<hardline>}` to `{stmt;}` regardless of
+		// width. Mirrors fork's `expressionIfWithBlocks` knob
+		// (`MarkSameLine.markBody` with `includeBrOpen=true` →
+		// `markBlockBody` Same-policy collapse). Currently consumed
+		// by `HxIfExpr.thenBranch` / `elseBranch`. Non-BlockExpr
+		// bodies and flag-false fall through to the regular policy
+		// cascade.
+		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
+		parts.push(bodyPolicyWrap({
+			flagName: bodyPolicyFlag,
+			exprFlagName: bodyPolicyExprFlag,
+			writeCall: writeCall,
+			bodyValueExpr: fieldAccess,
+			bodyTypePath: refName,
+			hasElseIf: hasElseIf,
+			elseFieldName: elseFieldName,
+			bodyOnSameLineExpr: bodyOnSameLineExpr,
+			kwPolicyFlagName: kwPolicyFlag,
+			afterTrailExpr: afterTrailExpr,
+			beforeLeadingExpr: beforeLeadingExpr,
+			indentObjArgs: indentObjArgs,
+			policyOverrides: policyOverrides,
+			bodyAllmanIndentArgs: bodyAllmanIndentArgs,
+			fallbackFlagName: fallbackFlag,
+			inlineBlockBodyArgs: inlineBlockBodyArgs,
+		}));
+		return { access: fieldAccess, typePath: refName };
 	}
 
 }
