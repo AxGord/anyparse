@@ -94,32 +94,10 @@ final class BinaryChainEmit {
 		//     would lay out flat. Replaces the old `HARDLINE_LEN` (~1M)
 		//     inflation that conflated "has hardline anywhere" with
 		//     "rule-bound widths".
-		var total: Int = 0;
-		var maxLen: Int = 0;
-		var anyHardline: Bool = false;
-		for (i in 0...items.length) {
-			final item: Doc = items[i];
-			if (WrapList.flatLength(item) < 0) anyHardline = true;
-			final w: Int = DocMeasure.flatTokenWidth(item);
-			total += w;
-			// `anyItemLength` mirrors upstream haxe-formatter's
-			// per-item width semantic: each operand beyond the first
-			// is preceded by `op ` on its continuation line, so the
-			// rendered token width for those items includes the
-			// leading `op ` (operator + single space). The first
-			// operand has no leading operator (it sits at the call
-			// site after the assignment / open paren). Without this
-			// adjustment a chain of ~39-char operands joined by `||`
-			// would measure `maxLen=39` and miss rule 1's
-			// `anyItemLength >= 40` predicate, while upstream
-			// measures `maxLen=42` (`|| ` + 39) and the rule fires.
-			final renderedW: Int = (i == 0) ? w : (ops[i - 1].length + 1 + w);
-			if (renderedW > maxLen) maxLen = renderedW;
-		}
-		// Add ` op ` width per gap so the cascade's `totalLength` /
-		// `exceedsMaxLineLength` predicates measure the realistic flat
-		// span (`items joined by ' op '`).
-		for (i in 0...ops.length) total += ops[i].length + 2;
+		final measure: { total: Int, maxLen: Int, anyHardline: Bool } = measureChain(items, ops);
+		final total: Int = measure.total;
+		final maxLen: Int = measure.maxLen;
+		final anyHardline: Bool = measure.anyHardline;
 
 		// `nestSuppress` collapses the chain shapes' own `Nest(cols, …)`
 		// to a no-op (cols=0) so chain breaks land at the inherited
@@ -166,6 +144,10 @@ final class BinaryChainEmit {
 			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
 		}
 
+		function shapeNoWrapAt(location: WrappingLocation): Doc {
+			return shape(NoWrap, location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
+		}
+
 		// Force-break path: cascade evaluated only against
 		// `exceeds=true` (anyHardline already commits to break-mode
 		// per the prior decoupling slice). Thresholds still
@@ -191,105 +173,10 @@ final class BinaryChainEmit {
 		//     state leaves at runtime, so the extra Doc shapes are
 		//     inert. None of the current default cascades use N≥2 —
 		//     this branch is correctness insurance for future cascades.
-		if (extraThresholds.length == 0) {
-			final flat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
-			final brk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
-			// ω-chain-keep-flat (increment-6 — CONSTRAINED probe): UNWRAP the
-			// chain to a single flat NoWrap line ONLY in the cond-wrap context
-			// (`condWrapForced` — the chain was collapsed to a forced mode
-			// inside an active `@:fmt(condWrap)` paren, NOT a leading-break
-			// call-arg) AND only when a NON-FIRST operand is a call/arrow
-			// whose open delim absorbs the overflow.
-			// Mirrors fork `unwrapBoolOps`/`unwrapAddOps` which fire ONLY inside
-			// `applyArrowWrapping` (an operand-call owns the wrap), never for a
-			// bare break-mode chain. Gates (each excludes a measured regression):
-			//  - `condWrapForced` — scope to cond-wrap (excludes string_concat /
-			//    issue_299 plain assignment AND call-arg chains —
-			//    opbool_in_call_leading_break_preserved / opsub_chain_in_single_param_call).
-			//  - `isChainOps(ops)` — `&&`/`||`/`+`/`-` only (excludes ternary
-			//    `?`/`:` — the ternary dispatch shares this engine).
-			//  - `!leadingOperandOpensDelim(items[0])` — operand-1 must not be a
-			//    paren-expr/array that itself leads with an open delim (excludes
-			//    condition_first_operand_paren_no_merge, where the fork breaks
-			//    the chain instead of gluing to operand-1's `(`).
-			final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0]);
-			// `condWrapForced` forces the chain rules to {rules:[], defaultMode:FLWLB}
-			// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
-			// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
-			if (unwrapCandidate && isBreakMode(flat.mode))
-				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(
-					opt.lineWidth, shapeAt(flat), shape(NoWrap, flat.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak)
-				));
-			if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
-			// ω-unwrap-add-ops (inverse CollapsePass): for a pure opAddSub
-			// chain (`+`/`-` only) whose broken shape differs from its flat
-			// (NoWrap-glued) shape, TAG the broken branch with
-			// `CollapseAddProbe`. The marker is render-transparent (byte-inert
-			// on its own); it lets `CollapsePass` recognise this `Group(IfBreak)`
-			// as an inner add-chain and, ONLY when an enclosing op-chain
-			// committed to its broken form, collapse this IfBreak to its `flat`
-			// (NoWrap) branch — gluing the `+`/`-` separators while leaving each
-			// operand's OWN wrapping intact (a ternary / call operand still
-			// breaks via its own Group). Mirrors fork `unwrapAddOps`, which
-			// strips `+`/`-` line-ends inside a wrapped region without touching
-			// inner ternary/call breaks. opBool / ternary chains are NOT tagged
-			// (fork never `unwrapAddOps` them).
-			if (isAddSubOps(ops)) return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
-			// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
-			// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
-			// (`AfterLast`) and that contains a function-call operand. TAG the broken
-			// branch with `CollapseBoolProbe`. The marker is render-transparent
-			// (byte-inert on its own); `CollapsePass` flips it to operator-LEADING
-			// ONLY when a contained call operand overflows at its flat column (fork
-			// `reEvaluateOpBoolAfterCallParam` — strip the call breaks, re-apply
-			// opBool with `useTrailing: false`). Gated to opBool + FillLine +
-			// AfterLast + has-call so every other chain stays byte-identical.
-			// `!nestSuppress` excludes a chain that is itself a CALL ARGUMENT
-			// (`_callArgChainNest`) or wrapped by a return-context paren
-			// (`_keepChainInParen`) — fork `reEvaluateOpBoolAfterCallParam` flips
-			// only condition / bare-value opBool chains, never a chain that is a
-			// call argument (`opbool_in_call_leading_break_preserved`, which keeps
-			// its trailing layout). At this final-IfBreak path `condWrapForced` is
-			// already false (the cond-wrap collapse takes the inc6 path above), so
-			// `nestSuppress` here means call-arg / keep-in-paren.
-			final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
-				&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
-			final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
-			return WrapBoundary(Group(IfBreak(brkShape, shapeAt(flat))));
-		}
+		if (extraThresholds.length == 0)
+			return emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, evalAt, shapeAt, shapeNoWrapAt);
 
-		if (extraThresholds.length == 1) {
-			final t: Int = extraThresholds[0];
-			if (t < opt.lineWidth) {
-				// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
-				//   (firing=∅,    exceeds=no)  → rNN
-				//   (firing={t},  exceeds=no)  → rYN
-				//   (firing={t},  exceeds=yes) → rYY
-				final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
-				final rYN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, [t]);
-				final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
-				if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return WrapBoundary(shapeAt(rNN));
-				// Inner IfBreak picks between exceeds-yes and exceeds-no
-				// when the column has already crossed `t`. Outer
-				// IfWidthExceeds picks the column-vs-t answer first; the
-				// flat side bypasses the IfBreak entirely (only one
-				// valid state below `t`).
-				final brk: Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
-				return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(rNN))));
-			}
-			// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
-			//   (firing=∅,    exceeds=no)  → rNN
-			//   (firing=∅,    exceeds=yes) → rNY
-			//   (firing={t},  exceeds=yes) → rYY
-			final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
-			final rNY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
-			final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
-			if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return WrapBoundary(shapeAt(rNN));
-			// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
-			// further partitions the exceeds=yes side around `t`.
-			final brk: Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
-			return WrapBoundary(Group(IfBreak(brk, shapeAt(rNN))));
-		}
+		if (extraThresholds.length == 1) return emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt);
 
 		// 2+ extra thresholds — full enumeration without impossibility
 		// filtering. Renderer's column-aware probe at each
@@ -677,6 +564,162 @@ final class BinaryChainEmit {
 		// (`cols == indentUnit`) both arms are byte-identical.
 		final nestCols: Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
 		return Group(Nest(nestCols, Fill(enriched, Line(' '))));
+	}
+
+	/**
+	 * Build the chain Doc for the single-extra-threshold case (`extraThresholds
+	 * == [t]`). The renderer's column-aware `IfWidthExceeds(t, …)` probe selects
+	 * between the impossibility-filtered 3-state leaves. Split out of `emit` for
+	 * the complexity threshold; `evalAt` / `shapeAt` are passed as the same
+	 * closures `emit` uses.
+	 */
+	private static function emitSingleThreshold(
+		t: Int, opt: WriteOptions, evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc
+	): Doc {
+		if (t < opt.lineWidth) {
+			// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
+			//   (firing=∅,    exceeds=no)  → rNN
+			//   (firing={t},  exceeds=no)  → rYN
+			//   (firing={t},  exceeds=yes) → rYY
+			final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
+			final rYN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, [t]);
+			final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
+			if (sameRule(rNN, rYN) && sameRule(rYN, rYY)) return WrapBoundary(shapeAt(rNN));
+			// Inner IfBreak picks between exceeds-yes and exceeds-no
+			// when the column has already crossed `t`. Outer
+			// IfWidthExceeds picks the column-vs-t answer first; the
+			// flat side bypasses the IfBreak entirely (only one
+			// valid state below `t`).
+			final brk: Doc = sameRule(rYY, rYN) ? shapeAt(rYY) : Group(IfBreak(shapeAt(rYY), shapeAt(rYN)));
+			return WrapBoundary(Group(IfWidthExceeds(t, brk, shapeAt(rNN))));
+		}
+		// t > lineWidth: 3 valid states (col+w>=t implies col+w>=lineWidth):
+		//   (firing=∅,    exceeds=no)  → rNN
+		//   (firing=∅,    exceeds=yes) → rNY
+		//   (firing={t},  exceeds=yes) → rYY
+		final rNN: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
+		final rNY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
+		final rYY: { mode: WrapMode, location: WrappingLocation } = evalAt(true, [t]);
+		if (sameRule(rNN, rNY) && sameRule(rNY, rYY)) return WrapBoundary(shapeAt(rNN));
+		// Outer IfBreak picks exceeds=no/yes; inner IfWidthExceeds
+		// further partitions the exceeds=yes side around `t`.
+		final brk: Doc = sameRule(rNY, rYY) ? shapeAt(rYY) : Group(IfWidthExceeds(t, shapeAt(rYY), shapeAt(rNY)));
+		return WrapBoundary(Group(IfBreak(brk, shapeAt(rNN))));
+	}
+
+	/**
+	 * Build the chain Doc for the no-extra-threshold case (the legacy 2-state
+	 * `Group(IfBreak(…))` path plus the CollapsePass-probe / cond-wrap-unwrap
+	 * tags). Split out of `emit` for the complexity threshold; the closures are
+	 * the same ones `emit` builds — `shapeNoWrapAt` renders the forced-NoWrap
+	 * unwrap shape that bypasses the cascade-decided mode.
+	 */
+	private static function emitNoThreshold(
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, nestSuppress: Bool, condWrapForced: Bool,
+		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
+		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
+	): Doc {
+		final flat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
+		final brk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
+		// ω-chain-keep-flat (increment-6 — CONSTRAINED probe): UNWRAP the
+		// chain to a single flat NoWrap line ONLY in the cond-wrap context
+		// (`condWrapForced` — the chain was collapsed to a forced mode
+		// inside an active `@:fmt(condWrap)` paren, NOT a leading-break
+		// call-arg) AND only when a NON-FIRST operand is a call/arrow
+		// whose open delim absorbs the overflow.
+		// Mirrors fork `unwrapBoolOps`/`unwrapAddOps` which fire ONLY inside
+		// `applyArrowWrapping` (an operand-call owns the wrap), never for a
+		// bare break-mode chain. Gates (each excludes a measured regression):
+		//  - `condWrapForced` — scope to cond-wrap (excludes string_concat /
+		//    issue_299 plain assignment AND call-arg chains —
+		//    opbool_in_call_leading_break_preserved / opsub_chain_in_single_param_call).
+		//  - `isChainOps(ops)` — `&&`/`||`/`+`/`-` only (excludes ternary
+		//    `?`/`:` — the ternary dispatch shares this engine).
+		//  - `!leadingOperandOpensDelim(items[0])` — operand-1 must not be a
+		//    paren-expr/array that itself leads with an open delim (excludes
+		//    condition_first_operand_paren_no_merge, where the fork breaks
+		//    the chain instead of gluing to operand-1's `(`).
+		final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0]);
+		// `condWrapForced` forces the chain rules to {rules:[], defaultMode:FLWLB}
+		// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
+		// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.
+		if (unwrapCandidate && isBreakMode(flat.mode))
+			return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeAt(flat), shapeNoWrapAt(flat.location)));
+		if (sameRule(flat, brk)) return WrapBoundary(shapeAt(flat));
+		// ω-unwrap-add-ops (inverse CollapsePass): for a pure opAddSub
+		// chain (`+`/`-` only) whose broken shape differs from its flat
+		// (NoWrap-glued) shape, TAG the broken branch with
+		// `CollapseAddProbe`. The marker is render-transparent (byte-inert
+		// on its own); it lets `CollapsePass` recognise this `Group(IfBreak)`
+		// as an inner add-chain and, ONLY when an enclosing op-chain
+		// committed to its broken form, collapse this IfBreak to its `flat`
+		// (NoWrap) branch — gluing the `+`/`-` separators while leaving each
+		// operand's OWN wrapping intact (a ternary / call operand still
+		// breaks via its own Group). Mirrors fork `unwrapAddOps`, which
+		// strips `+`/`-` line-ends inside a wrapped region without touching
+		// inner ternary/call breaks. opBool / ternary chains are NOT tagged
+		// (fork never `unwrapAddOps` them).
+		if (isAddSubOps(ops)) return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
+		// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
+		// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
+		// (`AfterLast`) and that contains a function-call operand. TAG the broken
+		// branch with `CollapseBoolProbe`. The marker is render-transparent
+		// (byte-inert on its own); `CollapsePass` flips it to operator-LEADING
+		// ONLY when a contained call operand overflows at its flat column (fork
+		// `reEvaluateOpBoolAfterCallParam` — strip the call breaks, re-apply
+		// opBool with `useTrailing: false`). Gated to opBool + FillLine +
+		// AfterLast + has-call so every other chain stays byte-identical.
+		// `!nestSuppress` excludes a chain that is itself a CALL ARGUMENT
+		// (`_callArgChainNest`) or wrapped by a return-context paren
+		// (`_keepChainInParen`) — fork `reEvaluateOpBoolAfterCallParam` flips
+		// only condition / bare-value opBool chains, never a chain that is a
+		// call argument (`opbool_in_call_leading_break_preserved`, which keeps
+		// its trailing layout). At this final-IfBreak path `condWrapForced` is
+		// already false (the cond-wrap collapse takes the inc6 path above), so
+		// `nestSuppress` here means call-arg / keep-in-paren.
+		final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
+			&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
+		final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
+		return WrapBoundary(Group(IfBreak(brkShape, shapeAt(flat))));
+	}
+
+	/**
+	 * Flat-measure the chain operands: `total` is the joined flat span (operand
+	 * widths plus a ` op ` gap per operator), `maxLen` the widest rendered
+	 * operand (operands beyond the first include their leading `op ` per
+	 * upstream's per-item width semantic), and `anyHardline` whether any operand
+	 * has a hardline anywhere (drives the break-commit shortcut). Split out of
+	 * `emit` for the complexity threshold.
+	 */
+	private static function measureChain(items: Array<Doc>, ops: Array<String>): { total: Int, maxLen: Int, anyHardline: Bool } {
+		var total: Int = 0;
+		var maxLen: Int = 0;
+		var anyHardline: Bool = false;
+		for (i in 0...items.length) {
+			final item: Doc = items[i];
+			if (WrapList.flatLength(item) < 0) anyHardline = true;
+			final w: Int = DocMeasure.flatTokenWidth(item);
+			total += w;
+			// `anyItemLength` mirrors upstream haxe-formatter's
+			// per-item width semantic: each operand beyond the first
+			// is preceded by `op ` on its continuation line, so the
+			// rendered token width for those items includes the
+			// leading `op ` (operator + single space). The first
+			// operand has no leading operator (it sits at the call
+			// site after the assignment / open paren). Without this
+			// adjustment a chain of ~39-char operands joined by `||`
+			// would measure `maxLen=39` and miss rule 1's
+			// `anyItemLength >= 40` predicate, while upstream
+			// measures `maxLen=42` (`|| ` + 39) and the rule fires.
+			final renderedW: Int = (i == 0) ? w : (ops[i - 1].length + 1 + w);
+			if (renderedW > maxLen) maxLen = renderedW;
+		}
+		// Add ` op ` width per gap so the cascade's `totalLength` /
+		// `exceedsMaxLineLength` predicates measure the realistic flat
+		// span (`items joined by ' op '`).
+		for (i in 0...ops.length) total += ops[i].length + 2;
+		return { total: total, maxLen: maxLen, anyHardline: anyHardline };
 	}
 
 }
