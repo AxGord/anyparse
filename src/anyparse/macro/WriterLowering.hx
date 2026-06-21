@@ -2247,126 +2247,11 @@ class WriterLowering {
 							// between `)` and the catch body).
 							parts.push(bareBodyBreakWrap(writeCall, fieldAccess, refName));
 						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
-							// ω-meta-allman-objectlit: `@:fmt(allmanIndentForCtor('<ctor>'))`
-							// on a bare-Ref non-first field forces an Allman-style
-							// brace placement plus one indent step when the field's
-							// runtime value matches the named ctor. The default
-							// `_dt(' ')` separator is suppressed and the writer call
-							// is wrapped in `Nest(_cols, [hardline, writeCall])` —
-							// the hardline lands at indent base + _cols (Nest bumps
-							// the current indent), so the value's own opening
-							// literal sits one indent step deeper than the parent
-							// and the value's body picks up another step from its
-							// own internal Nest. Non-matching ctors fall through to
-							// the default `_dt(' ') + writeCall` layout.
-							//
-							// First (and currently only) consumer: `HxMetaExpr.expr`
-							// with `('ObjectLit')` so `@meta { ... }` round-trips
-							// the haxe-formatter convention of placing `{` on its
-							// own line at indent +1 regardless of the global
-							// `objectLiteralLeftCurly` knob — the meta-prefixed
-							// brace placement is structural, not configurable.
-							//
-							// Trivia-mode `BeforeNewline` signal is bypassed when
-							// the flag fires — the runtime ctor check is
-							// structurally definitive for the brace-form layout
-							// and source-newline preservation would only matter
-							// for non-brace alternatives that already fall through
-							// to the default sep path.
-							final allmanCtor: Null<String> = child.fmtReadString('allmanIndentForCtor');
-							if (allmanCtor != null) {
-								final ctorMatchExpr: Expr = macro Type.enumConstructor($fieldAccess) == $v{allmanCtor};
-								// Non-matching ctor falls through to the same
-								// BeforeNewline-aware separator the plain
-								// bare-Ref non-first branch uses below
-								// (ω-issue-48-v2 mechanism). In trivia mode the
-								// synth slot `<f>BeforeNewline` records whether
-								// source had a newline before this field's
-								// first token; preserve it so `@:m if (…)` etc.
-								// honour source-side line breaks the same way
-								// the rest of the writer does. Plain mode (no
-								// trivia signal) keeps the unconditional space.
-								final sepExpr: Expr = ctx.trivia && isTriviaBearing(typePath)
-									? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
-									: macro _dt(' ');
-								parts.push(macro {
-									final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-									final _doc: anyparse.core.Doc = $writeCall;
-									$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$sepExpr, _doc]);
-								});
-							} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.trivia && isTriviaBearing(typePath)) {
-								// ω-cond-comp-expr-body-nest: source-shape-driven
-								// body break+nest. The bare-Ref non-first slot
-								// `<f>BeforeNewline:Bool` (synth via
-								// `TriviaTypeSynth.isBareNonFirstRef`) records
-								// whether the source had a newline before this
-								// field's first token. When true the wrapper
-								// emits `Nest(_cols, [hardline, body])` so the
-								// body sits one indent step deeper than the
-								// preceding `#if`/`#elseif` keyword line; when
-								// false the wrapper emits `' ' + body` for
-								// inline single-line cond-comp expressions.
-								// Currently consumed by `HxConditionalExpr.expr`
-								// and `HxElseifExpr.expr`.
-								final nlSignal: Expr = beforeNewlineAccess(fieldName);
-								parts.push(nestBodyOnSourceNewlineWrap(writeCall, nlSignal));
-							} else {
-								// ω-issue-48-v2: in trivia mode the bare Ref field
-								// grew a `<field>BeforeNewline:Bool` slot (see
-								// `TriviaTypeSynth.isBareNonFirstRef`). Consult it
-								// to emit a hardline when the parser captured a
-								// source newline in the gap — this is the only
-								// signal available when a preceding bare-tryparse
-								// Star (e.g. `HxMemberDecl.modifiers`) is empty,
-								// since that Star has no first element whose
-								// `newlineBefore` could be read.
-								if (ctx.trivia && isTriviaBearing(typePath)) {
-									final nlAccess: Expr = beforeNewlineAccess(fieldName);
-									final triviaSepExpr: Expr = if (prevAnyStarNonEmpty != null) {
-										final prev: Expr = prevAnyStarNonEmpty;
-										macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
-									} else
-										macro $nlAccess ? _dhl() : _dt(' ');
-									// ω-598-member-leading-comment: a bare non-first
-									// Ref field (e.g. `HxMemberDecl.member`) may carry
-									// comments the parser captured in the gap between the
-									// preceding content and this field's first token —
-									// notably a multiline block comment between a member
-									// modifier (`public`) and the `var` keyword, which the
-									// modifier Star's `collectTrailingFull` rejects. Emit
-									// each captured comment after the separator, glued to
-									// the preceding line, then a hardline before the
-									// field. Empty slot → the original separator
-									// unchanged (byte-inert). Gated on `child.kind == Ref`
-									// to match `TriviaTypeSynth.isBareNonFirstRef`, the
-									// only host that grows the `BeforeLeading` slot.
-									final sepWithLeading: Expr = child.kind == Ref
-										? {
-											final leadAccess: Expr = beforeLeadingAccess(fieldName);
-											macro {
-												final _sep598: anyparse.core.Doc = $triviaSepExpr;
-												final _leadCm598: Array<String> = $leadAccess;
-												if (_leadCm598.length == 0)
-													_sep598;
-												else {
-													final _p598: Array<anyparse.core.Doc> = [_sep598];
-													for (_c598 in _leadCm598) {
-														_p598.push(leadingCommentDoc(_c598, opt));
-														_p598.push(_dhl());
-													}
-													_dc(_p598);
-												}
-											}
-										}
-										: triviaSepExpr;
-									parts.push(withPadTrailingDrop(prevPadTrailing, sepWithLeading));
-								} else if (prevAnyStarNonEmpty != null) {
-									final prev: Expr = prevAnyStarNonEmpty;
-									parts.push(withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de()));
-								} else
-									parts.push(withPadTrailingDrop(prevPadTrailing, macro _dt(' ')));
-								parts.push(writeCall);
-							}
+							// Bare-Ref non-first body: allmanIndentForCtor / nestBodyOnSourceNewline /
+							// ω-issue-48-v2 sep cascade — see emitBareRefNonFirstBody.
+							emitBareRefNonFirstBody(
+								child, parts, fieldName, typePath, fieldAccess, writeCall, prevAnyStarNonEmpty, prevPadTrailing
+							);
 						} else if (hasCondWrap && spanInfo != null) {
 							// ω-condwrap-forstmt: span mode — defer the
 							// `emitCondition` wrap to the end-field
@@ -15324,6 +15209,141 @@ class WriterLowering {
 				final _body = $bodyAccess;
 				$bodySwitchExpr;
 			};
+	}
+
+	/**
+	 * Emit the separator + writeCall for a bare-Ref NON-FIRST struct body field
+	 * (kw-less, lead-less, non-raw). Covers `@:fmt(allmanIndentForCtor)`,
+	 * `@:fmt(nestBodyOnSourceNewline)`, and the ω-issue-48-v2 BeforeNewline /
+	 * ω-598 leading-comment sep cascade. Pushes onto `parts`. Extracted from the
+	 * mandatory `case Ref` branch of `lowerStruct`.
+	 */
+	private function emitBareRefNonFirstBody(
+		child: ShapeNode, parts: Array<Expr>, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
+		prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr>
+	): Void {
+		// ω-meta-allman-objectlit: `@:fmt(allmanIndentForCtor('<ctor>'))`
+		// on a bare-Ref non-first field forces an Allman-style
+		// brace placement plus one indent step when the field's
+		// runtime value matches the named ctor. The default
+		// `_dt(' ')` separator is suppressed and the writer call
+		// is wrapped in `Nest(_cols, [hardline, writeCall])` —
+		// the hardline lands at indent base + _cols (Nest bumps
+		// the current indent), so the value's own opening
+		// literal sits one indent step deeper than the parent
+		// and the value's body picks up another step from its
+		// own internal Nest. Non-matching ctors fall through to
+		// the default `_dt(' ') + writeCall` layout.
+		//
+		// First (and currently only) consumer: `HxMetaExpr.expr`
+		// with `('ObjectLit')` so `@meta { ... }` round-trips
+		// the haxe-formatter convention of placing `{` on its
+		// own line at indent +1 regardless of the global
+		// `objectLiteralLeftCurly` knob — the meta-prefixed
+		// brace placement is structural, not configurable.
+		//
+		// Trivia-mode `BeforeNewline` signal is bypassed when
+		// the flag fires — the runtime ctor check is
+		// structurally definitive for the brace-form layout
+		// and source-newline preservation would only matter
+		// for non-brace alternatives that already fall through
+		// to the default sep path.
+		final allmanCtor: Null<String> = child.fmtReadString('allmanIndentForCtor');
+		if (allmanCtor != null) {
+			final ctorMatchExpr: Expr = macro Type.enumConstructor($fieldAccess) == $v{allmanCtor};
+			// Non-matching ctor falls through to the same
+			// BeforeNewline-aware separator the plain
+			// bare-Ref non-first branch uses below
+			// (ω-issue-48-v2 mechanism). In trivia mode the
+			// synth slot `<f>BeforeNewline` records whether
+			// source had a newline before this field's
+			// first token; preserve it so `@:m if (…)` etc.
+			// honour source-side line breaks the same way
+			// the rest of the writer does. Plain mode (no
+			// trivia signal) keeps the unconditional space.
+			final sepExpr: Expr = ctx.trivia && isTriviaBearing(typePath)
+				? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
+				: macro _dt(' ');
+			parts.push(macro {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				final _doc: anyparse.core.Doc = $writeCall;
+				$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$sepExpr, _doc]);
+			});
+		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.trivia && isTriviaBearing(typePath)) {
+			// ω-cond-comp-expr-body-nest: source-shape-driven
+			// body break+nest. The bare-Ref non-first slot
+			// `<f>BeforeNewline:Bool` (synth via
+			// `TriviaTypeSynth.isBareNonFirstRef`) records
+			// whether the source had a newline before this
+			// field's first token. When true the wrapper
+			// emits `Nest(_cols, [hardline, body])` so the
+			// body sits one indent step deeper than the
+			// preceding `#if`/`#elseif` keyword line; when
+			// false the wrapper emits `' ' + body` for
+			// inline single-line cond-comp expressions.
+			// Currently consumed by `HxConditionalExpr.expr`
+			// and `HxElseifExpr.expr`.
+			final nlSignal: Expr = beforeNewlineAccess(fieldName);
+			parts.push(nestBodyOnSourceNewlineWrap(writeCall, nlSignal));
+		} else {
+			// ω-issue-48-v2: in trivia mode the bare Ref field
+			// grew a `<field>BeforeNewline:Bool` slot (see
+			// `TriviaTypeSynth.isBareNonFirstRef`). Consult it
+			// to emit a hardline when the parser captured a
+			// source newline in the gap — this is the only
+			// signal available when a preceding bare-tryparse
+			// Star (e.g. `HxMemberDecl.modifiers`) is empty,
+			// since that Star has no first element whose
+			// `newlineBefore` could be read.
+			if (ctx.trivia && isTriviaBearing(typePath)) {
+				final nlAccess: Expr = beforeNewlineAccess(fieldName);
+				final triviaSepExpr: Expr = if (prevAnyStarNonEmpty != null) {
+					final prev: Expr = prevAnyStarNonEmpty;
+					macro $prev ? ($nlAccess ? _dhl() : _dt(' ')) : _de();
+				} else
+					macro $nlAccess ? _dhl() : _dt(' ');
+				// ω-598-member-leading-comment: own-line gap comments — see buildBeforeLeadingSep.
+				final sepWithLeading: Expr = buildBeforeLeadingSep(child, fieldName, triviaSepExpr);
+				parts.push(withPadTrailingDrop(prevPadTrailing, sepWithLeading));
+			} else if (prevAnyStarNonEmpty != null) {
+				final prev: Expr = prevAnyStarNonEmpty;
+				parts.push(withPadTrailingDrop(prevPadTrailing, macro $prev ? _dt(' ') : _de()));
+			} else
+				parts.push(withPadTrailingDrop(prevPadTrailing, macro _dt(' ')));
+			parts.push(writeCall);
+		}
+	}
+
+	/**
+	 * ω-598-member-leading-comment: wrap a bare non-first Ref field's trivia
+	 * separator so own-line comments the parser captured in the gap (e.g. a
+	 * block comment between a member modifier and the `var` keyword) are emitted
+	 * glued to the preceding line, each followed by a hardline. Returns the
+	 * unmodified separator when the field is not a Ref (no `BeforeLeading` slot)
+	 * or the slot is empty. Extracted from `emitBareRefNonFirstBody`.
+	 */
+	private function buildBeforeLeadingSep(child: ShapeNode, fieldName: String, triviaSepExpr: Expr): Expr {
+		// Gated on `child.kind == Ref` to match `TriviaTypeSynth.isBareNonFirstRef`,
+		// the only host that grows the `BeforeLeading` slot.
+		return child.kind == Ref
+			? {
+				final leadAccess: Expr = beforeLeadingAccess(fieldName);
+				macro {
+					final _sep598: anyparse.core.Doc = $triviaSepExpr;
+					final _leadCm598: Array<String> = $leadAccess;
+					if (_leadCm598.length == 0)
+						_sep598;
+					else {
+						final _p598: Array<anyparse.core.Doc> = [_sep598];
+						for (_c598 in _leadCm598) {
+							_p598.push(leadingCommentDoc(_c598, opt));
+							_p598.push(_dhl());
+						}
+						_dc(_p598);
+					}
+				}
+			}
+			: triviaSepExpr;
 	}
 
 }
