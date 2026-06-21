@@ -13512,6 +13512,7 @@ class WriterLowering {
 		final fieldAccess: Expr = c.fieldAccess;
 		final writerOptExpr: Expr = c.writerOptExpr;
 		final triviaElemCall: Expr = c.triviaElemCall;
+		final multiClauseExpr: Expr = triviaTryparseHeritageMultiExpr();
 		return macro {
 			final _arr = $fieldAccess;
 			if (_arr.length == 0)
@@ -13544,93 +13545,124 @@ class WriterLowering {
 				} else if (_items.length <= 1) {
 					_dn(_cols, _dc([_dile(opt.lineWidth, _dhl(), _dt(' ')), _items[0]]));
 				} else {
-					// B4 ω-implements-extends-wrap: config-driven multi-clause
-					// layout. Resolve the fork-style WrapRules cascade at write
-					// time from opt.implementsExtendsWrap. lineLength rules gate
-					// via IfLineExceeds (prefix-aware); itemCount / defaultMode
-					// resolve as plain Haxe. additionalIndent comes from the
-					// cascade (defaultAdditionalIndent; anyparse WrapRule has no
-					// per-rule indent — see HaxeFormat.defaultImplementsExtendsWrap).
-					final _rules = opt.implementsExtendsWrap;
-					final _ai: Int = _cols * (_rules.defaultAdditionalIndent ?? 0);
-					// Resolve mode + lineLength threshold from the first matching
-					// rule (itemCount evaluated now; lineLength deferred to the
-					// render gate via _thr). _thr<0 means "apply mode always".
-					var _mode: anyparse.format.wrap.WrapMode = _rules.defaultMode;
-					var _thr: Int = -1;
-					var _ri: Int = 0;
-					var _matched: Bool = false;
-					while (_ri < _rules.rules.length && !_matched) {
-						final _rule = _rules.rules[_ri];
-						_ri++;
-						var _llThr: Int = -1;
-						var _ok: Bool = true;
-						var _ci2: Int = 0;
-						while (_ci2 < _rule.conditions.length) {
-							final _cond = _rule.conditions[_ci2];
-							_ci2++;
-							switch (_cond.cond) {
-								case anyparse.format.wrap.WrapConditionType.ItemCountLargerThan:
-									if (_arr.length < _cond.value)
-										_ok = false;
-								case anyparse.format.wrap.WrapConditionType.ItemCountLessThan:
-									if (_arr.length > _cond.value)
-										_ok = false;
-								case anyparse.format.wrap.WrapConditionType.LineLengthLargerThan:
-									_llThr = _cond.value;
-								case anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength:
-									_llThr = opt.lineWidth;
-								case _:
-									_ok = false;
-							}
-						}
-						if (_ok) {
-							_mode = _rule.mode;
-							_thr = _llThr;
-							_matched = true;
-						}
+					$multiClauseExpr;
+				}
+			}
+		};
+	}
+
+	/**
+	 * Tryparse-Star heritage multi-clause layout (B4 ω-implements-extends-wrap):
+	 * config-driven multi-clause wrap. Resolves the fork-style WrapRules
+	 * cascade (via triviaTryparseHeritageResolveExpr) then builds the broken
+	 * layout for the resolved mode plus the glued fallback, gated via the
+	 * lineLength threshold. References the runtime `_arr`/`_items`/`_cols`/
+	 * `opt` locals declared in `triviaTryparseHeritageExpr`'s emitted scope.
+	 * Extracted so the heritage emit stays under the complexity gate.
+	 */
+	private static function triviaTryparseHeritageMultiExpr(): Expr {
+		final resolveExpr: Expr = triviaTryparseHeritageResolveExpr();
+		return macro {
+			// B4 ω-implements-extends-wrap: config-driven multi-clause
+			// layout. Resolve the fork-style WrapRules cascade at write
+			// time from opt.implementsExtendsWrap. lineLength rules gate
+			// via IfLineExceeds (prefix-aware); itemCount / defaultMode
+			// resolve as plain Haxe. additionalIndent comes from the
+			// cascade (defaultAdditionalIndent; anyparse WrapRule has no
+			// per-rule indent — see HaxeFormat.defaultImplementsExtendsWrap).
+			final _rules = opt.implementsExtendsWrap;
+			final _ai: Int = _cols * (_rules.defaultAdditionalIndent ?? 0);
+			// Resolve mode + lineLength threshold from the first matching
+			// rule (itemCount evaluated now; lineLength deferred to the
+			// render gate via _thr). _thr<0 means "apply mode always".
+			var _mode: anyparse.format.wrap.WrapMode = _rules.defaultMode;
+			var _thr: Int = -1;
+			$resolveExpr;
+			// Build the broken layout for the resolved mode, plus the
+			// all-glued (space-joined) fallback used when the lineLength
+			// gate does not fire.
+			final _glued: Array<anyparse.core.Doc> = [_dt(' ')];
+			var _gj: Int = 0;
+			while (_gj < _items.length) {
+				if (_gj > 0) _glued.push(_dt(' '));
+				_glued.push(_items[_gj]);
+				_gj++;
+			}
+			final _gluedDoc: anyparse.core.Doc = _dc(_glued);
+			final _broken: anyparse.core.Doc = switch (_mode) {
+				case anyparse.format.wrap.WrapMode.OnePerLine:
+					final _ds: Array<anyparse.core.Doc> = [];
+					var _k: Int = 0;
+					while (_k < _items.length) {
+						_ds.push(_dhl());
+						_ds.push(_items[_k]);
+						_k++;
 					}
-					// Build the broken layout for the resolved mode, plus the
-					// all-glued (space-joined) fallback used when the lineLength
-					// gate does not fire.
-					final _glued: Array<anyparse.core.Doc> = [_dt(' ')];
-					var _gj: Int = 0;
-					while (_gj < _items.length) {
-						if (_gj > 0) _glued.push(_dt(' '));
-						_glued.push(_items[_gj]);
-						_gj++;
+					_dn(_ai, _dc(_ds));
+				case anyparse.format.wrap.WrapMode.OnePerLineAfterFirst:
+					final _ds: Array<anyparse.core.Doc> = [_dt(' '), _items[0]];
+					var _k: Int = 1;
+					while (_k < _items.length) {
+						_ds.push(_dhl());
+						_ds.push(_items[_k]);
+						_k++;
 					}
-					final _gluedDoc: anyparse.core.Doc = _dc(_glued);
-					final _broken: anyparse.core.Doc = switch (_mode) {
-						case anyparse.format.wrap.WrapMode.OnePerLine:
-							final _ds: Array<anyparse.core.Doc> = [];
-							var _k: Int = 0;
-							while (_k < _items.length) {
-								_ds.push(_dhl());
-								_ds.push(_items[_k]);
-								_k++;
-							}
-							_dn(_ai, _dc(_ds));
-						case anyparse.format.wrap.WrapMode.OnePerLineAfterFirst:
-							final _ds: Array<anyparse.core.Doc> = [_dt(' '), _items[0]];
-							var _k: Int = 1;
-							while (_k < _items.length) {
-								_ds.push(_dhl());
-								_ds.push(_items[_k]);
-								_k++;
-							}
-							_dn(_ai, _dc(_ds));
-						case anyparse.format.wrap.WrapMode.FillLine | anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak:
-							_dn(_ai, _dc([_dt(' '), _dfill(_items, _dl())]));
+					_dn(_ai, _dc(_ds));
+				case anyparse.format.wrap.WrapMode.FillLine | anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak:
+					_dn(_ai, _dc([_dt(' '), _dfill(_items, _dl())]));
+				case _:
+					_gluedDoc;
+			};
+			if (_mode == anyparse.format.wrap.WrapMode.NoWrap)
+				_gluedDoc;
+			else if (_thr < 0)
+				_broken;
+			else
+				_dile(_thr, _broken, _gluedDoc);
+		};
+	}
+
+	/**
+	 * Tryparse-Star heritage WrapRules cascade resolution (B4
+	 * ω-implements-extends-wrap): walks `_rules.rules`, evaluates each rule's
+	 * itemCount / lineLength conditions, and assigns the first matching
+	 * rule's `_mode` + lineLength `_thr`. References the runtime `_rules`/
+	 * `_arr`/`_mode`/`_thr`/`opt` locals declared in
+	 * `triviaTryparseHeritageMultiExpr`'s emitted scope. Extracted so the
+	 * multi-clause layout stays under the complexity gate.
+	 */
+	private static function triviaTryparseHeritageResolveExpr(): Expr {
+		return macro {
+			var _ri: Int = 0;
+			var _matched: Bool = false;
+			while (_ri < _rules.rules.length && !_matched) {
+				final _rule = _rules.rules[_ri];
+				_ri++;
+				var _llThr: Int = -1;
+				var _ok: Bool = true;
+				var _ci2: Int = 0;
+				while (_ci2 < _rule.conditions.length) {
+					final _cond = _rule.conditions[_ci2];
+					_ci2++;
+					switch (_cond.cond) {
+						case anyparse.format.wrap.WrapConditionType.ItemCountLargerThan:
+							if (_arr.length < _cond.value)
+								_ok = false;
+						case anyparse.format.wrap.WrapConditionType.ItemCountLessThan:
+							if (_arr.length > _cond.value)
+								_ok = false;
+						case anyparse.format.wrap.WrapConditionType.LineLengthLargerThan:
+							_llThr = _cond.value;
+						case anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength:
+							_llThr = opt.lineWidth;
 						case _:
-							_gluedDoc;
-					};
-					if (_mode == anyparse.format.wrap.WrapMode.NoWrap)
-						_gluedDoc;
-					else if (_thr < 0)
-						_broken;
-					else
-						_dile(_thr, _broken, _gluedDoc);
+							_ok = false;
+					}
+				}
+				if (_ok) {
+					_mode = _rule.mode;
+					_thr = _llThr;
+					_matched = true;
 				}
 			}
 		};
@@ -13800,31 +13832,11 @@ class WriterLowering {
 		final cascadeBlanksCount: Expr = c.cascadeBlanksCount;
 		final subsequentSepDoc: Expr = c.subsequentSepDoc;
 		final firstSepExpr: Expr = c.firstSepExpr;
-		final metaPolicyExpr: Expr = c.metaPolicyExpr;
 		final forceInlineSep: Bool = c.forceInlineSep;
+		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr();
 		return macro {
 			if (_t.leadingComments.length > 0) {
-				// ω-D16-padleading-first-comment-no-dup: padLeading
-				// already emitted `_dhl()` for the first element when
-				// `_padHardline` is true (driven by `_arr[0].newlineBefore`).
-				// Both reflect the SAME source newline between the
-				// prior token and the stmt's trivia — a second `_dhl()`
-				// here produces a spurious blank line (visible as
-				// `#if sys\n\n\t\t// comment` for HxConditionalStmt.body
-				// with `@:fmt(padLeading)` and a leading line comment
-				// on the first body stmt). Skip the dup only on the
-				// first iteration when padLeading fired as a hardline;
-				// inter-stmt path (`_si > 0`) and non-padLeading
-				// consumers stay byte-identical.
-				if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
-				if (_t.blankBefore && _si > 0) _docs.push(_dhl());
-				var _ci: Int = 0;
-				while (_ci < _t.leadingComments.length) {
-					_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
-					_docs.push(_dhl());
-					_ci++;
-				}
-				if (_t.blankAfterLeadingComments) _docs.push(_dhl());
+				$leadCommentEmit;
 			} else if (_flatCase) {
 				_docs.push(_dt(' '));
 			} else if (_nestBody) {
@@ -13898,17 +13910,54 @@ class WriterLowering {
 	}
 
 	/**
+	 * Tryparse-Star leading-comment separator emit (the body of the
+	 * `_t.leadingComments.length > 0` arm in the separator cascade):
+	 * padLeading-dup guard + blank-before + per-comment hardline emit +
+	 * blank-after. References the runtime `_si`/`_padLeading`/`_padHardline`/
+	 * `_t`/`_docs`/`opt` locals declared in the emitted scope. Extracted so
+	 * the separator cascade stays under the complexity gate.
+	 */
+	private static function triviaTryparseLeadCommentSepExpr(): Expr {
+		return macro {
+			// ω-D16-padleading-first-comment-no-dup: padLeading
+			// already emitted `_dhl()` for the first element when
+			// `_padHardline` is true (driven by `_arr[0].newlineBefore`).
+			// Both reflect the SAME source newline between the
+			// prior token and the stmt's trivia — a second `_dhl()`
+			// here produces a spurious blank line (visible as
+			// `#if sys\n\n\t\t// comment` for HxConditionalStmt.body
+			// with `@:fmt(padLeading)` and a leading line comment
+			// on the first body stmt). Skip the dup only on the
+			// first iteration when padLeading fired as a hardline;
+			// inter-stmt path (`_si > 0`) and non-padLeading
+			// consumers stay byte-identical.
+			if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
+			if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+			var _ci: Int = 0;
+			while (_ci < _t.leadingComments.length) {
+				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+				_docs.push(_dhl());
+				_ci++;
+			}
+			if (_t.blankAfterLeadingComments) _docs.push(_dhl());
+		};
+	}
+
+	/**
 	 * Tryparse-Star main trailing assembly: the post-loop tail-sep emit,
-	 * trailing pad / meta-policy hardline, orphan-trail-comment docs, and
-	 * the flat-case / nestBody / cond-increase / default wrap dispatch.
-	 * Returns the spliced statement; references the runtime locals declared
-	 * in `triviaTryparseMainExpr`'s emitted scope. Extracted so the main
-	 * builder stays under the complexity gate.
+	 * trailing pad / meta-policy hardline, orphan-trail-comment docs (via
+	 * triviaTryparseTrailDocsExpr), and the wrap dispatch (via
+	 * triviaTryparseWrapDispatchExpr). Returns the spliced statement;
+	 * references the runtime locals declared in `triviaTryparseMainExpr`'s
+	 * emitted scope. Extracted so the main builder stays under the
+	 * complexity gate.
 	 */
 	private static function triviaTryparseAssemblyExpr(c: TryparseStarCtx): Expr {
 		final tryparseBlockEndedTrailEmit: Expr = c.tryparseBlockEndedTrailEmit;
 		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
 		final finalWrapDocs: Expr = c.finalWrapDocs;
+		final trailDocsExpr: Expr = triviaTryparseTrailDocsExpr();
+		final wrapDispatch: Expr = triviaTryparseWrapDispatchExpr(finalWrapDocs);
 		return macro {
 			$tryparseBlockEndedTrailEmit;
 			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
@@ -13941,6 +13990,21 @@ class WriterLowering {
 			// body cases (only-comment) keep body-level indent — the
 			// trail concat fold below restores that path.
 			final _trailDocs: Array<anyparse.core.Doc> = [];
+			$trailDocsExpr;
+			$wrapDispatch;
+		};
+	}
+
+	/**
+	 * Tryparse-Star orphan-trail-comment docs build (the `_trailLC.length > 0`
+	 * loop): pushes hardline + per-comment doc into `_trailDocs`, with the
+	 * trailBB lead-blank and trailBA tail-blank. References the runtime
+	 * `_trailDocs`/`_trailLC`/`_trailBB`/`_trailBA`/`_arr`/`opt` locals.
+	 * Extracted so `triviaTryparseAssemblyExpr` stays under the complexity
+	 * gate.
+	 */
+	private static function triviaTryparseTrailDocsExpr(): Expr {
+		return macro {
 			if (_trailLC.length > 0) {
 				var _ti: Int = 0;
 				while (_ti < _trailLC.length) {
@@ -13957,6 +14021,19 @@ class WriterLowering {
 				// the empty line is trimmed by the renderer (default).
 				if (_trailBA) _trailDocs.push(_dhl());
 			}
+		};
+	}
+
+	/**
+	 * Tryparse-Star terminal wrap dispatch (the flat-case / nestBody /
+	 * cond-increase / default `if/else` chain producing the final `_dwb`
+	 * Doc). `finalWrapDocs` is the default-branch terminal. References the
+	 * runtime `_docs`/`_trailDocs`/`_flatCase`/`_nestBody`/`_condIncrease`/
+	 * `_cols`/`opt` locals. Extracted so `triviaTryparseAssemblyExpr` stays
+	 * under the complexity gate.
+	 */
+	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr): Expr {
+		return macro {
 			// ω-force-flat-engine sister-coverage: tryparse Star is used
 			// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
 			// which can sit under wrap-cascade Flatten parents in expression
