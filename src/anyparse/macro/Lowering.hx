@@ -666,36 +666,7 @@ class Lowering {
 		// prefix ops, extend Case 5 to route through `expectKw` the same
 		// way Cases 1 and 2 dispatch by `endsWithWordChar`.
 		final prefixOp: Null<String> = branch.annotations.get('prefix.op');
-		if (prefixOp != null) {
-			final children: Array<ShapeNode> = branch.children;
-			if (children.length != 1 || children[0].kind != Ref) {
-				Context.fatalError('Lowering: @:prefix branch must have exactly one Ref child (the operand)', Context.currentPos());
-			}
-			final refName: String = children[0].annotations.get('base.ref');
-			final enumSimple: String = simpleName(typePath);
-			if (simpleName(refName) != enumSimple) {
-				Context.fatalError('Lowering: @:prefix operand must reference the same enum ($enumSimple)', Context.currentPos());
-			}
-			if (endsWithWordChar(prefixOp)) {
-				Context.fatalError(
-					'Lowering: @:prefix operator must be symbolic (word-like prefix ops not supported yet): "$prefixOp"',
-					Context.currentPos()
-				);
-			}
-			final operandCT: ComplexType = ruleReturnCT(typePath);
-			final recurseCall: Expr = {
-				expr: ECall(macro $i{recurseFnName}, [macro ctx]),
-				pos: Context.currentPos(),
-			};
-			final ctorCall: Expr = { expr: ECall(ctorRef, [macro _operand]), pos: Context.currentPos() };
-			return macro {
-				skipWs(ctx);
-				expectLit(ctx, $v{prefixOp});
-				skipWs(ctx);
-				final _operand: $operandCT = $recurseCall;
-				return $ctorCall;
-			};
-		}
+		if (prefixOp != null) return lowerPrefixBranch(branch, typePath, ctorRef, recurseFnName, prefixOp);
 
 		// Case 0: zero-arg ctor with @:kw (no @:lit). Parallel to Case 1
 		// but driven by the Kw strategy annotation instead of the Lit
@@ -5444,6 +5415,43 @@ expectLit(ctx, $v{trailText}));
 		}
 		parseSteps.push(macro skipWs(ctx));
 		parseSteps.push(macro expectLit(ctx, $v{closeText}));
+	}
+
+	/**
+	 * Case 5: unary-prefix branch (`@:prefix("-")`). A ctor with a single
+	 * `Ref` child that references the same enum: consume the prefix literal,
+	 * recurse into `recurseFnName` (the atom fn for Pratt enums), and build
+	 * the ctor around the returned operand. Extracted from `lowerEnumBranch`
+	 * so the dispatcher stays under the complexity gate.
+	 */
+	private function lowerPrefixBranch(branch: ShapeNode, typePath: String, ctorRef: Expr, recurseFnName: String, prefixOp: String): Expr {
+		final children: Array<ShapeNode> = branch.children;
+		if (children.length != 1 || children[0].kind != Ref) {
+			Context.fatalError('Lowering: @:prefix branch must have exactly one Ref child (the operand)', Context.currentPos());
+		}
+		final refName: String = children[0].annotations.get('base.ref');
+		final enumSimple: String = simpleName(typePath);
+		if (simpleName(refName) != enumSimple) {
+			Context.fatalError('Lowering: @:prefix operand must reference the same enum ($enumSimple)', Context.currentPos());
+		}
+		if (endsWithWordChar(prefixOp)) {
+			Context.fatalError(
+				'Lowering: @:prefix operator must be symbolic (word-like prefix ops not supported yet): "$prefixOp"', Context.currentPos()
+			);
+		}
+		final operandCT: ComplexType = ruleReturnCT(typePath);
+		final recurseCall: Expr = {
+			expr: ECall(macro $i{recurseFnName}, [macro ctx]),
+			pos: Context.currentPos(),
+		};
+		final ctorCall: Expr = { expr: ECall(ctorRef, [macro _operand]), pos: Context.currentPos() };
+		return macro {
+			skipWs(ctx);
+			expectLit(ctx, $v{prefixOp});
+			skipWs(ctx);
+			final _operand: $operandCT = $recurseCall;
+			return $ctorCall;
+		};
 	}
 
 }
