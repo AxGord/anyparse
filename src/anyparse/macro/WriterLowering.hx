@@ -12040,22 +12040,7 @@ class WriterLowering {
 		// single-line, mirroring fork `getTypeInfo`'s `findLowestIndex` span
 		// which counts only the type's own leading comment + leading meta.
 		// Absent flag → null → byte-identical to pre-slice.
-		final triviaMultilineArgs: Null<Array<String>> = starNode.fmtReadStringArgs('multilineWhenLeadingTriviaSpansLines');
-		final triviaMultilineExpr: Null<Expr> = if (triviaMultilineArgs == null)
-			null
-		else {
-			if (triviaMultilineArgs.length != 2)
-				Context.fatalError(
-					'WriterLowering: @:fmt(multilineWhenLeadingTriviaSpansLines) expects exactly 2 string args (metaField, declField), got ${triviaMultilineArgs.length}',
-					Context.currentPos()
-				);
-			final pos: Position = Context.currentPos();
-			final metaField: String = triviaMultilineArgs[0];
-			final declField: String = triviaMultilineArgs[1];
-			final metaAccess: Expr = { expr: EField(macro _t.node, metaField), pos: pos };
-			final beforeNlAccess: Expr = { expr: EField(macro _t.node, declField + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: pos };
-			macro (_t.leadingComments.length > 0 || ($metaAccess.length > 0 && $beforeNlAccess));
-		}
+		final triviaMultilineExpr: Null<Expr> = buildTriviaMultilineExpr(starNode);
 		final afterCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAfterCtor');
 		final afterCtorInfos: Array<AfterCtorBlankInfo> = [
 			for (args in afterCtorAllArgs) buildAfterCtorBlankInfo(elemRefName, args, null)
@@ -12086,80 +12071,20 @@ class WriterLowering {
 		final betweenCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorByLevel');
 		final tailTransparentAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorTailTransparent');
 		final headTransparentAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesBetweenSameCtorHeadTransparent');
-		final transparentByClassifier: Map<String, { ctors: Array<String>, tailAdapter: Null<String>, headAdapter: Null<String> }> = [];
-		inline function ingestTransparent(args: Array<String>, isTail: Bool, metaName: String): Void {
-			if (args.length != 3)
-				Context.fatalError(
-					'WriterLowering: @:fmt($metaName) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
-					Context.currentPos()
-				);
-			final cf: String = args[0];
-			final ctor: String = args[1];
-			final adapter: String = args[2];
-			var entry: Null<{ ctors: Array<String>, tailAdapter: Null<String>, headAdapter: Null<String> }> = transparentByClassifier[cf];
-			if (entry == null) {
-				entry = { ctors: [], tailAdapter: null, headAdapter: null };
-				transparentByClassifier[cf] = entry;
-			}
-			if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
-			if (isTail) {
-				if (entry.tailAdapter != null && entry.tailAdapter != adapter)
-					Context.fatalError(
-						'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.tailAdapter}" and "$adapter"; one shared tail adapter per Star+classifier',
-						Context.currentPos()
-					);
-				entry.tailAdapter = adapter;
-			} else {
-				if (entry.headAdapter != null && entry.headAdapter != adapter)
-					Context.fatalError(
-						'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.headAdapter}" and "$adapter"; one shared head adapter per Star+classifier',
-						Context.currentPos()
-					);
-				entry.headAdapter = adapter;
-			}
-		}
-		for (args in tailTransparentAllArgs) ingestTransparent(args, true, 'blankLinesBetweenSameCtorTailTransparent');
-		for (args in headTransparentAllArgs) ingestTransparent(args, false, 'blankLinesBetweenSameCtorHeadTransparent');
-		final betweenCtorInfos: Array<BetweenCtorBlankInfo> = [
-			for (args in betweenCtorAllArgs) {
-				final classifier: String = args[0];
-				final tt: Null<{
-					ctors: Array<String>,
-					tailAdapter: Null<String>,
-					headAdapter: Null<String>
-				}> = transparentByClassifier[classifier];
-				buildBetweenCtorBlankInfo(
-					elemRefName, args, tt != null ? tt.ctors : [], tt != null ? tt.tailAdapter : null, tt != null ? tt.headAdapter : null
-				);
-			}
-		];
+		final transparentByClassifier: Map<String, TransparentEntry> = [];
+		for (args in tailTransparentAllArgs)
+			ingestTransparentArg(transparentByClassifier, args, true, 'blankLinesBetweenSameCtorTailTransparent');
+		for (args in headTransparentAllArgs)
+			ingestTransparentArg(transparentByClassifier, args, false, 'blankLinesBetweenSameCtorHeadTransparent');
 		final transitionAcrossAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesOnTransitionAcross');
-		final transitionAcrossInfos: Array<TransitionAcrossInfo> = [
-			for (args in transitionAcrossAllArgs) {
-				final classifier: String = args[0];
-				final tt: Null<{
-					ctors: Array<String>,
-					tailAdapter: Null<String>,
-					headAdapter: Null<String>
-				}> = transparentByClassifier[classifier];
-				buildTransitionAcrossInfo(
-					elemRefName, args, tt != null ? tt.ctors : [], tt != null ? tt.tailAdapter : null, tt != null ? tt.headAdapter : null
-				);
-			}
-		];
+		final ctorBlankInfos: {
+			between: Array<BetweenCtorBlankInfo>,
+			transition: Array<TransitionAcrossInfo>
+		} = buildCtorBlankInfos(elemRefName, betweenCtorAllArgs, transitionAcrossAllArgs, transparentByClassifier);
 		final headCtorAllArgs: Array<Array<String>> = starNode.fmtReadStringArgsAll('blankLinesAtHeadIfCtor');
 		final headCtorInfos: Array<HeadCtorBlankInfo> = [
 			for (args in headCtorAllArgs) buildHeadCtorBlankInfo(elemRefName, args)
 		];
-		for (cf in transparentByClassifier.keys()) {
-			final hasBetween: Bool = Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf);
-			final hasTransition: Bool = Lambda.exists(transitionAcrossInfos, info -> info.classifierFieldName == cf);
-			if (!hasBetween && !hasTransition)
-				Context.fatalError(
-					'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) or @:fmt(blankLinesOnTransitionAcross) on the same Star',
-					Context.currentPos()
-				);
-		}
 		// NB: the trivia-multiline override is intentionally NOT threaded into
 		// `blankLinesBetweenSameCtorIfNot` (betweenSingleLineTypes, inverted).
 		// That rule's blank between two single-line type pairs is OWNED by it
@@ -12179,8 +12104,8 @@ class WriterLowering {
 		return {
 			afterCtorInfos: afterCtorInfos,
 			beforeCtorInfos: beforeCtorInfos,
-			betweenCtorInfos: betweenCtorInfos,
-			transitionAcrossInfos: transitionAcrossInfos,
+			betweenCtorInfos: ctorBlankInfos.between,
+			transitionAcrossInfos: ctorBlankInfos.transition,
 			headCtorInfos: headCtorInfos,
 			betweenSameCtorIfNotInfos: betweenSameCtorIfNotInfos,
 		};
@@ -14096,6 +14021,113 @@ class WriterLowering {
 		};
 	}
 
+	/**
+	 * ω-leading-trivia-multiline — build the per-element `_t`-scoped
+	 * boolean for `@:fmt(multilineWhenLeadingTriviaSpansLines('<metaField>',
+	 * '<declField>'))`, OR-ed into the `'multiline'` predicate of every
+	 * predicate-gated blank rule. Returns null when the flag is absent
+	 * (byte-identical to pre-slice). Extracted from
+	 * `readCascadeInfosFromStar` to keep that reader below the gate.
+	 */
+	private function buildTriviaMultilineExpr(starNode: ShapeNode): Null<Expr> {
+		final triviaMultilineArgs: Null<Array<String>> = starNode.fmtReadStringArgs('multilineWhenLeadingTriviaSpansLines');
+		if (triviaMultilineArgs == null) return null;
+		if (triviaMultilineArgs.length != 2)
+			Context.fatalError(
+				'WriterLowering: @:fmt(multilineWhenLeadingTriviaSpansLines) expects exactly 2 string args (metaField, declField), got ${triviaMultilineArgs.length}',
+				Context.currentPos()
+			);
+		final pos: Position = Context.currentPos();
+		final metaField: String = triviaMultilineArgs[0];
+		final declField: String = triviaMultilineArgs[1];
+		final metaAccess: Expr = { expr: EField(macro _t.node, metaField), pos: pos };
+		final beforeNlAccess: Expr = { expr: EField(macro _t.node, declField + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX), pos: pos };
+		return macro (_t.leadingComments.length > 0 || ($metaAccess.length > 0 && $beforeNlAccess));
+	}
+
+	/**
+	 * Fold one `@:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent)`
+	 * arg-triple (classifierField, ctorName, adapterOptField) into the
+	 * per-classifier `transparentByClassifier` accumulator, validating
+	 * arity and one-shared-adapter-per-side. Extracted from
+	 * `readCascadeInfosFromStar` (was a local closure folding its guards
+	 * into the parent's complexity).
+	 */
+	private function ingestTransparentArg(
+		transparentByClassifier: Map<String, TransparentEntry>, args: Array<String>, isTail: Bool, metaName: String
+	): Void {
+		if (args.length != 3)
+			Context.fatalError(
+				'WriterLowering: @:fmt($metaName) expects exactly 3 string args (classifierField, ctorName, adapterOptField), got ${args.length}',
+				Context.currentPos()
+			);
+		final cf: String = args[0];
+		final ctor: String = args[1];
+		final adapter: String = args[2];
+		var entry: Null<TransparentEntry> = transparentByClassifier[cf];
+		if (entry == null) {
+			entry = { ctors: [], tailAdapter: null, headAdapter: null };
+			transparentByClassifier[cf] = entry;
+		}
+		if (entry.ctors.indexOf(ctor) < 0) entry.ctors.push(ctor);
+		if (isTail) {
+			if (entry.tailAdapter != null && entry.tailAdapter != adapter)
+				Context.fatalError(
+					'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.tailAdapter}" and "$adapter"; one shared tail adapter per Star+classifier',
+					Context.currentPos()
+				);
+			entry.tailAdapter = adapter;
+		} else {
+			if (entry.headAdapter != null && entry.headAdapter != adapter)
+				Context.fatalError(
+					'WriterLowering: @:fmt($metaName) adapter mismatch for classifier "$cf" — got "${entry.headAdapter}" and "$adapter"; one shared head adapter per Star+classifier',
+					Context.currentPos()
+				);
+			entry.headAdapter = adapter;
+		}
+	}
+
+	/**
+	 * Build the `betweenCtorInfos` + `transitionAcrossInfos` lists from
+	 * their arg-lists, threading each classifier's transparent-ctor entry,
+	 * then verify every accumulated transparent classifier has a matching
+	 * between/transition rule on the same Star. Extracted from
+	 * `readCascadeInfosFromStar` to keep that reader below the gate.
+	 */
+	private function buildCtorBlankInfos(
+		elemRefName: String, betweenCtorAllArgs: Array<Array<String>>, transitionAcrossAllArgs: Array<Array<String>>,
+		transparentByClassifier: Map<String, TransparentEntry>
+	): { between: Array<BetweenCtorBlankInfo>, transition: Array<TransitionAcrossInfo> } {
+		final betweenCtorInfos: Array<BetweenCtorBlankInfo> = [
+			for (args in betweenCtorAllArgs) {
+				final classifier: String = args[0];
+				final tt: Null<TransparentEntry> = transparentByClassifier[classifier];
+				buildBetweenCtorBlankInfo(
+					elemRefName, args, tt != null ? tt.ctors : [], tt != null ? tt.tailAdapter : null, tt != null ? tt.headAdapter : null
+				);
+			}
+		];
+		final transitionAcrossInfos: Array<TransitionAcrossInfo> = [
+			for (args in transitionAcrossAllArgs) {
+				final classifier: String = args[0];
+				final tt: Null<TransparentEntry> = transparentByClassifier[classifier];
+				buildTransitionAcrossInfo(
+					elemRefName, args, tt != null ? tt.ctors : [], tt != null ? tt.tailAdapter : null, tt != null ? tt.headAdapter : null
+				);
+			}
+		];
+		for (cf in transparentByClassifier.keys()) {
+			final hasBetween: Bool = Lambda.exists(betweenCtorInfos, info -> info.classifierFieldName == cf);
+			final hasTransition: Bool = Lambda.exists(transitionAcrossInfos, info -> info.classifierFieldName == cf);
+			if (!hasBetween && !hasTransition)
+				Context.fatalError(
+					'WriterLowering: @:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent) classifier "$cf" has no matching @:fmt(blankLinesBetweenSameCtorByLevel) or @:fmt(blankLinesOnTransitionAcross) on the same Star',
+					Context.currentPos()
+				);
+		}
+		return { between: betweenCtorInfos, transition: transitionAcrossInfos };
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -14118,6 +14150,16 @@ typedef WriterRule = {
 typedef PrevBodyInfo = {
 	access: Expr,
 	typePath: String
+};
+/**
+ * Per-classifier transparent-ctor accumulator used while reading
+ * `@:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent)` args in
+ * `readCascadeInfosFromStar`.
+ */
+typedef TransparentEntry = {
+	final ctors: Array<String>;
+	var tailAdapter: Null<String>;
+	var headAdapter: Null<String>;
 };
 /**
  * Shared inputs for `sameLineSeparatorShapeAware` — the shape-aware
