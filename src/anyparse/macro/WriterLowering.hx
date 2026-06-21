@@ -1331,216 +1331,20 @@ class WriterLowering {
 					// first-field case (HxIfStmt.thenBody after cond's
 					// `)` trail): the trail emits the token literally and
 					// bodyPolicyWrap replaces the default ` ` separator.
-					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw) {
+					if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw)
 						// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
 						justWrappedBody = emitBodyPolicyBareRef(
 							child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall,
 							fieldAccess, refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag
 						);
-						// (after-trail / before-leading / before-newline / policy-override / allman /
-						// inline-block companion metas live in emitBodyPolicyBareRef)
-					} else {
-						// `@:fmt(leftCurly)` on a bare Ref field (e.g.
-						// `HxFnDecl.body:HxFnBody`) routes the inter-field
-						// space through the runtime BracePlacement switch —
-						// same separator the Star path uses when the `{`
-						// open lives on the field. The Ref points at an
-						// enum (BlockBody / NoBody); the separator must be
-						// suppressed when the runtime branch is the
-						// `;`-terminated NoBody — emitting `_dt(' ')` ahead
-						// of `;` would round-trip as `function f():Void ;`.
-						// Detect the brace-bearing branch by `@:lead('{')`
-						// at macro time; gate emission on enum-ctor identity
-						// at runtime via `Type.enumConstructor`.
-						final lcSep: Null<Expr> = child.fmtHasFlag('leftCurly') ? leftCurlySeparator(child) : null;
-						final lcCtors: Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
-						final lcCtor: Null<String> = lcCtors.length == 0 ? null : lcCtors[0];
-						final bodyBreakFlag: Null<String> = child.fmtReadString('bodyBreak');
-						final bareBodyBreaksFlag: Bool = child.fmtHasFlag('bareBodyBreaks');
-						if (lcSep != null && lcCtor != null) {
-							// Sibling no-lead branches (e.g. `HxFnBody.ExprBody`) need a
-							// ` ` separator between the parent kw and the sub-rule's
-							// first token — Case 3 generic single-Ref branches whose
-							// writer emits `subCall` first. `;`-led siblings (NoBody)
-							// stay on the `_de()` default so `function f():Void;`
-							// round-trips with no inserted space ahead of `;`.
-							//
-							// ω-functionBody-policy: a sibling ctor carrying ctor-level
-							// `@:fmt(bodyPolicy(...))` has its own bodyPolicyWrap inside
-							// the sub-rule writer (Case 3 path) which provides the
-							// kw→body separator (`_dt(' ')` for Same, hardline+Nest for
-							// Next). The parent must therefore emit `_de()` for that
-							// ctor, otherwise we get a doubled space (Same) or a
-							// trailing space ahead of the hardline (Next). The
-							// per-sibling separator decision lives at the parent here
-							// because only the parent knows the runtime ctor.
-							final ctorExpr: Expr = macro Type.enumConstructor($fieldAccess);
-							final sepExpr: Expr = buildLeftCurlySepExpr(refName, lcCtors, ctorExpr, lcSep);
-							// ω-untyped-keep: `@:fmt(bodyPolicyForCtor('<ctor>',
-							// '<flagName>'))` on a struct field with leftCurly path
-							// runtime-replaces the per-ctor `sep + writeCall` pair with
-							// a `bodyPolicyWrap` invocation when the body's runtime
-							// ctor matches. The wrap reads `opt.<flagName>` for policy
-							// and (when the field's `<field>BeforeNewline:Bool` slot
-							// is synthesised — bare non-first Ref / trivia-bearing
-							// path, see `hasBeforeNewlineSlot` in `Lowering.lowerStruct`)
-							// reads `!value.<field>BeforeNewline` as `bodyOnSameLine`
-							// for the `Keep` dispatch. Other ctors keep the existing
-							// per-ctor switch unchanged.
-							//
-							// Architectural rationale: pre-kw gap before an inner kw
-							// (e.g. `untyped` inside `HxUntypedFnBody.block`) is
-							// consumed by parent-struct's pre-field skipWs BEFORE the
-							// inner sub-rule probes. Capturing the slot at the inner
-							// kw site always reads `true`. Moving the wrap from inner
-							// ctor (`HxFnBody.UntypedBlockBody`) to outer struct field
-							// (`HxFnDecl.body`) places it where the `bodyBeforeNewline`
-							// slot is captured by the existing `hasBeforeNewlineSlot`
-							// path — which fires during the parent struct's parse,
-							// when the gap is still in play.
-							//
-							// ω-fnbody-keep: `bodyPolicyForCtor` accepts MULTIPLE
-							// `('<ctor>', '<flagName>')` pairs (repeatable), each
-							// routing its own runtime ctor to a `bodyPolicyWrap`
-							// with the named policy flag. Built as a ternary chain
-							// — `Type.enumConstructor(body) == ctorᵢ ? wrapᵢ : …` —
-							// falling through to the per-ctor `sep + writeCall`
-							// `defaultPair` for every ctor with no pair. Consumers:
-							// `HxFnDecl.body` for `('UntypedBlockBody', 'untypedBody')`
-							// (the `untyped {…}` body) AND `('ExprBody', 'functionBody')`
-							// (the `return …` / bare-expr body). Both share ONE root
-							// cause — the signature→body source-newline gap is consumed
-							// by the parent struct's pre-field `skipWs` before the branch
-							// sub-rule probes, so the slot must be read at the parent
-							// (where `bodyBeforeNewline` IS captured), NOT inside the
-							// branch (a kw-less branch grows no `bodyOnSameLine` slot and
-							// the gap is already gone). `ExprBody` therefore drops its
-							// prior branch-local `@:fmt(bodyPolicy('functionBody'))`; the
-							// separator + Keep dispatch now live entirely on this parent
-							// wrap. `bodyValueExpr` is the `HxFnBody` value: only
-							// `bodyPolicyWrap`'s ctor-override / single-line / block-split
-							// paths consult it, none of which `functionBody` / `untypedBody`
-							// (plain policies, no override args) reach — so Same/Next
-							// output stays byte-identical to the pre-slice inner-branch
-							// emission.
-							final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
-							if (bodyPolicyForCtorPairs.length > 0) {
-								final hasBeforeNlSlot: Bool = ctx.trivia && isTriviaBearing(typePath) && !isFirstField && kwLead == null
-									&& leadText == null;
-								final wrapBodyOnSameLineExpr: Null<Expr> = hasBeforeNlSlot ? beforeNewlineNotAccess(fieldName) : null;
-								// ω-fnbody-meta-block-glue: `@:fmt(metaBlockGlue('<exprBodyCtor>',
-								// '<metaCtor>', '<blockCtor>'))` names the runtime descent so
-								// `bodyPolicyWrap` can route a metadata-wrapped block body
-								// (`@:meta { … }`) to the glued layout. Attached only to the
-								// wrap whose `wrapCtorName` matches the named expr-body ctor —
-								// the guard is inert on every other body ctor anyway, but the
-								// gate keeps the emitted descent localised. Consumer:
-								// `HxFnDecl.body` with `('ExprBody', 'MetaExpr', 'BlockExpr')`.
-								final metaBlockGlueArgs: Null<Array<String>> = child.fmtReadStringArgs('metaBlockGlue');
-								if (metaBlockGlueArgs != null && metaBlockGlueArgs.length != 3)
-									Context.fatalError(
-										'WriterLowering: @:fmt(metaBlockGlue(...)) requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args',
-										Context.currentPos()
-									);
-								parts.push(buildBodyPolicyForCtorChain(
-									bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, wrapBodyOnSameLineExpr,
-									metaBlockGlueArgs
-								));
-								// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
-							} else {
-								parts.push(sepExpr);
-								parts.push(writeCall);
-							}
-						} else if (bodyBreakFlag != null && kwLead == null && leadText == null && !isRaw) {
-							// ω-expression-try-body-break: wrap the body field in a
-							// SameLinePolicy switch — `Same` emits ` ` + body, `Next`
-							// emits hardline + Nest + body so the body sits one indent
-							// deeper than the surrounding kw line. Used by
-							// `HxTryCatchExpr.body` (first field; Case 3 strips the
-							// `try` kw's trailing space so the wrap's `Same` ` ` is the
-							// sole separator) and by `HxCatchClauseExpr.body` (last
-							// field; replaces the fixed `_dt(' ')` between `)` and the
-							// catch body).
-							parts.push(bodyBreakWrap(
-								bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline')
-							));
-						} else if (bareBodyBreaksFlag && kwLead == null && leadText == null && !isRaw) {
-							// ω-statement-bare-break: shape-only wrap — block body
-							// emits inline ` ` + body, bare body emits hardline +
-							// Nest + body. No policy involvement, so the layout is
-							// independent of `sameLineCatch` (block bodies still get
-							// their `} catch` placement controlled by the catches
-							// Star sameLine knob; bare bodies always break). Used by
-							// `HxTryCatchStmt.body` (first field; Case 3 strips the
-							// `try` kw's trailing space) and `HxCatchClause.body`
-							// (last field; replaces the default `_dt(' ')` separator
-							// between `)` and the catch body).
-							parts.push(bareBodyBreakWrap(writeCall, fieldAccess, refName));
-						} else if (kwLead == null && leadText == null && !isFirstField && !isRaw) {
-							// Bare-Ref non-first body: allmanIndentForCtor / nestBodyOnSourceNewline /
-							// ω-issue-48-v2 sep cascade — see emitBareRefNonFirstBody.
-							emitBareRefNonFirstBody(
-								child, parts, fieldName, typePath, fieldAccess, writeCall, prevAnyStarNonEmpty, prevPadTrailing
-							);
-						} else if (hasCondWrap && spanInfo != null) {
-							// ω-condwrap-forstmt: span mode — defer the
-							// `emitCondition` wrap to the end-field
-							// iteration. Push writeCall directly so
-							// inter-field separators / kw text /
-							// trailing-field writeCall accumulate in
-							// `parts` for splicing at the end. The
-							// `_setChainModeOverride` shadow is also
-							// applied lazily (inside the end-field's
-							// splice block) so the inner writeCalls see
-							// the overridden cascade.
-							parts.push(writeCall);
-						} else if (hasCondWrap) {
-							// ω-condition-wrap-wiring / ω-chain-fillline-in-condwrap: single-Ref condWrap
-							// emit — see emitCondWrapSingleRef.
-							emitCondWrapSingleRef(child, parts, condWrapArgs, typePath, fieldName, leadText, trailText, writeCall);
-							// (condParensInside / ω-condition-wrap-keep detail lives in emitCondWrapSingleRef)
-						} else if (child.fmtHasFlag('arrowBodyLineWrap')) {
-							// ω-arrow-body-line-wrap: when the line containing
-							// the lambda body — `(params) -> body` plus rest of
-							// stack — would exceed `opt.lineWidth`, break after
-							// `->` (or `=>`) and indent the body one level. The
-							// preceding lead emission via `whitespacePolicyLead`
-							// terminates with `_dop(' ')` (OptSpace); the brk
-							// side's leading hardline triggers the renderer's
-							// `pendingOptSpace` clear so the post-arrow space
-							// drops cleanly without leaving a trailing token.
-							// Flat side is the bare writeCall — byte-identical
-							// to the pre-slice default branch below.
-							//
-							// Mirrors fork's `MarkWrapping.applyArrowWrapping`
-							// (`MarkWrapping.hx:985-1041`): collect arrows whose
-							// flat line exceeds `maxLineLength`, apply break
-							// after `->`, try collapse, restore on still-exceed.
-							// Our `_dile` IS the collapse — flat side fires
-							// when the line fits, brk side fires when it does
-							// not, both decided at render time.
-							//
-							// Wrapped in `_dwb` (WrapBoundary) so a sister probe
-							// in `WrapList.shapeFillLine` 1-item path can detect
-							// the arrow-body-line-wrap signature structurally
-							// and route the outer Call's close paren to its own
-							// line (mirrors fork's parent-walk close-paren mark
-							// in `applyArrowWrapping`'s `lineEndBefore(pClose)`).
-							// Slice-2 follow-up extends `isChainOPLBreak`.
-							//
-							// Currently consumed by `HxThinParenLambda.body`
-							// (`->` form) and `HxParenLambda.body` (`=>` form)
-							// for symmetric coverage of the canonical and
-							// legacy lambda-body syntaxes.
-							parts.push(macro {
-								final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-								final _doc: anyparse.core.Doc = $writeCall;
-								_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
-							});
-						} else {
-							parts.push(writeCall);
-						}
-					}
+					else
+						// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
+						// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
+						// dispatch lives in emitBareRefNonBodyPolicy.
+						emitBareRefNonBodyPolicy(
+							child, parts, refName, fieldName, typePath, fieldAccess, writeCall, isFirstField, isRaw, kwLead, leadText,
+							hasCondWrap, condWrapArgs, spanInfo != null, trailText, prevAnyStarNonEmpty, prevPadTrailing
+						);
 					// ω-close-trailing-alt: track ANY bare-Ref body (with or
 					// without bodyPolicy wrap) so the next field can react to
 					// its runtime closeTrailing slot. Only matters when the
@@ -15498,6 +15302,197 @@ class WriterLowering {
 			indentObjArgs: indentObjArgs,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 		}));
+	}
+
+	/**
+	 * Emit a bare mandatory Ref body field (no `@:kw` / `@:lead`) that carries
+	 * no `@:fmt(bodyPolicy(...))` — the non-bodyPolicy dispatch. Routes through
+	 * `@:fmt(leftCurly)` runtime BracePlacement ctor switch (+ optional
+	 * `bodyPolicyForCtor` chain), `@:fmt(bodyBreak)` / `@:fmt(bareBodyBreaks)`
+	 * shape wraps, the bare-Ref non-first-body cascade, span-mode / single-Ref
+	 * `@:fmt(condWrap)`, the `@:fmt(arrowBodyLineWrap)` line-fit break, or the
+	 * default bare writeCall. Pushes into `parts`. Extracted from `lowerStruct`'s
+	 * mandatory-Ref arm.
+	 */
+	private function emitBareRefNonBodyPolicy(
+		child: ShapeNode, parts: Array<Expr>, refName: String, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
+		isFirstField: Bool, isRaw: Bool, kwLead: Null<String>, leadText: Null<String>, hasCondWrap: Bool,
+		condWrapArgs: Null<Array<String>>, spanInfoPresent: Bool, trailText: Null<String>, prevAnyStarNonEmpty: Null<Expr>,
+		prevPadTrailing: Null<Expr>
+	): Void {
+		// `@:fmt(leftCurly)` on a bare Ref field (e.g.
+		// `HxFnDecl.body:HxFnBody`) routes the inter-field
+		// space through the runtime BracePlacement switch —
+		// same separator the Star path uses when the `{`
+		// open lives on the field. The Ref points at an
+		// enum (BlockBody / NoBody); the separator must be
+		// suppressed when the runtime branch is the
+		// `;`-terminated NoBody — emitting `_dt(' ')` ahead
+		// of `;` would round-trip as `function f():Void ;`.
+		// Detect the brace-bearing branch by `@:lead('{')`
+		// at macro time; gate emission on enum-ctor identity
+		// at runtime via `Type.enumConstructor`.
+		final lcSep: Null<Expr> = child.fmtHasFlag('leftCurly') ? leftCurlySeparator(child) : null;
+		final lcCtors: Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
+		final lcCtor: Null<String> = lcCtors.length == 0 ? null : lcCtors[0];
+		final bodyBreakFlag: Null<String> = child.fmtReadString('bodyBreak');
+		final bareBodyBreaksFlag: Bool = child.fmtHasFlag('bareBodyBreaks');
+		final noLeadNoRaw: Bool = kwLead == null && leadText == null && !isRaw;
+		if (lcSep != null && lcCtor != null) {
+			// Sibling no-lead branches (e.g. `HxFnBody.ExprBody`) need a
+			// ` ` separator between the parent kw and the sub-rule's
+			// first token — Case 3 generic single-Ref branches whose
+			// writer emits `subCall` first. `;`-led siblings (NoBody)
+			// stay on the `_de()` default so `function f():Void;`
+			// round-trips with no inserted space ahead of `;`.
+			//
+			// ω-functionBody-policy: a sibling ctor carrying ctor-level
+			// `@:fmt(bodyPolicy(...))` has its own bodyPolicyWrap inside
+			// the sub-rule writer (Case 3 path) which provides the
+			// kw→body separator (`_dt(' ')` for Same, hardline+Nest for
+			// Next). The parent must therefore emit `_de()` for that
+			// ctor, otherwise we get a doubled space (Same) or a
+			// trailing space ahead of the hardline (Next). The
+			// per-sibling separator decision lives at the parent here
+			// because only the parent knows the runtime ctor.
+			emitLeftCurlyBody(
+				child, parts, refName, fieldName, typePath, fieldAccess, writeCall, isFirstField, kwLead, leadText, lcSep, lcCtors
+			);
+			// (bodyPolicyForCtor ternary chain + metaBlockGlue descent live in emitLeftCurlyBody)
+		} else if (bodyBreakFlag != null && noLeadNoRaw) {
+			// ω-expression-try-body-break: wrap the body field in a
+			// SameLinePolicy switch — `Same` emits ` ` + body, `Next`
+			// emits hardline + Nest + body so the body sits one indent
+			// deeper than the surrounding kw line. Used by
+			// `HxTryCatchExpr.body` (first field; Case 3 strips the
+			// `try` kw's trailing space so the wrap's `Same` ` ` is the
+			// sole separator) and by `HxCatchClauseExpr.body` (last
+			// field; replaces the fixed `_dt(' ')` between `)` and the
+			// catch body).
+			parts.push(bodyBreakWrap(bodyBreakFlag, writeCall, fieldAccess, refName, child.fmtHasFlag('blockBodyKeepsInline')));
+		} else if (bareBodyBreaksFlag && noLeadNoRaw) {
+			// ω-statement-bare-break: shape-only wrap — block body
+			// emits inline ` ` + body, bare body emits hardline +
+			// Nest + body. No policy involvement, so the layout is
+			// independent of `sameLineCatch` (block bodies still get
+			// their `} catch` placement controlled by the catches
+			// Star sameLine knob; bare bodies always break). Used by
+			// `HxTryCatchStmt.body` (first field; Case 3 strips the
+			// `try` kw's trailing space) and `HxCatchClause.body`
+			// (last field; replaces the default `_dt(' ')` separator
+			// between `)` and the catch body).
+			parts.push(bareBodyBreakWrap(writeCall, fieldAccess, refName));
+		} else if (noLeadNoRaw && !isFirstField) {
+			// Bare-Ref non-first body: allmanIndentForCtor / nestBodyOnSourceNewline /
+			// ω-issue-48-v2 sep cascade — see emitBareRefNonFirstBody.
+			emitBareRefNonFirstBody(child, parts, fieldName, typePath, fieldAccess, writeCall, prevAnyStarNonEmpty, prevPadTrailing);
+		} else if (hasCondWrap && spanInfoPresent) {
+			// ω-condwrap-forstmt: span mode — defer the
+			// `emitCondition` wrap to the end-field
+			// iteration. Push writeCall directly so
+			// inter-field separators / kw text /
+			// trailing-field writeCall accumulate in
+			// `parts` for splicing at the end. The
+			// `_setChainModeOverride` shadow is also
+			// applied lazily (inside the end-field's
+			// splice block) so the inner writeCalls see
+			// the overridden cascade.
+			parts.push(writeCall);
+		} else if (hasCondWrap) {
+			// ω-condition-wrap-wiring / ω-chain-fillline-in-condwrap: single-Ref condWrap
+			// emit — see emitCondWrapSingleRef.
+			emitCondWrapSingleRef(child, parts, condWrapArgs, typePath, fieldName, leadText, trailText, writeCall);
+			// (condParensInside / ω-condition-wrap-keep detail lives in emitCondWrapSingleRef)
+		} else if (child.fmtHasFlag('arrowBodyLineWrap')) {
+			// ω-arrow-body-line-wrap: when the line containing
+			// the lambda body — `(params) -> body` plus rest of
+			// stack — would exceed `opt.lineWidth`, break after
+			// `->` (or `=>`) and indent the body one level. The
+			// preceding lead emission via `whitespacePolicyLead`
+			// terminates with `_dop(' ')` (OptSpace); the brk
+			// side's leading hardline triggers the renderer's
+			// `pendingOptSpace` clear so the post-arrow space
+			// drops cleanly without leaving a trailing token.
+			// Flat side is the bare writeCall — byte-identical
+			// to the pre-slice default branch below.
+			//
+			// Mirrors fork's `MarkWrapping.applyArrowWrapping`
+			// (`MarkWrapping.hx:985-1041`): collect arrows whose
+			// flat line exceeds `maxLineLength`, apply break
+			// after `->`, try collapse, restore on still-exceed.
+			// Our `_dile` IS the collapse — flat side fires
+			// when the line fits, brk side fires when it does
+			// not, both decided at render time.
+			//
+			// Wrapped in `_dwb` (WrapBoundary) so a sister probe
+			// in `WrapList.shapeFillLine` 1-item path can detect
+			// the arrow-body-line-wrap signature structurally
+			// and route the outer Call's close paren to its own
+			// line (mirrors fork's parent-walk close-paren mark
+			// in `applyArrowWrapping`'s `lineEndBefore(pClose)`).
+			// Slice-2 follow-up extends `isChainOPLBreak`.
+			//
+			// Currently consumed by `HxThinParenLambda.body`
+			// (`->` form) and `HxParenLambda.body` (`=>` form)
+			// for symmetric coverage of the canonical and
+			// legacy lambda-body syntaxes.
+			parts.push(macro {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				final _doc: anyparse.core.Doc = $writeCall;
+				_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
+			});
+		} else {
+			parts.push(writeCall);
+		}
+	}
+
+	/**
+	 * Emit the `@:fmt(leftCurly)` bare-Ref body path — a runtime BracePlacement
+	 * ctor switch (`buildLeftCurlySepExpr`) between the parent kw and the body's
+	 * first token, optionally routing matched `@:fmt(bodyPolicyForCtor(...))`
+	 * ctors through `buildBodyPolicyForCtorChain` (with `@:fmt(metaBlockGlue)`
+	 * descent naming). Pushes into `parts`. Extracted from
+	 * `emitBareRefNonBodyPolicy`.
+	 */
+	private function emitLeftCurlyBody(
+		child: ShapeNode, parts: Array<Expr>, refName: String, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
+		isFirstField: Bool, kwLead: Null<String>, leadText: Null<String>, lcSep: Expr, lcCtors: Array<String>
+	): Void {
+		final ctorExpr: Expr = macro Type.enumConstructor($fieldAccess);
+		final sepExpr: Expr = buildLeftCurlySepExpr(refName, lcCtors, ctorExpr, lcSep);
+		// ω-untyped-keep / ω-fnbody-keep: `@:fmt(bodyPolicyForCtor('<ctor>',
+		// '<flagName>'))` (repeatable) runtime-replaces the per-ctor
+		// `sep + writeCall` pair with a `bodyPolicyWrap` for each matched
+		// runtime ctor, built as a ternary chain falling through to the
+		// per-ctor default. The `<field>BeforeNewline` Keep-dispatch slot is
+		// read at the parent (where it IS captured, see `hasBeforeNewlineSlot`
+		// in `Lowering.lowerStruct`), NOT inside the kw-less branch. Consumers:
+		// `HxFnDecl.body` for `('UntypedBlockBody', 'untypedBody')` and
+		// `('ExprBody', 'functionBody')`. Same/Next output stays byte-identical
+		// to the pre-slice inner-branch emission.
+		final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
+		if (bodyPolicyForCtorPairs.length > 0) {
+			final hasBeforeNlSlot: Bool = ctx.trivia && isTriviaBearing(typePath) && !isFirstField && kwLead == null && leadText == null;
+			final wrapBodyOnSameLineExpr: Null<Expr> = hasBeforeNlSlot ? beforeNewlineNotAccess(fieldName) : null;
+			// ω-fnbody-meta-block-glue: `@:fmt(metaBlockGlue('<exprBodyCtor>',
+			// '<metaCtor>', '<blockCtor>'))` names the runtime descent so
+			// `bodyPolicyWrap` can route a metadata-wrapped block body
+			// (`@:meta { … }`) to the glued layout. Consumer: `HxFnDecl.body`
+			// with `('ExprBody', 'MetaExpr', 'BlockExpr')`.
+			final metaBlockGlueArgs: Null<Array<String>> = child.fmtReadStringArgs('metaBlockGlue');
+			if (metaBlockGlueArgs != null && metaBlockGlueArgs.length != 3)
+				Context.fatalError(
+					'WriterLowering: @:fmt(metaBlockGlue(...)) requires (exprBodyCtor, metaCtor, blockCtor), got ${metaBlockGlueArgs.length} args',
+					Context.currentPos()
+				);
+			parts.push(buildBodyPolicyForCtorChain(
+				bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, fieldAccess, refName, wrapBodyOnSameLineExpr, metaBlockGlueArgs
+			));
+			// (ternary-chain fold lives in buildBodyPolicyForCtorChain)
+		} else {
+			parts.push(sepExpr);
+			parts.push(writeCall);
+		}
 	}
 
 }
