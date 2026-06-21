@@ -22,6 +22,12 @@ import anyparse.format.text.TextFormat.UnescapeResult;
 @:nullSafety(Strict)
 final class JsonFormat implements TextFormat {
 
+	/** JSON string-escape char code for backspace (`\b`). */
+	private static inline final BACKSPACE: Int = 0x08;
+
+	/** JSON string-escape char code for form feed (`\f`). */
+	private static inline final FORM_FEED: Int = 0x0C;
+
 	public static final instance: JsonFormat = new JsonFormat();
 
 	public var name(default, null): String = 'JSON';
@@ -121,10 +127,10 @@ final class JsonFormat implements TextFormat {
 			case '\n'.code: '\\n';
 			case '\r'.code: '\\r';
 			case '\t'.code: '\\t';
-			case 0x08: '\\b';
-			case 0x0C: '\\f';
+			case BACKSPACE: '\\b';
+			case FORM_FEED: '\\f';
 			case _:
-				if (c < 0x20)
+				if (c < ' '.code)
 					'\\u' + StringTools.hex(c, 4);
 				else
 					String.fromCharCode(c);

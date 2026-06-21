@@ -28,6 +28,9 @@ import haxe.macro.Expr;
  */
 class Codegen {
 
+	/** Byte-order mark code point, skipped as whitespace by generated parsers. */
+	private static inline final BOM: Int = 0xFEFF;
+
 	public static function emit(
 		rules: Array<GeneratedRule>, rootTypePath: String, rootReturnCT: ComplexType, formatInfo: FormatReader.FormatInfo,
 		?trivia: Bool = false, ?rootFnName: Null<String> = null
@@ -229,7 +232,7 @@ class Codegen {
 		// emit it at the file head; tolerating it inline costs nothing.
 		return macro while (ctx.pos < ctx.input.length) {
 			final c: Int = ctx.input.charCodeAt(ctx.pos);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == 0xFEFF) {
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == $v{BOM}) {
 				ctx.pos++;
 				continue;
 			}
@@ -273,7 +276,7 @@ class Codegen {
 		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
 		final body: Expr = macro while (ctx.pos < ctx.input.length) {
 			final c: Int = ctx.input.charCodeAt(ctx.pos);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == 0xFEFF) {
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == $v{BOM}) {
 				ctx.pos++;
 				continue;
 			}
@@ -595,7 +598,7 @@ class Codegen {
 					}
 					continue;
 				}
-				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == $v{BOM}) {
 					ctx.pos++;
 					continue;
 				}
@@ -655,7 +658,7 @@ class Codegen {
 			final _savedPos: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				final c: Int = ctx.input.charCodeAt(ctx.pos);
-				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == $v{BOM}) {
 					ctx.pos++;
 					continue;
 				}
@@ -814,7 +817,7 @@ class Codegen {
 			final _savedPos: Int = ctx.pos;
 			while (ctx.pos < ctx.input.length) {
 				final c: Int = ctx.input.charCodeAt(ctx.pos);
-				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == 0xFEFF) {
+				if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == $v{BOM}) {
 					ctx.pos++;
 					continue;
 				}

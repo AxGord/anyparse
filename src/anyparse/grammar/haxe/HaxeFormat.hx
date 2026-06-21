@@ -1555,7 +1555,7 @@ final class HaxeFormat implements TextFormat {
 			case '\r'.code: '\\r';
 			case '\t'.code: '\\t';
 			case _:
-				if (c < 0x20)
+				if (c < ' '.code)
 					'\\x' + StringTools.hex(c, 2);
 				else
 					String.fromCharCode(c);
@@ -1590,7 +1590,7 @@ final class HaxeFormat implements TextFormat {
 			case '\r'.code: '\\r';
 			case '\t'.code: '\\t';
 			case _:
-				if (c < 0x20)
+				if (c < ' '.code)
 					'\\x' + StringTools.hex(c, 2);
 				else
 					String.fromCharCode(c);

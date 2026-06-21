@@ -38,6 +38,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class PreferNullCoalescing implements Check {
 
+	/** A complete ternary node has children [cond, then, else]. */
+	private static inline final TERNARY_CHILD_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -148,7 +151,7 @@ final class PreferNullCoalescing implements Check {
 	private static function match(
 		ternary: QueryNode, source: String, eqKind: String, notEqKind: String, nullKind: String, unsafeKinds: Array<String>
 	): Null<{ guarded: QueryNode, fallback: QueryNode }> {
-		if (ternary.children.length != 3) return null;
+		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
 		final cond: QueryNode = ternary.children[0];
 		final thenBranch: QueryNode = ternary.children[1];
 		final elseBranch: QueryNode = ternary.children[2];

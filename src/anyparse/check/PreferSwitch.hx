@@ -58,6 +58,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class PreferSwitch implements Check {
 
+	/** An if node with an else branch has children [cond, then, else]. */
+	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -146,7 +149,7 @@ final class PreferSwitch implements Check {
 				discriminant = d;
 			else if (!RefactorSupport.sameSource(discriminant, d, source)) return;
 			rungs++;
-			if (cur.children.length >= 3 && ifKinds.contains(cur.children[2].kind))
+			if (cur.children.length >= IF_WITH_ELSE_CHILD_COUNT && ifKinds.contains(cur.children[2].kind))
 				cur = cur.children[2];
 			else
 				break;
@@ -220,7 +223,7 @@ final class PreferSwitch implements Check {
 			final body: String = StringTools.trim(source.substring(thenSpan.from, thenSpan.to));
 			cases.push('case $litText: $body');
 			rungs++;
-			if (cur.children.length >= 3) {
+			if (cur.children.length >= IF_WITH_ELSE_CHILD_COUNT) {
 				final elseChild: QueryNode = cur.children[2];
 				if (ifKinds.contains(elseChild.kind)) {
 					cur = elseChild;

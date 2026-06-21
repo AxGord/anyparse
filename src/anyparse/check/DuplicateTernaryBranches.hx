@@ -28,6 +28,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class DuplicateTernaryBranches implements Check {
 
+	/** A complete ternary node has children [cond, then, else]. */
+	private static inline final TERNARY_CHILD_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -67,7 +70,7 @@ final class DuplicateTernaryBranches implements Check {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length != 3) continue;
+			if (node == null || node.children.length != TERNARY_CHILD_COUNT) continue;
 			// Only safe to drop the condition when evaluating it has no side effect.
 			if (!RefactorSupport.isSideEffectFree(node.children[0])) continue;
 			final branchSpan: Null<Span> = node.children[1].span;
@@ -78,9 +81,9 @@ final class DuplicateTernaryBranches implements Check {
 	}
 
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String): Void {
-		if (
-			node.kind == ternaryKind && node.children.length == 3 && RefactorSupport.sameSource(node.children[1], node.children[2], source)
-		) {
+		if (node.kind == ternaryKind && node.children.length == TERNARY_CHILD_COUNT && RefactorSupport.sameSource(
+			node.children[1], node.children[2], source
+		)) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({

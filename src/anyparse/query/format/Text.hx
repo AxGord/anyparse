@@ -258,7 +258,7 @@ final class Text {
 		if (s.length == 0) return false;
 		for (i in 0...s.length) {
 			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c <= 0x20) return false;
+			if (c <= ' '.code) return false;
 			if (c == '('.code || c == ')'.code || c == '"'.code) return false;
 		}
 		return true;

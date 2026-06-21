@@ -291,6 +291,9 @@ final class Cli {
 	private static final SKIP_PATHS_SHOWN: Int = 5;
 	private static final FUZZY_MAX_DIST: Int = 3;
 
+	/** The maximum 32-bit signed integer — a null-span sort sentinel and the unbounded `--top` / `--all` count. */
+	private static inline final MAX_INT: Int = 0x7FFFFFFF;
+
 	/**
 	 * `blast`'s heuristic field-access section (member-name SUPERSET) is
 	 * the only walker section that routinely emits hundreds of lines on a
@@ -1232,7 +1235,7 @@ final class Cli {
 
 	/** Source-offset sort key for a violation span; null spans sort last. */
 	private static inline function spanStart(span: Null<Span>): Int {
-		return span != null ? span.from : 0x7FFFFFFF;
+		return span != null ? span.from : MAX_INT;
 	}
 
 	/**
@@ -10726,7 +10729,7 @@ final class Cli {
 					}
 					topN = v;
 				case '--all':
-					topN = 0x7fffffff;
+					topN = MAX_INT;
 				case '--probe':
 					probePath = expectValue(args, ++i, '--probe');
 				case '--cluster':

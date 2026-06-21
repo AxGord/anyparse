@@ -109,7 +109,7 @@ class BinaryWriterLowering {
 		if (align != null) {
 			steps.push(macro {
 				final _rem: Int = output.length % $v{align};
-				if (_rem != 0) output.writeByte(0x0A);
+				if (_rem != 0) output.writeByte('\n'.code);
 			});
 		}
 

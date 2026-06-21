@@ -37,6 +37,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class EmptyBlock implements Check {
 
+	/** An if node with both branches has children [cond, then, else]. */
+	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -145,7 +148,7 @@ final class EmptyBlock implements Check {
 		if (nspan == null) return null;
 		final kids: Array<QueryNode> = parent.children;
 		// Empty `else {}` — this node is the else branch (then + else both present).
-		if (kids.length >= 3 && kids[2] == node) {
+		if (kids.length >= IF_WITH_ELSE_CHILD_COUNT && kids[2] == node) {
 			final thenSpan: Null<Span> = kids[1].span;
 			return thenSpan == null ? null : { span: RefactorSupport.lineExtendedSpan(source, new Span(thenSpan.to, nspan.to)), text: '' };
 		}

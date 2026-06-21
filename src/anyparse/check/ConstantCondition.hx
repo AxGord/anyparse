@@ -31,6 +31,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class ConstantCondition implements Check {
 
+	/** An if node with an else branch has children [cond, then, else]. */
+	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -145,7 +148,7 @@ final class ConstantCondition implements Check {
 		final nspan: Null<Span> = node.span;
 		if (nspan == null) return null;
 		final isFalse: Bool = source.substring(cspan.from, cspan.to) == 'false';
-		final hasElse: Bool = node.children.length >= 3;
+		final hasElse: Bool = node.children.length >= IF_WITH_ELSE_CHILD_COUNT;
 		// Taken branch: then (children[1]) when true, else (children[2]) when false.
 		final taken: Null<QueryNode> = isFalse ? (hasElse ? node.children[2] : null) : node.children[1];
 		if (taken == null) {

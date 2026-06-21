@@ -47,6 +47,9 @@ import haxe.Exception;
 @:nullSafety(Strict)
 final class RedundantElse implements Check {
 
+	/** An if node with an else branch has children [cond, then, else]. */
+	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
+
 	public function new() {}
 
 	public function id(): String {
@@ -113,7 +116,7 @@ final class RedundantElse implements Check {
 
 	/** Emit one `Info` on the `else` branch of `ifNode` when its then-branch always exits. */
 	private static function flagIf(out: Array<Violation>, file: String, ifNode: QueryNode, support: ControlFlowSupport): Void {
-		if (ifNode.children.length < 3) return;
+		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
 		if (!branchAlwaysExits(ifNode.children[1], support)) return;
 		final elseSpan: Null<Span> = ifNode.children[2].span;
 		if (elseSpan != null) out.push({
@@ -157,7 +160,7 @@ final class RedundantElse implements Check {
 		ifNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>, flagged: Array<String>,
 		edits: Array<{ span: Span, text: String }>
 	): Void {
-		if (ifNode.children.length < 3) return;
+		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
 		final elseNode: QueryNode = ifNode.children[2];
 		final elseSpan: Null<Span> = elseNode.span;
 		if (elseSpan == null || !flagged.contains('${elseSpan.from}:${elseSpan.to}')) return;
