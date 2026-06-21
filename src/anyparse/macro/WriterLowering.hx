@@ -13934,10 +13934,10 @@ class WriterLowering {
 
 	/**
 	 * Tryparse-Star main (non-heritage) emit. Builds the per-element while
-	 * loop (cascade fire + leading-comment emit + separator cascade +
-	 * element emit + track) and the trailing assembly (flat-case / nestBody
-	 * / cond-increase / default). Extracted from `triviaTryparseStarExpr`
-	 * so the orchestrator stays under the complexity gate.
+	 * loop (via triviaTryparseWhileExpr) and the trailing assembly (via
+	 * triviaTryparseAssemblyExpr) inside the shared `_docs` scope.
+	 * Extracted from `triviaTryparseStarExpr` so the orchestrator stays
+	 * under the complexity gate.
 	 */
 	private static function triviaTryparseMainExpr(c: TryparseStarCtx): Expr {
 		final fieldAccess: Expr = c.fieldAccess;
@@ -13955,22 +13955,11 @@ class WriterLowering {
 		final condIncreaseGateExpr: Expr = c.condIncreaseGateExpr;
 		final condNestedIncreaseGateExpr: Expr = c.condNestedIncreaseGateExpr;
 		final cascadeInitPrev: Expr = c.cascadeInitPrev;
-		final cascadeInitCurr: Expr = c.cascadeInitCurr;
-		final cascadeCurrCompute: Expr = c.cascadeCurrCompute;
-		final cascadeTrackPrev: Expr = c.cascadeTrackPrev;
 		final cascadeHeadEmit: Expr = c.cascadeHeadEmit;
-		final cascadeBlanksCount: Expr = c.cascadeBlanksCount;
 		final priorAfterTrailEmit: Expr = c.priorAfterTrailEmit;
 		final padLeadingSpaceDoc: Expr = c.padLeadingSpaceDoc;
-		final subsequentSepDoc: Expr = c.subsequentSepDoc;
-		final firstSepExpr: Expr = c.firstSepExpr;
-		final triviaElemCallMaybeBreak: Expr = c.triviaElemCallMaybeBreak;
-		final elemOptInit: Expr = c.elemOptInit;
-		final tryparseBlockEndedSepEmit: Expr = c.tryparseBlockEndedSepEmit;
-		final tryparseBlockEndedTrailEmit: Expr = c.tryparseBlockEndedTrailEmit;
-		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
-		final finalWrapDocs: Expr = c.finalWrapDocs;
-		final forceInlineSep: Bool = c.forceInlineSep;
+		final whileExpr: Expr = triviaTryparseWhileExpr(c);
+		final assemblyExpr: Expr = triviaTryparseAssemblyExpr(c);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -14026,235 +14015,295 @@ class WriterLowering {
 				// the splice site reads it safely; when sepText is null /
 				// blockEnded false, the splice expands to `{}` (no read).
 				var _priorElemDoc: Null<anyparse.core.Doc> = null;
-				var _si: Int = 0;
-				while (_si < _arr.length) {
-					final _t = _arr[_si];
-					// ω-cond-indent-policy AlignedNestedIncrease: remember where
-					// THIS element's docs begin (its leading inter-element
-					// separator + the element body) so the splice at loop tail
-					// can wrap the whole span `+1` when the element is a nested
-					// conditional. Captured before any separator push.
-					final _condNestLen: Int = _docs.length;
-					$cascadeInitCurr;
-					$cascadeCurrCompute;
-					$tryparseBlockEndedSepEmit;
-					if (_t.leadingComments.length > 0) {
-						// ω-D16-padleading-first-comment-no-dup: padLeading
-						// already emitted `_dhl()` for the first element when
-						// `_padHardline` is true (driven by `_arr[0].newlineBefore`).
-						// Both reflect the SAME source newline between the
-						// prior token and the stmt's trivia — a second `_dhl()`
-						// here produces a spurious blank line (visible as
-						// `#if sys\n\n\t\t// comment` for HxConditionalStmt.body
-						// with `@:fmt(padLeading)` and a leading line comment
-						// on the first body stmt). Skip the dup only on the
-						// first iteration when padLeading fired as a hardline;
-						// inter-stmt path (`_si > 0`) and non-padLeading
-						// consumers stay byte-identical.
-						if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
-						if (_t.blankBefore && _si > 0) _docs.push(_dhl());
-						var _ci: Int = 0;
-						while (_ci < _t.leadingComments.length) {
-							_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
-							_docs.push(_dhl());
-							_ci++;
-						}
-						if (_t.blankAfterLeadingComments) _docs.push(_dhl());
-					} else if (_flatCase) {
-						_docs.push(_dt(' '));
-					} else if (_nestBody) {
-						_docs.push(_dhl());
-					} else if (_si > 0 && _metaPolicy == 1) {
-						// ω-metadata-line-end-function: After policy collapses
-						// source-driven inter-meta sep to a forced hardline,
-						// emitting one metadata per line regardless of source
-						// layout. Skips the cascade-blanks path — blank-line
-						// separators between metas aren't a fork-supported shape
-						// for the After policy.
-						_docs.push(_dhl());
-					} else if (_si > 0 && _metaPolicy == 3) {
-						// ω-metadata-line-end-function: ForceAfterLast collapses
-						// any source newline between consecutive metas to a
-						// single space, producing the canonical `@A @B @C`
-						// inline shape ahead of the trailing hardline.
-						_docs.push(_dt(' '));
-					} else if (
-						_si > 0 && $v{forceInlineSep} && Type.enumParameters(cast _arr[_si - 1].node).length == 0
-						&& Type.enumParameters(cast _t.node).length == 0
-					) {
-						// ω-slice-45: `@:fmt(forceInlineSep)` collapses every
-						// source linebreak between consecutive SimpleCtor
-						// elements to a single space. Modifier Stars
-						// (`HxMemberDecl.modifiers`, `HxTopLevelDecl.modifiers`)
-						// opt in so multi-line `static\n\toverload` round-trips
-						// as `static overload`. ParamCtor elements (current
-						// consumers: `Conditional(inner:HxConditionalMod)` —
-						// the `#if … #end` modifier region) are gated OUT so
-						// the existing CondMod layout (issue_332 V1/V4: source
-						// newline between `#end` and the next keyword
-						// preserved) stays byte-identical. Plugin-agnostic
-						// ctor classification via `Type.enumParameters` — no
-						// reflection by ctor name. The `cast` suppresses
-						// macro-time type-checking on `.node` (struct-shaped
-						// Star elements like `HxMemberDeclT`/`HxTopLevelDeclT`
-						// would otherwise fail `EnumValue` unification — dead-
-						// code elimination runs AFTER type-check); compile-
-						// time `$v{forceInlineSep}` short-circuit keeps the
-						// runtime reflection cost on opted-in modifier Stars
-						// only, where `.node` IS an enum (`HxMemberModifier` /
-						// `HxModifier`).
-						_docs.push(_dt(' '));
-					} else if (_si > 0 && _t.newlineBefore) {
-						// ω-cond-mod-newline: preserve a single source newline
-						// between try-parse Star elements. Without this, the
-						// default `sepExpr` (space) would collapse
-						// `#if COND <mods> #end\n\tpublic` (issue_332 V1) down
-						// to `#if COND <mods> #end public` on round-trip,
-						// losing the author's modifier-list line break.
-						//
-						// ω-bug-2c-inner-star: cascade-blanks loop replaces the
-						// pre-slice `if (_t.blankBefore) push(\\n)` source-driven
-						// path. With no cascade infos active, `$cascadeBlanksCount`
-						// reduces to `(_t.blankBefore ? 1 : 0)` — byte-identical
-						// to the prior single-blank emit.
-						_docs.push(_dhl());
-						final _blanks: Int = $cascadeBlanksCount;
-						var _bli: Int = 0;
-						while (_bli < _blanks) {
-							_docs.push(_dhl());
-							_bli++;
-						}
-					} else if (_si > 0) {
-						_docs.push($subsequentSepDoc);
-					} else if (_sepFirst) {
-						_docs.push($firstSepExpr);
-					}
-					$elemOptInit;
-					final _elem: anyparse.core.Doc = $triviaElemCallMaybeBreak;
-					final _tc: Null<String> = _t.trailingComment;
-					_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
-					// ω-cond-indent-policy AlignedNestedIncrease: if this body
-					// element is itself a nested `Conditional`, lift its whole
-					// span (leading separator + markers + guarded body, captured
-					// from `_condNestLen`) into a `_dn(_cols, …)` so the
-					// `#if`/`#elseif`/`#else`/`#end` markers AND body render one
-					// indent step deeper than the surrounding region. The leading
-					// separator is inside the span so the `#if` marker line (which
-					// renders at the PRECEDING hardline's indent) also shifts.
-					// Recursion through the nested conditional's own body Star
-					// accumulates the shift per depth. Adapter-null formats and
-					// non-conditional elements leave `_docs` untouched (byte-
-					// identical).
-					if (
-						_condNestedIncrease && opt.elementIsConditional != null && opt.elementIsConditional(_t.node)
-						&& _docs.length > _condNestLen
-					) {
-						final _condNestSpan: Array<anyparse.core.Doc> = _docs.splice(_condNestLen, _docs.length - _condNestLen);
-						_docs.push(_dn(_cols, _dc(_condNestSpan)));
-					}
-					_priorElemDoc = _elem;
-					$cascadeTrackPrev;
-					_si++;
+				$whileExpr;
+				$assemblyExpr;
+			}
+		};
+	}
+
+	/**
+	 * Tryparse-Star main per-element while-loop emit. Builds the cascade
+	 * fire + leading-comment emit + inter-element separator cascade +
+	 * element emit + cond-nested-increase splice + track, and returns the
+	 * `EWhile` spliced into `triviaTryparseMainExpr`. Extracted so the main
+	 * builder stays under the complexity gate.
+	 */
+	private static function triviaTryparseWhileExpr(c: TryparseStarCtx): Expr {
+		final cascadeInitCurr: Expr = c.cascadeInitCurr;
+		final cascadeCurrCompute: Expr = c.cascadeCurrCompute;
+		final cascadeTrackPrev: Expr = c.cascadeTrackPrev;
+		final cascadeBlanksCount: Expr = c.cascadeBlanksCount;
+		final subsequentSepDoc: Expr = c.subsequentSepDoc;
+		final firstSepExpr: Expr = c.firstSepExpr;
+		final triviaElemCallMaybeBreak: Expr = c.triviaElemCallMaybeBreak;
+		final elemOptInit: Expr = c.elemOptInit;
+		final tryparseBlockEndedSepEmit: Expr = c.tryparseBlockEndedSepEmit;
+		final metaPolicyExpr: Expr = c.metaPolicyExpr;
+		final forceInlineSep: Bool = c.forceInlineSep;
+		final sepCascade: Expr = triviaTryparseSepCascadeExpr(c);
+		return macro {
+			var _si: Int = 0;
+			while (_si < _arr.length) {
+				final _t = _arr[_si];
+				// ω-cond-indent-policy AlignedNestedIncrease: remember where
+				// THIS element's docs begin (its leading inter-element
+				// separator + the element body) so the splice at loop tail
+				// can wrap the whole span `+1` when the element is a nested
+				// conditional. Captured before any separator push.
+				final _condNestLen: Int = _docs.length;
+				$cascadeInitCurr;
+				$cascadeCurrCompute;
+				$tryparseBlockEndedSepEmit;
+				$sepCascade;
+				$elemOptInit;
+				final _elem: anyparse.core.Doc = $triviaElemCallMaybeBreak;
+				final _tc: Null<String> = _t.trailingComment;
+				_docs.push(_tc != null ? foldTrailingIntoBodyGroup(_elem, trailingCommentDocVerbatim(_tc, opt)) : _elem);
+				// ω-cond-indent-policy AlignedNestedIncrease: if this body
+				// element is itself a nested `Conditional`, lift its whole
+				// span (leading separator + markers + guarded body, captured
+				// from `_condNestLen`) into a `_dn(_cols, …)` so the
+				// `#if`/`#elseif`/`#else`/`#end` markers AND body render one
+				// indent step deeper than the surrounding region. The leading
+				// separator is inside the span so the `#if` marker line (which
+				// renders at the PRECEDING hardline's indent) also shifts.
+				// Recursion through the nested conditional's own body Star
+				// accumulates the shift per depth. Adapter-null formats and
+				// non-conditional elements leave `_docs` untouched (byte-
+				// identical).
+				if (
+					_condNestedIncrease && opt.elementIsConditional != null && opt.elementIsConditional(_t.node)
+					&& _docs.length > _condNestLen
+				) {
+					final _condNestSpan: Array<anyparse.core.Doc> = _docs.splice(_condNestLen, _docs.length - _condNestLen);
+					_docs.push(_dn(_cols, _dc(_condNestSpan)));
 				}
-				$tryparseBlockEndedTrailEmit;
-				// ω-cond-indent-policy: under AlignedIncrease hold the trailing
-				// pad out of `_docs` so the close marker (`#else`/`#end`)
-				// renders at the surrounding indent rather than at body+1. The
-				// pad doc is identical to the pre-policy push; only its
-				// placement (outside the `_dn`) changes. Other policies /
-				// non-cond Stars keep the inline push (`_condIncrease` false →
-				// byte-identical).
-				if (_condIncrease && _padTrailing && _arr.length > 0)
-					_condTrailPad = _padHardline ? _dhl() : _dt(' ');
-				else if (_padTrailing && _arr.length > 0)
-					_docs.push(_padHardline ? _dhl() : _dt(' '));
-				else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
-				// ω-trivia-tryparse-linelength: when the LAST element carries
-				// a same-line `// trail`, a `//` line comment runs until the
-				// next physical newline, so an inline ` ` separator before
-				// the next sibling's lead literal (`{`/`}`/...) would inline
-				// that sibling INSIDE the comment. Emit a terminating
-				// hardline so the next field's lead lands on its own line.
-				// Gated by `lineLengthAwareSeps` so non-opt-in callers stay
-				// byte-identical. First consumer: HxAbstractDecl.clauses
-				// terminating the last-clause trail before members `{` lead.
-				$lastTrailTerminatorEmit;
-				// Trail comments collected into a separate Doc array so the
-				// nestBody branch can render them at parent indent when the
-				// body has stmts (issue_392): a `// comment` on its own line
-				// between case body's last stmt and the next `case` label
-				// belongs at case-label level, not case-body level. Empty-
-				// body cases (only-comment) keep body-level indent — the
-				// trail concat fold below restores that path.
-				final _trailDocs: Array<anyparse.core.Doc> = [];
-				if (_trailLC.length > 0) {
-					var _ti: Int = 0;
-					while (_ti < _trailLC.length) {
-						_trailDocs.push(_dhl());
-						if (_trailBB && _ti == 0 && _arr.length > 0) _trailDocs.push(_dhl());
-						_trailDocs.push(leadingCommentDoc(_trailLC[_ti], opt));
-						_ti++;
-					}
-					// ω-trail-blank-after: source had a blank line between this
-					// trail comment and the next outer-Star sibling (e.g. case
-					// label). Append an extra hardline at trail's tail; the
-					// outer Star will then add its own element-leading hardline
-					// for a true blank-line separator. Trailing whitespace on
-					// the empty line is trimmed by the renderer (default).
-					if (_trailBA) _trailDocs.push(_dhl());
+				_priorElemDoc = _elem;
+				$cascadeTrackPrev;
+				_si++;
+			}
+		};
+	}
+
+	/**
+	 * Tryparse-Star inter-element separator cascade (the `if/else if` chain
+	 * deciding the leading separator of element `_si`). Returns the spliced
+	 * statement; references the runtime `_docs`/`_si`/`_t`/`_arr` locals
+	 * declared in `triviaTryparseWhileExpr`'s emitted scope. Extracted so
+	 * the while builder stays under the complexity gate.
+	 */
+	private static function triviaTryparseSepCascadeExpr(c: TryparseStarCtx): Expr {
+		final cascadeBlanksCount: Expr = c.cascadeBlanksCount;
+		final subsequentSepDoc: Expr = c.subsequentSepDoc;
+		final firstSepExpr: Expr = c.firstSepExpr;
+		final metaPolicyExpr: Expr = c.metaPolicyExpr;
+		final forceInlineSep: Bool = c.forceInlineSep;
+		return macro {
+			if (_t.leadingComments.length > 0) {
+				// ω-D16-padleading-first-comment-no-dup: padLeading
+				// already emitted `_dhl()` for the first element when
+				// `_padHardline` is true (driven by `_arr[0].newlineBefore`).
+				// Both reflect the SAME source newline between the
+				// prior token and the stmt's trivia — a second `_dhl()`
+				// here produces a spurious blank line (visible as
+				// `#if sys\n\n\t\t// comment` for HxConditionalStmt.body
+				// with `@:fmt(padLeading)` and a leading line comment
+				// on the first body stmt). Skip the dup only on the
+				// first iteration when padLeading fired as a hardline;
+				// inter-stmt path (`_si > 0`) and non-padLeading
+				// consumers stay byte-identical.
+				if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
+				if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+				var _ci: Int = 0;
+				while (_ci < _t.leadingComments.length) {
+					_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+					_docs.push(_dhl());
+					_ci++;
 				}
-				// ω-force-flat-engine sister-coverage: tryparse Star is used
-				// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
-				// which can sit under wrap-cascade Flatten parents in expression
-				// position. Each leaf branch hand-rolls its terminal Doc — wrap
-				// uniformly in `_dwb` so a nested wrap-engine reads its own
-				// independent layout. `_dwb` is no-op outside Flatten frame.
-				if (_flatCase) {
-					// ω-flat-case-wrap-indent: when bodyPolicy flattens the
-					// case body inline (`case X: foo({...});`) but the body
-					// breaks at render time (e.g. call-args wrap-rules fire),
-					// the broken lines need +1 continuation indent relative
-					// to the case-label line — matching haxe-formatter's
-					// expressionCase=same/keep behavior. Wrapping the body
-					// Doc in `_dn(_cols, ...)` is a no-op in the flat path
-					// (no \n inside the body) and applies +1 indent on every
-					// inner newline when the body wraps. Issue_121 fixtures.
-					//
-					// ω-align-inline-switch-case-body: under
-					// `opt.alignInlineSwitchCaseBody` the case `:` must NOT
-					// add this extra level: a wrapped argument already
-					// indents relative to the case line via its own
-					// container, so the `_dn(_cols, ...)` over-indents the
-					// content and its closing bracket by one tab (mirrors
-					// fork `Indenter.alignInlineSwitchCaseBody` skipping the
-					// `mustIndent` on the case DblDot for same-line bodies).
-					// Default `false` keeps the `_dn` (byte-identical to all
-					// existing flat-case fixtures); inline non-wrapping
-					// bodies have no inner newline so dropping it is a no-op
-					// there too.
-					_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
-				} else if (_nestBody) {
-					if (_arr.length > 0 && _trailDocs.length > 0) {
-						_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));
-					} else {
-						for (_d in _trailDocs) _docs.push(_d);
-						_dwb(_dn(_cols, _dc(_docs)));
-					}
-				} else if (_condIncrease) {
-					// ω-cond-indent-policy: AlignedIncrease — body content
-					// (leading pad + each body element, all inside `_docs`)
-					// nests one level deeper; the trailing close-marker pad
-					// (`_condTrailPad`, held out above) renders at the
-					// surrounding indent. `_trailDocs` (orphan trail comments)
-					// is empty for cond-comp bodies but appended defensively
-					// inside the nest to preserve the pre-policy ordering.
-					for (_d in _trailDocs) _docs.push(_d);
-					final _nested: anyparse.core.Doc = _dn(_cols, _dc(_docs));
-					_dwb(_condTrailPad != null ? _dc([_nested, _condTrailPad]) : _nested);
+				if (_t.blankAfterLeadingComments) _docs.push(_dhl());
+			} else if (_flatCase) {
+				_docs.push(_dt(' '));
+			} else if (_nestBody) {
+				_docs.push(_dhl());
+			} else if (_si > 0 && _metaPolicy == 1) {
+				// ω-metadata-line-end-function: After policy collapses
+				// source-driven inter-meta sep to a forced hardline,
+				// emitting one metadata per line regardless of source
+				// layout. Skips the cascade-blanks path — blank-line
+				// separators between metas aren't a fork-supported shape
+				// for the After policy.
+				_docs.push(_dhl());
+			} else if (_si > 0 && _metaPolicy == 3) {
+				// ω-metadata-line-end-function: ForceAfterLast collapses
+				// any source newline between consecutive metas to a
+				// single space, producing the canonical `@A @B @C`
+				// inline shape ahead of the trailing hardline.
+				_docs.push(_dt(' '));
+			} else if (
+				_si > 0 && $v{forceInlineSep} && Type.enumParameters(cast _arr[_si - 1].node).length == 0
+				&& Type.enumParameters(cast _t.node).length == 0
+			) {
+				// ω-slice-45: `@:fmt(forceInlineSep)` collapses every
+				// source linebreak between consecutive SimpleCtor
+				// elements to a single space. Modifier Stars
+				// (`HxMemberDecl.modifiers`, `HxTopLevelDecl.modifiers`)
+				// opt in so multi-line `static\n\toverload` round-trips
+				// as `static overload`. ParamCtor elements (current
+				// consumers: `Conditional(inner:HxConditionalMod)` —
+				// the `#if … #end` modifier region) are gated OUT so
+				// the existing CondMod layout (issue_332 V1/V4: source
+				// newline between `#end` and the next keyword
+				// preserved) stays byte-identical. Plugin-agnostic
+				// ctor classification via `Type.enumParameters` — no
+				// reflection by ctor name. The `cast` suppresses
+				// macro-time type-checking on `.node` (struct-shaped
+				// Star elements like `HxMemberDeclT`/`HxTopLevelDeclT`
+				// would otherwise fail `EnumValue` unification — dead-
+				// code elimination runs AFTER type-check); compile-
+				// time `$v{forceInlineSep}` short-circuit keeps the
+				// runtime reflection cost on opted-in modifier Stars
+				// only, where `.node` IS an enum (`HxMemberModifier` /
+				// `HxModifier`).
+				_docs.push(_dt(' '));
+			} else if (_si > 0 && _t.newlineBefore) {
+				// ω-cond-mod-newline: preserve a single source newline
+				// between try-parse Star elements. Without this, the
+				// default `sepExpr` (space) would collapse
+				// `#if COND <mods> #end\n\tpublic` (issue_332 V1) down
+				// to `#if COND <mods> #end public` on round-trip,
+				// losing the author's modifier-list line break.
+				//
+				// ω-bug-2c-inner-star: cascade-blanks loop replaces the
+				// pre-slice `if (_t.blankBefore) push(\\n)` source-driven
+				// path. With no cascade infos active, `$cascadeBlanksCount`
+				// reduces to `(_t.blankBefore ? 1 : 0)` — byte-identical
+				// to the prior single-blank emit.
+				_docs.push(_dhl());
+				final _blanks: Int = $cascadeBlanksCount;
+				var _bli: Int = 0;
+				while (_bli < _blanks) {
+					_docs.push(_dhl());
+					_bli++;
+				}
+			} else if (_si > 0) {
+				_docs.push($subsequentSepDoc);
+			} else if (_sepFirst) {
+				_docs.push($firstSepExpr);
+			}
+		};
+	}
+
+	/**
+	 * Tryparse-Star main trailing assembly: the post-loop tail-sep emit,
+	 * trailing pad / meta-policy hardline, orphan-trail-comment docs, and
+	 * the flat-case / nestBody / cond-increase / default wrap dispatch.
+	 * Returns the spliced statement; references the runtime locals declared
+	 * in `triviaTryparseMainExpr`'s emitted scope. Extracted so the main
+	 * builder stays under the complexity gate.
+	 */
+	private static function triviaTryparseAssemblyExpr(c: TryparseStarCtx): Expr {
+		final tryparseBlockEndedTrailEmit: Expr = c.tryparseBlockEndedTrailEmit;
+		final lastTrailTerminatorEmit: Expr = c.lastTrailTerminatorEmit;
+		final finalWrapDocs: Expr = c.finalWrapDocs;
+		return macro {
+			$tryparseBlockEndedTrailEmit;
+			// ω-cond-indent-policy: under AlignedIncrease hold the trailing
+			// pad out of `_docs` so the close marker (`#else`/`#end`)
+			// renders at the surrounding indent rather than at body+1. The
+			// pad doc is identical to the pre-policy push; only its
+			// placement (outside the `_dn`) changes. Other policies /
+			// non-cond Stars keep the inline push (`_condIncrease` false →
+			// byte-identical).
+			if (_condIncrease && _padTrailing && _arr.length > 0)
+				_condTrailPad = _padHardline ? _dhl() : _dt(' ');
+			else if (_padTrailing && _arr.length > 0)
+				_docs.push(_padHardline ? _dhl() : _dt(' '));
+			else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
+			// ω-trivia-tryparse-linelength: when the LAST element carries
+			// a same-line `// trail`, a `//` line comment runs until the
+			// next physical newline, so an inline ` ` separator before
+			// the next sibling's lead literal (`{`/`}`/...) would inline
+			// that sibling INSIDE the comment. Emit a terminating
+			// hardline so the next field's lead lands on its own line.
+			// Gated by `lineLengthAwareSeps` so non-opt-in callers stay
+			// byte-identical. First consumer: HxAbstractDecl.clauses
+			// terminating the last-clause trail before members `{` lead.
+			$lastTrailTerminatorEmit;
+			// Trail comments collected into a separate Doc array so the
+			// nestBody branch can render them at parent indent when the
+			// body has stmts (issue_392): a `// comment` on its own line
+			// between case body's last stmt and the next `case` label
+			// belongs at case-label level, not case-body level. Empty-
+			// body cases (only-comment) keep body-level indent — the
+			// trail concat fold below restores that path.
+			final _trailDocs: Array<anyparse.core.Doc> = [];
+			if (_trailLC.length > 0) {
+				var _ti: Int = 0;
+				while (_ti < _trailLC.length) {
+					_trailDocs.push(_dhl());
+					if (_trailBB && _ti == 0 && _arr.length > 0) _trailDocs.push(_dhl());
+					_trailDocs.push(leadingCommentDoc(_trailLC[_ti], opt));
+					_ti++;
+				}
+				// ω-trail-blank-after: source had a blank line between this
+				// trail comment and the next outer-Star sibling (e.g. case
+				// label). Append an extra hardline at trail's tail; the
+				// outer Star will then add its own element-leading hardline
+				// for a true blank-line separator. Trailing whitespace on
+				// the empty line is trimmed by the renderer (default).
+				if (_trailBA) _trailDocs.push(_dhl());
+			}
+			// ω-force-flat-engine sister-coverage: tryparse Star is used
+			// for inner-Star bodies (case bodies, `HxConditionalDecl.body`)
+			// which can sit under wrap-cascade Flatten parents in expression
+			// position. Each leaf branch hand-rolls its terminal Doc — wrap
+			// uniformly in `_dwb` so a nested wrap-engine reads its own
+			// independent layout. `_dwb` is no-op outside Flatten frame.
+			if (_flatCase) {
+				// ω-flat-case-wrap-indent: when bodyPolicy flattens the
+				// case body inline (`case X: foo({...});`) but the body
+				// breaks at render time (e.g. call-args wrap-rules fire),
+				// the broken lines need +1 continuation indent relative
+				// to the case-label line — matching haxe-formatter's
+				// expressionCase=same/keep behavior. Wrapping the body
+				// Doc in `_dn(_cols, ...)` is a no-op in the flat path
+				// (no \n inside the body) and applies +1 indent on every
+				// inner newline when the body wraps. Issue_121 fixtures.
+				//
+				// ω-align-inline-switch-case-body: under
+				// `opt.alignInlineSwitchCaseBody` the case `:` must NOT
+				// add this extra level: a wrapped argument already
+				// indents relative to the case line via its own
+				// container, so the `_dn(_cols, ...)` over-indents the
+				// content and its closing bracket by one tab (mirrors
+				// fork `Indenter.alignInlineSwitchCaseBody` skipping the
+				// `mustIndent` on the case DblDot for same-line bodies).
+				// Default `false` keeps the `_dn` (byte-identical to all
+				// existing flat-case fixtures); inline non-wrapping
+				// bodies have no inner newline so dropping it is a no-op
+				// there too.
+				_dwb(opt.alignInlineSwitchCaseBody ? _dc(_docs) : _dn(_cols, _dc(_docs)));
+			} else if (_nestBody) {
+				if (_arr.length > 0 && _trailDocs.length > 0) {
+					_dwb(_dc([_dn(_cols, _dc(_docs)), _dc(_trailDocs)]));
 				} else {
 					for (_d in _trailDocs) _docs.push(_d);
-					_dwb($finalWrapDocs);
+					_dwb(_dn(_cols, _dc(_docs)));
 				}
+			} else if (_condIncrease) {
+				// ω-cond-indent-policy: AlignedIncrease — body content
+				// (leading pad + each body element, all inside `_docs`)
+				// nests one level deeper; the trailing close-marker pad
+				// (`_condTrailPad`, held out above) renders at the
+				// surrounding indent. `_trailDocs` (orphan trail comments)
+				// is empty for cond-comp bodies but appended defensively
+				// inside the nest to preserve the pre-policy ordering.
+				for (_d in _trailDocs) _docs.push(_d);
+				final _nested: anyparse.core.Doc = _dn(_cols, _dc(_docs));
+				_dwb(_condTrailPad != null ? _dc([_nested, _condTrailPad]) : _nested);
+			} else {
+				for (_d in _trailDocs) _docs.push(_d);
+				_dwb($finalWrapDocs);
 			}
 		};
 	}
