@@ -6981,6 +6981,10 @@ class WriterLowering {
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
 		}
+		final _predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, matrixWrap, triviaElemCall);
+		final _matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
+			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
+		);
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -7095,49 +7099,7 @@ class WriterLowering {
 				// Only computed under `_noWrapFlat` (every other path leaves it
 				// false → no extra per-element render / reflection).
 				var _anyMultilineItem: Bool = false;
-				var _ti: Int = 0;
-				while (_ti < _arr.length) {
-					final _t = _arr[_ti];
-					if (_t.blankBefore) _requiresHardline = true;
-					if (_t.leadingComments.length > 0) {
-						if (_ignoreEmit)
-							_hasInlineableTrivia = true;
-						else
-							_requiresHardline = true;
-					}
-					final _tcSig: Null<String> = _t.trailingComment;
-					if (_tcSig != null) {
-						if (_ignoreEmit && StringTools.startsWith(_tcSig, '/*'))
-							_hasInlineableTrivia = true;
-						else
-							_requiresHardline = true;
-					}
-					// ω-array-reflow idempotence: the FIRST element's `newlineBefore` also fires for
-					// a newline BEFORE the open `[` (the array on a fresh line of an enclosing broken
-					// construct — e.g. a wrapped ternary branch), not only an internal one. Counting
-					// it marks a single-line `['a', 'b']` as source-multiline → forces it OnePerLine,
-					// which the writer's own broken-branch output then re-triggers every pass (non-
-					// idempotent). So for a `reflowSourceMultiline` array Star ignore the first
-					// element's flag — EXCEPT in Keep mode (preserves source breaks verbatim) and for
-					// a comprehension (`for`/`while` sole element), whose element genuinely starts on
-					// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
-					// newlines, so they are always counted.
-					if (_t.newlineBefore && !_ignoreEmit && !_matrixOff && !($v{reflowSourceMultiline} && _ti == 0 && !_keepEmit
-					&& Type.enumConstructor(cast _t.node) != 'ForExpr' && Type.enumConstructor(cast _t.node) != 'WhileExpr'))
-						_hasSourceNewlines = true;
-					if (_noWrapFlat) {
-						// `Type.enumConstructor` returns null for a non-enum
-						// payload (e.g. an object-literal field struct) — the
-						// `==` comparisons then simply miss. Typed `Null<String>`
-						// so the null path is explicit.
-						final _itemCtor: Null<String> = Type.enumConstructor(cast _t.node);
-						if (
-							_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr'
-							|| anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0
-						) _anyMultilineItem = true;
-					}
-					_ti++;
-				}
+				$_predicateScan;
 				final _hasTrivia: Bool = _requiresHardline || _hasSourceNewlines;
 				// ω-nowrap-flat: matrix grid wins over noWrap-flatten, mirroring
 				// the fork (`arrayLiteralWrapping` calls `tryMatrixWrap` BEFORE
@@ -7147,23 +7109,7 @@ class WriterLowering {
 				// (column-aligned grid). Only computed for a matrix-eligible
 				// Star (`matrixWrap`) under noWrap with no comment/blank
 				// hardline; every other path leaves it false.
-				final _matrixSucceeds: Bool = if ($v{matrixWrap} && _noWrapFlat && !_anyMultilineItem && !_requiresHardline
-					&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap) {
-					final _pdocs: Array<anyparse.core.Doc> = [];
-					final _prow: Array<Bool> = [];
-					var _pi: Int = 0;
-					while (_pi < _arr.length) {
-						final _t = _arr[_pi];
-						_pdocs.push($triviaElemCall);
-						_prow.push(_pi == 0 || _t.newlineBefore);
-						_pi++;
-					}
-					final _pcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
-					anyparse.format.wrap.MatrixWrap.tryLayout(
-						_pdocs, _prow, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _pcols
-					) != null;
-				} else
-					false;
+				final _matrixSucceeds: Bool = $_matrixSucc;
 				// ω-keep-relax-gate: Keep emit gate. Fires whenever the
 				// wrap-rules runtime mode is Keep — comments and blanks no
 				// longer block Keep semantics. The force-multi loop below
@@ -14595,6 +14541,90 @@ class WriterLowering {
 		} else {
 			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);
 		};
+	}
+
+	/**
+	 * Sep-Star predicate-scan loop: one pass over `_arr` populating the
+	 * `_requiresHardline` / `_hasSourceNewlines` / `_hasInlineableTrivia` /
+	 * `_anyMultilineItem` accumulators (declared in the emitted scope) from each
+	 * element's blank/comment/source-newline signals. References the runtime
+	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals. Extracted from
+	 * `triviaSepStarExpr` so the orchestrator stays under the complexity gate.
+	 */
+	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, matrixWrap: Bool, triviaElemCall: Expr): Expr {
+		return macro {
+			var _ti: Int = 0;
+			while (_ti < _arr.length) {
+				final _t = _arr[_ti];
+				if (_t.blankBefore) _requiresHardline = true;
+				if (_t.leadingComments.length > 0) {
+					if (_ignoreEmit)
+						_hasInlineableTrivia = true;
+					else
+						_requiresHardline = true;
+				}
+				final _tcSig: Null<String> = _t.trailingComment;
+				if (_tcSig != null) {
+					if (_ignoreEmit && StringTools.startsWith(_tcSig, '/*'))
+						_hasInlineableTrivia = true;
+					else
+						_requiresHardline = true;
+				}
+				// ω-array-reflow idempotence: the FIRST element's `newlineBefore` also fires for
+				// a newline BEFORE the open `[` (the array on a fresh line of an enclosing broken
+				// construct — e.g. a wrapped ternary branch), not only an internal one. Counting
+				// it marks a single-line `['a', 'b']` as source-multiline → forces it OnePerLine,
+				// which the writer's own broken-branch output then re-triggers every pass (non-
+				// idempotent). So for a `reflowSourceMultiline` array Star ignore the first
+				// element's flag — EXCEPT in Keep mode (preserves source breaks verbatim) and for
+				// a comprehension (`for`/`while` sole element), whose element genuinely starts on
+				// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
+				// newlines, so they are always counted.
+				if (_t.newlineBefore && !_ignoreEmit && !_matrixOff && !($v{reflowSourceMultiline} && _ti == 0 && !_keepEmit
+				&& Type.enumConstructor(cast _t.node) != 'ForExpr' && Type.enumConstructor(cast _t.node) != 'WhileExpr'))
+					_hasSourceNewlines = true;
+				if (_noWrapFlat) {
+					// `Type.enumConstructor` returns null for a non-enum
+					// payload (e.g. an object-literal field struct) — the
+					// `==` comparisons then simply miss. Typed `Null<String>`
+					// so the null path is explicit.
+					final _itemCtor: Null<String> = Type.enumConstructor(cast _t.node);
+					if (
+						_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr' || anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0
+					) _anyMultilineItem = true;
+				}
+				_ti++;
+			}
+		};
+	}
+
+	/**
+	 * Sep-Star noWrap matrix-grid probe: the RHS of the `_matrixSucceeds` flag —
+	 * true when a matrix-eligible Star under noWrap with no comment/blank
+	 * hardline forms a uniform source grid (`MatrixWrap.tryLayout != null`), else
+	 * false. References the runtime `_noWrapFlat`/`_anyMultilineItem`/
+	 * `_requiresHardline`/`_arr` locals. Extracted from `triviaSepStarExpr`.
+	 */
+	private static function triviaSepMatrixSucceedsExpr(
+		matrixWrap: Bool, openText: String, closeText: String, sepText: String, appendTrailingCommaExpr: Expr, triviaElemCall: Expr
+	): Expr {
+		return macro if ($v{matrixWrap} && _noWrapFlat && !_anyMultilineItem && !_requiresHardline
+			&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap) {
+			final _pdocs: Array<anyparse.core.Doc> = [];
+			final _prow: Array<Bool> = [];
+			var _pi: Int = 0;
+			while (_pi < _arr.length) {
+				final _t = _arr[_pi];
+				_pdocs.push($triviaElemCall);
+				_prow.push(_pi == 0 || _t.newlineBefore);
+				_pi++;
+			}
+			final _pcols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			anyparse.format.wrap.MatrixWrap.tryLayout(
+				_pdocs, _prow, opt.arrayMatrixWrap, $v{openText}, $v{closeText}, $v{sepText}, $appendTrailingCommaExpr, _pcols
+			) != null;
+		} else
+			false;
 	}
 
 }
