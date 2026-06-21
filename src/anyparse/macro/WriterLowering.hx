@@ -102,109 +102,7 @@ class WriterLowering {
 		for (branch in node.children) {
 			final ctor: String = branch.annotations.get('base.ctor');
 			final children: Array<ShapeNode> = branch.children;
-			// ω-close-trailing-alt: in trivia mode, close-peek `@:trivia`
-			// Alt branches grow a positional `closeTrailing:Null<String>`
-			// arg in the synth ctor (`HxStatementT.BlockStmt(stmts, closeTrailing)`).
-			// The ShapeNode tree is unchanged — gate by reading the same
-			// raw `@:trail` meta `TriviaTypeSynth` consults — so the
-			// pattern grows by one binding consumed by `lowerEnumStar`.
-			//
-			// ω-trailopt-source-track: in trivia mode, single-Ref Alt
-			// branches carrying `@:trailOpt(...)` likewise grow a positional
-			// `trailPresent:Bool` arg captured by the parser's `matchLit`.
-			// Disjoint from `isAltCloseTrailingBranch` (Star vs Ref child),
-			// so at most one extra arg per branch — the writer reads the
-			// flag via `argNames[1]` in `lowerEnumBranch`'s Case 3.
-			// ω-string-interp-noformat: in trivia mode, ctors with
-			// `@:fmt(captureSource)` grow a positional `sourceText:String`
-			// arg holding the parser-captured byte slice between the
-			// ctor's `@:lead` and `@:trail`. Disjoint from the above two
-			// (different shape predicates) — at most one extra arg per
-			// branch. Read inside Case 3 via `argNames[1]` to gate verbatim
-			// emission on `opt.formatStringInterpolation`.
-			final hasCloseTrailing: Bool = ctx.trivia && TriviaTypeSynth.isAltCloseTrailingBranch(branch);
-			final hasTrailOptFlag: Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
-			final hasCaptureSource: Bool = ctx.trivia && TriviaTypeSynth.isCaptureSourceBranch(branch);
-			// ω-issue-257-firstline: single-Ref kw-led ctors carrying
-			// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
-			// arg captured by the parser. Read inside Case 3 via the index
-			// computed below to forward as `bodyPolicyWrap`'s
-			// `bodyOnSameLineExpr` parameter so `Keep` policy dispatches
-			// source-shape-aware. Disjoint from the four predicates above
-			// (single-Ref + `:kw` + `bodyPolicy` is structurally distinct)
-			// so the predicate composes additively in `extraArgs`.
-			final hasBodyPolicyKw: Bool = ctx.trivia && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
-			// omega-paren-wrap-source-newline: single-Ref @:wrap branches with
-			// `@:fmt(captureWrapOpenNewline)` grow a positional `wrapOpenNewline:Bool`
-			// arg captured by the parser (post-lead skipWs gap newline). Read
-			// inside the wrap-shape block below via `wrapOpenNewlineExpr` to
-			// route between the open-broken and glue break shapes. Disjoint
-			// from the kw-bearing predicates (no kw on @:wrap ctors); composes
-			// additively in `extraArgs`.
-			final hasWrapOpenNewline: Bool = ctx.trivia && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
-			// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
-			// ctors with `@:fmt(captureKwNewline)` grow a positional
-			// `kwNewline:Bool` arg captured by the parser (gap newline between
-			// the last keyword / lead literal and the inner `decl` Ref). Read
-			// via `altSlotAccess(..., KwNewline)` to thread `_setVarKwNewline`
-			// into the inner writeCall. Disjoint from the wrap/bodyPolicy kw
-			// predicates; composes additively in `extraArgs`.
-			final hasKwNewline: Bool = ctx.trivia && TriviaTypeSynth.isAltKwNewlineBranch(branch);
-			// ω-keep-chain (increment 2): Pratt/infix ctors with
-			// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
-			// grow a positional `chainNewline:Bool` arg captured by the parser
-			// (gap newline before the ctor's right operand). Read via
-			// `altSlotAccess(..., ChainNewline)` to feed the chain `_gather`'s
-			// `_breaks` array. Disjoint from every Alt/postfix predicate (chain
-			// ctors are bare infix); composes additively in `extraArgs`.
-			final hasChainNewline: Bool = ctx.trivia && TriviaTypeSynth.isAltChainNewlineBranch(branch);
-			// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
-			// grows a `chainLeadComment:Null<String>` slot after its `chainNewline`
-			// slot (operand's dot-gap trailing comment). Reserve it in `extraArgs`
-			// so the general FieldAccess pattern destructures the right arity; the
-			// keep-mode chain dispatch reads it directly off its hand-written
-			// `FieldAccess(_prev, _fld, _nl, _opTrail)` pattern. Postfix-only.
-			final hasChainLeadComment: Bool = ctx.trivia && TriviaTypeSynth.isPostfixChainCommentBranch(branch);
-			// ω-open-trailing-alt: same-line trailing comment after the
-			// open lit grows a parallel positional arg next to closeTrailing.
-			// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
-			// mirrored here so `argNames[2]` names the openTrailing slot.
-			final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
-			// ω-postfix-call-trailing: postfix Star-suffix ctors with
-			// auto-marked `trivia.starCollects=true` Stars (currently
-			// `HxExpr.Call`) grow a positional `closeTrailing:Null<String>`
-			// slot for the trailing comment between the close `)` and the
-			// next postfix iteration. Disjoint from the four Alt-side
-			// predicates (different ctor shapes), so the predicates compose
-			// additively in `extraArgs` without collision.
-			// ω-keep-callclose-newline: the synth now grows THREE positionals on
-			// these branches — closeTrailing (argNames[2]), argsOpenNewline
-			// (argNames[3]), argsCloseNewline (argNames[4]); `extraArgs` below
-			// reserves all three so the writer-side arg names stay aligned with
-			// the parser-pushed ctor arity.
-			final hasPostfixCloseTrailing: Bool = ctx.trivia && TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
-			// ω-orphan-trivia-alt: when the branch grows openTrailing it
-			// also grows trailingBlankBefore (`argNames[3]`) and
-			// trailingLeading (`argNames[4]`). Same `isAltCloseTrailingBranch
-			// && @:lead && !@:tryparse` gate as `hasOpenTrailing` — the
-			// synth and parser sides both emit conditionally on it.
-			// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
-			// branches (HxExpr.ArrayExpr, HxType.Anon) grow a positional
-			// `trailPresent:Bool` arg holding whether the source had a trailing
-			// separator before the close literal. Same gate as the synth side
-			// (`branch.readMetaString(':sep') != null` inside the
-			// `isAltCloseTrailingBranch + @:lead + !@:tryparse` block in
-			// `TriviaTypeSynth.buildEnumCtor`) so positions stay deterministic.
-			// Writer reads via `argNames[5]` in `lowerEnumStar`. Sister to
-			// struct-Star `<field>TrailPresent` synth slot.
-			// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
-			// readMetaString — multi-arg `@:sep('text', tailRelax, blockEnded)`
-			// gates the same as 1-arg `@:sep(',')`. Sister to TriviaTypeSynth
-			// L1076 fix; positions stay deterministic between synth + writer.
-			final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
-			final extraArgs: Int = ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
-				+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-				+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixCloseTrailing ? 3 : 0);
+			final extraArgs: Int = branchExtraArgs(branch);
 			final argNames: Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
 
 			// Build pattern
@@ -13925,6 +13823,121 @@ class WriterLowering {
 		if (slot == ChainNewline) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
+	}
+
+	/**
+	 * Per-branch synth-arg-arity count. In trivia mode a ctor's synth pattern
+	 * grows positional args beyond its ShapeNode children (closeTrailing /
+	 * trailPresent / capture-source / bodyPolicy / wrap-open / kw / chain
+	 * newline flags, …) that the parser pushes and `lowerEnumBranch` /
+	 * `lowerEnumStar` read by index. Returns the extra-arg count for `branch`
+	 * (0 outside trivia mode — every predicate below is trivia-gated).
+	 */
+	private function branchExtraArgs(branch: ShapeNode): Int {
+		if (!ctx.trivia) return 0;
+		// ω-close-trailing-alt: in trivia mode, close-peek `@:trivia`
+		// Alt branches grow a positional `closeTrailing:Null<String>`
+		// arg in the synth ctor (`HxStatementT.BlockStmt(stmts, closeTrailing)`).
+		// The ShapeNode tree is unchanged — gate by reading the same
+		// raw `@:trail` meta `TriviaTypeSynth` consults — so the
+		// pattern grows by one binding consumed by `lowerEnumStar`.
+		//
+		// ω-trailopt-source-track: in trivia mode, single-Ref Alt
+		// branches carrying `@:trailOpt(...)` likewise grow a positional
+		// `trailPresent:Bool` arg captured by the parser's `matchLit`.
+		// Disjoint from `isAltCloseTrailingBranch` (Star vs Ref child),
+		// so at most one extra arg per branch — the writer reads the
+		// flag via `argNames[1]` in `lowerEnumBranch`'s Case 3.
+		// ω-string-interp-noformat: in trivia mode, ctors with
+		// `@:fmt(captureSource)` grow a positional `sourceText:String`
+		// arg holding the parser-captured byte slice between the
+		// ctor's `@:lead` and `@:trail`. Disjoint from the above two
+		// (different shape predicates) — at most one extra arg per
+		// branch. Read inside Case 3 via `argNames[1]` to gate verbatim
+		// emission on `opt.formatStringInterpolation`.
+		final hasCloseTrailing: Bool = TriviaTypeSynth.isAltCloseTrailingBranch(branch);
+		final hasTrailOptFlag: Bool = TriviaTypeSynth.isAltTrailOptBranch(branch);
+		final hasCaptureSource: Bool = TriviaTypeSynth.isCaptureSourceBranch(branch);
+		// ω-issue-257-firstline: single-Ref kw-led ctors carrying
+		// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
+		// arg captured by the parser. Read inside Case 3 via the index
+		// computed below to forward as `bodyPolicyWrap`'s
+		// `bodyOnSameLineExpr` parameter so `Keep` policy dispatches
+		// source-shape-aware. Disjoint from the four predicates above
+		// (single-Ref + `:kw` + `bodyPolicy` is structurally distinct)
+		// so the predicate composes additively in `extraArgs`.
+		final hasBodyPolicyKw: Bool = TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+		// omega-paren-wrap-source-newline: single-Ref @:wrap branches with
+		// `@:fmt(captureWrapOpenNewline)` grow a positional `wrapOpenNewline:Bool`
+		// arg captured by the parser (post-lead skipWs gap newline). Read
+		// inside the wrap-shape block below via `wrapOpenNewlineExpr` to
+		// route between the open-broken and glue break shapes. Disjoint
+		// from the kw-bearing predicates (no kw on @:wrap ctors); composes
+		// additively in `extraArgs`.
+		final hasWrapOpenNewline: Bool = TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
+		// ctors with `@:fmt(captureKwNewline)` grow a positional
+		// `kwNewline:Bool` arg captured by the parser (gap newline between
+		// the last keyword / lead literal and the inner `decl` Ref). Read
+		// via `altSlotAccess(..., KwNewline)` to thread `_setVarKwNewline`
+		// into the inner writeCall. Disjoint from the wrap/bodyPolicy kw
+		// predicates; composes additively in `extraArgs`.
+		final hasKwNewline: Bool = TriviaTypeSynth.isAltKwNewlineBranch(branch);
+		// ω-keep-chain (increment 2): Pratt/infix ctors with
+		// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
+		// grow a positional `chainNewline:Bool` arg captured by the parser
+		// (gap newline before the ctor's right operand). Read via
+		// `altSlotAccess(..., ChainNewline)` to feed the chain `_gather`'s
+		// `_breaks` array. Disjoint from every Alt/postfix predicate (chain
+		// ctors are bare infix); composes additively in `extraArgs`.
+		final hasChainNewline: Bool = TriviaTypeSynth.isAltChainNewlineBranch(branch);
+		// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
+		// grows a `chainLeadComment:Null<String>` slot after its `chainNewline`
+		// slot (operand's dot-gap trailing comment). Reserve it in `extraArgs`
+		// so the general FieldAccess pattern destructures the right arity; the
+		// keep-mode chain dispatch reads it directly off its hand-written
+		// `FieldAccess(_prev, _fld, _nl, _opTrail)` pattern. Postfix-only.
+		final hasChainLeadComment: Bool = TriviaTypeSynth.isPostfixChainCommentBranch(branch);
+		// ω-open-trailing-alt: same-line trailing comment after the
+		// open lit grows a parallel positional arg next to closeTrailing.
+		// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
+		// mirrored here so `argNames[2]` names the openTrailing slot.
+		final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
+		// ω-postfix-call-trailing: postfix Star-suffix ctors with
+		// auto-marked `trivia.starCollects=true` Stars (currently
+		// `HxExpr.Call`) grow a positional `closeTrailing:Null<String>`
+		// slot for the trailing comment between the close `)` and the
+		// next postfix iteration. Disjoint from the four Alt-side
+		// predicates (different ctor shapes), so the predicates compose
+		// additively in `extraArgs` without collision.
+		// ω-keep-callclose-newline: the synth now grows THREE positionals on
+		// these branches — closeTrailing (argNames[2]), argsOpenNewline
+		// (argNames[3]), argsCloseNewline (argNames[4]); `extraArgs` below
+		// reserves all three so the writer-side arg names stay aligned with
+		// the parser-pushed ctor arity.
+		final hasPostfixCloseTrailing: Bool = TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
+		// ω-orphan-trivia-alt: when the branch grows openTrailing it
+		// also grows trailingBlankBefore (`argNames[3]`) and
+		// trailingLeading (`argNames[4]`). Same `isAltCloseTrailingBranch
+		// && @:lead && !@:tryparse` gate as `hasOpenTrailing` — the
+		// synth and parser sides both emit conditionally on it.
+		// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
+		// branches (HxExpr.ArrayExpr, HxType.Anon) grow a positional
+		// `trailPresent:Bool` arg holding whether the source had a trailing
+		// separator before the close literal. Same gate as the synth side
+		// (`branch.readMetaString(':sep') != null` inside the
+		// `isAltCloseTrailingBranch + @:lead + !@:tryparse` block in
+		// `TriviaTypeSynth.buildEnumCtor`) so positions stay deterministic.
+		// Writer reads via `argNames[5]` in `lowerEnumStar`. Sister to
+		// struct-Star `<field>TrailPresent` synth slot.
+		// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+		// readMetaString — multi-arg `@:sep('text', tailRelax, blockEnded)`
+		// gates the same as 1-arg `@:sep(',')`. Sister to TriviaTypeSynth
+		// L1076 fix; positions stay deterministic between synth + writer.
+		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
+		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
+			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
+			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixCloseTrailing ? 3 : 0);
 	}
 
 }
