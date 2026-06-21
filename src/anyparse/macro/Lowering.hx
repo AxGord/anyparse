@@ -874,56 +874,16 @@ class Lowering {
 			// local fresh post-trail (`final … = collectTrailing(ctx)`)
 			// — the names collide harmlessly because the mandatory and
 			// optional paths are mutually exclusive per field.
-			final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref && isOptional && !isStar && trailText != null && ctx.trivia
-				&& isTriviaBearing(typePath);
-			if (hasOptionalRefAfterTrailSlot) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: '_afterTrail_$fieldName',
-							type: (macro :Null<String>),
-							expr: macro null,
-							isFinal: false,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-			}
-			// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
-			// typedef Ref fields carrying `@:trailOpt(LIT)` capture matchLit
-			// presence into `_trailPresent_<field>:Bool`. Mirrors the
-			// synth-side `<field>TrailPresent` slot pushed by
-			// `TriviaTypeSynth.buildStructFieldTrailPresentSlot` (Phase 2).
-			// Local is pre-declared `false` here so BOTH the mandatory-Ref
-			// path (post-switch L2517) and the optional-Ref + trailOpt path
-			// (inside the Ref-isOptional switch arm L2237) can write into
-			// the same name (the two paths are mutually exclusive per
-			// field — `!isOptional` vs `isOptional`).
-			//
-			// Phase 4 will read this on the writer side to gate trail
-			// re-emission on source presence; until then the captured
-			// value is unobserved and Δsweep stays 0.
-			final hasStructFieldTrailOptSlot: Bool = child.kind == Ref && !isStar && child.annotations.get('lit.trailOptional') == true
-				&& ctx.trivia && isTriviaBearing(typePath);
 			final trailPresentLocal: String = '_trailPresent_$fieldName';
-			if (hasStructFieldTrailOptSlot) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: trailPresentLocal,
-							type: (macro :Bool),
-							expr: macro false,
-							isFinal: false,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-			}
-			// Splicing the same `Expr` into two `macro` blocks is safe —
-			// macro Expr values are AST snapshots, not consumed on splice.
-			// Shared between the optional-Ref subCall arm and the mandatory-
-			// Ref post-switch matchLit (mutually exclusive per field).
-			final captureTrailPresentExpr: Expr = hasStructFieldTrailOptSlot ? macro $i{trailPresentLocal} = true : macro {};
+			final _trailSidecar = emitTrailSidecarDecls(
+				child, typePath, fieldName, isStar, isOptional, trailText, trailPresentLocal, parseSteps
+			);
+			final hasOptionalRefAfterTrailSlot: Bool = _trailSidecar.hasOptionalRefAfterTrailSlot;
+			final hasStructFieldTrailOptSlot: Bool = _trailSidecar.hasStructFieldTrailOptSlot;
+			final captureTrailPresentExpr: Expr = _trailSidecar.captureTrailPresentExpr;
+			// hasOptionalRefAfterTrailSlot / hasStructFieldTrailOptSlot and the two
+			// _afterTrail_/_trailPresent_ accumulator decls + captureTrailPresentExpr
+			// splice are computed/emitted by emitTrailSidecarDecls; see there.
 			if (hasKwTriviaSlots) {
 				emitKwTriviaSlotDecls(
 					afterKwLocal, kwLeadingLocal, beforeKwNlLocal, bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal,
@@ -5790,6 +5750,88 @@ expectLit(ctx, $v{trailText}));
 			final sepBeforeLocal: String = localName + 'SepBefore';
 			structFields.push({ field: fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX, expr: macro $i{sepBeforeLocal} });
 		}
+	}
+
+	/**
+	 * Compute the two trail-capture sidecar flags for a Ref field and emit
+	 * their pre-declared accumulator locals: `_afterTrail_<field>` (null,
+	 * filled by the optional-Ref lead-led commit branch) and
+	 * `_trailPresent_<field>` (false, set true by the @:trailOpt matchLit hit).
+	 * Returns the flags plus the shared `captureTrailPresentExpr` splice. Both
+	 * locals are pushed onto `parseSteps`; the flags are read downstream by the
+	 * switch arms, emitFieldTrail and pushStructFieldEntries. Lifted from
+	 * `lowerStruct`.
+	 */
+	private function emitTrailSidecarDecls(
+		child: ShapeNode, typePath: String, fieldName: Null<String>, isStar: Bool, isOptional: Bool, trailText: Null<String>,
+		trailPresentLocal: String, parseSteps: Array<Expr>
+	): {
+		hasOptionalRefAfterTrailSlot: Bool,
+		hasStructFieldTrailOptSlot: Bool,
+		captureTrailPresentExpr: Expr
+	} {
+		// ω-optional-ref-trail (Slice 40): pre-declare the
+		// `<field>AfterTrail` capture local before the parse step so
+		// the optional-Ref's lead-led commit branch can assign into
+		// it after `expectLit(trail)`, while the absent branch leaves
+		// the default `null`. Mandatory-Ref path declares the same
+		// local fresh post-trail (`final … = collectTrailing(ctx)`)
+		// — the names collide harmlessly because the mandatory and
+		// optional paths are mutually exclusive per field.
+		final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref && isOptional && !isStar && trailText != null && ctx.trivia
+			&& isTriviaBearing(typePath);
+		if (hasOptionalRefAfterTrailSlot) {
+			parseSteps.push({
+				expr: EVars([
+					{
+						name: '_afterTrail_$fieldName',
+						type: (macro :Null<String>),
+						expr: macro null,
+						isFinal: false,
+					}
+				]),
+				pos: Context.currentPos(),
+			});
+		}
+		// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
+		// typedef Ref fields carrying `@:trailOpt(LIT)` capture matchLit
+		// presence into `_trailPresent_<field>:Bool`. Mirrors the
+		// synth-side `<field>TrailPresent` slot pushed by
+		// `TriviaTypeSynth.buildStructFieldTrailPresentSlot` (Phase 2).
+		// Local is pre-declared `false` here so BOTH the mandatory-Ref
+		// path (post-switch L2517) and the optional-Ref + trailOpt path
+		// (inside the Ref-isOptional switch arm L2237) can write into
+		// the same name (the two paths are mutually exclusive per
+		// field — `!isOptional` vs `isOptional`).
+		//
+		// Phase 4 will read this on the writer side to gate trail
+		// re-emission on source presence; until then the captured
+		// value is unobserved and Δsweep stays 0.
+		final hasStructFieldTrailOptSlot: Bool = child.kind == Ref && !isStar && child.annotations.get('lit.trailOptional') == true
+			&& ctx.trivia && isTriviaBearing(typePath);
+		if (hasStructFieldTrailOptSlot) {
+			parseSteps.push({
+				expr: EVars([
+					{
+						name: trailPresentLocal,
+						type: (macro :Bool),
+						expr: macro false,
+						isFinal: false,
+					}
+				]),
+				pos: Context.currentPos(),
+			});
+		}
+		// Splicing the same `Expr` into two `macro` blocks is safe —
+		// macro Expr values are AST snapshots, not consumed on splice.
+		// Shared between the optional-Ref subCall arm and the mandatory-
+		// Ref post-switch matchLit (mutually exclusive per field).
+		final captureTrailPresentExpr: Expr = hasStructFieldTrailOptSlot ? macro $i{trailPresentLocal} = true : macro {};
+		return {
+			hasOptionalRefAfterTrailSlot: hasOptionalRefAfterTrailSlot,
+			hasStructFieldTrailOptSlot: hasStructFieldTrailOptSlot,
+			captureTrailPresentExpr: captureTrailPresentExpr,
+		};
 	}
 
 }
