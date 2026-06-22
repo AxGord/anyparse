@@ -3630,143 +3630,42 @@ final class Cli {
 	 * (case-patterns are the canonical example).
 	 */
 	private static function runMentions(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var limit: Int = -1;
-		var name: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printMentionsUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq mentions: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (name == null)
-						name = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: MentionsOpts = parseMentionsArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final name: Null<String> = o.name;
 		if (name == null) {
 			stderr('apq mentions: missing <name> argument\n');
 			printMentionsUsage();
 			return EXIT_USAGE;
 		}
-		if (inputSpecs.length == 0) {
+		if (o.inputSpecs.length == 0) {
 			stderr('apq mentions: missing <file-or-dir-or-glob> argument\n');
 			printMentionsUsage();
 			return EXIT_USAGE;
 		}
 		final target: String = name;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final refShape: RefShape = plugin.refShape();
 		final typeShape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq mentions: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq mentions: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
-		// Single value-AST pass per file, shared across all three sections.
-		// Mirrors `runBlast`'s caching discipline. All three sections
-		// (uses / refs / lit-exact) search for `target` verbatim, so the
-		// raw-substring pre-filter is a strict necessary condition.
-		// Section 3 (`lit`) matches decoded literal values, so the key is
-		// opted out of the pre-filter when it carries a backslash — same
-		// escaped-literal caution as `runLit`.
-		final mentionsPrefilterKey: Null<String> = target.indexOf('\\') < 0 ? target : null;
-		final valueTrees: Array<{ path: String, source: String, tree: QueryNode }> = [];
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked(
-				'mentions', plugin.parseFile, path, source, expanded.singleFile, null, mentionsPrefilterKey
-			);
-			streamProgress('mentions', ++scanned, paths.length, expanded.singleFile);
-			if (tree == null) {
-				if (expanded.singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			valueTrees.push({ path: path, source: source, tree: tree });
-		}
+		final valueTrees: Null<Array<{ path: String, source: String, tree: QueryNode }>> = collectMentionsValueTrees(
+			target, paths, plugin, expanded.singleFile
+		);
+		if (valueTrees == null) return EXIT_RUNTIME;
 
-		var any: Bool = false;
+		final usesAny: Bool = emitMentionsUses(target, valueTrees, plugin, typeShape, expanded.singleFile, o.flat);
+		final refsAny: Bool = emitMentionsRefs(target, valueTrees, refShape, o.flat);
+		final litAny: Bool = emitMentionsLit(target, valueTrees, o.limit, o.flat);
 
-		// Section 1 — type-position references (precise). The type-refs
-		// re-parse is pre-filtered on `target` (a type position always
-		// names the type verbatim).
-		var usesHeader: Bool = false;
-		for (entry in valueTrees) {
-			final typeTree: Null<QueryNode> = parseWalked(
-				'mentions', plugin.parseFileTypeRefs, entry.path, entry.source, expanded.singleFile, null, target
-			);
-			if (typeTree == null) continue;
-			final hits: Array<UsesHit> = Uses.find(target, typeTree, typeShape);
-			if (hits.length == 0) continue;
-			any = true;
-			if (!usesHeader) {
-				sysPrint('# uses (type positions)\n');
-				usesHeader = true;
-			}
-			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
-		}
-
-		// Section 2 — value-binding references (precise).
-		var refsHeader: Bool = false;
-		for (entry in valueTrees) {
-			final hits: Array<RefHit> = Refs.find(target, entry.tree, refShape);
-			if (hits.length == 0) continue;
-			any = true;
-			if (!refsHeader) {
-				sysPrint('# refs (value bindings)\n');
-				refsHeader = true;
-			}
-			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
-		}
-
-		// Section 3 — every other leaf carrying this name (case-patterns,
-		// imports, new exprs, field-name slots). `lit` with empty kind
-		// filter + exact match. `--limit` caps this section only — the
-		// precise refs/uses sections are typically small.
-		final litEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
-		for (entry in valueTrees) {
-			final hits: Array<LitHit> = Lit.find(target, entry.tree, true, null);
-			if (hits.length == 0) continue;
-			litEntries.push({ file: entry.path, source: entry.source, hits: hits });
-		}
-		if (litEntries.length > 0) {
-			any = true;
-			var totalHits: Int = 0;
-			for (e in litEntries) totalHits += e.hits.length;
-			final cappedLimit: Int = effectiveAutoLimit('mentions', limit, totalHits);
-			final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
-				limitEntries(
-					litEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-				);
-			sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
-			for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
-		}
-
+		final any: Bool = usesAny || refsAny || litAny;
 		if (!any) stderr('apq mentions: no uses / refs / lit-leaf of "$target" found\n');
 		return emptyExit(!any);
 	}
@@ -12117,6 +12016,159 @@ final class Cli {
 		};
 	}
 
+	private static inline function mentionsParseExit(code: Int): MentionsOpts {
+		return {
+			lang: '',
+			flat: false,
+			limit: -1,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseMentionsArgs(args: Array<String>): MentionsOpts {
+		var lang: String = 'haxe';
+		var flat: Bool = false;
+		var limit: Int = -1;
+		var name: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return mentionsParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printMentionsUsage();
+					return mentionsParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq mentions: unknown option "$a"\n');
+						return mentionsParseExit(EXIT_USAGE);
+					}
+					if (name == null)
+						name = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			flat: flat,
+			limit: limit,
+			name: name,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function collectMentionsValueTrees(
+		target: String, paths: Array<String>, plugin: GrammarPlugin, singleFile: Bool
+	): Null<Array<{ path: String, source: String, tree: QueryNode }>> {
+		// Single value-AST pass per file, shared across all three sections.
+		// Mirrors `runBlast`'s caching discipline. All three sections
+		// (uses / refs / lit-exact) search for `target` verbatim, so the
+		// raw-substring pre-filter is a strict necessary condition.
+		// Section 3 (`lit`) matches decoded literal values, so the key is
+		// opted out of the pre-filter when it carries a backslash — same
+		// escaped-literal caution as `runLit`.
+		final mentionsPrefilterKey: Null<String> = target.indexOf('\\') < 0 ? target : null;
+		final valueTrees: Array<{ path: String, source: String, tree: QueryNode }> = [];
+		var scanned: Int = 0;
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('mentions', plugin.parseFile, path, source, singleFile, null, mentionsPrefilterKey);
+			streamProgress('mentions', ++scanned, paths.length, singleFile);
+			if (tree == null) {
+				if (singleFile) return null;
+				continue;
+			}
+			valueTrees.push({ path: path, source: source, tree: tree });
+		}
+		return valueTrees;
+	}
+
+	private static function emitMentionsUses(
+		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, plugin: GrammarPlugin,
+		typeShape: TypeRefShape, singleFile: Bool, flat: Bool
+	): Bool {
+		// Section 1 — type-position references (precise). The type-refs
+		// re-parse is pre-filtered on `target` (a type position always
+		// names the type verbatim).
+		var any: Bool = false;
+		var header: Bool = false;
+		for (entry in valueTrees) {
+			final typeTree: Null<QueryNode> = parseWalked(
+				'mentions', plugin.parseFileTypeRefs, entry.path, entry.source, singleFile, null, target
+			);
+			if (typeTree == null) continue;
+			final hits: Array<UsesHit> = Uses.find(target, typeTree, typeShape);
+			if (hits.length == 0) continue;
+			any = true;
+			if (!header) {
+				sysPrint('# uses (type positions)\n');
+				header = true;
+			}
+			sysPrint(Text.renderUses(entry.path, entry.source, hits, false, false, flat));
+		}
+		return any;
+	}
+
+	private static function emitMentionsRefs(
+		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, refShape: RefShape, flat: Bool
+	): Bool {
+		// Section 2 — value-binding references (precise).
+		var any: Bool = false;
+		var header: Bool = false;
+		for (entry in valueTrees) {
+			final hits: Array<RefHit> = Refs.find(target, entry.tree, refShape);
+			if (hits.length == 0) continue;
+			any = true;
+			if (!header) {
+				sysPrint('# refs (value bindings)\n');
+				header = true;
+			}
+			sysPrint(Text.renderRefs(entry.path, entry.source, hits, false, false, flat));
+		}
+		return any;
+	}
+
+	private static function emitMentionsLit(
+		target: String, valueTrees: Array<{ path: String, source: String, tree: QueryNode }>, limit: Int, flat: Bool
+	): Bool {
+		// Section 3 — every other leaf carrying this name (case-patterns,
+		// imports, new exprs, field-name slots). `lit` with empty kind
+		// filter + exact match. `--limit` caps this section only — the
+		// precise refs/uses sections are typically small.
+		final litEntries: Array<{ file: String, source: String, hits: Array<LitHit> }> = [];
+		for (entry in valueTrees) {
+			final hits: Array<LitHit> = Lit.find(target, entry.tree, true, null);
+			if (hits.length == 0) continue;
+			litEntries.push({ file: entry.path, source: entry.source, hits: hits });
+		}
+		if (litEntries.length == 0) return false;
+		var totalHits: Int = 0;
+		for (e in litEntries) totalHits += e.hits.length;
+		final cappedLimit: Int = effectiveAutoLimit('mentions', limit, totalHits);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
+			limitEntries(
+				litEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			);
+		sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
+		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
+		return true;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12400,6 +12452,17 @@ typedef ReplaceNodeOpts = {
 	var file: Null<String>;
 	var newSource: Null<String>;
 	var fromFile: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef MentionsOpts = {
+	var lang: String;
+	var flat: Bool;
+	var limit: Int;
+	var name: Null<String>;
+	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
