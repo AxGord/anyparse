@@ -8246,86 +8246,37 @@ final class Cli {
 	 * non-zero if any file failed.
 	 */
 	private static function runFmt(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var list: Bool = false;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--write', '-w':
-					write = true;
-				case '--list', '-l':
-					list = true;
-				case '-h', '--help':
-					printFmtUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq fmt: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					inputSpecs.push(a);
-			}
-			i++;
-		}
-		if (inputSpecs.length == 0) {
+		final o: FmtOpts = parseFmtArgs(args);
+		if (o.errExit != null) return o.errExit;
+		if (o.inputSpecs.length == 0) {
 			stderr('apq fmt: expected <file/dir/glob>...\n');
 			printFmtUsage();
 			return EXIT_USAGE;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq fmt: ${inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq fmt: ${o.inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
 		// No --write and no -l on a single concrete file → emit the formatted
 		// source to stdout (gofmt's one-file default). Multiple files / a dir
 		// without --write → list mode (names of files that would change).
-		final listMode: Bool = list || (!write && !expanded.singleFile);
+		final listMode: Bool = o.list || (!o.write && !expanded.singleFile);
 
 		var changed: Int = 0;
 		var failed: Int = 0;
 		for (path in paths) {
-			final source: String = try readFile(path) catch (exception: Exception) {
-				stderr('apq fmt: $path: ${exception.message}\n');
-				failed++;
-				continue;
-			};
-			final optsJson: Null<String> = discoverFormatConfig(path);
-			final formatted: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: Exception) {
-				stderr('apq fmt: $path: ${exception.message}\n');
-				failed++;
-				continue;
-			};
-			if (formatted == null) {
-				stderr('apq fmt: no writer for lang "$lang"\n');
-				return EXIT_RUNTIME;
-			}
-			final isCanonical: Bool = formatted == source;
-			if (write) {
-				if (!isCanonical) {
-					writeFile(path, formatted);
-					changed++;
-				}
-			} else if (listMode) {
-				if (!isCanonical) {
-					sysPrint('$path\n');
-					changed++;
-				}
-			} else
-				sysPrint(formatted);
+			final r: FmtFileResult = formatOneFile(plugin, o.lang, path, o.write, listMode);
+			if (r.fatalExit != null) return r.fatalExit;
+			if (r.changed) changed++;
+			if (r.failed) failed++;
 		}
 
-		if (write)
+		if (o.write)
 			stderr('apq fmt: formatted $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
 		else if (listMode && failed > 0) stderr('apq fmt: $failed file(s) failed to parse\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
@@ -11932,6 +11883,83 @@ final class Cli {
 		};
 	}
 
+	private static inline function fmtParseExit(code: Int): FmtOpts {
+		return {
+			lang: '',
+			write: false,
+			list: false,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseFmtArgs(args: Array<String>): FmtOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var list: Bool = false;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write', '-w':
+					write = true;
+				case '--list', '-l':
+					list = true;
+				case '-h', '--help':
+					printFmtUsage();
+					return fmtParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq fmt: unknown option "$a"\n');
+						return fmtParseExit(EXIT_USAGE);
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			list: list,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function formatOneFile(plugin: GrammarPlugin, lang: String, path: String, write: Bool, listMode: Bool): FmtFileResult {
+		final source: String = try readFile(path) catch (exception: Exception) {
+			stderr('apq fmt: $path: ${exception.message}\n');
+			return { changed: false, failed: true, fatalExit: null };
+		};
+		final optsJson: Null<String> = discoverFormatConfig(path);
+		final formatted: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: Exception) {
+			stderr('apq fmt: $path: ${exception.message}\n');
+			return { changed: false, failed: true, fatalExit: null };
+		};
+		if (formatted == null) {
+			stderr('apq fmt: no writer for lang "$lang"\n');
+			return { changed: false, failed: false, fatalExit: EXIT_RUNTIME };
+		}
+		final isCanonical: Bool = formatted == source;
+		if (write) {
+			if (!isCanonical) {
+				writeFile(path, formatted);
+				return { changed: true, failed: false, fatalExit: null };
+			}
+		} else if (listMode) {
+			if (!isCanonical) {
+				sysPrint('$path\n');
+				return { changed: true, failed: false, fatalExit: null };
+			}
+		} else
+			sysPrint(formatted);
+		return { changed: false, failed: false, fatalExit: null };
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12141,4 +12169,23 @@ typedef SetDocOpts = {
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef FmtOpts = {
+	var lang: String;
+	var write: Bool;
+	var list: Bool;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+
+@:nullSafety(Strict)
+typedef FmtFileResult = {
+	var changed: Bool;
+	var failed: Bool;
+	// Non-null = a fatal per-file outcome (no writer wired for the lang);
+	// the caller returns this immediately, aborting the remaining files.
+	var fatalExit: Null<Int>;
 };
