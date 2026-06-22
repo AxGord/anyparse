@@ -3185,58 +3185,12 @@ final class Cli {
 	 * that extracts just the predicate name and groups by gate flavour.
 	 */
 	private static function runGates(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var flat: Bool = false;
-		var limit: Int = -1;
-		// `--mechanism <name>` extends `gates` from its original
-		// `trail-opt`-only scope (`@:fmt(trailOptParseGate(...))` /
-		// `trailOptShapeGate(...)`) to other Lowering mechanisms whose
-		// `--predict-relax`-style relaxation potential we want to
-		// inventory ahead of a slice:
-		//   - `optional-ref` — fields with `@:optional` + `@:lead` /
-		//     `@:kw` / `@:absentOn`. Already-relaxed precedent sites.
-		//   - `optional-ref-trail` — Slice 40's new pattern (`@:optional`
-		//     + `@:lead` + `@:trail` on a single Ref), used by
-		//     `HxAbstractDecl.underlyingType`. THE list of bracket-pair
-		//     fields you could optionalize via the Slice 40 mechanism.
-		//   - `mandatory-ref-lead-trail` — Ref fields with `@:lead` +
-		//     `@:trail` (bracket pair) WITHOUT `@:optional`. The
-		//     pre-Slice-40 shape — candidates to relax via Slice 40's
-		//     mechanism. THIS IS THE PREDICT-OPTIONAL FALLBACK list.
-		//   - `kw-lead` — fields with `@:kw`. Slice precedent for word-
-		//     keyword dispatch on a single field.
-		// Default value `trail-opt` preserves the bare `gates` output
-		// 1:1 (existing tests assume this).
-		var mechanism: String = 'trail-opt';
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '--mechanism':
-					mechanism = expectValue(args, ++i, '--mechanism');
-				case '-h', '--help':
-					printGatesUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq gates: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: GatesOpts = parseGatesArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final lang: String = o.lang;
+		final flat: Bool = o.flat;
+		final limit: Int = o.limit;
+		final mechanism: String = o.mechanism;
 		final validMechanisms: Array<String> = [
 			'trail-opt',
 			'optional-ref',
@@ -3249,7 +3203,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		// Default scope: the grammar tree for the selected lang.
-		final effectiveSpecs: Array<String> = inputSpecs.length > 0 ? inputSpecs : ['src/anyparse/grammar/$lang/'];
+		final effectiveSpecs: Array<String> = o.inputSpecs.length > 0 ? o.inputSpecs : ['src/anyparse/grammar/$lang/'];
 
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final shape: MetaShape = plugin.metaShape();
@@ -3280,37 +3234,11 @@ final class Cli {
 		}
 
 		if (allHits.length == 0) {
-			final what: String = switch mechanism {
-				case 'trail-opt':
-					'`@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations';
-				case 'optional-ref':
-					'`@:optional` Ref fields with `@:lead` / `@:kw` / `@:absentOn`';
-				case 'optional-ref-trail':
-					'`@:optional @:lead @:trail` Ref fields (Slice 40 bracket-pair pattern)';
-				case 'mandatory-ref-lead-trail':
-					'mandatory Ref fields with `@:lead` + `@:trail` (relax candidates for Slice 40 mechanism)';
-				case 'kw-lead':
-					'fields with `@:kw`';
-				case _: '<unknown mechanism>';
-			};
-			stderr('apq gates: no $what in ${paths.length} file(s) scanned\n');
+			stderr('apq gates: no ${gatesNoHitsLabel(mechanism)} in ${paths.length} file(s) scanned\n');
 			return EXIT_OK;
 		}
 
-		for (entry in allHits) {
-			if (!flat) sysPrint('${entry.file}:\n');
-			for (h in entry.hits) {
-				final declLabel: String = h.declName == null ? h.declKind : '${h.declKind} ${h.declName}';
-				final prefix: String = flat ? '${entry.file}:${h.line}:${h.col}: ' : '  ${h.line}:${h.col}: ';
-				// trail-opt format preserved 1:1 for backwards-compat:
-				// `<DeclKind> <name?> → trailOptParseGate('<pred>')`.
-				// Other mechanisms render `<DeclKind> <name?> → <metas>`
-				// where `<metas>` is the relevant subset of `@:` annotations
-				// already-quoted in `predicate` (raw string from classifier).
-				final tail: String = mechanism == 'trail-opt' ? '${h.gateKind}(\'${h.predicate}\')' : h.predicate;
-				sysPrint('$prefix$declLabel → $tail\n');
-			}
-		}
+		emitGateHits(allHits, mechanism, flat);
 		return EXIT_OK;
 	}
 
@@ -12169,6 +12097,115 @@ final class Cli {
 		return true;
 	}
 
+	private static inline function gatesParseExit(code: Int): GatesOpts {
+		return {
+			lang: '',
+			flat: false,
+			limit: -1,
+			mechanism: 'trail-opt',
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseGatesArgs(args: Array<String>): GatesOpts {
+		var lang: String = 'haxe';
+		var flat: Bool = false;
+		var limit: Int = -1;
+		// `--mechanism <name>` extends `gates` from its original
+		// `trail-opt`-only scope (`@:fmt(trailOptParseGate(...))` /
+		// `trailOptShapeGate(...)`) to other Lowering mechanisms whose
+		// `--predict-relax`-style relaxation potential we want to
+		// inventory ahead of a slice:
+		//   - `optional-ref` — fields with `@:optional` + `@:lead` /
+		//     `@:kw` / `@:absentOn`. Already-relaxed precedent sites.
+		//   - `optional-ref-trail` — Slice 40's new pattern (`@:optional`
+		//     + `@:lead` + `@:trail` on a single Ref), used by
+		//     `HxAbstractDecl.underlyingType`. THE list of bracket-pair
+		//     fields you could optionalize via the Slice 40 mechanism.
+		//   - `mandatory-ref-lead-trail` — Ref fields with `@:lead` +
+		//     `@:trail` (bracket pair) WITHOUT `@:optional`. The
+		//     pre-Slice-40 shape — candidates to relax via Slice 40's
+		//     mechanism. THIS IS THE PREDICT-OPTIONAL FALLBACK list.
+		//   - `kw-lead` — fields with `@:kw`. Slice precedent for word-
+		//     keyword dispatch on a single field.
+		// Default value `trail-opt` preserves the bare `gates` output
+		// 1:1 (existing tests assume this).
+		var mechanism: String = 'trail-opt';
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return gatesParseExit(EXIT_USAGE);
+					}
+				case '--mechanism':
+					mechanism = expectValue(args, ++i, '--mechanism');
+				case '-h', '--help':
+					printGatesUsage();
+					return gatesParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq gates: unknown option "$a"\n');
+						return gatesParseExit(EXIT_USAGE);
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			flat: flat,
+			limit: limit,
+			mechanism: mechanism,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function gatesNoHitsLabel(mechanism: String): String {
+		return switch mechanism {
+			case 'trail-opt':
+				'`@:fmt(trailOptParseGate(...))` / `@:fmt(trailOptShapeGate(...))` annotations';
+			case 'optional-ref':
+				'`@:optional` Ref fields with `@:lead` / `@:kw` / `@:absentOn`';
+			case 'optional-ref-trail':
+				'`@:optional @:lead @:trail` Ref fields (Slice 40 bracket-pair pattern)';
+			case 'mandatory-ref-lead-trail':
+				'mandatory Ref fields with `@:lead` + `@:trail` (relax candidates for Slice 40 mechanism)';
+			case 'kw-lead':
+				'fields with `@:kw`';
+			case _: '<unknown mechanism>';
+		};
+	}
+
+	private static function emitGateHits(
+		allHits: Array<{ file: String, source: String, hits: Array<GateHit> }>, mechanism: String, flat: Bool
+	): Void {
+		for (entry in allHits) {
+			if (!flat) sysPrint('${entry.file}:\n');
+			for (h in entry.hits) {
+				final declLabel: String = h.declName == null ? h.declKind : '${h.declKind} ${h.declName}';
+				final prefix: String = flat ? '${entry.file}:${h.line}:${h.col}: ' : '  ${h.line}:${h.col}: ';
+				// trail-opt format preserved 1:1 for backwards-compat:
+				// `<DeclKind> <name?> → trailOptParseGate('<pred>')`.
+				// Other mechanisms render `<DeclKind> <name?> → <metas>`
+				// where `<metas>` is the relevant subset of `@:` annotations
+				// already-quoted in `predicate` (raw string from classifier).
+				final tail: String = mechanism == 'trail-opt' ? '${h.gateKind}(\'${h.predicate}\')' : h.predicate;
+				sysPrint('$prefix$declLabel → $tail\n');
+			}
+		}
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12462,6 +12499,17 @@ typedef MentionsOpts = {
 	var flat: Bool;
 	var limit: Int;
 	var name: Null<String>;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef GatesOpts = {
+	var lang: String;
+	var flat: Bool;
+	var limit: Int;
+	var mechanism: String;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
