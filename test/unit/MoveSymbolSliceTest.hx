@@ -220,18 +220,18 @@ class MoveSymbolSliceTest extends Test {
 	/** Refusal: source and destination are the same file. */
 	public function testSameFileRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Foo {}';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/A.hx', [
-			{ file: 'pkg/A.hx', source: a },
-		], plugin(), typeRefShape());
+		final result: MoveResult = MoveSymbol.moveType(
+			'pkg/A.hx', 3, 7, 'pkg/A.hx', [{ file: 'pkg/A.hx', source: a },], plugin(), typeRefShape()
+		);
 		assertErr(result);
 	}
 
 	/** Refusal: the destination file is not in the scope set. */
 	public function testDestNotInScopeRefused(): Void {
 		final a: String = 'package pkg;\n\nclass Foo {}';
-		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'pkg/Missing.hx', [
-			{ file: 'pkg/A.hx', source: a },
-		], plugin(), typeRefShape());
+		final result: MoveResult = MoveSymbol.moveType(
+			'pkg/A.hx', 3, 7, 'pkg/Missing.hx', [{ file: 'pkg/A.hx', source: a },], plugin(), typeRefShape()
+		);
 		assertErr(result);
 	}
 

@@ -115,7 +115,8 @@ class JsonParserTest extends Test {
 
 	public function testNested(): Void {
 		parseEq(
-			'{"items":[1,{"x":"y"}]}', JObject([
+			'{"items":[1,{"x":"y"}]}',
+			JObject([
 				{
 					key: 'items',
 					value: JArray([

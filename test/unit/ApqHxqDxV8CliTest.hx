@@ -39,8 +39,7 @@ class ApqHxqDxV8CliTest extends Test {
 		// shape (a `var` keyword in pattern position) is gone. Use a
 		// pattern that REMOVES the case so the result still parses.
 		Assert.equals(
-			0,
-			Cli.run([
+			0, Cli.run([
 				'recon',
 				'--probe',
 				input,

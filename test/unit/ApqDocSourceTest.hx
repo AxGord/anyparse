@@ -88,7 +88,11 @@ class ApqDocSourceTest extends Test {
 	public function testRefsJsonDefaultByteIdentical(): Void {
 		final src: String = "class C {\n\t/** doc */\n\tvar count:Int = 0;\n}";
 		final entries: Array<{ file: String, source: String, hits: Array<RefHit> }> = [
-			{ file: "F.hx", source: src, hits: declHits(src, "count") }
+			{
+				file: "F.hx",
+				source: src,
+				hits: declHits(src, "count")
+			}
 		];
 
 		final off: String = Json.renderRefs(entries, false, false);

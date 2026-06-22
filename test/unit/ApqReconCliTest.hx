@@ -500,8 +500,7 @@ class ApqReconCliTest extends Test {
 
 	public function testReconPredictRelaxIncompatibleWithPredictStrip(): Void {
 		Assert.equals(
-			2,
-			Cli.run([
+			2, Cli.run([
 				'recon',
 				'--predict-relax',
 				'--predict-strip',
@@ -572,8 +571,7 @@ class ApqReconCliTest extends Test {
 
 	public function testReconNoTargetClusterIncompatibleWithCluster(): Void {
 		Assert.equals(
-			2,
-			Cli.run([
+			2, Cli.run([
 				'recon',
 				'--predict-relax',
 				'--no-target-cluster',
@@ -588,8 +586,7 @@ class ApqReconCliTest extends Test {
 
 	public function testReconNoTargetClusterIncompatibleWithProbe(): Void {
 		Assert.equals(
-			2,
-			Cli.run([
+			2, Cli.run([
 				'recon',
 				'--predict-relax',
 				'--no-target-cluster',
@@ -609,8 +606,7 @@ class ApqReconCliTest extends Test {
 		final dir: String = mkTempDir('apq_recon_no_target_cluster_miss');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		Assert.equals(
-			1,
-			Cli.run([
+			1, Cli.run([
 				'recon',
 				'--predict-relax',
 				'--no-target-cluster',
@@ -726,8 +722,7 @@ class ApqReconCliTest extends Test {
 
 	public function testReconPermissiveConstructIncompatibleWithPredictStrip(): Void {
 		Assert.equals(
-			2,
-			Cli.run([
+			2, Cli.run([
 				'recon',
 				'--permissive-construct',
 				'--predict-strip',

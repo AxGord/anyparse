@@ -58,8 +58,7 @@ class ApqAstChildCountTest extends Test {
 		final fixture: String = writeFixture(FIXTURE);
 		// min=2 max=2 → only Two survives (Three has 3 Requireds, One has 1).
 		Assert.equals(
-			0,
-			Cli.run([
+			0, Cli.run([
 				'ast',
 				'--select',
 				'ParamCtor',

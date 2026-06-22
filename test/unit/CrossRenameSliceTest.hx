@@ -156,9 +156,9 @@ class CrossRenameSliceTest extends Test {
 	public function testCursorNotOnTypeDeclRefused(): Void {
 		final a: String = 'class Foo {\n' + '\tvar field:Int;\n' + '}';
 		// Line 2: the field name `field` at col 6 — a value decl, not a type.
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 2, 6, 'renamed', [
-			{ file: 'a.hx', source: a },
-		], plugin(), typeRefShape(), refShape());
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			'a.hx', a, 2, 6, 'renamed', [{ file: 'a.hx', source: a },], plugin(), typeRefShape(), refShape()
+		);
 		assertErr(result);
 	}
 
@@ -179,18 +179,18 @@ class CrossRenameSliceTest extends Test {
 	/** No-op `Foo` -> `Foo` is refused. */
 	public function testNoOpRefused(): Void {
 		final a: String = 'class Foo {}';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, 'Foo', [
-			{ file: 'a.hx', source: a },
-		], plugin(), typeRefShape(), refShape());
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			'a.hx', a, 1, 7, 'Foo', [{ file: 'a.hx', source: a },], plugin(), typeRefShape(), refShape()
+		);
 		assertErr(result);
 	}
 
 	/** An invalid new name is rejected without touching any source. */
 	public function testInvalidNewNameRefused(): Void {
 		final a: String = 'class Foo {}';
-		final result: CrossRenameResult = CrossRename.crossRenameType('a.hx', a, 1, 7, '1bad', [
-			{ file: 'a.hx', source: a },
-		], plugin(), typeRefShape(), refShape());
+		final result: CrossRenameResult = CrossRename.crossRenameType(
+			'a.hx', a, 1, 7, '1bad', [{ file: 'a.hx', source: a },], plugin(), typeRefShape(), refShape()
+		);
 		assertErr(result);
 	}
 

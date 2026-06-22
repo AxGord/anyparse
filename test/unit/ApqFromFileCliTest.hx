@@ -78,8 +78,7 @@ class ApqFromFileCliTest extends Test {
 		// the splice op must strip it so it does not surface as a stray blank line before `}`.
 		final repl: String = CliFixture.write('apq_trailrepl', 'function f():Int {\n\t\treturn 99;\n\t}\n');
 		Assert.equals(
-			0,
-			Cli.run([
+			0, Cli.run([
 				'replace-node',
 				fixture,
 				'--select',

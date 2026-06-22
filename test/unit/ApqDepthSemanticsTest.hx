@@ -42,8 +42,7 @@ class ApqDepthSemanticsTest extends Test {
 		// With --select VarMember → root is the selected VarMember.
 		// --depth 0 shows just `(VarMember x)`, no IntLit child.
 		Assert.equals(
-			0,
-			Cli.run([
+			0, Cli.run([
 				'ast',
 				'--code',
 				'class C { var x:Int = 0; }',
@@ -59,8 +58,7 @@ class ApqDepthSemanticsTest extends Test {
 	public function testDepthOneWithSelect(): Void {
 		// With --select VarMember and --depth 1, we get the IntLit child.
 		Assert.equals(
-			0,
-			Cli.run([
+			0, Cli.run([
 				'ast',
 				'--code',
 				'class C { var x:Int = 0; }',
