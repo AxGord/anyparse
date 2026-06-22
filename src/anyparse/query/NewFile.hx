@@ -89,11 +89,8 @@ final class NewFile {
 	public static function create(spec: NewFileSpec, plugin: GrammarPlugin, ?optsJson: String): NewFileResult {
 		final kind: String = spec.kind ?? 'class';
 		final extendsList: Array<String> = spec.extendsList ?? [];
-		final ifaceSimple: Null<String> = spec.ifaceSimple;
-		if (ifaceSimple != null && kind != 'class') return err('--implements requires --kind class');
-		if (extendsList.length > 0 && !EXTENDABLE_KINDS.contains(kind)) return err('--extends does not apply to a $kind');
-		if (kind == 'class' && extendsList.length > 1) return err('a class extends at most one type (got ${extendsList.length})');
-		if (kind == 'abstract' && spec.underlying == null) return err('--kind abstract requires --underlying <T>');
+		final specError: Null<String> = validateSpec(spec, kind, extendsList);
+		if (specError != null) return err(specError);
 
 		final bodies: Map<String, String> = [];
 		final imports: Array<String> = [];
@@ -109,32 +106,9 @@ final class NewFile {
 
 		final members: Array<String> = [];
 		final stubbed: Array<String> = [];
-		final ifaceSource: Null<String> = spec.ifaceSource;
-		final ifaceModule: Null<String> = spec.ifaceModule;
-		if (ifaceSimple != null && ifaceSource != null && ifaceModule != null) {
-			final tree: Null<QueryNode> = try plugin.parseFile(ifaceSource) catch (exception: Exception) null;
-			if (tree == null) return err('could not parse the resolved interface source');
-			final iface: Null<QueryNode> = findInterface(tree, ifaceSimple);
-			if (iface == null) return err('no interface "$ifaceSimple" in the resolved source');
+		final ifaceError: Null<String> = implementInterface(spec, plugin, bodies, imports, members, stubbed);
+		if (ifaceError != null) return err(ifaceError);
 
-			carryImports(tree, ifaceSource, ifaceModule, ifaceSimple, spec.pkg, imports);
-
-			final methodNames: Array<String> = [];
-			for (member in iface.children) if (member.kind == 'FnMember') {
-				final sig: Null<String> = signatureOf(member, ifaceSource);
-				final name: Null<String> = member.name;
-				if (sig == null || name == null) continue;
-				methodNames.push(name);
-				final body: Null<String> = bodies[name];
-				if (body == null) {
-					stubbed.push(name);
-					members.push('public $sig {\n$STUB\n}');
-				} else
-					members.push('public $sig {\n$body\n}');
-			}
-			for (key in bodies.keys()) if (!methodNames.contains(key))
-				return err('@@ $key names no method on $ifaceSimple (have: ${methodNames.join(', ')})');
-		}
 		for (field in spec.fields) members.push(field);
 		if (freeMembers != null) members.push(freeMembers);
 
@@ -354,6 +328,64 @@ final class NewFile {
 			return EditResult.Err('source does not parse: ${exception.message}');
 		};
 		return canonical == null ? EditResult.Err('no writer for this grammar') : EditResult.Ok(canonical);
+	}
+
+	/**
+	 * Validate that the chosen `kind` is compatible with the supplied options:
+	 * `--implements` requires a class, `--extends` applies only to extendable
+	 * kinds and a class extends at most one type, and `--kind abstract` requires
+	 * an `--underlying`. Returns the refusal message, or null when the spec is
+	 * consistent.
+	 */
+	private static function validateSpec(spec: NewFileSpec, kind: String, extendsList: Array<String>): Null<String> {
+		if (spec.ifaceSimple != null && kind != 'class') return '--implements requires --kind class';
+		if (extendsList.length > 0 && !EXTENDABLE_KINDS.contains(kind)) return '--extends does not apply to a $kind';
+		if (kind == 'class' && extendsList.length > 1) return 'a class extends at most one type (got ${extendsList.length})';
+		if (kind == 'abstract' && spec.underlying == null) return '--kind abstract requires --underlying <T>';
+		return null;
+	}
+
+	/**
+	 * When `spec` carries a resolved interface (`--implements`), stub every
+	 * interface method into `members` with the right signature — filling from a
+	 * matching `@@ <method>` body in `bodies`, else the default `STUB` (recorded
+	 * in `stubbed`) — and carry the imports the signatures need into `imports`. A
+	 * no-op when no interface is resolved. Returns a refusal when the interface
+	 * source does not parse, the interface is absent, or a `@@` section names no
+	 * method on it; null otherwise.
+	 */
+	private static function implementInterface(
+		spec: NewFileSpec, plugin: GrammarPlugin, bodies: Map<String, String>, imports: Array<String>, members: Array<String>,
+		stubbed: Array<String>
+	): Null<String> {
+		final ifaceSimple: Null<String> = spec.ifaceSimple;
+		final ifaceSource: Null<String> = spec.ifaceSource;
+		final ifaceModule: Null<String> = spec.ifaceModule;
+		if (ifaceSimple == null || ifaceSource == null || ifaceModule == null) return null;
+
+		final tree: Null<QueryNode> = try plugin.parseFile(ifaceSource) catch (exception: Exception) null;
+		if (tree == null) return 'could not parse the resolved interface source';
+		final iface: Null<QueryNode> = findInterface(tree, ifaceSimple);
+		if (iface == null) return 'no interface "$ifaceSimple" in the resolved source';
+
+		carryImports(tree, ifaceSource, ifaceModule, ifaceSimple, spec.pkg, imports);
+
+		final methodNames: Array<String> = [];
+		for (member in iface.children) if (member.kind == 'FnMember') {
+			final sig: Null<String> = signatureOf(member, ifaceSource);
+			final name: Null<String> = member.name;
+			if (sig == null || name == null) continue;
+			methodNames.push(name);
+			final body: Null<String> = bodies[name];
+			if (body == null) {
+				stubbed.push(name);
+				members.push('public $sig {\n$STUB\n}');
+			} else
+				members.push('public $sig {\n$body\n}');
+		}
+		for (key in bodies.keys()) if (!methodNames.contains(key))
+			return '@@ $key names no method on $ifaceSimple (have: ${methodNames.join(', ')})';
+		return null;
 	}
 
 }
