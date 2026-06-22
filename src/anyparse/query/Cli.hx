@@ -2905,17 +2905,7 @@ final class Cli {
 		final source: String = readSourceForParse(filePath);
 		final regexMode: Bool = compiledRegex != null;
 		final regexes: Array<EReg> = compiledRegex ?? [];
-		inline function tryParse(s: String): { ok: Bool, msg: String } {
-			return try {
-				plugin.parseFile(s);
-				{ ok: true, msg: '' };
-			} catch (e: ParseError) {
-				{ ok: false, msg: e.toString() };
-			} catch (e: Exception) {
-				{ ok: false, msg: e.message };
-			}
-		}
-		final baseline: { ok: Bool, msg: String } = tryParse(source);
+		final baseline: { ok: Bool, msg: String } = stripTryParse(plugin, source);
 		sysPrint('baseline (no patterns): ${baseline.ok ? 'PARSE OK' : 'PARSE FAIL: ' + baseline.msg}\n');
 		final isolatedResults: Array<{ ok: Bool, hits: Int }> = [];
 		for (idx in 0...patterns.length) {
@@ -2923,7 +2913,7 @@ final class Cli {
 			final isolated: String = regexMode
 				? regexes[idx].replace(source, replacements[idx])
 				: StringTools.replace(source, patterns[idx], replacements[idx]);
-			final r: { ok: Bool, msg: String } = tryParse(isolated);
+			final r: { ok: Bool, msg: String } = stripTryParse(plugin, isolated);
 			isolatedResults.push({ ok: r.ok, hits: hits });
 			final pat: String = patterns[idx];
 			sysPrint('pattern[$idx] "$pat" ($hits match${hits == 1 ? '' : 'es'}): ${r.ok ? 'PARSE OK' : 'PARSE FAIL: ' + r.msg}\n');
@@ -2933,29 +2923,9 @@ final class Cli {
 			combinedStripped = regexMode
 				? regexes[idx].replace(combinedStripped, replacements[idx])
 				: StringTools.replace(combinedStripped, patterns[idx], replacements[idx]);
-		final combined: { ok: Bool, msg: String } = tryParse(combinedStripped);
+		final combined: { ok: Bool, msg: String } = stripTryParse(plugin, combinedStripped);
 		sysPrint('combined (all patterns): ${combined.ok ? 'PARSE OK' : 'PARSE FAIL: ' + combined.msg}\n');
-		// Verdict — interlocking-blockers signature: combined OK + every
-		// isolated row FAIL. This is the slice-scope warning: each
-		// pattern targets a separate parse blocker, so the slice needs
-		// N code mechanisms, not one.
-		if (combined.ok && !baseline.ok) {
-			var anyIsolatedOk: Bool = false;
-			for (r in isolatedResults) if (r.ok) anyIsolatedOk = true;
-			if (!anyIsolatedOk) {
-				sysPrint(
-					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs ${patterns.length} separate code mechanisms.\n'
-				);
-			} else {
-				var soleCount: Int = 0;
-				for (r in isolatedResults) if (r.ok) soleCount++;
-				sysPrint(
-					'VERDICT $soleCount of ${patterns.length} pattern${plural(patterns.length)} unblock alone — the rest are redundant (or compose into a tighter slice).\n'
-				);
-			}
-		} else if (!combined.ok && baseline.ok) {
-			sysPrint('VERDICT no-op — baseline already parses; the strip diagnostic does not apply.\n');
-		}
+		reportStripVerdict(baseline.ok, combined.ok, isolatedResults, patterns.length);
 		return combined.ok ? EXIT_OK : EXIT_RUNTIME;
 	}
 
@@ -11610,6 +11580,49 @@ final class Cli {
 				col: 0,
 				msg: reconNormalize(exception.message)
 			};
+		}
+	}
+
+	/**
+	 * Parse a candidate source under the plugin's file parser, returning a
+	 * PARSE OK / PARSE FAIL flag plus the failure message.
+	 */
+	private static function stripTryParse(plugin: GrammarPlugin, s: String): { ok: Bool, msg: String } {
+		return try {
+			plugin.parseFile(s);
+			{ ok: true, msg: '' };
+		} catch (e: ParseError) {
+			{ ok: false, msg: e.toString() };
+		} catch (e: Exception) {
+			{ ok: false, msg: e.message };
+		}
+	}
+
+	/**
+	 * Print the per-pattern strip verdict. Interlocking-blockers signature:
+	 * combined OK + every isolated row FAIL — the slice needs N code
+	 * mechanisms, not one. Otherwise report how many patterns unblock alone,
+	 * or flag the no-op case where the baseline already parses.
+	 */
+	private static function reportStripVerdict(
+		baselineOk: Bool, combinedOk: Bool, isolatedResults: Array<{ ok: Bool, hits: Int }>, patternCount: Int
+	): Void {
+		if (combinedOk && !baselineOk) {
+			var anyIsolatedOk: Bool = false;
+			for (r in isolatedResults) if (r.ok) anyIsolatedOk = true;
+			if (!anyIsolatedOk) {
+				sysPrint(
+					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs $patternCount separate code mechanisms.\n'
+				);
+			} else {
+				var soleCount: Int = 0;
+				for (r in isolatedResults) if (r.ok) soleCount++;
+				sysPrint(
+					'VERDICT $soleCount of $patternCount pattern${plural(patternCount)} unblock alone — the rest are redundant (or compose into a tighter slice).\n'
+				);
+			}
+		} else if (!combinedOk && baselineOk) {
+			sysPrint('VERDICT no-op — baseline already parses; the strip diagnostic does not apply.\n');
 		}
 	}
 
