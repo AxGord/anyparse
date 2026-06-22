@@ -177,6 +177,18 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+typedef SelfStatusWalk = {
+	var parseable: Int;
+	var skipParse: Int;
+	var skipLines: Array<String>;
+};
+typedef SelfStatusOpts = {
+	var lang: String;
+	var rootDir: Null<String>;
+	var strict: Bool;
+	var showSource: Bool;
+	var errExit: Null<Int>;
+};
 typedef LintPassResult = {
 	var nextActive: Array<{ file: String, source: String }>;
 	var fixedDelta: Int;
@@ -6528,79 +6540,20 @@ final class Cli {
 	 * wiring can guard against regressions.
 	 */
 	private static function runSelfStatus(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var rootDir: Null<String> = null;
-		var strict: Bool = false;
-		var showSource: Bool = false;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '-h', '--help':
-					printSelfStatusUsage();
-					return EXIT_OK;
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--strict':
-					strict = true;
-				case '--source':
-					showSource = true;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq self-status: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (rootDir != null) {
-						stderr('apq self-status: only one positional <dir> supported (got "$rootDir" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					rootDir = a;
-			}
-			i++;
-		}
-		final root: String = rootDir ?? 'src';
+		final opts: SelfStatusOpts = parseSelfStatusArgs(args);
+		if (opts.errExit != null) return opts.errExit;
+		final root: String = opts.rootDir ?? 'src';
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
 			stderr('apq self-status: "$root" is not a directory.\n');
 			return EXIT_RUNTIME;
 		}
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		var parseable: Int = 0;
-		var skipParse: Int = 0;
-		final skipLines: Array<String> = [];
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path)) {
-					stack.push(path);
-					continue;
-				}
-				if (!StringTools.endsWith(name, '.hx')) continue;
-				final source: String = try readSourceForParse(path) catch (_: Exception) continue;
-				try {
-					plugin.parseFile(source);
-					parseable++;
-				} catch (exception: ParseError) {
-					skipParse++;
-					final pos: Position = exception.span.lineCol(source);
-					final exp: String = reconNormalize(exception.expected);
-					final src: String = showSource ? ' :: src="' + reconNormalize(reconSnippet(source, exception.span.from)) + '"' : '';
-					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
-				} catch (exception: Exception) {
-					skipParse++;
-					skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
-				}
-			}
-		}
-		skipLines.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
-		for (line in skipLines) sysPrint('$line\n');
-		final total: Int = parseable + skipParse;
-		sysPrint('--- self-status: $parseable parseable, $skipParse skip-parse (total $total) ---\n');
-		return (strict && skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
+		final plugin: GrammarPlugin = pickPlugin(opts.lang);
+		final walk: SelfStatusWalk = walkSelfStatus(plugin, root, opts.showSource);
+		walk.skipLines.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		for (line in walk.skipLines) sysPrint('$line\n');
+		final total: Int = walk.parseable + walk.skipParse;
+		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
+		return (opts.strict && walk.skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	private static function printSelfStatusUsage(): Void {
@@ -11659,6 +11612,92 @@ final class Cli {
 			for (edit in check.fix(source, own, cached, index)) edits.push(edit);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/**
+	 * Parse `self-status` argv. `errExit` carries the exit code when a help
+	 * flag or a usage error short-circuits the command (EXIT_OK for -h,
+	 * EXIT_USAGE for a bad option / extra positional); null = proceed.
+	 */
+	private static function parseSelfStatusArgs(args: Array<String>): SelfStatusOpts {
+		final opts: SelfStatusOpts = {
+			lang: 'haxe',
+			rootDir: null,
+			strict: false,
+			showSource: false,
+			errExit: null
+		};
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '-h', '--help':
+					printSelfStatusUsage();
+					opts.errExit = EXIT_OK;
+					return opts;
+				case '--lang':
+					opts.lang = expectValue(args, ++i, '--lang');
+				case '--strict':
+					opts.strict = true;
+				case '--source':
+					opts.showSource = true;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq self-status: unknown option "$a"\n');
+						opts.errExit = EXIT_USAGE;
+						return opts;
+					}
+					if (opts.rootDir != null) {
+						stderr('apq self-status: only one positional <dir> supported (got "${opts.rootDir}" and "$a")\n');
+						opts.errExit = EXIT_USAGE;
+						return opts;
+					}
+					opts.rootDir = a;
+			}
+			i++;
+		}
+		return opts;
+	}
+
+	/**
+	 * Walk `root` for `.hx` files and parse each under the plugin, tallying
+	 * parseable vs skip-parse and collecting a SKIP line (with locus, and an
+	 * optional source snippet) per failure.
+	 */
+	private static function walkSelfStatus(plugin: GrammarPlugin, root: String, showSource: Bool): SelfStatusWalk {
+		var parseable: Int = 0;
+		var skipParse: Int = 0;
+		final skipLines: Array<String> = [];
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			final names: Array<String> = FileSystem.readDirectory(dir);
+			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (name in names) {
+				final path: String = '$dir/$name';
+				if (FileSystem.isDirectory(path)) {
+					stack.push(path);
+					continue;
+				}
+				if (!StringTools.endsWith(name, '.hx')) continue;
+				final source: String = try readSourceForParse(path) catch (_: Exception) continue;
+				try {
+					plugin.parseFile(source);
+					parseable++;
+				} catch (exception: ParseError) {
+					skipParse++;
+					final pos: Position = exception.span.lineCol(source);
+					final exp: String = reconNormalize(exception.expected);
+					final src: String = showSource ? ' :: src="' + reconNormalize(reconSnippet(source, exception.span.from)) + '"' : '';
+					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
+				} catch (exception: Exception) {
+					skipParse++;
+					skipLines.push('SKIP $path :: <non-ParseError> ${reconNormalize(exception.message)}');
+				}
+			}
+		}
+		return { parseable: parseable, skipParse: skipParse, skipLines: skipLines };
 	}
 
 }
