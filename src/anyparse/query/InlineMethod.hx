@@ -160,104 +160,11 @@ final class InlineMethod {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null) return Err('position $line:$col is not on a function or a call');
-		final cursorNode: QueryNode = node;
-		final targetName: Null<String> = cursorNode.name;
-		if (targetName == null) return Err('position $line:$col is not on a function or a call');
-		final name: String = targetName;
-
-		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
-		if (declNode == null) return Err('could not resolve a function binding for "$name" at $line:$col');
-		final decl: QueryNode = declNode;
-		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
-			return Err('"$name" is not a function (inline-method inlines a function declaration)');
-		final declSpan: Null<Span> = decl.span;
-		if (declSpan == null) return Err('"$name" declaration has no source span');
-		final binding: Int = declSpan.from;
-
-		// Parameter list + names (a nameless param slot cannot be substituted).
-		final params: Array<QueryNode> = CallSites.leadingParams(decl);
-		final paramNames: Array<String> = [];
-		for (p in params) {
-			final pn: Null<String> = p.name;
-			if (pn == null) return Err('"$name" has a parameter with no name slot — cannot inline');
-			paramNames.push(pn);
-		}
-
-		// Body must reduce to a single return expression `E`.
-		final body: Null<QueryNode> = singleReturnExpr(decl);
-		if (body == null)
-			return Err('"$name" body is not a single return expression — only `{ return E; }` / `=> E` bodies can be inlined');
-		final exprBody: QueryNode = body;
-
-		// Recursion: `E` calling `name` would outlive the deleted decl.
-		if (callsName(exprBody, name)) return Err('"$name" is recursive — cannot inline a function that calls itself');
-
-		// A parameter shadowed by a nested binding inside `E` would be
-		// substituted at the wrong binding.
-		final shadow: Null<String> = shadowedParam(exprBody, paramNames);
-		if (shadow != null) return Err('parameter "$shadow" is shadowed inside the body of "$name" — cannot inline');
-
-		// A parameter referenced via simple `'$p'` interpolation cannot be
-		// replaced by an arbitrary argument expression.
-		final interp: Null<String> = interpolatedParam(exprBody, paramNames);
-		if (interp != null) return Err('parameter "$interp" is used in string interpolation (\'$$$interp\') in "$name" — cannot inline');
-
-		// Collect + prove-complete the in-file call sites (the same proof
-		// `change-sig` / `remove-param` rely on).
-		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
-			case CErr(message): return Err(message);
-			case COk(sites): sites;
+		final prep: InlineMethodPrep = resolveInlineMethod(source, line, col, cursor, tree, shape);
+		return switch prep {
+			case PErr(message): Err(message);
+			case POk(target): buildInlineMethodEdits(source, target, plugin);
 		};
-		if (callSites.length == 0) return Err('"$name" has no in-file call sites to inline');
-
-		// Per-parameter substitution count in `E` (the IdentExpr targets).
-		final occ: Array<Int> = [for (pn in paramNames) countIdentExprNamed(exprBody, pn)];
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (call in callSites) {
-			final args: Array<QueryNode> = call.children.slice(1);
-			if (args.length != params.length) {
-				final at: String = CallSites.posOf(source, call.span);
-				return
-					Err(
-						'call at $at passes ${args.length} args, expected ${params.length} — inline-method cannot fill omitted optional arguments'
-					);
-			}
-			// A dropped (0-use) or duplicated (2+-use) argument must be pure.
-			for (i in 0...params.length) {
-				if (occ[i] != 1 && !isPure(args[i])) {
-					final at: String = CallSites.posOf(source, call.span);
-					final reason: String = occ[i] == 0
-						? 'dropped (parameter "${paramNames[i]}" is unused)'
-						: 'duplicated (parameter "${paramNames[i]}" is used ${occ[i]} times)';
-					return Err('argument ${i} at $at would be $reason but is not side-effect-free — cannot inline');
-				}
-			}
-			final callSpan: Null<Span> = call.span;
-			if (callSpan == null) return Err('a call site of "$name" has no source span');
-			final subText: Null<String> = substitute(source, exprBody, paramNames, args);
-			if (subText == null) return Err('a node of "$name" has no source span — cannot inline');
-			edits.push({ span: callSpan, text: subText });
-		}
-
-		// Delete the now-dead declaration (its whole owned lines).
-		final deleteSpan: Null<Span> = memberDeleteSpan(source, declSpan);
-		if (deleteSpan == null) return Err('"$name" declaration shares its line with other code — cannot inline cleanly');
-		edits.push({ span: deleteSpan, text: '' });
-
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
-		if (rewritten == source) return Err('inline of "$name" is a no-op');
-
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
-
-		return Ok(rewritten);
 	}
 
 	/**
@@ -470,5 +377,166 @@ final class InlineMethod {
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
+
+	/**
+	 * Resolve and validate the inline-method target at `cursor`: the binding must
+	 * be a function decl whose body is a single return expression `E`, not
+	 * recursive, with no parameter shadowed or simple-interpolated inside `E`, and
+	 * whose in-file call sites form a proven-complete set. Returns the validated
+	 * `InlineMethodTarget` (including the per-parameter substitution counts) or a
+	 * `PErr` with the precise refusal reason.
+	 */
+	private static function resolveInlineMethod(
+		source: String, line: Int, col: Int, cursor: Int, tree: QueryNode, shape: RefShape
+	): InlineMethodPrep {
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return PErr('position $line:$col is not on a function or a call');
+		final cursorNode: QueryNode = node;
+		final targetName: Null<String> = cursorNode.name;
+		if (targetName == null) return PErr('position $line:$col is not on a function or a call');
+		final name: String = targetName;
+
+		final declNode: Null<QueryNode> = CallSites.resolveFnDecl(cursorNode, tree, name, shape);
+		if (declNode == null) return PErr('could not resolve a function binding for "$name" at $line:$col');
+		final decl: QueryNode = declNode;
+		if (!RefactorSupport.FN_DECL_KINDS.contains(decl.kind))
+			return PErr('"$name" is not a function (inline-method inlines a function declaration)');
+		final declSpan: Null<Span> = decl.span;
+		if (declSpan == null) return PErr('"$name" declaration has no source span');
+		final binding: Int = declSpan.from;
+		final declSpanNN: Span = declSpan;
+
+		// Parameter list + names (a nameless param slot cannot be substituted).
+		final params: Array<QueryNode> = CallSites.leadingParams(decl);
+		final paramNames: Array<String> = [];
+		for (p in params) {
+			final pn: Null<String> = p.name;
+			if (pn == null) return PErr('"$name" has a parameter with no name slot — cannot inline');
+			paramNames.push(pn);
+		}
+
+		// Body must reduce to a single return expression `E`.
+		final body: Null<QueryNode> = singleReturnExpr(decl);
+		if (body == null)
+			return PErr('"$name" body is not a single return expression — only `{ return E; }` / `=> E` bodies can be inlined');
+		final exprBody: QueryNode = body;
+
+		// Recursion: `E` calling `name` would outlive the deleted decl.
+		if (callsName(exprBody, name)) return PErr('"$name" is recursive — cannot inline a function that calls itself');
+
+		// A parameter shadowed by a nested binding inside `E` would be
+		// substituted at the wrong binding.
+		final shadow: Null<String> = shadowedParam(exprBody, paramNames);
+		if (shadow != null) return PErr('parameter "$shadow" is shadowed inside the body of "$name" — cannot inline');
+
+		// A parameter referenced via simple `'$p'` interpolation cannot be
+		// replaced by an arbitrary argument expression.
+		final interp: Null<String> = interpolatedParam(exprBody, paramNames);
+		if (interp != null) return PErr('parameter "$interp" is used in string interpolation (\'$$$interp\') in "$name" — cannot inline');
+
+		// Collect + prove-complete the in-file call sites (the same proof
+		// `change-sig` / `remove-param` rely on).
+		final callSites: Array<QueryNode> = switch CallSites.collect(decl, tree, source, name, binding, shape) {
+			case CErr(message): return PErr(message);
+			case COk(sites): sites;
+		};
+		if (callSites.length == 0) return PErr('"$name" has no in-file call sites to inline');
+
+		// Per-parameter substitution count in `E` (the IdentExpr targets).
+		final occ: Array<Int> = [for (pn in paramNames) countIdentExprNamed(exprBody, pn)];
+
+		return POk({
+			name: name,
+			declSpan: declSpanNN,
+			params: params,
+			paramNames: paramNames,
+			exprBody: exprBody,
+			occ: occ,
+			callSites: callSites
+		});
+	}
+
+	/**
+	 * Build and apply the inline-method edits for a validated `target`: replace
+	 * each proven call site with `E`'s source, the call's positional arguments
+	 * substituted for the parameter references (refusing an arity mismatch, or a
+	 * non-pure argument that would be dropped or duplicated), delete the dead
+	 * declaration, then re-parse the rewrite — an unparseable result is rejected.
+	 */
+	private static function buildInlineMethodEdits(source: String, target: InlineMethodTarget, plugin: GrammarPlugin): EditResult {
+		final name: String = target.name;
+		final params: Array<QueryNode> = target.params;
+		final paramNames: Array<String> = target.paramNames;
+		final exprBody: QueryNode = target.exprBody;
+		final occ: Array<Int> = target.occ;
+
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (call in target.callSites) {
+			final args: Array<QueryNode> = call.children.slice(1);
+			if (args.length != params.length) {
+				final at: String = CallSites.posOf(source, call.span);
+				return
+					Err(
+						'call at $at passes ${args.length} args, expected ${params.length} — inline-method cannot fill omitted optional arguments'
+					);
+			}
+			// A dropped (0-use) or duplicated (2+-use) argument must be pure.
+			for (i in 0...params.length) {
+				if (occ[i] != 1 && !isPure(args[i])) {
+					final at: String = CallSites.posOf(source, call.span);
+					final reason: String = occ[i] == 0
+						? 'dropped (parameter "${paramNames[i]}" is unused)'
+						: 'duplicated (parameter "${paramNames[i]}" is used ${occ[i]} times)';
+					return Err('argument ${i} at $at would be $reason but is not side-effect-free — cannot inline');
+				}
+			}
+			final callSpan: Null<Span> = call.span;
+			if (callSpan == null) return Err('a call site of "$name" has no source span');
+			final subText: Null<String> = substitute(source, exprBody, paramNames, args);
+			if (subText == null) return Err('a node of "$name" has no source span — cannot inline');
+			edits.push({ span: callSpan, text: subText });
+		}
+
+		// Delete the now-dead declaration (its whole owned lines).
+		final deleteSpan: Null<Span> = memberDeleteSpan(source, target.declSpan);
+		if (deleteSpan == null) return Err('"$name" declaration shares its line with other code — cannot inline cleanly');
+		edits.push({ span: deleteSpan, text: '' });
+
+		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		if (rewritten == source) return Err('inline of "$name" is a no-op');
+
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
+
+		return Ok(rewritten);
+	}
+
+}
+
+/**
+ * A validated inline-method target: the function name, its decl span (deleted
+ * after inlining), the parameter slot nodes and names, the single-return body
+ * expression `E`, the per-parameter substitution counts within `E`, and the
+ * proven-complete set of in-file call sites.
+ */
+private typedef InlineMethodTarget = {
+	final name: String;
+	final declSpan: Span;
+	final params: Array<QueryNode>;
+	final paramNames: Array<String>;
+	final exprBody: QueryNode;
+	final occ: Array<Int>;
+	final callSites: Array<QueryNode>;
+};
+
+/** Resolution outcome of `resolveInlineMethod`: the target or a refusal. */
+private enum InlineMethodPrep {
+
+	POk(target: InlineMethodTarget);
+	PErr(message: String);
 
 }
