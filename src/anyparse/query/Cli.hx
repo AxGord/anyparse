@@ -834,64 +834,18 @@ final class Cli {
 	 * prints.
 	 */
 	private static function runMove(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var scope: Null<String> = null;
-		var file: Null<String> = null;
-		var posSpec: Null<String> = null;
-		var destFileArg: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--write':
-					write = true;
-				case '--scope':
-					scope = expectValue(args, ++i, '--scope');
-				case '-h', '--help':
-					printMoveUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq move: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (posSpec == null)
-						posSpec = a;
-					else if (destFileArg == null)
-						destFileArg = a;
-					else {
-						stderr('apq move: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (file == null || posSpec == null || destFileArg == null) {
-			stderr('apq move: expected <file> <line>:<col> <dest-file>\n');
-			printMoveUsage();
-			return EXIT_USAGE;
-		}
-		if (scope == null) {
-			stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
-			printMoveUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq move: malformed position "$posSpec" — expected <line>:<col>\n');
-			return EXIT_USAGE;
-		}
-
-		final cursorFile: String = file;
-		final destFile: String = destFileArg;
-		final scopeDir: String = scope;
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final o: MoveOpts = parseMoveArgs(args);
+		if (o.errExit != null) return o.errExit;
+		// parseMoveArgs proved file/destFile/scope/pos non-null before
+		// returning with errExit:null; Strict won't narrow struct fields, so
+		// re-bind into locals and throw on the provably-unreachable null.
+		final cursorFile: Null<String> = o.file;
+		final destFile: Null<String> = o.destFile;
+		final scopeDir: Null<String> = o.scope;
+		final pos: Null<Position> = o.pos;
+		if (cursorFile == null || destFile == null || scopeDir == null || pos == null)
+			throw new Exception('apq move: null arg after validation (unreachable)');
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 
 		// Gather scope files = expandInputs(scope) ∪ {cursorFile, destFile}.
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scopeDir], '.hx');
@@ -914,24 +868,7 @@ final class Cli {
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
 		final result: MoveResult = MoveSymbol.moveType(cursorFile, pos.line, pos.col, destFile, scopeFiles, plugin, typeRefShape);
-		switch result {
-			case Ok(changes, advisory):
-				if (write) {
-					for (c in changes) writeFile(c.file, c.newSource);
-					stderr('apq move: wrote ${changes.length} file(s)\n');
-				} else {
-					for (c in changes) {
-						final tag: String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
-						sysPrint('${c.file}: $tag\n');
-					}
-					sysPrint('total: ${changes.length} file(s)\n');
-				}
-				if (advisory != null) stderr('apq move: $advisory\n');
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq move: $message\n');
-				return EXIT_RUNTIME;
-		}
+		return emitMoveResult(result, cursorFile, destFile, o.write);
 	}
 
 	/**
@@ -11960,6 +11897,104 @@ final class Cli {
 		return { changed: false, failed: false, fatalExit: null };
 	}
 
+	private static inline function moveParseExit(code: Int): MoveOpts {
+		return {
+			lang: '',
+			write: false,
+			scope: null,
+			file: null,
+			pos: null,
+			destFile: null,
+			errExit: code
+		};
+	}
+
+	private static function parseMoveArgs(args: Array<String>): MoveOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var scope: Null<String> = null;
+		var file: Null<String> = null;
+		var posSpec: Null<String> = null;
+		var destFileArg: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '--scope':
+					scope = expectValue(args, ++i, '--scope');
+				case '-h', '--help':
+					printMoveUsage();
+					return moveParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq move: unknown option "$a"\n');
+						return moveParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (posSpec == null)
+						posSpec = a;
+					else if (destFileArg == null)
+						destFileArg = a;
+					else {
+						stderr('apq move: unexpected extra argument "$a"\n');
+						return moveParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		if (file == null || posSpec == null || destFileArg == null) {
+			stderr('apq move: expected <file> <line>:<col> <dest-file>\n');
+			printMoveUsage();
+			return moveParseExit(EXIT_USAGE);
+		}
+		if (scope == null) {
+			stderr('apq move: --scope <dir> is required (imports are fixed across the scope)\n');
+			printMoveUsage();
+			return moveParseExit(EXIT_USAGE);
+		}
+		final pos: Null<Position> = parseLineCol(posSpec);
+		if (pos == null) {
+			stderr('apq move: malformed position "$posSpec" — expected <line>:<col>\n');
+			return moveParseExit(EXIT_USAGE);
+		}
+		return {
+			lang: lang,
+			write: write,
+			scope: scope,
+			file: file,
+			pos: pos,
+			destFile: destFileArg,
+			errExit: null
+		};
+	}
+
+	private static function emitMoveResult(result: MoveResult, cursorFile: String, destFile: String, write: Bool): Int {
+		switch result {
+			case Ok(changes, advisory):
+				if (write) {
+					for (c in changes) writeFile(c.file, c.newSource);
+					stderr('apq move: wrote ${changes.length} file(s)\n');
+				} else {
+					for (c in changes) {
+						final tag: String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
+						sysPrint('${c.file}: $tag\n');
+					}
+					sysPrint('total: ${changes.length} file(s)\n');
+				}
+				if (advisory != null) stderr('apq move: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq move: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12188,4 +12223,16 @@ typedef FmtFileResult = {
 	// Non-null = a fatal per-file outcome (no writer wired for the lang);
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef MoveOpts = {
+	var lang: String;
+	var write: Bool;
+	var scope: Null<String>;
+	var file: Null<String>;
+	var pos: Null<Position>;
+	var destFile: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / missing
+	// --scope / malformed position -> EXIT_USAGE); the caller returns this immediately.
+	var errExit: Null<Int>;
 };
