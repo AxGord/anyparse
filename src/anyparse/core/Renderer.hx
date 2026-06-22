@@ -3,6 +3,31 @@ package anyparse.core;
 import anyparse.format.IndentChar;
 
 /**
+	Render-local mutable carrier for the `render` layout loop's scalar
+	accumulators plus the immutable run config. A fresh instance is built
+	per `render` call (never a static / Renderer field — invariant #1), so
+	the emit helpers can mutate the shared state by reference instead of
+	threading eight accumulators through every signature.
+**/
+private typedef RenderCtx = {
+	final buf: StringBuf;
+	final indentChar: IndentChar;
+	final tabWidth: Int;
+	final lineEnd: String;
+	final trailingWhitespace: Bool;
+	// One indent level in columns under a `ConditionalMarkerDecrease` scope.
+	final markerDecreaseUnit: Int;
+	var col: Int;
+	var pendingIndent: Int;
+	var pendingOptSpace: Null<String>;
+	var pendingHardline: Int;
+	var lastEmit: LastEmit;
+	var lineCount: Int;
+	var markerZeroDepth: Int;
+	var markerDecreaseDepth: Int;
+};
+
+/**
 	Layout mode for a `Doc` frame: flat (line breaks become their flat
 	replacement) or broken (line breaks become real newlines).
 **/
@@ -184,16 +209,15 @@ private class Frame {
 class Renderer {
 
 	/**
-		Renders `doc` targeting `width` columns per line.
+		Render a `Doc` tree to a string at the given `width`, indenting with
+		`indentChar` (tab width `tabWidth`). `lineEnd` is the newline sequence;
+		`finalNewline` appends one trailing `lineEnd` when missing;
+		`maxConsecutiveBlanks` (>= 0) caps runs of blank lines.
 
-		Defaults (`Space`, `tabWidth=1`, `lineEnd="\n"`, `finalNewline=false`)
-		preserve the behavior of pre-indent-aware callers that just pass
-		`render(doc, width)`.
-
-		Indent is emitted lazily: a break-mode `Line` appends `lineEnd` and
-		stores the target indent in `pendingIndent`, flushed to the buffer
-		only when the next content (Text or flat-mode Line) arrives. If
-		another break-mode `Line` fires first, the prior pending indent is
+		The blank-line handling: a break-mode `Line` leaves its indent pending;
+		if the next emit is another break-mode `Line` (an empty row) the prior
+		pending indent is overwritten before any tab is written, so the blank
+		row carries no trailing whitespace. The pending indent is only ever
 		silently discarded — this is exactly what blank lines need (no
 		trailing tabs on empty rows). Same effect every mature pretty-printer
 		(prettier, black, rustfmt) achieves with a trailing-whitespace strip
@@ -225,101 +249,32 @@ class Renderer {
 		// then commit the open + chain-glue in a rewritten Doc (breaking the
 		// branch-blind circular coupling between paren-open and chain-break).
 		// `null` (the generated `write` call site) leaves render unchanged.
-		final buf: StringBuf = new StringBuf();
 		final stack: Array<Frame> = [new Frame(0, MBreak, doc)];
-		var col: Int = 0;
-		var pendingIndent: Int = -1;
-		var pendingOptSpace: Null<String> = null;
-		// ω-opthardlineskipbeforeHardline: forward-looking hardline slot.
-		// `OptHardlineSkipBeforeHardline` sets this to its frame indent
-		// instead of emitting; the next content-bearing emit (Text,
-		// in-flat Line, flushed OptSpace*) flushes it as `\n+indent` and
-		// clears the slot, while an incoming hardline-like emit clears
-		// it without writing. Sister to `pendingOptSpace`'s deferred
-		// pattern but for the trailing-side. `-1` = no pending.
-		var pendingHardline: Int = -1;
-		// Three-state classifier of the last byte committed to `buf`.
-		// Drives `OptHardline` collision drop and
-		// `OptHardlineSkipAtOpenDelim` open-delim glue. See `LastEmit`
-		// docblock for state transitions; semantics replace a prior
-		// pair of parallel `lastEmittedWas{Hardline,OpenDelim}` Bools
-		// whose mutex was conventional, not type-enforced.
-		var lastEmit: LastEmit = Other;
-		// fill-break-after-wrap: monotonic count of physical newlines
-		// committed to `buf`. Incremented at every site that writes
-		// `lineEnd` (break-mode `Line`, `OptHardline`,
-		// `OptHardlineSkipAtOpenDelim`, `flushPendingHardline`). A
-		// `Doc.Fill` continuation frame snapshots this at the line where its
-		// previous item starts (`fillLineStart`); if the count advanced while
-		// that item rendered, the item self-wrapped (overflowed its
-		// continuation line) and the next item is forced to break — mirroring
-		// fork's `wrapFillLine*2AfterLast`, where an item whose flat width
-		// overflows pushes `lineLength` past `maxLineLength` and breaks the
-		// follower. Render-local (NOT a static — invariant #1).
-		var lineCount: Int = 0;
-		// ω-cond-indent-policy FixedZero: per-render nesting depth of active
-		// `ConditionalMarkerZero` scopes (render-local, NOT a static —
-		// invariant #1). Incremented on entry, decremented via a `popMarkerZero`
-		// sentinel on scope exit. When `> 0`, a fresh-line Text whose first byte
-		// is `#` (a `#if`/`#elseif`/`#else`/`#end` marker) is flushed at column
-		// `0` instead of its frame indent; body lines keep their indent.
-		var markerZeroDepth: Int = 0;
-		// ω-cond-indent-policy AlignedDecrease: per-render nesting depth of active
-		// `ConditionalMarkerDecrease` scopes (render-local, NOT a static —
-		// invariant #1). Incremented on entry, decremented via a
-		// `popMarkerDecrease` sentinel on scope exit. When `> 0`, EVERY fresh-line
-		// Text (markers AND body alike) is re-indented one indent level shallower
-		// (clamped at column `0`) — shifting the whole increase-style layout `-1`
-		// uniformly. One indent level = `indentChar == Space ? indentSize :
-		// tabWidth` columns (matching the writer's `_dn(_cols, …)` body-nest unit).
-		final markerDecreaseUnit: Int = indentChar == Space ? indentSize : tabWidth;
-		var markerDecreaseDepth: Int = 0;
-
-		inline function endsWithOpenDelim(s: String): Bool {
-			if (s.length == 0) return false;
-			final c: Int = StringTools.fastCodeAt(s, s.length - 1);
-			return c == '('.code || c == '['.code || c == '{'.code;
-		}
-
-		inline function lastEmitFromText(s: String): LastEmit {
-			return endsWithOpenDelim(s) ? OpenDelim : Other;
-		}
-
-		inline function flushOptSpace(): Void {
-			if (pendingOptSpace != null) {
-				if (pendingIndent >= 0) {
-					writeIndent(buf, pendingIndent, indentChar, tabWidth);
-					pendingIndent = -1;
-				}
-				buf.add(pendingOptSpace);
-				col += pendingOptSpace.length;
-				pendingOptSpace = null;
-				lastEmit = Other;
-			}
-		}
-
-		// Flush a pending `OptHardlineSkipBeforeHardline` slot: emit
-		// `\n+indent` like a regular break-mode `Line` and drop the
-		// pending OptSpace (mirrors the break-mode-Line semantic — the
-		// optional trailing space disappears before a newline). Called
-		// at the top of every content-bearing case so the deferred
-		// hardline lands before its follower. A no-op when no slot
-		// pending. Distinct from the `drop` path (no flush, just clear)
-		// taken by incoming hardline-like emits.
-		inline function flushPendingHardline(): Void {
-			if (pendingHardline >= 0) {
-				pendingOptSpace = null;
-				if (trailingWhitespace && pendingIndent >= 0) {
-					writeIndent(buf, pendingIndent, indentChar, tabWidth);
-				}
-				buf.add(lineEnd);
-				lineCount++;
-				pendingIndent = pendingHardline;
-				col = pendingHardline;
-				lastEmit = Hardline;
-				pendingHardline = -1;
-			}
-		}
+		// Render-local mutable carrier of the scalar layout accumulators plus
+		// the run config (NOT a static / Renderer field — invariant #1). The
+		// emit helpers mutate it by reference; the push helpers read it. See
+		// the `RenderCtx` typedef for the per-field semantic (pending-indent /
+		// pending-opt-space / forward-hardline slots, the `lastEmit` byte
+		// classifier, the physical `lineCount`, and the two marker-scope depths).
+		final ctx: RenderCtx = {
+			buf: new StringBuf(),
+			indentChar: indentChar,
+			tabWidth: tabWidth,
+			lineEnd: lineEnd,
+			trailingWhitespace: trailingWhitespace,
+			// One indent level in columns under a `ConditionalMarkerDecrease`
+			// scope: `indentSize` in Space mode, `tabWidth` in Tab mode (matches
+			// the writer's `_dn(_cols, …)` body-nest unit).
+			markerDecreaseUnit: indentChar == Space ? indentSize : tabWidth,
+			col: 0,
+			pendingIndent: -1,
+			pendingOptSpace: null,
+			pendingHardline: -1,
+			lastEmit: Other,
+			lineCount: 0,
+			markerZeroDepth: 0,
+			markerDecreaseDepth: 0
+		};
 
 		while (stack.length > 0) {
 			final f: Frame = stack.pop();
@@ -329,7 +284,7 @@ class Renderer {
 			// drained, so the matching depth increment is undone here at scope
 			// exit. Emit nothing.
 			if (f.popMarkerZero) {
-				if (markerZeroDepth > 0) markerZeroDepth--;
+				if (ctx.markerZeroDepth > 0) ctx.markerZeroDepth--;
 				continue;
 			}
 			// ω-cond-indent-policy AlignedDecrease: pop sentinel. A
@@ -338,285 +293,23 @@ class Renderer {
 			// drained, so the matching depth increment is undone here at scope
 			// exit. Emit nothing.
 			if (f.popMarkerDecrease) {
-				if (markerDecreaseDepth > 0) markerDecreaseDepth--;
+				if (ctx.markerDecreaseDepth > 0) ctx.markerDecreaseDepth--;
 				continue;
 			}
-			final fillRest: Null<Array<Doc>> = f.fillRest;
-			if (fillRest != null) {
-				final fillSep: Doc = f.fillSep;
-				final idx: Int = f.fillIdx;
-				final tailReserve: Int = f.fillTailReserve;
-				if (idx < fillRest.length) {
-					// `tailReserve` cols are reserved for post-Fill same-line
-					// content (trailing comma + close delim emitted OUTSIDE
-					// the Fill — see `Doc.Fill` doc-comment). Subtracting it
-					// from the probe budget makes the LAST packed item leave
-					// room for that tail, matching fork's `wrapFillLine2AfterLast`
-					// `lineLength + tokenLength >= maxLineLength` accounting
-					// where each item carries its trailing comma in
-					// `firstLineLength` (slice ω-fill-tail-reserve).
-					//
-					// `restW` is the additional tail beyond the Fill subtree
-					// itself (content trailing the Fill on the same rendered
-					// line — e.g. typedef RHS `= RequestMethod<...>;` after a
-					// typeParams Fill). Subtracted only when the originating
-					// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe)
-					// AND we're probing the LAST item (slice 4): fork's
-					// `wrapFillLine2AfterLast` reserves the rest-of-line tail
-					// for the AFTER-LAST decision, not every per-item probe.
-					// Middle items break only when they themselves overflow;
-					// the tail lands on whichever line the last item ends on,
-					// so only the last item's probe must account for it.
-					// Applying restW per-item is over-pessimistic (regresses
-					// e.g. `wrapping/issue_494_type_parameter` — too-early
-					// break, only 2 of 6 items packed instead of 5).
-					// Default `restW=0` preserves byte-equivalent legacy
-					// behavior; sister to `GroupWithRestProbe` at the Group
-					// decision layer.
-					final restW: Int = (f.fillRestProbe && idx == fillRest.length - 1) ? flatTokenWidthOfRestStack(stack) : 0;
-					// ω-fill-break-after-wrap: the just-drained previous item
-					// (`fillRest[idx - 1]`) self-wrapped when the render's
-					// physical-line count advanced past the snapshot taken when
-					// it started. A self-wrapped item overflowed its
-					// continuation line, so fork's `lineLength` accounting would
-					// push the follower onto its own line regardless of the
-					// short post-wrap pen column. Force the separator to break
-					// in that case, mirroring `wrapFillLine*2AfterLast`. Gated
-					// on `fillLineStart >= 0` so non-opting / force-flat Fills
-					// stay byte-identical via the legacy `fits` probe alone.
-					final prevWrapped: Bool = f.fillLineStart >= 0 && lineCount > f.fillLineStart;
-					final fits: Bool = !prevWrapped
-						&& fitsFlat(width - col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
-					if (idx + 1 < fillRest.length) {
-						// Snapshot the line where `fillRest[idx]` STARTS: when the
-						// separator breaks (`!fits`) the item begins on the next
-						// physical line, so the snapshot must account for that
-						// break (which hasn't been emitted yet). Disabled-mode
-						// (`fillLineStart < 0`) propagates `-1`.
-						final nextStart: Int = f.fillLineStart < 0 ? -1 : (fits ? lineCount : lineCount + 1);
-						stack.push(Frame.fillCont(
-							f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat, nextStart
-						));
-					}
-					stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat, f.hardFlat));
-					stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat, f.hardFlat));
-				}
+			if (f.fillRest != null) {
+				// Fill continuation frame: decide whether the next item packs
+				// onto the current line or breaks, pushing the item + separator
+				// (+ next continuation) frames. Reads `ctx.col`/`ctx.lineCount`.
+				resumeFill(ctx, f, stack, width);
 				continue;
 			}
 			switch (f.doc) {
-				case Empty:
-					// nothing
-				case Text(s):
-					if (s.length > 0) {
-						// ω-cond-indent-policy FixedZero: inside a
-						// `ConditionalMarkerZero` scope, a fresh-line token that
-						// starts with `#` is a preprocessor marker
-						// (`#if`/`#elseif`/`#else`/`#end`) — flush it at column 0
-						// regardless of the frame indent. Body lines (any other
-						// first byte) keep their pending frame indent.
-						final freshLine: Bool = lastEmit == Hardline && pendingOptSpace == null && pendingHardline < 0;
-						if (markerZeroDepth > 0 && freshLine && pendingIndent > 0 && StringTools.fastCodeAt(s, 0) == '#'.code) {
-							pendingIndent = 0;
-						}
-						// ω-cond-indent-policy AlignedDecrease: inside a
-						// `ConditionalMarkerDecrease` scope, EVERY fresh-line token —
-						// both `#`-markers and guarded body — is re-indented one
-						// indent level shallower (clamped at column 0), shifting the
-						// whole increase-style layout `-1` uniformly. Applied once
-						// per physical line (gated on the fresh-line flag), so a
-						// nested conditional's marker/body lines each get the single
-						// uniform shift rather than per-depth.
-						if (markerDecreaseDepth > 0 && freshLine && pendingIndent > 0) {
-							final shifted: Int = pendingIndent - markerDecreaseUnit;
-							pendingIndent = shifted > 0 ? shifted : 0;
-						}
-						flushPendingHardline();
-						flushOptSpace();
-						if (pendingIndent >= 0) {
-							writeIndent(buf, pendingIndent, indentChar, tabWidth);
-							pendingIndent = -1;
-						}
-						buf.add(s);
-						col += s.length;
-						lastEmit = lastEmitFromText(s);
-					}
-				case Line(flat):
-					if (f.forceFlat || f.mode == MFlat) {
-						flushPendingHardline();
-						flushOptSpace();
-						if (flat.length > 0 && pendingIndent >= 0) {
-							writeIndent(buf, pendingIndent, indentChar, tabWidth);
-							pendingIndent = -1;
-						}
-						buf.add(flat);
-						col += flat.length;
-						if (flat.length > 0) {
-							lastEmit = lastEmitFromText(flat);
-						}
-					} else {
-						// Break-mode hardline: drop pending OptSpace so the
-						// lead's optional trailing space disappears before
-						// the newline (no `var x = \n{...}` artifact). Also
-						// drop any pending `OptHardlineSkipBeforeHardline`
-						// (collision: the deferred hardline's reason for
-						// existing — "fire unless next is hardline" — fails
-						// here because we ARE that hardline).
-						pendingOptSpace = null;
-						if (pendingHardline >= 0) pendingHardline = -1;
-						if (trailingWhitespace && pendingIndent >= 0) {
-							writeIndent(buf, pendingIndent, indentChar, tabWidth);
-						}
-						buf.add(lineEnd);
-						lineCount++;
-						pendingIndent = f.indent;
-						col = f.indent;
-						lastEmit = Hardline;
-					}
-				case OptSpace(s):
-					// Defer; flushed by the next Text or in-flat Line, or
-					// dropped by the next break-mode Line. Multiple
-					// consecutive OptSpace nodes accumulate.
-					if (s.length > 0) {
-						pendingOptSpace = pendingOptSpace == null ? s : pendingOptSpace + s;
-					}
-				case OptHardline:
-					// Optional break-mode hardline: drop if the previous
-					// emit was already a `\n` (collision with sibling
-					// hardline at the same insertion point), otherwise
-					// emit `\n` + indent like a regular break-mode `Line`.
-					// Both branches clear `pendingOptSpace` to mirror
-					// real-hardline semantics. Even when dropped, update
-					// `pendingIndent` to this node's own indent — the
-					// dropping emitter is the "inner" one and its indent
-					// is more specific (e.g. objectLit's leftCurly Next
-					// inside a wrap-engine-driven multi-arg list).
-					//
-					// Drop any pending `OptHardlineSkipBeforeHardline`
-					// (collision: incoming hardline-like emit clears the
-					// deferred forward-looking hardline without write).
-					//
-					// Force-flat (slice B): inside a `Flatten(...)` region,
-					// every optional hardline is collapsed — `pendingOptSpace`
-					// is cleared (mirror real-hardline) but no `\n` is
-					// emitted and `pendingIndent`/`col`/`lastEmit` stay put.
-					pendingOptSpace = null;
-					if (pendingHardline >= 0) pendingHardline = -1;
-					if (f.forceFlat) {
-						// drop entirely
-					} else if (lastEmit == Hardline) {
-						pendingIndent = f.indent;
-						col = f.indent;
-					} else {
-						if (trailingWhitespace && pendingIndent >= 0) {
-							writeIndent(buf, pendingIndent, indentChar, tabWidth);
-						}
-						buf.add(lineEnd);
-						lineCount++;
-						pendingIndent = f.indent;
-						col = f.indent;
-						lastEmit = Hardline;
-					}
-				case OptSpaceSkipAfterHardline:
-					// Inline single space, dropped when the last emitted
-					// output ended with a hardline. Mirror of
-					// `OptHardlineSkipAtOpenDelim`'s drop-on-state pattern
-					// for the trailing-side. Pending `OptSpace` cleared on
-					// drop; on emit, the space prints at the current
-					// (post-flush) position via the same `pendingOptSpace`
-					// channel as `OptSpace(' ')` would, so the flat-mode
-					// `Line(' ')` collapse ordering still holds.
-					//
-					// Force-flat (slice B): inside a `Flatten(...)` region,
-					// every preceding `OptHardline*` was dropped, so a
-					// `Hardline` lastEmit can only carry over from OUTSIDE
-					// the region. Force the space unconditionally — the
-					// drop-on-state semantic is moot inside force-flat.
-					if (!f.forceFlat && lastEmit == Hardline) {
-						pendingOptSpace = null;
-					} else {
-						pendingOptSpace = pendingOptSpace == null ? ' ' : pendingOptSpace + ' ';
-					}
-				case OptHardlineSkipAtOpenDelim:
-					// Open-delim-aware leading hardline. Three branches:
-					//  1. Last emit was an open delim (`(`/`[`/`{`):
-					//     drop the `\n+indent` so items[0] glues to the
-					//     open delim. Leave `col` and `pendingIndent`
-					//     untouched — the open delim's text already set
-					//     col, and the next continuation `\n` (later
-					//     break-mode `Line` for items[1]) will set its
-					//     own pendingIndent at frame time.
-					//     `lastEmit` stays `OpenDelim` so a redundant
-					//     follow-up of the same ctor (defensive case)
-					//     keeps dropping.
-					//  2. Last emit was a hardline: mirror `OptHardline`'s
-					//     collision drop (update pendingIndent + col to
-					//     the more-specific inner indent).
-					//  3. Otherwise: emit `\n+indent` like a regular
-					//     break-mode `Line`. Used by chain shapes for
-					//     the leading `\n` before items[0] in
-					//     outer-context cases (`dirty = chain`).
-					//
-					// Drop any pending `OptHardlineSkipBeforeHardline`
-					// (collision: incoming hardline-like emit clears the
-					// deferred forward-looking hardline without write).
-					//
-					// Force-flat (slice B): same drop-entirely behaviour as
-					// `OptHardline` — `pendingOptSpace` cleared, no `\n`
-					// emitted, surrounding state untouched.
-					pendingOptSpace = null;
-					if (pendingHardline >= 0) pendingHardline = -1;
-					if (f.forceFlat) {
-						// drop entirely
-					} else
-						switch lastEmit {
-							case OpenDelim:
-								// drop, leave col / pendingIndent / lastEmit as-is
-							case Hardline:
-								pendingIndent = f.indent;
-								col = f.indent;
-							case Other:
-								if (trailingWhitespace && pendingIndent >= 0) {
-									writeIndent(buf, pendingIndent, indentChar, tabWidth);
-								}
-								buf.add(lineEnd);
-								lineCount++;
-								pendingIndent = f.indent;
-								col = f.indent;
-								lastEmit = Hardline;
-						}
-				case OptHardlineSkipBeforeHardline:
-					// Forward-looking opt-hardline (ω-opthardlineskipbeforehardline):
-					// defer the `\n+indent` emit to the first content-bearing
-					// follower (Text, in-flat Line, flushed OptSpace*). Sister
-					// to `pendingOptSpace`'s deferred pattern but for the
-					// trailing-side. An incoming hardline-like emit
-					// (`Line` in MBreak, `OptHardline`,
-					// `OptHardlineSkipAtOpenDelim`) clears the pending slot
-					// without write — collision suppression for the
-					// `} // comment\n + parent-Star sep \n` double-hardline
-					// case at the `trailFollowExpr` site.
-					//
-					// Collision among consecutive `OptHardlineSkipBeforeHardline`
-					// emits: overwrite the slot with the inner ctor's indent
-					// (the latter is more specific). The prior pending's
-					// emit was never committed, so no buf state to roll back.
-					//
-					// `pendingOptSpace` is intentionally NOT cleared on entry:
-					// the deferred state hasn't committed to a hardline yet,
-					// so the optional space stays alive until the slot
-					// flushes (which drops it as break-mode-Line does) or
-					// drops (collision — the incoming hardline will clear
-					// pendingOptSpace via its own path).
-					//
-					// Force-flat (slice B): drop entirely. Mirror
-					// `OptHardline`'s force-flat arm — inside a `Flatten(...)`
-					// region the deferred emit is moot (force-flat collapses
-					// every optional hardline).
-					if (f.forceFlat) {
-						// drop entirely
-					} else {
-						pendingHardline = f.indent;
-					}
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+					| OptHardlineSkipBeforeHardline:
+					// Content-emitting leaf ctors — mutate the scalar layout
+					// accumulators (buf / col / pending* / lastEmit / lineCount).
+					// Delegated to the static `emitLeaf` on the `ctx` carrier.
+					emitLeaf(ctx, f);
 				case Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupWithRestProbe(_) | Flatten(_) | WrapBoundary(_) | HardFlatten(
 					_
 				) | CollapseProbe(_):
@@ -624,21 +317,21 @@ class Renderer {
 					// frame pushes. Delegated to the static `pushStructural` (reads
 					// `col`/`width`/`f`, writes `stack`). See that helper for each
 					// per-ctor semantic.
-					pushStructural(f, stack, col, width);
+					pushStructural(f, stack, ctx.col, width);
 				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfFullLineExceeds(
 					_, _, _
 				) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
-					pushExceedsBranch(f, stack, col, width, decisions);
+					pushExceedsBranch(f, stack, ctx.col, width, decisions);
 				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
 					// mutation (reads `lineCount` for the break-after-wrap snapshot,
 					// writes `stack`). Delegated to the static `pushFill`.
-					pushFill(f, stack, lineCount);
+					pushFill(f, stack, ctx.lineCount);
 				case CollapseAddProbe(_) | CollapseBoolProbe(_) | CollapseChainProbe(_):
 					// Collapse-probe markers — pure render pass-through that records a
 					// measure-only decision (reads `col`/`decisions`, writes
 					// `decisions`/`stack`). Delegated to the static `pushCollapseProbe`.
-					pushCollapseProbe(f, stack, col, decisions);
+					pushCollapseProbe(f, stack, ctx.col, decisions);
 				case ConditionalMarkerZero(inner):
 					// ω-cond-indent-policy FixedZero: enter a marker-zero scope.
 					// Increment the render-local depth so the Text-flush re-indents
@@ -648,7 +341,7 @@ class Renderer {
 					// drain before the sentinel surfaces). Layout-transparent
 					// otherwise — `inner` renders at the same indent/mode/force-flat
 					// as the wrapper frame; only the `#`-marker lines move.
-					markerZeroDepth++;
+					ctx.markerZeroDepth++;
 					final popMz: Frame = new Frame(f.indent, f.mode, Empty, f.forceFlat, f.hardFlat);
 					popMz.popMarkerZero = true;
 					stack.push(popMz);
@@ -662,7 +355,7 @@ class Renderer {
 					// drain before the sentinel surfaces). Layout-transparent
 					// otherwise — `inner` renders at the same indent/mode/force-flat
 					// as the wrapper frame; only the per-line `-1` shift applies.
-					markerDecreaseDepth++;
+					ctx.markerDecreaseDepth++;
 					final popMd: Frame = new Frame(f.indent, f.mode, Empty, f.forceFlat, f.hardFlat);
 					popMd.popMarkerDecrease = true;
 					stack.push(popMd);
@@ -670,7 +363,7 @@ class Renderer {
 			}
 		}
 
-		final raw: String = buf.toString();
+		final raw: String = ctx.buf.toString();
 		final capped: String = maxConsecutiveBlanks >= 0 ? capConsecutiveBlanks(raw, lineEnd, maxConsecutiveBlanks) : raw;
 		return finalNewline && !StringTools.endsWith(capped, lineEnd) ? capped + lineEnd : capped;
 	}
@@ -2500,6 +2193,407 @@ class Renderer {
 				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
 				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case _:
+		}
+	}
+
+	/**
+	 * True when `s` ends with an open delimiter (`(`/`[`/`{`) — drives the
+	 * `OpenDelim` `lastEmit` classification.
+	 */
+	private static inline function endsWithOpenDelim(s: String): Bool {
+		if (s.length == 0) return false;
+		final c: Int = StringTools.fastCodeAt(s, s.length - 1);
+		return c == '('.code || c == '['.code || c == '{'.code;
+	}
+
+	/**
+	 * Classify the `lastEmit` state produced by emitting text `s`.
+	 */
+	private static inline function lastEmitFromText(s: String): LastEmit {
+		return endsWithOpenDelim(s) ? OpenDelim : Other;
+	}
+
+	/**
+	 * Flush a pending `OptSpace` into `ctx.buf` at the current pen, first
+	 * flushing any pending indent. A no-op when nothing is pending.
+	 */
+	private static function flushOptSpace(ctx: RenderCtx): Void {
+		if (ctx.pendingOptSpace != null) {
+			if (ctx.pendingIndent >= 0) {
+				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+				ctx.pendingIndent = -1;
+			}
+			ctx.buf.add(ctx.pendingOptSpace);
+			ctx.col += ctx.pendingOptSpace.length;
+			ctx.pendingOptSpace = null;
+			ctx.lastEmit = Other;
+		}
+	}
+
+	/**
+	 * Flush a pending `OptHardlineSkipBeforeHardline` slot: emit `\n+indent`
+	 * like a regular break-mode `Line` and drop the pending OptSpace (mirrors
+	 * the break-mode-Line semantic — the optional trailing space disappears
+	 * before a newline). Called at the top of every content-bearing case so
+	 * the deferred hardline lands before its follower. A no-op when no slot
+	 * pending. Distinct from the `drop` path (no flush, just clear) taken by
+	 * incoming hardline-like emits.
+	 */
+	private static function flushPendingHardline(ctx: RenderCtx): Void {
+		if (ctx.pendingHardline >= 0) {
+			ctx.pendingOptSpace = null;
+			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
+				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+			}
+			ctx.buf.add(ctx.lineEnd);
+			ctx.lineCount++;
+			ctx.pendingIndent = ctx.pendingHardline;
+			ctx.col = ctx.pendingHardline;
+			ctx.lastEmit = Hardline;
+			ctx.pendingHardline = -1;
+		}
+	}
+
+	/**
+	 * Emit a `Text(s)` node into `ctx` at the current pen — applying the
+	 * `ConditionalMarkerZero` / `ConditionalMarkerDecrease` fresh-line indent
+	 * policies, flushing pending hardline / opt-space / indent, then the text.
+	 * Mutates `ctx` (invariant #1: render-local carrier, no static state).
+	 */
+	private static function emitText(ctx: RenderCtx, s: String): Void {
+		if (s.length > 0) {
+			// ω-cond-indent-policy FixedZero: inside a
+			// `ConditionalMarkerZero` scope, a fresh-line token that
+			// starts with `#` is a preprocessor marker
+			// (`#if`/`#elseif`/`#else`/`#end`) — flush it at column 0
+			// regardless of the frame indent. Body lines (any other
+			// first byte) keep their pending frame indent.
+			final freshLine: Bool = ctx.lastEmit == Hardline && ctx.pendingOptSpace == null && ctx.pendingHardline < 0;
+			if (ctx.markerZeroDepth > 0 && freshLine && ctx.pendingIndent > 0 && StringTools.fastCodeAt(s, 0) == '#'.code) {
+				ctx.pendingIndent = 0;
+			}
+			// ω-cond-indent-policy AlignedDecrease: inside a
+			// `ConditionalMarkerDecrease` scope, EVERY fresh-line token —
+			// both `#`-markers and guarded body — is re-indented one
+			// indent level shallower (clamped at column 0), shifting the
+			// whole increase-style layout `-1` uniformly. Applied once
+			// per physical line (gated on the fresh-line flag), so a
+			// nested conditional's marker/body lines each get the single
+			// uniform shift rather than per-depth.
+			if (ctx.markerDecreaseDepth > 0 && freshLine && ctx.pendingIndent > 0) {
+				final shifted: Int = ctx.pendingIndent - ctx.markerDecreaseUnit;
+				ctx.pendingIndent = shifted > 0 ? shifted : 0;
+			}
+			flushPendingHardline(ctx);
+			flushOptSpace(ctx);
+			if (ctx.pendingIndent >= 0) {
+				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+				ctx.pendingIndent = -1;
+			}
+			ctx.buf.add(s);
+			ctx.col += s.length;
+			ctx.lastEmit = lastEmitFromText(s);
+		}
+	}
+
+	/**
+	 * Emit a `Line(flat)` node into `ctx`. In flat mode (force-flat or
+	 * `MFlat`) the line collapses to its `flat` replacement; in break mode it
+	 * becomes a real `\n+indent`, dropping any pending OptSpace and forward
+	 * hardline. Mutates `ctx`.
+	 */
+	private static function emitLine(ctx: RenderCtx, f: Frame, flat: String): Void {
+		if (f.forceFlat || f.mode == MFlat) {
+			flushPendingHardline(ctx);
+			flushOptSpace(ctx);
+			if (flat.length > 0 && ctx.pendingIndent >= 0) {
+				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+				ctx.pendingIndent = -1;
+			}
+			ctx.buf.add(flat);
+			ctx.col += flat.length;
+			if (flat.length > 0) {
+				ctx.lastEmit = lastEmitFromText(flat);
+			}
+		} else {
+			// Break-mode hardline: drop pending OptSpace so the
+			// lead's optional trailing space disappears before
+			// the newline (no `var x = \n{...}` artifact). Also
+			// drop any pending `OptHardlineSkipBeforeHardline`
+			// (collision: the deferred hardline's reason for
+			// existing — "fire unless next is hardline" — fails
+			// here because we ARE that hardline).
+			ctx.pendingOptSpace = null;
+			if (ctx.pendingHardline >= 0) ctx.pendingHardline = -1;
+			if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
+				writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+			}
+			ctx.buf.add(ctx.lineEnd);
+			ctx.lineCount++;
+			ctx.pendingIndent = f.indent;
+			ctx.col = f.indent;
+			ctx.lastEmit = Hardline;
+		}
+	}
+
+	/**
+	 * Emit the break-mode optional-hardline ctors `OptHardline` /
+	 * `OptHardlineSkipAtOpenDelim` into `ctx` — collision-dropping against a
+	 * prior hardline (or, for the open-delim variant, a prior open delim) and
+	 * collapsing entirely inside a force-flat region. Mutates `ctx`.
+	 */
+	private static function emitOptHardline(ctx: RenderCtx, f: Frame): Void {
+		switch (f.doc) {
+			case OptHardline:
+				// Optional break-mode hardline: drop if the previous
+				// emit was already a `\n` (collision with sibling
+				// hardline at the same insertion point), otherwise
+				// emit `\n` + indent like a regular break-mode `Line`.
+				// Both branches clear `pendingOptSpace` to mirror
+				// real-hardline semantics. Even when dropped, update
+				// `pendingIndent` to this node's own indent — the
+				// dropping emitter is the "inner" one and its indent
+				// is more specific (e.g. objectLit's leftCurly Next
+				// inside a wrap-engine-driven multi-arg list).
+				//
+				// Drop any pending `OptHardlineSkipBeforeHardline`
+				// (collision: incoming hardline-like emit clears the
+				// deferred forward-looking hardline without write).
+				//
+				// Force-flat (slice B): inside a `Flatten(...)` region,
+				// every optional hardline is collapsed — `pendingOptSpace`
+				// is cleared (mirror real-hardline) but no `\n` is
+				// emitted and `pendingIndent`/`col`/`lastEmit` stay put.
+				ctx.pendingOptSpace = null;
+				if (ctx.pendingHardline >= 0) ctx.pendingHardline = -1;
+				if (f.forceFlat) {
+					// drop entirely
+				} else if (ctx.lastEmit == Hardline) {
+					ctx.pendingIndent = f.indent;
+					ctx.col = f.indent;
+				} else {
+					if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
+						writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+					}
+					ctx.buf.add(ctx.lineEnd);
+					ctx.lineCount++;
+					ctx.pendingIndent = f.indent;
+					ctx.col = f.indent;
+					ctx.lastEmit = Hardline;
+				}
+			case OptHardlineSkipAtOpenDelim:
+				// Open-delim-aware leading hardline. Three branches:
+				//  1. Last emit was an open delim (`(`/`[`/`{`):
+				//     drop the `\n+indent` so items[0] glues to the
+				//     open delim. Leave `col` and `pendingIndent`
+				//     untouched — the open delim's text already set
+				//     col, and the next continuation `\n` (later
+				//     break-mode `Line` for items[1]) will set its
+				//     own pendingIndent at frame time.
+				//     `lastEmit` stays `OpenDelim` so a redundant
+				//     follow-up of the same ctor (defensive case)
+				//     keeps dropping.
+				//  2. Last emit was a hardline: mirror `OptHardline`'s
+				//     collision drop (update pendingIndent + col to
+				//     the more-specific inner indent).
+				//  3. Otherwise: emit `\n+indent` like a regular
+				//     break-mode `Line`. Used by chain shapes for
+				//     the leading `\n` before items[0] in
+				//     outer-context cases (`dirty = chain`).
+				//
+				// Drop any pending `OptHardlineSkipBeforeHardline`
+				// (collision: incoming hardline-like emit clears the
+				// deferred forward-looking hardline without write).
+				//
+				// Force-flat (slice B): same drop-entirely behaviour as
+				// `OptHardline` — `pendingOptSpace` cleared, no `\n`
+				// emitted, surrounding state untouched.
+				ctx.pendingOptSpace = null;
+				if (ctx.pendingHardline >= 0) ctx.pendingHardline = -1;
+				if (f.forceFlat) {
+					// drop entirely
+				} else
+					switch ctx.lastEmit {
+						case OpenDelim:
+							// drop, leave col / pendingIndent / lastEmit as-is
+						case Hardline:
+							ctx.pendingIndent = f.indent;
+							ctx.col = f.indent;
+						case Other:
+							if (ctx.trailingWhitespace && ctx.pendingIndent >= 0) {
+								writeIndent(ctx.buf, ctx.pendingIndent, ctx.indentChar, ctx.tabWidth);
+							}
+							ctx.buf.add(ctx.lineEnd);
+							ctx.lineCount++;
+							ctx.pendingIndent = f.indent;
+							ctx.col = f.indent;
+							ctx.lastEmit = Hardline;
+					}
+			case _:
+		}
+	}
+
+	/**
+	 * Emit the deferred / inline optional-space ctors `OptSpace` /
+	 * `OptSpaceSkipAfterHardline` / `OptHardlineSkipBeforeHardline` into `ctx`
+	 * — all accumulate into the pending-space or pending-hardline slot rather
+	 * than writing to `ctx.buf` directly. Mutates `ctx`.
+	 */
+	private static function emitOptSpaceVariants(ctx: RenderCtx, f: Frame): Void {
+		switch (f.doc) {
+			case OptSpace(s):
+				// Defer; flushed by the next Text or in-flat Line, or
+				// dropped by the next break-mode Line. Multiple
+				// consecutive OptSpace nodes accumulate.
+				if (s.length > 0) {
+					ctx.pendingOptSpace = ctx.pendingOptSpace == null ? s : ctx.pendingOptSpace + s;
+				}
+			case OptSpaceSkipAfterHardline:
+				// Inline single space, dropped when the last emitted
+				// output ended with a hardline. Mirror of
+				// `OptHardlineSkipAtOpenDelim`'s drop-on-state pattern
+				// for the trailing-side. Pending `OptSpace` cleared on
+				// drop; on emit, the space prints at the current
+				// (post-flush) position via the same `pendingOptSpace`
+				// channel as `OptSpace(' ')` would, so the flat-mode
+				// `Line(' ')` collapse ordering still holds.
+				//
+				// Force-flat (slice B): inside a `Flatten(...)` region,
+				// every preceding `OptHardline*` was dropped, so a
+				// `Hardline` lastEmit can only carry over from OUTSIDE
+				// the region. Force the space unconditionally — the
+				// drop-on-state semantic is moot inside force-flat.
+				if (!f.forceFlat && ctx.lastEmit == Hardline) {
+					ctx.pendingOptSpace = null;
+				} else {
+					ctx.pendingOptSpace = ctx.pendingOptSpace == null ? ' ' : ctx.pendingOptSpace + ' ';
+				}
+			case OptHardlineSkipBeforeHardline:
+				// Forward-looking opt-hardline (ω-opthardlineskipbeforehardline):
+				// defer the `\n+indent` emit to the first content-bearing
+				// follower (Text, in-flat Line, flushed OptSpace*). Sister
+				// to `pendingOptSpace`'s deferred pattern but for the
+				// trailing-side. An incoming hardline-like emit
+				// (`Line` in MBreak, `OptHardline`,
+				// `OptHardlineSkipAtOpenDelim`) clears the pending slot
+				// without write — collision suppression for the
+				// `} // comment\n + parent-Star sep \n` double-hardline
+				// case at the `trailFollowExpr` site.
+				//
+				// Collision among consecutive `OptHardlineSkipBeforeHardline`
+				// emits: overwrite the slot with the inner ctor's indent
+				// (the latter is more specific). The prior pending's
+				// emit was never committed, so no buf state to roll back.
+				//
+				// `pendingOptSpace` is intentionally NOT cleared on entry:
+				// the deferred state hasn't committed to a hardline yet,
+				// so the optional space stays alive until the slot
+				// flushes (which drops it as break-mode-Line does) or
+				// drops (collision — the incoming hardline will clear
+				// pendingOptSpace via its own path).
+				//
+				// Force-flat (slice B): drop entirely. Mirror
+				// `OptHardline`'s force-flat arm — inside a `Flatten(...)`
+				// region the deferred emit is moot (force-flat collapses
+				// every optional hardline).
+				if (f.forceFlat) {
+					// drop entirely
+				} else {
+					ctx.pendingHardline = f.indent;
+				}
+			case _:
+		}
+	}
+
+	/**
+	 * Dispatch a content-emitting leaf `Doc` ctor (`Empty` / `Text` / `Line`
+	 * / the `OptSpace*` and `OptHardline*` family) to its emit helper, mutating
+	 * `ctx`. The structural / probe / Fill ctors are handled by the push
+	 * helpers in `render` and never reach here.
+	 */
+	private static function emitLeaf(ctx: RenderCtx, f: Frame): Void {
+		switch (f.doc) {
+			case Empty:
+				// nothing
+			case Text(s):
+				emitText(ctx, s);
+			case Line(flat):
+				emitLine(ctx, f, flat);
+			case OptSpace(_) | OptSpaceSkipAfterHardline | OptHardlineSkipBeforeHardline:
+				emitOptSpaceVariants(ctx, f);
+			case OptHardline | OptHardlineSkipAtOpenDelim:
+				emitOptHardline(ctx, f);
+			case _:
+		}
+	}
+
+	/**
+	 * Resume a `Doc.Fill` continuation frame: decide whether `fillRest[idx]`
+	 * packs onto the current line or breaks, push the item + separator frames
+	 * (and the next continuation frame), reading `ctx.col`/`ctx.lineCount`.
+	 * Mutates `stack` only (the per-item fit probe reads `ctx` but does not
+	 * mutate its accumulators). Extracted verbatim from `render`'s fillRest
+	 * block.
+	 */
+	private static function resumeFill(ctx: RenderCtx, f: Frame, stack: Array<Frame>, width: Int): Void {
+		final fillRest: Null<Array<Doc>> = f.fillRest;
+		if (fillRest == null) return;
+		final fillSep: Doc = f.fillSep;
+		final idx: Int = f.fillIdx;
+		final tailReserve: Int = f.fillTailReserve;
+		if (idx < fillRest.length) {
+			// `tailReserve` cols are reserved for post-Fill same-line
+			// content (trailing comma + close delim emitted OUTSIDE
+			// the Fill — see `Doc.Fill` doc-comment). Subtracting it
+			// from the probe budget makes the LAST packed item leave
+			// room for that tail, matching fork's `wrapFillLine2AfterLast`
+			// `lineLength + tokenLength >= maxLineLength` accounting
+			// where each item carries its trailing comma in
+			// `firstLineLength` (slice ω-fill-tail-reserve).
+			//
+			// `restW` is the additional tail beyond the Fill subtree
+			// itself (content trailing the Fill on the same rendered
+			// line — e.g. typedef RHS `= RequestMethod<...>;` after a
+			// typeParams Fill). Subtracted only when the originating
+			// Fill ctor was `FillWithRestProbe` (ω-fill-rest-probe)
+			// AND we're probing the LAST item (slice 4): fork's
+			// `wrapFillLine2AfterLast` reserves the rest-of-line tail
+			// for the AFTER-LAST decision, not every per-item probe.
+			// Middle items break only when they themselves overflow;
+			// the tail lands on whichever line the last item ends on,
+			// so only the last item's probe must account for it.
+			// Applying restW per-item is over-pessimistic (regresses
+			// e.g. `wrapping/issue_494_type_parameter` — too-early
+			// break, only 2 of 6 items packed instead of 5).
+			// Default `restW=0` preserves byte-equivalent legacy
+			// behavior; sister to `GroupWithRestProbe` at the Group
+			// decision layer.
+			final restW: Int = (f.fillRestProbe && idx == fillRest.length - 1) ? flatTokenWidthOfRestStack(stack) : 0;
+			// ω-fill-break-after-wrap: the just-drained previous item
+			// (`fillRest[idx - 1]`) self-wrapped when the render's
+			// physical-line count advanced past the snapshot taken when
+			// it started. A self-wrapped item overflowed its
+			// continuation line, so fork's `lineLength` accounting would
+			// push the follower onto its own line regardless of the
+			// short post-wrap pen column. Force the separator to break
+			// in that case, mirroring `wrapFillLine*2AfterLast`. Gated
+			// on `fillLineStart >= 0` so non-opting / force-flat Fills
+			// stay byte-identical via the legacy `fits` probe alone.
+			final prevWrapped: Bool = f.fillLineStart >= 0 && ctx.lineCount > f.fillLineStart;
+			final fits: Bool = !prevWrapped && fitsFlat(width - ctx.col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
+			if (idx + 1 < fillRest.length) {
+				// Snapshot the line where `fillRest[idx]` STARTS: when the
+				// separator breaks (`!fits`) the item begins on the next
+				// physical line, so the snapshot must account for that
+				// break (which hasn't been emitted yet). Disabled-mode
+				// (`fillLineStart < 0`) propagates `-1`.
+				final nextStart: Int = f.fillLineStart < 0 ? -1 : (fits ? ctx.lineCount : ctx.lineCount + 1);
+				stack.push(Frame.fillCont(
+					f.indent, fillRest, idx + 1, fillSep, tailReserve, f.forceFlat, f.fillRestProbe, f.hardFlat, nextStart
+				));
+			}
+			stack.push(new Frame(f.indent, MBreak, fillRest[idx], f.forceFlat, f.hardFlat));
+			stack.push(new Frame(f.indent, fits ? MFlat : MBreak, fillSep, f.forceFlat, f.hardFlat));
 		}
 	}
 
