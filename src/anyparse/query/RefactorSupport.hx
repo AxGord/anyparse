@@ -1156,4 +1156,17 @@ final class RefactorSupport {
 		return a.kind == identKind && b.kind == nullKind ? a.name : b.kind == identKind && a.kind == nullKind ? b.name : null;
 	}
 
+	/**
+	 * Whether any edit in `candidate` overlaps (intersects) any edit in `accepted` —
+	 * the cross-check guard the `--fix` loop uses to keep a check's edits atomic. A
+	 * check whose edits intersect an already-accepted check's edits is deferred whole
+	 * to the next fixed-point pass, so a partial application (e.g. a signature edit
+	 * without its matching call-site edit) can never land.
+	 */
+	public static function editsOverlapAny(
+		candidate: Array<{ span: Span, text: String }>, accepted: Array<{ span: Span, text: String }>
+	): Bool {
+		return candidate.exists(c -> accepted.exists(a -> c.span.from < a.span.to && a.span.from < c.span.to));
+	}
+
 }

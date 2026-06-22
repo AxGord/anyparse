@@ -81,4 +81,28 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+	public function testParamRemovalConflictWithTernaryStaysConsistent(): Void {
+		#if (sys || nodejs)
+		// `caller`'s `if (flag) return helper(...); return helper(...);` is a
+		// prefer-ternary-return candidate whose helper calls sit inside the rewritten
+		// region; `helper`'s first parameter is unused. In one pass prefer-ternary's
+		// region-rewrite and unused-parameter's call-arg removal collided — the param
+		// was dropped from the signature but the call kept all three args
+		// (`Too many arguments`). The --fix loop must converge to an arity-consistent
+		// (compiling) result.
+		final src: String = 'package p;\n\nclass C {\n\tpublic static function caller(flag:Bool):Int {\n\t\tif (flag) return helper(1, 10, 20);\n\t\treturn helper(2, 30, 40);\n\t}\n\n\tstatic function helper(unused:Int, b:Int, c:Int):Int {\n\t\treturn b + c;\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixfp', [{ name: 'Foo.hx', source: src }]);
+		final path: String = '$dir/Foo.hx';
+		Assert.equals(0, Cli.run(['lint', '--fix', path]), 'lint --fix exits ok');
+		final out: String = File.getContent(path);
+		Assert.isFalse(
+			out.indexOf('helper(b:Int, c:Int)') != -1 && out.indexOf('helper(1, 10, 20)') != -1,
+			'unused-parameter dropped the param but prefer-ternary kept the call arg -> arity mismatch: $out'
+		);
+		cleanup(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

@@ -10662,7 +10662,13 @@ final class Cli {
 		for (check in checks) {
 			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
 			if (own.length == 0) continue;
-			for (edit in check.fix(source, own, cached, index)) edits.push(edit);
+			final checkEdits: Array<{ span: Span, text: String }> = check.fix(source, own, cached, index);
+			// Accept a check's edits only when none overlaps an edit already accepted from
+			// an earlier check this pass — applying a subset would break an atomic fix
+			// (e.g. unused-parameter's signature edit without its call-site arg edit, when
+			// prefer-ternary-return rewrites the enclosing region). A deferred check fires
+			// cleanly on the next fixed-point pass.
+			if (checkEdits.length > 0 && !RefactorSupport.editsOverlapAny(checkEdits, edits)) for (e in checkEdits) edits.push(e);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
 	}
