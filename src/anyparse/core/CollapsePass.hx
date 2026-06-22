@@ -912,8 +912,7 @@ final class CollapsePass {
 		final wrapper: Null<Doc> = mapWrapperChild(d, f);
 		if (wrapper != null) return wrapper;
 		final conditional: Null<Doc> = mapConditionalChildren(d, f);
-		if (conditional != null) return conditional;
-		return mapCollectionChildren(d, f);
+		return conditional ?? mapCollectionChildren(d, f);
 	}
 
 	/**

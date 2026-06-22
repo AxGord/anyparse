@@ -50,7 +50,7 @@ class WriterLowering {
 		final rawBody: Expr = switch node.kind {
 			case Alt: lowerEnum(node, typePath, hasPratt);
 			case Seq: lowerStruct(node, typePath);
-			case Terminal: lowerTerminal(node, simple);
+			case Terminal: lowerTerminal(node);
 			case _:
 				Context.fatalError('WriterLowering: cannot lower ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
@@ -1275,7 +1275,6 @@ class WriterLowering {
 			tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded, tryparseHeritageWrap, tryparseCondBodyIndent,
 			tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail
 		));
-		return;
 	}
 
 	/**
@@ -1677,7 +1676,6 @@ class WriterLowering {
 				_dc([_dt($v{openText ?? ''}), _dn(_cols, _dc(_items)), _dhl(), _dt($v{closeText})]);
 			}
 		});
-		return;
 	}
 
 	/**
@@ -2446,7 +2444,6 @@ class WriterLowering {
 		} else {
 			Context.fatalError('WriterLowering: @:trivia Star without @:trail must be the last field', Context.currentPos());
 		}
-		return;
 	}
 
 	private function emitWriterStarField(
@@ -2573,7 +2570,7 @@ class WriterLowering {
 
 	// -------- terminal rule --------
 
-	private function lowerTerminal(node: ShapeNode, simple: String): Expr {
+	private function lowerTerminal(node: ShapeNode): Expr {
 		final underlying: String = node.annotations.get('base.underlying');
 		final unescape: Bool = node.hasMeta(':unescape');
 		final unescapeMode: Null<String> = node.readMetaString(':unescape');
@@ -6425,8 +6422,7 @@ class WriterLowering {
 			if (folded != null) return folded;
 		}
 		// Enum dispatch: switch over each ctor's `multilineCtor` flag.
-		if (node.kind == Alt) return buildMultilineEnumPredicate(node, accessExpr);
-		return null;
+		return node.kind == Alt ? buildMultilineEnumPredicate(node, accessExpr) : null;
 	}
 
 	private static function findFieldByName(node: ShapeNode, name: String): Null<ShapeNode> {
@@ -6901,7 +6897,8 @@ class WriterLowering {
 				_docs.push(_dt($v{trailText}));
 				_dc(_docs);
 			};
-		} else if (sepText != null) {
+		}
+		if (sepText != null) {
 			// See `emitWriterStarField` — `@:sep('\n')` routes to a flat
 			// hardline-join emission (format-neutral).
 			if (sepText == '\n') {
@@ -8056,17 +8053,17 @@ class WriterLowering {
 				return macro $rulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep ? $keepDoc : $wrapListExpr;
 			}
 			return wrapListExpr;
-		} else if (c.branch.fmtHasFlag('fill')) {
+		}
+		if (c.branch.fmtHasFlag('fill')) {
 			final fillDouble: Bool = c.branch.fmtHasFlag('fillDoubleIndent');
 			return macro fillList(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false,
 				$v{fillDouble}
 			);
-		} else {
-			return macro sepList(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, false
-			);
 		}
+		return macro sepList(
+			$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, false
+		);
 	}
 
 	/**
@@ -9181,9 +9178,9 @@ class WriterLowering {
 		}
 		else
 			null;
-		if (indentObjGuardedNext != null) return indentObjGuardedNext;
-		if (hasKwSlots) return macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt);
-		return macro _dn(_cols, _dc([_dhl(), $writeCall]));
+		return indentObjGuardedNext ?? (hasKwSlots
+			? macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
+			: macro _dn(_cols, _dc([_dhl(), $writeCall])));
 	}
 
 	/**
@@ -10699,56 +10696,57 @@ class WriterLowering {
 	 * current writer's value type.
 	 */
 	private function infixChainGatherSwitch(isChainBool: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
-		if (threadBreaks) return isChainBool
-			? macro switch _e {
-				case Or(_l, _r, _nl):
-					_gather(_l);
-					_ops.push('||');
-					_breaks.push(_nl);
-					_gather(_r);
-				case And(_l, _r, _nl):
-					_gather(_l);
-					_ops.push('&&');
-					_breaks.push(_nl);
-					_gather(_r);
-				case _: _items.push($leafCall);
-			}
-			: macro switch _e {
-				case Add(_l, _r, _nl):
-					_gather(_l);
-					_ops.push('+');
-					_breaks.push(_nl);
-					_gather(_r);
-				case Sub(_l, _r, _nl):
-					_gather(_l);
-					_ops.push('-');
-					_breaks.push(_nl);
-					_gather(_r);
-				case _: _items.push($leafCall);
-			};
-		return isChainBool
-			? macro switch _e {
-				case Or(_l, _r):
-					_gather(_l);
-					_ops.push('||');
-					_gather(_r);
-				case And(_l, _r):
-					_gather(_l);
-					_ops.push('&&');
-					_gather(_r);
-				case _: _items.push($leafCall);
-			}
-			: macro switch _e {
-				case Add(_l, _r):
-					_gather(_l);
-					_ops.push('+');
-					_gather(_r);
-				case Sub(_l, _r):
-					_gather(_l);
-					_ops.push('-');
-					_gather(_r);
-				case _: _items.push($leafCall);
-			};
+		return threadBreaks
+			? isChainBool
+				? macro switch _e {
+					case Or(_l, _r, _nl):
+						_gather(_l);
+						_ops.push('||');
+						_breaks.push(_nl);
+						_gather(_r);
+					case And(_l, _r, _nl):
+						_gather(_l);
+						_ops.push('&&');
+						_breaks.push(_nl);
+						_gather(_r);
+					case _: _items.push($leafCall);
+				}
+				: macro switch _e {
+					case Add(_l, _r, _nl):
+						_gather(_l);
+						_ops.push('+');
+						_breaks.push(_nl);
+						_gather(_r);
+					case Sub(_l, _r, _nl):
+						_gather(_l);
+						_ops.push('-');
+						_breaks.push(_nl);
+						_gather(_r);
+					case _: _items.push($leafCall);
+				}
+			: isChainBool
+				? macro switch _e {
+					case Or(_l, _r):
+						_gather(_l);
+						_ops.push('||');
+						_gather(_r);
+					case And(_l, _r):
+						_gather(_l);
+						_ops.push('&&');
+						_gather(_r);
+					case _: _items.push($leafCall);
+				}
+				: macro switch _e {
+					case Add(_l, _r):
+						_gather(_l);
+						_ops.push('+');
+						_gather(_r);
+					case Sub(_l, _r):
+						_gather(_l);
+						_ops.push('-');
+						_gather(_r);
+					case _: _items.push($leafCall);
+				};
 	}
 
 	/**
@@ -10966,11 +10964,7 @@ class WriterLowering {
 		// and trail set) — the Group/hardline-before-close shape is built in
 		// kwRefWrapShape; null when not the wrap shape (falls through below).
 		final wrapDoc: Null<Expr> = kwRefWrapShape(c, parts, wrapOpenNewlineExpr);
-		if (wrapDoc != null) return wrapDoc;
-
-		// Concat the parts + apply the conditionalMarkerDedent render-scope
-		// (FixedZero / AlignedDecrease) — see kwRefFinalDoc.
-		return kwRefFinalDoc(c, parts);
+		return wrapDoc ?? kwRefFinalDoc(c, parts);
 	}
 
 	/**
@@ -11043,8 +11037,9 @@ class WriterLowering {
 		final leadDoc: Expr = parts[0];
 		final innerDoc: Expr = parts[1];
 		final trailDoc: Expr = parts[2];
-		if (branch.fmtHasFlag('expressionParenHardFlatten')) return kwRefWrapHardFlatten(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr);
-		return kwRefWrapSourceNewline(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr);
+		return branch.fmtHasFlag('expressionParenHardFlatten')
+			? kwRefWrapHardFlatten(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr)
+			: kwRefWrapSourceNewline(leadDoc, innerDoc, trailDoc, wrapOpenNewlineExpr);
 	}
 
 	/**
@@ -12888,8 +12883,8 @@ class WriterLowering {
 	 * from `triviaBlockInterMemberAddExpr`.
 	 */
 	private static function triviaBlockSubdivVarFnArmExpr(afterVarsAccess: Expr): Expr {
-		return macro (((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4))
-				|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0));
+		return macro ((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4))
+				|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0);
 	}
 
 	/**

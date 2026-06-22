@@ -155,33 +155,13 @@ final class BinaryChainEmit {
 		// a `LineLengthLargerThan` rule answer can flip with column.
 		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
 		// recursion (no IfBreak split — single shape per leaf).
-		if (anyHardline) return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
-
-		// Normal path: cascade evaluated against (exceeds=false /
-		// exceeds=true) AND each non-lineWidth threshold's firing
-		// state. Tree construction:
-		//   - 0 extra thresholds: existing 2-state Group(IfBreak)
-		//   - 1 extra threshold T (impossibility-filtered, 3 shapes):
-		//       * T < lineWidth: `IfWidthExceeds(T, IfBreak(YY, YN), NN)`
-		//         (col<T → col<lineWidth → !exceeds; one impossible state pruned)
-		//       * T > lineWidth: `IfBreak(IfWidthExceeds(T, YY, NY), NN)`
-		//         (col>=T>lineWidth → exceeds; one impossible state pruned)
-		//   - 2+ extra thresholds: full enumeration via
-		//     `buildBinaryThresholdTree` (each `IfWidthExceeds(t, …)`
-		//     nests the next threshold). Impossibility filtering not
-		//     applied at N≥2; renderer never reaches the impossible-
-		//     state leaves at runtime, so the extra Doc shapes are
-		//     inert. None of the current default cascades use N≥2 —
-		//     this branch is correctness insurance for future cascades.
-		if (extraThresholds.length == 0)
-			return emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, evalAt, shapeAt, shapeNoWrapAt);
-
-		if (extraThresholds.length == 1) return emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt);
-
-		// 2+ extra thresholds — full enumeration without impossibility
-		// filtering. Renderer's column-aware probe at each
-		// IfWidthExceeds layer picks the correct leaf at runtime.
-		return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
+		return anyHardline
+			? WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt))
+			: extraThresholds.length == 0
+				? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, evalAt, shapeAt, shapeNoWrapAt)
+				: extraThresholds.length == 1
+					? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
+					: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
 	}
 
 	/**

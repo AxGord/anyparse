@@ -178,9 +178,9 @@ final class Naming implements Check {
 		// field's decl-node span and its reference binding can disagree), so a
 		// rename not covering every textual occurrence of the name would leave a
 		// dangling reference — bail rather than emit a broken rename.
-		if (decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences))
-			return null;
-		return { occurrences: occurrences, name: newName };
+		return decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
+			? null
+			: { occurrences: occurrences, name: newName };
 	}
 
 }

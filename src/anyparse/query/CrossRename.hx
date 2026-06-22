@@ -147,10 +147,7 @@ final class CrossRename {
 
 		// 3. Uniqueness: exactly one declaration of `typeName` under scope.
 		final uniqueErr: Null<String> = checkScopeUniqueness(parse.parsed, cursorFile, typeName);
-		if (uniqueErr != null) return Err(uniqueErr);
-
-		// 4. Collect occurrence spans, apply + atomically validate edits per file.
-		return applyTypeRename(parse.parsed, typeName, newName, plugin, typeRefShape, refShape);
+		return uniqueErr != null ? Err(uniqueErr) : applyTypeRename(parse.parsed, typeName, newName, plugin, typeRefShape, refShape);
 	}
 
 	/**
@@ -312,10 +309,11 @@ final class CrossRename {
 			declCount += n;
 			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
 		}
-		if (declCount == 0) return 'no type "$typeName" declared under scope';
-		if (declCount > 1) return 'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing';
-		if (!declInCursorFile) return 'the type "$typeName" at the cursor is not the one declared under scope — refusing';
-		return null;
+		return declCount == 0
+			? 'no type "$typeName" declared under scope'
+			: declCount > 1
+				? 'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing'
+				: !declInCursorFile ? 'the type "$typeName" at the cursor is not the one declared under scope — refusing' : null;
 	}
 
 	/**

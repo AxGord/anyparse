@@ -499,39 +499,40 @@ final class HxExprUtil {
 		if (e == null) return false;
 		final ctor: Null<String> = Type.enumConstructor(e);
 		if (ctor == null) return false;
-		if (ASSIGN_CTORS.contains(ctor)) return assignRhsNoSemi(e);
-		return switch ctor {
-			// `macro class … { members }` always ends with the members
-			// block's closing `}`, so a bare-statement `macro class {}`
-			// needs no trailing `;` — regardless of named / anon / empty.
-			case 'MacroClassExpr': true;
-			case 'MacroExpr':
-				macroExprNoSemi(e);
-			// Slice 28: walk through `@:meta expr` into its inner expression —
-			// `@:nullSafety(Off) return switch (…) { … }` and
-			// `@:nullSafety(Off) if (…) { … }` end with the inner expr's `}`.
-			case 'MetaExpr':
-				metaExprNoSemi(e);
-			// Slice 28: walk through `return expr` into its operand —
-			// `return switch (…) { … }` ends with the switch's `}`. The
-			// statement-position `return` routes through `HxStatement.ReturnStmt`,
-			// so this branch only fires when something forces expression-mode
-			// (e.g. `@:meta return switch (…) { … }` reaching `ExprStmt`
-			// through `MetaExpr`).
-			case 'ReturnExpr':
-				final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-				params != null && params.length != 0 && stmtExprNoSemi(params[0]);
-			// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
-			// statement's last token is the else branch's last token, or
-			// the then branch's when there is no `else`.
-			case 'IfExpr':
-				ifExprNoSemi(e);
-			// Slice 19: recursion target. Standalone `{ … }` at statement
-			// position is `HxStatement.BlockStmt`, so the brace-terminal
-			// ctors only fire when reached through Assign / IfExpr above.
-			case _:
-				STMT_BRACE_TERMINAL_CTORS.contains(ctor) || endsWithCloseBrace(e);
-		};
+		return ASSIGN_CTORS.contains(ctor)
+			? assignRhsNoSemi(e)
+			: switch ctor {
+				// `macro class … { members }` always ends with the members
+				// block's closing `}`, so a bare-statement `macro class {}`
+				// needs no trailing `;` — regardless of named / anon / empty.
+				case 'MacroClassExpr': true;
+				case 'MacroExpr':
+					macroExprNoSemi(e);
+				// Slice 28: walk through `@:meta expr` into its inner expression —
+				// `@:nullSafety(Off) return switch (…) { … }` and
+				// `@:nullSafety(Off) if (…) { … }` end with the inner expr's `}`.
+				case 'MetaExpr':
+					metaExprNoSemi(e);
+				// Slice 28: walk through `return expr` into its operand —
+				// `return switch (…) { … }` ends with the switch's `}`. The
+				// statement-position `return` routes through `HxStatement.ReturnStmt`,
+				// so this branch only fires when something forces expression-mode
+				// (e.g. `@:meta return switch (…) { … }` reaching `ExprStmt`
+				// through `MetaExpr`).
+				case 'ReturnExpr':
+					final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+					params != null && params.length != 0 && stmtExprNoSemi(params[0]);
+				// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
+				// statement's last token is the else branch's last token, or
+				// the then branch's when there is no `else`.
+				case 'IfExpr':
+					ifExprNoSemi(e);
+				// Slice 19: recursion target. Standalone `{ … }` at statement
+				// position is `HxStatement.BlockStmt`, so the brace-terminal
+				// ctors only fire when reached through Assign / IfExpr above.
+				case _:
+					STMT_BRACE_TERMINAL_CTORS.contains(ctor) || endsWithCloseBrace(e);
+			};
 	}
 
 	/**

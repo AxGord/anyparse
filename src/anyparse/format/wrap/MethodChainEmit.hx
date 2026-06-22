@@ -154,15 +154,9 @@ class MethodChainEmit {
 			return WrapBoundary(maybeTagReglue(ifFLE, modeBreak, modeFlat, segments, nestSuppress, segCallLeadingBreak));
 		}
 
-		if (extraThresholds.length == 1)
-			return emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt);
-
-		// 2+ extra thresholds — full enumeration without impossibility
-		// filtering. Renderer's column-aware probe at each
-		// `IfWidthExceeds` layer picks the correct leaf at runtime; the
-		// impossible-state shapes are inert. None of the current default
-		// cascades use N≥2 — this branch is correctness insurance.
-		return WrapBoundary(buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth));
+		return extraThresholds.length == 1
+			? emitSingleThreshold(extraThresholds[0], opt, segments, nestSuppress, segCallLeadingBreak, evalAt, shapeAt)
+			: WrapBoundary(buildChainThresholdTree(extraThresholds, [], evalAt, shapeAt, opt.lineWidth));
 	}
 
 	/**

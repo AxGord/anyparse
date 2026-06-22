@@ -163,14 +163,15 @@ final class PreferTernaryReturn implements Check {
 		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
 		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
 		// `simplify-boolean-return-chain`'s job; a value ternary still collapses here.
-		if (isStuckBooleanCollapse(thenValue, elseValue, shape)) return null;
-		return {
-			ifNode: ifNode,
-			condition: ifNode.children[0],
-			thenValue: thenValue,
-			elseValue: elseValue,
-			nextReturn: next
-		};
+		return isStuckBooleanCollapse(thenValue, elseValue, shape)
+			? null
+			: {
+				ifNode: ifNode,
+				condition: ifNode.children[0],
+				thenValue: thenValue,
+				elseValue: elseValue,
+				nextReturn: next
+			};
 	}
 
 	/**

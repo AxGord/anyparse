@@ -221,13 +221,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	private static function isImplicitlyReachable(
 		category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>, mods: Array<String>
 	): Bool {
-		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return false;
-		if (name == 'new' || StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent))
-			return true;
-		// A macro-force field — `static final _x: Class<Marker> = Marker;` — exists
-		// only to reference a `@:build` marker class so its `Context.defineModule`
-		// synth runs; never read by name but load-bearing (deleting it breaks the build).
-		return node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node);
+		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
+			&& (name == 'new' || StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent)
+				|| node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
 	}
 
 	/**

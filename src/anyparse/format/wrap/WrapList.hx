@@ -191,37 +191,16 @@ class WrapList {
 		// `buildThresholdTree` helper handles 0/1/N thresholds via
 		// recursion (1-threshold optimization with impossibility
 		// filtering inlined for the common case below).
-		if (anyHardline || forceExceeds)
-			return WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
-
-		// Normal path: cascade evaluated against (exceeds=false /
-		// exceeds=true) AND each non-lineWidth threshold's firing
-		// state. Tree construction:
-		//   - 0 extra thresholds: existing 2-state Group(IfBreak)
-		//   - 1 extra threshold T (impossibility-filtered, 3 shapes):
-		//       * T < lineWidth: `IfWidthExceeds(T, IfBreak(YY, YN), NN)`
-		//         (no T-no/exceeds-yes — impossible since col<T → col<lineWidth)
-		//       * T > lineWidth: `IfBreak(IfWidthExceeds(T, YY, NY), NN)`
-		//         (no T-yes/exceeds-no — impossible since col>=T>lineWidth → exceeds)
-		//   - 2+ extra thresholds: full enumeration via
-		//     `buildThresholdTree` (each `IfWidthExceeds(t, …)` nests
-		//     the next threshold). Impossibility filtering not applied
-		//     at N≥2; renderer never reaches the impossible-state
-		//     leaves at runtime, so the extra Doc shapes are inert.
-		//     None of the current default cascades use N≥2 — this
-		//     branch is correctness insurance for future cascades.
-		if (extraThresholds.length == 0)
-			return emitZeroThreshold(
-				rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe, leadFlat, leadBreak, evalAt,
-				shapeAt, leadFor
-			);
-
-		if (extraThresholds.length == 1) return emitOneThreshold(extraThresholds[0], opt, leadFlat, leadBreak, evalAt, shapeAt, leadFor);
-
-		// 2+ extra thresholds — full enumeration without impossibility
-		// filtering. Renderer's column-aware probe at each
-		// IfWidthExceeds layer picks the correct leaf at runtime.
-		return WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
+		return anyHardline || forceExceeds
+			? WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
+			: extraThresholds.length == 0
+				? emitZeroThreshold(
+					rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe, leadFlat, leadBreak, evalAt,
+					shapeAt, leadFor
+				)
+				: extraThresholds.length == 1
+					? emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
+					: WrapBoundary(buildThresholdTree(extraThresholds, [], null, leadFlat, leadBreak, evalAt, shapeAt, leadFor));
 	}
 
 	/**
@@ -358,8 +337,7 @@ class WrapList {
 	 * `IfWidthExceeds` on the exceeds side.
 	 */
 	private static function emitOneThreshold(
-		t: Int, opt: WriteOptions, leadFlat: Doc, leadBreak: Doc, evalAt: (Bool, Array<Int>) -> WrapMode, shapeAt: (WrapMode, Doc) -> Doc,
-		leadFor: WrapMode -> Doc
+		t: Int, opt: WriteOptions, evalAt: (Bool, Array<Int>) -> WrapMode, shapeAt: (WrapMode, Doc) -> Doc, leadFor: WrapMode -> Doc
 	): Doc {
 		if (t < opt.lineWidth) {
 			// 3 valid states (col+w<t implies col+w<lineWidth implies !exceeds):
@@ -1330,11 +1308,11 @@ class WrapList {
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
 			keepCloseGlued, lineWidth
 		);
-		if (multiArgCollection != null) return multiArgCollection;
-		return shapeByMode(
-			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
-			sourceBreakBefore, keepCloseGlued, flatTrailingComma
-		);
+		return multiArgCollection
+			?? shapeByMode(
+				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe,
+				sepBeforeFlags, sourceBreakBefore, keepCloseGlued, flatTrailingComma
+			);
 	}
 
 	/**
@@ -1373,10 +1351,10 @@ class WrapList {
 	private static function shapeSoleArrowUniform(
 		mode: WrapMode, open: String, close: String, openInside: Doc, closeInside: Doc, items: Array<Doc>
 	): Null<Doc> {
-		if (items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0]) && (
-			mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0]))
-		)) return arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0]);
-		return null;
+		return items.length == 1 && isArrowBodyMarker(items[0]) && !arrowBodyIsBlock(items[0])
+			&& (mode == FillLine || (mode == FillLineWithLeadingBreak && arrowBodyBreaks(items[0])))
+			? arrowBodyCloseParenShape(open, close, openInside, closeInside, items[0])
+			: null;
 	}
 
 	/**
@@ -2392,8 +2370,7 @@ class WrapList {
 	 */
 	private static function hasLeadingHardline(d: Doc): Bool {
 		final leaf: Null<Bool> = leadingHardlineLeaf(d);
-		if (leaf != null) return leaf;
-		return switch d {
+		return leaf ?? switch d {
 			case Nest(_, inner): hasLeadingHardline(inner);
 			case Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner): hasLeadingHardline(inner);
 			case Concat(items):

@@ -91,8 +91,7 @@ class D {
 	 */
 	public static function flatten(d: Doc): Doc {
 		final conditional: Null<Doc> = flattenConditional(d);
-		if (conditional != null) return conditional;
-		return switch d {
+		return conditional ?? switch d {
 			case Empty: Empty;
 			case Text(_): d;
 			case Line(flat): flat == '\n' ? Empty : Text(flat);

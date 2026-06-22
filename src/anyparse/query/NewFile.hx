@@ -338,11 +338,13 @@ final class NewFile {
 	 * consistent.
 	 */
 	private static function validateSpec(spec: NewFileSpec, kind: String, extendsList: Array<String>): Null<String> {
-		if (spec.ifaceSimple != null && kind != 'class') return '--implements requires --kind class';
-		if (extendsList.length > 0 && !EXTENDABLE_KINDS.contains(kind)) return '--extends does not apply to a $kind';
-		if (kind == 'class' && extendsList.length > 1) return 'a class extends at most one type (got ${extendsList.length})';
-		if (kind == 'abstract' && spec.underlying == null) return '--kind abstract requires --underlying <T>';
-		return null;
+		return spec.ifaceSimple != null && kind != 'class'
+			? '--implements requires --kind class'
+			: extendsList.length > 0 && !EXTENDABLE_KINDS.contains(kind)
+				? '--extends does not apply to a $kind'
+				: kind == 'class' && extendsList.length > 1
+					? 'a class extends at most one type (got ${extendsList.length})'
+					: kind == 'abstract' && spec.underlying == null ? '--kind abstract requires --underlying <T>' : null;
 	}
 
 	/**

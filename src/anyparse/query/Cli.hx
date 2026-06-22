@@ -4294,14 +4294,9 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 		}
-		if (noTargetClusterFilter != null) return runReconRelaxNoTargetCluster(plugin, records, noTargetClusterFilter, showSource);
-		// Cluster scope (`--cluster <key>`) means the user already narrowed
-		// to a handful of fixtures and likely wants per-file NO TARGET lines
-		// for inspection. Full-sweep scope dumps tens of NO TARGET lines that
-		// are mostly cond-comp `//` catch-all noise — collapse those by
-		// `expected` message into a footer histogram, keep UNBLOCK / STILL
-		// FAIL per-file (low count, actionable).
-		return runReconRelaxFullSweep(plugin, records, clusterFilter != null, showSource);
+		return noTargetClusterFilter != null
+			? runReconRelaxNoTargetCluster(plugin, records, noTargetClusterFilter, showSource)
+			: runReconRelaxFullSweep(plugin, records, clusterFilter != null, showSource);
 	}
 
 	/**
@@ -10531,20 +10526,21 @@ final class Cli {
 	 */
 	private static function reconRegressionParse(plugin: GrammarPlugin, source: String): ReconCurrentParse {
 		try {
-			if (!plugin.reconParse(source)) return {
-				unwired: true,
-				ok: false,
-				line: 0,
-				col: 0,
-				msg: ''
-			};
-			return {
-				unwired: false,
-				ok: true,
-				line: 0,
-				col: 0,
-				msg: ''
-			};
+			return !plugin.reconParse(source)
+				? {
+					unwired: true,
+					ok: false,
+					line: 0,
+					col: 0,
+					msg: ''
+				}
+				: {
+					unwired: false,
+					ok: true,
+					line: 0,
+					col: 0,
+					msg: ''
+				};
 		} catch (exception: ParseError) {
 			final pos: Position = exception.span.lineCol(source);
 			return {
@@ -10979,8 +10975,9 @@ final class Cli {
 			return
 				' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
 		}
-		if (dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) return nudgeDottedHint(cmd, n, dotted);
-		return nudgeCommandHint(cmd, n, isUpper, isLower);
+		return dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')
+			? nudgeDottedHint(cmd, n, dotted)
+			: nudgeCommandHint(cmd, n, isUpper, isLower);
 	}
 
 	/**
@@ -10993,11 +10990,9 @@ final class Cli {
 		final rhs: String = dotted[dotted.length - 1];
 		final lhsFirst: Int = StringTools.fastCodeAt(lhs, 0);
 		final lhsIsUpper: Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
-		if (lhsIsUpper)
-			return
-				' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).';
-		return
-			' — "$n" is a dotted access (obj.field). $cmd matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
+		return lhsIsUpper
+			? ' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).'
+			: ' — "$n" is a dotted access (obj.field). $cmd matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
 	}
 
 	/**

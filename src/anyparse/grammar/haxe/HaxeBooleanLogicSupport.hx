@@ -53,12 +53,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		// change meaning AND fail `@:nullSafety(Strict)` (`cond || null`), so the
 		// ternary is left alone — mirroring `ComparisonToBoolean`'s `provablyBool` gate.
 		final other: QueryNode = thenBool != null ? elseNode : thenNode;
-		if (!provablyBool(other)) return null;
-		return thenBool != null
-			? thenBool ? joinOr(plain(cond, source), plain(elseNode, source)) : joinAnd(negate(cond, source), plain(elseNode, source))
-			: elseBool == true
-				? joinOr(negate(cond, source), plain(thenNode, source))
-				: joinAnd(plain(cond, source), plain(thenNode, source));
+		return !provablyBool(other)
+			? null
+			: thenBool != null
+				? thenBool ? joinOr(plain(cond, source), plain(elseNode, source)) : joinAnd(negate(cond, source), plain(elseNode, source))
+				: elseBool == true
+					? joinOr(negate(cond, source), plain(thenNode, source))
+					: joinAnd(plain(cond, source), plain(thenNode, source));
 	}
 
 	/** `node`'s boolean-literal value, or null when it is not a `true` / `false` literal. */

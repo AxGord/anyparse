@@ -2760,8 +2760,8 @@ class Lowering {
 		// consumes the optional sep so the next iteration's element parse
 		// doesn't match a bare `;` as `HxStatement.EmptyStmt`.
 		final hWsSkip: Expr = buildOptKwStarHWsSkipExpr();
-		if (isTriviaCollects && sepText != null) {
-			return macro {
+		return isTriviaCollects && sepText != null
+			? macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
@@ -2787,69 +2787,66 @@ class Lowering {
 						break;
 					}
 				}
-			};
-		}
-		if (isTriviaCollects) {
-			return macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					final _lead = collectTrivia(ctx);
-					try {
-						final _node: $elemCT = $elemCall;
-						final _trailing: Null<String> = collectTrailingFull(ctx);
-						_items.push({
-							blankBefore: _lead.blankBefore,
-							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-							newlineBefore: _lead.newlineBefore,
-							leadingComments: _lead.leadingComments,
-							trailingComment: _trailing,
-							trailingBeforeSep: false,
-							sepAfter: true,
-							node: _node,
-						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			};
-		}
-		if (sepText != null) {
-			return macro {
-				while (true) {
-					final _savedPos: Int = ctx.pos;
-					try {
-						skipWs(ctx);
-						_items.push($elemCall);
-						$hWsSkip;
-						matchLit(ctx, $v{sepText});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
-				}
-			};
-		}
-		return macro {
-			while (true) {
-				final _savedPos: Int = ctx.pos;
-				try {
-					skipWs(ctx);
-					_items.push($elemCall);
-				} catch (_e: anyparse.runtime.ParseError) {
-					ctx.pos = _savedPos;
-					break;
-				}
 			}
-		};
+			: isTriviaCollects
+				? macro {
+					while (true) {
+						final _savedPos: Int = ctx.pos;
+						final _lead = collectTrivia(ctx);
+						try {
+							final _node: $elemCT = $elemCall;
+							final _trailing: Null<String> = collectTrailingFull(ctx);
+							_items.push({
+								blankBefore: _lead.blankBefore,
+								blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+								newlineBefore: _lead.newlineBefore,
+								leadingComments: _lead.leadingComments,
+								trailingComment: _trailing,
+								trailingBeforeSep: false,
+								sepAfter: true,
+								node: _node,
+							});
+						} catch (_e: anyparse.runtime.ParseError) {
+							ctx.pos = _savedPos;
+							break;
+						}
+					}
+				}
+				: sepText != null
+					? macro {
+						while (true) {
+							final _savedPos: Int = ctx.pos;
+							try {
+								skipWs(ctx);
+								_items.push($elemCall);
+								$hWsSkip;
+								matchLit(ctx, $v{sepText});
+							} catch (_e: anyparse.runtime.ParseError) {
+								ctx.pos = _savedPos;
+								break;
+							}
+						}
+					}
+					: macro {
+						while (true) {
+							final _savedPos: Int = ctx.pos;
+							try {
+								skipWs(ctx);
+								_items.push($elemCall);
+							} catch (_e: anyparse.runtime.ParseError) {
+								ctx.pos = _savedPos;
+								break;
+							}
+						}
+					};
 	}
 
 	private function buildOptKwStarInnerCommit(
 		hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, bodyOnSameLineLocal: String
 	): Expr {
 		// Post-commit kw-trivia capture — mirrors the optional-Ref path.
-		if (hasKwTriviaSlots)
-			return macro {
+		return hasKwTriviaSlots
+			? macro {
 				final _kwEndPos: Int = ctx.pos;
 				$i{afterKwLocal} = collectTrailing(ctx);
 				final _t = collectTrivia(ctx);
@@ -2874,14 +2871,13 @@ class Lowering {
 					leadingComments: [],
 				};
 			}
-		else if (ctx.trivia)
-			return macro {
-				final _t = collectTrivia(ctx);
-				if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
-					ctx.pendingTrivia = _t;
-			}
-		else
-			return macro skipWs(ctx);
+			: ctx.trivia
+				? macro {
+					final _t = collectTrivia(ctx);
+					if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
+						ctx.pendingTrivia = _t;
+				}
+				: macro skipWs(ctx);
 	}
 
 	private function buildOptKwStarHWsSkipExpr(): Expr {
@@ -2902,8 +2898,8 @@ class Lowering {
 		// @:sep(text, tailRelax, blockEnded)` fork — permissive matchLit
 		// on sep. Element-parse failure rewinds + breaks via the try/catch.
 		// nestBody keeps the orphan-trail capture on parse failure.
-		if (nestBody) {
-			return macro {
+		return nestBody
+			? macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
@@ -2944,42 +2940,41 @@ class Lowering {
 						break;
 					}
 				}
-			};
-		}
-		return macro {
-			while (true) {
-				final _savedPos: Int = ctx.pos;
-				final _lead = collectTrivia(ctx);
-				try {
-					final _node: $elemCT = $elemCall;
-					final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
-					var _sepAfter: Bool = false;
-					while (ctx.pos < ctx.input.length) {
-						final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
-						if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
-							ctx.pos++;
-						else
-							break;
-					}
-					_sepAfter = matchLit(ctx, $v{sepText});
-					final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
-					$i{trailPresentLocal} = _sepAfter;
-					$accumRef.push({
-						blankBefore: _lead.blankBefore,
-						blankAfterLeadingComments: _lead.blankAfterLeadingComments,
-						newlineBefore: _lead.newlineBefore,
-						leadingComments: _lead.leadingComments,
-						trailingComment: _trailing,
-						trailingBeforeSep: _trailingBeforeSep != null,
-						sepAfter: _sepAfter,
-						node: _node,
-					});
-				} catch (_e: anyparse.runtime.ParseError) {
-					ctx.pos = _savedPos;
-					break;
-				}
 			}
-		};
+			: macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					final _lead = collectTrivia(ctx);
+					try {
+						final _node: $elemCT = $elemCall;
+						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
+						var _sepAfter: Bool = false;
+						while (ctx.pos < ctx.input.length) {
+							final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
+							if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
+								ctx.pos++;
+							else
+								break;
+						}
+						_sepAfter = matchLit(ctx, $v{sepText});
+						final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
+						$i{trailPresentLocal} = _sepAfter;
+						$accumRef.push({
+							blankBefore: _lead.blankBefore,
+							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
+							newlineBefore: _lead.newlineBefore,
+							leadingComments: _lead.leadingComments,
+							trailingComment: _trailing,
+							trailingBeforeSep: _trailingBeforeSep != null,
+							sepAfter: _sepAfter,
+							node: _node,
+						});
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+				}
+			};
 	}
 
 	private function buildTriviaTryparseNoSepBody(
@@ -3096,8 +3091,8 @@ class Lowering {
 		// whitespace skip avoids consuming newlines / comments (`skipWs` would
 		// swallow the trailing `// comment` before `collectTrailing` could see
 		// it). Sep-less Stars get a no-op.
-		if (sepText != null) {
-			return macro {
+		return sepText != null
+			? macro {
 				while (ctx.pos < ctx.input.length) {
 					final _hwc: Int = ctx.input.charCodeAt(ctx.pos);
 					if (_hwc == ' '.code || _hwc == '\t'.code || _hwc == '\r'.code)
@@ -3107,9 +3102,8 @@ class Lowering {
 				}
 				_sepAfter = matchLit(ctx, $v{sepText});
 				$i{trailPresentLocal} = _sepAfter;
-			};
-		}
-		return macro {};
+			}
+			: macro {};
 	}
 
 	private function buildTriviaCloseLoopBody(
@@ -3486,8 +3480,8 @@ class Lowering {
 			),
 			pos: Context.currentPos(),
 		};
-		if (close == null) {
-			return captureChainNl
+		return close == null
+			? captureChainNl
 				? macro {
 					final _chainNl: Bool = hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
 					skipWs(ctx);
@@ -3498,15 +3492,14 @@ class Lowering {
 					skipWs(ctx);
 					final _suffix: $suffixCT = $suffixCall;
 					left = $ctorCall;
-				};
-		}
-		return macro {
-			skipWs(ctx);
-			final _suffix: $suffixCT = $suffixCall;
-			skipWs(ctx);
-			expectLit(ctx, $v{close});
-			left = $ctorCall;
-		};
+				}
+			: macro {
+				skipWs(ctx);
+				final _suffix: $suffixCT = $suffixCall;
+				skipWs(ctx);
+				expectLit(ctx, $v{close});
+				left = $ctorCall;
+			};
 	}
 
 	private function buildPostfixNoMatchScanback(): Expr {
@@ -3631,21 +3624,15 @@ class Lowering {
 
 	private function buildPostfixSingleBranch(close: Null<String>, ctorRef: Expr): Expr {
 		final ctorCall: Expr = { expr: ECall(ctorRef, [macro left]), pos: Context.currentPos() };
-		if (close == null) {
-			// ω-postfix-single-literal: bare single-token postfix
-			// (`x++`, `x--`). The op literal is already consumed by
-			// the outer matchExpr dispatch; there is no close
-			// delimiter and no suffix child, so the branch only
-			// rewraps the accumulated `left` operand.
-			return macro {
+		return close == null
+			? macro {
+				left = $ctorCall;
+			}
+			: macro {
+				skipWs(ctx);
+				expectLit(ctx, $v{close});
 				left = $ctorCall;
 			};
-		}
-		return macro {
-			skipWs(ctx);
-			expectLit(ctx, $v{close});
-			left = $ctorCall;
-		};
 	}
 
 	private function buildTryparseSepLoop(elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr): Expr {
@@ -3656,14 +3643,8 @@ class Lowering {
 		// the pre-whitespace position. The block-ended variant additionally
 		// tolerates an omitted sep when the prior element ended with `;` (or
 		// the schema predicate matches).
-		if (sepBlockEnded) {
-			// Block-ended exemption: after a successful element, sep may be
-			// omitted if the element ended with `;` / `}` (byte-level check on
-			// `_prevEndPos - 1`) — or, when `blockEnded('<predicate>')` supplies
-			// a schema-instance predicate, when that predicate returns `true`
-			// for the just-pushed element. Consumers: `HxConditionalStmt.body`
-			// / `elseBody`, `HxElseifStmt.body`.
-			return macro {
+		return sepBlockEnded
+			? macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					try {
@@ -3691,23 +3672,22 @@ class Lowering {
 					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
 					ctx.pos++;
 				}
-			};
-		}
-		return macro {
-			while (true) {
-				final _savedPos: Int = ctx.pos;
-				try {
-					skipWs(ctx);
-					$accumRef.push($elemCall);
-				} catch (_e: anyparse.runtime.ParseError) {
-					ctx.pos = _savedPos;
-					break;
-				}
-				skipWs(ctx);
-				if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
-				ctx.pos++;
 			}
-		};
+			: macro {
+				while (true) {
+					final _savedPos: Int = ctx.pos;
+					try {
+						skipWs(ctx);
+						$accumRef.push($elemCall);
+					} catch (_e: anyparse.runtime.ParseError) {
+						ctx.pos = _savedPos;
+						break;
+					}
+					skipWs(ctx);
+					if (ctx.pos >= ctx.input.length || ctx.input.charCodeAt(ctx.pos) != $v{sepCharCode}) break;
+					ctx.pos++;
+				}
+			};
 	}
 
 	private function buildCloseBlockEndedBody(
@@ -3722,8 +3702,8 @@ class Lowering {
 		// at pos belongs to the NEXT element, never a separator (needed where
 		// the sep char can ALSO be a valid element body — Haxe `EmptyStmt`).
 		final beCheck: Expr = buildBlockEndedByteCheck(predicateCall);
-		if (sepStartsElement) {
-			return macro {
+		return sepStartsElement
+			? macro {
 				skipWs(ctx);
 				if ($closeNotNextExpr) {
 					var _prevEndPos: Int = ctx.pos;
@@ -3749,40 +3729,39 @@ class Lowering {
 						}
 					}
 				}
-			};
-		}
-		return macro {
-			skipWs(ctx);
-			if ($closeNotNextExpr) {
-				var _prevEndPos: Int = ctx.pos;
-				$accumRef.push($elemCall);
-				_prevEndPos = ctx.pos;
+			}
+			: macro {
 				skipWs(ctx);
-				while ($closeNotNextExpr) {
-					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
-						skipWs(ctx);
-						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
-						$accumRef.push($elemCall);
-						_prevEndPos = ctx.pos;
-						skipWs(ctx);
-					} else if ($beCheck) {
-						// Block-ended: prior element ended with `;`
-						// (byte-check after walking back over
-						// whitespace — covers stmts whose own
-						// `@:trailOpt(';')` consumed `;` and then
-						// the trailing `skipWs` advanced past it)
-						// or the AST-shape predicate returned true.
-						// No sep needed; parse next.
-						$accumRef.push($elemCall);
-						_prevEndPos = ctx.pos;
-						skipWs(ctx);
-					} else {
-						expectLit(ctx, $v{sepText}); // throws expected-sep
+				if ($closeNotNextExpr) {
+					var _prevEndPos: Int = ctx.pos;
+					$accumRef.push($elemCall);
+					_prevEndPos = ctx.pos;
+					skipWs(ctx);
+					while ($closeNotNextExpr) {
+						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+							$accumRef.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else if ($beCheck) {
+							// Block-ended: prior element ended with `;`
+							// (byte-check after walking back over
+							// whitespace — covers stmts whose own
+							// `@:trailOpt(';')` consumed `;` and then
+							// the trailing `skipWs` advanced past it)
+							// or the AST-shape predicate returned true.
+							// No sep needed; parse next.
+							$accumRef.push($elemCall);
+							_prevEndPos = ctx.pos;
+							skipWs(ctx);
+						} else {
+							expectLit(ctx, $v{sepText}); // throws expected-sep
+						}
 					}
 				}
-			}
-		};
+			};
 	}
 
 	private function buildBlockEndedByteCheck(predicateCall: Expr): Expr {
@@ -4890,11 +4869,9 @@ expectLit(ctx, $v{trailText}));
 			// opt-in: when `lit.sepBlockEnded` is absent the
 			// byte-identical pre-existing path runs.
 			final blockEnded: Bool = branch.annotations.get('lit.sepBlockEnded') == true;
-			if (blockEnded)
-				return lowerStarBlockEndedBranch(
-					branch, leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText
-				);
-			return lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
+			return blockEnded
+				? lowerStarBlockEndedBranch(branch, leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText)
+				: lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
 		}
 		return lowerStarNoSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall);
 	}

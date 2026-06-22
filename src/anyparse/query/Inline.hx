@@ -253,15 +253,15 @@ final class Inline {
 		// Every free identifier the initializer reads must be a stable
 		// local (not reassigned anywhere, not a field / property).
 		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
-		if (freeIdentErr != null) return PErr(freeIdentErr);
-
-		return POk({
-			name: name,
-			decl: decl,
-			initializer: initializer,
-			initRange: initRange,
-			reads: reads
-		});
+		return freeIdentErr != null
+			? PErr(freeIdentErr)
+			: POk({
+				name: name,
+				decl: decl,
+				initializer: initializer,
+				initRange: initRange,
+				reads: reads
+			});
 	}
 
 	/**

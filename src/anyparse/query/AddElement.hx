@@ -186,9 +186,9 @@ final class AddElement {
 					'position $line:$col is not on the first token of a container — point at the first token of a block / array / object / call / class / switch'
 				);
 		final containerSpan: Null<Span> = container.span;
-		if (containerSpan == null) return Err('the container at $line:$col has no source span');
-
-		return computeAppendEdit(source, line, col, containerSpan, container.kind, trimmed, reformat, plugin, optsJson);
+		return containerSpan == null
+			? Err('the container at $line:$col has no source span')
+			: computeAppendEdit(source, line, col, containerSpan, container.kind, trimmed, reformat, plugin, optsJson);
 	}
 
 	/**
