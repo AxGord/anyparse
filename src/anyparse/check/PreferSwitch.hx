@@ -199,46 +199,11 @@ final class PreferSwitch implements Check {
 	): Null<String> {
 		final headSpan: Null<Span> = head.span;
 		if (headSpan == null || containsComment(source, headSpan.from, headSpan.to)) return null;
-		var discText: Null<String> = null;
-		final cases: Array<String> = [];
-		var elseBody: Null<String> = null;
-		var cur: QueryNode = head;
-		var rungs: Int = 0;
-		while (ifKinds.contains(cur.kind) && cur.children.length >= 2) {
-			final cond: QueryNode = cur.children[0];
-			if (cond.kind != eqKind || cond.children.length != 2) return null;
-			final a: QueryNode = cond.children[0];
-			final b: QueryNode = cond.children[1];
-			final aLit: Bool = isConstLiteral(a, litKinds, stringFold, source);
-			final bLit: Bool = isConstLiteral(b, litKinds, stringFold, source);
-			if (aLit == bLit) return null;
-			final lit: QueryNode = aLit ? a : b;
-			final disc: QueryNode = aLit ? b : a;
-			final litSpan: Null<Span> = lit.span;
-			final dSpan: Null<Span> = disc.span;
-			final thenSpan: Null<Span> = cur.children[1].span;
-			if (litSpan == null || dSpan == null || thenSpan == null) return null;
-			if (discText == null) discText = StringTools.trim(source.substring(dSpan.from, dSpan.to));
-			final litText: String = StringTools.trim(source.substring(litSpan.from, litSpan.to));
-			final body: String = StringTools.trim(source.substring(thenSpan.from, thenSpan.to));
-			cases.push('case $litText: $body');
-			rungs++;
-			if (cur.children.length >= IF_WITH_ELSE_CHILD_COUNT) {
-				final elseChild: QueryNode = cur.children[2];
-				if (ifKinds.contains(elseChild.kind)) {
-					cur = elseChild;
-					continue;
-				}
-				final eSpan: Null<Span> = elseChild.span;
-				if (eSpan == null) return null;
-				elseBody = StringTools.trim(source.substring(eSpan.from, eSpan.to));
-			}
-			break;
-		}
-		if (rungs < 2 || discText == null) return null;
-		final lines: Array<String> = ['switch ($discText) {'];
-		for (c in cases) lines.push('\t$c');
-		if (elseBody != null) lines.push('\tcase _: $elseBody');
+		final scan: Null<SwitchScan> = scanRungs(source, head, ifKinds, eqKind, litKinds, stringFold);
+		if (scan == null || scan.rungs < 2) return null;
+		final lines: Array<String> = ['switch (${scan.discText}) {'];
+		for (c in scan.cases) lines.push('\t$c');
+		if (scan.elseBody != null) lines.push('\tcase _: ${scan.elseBody}');
 		lines.push('}');
 		return lines.join('\n');
 	}
@@ -287,4 +252,74 @@ final class PreferSwitch implements Check {
 		return false;
 	}
 
+	/**
+	 * Walk the if/else-if chain at `head`, collecting one `case <literal>:
+	 * <then-body>` string per rung, the shared discriminant text, and the
+	 * trailing `else` body (a non-`if` `children[2]`, if any). Each rung must
+	 * be an equality of exactly one constant literal against the discriminant;
+	 * a rung whose pieces lack a coordinate or fail that shape bails to null.
+	 * Returns the collected scan, or null when the chain cannot be rebuilt.
+	 */
+	private static function scanRungs(
+		source: String, head: QueryNode, ifKinds: Array<String>, eqKind: String, litKinds: Array<String>,
+		stringFold: Null<StringFoldSupport>
+	): Null<SwitchScan> {
+		var discText: Null<String> = null;
+		final cases: Array<String> = [];
+		var elseBody: Null<String> = null;
+		var cur: QueryNode = head;
+		var rungs: Int = 0;
+		while (ifKinds.contains(cur.kind) && cur.children.length >= 2) {
+			final cond: QueryNode = cur.children[0];
+			if (cond.kind != eqKind || cond.children.length != 2) return null;
+			final a: QueryNode = cond.children[0];
+			final b: QueryNode = cond.children[1];
+			final aLit: Bool = isConstLiteral(a, litKinds, stringFold, source);
+			final bLit: Bool = isConstLiteral(b, litKinds, stringFold, source);
+			if (aLit == bLit) return null;
+			final lit: QueryNode = aLit ? a : b;
+			final disc: QueryNode = aLit ? b : a;
+			final litSpan: Null<Span> = lit.span;
+			final dSpan: Null<Span> = disc.span;
+			final thenSpan: Null<Span> = cur.children[1].span;
+			if (litSpan == null || dSpan == null || thenSpan == null) return null;
+			if (discText == null) discText = StringTools.trim(source.substring(dSpan.from, dSpan.to));
+			final litText: String = StringTools.trim(source.substring(litSpan.from, litSpan.to));
+			final body: String = StringTools.trim(source.substring(thenSpan.from, thenSpan.to));
+			cases.push('case $litText: $body');
+			rungs++;
+			if (cur.children.length >= IF_WITH_ELSE_CHILD_COUNT) {
+				final elseChild: QueryNode = cur.children[2];
+				if (ifKinds.contains(elseChild.kind)) {
+					cur = elseChild;
+					continue;
+				}
+				final eSpan: Null<Span> = elseChild.span;
+				if (eSpan == null) return null;
+				elseBody = StringTools.trim(source.substring(eSpan.from, eSpan.to));
+			}
+			break;
+		}
+		return discText == null
+			? null
+			: {
+				discText: discText,
+				cases: cases,
+				elseBody: elseBody,
+				rungs: rungs
+			};
+	}
+
 }
+
+/**
+ * The collected pieces of an if/else-if chain ready to rebuild as a switch:
+ * the discriminant source text, one `case <literal>: <body>` string per
+ * rung, the optional trailing-`else` body, and the rung count.
+ */
+private typedef SwitchScan = {
+	final discText: String;
+	final cases: Array<String>;
+	final elseBody: Null<String>;
+	final rungs: Int;
+};
