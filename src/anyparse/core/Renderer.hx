@@ -617,56 +617,14 @@ class Renderer {
 					} else {
 						pendingHardline = f.indent;
 					}
-				case Nest(n, inner):
-					// Indent only matters when observed (i.e. on a hardline
-					// in MBreak mode). Skip the bump in MFlat — otherwise a
-					// nested Group inside a flat outer Group breaks at the
-					// wrong indent (outer-flat-Nest + inner-Nest stacks).
-					// haxe-formatter's chained-FitLine layout
-					// (`for (...) if (...)\n\t\tbody;`) requires inner-only
-					// indent; canonical Wadler cumulative nesting gives
-					// outer+inner instead.
-					final nextIndent: Int = f.mode == MBreak ? f.indent + n : f.indent;
-					stack.push(new Frame(nextIndent, f.mode, inner, f.forceFlat, f.hardFlat));
-				case Concat(items):
-					var i: Int = items.length;
-					while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i], f.forceFlat, f.hardFlat));
-				case Group(inner) | BodyGroup(inner):
-					// Force-flat (slice B): skip `fitsFlat` entirely and push
-					// the inner as MFlat with `forceFlat=true` propagated.
-					// The `Flatten` region committed to flat for the whole
-					// subtree at entry — local fit measurement is moot here.
-					// `hardFlat` rides along so an inner `WrapBoundary` keeps
-					// the force-flat region (HardFlatten semantic).
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
-					} else if (fitsFlat(width - col, f.indent, inner)) {
-						stack.push(new Frame(f.indent, MFlat, inner));
-					} else {
-						stack.push(new Frame(f.indent, MBreak, inner));
-					}
-				case GroupWithRestProbe(inner):
-					// ω-group-rest-probe: Group variant whose fit decision
-					// subtracts `flatTokenWidthOfRestStack(stack)` from the
-					// budget — same-line content emitted AFTER this Group by
-					// parent frames is considered before committing to MFlat.
-					// Mirrors fork's `wrapFillLine2AfterLast` `lengthAfter`
-					// bias: when significant content trails on the same line
-					// (e.g. typedef LHS typeParams followed by ` = RhsType<…>;`
-					// on the same line), prefer MBreak over MFlat so the
-					// trailing content has room. Sister to `IfLineExceeds`
-					// rest-of-stack lookahead — same walker, different
-					// consumer (Group-style fit instead of explicit branch).
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
-					} else {
-						final restW: Int = flatTokenWidthOfRestStack(stack);
-						if (fitsFlat(width - col - restW, f.indent, inner)) {
-							stack.push(new Frame(f.indent, MFlat, inner));
-						} else {
-							stack.push(new Frame(f.indent, MBreak, inner));
-						}
-					}
+				case Nest(_, _) | Concat(_) | Group(_) | BodyGroup(_) | GroupWithRestProbe(_) | Flatten(_) | WrapBoundary(_) | HardFlatten(
+					_
+				) | CollapseProbe(_):
+					// Structural / descend arms — no scalar layout mutation, only
+					// frame pushes. Delegated to the static `pushStructural` (reads
+					// `col`/`width`/`f`, writes `stack`). See that helper for each
+					// per-ctor semantic.
+					pushStructural(f, stack, col, width);
 				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfFullLineExceeds(
 					_, _, _
 				) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
@@ -728,83 +686,6 @@ class Renderer {
 							));
 						stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
 					}
-				case Flatten(inner):
-					// ω-force-flat-engine slice B: enter force-flat region.
-					// Push `inner` with `MFlat` mode and `forceFlat=true` so
-					// every descendant Group/IfBreak/Fill/etc. follows the
-					// flat dispatch path until a `WrapBoundary` resets the
-					// flag (or the subtree drains). Nested `Flatten` is a
-					// no-op — pushing `forceFlat=true` when already `true`
-					// is idempotent. Note: no emitter constructs `Flatten`
-					// yet (slice D opt-in); this arm is exercise-tested
-					// only after slice C/D land.
-					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
-				case WrapBoundary(inner):
-					// ω-force-flat-engine slice B: reset force-flat — UNLESS
-					// inside a `HardFlatten` region (`f.hardFlat`). Push
-					// `inner` with the enclosing frame's mode preserved and
-					// `forceFlat=false` so nested wrap-cascade outputs
-					// evaluate their own conditions independently inside a
-					// parent's force-flat region. When the enclosing context
-					// did NOT have force-flat active, this is a no-op pass-
-					// through (same shape as the prior slice-A arm).
-					//
-					// ω-hardflatten: when `f.hardFlat` is set the enclosing
-					// region is a `HardFlatten` — its "the opened paren owns
-					// its content, flatten unconditionally" semantic must
-					// survive this boundary. Keep `forceFlat=true` and
-					// `hardFlat=true` (mode pinned MFlat) so an inner chain's
-					// `WrapBoundary(Group(IfBreak))` stays flat rather than
-					// re-floating to its own fit (mirror fork's
-					// `collapseInnerChainBreaks`).
-					if (f.hardFlat) {
-						stack.push(new Frame(f.indent, MFlat, inner, true, true));
-					} else {
-						// Escaping an active force-flat region (`f.forceFlat`
-						// set by an enclosing `Flatten`, which pins mode MFlat):
-						// restore `MBreak`. Past the boundary the inner content
-						// re-decides its own layout — an inner Group re-resolves
-						// flat via its own `fitsFlat`, so fitting content does
-						// NOT break, but raw unconditional hardlines the inner
-						// emits (e.g. an anon-struct TYPE field-list forced one-
-						// per-line by its count rule, nested inside the
-						// `Array<…>` type-param `Flatten`) now render in break
-						// mode — their `Nest` observes the indent bump
-						// (`f.indent + n`) instead of being skipped in MFlat, so
-						// the field lands at the correct statement-relative
-						// indent rather than the unbumped base (write was non-
-						// idempotent: a re-write sees genuinely multiline source
-						// and resolves MBreak, indenting correctly). Mirrors the
-						// brk-side `MBreak` force the `If*Exceeds` arms already
-						// apply for this "forced hardline under an enclosing
-						// MFlat from a `Flatten`/`WrapBoundary`" case. When
-						// `f.forceFlat` was already false (no enclosing force-
-						// flat — the no-op pass-through), preserve `f.mode`.
-						final boundaryMode: Mode = f.forceFlat ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, boundaryMode, inner, false, false));
-					}
-				case HardFlatten(inner):
-					// ω-hardflatten: enter a force-flat region whose
-					// `forceFlat` survives every inner `WrapBoundary`. Push
-					// `inner` MFlat with `forceFlat=true` AND `hardFlat=true`
-					// so the `WrapBoundary` arm above keeps the region instead
-					// of resetting. This is the anyparse analogue of fork's
-					// `collapseInnerChainBreaks` (the unconditional inner
-					// opAddSub-chain flatten once an expression paren opens).
-					stack.push(new Frame(f.indent, MFlat, inner, true, true));
-				case CollapseProbe(inner):
-					// ω-collapse-probe (increment-2): pure render pass-through.
-					// Marks an expression-paren collapse-candidate open branch
-					// for `CollapsePass` WITHOUT altering layout — `inner` is
-					// pushed with the enclosing frame's mode and flags
-					// unchanged, so a marked opBool/ternary inner keeps its own
-					// wrap cascade (no force-flat) while a marked opAddSub inner
-					// carries its `HardFlatten` underneath. The marker exists
-					// solely so `CollapsePass.isCandidate` can recognise the
-					// paren and commit the enclosing chain to glued (mirror
-					// fork `collapseChainBreaksAfter`) regardless of operator
-					// class. Transparent to every Doc walker.
-					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 				case CollapseAddProbe(inner):
 					// ω-unwrap-add-ops (inverse CollapsePass): an inner opAddSub
 					// chain's BROKEN shape, reached ONLY when that chain's own
@@ -2438,6 +2319,146 @@ class Renderer {
 					final pushMode: Mode = contFits ? f.mode : MBreak;
 					stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
 				}
+			case _:
+		}
+	}
+
+	/**
+	 * Resolve and push the structural / descend arms of `render`'s dispatch
+	 * switch — every `Doc` ctor that contributes no scalar layout mutation,
+	 * only pushing the next frame(s) onto `stack` (reading `col`/`width`/`f`).
+	 * Extracted verbatim from `render` — see each arm comment for the per-ctor
+	 * semantic. Mutates no scalar accumulator (invariant #1).
+	 */
+	private static function pushStructural(f: Frame, stack: Array<Frame>, col: Int, width: Int): Void {
+		switch (f.doc) {
+			case Nest(n, inner):
+				// Indent only matters when observed (i.e. on a hardline
+				// in MBreak mode). Skip the bump in MFlat — otherwise a
+				// nested Group inside a flat outer Group breaks at the
+				// wrong indent (outer-flat-Nest + inner-Nest stacks).
+				// haxe-formatter's chained-FitLine layout
+				// (`for (...) if (...)\n\t\tbody;`) requires inner-only
+				// indent; canonical Wadler cumulative nesting gives
+				// outer+inner instead.
+				final nextIndent: Int = f.mode == MBreak ? f.indent + n : f.indent;
+				stack.push(new Frame(nextIndent, f.mode, inner, f.forceFlat, f.hardFlat));
+			case Concat(items):
+				var i: Int = items.length;
+				while (--i >= 0) stack.push(new Frame(f.indent, f.mode, items[i], f.forceFlat, f.hardFlat));
+			case Group(inner) | BodyGroup(inner):
+				// Force-flat (slice B): skip `fitsFlat` entirely and push
+				// the inner as MFlat with `forceFlat=true` propagated.
+				// The `Flatten` region committed to flat for the whole
+				// subtree at entry — local fit measurement is moot here.
+				// `hardFlat` rides along so an inner `WrapBoundary` keeps
+				// the force-flat region (HardFlatten semantic).
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
+				} else if (fitsFlat(width - col, f.indent, inner)) {
+					stack.push(new Frame(f.indent, MFlat, inner));
+				} else {
+					stack.push(new Frame(f.indent, MBreak, inner));
+				}
+			case GroupWithRestProbe(inner):
+				// ω-group-rest-probe: Group variant whose fit decision
+				// subtracts `flatTokenWidthOfRestStack(stack)` from the
+				// budget — same-line content emitted AFTER this Group by
+				// parent frames is considered before committing to MFlat.
+				// Mirrors fork's `wrapFillLine2AfterLast` `lengthAfter`
+				// bias: when significant content trails on the same line
+				// (e.g. typedef LHS typeParams followed by ` = RhsType<…>;`
+				// on the same line), prefer MBreak over MFlat so the
+				// trailing content has room. Sister to `IfLineExceeds`
+				// rest-of-stack lookahead — same walker, different
+				// consumer (Group-style fit instead of explicit branch).
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
+				} else {
+					final restW: Int = flatTokenWidthOfRestStack(stack);
+					if (fitsFlat(width - col - restW, f.indent, inner)) {
+						stack.push(new Frame(f.indent, MFlat, inner));
+					} else {
+						stack.push(new Frame(f.indent, MBreak, inner));
+					}
+				}
+			case Flatten(inner):
+				// ω-force-flat-engine slice B: enter force-flat region.
+				// Push `inner` with `MFlat` mode and `forceFlat=true` so
+				// every descendant Group/IfBreak/Fill/etc. follows the
+				// flat dispatch path until a `WrapBoundary` resets the
+				// flag (or the subtree drains). Nested `Flatten` is a
+				// no-op — pushing `forceFlat=true` when already `true`
+				// is idempotent. Note: no emitter constructs `Flatten`
+				// yet (slice D opt-in); this arm is exercise-tested
+				// only after slice C/D land.
+				stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
+			case WrapBoundary(inner):
+				// ω-force-flat-engine slice B: reset force-flat — UNLESS
+				// inside a `HardFlatten` region (`f.hardFlat`). Push
+				// `inner` with the enclosing frame's mode preserved and
+				// `forceFlat=false` so nested wrap-cascade outputs
+				// evaluate their own conditions independently inside a
+				// parent's force-flat region. When the enclosing context
+				// did NOT have force-flat active, this is a no-op pass-
+				// through (same shape as the prior slice-A arm).
+				//
+				// ω-hardflatten: when `f.hardFlat` is set the enclosing
+				// region is a `HardFlatten` — its "the opened paren owns
+				// its content, flatten unconditionally" semantic must
+				// survive this boundary. Keep `forceFlat=true` and
+				// `hardFlat=true` (mode pinned MFlat) so an inner chain's
+				// `WrapBoundary(Group(IfBreak))` stays flat rather than
+				// re-floating to its own fit (mirror fork's
+				// `collapseInnerChainBreaks`).
+				if (f.hardFlat) {
+					stack.push(new Frame(f.indent, MFlat, inner, true, true));
+				} else {
+					// Escaping an active force-flat region (`f.forceFlat`
+					// set by an enclosing `Flatten`, which pins mode MFlat):
+					// restore `MBreak`. Past the boundary the inner content
+					// re-decides its own layout — an inner Group re-resolves
+					// flat via its own `fitsFlat`, so fitting content does
+					// NOT break, but raw unconditional hardlines the inner
+					// emits (e.g. an anon-struct TYPE field-list forced one-
+					// per-line by its count rule, nested inside the
+					// `Array<…>` type-param `Flatten`) now render in break
+					// mode — their `Nest` observes the indent bump
+					// (`f.indent + n`) instead of being skipped in MFlat, so
+					// the field lands at the correct statement-relative
+					// indent rather than the unbumped base (write was non-
+					// idempotent: a re-write sees genuinely multiline source
+					// and resolves MBreak, indenting correctly). Mirrors the
+					// brk-side `MBreak` force the `If*Exceeds` arms already
+					// apply for this "forced hardline under an enclosing
+					// MFlat from a `Flatten`/`WrapBoundary`" case. When
+					// `f.forceFlat` was already false (no enclosing force-
+					// flat — the no-op pass-through), preserve `f.mode`.
+					final boundaryMode: Mode = f.forceFlat ? MBreak : f.mode;
+					stack.push(new Frame(f.indent, boundaryMode, inner, false, false));
+				}
+			case HardFlatten(inner):
+				// ω-hardflatten: enter a force-flat region whose
+				// `forceFlat` survives every inner `WrapBoundary`. Push
+				// `inner` MFlat with `forceFlat=true` AND `hardFlat=true`
+				// so the `WrapBoundary` arm above keeps the region instead
+				// of resetting. This is the anyparse analogue of fork's
+				// `collapseInnerChainBreaks` (the unconditional inner
+				// opAddSub-chain flatten once an expression paren opens).
+				stack.push(new Frame(f.indent, MFlat, inner, true, true));
+			case CollapseProbe(inner):
+				// ω-collapse-probe (increment-2): pure render pass-through.
+				// Marks an expression-paren collapse-candidate open branch
+				// for `CollapsePass` WITHOUT altering layout — `inner` is
+				// pushed with the enclosing frame's mode and flags
+				// unchanged, so a marked opBool/ternary inner keeps its own
+				// wrap cascade (no force-flat) while a marked opAddSub inner
+				// carries its `HardFlatten` underneath. The marker exists
+				// solely so `CollapsePass.isCandidate` can recognise the
+				// paren and commit the enclosing chain to glued (mirror
+				// fork `collapseChainBreaksAfter`) regardless of operator
+				// class. Transparent to every Doc walker.
+				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case _:
 		}
 	}
