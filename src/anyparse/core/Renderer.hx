@@ -667,245 +667,10 @@ class Renderer {
 							stack.push(new Frame(f.indent, MBreak, inner));
 						}
 					}
-				case IfBreak(breakDoc, flatDoc):
-					// Force-flat (slice B): always pick `flatDoc`, propagate
-					// `forceFlat=true` so the chosen branch keeps the region
-					// semantic for its own descendants. `hardFlat` rides along.
-					final picked: Doc = (f.forceFlat || f.mode == MFlat) ? flatDoc : breakDoc;
-					stack.push(new Frame(f.indent, f.mode, picked, f.forceFlat, f.hardFlat));
-				case IfWidthExceeds(n, breakDoc, flatDoc):
-					// Column-aware probe: rule fires when `col +
-					// DocMeasure.flatTokenWidth(flatDoc) >= n` (matches the
-					// cascade `lineLength >= n` predicate). The width
-					// measurement treats forced hardlines as zero width —
-					// the cascade rule asks "does the natural inline width
-					// reach n", not "does the flat shape budget-fit". Plain
-					// `fitsFlat` would refuse-to-flatten on any hardline
-					// inside flatDoc and incorrectly always pick brk;
-					// here a chain-emit shape (OPLAfterFirst, contains
-					// `Line('\n')` between operands) gets its real
-					// flat-token width back, so cascade rule 5
-					// (`itemCount>=4`) can win over rule 2
-					// (`lineLength>=140`) when the rendered chain at the
-					// current column wouldn't actually overflow.
-					//
-					// When `col >= n` already, the rule fires regardless
-					// of width — short-circuited by the `>=` comparison.
-					//
-					// Brk-side mode: force `MBreak`. The break shape may
-					// carry hardlines + Nest that must render as `\n +
-					// indent` and drop pendingOptSpace — under an enclosing
-					// `MFlat` context (e.g. inside a `Flatten` whose
-					// `WrapBoundary` reset `forceFlat` but did not restore
-					// mode), the inner `Line('\n')` would otherwise emit a
-					// bare `\n` flat string without indent. Sister-arm
-					// sweep mirrors the fix at `IfLineExceeds`
-					// (slice ω-iflineexceeds-brk-mode).
-					//
-					// Flat-side mode: preserve `f.mode`. The flat shape is
-					// the inline alternative; it respects the enclosing
-					// context's mode.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-					} else {
-						final crosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
-						final pushMode: Mode = crosses ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, pushMode, crosses ? breakDoc : flatDoc));
-					}
-				case IfFirstLineExceeds(n, breakDoc, flatDoc):
-					// First-line-aware probe: rule fires when `col +
-					// flatTokenWidthFirstLine(flatDoc) >= n`. Differs from
-					// `IfWidthExceeds` in measurement semantic — the first-
-					// line walk caps at the first forced hardline inside
-					// `flatDoc`, so a multi-line subtree whose first line
-					// fits stays inline (this branch picks `flatDoc`) even
-					// though its total flat width would exceed `n`. Used
-					// by `bodyPolicyWrap`'s width-aware path: e.g. `return
-					// <multi-line if-expr>` keeps the if-expr's head glued
-					// to `return` when the head fits, while subsequent
-					// `else` branches keep their own hardlines.
-					//
-					// Mode propagation matches `IfWidthExceeds` and
-					// `IfLineExceeds` — brk-side forces `MBreak` so a break
-					// shape carrying hardlines + Nest renders correctly under
-					// an enclosing `MFlat` context; flat-side preserves
-					// `f.mode` as the inline alternative.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-					} else {
-						final firstLineCrosses: Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
-						final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
-					}
-				case IfLineExceeds(n, breakDoc, flatDoc):
-					// Line-length-aware probe: rule fires when `col +
-					// DocMeasure.flatTokenWidth(flatDoc) +
-					// flatTokenWidthOfRestStack(stack) >= n`. The third term
-					// is a lookahead over the rendering stack from this
-					// point forward, summed up to the next forced hardline
-					// — captures everything that would land on the SAME
-					// rendered line if the flat branch fired here. Closes
-					// the Wadler-style local-Group blindspot where an inner
-					// `Group(IfBreak)` decides flat even though enclosing
-					// expression pushes the line past threshold.
-					//
-					// Brk-side mode: force `MBreak`. The break shape carries
-					// hardlines + Nest that must render as `\n + indent` and
-					// drop pendingOptSpace — under an enclosing `MFlat`
-					// context (e.g. inside a `Flatten` whose `WrapBoundary`
-					// reset `forceFlat` but did not restore mode), the inner
-					// `Line('\n')` would otherwise emit a bare `\n` flat
-					// string without indent. Slice ω-iflineexceeds-brk-mode.
-					//
-					// Flat-side mode: preserve `f.mode`. The flat shape is
-					// the inline alternative; it should respect the enclosing
-					// context's mode. Slice ω-iflineexceeds-infra.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-					} else {
-						final lineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
-						final pushMode: Mode = lineCrosses ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, pushMode, lineCrosses ? breakDoc : flatDoc));
-					}
-				case IfFullLineExceeds(n, breakDoc, flatDoc):
-					// Sibling of `IfLineExceeds` with asymmetric BG
-					// semantic: the primitive's own subtree uses the
-					// regular `flatTokenWidth` (defers BG — so a lambda
-					// body BG inside one of `flatDoc`'s segments stays
-					// deferred and doesn't inflate the chain probe),
-					// but the rest-of-stack lookahead descends BG via
-					// `flatTokenWidthOfRestStackFull` so a sibling body
-					// BG that follows on the same source line (e.g.
-					// `for (cond) BODY` with `forBody=fitLine` BG-wrap)
-					// is visible to the probe. Closes the chain-emit
-					// blindspot at `condition_wrapping_method_chain`
-					// while avoiding the chain-of-lambdas over-fire
-					// (regression class of the symmetric-descend
-					// approach). Slice ω-iffulllineexceeds-primitive.
-					//
-					// Mode propagation matches `IfLineExceeds`: brk-side
-					// forces `MBreak` (slice ω-iflineexceeds-brk-mode
-					// sister-arm sweep); flat-side preserves `f.mode`.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-						// Measure-only capture: inside a force-flat region the
-						// flat branch is always taken (record `false` = no open).
-						if (decisions != null)
-							decisions.push({ node: f.doc, crosses: false });
-					} else {
-						final fullLineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
-						// ω-collapse-commit: record the open/glued decision at
-						// this node's true render column for the Doc→Doc pass.
-						// Keyed by node identity (enum `==` is reference equality
-						// on JS — see CollapsePass). `ObjectMap` rejects enum
-						// keys (`K:{}` constraint), so a side list is used.
-						//
-						// For a collapse-candidate paren (`breakDoc` carries a
-						// `CollapseProbe`), the recorded `crosses` (= "this paren
-						// commits to open") is GATED by operator class:
-						//  - opAddSub inner (probe wraps `HardFlatten`) → open
-						//    iff `fullLineCrosses` (unconditional once the line
-						//    overflows — fork `collapseInnerChainBreaks` owns the
-						//    content even past width: the anchor's 117-wide inner
-						//    opens at 120 even though it won't fit at the deeper
-						//    indent).
-						//  - opBool / ternary inner (probe wraps the plain inner)
-						//    → open iff `fullLineCrosses` AND the inner rendered
-						//    FLAT fits at the paren's continuation indent
-						//    (`f.indent + flatWidth(inner) < n`). When the
-						//    inner can't be made a single fitting line, opening
-						//    the paren does not help (the fork keeps the paren
-						//    glued and lets the inner chain break one-per-line at
-						//    its own indent — issue_187's nested `((Y)||(Z))`,
-						//    ternary_nested). This is the anyparse analogue of the
-						//    fork's fit-gated `tryCollapseBreakBefore`.
-						// The same operator-class gate drives BOTH the captured
-						// decision AND the live render's open/glue: a candidate
-						// paren whose opBool/ternary inner cannot be made a
-						// fitting flat line must STAY GLUED in the emitted output
-						// too (otherwise the final render would open it via the
-						// raw `fullLineCrosses`, producing the `(\n inner` shape
-						// the fork rejects — issue_187 nested / ternary_nested).
-						// For a non-candidate `IfFullLineExceeds` (no
-						// `CollapseProbe`) `collapseParenCommitsOpen` returns the
-						// raw `fullLineCrosses`, so this is byte-identical to the
-						// pre-slice behaviour off the collapse path.
-						final commits: Bool = collapseParenCommitsOpen(breakDoc, fullLineCrosses, f.indent, n, stack);
-						if (decisions != null) decisions.push({ node: f.doc, crosses: commits });
-						final pushMode: Mode = commits ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
-					}
-				case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc):
-					// Natural-shape first-line probe: render `flatDoc`
-					// speculatively at the current pen, resolving each inner
-					// Group/BodyGroup/GroupWithRestProbe by its OWN `fitsFlat`
-					// decision, and measure the first physical line. Crosses
-					// iff that line reaches `n`. Unlike `IfFirstLineExceeds`
-					// (which walks flatDoc purely flat and over-measures any
-					// RHS whose own call-args wrap), this picks `flatDoc` when
-					// the RHS's natural first line is short (call-args wrap)
-					// and `breakDoc` when the RHS stays wide (NoWrap-pinned).
-					// Canonical consumer: assignment break-after-`=`.
-					//
-					// Mode propagation matches the other If*Exceeds: brk-side
-					// forces MBreak so a break shape carrying hardlines + Nest
-					// renders correctly under an enclosing MFlat context;
-					// flat-side preserves f.mode.
-					//
-					// `naturalFirstLineWidth` already folds `col` into its
-					// accumulator (per-Group `fitsFlat(width - col, ...)` needs
-					// the live running column), so the compare RHS is bare `n`
-					// — NOT `col + n`, unlike the flat siblings whose measurers
-					// return a from-zero width.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-					} else {
-						final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width) >= n);
-						final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
-						stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
-					}
-				case IfNaturalFirstLineFitsOpenDelim(n, breakDoc, flatDoc):
-					// ω-cond-paren-glued (increment-4 a1): render `flatDoc` (the
-					// GLUED `(cond)` shape) iff its NATURAL first line both fits
-					// within `n` AND ends at an open delimiter (`(`/`[`/`{` or an
-					// arrow `->`) — i.e. the inner construct (call / array / arrow
-					// lambda) LEADING-broke right after that delimiter so the cond
-					// prefix stays on the open line
-					// (`if (!list.exists(\n\t…\n))`). Otherwise render `breakDoc`
-					// (open the cond paren). The end-on-open-delim test separates
-					// a leading-broken inner call (keep glued) from one that
-					// fillLine-PACKS its first arg onto the open line, or a bare
-					// chain whose own operator breaks (open the paren). Mirrors
-					// `IfNaturalFirstLineExceeds`'s mode propagation.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-					} else {
-						final fits: Bool = naturalFirstLineWidth(flatDoc, col, f.indent, width) < n;
-						final gluable: Bool = naturalFirstLineGluable(flatDoc, col, f.indent, width);
-						final glue: Bool = fits && gluable;
-						final pushMode: Mode = glue ? f.mode : MBreak;
-						stack.push(new Frame(f.indent, pushMode, glue ? flatDoc : breakDoc));
-					}
-				case IfArrowContinuationFits(extraIndent, flatWidth, n, breakDoc, flatDoc):
-					// ω-inc5-cont: render `flatDoc` (OPEN-paren shape, arrow on its
-					// own continuation line) iff the arrow's flat `(params) -> body`
-					// fits at the CONTINUATION indent `f.indent + extraIndent` — NOT
-					// the current pen column. The decision is committed here (at the
-					// open-paren column) but the relevant width is the body's own
-					// continuation line, so the probe re-bases the measure to a fresh
-					// line at `f.indent + extraIndent`. `flatWidth` is the arrow
-					// item's flat token width, precomputed at lowering (column-
-					// independent), so the arm needs no render-time measurer. Mirrors
-					// fork `preferLambdaSignatureInlineOverWrap`: keep the signature
-					// inline on the continuation when it fits, else pull it up onto
-					// the open-paren line and break the body.
-					if (f.forceFlat) {
-						stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
-					} else {
-						final contFits: Bool = (f.indent + extraIndent + flatWidth < n);
-						final pushMode: Mode = contFits ? f.mode : MBreak;
-						stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
-					}
+				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfFullLineExceeds(
+					_, _, _
+				) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
+					pushExceedsBranch(f, stack, col, width, decisions);
 				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt) | FillBreakAfterWrap(
 					items, sep, tailReserveOpt
 				):
@@ -2419,6 +2184,261 @@ class Renderer {
 				// Leaf-content arms — handled by `naturalWidthStep`; never
 				// reached here (this helper is its `case _` delegate).
 				throw 'unreachable leaf in naturalWidthStructural';
+		}
+	}
+
+	/**
+	 * Resolve and push the chosen branch of an `If*Exceeds` family node onto
+	 * the render `stack`. Pure: reads `col`/`width`/`f`, pushes onto the
+	 * passed `stack` (and records measure-only decisions into `decisions`),
+	 * mutates no scalar layout accumulator. Extracted verbatim from
+	 * `render`'s dispatch switch — see each arm comment for the per-ctor
+	 * semantic.
+	 */
+	private static function pushExceedsBranch(
+		f: Frame, stack: Array<Frame>, col: Int, width: Int, decisions: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>>
+	): Void {
+		switch (f.doc) {
+			case IfBreak(breakDoc, flatDoc):
+				// Force-flat (slice B): always pick `flatDoc`, propagate
+				// `forceFlat=true` so the chosen branch keeps the region
+				// semantic for its own descendants. `hardFlat` rides along.
+				final picked: Doc = (f.forceFlat || f.mode == MFlat) ? flatDoc : breakDoc;
+				stack.push(new Frame(f.indent, f.mode, picked, f.forceFlat, f.hardFlat));
+			case IfWidthExceeds(n, breakDoc, flatDoc):
+				// Column-aware probe: rule fires when `col +
+				// DocMeasure.flatTokenWidth(flatDoc) >= n` (matches the
+				// cascade `lineLength >= n` predicate). The width
+				// measurement treats forced hardlines as zero width —
+				// the cascade rule asks "does the natural inline width
+				// reach n", not "does the flat shape budget-fit". Plain
+				// `fitsFlat` would refuse-to-flatten on any hardline
+				// inside flatDoc and incorrectly always pick brk;
+				// here a chain-emit shape (OPLAfterFirst, contains
+				// `Line('\n')` between operands) gets its real
+				// flat-token width back, so cascade rule 5
+				// (`itemCount>=4`) can win over rule 2
+				// (`lineLength>=140`) when the rendered chain at the
+				// current column wouldn't actually overflow.
+				//
+				// When `col >= n` already, the rule fires regardless
+				// of width — short-circuited by the `>=` comparison.
+				//
+				// Brk-side mode: force `MBreak`. The break shape may
+				// carry hardlines + Nest that must render as `\n +
+				// indent` and drop pendingOptSpace — under an enclosing
+				// `MFlat` context (e.g. inside a `Flatten` whose
+				// `WrapBoundary` reset `forceFlat` but did not restore
+				// mode), the inner `Line('\n')` would otherwise emit a
+				// bare `\n` flat string without indent. Sister-arm
+				// sweep mirrors the fix at `IfLineExceeds`
+				// (slice ω-iflineexceeds-brk-mode).
+				//
+				// Flat-side mode: preserve `f.mode`. The flat shape is
+				// the inline alternative; it respects the enclosing
+				// context's mode.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final crosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) >= n);
+					final pushMode: Mode = crosses ? MBreak : f.mode;
+					stack.push(new Frame(f.indent, pushMode, crosses ? breakDoc : flatDoc));
+				}
+			case IfFirstLineExceeds(n, breakDoc, flatDoc):
+				// First-line-aware probe: rule fires when `col +
+				// flatTokenWidthFirstLine(flatDoc) >= n`. Differs from
+				// `IfWidthExceeds` in measurement semantic — the first-
+				// line walk caps at the first forced hardline inside
+				// `flatDoc`, so a multi-line subtree whose first line
+				// fits stays inline (this branch picks `flatDoc`) even
+				// though its total flat width would exceed `n`. Used
+				// by `bodyPolicyWrap`'s width-aware path: e.g. `return
+				// <multi-line if-expr>` keeps the if-expr's head glued
+				// to `return` when the head fits, while subsequent
+				// `else` branches keep their own hardlines.
+				//
+				// Mode propagation matches `IfWidthExceeds` and
+				// `IfLineExceeds` — brk-side forces `MBreak` so a break
+				// shape carrying hardlines + Nest renders correctly under
+				// an enclosing `MFlat` context; flat-side preserves
+				// `f.mode` as the inline alternative.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final firstLineCrosses: Bool = (col + flatTokenWidthFirstLine(flatDoc) >= n);
+					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
+					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
+				}
+			case IfLineExceeds(n, breakDoc, flatDoc):
+				// Line-length-aware probe: rule fires when `col +
+				// DocMeasure.flatTokenWidth(flatDoc) +
+				// flatTokenWidthOfRestStack(stack) >= n`. The third term
+				// is a lookahead over the rendering stack from this
+				// point forward, summed up to the next forced hardline
+				// — captures everything that would land on the SAME
+				// rendered line if the flat branch fired here. Closes
+				// the Wadler-style local-Group blindspot where an inner
+				// `Group(IfBreak)` decides flat even though enclosing
+				// expression pushes the line past threshold.
+				//
+				// Brk-side mode: force `MBreak`. The break shape carries
+				// hardlines + Nest that must render as `\n + indent` and
+				// drop pendingOptSpace — under an enclosing `MFlat`
+				// context (e.g. inside a `Flatten` whose `WrapBoundary`
+				// reset `forceFlat` but did not restore mode), the inner
+				// `Line('\n')` would otherwise emit a bare `\n` flat
+				// string without indent. Slice ω-iflineexceeds-brk-mode.
+				//
+				// Flat-side mode: preserve `f.mode`. The flat shape is
+				// the inline alternative; it should respect the enclosing
+				// context's mode. Slice ω-iflineexceeds-infra.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final lineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n);
+					final pushMode: Mode = lineCrosses ? MBreak : f.mode;
+					stack.push(new Frame(f.indent, pushMode, lineCrosses ? breakDoc : flatDoc));
+				}
+			case IfFullLineExceeds(n, breakDoc, flatDoc):
+				// Sibling of `IfLineExceeds` with asymmetric BG
+				// semantic: the primitive's own subtree uses the
+				// regular `flatTokenWidth` (defers BG — so a lambda
+				// body BG inside one of `flatDoc`'s segments stays
+				// deferred and doesn't inflate the chain probe),
+				// but the rest-of-stack lookahead descends BG via
+				// `flatTokenWidthOfRestStackFull` so a sibling body
+				// BG that follows on the same source line (e.g.
+				// `for (cond) BODY` with `forBody=fitLine` BG-wrap)
+				// is visible to the probe. Closes the chain-emit
+				// blindspot at `condition_wrapping_method_chain`
+				// while avoiding the chain-of-lambdas over-fire
+				// (regression class of the symmetric-descend
+				// approach). Slice ω-iffulllineexceeds-primitive.
+				//
+				// Mode propagation matches `IfLineExceeds`: brk-side
+				// forces `MBreak` (slice ω-iflineexceeds-brk-mode
+				// sister-arm sweep); flat-side preserves `f.mode`.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+					// Measure-only capture: inside a force-flat region the
+					// flat branch is always taken (record `false` = no open).
+					if (decisions != null)
+						decisions.push({ node: f.doc, crosses: false });
+				} else {
+					final fullLineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
+					// ω-collapse-commit: record the open/glued decision at
+					// this node's true render column for the Doc→Doc pass.
+					// Keyed by node identity (enum `==` is reference equality
+					// on JS — see CollapsePass). `ObjectMap` rejects enum
+					// keys (`K:{}` constraint), so a side list is used.
+					//
+					// For a collapse-candidate paren (`breakDoc` carries a
+					// `CollapseProbe`), the recorded `crosses` (= "this paren
+					// commits to open") is GATED by operator class:
+					//  - opAddSub inner (probe wraps `HardFlatten`) → open
+					//    iff `fullLineCrosses` (unconditional once the line
+					//    overflows — fork `collapseInnerChainBreaks` owns the
+					//    content even past width: the anchor's 117-wide inner
+					//    opens at 120 even though it won't fit at the deeper
+					//    indent).
+					//  - opBool / ternary inner (probe wraps the plain inner)
+					//    → open iff `fullLineCrosses` AND the inner rendered
+					//    FLAT fits at the paren's continuation indent
+					//    (`f.indent + flatWidth(inner) < n`). When the
+					//    inner can't be made a single fitting line, opening
+					//    the paren does not help (the fork keeps the paren
+					//    glued and lets the inner chain break one-per-line at
+					//    its own indent — issue_187's nested `((Y)||(Z))`,
+					//    ternary_nested). This is the anyparse analogue of the
+					//    fork's fit-gated `tryCollapseBreakBefore`.
+					// The same operator-class gate drives BOTH the captured
+					// decision AND the live render's open/glue: a candidate
+					// paren whose opBool/ternary inner cannot be made a
+					// fitting flat line must STAY GLUED in the emitted output
+					// too (otherwise the final render would open it via the
+					// raw `fullLineCrosses`, producing the `(\n inner` shape
+					// the fork rejects — issue_187 nested / ternary_nested).
+					// For a non-candidate `IfFullLineExceeds` (no
+					// `CollapseProbe`) `collapseParenCommitsOpen` returns the
+					// raw `fullLineCrosses`, so this is byte-identical to the
+					// pre-slice behaviour off the collapse path.
+					final commits: Bool = collapseParenCommitsOpen(breakDoc, fullLineCrosses, f.indent, n, stack);
+					if (decisions != null) decisions.push({ node: f.doc, crosses: commits });
+					final pushMode: Mode = commits ? MBreak : f.mode;
+					stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
+				}
+			case IfNaturalFirstLineExceeds(n, breakDoc, flatDoc):
+				// Natural-shape first-line probe: render `flatDoc`
+				// speculatively at the current pen, resolving each inner
+				// Group/BodyGroup/GroupWithRestProbe by its OWN `fitsFlat`
+				// decision, and measure the first physical line. Crosses
+				// iff that line reaches `n`. Unlike `IfFirstLineExceeds`
+				// (which walks flatDoc purely flat and over-measures any
+				// RHS whose own call-args wrap), this picks `flatDoc` when
+				// the RHS's natural first line is short (call-args wrap)
+				// and `breakDoc` when the RHS stays wide (NoWrap-pinned).
+				// Canonical consumer: assignment break-after-`=`.
+				//
+				// Mode propagation matches the other If*Exceeds: brk-side
+				// forces MBreak so a break shape carrying hardlines + Nest
+				// renders correctly under an enclosing MFlat context;
+				// flat-side preserves f.mode.
+				//
+				// `naturalFirstLineWidth` already folds `col` into its
+				// accumulator (per-Group `fitsFlat(width - col, ...)` needs
+				// the live running column), so the compare RHS is bare `n`
+				// — NOT `col + n`, unlike the flat siblings whose measurers
+				// return a from-zero width.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width) >= n);
+					final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
+					stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
+				}
+			case IfNaturalFirstLineFitsOpenDelim(n, breakDoc, flatDoc):
+				// ω-cond-paren-glued (increment-4 a1): render `flatDoc` (the
+				// GLUED `(cond)` shape) iff its NATURAL first line both fits
+				// within `n` AND ends at an open delimiter (`(`/`[`/`{` or an
+				// arrow `->`) — i.e. the inner construct (call / array / arrow
+				// lambda) LEADING-broke right after that delimiter so the cond
+				// prefix stays on the open line
+				// (`if (!list.exists(\n\t…\n))`). Otherwise render `breakDoc`
+				// (open the cond paren). The end-on-open-delim test separates
+				// a leading-broken inner call (keep glued) from one that
+				// fillLine-PACKS its first arg onto the open line, or a bare
+				// chain whose own operator breaks (open the paren). Mirrors
+				// `IfNaturalFirstLineExceeds`'s mode propagation.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final fits: Bool = naturalFirstLineWidth(flatDoc, col, f.indent, width) < n;
+					final gluable: Bool = naturalFirstLineGluable(flatDoc, col, f.indent, width);
+					final glue: Bool = fits && gluable;
+					final pushMode: Mode = glue ? f.mode : MBreak;
+					stack.push(new Frame(f.indent, pushMode, glue ? flatDoc : breakDoc));
+				}
+			case IfArrowContinuationFits(extraIndent, flatWidth, n, breakDoc, flatDoc):
+				// ω-inc5-cont: render `flatDoc` (OPEN-paren shape, arrow on its
+				// own continuation line) iff the arrow's flat `(params) -> body`
+				// fits at the CONTINUATION indent `f.indent + extraIndent` — NOT
+				// the current pen column. The decision is committed here (at the
+				// open-paren column) but the relevant width is the body's own
+				// continuation line, so the probe re-bases the measure to a fresh
+				// line at `f.indent + extraIndent`. `flatWidth` is the arrow
+				// item's flat token width, precomputed at lowering (column-
+				// independent), so the arm needs no render-time measurer. Mirrors
+				// fork `preferLambdaSignatureInlineOverWrap`: keep the signature
+				// inline on the continuation when it fits, else pull it up onto
+				// the open-paren line and break the body.
+				if (f.forceFlat) {
+					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
+				} else {
+					final contFits: Bool = (f.indent + extraIndent + flatWidth < n);
+					final pushMode: Mode = contFits ? f.mode : MBreak;
+					stack.push(new Frame(f.indent, pushMode, contFits ? flatDoc : breakDoc));
+				}
+			case _:
 		}
 	}
 
