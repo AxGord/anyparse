@@ -166,37 +166,9 @@ final class CallSites {
 		];
 		final boundReadFroms: Array<Int> = [for (h in boundReads) h.span.from];
 
-		final sites: Array<QueryNode> = [];
-		final consumedFroms: Array<Int> = [];
-		var thisSiteCount: Int = 0;
-		var error: Null<String> = null;
-		function walk(node: QueryNode): Void {
-			if (error != null) return;
-			if (node.kind == 'Call' && node.children.length > 0) {
-				final callee: QueryNode = node.children[0];
-				switch calleeShape(callee, name) {
-					case CalleeBare(identSpan):
-						// A bare `name(...)` call. It is OUR call iff its
-						// callee identifier read binds to `binding`.
-						if (boundReadFroms.contains(identSpan.from)) {
-							sites.push(node);
-							consumedFroms.push(identSpan.from);
-						} else if (!bareBindsElsewhere(identSpan, hits))
-							error = 'cannot prove all call sites target "$name": unresolved call at ${posOf(source, node.span)} — every call site must be resolvable';
-					case CalleeThis:
-						sites.push(node);
-						thisSiteCount++;
-					case CalleeOtherReceiver(recv):
-						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)} — every call site must be resolvable (supported for local functions and methods called only via bare `$name(...)` / `this.$name(...)`)';
-					case CalleeNone:
-				}
-			}
-			for (c in node.children) {
-				if (error != null) return;
-				walk(c);
-			}
-		}
-		walk(tree);
+		final classified: MethodCallScan = classifyMethodCalls(tree, source, name, boundReadFroms, hits);
+		var error: Null<String> = classified.error;
+		final sites: Array<QueryNode> = classified.sites;
 		// Refuse the method captured as a first-class value, whose indirect
 		// calls cannot be tracked — rewriting its decl would silently break
 		// them. Three capture forms: a bare `var fn = foo;` (a binding read
@@ -205,11 +177,11 @@ final class CallSites {
 		// and a `var f = obj.foo;` (any non-`this` receiver field access —
 		// its call form already errored above).
 		if (error == null) {
-			final dangling: Null<RefHit> = boundReads.find(h -> !consumedFroms.contains(h.span.from));
+			final dangling: Null<RefHit> = boundReads.find(h -> !classified.consumedFroms.contains(h.span.from));
 			if (dangling != null)
 				error = '"$name" is referenced as a value (not called) at ${posOf(source, dangling.span)} — indirect calls through a captured reference cannot be tracked';
 		}
-		if (error == null) error = fieldAccessValueCapture(tree, source, name, thisSiteCount);
+		if (error == null) error = fieldAccessValueCapture(tree, source, name, classified.thisSiteCount);
 		return error != null ? CErr(error) : COk(sites);
 	}
 
@@ -360,6 +332,59 @@ final class CallSites {
 		return '${pos.line}:${pos.col}';
 	}
 
+	/**
+	 * Walk the tree once, classifying every `Call` callee named `name`
+	 * against the target binding. A bare `name(...)` whose callee ident is in
+	 * `boundReadFroms` is OUR call (its span recorded in `consumedFroms`); a
+	 * bare callee that resolves to a different binding is ignored; an
+	 * unresolvable bare callee or a non-`this` receiver-qualified call is a
+	 * refusal. `this.name(...)` calls are collected and counted separately so
+	 * the caller can reconcile them against `this.name` field-access captures.
+	 * Returns the partial collection plus the first completeness diagnostic,
+	 * or a null error when every call site was resolvable.
+	 */
+	private static function classifyMethodCalls(
+		tree: QueryNode, source: String, name: String, boundReadFroms: Array<Int>, hits: Array<RefHit>
+	): MethodCallScan {
+		final sites: Array<QueryNode> = [];
+		final consumedFroms: Array<Int> = [];
+		var thisSiteCount: Int = 0;
+		var error: Null<String> = null;
+		function walk(node: QueryNode): Void {
+			if (error != null) return;
+			if (node.kind == 'Call' && node.children.length > 0) {
+				final callee: QueryNode = node.children[0];
+				switch calleeShape(callee, name) {
+					case CalleeBare(identSpan):
+						// A bare `name(...)` call. It is OUR call iff its
+						// callee identifier read binds to `binding`.
+						if (boundReadFroms.contains(identSpan.from)) {
+							sites.push(node);
+							consumedFroms.push(identSpan.from);
+						} else if (!bareBindsElsewhere(identSpan, hits))
+							error = 'cannot prove all call sites target "$name": unresolved call at ${posOf(source, node.span)} — every call site must be resolvable';
+					case CalleeThis:
+						sites.push(node);
+						thisSiteCount++;
+					case CalleeOtherReceiver(recv):
+						error = 'cannot resolve receiver-qualified call `$recv.$name(...)` at ${posOf(source, node.span)} — every call site must be resolvable (supported for local functions and methods called only via bare `$name(...)` / `this.$name(...)`)';
+					case CalleeNone:
+				}
+			}
+			for (c in node.children) {
+				if (error != null) return;
+				walk(c);
+			}
+		}
+		walk(tree);
+		return {
+			sites: sites,
+			consumedFroms: consumedFroms,
+			thisSiteCount: thisSiteCount,
+			error: error
+		};
+	}
+
 }
 
 /** Classification of a `Call`'s callee relative to the target name — internal. */
@@ -371,3 +396,16 @@ private enum CalleeShape {
 	CalleeNone;
 
 }
+
+/**
+ * The partial result of `classifyMethodCalls`: the collected call-site
+ * `Call` nodes, the spans already consumed as bare-call callees, the count
+ * of `this.name(...)` sites, and the first completeness diagnostic (null
+ * when every call site was resolvable).
+ */
+private typedef MethodCallScan = {
+	final sites: Array<QueryNode>;
+	final consumedFroms: Array<Int>;
+	final thisSiteCount: Int;
+	final error: Null<String>;
+};
