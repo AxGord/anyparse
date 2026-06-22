@@ -634,66 +634,11 @@ class Renderer {
 					// mutation (reads `lineCount` for the break-after-wrap snapshot,
 					// writes `stack`). Delegated to the static `pushFill`.
 					pushFill(f, stack, lineCount);
-				case CollapseAddProbe(inner):
-					// ω-unwrap-add-ops (inverse CollapsePass): an inner opAddSub
-					// chain's BROKEN shape, reached ONLY when that chain's own
-					// `IfBreak` picked `brk` — so arriving here means the inner
-					// add-chain broke. Pure render pass-through (no layout effect),
-					// EXACTLY like `CollapseProbe`. In the measure-only pass
-					// (`decisions != null`) record the break-mode fact keyed by node
-					// identity: `crosses = f.mode == MBreak` ("inner add-chain broke
-					// in a break context"). `CollapsePass` reads this PLUS the
-					// enclosing-chain-broke fact and rewrites this marker to
-					// `HardFlatten(inner)` only inside a broken outer chain;
-					// otherwise it unwraps to bare `inner` (byte-inert). On the
-					// real emit pass (`decisions == null`) this never collapses on
-					// its own — the marker is always already rewritten away by
-					// `CollapsePass.run` before render, so reaching it here in the
-					// emit pass is a defensive pass-through.
-					//
-					// ω-opadd-head-break-remeasure: also record `f.indent` — the
-					// COLUMN the add-tail renders at (the chain's continuation
-					// indent). `CollapsePass` uses it for an O(1) order-dependent
-					// re-measure: keep the tail glued-flat on the continuation iff
-					// it fits at this captured indent (mirror the forward
-					// `collapseParenCommitsOpen` fit gate). Optional field — the
-					// forward `IfFullLineExceeds` push sites leave it null.
-					if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: f.indent });
-					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
-				case CollapseBoolProbe(inner):
-					// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an
-					// opBool chain's operator-TRAILING FillLine shape emitted inside a
-					// cond-wrap context. Pure render pass-through (no layout effect),
-					// EXACTLY like `CollapseAddProbe`. In the measure-only pass
-					// (`decisions != null`) record the break-mode fact (`crosses =
-					// f.mode == MBreak` — the chain wrapped) AND the ACTUAL VISUAL
-					// COLUMN the chain starts at (`indent = col`, NOT `f.indent` —
-					// the fork's `calcLineLength` call-overflow test needs the real
-					// column where the first operand begins, e.g. after `if (`).
-					// `CollapsePass` reads the decision, walks the trailing FillLine's
-					// operands, and flips the chain to operator-LEADING only when a
-					// contained call operand overflows at its flat position (mirror
-					// fork `reEvaluateOpBoolAfterCallParam`). On the real emit pass
-					// (`decisions == null`) the marker is always already rewritten away
-					// by `CollapsePass.run` before render — reaching it here is a
-					// defensive pass-through.
-					if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
-					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
-				case CollapseChainProbe(inner):
-					// ω-methodchain-reeval-after-callparam (CollapsePass increment 3,
-					// subroot-E): a method-chain `IfFullLineExceeds(w, dotBreak, glued)`
-					// tagged for the re-glue re-measure. Pure render pass-through (no
-					// layout effect), EXACTLY like `CollapseBoolProbe`. In the
-					// measure-only pass (`decisions != null`) record the ACTUAL VISUAL
-					// COLUMN the chain receiver starts at (`indent = col`, NOT `f.indent`
-					// — the glued-first-line fit test needs the real column the chain is
-					// measured against). `CollapsePass.rewriteChainProbe` reads that
-					// column and strips the chain dot-break (re-glues) when the full
-					// glued flat overflows but the glued first line (last call's args
-					// broken) fits at `col` — mirror fork
-					// `reEvaluateMethodChainAfterCallParam`.
-					if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
-					stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
+				case CollapseAddProbe(_) | CollapseBoolProbe(_) | CollapseChainProbe(_):
+					// Collapse-probe markers — pure render pass-through that records a
+					// measure-only decision (reads `col`/`decisions`, writes
+					// `decisions`/`stack`). Delegated to the static `pushCollapseProbe`.
+					pushCollapseProbe(f, stack, col, decisions);
 				case ConditionalMarkerZero(inner):
 					// ω-cond-indent-policy FixedZero: enter a marker-zero scope.
 					// Increment the render-local depth so the Text-flush re-indents
@@ -2477,6 +2422,83 @@ class Renderer {
 						));
 					stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
 				}
+			case _:
+		}
+	}
+
+	/**
+	 * Resolve and push a collapse-probe marker (`CollapseAddProbe` /
+	 * `CollapseBoolProbe` / `CollapseChainProbe`) onto `stack`. Pure render
+	 * pass-through: pushes `inner` with the frame's mode/flags unchanged and,
+	 * in the measure-only pass (`decisions != null`), records the break-mode
+	 * decision keyed by node identity. Reads `f`/`col`/`decisions`; writes
+	 * `decisions`/`stack`. Extracted verbatim from `render` — mutates no
+	 * scalar accumulator (invariant #1).
+	 */
+	private static function pushCollapseProbe(
+		f: Frame, stack: Array<Frame>, col: Int, decisions: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>>
+	): Void {
+		switch (f.doc) {
+			case CollapseAddProbe(inner):
+				// ω-unwrap-add-ops (inverse CollapsePass): an inner opAddSub
+				// chain's BROKEN shape, reached ONLY when that chain's own
+				// `IfBreak` picked `brk` — so arriving here means the inner
+				// add-chain broke. Pure render pass-through (no layout effect),
+				// EXACTLY like `CollapseProbe`. In the measure-only pass
+				// (`decisions != null`) record the break-mode fact keyed by node
+				// identity: `crosses = f.mode == MBreak` ("inner add-chain broke
+				// in a break context"). `CollapsePass` reads this PLUS the
+				// enclosing-chain-broke fact and rewrites this marker to
+				// `HardFlatten(inner)` only inside a broken outer chain;
+				// otherwise it unwraps to bare `inner` (byte-inert). On the
+				// real emit pass (`decisions == null`) this never collapses on
+				// its own — the marker is always already rewritten away by
+				// `CollapsePass.run` before render, so reaching it here in the
+				// emit pass is a defensive pass-through.
+				//
+				// ω-opadd-head-break-remeasure: also record `f.indent` — the
+				// COLUMN the add-tail renders at (the chain's continuation
+				// indent). `CollapsePass` uses it for an O(1) order-dependent
+				// re-measure: keep the tail glued-flat on the continuation iff
+				// it fits at this captured indent (mirror the forward
+				// `collapseParenCommitsOpen` fit gate). Optional field — the
+				// forward `IfFullLineExceeds` push sites leave it null.
+				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: f.indent });
+				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
+			case CollapseBoolProbe(inner):
+				// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an
+				// opBool chain's operator-TRAILING FillLine shape emitted inside a
+				// cond-wrap context. Pure render pass-through (no layout effect),
+				// EXACTLY like `CollapseAddProbe`. In the measure-only pass
+				// (`decisions != null`) record the break-mode fact (`crosses =
+				// f.mode == MBreak` — the chain wrapped) AND the ACTUAL VISUAL
+				// COLUMN the chain starts at (`indent = col`, NOT `f.indent` —
+				// the fork's `calcLineLength` call-overflow test needs the real
+				// column where the first operand begins, e.g. after `if (`).
+				// `CollapsePass` reads the decision, walks the trailing FillLine's
+				// operands, and flips the chain to operator-LEADING only when a
+				// contained call operand overflows at its flat position (mirror
+				// fork `reEvaluateOpBoolAfterCallParam`). On the real emit pass
+				// (`decisions == null`) the marker is always already rewritten away
+				// by `CollapsePass.run` before render — reaching it here is a
+				// defensive pass-through.
+				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
+				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
+			case CollapseChainProbe(inner):
+				// ω-methodchain-reeval-after-callparam (CollapsePass increment 3,
+				// subroot-E): a method-chain `IfFullLineExceeds(w, dotBreak, glued)`
+				// tagged for the re-glue re-measure. Pure render pass-through (no
+				// layout effect), EXACTLY like `CollapseBoolProbe`. In the
+				// measure-only pass (`decisions != null`) record the ACTUAL VISUAL
+				// COLUMN the chain receiver starts at (`indent = col`, NOT `f.indent`
+				// — the glued-first-line fit test needs the real column the chain is
+				// measured against). `CollapsePass.rewriteChainProbe` reads that
+				// column and strips the chain dot-break (re-glues) when the full
+				// glued flat overflows but the glued first line (last call's args
+				// broken) fits at `col` — mirror fork
+				// `reEvaluateMethodChainAfterCallParam`.
+				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
+				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case _:
 		}
 	}
