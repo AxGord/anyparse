@@ -188,31 +188,7 @@ final class AddElement {
 		final containerSpan: Null<Span> = container.span;
 		if (containerSpan == null) return Err('the container at $line:$col has no source span');
 
-		// Closing delimiter: scan back over whitespace from the last byte of
-		// the container's span (which may include trailing trivia past the
-		// brace for some decl shapes — `AddMember`'s back-scan handles it).
-		var close: Int = containerSpan.to - 1;
-		if (close >= source.length) close = source.length - 1;
-		while (close >= containerSpan.from && isSpace(StringTools.fastCodeAt(source, close))) close--;
-		if (close < containerSpan.from) return Err('the container at $line:$col has no closing delimiter');
-		final closeCode: Int = StringTools.fastCodeAt(source, close);
-		if (closeCode != '}'.code && closeCode != ']'.code && closeCode != ')'.code)
-			return Err('the node at $line:$col is not a brace / bracket / parenthesis container');
-
-		// Last content byte: scan back over whitespace from just inside the
-		// closing delimiter. If it is an opening delimiter, the container is
-		// empty and the element is spliced without a separator.
-		var lastContent: Int = close - 1;
-		while (lastContent >= containerSpan.from && isSpace(StringTools.fastCodeAt(source, lastContent))) lastContent--;
-		final lastCode: Int = lastContent >= containerSpan.from ? StringTools.fastCodeAt(source, lastContent) : -1;
-		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
-
-		final isComma: Bool = RefactorSupport.COMMA_CONTAINER_KINDS.contains(container.kind);
-		final at: Int = lastContent + 1;
-		final text: String = empty ? trimmed : (isComma ? ', ' + trimmed : '\n' + trimmed);
-
-		final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		return computeAppendEdit(source, line, col, containerSpan, container.kind, trimmed, reformat, plugin, optsJson);
 	}
 
 	/**
@@ -272,6 +248,45 @@ final class AddElement {
 
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	/**
+	 * Resolve the splice point and separator for `appendElement` once the
+	 * target container has been located, then canonicalise. Scans whitespace
+	 * back from the container's `span.to` to its closing delimiter (robust
+	 * against a decl span that swallows trailing trivia past the brace), then
+	 * back over whitespace to the last content byte: an opening delimiter
+	 * there means the container is empty and the element is spliced bare;
+	 * otherwise it is joined with the slot separator (`,` for a comma
+	 * container kind, a newline otherwise). `line` / `col` are only used for
+	 * the diagnostic messages.
+	 */
+	private static function computeAppendEdit(
+		source: String, line: Int, col: Int, containerSpan: Span, containerKind: String, trimmed: String, reformat: Bool,
+		plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		var close: Int = containerSpan.to - 1;
+		if (close >= source.length) close = source.length - 1;
+		while (close >= containerSpan.from && isSpace(StringTools.fastCodeAt(source, close))) close--;
+		if (close < containerSpan.from) return Err('the container at $line:$col has no closing delimiter');
+		final closeCode: Int = StringTools.fastCodeAt(source, close);
+		if (closeCode != '}'.code && closeCode != ']'.code && closeCode != ')'.code)
+			return Err('the node at $line:$col is not a brace / bracket / parenthesis container');
+
+		// Last content byte: scan back over whitespace from just inside the
+		// closing delimiter. If it is an opening delimiter, the container is
+		// empty and the element is spliced without a separator.
+		var lastContent: Int = close - 1;
+		while (lastContent >= containerSpan.from && isSpace(StringTools.fastCodeAt(source, lastContent))) lastContent--;
+		final lastCode: Int = lastContent >= containerSpan.from ? StringTools.fastCodeAt(source, lastContent) : -1;
+		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
+
+		final isComma: Bool = RefactorSupport.COMMA_CONTAINER_KINDS.contains(containerKind);
+		final at: Int = lastContent + 1;
+		final text: String = empty ? trimmed : (isComma ? ', ' + trimmed : '\n' + trimmed);
+
+		final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
+		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
 }
