@@ -103,81 +103,11 @@ final class Inline {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
-		if (node == null) return Err('position $line:$col is not on an inlinable identifier');
-		final targetName: Null<String> = node.name;
-		if (targetName == null) return Err('position $line:$col is not on an inlinable identifier');
-		final name: String = targetName;
-
-		final hits: Array<RefHit> = Refs.find(name, tree, shape);
-
-		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
-		if (bindingFrom == null) return Err('could not resolve a binding for "$name" at $line:$col');
-		final binding: Int = bindingFrom;
-
-		// The decl node must be a local var / final, not a field / param /
-		// for-iterator / catch-var.
-		final declNode: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, binding);
-		if (declNode == null) return Err('could not locate the declaration of "$name" at $line:$col');
-		final decl: QueryNode = declNode;
-		if (!LOCAL_DECL_KINDS.contains(decl.kind)) return Err('"$name" is not a local variable (only local var/final can be inlined)');
-
-		// The initializer is the decl's first child.
-		final init: Null<QueryNode> = decl.children.length > 0 ? decl.children[0] : null;
-		final initSpan: Null<Span> = init == null ? null : init.span;
-		if (init == null || initSpan == null) return Err('"$name" has no initializer to inline');
-		final initializer: QueryNode = init;
-		final initRange: Span = initSpan;
-
-		// No reassignment: the binding must have zero Write hits.
-		final writes: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write && h.bindingSpan != null && bindingSpanFrom(h) == binding);
-		if (writes.length > 0) return Err('"$name" is reassigned — cannot inline a mutable variable');
-
-		// Collect reads of this binding.
-		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read && h.bindingSpan != null && bindingSpanFrom(h) == binding);
-		if (reads.length == 0) return Err('"$name" has no reads to inline');
-
-		// The initializer subtree must be entirely inline-safe.
-		if (!RefactorSupport.isSideEffectFree(initializer))
-			return Err('"$name" initializer is not inline-safe (contains calls/field-access/collection/lambda)');
-
-		// Every free identifier the initializer reads must be a stable
-		// local (not reassigned anywhere, not a field / property).
-		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
-		if (freeIdentErr != null) return Err(freeIdentErr);
-
-		// Build the substitution text: the initializer's exact source,
-		// parenthesised when the root is an operator.
-		final initText: String = source.substring(initRange.from, initRange.to);
-		final substitution: String = ATOMIC_ROOT_KINDS.contains(initializer.kind) ? initText : '(' + initText + ')';
-
-		final edits: Array<{ span: Span, text: String }> = [];
-
-		// Each read's identifier token is replaced with the substitution.
-		for (read in reads) {
-			final identFrom: Int = RefactorSupport.identTokenOffset(source, read.span, name);
-			if (identFrom >= 0) edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
-		}
-
-		// The decl line is deleted. The decl span includes its trailing
-		// `;`; the line is removed only when the decl owns it exclusively
-		// (whitespace before, nothing but whitespace + the line break
-		// after) — otherwise we refuse rather than mangle adjacent code.
-		final deleteSpan: Null<Span> = computeDeclDeleteSpan(source, decl.span);
-		if (deleteSpan == null) return Err('"$name" declaration shares its line — cannot inline cleanly');
-		edits.push({ span: deleteSpan, text: '' });
-
-		final rewritten: String = RefactorSupport.applyEdits(source, edits);
-		if (rewritten == source) return Err('inline of "$name" is a no-op');
-
-		try
-			plugin.parseFile(rewritten)
-		catch (exception: ParseError)
-			return Err('rewritten source does not parse: ${exception.toString()}')
-		catch (exception: Exception)
-			return Err('rewritten source does not parse: ${exception.message}');
-
-		return Ok(rewritten);
+		final prep: InlinePrep = resolveInlineTarget(source, line, col, cursor, tree, shape);
+		return switch prep {
+			case PErr(message): Err(message);
+			case POk(target): buildInlineEdits(source, target, plugin);
+		};
 	}
 
 	/**
@@ -271,5 +201,133 @@ final class Inline {
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\r'.code;
 	}
+
+	/**
+	 * Resolve and validate the inline target at `cursor`: the binding must be a
+	 * local `var` / `final` (not a field / param / for-iterator / catch-var)
+	 * with a single-assignment, inline-safe initializer and at least one read,
+	 * every free identifier of which is a stable local. Returns the validated
+	 * `InlineTarget` or a `PErr` with the precise refusal reason.
+	 */
+	private static function resolveInlineTarget(
+		source: String, line: Int, col: Int, cursor: Int, tree: QueryNode, shape: RefShape
+	): InlinePrep {
+		final node: Null<QueryNode> = RefactorSupport.resolveCursorNode(tree, cursor, source);
+		if (node == null) return PErr('position $line:$col is not on an inlinable identifier');
+		final targetName: Null<String> = node.name;
+		if (targetName == null) return PErr('position $line:$col is not on an inlinable identifier');
+		final name: String = targetName;
+
+		final hits: Array<RefHit> = Refs.find(name, tree, shape);
+
+		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, hits);
+		if (bindingFrom == null) return PErr('could not resolve a binding for "$name" at $line:$col');
+		final binding: Int = bindingFrom;
+
+		// The decl node must be a local var / final, not a field / param /
+		// for-iterator / catch-var.
+		final declNode: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, binding);
+		if (declNode == null) return PErr('could not locate the declaration of "$name" at $line:$col');
+		final decl: QueryNode = declNode;
+		if (!LOCAL_DECL_KINDS.contains(decl.kind)) return PErr('"$name" is not a local variable (only local var/final can be inlined)');
+
+		// The initializer is the decl's first child.
+		final init: Null<QueryNode> = decl.children.length > 0 ? decl.children[0] : null;
+		final initSpan: Null<Span> = init == null ? null : init.span;
+		if (init == null || initSpan == null) return PErr('"$name" has no initializer to inline');
+		final initializer: QueryNode = init;
+		final initRange: Span = initSpan;
+
+		// No reassignment: the binding must have zero Write hits.
+		final writes: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Write && h.bindingSpan != null && bindingSpanFrom(h) == binding);
+		if (writes.length > 0) return PErr('"$name" is reassigned — cannot inline a mutable variable');
+
+		// Collect reads of this binding.
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read && h.bindingSpan != null && bindingSpanFrom(h) == binding);
+		if (reads.length == 0) return PErr('"$name" has no reads to inline');
+
+		// The initializer subtree must be entirely inline-safe.
+		if (!RefactorSupport.isSideEffectFree(initializer))
+			return PErr('"$name" initializer is not inline-safe (contains calls/field-access/collection/lambda)');
+
+		// Every free identifier the initializer reads must be a stable
+		// local (not reassigned anywhere, not a field / property).
+		final freeIdentErr: Null<String> = checkFreeIdents(name, initializer, tree, shape);
+		if (freeIdentErr != null) return PErr(freeIdentErr);
+
+		return POk({
+			name: name,
+			decl: decl,
+			initializer: initializer,
+			initRange: initRange,
+			reads: reads
+		});
+	}
+
+	/**
+	 * Build and apply the inline edits for a validated `target`: substitute the
+	 * initializer's exact source (parenthesised when its root is an operator) for
+	 * every read, delete the decl line (refusing if the decl shares its line),
+	 * then re-parse the rewrite — an unparseable result is rejected.
+	 */
+	private static function buildInlineEdits(source: String, target: InlineTarget, plugin: GrammarPlugin): InlineResult {
+		final name: String = target.name;
+		final initializer: QueryNode = target.initializer;
+		final initRange: Span = target.initRange;
+
+		// Build the substitution text: the initializer's exact source,
+		// parenthesised when the root is an operator.
+		final initText: String = source.substring(initRange.from, initRange.to);
+		final substitution: String = ATOMIC_ROOT_KINDS.contains(initializer.kind) ? initText : '(' + initText + ')';
+
+		final edits: Array<{ span: Span, text: String }> = [];
+
+		// Each read's identifier token is replaced with the substitution.
+		for (read in target.reads) {
+			final identFrom: Int = RefactorSupport.identTokenOffset(source, read.span, name);
+			if (identFrom >= 0) edits.push({ span: new Span(identFrom, identFrom + name.length), text: substitution });
+		}
+
+		// The decl line is deleted. The decl span includes its trailing
+		// `;`; the line is removed only when the decl owns it exclusively
+		// (whitespace before, nothing but whitespace + the line break
+		// after) — otherwise we refuse rather than mangle adjacent code.
+		final deleteSpan: Null<Span> = computeDeclDeleteSpan(source, target.decl.span);
+		if (deleteSpan == null) return Err('"$name" declaration shares its line — cannot inline cleanly');
+		edits.push({ span: deleteSpan, text: '' });
+
+		final rewritten: String = RefactorSupport.applyEdits(source, edits);
+		if (rewritten == source) return Err('inline of "$name" is a no-op');
+
+		try
+			plugin.parseFile(rewritten)
+		catch (exception: ParseError)
+			return Err('rewritten source does not parse: ${exception.toString()}')
+		catch (exception: Exception)
+			return Err('rewritten source does not parse: ${exception.message}');
+
+		return Ok(rewritten);
+	}
+
+}
+
+/**
+ * A validated inline target: the binding name, its local decl node, the
+ * inline-safe initializer subtree and its exact source span, and the reads
+ * to substitute.
+ */
+private typedef InlineTarget = {
+	final name: String;
+	final decl: QueryNode;
+	final initializer: QueryNode;
+	final initRange: Span;
+	final reads: Array<RefHit>;
+};
+
+/** Resolution outcome of `resolveInlineTarget`: the target or a refusal. */
+private enum InlinePrep {
+
+	POk(target: InlineTarget);
+	PErr(message: String);
 
 }
