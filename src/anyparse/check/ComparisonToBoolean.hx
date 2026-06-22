@@ -145,18 +145,6 @@ final class ComparisonToBoolean implements Check {
 		return false;
 	}
 
-	/**
-	 * Whether `operand` is a provably non-null Bool: a boolean-operator result
-	 * (`&&` / `||` / `!` / a comparison), parentheses unwrapped. Such an operand can never be
-	 * `Null<Bool>`, so stripping its `== true` is sound under strict null-safety. A bare
-	 * identifier, field access or call is NOT provable without types and is left to the report.
-	 */
-	private static function provablyBool(operand: QueryNode, boolOpKinds: Array<String>, parenKind: Null<String>): Bool {
-		var n: QueryNode = operand;
-		while (parenKind != null && n.kind == parenKind && n.children.length == 1) n = n.children[0];
-		return boolOpKinds.contains(n.kind);
-	}
-
 	/** `!operand`, parenthesizing a non-atomic operand so the unary `!` binds correctly. */
 	private static function negate(operand: QueryNode, src: String, identKind: String, parenKind: Null<String>): String {
 		return operand.kind == identKind || operand.kind == parenKind ? '!' + src : '!(' + src + ')';
@@ -192,7 +180,7 @@ final class ComparisonToBoolean implements Check {
 		if (leftIsBool == rightIsBool) return null;
 		final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
 		final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-		if (!provablyBool(other, boolOpKinds, parenKind)) return null;
+		if (!RefactorSupport.provablyBoolOperand(other, boolOpKinds, parenKind)) return null;
 		final litSpan: Null<Span> = lit.span;
 		final otherSpan: Null<Span> = other.span;
 		if (litSpan == null || otherSpan == null) return null;

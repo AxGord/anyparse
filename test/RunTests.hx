@@ -308,6 +308,7 @@ import unit.SuppressionSliceTest;
 import unit.ApqExitOnEmptyCliTest;
 import unit.MagicNumberCheckTest;
 import unit.CheckstyleConfigLoaderTest;
+import unit.SimplifyBooleanReturnChainCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -603,6 +604,7 @@ class RunTests {
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new SimplifyBooleanTernaryCheckTest());
+		addCase(new SimplifyBooleanReturnChainCheckTest());
 		addCase(new AssignmentInConditionCheckTest());
 		addCase(new DuplicateTernaryBranchesCheckTest());
 		addCase(new PreferBindCheckTest());

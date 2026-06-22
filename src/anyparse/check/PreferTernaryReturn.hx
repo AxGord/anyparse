@@ -157,15 +157,20 @@ final class PreferTernaryReturn implements Check {
 		if (thenValue == null) return null;
 		if (i + 1 >= kids.length) return null;
 		final next: QueryNode = kids[i + 1];
-		return next.kind != returnKind || next.children.length < 1
-			? null
-			: {
-				ifNode: ifNode,
-				condition: ifNode.children[0],
-				thenValue: thenValue,
-				elseValue: next.children[0],
-				nextReturn: next
-			};
+		if (next.kind != returnKind || next.children.length < 1) return null;
+		final elseValue: QueryNode = next.children[0];
+		// A bool-literal-vs-non-provably-Bool pair collapses to a "stuck" boolean ternary
+		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
+		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
+		// `simplify-boolean-return-chain`'s job; a value ternary still collapses here.
+		if (isStuckBooleanCollapse(thenValue, elseValue, shape)) return null;
+		return {
+			ifNode: ifNode,
+			condition: ifNode.children[0],
+			thenValue: thenValue,
+			elseValue: elseValue,
+			nextReturn: next
+		};
 	}
 
 	/**
@@ -206,6 +211,25 @@ final class PreferTernaryReturn implements Check {
 		final ternaryKind: Null<String> = shape.ternaryKind;
 		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
 		return needsParens ? '(' + source + ')' : source;
+	}
+
+	/**
+	 * Whether collapsing `if (c) return a; return b;` would produce a "stuck" boolean
+	 * ternary — exactly one of `a` / `b` is a boolean literal and the other is not a
+	 * provably non-null `Bool`. `cond ? true : <Call>` then cannot be reduced to
+	 * `cond || …` without a typer, so the ternary is uglier than the guard and is left
+	 * alone. Both-literal (`? true : false` -> `cond`) and provably-Bool other side
+	 * (reduces cleanly) and neither-literal (a value ternary) all collapse as before.
+	 */
+	private static function isStuckBooleanCollapse(a: QueryNode, b: QueryNode, shape: RefShape): Bool {
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		if (boolLitKind == null) return false;
+		final aBool: Bool = a.kind == boolLitKind;
+		final bBool: Bool = b.kind == boolLitKind;
+		if (aBool == bBool) return false;
+		final notKind: Null<String> = shape.notKind;
+		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
+		return !RefactorSupport.provablyBoolOperand(aBool ? b : a, boolOpKinds, shape.parenKind);
 	}
 
 }

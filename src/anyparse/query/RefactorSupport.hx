@@ -1169,4 +1169,17 @@ final class RefactorSupport {
 		return candidate.exists(c -> accepted.exists(a -> c.span.from < a.span.to && a.span.from < c.span.to));
 	}
 
+	/**
+	 * Whether `operand` (parentheses unwrapped) is a provably non-null `Bool` — a node
+	 * whose kind is in `boolOpKinds` (a comparison / `&&` / `||` / `!` result). Such a
+	 * node can never be `Null<Bool>`, so combining it with boolean logic is sound under
+	 * strict null-safety; an identifier, call, field access or literal is not provable
+	 * without types. Shared by `comparison-to-boolean` and `prefer-ternary-return`.
+	 */
+	public static function provablyBoolOperand(operand: QueryNode, boolOpKinds: Array<String>, parenKind: Null<String>): Bool {
+		var n: QueryNode = operand;
+		while (parenKind != null && n.kind == parenKind && n.children.length == 1) n = n.children[0];
+		return boolOpKinds.contains(n.kind);
+	}
+
 }

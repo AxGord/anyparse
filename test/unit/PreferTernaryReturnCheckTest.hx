@@ -131,11 +131,9 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
-	/** A null-check WITHOUT accessing the same ident still flags (no narrowing to lose). */
+	/** A null-check WITHOUT accessing the same ident still flags (no narrowing to lose). Value returns keep this off the stuck-boolean gate. */
 	public function testNullCheckWithoutAccessFlagged(): Void {
-		Assert.equals(
-			1, violations("class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null) return true;\n\t\treturn c;\n\t}\n}").length
-		);
+		Assert.equals(1, violations("class C {\n\tfunction f(s:Null<S>):Int {\n\t\tif (s != null) return 1;\n\t\treturn 0;\n\t}\n}").length);
 	}
 
 	/** A null-checked ident reused via INDEX access (`x[0]`) is guarded too (not just field/call). */
@@ -154,6 +152,24 @@ class PreferTernaryReturnCheckTest extends Test {
 			0,
 			violations("class C {\n\tfunction f(x:Null<S>):Bool {\n\t\tif (x != null && g(x)) return true;\n\t\treturn c;\n\t}\n}").length
 		);
+	}
+
+	/** `if (c) return true; return g();` would be a stuck `c ? true : g()` (g() not provably Bool): left as a guard. */
+	public function testStuckBooleanCallNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn g();\n\t}\n}').length);
+	}
+
+	/** A provably-Bool other side (`x > 0`) collapses — simplify-boolean-ternary then reduces it cleanly. */
+	public function testBooleanWithProvableOtherFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(c:Bool, x:Int):Bool {\n\t\tif (c) return true;\n\t\treturn x > 0;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return c ? true : x > 0;', es[0].text);
+	}
+
+	/** Both branches boolean literals (`? true : false`) still collapses (simplify then reduces to `c`). */
+	public function testBothBooleanLiteralsFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn false;\n\t}\n}').length);
 	}
 
 }

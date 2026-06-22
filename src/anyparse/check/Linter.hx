@@ -52,6 +52,7 @@ final class Linter {
 			new PreferMapLiteral(),
 			new PreferInterpolation(),
 			new PreferFinal(),
+			new SimplifyBooleanReturnChain(),
 			new PreferTernaryReturn(),
 			new PreferSingleQuotes(),
 			new SimplifyBooleanTernary(),

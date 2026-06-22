@@ -27,4 +27,19 @@ interface BooleanLogicSupport {
 	 */
 	public function simplifyBooleanTernary(ternary: QueryNode, source: String): Null<String>;
 
+	/**
+	 * The flat boolean expression equivalent to a boolean guard chain
+	 * `if (cond_i) return <bool>; … return <bool>;` (every return a boolean literal),
+	 * or null when it cannot be built without dropping a condition's evaluation
+	 * (a degenerate chain whose conditions are all absorbed by a literal). `conds[i]`
+	 * are the guard condition nodes, `lits[i]` their return's boolean literal node
+	 * (parallel to `conds`), `finalLit` the trailing return's literal; `source` indexes
+	 * the node spans. Each `cond_i` is an `if` condition — non-null `Bool` under strict
+	 * null-safety, since the source compiles — so joining them with `&&` / `||` is
+	 * sound; conditions are kept verbatim, preserving any `== true` null-safety idiom.
+	 */
+	public function reduceBooleanGuardChain(
+		conds: Array<QueryNode>, lits: Array<QueryNode>, finalLit: QueryNode, source: String
+	): Null<String>;
+
 }
