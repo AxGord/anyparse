@@ -8473,52 +8473,16 @@ final class Cli {
 	 * re-parse-validated (canonical-gated unless `--reformat`).
 	 */
 	private static function runSetDoc(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var fromFile: Null<String> = null;
-		var file: Null<String> = null;
-		var pos: Null<String> = null;
-		var docText: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
-				case '--reformat':
-					reformat = true;
-				case '--write':
-					write = true;
-				case '-h', '--help':
-					printSetDocUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq set-doc: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (pos == null)
-						pos = a;
-					else if (docText == null)
-						docText = a;
-					else {
-						stderr('apq set-doc: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (fromFile != null || docText == '-') {
-			final resolved: Null<String> = resolveCodeArg('set-doc', docText == '-' ? '-' : null, fromFile);
+		final o: SetDocOpts = parseSetDocArgs(args);
+		if (o.errExit != null) return o.errExit;
+		var docText: Null<String> = o.docText;
+		if (o.fromFile != null || docText == '-') {
+			final resolved: Null<String> = resolveCodeArg('set-doc', docText == '-' ? '-' : null, o.fromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			docText = resolved;
 		}
+		final file: Null<String> = o.file;
+		final pos: Null<String> = o.pos;
 		if (file == null || pos == null || docText == null) {
 			stderr('apq set-doc: expected <file> <line>:<col> (<text> | --from-file <path> | -)\n');
 			printSetDocUsage();
@@ -8536,20 +8500,10 @@ final class Cli {
 			stderr('apq set-doc: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		switch SetDoc.setDoc(source, loc.line, loc.col, docStr, reformat, plugin, optsJson) {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq set-doc: wrote $filePath\n');
-				} else
-					sysPrint(text);
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq set-doc: $message\n');
-				return EXIT_RUNTIME;
-		}
+		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
+		return emitEditResult('set-doc', filePath, result, o.write);
 	}
 
 	private static function printSetDocUsage(): Void {
@@ -11911,6 +11865,73 @@ final class Cli {
 		};
 	}
 
+	private static inline function setDocParseExit(code: Int): SetDocOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			fromFile: null,
+			file: null,
+			pos: null,
+			docText: null,
+			errExit: code
+		};
+	}
+
+	private static function parseSetDocArgs(args: Array<String>): SetDocOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var fromFile: Null<String> = null;
+		var file: Null<String> = null;
+		var pos: Null<String> = null;
+		var docText: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printSetDocUsage();
+					return setDocParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq set-doc: unknown option "$a"\n');
+						return setDocParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (pos == null)
+						pos = a;
+					else if (docText == null)
+						docText = a;
+					else {
+						stderr('apq set-doc: unexpected extra argument "$a"\n');
+						return setDocParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			fromFile: fromFile,
+			file: file,
+			pos: pos,
+			docText: docText,
+			errExit: null
+		};
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12104,6 +12125,19 @@ typedef AddMemberOpts = {
 	var file: Null<String>;
 	var memberText: Null<String>;
 	var fromFile: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef SetDocOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var fromFile: Null<String>;
+	var file: Null<String>;
+	var pos: Null<String>;
+	var docText: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
