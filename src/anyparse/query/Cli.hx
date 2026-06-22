@@ -548,64 +548,15 @@ final class Cli {
 	}
 
 	private static function runRefs(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var json: Bool = false;
-		var wantDecls: Bool = false;
-		var wantReads: Bool = false;
-		var wantWrites: Bool = false;
-		var wantDoc: Bool = false;
-		var wantSource: Bool = false;
-		var flat: Bool = false;
-		var limit: Int = -1;
-		var name: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--json':
-					json = true;
-				case '--decls':
-					wantDecls = true;
-				case '--reads':
-					wantReads = true;
-				case '--writes':
-					wantWrites = true;
-				case '--doc':
-					wantDoc = true;
-				case '--source':
-					wantSource = true;
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printRefsUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq refs: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (name == null)
-						name = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: RefsOpts = parseRefsArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final name: Null<String> = o.name;
 		if (name == null) {
 			stderr('apq refs: missing <name> argument\n');
 			printRefsUsage();
 			return EXIT_USAGE;
 		}
-		if (inputSpecs.length == 0) {
+		if (o.inputSpecs.length == 0) {
 			stderr('apq refs: missing <file-or-dir-or-glob> argument\n');
 			printRefsUsage();
 			return EXIT_USAGE;
@@ -614,54 +565,43 @@ final class Cli {
 		// No flag = no filter (emit every hit). Any flag flips on the
 		// allow-set; sister CLIs (`git log --author --grep`) follow the
 		// same any-flag-narrows convention.
-		final anyFilter: Bool = wantDecls || wantReads || wantWrites;
+		final anyFilter: Bool = o.wantDecls || o.wantReads || o.wantWrites;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: RefShape = plugin.refShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq refs: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq refs: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
-		final singleFile: Bool = expanded.singleFile;
-		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
 		final candidateNames: Map<String, Bool> = [];
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries, nameStr);
-			streamProgress('refs', ++scanned, paths.length, singleFile);
-			if (tree == null) {
-				if (singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			final raw: Array<RefHit> = Refs.find(nameStr, tree, shape);
-			final filtered: Array<RefHit> = anyFilter ? raw.filter(h -> kindAllowed(h.kind, wantDecls, wantReads, wantWrites)) : raw;
-			if (filtered.length == 0) {
-				collectNames(tree, candidateNames);
-				continue;
-			}
-			allEntries.push({ file: path, source: source, hits: filtered });
-		}
+		final allEntries: Null<Array<{ file: String, source: String, hits: Array<RefHit> }>> =
+			collectRefsEntries(nameStr, paths, plugin, shape, expanded.singleFile, skipEntries, candidateNames, {
+				anyFilter: anyFilter,
+				wantDecls: o.wantDecls,
+				wantReads: o.wantReads,
+				wantWrites: o.wantWrites
+			});
+		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('refs', limit, totalHits);
+		final cappedLimit: Int = effectiveAutoLimit('refs', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> =
 			limitEntries(
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
-		if (json) {
-			sysPrint(Json.renderRefs(shown, wantDoc, wantSource));
+		if (o.json) {
+			sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource));
 		} else {
-			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
+			for (entry in shown) sysPrint(Text.renderRefs(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat));
 		}
 		return emptyExit(allEntries.length == 0);
 	}
@@ -11995,6 +11935,127 @@ final class Cli {
 		}
 	}
 
+	private static inline function refsParseExit(code: Int): RefsOpts {
+		return {
+			lang: '',
+			json: false,
+			wantDecls: false,
+			wantReads: false,
+			wantWrites: false,
+			wantDoc: false,
+			wantSource: false,
+			flat: false,
+			limit: -1,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseRefsArgs(args: Array<String>): RefsOpts {
+		var lang: String = 'haxe';
+		var json: Bool = false;
+		var wantDecls: Bool = false;
+		var wantReads: Bool = false;
+		var wantWrites: Bool = false;
+		var wantDoc: Bool = false;
+		var wantSource: Bool = false;
+		var flat: Bool = false;
+		var limit: Int = -1;
+		var name: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--json':
+					json = true;
+				case '--decls':
+					wantDecls = true;
+				case '--reads':
+					wantReads = true;
+				case '--writes':
+					wantWrites = true;
+				case '--doc':
+					wantDoc = true;
+				case '--source':
+					wantSource = true;
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return refsParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printRefsUsage();
+					return refsParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq refs: unknown option "$a"\n');
+						return refsParseExit(EXIT_USAGE);
+					}
+					if (name == null)
+						name = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			json: json,
+			wantDecls: wantDecls,
+			wantReads: wantReads,
+			wantWrites: wantWrites,
+			wantDoc: wantDoc,
+			wantSource: wantSource,
+			flat: flat,
+			limit: limit,
+			name: name,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function collectRefsEntries(
+		name: String, paths: Array<String>, plugin: GrammarPlugin, shape: RefShape, singleFile: Bool, skipEntries: Array<SkipEntry>,
+		candidateNames: Map<String, Bool>, filter: {
+			anyFilter: Bool,
+			wantDecls: Bool,
+			wantReads: Bool,
+			wantWrites: Bool
+		}
+	): Null<Array<{ file: String, source: String, hits: Array<RefHit> }>> {
+		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = [];
+		var scanned: Int = 0;
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('refs', plugin.parseFile, path, source, singleFile, skipEntries, name);
+			streamProgress('refs', ++scanned, paths.length, singleFile);
+			if (tree == null) {
+				// Single-file mode treats a parse failure as fatal — null tells
+				// the caller to return EXIT_RUNTIME. Multi-file mode records the
+				// file in skipEntries and keeps walking.
+				if (singleFile) return null;
+				continue;
+			}
+			final raw: Array<RefHit> = Refs.find(name, tree, shape);
+			final filtered: Array<RefHit> = filter.anyFilter
+				? raw.filter(h -> kindAllowed(h.kind, filter.wantDecls, filter.wantReads, filter.wantWrites))
+				: raw;
+			if (filtered.length == 0) {
+				collectNames(tree, candidateNames);
+				continue;
+			}
+			allEntries.push({ file: path, source: source, hits: filtered });
+		}
+		return allEntries;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12234,5 +12295,22 @@ typedef MoveOpts = {
 	var destFile: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / missing
 	// --scope / malformed position -> EXIT_USAGE); the caller returns this immediately.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef RefsOpts = {
+	var lang: String;
+	var json: Bool;
+	var wantDecls: Bool;
+	var wantReads: Bool;
+	var wantWrites: Bool;
+	var wantDoc: Bool;
+	var wantSource: Bool;
+	var flat: Bool;
+	var limit: Int;
+	var name: Null<String>;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
