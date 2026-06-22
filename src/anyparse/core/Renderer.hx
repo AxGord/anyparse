@@ -629,63 +629,11 @@ class Renderer {
 					_, _, _
 				) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
 					pushExceedsBranch(f, stack, col, width, decisions);
-				case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt) | FillBreakAfterWrap(
-					items, sep, tailReserveOpt
-				):
-					// Shared arm: identical entry shape for all three ctors. The
-					// rest-probe semantic lives in FillCont resumption (see
-					// top of dispatch loop) — we just tag the FillCont frame
-					// with the originating ctor's `restProbe` flag. The
-					// force-flat / all-flat branches don't care which ctor
-					// produced them — items collapse to a flat sep-joined
-					// emit either way.
-					final restProbe: Bool = switch f.doc {
-						case FillWithRestProbe(_, _, _): true;
-						case _: false;
-					};
-					if (items.length == 0) {
-						// nothing
-					} else if (f.forceFlat || f.mode == MFlat) {
-						// All-flat: items joined by sep flat; reverse-push for
-						// natural left-to-right pop order. Force-flat (slice B)
-						// routes here too — items + sep propagate `forceFlat`
-						// so nested wrap markers inside an item stay collapsed.
-						var k: Int = items.length;
-						while (k > 0) {
-							k--;
-							stack.push(new Frame(f.indent, MFlat, items[k], f.forceFlat, f.hardFlat));
-							if (k > 0)
-								stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat, f.hardFlat));
-						}
-					} else {
-						// Per-item fill: push items[0] first, then a FillCont
-						// that resumes for items[1..] once item[0]'s frames
-						// have drained and `col` reflects the post-item[0]
-						// pen position. `tailReserve` (cols of post-Fill
-						// same-line content; default 0) rides the FillCont
-						// frame and tightens the per-item-fit budget on
-						// each subsequent probe — see Fill case at the top
-						// of the dispatch loop.
-						final tailReserve: Int = tailReserveOpt ?? 0;
-						// ω-fill-break-after-wrap: opt-in via the
-						// `FillBreakAfterWrap` ctor only. When set, snapshot the
-						// current physical-line count as the line where items[0]
-						// starts; the continuation frame compares it on resume to
-						// detect a self-wrapped item[0] and force the follower to
-						// break. Plain `Fill` / `FillWithRestProbe` pass `-1`
-						// (disabled) so every existing call-site stays byte-
-						// identical. Disabled for force-flat (no breaks possible).
-						final breakAfterWrap: Bool = switch f.doc {
-							case FillBreakAfterWrap(_, _, _): true;
-							case _: false;
-						};
-						if (items.length > 1)
-							stack.push(Frame.fillCont(
-								f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe, f.hardFlat,
-								(breakAfterWrap && !f.forceFlat) ? lineCount : -1
-							));
-						stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
-					}
+				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
+					// Fill family — per-item / all-flat layout, no scalar layout
+					// mutation (reads `lineCount` for the break-after-wrap snapshot,
+					// writes `stack`). Delegated to the static `pushFill`.
+					pushFill(f, stack, lineCount);
 				case CollapseAddProbe(inner):
 					// ω-unwrap-add-ops (inverse CollapsePass): an inner opAddSub
 					// chain's BROKEN shape, reached ONLY when that chain's own
@@ -2459,6 +2407,76 @@ class Renderer {
 				// fork `collapseChainBreaksAfter`) regardless of operator
 				// class. Transparent to every Doc walker.
 				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
+			case _:
+		}
+	}
+
+	/**
+	 * Resolve and push a `Fill` family node (`Fill` / `FillWithRestProbe` /
+	 * `FillBreakAfterWrap`) onto `stack`. Reads `f` and the current physical
+	 * `lineCount` (for the break-after-wrap snapshot); writes only `stack`.
+	 * Extracted verbatim from `render`'s dispatch switch — mutates no scalar
+	 * accumulator (invariant #1).
+	 */
+	private static function pushFill(f: Frame, stack: Array<Frame>, lineCount: Int): Void {
+		switch (f.doc) {
+			case Fill(items, sep, tailReserveOpt) | FillWithRestProbe(items, sep, tailReserveOpt) | FillBreakAfterWrap(
+				items, sep, tailReserveOpt
+			):
+				// Shared arm: identical entry shape for all three ctors. The
+				// rest-probe semantic lives in FillCont resumption (see
+				// top of dispatch loop) — we just tag the FillCont frame
+				// with the originating ctor's `restProbe` flag. The
+				// force-flat / all-flat branches don't care which ctor
+				// produced them — items collapse to a flat sep-joined
+				// emit either way.
+				final restProbe: Bool = switch f.doc {
+					case FillWithRestProbe(_, _, _): true;
+					case _: false;
+				};
+				if (items.length == 0) {
+					// nothing
+				} else if (f.forceFlat || f.mode == MFlat) {
+					// All-flat: items joined by sep flat; reverse-push for
+					// natural left-to-right pop order. Force-flat (slice B)
+					// routes here too — items + sep propagate `forceFlat`
+					// so nested wrap markers inside an item stay collapsed.
+					var k: Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push(new Frame(f.indent, MFlat, items[k], f.forceFlat, f.hardFlat));
+						if (k > 0)
+							stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat, f.hardFlat));
+					}
+				} else {
+					// Per-item fill: push items[0] first, then a FillCont
+					// that resumes for items[1..] once item[0]'s frames
+					// have drained and `col` reflects the post-item[0]
+					// pen position. `tailReserve` (cols of post-Fill
+					// same-line content; default 0) rides the FillCont
+					// frame and tightens the per-item-fit budget on
+					// each subsequent probe — see Fill case at the top
+					// of the dispatch loop.
+					final tailReserve: Int = tailReserveOpt ?? 0;
+					// ω-fill-break-after-wrap: opt-in via the
+					// `FillBreakAfterWrap` ctor only. When set, snapshot the
+					// current physical-line count as the line where items[0]
+					// starts; the continuation frame compares it on resume to
+					// detect a self-wrapped item[0] and force the follower to
+					// break. Plain `Fill` / `FillWithRestProbe` pass `-1`
+					// (disabled) so every existing call-site stays byte-
+					// identical. Disabled for force-flat (no breaks possible).
+					final breakAfterWrap: Bool = switch f.doc {
+						case FillBreakAfterWrap(_, _, _): true;
+						case _: false;
+					};
+					if (items.length > 1)
+						stack.push(Frame.fillCont(
+							f.indent, items, 1, sep, tailReserve, f.forceFlat, restProbe, f.hardFlat,
+							(breakAfterWrap && !f.forceFlat) ? lineCount : -1
+						));
+					stack.push(new Frame(f.indent, MBreak, items[0], f.forceFlat, f.hardFlat));
+				}
 			case _:
 		}
 	}
