@@ -177,6 +177,12 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+typedef PermissiveMetas = {
+	var hasOptional: Bool;
+	var lead: Null<String>;
+	var trail: Null<String>;
+	var sep: Null<String>;
+};
 typedef SelfStatusWalk = {
 	var parseable: Int;
 	var skipParse: Int;
@@ -5230,42 +5236,8 @@ final class Cli {
 			for (key in grouped.order) {
 				final metas: Null<Array<MetaHit>> = grouped.groups[key];
 				if (metas == null) continue;
-				var hasOptional: Bool = false;
-				var lead: Null<String> = null;
-				var trail: Null<String> = null;
-				var sep: Null<String> = null;
-				for (h in metas) switch h.annotation {
-					case '@:optional':
-						hasOptional = true;
-					case '@:lead':
-						lead = h.args.length > 0 ? stripQuotes(h.args[0]) : null;
-					case '@:trail':
-						trail = h.args.length > 0 ? stripQuotes(h.args[0]) : null;
-					case '@:sep':
-						sep = h.args.length > 0 ? h.args[0] : null;
-					case _:
-				}
-				if (hasOptional || lead == null || trail == null || sep != null) continue;
-				final leadStr: String = (lead: String);
-				final trailStr: String = (trail: String);
-				// Skip macro/string delimiters — their @:optional
-				// relaxation isn't the Slice 40 mechanism (interpolation,
-				// string body, etc.).
-				if (leadStr.length != 1 || trailStr.length != 1) continue;
-				if (leadStr == '"' || leadStr == "'") continue;
-				if (leadStr == '$') continue;
-				final first: MetaHit = metas[0];
-				final fspan: Null<Span> = first.declSpan;
-				final pos: Null<Position> = fspan != null ? fspan.lineCol(source) : null;
-				out.push({
-					file: path,
-					line: pos != null ? pos.line : 0,
-					col: pos != null ? pos.col : 0,
-					declKind: first.declKind,
-					declName: first.declName,
-					lead: leadStr,
-					trail: trailStr,
-				});
+				final candidate: Null<PermissiveCandidate> = extractPermissiveCandidate(metas, source, path);
+				if (candidate != null) out.push(candidate);
 			}
 		}
 		return out;
@@ -11698,6 +11670,65 @@ final class Cli {
 			}
 		}
 		return { parseable: parseable, skipParse: skipParse, skipLines: skipLines };
+	}
+
+	/**
+	 * Classify one decl-group's metas as a Slice 40 permissive candidate:
+	 * a non-@:optional single Ref with single-char @:lead + @:trail and no
+	 * @:sep (Star). Macro/string delimiters (quotes, `$`) are excluded.
+	 * Returns null when the group is not a candidate.
+	 */
+	private static function extractPermissiveCandidate(metas: Array<MetaHit>, source: String, path: String): Null<PermissiveCandidate> {
+		final m: PermissiveMetas = readPermissiveMetas(metas);
+		if (m.hasOptional || m.lead == null || m.trail == null || m.sep != null) return null;
+		final leadStr: String = (m.lead: String);
+		final trailStr: String = (m.trail: String);
+		// Skip macro/string delimiters — their @:optional
+		// relaxation isn't the Slice 40 mechanism (interpolation,
+		// string body, etc.).
+		if (leadStr.length != 1 || trailStr.length != 1) return null;
+		if (leadStr == '"' || leadStr == "'") return null;
+		if (leadStr == '$') return null;
+		final first: MetaHit = metas[0];
+		final fspan: Null<Span> = first.declSpan;
+		final pos: Null<Position> = fspan != null ? fspan.lineCol(source) : null;
+		return {
+			file: path,
+			line: pos != null ? pos.line : 0,
+			col: pos != null ? pos.col : 0,
+			declKind: first.declKind,
+			declName: first.declName,
+			lead: leadStr,
+			trail: trailStr,
+		};
+	}
+
+	/**
+	 * Read the @:optional / @:lead / @:trail / @:sep metas off one decl
+	 * group (lead/trail are unquoted, sep kept raw).
+	 */
+	private static function readPermissiveMetas(metas: Array<MetaHit>): PermissiveMetas {
+		var hasOptional: Bool = false;
+		var lead: Null<String> = null;
+		var trail: Null<String> = null;
+		var sep: Null<String> = null;
+		for (h in metas) switch h.annotation {
+			case '@:optional':
+				hasOptional = true;
+			case '@:lead':
+				lead = h.args.length > 0 ? stripQuotes(h.args[0]) : null;
+			case '@:trail':
+				trail = h.args.length > 0 ? stripQuotes(h.args[0]) : null;
+			case '@:sep':
+				sep = h.args.length > 0 ? h.args[0] : null;
+			case _:
+		}
+		return {
+			hasOptional: hasOptional,
+			lead: lead,
+			trail: trail,
+			sep: sep
+		};
 	}
 
 }
