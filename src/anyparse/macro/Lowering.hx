@@ -1861,9 +1861,7 @@ class Lowering {
 	 * set is closed at compile time, so a literal switch is both faster
 	 * and cleaner than an `EReg` alternation.
 	 */
-	private function lowerStringEnumTerminal(
-		typePath: String, simple: String, values: Array<{ name: String, value: String }>
-	): Expr {
+	private function lowerStringEnumTerminal(typePath: String, simple: String, values: Array<{ name: String, value: String }>): Expr {
 		final stringType: Null<String> = formatInfo.stringType;
 		if (stringType == null) {
 			Context.fatalError(
@@ -3650,9 +3648,7 @@ class Lowering {
 		};
 	}
 
-	private function buildTryparseSepLoop(
-		elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
-	): Expr {
+	private function buildTryparseSepLoop(elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr): Expr {
 		// Try-parse with sep peek (Slice 18). After each successful element,
 		// peeks the next non-whitespace char: if it equals the sep, consumes
 		// it and continues; otherwise breaks. On element-parse fail, rewinds

@@ -30,7 +30,10 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 		return switch node.kind {
 			case 'DoubleStringExpr': { quote: '"', content: inner(source, span) };
 			case 'SingleStringExpr': node.children.foreach(c -> c.kind == 'Literal' || c.kind == 'Dollar')
-				? { quote: "'", content: inner(source, span) }
+				? {
+					quote: "'",
+					content: inner(source, span)
+				}
 				: null;
 			case _: null;
 		}

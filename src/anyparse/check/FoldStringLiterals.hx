@@ -125,7 +125,12 @@ final class FoldStringLiterals implements Check {
 		final right: Null<StringLiteral> = folded(node.children[1], source, support);
 		return left == null || right == null
 			? null
-			: left.quote != right.quote ? null : { quote: left.quote, content: left.content + right.content };
+			: left.quote != right.quote
+				? null
+				: {
+					quote: left.quote,
+					content: left.content + right.content
+				};
 	}
 
 	/** Index every concat node by its full `from:to` span key (a left-assoc chain shares `from`). */

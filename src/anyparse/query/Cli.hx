@@ -5102,9 +5102,7 @@ final class Cli {
 			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
 		}
 		if (predictStrip)
-			return runReconPredictStrip(
-				filteredRecords, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource
-			);
+			return runReconPredictStrip(filteredRecords, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource);
 		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
 		return clusterFilter != null
 			? printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource)
@@ -5337,8 +5335,8 @@ final class Cli {
 	 * pattern-typo guard).
 	 */
 	private static function runReconPredictStrip(
-		records: Array<ReconRecord>, plugin: GrammarPlugin, patterns: Array<String>,
-		replacements: Array<String>, compiledRegex: Null<Array<EReg>>, clusterFilter: Null<String>, showSource: Bool
+		records: Array<ReconRecord>, plugin: GrammarPlugin, patterns: Array<String>, replacements: Array<String>,
+		compiledRegex: Null<Array<EReg>>, clusterFilter: Null<String>, showSource: Bool
 	): Int {
 		final regexMode: Bool = compiledRegex != null;
 		final regexes: Array<EReg> = compiledRegex ?? [];

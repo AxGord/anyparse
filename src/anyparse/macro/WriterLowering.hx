@@ -6316,8 +6316,7 @@ class WriterLowering {
 	 * untagged ctors emit `false`.
 	 */
 	private function buildPredicateGatedKind(
-		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false,
-		triviaMultilineExpr: Null<Expr> = null
+		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false, triviaMultilineExpr: Null<Expr> = null
 	): Expr {
 		if (predicateName != 'multiline')
 			Context.fatalError(

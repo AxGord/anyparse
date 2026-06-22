@@ -1201,16 +1201,12 @@ final class HaxeFormat implements TextFormat {
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
-					conditions: [
-						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },
-					],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },],
 				},
 				{
 					mode: WrapMode.FillLine,
 					location: WrappingLocation.BeforeLast,
-					conditions: [
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },
-					],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1275,16 +1271,12 @@ final class HaxeFormat implements TextFormat {
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
-					conditions: [
-						{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },
-					],
+					conditions: [{ cond: WrapConditionType.ItemCountLargerThan, value: 4 },],
 				},
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
-					conditions: [
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },
-					],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,
@@ -1336,9 +1328,7 @@ final class HaxeFormat implements TextFormat {
 				{
 					mode: WrapMode.OnePerLineAfterFirst,
 					location: WrappingLocation.BeforeLast,
-					conditions: [
-						{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },
-					],
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 },],
 				},
 			],
 			defaultMode: WrapMode.NoWrap,

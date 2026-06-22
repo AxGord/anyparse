@@ -1217,7 +1217,8 @@ class Renderer {
 			indent: Int,
 			mode: Mode,
 			forceFlat: Bool
-		}, breakDoc: Doc, flatDoc: Doc, crosses: Bool
+		},
+		breakDoc: Doc, flatDoc: Doc, crosses: Bool
 	): Void {
 		if (node.forceFlat) {
 			stack.push({
