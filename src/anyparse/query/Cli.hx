@@ -177,6 +177,10 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+typedef LintPassResult = {
+	var nextActive: Array<{ file: String, source: String }>;
+	var fixedDelta: Int;
+};
 typedef ReconCurrentParse = {
 	var unwired: Bool;
 	var ok: Bool;
@@ -1210,39 +1214,11 @@ final class Cli {
 				break;
 			}
 			passes++;
-			// Rebuild over the CURRENT (mutated) sources — naming's cross-file
-			// rename consults the index, so it must reflect this pass's input.
-			final index: SymbolIndex = SymbolIndex.build(files, cached);
-			final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, lintConfig);
-			for (v in Linter.run(files, cached, fullScopeChecks, lintConfig)) violations.push(v);
-			final nextActive: Array<{ file: String, source: String }> = [];
-			for (entry in active) {
-				final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
-				if (fileViolations.length == 0) continue;
-				final edits: Array<{ span: Span, text: String }> = [];
-				for (check in checks) {
-					final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
-					if (own.length == 0) continue;
-					for (edit in check.fix(entry.source, own, cached, index)) edits.push(edit);
-				}
-				final disjoint: Array<{ span: Span, text: String }> = RefactorSupport.dropContainedEdits(edits);
-				if (disjoint.length == 0) continue;
-				switch RefactorSupport.canonicalize(entry.source, disjoint, false, cached, optsByFile[entry.file]) {
-					case Ok(text):
-						if (text != entry.source) {
-							entry.source = text;
-							if (!changedFiles.contains(entry.file)) changedFiles.push(entry.file);
-							fixedCount += disjoint.length;
-							nextActive.push(entry);
-						}
-					case Err(message):
-						if (passes == 1 && !noted.contains(entry.file)) {
-							stderr('apq lint --fix: ${entry.file}: $message\n');
-							noted.push(entry.file);
-						}
-				}
-			}
-			active = nextActive;
+			final pass: LintPassResult = applyLintPass(
+				active, files, cached, activeScopeChecks, fullScopeChecks, checks, lintConfig, optsByFile, passes, noted, changedFiles
+			);
+			fixedCount += pass.fixedDelta;
+			active = pass.nextActive;
 		}
 
 		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
@@ -11624,6 +11600,65 @@ final class Cli {
 		} else if (!combinedOk && baselineOk) {
 			sysPrint('VERDICT no-op — baseline already parses; the strip diagnostic does not apply.\n');
 		}
+	}
+
+	/**
+	 * Run one --fix pass: rebuild the SymbolIndex over the current (mutated)
+	 * sources, lint the active subset (active-scope checks) plus the full
+	 * set (cross-file checks), then per active file collect + canonicalize
+	 * its fixes. Returns the files changed this pass (eligible next pass)
+	 * and the count of edits applied. Mutates `changedFiles` / `noted`.
+	 */
+	private static function applyLintPass(
+		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: GrammarPlugin,
+		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, lintConfig: LintConfig,
+		optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>
+	): LintPassResult {
+		// Rebuild over the CURRENT (mutated) sources — naming's cross-file
+		// rename consults the index, so it must reflect this pass's input.
+		final index: SymbolIndex = SymbolIndex.build(files, cached);
+		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, lintConfig);
+		for (v in Linter.run(files, cached, fullScopeChecks, lintConfig)) violations.push(v);
+		final nextActive: Array<{ file: String, source: String }> = [];
+		var fixedDelta: Int = 0;
+		for (entry in active) {
+			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
+			if (fileViolations.length == 0) continue;
+			final disjoint: Array<{ span: Span, text: String }> = computeFileLintEdits(entry.source, fileViolations, checks, cached, index);
+			if (disjoint.length == 0) continue;
+			switch RefactorSupport.canonicalize(entry.source, disjoint, false, cached, optsByFile[entry.file]) {
+				case Ok(text):
+					if (text != entry.source) {
+						entry.source = text;
+						if (!changedFiles.contains(entry.file)) changedFiles.push(entry.file);
+						fixedDelta += disjoint.length;
+						nextActive.push(entry);
+					}
+				case Err(message):
+					if (passes == 1 && !noted.contains(entry.file)) {
+						stderr('apq lint --fix: ${entry.file}: $message\n');
+						noted.push(entry.file);
+					}
+			}
+		}
+		return { nextActive: nextActive, fixedDelta: fixedDelta };
+	}
+
+	/**
+	 * Collect every check's fix edits for one file's violations and drop the
+	 * contained (overlapping) ones, returning a disjoint edit set ready for
+	 * canonicalization.
+	 */
+	private static function computeFileLintEdits(
+		source: String, fileViolations: Array<Violation>, checks: Array<Check>, cached: GrammarPlugin, index: SymbolIndex
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (check in checks) {
+			final own: Array<Violation> = fileViolations.filter(v -> v.rule == check.id());
+			if (own.length == 0) continue;
+			for (edit in check.fix(source, own, cached, index)) edits.push(edit);
+		}
+		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 }
