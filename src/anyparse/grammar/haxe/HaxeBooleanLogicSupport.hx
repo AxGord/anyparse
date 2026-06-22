@@ -9,7 +9,7 @@ import anyparse.runtime.Span;
  * an equivalent boolean expression. The four mixed forms collapse via
  * short-circuit `&&` / `||` (`cond ? true : x` -> `cond || x`, `cond ? false : x`
  * -> `!cond && x`, `cond ? x : true` -> `!cond || x`, `cond ? x : false` ->
- * `cond && x`), and the two pure-literal forms collapse to `cond` / `!cond`.
+ * `cond && x`), and the two pure-literal forms collapse to `cond` / `!cond`. A mixed form reduces only when its non-literal branch is a provably non-null `Bool` (a boolean-operator result); a `null` literal, bare identifier or call/field branch is left alone.
  *
  * Any negation is pushed inward by De Morgan — `!(a == null || b == null)`
  * becomes `a != null && b != null`, not `!(a == null || b == null)` — so the
@@ -32,6 +32,8 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	private static inline final PREC_TERNARY: Int = 10;
 	private static inline final PREC_ASSIGN: Int = 5;
 
+	private static final BOOL_OP_KINDS: Array<String> = ['Or', 'And', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Not'];
+
 	public function new() {}
 
 	public function simplifyBooleanTernary(ternary: QueryNode, source: String): Null<String> {
@@ -41,17 +43,22 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		final elseNode: QueryNode = ternary.children[2];
 		final thenBool: Null<Bool> = boolValue(thenNode, source);
 		final elseBool: Null<Bool> = boolValue(elseNode, source);
-		return thenBool == null && elseBool == null
-			? null
-			: thenBool != null && elseBool != null
-				? thenBool && !elseBool ? plain(cond, source).src : !thenBool && elseBool ? negate(cond, source).src : null
-				: thenBool != null
-					? thenBool
-						? joinOr(plain(cond, source), plain(elseNode, source))
-						: joinAnd(negate(cond, source), plain(elseNode, source))
-					: elseBool == true
-						? joinOr(negate(cond, source), plain(thenNode, source))
-						: joinAnd(plain(cond, source), plain(thenNode, source));
+		if (thenBool == null && elseBool == null) return null;
+		if (thenBool != null && elseBool != null)
+			return thenBool && !elseBool ? plain(cond, source).src : !thenBool && elseBool ? negate(cond, source).src : null;
+		// Exactly one branch is a boolean literal; the other becomes an operand of
+		// `&&` / `||`. That reduction is sound only when the non-literal branch is a
+		// non-null `Bool` — a boolean-operator result. A `null` literal, a bare
+		// identifier (possibly a `Null<Bool>` local) or a call / field access would
+		// change meaning AND fail `@:nullSafety(Strict)` (`cond || null`), so the
+		// ternary is left alone — mirroring `ComparisonToBoolean`'s `provablyBool` gate.
+		final other: QueryNode = thenBool != null ? elseNode : thenNode;
+		if (!provablyBool(other)) return null;
+		return thenBool != null
+			? thenBool ? joinOr(plain(cond, source), plain(elseNode, source)) : joinAnd(negate(cond, source), plain(elseNode, source))
+			: elseBool == true
+				? joinOr(negate(cond, source), plain(thenNode, source))
+				: joinAnd(plain(cond, source), plain(thenNode, source));
 	}
 
 	/** `node`'s boolean-literal value, or null when it is not a `true` / `false` literal. */
@@ -157,6 +164,19 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	private static inline function src(node: QueryNode, source: String): String {
 		final span: Null<Span> = node.span;
 		return span == null ? '' : StringTools.trim(source.substring(span.from, span.to));
+	}
+
+	/**
+	 * Whether `node` is a provably non-null `Bool`: a boolean-operator result
+	 * (`&&` / `||` / `!` / a comparison), parentheses unwrapped. Such a node can
+	 * never be `Null<Bool>`, so joining it with `&&` / `||` is sound under strict
+	 * null-safety. A boolean literal, a bare identifier, a field access or a call is
+	 * not provable without types and is left alone.
+	 */
+	private static function provablyBool(node: QueryNode): Bool {
+		var n: QueryNode = node;
+		while (n.kind == 'ParenExpr' && n.children.length == 1) n = n.children[0];
+		return BOOL_OP_KINDS.contains(n.kind);
 	}
 
 }

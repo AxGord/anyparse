@@ -41,7 +41,7 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 
 	public function testDeMorganAndCondition(): Void {
 		// !(a && b) -> !a || !b ; wrapped because `||` binds looser than the joining `&&`.
-		Assert.equals('(!a || !b) && c', simplifyOf('return a && b ? false : c;'));
+		Assert.equals('(!a || !b) && x > 0', simplifyOf('return a && b ? false : x > 0;'));
 	}
 
 	public function testPureTrueFalseToCond(): Void {
@@ -118,6 +118,23 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	/** Index-access reuse guards the ternary form too. */
 	public function testIndexAccessGuardNotSimplified(): Void {
 		Assert.equals("", simplifyOf("return c != null && c[0] > 0 ? true : x > 0;"));
+	}
+
+	/** A `null` branch makes the ternary `Null<Bool>`, not a boolean expression — left alone. */
+	public function testTrueNullNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return p ? true : null;'));
+		Assert.equals(0, violations('return p ? true : null;').length);
+	}
+
+	/** Same for a `false` / `null` ternary — the `null` branch is not provably Bool. */
+	public function testFalseNullNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return p ? false : null;'));
+	}
+
+	/** A bare-identifier branch may be a `Null<Bool>` local — not provably Bool, so left alone. */
+	public function testBareIdentBranchNotSimplified(): Void {
+		Assert.equals('', simplifyOf('return p ? true : c;'));
+		Assert.equals(0, violations('return p ? true : c;').length);
 	}
 
 }
