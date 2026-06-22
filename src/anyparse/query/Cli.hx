@@ -2002,66 +2002,23 @@ final class Cli {
 	 * an unparseable result, exits non-zero with the file untouched.
 	 */
 	private static function runReplaceNode(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var selectExpr: Null<String> = null;
-		var atSpec: Null<String> = null;
-		var kind: Null<String> = null;
-		var withDoc: Bool = false;
-		var file: Null<String> = null;
-		var newSource: Null<String> = null;
-		var fromFile: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
-				case '--at':
-					atSpec = expectValue(args, ++i, '--at');
-				case '--kind':
-					kind = expectValue(args, ++i, '--kind');
-				case '--with-doc':
-					withDoc = true;
-				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
-				case '--write':
-					write = true;
-				case '--reformat':
-					reformat = true;
-				case '-h', '--help':
-					printReplaceNodeUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq replace-node: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (newSource == null)
-						newSource = a;
-					else {
-						stderr('apq replace-node: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (fromFile != null || newSource == '-') {
-			final resolved: Null<String> = resolveCodeArg('replace-node', newSource, fromFile, true);
+		final o: ReplaceNodeOpts = parseReplaceNodeArgs(args);
+		if (o.errExit != null) return o.errExit;
+		var newSource: Null<String> = o.newSource;
+		if (o.fromFile != null || newSource == '-') {
+			final resolved: Null<String> = resolveCodeArg('replace-node', newSource, o.fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			newSource = resolved;
 		}
+		final file: Null<String> = o.file;
 		if (file == null || newSource == null) {
 			stderr('apq replace-node: expected <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -)\n');
 			printReplaceNodeUsage();
 			return EXIT_USAGE;
 		}
+		final selectExpr: Null<String> = o.selectExpr;
+		final atSpec: Null<String> = o.atSpec;
+		final kind: Null<String> = o.kind;
 		// Exactly one of --select / --at must be given.
 		if ((selectExpr == null) == (atSpec == null)) {
 			stderr('apq replace-node: provide exactly one of --select <sel> or --at <line>:<col>\n');
@@ -2096,10 +2053,10 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		return finishEdit(
-			'replace-node', filePath, write, ReplaceNode.replaceNode(source, target, newSrc, reformat, plugin, withDoc, optsJson)
+			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson)
 		);
 	}
 
@@ -12078,6 +12035,88 @@ final class Cli {
 		};
 	}
 
+	private static inline function replaceNodeParseExit(code: Int): ReplaceNodeOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			selectExpr: null,
+			atSpec: null,
+			kind: null,
+			withDoc: false,
+			file: null,
+			newSource: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static function parseReplaceNodeArgs(args: Array<String>): ReplaceNodeOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var selectExpr: Null<String> = null;
+		var atSpec: Null<String> = null;
+		var kind: Null<String> = null;
+		var withDoc: Bool = false;
+		var file: Null<String> = null;
+		var newSource: Null<String> = null;
+		var fromFile: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					atSpec = expectValue(args, ++i, '--at');
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--with-doc':
+					withDoc = true;
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printReplaceNodeUsage();
+					return replaceNodeParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq replace-node: unknown option "$a"\n');
+						return replaceNodeParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (newSource == null)
+						newSource = a;
+					else {
+						stderr('apq replace-node: unexpected extra argument "$a"\n');
+						return replaceNodeParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			selectExpr: selectExpr,
+			atSpec: atSpec,
+			kind: kind,
+			withDoc: withDoc,
+			file: file,
+			newSource: newSource,
+			fromFile: fromFile,
+			errExit: null
+		};
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12345,6 +12384,22 @@ typedef SetCommentOpts = {
 	var file: Null<String>;
 	var pos: Null<String>;
 	var commentText: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef ReplaceNodeOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var selectExpr: Null<String>;
+	var atSpec: Null<String>;
+	var kind: Null<String>;
+	var withDoc: Bool;
+	var file: Null<String>;
+	var newSource: Null<String>;
+	var fromFile: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
