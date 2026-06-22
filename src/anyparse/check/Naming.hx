@@ -92,25 +92,8 @@ final class Naming implements Check {
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
-			final span: Null<Span> = decl.span;
-			if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index)) continue;
-			final rule: Null<NamingRule> = applicableRule(decl, policy);
-			if (rule == null) continue;
-			final normalize: Null<String -> Null<String>> = rule.normalize;
-			if (normalize == null) continue;
-			final newName: Null<String> = normalize(decl.name);
-			if (newName == null || newName == decl.name || !rule.format.match(newName)) continue;
-			final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
-			if (occurrences.length == 0) continue;
-			// Completeness: the scope resolver can miss a bare field reference (a
-			// field's decl-node span and its reference binding can disagree), so a
-			// rename not covering every textual occurrence of the name would leave a
-			// dangling reference — bail rather than emit a broken rename.
-			if (
-				decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
-			) continue;
-			final finalName: String = newName;
-			for (occ in occurrences) edits.push({ span: occ, text: finalName });
+			final rename: Null<RenameEdits> = renameEditsFor(decl, source, tree, policy, shape, flaggedFroms, index);
+			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
 		}
 		return edits;
 	}
@@ -169,4 +152,44 @@ final class Naming implements Check {
 	 * `this`? Such an `other.<name>` is the one in-file access the scope resolver
 	 * (hence `Rename.renameOccurrences`) misses, making a single-file rename incomplete.
 	 */
+	/**
+	 * The rename to apply to one projected declaration, or null when it must be
+	 * skipped: not among the flagged spans, not rename-safe, no applicable rule
+	 * with a normalizer, already conformant, or — for a field whose textual
+	 * occurrences the scope resolver does not fully cover — incompletely
+	 * renameable (bailed to avoid a dangling reference). When non-null, every
+	 * returned occurrence span is rewritten to `name`.
+	 */
+	private static function renameEditsFor(
+		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, flaggedFroms: Array<Int>,
+		?index: SymbolIndex
+	): Null<RenameEdits> {
+		final span: Null<Span> = decl.span;
+		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index)) return null;
+		final rule: Null<NamingRule> = applicableRule(decl, policy);
+		if (rule == null) return null;
+		final normalize: Null<String -> Null<String>> = rule.normalize;
+		if (normalize == null) return null;
+		final newName: Null<String> = normalize(decl.name);
+		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
+		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
+		if (occurrences.length == 0) return null;
+		// Completeness: the scope resolver can miss a bare field reference (a
+		// field's decl-node span and its reference binding can disagree), so a
+		// rename not covering every textual occurrence of the name would leave a
+		// dangling reference — bail rather than emit a broken rename.
+		if (decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences))
+			return null;
+		return { occurrences: occurrences, name: newName };
+	}
+
 }
+
+/**
+ * A computed rename for one declaration: every span to rewrite and the new
+ * identifier to write at each.
+ */
+private typedef RenameEdits = {
+	final occurrences: Array<Span>;
+	final name: String;
+};
