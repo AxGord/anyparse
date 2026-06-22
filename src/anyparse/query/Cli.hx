@@ -4905,74 +4905,14 @@ final class Cli {
 				return EXIT_RUNTIME;
 			}
 		}
-		// `--no-target-cluster`: drill into one bucket of the footer NO TARGET
-		// breakdown. We must classify every record through `tryPredictRelax`
-		// first (the bucket key lives on the result, not on the raw record),
-		// so the filter runs after classification. Top-N reasons collected
-		// alongside for the 0-match diagnostic.
-		if (noTargetClusterFilter != null) {
-			final filter: String = noTargetClusterFilter;
-			final matched: Array<{ record: ReconRecord, result: PredictRelaxResult }> = [];
-			final noTargetReasonsTop: Array<{ key: String, count: Int }> = [];
-			for (r in records) {
-				final res: PredictRelaxResult = tryPredictRelax(plugin, r.source);
-				if (res.kind != NoTarget) continue;
-				bumpReasonCount(noTargetReasonsTop, res.message);
-				if (res.message == filter) matched.push({ record: r, result: res });
-			}
-			if (matched.length == 0) {
-				stderr('apq recon: --no-target-cluster "$filter" matched no NO TARGET records (predict-relax mode)\n');
-				if (noTargetReasonsTop.length > 0) {
-					noTargetReasonsTop.sort((a, b) -> b.count - a.count);
-					final maxKeys: Int = noTargetReasonsTop.length < NO_TARGET_TOP_N ? noTargetReasonsTop.length : NO_TARGET_TOP_N;
-					stderr('  available NO TARGET keys (top $maxKeys):\n');
-					for (entry in noTargetReasonsTop.slice(0, NO_TARGET_TOP_N)) stderr('    ${entry.count}× ${entry.key}\n');
-				}
-				return EXIT_RUNTIME;
-			}
-			for (m in matched) reportPredictRelax(m.record.path, m.record.source, m.result, showSource);
-			sysPrint('--- relax (no-target-cluster "$filter"): ${matched.length} files ---\n');
-			return EXIT_OK;
-		}
-		var unblockCount: Int = 0;
-		var stillFailCount: Int = 0;
-		var noTargetCount: Int = 0;
+		if (noTargetClusterFilter != null) return runReconRelaxNoTargetCluster(plugin, records, noTargetClusterFilter, showSource);
 		// Cluster scope (`--cluster <key>`) means the user already narrowed
 		// to a handful of fixtures and likely wants per-file NO TARGET lines
 		// for inspection. Full-sweep scope dumps tens of NO TARGET lines that
 		// are mostly cond-comp `//` catch-all noise — collapse those by
 		// `expected` message into a footer histogram, keep UNBLOCK / STILL
 		// FAIL per-file (low count, actionable).
-		final keepNoTargetPerFile: Bool = clusterFilter != null;
-		final noTargetReasons: Array<{ key: String, count: Int }> = [];
-		for (r in records) {
-			final res: PredictRelaxResult = tryPredictRelax(plugin, r.source);
-			switch res.kind {
-				case Unblock:
-					reportPredictRelax(r.path, r.source, res, showSource);
-					unblockCount++;
-				case StillFail:
-					reportPredictRelax(r.path, r.source, res, showSource);
-					stillFailCount++;
-				case NoTarget:
-					if (keepNoTargetPerFile)
-						reportPredictRelax(r.path, r.source, res, showSource);
-					else
-						bumpReasonCount(noTargetReasons, res.message);
-					noTargetCount++;
-			}
-		}
-		sysPrint(
-			'--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length} skip-parse files) ---\n'
-		);
-		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
-			noTargetReasons.sort((a, b) -> b.count - a.count);
-			sysPrint(
-				'   no target breakdown (use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n'
-			);
-			for (entry in noTargetReasons) sysPrint('     ${entry.count}× ${entry.key}\n');
-		}
-		return EXIT_OK;
+		return runReconRelaxFullSweep(plugin, records, clusterFilter != null, showSource);
 	}
 
 	/**
@@ -11532,6 +11472,82 @@ final class Cli {
 			stderr('apq lint: $errors error(s), $warnings warning(s), $infos info(s) in ${paths.length} file(s)\n');
 			if (!includeInfo && infos > 0) stderr('apq lint: $infos info advisory(ies) hidden — pass --all to show\n');
 		}
+	}
+
+	/**
+	 * `--no-target-cluster`: drill into one bucket of the footer NO TARGET
+	 * breakdown. We must classify every record through `tryPredictRelax`
+	 * first (the bucket key lives on the result, not on the raw record),
+	 * so the filter runs after classification. Top-N reasons collected
+	 * alongside for the 0-match diagnostic.
+	 */
+	private static function runReconRelaxNoTargetCluster(
+		plugin: GrammarPlugin, records: Array<ReconRecord>, filter: String, showSource: Bool
+	): Int {
+		final matched: Array<{ record: ReconRecord, result: PredictRelaxResult }> = [];
+		final noTargetReasonsTop: Array<{ key: String, count: Int }> = [];
+		for (r in records) {
+			final res: PredictRelaxResult = tryPredictRelax(plugin, r.source);
+			if (res.kind != NoTarget) continue;
+			bumpReasonCount(noTargetReasonsTop, res.message);
+			if (res.message == filter) matched.push({ record: r, result: res });
+		}
+		if (matched.length == 0) {
+			stderr('apq recon: --no-target-cluster "$filter" matched no NO TARGET records (predict-relax mode)\n');
+			if (noTargetReasonsTop.length > 0) {
+				noTargetReasonsTop.sort((a, b) -> b.count - a.count);
+				final maxKeys: Int = noTargetReasonsTop.length < NO_TARGET_TOP_N ? noTargetReasonsTop.length : NO_TARGET_TOP_N;
+				stderr('  available NO TARGET keys (top $maxKeys):\n');
+				for (entry in noTargetReasonsTop.slice(0, NO_TARGET_TOP_N)) stderr('    ${entry.count}× ${entry.key}\n');
+			}
+			return EXIT_RUNTIME;
+		}
+		for (m in matched) reportPredictRelax(m.record.path, m.record.source, m.result, showSource);
+		sysPrint('--- relax (no-target-cluster "$filter"): ${matched.length} files ---\n');
+		return EXIT_OK;
+	}
+
+	/**
+	 * Full predict-relax sweep over the records: classify each via
+	 * `tryPredictRelax`, report UNBLOCK / STILL FAIL per file, and either
+	 * keep NO TARGET per-file (cluster scope) or collapse it into a footer
+	 * histogram by `expected` message (full-sweep scope).
+	 */
+	private static function runReconRelaxFullSweep(
+		plugin: GrammarPlugin, records: Array<ReconRecord>, keepNoTargetPerFile: Bool, showSource: Bool
+	): Int {
+		var unblockCount: Int = 0;
+		var stillFailCount: Int = 0;
+		var noTargetCount: Int = 0;
+		final noTargetReasons: Array<{ key: String, count: Int }> = [];
+		for (r in records) {
+			final res: PredictRelaxResult = tryPredictRelax(plugin, r.source);
+			switch res.kind {
+				case Unblock:
+					reportPredictRelax(r.path, r.source, res, showSource);
+					unblockCount++;
+				case StillFail:
+					reportPredictRelax(r.path, r.source, res, showSource);
+					stillFailCount++;
+				case NoTarget:
+					if (keepNoTargetPerFile)
+						reportPredictRelax(r.path, r.source, res, showSource);
+					else
+						bumpReasonCount(noTargetReasons, res.message);
+					noTargetCount++;
+			}
+		}
+		sysPrint(
+			'--- relax: $unblockCount unblock, $stillFailCount still fail, $noTargetCount no target (of ${records.length} skip-parse files) ---\n'
+		);
+		if (!keepNoTargetPerFile && noTargetReasons.length > 0) {
+			noTargetReasons.sort((a, b) -> b.count - a.count);
+			sysPrint(
+				'   no target breakdown (use --no-target-cluster <key> to drill into a specific shape, or --cluster <locus-key> for forward-locus drill):\n'
+			);
+			for (entry in noTargetReasons) sysPrint('     ${entry.count}× ${entry.key}\n');
+		}
+		return EXIT_OK;
 	}
 
 }
