@@ -177,6 +177,19 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+typedef ReconCurrentParse = {
+	var unwired: Bool;
+	var ok: Bool;
+	var line: Int;
+	var col: Int;
+	var msg: String;
+};
+typedef ReconRegressionResult = {
+	var regressed: Int;
+	var unblocked: Int;
+	var scanned: Int;
+	var unwired: Bool;
+};
 
 /**
  * One trail-opt gate annotation hit surfaced by `apq gates`. `line`/`col`
@@ -5485,65 +5498,15 @@ final class Cli {
 			);
 			return EXIT_OK;
 		}
-		// Walk the current corpus and bucket each fixture as
-		// PARSE_OK or SKIP_PARSE. Reused machinery from `collectReconSkipRecords`
-		// — but we also need the OK list (which `collectReconSkipRecords`
-		// drops), so walk again with a simpler shape.
-		var regressed: Int = 0;
-		var unblocked: Int = 0;
-		var scanned: Int = 0;
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path)) {
-					stack.push(path);
-					continue;
-				}
-				if (!StringTools.endsWith(name, '.hxtest')) continue;
-				final relPath: String = stripRootPrefix(path, root);
-				final priorStatus: Null<String> = prior[relPath];
-				if (priorStatus == null) continue; // present locally but absent from snapshot — silent
-				scanned++;
-				final source: String = readSourceForParse(path);
-				var currentParseOk: Bool = false;
-				var currentLine: Int = 0;
-				var currentCol: Int = 0;
-				var currentMsg: String = '';
-				try {
-					if (!plugin.reconParse(source)) {
-						stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-						return EXIT_RUNTIME;
-					}
-					currentParseOk = true;
-				} catch (exception: ParseError) {
-					final pos: Position = exception.span.lineCol(source);
-					currentLine = pos.line;
-					currentCol = pos.col;
-					currentMsg = reconNormalize(exception.expected);
-				} catch (exception: Exception) {
-					currentMsg = reconNormalize(exception.message);
-				}
-				final priorParsed: Bool = priorStatus == 'PASS' || priorStatus == 'FAIL' || priorStatus == 'SKIP_WRITE';
-				final priorSkipParse: Bool = priorStatus == 'SKIP_PARSE';
-				if (priorParsed && !currentParseOk) {
-					regressed++;
-					final locus: String = currentLine > 0 ? ' :: $currentLine:$currentCol expected="$currentMsg"' : ' :: $currentMsg';
-					sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
-				} else if (priorSkipParse && currentParseOk) {
-					unblocked++;
-					sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
-				}
-				// SKIP_CONFIG / MALFORMED in prior: orthogonal to grammar; silent.
-				// No flip: silent.
-			}
+		final walk: ReconRegressionResult = walkReconRegression(plugin, root, prior);
+		if (walk.unwired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
 		}
-		sysPrint('--- regression-probe: $regressed regressed, $unblocked unblocked, $scanned scanned vs snapshot ---\n');
-		return regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
+		sysPrint(
+			'--- regression-probe: ${walk.regressed} regressed, ${walk.unblocked} unblocked, ${walk.scanned} scanned vs snapshot ---\n'
+		);
+		return walk.regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
 	/**
@@ -11548,6 +11511,106 @@ final class Cli {
 			for (entry in noTargetReasons) sysPrint('     ${entry.count}× ${entry.key}\n');
 		}
 		return EXIT_OK;
+	}
+
+	/**
+	 * Walk the current corpus and diff each fixture's parse status against
+	 * the prior snapshot, printing REGRESSED / UNBLOCKED flips. Reuses the
+	 * recursive-stack walk of `collectReconSkipRecords` but keeps the OK
+	 * list too (which that helper drops). `unwired` aborts the caller.
+	 */
+	private static function walkReconRegression(plugin: GrammarPlugin, root: String, prior: Map<String, String>): ReconRegressionResult {
+		var regressed: Int = 0;
+		var unblocked: Int = 0;
+		var scanned: Int = 0;
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			final names: Array<String> = FileSystem.readDirectory(dir);
+			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (name in names) {
+				final path: String = '$dir/$name';
+				if (FileSystem.isDirectory(path)) {
+					stack.push(path);
+					continue;
+				}
+				if (!StringTools.endsWith(name, '.hxtest')) continue;
+				final relPath: String = stripRootPrefix(path, root);
+				final priorStatus: Null<String> = prior[relPath];
+				if (priorStatus == null) continue; // present locally but absent from snapshot — silent
+				scanned++;
+				final source: String = readSourceForParse(path);
+				final current: ReconCurrentParse = reconRegressionParse(plugin, source);
+				if (current.unwired) return {
+					regressed: regressed,
+					unblocked: unblocked,
+					scanned: scanned,
+					unwired: true
+				};
+				final priorParsed: Bool = priorStatus == 'PASS' || priorStatus == 'FAIL' || priorStatus == 'SKIP_WRITE';
+				final priorSkipParse: Bool = priorStatus == 'SKIP_PARSE';
+				if (priorParsed && !current.ok) {
+					regressed++;
+					final locus: String = current.line > 0
+						? ' :: ${current.line}:${current.col} expected="${current.msg}"'
+						: ' :: ${current.msg}';
+					sysPrint('REGRESSED $relPath: was $priorStatus, now SKIP_PARSE$locus\n');
+				} else if (priorSkipParse && current.ok) {
+					unblocked++;
+					sysPrint('UNBLOCKED $relPath: was SKIP_PARSE, now parses OK\n');
+				}
+				// SKIP_CONFIG / MALFORMED in prior: orthogonal to grammar; silent.
+				// No flip: silent.
+			}
+		}
+		return {
+			regressed: regressed,
+			unblocked: unblocked,
+			scanned: scanned,
+			unwired: false
+		};
+	}
+
+	/**
+	 * Parse one fixture's source under the recon parser. `unwired` flags a
+	 * grammar plugin with no recon parser; otherwise `ok` plus the failure
+	 * locus (line/col/msg) when the parse threw.
+	 */
+	private static function reconRegressionParse(plugin: GrammarPlugin, source: String): ReconCurrentParse {
+		try {
+			if (!plugin.reconParse(source)) return {
+				unwired: true,
+				ok: false,
+				line: 0,
+				col: 0,
+				msg: ''
+			};
+			return {
+				unwired: false,
+				ok: true,
+				line: 0,
+				col: 0,
+				msg: ''
+			};
+		} catch (exception: ParseError) {
+			final pos: Position = exception.span.lineCol(source);
+			return {
+				unwired: false,
+				ok: false,
+				line: pos.line,
+				col: pos.col,
+				msg: reconNormalize(exception.expected)
+			};
+		} catch (exception: Exception) {
+			return {
+				unwired: false,
+				ok: false,
+				line: 0,
+				col: 0,
+				msg: reconNormalize(exception.message)
+			};
+		}
 	}
 
 }
