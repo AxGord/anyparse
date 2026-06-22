@@ -6,6 +6,7 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import haxe.Exception;
+import anyparse.query.SymbolIndex;
 
 /**
  * The Haxe grammar's `NamingSupport`: projects the named declarations the
@@ -149,7 +150,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: categoryValue,
 				mods: declMods,
 				enclosingType: enclosingType,
-				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent)
+				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods)
 			});
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
@@ -217,10 +218,16 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `(get, set)` property), or an annotation-bearing member a framework / macro
 	 * may reach. Non-members are never implicitly reachable.
 	 */
-	private static function isImplicitlyReachable(category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>): Bool {
-		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant) && (
-			name == 'new' || (StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent))
-		);
+	private static function isImplicitlyReachable(
+		category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>, mods: Array<String>
+	): Bool {
+		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return false;
+		if (name == 'new' || StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent))
+			return true;
+		// A macro-force field — `static final _x: Class<Marker> = Marker;` — exists
+		// only to reference a `@:build` marker class so its `Context.defineModule`
+		// synth runs; never read by name but load-bearing (deleting it breaks the build).
+		return node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node);
 	}
 
 	/**
@@ -237,6 +244,50 @@ final class HaxeNamingSupport implements NamingSupport {
 			if (kind == 'Meta') return true;
 			if (!MOD_KIND_TO_NAME.exists(kind)) break;
 			i--;
+		}
+		return false;
+	}
+
+	/** A method name utest's `@:autoBuild` collects: a `test*` / `spec*` test or a `setup*` / `teardown*` fixture. */
+	private static function isUtestMethodName(name: String): Bool {
+		return StringTools.startsWith(name, 'test') || StringTools.startsWith(name, 'spec') || StringTools.startsWith(name, 'setup')
+			|| StringTools.startsWith(name, 'teardown');
+	}
+
+	/** Whether `member`'s initializer is a bare PascalCase type reference (`= SomeType`) — the macro-force anchor shape. */
+	private static function isTypeReferenceInit(member: QueryNode): Bool {
+		final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
+		if (init == null || init.kind != 'IdentExpr') return false;
+		final n: Null<String> = init.name;
+		if (n == null || n.length == 0) return false;
+		final c: Int = StringTools.fastCodeAt(n, 0);
+		return c >= 'A'.code && c <= 'Z'.code;
+	}
+
+	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool {
+		if (decl.category != NamingCategory.Method) return false;
+		final owner: Null<String> = decl.enclosingType;
+		return owner != null && isUtestMethodName(decl.name) && transitivelyExtendsTest(owner, index);
+	}
+
+	/**
+	 * Whether `typeName` transitively extends a `Test` base (utest), via BFS over the
+	 * index's per-type direct-supertype names (`extends utest.Test` is indexed as the
+	 * simple name `Test`). Resolves the intermediate-base case a single tree cannot.
+	 */
+	private static function transitivelyExtendsTest(typeName: String, index: SymbolIndex): Bool {
+		final superMap: Map<String, Array<String>> = [];
+		for (f in index.allFiles()) for (t in f.types) superMap[t.name] = t.supertypes;
+		final seen: Array<String> = [typeName];
+		var i: Int = 0;
+		while (i < seen.length) {
+			final supers: Null<Array<String>> = superMap[seen[i]];
+			i++;
+			if (supers == null) continue;
+			for (s in supers) {
+				if (s == 'Test') return true;
+				if (!seen.contains(s)) seen.push(s);
+			}
 		}
 		return false;
 	}

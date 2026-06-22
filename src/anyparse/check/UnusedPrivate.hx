@@ -38,7 +38,7 @@ import haxe.Exception;
  * not by name), and annotation-bearing members (`@:keep`, abstract `@:from` /
  * `@:op`, ...) can be used without an in-source identifier reference. The
  * grammar marks these via `NamedDecl.implicitlyReachable`; the check never flags
- * them — a missed dead member, never a deleted live one.
+ * them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitlyReachable`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
  *
  * ## Autofix
  *
@@ -71,7 +71,7 @@ final class UnusedPrivate implements Check {
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) continue;
 			for (decl in support.project(tree)) {
-				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index);
+				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, support);
 				if (v != null) violations.push(v);
 			}
 		}
@@ -115,10 +115,12 @@ final class UnusedPrivate implements Check {
 	 * (types / locals / params), implicitly-reachable members, and any member
 	 * whose enclosing type the index cannot prove confined.
 	 */
-	private static function violationFor(file: String, source: String, decl: NamedDecl, index: SymbolIndex): Null<Violation> {
+	private static function violationFor(
+		file: String, source: String, decl: NamedDecl, index: SymbolIndex, support: NamingSupport
+	): Null<Violation> {
 		final category: NamingCategory = decl.category;
 		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
-		if (decl.mods.contains('public') || decl.implicitlyReachable == true) return null;
+		if (decl.mods.contains('public') || decl.implicitlyReachable == true || support.frameworkReachable(decl, index)) return null;
 		final owner: Null<String> = decl.enclosingType;
 		final span: Null<Span> = decl.span;
 		return owner == null || span == null

@@ -101,4 +101,12 @@ interface NamingSupport {
 	 */
 	public function policyFor(path: String): NamingPolicy;
 
+	/**
+	 * Whether `decl` is reachable through a framework or macro rather than an
+	 * in-source reference, given the cross-file `index` (e.g. a utest `test*` method
+	 * whose class transitively extends `Test`). Distinct from the per-decl,
+	 * index-free `NamedDecl.implicitlyReachable`.
+	 */
+	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool;
+
 }

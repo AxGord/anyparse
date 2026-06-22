@@ -148,4 +148,34 @@ class UnusedPrivateCheckTest extends Test {
 		}
 	}
 
+	/** A utest test method (`test*`) is invoked by utest's macro, not by an in-source reference — not flagged. */
+	public function testUtestMethodNotFlagged(): Void {
+		Assert.equals(0, one('class C extends Test {\n\tfunction testX() {}\n}').length);
+	}
+
+	/** A non-test-named private helper in a Test subclass is still flagged (the name gate). */
+	public function testNonTestHelperInTestClassFlagged(): Void {
+		Assert.equals(1, one('class C extends Test {\n\tprivate function helper() {}\n}').length);
+	}
+
+	/** A `test*`-named private method NOT in a Test subclass is flagged (the extends gate). */
+	public function testTestNamedOutsideTestClassFlagged(): Void {
+		Assert.equals(1, one('class C {\n\tprivate function testX() {}\n}').length);
+	}
+
+	/** A macro-force field (`static final _x: Class<Marker> = Marker;`) is load-bearing — not flagged. */
+	public function testMacroForceFieldNotFlagged(): Void {
+		Assert.equals(0, one('class C {\n\tprivate static final _f: Class<Marker> = Marker;\n}').length);
+	}
+
+	/** A `static final` with a lowercase-ident initializer is not a type reference — still flagged. */
+	public function testStaticFinalLowercaseInitFlagged(): Void {
+		Assert.equals(1, one('class C {\n\tprivate static final _dead = value;\n}').length);
+	}
+
+	/** A test method in a class extending an INTERMEDIATE base that extends Test is exempt (transitive). */
+	public function testUtestMethodViaIntermediateBaseNotFlagged(): Void {
+		Assert.equals(0, one('class Base extends Test {}\nclass C extends Base {\n\tfunction testX() {}\n}').length);
+	}
+
 }
