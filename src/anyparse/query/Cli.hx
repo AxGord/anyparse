@@ -177,6 +177,16 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+typedef SourceOpts = {
+	var lang: String;
+	var range: Null<String>;
+	var selectExpr: Null<String>;
+	var atSpec: Null<String>;
+	var number: Bool;
+	var raw: Bool;
+	var file: Null<String>;
+	var errExit: Null<Int>;
+};
 typedef PermissiveMetas = {
 	var hasOptional: Bool;
 	var lead: Null<String>;
@@ -6563,53 +6573,16 @@ final class Cli {
 	 * `cat -n`-style `<lineno>\t<line>` output for navigation.
 	 */
 	private static function runSource(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var range: Null<String> = null;
-		var selectExpr: Null<String> = null;
-		var atSpec: Null<String> = null;
-		var number: Bool = false;
-		var raw: Bool = false;
-		var file: Null<String> = null;
+		final opts: SourceOpts = parseSourceArgs(args);
+		if (opts.errExit != null) return opts.errExit;
 
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--range':
-					range = expectValue(args, ++i, '--range');
-				case '--select':
-					selectExpr = expectValue(args, ++i, '--select');
-				case '--at':
-					atSpec = expectValue(args, ++i, '--at');
-				case '--number', '-n':
-					number = true;
-				case '--raw':
-					raw = true;
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '-h', '--help':
-					printSourceUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq source: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file != null) {
-						stderr('apq source: only one file argument supported (got "$file" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					file = a;
-			}
-			i++;
-		}
-
+		final file: Null<String> = opts.file;
 		if (file == null) {
 			stderr('apq source: missing <file> argument\n');
 			printSourceUsage();
 			return EXIT_USAGE;
 		}
-		final modes: Int = (range != null ? 1 : 0) + (selectExpr != null ? 1 : 0) + (atSpec != null ? 1 : 0);
+		final modes: Int = (opts.range != null ? 1 : 0) + (opts.selectExpr != null ? 1 : 0) + (opts.atSpec != null ? 1 : 0);
 		if (modes > 1) {
 			stderr('apq source: --range, --select and --at are mutually exclusive — pick one\n');
 			return EXIT_USAGE;
@@ -6634,31 +6607,17 @@ final class Cli {
 		// `--select` / `--at` resolve a NODE's span to its line range (these
 		// parse the file — unlike the raw, parse-free `--range` / whole-file
 		// path, which still works on a skip-parse file).
-		final bounds: Null<{ from: Int, to: Int }> = if (selectExpr != null || atSpec != null)
-			resolveNodeLineBounds(path, content, lang, selectExpr, atSpec);
+		final bounds: Null<{ from: Int, to: Int }> = if (opts.selectExpr != null || opts.atSpec != null)
+			resolveNodeLineBounds(path, content, opts.lang, opts.selectExpr, opts.atSpec);
 		else
-			parseRangeSpec(range, lines.length);
+			parseRangeSpec(opts.range, lines.length);
 		if (bounds == null) {
-			if (selectExpr != null || atSpec != null) return EXIT_RUNTIME;
-			stderr('apq source: bad --range "$range" (use L, L:L2, L:, or :L2 — 1-based)\n');
+			if (opts.selectExpr != null || opts.atSpec != null) return EXIT_RUNTIME;
+			stderr('apq source: bad --range "${opts.range}" (use L, L:L2, L:, or :L2 — 1-based)\n');
 			return EXIT_USAGE;
 		}
 
-		// Strip the common leading-whitespace prefix shared by every non-blank
-		// line in the range (textwrap.dedent) so a deeply-nested slice reads
-		// without its indentation tax. `--raw` keeps bytes verbatim — required
-		// when the output anchors an Edit or feeds column coordinates, since
-		// dedent shifts both.
-		final strip: Int = raw ? 0 : commonIndentWidth(lines, bounds.from, bounds.to);
-
-		final buf: StringBuf = new StringBuf();
-		for (n in bounds.from...bounds.to + 1) {
-			final line: String = lines[n - 1];
-			if (number) buf.add('$n\t');
-			buf.add(strip > 0 ? dedentLine(line, strip) : line);
-			buf.add('\n');
-		}
-		sysPrint(buf.toString());
+		emitSourceLines(lines, bounds.from, bounds.to, opts.number, opts.raw);
 		return EXIT_OK;
 	}
 
@@ -11729,6 +11688,79 @@ final class Cli {
 			trail: trail,
 			sep: sep
 		};
+	}
+
+	/**
+	 * Parse `source` argv. `errExit` carries the exit code when -h
+	 * (EXIT_OK) or a usage error (EXIT_USAGE — unknown option / extra file)
+	 * short-circuits; null = proceed.
+	 */
+	private static function parseSourceArgs(args: Array<String>): SourceOpts {
+		final opts: SourceOpts = {
+			lang: 'haxe',
+			range: null,
+			selectExpr: null,
+			atSpec: null,
+			number: false,
+			raw: false,
+			file: null,
+			errExit: null
+		};
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--range':
+					opts.range = expectValue(args, ++i, '--range');
+				case '--select':
+					opts.selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					opts.atSpec = expectValue(args, ++i, '--at');
+				case '--number', '-n':
+					opts.number = true;
+				case '--raw':
+					opts.raw = true;
+				case '--lang':
+					opts.lang = expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printSourceUsage();
+					opts.errExit = EXIT_OK;
+					return opts;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq source: unknown option "$a"\n');
+						opts.errExit = EXIT_USAGE;
+						return opts;
+					}
+					if (opts.file != null) {
+						stderr('apq source: only one file argument supported (got "${opts.file}" and "$a")\n');
+						opts.errExit = EXIT_USAGE;
+						return opts;
+					}
+					opts.file = a;
+			}
+			i++;
+		}
+		return opts;
+	}
+
+	/**
+	 * Print lines [from, to] (1-based inclusive). Unless `raw`, strip the
+	 * common leading-whitespace prefix shared by every non-blank line in the
+	 * range (textwrap.dedent) so a deeply-nested slice reads without its
+	 * indentation tax; `raw` keeps bytes verbatim — required when the output
+	 * anchors an Edit or feeds column coordinates, since dedent shifts both.
+	 */
+	private static function emitSourceLines(lines: Array<String>, from: Int, to: Int, number: Bool, raw: Bool): Void {
+		final strip: Int = raw ? 0 : commonIndentWidth(lines, from, to);
+		final buf: StringBuf = new StringBuf();
+		for (n in from...to + 1) {
+			final line: String = lines[n - 1];
+			if (number) buf.add('$n\t');
+			buf.add(strip > 0 ? dedentLine(line, strip) : line);
+			buf.add('\n');
+		}
+		sysPrint(buf.toString());
 	}
 
 }
