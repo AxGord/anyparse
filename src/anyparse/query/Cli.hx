@@ -177,6 +177,14 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+typedef MechanismMetas = {
+	var hasOptional: Bool;
+	var lead: Null<String>;
+	var trail: Null<String>;
+	var kw: Null<String>;
+	var absentOn: Null<String>;
+	var sep: Null<String>;
+};
 typedef SourceOpts = {
 	var lang: String;
 	var range: Null<String>;
@@ -3732,62 +3740,8 @@ final class Cli {
 	 * structural metas.
 	 */
 	private static function classifyMechanism(metas: Array<MetaHit>, mechanism: String): Null<String> {
-		var hasOptional: Bool = false;
-		var lead: Null<String> = null;
-		var trail: Null<String> = null;
-		var kw: Null<String> = null;
-		var absentOn: Null<String> = null;
-		var sep: Null<String> = null;
-		for (h in metas) switch h.annotation {
-			case '@:optional':
-				hasOptional = true;
-			case '@:lead':
-				lead = h.args.length > 0 ? h.args[0] : null;
-			case '@:trail':
-				trail = h.args.length > 0 ? h.args[0] : null;
-			case '@:kw':
-				kw = h.args.length > 0 ? h.args[0] : null;
-			case '@:absentOn':
-				absentOn = h.args.length > 0 ? h.args[0] : null;
-			case '@:sep':
-				sep = h.args.length > 0 ? h.args[0] : null;
-			case _:
-		}
-		return switch mechanism {
-			case 'optional-ref':
-				if (!hasOptional)
-					null
-				else if (lead == null && kw == null && absentOn == null)
-					null
-				// Star fields with @:sep are excluded — they're the angle-
-				// bracket array shape, not single Ref optional. Inspect
-				// declName / declKind manually if you need both.
-				else if (sep != null)
-					null
-				else
-					renderMetaList(hasOptional, kw, lead, trail, absentOn);
-			case 'optional-ref-trail':
-				// Slice 40's exact signature: optional + lead + trail, no sep.
-				if (hasOptional && lead != null && trail != null && sep == null)
-					renderMetaList(hasOptional, kw, lead, trail, absentOn);
-				else
-					null;
-			case 'mandatory-ref-lead-trail':
-				// Pre-Slice-40 shape on a single Ref — the predict-optional
-				// fallback candidates (turn `@:lead + @:trail` into
-				// `@:optional @:lead + @:trail`). Exclude Star (`@:sep`)
-				// — angle-bracket arrays are not the target.
-				if (!hasOptional && lead != null && trail != null && sep == null)
-					renderMetaList(hasOptional, kw, lead, trail, absentOn);
-				else
-					null;
-			case 'kw-lead':
-				if (kw != null)
-					renderMetaList(hasOptional, kw, lead, trail, absentOn)
-				else
-					null;
-			case _: null;
-		};
+		final m: MechanismMetas = readMechanismMetas(metas);
+		return mechanismMatches(m, mechanism) ? renderMetaList(m.hasOptional, m.kw, m.lead, m.trail, m.absentOn) : null;
 	}
 
 	private static function renderMetaList(
@@ -11761,6 +11715,71 @@ final class Cli {
 			buf.add('\n');
 		}
 		sysPrint(buf.toString());
+	}
+
+	/**
+	 * Read the @:optional / @:lead / @:trail / @:kw / @:absentOn / @:sep
+	 * metas off one decl group (raw arg values, not unquoted).
+	 */
+	private static function readMechanismMetas(metas: Array<MetaHit>): MechanismMetas {
+		var hasOptional: Bool = false;
+		var lead: Null<String> = null;
+		var trail: Null<String> = null;
+		var kw: Null<String> = null;
+		var absentOn: Null<String> = null;
+		var sep: Null<String> = null;
+		for (h in metas) switch h.annotation {
+			case '@:optional':
+				hasOptional = true;
+			case '@:lead':
+				lead = h.args.length > 0 ? h.args[0] : null;
+			case '@:trail':
+				trail = h.args.length > 0 ? h.args[0] : null;
+			case '@:kw':
+				kw = h.args.length > 0 ? h.args[0] : null;
+			case '@:absentOn':
+				absentOn = h.args.length > 0 ? h.args[0] : null;
+			case '@:sep':
+				sep = h.args.length > 0 ? h.args[0] : null;
+			case _:
+		}
+		return {
+			hasOptional: hasOptional,
+			lead: lead,
+			trail: trail,
+			kw: kw,
+			absentOn: absentOn,
+			sep: sep
+		};
+	}
+
+	/**
+	 * Whether a decl group's metas qualify under the requested mechanism.
+	 * `optional-ref` = optional single Ref (excluding Star @:sep); the two
+	 * *-trail / mandatory variants are Slice 40's exact / pre-Slice-40
+	 * shapes; `kw-lead` = any keyword-dispatched field.
+	 */
+	private static function mechanismMatches(m: MechanismMetas, mechanism: String): Bool {
+		return switch mechanism {
+			case 'optional-ref':
+				// Star fields with @:sep are excluded — they're the angle-
+				// bracket array shape, not single Ref optional. Inspect
+				// declName / declKind manually if you need both.
+				m.hasOptional && (m.lead != null || m.kw != null || m.absentOn != null) && m.sep == null;
+			case 'optional-ref-trail':
+				// Slice 40's exact signature: optional + lead + trail, no sep.
+				m.hasOptional && m.lead != null && m.trail != null && m.sep == null;
+			case 'mandatory-ref-lead-trail':
+				// Pre-Slice-40 shape on a single Ref — the predict-optional
+				// fallback candidates (turn `@:lead + @:trail` into
+				// `@:optional @:lead + @:trail`). Exclude Star (`@:sep`)
+				// — angle-bracket arrays are not the target.
+				!m.hasOptional && m.lead != null && m.trail != null && m.sep == null;
+			case 'kw-lead':
+				m.kw != null;
+			case _:
+				false;
+		};
 	}
 
 }
