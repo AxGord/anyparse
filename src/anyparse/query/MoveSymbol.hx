@@ -113,50 +113,19 @@ final class MoveSymbol {
 		cursorFile: String, line: Int, col: Int, destFile: String, scopeFiles: Array<{ file: String, source: String }>,
 		plugin: GrammarPlugin, typeRefShape: TypeRefShape
 	): MoveResult {
-
-		// 1. Build the cross-file index; refuse on any skip-parse — a file
-		//    we cannot read cannot be proven free of references to the type.
+		// 1-3. Build the index, resolve the type at the cursor, and run the guards.
 		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
-		final skipped: Array<String> = index.skippedFiles();
-		if (skipped.length > 0) return Err('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
-
-		// Source text lookup for every scope file (the index keeps only
-		// structural info, not the raw bytes).
-		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
-		final cursorSource: Null<String> = sourceOf[cursorFile];
-		if (cursorSource == null) return Err('cursor file $cursorFile is not in the scope file set');
-
-		// 2. Resolve the type declaration the cursor sits on. `fullSpan` is
-		//    the FULL decl span — for a `final class` that is the OUTER
-		//    `FinalDecl` span (includes the `final ` keyword) so the cut and
-		//    the dependency-body scan both cover `final class X {…}` whole.
-		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return Err(
-			'$cursorFile does not parse: ${exception.toString()}'
-		)
-		catch (exception: Exception) return Err('$cursorFile does not parse: ${exception.message}');
-		final cursor: Int = Span.offsetOf(cursorSource, line, col);
-		final declMatch: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
-		if (declMatch == null) return Err('position $line:$col is not on a type declaration');
-		final typeName: String = declMatch.name;
-		final declSpan: Span = declMatch.fullSpan;
-
-		// 3. Guards.
-		final declarers: Array<FileInfo> = index.declaringFiles(typeName);
-		if (declarers.length == 0) return Err('no type "$typeName" declared under scope');
-		if (declarers.length > 1) return Err('type "$typeName" is declared in ${declarers.length} files under scope — ambiguous, refusing');
-		if (declarers[0].file != cursorFile)
-			return Err('the type "$typeName" at the cursor is not the one declared under scope — refusing');
-		if (cursorFile == destFile) return Err('source and destination are the same file — nothing to move');
-
-		final cursorInfo: Null<FileInfo> = index.fileInfo(cursorFile);
-		final destInfo: Null<FileInfo> = index.fileInfo(destFile);
-		if (destInfo == null) return Err('destination file $destFile is not a parseable file under scope');
-		if (cursorInfo == null) return Err('$cursorFile is not indexed');
-		if (cursorInfo.pkg != destInfo.pkg)
-			return Err(
-				'cross-package move not supported in this increment '
-				+ '(source package "${cursorInfo.pkg}" != destination package "${destInfo.pkg}")'
-			);
+		final prep: MovePrep = resolveMoveTarget(index, scopeFiles, cursorFile, destFile, line, col, plugin);
+		final target: MoveTarget = switch prep {
+			case PErr(message): return Err(message);
+			case POk(t): t;
+		};
+		final typeName: String = target.typeName;
+		final declSpan: Span = target.declSpan;
+		final cursorSource: String = target.cursorSource;
+		final cursorInfo: FileInfo = target.cursorInfo;
+		final destInfo: FileInfo = target.destInfo;
+		final sourceOf: Map<String, String> = target.sourceOf;
 
 		// 4. Cut span: extend backward over leading doc-comment / @:meta /
 		//    indentation, and forward over one trailing newline. Refuse a
@@ -179,40 +148,22 @@ final class MoveSymbol {
 		final destBasename: String = RefactorSupport.baseNameOf(destFile);
 		final newImportPath: String = typeName == destBasename ? destInfo.module : '${destInfo.module}.$typeName';
 
-		// 7. Assemble per-file edits.
-		//    Per-file edit accumulators keyed by file path.
+		// 7. Assemble per-file edits, keyed by file path.
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
-		inline function editsFor(file: String): Array<{ span: Span, text: String }> {
-			var arr: Null<Array<{ span: Span, text: String }>> = editsByFile[file];
-			if (arr == null) {
-				arr = [];
-				editsByFile[file] = arr;
-			}
-			return arr;
-		}
 
 		// 7a. Cut the decl from the source file.
-		editsFor(cursorFile).push({ span: cut, text: '' });
+		editsFor(editsByFile, cursorFile).push({ span: cut, text: '' });
 
 		// 7b. Insert the decl (plus carried imports) into the destination.
 		//     The carried imports go at the destination's import region;
 		//     the decl text is appended after the existing content.
 		final destInsertEdits: Array<{ span: Span, text: String }> = buildDestInsertEdits(destSource, destInfo, declText, carried);
-		for (e in destInsertEdits) editsFor(destFile).push(e);
+		for (e in destInsertEdits) editsFor(editsByFile, destFile).push(e);
 
 		// 7c. Rewrite cross-file importers: every file (other than dest)
 		//     whose import `raw` equals the old import path is repointed at
 		//     the new path. Computed BEFORE the move via the index.
-		if (oldImportPath != null && oldImportPath != newImportPath) {
-			final oldModule: String = SymbolIndex.moduleOf(oldImportPath);
-			for (importer in index.filesImportingModule(oldModule)) {
-				if (importer.file == destFile) continue; // dest handled in 7d.
-				final importerSource: Null<String> = sourceOf[importer.file];
-				if (importerSource == null) continue;
-				for (imp in importer.imports) if (imp.raw == oldImportPath)
-					editsFor(importer.file).push({ span: imp.span, text: importStatementText(imp, newImportPath) });
-			}
-		}
+		buildImporterEdits(editsByFile, index, sourceOf, oldImportPath, newImportPath, destFile);
 
 		// 7d. Source-file local import: if the source still references the
 		//     moved type after the cut, it now needs an import of the new
@@ -222,32 +173,14 @@ final class MoveSymbol {
 		if (oldImportPath != null) {
 			if (sourceStillUsesType(cursorSource, cut, plugin, typeRefShape, typeName)) {
 				final insert: Null<{ span: Span, text: String }> = addImportEdit(cursorSource, cursorInfo, newImportPath);
-				if (insert != null) editsFor(cursorFile).push(insert);
+				if (insert != null) editsFor(editsByFile, cursorFile).push(insert);
 			}
 			for (imp in destInfo.imports) if (imp.raw == oldImportPath)
-				editsFor(destFile).push({ span: removeImportSpan(destSource, imp), text: '' });
+				editsFor(editsByFile, destFile).push({ span: removeImportSpan(destSource, imp), text: '' });
 		}
 
-		// 8. Apply edits per file, re-parse each, collect changed files.
-		final changes: Array<MoveChange> = [];
-		for (file => edits in editsByFile) {
-			final original: Null<String> = sourceOf[file];
-			if (original == null) continue;
-			final newSource: String = RefactorSupport.applyEdits(original, edits);
-			if (newSource == original) continue;
-
-			// 9. Atomic validation: every rewritten file must re-parse.
-			try
-				plugin.parseFile(newSource)
-			catch (exception: ParseError)
-				return Err('rewritten $file does not parse: ${exception.toString()}')
-			catch (exception: Exception)
-				return Err('rewritten $file does not parse: ${exception.message}');
-
-			changes.push({ file: file, newSource: newSource });
-		}
-
-		return changes.length == 0 ? Err('move of "$typeName" changed nothing') : Ok(changes, ADVISORY);
+		// 8-9. Apply edits per file, atomically re-parse, collect changed files.
+		return applyMoveEdits(editsByFile, sourceOf, plugin, typeName);
 	}
 
 	/**
@@ -516,5 +449,160 @@ final class MoveSymbol {
 		}
 		return i;
 	}
+
+	/**
+	 * Build the source-text lookup, resolve the type declaration the cursor sits
+	 * on, and run every move guard: the scope must fully parse, the cursor file
+	 * must be in the scope set and on a type declaration, that type must be
+	 * uniquely declared at the cursor, source and destination must differ, and
+	 * both must be indexed in the SAME package (cross-package is refused). Returns
+	 * the validated `MoveTarget` or a `PErr` with the precise refusal reason.
+	 */
+	private static function resolveMoveTarget(
+		index: SymbolIndex, scopeFiles: Array<{ file: String, source: String }>, cursorFile: String, destFile: String, line: Int, col: Int,
+		plugin: GrammarPlugin
+	): MovePrep {
+		// 1. Refuse on any skip-parse — a file we cannot read cannot be proven
+		//    free of references to the type.
+		final skipped: Array<String> = index.skippedFiles();
+		if (skipped.length > 0) return PErr('cannot move across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
+
+		// Source text lookup for every scope file (the index keeps only
+		// structural info, not the raw bytes).
+		final sourceOf: Map<String, String> = [for (entry in scopeFiles) entry.file => entry.source];
+		final cursorSource: Null<String> = sourceOf[cursorFile];
+		if (cursorSource == null) return PErr('cursor file $cursorFile is not in the scope file set');
+
+		// 2. Resolve the type declaration the cursor sits on. `fullSpan` is the
+		//    FULL decl span — for a `final class` the OUTER `FinalDecl` span.
+		final cursorTree: QueryNode = try plugin.parseFile(cursorSource) catch (exception: ParseError) return PErr(
+			'$cursorFile does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return PErr('$cursorFile does not parse: ${exception.message}');
+		final cursor: Int = Span.offsetOf(cursorSource, line, col);
+		final declMatch: Null<TypeDeclMatch> = RefactorSupport.resolveTypeDeclAtCursor(cursorTree, cursor, cursorSource);
+		if (declMatch == null) return PErr('position $line:$col is not on a type declaration');
+		final typeName: String = declMatch.name;
+		final declSpan: Span = declMatch.fullSpan;
+
+		// 3. Guards.
+		final declarers: Array<FileInfo> = index.declaringFiles(typeName);
+		if (declarers.length == 0) return PErr('no type "$typeName" declared under scope');
+		if (declarers.length > 1)
+			return PErr('type "$typeName" is declared in ${declarers.length} files under scope — ambiguous, refusing');
+		if (declarers[0].file != cursorFile)
+			return PErr('the type "$typeName" at the cursor is not the one declared under scope — refusing');
+		if (cursorFile == destFile) return PErr('source and destination are the same file — nothing to move');
+
+		final cursorInfo: Null<FileInfo> = index.fileInfo(cursorFile);
+		final destInfo: Null<FileInfo> = index.fileInfo(destFile);
+		if (destInfo == null) return PErr('destination file $destFile is not a parseable file under scope');
+		if (cursorInfo == null) return PErr('$cursorFile is not indexed');
+		if (cursorInfo.pkg != destInfo.pkg)
+			return PErr(
+				'cross-package move not supported in this increment '
+				+ '(source package "${cursorInfo.pkg}" != destination package "${destInfo.pkg}")'
+			);
+
+		// Narrow the null-checked locals for the struct literal (Strict does
+		// not propagate narrowing into anonymous struct fields).
+		final cursorSourceNN: String = cursorSource;
+		final cursorInfoNN: FileInfo = cursorInfo;
+		final destInfoNN: FileInfo = destInfo;
+		return POk({
+			typeName: typeName,
+			declSpan: declSpan,
+			cursorSource: cursorSourceNN,
+			cursorInfo: cursorInfoNN,
+			destInfo: destInfoNN,
+			sourceOf: sourceOf
+		});
+	}
+
+	/** The per-file edit accumulator for `file`, created on first use. */
+	private static function editsFor(
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, file: String
+	): Array<{ span: Span, text: String }> {
+		var arr: Null<Array<{ span: Span, text: String }>> = editsByFile[file];
+		if (arr == null) {
+			arr = [];
+			editsByFile[file] = arr;
+		}
+		return arr;
+	}
+
+	/**
+	 * Repoint every cross-file importer of the moved type: a file (other than the
+	 * destination, which is handled separately) whose import `raw` equals the old
+	 * import path is rewritten to the new path. A no-op when the type had no
+	 * import path or the path is unchanged. Edits are accumulated into
+	 * `editsByFile`.
+	 */
+	private static function buildImporterEdits(
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, index: SymbolIndex, sourceOf: Map<String, String>,
+		oldImportPath: Null<String>, newImportPath: String, destFile: String
+	): Void {
+		if (oldImportPath == null || oldImportPath == newImportPath) return;
+		final oldModule: String = SymbolIndex.moduleOf(oldImportPath);
+		for (importer in index.filesImportingModule(oldModule)) {
+			if (importer.file == destFile) continue; // dest handled separately.
+			final importerSource: Null<String> = sourceOf[importer.file];
+			if (importerSource == null) continue;
+			for (imp in importer.imports) if (imp.raw == oldImportPath)
+				editsFor(editsByFile, importer.file).push({ span: imp.span, text: importStatementText(imp, newImportPath) });
+		}
+	}
+
+	/**
+	 * Apply the accumulated edits to each file, re-parse the result, and collect
+	 * the files whose content actually changed. Atomic: a single rewritten file
+	 * that fails to re-parse aborts the whole move with `Err`. `Ok` with the
+	 * changed files + advisory, or `Err` when nothing changed.
+	 */
+	private static function applyMoveEdits(
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, sourceOf: Map<String, String>, plugin: GrammarPlugin,
+		typeName: String
+	): MoveResult {
+		final changes: Array<MoveChange> = [];
+		for (file => edits in editsByFile) {
+			final original: Null<String> = sourceOf[file];
+			if (original == null) continue;
+			final newSource: String = RefactorSupport.applyEdits(original, edits);
+			if (newSource == original) continue;
+
+			// Atomic validation: every rewritten file must re-parse.
+			try
+				plugin.parseFile(newSource)
+			catch (exception: ParseError)
+				return Err('rewritten $file does not parse: ${exception.toString()}')
+			catch (exception: Exception)
+				return Err('rewritten $file does not parse: ${exception.message}');
+
+			changes.push({ file: file, newSource: newSource });
+		}
+		return changes.length == 0 ? Err('move of "$typeName" changed nothing') : Ok(changes, ADVISORY);
+	}
+
+}
+
+/**
+ * A validated move target: the type name, its full decl span, the cursor
+ * file's source, the source and destination file infos, and the scope's
+ * source-text lookup.
+ */
+private typedef MoveTarget = {
+	final typeName: String;
+	final declSpan: Span;
+	final cursorSource: String;
+	final cursorInfo: FileInfo;
+	final destInfo: FileInfo;
+	final sourceOf: Map<String, String>;
+};
+
+/** Resolution outcome of `resolveMoveTarget`: the target or a refusal. */
+private enum MovePrep {
+
+	POk(target: MoveTarget);
+	PErr(message: String);
 
 }
