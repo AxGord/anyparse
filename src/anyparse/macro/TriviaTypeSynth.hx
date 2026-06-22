@@ -786,7 +786,7 @@ class TriviaTypeSynth {
 					shapeRawToPairedWrap(argAccess, argNode, pos);
 				}
 			];
-			for (extra in buildAltExtraDefaults(branch, pos)) pairedArgs.push(extra);
+			for (extra in buildAltExtraDefaults(branch)) pairedArgs.push(extra);
 			final pairedCtorFn: Expr = MacroStringTools.toFieldExpr(pairedPath.concat([ctorName]));
 			final body: Expr = { expr: ECall(pairedCtorFn, pairedArgs), pos: pos };
 			cases.push({ values: [pattern], guard: null, expr: body });
@@ -800,7 +800,7 @@ class TriviaTypeSynth {
 	 * extras. Order MUST mirror `buildEnumCtor`'s push order so the
 	 * paired ctor's positional arg list is satisfied position-by-position.
 	 */
-	private static function buildAltExtraDefaults(branch: ShapeNode, pos: Position): Array<Expr> {
+	private static function buildAltExtraDefaults(branch: ShapeNode): Array<Expr> {
 		final defaults: Array<Expr> = [];
 		if (isAltCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing

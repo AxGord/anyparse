@@ -1217,8 +1217,7 @@ class Renderer {
 			indent: Int,
 			mode: Mode,
 			forceFlat: Bool
-		},
-		n: Int, breakDoc: Doc, flatDoc: Doc, crosses: Bool
+		}, breakDoc: Doc, flatDoc: Doc, crosses: Bool
 	): Void {
 		if (node.forceFlat) {
 			stack.push({
@@ -1340,12 +1339,12 @@ class Renderer {
 				// sibling `naturalFirstLineWidth` probe in the render
 				// decision. Resolve flat unless forced — these probes never
 				// sit at the head of a cond's flatShape spine.
-				pushNaturalExceeds(stack, node, nn, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
 			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
 				// Self-class sibling: resolve recursively at the running col
 				// over a strictly smaller subtree (mirror the width probe's
 				// own arm; bounded by the finite tree).
-				pushNaturalExceeds(stack, node, nn, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
+				pushNaturalExceeds(stack, node, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 				// Flat interleave tagged with node.mode (so a broken sep's
 				// Line terminates the first line). Mirror `naturalFirstLine
@@ -1561,7 +1560,7 @@ class Renderer {
 					forceFlat: node.forceFlat
 				});
 			case IfWidthExceeds(nn, breakDoc, flatDoc):
-				pushNaturalExceeds(stack, node, nn, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
+				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
 			case IfLineExceeds(nn, breakDoc, flatDoc) | IfFullLineExceeds(nn, breakDoc, flatDoc):
 				// Own flat width PLUS the rest-of-stack lookahead (the same-line
 				// content the pending work-stack will still emit). The lookahead
@@ -1573,12 +1572,12 @@ class Renderer {
 				// head with a trailing same-line body BodyGroup, so descend-vs-
 				// defer is inert here — one rest walker suffices (YAGNI).
 				pushNaturalExceeds(
-					stack, node, nn, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) + naturalRestStackWidth(stack) >= nn
+					stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) + naturalRestStackWidth(stack) >= nn
 				);
 			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
 				// Self-reference: resolve recursively at the running col
 				// over a strictly smaller subtree (bounded by finite tree).
-				pushNaturalExceeds(stack, node, nn, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
+				pushNaturalExceeds(stack, node, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 				// Flat interleave tagged with node.mode (so a broken sep's
 				// Line terminates the first line). Slight over-measure when

@@ -50,7 +50,7 @@ class WriterLowering {
 		final rawBody: Expr = switch node.kind {
 			case Alt: lowerEnum(node, typePath, hasPratt);
 			case Seq: lowerStruct(node, typePath);
-			case Terminal: lowerTerminal(node, typePath, simple);
+			case Terminal: lowerTerminal(node, simple);
 			case _:
 				Context.fatalError('WriterLowering: cannot lower ${node.kind} for $typePath', Context.currentPos());
 				throw 'unreachable';
@@ -69,7 +69,7 @@ class WriterLowering {
 		// `EField` field-access) — type-checked at compile time, IDE
 		// go-to-def works, no string typo can survive compile.
 		final preWriteFn: Null<Expr> = fmtReadCall(node, 'preWrite');
-		final body: Expr = preWriteFn != null ? wrapWithPreWrite(preWriteFn, rawBody, fnName, hasPratt, typePath) : rawBody;
+		final body: Expr = preWriteFn != null ? wrapWithPreWrite(preWriteFn, rawBody, fnName, typePath) : rawBody;
 		return [
 			{
 				fnName: fnName,
@@ -145,7 +145,7 @@ class WriterLowering {
 	 * so it fires only for the ctors that opt in via `@:fmt(preWrite)`
 	 * — non-opt-in ctors carry zero overhead, no extra dispatch.
 	 */
-	private function wrapWithPreWrite(fnExpr: Expr, defaultBody: Expr, writeFnName: String, hasPratt: Bool, typePath: String): Expr {
+	private function wrapWithPreWrite(fnExpr: Expr, defaultBody: Expr, writeFnName: String, typePath: String): Expr {
 		// preWrite signature: `(value:T, opt:WriteOptions) -> Null<T>`.
 		// `opt` is passed through unconditionally so future rewrites can
 		// branch on config (line width, comment style, etc.) without a
@@ -2573,7 +2573,7 @@ class WriterLowering {
 
 	// -------- terminal rule --------
 
-	private function lowerTerminal(node: ShapeNode, typePath: String, simple: String): Expr {
+	private function lowerTerminal(node: ShapeNode, simple: String): Expr {
 		final underlying: String = node.annotations.get('base.underlying');
 		final unescape: Bool = node.hasMeta(':unescape');
 		final unescapeMode: Null<String> = node.readMetaString(':unescape');
@@ -4822,7 +4822,7 @@ class WriterLowering {
 			reflowSourceMultiline: reflowSourceMultiline,
 			matrixWrap: matrixWrap,
 		}
-		final _predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, matrixWrap, triviaElemCall);
+		final _predicateScan: Expr = triviaSepPredicateScanExpr(reflowSourceMultiline, triviaElemCall);
 		final _matrixSucc: Expr = triviaSepMatrixSucceedsExpr(
 			matrixWrap, openText, closeText, sepText, appendTrailingCommaExpr, triviaElemCall
 		);
@@ -6275,7 +6275,7 @@ class WriterLowering {
 			else if (predicateName == null)
 				macro 1;
 			else
-				buildPredicateGatedKind(branch, ctorName, predicateName, metaName, enumRuleName, predicateInvert, triviaMultilineExpr);
+				buildPredicateGatedKind(branch, predicateName, metaName, predicateInvert, triviaMultilineExpr);
 			// When a predicate gate is active, the case pattern must bind the
 			// first arg as `_v0` so the predicate can reference it. Plain
 			// (non-predicated) and zero-arg ctors keep the original wildcard
@@ -6316,7 +6316,7 @@ class WriterLowering {
 	 * untagged ctors emit `false`.
 	 */
 	private function buildPredicateGatedKind(
-		branch: ShapeNode, ctorName: String, predicateName: String, metaName: String, enumRuleName: String, invert: Bool = false,
+		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false,
 		triviaMultilineExpr: Null<Expr> = null
 	): Expr {
 		if (predicateName != 'multiline')
@@ -12118,7 +12118,7 @@ class WriterLowering {
 	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals. Extracted from
 	 * `triviaSepStarExpr` so the orchestrator stays under the complexity gate.
 	 */
-	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, matrixWrap: Bool, triviaElemCall: Expr): Expr {
+	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, triviaElemCall: Expr): Expr {
 		return macro {
 			var _ti: Int = 0;
 			while (_ti < _arr.length) {

@@ -725,7 +725,7 @@ class Lowering {
 	// -------- struct rule --------
 
 	private function lowerStruct(node: ShapeNode, typePath: String): Expr {
-		if (shouldLowerByName(node)) return lowerStructByName(node, typePath);
+		if (shouldLowerByName(node)) return lowerStructByName(node);
 		final parseSteps: Array<Expr> = [];
 		final structFields: Array<ObjectField> = [];
 		// Binary: @:magic prefix — validate fixed magic bytes before fields.
@@ -1103,7 +1103,7 @@ class Lowering {
 			final sepBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
 			final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
 			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
-			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepText, sepCharCode, sepBlockEnded, predicateCall));
+			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepCharCode, sepBlockEnded, predicateCall));
 			return;
 		}
 		emitNonTriviaCloseSteps(starNode, parseSteps, isLastField, elemCall, accumRef, closeText, sepText);
@@ -1799,7 +1799,7 @@ class Lowering {
 
 	private function lowerTerminal(node: ShapeNode, typePath: String, simple: String): Expr {
 		final stringEnumValues: Null<Array<{ name: String, value: String }>> = node.annotations.get('base.stringEnumValues');
-		if (stringEnumValues != null) return lowerStringEnumTerminal(node, typePath, simple, stringEnumValues);
+		if (stringEnumValues != null) return lowerStringEnumTerminal(typePath, simple, stringEnumValues);
 		final pattern: Null<String> = node.annotations.get('re.pattern');
 		if (pattern == null) {
 			Context.fatalError('Lowering: terminal $typePath missing @:re', Context.currentPos());
@@ -1862,7 +1862,7 @@ class Lowering {
 	 * and cleaner than an `EReg` alternation.
 	 */
 	private function lowerStringEnumTerminal(
-		node: ShapeNode, typePath: String, simple: String, values: Array<{ name: String, value: String }>
+		typePath: String, simple: String, values: Array<{ name: String, value: String }>
 	): Expr {
 		final stringType: Null<String> = formatInfo.stringType;
 		if (stringType == null) {
@@ -1933,7 +1933,7 @@ class Lowering {
 	 * checked for null after the loop and raise `ParseError` listing
 	 * the missing name; optional fields retain their `null` default.
 	 */
-	private function lowerStructByName(node: ShapeNode, typePath: String): Expr {
+	private function lowerStructByName(node: ShapeNode): Expr {
 		final structFields: Array<ObjectField> = [];
 		final declareLocals: Array<Expr> = [];
 		final switchCases: Array<Case> = [];
@@ -3651,7 +3651,7 @@ class Lowering {
 	}
 
 	private function buildTryparseSepLoop(
-		elemCall: Expr, accumRef: Expr, sepText: String, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
+		elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
 	): Expr {
 		// Try-parse with sep peek (Slice 18). After each successful element,
 		// peeks the next non-whitespace char: if it equals the sep, consumes
