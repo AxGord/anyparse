@@ -141,52 +141,16 @@ final class CrossRename {
 		if (typeName == null) return Err('position $line:$col is not on a type declaration (cross-file --scope renames types only)');
 		if (typeName == newName) return Err('rename "$typeName" -> "$newName" is a no-op');
 
-		// 2. Parse every scope file once; refuse on any skip-parse (a file
-		//    we cannot read cannot be proven free of references to the type).
-		final parsed: Array<{ file: String, source: String, tree: QueryNode }> = [];
-		final skipped: Array<String> = [];
-		for (entry in scopeFiles) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: ParseError) null
-			catch (exception: Exception) null;
-			if (tree == null)
-				skipped.push(entry.file);
-			else
-				parsed.push({ file: entry.file, source: entry.source, tree: tree });
-		}
-		if (skipped.length > 0) return Err('cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}');
+		// 2. Parse every scope file once; refuse on any skip-parse.
+		final parse: ScopeParse = parseScopeFiles(scopeFiles, plugin);
+		if (parse.error != null) return Err(parse.error);
 
 		// 3. Uniqueness: exactly one declaration of `typeName` under scope.
-		var declCount: Int = 0;
-		var declInCursorFile: Bool = false;
-		for (entry in parsed) {
-			final n: Int = countTypeDecls(entry.tree, typeName);
-			declCount += n;
-			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
-		}
-		if (declCount == 0) return Err('no type "$typeName" declared under scope');
-		if (declCount > 1) return Err('type "$typeName" is declared in $declCount files under scope — ambiguous, refusing');
-		if (!declInCursorFile) return Err('the type "$typeName" at the cursor is not the one declared under scope — refusing');
+		final uniqueErr: Null<String> = checkScopeUniqueness(parse.parsed, cursorFile, typeName);
+		if (uniqueErr != null) return Err(uniqueErr);
 
-		// 4. Collect occurrence spans + apply edits per file.
-		final changes: Array<FileChange> = [];
-		for (entry in parsed) {
-			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape);
-			if (occurrences.length == 0) continue;
-			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
-			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
-
-			// 6. Atomic validation: every rewritten file must re-parse.
-			try
-				plugin.parseFile(newSource)
-			catch (exception: ParseError)
-				return Err('rewritten ${entry.file} does not parse: ${exception.toString()}')
-			catch (exception: Exception)
-				return Err('rewritten ${entry.file} does not parse: ${exception.message}');
-
-			changes.push({ file: entry.file, newSource: newSource, count: occurrences.length });
-		}
-
-		return changes.length == 0 ? Err('rename "$typeName" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
+		// 4. Collect occurrence spans, apply + atomically validate edits per file.
+		return applyTypeRename(parse.parsed, typeName, newName, plugin, typeRefShape, refShape);
 	}
 
 	/**
@@ -309,4 +273,99 @@ final class CrossRename {
 		return pathStart < 0 || pathStart >= span.to ? -1 : pathStart + lastDot + 1;
 	}
 
+	/**
+	 * Parse every scope file once. A file that does not parse is recorded as
+	 * skipped — a file we cannot read cannot be proven free of references to
+	 * the renamed type — and turned into a refusal so the rename stays atomic.
+	 * Returns the parsed files (empty `error`) or the skip diagnostic.
+	 */
+	private static function parseScopeFiles(scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin): ScopeParse {
+		final parsed: Array<ParsedFile> = [];
+		final skipped: Array<String> = [];
+		for (entry in scopeFiles) {
+			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (exception: ParseError) null
+			catch (exception: Exception) null;
+			if (tree == null) {
+				skipped.push(entry.file);
+			} else {
+				final parsedTree: QueryNode = tree;
+				parsed.push({ file: entry.file, source: entry.source, tree: parsedTree });
+			}
+		}
+		final error: Null<String> = skipped.length > 0
+			? 'cannot rename across scope: ${skipped.length} file(s) do not parse: ${skipped.join(', ')}'
+			: null;
+		return { parsed: parsed, error: error };
+	}
+
+	/**
+	 * Prove exactly one declaration of `typeName` exists under scope and that it
+	 * is the one in `cursorFile`. Returns the refusal diagnostic — none declared,
+	 * declared in more than one file (ambiguous), or the unique declaration is
+	 * not the cursor's — or null when the type is uniquely the cursor's.
+	 */
+	private static function checkScopeUniqueness(parsed: Array<ParsedFile>, cursorFile: String, typeName: String): Null<String> {
+		var declCount: Int = 0;
+		var declInCursorFile: Bool = false;
+		for (entry in parsed) {
+			final n: Int = countTypeDecls(entry.tree, typeName);
+			declCount += n;
+			if (n > 0 && entry.file == cursorFile) declInCursorFile = true;
+		}
+		if (declCount == 0) return 'no type "$typeName" declared under scope';
+		if (declCount > 1) return 'type "$typeName" is declared in $declCount files under scope — ambiguous, refusing';
+		if (!declInCursorFile) return 'the type "$typeName" at the cursor is not the one declared under scope — refusing';
+		return null;
+	}
+
+	/**
+	 * Collect every type-namespace occurrence of `typeName` in each parsed file,
+	 * rewrite it to `newName`, and re-parse the rewritten file before any change
+	 * is returned (atomicity — a single file whose rewrite breaks the parse fails
+	 * the whole rename). Unchanged files are omitted. `Err` on a re-parse failure
+	 * or when nothing changed; otherwise `Ok` with the per-file changes + advisory.
+	 */
+	private static function applyTypeRename(
+		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
+		refShape: RefShape
+	): CrossRenameResult {
+		final changes: Array<FileChange> = [];
+		for (entry in parsed) {
+			final occurrences: Array<Span> = collectOccurrences(entry.source, typeName, entry.tree, plugin, typeRefShape, refShape);
+			if (occurrences.length == 0) continue;
+			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: newName }];
+			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
+
+			// Atomic validation: every rewritten file must re-parse.
+			try
+				plugin.parseFile(newSource)
+			catch (exception: ParseError)
+				return Err('rewritten ${entry.file} does not parse: ${exception.toString()}')
+			catch (exception: Exception)
+				return Err('rewritten ${entry.file} does not parse: ${exception.message}');
+
+			changes.push({ file: entry.file, newSource: newSource, count: occurrences.length });
+		}
+		return changes.length == 0 ? Err('rename "$typeName" -> "$newName" changed nothing') : Ok(changes, ADVISORY);
+	}
+
 }
+
+/**
+ * One scope file parsed once: its path, source, and parse tree. The shared
+ * unit passed between the cross-rename phases.
+ */
+private typedef ParsedFile = {
+	final file: String;
+	final source: String;
+	final tree: QueryNode;
+};
+
+/**
+ * The result of parsing the scope: the parsed files, plus a non-null `error`
+ * diagnostic when any file skip-parsed (the rename is then refused).
+ */
+private typedef ScopeParse = {
+	final parsed: Array<ParsedFile>;
+	final error: Null<String>;
+};
