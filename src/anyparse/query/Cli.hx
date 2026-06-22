@@ -1661,52 +1661,16 @@ final class Cli {
 	 * result, exits non-zero with the file untouched.
 	 */
 	private static function runAddMember(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var typeName: Null<String> = null;
-		var file: Null<String> = null;
-		var memberText: Null<String> = null;
-		var fromFile: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--type':
-					typeName = expectValue(args, ++i, '--type');
-				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
-				case '--write':
-					write = true;
-				case '--reformat':
-					reformat = true;
-				case '-h', '--help':
-					printAddMemberUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq add-member: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (memberText == null)
-						memberText = a;
-					else {
-						stderr('apq add-member: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (fromFile != null || memberText == '-') {
-			final resolved: Null<String> = resolveCodeArg('add-member', memberText, fromFile);
+		final o: AddMemberOpts = parseAddMemberArgs(args);
+		if (o.errExit != null) return o.errExit;
+		var memberText: Null<String> = o.memberText;
+		if (o.fromFile != null || memberText == '-') {
+			final resolved: Null<String> = resolveCodeArg('add-member', memberText, o.fromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			memberText = resolved;
 		}
+		final file: Null<String> = o.file;
+		final typeName: Null<String> = o.typeName;
 		if (file == null || typeName == null || memberText == null) {
 			stderr('apq add-member: expected <file> --type <TypeName> (<memberText> | --from-file <path> | -)\n');
 			printAddMemberUsage();
@@ -1721,22 +1685,10 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, reformat, plugin, optsJson);
-		switch result {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq add-member: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq add-member: $message\n');
-				return EXIT_RUNTIME;
-		}
+		final result: EditResult = AddMember.addMember(source, typeStr, memberStr, o.reformat, plugin, optsJson);
+		return emitEditResult('add-member', filePath, result, o.write);
 	}
 
 	/**
@@ -11892,6 +11844,73 @@ final class Cli {
 		};
 	}
 
+	private static inline function addMemberParseExit(code: Int): AddMemberOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			typeName: null,
+			file: null,
+			memberText: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static function parseAddMemberArgs(args: Array<String>): AddMemberOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var typeName: Null<String> = null;
+		var file: Null<String> = null;
+		var memberText: Null<String> = null;
+		var fromFile: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					typeName = expectValue(args, ++i, '--type');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printAddMemberUsage();
+					return addMemberParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq add-member: unknown option "$a"\n');
+						return addMemberParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (memberText == null)
+						memberText = a;
+					else {
+						stderr('apq add-member: unexpected extra argument "$a"\n');
+						return addMemberParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			typeName: typeName,
+			file: file,
+			memberText: memberText,
+			fromFile: fromFile,
+			errExit: null
+		};
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12074,5 +12093,18 @@ typedef ExtractMethodOpts = {
 	var name: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / malformed
 	// position -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef AddMemberOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var typeName: Null<String>;
+	var file: Null<String>;
+	var memberText: Null<String>;
+	var fromFile: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
