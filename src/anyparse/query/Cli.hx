@@ -8459,47 +8459,11 @@ final class Cli {
 	}
 
 	private static function runCommentRewrite(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var list: Bool = false;
-		var reformat: Bool = false;
-		var regex: Bool = false;
-		var find: Null<String> = null;
-		var replace: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--write', '-w':
-					write = true;
-				case '--list', '-l':
-					list = true;
-				case '--reformat':
-					reformat = true;
-				case '--regex':
-					regex = true;
-				case '-h', '--help':
-					printCommentRewriteUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq comment-rewrite: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (find == null)
-						find = a;
-					else if (replace == null)
-						replace = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
-		if (find == null || replace == null || inputSpecs.length == 0) {
+		final o: CommentRewriteOpts = parseCommentRewriteArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final find: Null<String> = o.find;
+		final replace: Null<String> = o.replace;
+		if (find == null || replace == null || o.inputSpecs.length == 0) {
 			stderr('apq comment-rewrite: expected <find> <replace> <file/dir/glob>...\n');
 			printCommentRewriteUsage();
 			return EXIT_USAGE;
@@ -8507,48 +8471,23 @@ final class Cli {
 
 		final findStr: String = find;
 		final replaceStr: String = replace;
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq comment-rewrite: ${inputSpecs.join(', ')} matched no .hx files\n');
+			stderr('apq comment-rewrite: ${o.inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
 
-		final listMode: Bool = list || (!write && !expanded.singleFile);
+		final listMode: Bool = o.list || (!o.write && !expanded.singleFile);
 
-		var changed: Int = 0;
-		var failed: Int = 0;
-		for (path in paths) {
-			final source: String = try readFile(path) catch (exception: Exception) {
-				stderr('apq comment-rewrite: $path: ${exception.message}\n');
-				failed++;
-				continue;
-			};
-			final optsJson: Null<String> = discoverFormatConfig(path);
-			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson) {
-				case Ok(text):
-					final isChanged: Bool = text != source;
-					if (write) {
-						if (isChanged) {
-							writeFile(path, text);
-							changed++;
-						}
-					} else if (listMode) {
-						if (isChanged) {
-							sysPrint('$path\n');
-							changed++;
-						}
-					} else
-						sysPrint(text);
-				case Err(message):
-					stderr('apq comment-rewrite: $path: $message\n');
-					failed++;
-			}
-		}
+		final tally: { changed: Int, failed: Int } = rewriteCommentFiles(
+			paths, findStr, replaceStr, plugin, o.write, listMode, o.regex, o.reformat
+		);
+		final failed: Int = tally.failed;
 
-		if (write)
-			stderr('apq comment-rewrite: rewrote $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
+		if (o.write)
+			stderr('apq comment-rewrite: rewrote ${tally.changed} file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
 		else if (listMode && failed > 0) stderr('apq comment-rewrite: $failed file(s) failed\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
@@ -12206,6 +12145,110 @@ final class Cli {
 		}
 	}
 
+	private static inline function commentRewriteParseExit(code: Int): CommentRewriteOpts {
+		return {
+			lang: '',
+			write: false,
+			list: false,
+			reformat: false,
+			regex: false,
+			find: null,
+			replace: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseCommentRewriteArgs(args: Array<String>): CommentRewriteOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var list: Bool = false;
+		var reformat: Bool = false;
+		var regex: Bool = false;
+		var find: Null<String> = null;
+		var replace: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write', '-w':
+					write = true;
+				case '--list', '-l':
+					list = true;
+				case '--reformat':
+					reformat = true;
+				case '--regex':
+					regex = true;
+				case '-h', '--help':
+					printCommentRewriteUsage();
+					return commentRewriteParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq comment-rewrite: unknown option "$a"\n');
+						return commentRewriteParseExit(EXIT_USAGE);
+					}
+					if (find == null)
+						find = a;
+					else if (replace == null)
+						replace = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			list: list,
+			reformat: reformat,
+			regex: regex,
+			find: find,
+			replace: replace,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function rewriteCommentFiles(
+		paths: Array<String>, findStr: String, replaceStr: String, plugin: GrammarPlugin, write: Bool, listMode: Bool, regex: Bool,
+		reformat: Bool
+	): { changed: Int, failed: Int } {
+		var changed: Int = 0;
+		var failed: Int = 0;
+		for (path in paths) {
+			final source: String = try readFile(path) catch (exception: Exception) {
+				stderr('apq comment-rewrite: $path: ${exception.message}\n');
+				failed++;
+				continue;
+			};
+			final optsJson: Null<String> = discoverFormatConfig(path);
+			switch CommentRewrite.rewrite(source, findStr, replaceStr, regex, reformat, plugin, optsJson) {
+				case Ok(text):
+					final isChanged: Bool = text != source;
+					if (write) {
+						if (isChanged) {
+							writeFile(path, text);
+							changed++;
+						}
+					} else if (listMode) {
+						if (isChanged) {
+							sysPrint('$path\n');
+							changed++;
+						}
+					} else
+						sysPrint(text);
+				case Err(message):
+					stderr('apq comment-rewrite: $path: $message\n');
+					failed++;
+			}
+		}
+		return { changed: changed, failed: failed };
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12510,6 +12553,20 @@ typedef GatesOpts = {
 	var flat: Bool;
 	var limit: Int;
 	var mechanism: String;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef CommentRewriteOpts = {
+	var lang: String;
+	var write: Bool;
+	var list: Bool;
+	var reformat: Bool;
+	var regex: Bool;
+	var find: Null<String>;
+	var replace: Null<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
