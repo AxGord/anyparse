@@ -1667,58 +1667,15 @@ final class Cli {
 	 * overwrites in place.
 	 */
 	private static function runAddElement(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var afterSpec: Null<String> = null;
-		var beforeSpec: Null<String> = null;
-		var appendSpec: Null<String> = null;
-		var file: Null<String> = null;
-		var code: Null<String> = null;
-		var fromFile: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--after':
-					afterSpec = expectValue(args, ++i, '--after');
-				case '--before':
-					beforeSpec = expectValue(args, ++i, '--before');
-				case '--append':
-					appendSpec = expectValue(args, ++i, '--append');
-				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
-				case '--write':
-					write = true;
-				case '--reformat':
-					reformat = true;
-				case '-h', '--help':
-					printAddElementUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq add-element: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (code == null)
-						code = a;
-					else {
-						stderr('apq add-element: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (fromFile != null || code == '-') {
-			final resolved: Null<String> = resolveCodeArg('add-element', code, fromFile, true);
+		final o: AddElementOpts = parseAddElementArgs(args);
+		if (o.errExit != null) return o.errExit;
+		var code: Null<String> = o.code;
+		if (o.fromFile != null || code == '-') {
+			final resolved: Null<String> = resolveCodeArg('add-element', code, o.fromFile, true);
 			if (resolved == null) return EXIT_RUNTIME;
 			code = resolved;
 		}
+		final file: Null<String> = o.file;
 		if (file == null || code == null) {
 			stderr(
 				'apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) (<code> | --from-file <path> | -)\n'
@@ -1726,6 +1683,9 @@ final class Cli {
 			printAddElementUsage();
 			return EXIT_USAGE;
 		}
+		final afterSpec: Null<String> = o.afterSpec;
+		final beforeSpec: Null<String> = o.beforeSpec;
+		final appendSpec: Null<String> = o.appendSpec;
 		// Exactly one of --after / --before / --append must be given.
 		final targetCount: Int = (afterSpec != null ? 1 : 0) + (beforeSpec != null ? 1 : 0) + (appendSpec != null ? 1 : 0);
 		if (targetCount != 1) {
@@ -1733,12 +1693,10 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
-		final posSpec: String = if (afterSpec != null)
-			afterSpec;
-		else if (beforeSpec != null)
-			beforeSpec;
-		else
-			(appendSpec: String);
+		// targetCount == 1 guarantees exactly one spec is non-null; the
+		// `cast` commits the narrowing the analyzer can't prove across the
+		// struct-field rebind.
+		final posSpec: String = afterSpec ?? beforeSpec ?? (cast appendSpec: String);
 		final pos: Null<Position> = parseLineCol(posSpec);
 		if (pos == null) {
 			stderr('apq add-element: malformed position "$posSpec" — expected <line>:<col>\n');
@@ -1752,25 +1710,13 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = if (appendSpec != null)
-			AddElement.appendElement(source, pos.line, pos.col, codeStr, reformat, plugin, optsJson);
+			AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson);
 		else
-			AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, reformat, plugin, optsJson);
-		switch result {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq add-element: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq add-element: $message\n');
-				return EXIT_RUNTIME;
-		}
+			AddElement.addElement(source, pos.line, pos.col, afterSpec != null ? After : Before, codeStr, o.reformat, plugin, optsJson);
+		return emitEditResult('add-element', filePath, result, o.write);
 	}
 
 	/** Shared Ok/Err + write/print tail for the single-result remove ops. */
@@ -12249,6 +12195,83 @@ final class Cli {
 		return { changed: changed, failed: failed };
 	}
 
+	private static inline function addElementParseExit(code: Int): AddElementOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			afterSpec: null,
+			beforeSpec: null,
+			appendSpec: null,
+			file: null,
+			code: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static function parseAddElementArgs(args: Array<String>): AddElementOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var afterSpec: Null<String> = null;
+		var beforeSpec: Null<String> = null;
+		var appendSpec: Null<String> = null;
+		var file: Null<String> = null;
+		var code: Null<String> = null;
+		var fromFile: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--after':
+					afterSpec = expectValue(args, ++i, '--after');
+				case '--before':
+					beforeSpec = expectValue(args, ++i, '--before');
+				case '--append':
+					appendSpec = expectValue(args, ++i, '--append');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printAddElementUsage();
+					return addElementParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq add-element: unknown option "$a"\n');
+						return addElementParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (code == null)
+						code = a;
+					else {
+						stderr('apq add-element: unexpected extra argument "$a"\n');
+						return addElementParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			afterSpec: afterSpec,
+			beforeSpec: beforeSpec,
+			appendSpec: appendSpec,
+			file: file,
+			code: code,
+			fromFile: fromFile,
+			errExit: null
+		};
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12568,6 +12591,21 @@ typedef CommentRewriteOpts = {
 	var find: Null<String>;
 	var replace: Null<String>;
 	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef AddElementOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var afterSpec: Null<String>;
+	var beforeSpec: Null<String>;
+	var appendSpec: Null<String>;
+	var file: Null<String>;
+	var code: Null<String>;
+	var fromFile: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
