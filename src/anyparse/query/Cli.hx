@@ -8543,52 +8543,16 @@ final class Cli {
 	 * gated unless `--reformat`).
 	 */
 	private static function runSetComment(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var fromFile: Null<String> = null;
-		var file: Null<String> = null;
-		var pos: Null<String> = null;
-		var commentText: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--from-file':
-					fromFile = expectValue(args, ++i, '--from-file');
-				case '--reformat':
-					reformat = true;
-				case '--write':
-					write = true;
-				case '-h', '--help':
-					printSetCommentUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq set-comment: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (pos == null)
-						pos = a;
-					else if (commentText == null)
-						commentText = a;
-					else {
-						stderr('apq set-comment: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (fromFile != null || commentText == '-') {
-			final resolved: Null<String> = resolveCodeArg('set-comment', commentText == '-' ? '-' : null, fromFile);
+		final o: SetCommentOpts = parseSetCommentArgs(args);
+		if (o.errExit != null) return o.errExit;
+		var commentText: Null<String> = o.commentText;
+		if (o.fromFile != null || commentText == '-') {
+			final resolved: Null<String> = resolveCodeArg('set-comment', commentText == '-' ? '-' : null, o.fromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			commentText = resolved;
 		}
+		final file: Null<String> = o.file;
+		final pos: Null<String> = o.pos;
 		if (file == null || pos == null || commentText == null) {
 			stderr('apq set-comment: expected <file> <line>:<col> (<text> | --from-file <path> | -)\n');
 			printSetCommentUsage();
@@ -8606,20 +8570,11 @@ final class Cli {
 			stderr('apq set-comment: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		switch SetComment.setComment(source, loc.line, loc.col, commentStr, reformat, plugin, optsJson) {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq set-comment: wrote $filePath\n');
-				} else
-					sysPrint(text);
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq set-comment: $message\n');
-				return EXIT_RUNTIME;
-		}
+		return emitEditResult(
+			'set-comment', filePath, SetComment.setComment(source, loc.line, loc.col, commentStr, o.reformat, plugin, optsJson), o.write
+		);
 	}
 
 	private static function printSetCommentUsage(): Void {
@@ -12056,6 +12011,73 @@ final class Cli {
 		return allEntries;
 	}
 
+	private static inline function setCommentParseExit(code: Int): SetCommentOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			fromFile: null,
+			file: null,
+			pos: null,
+			commentText: null,
+			errExit: code
+		};
+	}
+
+	private static function parseSetCommentArgs(args: Array<String>): SetCommentOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var fromFile: Null<String> = null;
+		var file: Null<String> = null;
+		var pos: Null<String> = null;
+		var commentText: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printSetCommentUsage();
+					return setCommentParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq set-comment: unknown option "$a"\n');
+						return setCommentParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (pos == null)
+						pos = a;
+					else if (commentText == null)
+						commentText = a;
+					else {
+						stderr('apq set-comment: unexpected extra argument "$a"\n');
+						return setCommentParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			fromFile: fromFile,
+			file: file,
+			pos: pos,
+			commentText: commentText,
+			errExit: null
+		};
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12310,6 +12332,19 @@ typedef RefsOpts = {
 	var limit: Int;
 	var name: Null<String>;
 	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef SetCommentOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var fromFile: Null<String>;
+	var file: Null<String>;
+	var pos: Null<String>;
+	var commentText: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
