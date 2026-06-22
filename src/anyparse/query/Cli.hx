@@ -2534,100 +2534,49 @@ final class Cli {
 	}
 
 	private static function runUses(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var wantDoc: Bool = false;
-		var wantSource: Bool = false;
-		var flat: Bool = false;
-		var limit: Int = -1;
-		var name: Null<String> = null;
-		final inputSpecs: Array<String> = [];
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--doc':
-					wantDoc = true;
-				case '--source':
-					wantSource = true;
-				case '--flat':
-					flat = true;
-				case '--limit':
-					try limit = parseLimit(args, ++i) catch (e: Exception) {
-						stderr('${e.message}\n');
-						return EXIT_USAGE;
-					}
-				case '-h', '--help':
-					printUsesUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq uses: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (name == null)
-						name = a;
-					else
-						inputSpecs.push(a);
-			}
-			i++;
-		}
+		final o: UsesOpts = parseUsesArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final name: Null<String> = o.name;
 		if (name == null) {
 			stderr('apq uses: missing <type-name> argument\n');
 			printUsesUsage();
 			return EXIT_USAGE;
 		}
-		if (inputSpecs.length == 0) {
+		if (o.inputSpecs.length == 0) {
 			stderr('apq uses: missing <file-or-dir-or-glob> argument\n');
 			printUsesUsage();
 			return EXIT_USAGE;
 		}
 		final nameStr: String = name;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: TypeRefShape = plugin.typeRefShape();
 
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
 		final paths: Array<String> = expanded.paths;
 		if (paths.length == 0) {
-			stderr('apq uses: no input files matched ${inputSpecs.join(' ')}\n');
+			stderr('apq uses: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
 
-		final singleFile: Bool = expanded.singleFile;
-		final allEntries: Array<{ file: String, source: String, hits: Array<UsesHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
 		final candidateNames: Map<String, Bool> = [];
-		var scanned: Int = 0;
-		for (path in paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries, nameStr);
-			streamProgress('uses', ++scanned, paths.length, singleFile);
-			if (tree == null) {
-				if (singleFile) return EXIT_RUNTIME;
-				continue;
-			}
-			final hits: Array<UsesHit> = Uses.find(nameStr, tree, shape);
-			if (hits.length == 0) {
-				collectNames(tree, candidateNames);
-				continue;
-			}
-			allEntries.push({ file: path, source: source, hits: hits });
-		}
+		final allEntries: Null<Array<{ file: String, source: String, hits: Array<UsesHit> }>> = collectUsesEntries(
+			nameStr, paths, plugin, shape, expanded.singleFile, skipEntries, candidateNames
+		);
+		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
 			stderr(emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
-		final cappedLimit: Int = effectiveAutoLimit('uses', limit, totalHits);
+		final cappedLimit: Int = effectiveAutoLimit('uses', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> =
 			limitEntries(
 				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 			);
-		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, wantDoc, wantSource, flat));
+		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat));
 		return emptyExit(allEntries.length == 0);
 	}
 
@@ -11812,6 +11761,99 @@ final class Cli {
 		return suggestions.length > 0 ? '\napq $cmd: Did you mean: ${suggestions.join(', ')}?' : '';
 	}
 
+	private static inline function usesParseExit(code: Int): UsesOpts {
+		return {
+			lang: '',
+			wantDoc: false,
+			wantSource: false,
+			flat: false,
+			limit: -1,
+			name: null,
+			inputSpecs: [],
+			errExit: code
+		};
+	}
+
+	private static function parseUsesArgs(args: Array<String>): UsesOpts {
+		var lang: String = 'haxe';
+		var wantDoc: Bool = false;
+		var wantSource: Bool = false;
+		var flat: Bool = false;
+		var limit: Int = -1;
+		var name: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--doc':
+					wantDoc = true;
+				case '--source':
+					wantSource = true;
+				case '--flat':
+					flat = true;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (e: Exception) {
+						stderr('${e.message}\n');
+						return usesParseExit(EXIT_USAGE);
+					}
+				case '-h', '--help':
+					printUsesUsage();
+					return usesParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq uses: unknown option "$a"\n');
+						return usesParseExit(EXIT_USAGE);
+					}
+					if (name == null)
+						name = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			wantDoc: wantDoc,
+			wantSource: wantSource,
+			flat: flat,
+			limit: limit,
+			name: name,
+			inputSpecs: inputSpecs,
+			errExit: null
+		};
+	}
+
+	private static function collectUsesEntries(
+		name: String, paths: Array<String>, plugin: GrammarPlugin, shape: TypeRefShape, singleFile: Bool, skipEntries: Array<SkipEntry>,
+		candidateNames: Map<String, Bool>
+	): Null<Array<{ file: String, source: String, hits: Array<UsesHit> }>> {
+		final allEntries: Array<{ file: String, source: String, hits: Array<UsesHit> }> = [];
+		var scanned: Int = 0;
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('uses', plugin.parseFileTypeRefs, path, source, singleFile, skipEntries, name);
+			streamProgress('uses', ++scanned, paths.length, singleFile);
+			if (tree == null) {
+				// Single-file mode treats a parse failure as fatal — null tells
+				// the caller to return EXIT_RUNTIME. Multi-file mode records the
+				// file in skipEntries and keeps walking.
+				if (singleFile) return null;
+				continue;
+			}
+			final hits: Array<UsesHit> = Uses.find(name, tree, shape);
+			if (hits.length == 0) {
+				collectNames(tree, candidateNames);
+				continue;
+			}
+			allEntries.push({ file: path, source: source, hits: hits });
+		}
+		return allEntries;
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -11967,6 +12009,19 @@ typedef LintOpts = {
 	var ruleFilters: Array<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag/value -> EXIT_USAGE);
+	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef UsesOpts = {
+	var lang: String;
+	var wantDoc: Bool;
+	var wantSource: Bool;
+	var flat: Bool;
+	var limit: Int;
+	var name: Null<String>;
+	var inputSpecs: Array<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
