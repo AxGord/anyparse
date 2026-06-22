@@ -103,23 +103,10 @@ final class ComparisonToBoolean implements Check {
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length != 2) continue;
-			final leftIsBool: Bool = node.children[0].kind == boolLitKind;
-			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
-			if (leftIsBool == rightIsBool) continue;
-			final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
-			final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-			if (!provablyBool(other, boolOpKinds, parenKind)) continue;
-			final litSpan: Null<Span> = lit.span;
-			final otherSpan: Null<Span> = other.span;
-			if (litSpan == null || otherSpan == null) continue;
-			final litIsTrue: Bool = StringTools.trim(source.substring(litSpan.from, litSpan.to)) == 'true';
-			final isEq: Bool = node.kind == eqKind;
-			final otherSrc: String = StringTools.trim(source.substring(otherSpan.from, otherSpan.to));
-			edits.push({ span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, identKind, parenKind) });
+			final edit: Null<{ span: Span, text: String }> = comparisonEdit(
+				v, nodeByKey, source, boolLitKind, eqKind, boolOpKinds, identKind, parenKind
+			);
+			if (edit != null) edits.push(edit);
 		}
 		return edits;
 	}
@@ -182,6 +169,37 @@ final class ComparisonToBoolean implements Check {
 			if (span != null) out['${span.from}:${span.to}'] = node;
 		}
 		for (c in node.children) indexEqualities(c, equalityKinds, out);
+	}
+
+	/**
+	 * The replacement edit for one flagged comparison, or null when it cannot be
+	 * rewritten: no indexed node for the violation span, not a two-operand
+	 * comparison, not exactly one boolean-literal operand, or the other operand
+	 * not provably boolean. When rewritable, an `x == true` / `x != false`
+	 * collapses to `x`, and an `x == false` / `x != true` to its negation
+	 * (`negate` parenthesises unless the operand is an ident / paren).
+	 */
+	private static function comparisonEdit(
+		v: Violation, nodeByKey: Map<String, QueryNode>, source: String, boolLitKind: String, eqKind: String, boolOpKinds: Array<String>,
+		identKind: String, parenKind: Null<String>
+	): Null<{ span: Span, text: String }> {
+		final span: Null<Span> = v.span;
+		if (span == null) return null;
+		final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
+		if (node == null || node.children.length != 2) return null;
+		final leftIsBool: Bool = node.children[0].kind == boolLitKind;
+		final rightIsBool: Bool = node.children[1].kind == boolLitKind;
+		if (leftIsBool == rightIsBool) return null;
+		final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
+		final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
+		if (!provablyBool(other, boolOpKinds, parenKind)) return null;
+		final litSpan: Null<Span> = lit.span;
+		final otherSpan: Null<Span> = other.span;
+		if (litSpan == null || otherSpan == null) return null;
+		final litIsTrue: Bool = StringTools.trim(source.substring(litSpan.from, litSpan.to)) == 'true';
+		final isEq: Bool = node.kind == eqKind;
+		final otherSrc: String = StringTools.trim(source.substring(otherSpan.from, otherSpan.to));
+		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, identKind, parenKind) };
 	}
 
 }
