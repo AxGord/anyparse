@@ -8174,86 +8174,9 @@ final class Cli {
 	): String {
 		final summary: String = 'apq $cmd: 0 hits ($scanned file(s) scanned, $parseable parseable)';
 		final tail: StringBuf = new StringBuf();
-		if (name != null) {
-			final n: String = name;
-			final first: Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
-			final isUpper: Bool = first >= 'A'.code && first <= 'Z'.code;
-			final isLower: Bool = first >= 'a'.code && first <= 'z'.code;
-			final leadingDot: Null<String> = looksLikeLeadingDotField(n);
-			final dotted: Null<Array<String>> = looksLikeDottedAccess(n);
-			final hint: String = if (leadingDot != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
-				// Leading-dot query (`.expr`, `.body`) — user is hunting a
-				// field-access shape but typed the SLOT name only. lit
-				// won't capture the leading `.` (FieldAccess leaves are
-				// the identifier after `.`, the `.` is a postfix
-				// operator); refs/uses don't know about field positions.
-				// The structural answer is `apq search '$x.<tail>'`.
-				final t: String = leadingDot;
-				' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
-			} else if (dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
-				// Dotted query (`TypeName.method`, `obj.field`) — never a
-				// leaf-name / value-binding / type-position match. The
-				// structural answer is `apq search` with the access shape.
-				final lhs: String = dotted[0];
-				final rhs: String = dotted[dotted.length - 1];
-				final lhsFirst: Int = StringTools.fastCodeAt(lhs, 0);
-				final lhsIsUpper: Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
-				// LHS uppercase ⇒ static call shape; otherwise instance access.
-				if (lhsIsUpper)
-					' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).';
-				else
-					' — "$n" is a dotted access (obj.field). $cmd matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
-			} else
-				switch cmd {
-					case 'refs':
-						if (isUpper)
-							' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n <dir> (full change-impact incl. field-access), or apq lit \'$n\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
-						else
-							' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${macroEmitHint(n)}';
-					case 'uses':
-						if (isLower)
-							' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> --any-kind (every leaf).${macroEmitHint(n)}';
-						else
-							' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>, or apq lit \'$n\' <dir> --any-kind (every leaf — incl. case-patterns).';
-					case 'blast':
-						' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
-					case 'lit':
-						if (looksLikeMixedIdentifier(n))
-							' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
-						else
-							' — no string-literal content matches "$n" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
-					case 'meta':
-						''; // meta has no <name> arg (annotation is its own thing) — leave silent.
-					case _:
-						'';
-				};
-			tail.add(hint);
-		}
-
-		// Skip-parse warning: parseable < scanned means the answer may
-		// be hiding in unparsed files. Surface this loudly so a 0-hit
-		// query on a broken corpus is not silently trusted.
-		if (skipEntries != null && skipEntries.length > 0) {
-			final n: Int = skipEntries.length;
-			tail.add(
-				'\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure position; if it is far past the construct you searched for, the warning can be ignored.'
-			);
-			final shown: Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
-			for (i in 0...shown) {
-				final entry: SkipEntry = skipEntries[i];
-				tail.add('\n  skip: ${entry.path} :: ${entry.locus}');
-			}
-			if (n > shown) tail.add('\n  ... and ${n - shown} more');
-		}
-
-		// Fuzzy "did you mean": for refs/uses on 0 hits, propose the
-		// top-K decl/type names within Levenshtein distance. Stays
-		// silent when no candidate qualifies — don't fabricate hints.
-		if (name != null && candidates != null && (cmd == 'refs' || cmd == 'uses')) {
-			final suggestions: Array<String> = findFuzzy(name, candidates);
-			if (suggestions.length > 0) tail.add('\napq $cmd: Did you mean: ${suggestions.join(', ')}?');
-		}
-
+		if (name != null) tail.add(nudgeNameHint(cmd, name));
+		tail.add(nudgeSkipWarning(cmd, skipEntries));
+		tail.add(nudgeFuzzy(cmd, name, candidates));
 		return summary + tail.toString();
 	}
 
@@ -11780,6 +11703,113 @@ final class Cli {
 			case _:
 				false;
 		};
+	}
+
+	/**
+	 * Build the kind/case-aware tool-suggestion hint for a 0-hit walker
+	 * with a non-null query name. Leading-dot and dotted-access queries get
+	 * a structural-search redirect; otherwise the per-command cascade
+	 * (refs/uses/blast/lit) suggests the right walker for the name's case.
+	 */
+	private static function nudgeNameHint(cmd: String, n: String): String {
+		final first: Int = n.length > 0 ? StringTools.fastCodeAt(n, 0) : 0;
+		final isUpper: Bool = first >= 'A'.code && first <= 'Z'.code;
+		final isLower: Bool = first >= 'a'.code && first <= 'z'.code;
+		final leadingDot: Null<String> = looksLikeLeadingDotField(n);
+		final dotted: Null<Array<String>> = looksLikeDottedAccess(n);
+		if (leadingDot != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) {
+			// Leading-dot query (`.expr`, `.body`) — user is hunting a
+			// field-access shape but typed the SLOT name only. lit
+			// won't capture the leading `.` (FieldAccess leaves are
+			// the identifier after `.`, the `.` is a postfix
+			// operator); refs/uses don't know about field positions.
+			// The structural answer is `apq search '$x.<tail>'`.
+			final t: String = leadingDot;
+			return
+				' — "$n" is a leading-dot field-name slot. $cmd matches leaf names / single bindings / type positions, never `expr.field` shape. Try: apq search \'$$x.$t\' <dir> (field-access shape), apq lit \'$t\' <dir> --any-kind (every leaf — field-name slots included), or apq refs $t <dir> --decls (where the field is declared).';
+		}
+		if (dotted != null && (cmd == 'lit' || cmd == 'refs' || cmd == 'uses')) return nudgeDottedHint(cmd, n, dotted);
+		return nudgeCommandHint(cmd, n, isUpper, isLower);
+	}
+
+	/**
+	 * Hint for a dotted query (`TypeName.method`, `obj.field`) — never a
+	 * leaf-name / value-binding / type-position match. LHS uppercase ⇒
+	 * static-call shape; otherwise instance access.
+	 */
+	private static function nudgeDottedHint(cmd: String, n: String, dotted: Array<String>): String {
+		final lhs: String = dotted[0];
+		final rhs: String = dotted[dotted.length - 1];
+		final lhsFirst: Int = StringTools.fastCodeAt(lhs, 0);
+		final lhsIsUpper: Bool = lhsFirst >= 'A'.code && lhsFirst <= 'Z'.code;
+		if (lhsIsUpper)
+			return
+				' — "$n" is a dotted access (Type.method / pkg.Module). $cmd matches leaf names / single bindings / type positions, never `Type.method` shape. Try: apq search \'$n($$_)\' <dir> (call shape), apq search \'$lhs.$rhs\' <dir> (field-access shape), or apq refs $rhs <dir> --decls (where the method is declared).';
+		return
+			' — "$n" is a dotted access (obj.field). $cmd matches leaf names / single bindings, never `obj.field` shape. Try: apq search \'$$x.$rhs\' <dir> (field-access shape), apq search \'$n\' <dir> (literal access), or apq refs $rhs <dir> --decls (where the field is declared).';
+	}
+
+	/**
+	 * Per-command 0-hit hint (refs/uses/blast/lit), branching on the query
+	 * name's leading case to point at the complementary walker.
+	 */
+	private static function nudgeCommandHint(cmd: String, n: String, isUpper: Bool, isLower: Bool): String {
+		return switch cmd {
+			case 'refs':
+				if (isUpper)
+					' — "$n" starts uppercase, looks like a TypeName. Try: apq uses $n <dir> (type positions), apq blast $n <dir> (full change-impact incl. field-access), or apq lit \'$n\' <dir> --any-kind (every leaf — case-patterns / imports / new exprs).';
+				else
+					' — "$n" has no value-binding here. Locals/params are NOT indexed. Try: apq lit \'$n\' <dir> --any-kind (every leaf — strings/idents/field-names) or apq search \'$$x.$n\' <dir> (field-access shape).${macroEmitHint(n)}';
+			case 'uses':
+				if (isLower)
+					' — "$n" starts lowercase, not a TypeName. Try: apq refs $n <dir> (value bindings) or apq lit \'$n\' <dir> --any-kind (every leaf).${macroEmitHint(n)}';
+				else
+					' — no type-position references. For full change-impact incl. `.field` access try: apq blast $n <dir>, or apq lit \'$n\' <dir> --any-kind (every leaf — incl. case-patterns).';
+			case 'blast':
+				' — no declaration of "$n" in the scanned set (the heuristic section needs it). Either widen the scan, or use apq uses $n <dir> + apq refs $n <dir> directly.';
+			case 'lit':
+				if (looksLikeMixedIdentifier(n))
+					' — no Literal/IdentExpr leaf matches "$n" (camelCase/snake_case query → default kind widened to Literal+IdentExpr; --exact for full equality). Try --any-kind (every leaf — incl. field-name slots), apq refs $n <dir> --decls, or apq search \'$$x.$n\' <dir> (field-access shape).';
+				else
+					' — no string-literal content matches "$n" (default: substring on Literal leaves; --exact for full equality). Widen the kind set with --kind Literal,IdentExpr or --any-kind (catches every leaf — incl. field-name slots), or try: apq refs $n <dir> --decls.';
+			case 'meta':
+				''; // meta has no <name> arg (annotation is its own thing) — leave silent.
+			case _:
+				'';
+		};
+	}
+
+	/**
+	 * Skip-parse warning: parseable < scanned means the answer may be hiding
+	 * in unparsed files. Surface it loudly (with up to SKIP_PATHS_SHOWN
+	 * loci) so a 0-hit query on a broken corpus is not silently trusted.
+	 * Empty string when nothing skip-parsed.
+	 */
+	private static function nudgeSkipWarning(cmd: String, ?skipEntries: Array<SkipEntry>): String {
+		if (skipEntries == null || skipEntries.length == 0) return '';
+		final tail: StringBuf = new StringBuf();
+		final n: Int = skipEntries.length;
+		tail.add(
+			'\napq $cmd: WARNING: $n file(s) skip-parse — answer may be hiding in unparsed files. Locus shows the parse-failure position; if it is far past the construct you searched for, the warning can be ignored.'
+		);
+		final shown: Int = n < SKIP_PATHS_SHOWN ? n : SKIP_PATHS_SHOWN;
+		for (i in 0...shown) {
+			final entry: SkipEntry = skipEntries[i];
+			tail.add('\n  skip: ${entry.path} :: ${entry.locus}');
+		}
+		if (n > shown) tail.add('\n  ... and ${n - shown} more');
+		return tail.toString();
+	}
+
+	/**
+	 * Fuzzy "did you mean": for refs/uses on 0 hits, propose the top-K
+	 * decl/type names within Levenshtein distance. Empty string when no
+	 * candidate qualifies — don't fabricate hints.
+	 */
+	private static function nudgeFuzzy(cmd: String, name: Null<String>, ?candidates: Map<String, Bool>): String {
+		if (name == null || candidates == null || (cmd != 'refs' && cmd != 'uses')) return '';
+		final suggestions: Array<String> = findFuzzy(name, candidates);
+		return suggestions.length > 0 ? '\napq $cmd: Did you mean: ${suggestions.join(', ')}?' : '';
 	}
 
 }
