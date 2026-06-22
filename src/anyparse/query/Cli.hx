@@ -1538,89 +1538,29 @@ final class Cli {
 	 * overwrites in place.
 	 */
 	private static function runExtractMethod(args: Array<String>): Int {
-		var lang: String = 'haxe';
-		var write: Bool = false;
-		var reformat: Bool = false;
-		var file: Null<String> = null;
-		var startSpec: Null<String> = null;
-		var endSpec: Null<String> = null;
-		var name: Null<String> = null;
-
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--lang':
-					lang = expectValue(args, ++i, '--lang');
-				case '--write':
-					write = true;
-				case '--reformat':
-					reformat = true;
-				case '-h', '--help':
-					printExtractMethodUsage();
-					return EXIT_OK;
-				case _:
-					if (StringTools.startsWith(a, '--')) {
-						stderr('apq extract-method: unknown option "$a"\n');
-						return EXIT_USAGE;
-					}
-					if (file == null)
-						file = a;
-					else if (startSpec == null)
-						startSpec = a;
-					else if (endSpec == null)
-						endSpec = a;
-					else if (name == null)
-						name = a;
-					else {
-						stderr('apq extract-method: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
-			}
-			i++;
-		}
-		if (file == null || startSpec == null || endSpec == null || name == null) {
-			stderr('apq extract-method: expected <file> <startLine>:<col> <endLine>:<col> <name>\n');
-			printExtractMethodUsage();
-			return EXIT_USAGE;
-		}
-		final startPos: Null<Position> = parseLineCol(startSpec);
-		if (startPos == null) {
-			stderr('apq extract-method: malformed start position "$startSpec" — expected <line>:<col>\n');
-			return EXIT_USAGE;
-		}
-		final endPos: Null<Position> = parseLineCol(endSpec);
-		if (endPos == null) {
-			stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
-			return EXIT_USAGE;
-		}
-
-		final filePath: String = file;
-		final nameStr: String = name;
+		final o: ExtractMethodOpts = parseExtractMethodArgs(args);
+		if (o.errExit != null) return o.errExit;
+		// parseExtractMethodArgs proved these non-null before returning with
+		// errExit:null; Strict won't narrow struct fields, so re-bind into
+		// locals and throw on the provably-unreachable null state.
+		final filePath: Null<String> = o.file;
+		final startPos: Null<Position> = o.startPos;
+		final endPos: Null<Position> = o.endPos;
+		final nameStr: Null<String> = o.name;
+		if (filePath == null || startPos == null || endPos == null || nameStr == null)
+			throw new Exception('apq extract-method: null arg after validation (unreachable)');
 		final source: String = try readFile(filePath) catch (exception: Exception) {
 			stderr('apq extract-method: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
 		final shape: RefShape = plugin.refShape();
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = ExtractMethod.extractMethod(
-			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, reformat, plugin, shape, optsJson
+			source, startPos.line, startPos.col, endPos.line, endPos.col, nameStr, o.reformat, plugin, shape, optsJson
 		);
-		switch result {
-			case Ok(text):
-				if (write) {
-					writeFile(filePath, text);
-					stderr('apq extract-method: wrote $filePath\n');
-				} else {
-					sysPrint(text);
-				}
-				return EXIT_OK;
-			case Err(message):
-				stderr('apq extract-method: $message\n');
-				return EXIT_RUNTIME;
-		}
+		return emitEditResult('extract-method', filePath, result, o.write);
 	}
 
 	/**
@@ -11854,6 +11794,104 @@ final class Cli {
 		return allEntries;
 	}
 
+	private static function emitEditResult(opName: String, filePath: String, result: EditResult, write: Bool): Int {
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq $opName: wrote $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq $opName: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static inline function extractMethodParseExit(code: Int): ExtractMethodOpts {
+		return {
+			lang: '',
+			write: false,
+			reformat: false,
+			file: null,
+			startPos: null,
+			endPos: null,
+			name: null,
+			errExit: code
+		};
+	}
+
+	private static function parseExtractMethodArgs(args: Array<String>): ExtractMethodOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var startSpec: Null<String> = null;
+		var endSpec: Null<String> = null;
+		var name: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printExtractMethodUsage();
+					return extractMethodParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq extract-method: unknown option "$a"\n');
+						return extractMethodParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (startSpec == null)
+						startSpec = a;
+					else if (endSpec == null)
+						endSpec = a;
+					else if (name == null)
+						name = a;
+					else {
+						stderr('apq extract-method: unexpected extra argument "$a"\n');
+						return extractMethodParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		if (file == null || startSpec == null || endSpec == null || name == null) {
+			stderr('apq extract-method: expected <file> <startLine>:<col> <endLine>:<col> <name>\n');
+			printExtractMethodUsage();
+			return extractMethodParseExit(EXIT_USAGE);
+		}
+		final startPos: Null<Position> = parseLineCol(startSpec);
+		if (startPos == null) {
+			stderr('apq extract-method: malformed start position "$startSpec" — expected <line>:<col>\n');
+			return extractMethodParseExit(EXIT_USAGE);
+		}
+		final endPos: Null<Position> = parseLineCol(endSpec);
+		if (endPos == null) {
+			stderr('apq extract-method: malformed end position "$endSpec" — expected <line>:<col>\n');
+			return extractMethodParseExit(EXIT_USAGE);
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			file: file,
+			startPos: startPos,
+			endPos: endPos,
+			name: name,
+			errExit: null
+		};
+	}
+
 }
 
 @:nullSafety(Strict)
@@ -12023,5 +12061,18 @@ typedef UsesOpts = {
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
 	// the caller returns this immediately and ignores the rest of the struct.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef ExtractMethodOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var file: Null<String>;
+	var startPos: Null<Position>;
+	var endPos: Null<Position>;
+	var name: Null<String>;
+	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / malformed
+	// position -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
 };
