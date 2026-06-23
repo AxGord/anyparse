@@ -125,6 +125,90 @@ final class RefactorSupport {
 	];
 
 	/**
+	 * Expression-list container kinds whose direct children are
+	 * comma-separated. When an element's parent is one of these, an insert
+	 * joins with a `,` and a remove swallows one. `Call` / `NewExpr` carry a
+	 * leading non-element child (callee / constructed type), harmless here
+	 * because the targeted element is an actual argument, never the callee.
+	 * Shared by `add-element` (insert) and `deleteNode` (remove) so the two
+	 * agree on which slots are comma lists.
+	 */
+	public static final COMMA_CONTAINER_KINDS: Array<String> = ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'];
+
+	/**
+	 * Sibling node kinds a declaration's modifiers and metadata project to —
+	 * emitted BEFORE the decl they modify (`public static function` is
+	 * `(Public)(Static)(FnMember)`; `@:meta` is `(Meta)`). `declGroupSpan`
+	 * folds a run of these plus the decl into one logical element so a
+	 * structural edit treats the whole `[@:meta modifiers… decl]` as a unit,
+	 * not the decl keyword alone. `final` is NOT here — it WRAPS its decl
+	 * (`FinalDecl` / `FinalModifiedMember` / `FinalMember`) instead of
+	 * projecting to a separate sibling.
+	 */
+	private static final MODIFIER_META_KINDS: Array<String> = [
+		'Meta',
+		'Public',
+		'Private',
+		'Static',
+		'Inline',
+		'Override',
+		'Macro',
+		'Extern',
+		'Dynamic'
+	];
+
+	/**
+	 * Node kinds an expression subtree may contain and still be
+	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
+	 * the pure binary / unary / ternary operators. The string-payload leaf
+	 * `Literal` is included so a plain (non-interpolated) string passes — an
+	 * INTERPOLATED string instead nests `Ident` / `Block` children (the
+	 * spliced expression / variable), neither of which is whitelisted, so it
+	 * is correctly excluded. The increment / decrement ctors are deliberately
+	 * absent — they mutate their operand. Shared by `Inline` (inline-var
+	 * substitution safety) and the `unused-local` check (delete-fix safety).
+	 */
+	private static final SAFE_KINDS: Array<String> = [
+		// Literals + the plain-string content leaf.
+		'IntLit',
+		'FloatLit',
+		'BoolLit',
+		'NullLit',
+		'DoubleStringExpr',
+		'SingleStringExpr',
+		'Literal',
+		// Bare identifier + paren group.
+		'IdentExpr',
+		'ParenExpr',
+		// Binary operators (HxExpr Pratt set, mutating assigns excluded).
+		'Add',
+		'Sub',
+		'Mul',
+		'Div',
+		'Mod',
+		'And',
+		'Or',
+		'Eq',
+		'NotEq',
+		'Lt',
+		'Gt',
+		'LtEq',
+		'GtEq',
+		'BitAnd',
+		'BitOr',
+		'BitXor',
+		'Shl',
+		'Shr',
+		'UShr',
+		'NullCoal',
+		// Unary operators + ternary.
+		'Neg',
+		'Not',
+		'BitNot',
+		'Ternary',
+	];
+
+	/**
 	 * Resolve the cursor to the named occurrence node it sits on, in two
 	 * tiers (innermost-wins within each):
 	 *
@@ -460,39 +544,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Sibling node kinds a declaration's modifiers and metadata project to —
-	 * emitted BEFORE the decl they modify (`public static function` is
-	 * `(Public)(Static)(FnMember)`; `@:meta` is `(Meta)`). `declGroupSpan`
-	 * folds a run of these plus the decl into one logical element so a
-	 * structural edit treats the whole `[@:meta modifiers… decl]` as a unit,
-	 * not the decl keyword alone. `final` is NOT here — it WRAPS its decl
-	 * (`FinalDecl` / `FinalModifiedMember` / `FinalMember`) instead of
-	 * projecting to a separate sibling.
-	 */
-	private static final MODIFIER_META_KINDS: Array<String> = [
-		'Meta',
-		'Public',
-		'Private',
-		'Static',
-		'Inline',
-		'Override',
-		'Macro',
-		'Extern',
-		'Dynamic'
-	];
-
-	/**
-	 * Expression-list container kinds whose direct children are
-	 * comma-separated. When an element's parent is one of these, an insert
-	 * joins with a `,` and a remove swallows one. `Call` / `NewExpr` carry a
-	 * leading non-element child (callee / constructed type), harmless here
-	 * because the targeted element is an actual argument, never the callee.
-	 * Shared by `add-element` (insert) and `deleteNode` (remove) so the two
-	 * agree on which slots are comma lists.
-	 */
-	public static final COMMA_CONTAINER_KINDS: Array<String> = ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'];
-
-	/**
 	 * The source span of the LOGICAL declaration at `node` — a decl together
 	 * with the modifier / metadata sibling nodes that precede it. Modifiers
 	 * (`public` / `private` / `static` / `inline` / `override` / `macro` /
@@ -663,24 +714,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Extend `span` to also remove ONE separating comma so a comma list stays
-	 * well-formed after the element is cut: the trailing comma (preferred) —
-	 * the next non-whitespace byte after `span.to` — else the leading comma
-	 * before `span.from` (the element was last). A single-element list has
-	 * neither and the span is returned unchanged (`[a]` → `[]`). Surrounding
-	 * whitespace is left to the writer re-emit.
-	 */
-	private static function commaExtendedSpan(source: String, span: Span): Span {
-		var i: Int = span.to;
-		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
-		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return new Span(span.from, i + 1);
-
-		var j: Int = span.from - 1;
-		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
-		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code ? new Span(j, span.to) : span;
-	}
-
-	/**
 	 * Is the element at `span` immediately adjacent to a `,` — the next
 	 * non-whitespace byte after `span.to`, or the previous before `span.from`,
 	 * is a comma? True ⇒ the element sits in a comma-separated list (catches a
@@ -696,57 +729,6 @@ final class RefactorSupport {
 		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
 		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code;
 	}
-
-	/**
-	 * Node kinds an expression subtree may contain and still be
-	 * SIDE-EFFECT-FREE: literals, bare identifiers, parenthesised groups, and
-	 * the pure binary / unary / ternary operators. The string-payload leaf
-	 * `Literal` is included so a plain (non-interpolated) string passes — an
-	 * INTERPOLATED string instead nests `Ident` / `Block` children (the
-	 * spliced expression / variable), neither of which is whitelisted, so it
-	 * is correctly excluded. The increment / decrement ctors are deliberately
-	 * absent — they mutate their operand. Shared by `Inline` (inline-var
-	 * substitution safety) and the `unused-local` check (delete-fix safety).
-	 */
-	private static final SAFE_KINDS: Array<String> = [
-		// Literals + the plain-string content leaf.
-		'IntLit',
-		'FloatLit',
-		'BoolLit',
-		'NullLit',
-		'DoubleStringExpr',
-		'SingleStringExpr',
-		'Literal',
-		// Bare identifier + paren group.
-		'IdentExpr',
-		'ParenExpr',
-		// Binary operators (HxExpr Pratt set, mutating assigns excluded).
-		'Add',
-		'Sub',
-		'Mul',
-		'Div',
-		'Mod',
-		'And',
-		'Or',
-		'Eq',
-		'NotEq',
-		'Lt',
-		'Gt',
-		'LtEq',
-		'GtEq',
-		'BitAnd',
-		'BitOr',
-		'BitXor',
-		'Shl',
-		'Shr',
-		'UShr',
-		'NullCoal',
-		// Unary operators + ternary.
-		'Neg',
-		'Not',
-		'BitNot',
-		'Ternary',
-	];
 
 	/**
 	 * Is every node kind in `node`'s subtree side-effect-free per `SAFE_KINDS`?
@@ -769,15 +751,6 @@ final class RefactorSupport {
 		}
 		walk(node);
 		return safe;
-	}
-
-	/**
-	 * A node kind that contributes no side effect on its own: an enumerated
-	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
-	 * (a literal payload not separately enumerated).
-	 */
-	private static inline function isSafeKind(kind: String): Bool {
-		return SAFE_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
 	}
 
 	/**
@@ -808,12 +781,6 @@ final class RefactorSupport {
 			if (beforeOk && afterOk && !offsetWithinAny(at, excluded)) return true;
 			i = at + 1;
 		}
-		return false;
-	}
-
-	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
-	private static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
-		for (s in spans) if (offset >= s.from && offset < s.to) return true;
 		return false;
 	}
 
@@ -917,36 +884,6 @@ final class RefactorSupport {
 		return out;
 	}
 
-	/** True if only whitespace precedes the byte at `from` on its line. */
-	private static function isFullLineComment(source: String, from: Int): Bool {
-		var i: Int = from - 1;
-		while (i >= 0 && StringTools.fastCodeAt(source, i) != '\n'.code) {
-			if (!isSpace(StringTools.fastCodeAt(source, i))) return false;
-			i--;
-		}
-		return true;
-	}
-
-	/**
-	 * True if two comment tokens are full-line line comments separated by a
-	 * single line break (no blank line, no code) — members of one contiguous
-	 * line-comment block.
-	 */
-	private static function contiguousLineComments(
-		source: String, a: { from: Int, to: Int, isLine: Bool }, b: { from: Int, to: Int, isLine: Bool }
-	): Bool {
-		if (!a.isLine || !b.isLine) return false;
-		if (!isFullLineComment(source, a.from) || !isFullLineComment(source, b.from)) return false;
-		var newlines: Int = 0;
-		for (k in a.to...b.from) {
-			final c: Int = StringTools.fastCodeAt(source, k);
-			if (c == '\n'.code)
-				newlines++;
-			else if (!isSpace(c)) return false;
-		}
-		return newlines == 1;
-	}
-
 	/**
 	 * Body span of a comment token — the text between the opener (`//` or the
 	 * block opener) and the closer, with a closed block's trailing delimiter
@@ -1002,18 +939,6 @@ final class RefactorSupport {
 	 */
 	public static function dropContainedEdits(edits: Array<{ span: Span, text: String }>): Array<{ span: Span, text: String }> {
 		return [for (i in 0...edits.length) if (!isContainedEdit(edits, i)) edits[i]];
-	}
-
-	/** True when `edits[i]` is contained in another edit (the outer one is kept). */
-	private static function isContainedEdit(edits: Array<{ span: Span, text: String }>, i: Int): Bool {
-		final e: Span = edits[i].span;
-		for (j in 0...edits.length) if (j != i) {
-			final o: Span = edits[j].span;
-			final contains: Bool = o.from <= e.from && e.to <= o.to;
-			final strictlyBigger: Bool = o.from < e.from || e.to < o.to;
-			if (contains && (strictlyBigger || j < i)) return true;
-		}
-		return false;
 	}
 
 	/**
@@ -1075,31 +1000,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Skip a comment line-continuation starting at `from` (just past a `\n`): any
-	 * further whitespace and blank lines, plus ONE ` * ` doc-marker per line.
-	 * Returns the index of the first content character (or `n`).
-	 */
-	private static function skipContinuation(body: String, from: Int, n: Int): Int {
-		var i: Int = from;
-		var markerSeen: Bool = false;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(body, i);
-			if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
-				i++;
-			} else if (c == '\n'.code) {
-				i++;
-				markerSeen = false;
-			} else if (c == '*'.code && !markerSeen) {
-				i++;
-				markerSeen = true;
-			} else {
-				break;
-			}
-		}
-		return i;
-	}
-
-	/**
 	 * Whether the condition subtree `cond` contains a null-narrowing guard: an
 	 * identifier compared against null (`x == null` / `x != null`) that is then
 	 * REUSED elsewhere in the same condition (`x.f`, `x[i]`, `x()`, `g(x)`, a bare
@@ -1124,36 +1024,6 @@ final class RefactorSupport {
 			if (checks != null && total > checks) return true;
 		}
 		return false;
-	}
-
-	/** Tally, over `node`, every IdentExpr occurrence and every null-comparison ident operand. */
-	private static function tallyGuardIdents(
-		node: QueryNode, identKind: String, nullKind: String, eqKind: Null<String>, notEqKind: Null<String>, identCount: Map<String, Int>,
-		checkCount: Map<String, Int>
-	): Void {
-		if (node.kind == identKind) {
-			final name: Null<String> = node.name;
-			if (name != null) bumpCount(identCount, name);
-		}
-		if ((eqKind != null && node.kind == eqKind) || (notEqKind != null && node.kind == notEqKind)) {
-			final ident: Null<String> = nullComparedIdent(node, identKind, nullKind);
-			if (ident != null) bumpCount(checkCount, ident);
-		}
-		for (c in node.children) tallyGuardIdents(c, identKind, nullKind, eqKind, notEqKind, identCount, checkCount);
-	}
-
-	/** Increment the integer counter for `key`. */
-	private static inline function bumpCount(map: Map<String, Int>, key: String): Void {
-		final cur: Null<Int> = map[key];
-		map[key] = (cur ?? 0) + 1;
-	}
-
-	/** The identifier compared against null in `node` (one operand an ident, the other null), or null. */
-	private static function nullComparedIdent(node: QueryNode, identKind: String, nullKind: String): Null<String> {
-		if (node.children.length != 2) return null;
-		final a: QueryNode = node.children[0];
-		final b: QueryNode = node.children[1];
-		return a.kind == identKind && b.kind == nullKind ? a.name : b.kind == identKind && a.kind == nullKind ? b.name : null;
 	}
 
 	/**
@@ -1210,31 +1080,6 @@ final class RefactorSupport {
 		}
 	}
 
-	/** Recursive worker for `eachFieldMember`: visit a container's mutable fields, tracking exported state. */
-	private static function walkFieldContainers(
-		node: QueryNode, source: String, file: String, containers: Array<String>, members: Array<String>, mutableFields: Array<String>,
-		visibility: Array<String>, defaultVis: String,
-		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
-	): Void {
-		if (containers.contains(node.kind)) {
-			final owner: Null<String> = node.name;
-			if (owner != null) {
-				var exported: Bool = false;
-				for (child in node.children) {
-					if (visibility.contains(child.kind)) {
-						final span: Null<Span> = child.span;
-						if (span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis) exported = true;
-					} else if (members.contains(child.kind)) {
-						if (mutableFields.contains(child.kind)) visit(owner, child, source, file, exported);
-						exported = false;
-					}
-				}
-			}
-		}
-		for (child in node.children)
-			walkFieldContainers(child, source, file, containers, members, mutableFields, visibility, defaultVis, visit);
-	}
-
 	/**
 	 * The `var` → `final` keyword-swap edits for each non-null span in `spans` (a field
 	 * decl whose span starts at the `var` keyword). Shared by the `prefer-final-field`
@@ -1265,6 +1110,210 @@ final class RefactorSupport {
 		final initSpan: Null<Span> = field.children[0].span;
 		if (initSpan == null) return false;
 		return source.substring(span.from, initSpan.from).indexOf('(') < 0;
+	}
+
+	/**
+	 * Extend `span` (a member's `declGroupSpan`) over its ATTACHED comments so the doc
+	 * travels with the member during a `member-order` reorder: backward over the run of
+	 * OWN-LINE leading comments (line comments and block comments, across blank lines)
+	 * up to the previous member's code, and forward over a comment trailing on the
+	 * decl's own line. A comment on a member's code line stays that member's trailing; an
+	 * own-line comment between two members attaches to the FOLLOWING member — so two
+	 * adjacent members never claim the same comment (their slots stay disjoint).
+	 */
+	public static function memberTriviaSpan(source: String, span: Span): Span {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+		var from: Int = span.from;
+		while (true) {
+			final c: Null<{ from: Int, to: Int, isLine: Bool }> = lastCommentEndingBefore(comments, from);
+			if (c == null || StringTools.trim(source.substring(c.to, from)) != '') break;
+			final ls: Int = lineStartOf(source, c.from);
+			if (StringTools.trim(source.substring(ls, c.from)) != '') break;
+			from = ls;
+		}
+		var to: Int = span.to;
+		final t: Null<{ from: Int, to: Int, isLine: Bool }> = firstCommentStartingAfter(comments, to);
+		if (t != null && StringTools.trim(source.substring(to, t.from)) == '' && source.substring(to, t.from).indexOf('\n') < 0) to = t.to;
+		return new Span(from, to);
+	}
+
+	/**
+	 * Extend `span` to also remove ONE separating comma so a comma list stays
+	 * well-formed after the element is cut: the trailing comma (preferred) —
+	 * the next non-whitespace byte after `span.to` — else the leading comma
+	 * before `span.from` (the element was last). A single-element list has
+	 * neither and the span is returned unchanged (`[a]` → `[]`). Surrounding
+	 * whitespace is left to the writer re-emit.
+	 */
+	private static function commaExtendedSpan(source: String, span: Span): Span {
+		var i: Int = span.to;
+		while (i < source.length && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		if (i < source.length && StringTools.fastCodeAt(source, i) == ','.code) return new Span(span.from, i + 1);
+
+		var j: Int = span.from - 1;
+		while (j >= 0 && isSpace(StringTools.fastCodeAt(source, j))) j--;
+		return j >= 0 && StringTools.fastCodeAt(source, j) == ','.code ? new Span(j, span.to) : span;
+	}
+
+	/**
+	 * A node kind that contributes no side effect on its own: an enumerated
+	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
+	 * (a literal payload not separately enumerated).
+	 */
+	private static inline function isSafeKind(kind: String): Bool {
+		return SAFE_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
+	}
+
+	/** Is `offset` inside any of `spans` (`from`-inclusive, `to`-exclusive)? */
+	private static function offsetWithinAny(offset: Int, spans: Array<Span>): Bool {
+		for (s in spans) if (offset >= s.from && offset < s.to) return true;
+		return false;
+	}
+
+	/** True if only whitespace precedes the byte at `from` on its line. */
+	private static function isFullLineComment(source: String, from: Int): Bool {
+		var i: Int = from - 1;
+		while (i >= 0 && StringTools.fastCodeAt(source, i) != '\n'.code) {
+			if (!isSpace(StringTools.fastCodeAt(source, i))) return false;
+			i--;
+		}
+		return true;
+	}
+
+	/**
+	 * True if two comment tokens are full-line line comments separated by a
+	 * single line break (no blank line, no code) — members of one contiguous
+	 * line-comment block.
+	 */
+	private static function contiguousLineComments(
+		source: String, a: { from: Int, to: Int, isLine: Bool }, b: { from: Int, to: Int, isLine: Bool }
+	): Bool {
+		if (!a.isLine || !b.isLine) return false;
+		if (!isFullLineComment(source, a.from) || !isFullLineComment(source, b.from)) return false;
+		var newlines: Int = 0;
+		for (k in a.to...b.from) {
+			final c: Int = StringTools.fastCodeAt(source, k);
+			if (c == '\n'.code)
+				newlines++;
+			else if (!isSpace(c)) return false;
+		}
+		return newlines == 1;
+	}
+
+	/** True when `edits[i]` is contained in another edit (the outer one is kept). */
+	private static function isContainedEdit(edits: Array<{ span: Span, text: String }>, i: Int): Bool {
+		final e: Span = edits[i].span;
+		for (j in 0...edits.length) if (j != i) {
+			final o: Span = edits[j].span;
+			final contains: Bool = o.from <= e.from && e.to <= o.to;
+			final strictlyBigger: Bool = o.from < e.from || e.to < o.to;
+			if (contains && (strictlyBigger || j < i)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Skip a comment line-continuation starting at `from` (just past a `\n`): any
+	 * further whitespace and blank lines, plus ONE ` * ` doc-marker per line.
+	 * Returns the index of the first content character (or `n`).
+	 */
+	private static function skipContinuation(body: String, from: Int, n: Int): Int {
+		var i: Int = from;
+		var markerSeen: Bool = false;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(body, i);
+			if (c == ' '.code || c == '\t'.code || c == '\r'.code) {
+				i++;
+			} else if (c == '\n'.code) {
+				i++;
+				markerSeen = false;
+			} else if (c == '*'.code && !markerSeen) {
+				i++;
+				markerSeen = true;
+			} else {
+				break;
+			}
+		}
+		return i;
+	}
+
+	/** Tally, over `node`, every IdentExpr occurrence and every null-comparison ident operand. */
+	private static function tallyGuardIdents(
+		node: QueryNode, identKind: String, nullKind: String, eqKind: Null<String>, notEqKind: Null<String>, identCount: Map<String, Int>,
+		checkCount: Map<String, Int>
+	): Void {
+		if (node.kind == identKind) {
+			final name: Null<String> = node.name;
+			if (name != null) bumpCount(identCount, name);
+		}
+		if ((eqKind != null && node.kind == eqKind) || (notEqKind != null && node.kind == notEqKind)) {
+			final ident: Null<String> = nullComparedIdent(node, identKind, nullKind);
+			if (ident != null) bumpCount(checkCount, ident);
+		}
+		for (c in node.children) tallyGuardIdents(c, identKind, nullKind, eqKind, notEqKind, identCount, checkCount);
+	}
+
+	/** Increment the integer counter for `key`. */
+	private static inline function bumpCount(map: Map<String, Int>, key: String): Void {
+		final cur: Null<Int> = map[key];
+		map[key] = (cur ?? 0) + 1;
+	}
+
+	/** The identifier compared against null in `node` (one operand an ident, the other null), or null. */
+	private static function nullComparedIdent(node: QueryNode, identKind: String, nullKind: String): Null<String> {
+		if (node.children.length != 2) return null;
+		final a: QueryNode = node.children[0];
+		final b: QueryNode = node.children[1];
+		return a.kind == identKind && b.kind == nullKind ? a.name : b.kind == identKind && a.kind == nullKind ? b.name : null;
+	}
+
+	/** Recursive worker for `eachFieldMember`: visit a container's mutable fields, tracking exported state. */
+	private static function walkFieldContainers(
+		node: QueryNode, source: String, file: String, containers: Array<String>, members: Array<String>, mutableFields: Array<String>,
+		visibility: Array<String>, defaultVis: String,
+		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
+	): Void {
+		if (containers.contains(node.kind)) {
+			final owner: Null<String> = node.name;
+			if (owner != null) {
+				var exported: Bool = false;
+				for (child in node.children) {
+					if (visibility.contains(child.kind)) {
+						final span: Null<Span> = child.span;
+						if (span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis) exported = true;
+					} else if (members.contains(child.kind)) {
+						if (mutableFields.contains(child.kind)) visit(owner, child, source, file, exported);
+						exported = false;
+					}
+				}
+			}
+		}
+		for (child in node.children)
+			walkFieldContainers(child, source, file, containers, members, mutableFields, visibility, defaultVis, visit);
+	}
+
+	/** Walk back from `from` over own-line line-comments and block-comments (and the whitespace between) to the first code. */
+	private static function lastCommentEndingBefore(
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int
+	): Null<{ from: Int, to: Int, isLine: Bool }> {
+		var best: Null<{ from: Int, to: Int, isLine: Bool }> = null;
+		for (c in comments) if (c.to <= pos && (best == null || c.to > best.to)) best = c;
+		return best;
+	}
+
+	/** Extend `to` forward over a line-comment (or same-line block-comment) trailing on the decl's own line. */
+	private static function firstCommentStartingAfter(
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int
+	): Null<{ from: Int, to: Int, isLine: Bool }> {
+		var best: Null<{ from: Int, to: Int, isLine: Bool }> = null;
+		for (c in comments) if (c.from >= pos && (best == null || c.from < best.from)) best = c;
+		return best;
+	}
+
+	/** Index of the first character of the line containing `i` (just past the preceding newline). */
+	private static function lineStartOf(source: String, i: Int): Int {
+		final nl: Int = source.lastIndexOf('\n', i);
+		return nl < 0 ? 0 : nl + 1;
 	}
 
 }

@@ -174,7 +174,7 @@ final class MemberOrder implements Check {
 				final span: Null<Span> = child.span;
 				if (span != null) {
 					final group: Span = RefactorSupport.declGroupSpan(child, container, span);
-					final full: Span = RefactorSupport.docExtendedSpan(source, group);
+					final full: Span = RefactorSupport.memberTriviaSpan(source, group);
 					final isField: Bool = fields.contains(child.kind);
 					out.push({
 						node: child,

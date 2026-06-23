@@ -96,11 +96,13 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
-	/** An orphan line comment between members blocks the reorder (it would be misplaced). */
-	public function testOrphanCommentBlocksReorder(): Void {
-		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t// note about the field\n\tpublic var x:Int = 0;\n}';
-		Assert.isTrue(violations(src).length > 0);
-		Assert.equals(0, edits(src).length);
+	/** A leading line comment travels WITH its member during the reorder (it is part of the member's slot). */
+	public function testLeadingCommentTravelsWithMember(): Void {
+		final fixed: String = fixedSource(
+			'class C {\n\tpublic function m():Void {}\n\n\t// note about the field\n\tpublic var x:Int = 0;\n}'
+		);
+		Assert.isTrue(fixed.indexOf('// note about the field') < fixed.indexOf('var x'), 'note still immediately before x: $fixed');
+		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('function m'), 'field (with its note) moved before the method: $fixed');
 	}
 
 }

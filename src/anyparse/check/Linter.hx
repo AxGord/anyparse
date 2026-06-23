@@ -66,6 +66,7 @@ final class Linter {
 			new MissingVisibility(),
 			new ModifierOrder(),
 			new MemberOrder(),
+			new FragmentedDocComment(),
 			new ExplicitType(),
 			new PreferFinalField(),
 			new PreferFinalPublicField(),
