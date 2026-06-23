@@ -112,4 +112,67 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('static final K') < fixed.indexOf('var x'), 'static const moved before instance field: $fixed');
 	}
 
+	/** A guarded member reorders into canonical position and stays wrapped in its `#if`. */
+	public function testConditionalReordersAndStaysWrapped(): Void {
+		final fixed: String = fixedSource('class C {\n\t#if X\n\tpublic function a():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}');
+		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('function a'), 'public field before public method: $fixed');
+		Assert.isTrue(fixed.indexOf('#if X') < fixed.indexOf('function a'), 'method still opens its #if: $fixed');
+		Assert.isTrue(fixed.indexOf('function a') < fixed.indexOf('#end'), 'method still closed by #end: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+	}
+
+	/** A `#if X` nested in another `#if X` (the Cli shape) collapses to one block — the members stay together. */
+	public function testNestedSameConditionCoalesces(): Void {
+		final fixed: String = fixedSource(
+			'class C {\n\t#if SYS\n\tpublic function a():Void {}\n\n\t#if SYS\n\tpublic function b():Void {}\n\t#end\n\t#end\n\n\tpublic var x:Int = 0;\n}'
+		);
+		final between: String = fixed.substring(fixed.indexOf('function a'), fixed.indexOf('function b'));
+		Assert.isTrue(between.indexOf('#if') < 0 && between.indexOf('#end') < 0, 'a and b share one coalesced #if SYS block: $fixed');
+		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('function a'), 'field moved before the methods: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+	}
+
+	/** Differently-guarded nesting flattens to a parenthesised conjunction the grammar's `#if` accepts. */
+	public function testNestedDifferentConditionConjunction(): Void {
+		final fixed: String = fixedSource(
+			'class C {\n\t#if A\n\tpublic function a():Void {}\n\n\t#if B\n\tpublic function b():Void {}\n\t#end\n\t#end\n\n\tpublic var x:Int = 0;\n}'
+		);
+		Assert.isTrue(fixed.indexOf('#if ((A) && (B))') >= 0, 'nested different conds become a parenthesised conjunction: $fixed');
+		Assert.isTrue(fixed.indexOf('((A) && (B))') < fixed.indexOf('function b'), 'b is under the conjunction: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses through the grammar #if: $fixed');
+	}
+
+	/** A conditional with an `#else` is flagged but NOT auto-reordered (v1 cannot split then/else bodies). */
+	public function testConditionalElseBailsNotFixed(): Void {
+		final src: String = 'class C {\n\t#if X\n\tpublic function a():Void {}\n\t#else\n\tpublic function b():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** An orphan comment stranded between a member and its `#end` (no member to absorb it) bails the reorder. */
+	public function testConditionalOrphanCommentBails(): Void {
+		final src: String = 'class C {\n\t#if A\n\tpublic function a():Void {}\n\t// orphan in block\n\t#end\n\n\tpublic var x:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A doc comment written before a member's `#if` (the Cli pattern) moves inside the regenerated `#if`, with its member. */
+	public function testLeadDocBeforeIfTravels(): Void {
+		final fixed: String = fixedSource(
+			'class C {\n\t/** docs for r */\n\t#if SYS\n\tpublic function r():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}'
+		);
+		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('#if SYS'), 'field reordered before the #if block: $fixed');
+		Assert.isTrue(fixed.indexOf('#if SYS') < fixed.indexOf('docs for r'), 'doc moved inside the #if: $fixed');
+		Assert.isTrue(fixed.indexOf('docs for r') < fixed.indexOf('function r'), 'doc still immediately before its member: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+	}
+
+	/** Whether `src` parses — used to assert a conditional-reorder rebuild round-trips through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips). */
+	private function parses(src: String): Bool {
+		return try {
+			new HaxeQueryPlugin().parseFile(src);
+			true;
+		} catch (exception: haxe.Exception) false;
+	}
+
 }

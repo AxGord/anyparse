@@ -477,6 +477,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			staticModifierKind: 'Static',
 			constructorName: 'new',
 			accessorMethodPrefixes: ['get_', 'set_'],
+			conditionalMemberKind: 'Conditional',
+			conditionalIfKeyword: '#if',
+			conditionalElseKeywords: ['#else', '#elseif'],
 		};
 	}
 

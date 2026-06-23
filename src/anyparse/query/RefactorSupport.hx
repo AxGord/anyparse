@@ -1112,24 +1112,9 @@ final class RefactorSupport {
 		return source.substring(span.from, initSpan.from).indexOf('(') < 0;
 	}
 
-	/**
-	 * Extend `span` (a member's `declGroupSpan`) over its ATTACHED comments so the doc
-	 * travels with the member during a `member-order` reorder: backward over the run of
-	 * OWN-LINE leading comments (line comments and block comments, across blank lines)
-	 * up to the previous member's code, and forward over a comment trailing on the
-	 * decl's own line. A comment on a member's code line stays that member's trailing; an
-	 * own-line comment between two members attaches to the FOLLOWING member — so two
-	 * adjacent members never claim the same comment (their slots stay disjoint).
-	 */
+	/** Extend a member's `span` back over own-line leading comments and forward over a same-line trailing comment, yielding its full source slot. */
 	public static function memberTriviaSpan(source: String, span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
-		var from: Int = span.from;
-		while (true) {
-			final c: Null<{ from: Int, to: Int, isLine: Bool }> = lastCommentEndingBefore(comments, from);
-			if (c == null || StringTools.trim(source.substring(c.to, from)) != '') break;
-			final ls: Int = lineStartOf(source, c.from);
-			if (StringTools.trim(source.substring(ls, c.from)) != '') break;
-			from = ls;
-		}
+		final from: Int = absorbLeadingComments(source, comments, span.from);
 		var to: Int = span.to;
 		final t: Null<{ from: Int, to: Int, isLine: Bool }> = firstCommentStartingAfter(comments, to);
 		if (t != null && StringTools.trim(source.substring(to, t.from)) == '' && source.substring(to, t.from).indexOf('\n') < 0) to = t.to;
@@ -1313,6 +1298,29 @@ final class RefactorSupport {
 	private static function lineStartOf(source: String, i: Int): Int {
 		final nl: Int = source.lastIndexOf('\n', i);
 		return nl < 0 ? 0 : nl + 1;
+	}
+
+	/**
+	 * The start offset of the contiguous own-line comment block immediately preceding the
+	 * line that contains `pos` (only whitespace between the comments and that line), or that
+	 * line's start when none exists. Lets a reorder absorb a doc comment sitting just before
+	 * a `#if` directive into the conditional it documents.
+	 */
+	public static function leadingCommentBlockStart(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int): Int {
+		return absorbLeadingComments(source, comments, lineStartOf(source, pos));
+	}
+
+	/** Walk `from` back over own-line leading comments (and the whitespace between) to the first code; returns the new start offset. Shared by `memberTriviaSpan` and `leadingCommentBlockStart`. */
+	private static function absorbLeadingComments(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int): Int {
+		var result: Int = from;
+		while (true) {
+			final c: Null<{ from: Int, to: Int, isLine: Bool }> = lastCommentEndingBefore(comments, result);
+			if (c == null || StringTools.trim(source.substring(c.to, result)) != '') break;
+			final ls: Int = lineStartOf(source, c.from);
+			if (StringTools.trim(source.substring(ls, c.from)) != '') break;
+			result = ls;
+		}
+		return result;
 	}
 
 }

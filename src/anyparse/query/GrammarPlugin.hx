@@ -725,6 +725,25 @@ typedef RefShape = {
 	 * other instance methods. Optional; unset means accessors sort as ordinary methods.
 	 */
 	@:optional var accessorMethodPrefixes: Array<String>;
+
+	/**
+	 * The conditional-compilation member kind (Haxe `Conditional`, a `#if … #end`
+	 * region wrapping whole member declarations). The `member-order` check descends
+	 * into it to collect a guarded member with the condition it is declared under,
+	 * and the reorder autofix re-wraps the sorted members in `#if`/`#end`. Optional;
+	 * unset means the grammar has no conditional members (no descent).
+	 */
+	@:optional var conditionalMemberKind: String;
+
+	/** The `#if` directive keyword (Haxe `#if`) opening a conditional region — read to recover its condition text. Optional. */
+	@:optional var conditionalIfKeyword: String;
+
+	/**
+	 * The `#else` / `#elseif` directive keywords. The `member-order` reorder cannot yet
+	 * split a conditional's then-body from its else-body (both project as flat
+	 * children), so it bails a container whose member gaps contain one. Optional.
+	 */
+	@:optional var conditionalElseKeywords: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

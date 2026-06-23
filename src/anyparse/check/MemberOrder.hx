@@ -23,6 +23,13 @@ typedef OrderedMember = {
 	var isField: Bool;
 	var isStatic: Bool;
 	var initNode: Null<QueryNode>;
+
+	var condition: Null<String>;
+	var regionFrom: Int;
+	var regionTo: Int;
+
+	var leadTrivia: String;
+	var leadFrom: Int;
 }
 @:nullSafety(Strict)
 final class MemberOrder implements Check {
@@ -103,9 +110,10 @@ final class MemberOrder implements Check {
 	}
 
 	/**
-	 * Emit the slot-permutation edits for `container` when its first out-of-order
-	 * member is flagged and its fields are reorder-safe: stable-sort the members by
-	 * rank and replace each source slot with the member now ranked for it.
+	 * Emit the reorder edits for `container` when its first out-of-order member is
+	 * flagged and its fields are reorder-safe: stable-sort the members by rank, then
+	 * either swap each source slot in place (no conditionals) or rebuild the whole
+	 * member region with regrouped `#if`/`#end` directives (conditional members).
 	 */
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>
@@ -117,53 +125,30 @@ final class MemberOrder implements Check {
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> a.rank != b.rank ? a.rank - b.rank : a.index - b.index);
 		if (!reorderSafe(members, sorted, source, shape)) return;
-		for (i in 0...members.length) if (members[i].node != sorted[i].node)
-			edits.push({ span: members[i].span, text: source.substring(sorted[i].span.from, sorted[i].span.to) });
+		var hasConditional: Bool = false;
+		for (m in members) if (m.condition != null) {
+			hasConditional = true;
+			break;
+		}
+		if (!hasConditional) {
+			for (i in 0...members.length) if (members[i].node != sorted[i].node)
+				edits.push({ span: members[i].span, text: source.substring(sorted[i].span.from, sorted[i].span.to) });
+			return;
+		}
+		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape);
+		if (rebuilt == null) return;
+		edits.push({ span: new Span(members[0].regionFrom, members[members.length - 1].regionTo), text: rebuilt });
 	}
 
 	/**
-	 * Collect `container`'s direct members in source order, each with its rank and
-	 * full slot span. The modifier / `@:meta` siblings preceding a member set its
-	 * `static` and public flags (public = a visibility modifier whose text differs
-	 * from the default); both reset at each member.
+	 * Collect `container`'s members in source (pre-order) order with each member's
+	 * rank and full slot span, descending into `#if` conditional regions so a guarded
+	 * member is recorded with the condition it is declared under (see `collectInto`).
 	 */
 	private static function collectMembers(container: QueryNode, source: String, shape: RefShape): Array<OrderedMember> {
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final fields: Array<String> = shape.fieldDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		final staticKind: Null<String> = shape.staticModifierKind;
-		final defaultVis: String = shape.defaultVisibilityModifierText ?? '';
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
 		final out: Array<OrderedMember> = [];
-		var isStatic: Bool = false;
-		var isPublic: Bool = false;
-		for (child in container.children) {
-			if (members.contains(child.kind)) {
-				final span: Null<Span> = child.span;
-				if (span != null) {
-					final group: Span = RefactorSupport.declGroupSpan(child, container, span);
-					final full: Span = RefactorSupport.memberTriviaSpan(source, group, comments);
-					final isField: Bool = fields.contains(child.kind);
-					out.push({
-						node: child,
-						rank: rankOf(child, isStatic, isPublic, isField, shape),
-						index: out.length,
-						span: full,
-						isField: isField,
-						isStatic: isStatic,
-						initNode: isField && child.children.length > 0 ? child.children[0] : null
-					});
-				}
-				isStatic = false;
-				isPublic = false;
-			} else {
-				if (staticKind != null && child.kind == staticKind) isStatic = true;
-				if (visibility.contains(child.kind)) {
-					final s: Null<Span> = child.span;
-					if (s != null && StringTools.trim(source.substring(s.from, s.to)) != defaultVis) isPublic = true;
-				}
-			}
-		}
+		collectInto(out, container, source, shape, comments, [], null);
 		return out;
 	}
 
@@ -199,46 +184,15 @@ final class MemberOrder implements Check {
 	}
 
 	/**
-	 * Whether reordering `members` cannot change behaviour: every field with an
-	 * initializer is side-effect-free AND references no sibling field name, so its
-	 * declaration order is immaterial. Methods are always safe.
+	 * Whether reordering `members` cannot change behaviour. Reordering changes behaviour
+	 * only via FIELD initializers (they run in declaration order; statics at class-load,
+	 * instance fields in the constructor — independent phases). Bails on stranded trivia
+	 * (an `#else`, an orphan comment) or a field-init order flip a text scan cannot prove
+	 * safe.
 	 */
 	private static function reorderSafe(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape): Bool {
-		// Reordering changes behaviour only via FIELD initializers (they run in
-		// declaration order). Static fields init at class-load and instance fields in
-		// the constructor — INDEPENDENT phases — so a field need only keep its order
-		// relative to OTHER FIELDS OF THE SAME static-ness (`f.isStatic == g.isStatic`).
-		//
-		// (0) Orphan trivia between two member slots (a note / trailing comment not
-		// absorbed into either slot) would be left behind while members move around it,
-		// so any non-whitespace gap bails the container (report-only).
-		for (i in 0...members.length - 1) {
-			final gapFrom: Int = members[i].span.to;
-			final gapTo: Int = members[i + 1].span.from;
-			if (gapTo > gapFrom && StringTools.trim(source.substring(gapFrom, gapTo)) != '') return false;
-		}
-		// (1) A side-effecting field init (a call / `new` / assignment) can read or
-		// mutate any same-phase field through the callee (invisible to a text scan), so
-		// it must keep its relative order to every same-phase field.
-		final unsafe: Array<String> = shape.writeParentKinds.copy();
-		if (shape.callKind != null) unsafe.push(shape.callKind);
-		if (shape.newExprKind != null) unsafe.push(shape.newExprKind);
-		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
-		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields)
-			if (g.node != f.node && f.isStatic == g.isStatic && orderFlips(f, g, sorted)) return false;
-		// (2) A field whose init TEXT reads a same-phase sibling field must keep its
-		// relative order to it (a cross-phase read is always safe — statics init first).
-		for (m in members) {
-			final init: Null<QueryNode> = m.initNode;
-			if (init == null) continue;
-			final s: Null<Span> = init.span;
-			if (s == null) continue;
-			for (g in members)
-				if (g.isField && g.node != m.node && g.isStatic == m.isStatic && g.node.name != null && RefactorSupport.referencedInRange(
-					source, (g.node.name: String), s.from, s.to, []
-				) && orderFlips(m, g, sorted)) return false;
-		}
-		return true;
+		return !hasElseBetweenMembers(members, source, shape) && !hasOrphanComment(members, source)
+			&& !hasSideEffectingFieldFlip(members, sorted, shape) && !hasSiblingReadFlip(members, sorted, source);
 	}
 
 	/** Whether `a` and `b`'s relative order differs between source (`index`) and `sorted`. */
@@ -265,6 +219,268 @@ final class MemberOrder implements Check {
 		if (kinds.contains(node.kind)) return true;
 		for (c in node.children) if (subtreeContainsAny(c, kinds)) return true;
 		return false;
+	}
+
+	/**
+	 * Collect `parent`'s direct member declarations into `out` in source (pre-order)
+	 * order, descending into `conditionalMemberKind` (`#if`) regions so each guarded
+	 * member is recorded with the condition it is declared under. `condStack` holds the
+	 * enclosing `#if` condition conjuncts (an identical conjunct is deduped, collapsing
+	 * a redundant `#if X` nested in `#if X`); `outerCond` is the outermost enclosing
+	 * conditional's span — the rebuild-region bound for every member under it.
+	 */
+	private static function collectInto(
+		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>
+	): Void {
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
+		final staticKind: Null<String> = shape.staticModifierKind;
+		final defaultVis: String = shape.defaultVisibilityModifierText ?? '';
+		final condKind: Null<String> = shape.conditionalMemberKind;
+		var isStatic: Bool = false;
+		var isPublic: Bool = false;
+		for (child in parent.children) {
+			if (condKind != null && child.kind == condKind) {
+				final span: Null<Span> = child.span;
+				final cond: Null<String> = extractConditionText(child, source, shape);
+				final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
+				final firstIdx: Int = out.length;
+				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span);
+				if (span != null && out.length > firstIdx) absorbLeadDoc(out, firstIdx, source, comments, span.from);
+				isStatic = false;
+				isPublic = false;
+			} else if (members.contains(child.kind)) {
+				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic);
+				isStatic = false;
+				isPublic = false;
+			} else {
+				if (staticKind != null && child.kind == staticKind) isStatic = true;
+				if (visibility.contains(child.kind)) {
+					final s: Null<Span> = child.span;
+					if (s != null && StringTools.trim(source.substring(s.from, s.to)) != defaultVis) isPublic = true;
+				}
+			}
+		}
+	}
+
+	/**
+	 * The `#if` condition text of a conditional-member node, whitespace-normalised, or
+	 * null. The condition ends at the first newline after `#if` (it is a single-line
+	 * directive) or at the first member, whichever comes first — so a doc comment that
+	 * sits between the `#if` line and the first member is NOT captured into the condition.
+	 */
+	private static function extractConditionText(node: QueryNode, source: String, shape: RefShape): Null<String> {
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
+		final ifIdx: Int = source.indexOf(ifKw, span.from);
+		if (ifIdx < 0) return null;
+		final condStart: Int = ifIdx + ifKw.length;
+		final firstChild: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
+		final childSpan: Null<Span> = firstChild != null ? firstChild.span : null;
+		final childFrom: Int = childSpan != null ? childSpan.from : span.to;
+		final nl: Int = source.indexOf('\n', condStart);
+		final lineEnd: Int = nl < 0 ? span.to : nl;
+		final condEnd: Int = childFrom < lineEnd ? childFrom : lineEnd;
+		if (condEnd <= condStart) return null;
+		final raw: String = StringTools.trim(source.substring(condStart, condEnd));
+		return raw == '' ? null : normalizeCondition(raw);
+	}
+
+	/** Collapse internal whitespace runs in a condition to single spaces for stable comparison. */
+	private static function normalizeCondition(cond: String): String {
+		return (~/\s+/g).replace(cond, ' ');
+	}
+
+	/**
+	 * Join condition conjuncts into one parenthesised `#if` expression. Each conjunct is
+	 * itself parenthesised unless already balanced-parenthesised, and the whole is wrapped
+	 * in an outer pair — the grammar's `#if` accepts a single (parenthesised) condition, not
+	 * a bare top-level `&&`, so `((A) && (B))`, never `(A) && (B)`.
+	 */
+	private static function joinConds(stack: Array<String>): String {
+		return stack.length == 1 ? stack[0] : '(' + stack.map(parenthesiseConjunct).join(' && ') + ')';
+	}
+
+	/** Wrap `cond` in parentheses unless it is already a single balanced parenthesised group. */
+	private static function parenthesiseConjunct(cond: String): String {
+		return isBalancedParenWrapped(cond) ? cond : '($cond)';
+	}
+
+	/** Whether `cond` is wrapped in one outer pair of balanced parentheses spanning the whole string. */
+	private static function isBalancedParenWrapped(cond: String): Bool {
+		if (!StringTools.startsWith(cond, '(') || !StringTools.endsWith(cond, ')')) return false;
+		var depth: Int = 0;
+		for (i in 0...cond.length) {
+			switch cond.charAt(i) {
+				case '(':
+					depth++;
+				case ')':
+					depth--;
+					if (depth == 0 && i < cond.length - 1)
+						return false;
+				case _:
+			}
+		}
+		return depth == 0;
+	}
+
+	/**
+	 * Rebuild a container's whole member region from `sorted` (rank order): each maximal
+	 * run of members sharing one `#if` condition is wrapped in a single `#if <cond> …
+	 * #end`; unconditional runs stay bare. A member's absorbed lead-doc is emitted just
+	 * before it, inside the regenerated `#if`. The writer round-trip re-indents the rough
+	 * newline joins. Returns null if the self-check finds any member no longer under its
+	 * recorded condition.
+	 */
+	private static function buildConditionalRegion(sorted: Array<OrderedMember>, source: String, shape: RefShape): Null<String> {
+		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
+		final parts: Array<String> = [];
+		var prevCond: Null<String> = null;
+		var started: Bool = false;
+		for (m in sorted) {
+			if (!sameCondition(m.condition, prevCond)) {
+				if (started && prevCond != null) parts.push('#end');
+				final cond: Null<String> = m.condition;
+				if (cond != null) parts.push('$ifKw $cond');
+				prevCond = m.condition;
+			}
+			parts.push(m.leadTrivia + source.substring(m.span.from, m.span.to));
+			started = true;
+		}
+		if (prevCond != null) parts.push('#end');
+		return verifyRegion(parts, sorted, ifKw) ? parts.join('\n') : null;
+	}
+
+	/** Re-derive each emitted member's surrounding condition from the directive stream and confirm it equals the recorded one. */
+	private static function verifyRegion(parts: Array<String>, sorted: Array<OrderedMember>, ifKw: String): Bool {
+		final ifPrefix: String = '$ifKw ';
+		var current: Null<String> = null;
+		var si: Int = 0;
+		for (p in parts) {
+			final t: String = StringTools.trim(p);
+			if (t == '#end')
+				current = null;
+			else if (StringTools.startsWith(t, ifPrefix))
+				current = StringTools.trim(t.substring(ifPrefix.length));
+			else {
+				if (si >= sorted.length || !sameCondition(current, sorted[si].condition)) return false;
+				si++;
+			}
+		}
+		return si == sorted.length;
+	}
+
+	/** Whether two optional `#if` conditions are equal (both null = unconditional). */
+	private static function sameCondition(a: Null<String>, b: Null<String>): Bool {
+		return a == b;
+	}
+
+	/**
+	 * Attach a doc/comment block sitting on the lines immediately before a conditional's
+	 * `#if` (the parser puts it outside the conditional) to the conditional's first
+	 * member `out[firstIdx]`, so the rebuild re-emits it with that member inside the
+	 * regenerated `#if`. Extends the member's rebuild-region start back over the block.
+	 */
+	private static function absorbLeadDoc(
+		out: Array<OrderedMember>, firstIdx: Int, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, ifPos: Int
+	): Void {
+		final nl: Int = source.lastIndexOf('\n', ifPos);
+		final ifLineStart: Int = nl < 0 ? 0 : nl + 1;
+		final leadFrom: Int = RefactorSupport.leadingCommentBlockStart(source, comments, ifPos);
+		if (leadFrom >= ifLineStart) return;
+		out[firstIdx].leadTrivia = source.substring(leadFrom, ifLineStart);
+		out[firstIdx].leadFrom = leadFrom;
+		if (leadFrom < out[firstIdx].regionFrom) out[firstIdx].regionFrom = leadFrom;
+	}
+
+	/** Whether an `#else` / `#elseif` sits between member slots — the projection flattens then-body and else-body members, so their conditions cannot be split. */
+	private static function hasElseBetweenMembers(members: Array<OrderedMember>, source: String, shape: RefShape): Bool {
+		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
+		if (elseKeywords.length == 0) return false;
+		for (i in 0...members.length - 1) {
+			final gap: String = source.substring(members[i].span.to, members[i + 1].span.from);
+			for (line in gap.split('\n')) {
+				final t: String = StringTools.trim(line);
+				for (k in elseKeywords) if (StringTools.startsWith(t, k)) return true;
+			}
+		}
+		return false;
+	}
+
+	/** Whether a comment in the member region is covered by no member's slot or absorbed lead-doc — an orphan note the reorder would strand. Directives are regenerated, so need no coverage. */
+	private static function hasOrphanComment(members: Array<OrderedMember>, source: String): Bool {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		final regionFrom: Int = members[0].regionFrom;
+		final regionTo: Int = members[members.length - 1].regionTo;
+		for (c in comments) {
+			if (c.to <= regionFrom || c.from >= regionTo) continue;
+			var covered: Bool = false;
+			for (m in members) {
+				final leadEnd: Int = m.leadFrom + m.leadTrivia.length;
+				if (c.from >= m.leadFrom && c.to <= leadEnd || c.from >= m.span.from && c.to <= m.span.to) {
+					covered = true;
+					break;
+				}
+			}
+			if (!covered) return true;
+		}
+		return false;
+	}
+
+	/** Whether a side-effecting field initializer would flip order with a same-phase field — its callee may read/mutate that field (invisible to a text scan). */
+	private static function hasSideEffectingFieldFlip(members: Array<OrderedMember>, sorted: Array<OrderedMember>, shape: RefShape): Bool {
+		final unsafe: Array<String> = shape.writeParentKinds.copy();
+		if (shape.callKind != null) unsafe.push(shape.callKind);
+		if (shape.newExprKind != null) unsafe.push(shape.newExprKind);
+		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
+		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields)
+			if (g.node != f.node && f.isStatic == g.isStatic && orderFlips(f, g, sorted)) return true;
+		return false;
+	}
+
+	/** Whether a field initializer that textually reads a same-phase sibling field would flip order with it (a cross-phase read is safe — statics init first). */
+	private static function hasSiblingReadFlip(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String): Bool {
+		for (m in members) {
+			final init: Null<QueryNode> = m.initNode;
+			if (init == null) continue;
+			final s: Null<Span> = init.span;
+			if (s == null) continue;
+			for (g in members)
+				if (g.isField && g.node != m.node && g.isStatic == m.isStatic && g.node.name != null && RefactorSupport.referencedInRange(
+					source, (g.node.name: String), s.from, s.to, []
+				) && orderFlips(m, g, sorted)) return true;
+		}
+		return false;
+	}
+
+	/** Build and push the `OrderedMember` for member `child` of `parent`, ranked under the running modifier flags and the `condStack` condition. */
+	private static function pushMember(
+		out: Array<OrderedMember>, child: QueryNode, parent: QueryNode, source: String, shape: RefShape,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, isStatic: Bool,
+		isPublic: Bool
+	): Void {
+		final span: Null<Span> = child.span;
+		if (span == null) return;
+		final group: Span = RefactorSupport.declGroupSpan(child, parent, span);
+		final full: Span = RefactorSupport.memberTriviaSpan(source, group, comments);
+		final isField: Bool = (shape.fieldDeclKinds ?? []).contains(child.kind);
+		final region: Span = outerCond ?? full;
+		out.push({
+			node: child,
+			rank: rankOf(child, isStatic, isPublic, isField, shape),
+			index: out.length,
+			span: full,
+			isField: isField,
+			isStatic: isStatic,
+			initNode: isField && child.children.length > 0 ? child.children[0] : null,
+			condition: condStack.length == 0 ? null : joinConds(condStack),
+			regionFrom: region.from,
+			regionTo: region.to,
+			leadTrivia: '',
+			leadFrom: full.from
+		});
 	}
 
 }
