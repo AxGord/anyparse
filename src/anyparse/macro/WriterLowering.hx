@@ -41,7 +41,6 @@ class WriterLowering {
 	}
 
 	private function lowerRule(typePath: String, node: ShapeNode): Array<WriterRule> {
-		final simple: String = simpleName(typePath);
 		final fnName: String = writeFnFor(typePath);
 		final valueCT: ComplexType = ruleValueCT(typePath);
 
@@ -9707,14 +9706,9 @@ class WriterLowering {
 		final cascadeInitCurr: Expr = c.cascadeInitCurr;
 		final cascadeCurrCompute: Expr = c.cascadeCurrCompute;
 		final cascadeTrackPrev: Expr = c.cascadeTrackPrev;
-		final cascadeBlanksCount: Expr = c.cascadeBlanksCount;
-		final subsequentSepDoc: Expr = c.subsequentSepDoc;
-		final firstSepExpr: Expr = c.firstSepExpr;
 		final triviaElemCallMaybeBreak: Expr = c.triviaElemCallMaybeBreak;
 		final elemOptInit: Expr = c.elemOptInit;
 		final tryparseBlockEndedSepEmit: Expr = c.tryparseBlockEndedSepEmit;
-		final metaPolicyExpr: Expr = c.metaPolicyExpr;
-		final forceInlineSep: Bool = c.forceInlineSep;
 		final sepCascade: Expr = triviaTryparseSepCascadeExpr(c);
 		return macro {
 			var _si: Int = 0;
