@@ -685,6 +685,25 @@ typedef RefShape = {
 	 * Optional — unset leaves a reification subtree fully opaque.
 	 */
 	@:optional var interpolationKinds: Array<String>;
+
+	/**
+	 * The identifier that qualifies an instance-member access with the enclosing
+	 * object — `this` in curly-brace families, `self` in Python. Used by the
+	 * `redundant-this` check to recognise a self-qualified access (`this.field`)
+	 * reducible to a bare reference when no local shadows the name. Optional —
+	 * unset disables the check.
+	 */
+	@:optional var selfReferenceText: Null<String>;
+
+	/**
+	 * Type-declaration kinds whose `this` is the underlying value rather than an
+	 * instance — a compile-time `abstract A(T)` / `enum abstract`, where a
+	 * `this.field` accesses the underlying type's member and the `this.` qualifier
+	 * is MANDATORY (there is no implicit-this). The `redundant-this` check skips
+	 * members of these types. An OOP `abstract class` is a real class and is NOT
+	 * listed. Optional — unset means no such types exist.
+	 */
+	@:optional var underlyingThisTypeKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

@@ -275,6 +275,8 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 		// `obj.x = …` and `arr[i] = …` keep `obj` / `arr` / `i` as Reads.
 		return {
 			identKind: 'IdentExpr',
+			selfReferenceText: 'this',
+			underlyingThisTypeKinds: ['AbstractDecl', 'EnumAbstractDecl'],
 			declHostKinds: DECL_HOST_KINDS,
 			// `CatchClause` is surfaced by `appendNodes` from the
 			// `@:spanned('CatchClause')` paired struct; it opens a scope

@@ -309,6 +309,7 @@ import unit.ApqExitOnEmptyCliTest;
 import unit.MagicNumberCheckTest;
 import unit.CheckstyleConfigLoaderTest;
 import unit.SimplifyBooleanReturnChainCheckTest;
+import unit.RedundantThisCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -589,6 +590,7 @@ class RunTests {
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
+		addCase(new RedundantThisCheckTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
 		addCase(new RedundantElseCheckTest());
