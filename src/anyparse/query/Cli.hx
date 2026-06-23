@@ -340,7 +340,6 @@ final class Cli {
 	private static final EXIT_OK: Int = 0;
 	private static final EXIT_USAGE: Int = 2;
 	private static final EXIT_RUNTIME: Int = 1;
-
 	private static final SKIP_PATHS_SHOWN: Int = 5;
 	private static final FUZZY_MAX_DIST: Int = 3;
 
@@ -389,6 +388,63 @@ final class Cli {
 	 * `FooSomeReallyLongName` and crowding out true neighbours).
 	 */
 	private static final FUZZY_SUBSTRING_MAX_EXTRA: Int = 8;
+
+	/**
+	 * Single-line byte-diff describing where `actual` first diverges from
+	 * `expected`, with windowed snippets around the divergence point.
+	 * Same shape as the corpus harness's `describeDiff` so writer-bug
+	 * iteration via `apq writer-equals` reads identical to the corpus
+	 * fail line.
+	 */
+	private static final BYTE_DIFF_WINDOW: Int = 40;
+
+	private static final BYTE_DIFF_LEAD: Int = 4;
+	private static inline final STAGE_PROBE_PATH: String = '/tmp/anyparse-last-probe.hx';
+
+	/**
+	 * Boolean (value-less) `--flag` set for `runAst`. Listed explicitly
+	 * so `runProbe`'s argv walker can tell `--depth 5` (consumes 5)
+	 * from `--json` (consumes nothing). Stay in sync with the cases
+	 * in `runAst` that take no `expectValue` call.
+	 */
+	private static final AST_BOOL_FLAGS: Array<String> = [
+		'--json',
+		'--doc',
+		'--source',
+		'--writer-output',
+		'--writer-output-plain',
+		'--diff',
+		'--stdin',
+		'--spans',
+	];
+
+	#if (sys || nodejs)
+	/**
+	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
+	 * stderr and the sweep footer breakdown surface at most this many
+	 * keys before truncating.
+	 */
+	private static inline final NO_TARGET_TOP_N: Int = 10;
+	#end
+	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
+
+	/**
+	 * Heartbeat interval for the multi-file walk progress line — emit a
+	 * stderr `scanned K/N` every this many files so a corpus-wide walk
+	 * never goes silent (a watchdog reading a redirected stream sees
+	 * steady byte growth). Tuned so a several-hundred-file `src/` walk
+	 * yields ~10–20 lines rather than one-per-file flooding.
+	 */
+	private static inline final PROGRESS_INTERVAL: Int = 25;
+
+	/**
+	 * Map a `--fail-on` level name to its `Severity`, or null if unknown.
+	 * `--exit-on-empty` / `--require-match`, stripped from the argv in `run` and
+	 * reset there on every invocation (single CLI call chain, never concurrent).
+	 * When set, a find-walker that produced no hits exits non-zero instead of 0, so
+	 * a script can reliably detect "no match" (e.g. confirm a symbol was removed).
+	 */
+	private static var _requireMatch: Bool = false;
 
 	public static function main(): Void {
 		#if nodejs
@@ -546,6 +602,96 @@ final class Cli {
 				return EXIT_USAGE;
 		}
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
+	 * the structured result (counts + first-failure locus) can be asserted
+	 * directly without the stdout-capture round-trip Cli.run would impose.
+	 *
+	 * Line shape recognition (utest 1.13.x):
+	 *  - `  testName: OK <dots>` — pass; dot-count adds to assertions.
+	 *  - `  testName: FAIL[URE] <…>` — failure counter.
+	 *  - `  testName: ERR[OR] <…>` — error counter.
+	 *  - `ClassName` (unindented CamelCase token, no colon) — class header;
+	 *    tracked so first-failure carries its qualifier.
+	 *  - `    <detail>` (4-space indent) following a fail/err — the
+	 *    failure's detail line. `line: N, <msg>` and
+	 *    `fileName: X, line: N, <msg>` shapes are decoded into structured
+	 *    fields; bare detail falls into `message`.
+	 *
+	 * The detail capture only fires for the FIRST fail/err — once
+	 * `firstFailure` is set, subsequent failures only bump counters.
+	 */
+	public static function parseTestSummary(raw: String): TestSummaryResult {
+		final okRe: EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
+		final failRe: EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
+		final errRe: EReg = ~/^\s+(\w[\w.]*):\s+ERR/;
+		final classRe: EReg = ~/^([A-Z]\w*)$/;
+		final detailFullRe: EReg = ~/^\s*fileName:\s*([^,]+),\s*line:\s*(\d+),\s*(.*)$/;
+		final detailLineRe: EReg = ~/^\s*line:\s*(\d+),\s*(.*)$/;
+		// Bare-message detail: any non-zero indent + non-empty content.
+		// Widened from `\s{4,}` because utest's indent isn't guaranteed
+		// 4-space (tabs / 2-space variants exist in older transcripts).
+		final detailBareRe: EReg = ~/^\s+(\S.*)$/;
+		var tests: Int = 0;
+		var assertions: Int = 0;
+		var failures: Int = 0;
+		var errors: Int = 0;
+		var currentClass: String = '';
+		var firstFailure: Null<TestSummaryFailureLocus> = null;
+		var awaitingDetail: Bool = false;
+		for (line in raw.split('\n')) {
+			if (awaitingDetail) {
+				awaitingDetail = false;
+				final locus: Null<TestSummaryFailureLocus> = firstFailure;
+				if (locus != null && tryCaptureDetail(locus, line, detailFullRe, detailLineRe, detailBareRe)) continue;
+				// Fall through: the line was NOT a detail row (utest emitted
+				// no detail for this failure, or the next test row arrived
+				// immediately). Re-process via the normal regex chain so we
+				// don't silently swallow it.
+			}
+			if (okRe.match(line)) {
+				tests++;
+				final dots: Null<String> = try okRe.matched(3) catch (_: Exception) null;
+				if (dots != null) assertions += (dots: String).length;
+			} else if (failRe.match(line)) {
+				failures++;
+				if (firstFailure == null) {
+					firstFailure = {
+						className: currentClass,
+						testName: failRe.matched(1),
+						line: -1,
+						message: '',
+						kind: TestSummaryFailureKind.Fail
+					};
+					awaitingDetail = true;
+				}
+			} else if (errRe.match(line)) {
+				errors++;
+				if (firstFailure == null) {
+					firstFailure = {
+						className: currentClass,
+						testName: errRe.matched(1),
+						line: -1,
+						message: '',
+						kind: TestSummaryFailureKind.Error
+					};
+					awaitingDetail = true;
+				}
+			} else if (classRe.match(line)) {
+				currentClass = classRe.matched(1);
+			}
+		}
+		return {
+			tests: tests,
+			assertions: assertions,
+			failures: failures,
+			errors: errors,
+			firstFailure: firstFailure
+		};
+	}
+	#end
 
 	private static function runRefs(args: Array<String>): Int {
 		final o: RefsOpts = parseRefsArgs(args);
@@ -2811,17 +2957,6 @@ final class Cli {
 		return EXIT_RUNTIME;
 	}
 
-	/**
-	 * Single-line byte-diff describing where `actual` first diverges from
-	 * `expected`, with windowed snippets around the divergence point.
-	 * Same shape as the corpus harness's `describeDiff` so writer-bug
-	 * iteration via `apq writer-equals` reads identical to the corpus
-	 * fail line.
-	 */
-	private static final BYTE_DIFF_WINDOW: Int = 40;
-
-	private static final BYTE_DIFF_LEAD: Int = 4;
-
 	private static function describeByteDiff(actual: String, expected: String): String {
 		final maxLen: Int = expected.length < actual.length ? expected.length : actual.length;
 		var diffAt: Int = -1;
@@ -4012,25 +4147,6 @@ final class Cli {
 		#end
 	}
 
-	private static inline final STAGE_PROBE_PATH: String = '/tmp/anyparse-last-probe.hx';
-
-	/**
-	 * Boolean (value-less) `--flag` set for `runAst`. Listed explicitly
-	 * so `runProbe`'s argv walker can tell `--depth 5` (consumes 5)
-	 * from `--json` (consumes nothing). Stay in sync with the cases
-	 * in `runAst` that take no `expectValue` call.
-	 */
-	private static final AST_BOOL_FLAGS: Array<String> = [
-		'--json',
-		'--doc',
-		'--source',
-		'--writer-output',
-		'--writer-output-plain',
-		'--diff',
-		'--stdin',
-		'--spans',
-	];
-
 	private static inline function isAstBoolFlag(flag: String): Bool {
 		return AST_BOOL_FLAGS.contains(flag);
 	}
@@ -4175,6 +4291,7 @@ final class Cli {
 		};
 	}
 
+	#if (sys || nodejs)
 	/**
 	 * `apq recon` — corpus skip-parse drill harness. Walks a directory
 	 * looking for source files (`.hxtest` fixtures auto-extract section
@@ -4196,7 +4313,6 @@ final class Cli {
 	 *  - `apq recon --probe <file>` — single-file probe. Useful for
 	 *    confirming a hypothesis about ONE fixture after a grammar edit.
 	 */
-	#if (sys || nodejs)
 	private static function runRecon(args: Array<String>): Int {
 		final o: ReconOpts = parseReconArgs(args);
 		if (o.errExit != null) return o.errExit;
@@ -4236,7 +4352,6 @@ final class Cli {
 							o.showSource
 						);
 	}
-
 	/**
 	 * `apq recon --probe <file> --predict-relax` — single-file
 	 * terminator-insertion predictor. Parses `<file>`, captures the
@@ -4262,7 +4377,6 @@ final class Cli {
 		final res: PredictRelaxResult = tryPredictRelax(plugin, original);
 		return reportPredictRelax(path, original, res, showSource);
 	}
-
 	/**
 	 * Sweep-mode predict-relax. Walks every skip-parse fixture under
 	 * `root`, runs `tryPredictRelax`, prints per-file outcome plus a
@@ -4304,7 +4418,6 @@ final class Cli {
 			? runReconRelaxNoTargetCluster(plugin, records, noTargetClusterFilter, showSource)
 			: runReconRelaxFullSweep(plugin, records, clusterFilter != null, showSource);
 	}
-
 	/**
 	 * Run a single predict-relax probe on `source`. Returns one of the
 	 * three result kinds with the patched source / new locus / injected
@@ -4420,14 +4533,6 @@ final class Cli {
 			};
 		}
 	}
-
-	/**
-	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
-	 * stderr and the sweep footer breakdown surface at most this many
-	 * keys before truncating.
-	 */
-	private static inline final NO_TARGET_TOP_N: Int = 10;
-
 	/**
 	 * Find-or-insert a `{key, count}` entry in `reasons` by exact key
 	 * match. Shared by the predict-relax sweep footer (`runReconSweepRelax`
@@ -4441,7 +4546,6 @@ final class Cli {
 		}
 		reasons.push({ key: key, count: 1 });
 	}
-
 	private static function reportPredictRelax(path: String, original: String, res: PredictRelaxResult, showSource: Bool): Int {
 		switch res.kind {
 			case Unblock:
@@ -4465,7 +4569,6 @@ final class Cli {
 				return EXIT_RUNTIME;
 		}
 	}
-
 	/**
 	 * Strip the `expected="<X>"` hint down to a literal token. Hints
 	 * arrive as raw strings from `ParseError.expected` — they may be
@@ -4489,7 +4592,6 @@ final class Cli {
 		// NO TARGET.
 		return t == '//' || t == '<no message>' ? '' : t;
 	}
-
 	/**
 	 * `apq recon --candidates <regex>` — walk skip-parse fixtures and
 	 * count regex matches in each fixture's source. Reports one line per
@@ -4533,7 +4635,6 @@ final class Cli {
 		);
 		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
-
 	/**
 	 * `apq recon --permissive-construct` — field-optionalization
 	 * predictor for Slice 40's `@:optional + @:lead + @:trail` mechanism.
@@ -4620,7 +4721,6 @@ final class Cli {
 		}
 		return totalUnblocks == 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
-
 	/**
 	 * Enumerate `mandatory-ref-lead-trail` candidates by walking the
 	 * grammar tree (`src/anyparse/grammar/<lang>/`) the same way `apq
@@ -4655,7 +4755,6 @@ final class Cli {
 		}
 		return out;
 	}
-
 	/**
 	 * Single-pass `<lead>...<trail>` strip on `source`. Symmetric leads
 	 * (`(`, `{`, `[`) consume the whole balanced pair; asymmetric leads
@@ -4699,7 +4798,6 @@ final class Cli {
 		}
 		return { out: buf.toString(), count: count };
 	}
-
 	/**
 	 * Scan from `startIdx` looking for the matching trail. Returns the
 	 * index PAST the strip region (caller does `i = endIdx` to skip it):
@@ -4749,15 +4847,12 @@ final class Cli {
 		}
 		return -1;
 	}
-
 	private static inline function isBracketOpener(c: Int): Bool {
 		return c == '('.code || c == '{'.code || c == '['.code;
 	}
-
 	private static inline function isBracketCloser(c: Int): Bool {
 		return c == ')'.code || c == '}'.code || c == ']'.code;
 	}
-
 	/**
 	 * If `source[i]` starts a string literal (single- or double-quoted)
 	 * or comment (line-style or block-style), return the index PAST it;
@@ -4800,7 +4895,6 @@ final class Cli {
 		}
 		return i;
 	}
-
 	/**
 	 * `apq recon --regression-probe` — load the prior sweep snapshot's
 	 * per-fixture status map (`bin/.last-sweep.json`'s `fixtures` array,
@@ -4851,7 +4945,6 @@ final class Cli {
 		);
 		return walk.regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
-
 	/**
 	 * Read `bin/.last-sweep.json`'s `fixtures` array (written by
 	 * `HxFormatterCorpusTest.printSweepDelta`) into a `path → status`
@@ -4891,7 +4984,6 @@ final class Cli {
 		}
 		return out;
 	}
-
 	private static function runReconProbe(
 		plugin: GrammarPlugin, path: String, predictStrip: Bool, patterns: Array<String>, replacements: Array<String>,
 		compiledRegex: Null<Array<EReg>>, showSource: Bool, writerEqualsAfter: Bool = false, writerEqualsPlain: Bool = false,
@@ -4931,7 +5023,6 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 	}
-
 	/**
 	 * ω-probe-writer-check: chain a writer round-trip + byte-equality check
 	 * onto a probe-mode PARSE OK. Reuses `runWriterEquals`'s machinery so
@@ -4993,7 +5084,6 @@ final class Cli {
 		sysPrint('WRITER FAIL :: ${describeByteDiff(emittedNormalised, expectedSource)}\n');
 		return EXIT_RUNTIME;
 	}
-
 	private static function runReconProbePredict(
 		plugin: GrammarPlugin, path: String, original: String, patterns: Array<String>, replacements: Array<String>,
 		compiledRegex: Null<Array<EReg>>, showSource: Bool
@@ -5059,7 +5149,6 @@ final class Cli {
 		}
 		return exitCode;
 	}
-
 	private static function runReconSweep(
 		plugin: GrammarPlugin, root: String, topN: Int, clusterFilter: Null<String>, predictStrip: Bool, patterns: Array<String>,
 		replacements: Array<String>, compiledRegex: Null<Array<EReg>>, showSource: Bool
@@ -5109,7 +5198,6 @@ final class Cli {
 			? printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource)
 			: printReconHistogram(clusters, records.length, topN);
 	}
-
 	/**
 	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
 	 * record list drives both the recon sweep (histogram / cluster drill
@@ -5177,7 +5265,6 @@ final class Cli {
 		}
 		return { wired: wired, records: records, clusters: clusters };
 	}
-
 	private static function printReconHistogram(clusters: Map<String, ReconCluster>, total: Int, topN: Int): Int {
 		final entries: Array<{ key: String, cluster: ReconCluster }> = [
 			for (k => v in clusters) { key: k, cluster: v }
@@ -5196,7 +5283,6 @@ final class Cli {
 		if (entries.length > shown) sysPrint('  … (${entries.length - shown} more, use --top N or --all to see)\n');
 		return EXIT_OK;
 	}
-
 	/**
 	 * `--cluster <substr>` drill output: one block per matching
 	 * cluster with the FULL path list (not the histogram's capped
@@ -5252,7 +5338,6 @@ final class Cli {
 		}
 		return EXIT_OK;
 	}
-
 	/**
 	 * Emit a windowed source slice centred on `failLine` (1-indexed) to
 	 * stdout, with a `>>` marker on the fail row and right-aligned line
@@ -5277,13 +5362,11 @@ final class Cli {
 		}
 		sysPrint('      --- end ---\n');
 	}
-
 	private static inline function padLeft(s: String, width: Int): String {
 		var out: String = s;
 		while (out.length < width) out = ' ' + out;
 		return out;
 	}
-
 	/**
 	 * Render the predict-strip "moved locus" suffix. Three regimes:
 	 *  - Same locus → empty (no hint needed).
@@ -5314,7 +5397,6 @@ final class Cli {
 				? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
 				: ' (was $origLine:$origCol)';
 	}
-
 	/**
 	 * `--predict-strip` output: for each skip-parse record, apply the
 	 * supplied --replace / --with / --delete substitutions to the
@@ -5413,7 +5495,6 @@ final class Cli {
 		}
 		return EXIT_OK;
 	}
-
 	private static function defaultReconRoot(): String {
 		final fork: Null<String> = resolveForkPath();
 		if (fork == null || fork.length == 0) return '';
@@ -5431,7 +5512,6 @@ final class Cli {
 		#end
 		return resolved;
 	}
-
 	/**
 	 * Resolve the haxe-formatter fork path with env > config-cache
 	 * precedence. The env var IS the canonical source — the cache
@@ -5449,7 +5529,6 @@ final class Cli {
 		#end
 		return null;
 	}
-
 	/**
 	 * Emit a stderr nudge when any `.hx` file under `src/` or `test/` is
 	 * newer than `bin/test.js` — the next `node bin/test.js` will run
@@ -5480,8 +5559,6 @@ final class Cli {
 		}
 		#end
 	}
-
-	#if (sys || nodejs)
 	private static function anyHxNewerThan(root: String, threshold: Float): Bool {
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return false;
 		final stack: Array<String> = [root];
@@ -5504,12 +5581,10 @@ final class Cli {
 		}
 		return false;
 	}
-
 	private static function forkPathCacheFile(): Null<String> {
 		final home: Null<String> = Sys.getEnv('HOME');
 		return home == null || home.length == 0 ? null : '$home/.config/anyparse/fork_path';
 	}
-
 	private static function readForkPathCache(): Null<String> {
 		final path: Null<String> = forkPathCacheFile();
 		if (path == null || !FileSystem.exists(path)) return null;
@@ -5521,7 +5596,6 @@ final class Cli {
 			return null;
 		}
 	}
-
 	private static function tryWriteForkPathCache(value: String): Void {
 		final path: Null<String> = forkPathCacheFile();
 		if (path == null) return;
@@ -5545,12 +5619,9 @@ final class Cli {
 			// path stays valid for the current run.
 		}
 	}
-	#end
-
 	private static function stripRootPrefix(path: String, root: String): String {
 		return StringTools.startsWith(path, root + '/') ? path.substr(root.length + 1) : path == root ? '.' : path;
 	}
-
 	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
 		final prev: Null<ReconCluster> = map[key];
 		if (prev == null) {
@@ -5566,7 +5637,6 @@ final class Cli {
 			if (prev.examples.length < RECON_EXAMPLES_PER_CLUSTER) prev.examples.push(file);
 		}
 	}
-
 	/**
 	 * Raw forward locus — `RECON_LOCUS_LEN` chars starting AT the fail
 	 * position. Used both as the cluster's raw sample (display) and as
@@ -5577,7 +5647,6 @@ final class Cli {
 		final end: Int = start + RECON_LOCUS_LEN > input.length ? input.length : start + RECON_LOCUS_LEN;
 		return input.substring(start, end);
 	}
-
 	/**
 	 * Normalise the forward locus into a cluster key — identifier runs
 	 * of length > 4 collapse to `_`, shorter runs (Haxe short keywords
@@ -5614,7 +5683,6 @@ final class Cli {
 		}
 		return reconNormalize(buf.toString());
 	}
-
 	/**
 	 * Source window of `RECON_HEAD_LEN` characters centred on `offset`
 	 * — the text around the farthest-failure locus, for the human-
@@ -5627,13 +5695,11 @@ final class Cli {
 		final end: Int = centre + half > input.length ? input.length : centre + half;
 		return input.substring(start, end);
 	}
-
 	private static function reconNormalize(message: Null<String>): String {
 		return message == null || message == ''
 			? '<no message>'
 			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
 	}
-
 	/**
 	 * `apq sweep` — read-only view on the corpus harness's
 	 * `bin/.last-sweep.json` snapshot. Prints totals (+ Δ vs a prior
@@ -5726,7 +5792,6 @@ final class Cli {
 		}
 		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
 	}
-
 	/**
 	 * Per-fixture status diff between two sweep snapshots. THE answer to
 	 * "which fixtures flipped between these two runs" — replaces the
@@ -5784,7 +5849,6 @@ final class Cli {
 			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n');
 		return EXIT_OK;
 	}
-
 	private static function loadSweepJson(path: String): Null<SweepTotals> {
 		return !sys.FileSystem.exists(path)
 			? null
@@ -5808,9 +5872,7 @@ final class Cli {
 				};
 			} catch (_: Exception) null;
 	}
-
 	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';
-
 	private static function printSweepUsage(): Void {
 		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
 		sysPrint('\n');
@@ -5829,7 +5891,6 @@ final class Cli {
 		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
 		sysPrint('  -h, --help      Show this help\n');
 	}
-
 	/**
 	 * `apq test-summary [<file>]` — parse a utest stdout transcript and
 	 * print `N tests / M assertions / F failures / E errors`. Replaces
@@ -5906,7 +5967,6 @@ final class Cli {
 		}
 		return EXIT_OK;
 	}
-
 	/**
 	 * `apq self-status [<dir>]` — walk `<dir>` recursively (default `src/`),
 	 * try every `.hx` file via the grammar plugin's trivia parser, print
@@ -5938,7 +5998,6 @@ final class Cli {
 		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
 		return (opts.strict && walk.skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
 	}
-
 	private static function printSelfStatusUsage(): Void {
 		sysPrint('apq self-status [<dir>] [--strict] [--source]\n');
 		sysPrint('\n');
@@ -5958,8 +6017,6 @@ final class Cli {
 		sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
 		sysPrint('  -h, --help     Show this help.\n');
 	}
-
-	#if (sys || nodejs)
 	/**
 	 * `apq source <file> [--range SPEC] [--number]` — emit a file's RAW
 	 * verbatim lines with NO AST parse, so it works on ANY file (parseable
@@ -6021,7 +6078,6 @@ final class Cli {
 		emitSourceLines(lines, bounds.from, bounds.to, opts.number, opts.raw);
 		return EXIT_OK;
 	}
-
 	/**
 	 * Parse a `source --range` spec into a 1-based inclusive `{from, to}`
 	 * line pair, clamped to `[1, lineCount]`. Forms: `null`/`""` → whole
@@ -6049,12 +6105,10 @@ final class Cli {
 		final to: Int = clampLine(hi, lineCount);
 		return from > to ? null : { from: from, to: to };
 	}
-
 	/** Clamp a 1-based line number into `[1, lineCount]`. */
 	private static inline function clampLine(n: Int, lineCount: Int): Int {
 		return n < 1 ? 1 : (n > lineCount ? lineCount : n);
 	}
-
 	private static function printSourceUsage(): Void {
 		sysPrint('Usage: apq source [options] <file>\n');
 		sysPrint('\n');
@@ -6078,96 +6132,6 @@ final class Cli {
 		sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
 		sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
 	}
-	#end
-
-	/**
-	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
-	 * the structured result (counts + first-failure locus) can be asserted
-	 * directly without the stdout-capture round-trip Cli.run would impose.
-	 *
-	 * Line shape recognition (utest 1.13.x):
-	 *  - `  testName: OK <dots>` — pass; dot-count adds to assertions.
-	 *  - `  testName: FAIL[URE] <…>` — failure counter.
-	 *  - `  testName: ERR[OR] <…>` — error counter.
-	 *  - `ClassName` (unindented CamelCase token, no colon) — class header;
-	 *    tracked so first-failure carries its qualifier.
-	 *  - `    <detail>` (4-space indent) following a fail/err — the
-	 *    failure's detail line. `line: N, <msg>` and
-	 *    `fileName: X, line: N, <msg>` shapes are decoded into structured
-	 *    fields; bare detail falls into `message`.
-	 *
-	 * The detail capture only fires for the FIRST fail/err — once
-	 * `firstFailure` is set, subsequent failures only bump counters.
-	 */
-	public static function parseTestSummary(raw: String): TestSummaryResult {
-		final okRe: EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
-		final failRe: EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
-		final errRe: EReg = ~/^\s+(\w[\w.]*):\s+ERR/;
-		final classRe: EReg = ~/^([A-Z]\w*)$/;
-		final detailFullRe: EReg = ~/^\s*fileName:\s*([^,]+),\s*line:\s*(\d+),\s*(.*)$/;
-		final detailLineRe: EReg = ~/^\s*line:\s*(\d+),\s*(.*)$/;
-		// Bare-message detail: any non-zero indent + non-empty content.
-		// Widened from `\s{4,}` because utest's indent isn't guaranteed
-		// 4-space (tabs / 2-space variants exist in older transcripts).
-		final detailBareRe: EReg = ~/^\s+(\S.*)$/;
-		var tests: Int = 0;
-		var assertions: Int = 0;
-		var failures: Int = 0;
-		var errors: Int = 0;
-		var currentClass: String = '';
-		var firstFailure: Null<TestSummaryFailureLocus> = null;
-		var awaitingDetail: Bool = false;
-		for (line in raw.split('\n')) {
-			if (awaitingDetail) {
-				awaitingDetail = false;
-				final locus: Null<TestSummaryFailureLocus> = firstFailure;
-				if (locus != null && tryCaptureDetail(locus, line, detailFullRe, detailLineRe, detailBareRe)) continue;
-				// Fall through: the line was NOT a detail row (utest emitted
-				// no detail for this failure, or the next test row arrived
-				// immediately). Re-process via the normal regex chain so we
-				// don't silently swallow it.
-			}
-			if (okRe.match(line)) {
-				tests++;
-				final dots: Null<String> = try okRe.matched(3) catch (_: Exception) null;
-				if (dots != null) assertions += (dots: String).length;
-			} else if (failRe.match(line)) {
-				failures++;
-				if (firstFailure == null) {
-					firstFailure = {
-						className: currentClass,
-						testName: failRe.matched(1),
-						line: -1,
-						message: '',
-						kind: TestSummaryFailureKind.Fail
-					};
-					awaitingDetail = true;
-				}
-			} else if (errRe.match(line)) {
-				errors++;
-				if (firstFailure == null) {
-					firstFailure = {
-						className: currentClass,
-						testName: errRe.matched(1),
-						line: -1,
-						message: '',
-						kind: TestSummaryFailureKind.Error
-					};
-					awaitingDetail = true;
-				}
-			} else if (classRe.match(line)) {
-				currentClass = classRe.matched(1);
-			}
-		}
-		return {
-			tests: tests,
-			assertions: assertions,
-			failures: failures,
-			errors: errors,
-			firstFailure: firstFailure
-		};
-	}
-
 	private static function tryCaptureDetail(locus: TestSummaryFailureLocus, line: String, full: EReg, lineOnly: EReg, bare: EReg): Bool {
 		// Disambiguate bare detail from regular test rows: a fail/err line
 		// fits `bare` too (`^\s+\S.*`). The fail/err regexes already
@@ -6189,12 +6153,10 @@ final class Cli {
 		}
 		return false;
 	}
-
 	private static inline function parsePositiveInt(s: String): Int {
 		final v: Null<Int> = Std.parseInt(s);
 		return v ?? -1;
 	}
-
 	private static function printTestSummaryUsage(): Void {
 		sysPrint('Usage: apq test-summary [<file> | -]\n');
 		sysPrint('\n');
@@ -6570,8 +6532,6 @@ final class Cli {
 		stderr('apq $cmdName: auto-capped to $AUTO_LIMIT_THRESHOLD of $totalHits hits — pass `--limit N` for an explicit cap.\n');
 		return AUTO_LIMIT_THRESHOLD;
 	}
-
-	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
 
 	private static function printUsage(): Void {
 		sysPrint('apq — anyparse query CLI\n');
@@ -7276,15 +7236,6 @@ final class Cli {
 		Sys.stderr().writeString(s);
 		#end
 	}
-
-	/**
-	 * Heartbeat interval for the multi-file walk progress line — emit a
-	 * stderr `scanned K/N` every this many files so a corpus-wide walk
-	 * never goes silent (a watchdog reading a redirected stream sees
-	 * steady byte growth). Tuned so a several-hundred-file `src/` walk
-	 * yields ~10–20 lines rather than one-per-file flooding.
-	 */
-	private static inline final PROGRESS_INTERVAL: Int = 25;
 
 	/**
 	 * Per-file walk progress heartbeat (multi-file scans only). Writes a
@@ -8506,15 +8457,6 @@ final class Cli {
 		final endOffset: Int = span.to > span.from ? span.to - 1 : span.from;
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}
-
-	/**
-	 * Map a `--fail-on` level name to its `Severity`, or null if unknown.
-	 * `--exit-on-empty` / `--require-match`, stripped from the argv in `run` and
-	 * reset there on every invocation (single CLI call chain, never concurrent).
-	 * When set, a find-walker that produced no hits exits non-zero instead of 0, so
-	 * a script can reliably detect "no match" (e.g. confirm a symbol was removed).
-	 */
-	private static var _requireMatch: Bool = false;
 
 	/**
 	 * Walker exit code honouring `--exit-on-empty`: `EXIT_RUNTIME` when the walk
