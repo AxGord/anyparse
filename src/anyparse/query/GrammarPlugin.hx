@@ -704,6 +704,27 @@ typedef RefShape = {
 	 * listed. Optional — unset means no such types exist.
 	 */
 	@:optional var underlyingThisTypeKinds: Array<String>;
+
+	/**
+	 * The `static` modifier kind (Haxe `Static`) — the `member-order` check uses it to
+	 * tell a static field/method (a constant / static-method-section member) from an
+	 * instance one. Optional; unset makes the check treat every member as instance.
+	 */
+	@:optional var staticModifierKind: String;
+
+	/**
+	 * The constructor's member name (Haxe `new`) — the `member-order` check ranks the
+	 * constructor between the fields and the instance methods. Optional; unset means no
+	 * constructor is recognised (it sorts as an ordinary instance method).
+	 */
+	@:optional var constructorName: String;
+
+	/**
+	 * Name prefixes of property accessor methods (Haxe `get_` / `set_`) — the
+	 * `member-order` check ranks them immediately after the constructor, ahead of the
+	 * other instance methods. Optional; unset means accessors sort as ordinary methods.
+	 */
+	@:optional var accessorMethodPrefixes: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

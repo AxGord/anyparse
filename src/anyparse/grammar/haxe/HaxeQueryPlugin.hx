@@ -130,6 +130,65 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		[['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]
 	);
 
+	/**
+	 * Extension-method names that `using <module>` brings into scope, for the
+	 * Haxe standard-library modules used with `using` in practice. Sourced from
+	 * the installed Haxe std (every `FnMember` of each module), so the set is
+	 * complete: `unused-import` deletes a `using` only when NONE of these is
+	 * called, and a missing name would risk deleting a live `using`. A superset
+	 * name is harmless — it only makes the "used" test more generous.
+	 */
+	private static final EXTENSION_METHODS: Map<String, Array<String>> = [
+		'StringTools' => [
+			'_charAt',
+			'contains',
+			'endsWith',
+			'fastCodeAt',
+			'hex',
+			'htmlEscape',
+			'htmlUnescape',
+			'isEof',
+			'isSpace',
+			'iterator',
+			'keyValueIterator',
+			'lpad',
+			'ltrim',
+			'postProcessUrlEncode',
+			'quoteUnixArg',
+			'quoteWinArg',
+			'replace',
+			'rpad',
+			'rtrim',
+			'startsWith',
+			'trim',
+			'unsafeCodeAt',
+			'urlDecode',
+			'urlEncode',
+			'utf16CodePointAt'
+		],
+		'Lambda' => [
+			'array',
+			'concat',
+			'count',
+			'empty',
+			'exists',
+			'filter',
+			'find',
+			'findIndex',
+			'flatMap',
+			'flatten',
+			'fold',
+			'foldi',
+			'foreach',
+			'has',
+			'indexOf',
+			'iter',
+			'list',
+			'map',
+			'mapi'
+		]
+	];
+
 	public function new() {}
 
 	public function langName(): String return 'haxe';
@@ -197,13 +256,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	public function reconParse(source: String): Bool {
 		HaxeModuleTriviaParser.parse(source);
 		return true;
-	}
-
-	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
-		final root: Dynamic = HaxeModuleSpanParser.parse(source);
-		final children: Array<QueryNode> = [];
-		appendNodes(Reflect.field(root, 'decls'), children, withTypeRefs);
-		return new QueryNode('module', null, orderBySpan(children));
 	}
 
 	public function typeRefShape(): TypeRefShape {
@@ -422,6 +474,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			voidReturnKind: 'VoidReturnStmt',
 			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
 			objectFieldKind: 'Field',
+			staticModifierKind: 'Static',
+			constructorName: 'new',
+			accessorMethodPrefixes: ['get_', 'set_'],
 		};
 	}
 
@@ -473,98 +528,95 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument';
 	}
 
-	private static function wrapAsStmt(src: String): String {
-		return 'class _ApqPattern { static function _apq() { ${trimTrailingSemicolons(src)}; } }';
-	}
-
-	private static function wrapAsExpr(src: String): String {
-		return 'class _ApqPattern { static function _apq() { var _v = ${trimTrailingSemicolons(src)}; } }';
+	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */
+	public function namingSupport(): Null<NamingSupport> {
+		return new HaxeNamingSupport();
 	}
 
 	/**
-	 * Drop the trailing run of `;` and whitespace from a pattern fragment.
-	 * A statement or expression pattern is naturally written with a
-	 * closing `;` (`return $_;`), but `wrapAsStmt` / `wrapAsExpr` append
-	 * their own `;`; without trimming, the wrapped source becomes `…;;`
-	 * and the Haxe grammar — which has no empty-statement production —
-	 * rejects it, failing the whole cascade on a valid statement pattern.
-	 * The unwrapped decl attempt keeps the original source (a
-	 * `typedef X = Y;` decl pattern needs its `;`), so the trim is scoped
-	 * to the wrappers only.
+	 * The Haxe adjacent-string-literal folding capability, consumed by the
+	 * `fold-adjacent-string-literals` check.
 	 */
-	private static function trimTrailingSemicolons(src: String): String {
-		var end: Int = src.length;
-		while (end > 0) {
-			final c: Int = StringTools.fastCodeAt(src, end - 1);
-			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code)
-				end--;
-			else
-				break;
-		}
-		return src.substring(0, end);
+	public function stringFoldSupport(): Null<StringFoldSupport> {
+		return new HaxeStringFoldSupport();
 	}
 
-	private static function wrapAsMetaArgs(src: String): String {
-		return 'class _ApqPattern { $src var _v:Int = 0; }';
+	/**
+	 * The maximum cyclomatic complexity the `complexity` check should allow for a
+	 * function in the file at `path`: read from a discovered `checkstyle.json`'s
+	 * `CyclomaticComplexity` config, or null when none applies (the check then
+	 * uses its built-in default).
+	 */
+	public function maxComplexity(path: String): Null<Int> {
+		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
+		return content == null ? null : try CheckstyleConfigLoader.loadComplexityMax(content) catch (exception: Exception) null;
 	}
 
-	private static function extractFirstDecl(module: QueryNode): Null<QueryNode> {
-		return module.children.length == 0 ? null : module.children[0];
+	public function controlFlowSupport(): Null<ControlFlowSupport> {
+		return new HaxeControlFlowSupport();
 	}
 
-	private static function extractFirstStmt(module: QueryNode): Null<QueryNode> {
-		// module → ClassDecl wrapper → FunctionField → FnDecl struct →
-		// HxFnBody.BlockBody (enum) → HxFnBlock struct (flattened) →
-		// stmts[0]. We navigate by enum kind names; struct envelopes are
-		// transparent in the QueryNode tree.
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		if (cls == null) return null;
-		final block: Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
-		if (block == null) return null;
-		if (block.children.length == 0) return null;
-		final first: QueryNode = block.children[0];
-		// A bare expression-statement pattern (`$a + $b`, `$f($_)`,
-		// `trace($_);`) wraps its expression in a synthetic `ExprStmt`
-		// node. Returning that wrapper as the pattern root constrains
-		// matches to statement position only — the expression stays
-		// invisible in var-init / argument / sub-expression position (the
-		// common case). Reject it so the cascade proceeds to the Expr
-		// attempt, which yields the bare expression as the root; the
-		// matcher then walks every subtree and finds it anywhere.
-		// Non-expression statements (if/for/while/return/var/switch/try/
-		// throw) are not `ExprStmt` and pass through unchanged. Node-level
-		// analog of the `trimTrailingSemicolons` wrapper-artifact fix (#3).
-		return first.kind == 'ExprStmt' ? null : first;
+	public function booleanLogicSupport(): Null<BooleanLogicSupport> {
+		return new HaxeBooleanLogicSupport();
 	}
 
-	private static function extractFirstExpr(module: QueryNode): Null<QueryNode> {
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		if (cls == null) return null;
-		final varStmt: Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
-		return varStmt == null ? null : varStmt.children.length == 0 ? null : varStmt.children[varStmt.children.length - 1];
+	public function knownExtensionMethods(modulePath: String): Null<Array<String>> {
+		return EXTENSION_METHODS[modulePath];
 	}
 
-	private static function extractFirstMeta(module: QueryNode): Null<QueryNode> {
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		return cls == null ? null : findFirstByKind(cls, 'HxMeta') ?? findFirstByKind(cls, 'Meta') ?? findFirstByKindPrefix(cls, 'Meta');
+	public function checkOverrides(path: String): Null<CheckOverrides> {
+		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
+		return content == null ? null : try CheckstyleConfigLoader.loadOverrides(content) catch (exception: Exception) null;
 	}
 
-	private static function findFirstByKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = findFirstByKind(c, kind);
-			if (found != null) return found;
-		}
-		return null;
+	/**
+	 * `TypeInfoProvider`: maps each typed declaration's binding-span `from` to the
+	 * SIMPLE name of its nominal declared type, recovered from the grammar AST
+	 * (which the QueryNode projection drops). Walks the same structure `appendNodes`
+	 * does, associating an enum-ctor decl's Span param with the `type` on its
+	 * payload struct, and a spanned struct's `_span` with its own `type`.
+	 */
+	public function declaredTypes(source: String): Map<Int, String> {
+		final out: Map<Int, String> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'type')) {
+				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
+				if (nm != null)
+					out[span.from] = nm;
+			}
+		});
+		return out;
 	}
 
-	private static function findFirstByKindPrefix(node: QueryNode, prefix: String): Null<QueryNode> {
-		if (StringTools.startsWith(node.kind, prefix)) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = findFirstByKindPrefix(c, prefix);
-			if (found != null) return found;
-		}
-		return null;
+	/**
+	 * `TypeInfoProvider`: maps each property-bearing member's binding-span `from` to
+	 * whether its read accessor is a getter (`get` / `dynamic` → side-effecting,
+	 * true) vs a plain stored read (`default` / `never` / a method name → false).
+	 * A member with NO accessor clause (a plain field) is ABSENT — the consumer
+	 * treats absence as a plain field. Same grammar-AST walk as `declaredTypes`,
+	 * keyed on `HxVarDecl.access` (dropped from the QueryNode projection).
+	 */
+	public function propertyAccessors(source: String): Map<Int, Bool> {
+		final out: Map<Int, Bool> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'access')) {
+				final access: Dynamic = Reflect.field(node, 'access');
+				if (access != null)
+					out[span.from] = isGetterAccess(access);
+			}
+		});
+		return out;
+	}
+
+	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
+		final root: Dynamic = HaxeModuleSpanParser.parse(source);
+		final children: Array<QueryNode> = [];
+		appendNodes(Reflect.field(root, 'decls'), children, withTypeRefs);
+		return new QueryNode('module', null, orderBySpan(children));
 	}
 
 	private function appendNodes(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool): Void {
@@ -801,166 +853,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return null;
 	}
 
-	/**
-	 * True when `v` is an `HxType.Anon` enum value — the anon-struct
-	 * type whose `fields` carry decl-host members + their metadata.
-	 * Gates the `appendNodes` `type`-field descent so only anon
-	 * bodies surface; `Named` / `Arrow` / `Parens` type-refs stay
-	 * skipped (descending them would emit a phantom child per typed
-	 * binding).
-	 */
-	private static inline function isAnonType(v: Dynamic): Bool {
-		if (v == null) return false;
-		final t: Type.ValueType = Type.typeof(v);
-		return switch t {
-			case TEnum(_): Type.enumConstructor(v) == 'Anon';
-			case _: false;
-		}
-	}
-
-	/**
-	 * Order a node's children by source position so the `apq ast`
-	 * dump is engine-independent. `appendNodes` flattens struct
-	 * fields via `Reflect.fields`, whose iteration order is
-	 * target-defined (neko hash order vs js insertion order), so
-	 * without this the then-body / else-body of an `IfStmt` (and any
-	 * other struct-bearing node) surface in different order on neko
-	 * vs node. Stable sort by span start; left untouched unless every
-	 * child carries a span, since a span-less node has no defined
-	 * source position to order against.
-	 */
-	private static function orderBySpan(children: Array<QueryNode>): Array<QueryNode> {
-		final indexed: Array<{ from: Int, idx: Int, node: QueryNode }> = [];
-		for (i in 0...children.length) {
-			final s: Null<Span> = children[i].span;
-			if (s == null) return children;
-			indexed.push({ from: s.from, idx: i, node: children[i] });
-		}
-		indexed.sort((a, b) -> a.from != b.from ? a.from - b.from : a.idx - b.idx);
-		return [for (e in indexed) e.node];
-	}
-
-	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */
-	public function namingSupport(): Null<NamingSupport> {
-		return new HaxeNamingSupport();
-	}
-
-	/**
-	 * The Haxe adjacent-string-literal folding capability, consumed by the
-	 * `fold-adjacent-string-literals` check.
-	 */
-	public function stringFoldSupport(): Null<StringFoldSupport> {
-		return new HaxeStringFoldSupport();
-	}
-
-	/**
-	 * The maximum cyclomatic complexity the `complexity` check should allow for a
-	 * function in the file at `path`: read from a discovered `checkstyle.json`'s
-	 * `CyclomaticComplexity` config, or null when none applies (the check then
-	 * uses its built-in default).
-	 */
-	public function maxComplexity(path: String): Null<Int> {
-		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
-		return content == null ? null : try CheckstyleConfigLoader.loadComplexityMax(content) catch (exception: Exception) null;
-	}
-
-	public function controlFlowSupport(): Null<ControlFlowSupport> {
-		return new HaxeControlFlowSupport();
-	}
-
-	public function booleanLogicSupport(): Null<BooleanLogicSupport> {
-		return new HaxeBooleanLogicSupport();
-	}
-
-	/**
-	 * Extension-method names that `using <module>` brings into scope, for the
-	 * Haxe standard-library modules used with `using` in practice. Sourced from
-	 * the installed Haxe std (every `FnMember` of each module), so the set is
-	 * complete: `unused-import` deletes a `using` only when NONE of these is
-	 * called, and a missing name would risk deleting a live `using`. A superset
-	 * name is harmless — it only makes the "used" test more generous.
-	 */
-	private static final EXTENSION_METHODS: Map<String, Array<String>> = [
-		'StringTools' => [
-			'_charAt',
-			'contains',
-			'endsWith',
-			'fastCodeAt',
-			'hex',
-			'htmlEscape',
-			'htmlUnescape',
-			'isEof',
-			'isSpace',
-			'iterator',
-			'keyValueIterator',
-			'lpad',
-			'ltrim',
-			'postProcessUrlEncode',
-			'quoteUnixArg',
-			'quoteWinArg',
-			'replace',
-			'rpad',
-			'rtrim',
-			'startsWith',
-			'trim',
-			'unsafeCodeAt',
-			'urlDecode',
-			'urlEncode',
-			'utf16CodePointAt'
-		],
-		'Lambda' => [
-			'array',
-			'concat',
-			'count',
-			'empty',
-			'exists',
-			'filter',
-			'find',
-			'findIndex',
-			'flatMap',
-			'flatten',
-			'fold',
-			'foldi',
-			'foreach',
-			'has',
-			'indexOf',
-			'iter',
-			'list',
-			'map',
-			'mapi'
-		]
-	];
-
-	public function knownExtensionMethods(modulePath: String): Null<Array<String>> {
-		return EXTENSION_METHODS[modulePath];
-	}
-
-	public function checkOverrides(path: String): Null<CheckOverrides> {
-		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
-		return content == null ? null : try CheckstyleConfigLoader.loadOverrides(content) catch (exception: Exception) null;
-	}
-
-	/**
-	 * `TypeInfoProvider`: maps each typed declaration's binding-span `from` to the
-	 * SIMPLE name of its nominal declared type, recovered from the grammar AST
-	 * (which the QueryNode projection drops). Walks the same structure `appendNodes`
-	 * does, associating an enum-ctor decl's Span param with the `type` on its
-	 * payload struct, and a spanned struct's `_span` with its own `type`.
-	 */
-	public function declaredTypes(source: String): Map<Int, String> {
-		final out: Map<Int, String> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'type')) {
-				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
-				if (nm != null)
-					out[span.from] = nm;
-			}
-		});
-		return out;
-	}
-
 	/** Simple name of a nominal `HxType.Named(payload)` (the name lives on the payload struct), else null. */
 	private function nominalTypeName(typeVal: Dynamic): Null<String> {
 		if (typeVal == null || !Type.typeof(typeVal).match(TEnum(_))) return null;
@@ -974,28 +866,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			}
 		}
 		return null;
-	}
-
-	/**
-	 * `TypeInfoProvider`: maps each property-bearing member's binding-span `from` to
-	 * whether its read accessor is a getter (`get` / `dynamic` → side-effecting,
-	 * true) vs a plain stored read (`default` / `never` / a method name → false).
-	 * A member with NO accessor clause (a plain field) is ABSENT — the consumer
-	 * treats absence as a plain field. Same grammar-AST walk as `declaredTypes`,
-	 * keyed on `HxVarDecl.access` (dropped from the QueryNode projection).
-	 */
-	public function propertyAccessors(source: String): Map<Int, Bool> {
-		final out: Map<Int, Bool> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'access')) {
-				final access: Dynamic = Reflect.field(node, 'access');
-				if (access != null)
-					out[span.from] = isGetterAccess(access);
-			}
-		});
-		return out;
 	}
 
 	/**
@@ -1044,6 +914,139 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				}
 			case _:
 		}
+	}
+
+	private static function wrapAsStmt(src: String): String {
+		return 'class _ApqPattern { static function _apq() { ${trimTrailingSemicolons(src)}; } }';
+	}
+
+	private static function wrapAsExpr(src: String): String {
+		return 'class _ApqPattern { static function _apq() { var _v = ${trimTrailingSemicolons(src)}; } }';
+	}
+
+	/**
+	 * Drop the trailing run of `;` and whitespace from a pattern fragment.
+	 * A statement or expression pattern is naturally written with a
+	 * closing `;` (`return $_;`), but `wrapAsStmt` / `wrapAsExpr` append
+	 * their own `;`; without trimming, the wrapped source becomes `…;;`
+	 * and the Haxe grammar — which has no empty-statement production —
+	 * rejects it, failing the whole cascade on a valid statement pattern.
+	 * The unwrapped decl attempt keeps the original source (a
+	 * `typedef X = Y;` decl pattern needs its `;`), so the trim is scoped
+	 * to the wrappers only.
+	 */
+	private static function trimTrailingSemicolons(src: String): String {
+		var end: Int = src.length;
+		while (end > 0) {
+			final c: Int = StringTools.fastCodeAt(src, end - 1);
+			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code)
+				end--;
+			else
+				break;
+		}
+		return src.substring(0, end);
+	}
+
+	private static function wrapAsMetaArgs(src: String): String {
+		return 'class _ApqPattern { $src var _v:Int = 0; }';
+	}
+
+	private static function extractFirstDecl(module: QueryNode): Null<QueryNode> {
+		return module.children.length == 0 ? null : module.children[0];
+	}
+
+	private static function extractFirstStmt(module: QueryNode): Null<QueryNode> {
+		// module → ClassDecl wrapper → FunctionField → FnDecl struct →
+		// HxFnBody.BlockBody (enum) → HxFnBlock struct (flattened) →
+		// stmts[0]. We navigate by enum kind names; struct envelopes are
+		// transparent in the QueryNode tree.
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		if (cls == null) return null;
+		final block: Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
+		if (block == null) return null;
+		if (block.children.length == 0) return null;
+		final first: QueryNode = block.children[0];
+		// A bare expression-statement pattern (`$a + $b`, `$f($_)`,
+		// `trace($_);`) wraps its expression in a synthetic `ExprStmt`
+		// node. Returning that wrapper as the pattern root constrains
+		// matches to statement position only — the expression stays
+		// invisible in var-init / argument / sub-expression position (the
+		// common case). Reject it so the cascade proceeds to the Expr
+		// attempt, which yields the bare expression as the root; the
+		// matcher then walks every subtree and finds it anywhere.
+		// Non-expression statements (if/for/while/return/var/switch/try/
+		// throw) are not `ExprStmt` and pass through unchanged. Node-level
+		// analog of the `trimTrailingSemicolons` wrapper-artifact fix (#3).
+		return first.kind == 'ExprStmt' ? null : first;
+	}
+
+	private static function extractFirstExpr(module: QueryNode): Null<QueryNode> {
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		if (cls == null) return null;
+		final varStmt: Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
+		return varStmt == null ? null : varStmt.children.length == 0 ? null : varStmt.children[varStmt.children.length - 1];
+	}
+
+	private static function extractFirstMeta(module: QueryNode): Null<QueryNode> {
+		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
+		return cls == null ? null : findFirstByKind(cls, 'HxMeta') ?? findFirstByKind(cls, 'Meta') ?? findFirstByKindPrefix(cls, 'Meta');
+	}
+
+	private static function findFirstByKind(node: QueryNode, kind: String): Null<QueryNode> {
+		if (node.kind == kind) return node;
+		for (c in node.children) {
+			final found: Null<QueryNode> = findFirstByKind(c, kind);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	private static function findFirstByKindPrefix(node: QueryNode, prefix: String): Null<QueryNode> {
+		if (StringTools.startsWith(node.kind, prefix)) return node;
+		for (c in node.children) {
+			final found: Null<QueryNode> = findFirstByKindPrefix(c, prefix);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	/**
+	 * True when `v` is an `HxType.Anon` enum value — the anon-struct
+	 * type whose `fields` carry decl-host members + their metadata.
+	 * Gates the `appendNodes` `type`-field descent so only anon
+	 * bodies surface; `Named` / `Arrow` / `Parens` type-refs stay
+	 * skipped (descending them would emit a phantom child per typed
+	 * binding).
+	 */
+	private static inline function isAnonType(v: Dynamic): Bool {
+		if (v == null) return false;
+		final t: Type.ValueType = Type.typeof(v);
+		return switch t {
+			case TEnum(_): Type.enumConstructor(v) == 'Anon';
+			case _: false;
+		}
+	}
+
+	/**
+	 * Order a node's children by source position so the `apq ast`
+	 * dump is engine-independent. `appendNodes` flattens struct
+	 * fields via `Reflect.fields`, whose iteration order is
+	 * target-defined (neko hash order vs js insertion order), so
+	 * without this the then-body / else-body of an `IfStmt` (and any
+	 * other struct-bearing node) surface in different order on neko
+	 * vs node. Stable sort by span start; left untouched unless every
+	 * child carries a span, since a span-less node has no defined
+	 * source position to order against.
+	 */
+	private static function orderBySpan(children: Array<QueryNode>): Array<QueryNode> {
+		final indexed: Array<{ from: Int, idx: Int, node: QueryNode }> = [];
+		for (i in 0...children.length) {
+			final s: Null<Span> = children[i].span;
+			if (s == null) return children;
+			indexed.push({ from: s.from, idx: i, node: children[i] });
+		}
+		indexed.sort((a, b) -> a.from != b.from ? a.from - b.from : a.idx - b.idx);
+		return [for (e in indexed) e.node];
 	}
 
 }

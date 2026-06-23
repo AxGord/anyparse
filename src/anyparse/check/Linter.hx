@@ -65,6 +65,7 @@ final class Linter {
 			new PreferSwitch(),
 			new MissingVisibility(),
 			new ModifierOrder(),
+			new MemberOrder(),
 			new ExplicitType(),
 			new PreferFinalField(),
 			new PreferFinalPublicField(),

@@ -313,6 +313,7 @@ import unit.RedundantThisCheckTest;
 import unit.TypeResolverSliceTest;
 import unit.PreferFinalPublicFieldCheckTest;
 import unit.PreferReadOnlyFieldCheckTest;
+import unit.MemberOrderCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -585,6 +586,7 @@ class RunTests {
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
+		addCase(new MemberOrderCheckTest());
 		addCase(new ExplicitTypeCheckTest());
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());
