@@ -49,12 +49,12 @@ class ShapeBuilder {
 	private final _pending: Array<{ name: String, type: Type }> = [];
 	private final _shaped: Map<String, ShapeNode> = [];
 	private final _inFlight: Array<String> = [];
-	private final formatInfo: Null<FormatReader.FormatInfo>;
+	private final _formatInfo: Null<FormatReader.FormatInfo>;
 
 	private var _rootName: String = '';
 
 	public function new(?formatInfo: FormatReader.FormatInfo) {
-		this.formatInfo = formatInfo;
+		this._formatInfo = formatInfo;
 	}
 
 	public function build(root: Type): ShapeResult {
@@ -70,13 +70,13 @@ class ShapeBuilder {
 		//     type mappings for `intType`/`floatType`/`boolType`
 		//     enqueue lazily from `shapeFieldType` when a field actually
 		//     references them.
-		if (formatInfo != null) {
-			if (formatInfo.anyType != null && formatInfo.onUnknown == UnknownPolicy.Skip) {
-				final anyType: String = formatInfo.anyType;
+		if (_formatInfo != null) {
+			if (_formatInfo.anyType != null && _formatInfo.onUnknown == UnknownPolicy.Skip) {
+				final anyType: String = _formatInfo.anyType;
 				enqueue(anyType, Context.getType(anyType));
 			}
-			if (formatInfo.stringType != null) {
-				final stringType: String = formatInfo.stringType;
+			if (_formatInfo.stringType != null) {
+				final stringType: String = _formatInfo.stringType;
 				enqueue(stringType, Context.getType(stringType));
 			}
 		}
@@ -174,8 +174,8 @@ class ShapeBuilder {
 			// `stringType` terminal to consume the literal before
 			// dispatching to the matched enum value — enqueue it so
 			// the generated parser contains the rule.
-			if (formatInfo != null && formatInfo.stringType != null) {
-				final st: String = formatInfo.stringType;
+			if (_formatInfo != null && _formatInfo.stringType != null) {
+				final st: String = _formatInfo.stringType;
 				enqueue(st, Context.getType(st));
 			}
 		}
@@ -208,13 +208,13 @@ class ShapeBuilder {
 	}
 
 	private function primitiveRef(primName: String): Null<String> {
-		return formatInfo == null
+		return _formatInfo == null
 			? null
 			: switch primName {
-				case 'Int': formatInfo.intType;
-				case 'Float': formatInfo.floatType;
-				case 'Bool': formatInfo.boolType;
-				case 'String': formatInfo.stringType;
+				case 'Int': _formatInfo.intType;
+				case 'Float': _formatInfo.floatType;
+				case 'Bool': _formatInfo.boolType;
+				case 'String': _formatInfo.stringType;
 				case _: null;
 			};
 	}

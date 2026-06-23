@@ -46,10 +46,10 @@ using Lambda;
  */
 class TransformLowering {
 
-	private final shape: ShapeBuilder.ShapeResult;
+	private final _shape: ShapeBuilder.ShapeResult;
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
-		this.shape = shape;
+		this._shape = shape;
 	}
 
 	/**
@@ -58,7 +58,7 @@ class TransformLowering {
 	 * typedef, and the public `transform` entry rooted on `shape.root`.
 	 */
 	public function generate(): TransformResult {
-		final ruleNames: Array<String> = [for (name in shape.rules.keys()) name];
+		final ruleNames: Array<String> = [for (name in _shape.rules.keys()) name];
 		// Deterministic order — keep generated field order stable across
 		// compiles regardless of Map iteration order.
 		ruleNames.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
@@ -66,7 +66,7 @@ class TransformLowering {
 		final fns: Array<TransformFn> = [];
 		final hooks: Array<TransformHook> = [];
 		for (name in ruleNames) {
-			final node: ShapeNode = shape.rules.get(name);
+			final node: ShapeNode = _shape.rules.get(name);
 			if (node == null) continue;
 			final ct: ComplexType = pathToComplexType(name);
 			final hookName: String = hookFieldName(name);
@@ -80,9 +80,9 @@ class TransformLowering {
 		}
 
 		return {
-			rootTypePath: shape.root,
-			rootCT: pathToComplexType(shape.root),
-			rootFnName: transformFnName(shape.root),
+			rootTypePath: _shape.root,
+			rootCT: pathToComplexType(_shape.root),
+			rootFnName: transformFnName(_shape.root),
 			fns: fns,
 			hooks: hooks,
 		};
@@ -275,7 +275,7 @@ class TransformLowering {
 				// in the shape is a valid recursion target — including
 				// Terminal rules, whose hook is the rename primitive.
 				final ref: String = node.annotations.get('base.ref');
-				shape.rules.exists(ref);
+				_shape.rules.exists(ref);
 			case Star:
 				isTransformable(node.children[0]);
 			case Seq, Alt:

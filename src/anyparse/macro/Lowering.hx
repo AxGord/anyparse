@@ -33,14 +33,14 @@ using anyparse.macro.MetaInspect;
  */
 class Lowering {
 
-	private final shape: ShapeBuilder.ShapeResult;
-	private final formatInfo: FormatReader.FormatInfo;
+	private final _shape: ShapeBuilder.ShapeResult;
+	private final _formatInfo: FormatReader.FormatInfo;
 	private final ctx: LoweringCtx;
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
-		this.shape = shape;
-		this.formatInfo = formatInfo;
+		this._shape = shape;
+		this._formatInfo = formatInfo;
 		this.ctx = ctx;
 	}
 
@@ -55,7 +55,7 @@ class Lowering {
 		// primitives and have no ctor builds — skip them so their bodies
 		// stay untouched.
 		final spanRuleNames: Map<String, Bool> = [];
-		for (typePath => node in shape.rules) {
+		for (typePath => node in _shape.rules) {
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
 				if (ctx.spans && node.kind != Terminal) spanRuleNames.set(rule.fnName, true);
@@ -258,7 +258,7 @@ class Lowering {
 		// NOT consume spaces between tokens. The caller's skipWs (in the
 		// non-raw parent rule) handles whitespace before the raw rule's
 		// entry point; inside the raw rule, every character is significant.
-		if (node.hasMeta(':raw') || formatInfo.isBinary) for (rule in rules) rule.body = stripSkipWs(rule.body);
+		if (node.hasMeta(':raw') || _formatInfo.isBinary) for (rule in rules) rule.body = stripSkipWs(rule.body);
 		return rules;
 	}
 
@@ -279,7 +279,7 @@ class Lowering {
 	 * `;`-elision; `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
 	 */
 	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr): Expr {
-		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		final lastElem: Expr = macro $accumRef[$accumRef.length - 1];
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [lastElem]),
@@ -1862,10 +1862,10 @@ class Lowering {
 	 * and cleaner than an `EReg` alternation.
 	 */
 	private function lowerStringEnumTerminal(typePath: String, simple: String, values: Array<{ name: String, value: String }>): Expr {
-		final stringType: Null<String> = formatInfo.stringType;
+		final stringType: Null<String> = _formatInfo.stringType;
 		if (stringType == null) {
 			Context.fatalError(
-				'Lowering: enum-abstract(String) terminal $typePath requires the format ${formatInfo.schemaTypePath} to declare stringType',
+				'Lowering: enum-abstract(String) terminal $typePath requires the format ${_formatInfo.schemaTypePath} to declare stringType',
 				Context.currentPos()
 			);
 			throw 'unreachable';
@@ -1906,9 +1906,9 @@ class Lowering {
 	 * `FormatReader`).
 	 */
 	private function shouldLowerByName(node: ShapeNode): Bool {
-		if (formatInfo.isBinary) return false;
-		if (formatInfo.fieldLookup != ByName) return false;
-		if (formatInfo.keySyntax != Quoted) return false;
+		if (_formatInfo.isBinary) return false;
+		if (_formatInfo.fieldLookup != ByName) return false;
+		if (_formatInfo.keySyntax != Quoted) return false;
 		if (node.annotations.get('bin.magic') != null) return false;
 		if (node.annotations.get('bin.align') != null) return false;
 		for (child in node.children) {
@@ -1989,12 +1989,12 @@ class Lowering {
 				structFields.push({ field: fieldName, expr: macro $i{localName} });
 			}
 		}
-		final defaultExpr: Expr = switch formatInfo.onUnknown {
+		final defaultExpr: Expr = switch _formatInfo.onUnknown {
 			case Skip:
-				final anyType: Null<String> = formatInfo.anyType;
+				final anyType: Null<String> = _formatInfo.anyType;
 				if (anyType == null) {
 					Context.fatalError(
-						'Lowering: UnknownPolicy.Skip requires the format ${formatInfo.schemaTypePath} to declare anyType (the universal-value grammar type used to consume unknown keys)',
+						'Lowering: UnknownPolicy.Skip requires the format ${_formatInfo.schemaTypePath} to declare anyType (the universal-value grammar type used to consume unknown keys)',
 						Context.currentPos()
 					);
 					throw 'unreachable';
@@ -2008,27 +2008,27 @@ class Lowering {
 			);
 			case _:
 				Context.fatalError(
-					'Lowering: UnknownPolicy.Store is not supported in ByName mode (schema ${formatInfo.schemaTypePath})',
+					'Lowering: UnknownPolicy.Store is not supported in ByName mode (schema ${_formatInfo.schemaTypePath})',
 					Context.currentPos()
 				);
 				throw 'unreachable';
 		};
 		final switchExpr: Expr = { expr: ESwitch(macro _key, switchCases, defaultExpr), pos: Context.currentPos() };
-		final stringType: Null<String> = formatInfo.stringType;
+		final stringType: Null<String> = _formatInfo.stringType;
 		if (stringType == null) {
 			Context.fatalError(
-				'Lowering: ByName struct parsing requires the format ${formatInfo.schemaTypePath} to declare stringType (the grammar type used to parse mapping keys)',
+				'Lowering: ByName struct parsing requires the format ${_formatInfo.schemaTypePath} to declare stringType (the grammar type used to parse mapping keys)',
 				Context.currentPos()
 			);
 			throw 'unreachable';
 		}
 		final keyFn: String = 'parse${simpleName(stringType)}';
 		final keyCall: Expr = { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() };
-		final closeCharCode: Int = formatInfo.mappingClose.charCodeAt(0);
-		final mappingOpen: String = formatInfo.mappingOpen;
-		final mappingClose: String = formatInfo.mappingClose;
-		final keyValueSep: String = formatInfo.keyValueSep;
-		final entrySep: String = formatInfo.entrySep;
+		final closeCharCode: Int = _formatInfo.mappingClose.charCodeAt(0);
+		final mappingOpen: String = _formatInfo.mappingOpen;
+		final mappingClose: String = _formatInfo.mappingClose;
+		final keyValueSep: String = _formatInfo.keyValueSep;
+		final entrySep: String = _formatInfo.entrySep;
 		final structLiteral: Expr = { expr: EObjectDecl(structFields), pos: Context.currentPos() };
 		final parseSteps: Array<Expr> = [macro skipWs(ctx), macro expectLit(ctx, $v{mappingOpen})];
 		for (d in declareLocals) parseSteps.push(d);
@@ -2065,7 +2065,7 @@ class Lowering {
 			case _:
 				Context.fatalError(
 					'Lowering: ByName struct field "$fieldName" has unsupported kind ${child.kind}'
-					+ ' — format ${formatInfo.schemaTypePath} may be missing a primitive type mapping',
+					+ ' — format ${_formatInfo.schemaTypePath} may be missing a primitive type mapping',
 					Context.currentPos()
 				);
 				throw 'unreachable';
@@ -2093,11 +2093,11 @@ class Lowering {
 	 * deferred until a real schema needs `Array<Array<T>>`.
 	 */
 	private function byNameStarParseExpr(child: ShapeNode, fieldName: String): Expr {
-		final seqOpen: Null<String> = formatInfo.sequenceOpen;
-		final seqClose: Null<String> = formatInfo.sequenceClose;
+		final seqOpen: Null<String> = _formatInfo.sequenceOpen;
+		final seqClose: Null<String> = _formatInfo.sequenceClose;
 		if (seqOpen == null || seqClose == null) {
 			Context.fatalError(
-				'Lowering: ByName Array<T> field "$fieldName" requires the format ${formatInfo.schemaTypePath} '
+				'Lowering: ByName Array<T> field "$fieldName" requires the format ${_formatInfo.schemaTypePath} '
 				+ 'to declare sequenceOpen / sequenceClose',
 				Context.currentPos()
 			);
@@ -2124,7 +2124,7 @@ class Lowering {
 		final fieldCT: Null<ComplexType> = child.annotations.get('base.fieldType');
 		final innerCT: ComplexType = extractArrayElementCT(fieldCT) ?? ruleReturnCT(refName);
 		final closeCharCode: Int = seqClose.charCodeAt(0);
-		final entrySep: String = formatInfo.entrySep;
+		final entrySep: String = _formatInfo.entrySep;
 		return macro {
 			final _arr: Array<$innerCT> = [];
 			skipWs(ctx);
@@ -2371,7 +2371,7 @@ class Lowering {
 	 */
 	private function isTriviaBearing(refName: String): Bool {
 		if (!ctx.trivia) return false;
-		final node: Null<ShapeNode> = shape.rules.get(refName);
+		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		return node != null && node.annotations.get('trivia.bearing') == true;
 	}
 
@@ -2382,7 +2382,7 @@ class Lowering {
 	 */
 	private function isSpanBearing(refName: String): Bool {
 		if (!ctx.spans) return false;
-		final node: Null<ShapeNode> = shape.rules.get(refName);
+		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		return node != null && node.kind != Terminal;
 	}
 
@@ -2459,7 +2459,7 @@ class Lowering {
 		if (unescape && raw) Context.fatalError('Lowering: terminal $typePath has both @:unescape and @:rawString', Context.currentPos());
 
 		if (unescape) {
-			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 			final bodyExpr: Expr = if (unescapeMode == 'raw' || unescapeMode == 'singleQuoteRaw')
 				macro _matched
 			else
@@ -4791,7 +4791,7 @@ expectLit(ctx, $v{trailText}));
 	private function buildKwRefParseGateCall(branch: ShapeNode): Null<Expr> {
 		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
 		if (parseGate == null || parseGate.length != 1) return null;
-		final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),
 			pos: Context.currentPos(),

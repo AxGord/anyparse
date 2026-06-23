@@ -24,19 +24,19 @@ using anyparse.macro.MetaInspect;
  */
 class WriterLowering {
 
-	private final shape: ShapeBuilder.ShapeResult;
-	private final formatInfo: FormatReader.FormatInfo;
-	private final ctx: LoweringCtx;
+	private final _shape: ShapeBuilder.ShapeResult;
+	private final _formatInfo: FormatReader.FormatInfo;
+	private final _ctx: LoweringCtx;
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
-		this.shape = shape;
-		this.formatInfo = formatInfo;
-		this.ctx = ctx;
+		this._shape = shape;
+		this._formatInfo = formatInfo;
+		this._ctx = ctx;
 	}
 
 	public function generate(): Array<WriterRule> {
 		final rules: Array<WriterRule> = [];
-		for (typePath => node in shape.rules) for (rule in lowerRule(typePath, node)) rules.push(rule);
+		for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rules.push(rule);
 		return rules;
 	}
 
@@ -263,7 +263,7 @@ class WriterLowering {
 		// don't auto-collect on the postfix Star-suffix keep the
 		// pre-slice direct `_a` access.
 		final cbStar: ShapeNode = cb.children[1];
-		final isCallTriviaStar: Bool = ctx.trivia && cbStar.annotations.get('trivia.starCollects') == true;
+		final isCallTriviaStar: Bool = _ctx.trivia && cbStar.annotations.get('trivia.starCollects') == true;
 		// ω-methodchain-reeval-after-callparam (axis 2): a chain segment's call
 		// args bypass the normal `HxExpr.Call` postfix path's per-arg
 		// `_setCallArgChainNest` wrapping (the chain segment goes through
@@ -414,7 +414,7 @@ class WriterLowering {
 		// delimiters intact) as `_dt(' ') + trailingCommentDoc` after
 		// the element when non-null. Plain mode and non-trivia-collecting
 		// Stars keep the pre-slice direct `_args[_i]` access.
-		final isTriviaStar: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		final elemRead: Expr = isTriviaStar ? macro _args[_i].node : macro _args[_i];
 		// ω-issue-423-mech-a: ctor-level `@:fmt(propagateExprPosition)` on a
 		// postfix-Star ctor (e.g. `HxExpr.Call`, `HxNewExpr`) wraps each
@@ -558,7 +558,7 @@ class WriterLowering {
 			sepText: sepText,
 			starNode: starNode,
 		};
-		final isTriviaStar: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		final emission: Expr = isTriviaStar ? lowerEnumStarTrivia(c) : lowerEnumStarPlain(c);
 		parts.push(emission);
 		return if (parts.length == 1)
@@ -582,9 +582,9 @@ class WriterLowering {
 	 * `Build.buildWriter` without any positional metadata.
 	 */
 	private function shouldWriteByName(node: ShapeNode): Bool {
-		if (formatInfo.isBinary) return false;
-		if (formatInfo.fieldLookup != ByName) return false;
-		if (formatInfo.keySyntax != Quoted) return false;
+		if (_formatInfo.isBinary) return false;
+		if (_formatInfo.fieldLookup != ByName) return false;
+		if (_formatInfo.keySyntax != Quoted) return false;
 		if (node.annotations.get('bin.magic') != null) return false;
 		if (node.annotations.get('bin.align') != null) return false;
 		for (child in node.children) {
@@ -621,10 +621,10 @@ class WriterLowering {
 	 * fatal error.
 	 */
 	private function lowerStructByName(node: ShapeNode, typePath: String): Expr {
-		final mappingOpen: String = formatInfo.mappingOpen;
-		final mappingClose: String = formatInfo.mappingClose;
-		final keyValueSep: String = formatInfo.keyValueSep;
-		final entrySep: String = formatInfo.entrySep;
+		final mappingOpen: String = _formatInfo.mappingOpen;
+		final mappingClose: String = _formatInfo.mappingClose;
+		final keyValueSep: String = _formatInfo.keyValueSep;
+		final entrySep: String = _formatInfo.entrySep;
 
 		final stmts: Array<Expr> = [macro final _entries: Array<anyparse.core.Doc> = []];
 
@@ -669,7 +669,7 @@ class WriterLowering {
 			case _:
 				Context.fatalError(
 					'WriterLowering: ByName struct field "$fieldName" has unsupported kind ${child.kind}'
-					+ ' — format ${formatInfo.schemaTypePath} may be missing a primitive type mapping',
+					+ ' — format ${_formatInfo.schemaTypePath} may be missing a primitive type mapping',
 					Context.currentPos()
 				);
 				throw 'unreachable';
@@ -677,11 +677,11 @@ class WriterLowering {
 	}
 
 	private function byNameStarWriteExpr(child: ShapeNode, fieldName: String, valueAccess: Expr): Expr {
-		final seqOpen: Null<String> = formatInfo.sequenceOpen;
-		final seqClose: Null<String> = formatInfo.sequenceClose;
+		final seqOpen: Null<String> = _formatInfo.sequenceOpen;
+		final seqClose: Null<String> = _formatInfo.sequenceClose;
 		if (seqOpen == null || seqClose == null) {
 			Context.fatalError(
-				'WriterLowering: ByName Array<T> field "$fieldName" requires the format ${formatInfo.schemaTypePath} '
+				'WriterLowering: ByName Array<T> field "$fieldName" requires the format ${_formatInfo.schemaTypePath} '
 				+ 'to declare sequenceOpen / sequenceClose',
 				Context.currentPos()
 			);
@@ -705,7 +705,7 @@ class WriterLowering {
 		}
 		final refName: String = inner.annotations.get('base.ref');
 		final elemFn: String = writeFnFor(refName);
-		final entrySep: String = formatInfo.entrySep;
+		final entrySep: String = _formatInfo.entrySep;
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [for (_e in $valueAccess) $i{elemFn}(_e, opt)];
 			sepList($v{seqOpen}, $v{seqClose}, $v{entrySep}, _items, opt, false, _de(), _de(), false, false);
@@ -1411,7 +1411,7 @@ class WriterLowering {
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
-			blockEndedFlag ? formatInfo.schemaTypePath : null, condLeadingDocInfo, false
+			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, false
 		));
 	}
 
@@ -1625,7 +1625,7 @@ class WriterLowering {
 		final sepText: Null<String> = c.sepText;
 		final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
 		final predicateCheck: Expr = if (predicateName != null) {
-			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 			{
 				expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _arr[_si]]),
 				pos: Context.currentPos(),
@@ -1641,7 +1641,7 @@ class WriterLowering {
 		// source-fidelity `sepAfter` gate (plain mode has no per-pair
 		// state — always emit when non-block-ended).
 		final lastPredicateCheck: Expr = if (predicateName != null) {
-			final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 			{
 				expr: ECall(
 					{ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _arr[_arr.length - 1]]
@@ -1812,7 +1812,7 @@ class WriterLowering {
 		// the `case ` trailing space drops cleanly before the hardline.
 		// Mirrors the bare-Ref first-field channel (`HxTryCatchStmt.body`
 		// / `bodyPolicyWrap` Next branch `_dn(_cols, [_dhl, body])`).
-		final firstStarNlKeep: Bool = isFirstField && ctx.trivia && isTriviaBearing(typePath)
+		final firstStarNlKeep: Bool = isFirstField && _ctx.trivia && isTriviaBearing(typePath)
 			&& starNode.fmtHasFlag('beforeNewlineSlotFirst');
 		final patternListExpr: Expr = if (firstStarNlKeep) {
 			final nlFieldName: String = starNode.annotations.get('base.fieldName');
@@ -2237,7 +2237,7 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(sepBeforeOpt) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos()
 			);
-		final sepBeforeOptActive: Bool = sepBeforeOpt && ctx.trivia;
+		final sepBeforeOptActive: Bool = sepBeforeOpt && _ctx.trivia;
 		// ω-condcomp-body-softfill (Slice 18h): plain-mode
 		// `@:sep + @:tryparse` Star with `@:fmt(padLeading[, padTrailing])`
 		// can opt into Wadler `Fill(items, sep)` inter-element layout via
@@ -2457,7 +2457,7 @@ class WriterLowering {
 		final openText: Null<String> = starNode.annotations.get('lit.leadText');
 		final closeText: Null<String> = starNode.annotations.get('lit.trailText');
 		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
-		final isTriviaStar: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		final args: StarFieldArgs = {
 			starNode: starNode,
 			fieldAccess: fieldAccess,
@@ -2591,7 +2591,7 @@ class WriterLowering {
 				//                              `'...'` strings round-trips
 				//                              bare instead of being
 				//                              over-escaped to `\\"`.
-				final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+				final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 				final escapeCall: Expr = unescapeMode == 'singleQuoteRaw'
 					? macro $p{fmtParts}.instance.escapeSingleQuoteChar(_c)
 					: macro $p{fmtParts}.instance.escapeChar(_c);
@@ -2720,7 +2720,7 @@ class WriterLowering {
 		// grammar triggers this combo (first non-bearing `@:optional @:kw` is
 		// `HxIfExpr.elseBranch`, which has no `@:fmt(sameLine)`), but closing
 		// the gap preemptively avoids recurrence of the Lowering fix pattern.
-		final hasKeepSlot: Bool = ctx.trivia && isTriviaBearing(typePath) && fieldName != null && child.kind == Ref
+		final hasKeepSlot: Bool = _ctx.trivia && isTriviaBearing(typePath) && fieldName != null && child.kind == Ref
 			&& child.annotations.get('base.optional') == true && child.readMetaString(':kw') != null;
 		final keepExpr: Expr = if (hasKeepSlot) {
 			final slotAccess: Expr = {
@@ -2888,7 +2888,7 @@ class WriterLowering {
 	 * pre-existing and unrelated to this slice's Ref-kind lift).
 	 */
 	private function padTrailingDoc(parent: ShapeNode, child: ShapeNode, typePath: String): Expr {
-		if (!ctx.trivia || !isTriviaBearing(typePath)) return macro _dt(' ');
+		if (!_ctx.trivia || !isTriviaBearing(typePath)) return macro _dt(' ');
 		final signals: Array<{ guard: Expr, signal: Expr }> = collectFollowingNewlineSignals(parent, child);
 		if (signals.length == 0) return macro _dt(' ');
 		var picked: Expr = macro false;
@@ -3443,7 +3443,7 @@ class WriterLowering {
 	 */
 	private function leftCurlyTargetCtors(refName: String): Array<String> {
 		final result: Array<String> = [];
-		final node: Null<ShapeNode> = shape.rules.get(refName);
+		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return result;
 		for (branch in node.children) {
 			final ctor: Null<String> = branch.annotations.get('base.ctor');
@@ -3455,7 +3455,7 @@ class WriterLowering {
 			}
 			if (branch.children.length == 1 && branch.children[0].kind == Ref) {
 				final innerName: Null<String> = branch.children[0].annotations.get('base.ref');
-				final innerNode: Null<ShapeNode> = innerName == null ? null : shape.rules.get(innerName);
+				final innerNode: Null<ShapeNode> = innerName == null ? null : _shape.rules.get(innerName);
 				if (innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0) {
 					final firstField: ShapeNode = innerNode.children[0];
 					final firstLead: Null<String> = firstField.annotations.get('lit.leadText') ?? firstField.readMetaString(':lead');
@@ -3485,7 +3485,7 @@ class WriterLowering {
 	 */
 	private function spacePrefixCtors(refName: String, lcCtorNames: Array<String>): Array<String> {
 		final ctors: Array<String> = [];
-		final node: Null<ShapeNode> = shape.rules.get(refName);
+		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return ctors;
 		for (branch in node.children) {
 			final ctor: Null<String> = branch.annotations.get('base.ctor');
@@ -3515,7 +3515,7 @@ class WriterLowering {
 	 * (slice ω-functionBody-policy).
 	 */
 	private function ctorHasBodyPolicy(refName: String, ctorName: String): Bool {
-		final node: Null<ShapeNode> = shape.rules.get(refName);
+		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return false;
 		for (branch in node.children) if (branch.annotations.get('base.ctor') == ctorName)
 			return branch.fmtReadStringArgs('bodyPolicy') != null;
@@ -4037,7 +4037,7 @@ class WriterLowering {
 	 * enum, has no such branches, or is absent from the shape map.
 	 */
 	private function collectBlockCtorPatterns(bodyTypePath: String): Array<Expr> {
-		final rule: Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
 		final patterns: Array<Expr> = [];
 		for (branch in rule.children) if (isBlockCtorBranch(branch)) patterns.push(branchCtorPattern(bodyTypePath, branch));
@@ -4045,7 +4045,7 @@ class WriterLowering {
 	}
 
 	private function collectBlockShapeEquivalentPatterns(bodyTypePath: String): Array<Expr> {
-		final rule: Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
 		final patterns: Array<Expr> = [];
 		for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) patterns.push(branchCtorPattern(bodyTypePath, branch));
@@ -4064,7 +4064,7 @@ class WriterLowering {
 	 * directly).
 	 */
 	private function findElementBodyField(elemTypePath: String, bodyTypePath: String): Null<String> {
-		final rule: Null<ShapeNode> = shape.rules.get(elemTypePath);
+		final rule: Null<ShapeNode> = _shape.rules.get(elemTypePath);
 		if (rule == null || rule.kind != Seq) return null;
 		for (child in rule.children) if (child.kind == Ref) {
 			if (child.annotations.get('base.optional') == true) continue;
@@ -4089,7 +4089,7 @@ class WriterLowering {
 	 */
 	private function buildCloseTrailingFirstSepOverride(prevBareRefBody: Null<PrevBodyInfo>, sepExpr: Expr): Null<Expr> {
 		if (prevBareRefBody == null) return null;
-		final rule: Null<ShapeNode> = shape.rules.get(prevBareRefBody.typePath);
+		final rule: Null<ShapeNode> = _shape.rules.get(prevBareRefBody.typePath);
 		if (rule == null || rule.kind != Alt) return null;
 		final cases: Array<Case> = [];
 		for (branch in rule.children) if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
@@ -4141,7 +4141,7 @@ class WriterLowering {
 	 * source-shape), so no source-line probe is needed at this point.
 	 */
 	private function collectBlockCtorPatternsByLeftCurly(bodyTypePath: String): { tagged: Array<Expr>, untagged: Array<Expr> } {
-		final rule: Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return { tagged: [], untagged: [] };
 		final tagged: Array<Expr> = [];
 		final untagged: Array<Expr> = [];
@@ -4232,7 +4232,7 @@ class WriterLowering {
 	 * `HxStatement` when rendering the `else` body of `HxIfStmt`.
 	 */
 	private function findCtorPattern(bodyTypePath: String, ctorName: String): Null<Expr> {
-		final rule: Null<ShapeNode> = shape.rules.get(bodyTypePath);
+		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return null;
 		for (branch in rule.children) {
 			final branchCtor: String = branch.annotations.get('base.ctor');
@@ -4288,7 +4288,7 @@ class WriterLowering {
 	 * token. Evaluated at macro time against `formatInfo.spacedLeads`.
 	 */
 	private function isSpacedLead(openText: Null<String>): Bool {
-		return openText != null && formatInfo.spacedLeads.indexOf(openText) != -1;
+		return openText != null && _formatInfo.spacedLeads.indexOf(openText) != -1;
 	}
 
 	/**
@@ -4315,7 +4315,7 @@ class WriterLowering {
 	 * spaces like keyword leads (`else`, `catch`).
 	 */
 	private function isTightLead(leadText: Null<String>): Bool {
-		return leadText != null && formatInfo.tightLeads.indexOf(leadText) != -1;
+		return leadText != null && _formatInfo.tightLeads.indexOf(leadText) != -1;
 	}
 
 	/**
@@ -4328,7 +4328,7 @@ class WriterLowering {
 	 * case and a dangling space before a hardline in `Next` / `FitLine`.
 	 */
 	private function subStructStartsWithBodyPolicy(refName: String): Bool {
-		final subNode: Null<ShapeNode> = shape.rules.get(refName);
+		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
 		if (subNode == null || subNode.kind != Seq) return false;
 		final children: Array<ShapeNode> = subNode.children;
 		if (children.length == 0) return false;
@@ -4351,7 +4351,7 @@ class WriterLowering {
 	 * hardline in `Next`.
 	 */
 	private function subStructStartsWithBodyBreak(refName: String): Bool {
-		final subNode: Null<ShapeNode> = shape.rules.get(refName);
+		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
 		if (subNode == null || subNode.kind != Seq) return false;
 		final children: Array<ShapeNode> = subNode.children;
 		if (children.length == 0) return false;
@@ -4374,7 +4374,7 @@ class WriterLowering {
 	 * the hardline).
 	 */
 	private function subStructStartsWithBareBodyBreaks(refName: String): Bool {
-		final subNode: Null<ShapeNode> = shape.rules.get(refName);
+		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
 		if (subNode == null || subNode.kind != Seq) return false;
 		final children: Array<ShapeNode> = subNode.children;
 		if (children.length == 0) return false;
@@ -4393,7 +4393,7 @@ class WriterLowering {
 	 * that are NOT tight (`(`, `{`) keep the space (`if (`, `else {`).
 	 */
 	private function subStructStartsWithTightLead(refName: String): Bool {
-		final subNode: Null<ShapeNode> = shape.rules.get(refName);
+		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
 		if (subNode == null || subNode.kind != Seq) return false;
 		final children: Array<ShapeNode> = subNode.children;
 		if (children.length == 0) return false;
@@ -5389,8 +5389,8 @@ class WriterLowering {
 	 * call through their plain `writeXxx` functions).
 	 */
 	private function isTriviaBearing(refName: String): Bool {
-		if (!ctx.trivia) return false;
-		final node: Null<ShapeNode> = shape.rules.get(refName);
+		if (!_ctx.trivia) return false;
+		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		return node != null && node.annotations.get('trivia.bearing') == true;
 	}
 
@@ -5545,7 +5545,7 @@ class WriterLowering {
 		final fieldName: String = args[0];
 		final condCtor: String = args[1];
 		final bodyField: String = args[2];
-		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
+		final elemRule: Null<ShapeNode> = _shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) requires element rule $elemRefName to be a Seq struct',
@@ -5562,7 +5562,7 @@ class WriterLowering {
 				Context.currentPos()
 			);
 		final enumRuleName: Null<String> = classifierNode.annotations.get('base.ref');
-		final enumRule: Null<ShapeNode> = enumRuleName == null ? null : shape.rules.get(enumRuleName);
+		final enumRule: Null<ShapeNode> = enumRuleName == null ? null : _shape.rules.get(enumRuleName);
 		if (enumRule == null || enumRule.kind != Alt)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier target for "$fieldName" must be an Alt (enum)',
@@ -6185,7 +6185,7 @@ class WriterLowering {
 	private function resolveClassifierEnum(
 		elemRefName: String, fieldName: String, metaName: String
 	): { enumRule: ShapeNode, enumRuleName: String } {
-		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
+		final elemRule: Null<ShapeNode> = _shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
@@ -6205,7 +6205,7 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" has no base.ref annotation', Context.currentPos()
 			);
-		final enumRule: Null<ShapeNode> = shape.rules.get(enumRuleName);
+		final enumRule: Null<ShapeNode> = _shape.rules.get(enumRuleName);
 		if (enumRule == null || enumRule.kind != Alt)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) classifier target $enumRuleName must be an Alt (enum)', Context.currentPos()
@@ -6413,7 +6413,7 @@ class WriterLowering {
 	 * wins-returns precluded this composition.
 	 */
 	private function buildMultilinePredicate(typeName: String, accessExpr: Expr): Null<Expr> {
-		final node: Null<ShapeNode> = shape.rules.get(typeName);
+		final node: Null<ShapeNode> = _shape.rules.get(typeName);
 		if (node == null) return null;
 		final meta: Null<Metadata> = node.annotations.get('base.meta');
 		if (meta != null) {
@@ -6491,7 +6491,7 @@ class WriterLowering {
 	 * (0 outside trivia mode — every predicate below is trivia-gated).
 	 */
 	private function branchExtraArgs(branch: ShapeNode): Int {
-		if (!ctx.trivia) return 0;
+		if (!_ctx.trivia) return 0;
 		// ω-close-trailing-alt: in trivia mode, close-peek `@:trivia`
 		// Alt branches grow a positional `closeTrailing:Null<String>`
 		// arg in the synth ctor (`HxStatementT.BlockStmt(stmts, closeTrailing)`).
@@ -6762,7 +6762,7 @@ class WriterLowering {
 			c.trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks, false, false, null, false, null,
 			anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
 			altBlockEndedFlag ? (branch.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
-			altBlockEndedFlag ? formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail')
+			altBlockEndedFlag ? _formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail')
 		);
 	}
 
@@ -6867,7 +6867,7 @@ class WriterLowering {
 			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded[('pred'[, sepStartsElement])])`.
 			final predicateName: Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
 			final predicateCheckPrior: Expr = if (predicateName != null) {
-				final fmtParts: Array<String> = formatInfo.schemaTypePath.split('.');
+				final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 				{
 					expr: ECall(
 						{ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _args[_i - 1]]
@@ -7206,7 +7206,7 @@ class WriterLowering {
 	 * below the complexity gate.
 	 */
 	private function validateStaticVarSubdivision(elemRefName: String, modifierField: String, staticCtor: String): Void {
-		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
+		final elemRule: Null<ShapeNode> = _shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
@@ -7240,7 +7240,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" has no base.ref annotation',
 				Context.currentPos()
 			);
-		final modifierEnum: Null<ShapeNode> = shape.rules.get(modifierEnumName);
+		final modifierEnum: Null<ShapeNode> = _shape.rules.get(modifierEnumName);
 		if (modifierEnum == null || modifierEnum.kind != Alt)
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)',
@@ -7403,7 +7403,7 @@ class WriterLowering {
 		//     `sameLineExpressionElse`, not the statement rule — keep `else`
 		//     glued there. Mirrors fork's `MarkSameLine.markElse` (statement
 		//     `if` only).
-		final inlineSep: Expr = if (ctx.trivia && c.child.fmtHasFlag('semicolonNextLineElse')) {
+		final inlineSep: Expr = if (_ctx.trivia && c.child.fmtHasFlag('semicolonNextLineElse')) {
 			final prevWriteFn: String = writeFnFor(c.prevBody.typePath);
 			final prevAccess: Expr = c.prevBody.access;
 			final prevDoc: Expr = { expr: ECall(macro $i{prevWriteFn}, [prevAccess, macro opt]), pos: Context.currentPos() };
@@ -7717,7 +7717,7 @@ class WriterLowering {
 	 * with its validation gates.
 	 */
 	private function resolveInterMemberEnumRule(elemRefName: String, fieldName: String): ShapeNode {
-		final elemRule: Null<ShapeNode> = shape.rules.get(elemRefName);
+		final elemRule: Null<ShapeNode> = _shape.rules.get(elemRefName);
 		if (elemRule == null || elemRule.kind != Seq)
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
@@ -7743,7 +7743,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" has no base.ref annotation',
 				Context.currentPos()
 			);
-		final enumRule: Null<ShapeNode> = shape.rules.get(enumRuleName);
+		final enumRule: Null<ShapeNode> = _shape.rules.get(enumRuleName);
 		if (enumRule == null || enumRule.kind != Alt)
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) classifier target $enumRuleName must be an Alt (enum)', Context.currentPos()
@@ -10565,12 +10565,12 @@ class WriterLowering {
 		// — the gap before THIS branch's right operand (`argNames[1]`),
 		// pushed between the two top-level gathers to stay parallel to
 		// the outer `_ops.push(opText)`.
-		final outerChainNl: Null<Expr> = ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainNewline) : null;
+		final outerChainNl: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainNewline) : null;
 		// All four chain ctors (Or/And/Add/Sub) carry `captureChainNewline`,
 		// so `outerChainNl` is non-null in Trivia mode; the `!= null` guard
 		// keeps `_breaks` declaration and the gatherSwitch's `_breaks.push`
 		// strictly in lockstep (no half-wired state).
-		final threadBreaks: Bool = ctx.trivia && outerChainNl != null;
+		final threadBreaks: Bool = _ctx.trivia && outerChainNl != null;
 		final gatherSwitch: Expr = infixChainGatherSwitch(isChainBool, threadBreaks, leafCall);
 		// `_breaks` (parallel to `_ops`) only exists in Trivia mode.
 		// ω-keep-chain head break (increment 2): a `return`→head source
@@ -10825,7 +10825,7 @@ class WriterLowering {
 		// (kwNewline false) leaves `opt` unchanged — byte-inert. Trivia-
 		// only (the slot exists only on bearing trivia ctors); plain mode
 		// leaves `kwNewlineExpr` null and the head stays glued to `var `.
-		final kwNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+		final kwNewlineExpr: Null<Expr> = (_ctx.trivia && isTriviaBearing(typePath))
 			? altSlotAccess(branch, children.length, argNames, KwNewline)
 			: null;
 		final ctorOptArg: Expr = kwRefCtorOptArg(c, kwNewlineExpr);
@@ -10879,7 +10879,7 @@ class WriterLowering {
 		// closeTrailing. Plain mode keeps `null` and the wrap degrades
 		// to `sameLayoutExpr` (no Keep slot — falls through the same
 		// width-aware path as `Same`).
-		final bodyOnSameLineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+		final bodyOnSameLineExpr: Null<Expr> = (_ctx.trivia && isTriviaBearing(typePath))
 			? altSlotAccess(branch, children.length, argNames, BodyPolicyKw)
 			: null;
 		// omega-paren-wrap-source-newline: ctors carrying
@@ -10890,7 +10890,7 @@ class WriterLowering {
 		// shape based on source-shape capture. Plain mode (or trivia-mode
 		// without the opt-in flag) leaves `wrapOpenNewlineExpr` null and
 		// the shape falls back to the existing unconditional glue.
-		final wrapOpenNewlineExpr: Null<Expr> = (ctx.trivia && isTriviaBearing(typePath))
+		final wrapOpenNewlineExpr: Null<Expr> = (_ctx.trivia && isTriviaBearing(typePath))
 			? altSlotAccess(branch, children.length, argNames, WrapOpenNewline)
 			: null;
 		// ω-issue-257-firstline regression-fix: forward `indentArgs` to
@@ -11218,7 +11218,7 @@ class WriterLowering {
 		// → byte-inert. A BARE chain return value (opbool case-2) has NO
 		// enclosing `ParenExpr`, so the flag stays false and its chain keeps
 		// its own headBreak + Nest. Trivia-only.
-		if (parenHardFlatten && ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
+		if (parenHardFlatten && _ctx.trivia) _o = macro _setKeepChainInParen($_o, true);
 		if (kwNewlineExpr != null) _o = macro _setVarKwNewline($_o, $kwNewlineExpr);
 		return _o;
 	}
@@ -11361,7 +11361,7 @@ class WriterLowering {
 			// Slice 9: `@:fmt(spaceBeforeTrail)` prepends a space so a
 			// word-start trail (`#end`) does not fuse with the body's last
 			// word character.
-			final isTriviaTrailOpt: Bool = ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
+			final isTriviaTrailOpt: Bool = _ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
 			final trailEmit: String = branch.fmtHasFlag('spaceBeforeTrail') ? ' ' + trailText : trailText;
 			final trailExpr: Expr = if (isTriviaTrailOpt) {
 				final flagAccess: Expr = macro $i{argNames[1]};
@@ -11415,7 +11415,7 @@ class WriterLowering {
 		// `argNames[1]` holds the verbatim slice. Gate on the named Bool opt:
 		// `false` → emit captured bytes via `_dt(sourceText)`. Match fork's
 		// `printStringToken` bail-outs: any `{`/`}` in the slice → verbatim.
-		final captureSourceOpt: Null<String> = ctx.trivia ? branch.fmtReadString('captureSource') : null;
+		final captureSourceOpt: Null<String> = _ctx.trivia ? branch.fmtReadString('captureSource') : null;
 		var bodyExpr: Expr = if (captureSourceOpt != null) {
 			final sourceAccess: Expr = macro $i{argNames[1]};
 			final optAccess: Expr = optFieldAccess(captureSourceOpt);
@@ -13462,10 +13462,10 @@ class WriterLowering {
 		// `TrailingBlankBefore` (blank-line only is still empty). In plain mode
 		// the slots don't exist on the body type, so the original
 		// `_b.stmts.length == 0` form is preserved.
-		final blockEmptyExpr: Expr = ctx.trivia
+		final blockEmptyExpr: Expr = _ctx.trivia
 			? macro _b.stmts.length == 0 && _b.stmtsTrailingOpen == null && _b.stmtsTrailingLeading.length == 0
 			: macro _b.stmts.length == 0;
-		final untypedBlockEmptyExpr: Expr = ctx.trivia
+		final untypedBlockEmptyExpr: Expr = _ctx.trivia
 			? macro _u.block.stmts.length == 0 && _u.block.stmtsTrailingOpen == null && _u.block.stmtsTrailingLeading.length == 0
 			: macro _u.block.stmts.length == 0;
 		final bodySwitchExpr: Expr = switch bodyTypeName {
@@ -13552,7 +13552,7 @@ class WriterLowering {
 			// honour source-side line breaks the same way
 			// the rest of the writer does. Plain mode (no
 			// trivia signal) keeps the unconditional space.
-			final sepExpr: Expr = ctx.trivia && isTriviaBearing(typePath)
+			final sepExpr: Expr = _ctx.trivia && isTriviaBearing(typePath)
 				? macro ${beforeNewlineAccess(fieldName)} ? _dhl() : _dt(' ')
 				: macro _dt(' ');
 			parts.push(macro {
@@ -13560,7 +13560,7 @@ class WriterLowering {
 				final _doc: anyparse.core.Doc = $writeCall;
 				$ctorMatchExpr ? _dn(_cols, _dc([_dhl(), _doc])) : _dc([$sepExpr, _doc]);
 			});
-		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && ctx.trivia && isTriviaBearing(typePath)) {
+		} else if (child.fmtHasFlag('nestBodyOnSourceNewline') && _ctx.trivia && isTriviaBearing(typePath)) {
 			// ω-cond-comp-expr-body-nest: source-shape-driven
 			// body break+nest. The bare-Ref non-first slot
 			// `<f>BeforeNewline:Bool` (synth via
@@ -13586,7 +13586,7 @@ class WriterLowering {
 			// Star (e.g. `HxMemberDecl.modifiers`) is empty,
 			// since that Star has no first element whose
 			// `newlineBefore` could be read.
-			if (ctx.trivia && isTriviaBearing(typePath)) {
+			if (_ctx.trivia && isTriviaBearing(typePath)) {
 				final nlAccess: Expr = beforeNewlineAccess(fieldName);
 				final triviaSepExpr: Expr = if (prevAnyStarNonEmpty != null) {
 					final prev: Expr = prevAnyStarNonEmpty;
@@ -13671,7 +13671,7 @@ class WriterLowering {
 		// `@:fmt(captureCondOpenNewline)`; otherwise the slot does
 		// not exist, so we pass a literal `false` → byte-inert
 		// (plain mode, non-keep modes, non-opted condWrap fields).
-		final hasCondOpenNewlineSlot: Bool = ctx.trivia && isTriviaBearing(typePath) && child.fmtHasFlag('captureCondOpenNewline');
+		final hasCondOpenNewlineSlot: Bool = _ctx.trivia && isTriviaBearing(typePath) && child.fmtHasFlag('captureCondOpenNewline');
 		final condOpenNewlineExpr: Expr = hasCondOpenNewlineSlot
 			? {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX),
@@ -13844,13 +13844,13 @@ class WriterLowering {
 		// Currently consumed by `HxTryCatchStmt.body` for
 		// `untypedBody=Keep` source-shape preservation.
 		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-		final bodyOnSameLineExpr: Null<Expr> = ctx.trivia && (
+		final bodyOnSameLineExpr: Null<Expr> = _ctx.trivia && (
 			!isFirstField || firstFieldNlOptIn
 		) ? beforeNewlineNotAccess(fieldName) : null;
 		// ω-556-then-body-leading-comment: own-line leading-comment
 		// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
 		// sibling shares the `isBareNonFirstRef` host).
-		final beforeLeadingExpr: Null<Expr> = ctx.trivia && (!isFirstField || firstFieldNlOptIn) ? beforeLeadingAccess(fieldName) : null;
+		final beforeLeadingExpr: Null<Expr> = _ctx.trivia && (!isFirstField || firstFieldNlOptIn) ? beforeLeadingAccess(fieldName) : null;
 		// ω-untyped-body-stmt-override: forward all
 		// `@:fmt(bodyPolicyOverride('<ctor>', '<flag>'))`
 		// entries on this field to bodyPolicyWrap. Each entry
@@ -13927,7 +13927,7 @@ class WriterLowering {
 		final starAccess: Expr = { expr: EField(macro value, starField), pos: pos };
 		final flagAccess: Expr = { expr: EField(macro _wo, optField), pos: pos };
 		final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-		final useNodeAccess: Bool = ctx.trivia && isTriviaBearing(typePath);
+		final useNodeAccess: Bool = _ctx.trivia && isTriviaBearing(typePath);
 		final probeBody: Expr = useNodeAccess
 			? macro for (_m in $starAccess)
 				if (_m.node.match($ctorIdent)) {
@@ -14153,7 +14153,7 @@ class WriterLowering {
 			// inside the helper, mirroring `HxConditionalMod.body`'s
 			// non-optional precedent. First consumer:
 			// `HxConditionalDecl.elseBody`.
-			final useTriviaGap: Bool = ctx.trivia;
+			final useTriviaGap: Bool = _ctx.trivia;
 			final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
 				? {
 					expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
@@ -14207,7 +14207,7 @@ class WriterLowering {
 	 */
 	private function buildInterStarSep(prevAnyStarNonEmpty: Expr, fieldAccess: Expr, prevPadTrailing: Null<Expr>): Expr {
 		final prev: Expr = prevAnyStarNonEmpty;
-		final baseExpr: Expr = ctx.trivia
+		final baseExpr: Expr = _ctx.trivia
 			? macro {
 				final _next = $fieldAccess;
 				if ($prev && _next.length > 0) {
@@ -14548,7 +14548,7 @@ class WriterLowering {
 		// gap between the kw and the body. Read them off `value`
 		// (the parent struct) and forward to `bodyPolicyWrap`
 		// which injects them into the kw→body separator.
-		final useTriviaGap: Bool = ctx.trivia;
+		final useTriviaGap: Bool = _ctx.trivia;
 		final afterKwExpr: Null<Expr> = useTriviaGap
 			? {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
@@ -14837,7 +14837,7 @@ class WriterLowering {
 		// to the pre-slice inner-branch emission.
 		final bodyPolicyForCtorPairs: Array<Array<String>> = child.fmtReadStringArgsAll('bodyPolicyForCtor');
 		if (bodyPolicyForCtorPairs.length > 0) {
-			final hasBeforeNlSlot: Bool = ctx.trivia && isTriviaBearing(typePath) && !isFirstField && kwLead == null && leadText == null;
+			final hasBeforeNlSlot: Bool = _ctx.trivia && isTriviaBearing(typePath) && !isFirstField && kwLead == null && leadText == null;
 			final wrapBodyOnSameLineExpr: Null<Expr> = hasBeforeNlSlot ? beforeNewlineNotAccess(fieldName) : null;
 			// ω-fnbody-meta-block-glue: `@:fmt(metaBlockGlue('<exprBodyCtor>',
 			// '<metaCtor>', '<blockCtor>'))` names the runtime descent so
@@ -15012,7 +15012,7 @@ class WriterLowering {
 		// element is reached via `.node`; in plain mode the Star holds the
 		// raw `HxVarMore` directly. Both yield a value whose `.decl` is the
 		// next `HxVarDecl(T)` link, so the rest of the walk is identical.
-		final linkBind: Expr = ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
+		final linkBind: Expr = _ctx.trivia ? (macro final _link = _ml[0].node) : (macro final _link = _ml[0]);
 		// ω-keep-newline-after-sep (increment 1): when this fold's
 		// `WrapList.emit` resolves to `WrapMode.Keep`, the engine reproduces
 		// each comma-link's source break iff the source placed a newline AFTER
@@ -15022,10 +15022,10 @@ class WriterLowering {
 		// reproduces the source `var`→head newline, threaded onto
 		// `opt._varKwNewline` by the `HxStatement.VarStmt` writer. In plain
 		// mode `_breaks` stays null and Keep falls back to `shapeNoWrap` glue.
-		final breakDecl: Expr = ctx.trivia
+		final breakDecl: Expr = _ctx.trivia
 			? (macro final _breaks: Array<Bool> = [_varKwNewlineHead])
 			: (macro final _breaks: Null<Array<Bool>> = null);
-		final breakStepPush: Expr = ctx.trivia ? (macro _breaks.push(_ml[0].newlineAfterSep == true)) : (macro {});
+		final breakStepPush: Expr = _ctx.trivia ? (macro _breaks.push(_ml[0].newlineAfterSep == true)) : (macro {});
 		return macro {
 			final _suppressMoreEntry: Bool = opt._suppressMore;
 			final _varKwNewlineHead: Bool = opt._varKwNewline;
@@ -15249,7 +15249,7 @@ class WriterLowering {
 		// mode publishes its name so the NEXT field's `bodyPolicyWrap` can read
 		// `value.<name>AfterTrail`. Slice 40: optional Refs with `@:lead + @:trail`
 		// also publish (mirror of the parser-side `hasAfterTrailSlot` extension).
-		final newPrevTrailFieldName: Null<String> = (trailText != null && ctx.trivia && isTriviaBearing(typePath)) ? fieldName : null;
+		final newPrevTrailFieldName: Null<String> = (trailText != null && _ctx.trivia && isTriviaBearing(typePath)) ? fieldName : null;
 		// ω-condwrap-forstmt: end of span-mode iteration — splice the accumulated
 		// cond-span Doc parts into a single `WrapList.emitCondition`.
 		if (hasCondWrapEnd && spanInfo != null)
@@ -15305,7 +15305,7 @@ class WriterLowering {
 		// `value.<field>TrailPresent:Null<Bool>` (synth slot) so the writer
 		// preserves source presence of the trail rather than always re-emitting it.
 		final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref && child.annotations.get('lit.trailOptional') == true
-			&& ctx.trivia && isTriviaBearing(typePath);
+			&& _ctx.trivia && isTriviaBearing(typePath);
 		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot
 			? {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
