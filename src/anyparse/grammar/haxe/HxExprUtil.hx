@@ -52,8 +52,6 @@ final class HxExprUtil {
 	 * like statements" (switch / try / function-block) drop the
 	 * trailing `;`; literal-shaped expressions (object / block / array
 	 * / paren / if-as-expression) keep it.
-	 */
-	/**
 	 * HxExpr ctor names that — when wrapped in `ExprStmt(expr)` and
 	 * standing as the sole statement of a case body — refuse inline
 	 * emission. Empirical scope (probed against fork CLI): only `And`

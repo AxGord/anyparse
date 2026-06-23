@@ -7496,8 +7496,6 @@ final class Cli {
 	 * Returns the split segments when the query qualifies, null otherwise.
 	 * Each segment must be a non-empty identifier (`[A-Za-z_][A-Za-z0-9_]*`)
 	 * and total segment count must be ≥ 2.
-	 */
-	/**
 	 * DX v10: detect regex-like queries handed to `lit`. `lit` is
 	 * substring-only; users who reach for `\|` (regex alternation),
 	 * `[^...]` (character class negation), or `(?:...)` (non-capturing
@@ -7913,8 +7911,8 @@ final class Cli {
 	 * is refused. `--bodies -` reads `@@ <method>` sections from stdin (see
 	 * `NewFile`); a method without a section is left as a NotImplementedException
 	 * stub (reported on stderr). Without `--write` the source goes to stdout.
+	 * The class name for a new file: its basename without the `.hx` extension.
 	 */
-	/** The class name for a new file: its basename without the `.hx` extension. */
 	private static function newFileClassName(path: String): String {
 		final base: String = haxe.io.Path.withoutDirectory(path);
 		return StringTools.endsWith(base, '.hx') ? base.substr(0, base.length - 3) : base;
@@ -7946,8 +7944,6 @@ final class Cli {
 	 * the new file's); a simple `Name` is taken as a sibling in the new file's
 	 * own directory (same package, no import). Returns null when the file does
 	 * not exist.
-	 */
-	/**
 	 * Resolve an `--implements` argument to the interface's source, its
 	 * fully-qualified module path, and its simple name. A qualified `pkg.Name`
 	 * maps to `<srcRoot>/pkg/Name.hx`; a simple `Name` is taken as a sibling in
@@ -7990,8 +7986,6 @@ final class Cli {
 	 * sections from stdin (see `NewFile`); a method without a section is left as
 	 * a NotImplementedException stub (reported on stderr). Without `--write` the
 	 * source goes to stdout.
-	 */
-	/**
 	 * `apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]...
 	 * [--open] [--field <m>]... [--bodies -] [--write]` — create a new module
 	 * deterministically: derive the package + class name from <path>, assemble the
@@ -8004,8 +7998,6 @@ final class Cli {
 	 * reads `@@ <method>` sections from stdin (see `NewFile`); a method without a
 	 * section is left as a NotImplementedException stub (reported on stderr).
 	 * Without `--write` the source goes to stdout.
-	 */
-	/**
 	 * `apq new <path> (--class | --implements <iface> | --kind <k>) [--extends <T>]...
 	 * [--open] [--underlying <T>] [--from <T>]... [--to <T>]... [--field <m>]...
 	 * [--bodies -] [--write]` — create a new module deterministically: derive the
@@ -8020,8 +8012,6 @@ final class Cli {
 	 * reads `@@ <method>` sections from stdin (see `NewFile`); a method without a
 	 * section is left as a NotImplementedException stub (reported on stderr).
 	 * Without `--write` the source goes to stdout.
-	 */
-	/**
 	 * `apq set-doc <file> <line>:<col> (<text> | --from-file | -) [--reformat]
 	 * [--write]` — add or replace the doc-comment of the declaration at the
 	 * cursor (see `SetDoc`). The text (inline / file / stdin via `resolveCodeArg`)
@@ -8517,8 +8507,8 @@ final class Cli {
 		return { from: span.lineCol(content).line, to: new Span(endOffset, endOffset).lineCol(content).line };
 	}
 
-	/** Map a `--fail-on` level name to its `Severity`, or null if unknown. */
 	/**
+	 * Map a `--fail-on` level name to its `Severity`, or null if unknown.
 	 * `--exit-on-empty` / `--require-match`, stripped from the argv in `run` and
 	 * reset there on every invocation (single CLI call chain, never concurrent).
 	 * When set, a find-walker that produced no hits exits non-zero instead of 0, so

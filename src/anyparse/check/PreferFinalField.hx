@@ -135,8 +135,8 @@ final class PreferFinalField implements Check {
 		}
 	}
 
-	/** Whether the non-whitespace token immediately before `idx` is `++` or `--`. */
 	/**
+	 * Whether the non-whitespace token immediately before `idx` is `++` or `--`.
 	 * Whether the non-whitespace token immediately before `idx`, skipping any
 	 * interposed block comment, is `++` or `--` (a prefix increment / decrement —
 	 * a write). Symmetric with `followedByAssign`'s comment-skipping so a write

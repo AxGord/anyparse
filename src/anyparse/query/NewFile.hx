@@ -269,8 +269,8 @@ final class NewFile {
 		return sig;
 	}
 
-	/** Wrap `text` as a `/** … *\/` doc-comment, one ` * ` per line. */
 	/**
+	 * Wrap `text` as a `/** … *\/` doc-comment, one ` * ` per line.
 	 * Parse the `--bodies` payload into method bodies and extra imports. A
 	 * line `@@ <name>` opens a section; lines until the next `@@` (or EOF) are
 	 * its content. The reserved section `@@ imports` contributes one

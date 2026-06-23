@@ -950,14 +950,12 @@ class WriterLowering {
 		// (empty-body detection + ctor-set dispatch live in finalizeStructReturn)
 	}
 
-	/** Emit writer steps for a Star struct field. */
 	/**
+	 * Emit writer steps for a Star struct field.
 	 * Trivia `@:tryparse` Star dispatch (the `if (starNode.hasMeta(':tryparse'))`
 	 * branch of `emitWriterStarField`). Reads the per-construct `@:fmt` flags and
 	 * sep-override switches, then pushes the `triviaTryparseStarExpr` emit onto
 	 * `parts`. Extracted so the orchestrator stays under the complexity gate.
-	 */
-	/**
 	 * Builds the first / subsequent element separator overrides for a
 	 * `@:trivia @:tryparse` Star (the close-trailing + block-shape-aware switches).
 	 * Bundled for `emitTriviaTryparseStar`. Extracted to keep that helper under the
@@ -1282,14 +1280,10 @@ class WriterLowering {
 	 * Star through `triviaSepStarExpr` (sep-bearing) or `triviaBlockStarExpr`
 	 * (block) and pushes onto `parts`. Extracted to keep the orchestrator under
 	 * the complexity gate.
-	 */
-	/**
 	 * Trivia block-mode (`@:trail`, no flat sep) Star dispatch — the fall-through
 	 * tail of `emitTriviaCloseStar` after the sep dispatch returns. Reads the
 	 * block-layout `@:fmt` flags and pushes the `triviaBlockStarExpr` emit onto
 	 * `parts`. Extracted to keep the helper under the complexity gate.
-	 */
-	/**
 	 * Resolves the three classify-info builders (`interMemberInfo` /
 	 * `staticVarSubdivInfo` / `condLeadingDocInfo`) read off a block-mode trivia
 	 * Star, bundled for `emitTriviaBlockStarDispatch`. Extracted to keep that
@@ -1713,8 +1707,6 @@ class WriterLowering {
 	 * branch of `emitWriterStarField`). Routes the list through sepList / fillList
 	 * / WrapList per the wrap `@:fmt` flags and emits the first-field pattern-list
 	 * keep. Extracted to keep the orchestrator under the complexity gate.
-	 */
-	/**
 	 * Plain-mode sep Star list emission — the tail of `emitSepStar` after the
 	 * `\n`-join and leading-space handling. Builds the sepList / fillList /
 	 * WrapList call and the first-field pattern-list keep, then pushes onto
@@ -1940,8 +1932,6 @@ class WriterLowering {
 	 * Handles the `@:fmt(sameLine)` block-shape separator path and the
 	 * `padLeading` / `padTrailing` / `softFill` / `lineLengthAwareSeps` pad paths.
 	 * Extracted to keep the orchestrator under the complexity gate.
-	 */
-	/**
 	 * Plain-mode try-parse `@:fmt(sameLine)` block-shape separator path (the
 	 * `sameLineName != null` branch of `emitTryparseOrPadStar`). Emits the
 	 * per-element runtime-conditional separator with the block-ctor / bare-body
@@ -2040,14 +2030,10 @@ class WriterLowering {
 	 * `emitTryparseOrPadStar`). Handles `@:fmt(padLeading)` / `padTrailing` /
 	 * `softFill` / `lineLengthAwareSeps` / `sepBeforeOpt` inter-element + edge
 	 * spacing. Extracted to keep the helper under the complexity gate.
-	 */
-	/**
 	 * Plain-mode try-parse pad emission (the `if (padLeading || padTrailing)`
 	 * block of `emitTryparsePadStar`). Emits the lineLengthAware / sepBeforeOpt /
 	 * softFill / plain inter-element + edge layouts per the resolved `PadFlags`.
 	 * Extracted to keep the helper under the complexity gate.
-	 */
-	/**
 	 * Plain-mode try-parse pad emission, non-lineLengthAware path (the inner
 	 * `else` of `emitTryparsePadEmit`). Resolves the leading / trailing pad pushes
 	 * (`sepBeforeOpt` aware) and emits the `softFill` or plain inter-element
@@ -2295,8 +2281,6 @@ class WriterLowering {
 	 * builds the trailing-slot accessors + `TriviaStarCtx`, then routes to the
 	 * tryparse / close / EOF trivia emit helper. Extracted to keep the orchestrator
 	 * under the complexity gate.
-	 */
-	/**
 	 * Builds the trailing-slot accessors + the `TriviaStarCtx` for a `@:trivia`
 	 * Star, from the resolved `StarFieldArgs`. Extracted from `emitTriviaStar` so
 	 * the dispatch stays under the complexity gate.
@@ -5038,8 +5022,6 @@ class WriterLowering {
 	 * writer renders them at body-indent right after the last element.
 	 * Empty bodies with no trailing orphans emit nothing (no stray
 	 * hardline, no dangling nest).
-	 */
-	/**
 	 * Build a per-flag flat-gate predicate for the case-body
 	 * `bodyPolicy` mechanism: `opt.<flag> == Same || (opt.<flag> ==
 	 * Keep && !_arr[0].newlineBefore)`. The emitted Expr references
@@ -5053,8 +5035,6 @@ class WriterLowering {
 	 * dispatches at runtime on `opt._inExprPosition` to pick which
 	 * predicate fires; this helper just builds the predicate body for
 	 * one flag at a time.
-	 */
-	/**
 	 * ω-issue-257-else-in-return-switch — read the dual-flag form of
 	 * `@:fmt(bodyPolicy('<stmtFlag>')` or `@:fmt(bodyPolicy('<stmtFlag>',
 	 * '<exprFlag>'))` from a grammar node. Single-flag form returns
@@ -15846,25 +15826,17 @@ typedef CascadeInfos = {
  * spliced once at the start of the Star body, after `_docs` init.
  * Empty info arrays produce `macro {}` placeholders so non-cascade-
  * bearing consumers stay byte-identical.
- */
-/**
  * Shared setup locals bundled for the `triviaEofStarExpr` emission
  * helpers (`triviaEofWhileExpr` / `triviaEofElseBody` + the per-flag
  * leaf Expr builders). Replaces a >5-scalar helper signature with one
  * context struct.
- */
-/**
  * Shared setup locals + derived flags bundled for the `triviaBlockStarExpr`
  * emission helpers (the blank-before / begin-end / between / blockEnded-sep
  * builders + the main orchestrator). Replaces a >5-param helper signature
  * with one context struct (mirrors EofStarCtx / SepStarCtx).
- */
-/**
  * The strip / add gate Exprs + per-element compute Exprs bundled for the
  * `triviaBlockBlankBeforeAssemblyExpr` final-assembly helper. Replaces a
  * >5-param helper signature with one struct.
- */
-/**
  * The per-flag init / track / wrap leaf Exprs bundled for the orchestrator,
  * built once by `triviaBlockLeafExprs`. Replaces a multi-value return with one
  * struct.

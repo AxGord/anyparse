@@ -94,8 +94,6 @@ final class ExplicitType implements Check {
 	 * Flag each untyped parameter of `fn`, and `fn` itself when it has no return
 	 * type — a child that is neither a parameter nor a body marker. A constructor
 	 * (`new`) is exempt from the return-type rule: it has no return type.
-	 */
-	/**
 	 * Flag each untyped parameter of `fn`, and `fn` itself when it has no return
 	 * type. A constructor (`new`) is exempt from the return-type rule — it has no
 	 * return type to declare.

@@ -240,8 +240,6 @@ final class PreferSwitch implements Check {
 	 * Whether `source[from...to]` contains a `//` or block-comment opener outside a
 	 * string literal — a conservative gate that keeps the comment-dropping rebuild
 	 * away from any commented chain (a `//` inside a string only over-bails).
-	 */
-	/**
 	 * Whether any comment token starts within `source[from...to]`, via the shared
 	 * string-aware scanner `RefactorSupport.collectCommentTokens` — a comment inside
 	 * a string literal is correctly not counted. A commented chain bails to
