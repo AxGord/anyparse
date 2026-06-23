@@ -108,7 +108,7 @@ final class AddElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = findElementAt(tree, source, cursor);
+		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
 		if (hit == null)
 			return
 				Err(
@@ -219,34 +219,6 @@ final class AddElement {
 		return EXPR_CONTAINER_KINDS.contains(node.kind) || RefactorSupport.typeDeclOf(node) != null;
 	}
 
-	/**
-	 * The outermost node whose FIRST TOKEN the cursor falls within (the FIRST in pre-order,
-	 * since a container starts before its element — a block at `{`, a call at its callee,
-	 * a switch at `switch`), together with its parent. This is the list element the cursor's
-	 * first token identifies. The bound is EXCLUSIVE of the token's trailing boundary so a
-	 * container's single-char delimiter (`[` / `{` / `(`) does NOT swallow the first
-	 * element that begins right after it — the cursor at that boundary resolves the element,
-	 * not the container. A column landing inside a multi-character element name still
-	 * resolves it. Null when no node's first token contains `cursor`.
-	 */
-	private static function findElementAt(tree: QueryNode, source: String, cursor: Int): Null<{ node: QueryNode, parent: Null<QueryNode> }> {
-		var result: Null<{ node: QueryNode, parent: Null<QueryNode> }> = null;
-		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
-			if (result != null) return;
-			final sp: Null<Span> = node.span;
-			if (sp != null && cursor >= sp.from && cursor < firstTokenEnd(source, sp.from)) {
-				result = { node: node, parent: parent };
-				return;
-			}
-			for (c in node.children) {
-				if (result != null) return;
-				walk(c, node);
-			}
-		}
-		walk(tree, null);
-		return result;
-	}
-
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
@@ -290,28 +262,9 @@ final class AddElement {
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 
-	private static inline function isIdentChar(c: Int): Bool {
-		return c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code || c == '_'.code;
-	}
-
-	/**
-	 * The offset just past the first token at `from` — the run of identifier characters
-	 * when `from` is on one (a name / keyword), else the single delimiter / operator
-	 * character (`{` / `[` / `(`). Lets a cursor that lands anywhere within a node's
-	 * opening token (e.g. one column past `{`, or inside a callee name) still resolve it,
-	 * matching the forgiving `ast --at` instead of demanding the exact `span.from` column.
-	 */
-	private static function firstTokenEnd(source: String, from: Int): Int {
-		if (from < 0 || from >= source.length) return from;
-		if (!isIdentChar(StringTools.fastCodeAt(source, from))) return from + 1;
-		var i: Int = from + 1;
-		while (i < source.length && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
-		return i;
-	}
-
-	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary). */
+	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary, inclusive). */
 	private static inline function cursorInFirstToken(source: String, from: Int, cursor: Int): Bool {
-		return cursor >= from && cursor <= firstTokenEnd(source, from);
+		return cursor >= from && cursor <= RefactorSupport.firstTokenEnd(source, from);
 	}
 
 }

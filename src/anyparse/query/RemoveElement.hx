@@ -27,10 +27,15 @@ import haxe.Exception;
 final class RemoveElement {
 
 	/**
-	 * Remove the element whose first token is at `line:col` in `source`.
-	 * `reformat` opts into a whole-file canonicalisation when the source is
-	 * not already writer-canonical. Returns `Ok(rewritten)` or an `Err`; the
-	 * source is never mutated.
+		 * Remove the sibling element whose first token the cursor at `line:col` falls within
+		 * — a statement, `case`, comma-list element, or member (folded with its leading
+		 * modifier / `@:meta` group). `reformat` opts into a whole-file canonicalisation when
+		 * the source is not writer-canonical; `withDoc` also removes a leading `/**
+	 * Remove the sibling element whose first token the cursor at `line:col` falls within
+	 * — a statement, `case`, comma-list element, or member (folded with its leading
+	 * modifier / `@:meta` group). `reformat` opts into a whole-file canonicalisation when
+	 * the source is not writer-canonical; `withDoc` also removes a leading `/*`-doc comment.
+	 * Returns `Ok(rewritten)` or an `Err`; the source is never mutated.
 	 */
 	public static function removeElement(
 		source: String, line: Int, col: Int, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false, ?optsJson: String
@@ -43,15 +48,12 @@ final class RemoveElement {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final node: Null<QueryNode> = RefactorSupport.nodeAtFrom(tree, cursor);
-		if (node == null)
-			return
-				Err(
-					'position $line:$col is not on the first token of an element — point at the first token of a statement / case / list element / member'
-				);
-
-		final parent: Null<QueryNode> = RefactorSupport.parentOf(tree, node);
-		return RefactorSupport.deleteNode(source, node, parent, reformat, plugin, withDoc, optsJson);
+		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
+		return hit == null
+			? Err(
+				'position $line:$col is not on the first token of an element — point at the first token of a statement / case / list element / member'
+			)
+			: RefactorSupport.deleteNode(source, hit.node, hit.parent, reformat, plugin, withDoc, optsJson);
 	}
 
 }
