@@ -21,42 +21,9 @@ typedef OrderedMember = {
 	var index: Int;
 	var span: Span;
 	var isField: Bool;
+	var isStatic: Bool;
 	var initNode: Null<QueryNode>;
 }
-
-/**
- * Flags a type whose members are not in the canonical declaration order and
- * reorders them. Purely cosmetic (the order carries no meaning to the compiler), so
- * `Severity.Info`; the sibling of `modifier-order` one level up — where that orders
- * the keywords of one member, this orders the members of one type. The order:
- *
- *   1. constants (static fields) — public, then private
- *   2. instance fields — public final, public var, private final, private var
- *   3. constructor
- *   4. property accessors (`get_*` / `set_*`)
- *   5. instance methods — public, then private
- *   6. static methods — public, then private
- *
- * ## Grammar-agnostic
- *
- * Every category test is a `RefShape` kind-set / text comparison: container kinds,
- * member kinds, the field subset and its mutable (`var`) subset, the visibility
- * modifiers (a member is public when a visibility modifier's text differs from the
- * default), the `static` modifier, the constructor name, and the accessor prefixes.
- * Any required field unset makes the check a no-op.
- *
- * ## Autofix soundness — field init order is preserved
- *
- * Reordering METHODS is always safe (declaration order never affects behaviour).
- * Reordering FIELDS is NOT: a field initializer runs in declaration order, so moving
- * one past another can change the order of its side effects or read a sibling field
- * before it is initialized — a silent behaviour change the compiler will not catch.
- * The autofix therefore BAILS the whole container (report-only) when any field has an
- * initializer that is not side-effect-free, or that references a sibling field name.
- * Otherwise the members are reordered by replacing each source slot with the member
- * now ranked for it (the `modifier-order` slot-permutation, at member granularity),
- * so inter-member trivia keeps its position and the writer re-canonicalises spacing.
- */
 @:nullSafety(Strict)
 final class MemberOrder implements Check {
 
@@ -166,6 +133,7 @@ final class MemberOrder implements Check {
 		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final defaultVis: String = shape.defaultVisibilityModifierText ?? '';
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
 		final out: Array<OrderedMember> = [];
 		var isStatic: Bool = false;
 		var isPublic: Bool = false;
@@ -174,7 +142,7 @@ final class MemberOrder implements Check {
 				final span: Null<Span> = child.span;
 				if (span != null) {
 					final group: Span = RefactorSupport.declGroupSpan(child, container, span);
-					final full: Span = RefactorSupport.memberTriviaSpan(source, group);
+					final full: Span = RefactorSupport.memberTriviaSpan(source, group, comments);
 					final isField: Bool = fields.contains(child.kind);
 					out.push({
 						node: child,
@@ -182,6 +150,7 @@ final class MemberOrder implements Check {
 						index: out.length,
 						span: full,
 						isField: isField,
+						isStatic: isStatic,
 						initNode: isField && child.children.length > 0 ? child.children[0] : null
 					});
 				}
@@ -236,36 +205,36 @@ final class MemberOrder implements Check {
 	 */
 	private static function reorderSafe(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape): Bool {
 		// Reordering changes behaviour only via FIELD initializers (they run in
-		// declaration order — the constructor for instance fields, static-init for
-		// statics; method order is immaterial).
+		// declaration order). Static fields init at class-load and instance fields in
+		// the constructor — INDEPENDENT phases — so a field need only keep its order
+		// relative to OTHER FIELDS OF THE SAME static-ness (`f.isStatic == g.isStatic`).
 		//
-		// (0) Orphan trivia between two member slots (a `//` note, a trailing comment)
-		// belongs to no slot and would be left behind while members move around it, so
-		// any non-whitespace gap bails the container (report-only). Leading `/**` docs
-		// are absorbed into the following slot by `docExtendedSpan` and travel with it.
+		// (0) Orphan trivia between two member slots (a note / trailing comment not
+		// absorbed into either slot) would be left behind while members move around it,
+		// so any non-whitespace gap bails the container (report-only).
 		for (i in 0...members.length - 1) {
 			final gapFrom: Int = members[i].span.to;
 			final gapTo: Int = members[i + 1].span.from;
 			if (gapTo > gapFrom && StringTools.trim(source.substring(gapFrom, gapTo)) != '') return false;
 		}
 		// (1) A side-effecting field init (a call / `new` / assignment) can read or
-		// mutate ANY other field, so it must keep its relative order to EVERY field —
-		// not merely to other side-effecting ones (the dependency can flow through the
-		// callee, invisible to a text scan).
+		// mutate any same-phase field through the callee (invisible to a text scan), so
+		// it must keep its relative order to every same-phase field.
 		final unsafe: Array<String> = shape.writeParentKinds.copy();
 		if (shape.callKind != null) unsafe.push(shape.callKind);
 		if (shape.newExprKind != null) unsafe.push(shape.newExprKind);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
-		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields) if (g.node != f.node && orderFlips(f, g, sorted)) return false;
-		// (2) A field whose init TEXT reads a sibling field must keep its relative order
-		// to that sibling (the read-after-init order).
+		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields)
+			if (g.node != f.node && f.isStatic == g.isStatic && orderFlips(f, g, sorted)) return false;
+		// (2) A field whose init TEXT reads a same-phase sibling field must keep its
+		// relative order to it (a cross-phase read is always safe — statics init first).
 		for (m in members) {
 			final init: Null<QueryNode> = m.initNode;
 			if (init == null) continue;
 			final s: Null<Span> = init.span;
 			if (s == null) continue;
 			for (g in members)
-				if (g.isField && g.node != m.node && g.node.name != null && RefactorSupport.referencedInRange(
+				if (g.isField && g.node != m.node && g.isStatic == m.isStatic && g.node.name != null && RefactorSupport.referencedInRange(
 					source, (g.node.name: String), s.from, s.to, []
 				) && orderFlips(m, g, sorted)) return false;
 		}

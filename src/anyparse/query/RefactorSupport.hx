@@ -1121,8 +1121,7 @@ final class RefactorSupport {
 	 * own-line comment between two members attaches to the FOLLOWING member — so two
 	 * adjacent members never claim the same comment (their slots stay disjoint).
 	 */
-	public static function memberTriviaSpan(source: String, span: Span): Span {
-		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = collectCommentTokens(source);
+	public static function memberTriviaSpan(source: String, span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Span {
 		var from: Int = span.from;
 		while (true) {
 			final c: Null<{ from: Int, to: Int, isLine: Bool }> = lastCommentEndingBefore(comments, from);
