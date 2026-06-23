@@ -35,13 +35,13 @@ class Lowering {
 
 	private final _shape: ShapeBuilder.ShapeResult;
 	private final _formatInfo: FormatReader.FormatInfo;
-	private final ctx: LoweringCtx;
+	private final _ctx: LoweringCtx;
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		this._shape = shape;
 		this._formatInfo = formatInfo;
-		this.ctx = ctx;
+		this._ctx = ctx;
 	}
 
 	public function generate(): Array<GeneratedRule> {
@@ -58,10 +58,10 @@ class Lowering {
 		for (typePath => node in _shape.rules) {
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
-				if (ctx.spans && node.kind != Terminal) spanRuleNames.set(rule.fnName, true);
+				if (_ctx.spans && node.kind != Terminal) spanRuleNames.set(rule.fnName, true);
 			}
 		}
-		if (ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
+		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
 		return rules;
 	}
 
@@ -436,7 +436,7 @@ class Lowering {
 		// data loss. Without this swap, `a + // c\n b` loses `// c` because
 		// the post-op `skipWs` discards it (the outer Pratt rewind only fires
 		// on no-match). Plain mode keeps `skipWs` (no Trivia channel).
-		final skipFnName: String = ctx.trivia ? 'skipWsAndStash' : 'skipWs';
+		final skipFnName: String = _ctx.trivia ? 'skipWsAndStash' : 'skipWs';
 		final skipCall: Expr = {
 			expr: ECall(macro $i{skipFnName}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -545,7 +545,7 @@ class Lowering {
 		// emits the legacy body unchanged (byte-inert non-keep / non-chain).
 		var _hasChainBranch: Bool = false;
 		for (b in postfixBranches) if (b.fmtHasFlag('captureChainNewline')) _hasChainBranch = true;
-		final wantOpTrail: Bool = ctx.trivia && _hasChainBranch;
+		final wantOpTrail: Bool = _ctx.trivia && _hasChainBranch;
 		// Longest-first sort — same macro-time policy as lowerPrattLoop (D33).
 		postfixBranches.sort((a, b) -> {
 			final la: Int = (a.annotations.get('postfix.op'): String).length;
@@ -971,7 +971,7 @@ class Lowering {
 		// `instrumentSpans` wraps the whole rule body for span-bearing
 		// (incl. Seq) rules. Flat/no-span builds skip both fields entirely.
 		final spannedKind: Null<String> = node.readMetaString(':spanned');
-		if (ctx.spans && spannedKind != null) {
+		if (_ctx.spans && spannedKind != null) {
 			structFields.push({ field: '_span', expr: macro new anyparse.runtime.Span(_start, ctx.pos) });
 			structFields.push({ field: '_kind', expr: macro $v{spannedKind} });
 		}
@@ -1049,7 +1049,7 @@ class Lowering {
 		// mode (HxModule.decls). `@:sep` and `@:tryparse` combined with
 		// @:trivia are rejected — no current grammar combines them and the
 		// semantics of "trivia around a sep-separated list" are undecided.
-		if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
+		if (_ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
 			emitTriviaStarFieldSteps(starNode, localName, parseSteps, isLastField, elemCT, elemCall, openText, closeText);
 			return;
 		}
@@ -1269,7 +1269,7 @@ class Lowering {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		final isTriviaCollects: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaCollects: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		// Element wrap and accumulator types — Trivial<T> in trivia mode.
 		final accumElemCT: ComplexType = isTriviaCollects
 			? TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)] })
@@ -2370,7 +2370,7 @@ class Lowering {
 	 * `HxFormatConfig`).
 	 */
 	private function isTriviaBearing(refName: String): Bool {
-		if (!ctx.trivia) return false;
+		if (!_ctx.trivia) return false;
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		return node != null && node.annotations.get('trivia.bearing') == true;
 	}
@@ -2381,7 +2381,7 @@ class Lowering {
 	 * every enum value (Terminals stay as primitives — no carrier).
 	 */
 	private function isSpanBearing(refName: String): Bool {
-		if (!ctx.spans) return false;
+		if (!_ctx.spans) return false;
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		return node != null && node.kind != Terminal;
 	}
@@ -2589,7 +2589,7 @@ class Lowering {
 			//      it does not leak to the next operand. O(1), no recursive
 			//      probe. Plain mode keeps the 2-arg ctor (synth widens only
 			//      in Trivia).
-			final captureChainNl: Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+			final captureChainNl: Bool = _ctx.trivia && branch.fmtHasFlag('captureChainNewline');
 			final isBoolChainOp: Bool = opText == '&&' || opText == '||';
 			final ctorCall: Expr = {
 				expr: ECall(
@@ -2652,7 +2652,7 @@ class Lowering {
 		// the caller's collectTrivia sees them AND re-captures from input,
 		// duplicating. `_stashCount0` snapshot lets us truncate.
 		final noMatch: Expr = buildPrattNoMatchHandlerExpr();
-		return ctx.trivia
+		return _ctx.trivia
 			? macro {
 				var left: $returnCT = $atomCall;
 				while (true) {
@@ -2871,7 +2871,7 @@ class Lowering {
 					leadingComments: [],
 				};
 			}
-			: ctx.trivia
+			: _ctx.trivia
 				? macro {
 					final _t = collectTrivia(ctx);
 					if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
@@ -3265,7 +3265,7 @@ class Lowering {
 		// trivia-Star pattern: horizontal-only-skip before sep match
 		// so an inline `// comment` or `/* x */` after each arg lands
 		// in `collectTrailing` instead of being eaten by `skipWs`.
-		final triviaCollect: Bool = ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final triviaCollect: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
 		if (triviaCollect && sepText != null) {
 			final wrappedCT: ComplexType = TPath({
 				pack: ['anyparse', 'runtime'],
@@ -3455,7 +3455,7 @@ class Lowering {
 		// so a `WrapMode.Keep` method-chain round-trips the source per-
 		// segment dot-boundary line breaks. Plain mode keeps the original
 		// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
-		final captureChainNl: Bool = ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+		final captureChainNl: Bool = _ctx.trivia && branch.fmtHasFlag('captureChainNewline');
 		// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
 		// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
 		// It reads `_opTrailComment` — the operand's trailing comment captured
@@ -3563,7 +3563,7 @@ class Lowering {
 		// no-match scan-back (comment-rewind / newline-stash); plain mode is
 		// the bare matchExpr dispatch loop.
 		final scanback: Expr = buildPostfixNoMatchScanback();
-		return ctx.trivia
+		return _ctx.trivia
 			? macro {
 				var left: $returnCT = $coreCall;
 				while (true) {
@@ -4447,7 +4447,7 @@ class Lowering {
 		// `trailPresent:Bool` arg synthesised by `TriviaTypeSynth`.
 		// Pass the captured `matchLit` result through so the writer
 		// can preserve source presence of the trail literal.
-		final triviaTrailOpt: Bool = trailOptional && ctx.trivia && isTriviaBearing(typePath);
+		final triviaTrailOpt: Bool = trailOptional && _ctx.trivia && isTriviaBearing(typePath);
 		// ω-slice-V — parser-side shape-gated trail literal. A ctor
 		// carrying `@:fmt(trailOptParseGate('<adapter>'))` alongside
 		// `@:trailOpt(...)` makes the optional-trail decision depend on
@@ -4473,7 +4473,7 @@ class Lowering {
 		// `opt.formatStringInterpolation == false`. Trivia-only because
 		// the synth-pair ctor is the carrier; plain pipelines keep the
 		// pre-slice ctor arity.
-		final triviaCaptureSource: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isCaptureSourceBranch(branch);
+		final triviaCaptureSource: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isCaptureSourceBranch(branch);
 		// ω-issue-257-firstline: ctors with `@:fmt(bodyPolicy(...))` on a
 		// single-Ref kw-led branch (e.g. `HxStatement.ReturnStmt`) carry
 		// a positional `bodyOnSameLine:Bool` arg in the synth pair. The
@@ -4482,7 +4482,7 @@ class Lowering {
 		// source-shape-aware. Trivia-only — plain mode keeps the
 		// original ctor arity and falls back to width-driven layout
 		// via `widthAware`.
-		final triviaBodyPolicyKw: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
+		final triviaBodyPolicyKw: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
 		// omega-paren-wrap-source-newline: ctors with @:fmt(captureWrapOpenNewline)
 		// on a single-Ref @:wrap branch carry a positional wrapOpenNewline:
 		// Bool arg in the synth pair. Parser captures whether the gap
@@ -4491,7 +4491,7 @@ class Lowering {
 		// `(\n<inner>\n)` (open broken; preserves authored shape on
 		// chain inners) and `(<inner>\n)` (glued; unchanged default).
 		// Trivia-only; plain mode keeps the original ctor arity.
-		final triviaWrapOpenNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
+		final triviaWrapOpenNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
 		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
 		// ctors with `@:fmt(captureKwNewline)` carry a positional
 		// `kwNewline:Bool` arg. The parser captures whether the gap between
@@ -4500,7 +4500,7 @@ class Lowering {
 		// `HxVarDecl` multiVar fold reproduces the source `var`→head newline
 		// under `WrapMode.Keep`. Trivia-only; plain mode keeps the original
 		// ctor arity (head always glued to `var `).
-		final triviaKwNewline: Bool = ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltKwNewlineBranch(branch);
+		final triviaKwNewline: Bool = _ctx.trivia && isTriviaBearing(typePath) && TriviaTypeSynth.isAltKwNewlineBranch(branch);
 		final ctorCall: Expr = buildKwRefCtorCall(
 			ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline, triviaKwNewline
 		);
@@ -4842,7 +4842,7 @@ expectLit(ctx, $v{trailText}));
 		// after each element via `matchLit`, before `collectTrailing`,
 		// so a same-line `// comment` after `,` attaches to the
 		// just-pushed element.
-		if (ctx.trivia && starNode.annotations.get('trivia.starCollects') == true)
+		if (_ctx.trivia && starNode.annotations.get('trivia.starCollects') == true)
 			return lowerTriviaStarBranch(branch, ctorRef, leadText, trailText, sepText, elemCT, elemCall, closeNextOrEofExpr);
 		if (sepText != null) {
 			final sepCharCode: Int = sepText.charCodeAt(0);
@@ -4969,7 +4969,7 @@ expectLit(ctx, $v{trailText}));
 				}
 				acc;
 			};
-			final wsAction: Expr = ctx.trivia
+			final wsAction: Expr = _ctx.trivia
 				? macro {
 					final _t = collectTrivia(ctx);
 					if (_t.leadingComments.length > 0 || _t.blankBefore || _t.blankAfterLeadingComments || _t.newlineBefore)
@@ -5115,7 +5115,7 @@ expectLit(ctx, $v{trailText}));
 		optStarWithLead: Bool
 	} {
 		final triviaEofStar: Bool = isStar && child.annotations.get('trivia.starCollects') == true && child.readMetaString(':lead') == null
-			&& child.readMetaString(':kw') == null && ctx.trivia;
+			&& child.readMetaString(':kw') == null && _ctx.trivia;
 		// Slice ω₆a: an @:optional Ref field takes ownership of its own
 		// pre-field ws handling so the commit-check can rewind over the
 		// just-consumed whitespace (and any comments inside it, in trivia
@@ -5500,7 +5500,7 @@ expectLit(ctx, $v{trailText}));
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal} });
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal} });
 		}
-		if (ctx.trivia && child.kind == Star && child.annotations.get('trivia.starCollects') == true) {
+		if (_ctx.trivia && child.kind == Star && child.annotations.get('trivia.starCollects') == true) {
 			pushTrailingStarSlots(child, localName, fieldName, structFields);
 		}
 		// ω-condcomp-body-leading-sep (Slice 18f): @:fmt(sepBeforeOpt)
@@ -5512,7 +5512,7 @@ expectLit(ctx, $v{trailText}));
 		// ensures plain-mode struct literals stay byte-identical to
 		// pre-slice (the captured local is still declared above and
 		// discarded — no field-shape mismatch).
-		if (ctx.trivia && child.kind == Star && child.fmtHasFlag('sepBeforeOpt')) {
+		if (_ctx.trivia && child.kind == Star && child.fmtHasFlag('sepBeforeOpt')) {
 			final sepBeforeLocal: String = localName + 'SepBefore';
 			structFields.push({ field: fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX, expr: macro $i{sepBeforeLocal} });
 		}
@@ -5544,7 +5544,7 @@ expectLit(ctx, $v{trailText}));
 		// local fresh post-trail (`final … = collectTrailing(ctx)`)
 		// — the names collide harmlessly because the mandatory and
 		// optional paths are mutually exclusive per field.
-		final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref && isOptional && !isStar && trailText != null && ctx.trivia
+		final hasOptionalRefAfterTrailSlot: Bool = child.kind == Ref && isOptional && !isStar && trailText != null && _ctx.trivia
 			&& isTriviaBearing(typePath);
 		if (hasOptionalRefAfterTrailSlot) {
 			parseSteps.push({
@@ -5574,7 +5574,7 @@ expectLit(ctx, $v{trailText}));
 		// re-emission on source presence; until then the captured
 		// value is unobserved and Δsweep stays 0.
 		final hasStructFieldTrailOptSlot: Bool = child.kind == Ref && !isStar && child.annotations.get('lit.trailOptional') == true
-			&& ctx.trivia && isTriviaBearing(typePath);
+			&& _ctx.trivia && isTriviaBearing(typePath);
 		if (hasStructFieldTrailOptSlot) {
 			parseSteps.push({
 				expr: EVars([
@@ -5682,7 +5682,7 @@ expectLit(ctx, $v{trailText}));
 	private function emitNewlineAfterCapture(
 		child: ShapeNode, typePath: String, fieldName: Null<String>, isStar: Bool, trailText: Null<String>, parseSteps: Array<Expr>
 	): { hasNewlineAfterSlot: Bool, newlineAfterLocal: String } {
-		final hasNewlineAfterSlot: Bool = child.kind == Ref && !isStar && trailText == null && ctx.trivia && isTriviaBearing(typePath)
+		final hasNewlineAfterSlot: Bool = child.kind == Ref && !isStar && trailText == null && _ctx.trivia && isTriviaBearing(typePath)
 			&& child.fmtHasFlag('captureSourceNewlineAfter');
 		final newlineAfterLocal: String = '_newlineAfter_$fieldName';
 		if (hasNewlineAfterSlot) {
@@ -5725,7 +5725,7 @@ expectLit(ctx, $v{trailText}));
 	private function hasCondOpenNewlineField(
 		child: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, leadText: Null<String>
 	): Bool {
-		return child.kind == Ref && !isStar && !isOptional && leadText != null && ctx.trivia && isTriviaBearing(typePath)
+		return child.kind == Ref && !isStar && !isOptional && leadText != null && _ctx.trivia && isTriviaBearing(typePath)
 			&& child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline');
 	}
 
@@ -5735,7 +5735,7 @@ expectLit(ctx, $v{trailText}));
 	 * True for exactly that shape. Pure predicate lifted from `lowerStruct`.
 	 */
 	private function hasKwTriviaSlotsField(typePath: String, isOptionalRef: Bool, isOptionalKwStar: Bool, kwLead: Null<String>): Bool {
-		return (isOptionalRef || isOptionalKwStar) && kwLead != null && ctx.trivia && isTriviaBearing(typePath);
+		return (isOptionalRef || isOptionalKwStar) && kwLead != null && _ctx.trivia && isTriviaBearing(typePath);
 	}
 
 	/**
@@ -5744,7 +5744,7 @@ expectLit(ctx, $v{trailText}));
 	 * shape. Pure predicate lifted from `lowerStruct`.
 	 */
 	private function hasAfterTrailSlotField(child: ShapeNode, typePath: String, isStar: Bool, trailText: Null<String>): Bool {
-		return child.kind == Ref && !isStar && trailText != null && ctx.trivia && isTriviaBearing(typePath);
+		return child.kind == Ref && !isStar && trailText != null && _ctx.trivia && isTriviaBearing(typePath);
 	}
 
 	/**
@@ -5758,11 +5758,11 @@ expectLit(ctx, $v{trailText}));
 	private function computeBeforeSlots(
 		child: ShapeNode, node: ShapeNode, typePath: String, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>
 	): { hasBeforeNewlineSlot: Bool, hasBeforeLeadingSlot: Bool } {
-		final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && ctx.trivia
+		final isBareTriviaRefNoLead: Bool = child.kind == Ref && !isOptional && kwLead == null && leadText == null && _ctx.trivia
 			&& isTriviaBearing(typePath);
 		final isFirstField: Bool = child == node.children[0];
 		final isFirstFieldNlOptIn: Bool = isBareTriviaRefNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-		final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && ctx.trivia
+		final isBareTriviaStarNoLead: Bool = isStar && !isOptional && kwLead == null && leadText == null && _ctx.trivia
 			&& isTriviaBearing(typePath);
 		final isFirstFieldStarNlOptIn: Bool = isBareTriviaStarNoLead && isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
 		final hasBeforeNewlineSlot: Bool = (isBareTriviaRefNoLead && (!isFirstField || isFirstFieldNlOptIn)) || isFirstFieldStarNlOptIn;
@@ -5815,7 +5815,7 @@ expectLit(ctx, $v{trailText}));
 				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
 				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
 			}
-		else if (ctx.trivia)
+		else if (_ctx.trivia)
 			macro {
 				final _t = collectTrivia(ctx);
 				// Stash whenever the captured run carries any signal the
