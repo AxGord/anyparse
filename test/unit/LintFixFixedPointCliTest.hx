@@ -105,4 +105,25 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * `ext` is written ONLY from B.hx; A is made active for pass 2 by a redundant-else
+	 * fix. `prefer-final-public-field` is in the `--fix` loop's `fullScopeIds`, so pass 2
+	 * over the subset {A} still includes B's `a.ext = 9` write and `ext` stays `var`.
+	 * Were the check active-scope, pass 2 would re-lint {A} alone, see no write, and
+	 * wrongly rewrite it to `final` — breaking B's write. Guard-free: File / FileSystem
+	 * are imported under the file's `#if (sys || nodejs)` and every test target satisfies it.
+	 */
+	public function testPreferFinalPublicFieldFullScopeAcrossPasses(): Void {
+		final a: String = 'package p;\n\nclass A {\n\tpublic var ext:Int = 0;\n\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return 2;\n\t}\n}\n';
+		final b: String = 'package p;\n\nclass B {\n\tpublic function poke(a:A):Void {\n\t\ta.ext = 9;\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixfpf', [{ name: 'A.hx', source: a }, { name: 'B.hx', source: b }]);
+		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
+		final outA: String = File.getContent('$dir/A.hx');
+		Assert.isTrue(outA.indexOf('else') == -1, 'redundant else de-nested (pass 1 ran): $outA');
+		Assert.isTrue(outA.indexOf('public var ext') != -1, 'ext kept var — written cross-file from B: $outA');
+		if (FileSystem.exists('$dir/A.hx')) FileSystem.deleteFile('$dir/A.hx');
+		if (FileSystem.exists('$dir/B.hx')) FileSystem.deleteFile('$dir/B.hx');
+		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+	}
+
 }
