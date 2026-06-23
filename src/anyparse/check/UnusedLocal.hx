@@ -9,6 +9,8 @@ import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
+import anyparse.query.TypeInfoProvider;
 
 /**
  * Flags local `var` / `final` declarations whose bound name is never
@@ -100,6 +102,16 @@ final class UnusedLocal implements Check {
 		final declByFrom: Map<Int, QueryNode> = [];
 		collectLocalDecls(tree, declByFrom, opaqueKinds, localDeclKinds);
 
+		// Type-aware purity allow-path: `final x = recv.field;` whose receiver is an
+		// anonymous-struct value is a side-effect-free read (anon fields can never be
+		// property getters), so it is safe to delete even though `isSideEffectFree`
+		// conservatively rejects any field access. Available only when the grammar
+		// supplies declared types (`TypeInfoProvider`) and a symbol index is passed.
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		final treeRoot: QueryNode = tree;
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
+
 		for (v in violations) {
 			if (v.severity != Severity.Warning) continue;
 			final span: Null<Span> = v.span;
@@ -107,7 +119,12 @@ final class UnusedLocal implements Check {
 			final decl: Null<QueryNode> = declByFrom[span.from];
 			if (decl == null) continue;
 			final init: Null<QueryNode> = decl.children.length > 0 ? decl.children[0] : null;
-			if (init != null && !RefactorSupport.isSideEffectFree(init)) continue;
+			if (init != null && !RefactorSupport.isSideEffectFree(init)) {
+				var plainFieldRead: Bool = false;
+				if (index != null && fieldAccessKind != null && init.kind == fieldAccessKind)
+					plainFieldRead = TypeResolver.isAnonStructFieldAccess(init, treeRoot, shape, declaredTypes, index);
+				if (!plainFieldRead) continue;
+			}
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;

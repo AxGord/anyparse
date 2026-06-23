@@ -12,6 +12,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin.CheckOverrides;
+import anyparse.query.TypeInfoProvider;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -46,7 +47,7 @@ import anyparse.query.GrammarPlugin.CheckOverrides;
  * applies. Its children (top-level decls) carry their own spans.
  */
 @:nullSafety(Strict)
-final class HaxeQueryPlugin implements GrammarPlugin {
+final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider {
 
 	/**
 	 * Binding-declaration kinds shared by `refShape` and `metaShape`
@@ -937,6 +938,66 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 	public function checkOverrides(path: String): Null<CheckOverrides> {
 		final content: Null<String> = CheckstyleConfigFinder.findConfigContent(path);
 		return content == null ? null : try CheckstyleConfigLoader.loadOverrides(content) catch (exception: Exception) null;
+	}
+
+	/**
+	 * `TypeInfoProvider`: maps each typed declaration's binding-span `from` to the
+	 * SIMPLE name of its nominal declared type, recovered from the grammar AST
+	 * (which the QueryNode projection drops). Walks the same structure `appendNodes`
+	 * does, associating an enum-ctor decl's Span param with the `type` on its
+	 * payload struct, and a spanned struct's `_span` with its own `type`.
+	 */
+	public function declaredTypes(source: String): Map<Int, String> {
+		final out: Map<Int, String> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		collectDeclaredTypes(Reflect.field(root, 'decls'), null, out);
+		return out;
+	}
+
+	private function collectDeclaredTypes(value: Dynamic, currentSpan: Null<Span>, out: Map<Int, String>): Void {
+		if (value == null || (value is String) || Std.isOfType(value, Span)) return;
+		final t: Type.ValueType = Type.typeof(value);
+		switch t {
+			case TEnum(_):
+				// An enum decl ctor carries the binding span as a Span param; the
+				// declared type sits on a payload struct's `type` field (which has no
+				// own `_span`), so thread this ctor's span down to the payload.
+				final params: Array<Dynamic> = Type.enumParameters(value);
+				var span: Null<Span> = currentSpan;
+				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
+				for (p in params) if (!Std.isOfType(p, Span))
+					collectDeclaredTypes(p, span, out);
+			case TObject:
+				final spanField: Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
+				final span: Null<Span> = Std.isOfType(spanField, Span) ? cast spanField : currentSpan;
+				if (Reflect.hasField(value, 'type')) {
+					final nm: Null<String> = nominalTypeName(Reflect.field(value, 'type'));
+					if (nm != null && span != null) out[span.from] = nm;
+				}
+				for (field in Reflect.fields(value)) collectDeclaredTypes(Reflect.field(value, field), span, out);
+			case TClass(_):
+				if (Std.isOfType(value, Array)) {
+					final arr: Array<Dynamic> = cast value;
+					for (e in arr) collectDeclaredTypes(e, currentSpan, out);
+				}
+			case _:
+		}
+	}
+
+	/** Simple name of a nominal `HxType.Named(payload)` (the name lives on the payload struct), else null. */
+	private function nominalTypeName(typeVal: Dynamic): Null<String> {
+		if (typeVal == null || !Type.typeof(typeVal).match(TEnum(_))) return null;
+		if (Type.enumConstructor(typeVal) != 'Named') return null;
+		for (p in Type.enumParameters(typeVal)) {
+			if (Std.isOfType(p, Span)) continue;
+			final nm: Null<String> = extractName(p);
+			if (nm != null) {
+				final dot: Int = nm.lastIndexOf('.');
+				return dot == -1 ? nm : nm.substring(dot + 1);
+			}
+		}
+		return null;
 	}
 
 }

@@ -29,7 +29,7 @@ import anyparse.query.GrammarPlugin.CheckOverrides;
  * skip-parse file re-parses per check, a negligible minority).
  */
 @:nullSafety(Strict)
-final class CachingGrammarPlugin implements GrammarPlugin {
+final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider {
 
 	private final _inner: GrammarPlugin;
 	private final _parseCache: Map<String, QueryNode> = [];
@@ -87,5 +87,22 @@ final class CachingGrammarPlugin implements GrammarPlugin {
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>> return _inner.knownExtensionMethods(modulePath);
 
 	public function checkOverrides(path: String): Null<CheckOverrides> return _inner.checkOverrides(path);
+
+	/**
+	 * `TypeInfoProvider` (optional capability): forward to the wrapped plugin when it
+	 * supplies declared types, memoized by source like the parse caches. A wrapped
+	 * plugin without the capability yields an empty map — the type-aware checks then
+	 * fall back to their conservative default.
+	 */
+	public function declaredTypes(source: String): Map<Int, String> {
+		final cached: Null<Map<Int, String>> = _declaredTypeCache[source];
+		if (cached != null) return cached;
+		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final result: Map<Int, String> = inner != null ? inner.declaredTypes(source) : [];
+		_declaredTypeCache[source] = result;
+		return result;
+	}
+
+	private final _declaredTypeCache: Map<String, Map<Int, String>> = [];
 
 }

@@ -61,6 +61,9 @@ typedef TypeDeclInfo = {
 	 * cross-file-safe private-member rename (a subtype could access the member).
 	 */
 	var supertypes: Array<String>;
+
+	/** True when this is a `typedef X = {…}` anonymous struct — its fields can never be properties, so field access on it is side-effect-free. */
+	var isAnonStruct: Bool;
 }
 typedef FileInfo = {
 	var file: String;
@@ -234,7 +237,10 @@ final class SymbolIndex {
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
 					isMain: typeDecl.name == basename,
-					supertypes: collectSupertypes(node)
+					supertypes: collectSupertypes(node),
+					// A `typedef X = {…}` projects an `Anon` child; its fields can
+					// never be properties, so field access on it is side-effect-free.
+					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon')
 				});
 				continue;
 			}
@@ -351,6 +357,21 @@ final class SymbolIndex {
 		final segments: Array<String> = path.split('.');
 		final last: Null<String> = segments[segments.length - 1];
 		return last ?? path;
+	}
+
+	/**
+	 * True iff every indexed type with simple name `name` is an anonymous-struct
+	 * typedef (and at least one exists) — so a value of that type has only plain
+	 * fields and `value.field` access is provably side-effect-free. Conservative
+	 * under ambiguity: a single non-anon match (or no match) yields false.
+	 */
+	public function isAnonStructType(name: String): Bool {
+		var found: Bool = false;
+		for (fi in _files) for (t in fi.types) if (t.name == name) {
+			if (!t.isAnonStruct) return false;
+			found = true;
+		}
+		return found;
 	}
 
 }

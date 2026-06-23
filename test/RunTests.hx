@@ -310,6 +310,7 @@ import unit.MagicNumberCheckTest;
 import unit.CheckstyleConfigLoaderTest;
 import unit.SimplifyBooleanReturnChainCheckTest;
 import unit.RedundantThisCheckTest;
+import unit.TypeResolverSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -591,6 +592,7 @@ class RunTests {
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantThisCheckTest());
+		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
 		addCase(new RedundantElseCheckTest());
