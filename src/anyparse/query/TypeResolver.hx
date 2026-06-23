@@ -76,7 +76,7 @@ final class TypeResolver {
 	 * The binding-span `from` the receiver occurrence at `recvSpan` resolves to,
 	 * via the scope resolver — the key into a `TypeInfoProvider` decl-type map.
 	 */
-	private static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
+	public static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
 		for (hit in Refs.find(name, tree, shape)) {
 			final hs: Null<Span> = hit.span;
 			if (hs != null && hs.from == recvSpan.from && hs.to == recvSpan.to) {

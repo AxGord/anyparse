@@ -311,6 +311,8 @@ import unit.CheckstyleConfigLoaderTest;
 import unit.SimplifyBooleanReturnChainCheckTest;
 import unit.RedundantThisCheckTest;
 import unit.TypeResolverSliceTest;
+import unit.PreferFinalPublicFieldCheckTest;
+import unit.PreferReadOnlyFieldCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -587,6 +589,8 @@ class RunTests {
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());
 		addCase(new PreferFinalFieldCheckTest());
+		addCase(new PreferFinalPublicFieldCheckTest());
+		addCase(new PreferReadOnlyFieldCheckTest());
 		addCase(new IdenticalOperandsCheckTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());

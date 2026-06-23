@@ -67,6 +67,8 @@ final class Linter {
 			new ModifierOrder(),
 			new ExplicitType(),
 			new PreferFinalField(),
+			new PreferFinalPublicField(),
+			new PreferReadOnlyField(),
 			new UnnecessaryBlock(),
 			new RedundantVoidReturn(),
 			new MagicNumber(),

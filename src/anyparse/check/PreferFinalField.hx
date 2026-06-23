@@ -2,13 +2,10 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
-import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a private `var` field whose initializer is its only assignment — a
@@ -71,22 +68,12 @@ final class PreferFinalField implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
-		final mutableFields: Array<String> = shape.mutableFieldDeclKinds ?? [];
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
-		if (containers.length == 0 || mutableFields.length == 0 || members.length == 0 || visibility.length == 0 || defaultVis == null)
-			return [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null)
-				walk(violations, entry.file, entry.source, tree, index, containers, members, mutableFields, visibility, defaultVis);
-		}
+		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
+			if (!exported)
+				considerField(violations, file, source, field, owner, index);
+		});
 		return violations;
 	}
 
@@ -99,50 +86,7 @@ final class PreferFinalField implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final keyword: String = 'var';
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final end: Int = span.from + keyword.length;
-			if (source.substring(span.from, end) != keyword) continue;
-			edits.push({ span: new Span(span.from, end), text: 'final' });
-		}
-		return edits;
-	}
-
-	/** Walk `node`; check the members of every visibility-requiring container. */
-	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, index: SymbolIndex, containers: Array<String>,
-		members: Array<String>, mutableFields: Array<String>, visibility: Array<String>, defaultVis: String
-	): Void {
-		if (containers.contains(node.kind)) checkContainer(out, file, source, node, index, members, mutableFields, visibility, defaultVis);
-		for (c in node.children) walk(out, file, source, c, index, containers, members, mutableFields, visibility, defaultVis);
-	}
-
-	/**
-	 * Scan `container`'s children in source order, tracking whether the current
-	 * member's preceding modifier run carries a non-default (exported / public)
-	 * visibility; reset at each member. A mutable field that is NOT exported is
-	 * considered. The `exported` test compares each visibility modifier's keyword to
-	 * `defaultVis`, so an explicit `private` and the default (no modifier) both pass.
-	 */
-	private static function checkContainer(
-		out: Array<Violation>, file: String, source: String, container: QueryNode, index: SymbolIndex, members: Array<String>,
-		mutableFields: Array<String>, visibility: Array<String>, defaultVis: String
-	): Void {
-		final owner: Null<String> = container.name;
-		if (owner == null) return;
-		var exported: Bool = false;
-		for (child in container.children) {
-			if (visibility.contains(child.kind)) {
-				final span: Null<Span> = child.span;
-				if (span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis) exported = true;
-			} else if (members.contains(child.kind)) {
-				if (!exported && mutableFields.contains(child.kind)) considerField(out, file, source, child, owner, index);
-				exported = false;
-			}
-		}
+		return RefactorSupport.varKeywordToFinalEdits(source, [for (v in violations) v.span]);
 	}
 
 	/**
@@ -154,10 +98,8 @@ final class PreferFinalField implements Check {
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
-		if (name == null || span == null || field.children.length < 1) return;
-		final initSpan: Null<Span> = field.children[0].span;
-		if (initSpan == null) return;
-		if (source.substring(span.from, initSpan.from).indexOf('(') >= 0) return;
+		if (name == null || span == null) return;
+		if (!RefactorSupport.isInitializedNonPropertyField(source, field)) return;
 		if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
 		if (writtenInFile(source, name, span)) return;
 		out.push({

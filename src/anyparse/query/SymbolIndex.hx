@@ -418,4 +418,45 @@ final class SymbolIndex {
 		return found;
 	}
 
+	/**
+	 * The single declaring file + decl span of the type named `typeName`, or null when
+	 * zero or more than one file declares it (ambiguous — a write-confinement query
+	 * cannot pin a unique decl range and must bail). The decl span is the type's full
+	 * source range, used to tell an internal write from an external one.
+	 */
+	public function declarationSiteOf(typeName: String): Null<{ file: String, span: Span }> {
+		final declarers: Array<FileInfo> = declaringFiles(typeName);
+		if (declarers.length != 1) return null;
+		final f: FileInfo = declarers[0];
+		final t: Null<TypeDeclInfo> = f.types.find(td -> td.name == typeName);
+		return t == null ? null : { file: f.file, span: t.span };
+	}
+
+	/**
+	 * Whether a (transitive) supertype of `typeName` declares a member named `field`.
+	 * Such a field's property access is fixed by the supertype, so a check must not
+	 * tighten it (`var` → `final` / `(default, null)`) — Haxe rejects an override /
+	 * implementation whose access differs — and an interface-typed write to it
+	 * attributes to the supertype, not `typeName`. The supertype-ward companion of
+	 * `hasSubtype`, used by the public-field immutability checks as a soundness gate.
+	 */
+	public function supertypeDeclaresMember(typeName: String, field: String): Bool {
+		return supertypeDeclares(typeName, field, []);
+	}
+
+	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */
+	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
+		if (seen.contains(typeName)) return false;
+		seen.push(typeName);
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes)
+			if (declaresMember(sup, field) || supertypeDeclares(sup, field, seen)) return true;
+		return false;
+	}
+
+	/** Whether any indexed type named `typeName` directly declares a member named `field`. */
+	private function declaresMember(typeName: String, field: String): Bool {
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) if (t.members.exists(m -> m.name == field)) return true;
+		return false;
+	}
+
 }

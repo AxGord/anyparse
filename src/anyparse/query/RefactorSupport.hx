@@ -1182,4 +1182,89 @@ final class RefactorSupport {
 		return boolOpKinds.contains(n.kind);
 	}
 
+	/**
+	 * Visit every mutable `var` field member of every visibility-bearing type in
+	 * `files`, with the enclosing type's simple name, the field node, its source, file,
+	 * and whether its preceding modifier run marks it exported (non-default visibility).
+	 * The shared container walk behind the field-immutability checks
+	 * (`prefer-final-field` private path, `prefer-final-public-field`,
+	 * `prefer-read-only-field`) — each filters by `exported` and applies its own proof.
+	 * Skip-parse tolerant; a grammar lacking the visibility kind-sets yields nothing.
+	 */
+	public static function eachFieldMember(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin,
+		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
+	): Void {
+		final shape: RefShape = plugin.refShape();
+		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		final mutableFields: Array<String> = shape.mutableFieldDeclKinds ?? [];
+		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
+		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
+		if (containers.length == 0 || members.length == 0 || mutableFields.length == 0 || visibility.length == 0 || defaultVis == null)
+			return;
+		for (entry in files) {
+			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
+			if (tree != null)
+				walkFieldContainers(tree, entry.source, entry.file, containers, members, mutableFields, visibility, defaultVis, visit);
+		}
+	}
+
+	/** Recursive worker for `eachFieldMember`: visit a container's mutable fields, tracking exported state. */
+	private static function walkFieldContainers(
+		node: QueryNode, source: String, file: String, containers: Array<String>, members: Array<String>, mutableFields: Array<String>,
+		visibility: Array<String>, defaultVis: String,
+		visit: (owner:String, field:QueryNode, source:String, file:String, exported:Bool) -> Void
+	): Void {
+		if (containers.contains(node.kind)) {
+			final owner: Null<String> = node.name;
+			if (owner != null) {
+				var exported: Bool = false;
+				for (child in node.children) {
+					if (visibility.contains(child.kind)) {
+						final span: Null<Span> = child.span;
+						if (span != null && StringTools.trim(source.substring(span.from, span.to)) != defaultVis) exported = true;
+					} else if (members.contains(child.kind)) {
+						if (mutableFields.contains(child.kind)) visit(owner, child, source, file, exported);
+						exported = false;
+					}
+				}
+			}
+		}
+		for (child in node.children)
+			walkFieldContainers(child, source, file, containers, members, mutableFields, visibility, defaultVis, visit);
+	}
+
+	/**
+	 * The `var` → `final` keyword-swap edits for each non-null span in `spans` (a field
+	 * decl whose span starts at the `var` keyword). Shared by the `prefer-final-field`
+	 * and `prefer-final-public-field` autofixes. Each edit fires only when the bytes at
+	 * the span start are literally `var`, so an unexpected span is silently skipped.
+	 */
+	public static function varKeywordToFinalEdits(source: String, spans: Array<Null<Span>>): Array<{ span: Span, text: String }> {
+		final keyword: String = 'var';
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (span in spans) {
+			if (span == null) continue;
+			final end: Int = span.from + keyword.length;
+			if (source.substring(span.from, end) != keyword) continue;
+			edits.push({ span: new Span(span.from, end), text: 'final' });
+		}
+		return edits;
+	}
+
+	/**
+	 * Whether `field` is a plain field with an initializer and is NOT a property — the
+	 * shared candidate-shape gate of the `final`-conversion field checks. False when the
+	 * field has no initializer (its first child carries no span) or its head before the
+	 * initializer contains a `(` (a property accessor clause).
+	 */
+	public static function isInitializedNonPropertyField(source: String, field: QueryNode): Bool {
+		final span: Null<Span> = field.span;
+		if (span == null || field.children.length < 1) return false;
+		final initSpan: Null<Span> = field.children[0].span;
+		if (initSpan == null) return false;
+		return source.substring(span.from, initSpan.from).indexOf('(') < 0;
+	}
+
 }
