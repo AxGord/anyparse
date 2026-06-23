@@ -2,6 +2,7 @@ package anyparse.query;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport.TypeDeclMatch;
 
 /**
  * Minimal type-aware purity resolution for the analysis layer. Recovers a
@@ -22,28 +23,53 @@ final class TypeResolver {
 	private function new() {}
 
 	/**
-	 * True when `faNode` (a field-access node) reads a field of an
-	 * anonymous-struct-typed receiver — a provably side-effect-free access.
-	 * `tree` is the file's parse tree, `shape` the grammar's RefShape,
-	 * `declaredTypes` the decl-span→type-name map, `index` the symbol index.
+	 * True when `faNode` (a field-access node) is a provably side-effect-free read.
+	 * Three resolved receivers: an anonymous-struct value (fields can't be getters);
+	 * a local/param of a class/abstract type whose member `field` is a plain member;
+	 * and `this`, against the enclosing type's members. Any unresolved receiver, a
+	 * getter property, or a field that is not a known direct member returns false —
+	 * the caller keeps its conservative default.
 	 */
-	public static function isAnonStructFieldAccess(
+	public static function isPlainFieldRead(
 		faNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
 	): Bool {
 		if (faNode.children.length != 1) return false;
+		final field: Null<String> = faNode.name;
+		if (field == null) return false;
 		final recv: QueryNode = faNode.children[0];
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null || recv.kind != identKind) return false;
 		final recvName: Null<String> = recv.name;
 		final recvSpan: Null<Span> = recv.span;
 		if (recvName == null || recvSpan == null) return false;
-		// `this` (and any non-local receiver) is out of MVP scope.
-		if (recvName == shape.selfReferenceText) return false;
+		if (recvName == shape.selfReferenceText) {
+			final lookSpan: Span = faNode.span ?? recvSpan;
+			final enclosing: Null<String> = enclosingTypeName(tree, lookSpan);
+			return enclosing != null && index.memberGetter(enclosing, field) == false;
+		}
 		final bindingFrom: Null<Int> = resolveBindingFrom(recvName, recvSpan, tree, shape);
 		if (bindingFrom == null) return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
 		if (typeName == null) return false;
-		return index.isAnonStructType(typeName);
+		if (index.isAnonStructType(typeName)) return true;
+		return index.memberGetter(typeName, field) == false;
+	}
+
+	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
+	private static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
+		var best: Null<TypeDeclMatch> = null;
+		function walk(n: QueryNode): Void {
+			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
+			if (td != null && td.fullSpan.from <= faSpan.from && faSpan.to <= td.fullSpan.to) {
+				final width: Int = td.fullSpan.to - td.fullSpan.from;
+				final b: Null<TypeDeclMatch> = best;
+				if (b == null || width < b.fullSpan.to - b.fullSpan.from) best = td;
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		final b: Null<TypeDeclMatch> = best;
+		return b == null ? null : b.name;
 	}
 
 	/**

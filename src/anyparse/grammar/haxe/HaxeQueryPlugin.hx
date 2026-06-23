@@ -951,38 +951,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final out: Map<Int, String> = [];
 		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
 		if (root == null) return out;
-		collectDeclaredTypes(Reflect.field(root, 'decls'), null, out);
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'type')) {
+				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
+				if (nm != null)
+					out[span.from] = nm;
+			}
+		});
 		return out;
-	}
-
-	private function collectDeclaredTypes(value: Dynamic, currentSpan: Null<Span>, out: Map<Int, String>): Void {
-		if (value == null || (value is String) || Std.isOfType(value, Span)) return;
-		final t: Type.ValueType = Type.typeof(value);
-		switch t {
-			case TEnum(_):
-				// An enum decl ctor carries the binding span as a Span param; the
-				// declared type sits on a payload struct's `type` field (which has no
-				// own `_span`), so thread this ctor's span down to the payload.
-				final params: Array<Dynamic> = Type.enumParameters(value);
-				var span: Null<Span> = currentSpan;
-				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
-				for (p in params) if (!Std.isOfType(p, Span))
-					collectDeclaredTypes(p, span, out);
-			case TObject:
-				final spanField: Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
-				final span: Null<Span> = Std.isOfType(spanField, Span) ? cast spanField : currentSpan;
-				if (Reflect.hasField(value, 'type')) {
-					final nm: Null<String> = nominalTypeName(Reflect.field(value, 'type'));
-					if (nm != null && span != null) out[span.from] = nm;
-				}
-				for (field in Reflect.fields(value)) collectDeclaredTypes(Reflect.field(value, field), span, out);
-			case TClass(_):
-				if (Std.isOfType(value, Array)) {
-					final arr: Array<Dynamic> = cast value;
-					for (e in arr) collectDeclaredTypes(e, currentSpan, out);
-				}
-			case _:
-		}
 	}
 
 	/** Simple name of a nominal `HxType.Named(payload)` (the name lives on the payload struct), else null. */
@@ -998,6 +974,76 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * `TypeInfoProvider`: maps each property-bearing member's binding-span `from` to
+	 * whether its read accessor is a getter (`get` / `dynamic` → side-effecting,
+	 * true) vs a plain stored read (`default` / `never` / a method name → false).
+	 * A member with NO accessor clause (a plain field) is ABSENT — the consumer
+	 * treats absence as a plain field. Same grammar-AST walk as `declaredTypes`,
+	 * keyed on `HxVarDecl.access` (dropped from the QueryNode projection).
+	 */
+	public function propertyAccessors(source: String): Map<Int, Bool> {
+		final out: Map<Int, Bool> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'access')) {
+				final access: Dynamic = Reflect.field(node, 'access');
+				if (access != null)
+					out[span.from] = isGetterAccess(access);
+			}
+		});
+		return out;
+	}
+
+	/**
+	 * Whether an `HxAccessClause`'s READ accessor (`ids[0]`) runs code on read — a
+	 * getter. Only the three stored-field reads `default` / `null` / `never` are
+	 * side-effect-free; everything else (`get`, `dynamic`, or a custom method-name
+	 * accessor) is treated as a getter, so the classification is sound by default.
+	 */
+	private function isGetterAccess(access: Dynamic): Bool {
+		final ids: Dynamic = Reflect.field(access, 'ids');
+		if (!Std.isOfType(ids, Array)) return true;
+		final arr: Array<Dynamic> = cast ids;
+		if (arr.length == 0) return true;
+		final first: Dynamic = arr[0];
+		if (!(first is String)) return true;
+		final s: String = first;
+		return !(s == 'default' || s == 'null' || s == 'never');
+	}
+
+	/**
+	 * Walk the raw grammar AST (which the QueryNode projection drops type/accessor
+	 * detail from), invoking `visit(node, span)` for every spanned struct node with
+	 * the nearest enclosing binding span threaded down — an enum decl ctor carries
+	 * the span as a `Span` param, its payload struct carries `type`/`access` with no
+	 * own `_span`. The shared traversal for `declaredTypes` / `propertyAccessors`.
+	 */
+	private function walkGrammarSpans(value: Dynamic, currentSpan: Null<Span>, visit: (Dynamic, Null<Span>) -> Void): Void {
+		if (value == null || (value is String) || Std.isOfType(value, Span)) return;
+		final t: Type.ValueType = Type.typeof(value);
+		switch t {
+			case TEnum(_):
+				final params: Array<Dynamic> = Type.enumParameters(value);
+				var span: Null<Span> = currentSpan;
+				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
+				for (p in params) if (!Std.isOfType(p, Span))
+					walkGrammarSpans(p, span, visit);
+			case TObject:
+				final spanField: Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
+				final span: Null<Span> = Std.isOfType(spanField, Span) ? cast spanField : currentSpan;
+				visit(value, span);
+				for (field in Reflect.fields(value)) walkGrammarSpans(Reflect.field(value, field), span, visit);
+			case TClass(_):
+				if (Std.isOfType(value, Array)) {
+					final arr: Array<Dynamic> = cast value;
+					for (e in arr) walkGrammarSpans(e, currentSpan, visit);
+				}
+			case _:
+		}
 	}
 
 }

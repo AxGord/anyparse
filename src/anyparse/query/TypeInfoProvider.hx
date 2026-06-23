@@ -22,4 +22,12 @@ interface TypeInfoProvider {
 	 */
 	public function declaredTypes(source: String): Map<Int, String>;
 
+	/**
+	 * Maps a property-bearing member's binding-span `from` to whether its read
+	 * accessor is a getter (`get` / `dynamic` → true) vs a plain stored read. A
+	 * plain field (no accessor clause) is ABSENT. Lets a consumer decide whether
+	 * `value.field` is a side-effect-free read once the member is located.
+	 */
+	public function propertyAccessors(source: String): Map<Int, Bool>;
+
 }

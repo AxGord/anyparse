@@ -49,6 +49,14 @@ typedef ImportInfo = {
  * name equals the file basename — i.e. it is the module's main type,
  * importable as `import <package>.<Basename>;`.
  */
+typedef MemberInfo = {
+	/** The member's name. */
+	var name: String;
+
+	/** True when the member is a property whose READ accessor is a getter (`get` / `dynamic`) — reading it runs code. A plain field / method is false. */
+	var hasGetter: Bool;
+};
+
 typedef TypeDeclInfo = {
 	var name: String;
 	var kind: String;
@@ -64,7 +72,10 @@ typedef TypeDeclInfo = {
 
 	/** True when this is a `typedef X = {…}` anonymous struct — its fields can never be properties, so field access on it is side-effect-free. */
 	var isAnonStruct: Bool;
-}
+
+	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
+	var members: Array<MemberInfo>;
+};
 typedef FileInfo = {
 	var file: String;
 	var pkg: String;
@@ -180,13 +191,15 @@ final class SymbolIndex {
 	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): SymbolIndex {
 		final infos: Array<FileInfo> = [];
 		final skipped: Array<String> = [];
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (tree == null) {
 				skipped.push(entry.file);
 				continue;
 			}
-			infos.push(extractFileInfo(entry.file, tree));
+			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
+			infos.push(extractFileInfo(entry.file, tree, accessors));
 		}
 		return new SymbolIndex(infos, skipped);
 	}
@@ -218,18 +231,13 @@ final class SymbolIndex {
 	 * using statements, and the top-level type declarations. The
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
-	private static function extractFileInfo(file: String, tree: QueryNode): FileInfo {
+	private static function extractFileInfo(file: String, tree: QueryNode, accessors: Map<Int, Bool>): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
 
 		for (node in tree.children) {
-			// Type declarations resolve through the final-aware helper FIRST
-			// — a `final class` is a nameless `FinalDecl` wrapper whose inner
-			// `ClassForm` holds the name, so a plain `node.name` guard would
-			// drop it. `typeDeclOf` normalises both shapes and yields the
-			// FULL span (including the `final ` keyword for a final class).
 			final typeDecl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
 			if (typeDecl != null) {
 				types.push({
@@ -240,7 +248,8 @@ final class SymbolIndex {
 					supertypes: collectSupertypes(node),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
-					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon')
+					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
+					members: collectMembers(node, accessors)
 				});
 				continue;
 			}
@@ -251,11 +260,6 @@ final class SymbolIndex {
 				if (node.kind == 'PackageDecl' && nullableName != null) pkg = nullableName;
 				continue;
 			}
-			// Re-bind to non-nullable locals: Strict null-safety narrows
-			// the nullable locals for the guard, but the inferred field
-			// type of an anonymous struct literal is taken from the
-			// DECLARED type — so the literals must read locals whose
-			// declared type is already non-null.
 			final name: String = nullableName;
 			final span: Span = nullableSpan;
 			switch node.kind {
@@ -370,6 +374,46 @@ final class SymbolIndex {
 		for (fi in _files) for (t in fi.types) if (t.name == name) {
 			if (!t.isAnonStruct) return false;
 			found = true;
+		}
+		return found;
+	}
+
+	/**
+	 * The directly-declared members of the type rooted at `node` — every
+	 * field-member-kind descendant (a type body's own `var`/`final`/`fn` members;
+	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
+	 * with its getter-property flag from the `accessors` span map (absent = plain).
+	 */
+	private static function collectMembers(node: QueryNode, accessors: Map<Int, Bool>): Array<MemberInfo> {
+		final out: Array<MemberInfo> = [];
+		collectInto(
+			node, n -> {
+				if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind)) {
+					final nm: Null<String> = n.name;
+					final sp: Null<Span> = n.span;
+					if (nm != null && sp != null) {
+						// Re-bind to a non-null local — Strict null-safety takes a struct
+						// literal's field type from the declared type, not the narrowed one.
+						final memberName: String = nm;
+						out.push({ name: memberName, hasGetter: accessors[sp.from] ?? false });
+					}
+				}
+			}
+		);
+		return out;
+	}
+
+	/**
+	 * Whether type `typeName`'s member `field` is a getter-property (true → reading
+	 * it runs code), a plain member (false → side-effect-free read), or not a known
+	 * direct member (null). Conservative under ambiguity: any matching type whose
+	 * `field` is a getter yields true.
+	 */
+	public function memberGetter(typeName: String, field: String): Null<Bool> {
+		var found: Null<Bool> = null;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == field) {
+			if (m.hasGetter) return true;
+			found = false;
 		}
 		return found;
 	}

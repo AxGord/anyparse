@@ -122,7 +122,7 @@ final class UnusedLocal implements Check {
 			if (init != null && !RefactorSupport.isSideEffectFree(init)) {
 				var plainFieldRead: Bool = false;
 				if (index != null && fieldAccessKind != null && init.kind == fieldAccessKind)
-					plainFieldRead = TypeResolver.isAnonStructFieldAccess(init, treeRoot, shape, declaredTypes, index);
+					plainFieldRead = TypeResolver.isPlainFieldRead(init, treeRoot, shape, declaredTypes, index);
 				if (!plainFieldRead) continue;
 			}
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });

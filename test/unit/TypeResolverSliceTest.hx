@@ -25,9 +25,9 @@ class TypeResolverSliceTest extends Test {
 		Assert.equals(1, fixEdits(src).length, 'a dead anon-struct field read should be deletable');
 	}
 
-	public function testClassFieldAccessKept(): Void {
-		final src: String = 'class T { public var f:Int; } class C { static function m(t:T):Void { final dead = t.f; } }';
-		Assert.equals(0, fixEdits(src).length, 'a class receiver is not an anon struct — kept');
+	public function testClassPlainFieldDeleted(): Void {
+		final src: String = 'class T { public var f:Int; } class C { static function m(t:T):Int { final dead = t.f; return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'a plain class field read is side-effect-free — deletable');
 	}
 
 	public function testUnannotatedReceiverKept(): Void {
@@ -72,6 +72,27 @@ class TypeResolverSliceTest extends Test {
 		final violations: Array<Violation> = check.run(files, plugin);
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		return check.fix(src, violations, plugin, index);
+	}
+
+	public function testClassGetterFieldKept(): Void {
+		final src: String = 'class T { public var f(get, never):Int; } class C { static function m(t:T):Int { final dead = t.f; return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'a getter property read may run code — kept');
+	}
+
+	public function testThisPlainFieldDeleted(): Void {
+		final src: String = 'class C { var f:Int; function m():Int { final dead = this.f; return 1; } }';
+		Assert.equals(1, fixEdits(src).length, 'this.f on a plain field is side-effect-free — deletable');
+	}
+
+	public function testThisGetterFieldKept(): Void {
+		final src: String = 'class C { var f(get, never):Int; function m():Int { final dead = this.f; return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'this.f on a getter property may run code — kept');
+	}
+
+	public function testCustomMethodAccessorKept(): Void {
+		// A custom-named read accessor (`getF`) runs code on read — not a plain field.
+		final src: String = 'class C { var f(getF, never):Int; function m():Int { final dead = this.f; return 1; } }';
+		Assert.equals(0, fixEdits(src).length, 'a custom-method read accessor may run code — kept');
 	}
 
 }
