@@ -49,7 +49,7 @@ class ParseError extends Exception {
 		this.span = span;
 		this.expected = expected;
 		this.severity = severity;
-		this.source = null;
+		source = null;
 	}
 
 	override public function toString(): String {

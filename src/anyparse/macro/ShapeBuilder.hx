@@ -54,7 +54,7 @@ class ShapeBuilder {
 	private var _rootName: String = '';
 
 	public function new(?formatInfo: FormatReader.FormatInfo) {
-		this._formatInfo = formatInfo;
+		_formatInfo = formatInfo;
 	}
 
 	public function build(root: Type): ShapeResult {

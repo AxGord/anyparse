@@ -49,7 +49,7 @@ class TransformLowering {
 	private final _shape: ShapeBuilder.ShapeResult;
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
-		this._shape = shape;
+		_shape = shape;
 	}
 
 	/**

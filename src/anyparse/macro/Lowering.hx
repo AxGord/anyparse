@@ -39,9 +39,9 @@ class Lowering {
 	private final _eregByRule: Map<String, GeneratedRule.EregSpec> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
-		this._shape = shape;
-		this._formatInfo = formatInfo;
-		this._ctx = ctx;
+		_shape = shape;
+		_formatInfo = formatInfo;
+		_ctx = ctx;
 	}
 
 	public function generate(): Array<GeneratedRule> {

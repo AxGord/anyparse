@@ -167,14 +167,14 @@ private class Frame {
 		this.doc = doc;
 		this.forceFlat = forceFlat;
 		this.hardFlat = hardFlat;
-		this.fillRest = null;
-		this.fillIdx = 0;
-		this.fillSep = null;
-		this.fillTailReserve = 0;
-		this.fillRestProbe = false;
-		this.fillLineStart = -1;
-		this.popMarkerZero = false;
-		this.popMarkerDecrease = false;
+		fillRest = null;
+		fillIdx = 0;
+		fillSep = null;
+		fillTailReserve = 0;
+		fillRestProbe = false;
+		fillLineStart = -1;
+		popMarkerZero = false;
+		popMarkerDecrease = false;
 	}
 
 	public static inline function fillCont(
