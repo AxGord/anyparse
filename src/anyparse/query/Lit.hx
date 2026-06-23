@@ -35,6 +35,17 @@ import anyparse.runtime.Span.Position;
 final class Lit {
 
 	/**
+	 * Truncate hit content for rendering: collapse to the first source line,
+	 * suffix `… +N more` when bytes were dropped. Captured `name` keeps
+	 * the full content for downstream consumers — only the printed display
+	 * truncates. Killer case: a `lit '/*' src/ --any-kind` over a corpus
+	 * heavy with multi-line `/** … *\/` doc-comments previously dumped
+	 * thousands of body lines verbatim (~190KB for src/). Now each hit
+	 * occupies one line; the user still sees locus + kind + first line.
+	 */
+	private static inline final DISPLAY_MAX: Int = 120;
+
+	/**
 	 * Walk `tree`, collecting every leaf-or-named node whose `name`
 	 * matches `target`. `exact=true` requires `name == target`; default
 	 * is substring match (`name.indexOf(target) >= 0`).
@@ -52,18 +63,6 @@ final class Lit {
 		return out;
 	}
 
-	private static function walk(target: String, node: QueryNode, exact: Bool, filter: Null<Array<String>>, out: Array<LitHit>): Void {
-		final n: Null<String> = node.name;
-		if (n != null) {
-			final kindOk: Bool = filter == null || filter.contains(node.kind);
-			if (kindOk) {
-				final hit: Bool = exact ? n == target : n.indexOf(target) >= 0;
-				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
-			}
-		}
-		for (c in node.children) walk(target, c, exact, filter, out);
-	}
-
 	public static function render(file: String, source: String, hits: Array<LitHit>, flat: Bool = false): String {
 		final buf: StringBuf = new StringBuf();
 		if (!flat && hits.length > 0) buf.add('$file:\n');
@@ -78,16 +77,17 @@ final class Lit {
 		return buf.toString();
 	}
 
-	/**
-	 * Truncate hit content for rendering: collapse to the first source line,
-	 * suffix `… +N more` when bytes were dropped. Captured `name` keeps
-	 * the full content for downstream consumers — only the printed display
-	 * truncates. Killer case: a `lit '/*' src/ --any-kind` over a corpus
-	 * heavy with multi-line `/** … *\/` doc-comments previously dumped
-	 * thousands of body lines verbatim (~190KB for src/). Now each hit
-	 * occupies one line; the user still sees locus + kind + first line.
-	 */
-	private static inline final DISPLAY_MAX: Int = 120;
+	private static function walk(target: String, node: QueryNode, exact: Bool, filter: Null<Array<String>>, out: Array<LitHit>): Void {
+		final n: Null<String> = node.name;
+		if (n != null) {
+			final kindOk: Bool = filter == null || filter.contains(node.kind);
+			if (kindOk) {
+				final hit: Bool = exact ? n == target : n.indexOf(target) >= 0;
+				if (hit && node.span != null) out.push(new LitHit(node.kind, n, (node.span: Span)));
+			}
+		}
+		for (c in node.children) walk(target, c, exact, filter, out);
+	}
 
 	private static function displayText(name: String): String {
 		final nl: Int = name.indexOf('\n');

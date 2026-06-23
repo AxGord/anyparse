@@ -455,6 +455,242 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * True when the branch is a postfix Star-suffix ctor (e.g.
+	 * `Call(operand:T, args:Array<T>)` from `@:postfix('(', ')') @:sep(',')`)
+	 * whose Star child carries `trivia.starCollects=true` (set by
+	 * `TriviaAnalysis.markPostfixStarSuffix`). Such branches grow a
+	 * positional `closeTrailing:Null<String>` arg holding the trailing
+	 * comment captured by the parser right after the postfix close literal,
+	 * before the next postfix step's `skipWs` would eat it.
+	 *
+	 * Single-Ref-suffix postfix (e.g. `FieldAccess(operand, field)` from
+	 * `@:postfix('.')`) doesn't qualify — child[1] is Ref, not Star, so
+	 * `TriviaAnalysis.markPostfixStarSuffix` never sets `trivia.starCollects`
+	 * on it. Pair-lit postfix (1 child + close lit) likewise misses. Both
+	 * shapes can grow their own slot in a follow-up if a fixture demands
+	 * it; today the only failing fixture is the Star-suffix Call form
+	 * (`indentation/method_chain_with_line_comment`).
+	 *
+	 * Discriminator is `trivia.starCollects` on a 2nd Star child — the
+	 * marker function only sets that for the postfix Star-suffix shape it
+	 * detects via `:postfix(open, close)` + `[Ref, Star]`. We can't read
+	 * `postfix.op`/`postfix.close` from `branch.annotations` here because
+	 * the Postfix strategy runs LATER (see `Build.run`: TriviaAnalysis →
+	 * TriviaTypeSynth.arm → registry.runAnnotate); only the marker's
+	 * `trivia.starCollects` flag is reliably present at arm-time.
+	 */
+	public static function isPostfixCloseTrailingBranch(branch: ShapeNode): Bool {
+		if (branch.children.length != 2) return false;
+		if (branch.children[0].kind != Ref) return false;
+		final star: ShapeNode = branch.children[1];
+		if (star.kind != Star) return false;
+		if (star.annotations.get('trivia.starCollects') != true) return false;
+		// Tighten: `trivia.starCollects` is also set by `markStarsWithTrivia`
+		// for `:trivia` Seq branches with a single Star child. Those are NOT
+		// postfix and must not grow a `closeTrailing` slot — Lowering's
+		// `lowerPostfixLoop` is the only producer for the slot. Read
+		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
+		// to ensure the branch is a postfix ctor.
+		final meta: Null<Metadata> = branch.annotations.get('base.meta');
+		if (meta == null) return false;
+		for (entry in meta) if (entry.name == ':postfix' && entry.params.length == 2) return true;
+		return false;
+	}
+
+	/**
+	 * True when the branch is a close-peek `@:trivia` Alt-ctor wrapping
+	 * a single Star child — structurally equivalent to the Seq Case 4
+	 * shape that grows a `TrailingClose` slot in `buildStarTrailingSlots`.
+	 * Reads `@:trail` from `base.meta` directly since `arm()` runs
+	 * before the Lit strategy populates `lit.trailText`.
+	 */
+	public static function isAltCloseTrailingBranch(branch: ShapeNode): Bool {
+		if (branch.children.length != 1) return false;
+		final star: ShapeNode = branch.children[0];
+		return star.kind == Star && (star.annotations.get('trivia.starCollects') == true && branch.readMetaString(':trail') != null);
+	}
+
+	/**
+	 * True when the branch is a single-Ref Alt-ctor carrying `@:trailOpt(...)`.
+	 * Such ctors grow a positional `trailPresent:Bool` arg in the synth
+	 * pair so the writer can preserve source presence of the optional
+	 * trail literal. Reads `@:trailOpt` from `base.meta` directly since
+	 * `arm()` runs before the Lit strategy populates `lit.trailOptional`.
+	 *
+	 * Disjoint from `isAltCloseTrailingBranch`: that function requires a
+	 * single Star child with `@:trail`, this requires a single Ref child
+	 * with `@:trailOpt`. The two never coexist on the same branch.
+	 */
+	public static function isAltTrailOptBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 1 && (branch.children[0].kind == Ref && branch.readMetaString(':trailOpt') != null);
+	}
+
+	/**
+	 * True when a struct typedef field carries `@:trailOpt(...)`. The
+	 * struct-field analog of `isAltTrailOptBranch` — destined to gate
+	 * synthesis of a `_trailPresent_<fieldName>:Bool` slot on the
+	 * paired-T struct so the writer can preserve source presence of
+	 * the optional trail literal in trivia mode (today struct-field
+	 * `@:trailOpt` is parser-permissive but writer-canonical — always
+	 * re-emits, breaking source-preservation contracts for fixtures
+	 * like `wrapping/issue_366_nested_array_comprehension` where
+	 * fork's section-3 preserves the optional `;`).
+	 *
+	 * Phase 2 (Session 14) wires this as the gate inside `buildTypeDefinition`'s
+	 * Seq arm — every matching field grows an `@:optional Null<Bool>`
+	 * `<field>TrailPresent` slot via `buildStructFieldTrailPresentSlot`.
+	 * Phase 3 will add the parser-side capture (`matchLit` result),
+	 * Phase 4 the writer-side emit (gate trail re-emission on source
+	 * presence). See [[project-blockbody-star-session14-design]].
+	 *
+	 * Disjoint from `isAltTrailOptBranch` (struct typedef field vs
+	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
+	 * but different host kind).
+	 */
+	public static function isStructFieldTrailOpt(field: ShapeNode): Bool {
+		return field.readMetaString(':trailOpt') != null;
+	}
+
+	/**
+	 * True when the branch opts into source-byte capture via
+	 * `@:fmt(captureSource('<optionFieldName>'))`. The synth-pair ctor
+	 * grows a positional `sourceText:String` arg; the parser fills it
+	 * with the input slice between the ctor's `@:lead` and `@:trail`
+	 * literals (inclusive of any whitespace inside) so the writer can
+	 * emit verbatim when the named runtime `Bool` option is `false`.
+	 *
+	 * Requires single Ref child + `@:lead` + `@:trail` (the parser has
+	 * an unambiguous slice to capture). Disjoint from
+	 * `isAltTrailOptBranch` since `@:trailOpt` and unconditional
+	 * `@:trail` are mutually exclusive on the same ctor.
+	 */
+	public static function isCaptureSourceBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref
+				&& (branch.readMetaString(':lead') != null
+					&& (branch.readMetaString(':trail') != null && branch.fmtReadString('captureSource') != null)));
+	}
+
+	/**
+	 * True when the branch is a single-Ref kw-led Alt-ctor carrying
+	 * `@:fmt(bodyPolicy(...))`. Such ctors grow a positional
+	 * `bodyOnSameLine:Bool` arg in the synth pair so `bodyPolicyWrap`'s
+	 * `Keep` branch can dispatch source-shape-aware between
+	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time. Reads
+	 * `@:fmt(bodyPolicy(...))` via `fmtReadString`, which works at arm-time
+	 * because `base.meta` is populated by `ShapeBuilder` before
+	 * `TriviaTypeSynth.arm()` runs (see `Build.run` ordering — same path
+	 * `isCaptureSourceBranch` relies on).
+	 *
+	 * Requires `@:kw(...)` for the parser's commit point — bodyPolicy
+	 * without a kw has no anchor for the post-kw newline probe.
+	 * Co-occurs with `isAltTrailOptBranch` on the first consumer
+	 * `HxStatement.ReturnStmt` (`@:kw('return') @:trailOpt(';')`); the
+	 * `buildEnumCtor` push order (trailPresent → sourceText →
+	 * bodyOnSameLine) keeps the layout deterministic. Disjoint from the
+	 * close-trailing predicates (single Ref child, no Star child). First
+	 * consumer: `HxStatement.ReturnStmt`.
+	 */
+	public static function isAltBodyPolicyKwBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref && (branch.readMetaString(':kw') != null && branch.fmtReadString('bodyPolicy') != null));
+	}
+
+	/**
+	 * ω-paren-wrap-source-newline: True when the branch is a single-Ref
+	 * `@:wrap(open, close)` Alt-ctor (no `@:kw`, has both `@:lead` and
+	 * `@:trail`) opting in via parameterless `@:fmt(captureWrapOpenNewline)`.
+	 * Such ctors grow a positional `wrapOpenNewline:Bool` arg in the synth
+	 * pair so the writer can route between two break shapes at write time:
+	 *   - source had `\n` after open delim (`paramOpenedNewline=true`)  -->
+	 *     break shape `(\n<inner>\n)` (open delim followed by hardline,
+	 *     close on its own line); matches author intent for chains where
+	 *     the source already broke after `(`.
+	 *   - source had no `\n` after open delim (`paramOpenedNewline=false`)
+	 *     --> existing glue shape `(<inner>\n)` from the chain emit's
+	 *     `OptHardlineSkipAtOpenDelim`. Items[0] glued to enclosing `(`.
+	 *
+	 * Disjoint from `isAltBodyPolicyKwBranch` (kw absent vs required) and
+	 * from the close/postfix-trailing predicates (Ref vs Star child).
+	 * Plain mode keeps the original ctor arity and the writer falls back
+	 * to the unconditional glue shape. First consumer: `HxExpr.ParenExpr`.
+	 */
+	public static function isAltWrapOpenNewlineBranch(branch: ShapeNode): Bool {
+		if (branch.children.length != 1) return false;
+		if (branch.children[0].kind != Ref) return false;
+		if (branch.hasMeta(':kw')) return false;
+		// `@:wrap(o,c)` is the canonical shorthand for `@:lead(o) + @:trail(c)`
+		// at this opt-in's first consumer. `Lit.annotate` populates
+		// `lit.leadText`/`lit.trailText` from either form, but that runs AFTER
+		// `arm()` (see `Build.run` ordering -- same constraint motivating
+		// raw-meta probes elsewhere in this file). Use `hasMeta` rather than
+		// `readMetaString` because `@:wrap` carries TWO params (open + close)
+		// and `readMetaString` requires exactly one. Both authoring forms
+		// grow the same lit pair downstream.
+		final hasWrap: Bool = branch.hasMeta(':wrap');
+		final hasLeadTrail: Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
+		return (hasWrap || hasLeadTrail) && branch.fmtHasFlag('captureWrapOpenNewline');
+	}
+
+	/**
+	 * ω-keep-kw-newline (increment 1b) — true when the branch is a single-Ref
+	 * mandatory-`@:kw` Alt ctor carrying `@:fmt(captureKwNewline)` (the
+	 * VarStmt-family: `VarStmt` / `FinalStmt` / `StaticVarStmt` /
+	 * `StaticFinalStmt`). Such ctors grow a positional `kwNewline:Bool` arg in
+	 * the synth pair so the `HxVarDecl` multiVar fold can reproduce the
+	 * source-author `var`→head newline under `WrapMode.Keep`. Requires the
+	 * mandatory `@:kw` for the parser commit point. Disjoint from
+	 * `isAltWrapOpenNewlineBranch` (those are kw-less @:wrap ctors). Reads the
+	 * flag via `fmtHasFlag`, which works at arm-time (`base.meta` populated by
+	 * `ShapeBuilder` before `arm()` runs — same path the sister predicates
+	 * rely on). First consumers: `HxStatement.{VarStmt, FinalStmt,
+	 * StaticVarStmt, StaticFinalStmt}`.
+	 */
+	public static function isAltKwNewlineBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 1
+			&& (branch.children[0].kind == Ref && (branch.hasMeta(':kw') && branch.fmtHasFlag('captureKwNewline')));
+	}
+
+	/**
+	 * ω-keep-chain — true when the branch is a binary chain enum ctor
+	 * carrying `@:fmt(captureChainNewline)`. Two consumer families:
+	 *  - `@:infix` Pratt chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`
+	 *    (increment 2 — the `lowerPrattLoop` operator-match site captures the
+	 *    gap newline before the ctor's RIGHT operand);
+	 *  - `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (increment 9
+	 *    — the `lowerPostfixLoop` gap before the `.` dispatch captures the
+	 *    source newline before the `.field` segment).
+	 * Such ctors grow a positional `chainNewline:Bool` arg in the synth pair
+	 * so the chain emit (`BinaryChainEmit` / `MethodChainEmit`) can reproduce
+	 * the source per-boundary line breaks under `WrapMode.Keep`. Requires
+	 * exactly two operand children (`left,right` infix / `operand,field`
+	 * postfix). Disjoint from every sister predicate (chain ctors carry no
+	 * `@:kw` / `@:lead` / `@:trail` / `@:wrap` / bodyPolicy, and the
+	 * `@:postfix('.')` FieldAccess carries no close delimiter so it is NOT a
+	 * postfix-close-trailing branch). Consumers: `HxExpr.{Add, Sub, And, Or,
+	 * FieldAccess}`.
+	 */
+	public static function isAltChainNewlineBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 2
+			&& ((branch.hasMeta(':infix') || branch.hasMeta(':postfix')) && branch.fmtHasFlag('captureChainNewline'));
+	}
+
+	/**
+	 * ω-keep-chain-receiver-comment — true when the branch is the
+	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
+	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
+	 * positional `chainLeadComment:Null<String>` slot (in addition to
+	 * `chainNewline:Bool`) holding the verbatim trailing comment of its operand
+	 * captured before the `.` dispatch. Strictly narrower than
+	 * `isAltChainNewlineBranch` — the infix chain ctors (Add/Sub/And/Or) are
+	 * excluded since they capture operand trivia through the Pratt stash, not a
+	 * dedicated slot. Two operand children (`operand,field`).
+	 */
+	public static function isPostfixChainCommentBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 2 && (branch.hasMeta(':postfix') && branch.fmtHasFlag('captureChainNewline'));
+	}
+
+	/**
 	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
 	 * `pairedToRaw_<T>` static helpers for every paired type in the
 	 * batch. Phase A2 appends `rawToPaired_<T>` siblings.
@@ -1638,242 +1874,6 @@ class TriviaTypeSynth {
 			pos: pos,
 			access: []
 		};
-	}
-
-	/**
-	 * True when the branch is a postfix Star-suffix ctor (e.g.
-	 * `Call(operand:T, args:Array<T>)` from `@:postfix('(', ')') @:sep(',')`)
-	 * whose Star child carries `trivia.starCollects=true` (set by
-	 * `TriviaAnalysis.markPostfixStarSuffix`). Such branches grow a
-	 * positional `closeTrailing:Null<String>` arg holding the trailing
-	 * comment captured by the parser right after the postfix close literal,
-	 * before the next postfix step's `skipWs` would eat it.
-	 *
-	 * Single-Ref-suffix postfix (e.g. `FieldAccess(operand, field)` from
-	 * `@:postfix('.')`) doesn't qualify — child[1] is Ref, not Star, so
-	 * `TriviaAnalysis.markPostfixStarSuffix` never sets `trivia.starCollects`
-	 * on it. Pair-lit postfix (1 child + close lit) likewise misses. Both
-	 * shapes can grow their own slot in a follow-up if a fixture demands
-	 * it; today the only failing fixture is the Star-suffix Call form
-	 * (`indentation/method_chain_with_line_comment`).
-	 *
-	 * Discriminator is `trivia.starCollects` on a 2nd Star child — the
-	 * marker function only sets that for the postfix Star-suffix shape it
-	 * detects via `:postfix(open, close)` + `[Ref, Star]`. We can't read
-	 * `postfix.op`/`postfix.close` from `branch.annotations` here because
-	 * the Postfix strategy runs LATER (see `Build.run`: TriviaAnalysis →
-	 * TriviaTypeSynth.arm → registry.runAnnotate); only the marker's
-	 * `trivia.starCollects` flag is reliably present at arm-time.
-	 */
-	public static function isPostfixCloseTrailingBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 2) return false;
-		if (branch.children[0].kind != Ref) return false;
-		final star: ShapeNode = branch.children[1];
-		if (star.kind != Star) return false;
-		if (star.annotations.get('trivia.starCollects') != true) return false;
-		// Tighten: `trivia.starCollects` is also set by `markStarsWithTrivia`
-		// for `:trivia` Seq branches with a single Star child. Those are NOT
-		// postfix and must not grow a `closeTrailing` slot — Lowering's
-		// `lowerPostfixLoop` is the only producer for the slot. Read
-		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
-		// to ensure the branch is a postfix ctor.
-		final meta: Null<Metadata> = branch.annotations.get('base.meta');
-		if (meta == null) return false;
-		for (entry in meta) if (entry.name == ':postfix' && entry.params.length == 2) return true;
-		return false;
-	}
-
-	/**
-	 * True when the branch is a close-peek `@:trivia` Alt-ctor wrapping
-	 * a single Star child — structurally equivalent to the Seq Case 4
-	 * shape that grows a `TrailingClose` slot in `buildStarTrailingSlots`.
-	 * Reads `@:trail` from `base.meta` directly since `arm()` runs
-	 * before the Lit strategy populates `lit.trailText`.
-	 */
-	public static function isAltCloseTrailingBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		final star: ShapeNode = branch.children[0];
-		return star.kind == Star && (star.annotations.get('trivia.starCollects') == true && branch.readMetaString(':trail') != null);
-	}
-
-	/**
-	 * True when the branch is a single-Ref Alt-ctor carrying `@:trailOpt(...)`.
-	 * Such ctors grow a positional `trailPresent:Bool` arg in the synth
-	 * pair so the writer can preserve source presence of the optional
-	 * trail literal. Reads `@:trailOpt` from `base.meta` directly since
-	 * `arm()` runs before the Lit strategy populates `lit.trailOptional`.
-	 *
-	 * Disjoint from `isAltCloseTrailingBranch`: that function requires a
-	 * single Star child with `@:trail`, this requires a single Ref child
-	 * with `@:trailOpt`. The two never coexist on the same branch.
-	 */
-	public static function isAltTrailOptBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1 && (branch.children[0].kind == Ref && branch.readMetaString(':trailOpt') != null);
-	}
-
-	/**
-	 * True when a struct typedef field carries `@:trailOpt(...)`. The
-	 * struct-field analog of `isAltTrailOptBranch` — destined to gate
-	 * synthesis of a `_trailPresent_<fieldName>:Bool` slot on the
-	 * paired-T struct so the writer can preserve source presence of
-	 * the optional trail literal in trivia mode (today struct-field
-	 * `@:trailOpt` is parser-permissive but writer-canonical — always
-	 * re-emits, breaking source-preservation contracts for fixtures
-	 * like `wrapping/issue_366_nested_array_comprehension` where
-	 * fork's section-3 preserves the optional `;`).
-	 *
-	 * Phase 2 (Session 14) wires this as the gate inside `buildTypeDefinition`'s
-	 * Seq arm — every matching field grows an `@:optional Null<Bool>`
-	 * `<field>TrailPresent` slot via `buildStructFieldTrailPresentSlot`.
-	 * Phase 3 will add the parser-side capture (`matchLit` result),
-	 * Phase 4 the writer-side emit (gate trail re-emission on source
-	 * presence). See [[project-blockbody-star-session14-design]].
-	 *
-	 * Disjoint from `isAltTrailOptBranch` (struct typedef field vs
-	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
-	 * but different host kind).
-	 */
-	public static function isStructFieldTrailOpt(field: ShapeNode): Bool {
-		return field.readMetaString(':trailOpt') != null;
-	}
-
-	/**
-	 * True when the branch opts into source-byte capture via
-	 * `@:fmt(captureSource('<optionFieldName>'))`. The synth-pair ctor
-	 * grows a positional `sourceText:String` arg; the parser fills it
-	 * with the input slice between the ctor's `@:lead` and `@:trail`
-	 * literals (inclusive of any whitespace inside) so the writer can
-	 * emit verbatim when the named runtime `Bool` option is `false`.
-	 *
-	 * Requires single Ref child + `@:lead` + `@:trail` (the parser has
-	 * an unambiguous slice to capture). Disjoint from
-	 * `isAltTrailOptBranch` since `@:trailOpt` and unconditional
-	 * `@:trail` are mutually exclusive on the same ctor.
-	 */
-	public static function isCaptureSourceBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref
-				&& (branch.readMetaString(':lead') != null
-					&& (branch.readMetaString(':trail') != null && branch.fmtReadString('captureSource') != null)));
-	}
-
-	/**
-	 * True when the branch is a single-Ref kw-led Alt-ctor carrying
-	 * `@:fmt(bodyPolicy(...))`. Such ctors grow a positional
-	 * `bodyOnSameLine:Bool` arg in the synth pair so `bodyPolicyWrap`'s
-	 * `Keep` branch can dispatch source-shape-aware between
-	 * `sameLayoutExpr` and `nextLayoutExpr` at writer time. Reads
-	 * `@:fmt(bodyPolicy(...))` via `fmtReadString`, which works at arm-time
-	 * because `base.meta` is populated by `ShapeBuilder` before
-	 * `TriviaTypeSynth.arm()` runs (see `Build.run` ordering — same path
-	 * `isCaptureSourceBranch` relies on).
-	 *
-	 * Requires `@:kw(...)` for the parser's commit point — bodyPolicy
-	 * without a kw has no anchor for the post-kw newline probe.
-	 * Co-occurs with `isAltTrailOptBranch` on the first consumer
-	 * `HxStatement.ReturnStmt` (`@:kw('return') @:trailOpt(';')`); the
-	 * `buildEnumCtor` push order (trailPresent → sourceText →
-	 * bodyOnSameLine) keeps the layout deterministic. Disjoint from the
-	 * close-trailing predicates (single Ref child, no Star child). First
-	 * consumer: `HxStatement.ReturnStmt`.
-	 */
-	public static function isAltBodyPolicyKwBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref && (branch.readMetaString(':kw') != null && branch.fmtReadString('bodyPolicy') != null));
-	}
-
-	/**
-	 * ω-paren-wrap-source-newline: True when the branch is a single-Ref
-	 * `@:wrap(open, close)` Alt-ctor (no `@:kw`, has both `@:lead` and
-	 * `@:trail`) opting in via parameterless `@:fmt(captureWrapOpenNewline)`.
-	 * Such ctors grow a positional `wrapOpenNewline:Bool` arg in the synth
-	 * pair so the writer can route between two break shapes at write time:
-	 *   - source had `\n` after open delim (`paramOpenedNewline=true`)  -->
-	 *     break shape `(\n<inner>\n)` (open delim followed by hardline,
-	 *     close on its own line); matches author intent for chains where
-	 *     the source already broke after `(`.
-	 *   - source had no `\n` after open delim (`paramOpenedNewline=false`)
-	 *     --> existing glue shape `(<inner>\n)` from the chain emit's
-	 *     `OptHardlineSkipAtOpenDelim`. Items[0] glued to enclosing `(`.
-	 *
-	 * Disjoint from `isAltBodyPolicyKwBranch` (kw absent vs required) and
-	 * from the close/postfix-trailing predicates (Ref vs Star child).
-	 * Plain mode keeps the original ctor arity and the writer falls back
-	 * to the unconditional glue shape. First consumer: `HxExpr.ParenExpr`.
-	 */
-	public static function isAltWrapOpenNewlineBranch(branch: ShapeNode): Bool {
-		if (branch.children.length != 1) return false;
-		if (branch.children[0].kind != Ref) return false;
-		if (branch.hasMeta(':kw')) return false;
-		// `@:wrap(o,c)` is the canonical shorthand for `@:lead(o) + @:trail(c)`
-		// at this opt-in's first consumer. `Lit.annotate` populates
-		// `lit.leadText`/`lit.trailText` from either form, but that runs AFTER
-		// `arm()` (see `Build.run` ordering -- same constraint motivating
-		// raw-meta probes elsewhere in this file). Use `hasMeta` rather than
-		// `readMetaString` because `@:wrap` carries TWO params (open + close)
-		// and `readMetaString` requires exactly one. Both authoring forms
-		// grow the same lit pair downstream.
-		final hasWrap: Bool = branch.hasMeta(':wrap');
-		final hasLeadTrail: Bool = branch.hasMeta(':lead') && branch.hasMeta(':trail');
-		return (hasWrap || hasLeadTrail) && branch.fmtHasFlag('captureWrapOpenNewline');
-	}
-
-	/**
-	 * ω-keep-kw-newline (increment 1b) — true when the branch is a single-Ref
-	 * mandatory-`@:kw` Alt ctor carrying `@:fmt(captureKwNewline)` (the
-	 * VarStmt-family: `VarStmt` / `FinalStmt` / `StaticVarStmt` /
-	 * `StaticFinalStmt`). Such ctors grow a positional `kwNewline:Bool` arg in
-	 * the synth pair so the `HxVarDecl` multiVar fold can reproduce the
-	 * source-author `var`→head newline under `WrapMode.Keep`. Requires the
-	 * mandatory `@:kw` for the parser commit point. Disjoint from
-	 * `isAltWrapOpenNewlineBranch` (those are kw-less @:wrap ctors). Reads the
-	 * flag via `fmtHasFlag`, which works at arm-time (`base.meta` populated by
-	 * `ShapeBuilder` before `arm()` runs — same path the sister predicates
-	 * rely on). First consumers: `HxStatement.{VarStmt, FinalStmt,
-	 * StaticVarStmt, StaticFinalStmt}`.
-	 */
-	public static function isAltKwNewlineBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 1
-			&& (branch.children[0].kind == Ref && (branch.hasMeta(':kw') && branch.fmtHasFlag('captureKwNewline')));
-	}
-
-	/**
-	 * ω-keep-chain — true when the branch is a binary chain enum ctor
-	 * carrying `@:fmt(captureChainNewline)`. Two consumer families:
-	 *  - `@:infix` Pratt chain ctors `HxExpr.Add` / `Sub` / `And` / `Or`
-	 *    (increment 2 — the `lowerPrattLoop` operator-match site captures the
-	 *    gap newline before the ctor's RIGHT operand);
-	 *  - `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (increment 9
-	 *    — the `lowerPostfixLoop` gap before the `.` dispatch captures the
-	 *    source newline before the `.field` segment).
-	 * Such ctors grow a positional `chainNewline:Bool` arg in the synth pair
-	 * so the chain emit (`BinaryChainEmit` / `MethodChainEmit`) can reproduce
-	 * the source per-boundary line breaks under `WrapMode.Keep`. Requires
-	 * exactly two operand children (`left,right` infix / `operand,field`
-	 * postfix). Disjoint from every sister predicate (chain ctors carry no
-	 * `@:kw` / `@:lead` / `@:trail` / `@:wrap` / bodyPolicy, and the
-	 * `@:postfix('.')` FieldAccess carries no close delimiter so it is NOT a
-	 * postfix-close-trailing branch). Consumers: `HxExpr.{Add, Sub, And, Or,
-	 * FieldAccess}`.
-	 */
-	public static function isAltChainNewlineBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2
-			&& ((branch.hasMeta(':infix') || branch.hasMeta(':postfix')) && branch.fmtHasFlag('captureChainNewline'));
-	}
-
-	/**
-	 * ω-keep-chain-receiver-comment — true when the branch is the
-	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
-	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
-	 * positional `chainLeadComment:Null<String>` slot (in addition to
-	 * `chainNewline:Bool`) holding the verbatim trailing comment of its operand
-	 * captured before the `.` dispatch. Strictly narrower than
-	 * `isAltChainNewlineBranch` — the infix chain ctors (Add/Sub/And/Or) are
-	 * excluded since they capture operand trivia through the Pratt stash, not a
-	 * dedicated slot. Two operand children (`operand,field`).
-	 */
-	public static function isPostfixChainCommentBranch(branch: ShapeNode): Bool {
-		return branch.children.length == 2 && (branch.hasMeta(':postfix') && branch.fmtHasFlag('captureChainNewline'));
 	}
 
 	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {

@@ -143,6 +143,13 @@ final class CallSites {
 		return isMethod ? collectMethodCalls(tree, source, name, binding, shape) : collectLocalFnCalls(tree, source, name);
 	}
 
+	/** Human-facing `line:col` for a span, in the `apq refs` print convention. */
+	public static function posOf(source: String, span: Null<Span>): String {
+		if (span == null) return '?:?';
+		final pos: Position = span.lineCol(source);
+		return '${pos.line}:${pos.col}';
+	}
+
 	/**
 	 * Collect a method's in-file call sites and prove the set complete.
 	 *
@@ -323,13 +330,6 @@ final class CallSites {
 	private static inline function bindingFrom(hit: RefHit): Int {
 		final b: Null<Span> = hit.bindingSpan;
 		return b == null ? -1 : b.from;
-	}
-
-	/** Human-facing `line:col` for a span, in the `apq refs` print convention. */
-	public static function posOf(source: String, span: Null<Span>): String {
-		if (span == null) return '?:?';
-		final pos: Position = span.lineCol(source);
-		return '${pos.line}:${pos.col}';
 	}
 
 	/**

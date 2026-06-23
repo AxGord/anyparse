@@ -35,6 +35,10 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
 
+	private final _declaredTypeCache: Map<String, Map<Int, String>> = [];
+
+	private final _accessorCache: Map<String, Map<Int, Bool>> = [];
+
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
 	}
@@ -102,10 +106,6 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		_declaredTypeCache[source] = result;
 		return result;
 	}
-
-	private final _declaredTypeCache: Map<String, Map<Int, String>> = [];
-
-	private final _accessorCache: Map<String, Map<Int, Bool>> = [];
 
 	/** `TypeInfoProvider`: forward + memoize the property-accessor map. */
 	public function propertyAccessors(source: String): Map<Int, Bool> {

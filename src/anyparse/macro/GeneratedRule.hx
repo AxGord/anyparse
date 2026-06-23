@@ -28,9 +28,9 @@ class GeneratedRule {
 
 	public final fnName: String;
 	public final returnCT: ComplexType;
-	public var body: Expr;
 	public final eregs: Array<EregSpec>;
 	public final hasMinPrec: Bool;
+	public var body: Expr;
 
 	public function new(fnName: String, returnCT: ComplexType, body: Expr, eregs: Array<EregSpec>, hasMinPrec: Bool = false) {
 		this.fnName = fnName;

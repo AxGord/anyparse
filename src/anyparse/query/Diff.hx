@@ -42,34 +42,6 @@ final class Diff {
 		return out;
 	}
 
-	private static function walk(a: Null<QueryNode>, b: Null<QueryNode>, out: Array<DiffHit>): Void {
-		if (a == null && b == null) return;
-		if (a == null) {
-			out.push(new DiffHit(DiffKind.Added, null, b));
-			return;
-		}
-		if (b == null) {
-			out.push(new DiffHit(DiffKind.Removed, a, null));
-			return;
-		}
-		// Same-position pair: compare ctor shape (kind + name slot).
-		// If either differs, the subtrees are not corresponding — emit
-		// a single Differs hit and stop recursing.
-		if (a.kind != b.kind || (a.name != b.name)) {
-			out.push(new DiffHit(DiffKind.Differs, a, b));
-			return;
-		}
-		// Same shape — zip children by index. Imbalanced tail surfaces
-		// as Added/Removed on the longer side.
-		final la: Int = a.children.length;
-		final lb: Int = b.children.length;
-		final shared: Int = la < lb ? la : lb;
-		for (i in 0...shared) walk(a.children[i], b.children[i], out);
-		if (la > lb)
-			for (i in lb...la) walk(a.children[i], null, out);
-		else if (lb > la) for (i in la...lb) walk(null, b.children[i], out);
-	}
-
 	public static function render(
 		fileA: String, sourceA: String, fileB: String, sourceB: String, hits: Array<DiffHit>, flat: Bool = false
 	): String {
@@ -115,6 +87,34 @@ final class Diff {
 			}
 		}
 		return buf.toString();
+	}
+
+	private static function walk(a: Null<QueryNode>, b: Null<QueryNode>, out: Array<DiffHit>): Void {
+		if (a == null && b == null) return;
+		if (a == null) {
+			out.push(new DiffHit(DiffKind.Added, null, b));
+			return;
+		}
+		if (b == null) {
+			out.push(new DiffHit(DiffKind.Removed, a, null));
+			return;
+		}
+		// Same-position pair: compare ctor shape (kind + name slot).
+		// If either differs, the subtrees are not corresponding — emit
+		// a single Differs hit and stop recursing.
+		if (a.kind != b.kind || (a.name != b.name)) {
+			out.push(new DiffHit(DiffKind.Differs, a, b));
+			return;
+		}
+		// Same shape — zip children by index. Imbalanced tail surfaces
+		// as Added/Removed on the longer side.
+		final la: Int = a.children.length;
+		final lb: Int = b.children.length;
+		final shared: Int = la < lb ? la : lb;
+		for (i in 0...shared) walk(a.children[i], b.children[i], out);
+		if (la > lb)
+			for (i in lb...la) walk(a.children[i], null, out);
+		else if (lb > la) for (i in la...lb) walk(null, b.children[i], out);
 	}
 
 	private static inline function posOrZero(p: Null<Position>): String {

@@ -124,21 +124,6 @@ final class DocMeasure {
 		return false;
 	}
 
-	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
-	}
-
-	/**
-	 * True iff char code `c` (the char immediately before a `(`) marks that `(`
-	 * as a CALL open paren rather than a grouping paren — an identifier char,
-	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
-	 */
-	private static inline function isCallPrefixChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
-			|| c == '$'.code || c == ')'.code || c == '>'.code;
-	}
-
 	/**
 	 * Right-spine walk: does this `Doc` render with its last visible
 	 * non-whitespace character equal to `}`? Used by the BlockBody Star
@@ -277,6 +262,21 @@ final class DocMeasure {
 			}
 		}
 		return false;
+	}
+
+	/** True iff char code `c` may start an identifier (letter / `_` / `$`). */
+	private static inline function isIdentStart(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
+	}
+
+	/**
+	 * True iff char code `c` (the char immediately before a `(`) marks that `(`
+	 * as a CALL open paren rather than a grouping paren — an identifier char,
+	 * a close `)` (`f()()`), or a type-param close `>` (`f<T>()`).
+	 */
+	private static inline function isCallPrefixChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '$'.code || c == ')'.code || c == '>'.code;
 	}
 
 	/**

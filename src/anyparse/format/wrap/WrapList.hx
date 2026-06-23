@@ -204,6 +204,568 @@ class WrapList {
 	}
 
 	/**
+	 * Single-Ref wrap variant of `emit` for statement-condition paren
+	 * groups (`if (cond)`, `while (cond)`). The cascade sees the cond
+	 * as a 1-item list and picks between flat shape `(cond)` and
+	 * wrapped shape `(\n\tcond\n)`. Renderer's column-aware fit
+	 * decision selects the right shape via `Group(IfBreak(brk, flat))`.
+	 *
+	 * Cond payloads carrying hardlines (cond already broken by inner
+	 * opBoolChain / call-arg wrap / lambda body) commit to the wrapped
+	 * shape unconditionally — `flatLength(condDoc) < 0`.
+	 *
+	 * `LineLengthLargerThan` thresholds beyond the cascade's basic
+	 * `ExceedsMaxLineLength` rule are NOT supported here yet — first
+	 * consumer (`HxIfStmt.cond` / `HxWhileStmt.cond`) ships only the
+	 * fork's default `fillLineWithLeadingBreak` + `exceedsMaxLineLength:
+	 * 0 → noWrap` cascade. Slice ω-condition-wrap-wiring.
+	 */
+	public static function emitCondition(
+		open: String, close: String, condDoc: Doc, opt: WriteOptions, rules: WrapRules,
+		// ω-condition-parens (Stage C): inner padding Docs for the FLAT
+		// shape (`if( cond )`). `openInside` follows `Text(open)`,
+		// `closeInside` precedes `Text(close)`. Both default `Empty` →
+		// byte-identical tight `(cond)`. Break shape leaves the cond on its
+		// own line so inner pads do not apply there.
+		openInside: Doc = Empty,
+		closeInside: Doc = Empty,
+		// ω-condition-wrap-keep — the source placed a newline right after the
+		// open paren (`if (\n\tcond`). Captured at parse time onto the cond
+		// field's `<field>CondOpenNewline:Bool` synth slot (mandatory-Ref
+		// `@:fmt(condWrap)` + `@:fmt(captureCondOpenNewline)`) and threaded by
+		// the single-Ref condWrap emit in `WriterLowering`. Consumed ONLY under
+		// `WrapMode.Keep` (`rules.defaultMode == Keep`) → forces `brkShape`
+		// (`(\n\tcond\n)`) so a kept condition round-trips the author's
+		// post-`(` break verbatim while the inner chain self-breaks per the
+		// already-landed chain source-newline mechanism. Default false →
+		// every non-keep / non-bearing caller (span mode, plain mode) is
+		// byte-inert.
+		sourceOpenNewline: Bool = false
+	): Doc {
+		final cols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final condW: Int = DocMeasure.flatTokenWidth(condDoc);
+		final hasHardline: Bool = flatLength(condDoc) < 0;
+
+		final flatShape: Doc = Concat([Text(open), openInside, condDoc, closeInside, Text(close)]);
+		// `Nest(cols, [Line('\n'), condDoc])` puts BOTH the post-open
+		// hardline AND `condDoc` itself at the bumped indent base
+		// (outer+cols). Inner break engines that emit their own
+		// `Nest(cols, …)` therefore inherit the bumped base — call-arg
+		// continuation lands at outer+2cols (matching fork's `WrapPClose`
+		// `+1` paren indent + call-arg's own `+1`). Chains
+		// (opBoolChain / opAddSubChain) participate via the
+		// `_chainModeOverride` channel: the chain dispatch suppresses its
+		// own `Nest(cols, …)` when an override is active so its breaks
+		// land at outer+cols (operator-led illusion), not at
+		// outer+2cols. See `BinaryChainEmit.emit`'s `nestSuppress`
+		// argument and the macro-emitted call site in `WriterLowering`.
+		final brkShape: Doc = Concat([
+			Text(open),
+			Nest(cols, Concat([Line('\n'), condDoc])),
+			Line('\n'),
+			Text(close),
+		]);
+
+		// ω-condition-wrap-keep: a `WrapMode.Keep` condition whose source
+		// placed a newline right after the open paren (`if (\n\tcond`) breaks
+		// the cond onto its own line verbatim — `brkShape` reproduces BOTH the
+		// post-`(` break AND the `)` on its own line. Without this, the
+		// width-driven decision below glues `if (cond` whenever the cond fits
+		// flat (or returns the chain's own hardline-bearing flat shape via the
+		// `hasHardline` branch), dropping the author's structural break. Gated
+		// on `rules.defaultMode == Keep` so every other wrap mode (and the
+		// non-bearing default `sourceOpenNewline == false`) is byte-inert. The
+		// inner chain self-breaks via the already-landed chain source-newline
+		// mechanism (`BinaryChainEmit.shapeKeep`), so `condDoc` already carries
+		// the `&& operand` continuation breaks — `brkShape`'s `Nest(cols)` just
+		// indents them under the bumped base. Pre-empts the `hasHardline` and
+		// `isTopLevelChain` branches below, both of which would otherwise glue.
+		if (sourceOpenNewline && rules.defaultMode == WrapMode.Keep) return WrapBoundary(brkShape);
+
+		inline function decideAt(exceeds: Bool): WrapMode {
+			return decideWithLineLengthState(rules, 1, condW, condW, exceeds, hasHardline, t -> t == opt.lineWidth && exceeds);
+		}
+
+		// Only `FillLineWithLeadingBreak` materialises the leading +
+		// trailing hardlines around the cond — other wrap modes
+		// (`OnePerLine`, `OnePerLineAfterFirst`, `FillLine`) keep the
+		// open/close glued to the cond and rely on the cond's own
+		// internal break engines (opBoolChain, call-arg wrap, …) for
+		// per-operand layout. `NoWrap` and unmodelled modes fall back
+		// to flat. This narrow ⟂-modes match keeps the slice net-
+		// positive — every other mode acts as a no-op until a future
+		// slice models its specific shape.
+		inline function shapeFor(mode: WrapMode): Doc {
+			return mode == FillLineWithLeadingBreak ? brkShape : flatShape;
+		}
+
+		if (hasHardline) return WrapBoundary(shapeFor(decideAt(true)));
+
+		final modeFlat: WrapMode = decideAt(false);
+		final modeBreak: WrapMode = decideAt(true);
+		final flatBrk: Bool = modeFlat == FillLineWithLeadingBreak;
+		final breakBrk: Bool = modeBreak == FillLineWithLeadingBreak;
+		return flatBrk == breakBrk
+			? WrapBoundary(shapeFor(modeFlat))
+			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
+				? WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)))
+				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
+	}
+
+	/**
+	 * True iff `d`'s OWN outermost wrap level carries a binary-operator
+	 * separator (`+` / `-` / `||` / `&&`) — i.e. `d` is a top-level binary
+	 * chain whose own operators break, rather than a delimiter-bounded
+	 * construct (call / array / prefix-call) whose inner args break one
+	 * level deeper. The `BinaryChainEmit` output wraps the whole chain in a
+	 * single `WrapBoundary`, so the chain's top-level operators sit at
+	 * `WrapBoundary` depth 1; a `WrapList.emit` call/array wraps its args
+	 * in their own `WrapBoundary`, putting any operand operators at depth ≥ 2.
+	 * Mirror of `isPureOpAddSubChain`'s depth-tracking walk but answers the
+	 * coarser "any top-level operator at depth 1" question used by the
+	 * cond-paren-glued discriminator in `emitCondition`.
+	 */
+	// ω-ternary-paren-glue (composite, ternary_collapse_after_opadd): true iff
+	// the inner's TOP-LEVEL (WrapBoundary depth 1) operator separators are
+	// ternary `?`/`:` and NO `+`/`-`/`||`/`&&` appears at that level. Mirrors
+	// isTopLevelChain's depth-1 walk; routes a ternary-inner expr-paren to the
+	// keep-`(`-glued shape instead of the IfFullLineExceeds open.
+	public static function isTopLevelTernary(d: Doc): Bool {
+		var ternary: Bool = false;
+		var other: Bool = false;
+		function w(n: Doc, depth: Int): Void {
+			if (depth > 1) return;
+			switch n {
+				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+					i
+				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+					w(i, depth);
+				case WrapBoundary(i):
+					w(i, depth + 1);
+				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfFullLineExceeds(
+					_, b, _
+				) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _) | IfArrowContinuationFits(_, _, _, b, _):
+					w(b, depth);
+				case Concat(items):
+					for (it in items) w(it, depth);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+					w(sep, depth);
+					for (it in items) w(it, depth);
+				case Text(t):
+					if (depth == 1)
+						switch StringTools.trim(t) {
+							case '?' | ':': ternary = true;
+							case '+' | '-' | '||' | '&&': other = true;
+							case _:
+						}
+				case _:
+			}
+		}
+		w(d, 0);
+		return ternary && !other;
+	}
+
+	/**
+	 * Returns the de-duplicated set of `LineLengthLargerThan` thresholds
+	 * appearing in `rules.rules` whose value differs from `lineWidth`.
+	 * Thresholds equal to `lineWidth` collapse to the `exceeds` semantic
+	 * (handled by the standard `IfBreak` pivot) and are filtered out.
+	 *
+	 * Public so chain-emit consumers (`BinaryChainEmit`) can build the
+	 * same threshold-aware Doc tree on top of the cascade evaluator
+	 * variants `decideWithLineLengthState` / `decideRuleWithLineLengthState`.
+	 */
+	public static function collectExtraLineLengthThresholds(rules: WrapRules, lineWidth: Int): Array<Int> {
+		final out: Array<Int> = [];
+		for (rule in rules.rules) {
+			for (cond in rule.conditions) {
+				if (cond.cond == LineLengthLargerThan && cond.value != lineWidth && out.indexOf(cond.value) < 0) out.push(cond.value);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Walks the rules cascade and returns the first matching mode.
+	 * `LineLengthLargerThan` evaluation is deferred to the caller-
+	 * supplied `lineLengthFires` predicate so consumers can enumerate
+	 * cascade outcomes across (exceeds, lineLength-firing) state
+	 * combinations and route the threshold answer through the renderer's
+	 * column-aware `IfWidthExceeds` probe at layout time. Falls back to
+	 * `rules.defaultMode` when no rule matches.
+	 *
+	 * Used by `emit`, `BinaryChainEmit.emit`, and `MethodChainEmit.emit`
+	 * — the three callers that build threshold-aware Doc trees on top
+	 * of this evaluator (slice ω-ifwidthexceeds-infra +
+	 * ω-methodchain-threshold-aware).
+	 */
+	public static function decideWithLineLengthState(
+		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
+		lineLengthFires: Int -> Bool
+	): WrapMode {
+		for (rule in rules.rules) {
+			if (matchesWithLineLengthState(
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
+			)) return rule.mode;
+		}
+		return rules.defaultMode;
+	}
+
+	/**
+	 * ω-keep-fnsig-newline: width-independent Keep predicate for the trivia
+	 * source-newline-preservation path (`WriterLowering.triviaSepStarExpr`'s
+	 * `_keepEmit` gate). The trivia branch decides whether to reproduce each
+	 * element's source `newlineBefore` BEFORE per-element Docs (and thus
+	 * rendered widths) exist, so it cannot consult the column-aware cascade
+	 * the no-trivia `emit` path uses. This resolves the cascade for the known
+	 * `itemCount` (= element count) across BOTH the fits and exceeds states
+	 * (and both `lineLengthFires` outcomes, paired with the exceeds probe);
+	 * returns `true` only when EVERY probed state yields `Keep`. That is
+	 * exactly the set of configs whose Keep decision is width-independent:
+	 *  - `defaultWrap: keep` with `rules: []` (e.g.
+	 *    `issue_238_keep_wrapping_function_signature`) — `decide*` falls
+	 *    through to `defaultMode == Keep` in every state.
+	 *  - a structural rule such as `itemCount >= 0 -> keep` (e.g.
+	 *    `wrapping_of_function_signature_keep`) — matches in every state.
+	 * A genuinely width-conditional rule (`lineLength >= 140 -> keep`)
+	 * disagrees across the probes and correctly returns `false`, so the
+	 * trivia path does NOT force keep when the source-layout intent is
+	 * actually gated on rendered width — that case stays on the legacy
+	 * cascade. Item-length / total-length conditions cannot be evaluated
+	 * pre-render either, so they are probed as "not firing"; no current
+	 * function-signature keep fixture uses them.
+	 */
+	public static function cascadeIsKeep(rules: WrapRules, itemCount: Int): Bool {
+		inline function at(exceeds: Bool): WrapMode {
+			return decideWithLineLengthState(rules, itemCount, 0, 0, exceeds, false, _ -> exceeds);
+		}
+		return at(false) == WrapMode.Keep && at(true) == WrapMode.Keep;
+	}
+
+	/**
+	 * Walks the cascade and returns the matched rule's `mode` paired with
+	 * its effective `location` (`BeforeLast` / `AfterLast`), so chain-emit
+	 * consumers can render per-rule operator placement. `LineLengthLargerThan`
+	 * evaluation is deferred to the caller-supplied `lineLengthFires`
+	 * predicate so the threshold answer can route through the renderer's
+	 * column-aware `IfWidthExceeds` probe at layout time.
+	 *
+	 * Location resolution: `rule.location ?? rules.defaultLocation ??
+	 * WrappingLocation.AfterLast` — mirrors haxe-formatter's `WrapRules.defaultLocation`
+	 * typedef default.
+	 *
+	 * Used by `BinaryChainEmit.emit` to enumerate cascade outcomes
+	 * across (exceeds, lineLength-firing) state combinations.
+	 */
+	public static function decideRuleWithLineLengthState(
+		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
+		lineLengthFires: Int -> Bool
+	): { mode: WrapMode, location: WrappingLocation } {
+		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
+		for (rule in rules.rules) {
+			if (matchesWithLineLengthState(
+				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
+			)) return { mode: rule.mode, location: rule.location ?? fallback };
+		}
+		return { mode: rules.defaultMode, location: fallback };
+	}
+
+	/**
+	 * Walks a `Doc` tree and returns its flat-mode width in columns.
+	 * Returns `-1` when the tree contains a forced hardline
+	 * (`Line` whose flat replacement starts with `\n`) — those trees
+	 * cannot be laid out in flat mode at all and the caller should
+	 * pick a break-mode shape unconditionally.
+	 */
+	public static function flatLength(d: Doc): Int {
+		final stack: Array<Doc> = [d];
+		var total: Int = 0;
+		while (stack.length > 0) {
+			final node: Doc = stack.pop();
+			if (flatPushChildren(node, stack)) continue;
+			final contribution: Int = flatLeafLen(node);
+			if (contribution < 0) return -1;
+			total += contribution;
+		}
+		return total;
+	}
+
+	/**
+	 * Returns `true` if `d`, when laid out in break mode, would emit a
+	 * forced hardline (`Line('\n')` or `OptHardline`) before any
+	 * non-newline content. Walks the leftmost spine: descends through
+	 * `Nest`/`Group`/`BodyGroup`, picks the break branch of `IfBreak`,
+	 * and skips leading transparent nodes (`Empty` / `Concat([])`).
+	 *
+	 * Mirrors `flatLength`'s "forced hardline" convention — soft
+	 * `Line(' ')` / `Line('')` and `OptSpace(_)` answer `false` (a soft
+	 * line in break mode emits `\n` but is flat-flattenable, so it
+	 * doesn't qualify as a "starts with hardline" signal). Distinct
+	 * from `hasLeadingHardline` (private) which is FillLine-mode-only
+	 * and returns `false` for `IfBreak` unconditionally; this variant
+	 * descends into the break branch because its caller renders in
+	 * break mode.
+	 *
+	 * Used by macro-generated paren-wrap (`@:wrap(open, close)` on an
+	 * enum ctor) to gate "trailing hardline before close": when the
+	 * inner Doc opens with a forced hardline (e.g. `BinaryChainEmit`'s
+	 * `OnePerLine` shape — every operand on its own line including
+	 * the first), the wrap renders the close delimiter on its own line
+	 * at the outer indent, matching haxe-formatter's `return !(\n…\n)`
+	 * shape on issue_187_oneline. When the inner does NOT start with a
+	 * hardline (e.g. `OnePerLineAfterFirst` keeps the first operand
+	 * inline with the open delim), the wrap stays glued — matches the
+	 * default-cascade `((items[0]\n\t…\n\titems[n-1]))` shape on
+	 * issue_187_multi_line_wrapped_assignment.
+	 */
+	public static function startsWithHardline(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
+				return false;
+			case Line(flat):
+				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
+			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+				// All three opt-hardline variants count as a leading
+				// hardline for the wrap-engine `(...)` shape decision.
+				// Their render-time drops are emit-time decisions; the
+				// structural answer here stays "yes, inner has a leading
+				// break point" so the wrap still places close on its own
+				// line.
+				return true;
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
+				node = inner;
+			case IfBreak(brk, _):
+				node = brk;
+			case IfWidthExceeds(_, brk, _):
+				node = brk;
+			case IfFirstLineExceeds(_, brk, _):
+				node = brk;
+			case IfLineExceeds(_, brk, _):
+				node = brk;
+			case IfFullLineExceeds(_, brk, _):
+				node = brk;
+			case IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _) | IfArrowContinuationFits(
+				_, _, _, brk, _
+			):
+				// Break-side leading-edge walk: descend the break branch
+				// (mirrors the If*Exceeds siblings).
+				node = brk;
+			case Concat(items):
+				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+				inner
+			) | CollapseChainProbe(inner):
+				// ω-force-flat-engine slice A: pass-through. Render-time
+				// state — leading-hardline detection sees the marker's
+				// `inner` as if no wrapper were present.
+				node = inner;
+			case ConditionalMarkerZero(inner):
+				// ω-cond-indent-policy FixedZero: render-time marker,
+				// transparent — descend `inner` for leading-hardline detection.
+				node = inner;
+			case ConditionalMarkerDecrease(inner):
+				// ω-cond-indent-policy AlignedDecrease: render-time marker,
+				// transparent — descend `inner` for leading-hardline detection.
+				node = inner;
+		}
+	}
+
+	/**
+	 * ω-expr-paren-in-condition (cond F2): returns the fillLine-family
+	 * `WrapMode` an `expressionWrapping` cascade WOULD produce when its
+	 * content overflows, or `null` when the cascade never fillLine-wraps.
+	 *
+	 * The fork applies `expressionWrapping` (fillLineWithLeadingBreak) to
+	 * an expression paren whose content exceeds the line; anyparse routes
+	 * an in-condition expr paren through the `expressionParenHardFlatten`
+	 * branch (HardFlatten → inner chain collapsed flat). When the
+	 * configured `expressionWrappingWrap` cascade has a fillLine-family
+	 * rule (or default), this surfaces that mode so the cond-emit site can
+	 * thread it as a `_chainModeOverride` into the in-condition paren's
+	 * inner chain — making the inner chain wrap fillLine instead of
+	 * collapsing flat. Returns `null` for the universal default
+	 * (`{rules: [], defaultMode: NoWrap}`) so every default-config
+	 * consumer is byte-inert.
+	 */
+	public static function effectiveExpressionWrapMode(rules: WrapRules): Null<WrapMode> {
+		inline function isFill(m: WrapMode): Bool return m == FillLine || m == FillLineWithLeadingBreak;
+		if (isFill(rules.defaultMode)) return rules.defaultMode;
+		final fillRule: Null<WrapRule> = rules.rules.find(r -> isFill(r.mode));
+		return fillRule != null ? fillRule.mode : null;
+	}
+
+	/**
+	 * True iff `d`'s first rendered visible token is an open delimiter
+	 * (`(` / `[` / `{`) — i.e. the construct is a paren-expression / call /
+	 * array / object literal whose open bracket leads. Left-spine walk that
+	 * descends through transparent render wrappers and the flat side of every
+	 * render-decision (`Group` / `If*`), skipping leading whitespace
+	 * fragments. O(left-spine), no re-measure.
+	 *
+	 * Used by the generic non-chain infix emit (ω-binop-open-delim-glue) to
+	 * keep the operator GLUED (`a * (chain)`) when its right operand opens a
+	 * delimiter that will absorb the line break inside its own brackets —
+	 * mirrors the fork, where `*` / `/` / `%` / compare / shift / bitwise /
+	 * `is` / `??` are NEVER wrap-marked (`MarkWrapping` wrap-marks only
+	 * `OpAdd` / `OpLt` type-param / `OpArrow`), so the operator never breaks;
+	 * only its bracketed operand does. Structural sister of
+	 * `startsWithHardline` (this checks the FLAT leading edge for an open
+	 * delim; that checks the BREAK leading edge for a hardline).
+	 */
+	public static function startsWithOpenDelim(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				return s.length > 0
+					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
+						|| StringTools.fastCodeAt(s, 0) == '{'.code);
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				node = flat;
+			case Concat(items):
+				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+		}
+	}
+
+	/**
+	 * True iff `d`'s last rendered visible token is a close delimiter
+	 * (`)` / `]` / `}`) — i.e. the construct is a paren-expression / call /
+	 * array / object literal / index access whose close bracket trails. The
+	 * right-spine mirror of `startsWithOpenDelim`: descends through transparent
+	 * render wrappers and the flat side of every render-decision (`Group` /
+	 * `If*`), skipping trailing whitespace fragments, taking the LAST visible
+	 * element of every `Concat` / `Fill`. O(right-spine), no re-measure.
+	 *
+	 * Used by the generic non-chain infix emit (ω-binop-close-delim-glue) to
+	 * keep a never-wrap-marked operator (`*` / `/` / `%` / compare / shift /
+	 * bitwise / `is` / `??`) GLUED to its LEFT operand's close-paren line
+	 * (`[…].indexOf(x) < 0`) when that operand opens a delimiter that absorbs
+	 * the line break inside its own brackets. Without it, the legacy
+	 * `Group(Line)` over-breaks the operator (`].indexOf(x)\n\t< 0`) once the
+	 * left operand's bracket wraps and injects a committed hardline. Mirrors the
+	 * fork: compare ops are never wrap-marked, so they ride the close-delim line.
+	 */
+	public static function endsWithCloseDelim(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				if (s.length == 0) return false;
+				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
+				return c == ')'.code || c == ']'.code || c == '}'.code;
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				node = flat;
+			case Concat(items):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+		}
+	}
+
+	/**
+	 * True iff `d` is a binary-op chain whose TOP-LEVEL separators are all
+	 * `+` / `-` (opAddSub), with no top-level `||` / `&&` / `?` / `:`. The
+	 * walk descends through transparent render wrappers and the chain's own
+	 * `Group`/`IfBreak`/`Fill` cascade, collecting operator-text separators,
+	 * but does NOT recurse into operand sub-chains (`WrapBoundary` marks a
+	 * sub-chain/operand boundary in the `BinaryChainEmit` output). A chain
+	 * with no operator separators at all (single operand) is NOT a pure
+	 * opAddSub chain.
+	 */
+	public static function isPureOpAddSubChain(d: Doc): Bool {
+		// Operator separators recorded per WrapBoundary depth. The chain's
+		// own top-level separators sit at the SHALLOWEST depth that has any
+		// operator (the chain emit wraps its whole output in a WrapBoundary,
+		// so the chain level is depth >= 1; operand sub-chains nest deeper).
+		// The TOP-LEVEL operator class is the operator set at that minimum
+		// depth — nested operand ops at deeper levels are irrelevant.
+		var addSubDepth: Int = -1;
+		var otherDepth: Int = -1;
+		function record(isAdd: Bool, depth: Int): Void {
+			if (isAdd) {
+				if (addSubDepth < 0 || depth < addSubDepth) addSubDepth = depth;
+			} else {
+				if (otherDepth < 0 || depth < otherDepth) otherDepth = depth;
+			}
+		}
+		function w(n: Doc, depth: Int): Void {
+			switch n {
+				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+					i
+				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+					w(i, depth);
+				case WrapBoundary(i):
+					w(i, depth + 1);
+				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f) | IfLineExceeds(_, b, f) | IfFullLineExceeds(
+					_, b, f
+				) | IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f) | IfArrowContinuationFits(_, _, _, b, f):
+					// Both branches of a chain cascade carry the same
+					// separators; walk only the break branch to avoid
+					// double-counting.
+					w(b, depth);
+				case Concat(items):
+					for (it in items) w(it, depth);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+					w(sep, depth);
+					for (it in items) w(it, depth);
+				case Text(t):
+					switch StringTools.trim(t) {
+						case '+' | '-': record(true, depth);
+						case '||' | '&&' | '?' | ':': record(false, depth);
+						case _:
+					}
+				case _:
+			}
+		}
+		w(d, 0);
+		// Pure opAddSub iff an add/sub separator exists and no other-class
+		// separator appears at the SAME-OR-SHALLOWER depth (the chain's top
+		// level is opAddSub; any `||`/`&&`/`?`/`:` at that level disqualifies).
+		return addSubDepth >= 0 && (otherDepth < 0 || otherDepth > addSubDepth);
+	}
+
+	/**
 	 * Normal-path 0-extra-threshold tree: the cascade collapses to the
 	 * legacy 2-state shape. When flat (`exceeds=false`) and break
 	 * (`exceeds=true`) resolve to the SAME mode, `emitZeroThresholdAgree`
@@ -443,168 +1005,6 @@ class WrapList {
 		return baseCols * (compactCont && additional > 0 ? additional : 1 + additional);
 	}
 
-	/**
-	 * Single-Ref wrap variant of `emit` for statement-condition paren
-	 * groups (`if (cond)`, `while (cond)`). The cascade sees the cond
-	 * as a 1-item list and picks between flat shape `(cond)` and
-	 * wrapped shape `(\n\tcond\n)`. Renderer's column-aware fit
-	 * decision selects the right shape via `Group(IfBreak(brk, flat))`.
-	 *
-	 * Cond payloads carrying hardlines (cond already broken by inner
-	 * opBoolChain / call-arg wrap / lambda body) commit to the wrapped
-	 * shape unconditionally — `flatLength(condDoc) < 0`.
-	 *
-	 * `LineLengthLargerThan` thresholds beyond the cascade's basic
-	 * `ExceedsMaxLineLength` rule are NOT supported here yet — first
-	 * consumer (`HxIfStmt.cond` / `HxWhileStmt.cond`) ships only the
-	 * fork's default `fillLineWithLeadingBreak` + `exceedsMaxLineLength:
-	 * 0 → noWrap` cascade. Slice ω-condition-wrap-wiring.
-	 */
-	public static function emitCondition(
-		open: String, close: String, condDoc: Doc, opt: WriteOptions, rules: WrapRules,
-		// ω-condition-parens (Stage C): inner padding Docs for the FLAT
-		// shape (`if( cond )`). `openInside` follows `Text(open)`,
-		// `closeInside` precedes `Text(close)`. Both default `Empty` →
-		// byte-identical tight `(cond)`. Break shape leaves the cond on its
-		// own line so inner pads do not apply there.
-		openInside: Doc = Empty,
-		closeInside: Doc = Empty,
-		// ω-condition-wrap-keep — the source placed a newline right after the
-		// open paren (`if (\n\tcond`). Captured at parse time onto the cond
-		// field's `<field>CondOpenNewline:Bool` synth slot (mandatory-Ref
-		// `@:fmt(condWrap)` + `@:fmt(captureCondOpenNewline)`) and threaded by
-		// the single-Ref condWrap emit in `WriterLowering`. Consumed ONLY under
-		// `WrapMode.Keep` (`rules.defaultMode == Keep`) → forces `brkShape`
-		// (`(\n\tcond\n)`) so a kept condition round-trips the author's
-		// post-`(` break verbatim while the inner chain self-breaks per the
-		// already-landed chain source-newline mechanism. Default false →
-		// every non-keep / non-bearing caller (span mode, plain mode) is
-		// byte-inert.
-		sourceOpenNewline: Bool = false
-	): Doc {
-		final cols: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
-		final condW: Int = DocMeasure.flatTokenWidth(condDoc);
-		final hasHardline: Bool = flatLength(condDoc) < 0;
-
-		final flatShape: Doc = Concat([Text(open), openInside, condDoc, closeInside, Text(close)]);
-		// `Nest(cols, [Line('\n'), condDoc])` puts BOTH the post-open
-		// hardline AND `condDoc` itself at the bumped indent base
-		// (outer+cols). Inner break engines that emit their own
-		// `Nest(cols, …)` therefore inherit the bumped base — call-arg
-		// continuation lands at outer+2cols (matching fork's `WrapPClose`
-		// `+1` paren indent + call-arg's own `+1`). Chains
-		// (opBoolChain / opAddSubChain) participate via the
-		// `_chainModeOverride` channel: the chain dispatch suppresses its
-		// own `Nest(cols, …)` when an override is active so its breaks
-		// land at outer+cols (operator-led illusion), not at
-		// outer+2cols. See `BinaryChainEmit.emit`'s `nestSuppress`
-		// argument and the macro-emitted call site in `WriterLowering`.
-		final brkShape: Doc = Concat([
-			Text(open),
-			Nest(cols, Concat([Line('\n'), condDoc])),
-			Line('\n'),
-			Text(close),
-		]);
-
-		// ω-condition-wrap-keep: a `WrapMode.Keep` condition whose source
-		// placed a newline right after the open paren (`if (\n\tcond`) breaks
-		// the cond onto its own line verbatim — `brkShape` reproduces BOTH the
-		// post-`(` break AND the `)` on its own line. Without this, the
-		// width-driven decision below glues `if (cond` whenever the cond fits
-		// flat (or returns the chain's own hardline-bearing flat shape via the
-		// `hasHardline` branch), dropping the author's structural break. Gated
-		// on `rules.defaultMode == Keep` so every other wrap mode (and the
-		// non-bearing default `sourceOpenNewline == false`) is byte-inert. The
-		// inner chain self-breaks via the already-landed chain source-newline
-		// mechanism (`BinaryChainEmit.shapeKeep`), so `condDoc` already carries
-		// the `&& operand` continuation breaks — `brkShape`'s `Nest(cols)` just
-		// indents them under the bumped base. Pre-empts the `hasHardline` and
-		// `isTopLevelChain` branches below, both of which would otherwise glue.
-		if (sourceOpenNewline && rules.defaultMode == WrapMode.Keep) return WrapBoundary(brkShape);
-
-		inline function decideAt(exceeds: Bool): WrapMode {
-			return decideWithLineLengthState(rules, 1, condW, condW, exceeds, hasHardline, t -> t == opt.lineWidth && exceeds);
-		}
-
-		// Only `FillLineWithLeadingBreak` materialises the leading +
-		// trailing hardlines around the cond — other wrap modes
-		// (`OnePerLine`, `OnePerLineAfterFirst`, `FillLine`) keep the
-		// open/close glued to the cond and rely on the cond's own
-		// internal break engines (opBoolChain, call-arg wrap, …) for
-		// per-operand layout. `NoWrap` and unmodelled modes fall back
-		// to flat. This narrow ⟂-modes match keeps the slice net-
-		// positive — every other mode acts as a no-op until a future
-		// slice models its specific shape.
-		inline function shapeFor(mode: WrapMode): Doc {
-			return mode == FillLineWithLeadingBreak ? brkShape : flatShape;
-		}
-
-		if (hasHardline) return WrapBoundary(shapeFor(decideAt(true)));
-
-		final modeFlat: WrapMode = decideAt(false);
-		final modeBreak: WrapMode = decideAt(true);
-		final flatBrk: Bool = modeFlat == FillLineWithLeadingBreak;
-		final breakBrk: Bool = modeBreak == FillLineWithLeadingBreak;
-		return flatBrk == breakBrk
-			? WrapBoundary(shapeFor(modeFlat))
-			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
-				? WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)))
-				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
-	}
-
-	/**
-	 * True iff `d`'s OWN outermost wrap level carries a binary-operator
-	 * separator (`+` / `-` / `||` / `&&`) — i.e. `d` is a top-level binary
-	 * chain whose own operators break, rather than a delimiter-bounded
-	 * construct (call / array / prefix-call) whose inner args break one
-	 * level deeper. The `BinaryChainEmit` output wraps the whole chain in a
-	 * single `WrapBoundary`, so the chain's top-level operators sit at
-	 * `WrapBoundary` depth 1; a `WrapList.emit` call/array wraps its args
-	 * in their own `WrapBoundary`, putting any operand operators at depth ≥ 2.
-	 * Mirror of `isPureOpAddSubChain`'s depth-tracking walk but answers the
-	 * coarser "any top-level operator at depth 1" question used by the
-	 * cond-paren-glued discriminator in `emitCondition`.
-	 */
-	// ω-ternary-paren-glue (composite, ternary_collapse_after_opadd): true iff
-	// the inner's TOP-LEVEL (WrapBoundary depth 1) operator separators are
-	// ternary `?`/`:` and NO `+`/`-`/`||`/`&&` appears at that level. Mirrors
-	// isTopLevelChain's depth-1 walk; routes a ternary-inner expr-paren to the
-	// keep-`(`-glued shape instead of the IfFullLineExceeds open.
-	public static function isTopLevelTernary(d: Doc): Bool {
-		var ternary: Bool = false;
-		var other: Bool = false;
-		function w(n: Doc, depth: Int): Void {
-			if (depth > 1) return;
-			switch n {
-				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
-					i
-				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
-					w(i, depth);
-				case WrapBoundary(i):
-					w(i, depth + 1);
-				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfFullLineExceeds(
-					_, b, _
-				) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _) | IfArrowContinuationFits(_, _, _, b, _):
-					w(b, depth);
-				case Concat(items):
-					for (it in items) w(it, depth);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					w(sep, depth);
-					for (it in items) w(it, depth);
-				case Text(t):
-					if (depth == 1)
-						switch StringTools.trim(t) {
-							case '?' | ':': ternary = true;
-							case '+' | '-' | '||' | '&&': other = true;
-							case _:
-						}
-				case _:
-			}
-		}
-		w(d, 0);
-		return ternary && !other;
-	}
-
 	private static function isTopLevelChain(d: Doc): Bool {
 		var found: Bool = false;
 		function w(n: Doc, depth: Int): Void {
@@ -712,111 +1112,6 @@ class WrapList {
 		return IfWidthExceeds(t, brk, flat);
 	}
 
-	/**
-	 * Returns the de-duplicated set of `LineLengthLargerThan` thresholds
-	 * appearing in `rules.rules` whose value differs from `lineWidth`.
-	 * Thresholds equal to `lineWidth` collapse to the `exceeds` semantic
-	 * (handled by the standard `IfBreak` pivot) and are filtered out.
-	 *
-	 * Public so chain-emit consumers (`BinaryChainEmit`) can build the
-	 * same threshold-aware Doc tree on top of the cascade evaluator
-	 * variants `decideWithLineLengthState` / `decideRuleWithLineLengthState`.
-	 */
-	public static function collectExtraLineLengthThresholds(rules: WrapRules, lineWidth: Int): Array<Int> {
-		final out: Array<Int> = [];
-		for (rule in rules.rules) {
-			for (cond in rule.conditions) {
-				if (cond.cond == LineLengthLargerThan && cond.value != lineWidth && out.indexOf(cond.value) < 0) out.push(cond.value);
-			}
-		}
-		return out;
-	}
-
-	/**
-	 * Walks the rules cascade and returns the first matching mode.
-	 * `LineLengthLargerThan` evaluation is deferred to the caller-
-	 * supplied `lineLengthFires` predicate so consumers can enumerate
-	 * cascade outcomes across (exceeds, lineLength-firing) state
-	 * combinations and route the threshold answer through the renderer's
-	 * column-aware `IfWidthExceeds` probe at layout time. Falls back to
-	 * `rules.defaultMode` when no rule matches.
-	 *
-	 * Used by `emit`, `BinaryChainEmit.emit`, and `MethodChainEmit.emit`
-	 * — the three callers that build threshold-aware Doc trees on top
-	 * of this evaluator (slice ω-ifwidthexceeds-infra +
-	 * ω-methodchain-threshold-aware).
-	 */
-	public static function decideWithLineLengthState(
-		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
-	): WrapMode {
-		for (rule in rules.rules) {
-			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
-			)) return rule.mode;
-		}
-		return rules.defaultMode;
-	}
-
-	/**
-	 * ω-keep-fnsig-newline: width-independent Keep predicate for the trivia
-	 * source-newline-preservation path (`WriterLowering.triviaSepStarExpr`'s
-	 * `_keepEmit` gate). The trivia branch decides whether to reproduce each
-	 * element's source `newlineBefore` BEFORE per-element Docs (and thus
-	 * rendered widths) exist, so it cannot consult the column-aware cascade
-	 * the no-trivia `emit` path uses. This resolves the cascade for the known
-	 * `itemCount` (= element count) across BOTH the fits and exceeds states
-	 * (and both `lineLengthFires` outcomes, paired with the exceeds probe);
-	 * returns `true` only when EVERY probed state yields `Keep`. That is
-	 * exactly the set of configs whose Keep decision is width-independent:
-	 *  - `defaultWrap: keep` with `rules: []` (e.g.
-	 *    `issue_238_keep_wrapping_function_signature`) — `decide*` falls
-	 *    through to `defaultMode == Keep` in every state.
-	 *  - a structural rule such as `itemCount >= 0 -> keep` (e.g.
-	 *    `wrapping_of_function_signature_keep`) — matches in every state.
-	 * A genuinely width-conditional rule (`lineLength >= 140 -> keep`)
-	 * disagrees across the probes and correctly returns `false`, so the
-	 * trivia path does NOT force keep when the source-layout intent is
-	 * actually gated on rendered width — that case stays on the legacy
-	 * cascade. Item-length / total-length conditions cannot be evaluated
-	 * pre-render either, so they are probed as "not firing"; no current
-	 * function-signature keep fixture uses them.
-	 */
-	public static function cascadeIsKeep(rules: WrapRules, itemCount: Int): Bool {
-		inline function at(exceeds: Bool): WrapMode {
-			return decideWithLineLengthState(rules, itemCount, 0, 0, exceeds, false, _ -> exceeds);
-		}
-		return at(false) == WrapMode.Keep && at(true) == WrapMode.Keep;
-	}
-
-	/**
-	 * Walks the cascade and returns the matched rule's `mode` paired with
-	 * its effective `location` (`BeforeLast` / `AfterLast`), so chain-emit
-	 * consumers can render per-rule operator placement. `LineLengthLargerThan`
-	 * evaluation is deferred to the caller-supplied `lineLengthFires`
-	 * predicate so the threshold answer can route through the renderer's
-	 * column-aware `IfWidthExceeds` probe at layout time.
-	 *
-	 * Location resolution: `rule.location ?? rules.defaultLocation ??
-	 * WrappingLocation.AfterLast` — mirrors haxe-formatter's `WrapRules.defaultLocation`
-	 * typedef default.
-	 *
-	 * Used by `BinaryChainEmit.emit` to enumerate cascade outcomes
-	 * across (exceeds, lineLength-firing) state combinations.
-	 */
-	public static function decideRuleWithLineLengthState(
-		rules: WrapRules, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
-		lineLengthFires: Int -> Bool
-	): { mode: WrapMode, location: WrappingLocation } {
-		final fallback: WrappingLocation = rules.defaultLocation ?? WrappingLocation.AfterLast;
-		for (rule in rules.rules) {
-			if (matchesWithLineLengthState(
-				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
-			)) return { mode: rule.mode, location: rule.location ?? fallback };
-		}
-		return { mode: rules.defaultMode, location: fallback };
-	}
-
 	private static function matchesWithLineLengthState(
 		rule: WrapRule, itemCount: Int, maxItemLen: Int, totalItemLen: Int, exceedsMaxLineLength: Bool, hasMultilineItems: Bool,
 		lineLengthFires: Int -> Bool
@@ -837,26 +1132,6 @@ class WrapList {
 			if (!ok) return false;
 		}
 		return true;
-	}
-
-	/**
-	 * Walks a `Doc` tree and returns its flat-mode width in columns.
-	 * Returns `-1` when the tree contains a forced hardline
-	 * (`Line` whose flat replacement starts with `\n`) — those trees
-	 * cannot be laid out in flat mode at all and the caller should
-	 * pick a break-mode shape unconditionally.
-	 */
-	public static function flatLength(d: Doc): Int {
-		final stack: Array<Doc> = [d];
-		var total: Int = 0;
-		while (stack.length > 0) {
-			final node: Doc = stack.pop();
-			if (flatPushChildren(node, stack)) continue;
-			final contribution: Int = flatLeafLen(node);
-			if (contribution < 0) return -1;
-			total += contribution;
-		}
-		return total;
 	}
 
 	/**
@@ -938,168 +1213,6 @@ class WrapList {
 	}
 
 	/**
-	 * Returns `true` if `d`, when laid out in break mode, would emit a
-	 * forced hardline (`Line('\n')` or `OptHardline`) before any
-	 * non-newline content. Walks the leftmost spine: descends through
-	 * `Nest`/`Group`/`BodyGroup`, picks the break branch of `IfBreak`,
-	 * and skips leading transparent nodes (`Empty` / `Concat([])`).
-	 *
-	 * Mirrors `flatLength`'s "forced hardline" convention — soft
-	 * `Line(' ')` / `Line('')` and `OptSpace(_)` answer `false` (a soft
-	 * line in break mode emits `\n` but is flat-flattenable, so it
-	 * doesn't qualify as a "starts with hardline" signal). Distinct
-	 * from `hasLeadingHardline` (private) which is FillLine-mode-only
-	 * and returns `false` for `IfBreak` unconditionally; this variant
-	 * descends into the break branch because its caller renders in
-	 * break mode.
-	 *
-	 * Used by macro-generated paren-wrap (`@:wrap(open, close)` on an
-	 * enum ctor) to gate "trailing hardline before close": when the
-	 * inner Doc opens with a forced hardline (e.g. `BinaryChainEmit`'s
-	 * `OnePerLine` shape — every operand on its own line including
-	 * the first), the wrap renders the close delimiter on its own line
-	 * at the outer indent, matching haxe-formatter's `return !(\n…\n)`
-	 * shape on issue_187_oneline. When the inner does NOT start with a
-	 * hardline (e.g. `OnePerLineAfterFirst` keeps the first operand
-	 * inline with the open delim), the wrap stays glued — matches the
-	 * default-cascade `((items[0]\n\t…\n\titems[n-1]))` shape on
-	 * issue_187_multi_line_wrapped_assignment.
-	 */
-	public static function startsWithHardline(d: Doc): Bool {
-		var node: Doc = d;
-		while (true) switch node {
-			case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
-				return false;
-			case Line(flat):
-				return flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code;
-			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
-				// All three opt-hardline variants count as a leading
-				// hardline for the wrap-engine `(...)` shape decision.
-				// Their render-time drops are emit-time decisions; the
-				// structural answer here stays "yes, inner has a leading
-				// break point" so the wrap still places close on its own
-				// line.
-				return true;
-			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner):
-				node = inner;
-			case IfBreak(brk, _):
-				node = brk;
-			case IfWidthExceeds(_, brk, _):
-				node = brk;
-			case IfFirstLineExceeds(_, brk, _):
-				node = brk;
-			case IfLineExceeds(_, brk, _):
-				node = brk;
-			case IfFullLineExceeds(_, brk, _):
-				node = brk;
-			case IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _) | IfArrowContinuationFits(
-				_, _, _, brk, _
-			):
-				// Break-side leading-edge walk: descend the break branch
-				// (mirrors the If*Exceeds siblings).
-				node = brk;
-			case Concat(items):
-				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
-				if (first == null) return false;
-				node = first;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
-				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
-				if (first == null) return false;
-				node = first;
-			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
-				inner
-			) | CollapseChainProbe(inner):
-				// ω-force-flat-engine slice A: pass-through. Render-time
-				// state — leading-hardline detection sees the marker's
-				// `inner` as if no wrapper were present.
-				node = inner;
-			case ConditionalMarkerZero(inner):
-				// ω-cond-indent-policy FixedZero: render-time marker,
-				// transparent — descend `inner` for leading-hardline detection.
-				node = inner;
-			case ConditionalMarkerDecrease(inner):
-				// ω-cond-indent-policy AlignedDecrease: render-time marker,
-				// transparent — descend `inner` for leading-hardline detection.
-				node = inner;
-		}
-	}
-
-	/**
-	 * ω-expr-paren-in-condition (cond F2): returns the fillLine-family
-	 * `WrapMode` an `expressionWrapping` cascade WOULD produce when its
-	 * content overflows, or `null` when the cascade never fillLine-wraps.
-	 *
-	 * The fork applies `expressionWrapping` (fillLineWithLeadingBreak) to
-	 * an expression paren whose content exceeds the line; anyparse routes
-	 * an in-condition expr paren through the `expressionParenHardFlatten`
-	 * branch (HardFlatten → inner chain collapsed flat). When the
-	 * configured `expressionWrappingWrap` cascade has a fillLine-family
-	 * rule (or default), this surfaces that mode so the cond-emit site can
-	 * thread it as a `_chainModeOverride` into the in-condition paren's
-	 * inner chain — making the inner chain wrap fillLine instead of
-	 * collapsing flat. Returns `null` for the universal default
-	 * (`{rules: [], defaultMode: NoWrap}`) so every default-config
-	 * consumer is byte-inert.
-	 */
-	public static function effectiveExpressionWrapMode(rules: WrapRules): Null<WrapMode> {
-		inline function isFill(m: WrapMode): Bool return m == FillLine || m == FillLineWithLeadingBreak;
-		if (isFill(rules.defaultMode)) return rules.defaultMode;
-		final fillRule: Null<WrapRule> = rules.rules.find(r -> isFill(r.mode));
-		return fillRule != null ? fillRule.mode : null;
-	}
-
-	/**
-	 * True iff `d`'s first rendered visible token is an open delimiter
-	 * (`(` / `[` / `{`) — i.e. the construct is a paren-expression / call /
-	 * array / object literal whose open bracket leads. Left-spine walk that
-	 * descends through transparent render wrappers and the flat side of every
-	 * render-decision (`Group` / `If*`), skipping leading whitespace
-	 * fragments. O(left-spine), no re-measure.
-	 *
-	 * Used by the generic non-chain infix emit (ω-binop-open-delim-glue) to
-	 * keep the operator GLUED (`a * (chain)`) when its right operand opens a
-	 * delimiter that will absorb the line break inside its own brackets —
-	 * mirrors the fork, where `*` / `/` / `%` / compare / shift / bitwise /
-	 * `is` / `??` are NEVER wrap-marked (`MarkWrapping` wrap-marks only
-	 * `OpAdd` / `OpLt` type-param / `OpArrow`), so the operator never breaks;
-	 * only its bracketed operand does. Structural sister of
-	 * `startsWithHardline` (this checks the FLAT leading edge for an open
-	 * delim; that checks the BREAK leading edge for a hardline).
-	 */
-	public static function startsWithOpenDelim(d: Doc): Bool {
-		var node: Doc = d;
-		while (true) switch node {
-			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-				| OptHardlineSkipBeforeHardline:
-				return false;
-			case Text(s):
-				return s.length > 0
-					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
-						|| StringTools.fastCodeAt(s, 0) == '{'.code);
-			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-				inner
-			) | ConditionalMarkerDecrease(inner):
-				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
-				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
-				_, _, _, _, flat
-			):
-				node = flat;
-			case Concat(items):
-				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
-				if (first == null) return false;
-				node = first;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
-				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
-				if (first == null) return false;
-				node = first;
-		}
-	}
-
-	/**
 	 * True iff `d`'s first visible Text leaf starts with a COLLECTION open
 	 * delimiter — `[` (array literal) or `{` (object / map literal). The
 	 * narrower sibling of `startsWithOpenDelim`: that matches `(` too (paren-
@@ -1168,57 +1281,6 @@ class WrapList {
 			collIdx = i;
 		}
 		return collIdx;
-	}
-
-	/**
-	 * True iff `d`'s last rendered visible token is a close delimiter
-	 * (`)` / `]` / `}`) — i.e. the construct is a paren-expression / call /
-	 * array / object literal / index access whose close bracket trails. The
-	 * right-spine mirror of `startsWithOpenDelim`: descends through transparent
-	 * render wrappers and the flat side of every render-decision (`Group` /
-	 * `If*`), skipping trailing whitespace fragments, taking the LAST visible
-	 * element of every `Concat` / `Fill`. O(right-spine), no re-measure.
-	 *
-	 * Used by the generic non-chain infix emit (ω-binop-close-delim-glue) to
-	 * keep a never-wrap-marked operator (`*` / `/` / `%` / compare / shift /
-	 * bitwise / `is` / `??`) GLUED to its LEFT operand's close-paren line
-	 * (`[…].indexOf(x) < 0`) when that operand opens a delimiter that absorbs
-	 * the line break inside its own brackets. Without it, the legacy
-	 * `Group(Line)` over-breaks the operator (`].indexOf(x)\n\t< 0`) once the
-	 * left operand's bracket wraps and injects a committed hardline. Mirrors the
-	 * fork: compare ops are never wrap-marked, so they ride the close-delim line.
-	 */
-	public static function endsWithCloseDelim(d: Doc): Bool {
-		var node: Doc = d;
-		while (true) switch node {
-			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-				| OptHardlineSkipBeforeHardline:
-				return false;
-			case Text(s):
-				if (s.length == 0) return false;
-				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
-				return c == ')'.code || c == ']'.code || c == '}'.code;
-			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-				inner
-			) | ConditionalMarkerDecrease(inner):
-				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
-				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
-				_, _, _, _, flat
-			):
-				node = flat;
-			case Concat(items):
-				final last: Null<Doc> = findLastNonTrailingTransparent(items);
-				if (last == null) return false;
-				node = last;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
-				final last: Null<Doc> = findLastNonTrailingTransparent(items);
-				if (last == null) return false;
-				node = last;
-		}
 	}
 
 	/**
@@ -2433,68 +2495,6 @@ class WrapList {
 			case Concat([]): true;
 			case _: false;
 		};
-	}
-
-	/**
-	 * True iff `d` is a binary-op chain whose TOP-LEVEL separators are all
-	 * `+` / `-` (opAddSub), with no top-level `||` / `&&` / `?` / `:`. The
-	 * walk descends through transparent render wrappers and the chain's own
-	 * `Group`/`IfBreak`/`Fill` cascade, collecting operator-text separators,
-	 * but does NOT recurse into operand sub-chains (`WrapBoundary` marks a
-	 * sub-chain/operand boundary in the `BinaryChainEmit` output). A chain
-	 * with no operator separators at all (single operand) is NOT a pure
-	 * opAddSub chain.
-	 */
-	public static function isPureOpAddSubChain(d: Doc): Bool {
-		// Operator separators recorded per WrapBoundary depth. The chain's
-		// own top-level separators sit at the SHALLOWEST depth that has any
-		// operator (the chain emit wraps its whole output in a WrapBoundary,
-		// so the chain level is depth >= 1; operand sub-chains nest deeper).
-		// The TOP-LEVEL operator class is the operator set at that minimum
-		// depth — nested operand ops at deeper levels are irrelevant.
-		var addSubDepth: Int = -1;
-		var otherDepth: Int = -1;
-		function record(isAdd: Bool, depth: Int): Void {
-			if (isAdd) {
-				if (addSubDepth < 0 || depth < addSubDepth) addSubDepth = depth;
-			} else {
-				if (otherDepth < 0 || depth < otherDepth) otherDepth = depth;
-			}
-		}
-		function w(n: Doc, depth: Int): Void {
-			switch n {
-				case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
-					i
-				) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
-					w(i, depth);
-				case WrapBoundary(i):
-					w(i, depth + 1);
-				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f) | IfLineExceeds(_, b, f) | IfFullLineExceeds(
-					_, b, f
-				) | IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f) | IfArrowContinuationFits(_, _, _, b, f):
-					// Both branches of a chain cascade carry the same
-					// separators; walk only the break branch to avoid
-					// double-counting.
-					w(b, depth);
-				case Concat(items):
-					for (it in items) w(it, depth);
-				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
-					w(sep, depth);
-					for (it in items) w(it, depth);
-				case Text(t):
-					switch StringTools.trim(t) {
-						case '+' | '-': record(true, depth);
-						case '||' | '&&' | '?' | ':': record(false, depth);
-						case _:
-					}
-				case _:
-			}
-		}
-		w(d, 0);
-		// Pure opAddSub iff an add/sub separator exists and no other-class
-		// separator appears at the SAME-OR-SHALLOWER depth (the chain's top
-		// level is opAddSub; any `||`/`&&`/`?`/`:` at that level disqualifies).
-		return addSubDepth >= 0 && (otherDepth < 0 || otherDepth > addSubDepth);
 	}
 
 }

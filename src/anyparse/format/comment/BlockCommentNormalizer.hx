@@ -59,6 +59,98 @@ class BlockCommentNormalizer {
 	}
 
 	/**
+	 * Engine-wired AST→AST hook for the Verbatim emit path.
+	 *
+	 * Invoked by the macro writer via the rule-level
+	 * `@:fmt(preWrite(BlockCommentNormalizer.normalize))` meta on
+	 * `BlockComment` — no plugin call site, the engine handles the
+	 * dispatch. Returns a new `BlockComment` with each line's `ws`
+	 * field rewritten so the macro `@:sep('\n')` hardline-join's
+	 * surrounding nest lands each line at the correct target column.
+	 *
+	 * Source common-prefix across non-edge non-decoration non-blank
+	 * lines is reduced; per-line residual whitespace beyond common
+	 * survives. When source common is strictly deeper than the wrap
+	 * (closing line's structural ws), content was authored "one
+	 * level deeper than the wrap delimiters" — re-emit one indent
+	 * unit deeper at target. Otherwise (close inline with content,
+	 * common == close ws) emit at wrap level so the close stays
+	 * aligned.
+	 *
+	 * Per-line newWs:
+	 *  - Line 0: keep source ws (separator after `/*` for inline
+	 *    content like `/* foo\n…`); blank line 0 → `''`.
+	 *  - Last line decoration (`**\/` etc.): `''` so it aligns with
+	 *    the wrap.
+	 *  - Last line empty body (`\n*\/` close on own line): `' '`
+	 *    canonical pad before `*\/`. Surrounding nest is applied by
+	 *    the renderer via `Line('\n')`.
+	 *  - Last line non-empty body (`}*\/` style): structural close
+	 *    ws preserved (caller authored the close column).
+	 *  - Interior content: `(shouldBake ? indentUnit : '') + relWs`.
+	 *  - Interior blank: `''`.
+	 */
+	public static function normalize(comment: BlockComment, opt: WriteOptions): Null<BlockComment> {
+		final lines: Array<BlockCommentLine> = comment.lines;
+		if (lines.length <= 1) return null;
+
+		final decoFlags: Array<Bool> = [for (l in lines) isAllStars(l.body)];
+		final last: Int = lines.length - 1;
+		var commonPrefix: String = '';
+		var havePrefix: Bool = false;
+		for (i in 0...lines.length) {
+			final body: String = lines[i].body;
+			final ws: String = lines[i].ws;
+			if (body.length == 0) continue;
+			if (i == 0) continue;
+			// Last line is the structural close (`*\/` or `<content>*\/`),
+			// not interior content. Its ws represents the wrap's structural
+			// indent, not the comment body's indent depth.
+			if (i == last) continue;
+			if (!havePrefix) {
+				commonPrefix = ws;
+				havePrefix = true;
+			} else {
+				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
+				var j: Int = 0;
+				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
+				commonPrefix = commonPrefix.substr(0, j);
+			}
+		}
+		final commonLen: Int = commonPrefix.length;
+		final closingWs: String = lines[last].ws;
+		final closeStructLen: Int = structuralCloseLen(closingWs);
+		final structuralClose: String = closingWs.substr(0, closeStructLen);
+		final shouldBake: Bool = commonLen > closeStructLen;
+		final indentUnit: String = indentUnitOf(opt);
+
+		final newLines: Array<BlockCommentLine> = [];
+		for (i in 0...lines.length) {
+			final body: String = lines[i].body;
+			final ws: String = lines[i].ws;
+			var newWs: String;
+			if (i == 0) {
+				newWs = body.length > 0 ? ws : '';
+			} else if (i == last) {
+				if (decoFlags[i]) {
+					newWs = '';
+				} else if (body.length == 0) {
+					newWs = ' ';
+				} else {
+					newWs = structuralClose;
+				}
+			} else if (body.length == 0) {
+				newWs = '';
+			} else {
+				final relWs: String = ws.length > commonLen ? ws.substr(commonLen) : '';
+				newWs = shouldBake ? indentUnit + relWs : relWs;
+			}
+			newLines.push({ ws: newWs, body: body });
+		}
+		return { lines: newLines };
+	}
+
+	/**
 	 * Build a Doc for javadoc-bodied verbatim comments (`isJavadocStyle`)
 	 * that lets the surrounding writer's nest land on each interior line.
 	 *
@@ -232,98 +324,6 @@ class BlockCommentNormalizer {
 	private static function structuralCloseLen(ws: String): Int {
 		final len: Int = ws.length;
 		return len > 0 && StringTools.fastCodeAt(ws, len - 1) == ' '.code ? len - 1 : len;
-	}
-
-	/**
-	 * Engine-wired AST→AST hook for the Verbatim emit path.
-	 *
-	 * Invoked by the macro writer via the rule-level
-	 * `@:fmt(preWrite(BlockCommentNormalizer.normalize))` meta on
-	 * `BlockComment` — no plugin call site, the engine handles the
-	 * dispatch. Returns a new `BlockComment` with each line's `ws`
-	 * field rewritten so the macro `@:sep('\n')` hardline-join's
-	 * surrounding nest lands each line at the correct target column.
-	 *
-	 * Source common-prefix across non-edge non-decoration non-blank
-	 * lines is reduced; per-line residual whitespace beyond common
-	 * survives. When source common is strictly deeper than the wrap
-	 * (closing line's structural ws), content was authored "one
-	 * level deeper than the wrap delimiters" — re-emit one indent
-	 * unit deeper at target. Otherwise (close inline with content,
-	 * common == close ws) emit at wrap level so the close stays
-	 * aligned.
-	 *
-	 * Per-line newWs:
-	 *  - Line 0: keep source ws (separator after `/*` for inline
-	 *    content like `/* foo\n…`); blank line 0 → `''`.
-	 *  - Last line decoration (`**\/` etc.): `''` so it aligns with
-	 *    the wrap.
-	 *  - Last line empty body (`\n*\/` close on own line): `' '`
-	 *    canonical pad before `*\/`. Surrounding nest is applied by
-	 *    the renderer via `Line('\n')`.
-	 *  - Last line non-empty body (`}*\/` style): structural close
-	 *    ws preserved (caller authored the close column).
-	 *  - Interior content: `(shouldBake ? indentUnit : '') + relWs`.
-	 *  - Interior blank: `''`.
-	 */
-	public static function normalize(comment: BlockComment, opt: WriteOptions): Null<BlockComment> {
-		final lines: Array<BlockCommentLine> = comment.lines;
-		if (lines.length <= 1) return null;
-
-		final decoFlags: Array<Bool> = [for (l in lines) isAllStars(l.body)];
-		final last: Int = lines.length - 1;
-		var commonPrefix: String = '';
-		var havePrefix: Bool = false;
-		for (i in 0...lines.length) {
-			final body: String = lines[i].body;
-			final ws: String = lines[i].ws;
-			if (body.length == 0) continue;
-			if (i == 0) continue;
-			// Last line is the structural close (`*\/` or `<content>*\/`),
-			// not interior content. Its ws represents the wrap's structural
-			// indent, not the comment body's indent depth.
-			if (i == last) continue;
-			if (!havePrefix) {
-				commonPrefix = ws;
-				havePrefix = true;
-			} else {
-				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
-				var j: Int = 0;
-				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
-				commonPrefix = commonPrefix.substr(0, j);
-			}
-		}
-		final commonLen: Int = commonPrefix.length;
-		final closingWs: String = lines[last].ws;
-		final closeStructLen: Int = structuralCloseLen(closingWs);
-		final structuralClose: String = closingWs.substr(0, closeStructLen);
-		final shouldBake: Bool = commonLen > closeStructLen;
-		final indentUnit: String = indentUnitOf(opt);
-
-		final newLines: Array<BlockCommentLine> = [];
-		for (i in 0...lines.length) {
-			final body: String = lines[i].body;
-			final ws: String = lines[i].ws;
-			var newWs: String;
-			if (i == 0) {
-				newWs = body.length > 0 ? ws : '';
-			} else if (i == last) {
-				if (decoFlags[i]) {
-					newWs = '';
-				} else if (body.length == 0) {
-					newWs = ' ';
-				} else {
-					newWs = structuralClose;
-				}
-			} else if (body.length == 0) {
-				newWs = '';
-			} else {
-				final relWs: String = ws.length > commonLen ? ws.substr(commonLen) : '';
-				newWs = shouldBake ? indentUnit + relWs : relWs;
-			}
-			newLines.push({ ws: newWs, body: body });
-		}
-		return { lines: newLines };
 	}
 
 	/**

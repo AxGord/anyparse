@@ -62,6 +62,108 @@ final class HxExprUtil {
 	private static final REFUSED_CASE_BODY_CTORS: Array<String> = ['And', 'Or'];
 
 	/**
+	 * HxExpr `*Assign` ctor names — every right-associative `=` infix
+	 * (`Assign` plus the 14 compound forms `+=` / `-=` / `*=` / `/=` /
+	 * `%=` / `<<=` / `>>>=` / `>>=` / `|=` / `&=` / `^=` / `??=` /
+	 * `&&=` / `||=`). Used by `stmtExprNoSemi` to walk through an
+	 * assignment-statement's right operand: the last token of
+	 * `x = if (…) {…} else {…}` is the `}` of the else block, so the
+	 * trailing `;` is optional just like for a bare `if (…) {…} else
+	 * {…}` statement.
+	 */
+	private static final ASSIGN_CTORS: Array<String> = [
+		'Assign',
+		'AddAssign',
+		'SubAssign',
+		'MulAssign',
+		'DivAssign',
+		'ModAssign',
+		'ShlAssign',
+		'UShrAssign',
+		'ShrAssign',
+		'BitOrAssign',
+		'BitAndAssign',
+		'BitXorAssign',
+		'NullCoalAssign',
+		'BoolAndAssign',
+		'BoolOrAssign',
+	];
+
+	/**
+	 * `HxExpr` constructors whose surface form always ends with `}`:
+	 * `switch … { … }`, a `{ … }` block, a `{ k: v }` object literal,
+	 * and `macro class … { members }`. No recursion needed.
+	 */
+	private static final BRACE_TERMINAL_CTORS: Array<String> = [
+		'SwitchExpr',
+		'SwitchExprBare',
+		'BlockExpr',
+		'ObjectLit',
+		'MacroClassExpr',
+	];
+
+	/**
+	 * `HxExpr` constructors that, at statement-expression position, leave
+	 * the statement `}`/`]`/literal-terminated so no trailing `;` is
+	 * needed: `{ … }` block, `{ k: v }` object literal, `[ … ]` array,
+	 * `${expr}` interpolation block, and `a is T`. These are the
+	 * recursion target reached through Assign / If / Meta / Return arms.
+	 */
+	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
+		'BlockExpr',
+		'ObjectLit',
+		'ArrayExpr',
+		'DollarBlockExpr',
+		'Is',
+	];
+
+	/**
+	 * Statement constructors whose surface form ends with `}` — the `}`
+	 * is the last token, so no trailing `;` is needed. Byte-check `'}'`
+	 * would also match; the explicit set makes the intent clear.
+	 */
+	private static final BRACE_TERMINAL_STMT_CTORS: Array<String> = [
+		'BlockStmt',
+		'IfStmt',
+		'WhileStmt',
+		'ForStmt',
+		'SwitchStmt',
+		'SwitchStmtBare',
+		'TryCatchStmt',
+		'LocalFnStmt',
+		'LocalInlineFnStmt',
+		'UntypedBlockStmt',
+	];
+
+	/**
+	 * Statement constructors whose own `@:trail(';')` / `@:lit(';')`
+	 * consumed the separator; the byte at `_prevEndPos - 1` is `;` so a
+	 * byte-check also passes, but the explicit set keeps the intent clear.
+	 */
+	private static final SEP_TERMINAL_STMT_CTORS: Array<String> = [
+		'VoidReturnStmt',
+		'ThrowStmt',
+		'DoWhileStmt',
+		'ErrorStmt',
+		'EmptyStmt',
+		'TryCatchStmtBare',
+	];
+
+	/**
+	 * Statement constructors the byte-check misses: `#if … #end`
+	 * (`Conditional`) ends with `d`, and the `....` placeholder
+	 * (`EllipsisStmt`) ends with `.`. The AST predicate is required here.
+	 */
+	private static final NON_BYTE_TERMINAL_STMT_CTORS: Array<String> = ['Conditional', 'EllipsisStmt'];
+
+	/**
+	 * `var` / `final` (and static variants) statement constructors whose
+	 * brace-termination depends on the init expression — routed through
+	 * `varInitEndsWithBrace`.
+	 */
+	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
+
+	/**
 	 * True when a single-statement case body should refuse inline
 	 * because its outermost expression is `&&` or `||`. Mirrors
 	 * haxe-formatter's `MarkSameLine.markExpressionCase` body-shape
@@ -222,173 +324,6 @@ final class HxExprUtil {
 	}
 
 	/**
-	 * `@:meta <operand>` wrapper — recurse on the wrapped expression
-	 * (`params[0].expr`).
-	 */
-	private static function metaExprEndsWithBrace(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length == 0) return false;
-		final metaExpr: Null<Dynamic> = params[0];
-		if (metaExpr == null) return false;
-		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
-		return inner != null && endsWithCloseBrace(inner);
-	}
-
-	/**
-	 * `for (…) body` / `while (…) body` — recurse on the loop body.
-	 */
-	private static function loopBodyEndsWithBrace(e: Dynamic): Bool {
-		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-		if (stmt == null) return false;
-		final body: Null<Dynamic> = Reflect.field(stmt, 'body');
-		return body != null && endsWithCloseBrace(body);
-	}
-
-	/**
-	 * `if (c) then else else'` — recurse on the last evaluated branch
-	 * (the else branch if present, otherwise the then branch).
-	 */
-	private static function ifExprEndsWithBrace(e: Dynamic): Bool {
-		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-		if (stmt == null) return false;
-		final elseBranch: Null<Dynamic> = Reflect.field(stmt, 'elseBranch');
-		if (elseBranch != null) return endsWithCloseBrace(elseBranch);
-		final thenBranch: Null<Dynamic> = Reflect.field(stmt, 'thenBranch');
-		return thenBranch != null && endsWithCloseBrace(thenBranch);
-	}
-
-	/**
-	 * `function(…) body` — brace-terminated iff the body is a `BlockBody`.
-	 */
-	private static function fnExprEndsWithBrace(e: Dynamic): Bool {
-		final fn: Null<Dynamic> = Type.enumParameters(e)[0];
-		if (fn == null) return false;
-		final body: Null<Dynamic> = unwrap(Reflect.field(fn, 'body'));
-		return body != null && Type.enumConstructor(body) == 'BlockBody';
-	}
-
-	/**
-	 * `try body catch (…) …` — recurse on the last catch clause's body,
-	 * or the try body itself when there are no catches.
-	 */
-	private static function tryExprEndsWithBrace(e: Dynamic): Bool {
-		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
-		if (stmt == null) return false;
-		final catches: Null<Array<Dynamic>> = Reflect.field(stmt, 'catches');
-		if (catches == null || catches.length == 0) {
-			final body: Null<Dynamic> = Reflect.field(stmt, 'body');
-			return body != null && endsWithCloseBrace(body);
-		}
-		final last: Null<Dynamic> = catches[catches.length - 1];
-		if (last == null) return false;
-		final lastInner: Dynamic = Reflect.hasField(last, 'node') ? last.node : last;
-		final body: Null<Dynamic> = Reflect.field(lastInner, 'body');
-		return body != null && endsWithCloseBrace(body);
-	}
-
-	/**
-	 * HxExpr `*Assign` ctor names — every right-associative `=` infix
-	 * (`Assign` plus the 14 compound forms `+=` / `-=` / `*=` / `/=` /
-	 * `%=` / `<<=` / `>>>=` / `>>=` / `|=` / `&=` / `^=` / `??=` /
-	 * `&&=` / `||=`). Used by `stmtExprNoSemi` to walk through an
-	 * assignment-statement's right operand: the last token of
-	 * `x = if (…) {…} else {…}` is the `}` of the else block, so the
-	 * trailing `;` is optional just like for a bare `if (…) {…} else
-	 * {…}` statement.
-	 */
-	private static final ASSIGN_CTORS: Array<String> = [
-		'Assign',
-		'AddAssign',
-		'SubAssign',
-		'MulAssign',
-		'DivAssign',
-		'ModAssign',
-		'ShlAssign',
-		'UShrAssign',
-		'ShrAssign',
-		'BitOrAssign',
-		'BitAndAssign',
-		'BitXorAssign',
-		'NullCoalAssign',
-		'BoolAndAssign',
-		'BoolOrAssign',
-	];
-
-	/**
-	 * `HxExpr` constructors whose surface form always ends with `}`:
-	 * `switch … { … }`, a `{ … }` block, a `{ k: v }` object literal,
-	 * and `macro class … { members }`. No recursion needed.
-	 */
-	private static final BRACE_TERMINAL_CTORS: Array<String> = [
-		'SwitchExpr',
-		'SwitchExprBare',
-		'BlockExpr',
-		'ObjectLit',
-		'MacroClassExpr',
-	];
-
-	/**
-	 * `HxExpr` constructors that, at statement-expression position, leave
-	 * the statement `}`/`]`/literal-terminated so no trailing `;` is
-	 * needed: `{ … }` block, `{ k: v }` object literal, `[ … ]` array,
-	 * `${expr}` interpolation block, and `a is T`. These are the
-	 * recursion target reached through Assign / If / Meta / Return arms.
-	 */
-	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
-		'BlockExpr',
-		'ObjectLit',
-		'ArrayExpr',
-		'DollarBlockExpr',
-		'Is',
-	];
-
-	/**
-	 * Statement constructors whose surface form ends with `}` — the `}`
-	 * is the last token, so no trailing `;` is needed. Byte-check `'}'`
-	 * would also match; the explicit set makes the intent clear.
-	 */
-	private static final BRACE_TERMINAL_STMT_CTORS: Array<String> = [
-		'BlockStmt',
-		'IfStmt',
-		'WhileStmt',
-		'ForStmt',
-		'SwitchStmt',
-		'SwitchStmtBare',
-		'TryCatchStmt',
-		'LocalFnStmt',
-		'LocalInlineFnStmt',
-		'UntypedBlockStmt',
-	];
-
-	/**
-	 * Statement constructors whose own `@:trail(';')` / `@:lit(';')`
-	 * consumed the separator; the byte at `_prevEndPos - 1` is `;` so a
-	 * byte-check also passes, but the explicit set keeps the intent clear.
-	 */
-	private static final SEP_TERMINAL_STMT_CTORS: Array<String> = [
-		'VoidReturnStmt',
-		'ThrowStmt',
-		'DoWhileStmt',
-		'ErrorStmt',
-		'EmptyStmt',
-		'TryCatchStmtBare',
-	];
-
-	/**
-	 * Statement constructors the byte-check misses: `#if … #end`
-	 * (`Conditional`) ends with `d`, and the `....` placeholder
-	 * (`EllipsisStmt`) ends with `.`. The AST predicate is required here.
-	 */
-	private static final NON_BYTE_TERMINAL_STMT_CTORS: Array<String> = ['Conditional', 'EllipsisStmt'];
-
-	/**
-	 * `var` / `final` (and static variants) statement constructors whose
-	 * brace-termination depends on the init expression — routed through
-	 * `varInitEndsWithBrace`.
-	 */
-	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
-
-	/**
 	 * True iff `raw`, standing as a statement (`HxStatement.ExprStmt`),
 	 * is `}`-terminated so Haxe needs no trailing `;`. Drives the
 	 * parser-side `@:fmt(trailOptParseGate('stmtExprNoSemi'))` gate on
@@ -534,67 +469,6 @@ final class HxExprUtil {
 	}
 
 	/**
-	 * `macro <operand>` at statement position — `}`-terminated iff the
-	 * operand is a `BlockExpr` or itself statement-brace-terminated.
-	 */
-	private static function macroExprNoSemi(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length == 0) return false;
-		final operand: Null<Dynamic> = unwrap(params[0]);
-		if (operand == null) return false;
-		final operandCtor: Null<String> = Type.enumConstructor(operand);
-		return operandCtor == 'BlockExpr' || stmtExprNoSemi(operand);
-	}
-
-	/**
-	 * `@:meta expr` at statement position — recurse on `params[0].expr`
-	 * (same struct shape as `IfExpr`).
-	 */
-	private static function metaExprNoSemi(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length == 0) return false;
-		final metaExpr: Null<Dynamic> = params[0];
-		if (metaExpr == null) return false;
-		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
-		return inner != null && stmtExprNoSemi(inner);
-	}
-
-	/**
-	 * `*Assign` at statement position — recurse on the right operand.
-	 * Slice 30 / 39 / 42 / 43 carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
-	 * `x = ${expr}` and `x = a is Int` keep `;` strict (the corpus
-	 * contract — distinct from bare `{a: 1}` / `[1, 2, 3]` / `${expr}` /
-	 * `a is Int` at stmt position). The carve-out lives here, not in the
-	 * brace-terminal set below, so other recursive arms (Meta / Return /
-	 * If) still see them as brace-terminated.
-	 */
-	private static function assignRhsNoSemi(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length < 2) return false;
-		final rhs: Null<Dynamic> = unwrap(params[1]);
-		if (rhs == null) return false;
-		final rhsCtor: Null<String> = Type.enumConstructor(rhs);
-		return rhsCtor != 'ObjectLit' && rhsCtor != 'ArrayExpr' && rhsCtor != 'DollarBlockExpr' && rhsCtor != 'Is' && stmtExprNoSemi(rhs);
-	}
-
-	/**
-	 * `if (…) … else …` at statement position — recurse on the else
-	 * branch when present, otherwise the then branch. `params[0]` is the
-	 * `HxIfExpr` struct; its field values are wrapped and re-entered
-	 * through `stmtExprNoSemi` (which calls `unwrap`).
-	 */
-	private static function ifExprNoSemi(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length == 0) return false;
-		final ifExpr: Null<Dynamic> = params[0];
-		if (ifExpr == null) return false;
-		final elseBranch: Null<Dynamic> = Reflect.field(ifExpr, 'elseBranch');
-		if (elseBranch != null) return stmtExprNoSemi(elseBranch);
-		final thenBranch: Null<Dynamic> = Reflect.field(ifExpr, 'thenBranch');
-		return thenBranch != null && stmtExprNoSemi(thenBranch);
-	}
-
-	/**
 	 * ω-stmt-no-semi — HxStatement-level twin of `stmtExprNoSemi`. Returns
 	 * true iff a prior statement of shape `raw` does NOT need a trailing
 	 * `;` before the next statement in a BlockBody Star.
@@ -650,34 +524,6 @@ final class HxExprUtil {
 		if (NON_BYTE_TERMINAL_STMT_CTORS.contains(ctor)) return true;
 		if (VAR_INIT_STMT_CTORS.contains(ctor)) return varInitEndsWithBrace(s);
 		return false;
-	}
-
-	/**
-	 * `var x = expr` / `final x = expr` / static-variant stmts whose init
-	 * expression ends with `}` (Switch / TryCatch / FnExpr with
-	 * BlockBody). Byte-check on `_prevEndPos - 1` misses these because the
-	 * stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s `matchLit`)
-	 * advances past the brace + newline + tabs when no trailing `;` is
-	 * present, leaving `_prevEndPos` past the `}`. Delegate to
-	 * `endsWithCloseBrace` on the `HxVarDecl.init` field.
-	 */
-	private static function varInitEndsWithBrace(s: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
-		if (params == null || params.length == 0) return false;
-		final decl: Null<Dynamic> = params[0];
-		if (decl == null) return false;
-		final init: Null<Dynamic> = Reflect.field(decl, 'init');
-		return init != null && endsWithCloseBrace(init);
-	}
-
-	/**
-	 * Returns the inner enum value for `raw`. Handles three shapes:
-	 *  - `null` → `null`
-	 *  - direct enum value (Plain-mode AST node) → `raw` unchanged
-	 *  - `Trivial<T>` struct wrapper (Trivia-mode AST node) → `raw.node`
-	 */
-	private static inline function unwrap(raw: Null<Dynamic>): Null<Dynamic> {
-		return raw == null ? null : Type.getEnum(raw) != null ? raw : Reflect.field(raw, 'node');
 	}
 
 	/**
@@ -799,49 +645,6 @@ final class HxExprUtil {
 	}
 
 	/**
-	 * Classify one element from a `HxConditionalDecl.body` /
-	 * `elseifs[i].body` / `elseBody` Star. Element shape is
-	 * `HxTopLevelDecl` (Plain mode) or `Trivial<HxTopLevelDeclT>`
-	 * (Trivia mode); both expose a `.decl` field of an `HxDecl` /
-	 * `HxDeclT` enum value. Returns `null` on null input, missing
-	 * `.decl`, or any unsupported ctor.
-	 *
-	 * `direction` selects which sub-walker recurses into a nested
-	 * `Conditional` payload — `Head` keeps walking into first-branch /
-	 * first-element, `Tail` into last-branch / last-element. Direction
-	 * does NOT affect terminal `ImportDecl` / `UsingDecl` etc. cases.
-	 */
-	private static function classifyTopLevelDeclElement(
-		elem: Null<Dynamic>, direction: LeafDirection
-	): Null<{ ctorName: String, path: String }> {
-		final inner: Null<Dynamic> = unwrapTrivialStruct(elem);
-		if (inner == null) return null;
-		final decl: Null<Dynamic> = Reflect.field(inner, 'decl');
-		if (decl == null) return null;
-		final ctor: Null<String> = Type.enumConstructor(decl);
-		if (ctor == null) return null;
-		final params: Null<Array<Dynamic>> = Type.enumParameters(decl);
-		return params == null || params.length == 0
-			? null
-			: switch ctor {
-				case 'Conditional': direction == Tail ? tailLeafClassifyImports(params[0]) : headLeafClassifyImports(params[0]);
-				case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
-					final path: Null<String> = params[0];
-					path == null ? null : { ctorName: ctor, path: path };
-				case 'ImportAliasDecl':
-					// First ctor arg is `HxImportAlias` struct, not a String —
-					// the lowering rejects multi-arg enum branches so the path
-					// lives in the wrapped struct's `path` field instead of
-					// being a positional sibling.
-					final aliasDecl: Null<Dynamic> = unwrapTrivialStruct(params[0]);
-					if (aliasDecl == null) return null;
-					final path: Null<String> = Reflect.field(aliasDecl, 'path');
-					path == null ? null : { ctorName: ctor, path: path };
-				case _: null;
-			};
-	}
-
-	/**
 	 * ω-after-conditional-block — tail-leaf classifier for the module-level
 	 * `#if … #end → decl` blank decision. Returns non-null `{ctorName, path}`
 	 * when the conditional's tail leaf is a decl after which fork KEEPS (or
@@ -886,6 +689,203 @@ final class HxExprUtil {
 		}
 		final body: Null<Array<Dynamic>> = Reflect.field(payload, 'body');
 		return body != null && body.length > 0 ? classifyKeepsBlankElement(body[body.length - 1]) : null;
+	}
+
+	/**
+	 * `@:meta <operand>` wrapper — recurse on the wrapped expression
+	 * (`params[0].expr`).
+	 */
+	private static function metaExprEndsWithBrace(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return false;
+		final metaExpr: Null<Dynamic> = params[0];
+		if (metaExpr == null) return false;
+		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+		return inner != null && endsWithCloseBrace(inner);
+	}
+
+	/**
+	 * `for (…) body` / `while (…) body` — recurse on the loop body.
+	 */
+	private static function loopBodyEndsWithBrace(e: Dynamic): Bool {
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final body: Null<Dynamic> = Reflect.field(stmt, 'body');
+		return body != null && endsWithCloseBrace(body);
+	}
+
+	/**
+	 * `if (c) then else else'` — recurse on the last evaluated branch
+	 * (the else branch if present, otherwise the then branch).
+	 */
+	private static function ifExprEndsWithBrace(e: Dynamic): Bool {
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final elseBranch: Null<Dynamic> = Reflect.field(stmt, 'elseBranch');
+		if (elseBranch != null) return endsWithCloseBrace(elseBranch);
+		final thenBranch: Null<Dynamic> = Reflect.field(stmt, 'thenBranch');
+		return thenBranch != null && endsWithCloseBrace(thenBranch);
+	}
+
+	/**
+	 * `function(…) body` — brace-terminated iff the body is a `BlockBody`.
+	 */
+	private static function fnExprEndsWithBrace(e: Dynamic): Bool {
+		final fn: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (fn == null) return false;
+		final body: Null<Dynamic> = unwrap(Reflect.field(fn, 'body'));
+		return body != null && Type.enumConstructor(body) == 'BlockBody';
+	}
+
+	/**
+	 * `try body catch (…) …` — recurse on the last catch clause's body,
+	 * or the try body itself when there are no catches.
+	 */
+	private static function tryExprEndsWithBrace(e: Dynamic): Bool {
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final catches: Null<Array<Dynamic>> = Reflect.field(stmt, 'catches');
+		if (catches == null || catches.length == 0) {
+			final body: Null<Dynamic> = Reflect.field(stmt, 'body');
+			return body != null && endsWithCloseBrace(body);
+		}
+		final last: Null<Dynamic> = catches[catches.length - 1];
+		if (last == null) return false;
+		final lastInner: Dynamic = Reflect.hasField(last, 'node') ? last.node : last;
+		final body: Null<Dynamic> = Reflect.field(lastInner, 'body');
+		return body != null && endsWithCloseBrace(body);
+	}
+
+	/**
+	 * `macro <operand>` at statement position — `}`-terminated iff the
+	 * operand is a `BlockExpr` or itself statement-brace-terminated.
+	 */
+	private static function macroExprNoSemi(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return false;
+		final operand: Null<Dynamic> = unwrap(params[0]);
+		if (operand == null) return false;
+		final operandCtor: Null<String> = Type.enumConstructor(operand);
+		return operandCtor == 'BlockExpr' || stmtExprNoSemi(operand);
+	}
+
+	/**
+	 * `@:meta expr` at statement position — recurse on `params[0].expr`
+	 * (same struct shape as `IfExpr`).
+	 */
+	private static function metaExprNoSemi(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return false;
+		final metaExpr: Null<Dynamic> = params[0];
+		if (metaExpr == null) return false;
+		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+		return inner != null && stmtExprNoSemi(inner);
+	}
+
+	/**
+	 * `*Assign` at statement position — recurse on the right operand.
+	 * Slice 30 / 39 / 42 / 43 carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
+	 * `x = ${expr}` and `x = a is Int` keep `;` strict (the corpus
+	 * contract — distinct from bare `{a: 1}` / `[1, 2, 3]` / `${expr}` /
+	 * `a is Int` at stmt position). The carve-out lives here, not in the
+	 * brace-terminal set below, so other recursive arms (Meta / Return /
+	 * If) still see them as brace-terminated.
+	 */
+	private static function assignRhsNoSemi(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length < 2) return false;
+		final rhs: Null<Dynamic> = unwrap(params[1]);
+		if (rhs == null) return false;
+		final rhsCtor: Null<String> = Type.enumConstructor(rhs);
+		return rhsCtor != 'ObjectLit' && rhsCtor != 'ArrayExpr' && rhsCtor != 'DollarBlockExpr' && rhsCtor != 'Is' && stmtExprNoSemi(rhs);
+	}
+
+	/**
+	 * `if (…) … else …` at statement position — recurse on the else
+	 * branch when present, otherwise the then branch. `params[0]` is the
+	 * `HxIfExpr` struct; its field values are wrapped and re-entered
+	 * through `stmtExprNoSemi` (which calls `unwrap`).
+	 */
+	private static function ifExprNoSemi(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return false;
+		final ifExpr: Null<Dynamic> = params[0];
+		if (ifExpr == null) return false;
+		final elseBranch: Null<Dynamic> = Reflect.field(ifExpr, 'elseBranch');
+		if (elseBranch != null) return stmtExprNoSemi(elseBranch);
+		final thenBranch: Null<Dynamic> = Reflect.field(ifExpr, 'thenBranch');
+		return thenBranch != null && stmtExprNoSemi(thenBranch);
+	}
+
+	/**
+	 * `var x = expr` / `final x = expr` / static-variant stmts whose init
+	 * expression ends with `}` (Switch / TryCatch / FnExpr with
+	 * BlockBody). Byte-check on `_prevEndPos - 1` misses these because the
+	 * stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s `matchLit`)
+	 * advances past the brace + newline + tabs when no trailing `;` is
+	 * present, leaving `_prevEndPos` past the `}`. Delegate to
+	 * `endsWithCloseBrace` on the `HxVarDecl.init` field.
+	 */
+	private static function varInitEndsWithBrace(s: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
+		if (params == null || params.length == 0) return false;
+		final decl: Null<Dynamic> = params[0];
+		if (decl == null) return false;
+		final init: Null<Dynamic> = Reflect.field(decl, 'init');
+		return init != null && endsWithCloseBrace(init);
+	}
+
+	/**
+	 * Returns the inner enum value for `raw`. Handles three shapes:
+	 *  - `null` → `null`
+	 *  - direct enum value (Plain-mode AST node) → `raw` unchanged
+	 *  - `Trivial<T>` struct wrapper (Trivia-mode AST node) → `raw.node`
+	 */
+	private static inline function unwrap(raw: Null<Dynamic>): Null<Dynamic> {
+		return raw == null ? null : Type.getEnum(raw) != null ? raw : Reflect.field(raw, 'node');
+	}
+
+	/**
+	 * Classify one element from a `HxConditionalDecl.body` /
+	 * `elseifs[i].body` / `elseBody` Star. Element shape is
+	 * `HxTopLevelDecl` (Plain mode) or `Trivial<HxTopLevelDeclT>`
+	 * (Trivia mode); both expose a `.decl` field of an `HxDecl` /
+	 * `HxDeclT` enum value. Returns `null` on null input, missing
+	 * `.decl`, or any unsupported ctor.
+	 *
+	 * `direction` selects which sub-walker recurses into a nested
+	 * `Conditional` payload — `Head` keeps walking into first-branch /
+	 * first-element, `Tail` into last-branch / last-element. Direction
+	 * does NOT affect terminal `ImportDecl` / `UsingDecl` etc. cases.
+	 */
+	private static function classifyTopLevelDeclElement(
+		elem: Null<Dynamic>, direction: LeafDirection
+	): Null<{ ctorName: String, path: String }> {
+		final inner: Null<Dynamic> = unwrapTrivialStruct(elem);
+		if (inner == null) return null;
+		final decl: Null<Dynamic> = Reflect.field(inner, 'decl');
+		if (decl == null) return null;
+		final ctor: Null<String> = Type.enumConstructor(decl);
+		if (ctor == null) return null;
+		final params: Null<Array<Dynamic>> = Type.enumParameters(decl);
+		return params == null || params.length == 0
+			? null
+			: switch ctor {
+				case 'Conditional': direction == Tail ? tailLeafClassifyImports(params[0]) : headLeafClassifyImports(params[0]);
+				case 'ImportDecl' | 'ImportWildDecl' | 'UsingDecl' | 'UsingWildDecl':
+					final path: Null<String> = params[0];
+					path == null ? null : { ctorName: ctor, path: path };
+				case 'ImportAliasDecl':
+					// First ctor arg is `HxImportAlias` struct, not a String —
+					// the lowering rejects multi-arg enum branches so the path
+					// lives in the wrapped struct's `path` field instead of
+					// being a positional sibling.
+					final aliasDecl: Null<Dynamic> = unwrapTrivialStruct(params[0]);
+					if (aliasDecl == null) return null;
+					final path: Null<String> = Reflect.field(aliasDecl, 'path');
+					path == null ? null : { ctorName: ctor, path: path };
+				case _: null;
+			};
 	}
 
 	/**

@@ -88,33 +88,6 @@ final class Text {
 		return buf.toString();
 	}
 
-	/**
-	 * Emit the optional `--doc` / `--source` blocks after a hit line.
-	 * Each block is 2-space indented and followed by a blank line.
-	 * No-op when neither flag is set or nothing resolves — so default
-	 * output is unchanged.
-	 */
-	private static function appendDocSource(buf: StringBuf, source: String, span: Null<Span>, doc: Bool, src: Bool): Void {
-		if (doc) {
-			final d: Null<String> = SourceSlice.leadingDoc(source, span);
-			if (d != null) {
-				buf.add(indentBlock(d));
-				buf.add('\n');
-			}
-		}
-		if (src) {
-			final s: String = SourceSlice.slice(source, span);
-			if (s.length > 0) {
-				buf.add(indentBlock(s));
-				buf.add('\n');
-			}
-		}
-	}
-
-	private static inline function indentBlock(text: String): String {
-		return '  ' + text.split('\n').join('\n  ') + '\n';
-	}
-
 	public static function renderMeta(file: String, source: String, hits: Array<MetaHit>, flat: Bool = false): String {
 		if (hits.length == 0) return '$file: no meta\n';
 		final buf: StringBuf = new StringBuf();
@@ -205,6 +178,33 @@ final class Text {
 			buf.add('\n');
 		}
 		return buf.toString();
+	}
+
+	/**
+	 * Emit the optional `--doc` / `--source` blocks after a hit line.
+	 * Each block is 2-space indented and followed by a blank line.
+	 * No-op when neither flag is set or nothing resolves — so default
+	 * output is unchanged.
+	 */
+	private static function appendDocSource(buf: StringBuf, source: String, span: Null<Span>, doc: Bool, src: Bool): Void {
+		if (doc) {
+			final d: Null<String> = SourceSlice.leadingDoc(source, span);
+			if (d != null) {
+				buf.add(indentBlock(d));
+				buf.add('\n');
+			}
+		}
+		if (src) {
+			final s: String = SourceSlice.slice(source, span);
+			if (s.length > 0) {
+				buf.add(indentBlock(s));
+				buf.add('\n');
+			}
+		}
+	}
+
+	private static inline function indentBlock(text: String): String {
+		return '  ' + text.split('\n').join('\n  ') + '\n';
 	}
 
 	private static inline function countBindings(m: Match): Int {

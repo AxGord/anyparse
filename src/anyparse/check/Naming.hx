@@ -151,8 +151,6 @@ final class Naming implements Check {
 	 * Does `node` contain a field access of `name` through a receiver other than
 	 * `this`? Such an `other.<name>` is the one in-file access the scope resolver
 	 * (hence `Rename.renameOccurrences`) misses, making a single-file rename incomplete.
-	 */
-	/**
 	 * The rename to apply to one projected declaration, or null when it must be
 	 * skipped: not among the flagged spans, not rename-safe, no applicable rule
 	 * with a normalizer, already conformant, or — for a field whose textual
@@ -180,7 +178,10 @@ final class Naming implements Check {
 		// dangling reference — bail rather than emit a broken rename.
 		return decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
 			? null
-			: { occurrences: occurrences, name: newName };
+			: {
+				occurrences: occurrences,
+				name: newName
+			};
 	}
 
 }

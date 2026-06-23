@@ -39,6 +39,39 @@ final class LintConfig {
 		_rules = rules;
 	}
 
+	/** Whether `id` runs in the default set (absent, or no `enabled` key → true). */
+	public function enabledFor(id: String): Bool {
+		final rc: Null<RuleConfig> = _rules[id];
+		return rc == null || (rc.enabled ?? true);
+	}
+
+	/** The configured severity override for `id`, or null when unset. */
+	public function severityFor(id: String): Null<Severity> {
+		final rc: Null<RuleConfig> = _rules[id];
+		return rc == null ? null : rc.severity;
+	}
+
+	/** A rule-specific integer option (e.g. complexity `max`), or null when unset. */
+	public function intOption(id: String, key: String): Null<Int> {
+		final rc: Null<RuleConfig> = _rules[id];
+		if (rc == null) return null;
+		final v: Null<Dynamic> = rc.props.get(key);
+		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
+	}
+
+	/**
+	 * A rule-specific list-of-numbers option (e.g. `magic-number` `ignore`),
+	 * or null when unset; a non-array value or non-numeric elements are dropped.
+	 */
+	public function numberListOption(id: String, key: String): Null<Array<Float>> {
+		final rc: Null<RuleConfig> = _rules[id];
+		if (rc == null) return null;
+		final v: Null<Dynamic> = rc.props.get(key);
+		if (v == null || !(v is Array)) return null;
+		final raw: Array<Dynamic> = v;
+		return [for (e in raw) if (e is Int || e is Float) (e: Float)];
+	}
+
 	/**
 	 * Discover an `apqlint.json` by walking up from `path`'s directory and parse
 	 * it; an empty config (every rule enabled, no overrides) when none is found.
@@ -73,39 +106,6 @@ final class LintConfig {
 		final enabled: Null<Bool> = enabledRaw is Bool ? enabledRaw : null;
 		final severity: Null<Severity> = severityRaw != null && severityRaw is String ? Severity.fromName(severityRaw) : null;
 		return { enabled: enabled, severity: severity, props: props };
-	}
-
-	/** Whether `id` runs in the default set (absent, or no `enabled` key → true). */
-	public function enabledFor(id: String): Bool {
-		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null || (rc.enabled ?? true);
-	}
-
-	/** The configured severity override for `id`, or null when unset. */
-	public function severityFor(id: String): Null<Severity> {
-		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null ? null : rc.severity;
-	}
-
-	/** A rule-specific integer option (e.g. complexity `max`), or null when unset. */
-	public function intOption(id: String, key: String): Null<Int> {
-		final rc: Null<RuleConfig> = _rules[id];
-		if (rc == null) return null;
-		final v: Null<Dynamic> = rc.props.get(key);
-		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
-	}
-
-	/**
-	 * A rule-specific list-of-numbers option (e.g. `magic-number` `ignore`),
-	 * or null when unset; a non-array value or non-numeric elements are dropped.
-	 */
-	public function numberListOption(id: String, key: String): Null<Array<Float>> {
-		final rc: Null<RuleConfig> = _rules[id];
-		if (rc == null) return null;
-		final v: Null<Dynamic> = rc.props.get(key);
-		if (v == null || !(v is Array)) return null;
-		final raw: Array<Dynamic> = v;
-		return [for (e in raw) if (e is Int || e is Float) (e: Float)];
 	}
 
 }

@@ -822,6 +822,94 @@ final class HaxeFormat implements TextFormat {
 
 	private function new() {}
 
+	public function escapeChar(c: Int): String {
+		return switch c {
+			case '"'.code: '\\"';
+			case '\\'.code: '\\\\';
+			case '\n'.code: '\\n';
+			case '\r'.code: '\\r';
+			case '\t'.code: '\\t';
+			case _:
+				if (c < ' '.code)
+					'\\x' + StringTools.hex(c, 2);
+				else
+					String.fromCharCode(c);
+		};
+	}
+
+	/**
+	 * Escape a single character for emission inside a SINGLE-quoted Haxe
+	 * string segment (`'...'`).
+	 *
+	 * Asymmetry with `escapeChar` (which targets double-quoted strings):
+	 *  - `'` is the delimiter → escape as `\'`
+	 *  - `"` is a literal character inside single-quoted strings → bare
+	 *  - `$` triggers interpolation → escape as `\$` so a literal dollar
+	 *    in the parsed segment doesn't accidentally start interpolation
+	 *    on re-parse. (Currently the segment parser regex excludes `$`
+	 *    from `HxStringLitSegment`, but the writer guards defensively.)
+	 *  - `\` and control chars (`\n`, `\r`, `\t`, `\xNN`) — same as
+	 *    `escapeChar`.
+	 *
+	 * Used by `HxStringLitSegment`'s writer (`@:unescape("singleQuoteRaw")`
+	 * mode) to round-trip Haxe single-quoted strings whose literal body
+	 * may contain bare `"` (very common in code that builds SQL / HTML
+	 * snippets in single-quoted strings).
+	 */
+	public function escapeSingleQuoteChar(c: Int): String {
+		return switch c {
+			case '\''.code: '\\\'';
+			case '\\'.code: '\\\\';
+			case '$'.code: '\\$';
+			case '\n'.code: '\\n';
+			case '\r'.code: '\\r';
+			case '\t'.code: '\\t';
+			case _:
+				if (c < ' '.code)
+					'\\x' + StringTools.hex(c, 2);
+				else
+					String.fromCharCode(c);
+		};
+	}
+
+	public function unescapeChar(input: String, pos: Int): UnescapeResult {
+		final esc: Null<Int> = input.charCodeAt(pos);
+		if (esc == null) throw new haxe.Exception('unterminated escape at $pos');
+		return switch esc {
+			case '"'.code: { char: '"'.code, consumed: 1 };
+			case '\\'.code: { char: '\\'.code, consumed: 1 };
+			case 'n'.code: { char: '\n'.code, consumed: 1 };
+			case 'r'.code: { char: '\r'.code, consumed: 1 };
+			case 't'.code: { char: '\t'.code, consumed: 1 };
+			case '\''.code: { char: '\''.code, consumed: 1 };
+			case '$'.code: { char: '$'.code, consumed: 1 };
+			case _: throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
+		};
+	}
+
+	/**
+	 * Parser-side statement-terminator gate for
+	 * `@:fmt(trailOptParseGate('stmtExprNoSemi'))` on
+	 * `HxStatement.ExprStmt`. Reached from the generated parser via
+	 * `schema.instance.stmtExprNoSemi(_raw)` (the same channel as
+	 * `unescapeChar`); delegates to the AST predicate in `HxExprUtil`
+	 * so the grammar-AST logic stays beside `endsWithCloseBrace`.
+	 */
+	public inline function stmtExprNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtExprNoSemi(raw);
+
+	/**
+	 * HxStatement-level sister of `stmtExprNoSemi`. Wired through
+	 * `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` on BlockBody
+	 * Star containers (Session 6 option b2 — AST-shape adapter). The
+	 * generated parser calls
+	 * `schema.instance.stmtNoSemi(_arr[_arr.length - 1])` after each
+	 * pushed element to decide whether the next-element gate may skip
+	 * the `;` separator. Delegates to the AST predicate in `HxExprUtil`
+	 * so all the per-ctor logic (including recursive `ExprStmt(expr)` →
+	 * `stmtExprNoSemi(expr)`) stays beside `endsWithCloseBrace`.
+	 */
+	public inline function stmtNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtNoSemi(raw);
+
 	/**
 	 * Default `WrapRules` cascade for `HxObjectLit.fields` — ported
 	 * verbatim from haxe-formatter's `wrapping.objectLiteral` rule set
@@ -1536,93 +1624,5 @@ final class HaxeFormat implements TextFormat {
 			defaultAdditionalIndent: 2,
 		};
 	}
-
-	public function escapeChar(c: Int): String {
-		return switch c {
-			case '"'.code: '\\"';
-			case '\\'.code: '\\\\';
-			case '\n'.code: '\\n';
-			case '\r'.code: '\\r';
-			case '\t'.code: '\\t';
-			case _:
-				if (c < ' '.code)
-					'\\x' + StringTools.hex(c, 2);
-				else
-					String.fromCharCode(c);
-		};
-	}
-
-	/**
-	 * Escape a single character for emission inside a SINGLE-quoted Haxe
-	 * string segment (`'...'`).
-	 *
-	 * Asymmetry with `escapeChar` (which targets double-quoted strings):
-	 *  - `'` is the delimiter → escape as `\'`
-	 *  - `"` is a literal character inside single-quoted strings → bare
-	 *  - `$` triggers interpolation → escape as `\$` so a literal dollar
-	 *    in the parsed segment doesn't accidentally start interpolation
-	 *    on re-parse. (Currently the segment parser regex excludes `$`
-	 *    from `HxStringLitSegment`, but the writer guards defensively.)
-	 *  - `\` and control chars (`\n`, `\r`, `\t`, `\xNN`) — same as
-	 *    `escapeChar`.
-	 *
-	 * Used by `HxStringLitSegment`'s writer (`@:unescape("singleQuoteRaw")`
-	 * mode) to round-trip Haxe single-quoted strings whose literal body
-	 * may contain bare `"` (very common in code that builds SQL / HTML
-	 * snippets in single-quoted strings).
-	 */
-	public function escapeSingleQuoteChar(c: Int): String {
-		return switch c {
-			case '\''.code: '\\\'';
-			case '\\'.code: '\\\\';
-			case '$'.code: '\\$';
-			case '\n'.code: '\\n';
-			case '\r'.code: '\\r';
-			case '\t'.code: '\\t';
-			case _:
-				if (c < ' '.code)
-					'\\x' + StringTools.hex(c, 2);
-				else
-					String.fromCharCode(c);
-		};
-	}
-
-	public function unescapeChar(input: String, pos: Int): UnescapeResult {
-		final esc: Null<Int> = input.charCodeAt(pos);
-		if (esc == null) throw new haxe.Exception('unterminated escape at $pos');
-		return switch esc {
-			case '"'.code: { char: '"'.code, consumed: 1 };
-			case '\\'.code: { char: '\\'.code, consumed: 1 };
-			case 'n'.code: { char: '\n'.code, consumed: 1 };
-			case 'r'.code: { char: '\r'.code, consumed: 1 };
-			case 't'.code: { char: '\t'.code, consumed: 1 };
-			case '\''.code: { char: '\''.code, consumed: 1 };
-			case '$'.code: { char: '$'.code, consumed: 1 };
-			case _: throw new haxe.Exception('invalid escape: \\${String.fromCharCode(esc)}');
-		};
-	}
-
-	/**
-	 * Parser-side statement-terminator gate for
-	 * `@:fmt(trailOptParseGate('stmtExprNoSemi'))` on
-	 * `HxStatement.ExprStmt`. Reached from the generated parser via
-	 * `schema.instance.stmtExprNoSemi(_raw)` (the same channel as
-	 * `unescapeChar`); delegates to the AST predicate in `HxExprUtil`
-	 * so the grammar-AST logic stays beside `endsWithCloseBrace`.
-	 */
-	public inline function stmtExprNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtExprNoSemi(raw);
-
-	/**
-	 * HxStatement-level sister of `stmtExprNoSemi`. Wired through
-	 * `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` on BlockBody
-	 * Star containers (Session 6 option b2 — AST-shape adapter). The
-	 * generated parser calls
-	 * `schema.instance.stmtNoSemi(_arr[_arr.length - 1])` after each
-	 * pushed element to decide whether the next-element gate may skip
-	 * the `;` separator. Delegates to the AST predicate in `HxExprUtil`
-	 * so all the per-ctor logic (including recursive `ExprStmt(expr)` →
-	 * `stmtExprNoSemi(expr)`) stays beside `endsWithCloseBrace`.
-	 */
-	public inline function stmtNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtNoSemi(raw);
 
 }

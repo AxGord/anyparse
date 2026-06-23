@@ -508,6 +508,8 @@ import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 @:nullSafety(Strict)
 final class HaxeFormatConfigLoader {
 
+	private function new() {}
+
 	/**
 	 * Parses a `hxformat.json` document and returns the equivalent
 	 * `HxModuleWriteOptions`, starting from the Haxe format defaults
@@ -754,8 +756,6 @@ final class HaxeFormatConfigLoader {
 		if (cfg.emptyLines != null) applyEmptyLines(cfg.emptyLines, result);
 		return result;
 	}
-
-	private function new() {}
 
 	private static function applyIndentation(section: HxFormatIndentationSection, opt: HxModuleWriteOptions): Void {
 		final character: Null<String> = section.character;

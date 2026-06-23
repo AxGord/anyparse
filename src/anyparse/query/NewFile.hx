@@ -127,6 +127,21 @@ final class NewFile {
 		return canonical == null ? err('no writer for this grammar') : { result: EditResult.Ok(canonical), stubbed: stubbed };
 	}
 
+	/**
+	 * Validate + canonicalise an arbitrary whole-file `content` — the validated,
+	 * atomic equivalent of a raw write (`apq new --raw`): parse-or-`Err`,
+	 * canonicalise, `Ok`. For files no `--kind` spec shape covers (multi-type
+	 * modules, free-form layouts) so creation can still go through the tooling.
+	 */
+	public static function createRaw(content: String, plugin: GrammarPlugin, ?optsJson: String): EditResult {
+		final canonical: Null<String> = try plugin.writeRoundTrip(content, optsJson) catch (exception: ParseError) {
+			return EditResult.Err('source does not parse: ${exception.message}');
+		} catch (exception: Exception) {
+			return EditResult.Err('source does not parse: ${exception.message}');
+		};
+		return canonical == null ? EditResult.Err('no writer for this grammar') : EditResult.Ok(canonical);
+	}
+
 	/** Wrap an error message as a stub-free `NewFileResult`. */
 	private static inline function err(message: String): NewFileResult {
 		return { result: EditResult.Err(message), stubbed: [] };
@@ -313,21 +328,6 @@ final class NewFile {
 		final out: Array<String> = [];
 		for (line in lines) if (!out.contains(line)) out.push(line);
 		return out;
-	}
-
-	/**
-	 * Validate + canonicalise an arbitrary whole-file `content` — the validated,
-	 * atomic equivalent of a raw write (`apq new --raw`): parse-or-`Err`,
-	 * canonicalise, `Ok`. For files no `--kind` spec shape covers (multi-type
-	 * modules, free-form layouts) so creation can still go through the tooling.
-	 */
-	public static function createRaw(content: String, plugin: GrammarPlugin, ?optsJson: String): EditResult {
-		final canonical: Null<String> = try plugin.writeRoundTrip(content, optsJson) catch (exception: ParseError) {
-			return EditResult.Err('source does not parse: ${exception.message}');
-		} catch (exception: Exception) {
-			return EditResult.Err('source does not parse: ${exception.message}');
-		};
-		return canonical == null ? EditResult.Err('no writer for this grammar') : EditResult.Ok(canonical);
 	}
 
 	/**

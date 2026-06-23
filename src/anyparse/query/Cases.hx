@@ -28,6 +28,21 @@ final class Cases {
 		return out;
 	}
 
+	public static function render(file: String, source: String, hits: Array<CasesHit>, flat: Bool = false): String {
+		final buf: StringBuf = new StringBuf();
+		if (!flat && hits.length > 0) buf.add('$file:\n');
+		for (h in hits) {
+			final span: Null<Span> = h.span;
+			if (span == null) continue;
+			final pos: Position = span.lineCol(source);
+			if (flat)
+				buf.add('$file:${pos.line}:${pos.col}: ${h.patternKind}\n');
+			else
+				buf.add('  ${pos.line}:${pos.col}: ${h.patternKind}\n');
+		}
+		return buf.toString();
+	}
+
 	private static function walk(target: String, node: QueryNode, out: Array<CasesHit>): Void {
 		if (node.kind == 'CaseBranch') {
 			final kids: Array<QueryNode> = node.children;
@@ -76,21 +91,6 @@ final class Cases {
 			case _:
 				false;
 		};
-	}
-
-	public static function render(file: String, source: String, hits: Array<CasesHit>, flat: Bool = false): String {
-		final buf: StringBuf = new StringBuf();
-		if (!flat && hits.length > 0) buf.add('$file:\n');
-		for (h in hits) {
-			final span: Null<Span> = h.span;
-			if (span == null) continue;
-			final pos: Position = span.lineCol(source);
-			if (flat)
-				buf.add('$file:${pos.line}:${pos.col}: ${h.patternKind}\n');
-			else
-				buf.add('  ${pos.line}:${pos.col}: ${h.patternKind}\n');
-		}
-		return buf.toString();
 	}
 
 }

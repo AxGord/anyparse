@@ -151,13 +151,6 @@ class Lowering {
 		};
 	}
 
-	private static function isBareLeft(e: Expr): Bool {
-		return switch e.expr {
-			case EConst(CIdent('left')): true;
-			case _: false;
-		};
-	}
-
 	private function lowerRule(typePath: String, node: ShapeNode): Array<GeneratedRule> {
 		final simple: String = simpleName(typePath);
 		final fnName: String = parseFnName(typePath);
@@ -285,24 +278,6 @@ class Lowering {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [lastElem]),
 			pos: Context.currentPos(),
 		};
-	}
-
-	private static function hasPrattBranch(node: ShapeNode): Bool {
-		for (branch in node.children) {
-			if (branch.annotations.get('pratt.prec') != null || branch.annotations.get('ternary.op') != null) return true;
-		}
-		return false;
-	}
-
-	private static function hasPostfixBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (branch.annotations.get('postfix.op') != null) return true;
-		return false;
-	}
-
-	/** Returns the operator literal for a branch in the Pratt dispatch chain.
-	*  Binary infix branches carry `pratt.op`; ternary branches carry `ternary.op`. */
-	private static function getOperatorText(branch: ShapeNode): String {
-		return (branch.annotations.get('pratt.op'): Null<String>) ?? branch.annotations.get('ternary.op');
 	}
 
 	// -------- enum rule --------
@@ -1730,71 +1705,6 @@ class Lowering {
 		}
 	}
 
-	/**
-	 * Name of the `Bool` local that records whether the trailing
-	 * trivia run captured on a `@:trivia` Star's final iteration
-	 * crossed a blank line. Shared between `emitTriviaStarFieldSteps`
-	 * (the producer) and `lowerStruct`'s Seq-child loop (the consumer
-	 * that pushes it into the struct literal).
-	 */
-	public static inline function trailingBlankBeforeLocalName(localName: String): String return '${localName}_trailBB';
-
-	/**
-	 * ω-keep-fnsig-newline: name of the `Bool` local that records whether the
-	 * source had at least one newline (not necessarily a blank line) between
-	 * the last `@:trivia` Star element and the close literal. Sibling of
-	 * `trailingBlankBeforeLocalName`; set from the same terminal
-	 * `_lead.newlineBefore`. Consumed by the writer's `_keepEmit` close
-	 * placement to round-trip a kept signature's glued-vs-own-line close.
-	 */
-	public static inline function trailingNewlineBeforeLocalName(localName: String): String return '${localName}_trailNL';
-
-	/**
-	 * Name of the `Array<String>` local that records the own-line
-	 * comments captured on a `@:trivia` Star's final iteration (after
-	 * the last element, before the close / EOF).
-	 */
-	public static inline function trailingLeadingLocalName(localName: String): String return '${localName}_trailLC';
-
-	/**
-	 * Name of the `Null<String>` local that records a same-line
-	 * trailing comment captured right after a close-peek `@:trivia`
-	 * Star's close literal (ω-close-trailing). Only declared in the
-	 * close-peek branch of `emitTriviaStarFieldSteps`; the EOF and
-	 * try-parse branches skip it.
-	 */
-	public static inline function trailingCloseLocalName(localName: String): String return '${localName}_trailClose';
-
-	/**
-	 * Name of the `Null<String>` local that records a same-line trailing
-	 * comment captured right after a `@:trivia` Star's open literal
-	 * (ω-open-trailing). Mirror of `trailingCloseLocalName`. Only declared
-	 * in branches of `emitTriviaStarFieldSteps` that emit the open lit
-	 * (i.e. `openText != null`).
-	 */
-	public static inline function trailingOpenLocalName(localName: String): String return '${localName}_trailOpen';
-
-	/**
-	 * Name of the `Bool` local that records whether a tryparse+nestBody
-	 * Star's stashed orphan trail run was followed by a blank line
-	 * (ω-trail-blank-after). Mirrors `trailingBlankBeforeLocalName` —
-	 * the "after" cousin records gap between trail and the next outer
-	 * sibling, while "before" records gap between the last body element
-	 * and the trail itself.
-	 */
-	public static inline function trailingBlankAfterLocalName(localName: String): String return '${localName}_trailBA';
-
-	/**
-	 * Name of the `Bool` local that records whether the source had a
-	 * trailing separator after the last element of a `@:trivia` sep-Star
-	 * with a close literal (ω-objectlit-source-trail-comma). Set by the
-	 * per-iteration `matchLit(sepText)` capture inside
-	 * `emitTriviaStarFieldSteps`'s sep+close branch; pushed into the
-	 * synth pair's `<field>TrailPresent` slot by `lowerStruct`. Consumed
-	 * by the writer's `WrapList.emit` call as the `forceExceeds` flag.
-	 */
-	public static inline function trailPresentLocalName(localName: String): String return '${localName}_trailPresent';
-
 	// -------- terminal rule --------
 
 	private function lowerTerminal(node: ShapeNode, typePath: String, simple: String): Expr {
@@ -2144,222 +2054,6 @@ class Lowering {
 		};
 	}
 
-	/**
-	 * Unwrap `Array<T>` (or `Null<Array<T>>`) and return the element
-	 * `ComplexType`. Used by `byNameStarParseExpr` to type the
-	 * accumulator local against the schema-declared element type
-	 * instead of the parse-fn return type, so primitive-rewrite paths
-	 * (`Array<Int>` field whose Ref child resolves to `JIntLit`) keep
-	 * `Array<Int>` shape and rely on the abstract's `from`/`to`
-	 * conversion at each `push`. Returns `null` on any other shape;
-	 * caller falls back to `ruleReturnCT(refName)`.
-	 */
-	private static function extractArrayElementCT(ct: Null<ComplexType>): Null<ComplexType> {
-		return ct == null
-			? null
-			: switch ct {
-				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
-				case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractArrayElementCT(inner);
-				case _: null;
-			};
-	}
-
-	// -------- binary field helpers --------
-
-	/**
-	 * Emit parse steps for a `@:bin(N)` String field — read N bytes as
-	 * an ASCII string and strip trailing spaces. The right-padding is a
-	 * format convention (e.g. ar), never a meaningful part of the value.
-	 */
-	private static function emitBinFixedStringField(localName: String, len: Int, parseSteps: Array<Expr>): Void {
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro :String,
-					expr: macro {
-						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{len}));
-						ctx.pos += $v{len};
-						_s;
-					},
-					isFinal: true,
-				}
-			]),
-			pos: Context.currentPos(),
-		});
-	}
-
-	/**
-	 * Emit parse steps for a `@:bin(N, Dec|Oct)` Int field — read N bytes
-	 * as an ASCII slice, strip trailing spaces, and decode as an integer
-	 * in the given base.
-	 */
-	private static inline function emitBinFixedIntField(
-		localName: String, len: Int, encoding: String, fieldName: String, parseSteps: Array<Expr>
-	): Void {
-		emitIntSliceLocal(localName, len, encoding, 'field "$fieldName"', parseSteps);
-	}
-
-	/**
-	 * Emit parse steps for a `@:bin("fieldName")` Bytes field — read a
-	 * variable number of bytes determined by `parseInt(trim(fieldRef))`.
-	 */
-	private static function emitBinDataField(localName: String, refField: String, parseSteps: Array<Expr>): Void {
-		final localRef: Expr = { expr: EConst(CIdent('_f_$refField')), pos: Context.currentPos() };
-		final errMsg: String = 'invalid size in field "$refField"';
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro :haxe.io.Bytes,
-					expr: macro {
-						final _len: Int = {
-							final _s: String = StringTools.rtrim($localRef);
-							final _v: Null<Int> = Std.parseInt(_s);
-							if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
-							(_v: Int);
-						};
-						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + _len);
-						ctx.pos += _len;
-						_b;
-					},
-					isFinal: true,
-				}
-			]),
-			pos: Context.currentPos(),
-		});
-	}
-
-	/**
-	 * Emit parse steps for a `@:length(N, Dec|Oct)` length prefix. Reads
-	 * N bytes, right-trims, decodes as an integer in the given base, and
-	 * stores the result in `_lenPrefix_<field>:Int`.
-	 */
-	private static inline function emitBinLengthPrefix(fieldName: String, width: Int, encoding: String, parseSteps: Array<Expr>): Void {
-		emitIntSliceLocal('_lenPrefix_$fieldName', width, encoding, 'length prefix for "$fieldName"', parseSteps);
-	}
-
-	/**
-	 * Emit `final <localName>:Int = decode(rtrim(slice of <width> bytes))`.
-	 * Shared by fixed-width Int fields and length prefixes — they differ
-	 * only in the local name they bind to and the error context string.
-	 */
-	private static function emitIntSliceLocal(
-		localName: String, width: Int, encoding: String, errContext: String, parseSteps: Array<Expr>
-	): Void {
-		final decodeExpr: Expr = makeIntDecodeExpr(encoding, errContext);
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro :Int,
-					expr: macro {
-						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{width}));
-						ctx.pos += $v{width};
-						$decodeExpr;
-					},
-					isFinal: true,
-				}
-			]),
-			pos: Context.currentPos(),
-		});
-	}
-
-	/**
-	 * Emit parse steps for a `@:length`-paired Bytes field — read the
-	 * count stored in `_lenPrefix_<field>` bytes into the AST value.
-	 */
-	private static function emitBinLengthBytesField(localName: String, fieldName: String, parseSteps: Array<Expr>): Void {
-		final lenRef: Expr = { expr: EConst(CIdent('_lenPrefix_$fieldName')), pos: Context.currentPos() };
-		parseSteps.push({
-			expr: EVars([
-				{
-					name: localName,
-					type: macro :haxe.io.Bytes,
-					expr: macro {
-						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + $lenRef);
-						ctx.pos += $lenRef;
-						_b;
-					},
-					isFinal: true,
-				}
-			]),
-			pos: Context.currentPos(),
-		});
-	}
-
-	/**
-	 * Build the Int-decode expression for a right-trimmed `_s:String`
-	 * local. `Dec` uses `Std.parseInt`; `Oct` runs an inline digit loop
-	 * (Haxe's `Std.parseInt` interprets unprefixed ASCII as decimal, not
-	 * octal, so the octal path cannot delegate to it).
-	 */
-	private static function makeIntDecodeExpr(encoding: String, errContext: String): Expr {
-		return switch encoding {
-			case 'Dec':
-				final errMsg: String = 'invalid decimal in $errContext';
-				macro {
-					final _v: Null<Int> = Std.parseInt(_s);
-					if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
-					(_v: Int);
-				};
-			case 'Oct':
-				final emptyMsg: String = 'empty octal in $errContext';
-				final digitMsg: String = 'invalid octal digit in $errContext';
-				macro {
-					if (_s.length == 0) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{emptyMsg});
-					var _acc: Int = 0;
-					var _oi: Int = 0;
-					while (_oi < _s.length) {
-						final _oc: Int = StringTools.fastCodeAt(_s, _oi);
-						if (_oc < '0'.code || _oc > '7'.code)
-							throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{digitMsg});
-						_acc = (_acc << 3) | (_oc - '0'.code);
-						_oi++;
-					}
-					_acc;
-				};
-			case _:
-				Context.fatalError('Lowering: unsupported bin encoding "$encoding"', Context.currentPos());
-				throw 'unreachable';
-		};
-	}
-
-	// -------- @:raw post-processing --------
-
-	/**
-	 * Recursively replace every `skipWs(ctx)` call in an expression tree
-	 * with an empty block `{}`. Used by `@:raw` rules to suppress
-	 * whitespace skipping without modifying any of the 50+ emission
-	 * sites. Referenced sub-rules (via Ref) are separate generated
-	 * functions — their own skipWs calls are in their own bodies, not
-	 * in this tree, so they are unaffected.
-	 */
-	private static function stripSkipWs(e: Expr): Expr {
-		return switch e.expr {
-			case ECall({ expr: EConst(CIdent('skipWs')) }, _):
-				{ expr: EBlock([]), pos: e.pos };
-			case _:
-				ExprTools.map(e, stripSkipWs);
-		};
-	}
-
-	// -------- helpers --------
-
-	/**
-	 * Returns true if the literal's last character is a word character
-	 * (`[A-Za-z0-9_]`). Used by `lowerEnumBranch` Cases 1 and 2 to decide
-	 * between `expectLit` / `matchLit` and their word-boundary-enforcing
-	 * `expectKw` / `matchKw` counterparts for `@:lit`-annotated branches.
-	 * An empty literal returns false — the branch would be nonsense, and
-	 * the surrounding shape checks reject it before this helper runs.
-	 */
-	private static function endsWithWordChar(lit: String): Bool {
-		if (lit.length == 0) return false;
-		final c: Int = lit.charCodeAt(lit.length - 1);
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
 	// -------- trivia-mode helpers --------
 
 	/**
@@ -2426,16 +2120,6 @@ class Lowering {
 			: isTriviaBearing(typePath)
 				? packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor])
 				: packOf(typePath).concat([simple, ctor]);
-	}
-
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
-	}
-
-	private static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
 	}
 
 	private function lowerTerminalDecodeExpr(node: ShapeNode, typePath: String, underlying: String, raw: Bool): Expr {
@@ -5006,96 +4690,6 @@ expectLit(ctx, $v{trailText}));
 	}
 
 	/**
-	 * Compile-time validation of a struct field's metadata-combination
-	 * legality (`@:optional` / `@:kw` / `@:lead` / `@:trail` / `@:absentOn`).
-	 * Each illegal combination halts the build via `Context.fatalError`.
-	 * Pure — no emit, no `ctx`; lifted out of `lowerStruct`'s per-field loop.
-	 */
-	private static function validateStructField(
-		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, isStar: Bool, kwLead: Null<String>, leadText: Null<String>,
-		trailText: Null<String>, absentOnLits: Null<Array<String>>
-	): Void {
-		if (isOptional && child.kind != Ref && child.kind != Star) {
-			Context.fatalError(
-				'Lowering: @:optional is only supported on Ref- or Star-shaped struct fields (field "$fieldName")', Context.currentPos()
-			);
-		}
-		if (isOptional && !isStar && trailText != null && kwLead != null) {
-			// `@:trail` on an optional kw-led Ref has no consumer yet
-			// (the kw-led trivia capture path threads `_afterKw_*` /
-			// `_kwLeading_*` slots whose layout assumes no per-field
-			// trail). Defer until a grammar needs it; the lead-led
-			// shape (`@:optional @:lead('(') @:trail(')')`) is
-			// supported below — first consumer Slice 40 / `@:coreType`
-			// bare abstract via `HxAbstractDecl.underlyingType`.
-			Context.fatalError('Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")', Context.currentPos());
-		}
-		if (absentOnLits != null) {
-			// `@:absentOn` is a peek-ahead absence dispatch — it does NOT
-			// consume any literals (the listed terminators belong to the
-			// enclosing context). Combined with `@:lead`/`@:kw` it would
-			// be ambiguous (which decides absence?), and combined with
-			// `@:trail` it inherits the same "trail inside peek" gap as
-			// regular `@:optional`. Both combinations are rejected. The
-			// meta also requires the field to be an optional Ref —
-			// Stars have their own commit semantics through `@:lead` /
-			// `@:trail`; `absentOn` adds nothing there.
-			if (!isOptional || child.kind != Ref) {
-				Context.fatalError('Lowering: @:absentOn requires @:optional Ref (field "$fieldName")', Context.currentPos());
-			}
-			if (kwLead != null || leadText != null) {
-				Context.fatalError('Lowering: @:absentOn cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos());
-			}
-			if (trailText != null) {
-				Context.fatalError('Lowering: @:absentOn cannot combine with @:trail (field "$fieldName")', Context.currentPos());
-			}
-			if (absentOnLits.length == 0) {
-				Context.fatalError(
-					'Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos()
-				);
-			}
-		}
-		if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
-			Context.fatalError(
-				'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
-				Context.currentPos()
-			);
-		}
-	}
-
-	/**
-	 * Pre-declare the six `@:optional @:kw(...)` trivia sidecar locals
-	 * (`_afterKw_*` / `_kwLeading_*` / `_beforeKwNl_*` / `_bodyOnSameLine_*` /
-	 * `_beforeKwLeading_*` / `_beforeKwTrailing_*`) that the optional-Ref /
-	 * optional-kw-Star commit path assigns into. Pushes one `EVars` per local.
-	 * Pure — lifted from `lowerStruct`'s per-field loop.
-	 */
-	private static function emitKwTriviaSlotDecls(
-		afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
-		beforeKwTrailingLocal: String, parseSteps: Array<Expr>
-	): Void {
-		inline function pushVar(name: String, type: ComplexType, init: Expr): Void {
-			parseSteps.push({
-				expr: EVars([
-					{
-						name: name,
-						type: type,
-						expr: init,
-						isFinal: false
-					}
-				]),
-				pos: Context.currentPos(),
-			});
-		}
-		pushVar(afterKwLocal, macro :Null<String>, macro null);
-		pushVar(kwLeadingLocal, macro :Array<String>, macro []);
-		pushVar(beforeKwNlLocal, macro :Bool, macro false);
-		pushVar(bodyOnSameLineLocal, macro :Bool, macro false);
-		pushVar(beforeKwLeadingLocal, macro :Array<String>, macro []);
-		pushVar(beforeKwTrailingLocal, macro :Null<String>, macro null);
-	}
-
-	/**
 	 * Compute the per-field pre-emit dispatch booleans for one struct field.
 	 * These gate the pre-field whitespace/trivia handling and the
 	 * `<field>BeforeNewline` / `<field>BeforeLeading` synth-slot captures.
@@ -5244,210 +4838,6 @@ expectLit(ctx, $v{trailText}));
 		if (child.annotations.get('lit.sepText') != null && child.annotations.get('lit.trailText') != null) {
 			final trailPresentLocal: String = trailPresentLocalName(localName);
 			structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
-		}
-	}
-
-	/**
-	 * Emit the post-switch per-field trailing-literal steps for a non-Star,
-	 * non-optional Ref field: the mandatory `@:trail` close (+ trivia
-	 * `<field>AfterTrail` same-line-comment capture) and/or the `@:trailOpt`
-	 * peek-consume-rewind close (+ `_trailPresent_<field>` capture). Both are
-	 * gated `!isStar && !isOptional`; `trailText` drives the required path,
-	 * `trailOptText` the optional path. Pure — lifted from `lowerStruct`.
-	 */
-	private static function emitFieldTrail(
-		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, trailText: Null<String>, hasAfterTrailSlot: Bool, afterTrailLocal: String,
-		trailOptText: Null<String>, captureTrailPresentExpr: Expr
-	): Void {
-		if (!isStar && !isOptional && trailText != null) {
-			parseSteps.push(macro skipWs(ctx));
-			parseSteps.push(macro expectLit(ctx, $v{trailText}));
-			// ω-trivia-after-trail: in trivia-bearing rules, capture a
-			// same-line `// comment` after the trail literal into a
-			// sidecar local — pushed to the synth pair as
-			// `<field>AfterTrail:Null<String>` for the next sibling's
-			// `bodyPolicyWrap` to thread before its body emission.
-			// `collectTrailing` returns null when no same-line comment
-			// is present and does not consume any whitespace beyond
-			// the optional space + `//<body>` match.
-			if (hasAfterTrailSlot) {
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: afterTrailLocal,
-							type: (macro :Null<String>),
-							expr: macro collectTrailing(ctx),
-							isFinal: true,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-			}
-		}
-		if (!isStar && !isOptional && trailOptText != null) {
-			// ω-trailopt-rewind-on-miss-struct (BlockBody Star Session 5):
-			// trail-absence must REWIND pos to pre-trivia so trivia stays
-			// observable to the next field/Star. Bare `skipWs(ctx)` (the
-			// pre-Session-5 form) silently advances past whitespace and
-			// comments even when the optional trail literal is absent —
-			// breaking BOTH trivia-mode round-trip (statement-context
-			// hosts where the field-level `@:trailOpt(';')` sits between
-			// two statement siblings — HxIfStmt.thenBody / .elseBody /
-			// HxWhileStmt.body / HxForStmt.body / HxDoWhileStmt.body
-			// added in Session 5 Step 1) AND plain-mode block-ended Star
-			// detection (the close-peek Star at L2796-2833 reads
-			// `ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code` to
-			// decide if sep is exempt; if `skipWs` advanced `_prevEndPos`
-			// past the closing `}` to the next token, the check reads a
-			// space instead of `}` and the exemption misses). The
-			// optional-kw pattern at L2296 uses the same `ctx.pos = _wsPos`
-			// rewind on miss — this mirrors it for optional-trail. On
-			// `;` hit: advance past it normally. On miss: rewind pos so
-			// the preceding trivia is re-observable. Applied in BOTH
-			// modes — plain mode also benefits (downstream block-ended
-			// Star checks need pre-trivia pos). Existing expression-
-			// context consumers (HxIfExpr.thenBranch, HxConditionalType.type,
-			// HxConditionalTypeElse.type, HxTryCatchExpr.body,
-			// HxFnBody.ExprBody) see no observable change — their
-			// downstream parsers re-scan the same trivia via their own
-			// skipWs / collectTrivia.
-			//
-			// ω-struct-trailopt-source-track (Session 14 Phase 3): when
-			// the field's paired-T type carries a synth
-			// `<field>TrailPresent:Null<Bool>` slot, capture `matchLit`'s
-			// hit into `_trailPresent_<field>` for the writer (Phase 4
-			// will read it). Pre-declared `false` above so the miss
-			// branch leaves the local untouched. `captureTrailPresentExpr`
-			// is the shared splice — disjoint from the optional-Ref arm
-			// which feeds the same Expr into a different subCall body.
-			parseSteps.push(macro {
-				final _trailOptWsPos: Int = ctx.pos;
-				skipWs(ctx);
-				if (matchLit(ctx, $v{trailOptText}))
-					$captureTrailPresentExpr;
-				else
-					ctx.pos = _trailOptWsPos;
-			});
-		}
-	}
-
-	/**
-	 * Emit the pre-field whitespace / trivia handling for one struct field
-	 * (skipped for the optional-Ref / optional-kw-Star / EOF-Star / optional-
-	 * Star-with-lead paths that own their own ws). Three modes: capture
-	 * `collectTrivia` into BeforeLeading+BeforeNewline slots, or just
-	 * BeforeNewline, or a plain `skipWs`. Then, for an opted-in condWrap cond
-	 * field, probe the `(`→cond newline gap into the CondOpenNewline slot.
-	 * Pure — lifted from `lowerStruct`'s per-field loop.
-	 */
-	private static function emitPreFieldWs(
-		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
-		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
-		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String
-	): Void {
-		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
-			if (hasBeforeLeadingSlot) {
-				// ω-598-member-leading-comment: capture the full
-				// `collectTrivia` result once, then split into the
-				// `newlineBefore` bool (BeforeNewline slot) and the
-				// verbatim `leadingComments` array (BeforeLeading slot).
-				// The array holds a comment dropped in the gap between the
-				// last modifier and the member keyword; emitted by the
-				// writer's bare-Ref non-first separator. Empty in the
-				// common case (no inter-modifier comment) → byte-inert.
-				final arrayStrCT: ComplexType = TPath({
-					pack: [],
-					name: 'Array',
-					params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
-				});
-				parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeNlLocal,
-							type: (macro :Bool),
-							expr: macro _beforeTrivia.newlineBefore,
-							isFinal: true,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeLeadingLocal,
-							type: arrayStrCT,
-							expr: macro _beforeTrivia.leadingComments,
-							isFinal: true,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-			} else if (hasBeforeNewlineSlot) {
-				// Route through `collectTrivia` — drains any
-				// `pendingTrivia` stash from a preceding empty
-				// bare-tryparse Star and captures `newlineBefore` into
-				// the local that the struct literal writes onto the
-				// synth slot. `skipWs` would silently discard both.
-				parseSteps.push({
-					expr: EVars([
-						{
-							name: beforeNlLocal,
-							type: (macro :Bool),
-							expr: macro collectTrivia(ctx).newlineBefore,
-							isFinal: true,
-						}
-					]),
-					pos: Context.currentPos(),
-				});
-			} else
-				parseSteps.push(macro skipWs(ctx));
-		}
-		// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
-		// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
-		// `[_condLeadEnd, ctx.pos)` answers "did the source break right
-		// after `(`?". Captured into the local that the struct literal
-		// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
-		// only for the opted-in condWrap cond field; `_condLeadEnd` was
-		// declared right after the lead `expectLit` above.
-		if (hasCondOpenNewlineSlot) parseSteps.push({
-			expr: EVars([
-				{
-					name: condOpenNewlineLocal,
-					type: (macro :Bool),
-					expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
-					isFinal: true,
-				}
-			]),
-			pos: Context.currentPos(),
-		});
-	}
-
-	/**
-	 * Emit the mandatory per-field lead-in for a non-Star, non-optional field:
-	 * the `@:kw` keyword (`skipWs` + `expectKw`) and/or the `@:lead` literal
-	 * (`skipWs` + `expectLit`), in that order (D50). For an opted-in condWrap
-	 * cond field, also record `_condLeadEnd` right after the lead so the
-	 * `(`→cond newline probe in emitPreFieldWs spans the correct gap. Pure —
-	 * lifted from `lowerStruct`.
-	 */
-	private static function emitFieldLeadIn(
-		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
-		hasCondOpenNewlineSlot: Bool
-	): Void {
-		if (!isStar && !isOptional) {
-			if (kwLead != null) {
-				parseSteps.push(macro skipWs(ctx));
-				parseSteps.push(macro expectKw(ctx, $v{kwLead}));
-			}
-			if (leadText != null) {
-				parseSteps.push(macro skipWs(ctx));
-				parseSteps.push(macro expectLit(ctx, $v{leadText}));
-				// ω-condition-wrap-keep: record the byte position right
-				// after the open paren (BEFORE the pre-field `skipWs` below)
-				// so the `hasNewlineIn` probe spans exactly the `(`→cond gap.
-				if (hasCondOpenNewlineSlot) parseSteps.push(macro final _condLeadEnd: Int = ctx.pos);
-			}
 		}
 	}
 
@@ -5910,6 +5300,616 @@ expectLit(ctx, $v{trailText}));
 			]),
 			pos: Context.currentPos(),
 		});
+	}
+
+	/**
+	 * Name of the `Bool` local that records whether the trailing
+	 * trivia run captured on a `@:trivia` Star's final iteration
+	 * crossed a blank line. Shared between `emitTriviaStarFieldSteps`
+	 * (the producer) and `lowerStruct`'s Seq-child loop (the consumer
+	 * that pushes it into the struct literal).
+	 */
+	public static inline function trailingBlankBeforeLocalName(localName: String): String return '${localName}_trailBB';
+
+	/**
+	 * ω-keep-fnsig-newline: name of the `Bool` local that records whether the
+	 * source had at least one newline (not necessarily a blank line) between
+	 * the last `@:trivia` Star element and the close literal. Sibling of
+	 * `trailingBlankBeforeLocalName`; set from the same terminal
+	 * `_lead.newlineBefore`. Consumed by the writer's `_keepEmit` close
+	 * placement to round-trip a kept signature's glued-vs-own-line close.
+	 */
+	public static inline function trailingNewlineBeforeLocalName(localName: String): String return '${localName}_trailNL';
+
+	/**
+	 * Name of the `Array<String>` local that records the own-line
+	 * comments captured on a `@:trivia` Star's final iteration (after
+	 * the last element, before the close / EOF).
+	 */
+	public static inline function trailingLeadingLocalName(localName: String): String return '${localName}_trailLC';
+
+	/**
+	 * Name of the `Null<String>` local that records a same-line
+	 * trailing comment captured right after a close-peek `@:trivia`
+	 * Star's close literal (ω-close-trailing). Only declared in the
+	 * close-peek branch of `emitTriviaStarFieldSteps`; the EOF and
+	 * try-parse branches skip it.
+	 */
+	public static inline function trailingCloseLocalName(localName: String): String return '${localName}_trailClose';
+
+	/**
+	 * Name of the `Null<String>` local that records a same-line trailing
+	 * comment captured right after a `@:trivia` Star's open literal
+	 * (ω-open-trailing). Mirror of `trailingCloseLocalName`. Only declared
+	 * in branches of `emitTriviaStarFieldSteps` that emit the open lit
+	 * (i.e. `openText != null`).
+	 */
+	public static inline function trailingOpenLocalName(localName: String): String return '${localName}_trailOpen';
+
+	/**
+	 * Name of the `Bool` local that records whether a tryparse+nestBody
+	 * Star's stashed orphan trail run was followed by a blank line
+	 * (ω-trail-blank-after). Mirrors `trailingBlankBeforeLocalName` —
+	 * the "after" cousin records gap between trail and the next outer
+	 * sibling, while "before" records gap between the last body element
+	 * and the trail itself.
+	 */
+	public static inline function trailingBlankAfterLocalName(localName: String): String return '${localName}_trailBA';
+
+	/**
+	 * Name of the `Bool` local that records whether the source had a
+	 * trailing separator after the last element of a `@:trivia` sep-Star
+	 * with a close literal (ω-objectlit-source-trail-comma). Set by the
+	 * per-iteration `matchLit(sepText)` capture inside
+	 * `emitTriviaStarFieldSteps`'s sep+close branch; pushed into the
+	 * synth pair's `<field>TrailPresent` slot by `lowerStruct`. Consumed
+	 * by the writer's `WrapList.emit` call as the `forceExceeds` flag.
+	 */
+	public static inline function trailPresentLocalName(localName: String): String return '${localName}_trailPresent';
+
+	private static function isBareLeft(e: Expr): Bool {
+		return switch e.expr {
+			case EConst(CIdent('left')): true;
+			case _: false;
+		};
+	}
+
+	private static function hasPrattBranch(node: ShapeNode): Bool {
+		for (branch in node.children) {
+			if (branch.annotations.get('pratt.prec') != null || branch.annotations.get('ternary.op') != null) return true;
+		}
+		return false;
+	}
+
+	private static function hasPostfixBranch(node: ShapeNode): Bool {
+		for (branch in node.children) if (branch.annotations.get('postfix.op') != null) return true;
+		return false;
+	}
+
+	/** Returns the operator literal for a branch in the Pratt dispatch chain.
+	*  Binary infix branches carry `pratt.op`; ternary branches carry `ternary.op`. */
+	private static function getOperatorText(branch: ShapeNode): String {
+		return (branch.annotations.get('pratt.op'): Null<String>) ?? branch.annotations.get('ternary.op');
+	}
+
+	/**
+	 * Unwrap `Array<T>` (or `Null<Array<T>>`) and return the element
+	 * `ComplexType`. Used by `byNameStarParseExpr` to type the
+	 * accumulator local against the schema-declared element type
+	 * instead of the parse-fn return type, so primitive-rewrite paths
+	 * (`Array<Int>` field whose Ref child resolves to `JIntLit`) keep
+	 * `Array<Int>` shape and rely on the abstract's `from`/`to`
+	 * conversion at each `push`. Returns `null` on any other shape;
+	 * caller falls back to `ruleReturnCT(refName)`.
+	 */
+	private static function extractArrayElementCT(ct: Null<ComplexType>): Null<ComplexType> {
+		return ct == null
+			? null
+			: switch ct {
+				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
+				case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractArrayElementCT(inner);
+				case _: null;
+			};
+	}
+
+	// -------- binary field helpers --------
+
+	/**
+	 * Emit parse steps for a `@:bin(N)` String field — read N bytes as
+	 * an ASCII string and strip trailing spaces. The right-padding is a
+	 * format convention (e.g. ar), never a meaningful part of the value.
+	 */
+	private static function emitBinFixedStringField(localName: String, len: Int, parseSteps: Array<Expr>): Void {
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: localName,
+					type: macro :String,
+					expr: macro {
+						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{len}));
+						ctx.pos += $v{len};
+						_s;
+					},
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+	}
+
+	/**
+	 * Emit parse steps for a `@:bin(N, Dec|Oct)` Int field — read N bytes
+	 * as an ASCII slice, strip trailing spaces, and decode as an integer
+	 * in the given base.
+	 */
+	private static inline function emitBinFixedIntField(
+		localName: String, len: Int, encoding: String, fieldName: String, parseSteps: Array<Expr>
+	): Void {
+		emitIntSliceLocal(localName, len, encoding, 'field "$fieldName"', parseSteps);
+	}
+
+	/**
+	 * Emit parse steps for a `@:bin("fieldName")` Bytes field — read a
+	 * variable number of bytes determined by `parseInt(trim(fieldRef))`.
+	 */
+	private static function emitBinDataField(localName: String, refField: String, parseSteps: Array<Expr>): Void {
+		final localRef: Expr = { expr: EConst(CIdent('_f_$refField')), pos: Context.currentPos() };
+		final errMsg: String = 'invalid size in field "$refField"';
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: localName,
+					type: macro :haxe.io.Bytes,
+					expr: macro {
+						final _len: Int = {
+							final _s: String = StringTools.rtrim($localRef);
+							final _v: Null<Int> = Std.parseInt(_s);
+							if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
+							(_v: Int);
+						};
+						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + _len);
+						ctx.pos += _len;
+						_b;
+					},
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+	}
+
+	/**
+	 * Emit parse steps for a `@:length(N, Dec|Oct)` length prefix. Reads
+	 * N bytes, right-trims, decodes as an integer in the given base, and
+	 * stores the result in `_lenPrefix_<field>:Int`.
+	 */
+	private static inline function emitBinLengthPrefix(fieldName: String, width: Int, encoding: String, parseSteps: Array<Expr>): Void {
+		emitIntSliceLocal('_lenPrefix_$fieldName', width, encoding, 'length prefix for "$fieldName"', parseSteps);
+	}
+
+	/**
+	 * Emit `final <localName>:Int = decode(rtrim(slice of <width> bytes))`.
+	 * Shared by fixed-width Int fields and length prefixes — they differ
+	 * only in the local name they bind to and the error context string.
+	 */
+	private static function emitIntSliceLocal(
+		localName: String, width: Int, encoding: String, errContext: String, parseSteps: Array<Expr>
+	): Void {
+		final decodeExpr: Expr = makeIntDecodeExpr(encoding, errContext);
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: localName,
+					type: macro :Int,
+					expr: macro {
+						final _s: String = StringTools.rtrim(ctx.input.substring(ctx.pos, ctx.pos + $v{width}));
+						ctx.pos += $v{width};
+						$decodeExpr;
+					},
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+	}
+
+	/**
+	 * Emit parse steps for a `@:length`-paired Bytes field — read the
+	 * count stored in `_lenPrefix_<field>` bytes into the AST value.
+	 */
+	private static function emitBinLengthBytesField(localName: String, fieldName: String, parseSteps: Array<Expr>): Void {
+		final lenRef: Expr = { expr: EConst(CIdent('_lenPrefix_$fieldName')), pos: Context.currentPos() };
+		parseSteps.push({
+			expr: EVars([
+				{
+					name: localName,
+					type: macro :haxe.io.Bytes,
+					expr: macro {
+						final _b: haxe.io.Bytes = ctx.input.bytes(ctx.pos, ctx.pos + $lenRef);
+						ctx.pos += $lenRef;
+						_b;
+					},
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+	}
+
+	/**
+	 * Build the Int-decode expression for a right-trimmed `_s:String`
+	 * local. `Dec` uses `Std.parseInt`; `Oct` runs an inline digit loop
+	 * (Haxe's `Std.parseInt` interprets unprefixed ASCII as decimal, not
+	 * octal, so the octal path cannot delegate to it).
+	 */
+	private static function makeIntDecodeExpr(encoding: String, errContext: String): Expr {
+		return switch encoding {
+			case 'Dec':
+				final errMsg: String = 'invalid decimal in $errContext';
+				macro {
+					final _v: Null<Int> = Std.parseInt(_s);
+					if (_v == null) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{errMsg});
+					(_v: Int);
+				};
+			case 'Oct':
+				final emptyMsg: String = 'empty octal in $errContext';
+				final digitMsg: String = 'invalid octal digit in $errContext';
+				macro {
+					if (_s.length == 0) throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{emptyMsg});
+					var _acc: Int = 0;
+					var _oi: Int = 0;
+					while (_oi < _s.length) {
+						final _oc: Int = StringTools.fastCodeAt(_s, _oi);
+						if (_oc < '0'.code || _oc > '7'.code)
+							throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{digitMsg});
+						_acc = (_acc << 3) | (_oc - '0'.code);
+						_oi++;
+					}
+					_acc;
+				};
+			case _:
+				Context.fatalError('Lowering: unsupported bin encoding "$encoding"', Context.currentPos());
+				throw 'unreachable';
+		};
+	}
+
+	// -------- @:raw post-processing --------
+
+	/**
+	 * Recursively replace every `skipWs(ctx)` call in an expression tree
+	 * with an empty block `{}`. Used by `@:raw` rules to suppress
+	 * whitespace skipping without modifying any of the 50+ emission
+	 * sites. Referenced sub-rules (via Ref) are separate generated
+	 * functions — their own skipWs calls are in their own bodies, not
+	 * in this tree, so they are unaffected.
+	 */
+	private static function stripSkipWs(e: Expr): Expr {
+		return switch e.expr {
+			case ECall({ expr: EConst(CIdent('skipWs')) }, _):
+				{ expr: EBlock([]), pos: e.pos };
+			case _:
+				ExprTools.map(e, stripSkipWs);
+		};
+	}
+
+	// -------- helpers --------
+
+	/**
+	 * Returns true if the literal's last character is a word character
+	 * (`[A-Za-z0-9_]`). Used by `lowerEnumBranch` Cases 1 and 2 to decide
+	 * between `expectLit` / `matchLit` and their word-boundary-enforcing
+	 * `expectKw` / `matchKw` counterparts for `@:lit`-annotated branches.
+	 * An empty literal returns false — the branch would be nonsense, and
+	 * the surrounding shape checks reject it before this helper runs.
+	 */
+	private static function endsWithWordChar(lit: String): Bool {
+		if (lit.length == 0) return false;
+		final c: Int = lit.charCodeAt(lit.length - 1);
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+	}
+
+	private static function simpleName(typePath: String): String {
+		final idx: Int = typePath.lastIndexOf('.');
+		return idx == -1 ? typePath : typePath.substring(idx + 1);
+	}
+
+	private static function packOf(typePath: String): Array<String> {
+		final idx: Int = typePath.lastIndexOf('.');
+		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
+	}
+
+	/**
+	 * Compile-time validation of a struct field's metadata-combination
+	 * legality (`@:optional` / `@:kw` / `@:lead` / `@:trail` / `@:absentOn`).
+	 * Each illegal combination halts the build via `Context.fatalError`.
+	 * Pure — no emit, no `ctx`; lifted out of `lowerStruct`'s per-field loop.
+	 */
+	private static function validateStructField(
+		child: ShapeNode, fieldName: Null<String>, isOptional: Bool, isStar: Bool, kwLead: Null<String>, leadText: Null<String>,
+		trailText: Null<String>, absentOnLits: Null<Array<String>>
+	): Void {
+		if (isOptional && child.kind != Ref && child.kind != Star) {
+			Context.fatalError(
+				'Lowering: @:optional is only supported on Ref- or Star-shaped struct fields (field "$fieldName")', Context.currentPos()
+			);
+		}
+		if (isOptional && !isStar && trailText != null && kwLead != null) {
+			// `@:trail` on an optional kw-led Ref has no consumer yet
+			// (the kw-led trivia capture path threads `_afterKw_*` /
+			// `_kwLeading_*` slots whose layout assumes no per-field
+			// trail). Defer until a grammar needs it; the lead-led
+			// shape (`@:optional @:lead('(') @:trail(')')`) is
+			// supported below — first consumer Slice 40 / `@:coreType`
+			// bare abstract via `HxAbstractDecl.underlyingType`.
+			Context.fatalError('Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")', Context.currentPos());
+		}
+		if (absentOnLits != null) {
+			// `@:absentOn` is a peek-ahead absence dispatch — it does NOT
+			// consume any literals (the listed terminators belong to the
+			// enclosing context). Combined with `@:lead`/`@:kw` it would
+			// be ambiguous (which decides absence?), and combined with
+			// `@:trail` it inherits the same "trail inside peek" gap as
+			// regular `@:optional`. Both combinations are rejected. The
+			// meta also requires the field to be an optional Ref —
+			// Stars have their own commit semantics through `@:lead` /
+			// `@:trail`; `absentOn` adds nothing there.
+			if (!isOptional || child.kind != Ref) {
+				Context.fatalError('Lowering: @:absentOn requires @:optional Ref (field "$fieldName")', Context.currentPos());
+			}
+			if (kwLead != null || leadText != null) {
+				Context.fatalError('Lowering: @:absentOn cannot combine with @:lead or @:kw (field "$fieldName")', Context.currentPos());
+			}
+			if (trailText != null) {
+				Context.fatalError('Lowering: @:absentOn cannot combine with @:trail (field "$fieldName")', Context.currentPos());
+			}
+			if (absentOnLits.length == 0) {
+				Context.fatalError(
+					'Lowering: @:absentOn requires at least one terminator literal (field "$fieldName")', Context.currentPos()
+				);
+			}
+		}
+		if (isStar && isOptional && kwLead == null && (leadText == null || trailText == null)) {
+			Context.fatalError(
+				'Lowering: @:optional Star field "$fieldName" requires either @:kw (tryparse mode) or both @:lead and @:trail (angle-bracket mode)',
+				Context.currentPos()
+			);
+		}
+	}
+
+	/**
+	 * Pre-declare the six `@:optional @:kw(...)` trivia sidecar locals
+	 * (`_afterKw_*` / `_kwLeading_*` / `_beforeKwNl_*` / `_bodyOnSameLine_*` /
+	 * `_beforeKwLeading_*` / `_beforeKwTrailing_*`) that the optional-Ref /
+	 * optional-kw-Star commit path assigns into. Pushes one `EVars` per local.
+	 * Pure — lifted from `lowerStruct`'s per-field loop.
+	 */
+	private static function emitKwTriviaSlotDecls(
+		afterKwLocal: String, kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
+		beforeKwTrailingLocal: String, parseSteps: Array<Expr>
+	): Void {
+		inline function pushVar(name: String, type: ComplexType, init: Expr): Void {
+			parseSteps.push({
+				expr: EVars([
+					{
+						name: name,
+						type: type,
+						expr: init,
+						isFinal: false
+					}
+				]),
+				pos: Context.currentPos(),
+			});
+		}
+		pushVar(afterKwLocal, macro :Null<String>, macro null);
+		pushVar(kwLeadingLocal, macro :Array<String>, macro []);
+		pushVar(beforeKwNlLocal, macro :Bool, macro false);
+		pushVar(bodyOnSameLineLocal, macro :Bool, macro false);
+		pushVar(beforeKwLeadingLocal, macro :Array<String>, macro []);
+		pushVar(beforeKwTrailingLocal, macro :Null<String>, macro null);
+	}
+
+	/**
+	 * Emit the post-switch per-field trailing-literal steps for a non-Star,
+	 * non-optional Ref field: the mandatory `@:trail` close (+ trivia
+	 * `<field>AfterTrail` same-line-comment capture) and/or the `@:trailOpt`
+	 * peek-consume-rewind close (+ `_trailPresent_<field>` capture). Both are
+	 * gated `!isStar && !isOptional`; `trailText` drives the required path,
+	 * `trailOptText` the optional path. Pure — lifted from `lowerStruct`.
+	 */
+	private static function emitFieldTrail(
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, trailText: Null<String>, hasAfterTrailSlot: Bool, afterTrailLocal: String,
+		trailOptText: Null<String>, captureTrailPresentExpr: Expr
+	): Void {
+		if (!isStar && !isOptional && trailText != null) {
+			parseSteps.push(macro skipWs(ctx));
+			parseSteps.push(macro expectLit(ctx, $v{trailText}));
+			// ω-trivia-after-trail: in trivia-bearing rules, capture a
+			// same-line `// comment` after the trail literal into a
+			// sidecar local — pushed to the synth pair as
+			// `<field>AfterTrail:Null<String>` for the next sibling's
+			// `bodyPolicyWrap` to thread before its body emission.
+			// `collectTrailing` returns null when no same-line comment
+			// is present and does not consume any whitespace beyond
+			// the optional space + `//<body>` match.
+			if (hasAfterTrailSlot) {
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: afterTrailLocal,
+							type: (macro :Null<String>),
+							expr: macro collectTrailing(ctx),
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			}
+		}
+		if (!isStar && !isOptional && trailOptText != null) {
+			// ω-trailopt-rewind-on-miss-struct (BlockBody Star Session 5):
+			// trail-absence must REWIND pos to pre-trivia so trivia stays
+			// observable to the next field/Star. Bare `skipWs(ctx)` (the
+			// pre-Session-5 form) silently advances past whitespace and
+			// comments even when the optional trail literal is absent —
+			// breaking BOTH trivia-mode round-trip (statement-context
+			// hosts where the field-level `@:trailOpt(';')` sits between
+			// two statement siblings — HxIfStmt.thenBody / .elseBody /
+			// HxWhileStmt.body / HxForStmt.body / HxDoWhileStmt.body
+			// added in Session 5 Step 1) AND plain-mode block-ended Star
+			// detection (the close-peek Star at L2796-2833 reads
+			// `ctx.input.charCodeAt(_prevEndPos - 1) == '}'.code` to
+			// decide if sep is exempt; if `skipWs` advanced `_prevEndPos`
+			// past the closing `}` to the next token, the check reads a
+			// space instead of `}` and the exemption misses). The
+			// optional-kw pattern at L2296 uses the same `ctx.pos = _wsPos`
+			// rewind on miss — this mirrors it for optional-trail. On
+			// `;` hit: advance past it normally. On miss: rewind pos so
+			// the preceding trivia is re-observable. Applied in BOTH
+			// modes — plain mode also benefits (downstream block-ended
+			// Star checks need pre-trivia pos). Existing expression-
+			// context consumers (HxIfExpr.thenBranch, HxConditionalType.type,
+			// HxConditionalTypeElse.type, HxTryCatchExpr.body,
+			// HxFnBody.ExprBody) see no observable change — their
+			// downstream parsers re-scan the same trivia via their own
+			// skipWs / collectTrivia.
+			//
+			// ω-struct-trailopt-source-track (Session 14 Phase 3): when
+			// the field's paired-T type carries a synth
+			// `<field>TrailPresent:Null<Bool>` slot, capture `matchLit`'s
+			// hit into `_trailPresent_<field>` for the writer (Phase 4
+			// will read it). Pre-declared `false` above so the miss
+			// branch leaves the local untouched. `captureTrailPresentExpr`
+			// is the shared splice — disjoint from the optional-Ref arm
+			// which feeds the same Expr into a different subCall body.
+			parseSteps.push(macro {
+				final _trailOptWsPos: Int = ctx.pos;
+				skipWs(ctx);
+				if (matchLit(ctx, $v{trailOptText}))
+					$captureTrailPresentExpr;
+				else
+					ctx.pos = _trailOptWsPos;
+			});
+		}
+	}
+
+	/**
+	 * Emit the pre-field whitespace / trivia handling for one struct field
+	 * (skipped for the optional-Ref / optional-kw-Star / EOF-Star / optional-
+	 * Star-with-lead paths that own their own ws). Three modes: capture
+	 * `collectTrivia` into BeforeLeading+BeforeNewline slots, or just
+	 * BeforeNewline, or a plain `skipWs`. Then, for an opted-in condWrap cond
+	 * field, probe the `(`→cond newline gap into the CondOpenNewline slot.
+	 * Pure — lifted from `lowerStruct`'s per-field loop.
+	 */
+	private static function emitPreFieldWs(
+		parseSteps: Array<Expr>, triviaEofStar: Bool, isOptionalRef: Bool, isOptionalKwStar: Bool, optStarWithLead: Bool,
+		hasBeforeLeadingSlot: Bool, hasBeforeNewlineSlot: Bool, beforeNlLocal: String, beforeLeadingLocal: String,
+		hasCondOpenNewlineSlot: Bool, condOpenNewlineLocal: String
+	): Void {
+		if (!triviaEofStar && !isOptionalRef && !isOptionalKwStar && !optStarWithLead) {
+			if (hasBeforeLeadingSlot) {
+				// ω-598-member-leading-comment: capture the full
+				// `collectTrivia` result once, then split into the
+				// `newlineBefore` bool (BeforeNewline slot) and the
+				// verbatim `leadingComments` array (BeforeLeading slot).
+				// The array holds a comment dropped in the gap between the
+				// last modifier and the member keyword; emitted by the
+				// writer's bare-Ref non-first separator. Empty in the
+				// common case (no inter-modifier comment) → byte-inert.
+				final arrayStrCT: ComplexType = TPath({
+					pack: [],
+					name: 'Array',
+					params: [TPType(TPath({ pack: [], name: 'String', params: [] }))]
+				});
+				parseSteps.push(macro final _beforeTrivia = collectTrivia(ctx));
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeNlLocal,
+							type: (macro :Bool),
+							expr: macro _beforeTrivia.newlineBefore,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeLeadingLocal,
+							type: arrayStrCT,
+							expr: macro _beforeTrivia.leadingComments,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			} else if (hasBeforeNewlineSlot) {
+				// Route through `collectTrivia` — drains any
+				// `pendingTrivia` stash from a preceding empty
+				// bare-tryparse Star and captures `newlineBefore` into
+				// the local that the struct literal writes onto the
+				// synth slot. `skipWs` would silently discard both.
+				parseSteps.push({
+					expr: EVars([
+						{
+							name: beforeNlLocal,
+							type: (macro :Bool),
+							expr: macro collectTrivia(ctx).newlineBefore,
+							isFinal: true,
+						}
+					]),
+					pos: Context.currentPos(),
+				});
+			} else
+				parseSteps.push(macro skipWs(ctx));
+		}
+		// ω-condition-wrap-keep: the pre-field `skipWs` above advanced
+		// `ctx.pos` to the cond's first token, so `hasNewlineIn` over
+		// `[_condLeadEnd, ctx.pos)` answers "did the source break right
+		// after `(`?". Captured into the local that the struct literal
+		// writes onto the `<field>CondOpenNewline:Bool` synth slot. Runs
+		// only for the opted-in condWrap cond field; `_condLeadEnd` was
+		// declared right after the lead `expectLit` above.
+		if (hasCondOpenNewlineSlot) parseSteps.push({
+			expr: EVars([
+				{
+					name: condOpenNewlineLocal,
+					type: (macro :Bool),
+					expr: macro hasNewlineIn(ctx.input, _condLeadEnd, ctx.pos),
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		});
+	}
+
+	/**
+	 * Emit the mandatory per-field lead-in for a non-Star, non-optional field:
+	 * the `@:kw` keyword (`skipWs` + `expectKw`) and/or the `@:lead` literal
+	 * (`skipWs` + `expectLit`), in that order (D50). For an opted-in condWrap
+	 * cond field, also record `_condLeadEnd` right after the lead so the
+	 * `(`→cond newline probe in emitPreFieldWs spans the correct gap. Pure —
+	 * lifted from `lowerStruct`.
+	 */
+	private static function emitFieldLeadIn(
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
+		hasCondOpenNewlineSlot: Bool
+	): Void {
+		if (!isStar && !isOptional) {
+			if (kwLead != null) {
+				parseSteps.push(macro skipWs(ctx));
+				parseSteps.push(macro expectKw(ctx, $v{kwLead}));
+			}
+			if (leadText != null) {
+				parseSteps.push(macro skipWs(ctx));
+				parseSteps.push(macro expectLit(ctx, $v{leadText}));
+				// ω-condition-wrap-keep: record the byte position right
+				// after the open paren (BEFORE the pre-field `skipWs` below)
+				// so the `hasNewlineIn` probe spans exactly the `(`→cond gap.
+				if (hasCondOpenNewlineSlot) parseSteps.push(macro final _condLeadEnd: Int = ctx.pos);
+			}
+		}
 	}
 
 }

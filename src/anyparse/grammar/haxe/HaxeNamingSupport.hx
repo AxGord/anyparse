@@ -40,6 +40,12 @@ final class HaxeNamingSupport implements NamingSupport {
 		return content == null ? defaults() : try CheckstyleConfigLoader.load(content) catch (exception: Exception) defaults();
 	}
 
+	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool {
+		if (decl.category != NamingCategory.Method) return false;
+		final owner: Null<String> = decl.enclosingType;
+		return owner != null && isUtestMethodName(decl.name) && transitivelyExtendsTest(owner, index);
+	}
+
 	/**
 	 * The built-in Haxe naming convention (the user's `preferences-haxe`
 	 * rules), applied when no `checkstyle.json` governs the file. Ordered: the
@@ -258,12 +264,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (n == null || n.length == 0) return false;
 		final c: Int = StringTools.fastCodeAt(n, 0);
 		return c >= 'A'.code && c <= 'Z'.code;
-	}
-
-	public function frameworkReachable(decl: NamedDecl, index: SymbolIndex): Bool {
-		if (decl.category != NamingCategory.Method) return false;
-		final owner: Null<String> = decl.enclosingType;
-		return owner != null && isUtestMethodName(decl.name) && transitivelyExtendsTest(owner, index);
 	}
 
 	/**

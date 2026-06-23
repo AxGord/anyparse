@@ -93,21 +93,6 @@ final class CheckstyleConfigLoader {
 		return onset - 1;
 	}
 
-	/** Map a checkstyle naming-check `type` to a neutral category, or null if not naming-family. */
-	private static function categoryOf(type: String): Null<NamingCategory> {
-		return switch type {
-			case 'TypeName': NamingCategory.Type;
-			case 'MemberName': NamingCategory.Field;
-			case 'MethodName': NamingCategory.Method;
-			case 'ConstantName': NamingCategory.Constant;
-			case 'LocalVariableName': NamingCategory.Local;
-			case 'ParameterName': NamingCategory.Param;
-			case 'EnumValueName': NamingCategory.EnumValue;
-			case 'CatchParameterName': NamingCategory.CatchVar;
-			case _: null;
-		}
-	}
-
 	/**
 	 * Map a `checkstyle.json` onto the neutral `CheckOverrides` the checks read.
 	 * One pass over `checks`; each recognised `type` fills its field, applying
@@ -142,6 +127,21 @@ final class CheckstyleConfigLoader {
 			}
 		}
 		return overrides;
+	}
+
+	/** Map a checkstyle naming-check `type` to a neutral category, or null if not naming-family. */
+	private static function categoryOf(type: String): Null<NamingCategory> {
+		return switch type {
+			case 'TypeName': NamingCategory.Type;
+			case 'MemberName': NamingCategory.Field;
+			case 'MethodName': NamingCategory.Method;
+			case 'ConstantName': NamingCategory.Constant;
+			case 'LocalVariableName': NamingCategory.Local;
+			case 'ParameterName': NamingCategory.Param;
+			case 'EnumValueName': NamingCategory.EnumValue;
+			case 'CatchParameterName': NamingCategory.CatchVar;
+			case _: null;
+		}
 	}
 
 	/** A numeric-array prop, or `fallback` when the prop is absent or not an array. */

@@ -182,31 +182,6 @@ class ShapeBuilder {
 		return node;
 	}
 
-	/**
-	 * If `a` is an `enum abstract(String)` (new-style `enum` keyword or
-	 * legacy `@:enum` meta), return the declared `name → value` pairs
-	 * parsed from the impl class's static final fields. Returns `null`
-	 * when the abstract is not an enum abstract or its underlying type
-	 * isn't String — callers then fall through to the regex-based
-	 * terminal path.
-	 */
-	private static function extractStringEnumValues(a: AbstractType): Null<Array<{ name: String, value: String }>> {
-		if (primitiveNameOrNull(a.type) != 'String') return null;
-		if (!a.meta.has(':enum')) return null;
-		if (a.impl == null) return null;
-		final impl: ClassType = a.impl.get();
-		final values: Array<{ name: String, value: String }> = [];
-		for (f in impl.statics.get()) {
-			if (f.kind.match(FMethod(_))) continue;
-			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr == null) continue;
-			final s: Null<String> = extractStringConst(texpr);
-			if (s == null) continue;
-			values.push({ name: f.name, value: s });
-		}
-		return values.length == 0 ? null : values;
-	}
-
 	private function primitiveRef(primName: String): Null<String> {
 		return _formatInfo == null
 			? null
@@ -217,15 +192,6 @@ class ShapeBuilder {
 				case 'String': _formatInfo.stringType;
 				case _: null;
 			};
-	}
-
-	private static function extractStringConst(texpr: TypedExpr): Null<String> {
-		return switch texpr.expr {
-			case TConst(TString(s)): s;
-			case TCast(inner, _): extractStringConst(inner);
-			case TParenthesis(inner): extractStringConst(inner);
-			case _: null;
-		};
 	}
 
 	private function shapeField(fieldName: String, t: Type, meta: Null<Metadata>): ShapeNode {
@@ -330,6 +296,40 @@ class ShapeBuilder {
 		}
 		Context.fatalError('ShapeBuilder: unsupported field type: ${typeToString(t)}', Context.currentPos());
 		throw 'unreachable';
+	}
+
+	/**
+	 * If `a` is an `enum abstract(String)` (new-style `enum` keyword or
+	 * legacy `@:enum` meta), return the declared `name → value` pairs
+	 * parsed from the impl class's static final fields. Returns `null`
+	 * when the abstract is not an enum abstract or its underlying type
+	 * isn't String — callers then fall through to the regex-based
+	 * terminal path.
+	 */
+	private static function extractStringEnumValues(a: AbstractType): Null<Array<{ name: String, value: String }>> {
+		if (primitiveNameOrNull(a.type) != 'String') return null;
+		if (!a.meta.has(':enum')) return null;
+		if (a.impl == null) return null;
+		final impl: ClassType = a.impl.get();
+		final values: Array<{ name: String, value: String }> = [];
+		for (f in impl.statics.get()) {
+			if (f.kind.match(FMethod(_))) continue;
+			final texpr: Null<TypedExpr> = f.expr();
+			if (texpr == null) continue;
+			final s: Null<String> = extractStringConst(texpr);
+			if (s == null) continue;
+			values.push({ name: f.name, value: s });
+		}
+		return values.length == 0 ? null : values;
+	}
+
+	private static function extractStringConst(texpr: TypedExpr): Null<String> {
+		return switch texpr.expr {
+			case TConst(TString(s)): s;
+			case TCast(inner, _): extractStringConst(inner);
+			case TParenthesis(inner): extractStringConst(inner);
+			case _: null;
+		};
 	}
 
 	// -------- type-name helpers --------

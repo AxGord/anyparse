@@ -62,6 +62,50 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 					: joinAnd(plain(cond, source), plain(thenNode, source));
 	}
 
+	public function reduceBooleanGuardChain(
+		conds: Array<QueryNode>, lits: Array<QueryNode>, finalLit: QueryNode, source: String
+	): Null<String> {
+		if (conds.length == 0 || conds.length != lits.length) return null;
+		final finalVal: Null<Bool> = boolValue(finalLit, source);
+		if (finalVal == null) return null;
+		// Fold right-to-left from the trailing literal. `accLit` holds the accumulator's
+		// boolean value while it is still a literal — used to simplify and to refuse a
+		// fold that would absorb (drop) a condition's evaluation.
+		var accSrc: String = finalVal ? 'true' : 'false';
+		var accPrec: Int = PREC_ATOM;
+		var accLit: Null<Bool> = finalVal;
+		var i: Int = conds.length - 1;
+		while (i >= 0) {
+			final litVal: Null<Bool> = boolValue(lits[i], source);
+			if (litVal == null) return null;
+			final cond: QueryNode = conds[i];
+			if (litVal == true) {
+				if (accLit == true) return null; // cond || true -> true : drops cond's evaluation
+				if (accLit == false) {
+					final p: Operand = plain(cond, source); // cond || false -> cond
+					accSrc = p.src;
+					accPrec = p.prec;
+				} else {
+					accSrc = joinOr(plain(cond, source), { src: accSrc, prec: accPrec });
+					accPrec = PREC_OR;
+				}
+			} else {
+				if (accLit == false) return null; // !cond && false -> false : drops cond's evaluation
+				final n: Operand = negate(cond, source);
+				if (accLit == true) { // !cond && true -> !cond
+					accSrc = n.src;
+					accPrec = n.prec;
+				} else {
+					accSrc = joinAnd(n, { src: accSrc, prec: accPrec });
+					accPrec = PREC_AND;
+				}
+			}
+			accLit = null;
+			i--;
+		}
+		return accSrc;
+	}
+
 	/** `node`'s boolean-literal value, or null when it is not a `true` / `false` literal. */
 	private static function boolValue(node: QueryNode, source: String): Null<Bool> {
 		if (node.kind != 'BoolLit') return null;
@@ -178,50 +222,6 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		var n: QueryNode = node;
 		while (n.kind == 'ParenExpr' && n.children.length == 1) n = n.children[0];
 		return BOOL_OP_KINDS.contains(n.kind);
-	}
-
-	public function reduceBooleanGuardChain(
-		conds: Array<QueryNode>, lits: Array<QueryNode>, finalLit: QueryNode, source: String
-	): Null<String> {
-		if (conds.length == 0 || conds.length != lits.length) return null;
-		final finalVal: Null<Bool> = boolValue(finalLit, source);
-		if (finalVal == null) return null;
-		// Fold right-to-left from the trailing literal. `accLit` holds the accumulator's
-		// boolean value while it is still a literal — used to simplify and to refuse a
-		// fold that would absorb (drop) a condition's evaluation.
-		var accSrc: String = finalVal ? 'true' : 'false';
-		var accPrec: Int = PREC_ATOM;
-		var accLit: Null<Bool> = finalVal;
-		var i: Int = conds.length - 1;
-		while (i >= 0) {
-			final litVal: Null<Bool> = boolValue(lits[i], source);
-			if (litVal == null) return null;
-			final cond: QueryNode = conds[i];
-			if (litVal == true) {
-				if (accLit == true) return null; // cond || true -> true : drops cond's evaluation
-				if (accLit == false) {
-					final p: Operand = plain(cond, source); // cond || false -> cond
-					accSrc = p.src;
-					accPrec = p.prec;
-				} else {
-					accSrc = joinOr(plain(cond, source), { src: accSrc, prec: accPrec });
-					accPrec = PREC_OR;
-				}
-			} else {
-				if (accLit == false) return null; // !cond && false -> false : drops cond's evaluation
-				final n: Operand = negate(cond, source);
-				if (accLit == true) { // !cond && true -> !cond
-					accSrc = n.src;
-					accPrec = n.prec;
-				} else {
-					accSrc = joinAnd(n, { src: accSrc, prec: accPrec });
-					accPrec = PREC_AND;
-				}
-			}
-			accLit = null;
-			i--;
-		}
-		return accSrc;
 	}
 
 }

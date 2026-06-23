@@ -55,6 +55,21 @@ final class TypeResolver {
 		return index.memberGetter(typeName, field) == false;
 	}
 
+	/**
+	 * The binding-span `from` the receiver occurrence at `recvSpan` resolves to,
+	 * via the scope resolver — the key into a `TypeInfoProvider` decl-type map.
+	 */
+	public static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
+		for (hit in Refs.find(name, tree, shape)) {
+			final hs: Null<Span> = hit.span;
+			if (hs != null && hs.from == recvSpan.from && hs.to == recvSpan.to) {
+				final b: Null<Span> = hit.bindingSpan;
+				return b == null ? null : b.from;
+			}
+		}
+		return null;
+	}
+
 	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
 	private static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
 		var best: Null<TypeDeclMatch> = null;
@@ -70,21 +85,6 @@ final class TypeResolver {
 		walk(tree);
 		final b: Null<TypeDeclMatch> = best;
 		return b == null ? null : b.name;
-	}
-
-	/**
-	 * The binding-span `from` the receiver occurrence at `recvSpan` resolves to,
-	 * via the scope resolver — the key into a `TypeInfoProvider` decl-type map.
-	 */
-	public static function resolveBindingFrom(name: String, recvSpan: Span, tree: QueryNode, shape: RefShape): Null<Int> {
-		for (hit in Refs.find(name, tree, shape)) {
-			final hs: Null<Span> = hit.span;
-			if (hs != null && hs.from == recvSpan.from && hs.to == recvSpan.to) {
-				final b: Null<Span> = hit.bindingSpan;
-				return b == null ? null : b.from;
-			}
-		}
-		return null;
 	}
 
 }
