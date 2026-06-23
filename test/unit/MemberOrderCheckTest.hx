@@ -105,4 +105,11 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('function m'), 'field (with its note) moved before the method: $fixed');
 	}
 
+	/** A side-effecting static const reorders past INSTANCE fields — independent init phase (the ParseError.backtrack case). */
+	public function testCrossPhaseStaticReorders(): Void {
+		final src: String = 'class C {\n\tpublic var x:Int = 0;\n\n\tpublic function m():Void {}\n\n\tpublic static final K:Int = make();\n\n\tstatic function make():Int {\n\t\treturn 1;\n\t}\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('static final K') < fixed.indexOf('var x'), 'static const moved before instance field: $fixed');
+	}
+
 }
