@@ -67,9 +67,17 @@ final class Refs {
 	}
 
 	private static function walk(
-		target: String, node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Array<RefHit>, isWriteTarget: Bool = false
+		target: String, node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Array<RefHit>, isWriteTarget: Bool = false,
+		macroEmit: Bool = false
 	): Void {
-		final isScope: Bool = shape.scopeKinds.contains(node.kind);
+		// Inside a macro-reification subtree (`opaqueKinds`, e.g. `macro { … }`) a
+		// plain identifier is a runtime emit spliced into generated code — NOT a
+		// reference to the enclosing scope — and a reified `var` is not a real
+		// binding. While in this `macroEmit` context suppress scope handling and
+		// ref emission; only a macro interpolation (`interpolationKinds`: `${…}` /
+		// `$v{…}`) re-opens normal resolution for its own subtree, where an
+		// identifier IS a genuine compile-time reference.
+		final isScope: Bool = !macroEmit && shape.scopeKinds.contains(node.kind);
 		if (isScope) {
 			final frame: ScopeFrame = new ScopeFrame(node);
 			collectDecls(target, node, shape, frame);
@@ -81,22 +89,29 @@ final class Refs {
 			if (selfSpan != null && node.name == target && shape.selfScopeDeclKinds.contains(node.kind)) frame.declare(target, selfSpan);
 			scopes.push(frame);
 		}
-		final nname: Null<String> = node.name;
-		if (nname == target) {
-			final span: Null<Span> = node.span;
-			if (span != null) {
-				final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
-				if (kind != null) {
-					final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(target);
-					out.push(new RefHit(kind, target, span, bindingSpan));
+		if (!macroEmit) {
+			final nname: Null<String> = node.name;
+			if (nname == target) {
+				final span: Null<Span> = node.span;
+				if (span != null) {
+					final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
+					if (kind != null) {
+						final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(target);
+						out.push(new RefHit(kind, target, span, bindingSpan));
+					}
 				}
 			}
 		}
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final interpolationKinds: Array<String> = shape.interpolationKinds ?? [];
+		// Enter macro-emit on a reification node; an interpolation node clears it
+		// for its subtree; otherwise inherit the parent's context.
+		final childMacroEmit: Bool = opaqueKinds.contains(node.kind) || (!interpolationKinds.contains(node.kind) && macroEmit);
 		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
 		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length) {
 			final childIsWriteTarget: Bool = isWriteParent && i == 0;
-			walk(target, children[i], shape, scopes, out, childIsWriteTarget);
+			walk(target, children[i], shape, scopes, out, childIsWriteTarget, childMacroEmit);
 		}
 		if (isScope) scopes.pop();
 	}

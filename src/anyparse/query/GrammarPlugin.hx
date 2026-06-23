@@ -675,6 +675,16 @@ typedef RefShape = {
 	 * object-field exemption.
 	 */
 	@:optional var objectFieldKind: String;
+
+	/**
+	 * Kinds INSIDE an `opaqueKinds` reification subtree that RE-OPEN normal
+	 * reference resolution: macro interpolation — `${…}` (`DollarBlockExpr`) and
+	 * `$v{…}`/`$i{…}`/`$p{…}` (`DollarReifExpr`). A plain identifier under a
+	 * reified node is a runtime emit (NOT a reference to the enclosing scope), but
+	 * an identifier under an interpolation IS a real compile-time reference.
+	 * Optional — unset leaves a reification subtree fully opaque.
+	 */
+	@:optional var interpolationKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

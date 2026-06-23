@@ -439,4 +439,30 @@ class ApqRefsTest extends Test {
 		}).join(', ') + ']';
 	}
 
+	public function testMacroEmittedIdentNotCountedAsRef(): Void {
+		// A bare identifier inside `macro {…}` is a runtime emit spliced into
+		// generated code, not a reference to the enclosing local — only the decl
+		// is collected.
+		final hits: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro ctx.pos; } }", 'ctx');
+		Assert.equals(1, hits.length, 'decl only, no macro-emit read — got ${describe(hits)}');
+		Assert.equals(RefKind.Decl, hits[0].kind);
+	}
+
+	public function testInterpolatedIdentInMacroCountedAsRef(): Void {
+		// Interpolations re-open normal resolution: the interpolated identifier IS
+		// a genuine compile-time reference, so decl + read are both collected.
+		final blockInterp: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro foo(${ctx}); } }", 'ctx');
+		Assert.equals(2, blockInterp.length, 'decl + dollar-block interpolation read — got ${describe(blockInterp)}');
+		final reifInterp: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro foo($v{ctx}); } }", 'ctx');
+		Assert.equals(2, reifInterp.length, 'decl + reification interpolation read — got ${describe(reifInterp)}');
+	}
+
+	public function testMacroMixedEmitAndInterp(): Void {
+		// Within one macro block: the bare emit is skipped, the interpolation is
+		// counted — exactly one read survives.
+		final hits: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro { bar(ctx); baz(${ctx}); }; } }", 'ctx');
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(1, reads.length, 'only the interpolated read, emit skipped — got ${describe(hits)}');
+	}
+
 }

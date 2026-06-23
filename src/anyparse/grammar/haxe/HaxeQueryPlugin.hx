@@ -335,6 +335,7 @@ final class HaxeQueryPlugin implements GrammarPlugin {
 				'CatchClause',
 			],
 			opaqueKinds: ['MacroExpr'],
+			interpolationKinds: ['DollarBlockExpr', 'DollarReifExpr'],
 			branchKinds: [
 				'IfStmt',
 				'IfExpr',
