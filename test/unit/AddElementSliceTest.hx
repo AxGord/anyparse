@@ -249,4 +249,25 @@ class AddElementSliceTest extends Test {
 		return AddElement.addElement(source, line, col, side, code, reformat, plugin);
 	}
 
+	/** --append tolerates a column ONE PAST the opening `{` (the off-by-one `ast --at` masks). */
+	public function testAppendObjectLitTolerant(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar o = {a: 1};\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar o = {a: 1, b: 2};\n\t}\n}\n';
+		assertAppend(source, 3, 12, 'b: 2', true, expected);
+	}
+
+	/** --append tolerates a cursor INSIDE the callee name, not only on its first character. */
+	public function testAppendTolerantWithinCallee(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfoo(x);\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tfoo(x, y);\n\t}\n}\n';
+		assertAppend(source, 3, 4, 'y', true, expected);
+	}
+
+	/** --after tolerates a cursor INSIDE an element's identifier, not only on its first character. */
+	public function testInsertAfterTolerantWithinIdent(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [abc, def];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [abc, xyz, def];\n\t}\n}\n';
+		assertAdd(source, 3, 13, After, 'xyz', true, expected);
+	}
+
 }
