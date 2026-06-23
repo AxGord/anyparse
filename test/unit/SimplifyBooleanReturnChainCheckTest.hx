@@ -107,4 +107,24 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		Assert.equals(0, violations('{ if (a) return false; if (b) return false; return false; }').length);
 	}
 
+	public function testBracedGuardsToOr(): Void {
+		Assert.equals('return a || b;', reduce('{ if (a) { return true; } if (b) { return true; } return false; }'));
+	}
+
+	public function testMixedBracedAndBareToOr(): Void {
+		Assert.equals('return a || b;', reduce('{ if (a) return true; if (b) { return true; } return false; }'));
+	}
+
+	public function testBracedThreeGuardsToOr(): Void {
+		Assert.equals(
+			'return a || b || c;', reduce('{ if (a) { return true; } if (b) { return true; } if (c) { return true; } return false; }')
+		);
+	}
+
+	public function testBracedGuardWithExtraStatementNotFlagged(): Void {
+		// The first block carries another statement, so flattening it would drop `x++`:
+		// it is not a guard, leaving a single guard below the 2-guard threshold.
+		Assert.equals(0, violations('{ if (a) { x++; return true; } if (b) { return true; } return false; }').length);
+	}
+
 }

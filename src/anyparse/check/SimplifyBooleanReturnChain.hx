@@ -150,13 +150,18 @@ final class SimplifyBooleanReturnChain implements Check {
 		}
 	}
 
-	/** A `Chain` over the `kids[i...j]` guards + the closing return `kids[j]`, or null if a span is missing. */
+	/** A `Chain` over the `kids[i...j]` guards + the closing return `kids[j]`, or null if a span or a guard's bool return is missing. */
 	private static function makeChain(kids: Array<QueryNode>, i: Int, j: Int, c: Ctx): Null<Chain> {
 		final firstSpan: Null<Span> = kids[i].span;
 		final lastSpan: Null<Span> = kids[j].span;
 		if (firstSpan == null || lastSpan == null) return null;
 		final conds: Array<QueryNode> = [for (k in i...j) kids[k].children[0]];
-		final lits: Array<QueryNode> = [for (k in i...j) kids[k].children[1].children[0]];
+		final lits: Array<QueryNode> = [];
+		for (k in i...j) {
+			final ret: Null<QueryNode> = boolReturnOf(kids[k].children[1], c);
+			if (ret == null) return null;
+			lits.push(ret.children[0]);
+		}
 		return {
 			span: new Span(firstSpan.from, lastSpan.to),
 			conds: conds,
@@ -165,14 +170,26 @@ final class SimplifyBooleanReturnChain implements Check {
 		};
 	}
 
-	/** `if (cond) return <bool>;` with no `else`: the guard `if` kind, two children, a boolean-literal return then-body. */
+	/** `if (cond) return <bool>;` with no `else` — the bool return bare, or wrapped in a single-statement block (`{ return true; }`). */
 	private static function isGuard(node: QueryNode, c: Ctx): Bool {
-		return c.ifKinds.contains(node.kind) && node.children.length == 2 && isBoolReturn(node.children[1], c);
+		return c.ifKinds.contains(node.kind) && node.children.length == 2 && boolReturnOf(node.children[1], c) != null;
 	}
 
 	/** `return <bool-literal>;` — the chain's return kind with a single boolean-literal child. */
 	private static function isBoolReturn(node: QueryNode, c: Ctx): Bool {
 		return node.kind == c.returnKind && node.children.length == 1 && node.children[0].kind == c.boolLitKind;
+	}
+
+	/**
+	 * The `return <bool>;` a guard then-body resolves to: the bare return, or the
+	 * sole statement of a single-statement block (`{ return true; }`); else null.
+	 * The single-statement requirement keeps the reduction sound — a block with any
+	 * other statement carries an evaluation that flattening the chain would drop.
+	 */
+	private static function boolReturnOf(node: QueryNode, c: Ctx): Null<QueryNode> {
+		if (isBoolReturn(node, c)) return node;
+		if (c.blockKinds.contains(node.kind) && node.children.length == 1 && isBoolReturn(node.children[0], c)) return node.children[0];
+		return null;
 	}
 
 }
