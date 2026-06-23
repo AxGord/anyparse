@@ -1122,6 +1122,58 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The start offset of the contiguous own-line comment block immediately preceding the
+	 * line that contains `pos` (only whitespace between the comments and that line), or that
+	 * line's start when none exists. Lets a reorder absorb a doc comment sitting just before
+	 * a `#if` directive into the conditional it documents.
+	 */
+	public static function leadingCommentBlockStart(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int): Int {
+		return absorbLeadingComments(source, comments, lineStartOf(source, pos));
+	}
+
+	/**
+	 * The offset just past the first token at `from` — the run of identifier characters
+	 * when `from` is on one (a name / keyword), else the single delimiter / operator
+	 * character. Lets a cursor land anywhere within a node's opening token and still
+	 * resolve the node, matching the forgiving `ast --at` rather than an exact `span.from`.
+	 */
+	public static function firstTokenEnd(source: String, from: Int): Int {
+		if (from < 0 || from >= source.length) return from;
+		if (!isIdentChar(StringTools.fastCodeAt(source, from))) return from + 1;
+		var i: Int = from + 1;
+		while (i < source.length && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		return i;
+	}
+
+	/**
+	 * The outermost node whose FIRST TOKEN the cursor falls within (the first in pre-order)
+	 * together with its parent — the list element / member the cursor's first token
+	 * identifies. The bound is EXCLUSIVE of the token's trailing boundary so a container's
+	 * single-char delimiter (`[` / `{` / `(`) does not swallow the element beginning right
+	 * after it; a column landing inside a name still resolves it. Null when no node's first
+	 * token contains `cursor`. The tolerant twin of `nodeAtFrom` for the USER-cursor ops
+	 * (`add-element`, `remove-element`); `nodeAtFrom` stays exact for the internal callers
+	 * that pass an already-resolved binding span.
+	 */
+	public static function elementAtFrom(tree: QueryNode, source: String, cursor: Int): Null<{ node: QueryNode, parent: Null<QueryNode> }> {
+		var result: Null<{ node: QueryNode, parent: Null<QueryNode> }> = null;
+		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
+			if (result != null) return;
+			final sp: Null<Span> = node.span;
+			if (sp != null && cursor >= sp.from && cursor < firstTokenEnd(source, sp.from)) {
+				result = { node: node, parent: parent };
+				return;
+			}
+			for (c in node.children) {
+				if (result != null) return;
+				walk(c, node);
+			}
+		}
+		walk(tree, null);
+		return result;
+	}
+
+	/**
 	 * Extend `span` to also remove ONE separating comma so a comma list stays
 	 * well-formed after the element is cut: the trailing comma (preferred) —
 	 * the next non-whitespace byte after `span.to` — else the leading comma
@@ -1300,16 +1352,6 @@ final class RefactorSupport {
 		return nl < 0 ? 0 : nl + 1;
 	}
 
-	/**
-	 * The start offset of the contiguous own-line comment block immediately preceding the
-	 * line that contains `pos` (only whitespace between the comments and that line), or that
-	 * line's start when none exists. Lets a reorder absorb a doc comment sitting just before
-	 * a `#if` directive into the conditional it documents.
-	 */
-	public static function leadingCommentBlockStart(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, pos: Int): Int {
-		return absorbLeadingComments(source, comments, lineStartOf(source, pos));
-	}
-
 	/** Walk `from` back over own-line leading comments (and the whitespace between) to the first code; returns the new start offset. Shared by `memberTriviaSpan` and `leadingCommentBlockStart`. */
 	private static function absorbLeadingComments(source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, from: Int): Int {
 		var result: Int = from;
@@ -1320,48 +1362,6 @@ final class RefactorSupport {
 			if (StringTools.trim(source.substring(ls, c.from)) != '') break;
 			result = ls;
 		}
-		return result;
-	}
-
-	/**
-	 * The offset just past the first token at `from` — the run of identifier characters
-	 * when `from` is on one (a name / keyword), else the single delimiter / operator
-	 * character. Lets a cursor land anywhere within a node's opening token and still
-	 * resolve the node, matching the forgiving `ast --at` rather than an exact `span.from`.
-	 */
-	public static function firstTokenEnd(source: String, from: Int): Int {
-		if (from < 0 || from >= source.length) return from;
-		if (!isIdentChar(StringTools.fastCodeAt(source, from))) return from + 1;
-		var i: Int = from + 1;
-		while (i < source.length && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
-		return i;
-	}
-
-	/**
-	 * The outermost node whose FIRST TOKEN the cursor falls within (the first in pre-order)
-	 * together with its parent — the list element / member the cursor's first token
-	 * identifies. The bound is EXCLUSIVE of the token's trailing boundary so a container's
-	 * single-char delimiter (`[` / `{` / `(`) does not swallow the element beginning right
-	 * after it; a column landing inside a name still resolves it. Null when no node's first
-	 * token contains `cursor`. The tolerant twin of `nodeAtFrom` for the USER-cursor ops
-	 * (`add-element`, `remove-element`); `nodeAtFrom` stays exact for the internal callers
-	 * that pass an already-resolved binding span.
-	 */
-	public static function elementAtFrom(tree: QueryNode, source: String, cursor: Int): Null<{ node: QueryNode, parent: Null<QueryNode> }> {
-		var result: Null<{ node: QueryNode, parent: Null<QueryNode> }> = null;
-		function walk(node: QueryNode, parent: Null<QueryNode>): Void {
-			if (result != null) return;
-			final sp: Null<Span> = node.span;
-			if (sp != null && cursor >= sp.from && cursor < firstTokenEnd(source, sp.from)) {
-				result = { node: node, parent: parent };
-				return;
-			}
-			for (c in node.children) {
-				if (result != null) return;
-				walk(c, node);
-			}
-		}
-		walk(tree, null);
 		return result;
 	}
 
