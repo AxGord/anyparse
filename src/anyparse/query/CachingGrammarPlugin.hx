@@ -38,6 +38,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _declaredTypeCache: Map<String, Map<Int, String>> = [];
 
 	private final _accessorCache: Map<String, Map<Int, Bool>> = [];
+	private final _castTargetCache: Map<String, Map<Int, String>> = [];
+	private final _importMapCache: Map<String, Map<String, String>> = [];
+	private final _declaredTypeSourceCache: Map<String, Map<Int, String>> = [];
 
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
@@ -114,6 +117,36 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
 		final result: Map<Int, Bool> = inner != null ? inner.propertyAccessors(source) : [];
 		_accessorCache[source] = result;
+		return result;
+	}
+
+	/** `TypeInfoProvider`: forward + memoize the declaration type-source map per source. */
+	public function declaredTypeSources(source: String): Map<Int, String> {
+		final cached: Null<Map<Int, String>> = _declaredTypeSourceCache[source];
+		if (cached != null) return cached;
+		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final result: Map<Int, String> = inner != null ? inner.declaredTypeSources(source) : [];
+		_declaredTypeSourceCache[source] = result;
+		return result;
+	}
+
+	/** `TypeInfoProvider`: forward + memoize the typed-cast target-type-source map per source. */
+	public function castTargetSources(source: String): Map<Int, String> {
+		final cached: Null<Map<Int, String>> = _castTargetCache[source];
+		if (cached != null) return cached;
+		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final result: Map<Int, String> = inner != null ? inner.castTargetSources(source) : [];
+		_castTargetCache[source] = result;
+		return result;
+	}
+
+	/** `TypeInfoProvider`: forward + memoize the import simple-name → FQN map per source. */
+	public function importMap(source: String): Map<String, String> {
+		final cached: Null<Map<String, String>> = _importMapCache[source];
+		if (cached != null) return cached;
+		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final result: Map<String, String> = inner != null ? inner.importMap(source) : [];
+		_importMapCache[source] = result;
 		return result;
 	}
 

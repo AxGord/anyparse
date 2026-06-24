@@ -70,8 +70,91 @@ final class TypeResolver {
 		return null;
 	}
 
-	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
-	private static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
+	/**
+	 * The binding-span `from` that the identifier `ident` resolves to — the key
+	 * into a `TypeInfoProvider` declared-type / cast map. Null when `ident` is not
+	 * an identifier node or its binding is unresolved.
+	 */
+	public static function identBindingFrom(ident: QueryNode, tree: QueryNode, shape: RefShape): Null<Int> {
+		final identKind: Null<String> = shape.identKind;
+		if (identKind == null || ident.kind != identKind) return null;
+		final name: Null<String> = ident.name;
+		final span: Null<Span> = ident.span;
+		return name == null || span == null ? null : resolveBindingFrom(name, span, tree, shape);
+	}
+
+	/**
+	 * The SIMPLE declared type name of the identifier `ident` — resolves its
+	 * binding via the scope resolver and reads `declaredTypes`. Null when `ident`
+	 * is not an identifier node, its binding is unresolved, or the binding has no
+	 * recovered nominal type (unannotated, parametric, or `Null<…>`-wrapped — all
+	 * absent from `declaredTypes`).
+	 */
+	public static function identTypeName(ident: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Null<String> {
+		final bindingFrom: Null<Int> = identBindingFrom(ident, tree, shape);
+		return bindingFrom == null ? null : declaredTypes[bindingFrom];
+	}
+
+	/**
+	 * The fully-qualified form of a SIMPLE type reference `typeSrc` (already
+	 * whitespace-stripped): a qualified path (`a.b.X`) is its own FQN; a bare name
+	 * (`X`) resolves via `importMap` (a plain `import a.b.X;`). Returns null for
+	 * anything that is not a plain nominal reference — a generic / function / anon
+	 * type (any char outside `[A-Za-z0-9_.]`), or a bare name with no matching import.
+	 * Lets a check compare two type spellings by identity rather than by text.
+	 */
+	public static function canonicalTypeName(typeSrc: String, importMap: Map<String, String>): Null<String> {
+		for (i in 0...typeSrc.length) {
+			final c: Int = StringTools.fastCodeAt(typeSrc, i);
+			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
+				|| c == '_'.code || c == '.'.code;
+			if (!ok) return null;
+		}
+		return typeSrc.indexOf('.') != -1 ? typeSrc : importMap[typeSrc];
+	}
+
+	/**
+	 * Whether the declaration binding at `bindingFrom` is an optional parameter
+	 * (a node of kind `optionalParamKind` whose span covers it) — its value is
+	 * nullable even though `declaredTypes` recorded a nominal type for it.
+	 */
+	public static function bindingIsOptionalParam(tree: QueryNode, bindingFrom: Int, optionalParamKind: String): Bool {
+		var found: Bool = false;
+		function walk(n: QueryNode): Void {
+			if (found) return;
+			if (n.kind == optionalParamKind) {
+				final s: Null<Span> = n.span;
+				if (s != null && s.from <= bindingFrom && bindingFrom < s.to) {
+					found = true;
+					return;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+	/**
+	 * True when the innermost type declaration enclosing `span` is annotated with
+	 * the `metaName` meta (e.g. `@:nullSafety`), making any non-`Null<…>` nominal
+	 * member of it provably non-null. The meta binds to a declaration when no OTHER
+	 * type declaration sits between the meta and that declaration — tolerant of
+	 * intervening modifier keywords (`final` / `public` / …) which are not type
+	 * decls. A meta carrying `disableArg` (`@:nullSafety(Off)`) does not count.
+	 *
+	 * Only the enclosing TYPE declaration's meta is consulted; a member-level
+	 * `@:nullSafety(Off)` inside a null-safe type is not modeled — a rare,
+	 * documented limitation.
+	 */
+	public static function enclosingIsNullSafe(tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>): Bool {
+		final decl: Null<TypeDeclMatch> = innermostTypeDecl(tree, span);
+		if (decl == null) return false;
+		return enclosingMetaPresent(tree, decl.fullSpan, metaName, disableArg);
+	}
+
+	/** The innermost type declaration whose span contains `faSpan`, or null. */
+	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
 		function walk(n: QueryNode): Void {
 			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
@@ -83,8 +166,49 @@ final class TypeResolver {
 			for (c in n.children) walk(c);
 		}
 		walk(tree);
-		final b: Null<TypeDeclMatch> = best;
-		return b == null ? null : b.name;
+		return best;
+	}
+
+	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
+	private static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
+		final td: Null<TypeDeclMatch> = innermostTypeDecl(tree, faSpan);
+		return td == null ? null : td.name;
+	}
+
+	/**
+	 * Whether a meta node named `metaName` binds to the type declaration at
+	 * `declSpan` — its span ends at or before `declSpan.from` with no other type
+	 * declaration starting in between.
+	 */
+	private static function enclosingMetaPresent(tree: QueryNode, declSpan: Span, metaName: String, disableArg: Null<String>): Bool {
+		final typeFroms: Array<Int> = [];
+		final metaNodes: Array<QueryNode> = [];
+		function walk(n: QueryNode): Void {
+			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
+			if (td != null) typeFroms.push(td.fullSpan.from);
+			if (n.name == metaName && n.span != null) metaNodes.push(n);
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		for (m in metaNodes) {
+			final ms: Null<Span> = m.span;
+			if (ms == null || ms.to > declSpan.from) continue;
+			if (disableArg != null && subtreeHasName(m, disableArg)) continue;
+			var blocked: Bool = false;
+			for (tf in typeFroms) if (tf >= ms.to && tf < declSpan.from) {
+				blocked = true;
+				break;
+			}
+			if (!blocked) return true;
+		}
+		return false;
+	}
+
+	/** Whether `node` or any descendant carries the name `name`. */
+	private static function subtreeHasName(node: QueryNode, name: String): Bool {
+		if (node.name == name) return true;
+		for (c in node.children) if (subtreeHasName(c, name)) return true;
+		return false;
 	}
 
 }

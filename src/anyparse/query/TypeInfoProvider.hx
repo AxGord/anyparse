@@ -30,4 +30,32 @@ interface TypeInfoProvider {
 	 */
 	public function propertyAccessors(source: String): Map<Int, Bool>;
 
+	/**
+	 * Maps each declaration's binding-span `from` (the `declaredTypes` key) to the
+	 * VERBATIM source text of its `:Type` annotation — `var x: Array<Int>` → the
+	 * substring `Array<Int>`. Lets a consumer compare two annotations by their
+	 * written form (sound within one file: a byte-identical type source denotes the
+	 * same type) instead of a package-stripped simple name. A declaration with no
+	 * recoverable type-annotation span is absent.
+	 */
+	public function declaredTypeSources(source: String): Map<Int, String>;
+
+	/**
+	 * Maps each typed-cast / type-check node's payload `span.from` to the VERBATIM
+	 * source text of its TARGET type — `cast(expr, Array<Int>)` / `(expr : Array<Int>)`
+	 * → `Array<Int>`. The written-form counterpart of `declaredTypes` for casts,
+	 * recovered from the grammar AST that the `QueryNode` projection drops. A grammar
+	 * without typed casts returns an empty map.
+	 */
+	public function castTargetSources(source: String): Map<Int, String>;
+
+	/**
+	 * Maps each simple type name brought into scope by a plain `import a.b.X;` to
+	 * its fully-qualified path (`X` → `a.b.X`). Aliased imports (`import a.b.X as Y;` —
+	 * the original path is not exposed by the grammar), wildcard imports, and `using`
+	 * are excluded. Lets a consumer canonicalize a bare type reference to an FQN and
+	 * thus tell `Eof` (imported `haxe.io.Eof`) from a qualified `sys.io.Eof`.
+	 */
+	public function importMap(source: String): Map<String, String>;
+
 }

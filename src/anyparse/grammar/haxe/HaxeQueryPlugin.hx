@@ -419,6 +419,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			mutableLocalDeclKinds: ['VarStmt'],
 			ifStatementKinds: ['IfStmt'],
 			equalityKinds: ['Eq', 'NotEq'],
+			optionalParamKind: 'Optional',
+			nullableWrapperTypeNames: ['Null', 'Dynamic', 'Any'],
+			nullSafetyDisableArg: 'Off',
+			nonNullableTypeNames: ['Int', 'Float', 'Bool', 'UInt'],
+			nullSafetyMetaName: '@:nullSafety',
+			typedCastKinds: ['TypedCastExpr', 'ECheckTypeExpr'],
 			nullSafeAccessKind: 'SafeFieldAccess',
 			nullableOperandKinds: ['Call', 'FieldAccess', 'SafeFieldAccess'],
 			notKind: 'Not',
@@ -613,6 +619,86 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			}
 		});
 		return out;
+	}
+
+	/**
+	 * `TypeInfoProvider`: maps each declaration's binding-span `from` to the VERBATIM
+	 * source of its `:Type` annotation (`var x: Array<Int>` → `Array<Int>`), recovered
+	 * by slicing the type node's span. Same walk + key as `declaredTypes`; the value is
+	 * the written form rather than the package-stripped simple name.
+	 */
+	public function declaredTypeSources(source: String): Map<Int, String> {
+		final out: Map<Int, String> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'type')) {
+				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
+				if (ts != null)
+					out[span.from] = source.substring(ts.from, ts.to);
+			}
+		});
+		return out;
+	}
+
+	/**
+	 * `TypeInfoProvider`: maps each typed-cast / type-check node's payload `_span.from`
+	 * to the VERBATIM source of its TARGET type (`cast(x, Array<Int>)` → `Array<Int>`).
+	 * Same discriminated walk as the simple-name cast recovery (a `type` field plus an
+	 * operand `target` / `expr`, no `name`), but the value is the written type source.
+	 */
+	public function castTargetSources(source: String): Map<Int, String> {
+		final out: Map<Int, String> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'type') && !Reflect.hasField(node, 'name') && (
+				Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr')
+			)) {
+				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
+				if (ts != null)
+					out[span.from] = source.substring(ts.from, ts.to);
+			}
+		});
+		return out;
+	}
+
+	/**
+	 * `TypeInfoProvider`: maps each simple name brought into scope by a plain
+	 * `import a.b.X;` to its fully-qualified path (`X` → `a.b.X`). Aliased / wildcard
+	 * imports and `using` are skipped (an alias's original path is not exposed by the
+	 * grammar). A name also used as a TYPE PARAMETER anywhere in the file is excluded —
+	 * a type param shadows an import of the same name within its scope, so a bare
+	 * reference to it must not resolve to the import (drops the rare collision).
+	 */
+	public function importMap(source: String): Map<String, String> {
+		final out: Map<String, String> = [];
+		final tree: Null<QueryNode> = try buildTree(source, false) catch (exception: Exception) null;
+		if (tree == null) return out;
+		for (node in tree.children) if (node.kind == 'ImportDecl') {
+			final raw: Null<String> = node.name;
+			if (raw != null) {
+				final dot: Int = raw.lastIndexOf('.');
+				out[dot == -1 ? raw : raw.substring(dot + 1)] = raw;
+			}
+		}
+		for (tp in typeParamNames(source)) out.remove(tp);
+		return out;
+	}
+
+	/** Every declare-site type-parameter name in the file (`class C<T>`, `function f<U>`, …). */
+	private function typeParamNames(source: String): Array<String> {
+		final names: Array<String> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return names;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, _span) -> {
+			if (Reflect.hasField(node, 'constraintMore') && Reflect.hasField(node, 'name')) {
+				final nm: Null<String> = extractName(Reflect.field(node, 'name'));
+				if (nm != null && !names.contains(nm))
+					names.push(nm);
+			}
+		});
+		return names;
 	}
 
 	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
@@ -868,6 +954,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				return dot == -1 ? nm : nm.substring(dot + 1);
 			}
 		}
+		return null;
+	}
+
+	/** The span of an `HxType` value — the `Named` ctor's `Span` param — or null when absent. */
+	private function typeFieldSpan(typeVal: Dynamic): Null<Span> {
+		if (typeVal == null || !Type.typeof(typeVal).match(TEnum(_))) return null;
+		for (p in Type.enumParameters(typeVal)) if (Std.isOfType(p, Span)) return cast p;
 		return null;
 	}
 

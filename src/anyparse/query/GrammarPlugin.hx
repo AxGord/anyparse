@@ -744,6 +744,61 @@ typedef RefShape = {
 	 * children), so it bails a container whose member gaps contain one. Optional.
 	 */
 	@:optional var conditionalElseKeywords: Array<String>;
+
+	/**
+	 * Type names that are provably non-nullable on static targets — Haxe value
+	 * types (`Int` / `Float` / `Bool` / `UInt`) whose `!= null` comparison is
+	 * constant regardless of null-safety. The `unnecessary-null-check` check
+	 * flags a comparison against `null` whose other operand resolves (via
+	 * `TypeInfoProvider.declaredTypes`) to one of these. Optional; unset removes
+	 * the value-type half of that check.
+	 */
+	@:optional var nonNullableTypeNames: Array<String>;
+
+	/**
+	 * The metadata name (including the `@:` prefix, e.g. `@:nullSafety`) that marks
+	 * a type declaration as null-checked. When present on the enclosing type,
+	 * `unnecessary-null-check` treats any non-`Null<…>` nominal local/param/field
+	 * (present in `declaredTypes`) as non-null. Optional; unset disables the
+	 * null-safety half of that check, leaving only `nonNullableTypeNames`.
+	 */
+	@:optional var nullSafetyMetaName: String;
+
+	/**
+	 * Typed-cast / type-check expression kinds whose target type the
+	 * `redundant-cast` check compares against its operand's declared type —
+	 * Haxe `cast(expr, T)` (`TypedCastExpr`) and `(expr : T)` (`ECheckTypeExpr`).
+	 * The untyped `cast expr` (no target type) is excluded. The target type is
+	 * recovered via `TypeInfoProvider.castTargetTypes`. Optional; unset makes the
+	 * check a no-op.
+	 */
+	@:optional var typedCastKinds: Array<String>;
+
+	/**
+	 * Nominal type names that stay nullable even under a null-safety meta — the
+	 * explicit `Null<…>` wrapper (recovered as its outer name `Null`) and the
+	 * null-safety escape hatches (`Dynamic` / `Any`). `unnecessary-null-check`
+	 * never treats one of these as non-null, so a `!= null` on it is reported as
+	 * load-bearing, not redundant. Optional; unset adds no exclusions.
+	 */
+	@:optional var nullableWrapperTypeNames: Array<String>;
+
+	/**
+	 * The argument identifier of the null-safety meta that DISABLES checking
+	 * (Haxe `@:nullSafety(Off)`). When the enclosing type's null-safety meta
+	 * carries it, `unnecessary-null-check` does not treat the type as null-checked.
+	 * Optional; unset means any presence of `nullSafetyMetaName` counts as enabled.
+	 */
+	@:optional var nullSafetyDisableArg: String;
+
+	/**
+	 * The node kind of an OPTIONAL parameter (Haxe `?x: T`, projected as
+	 * `Optional`), whose value is nullable despite a nominal `:Type` annotation
+	 * (which `declaredTypes` records). A parameter with a default value (`x: T = d`)
+	 * projects as the required kind and is non-null. `unnecessary-null-check` skips
+	 * an operand bound to an optional parameter. Optional; unset disables the skip.
+	 */
+	@:optional var optionalParamKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
