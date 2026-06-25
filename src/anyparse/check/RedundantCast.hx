@@ -10,6 +10,7 @@ import anyparse.query.TypeResolver;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags a typed cast / type-check whose target type already equals its operand's
@@ -89,7 +90,7 @@ final class RedundantCast implements Check {
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 		if (tree == null) return [];
 		final byKey: Map<String, QueryNode> = [];
-		indexCasts(tree, typedCastKinds, byKey);
+		RefactorSupport.indexNodesByKind(tree, typedCastKinds, byKey);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -156,15 +157,6 @@ final class RedundantCast implements Check {
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
 		}
 		return buf.toString();
-	}
-
-	/** Index every typed-cast node by its `from:to` span key, for span-keyed violation lookup. */
-	private static function indexCasts(node: QueryNode, typedCastKinds: Array<String>, out: Map<String, QueryNode>): Void {
-		if (typedCastKinds.contains(node.kind)) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexCasts(c, typedCastKinds, out);
 	}
 
 }

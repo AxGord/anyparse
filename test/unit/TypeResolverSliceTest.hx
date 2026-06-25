@@ -10,6 +10,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.TypeResolver;
 
 /**
  * Type-resolver MVP (getter-purity): `unused-local`'s autofix now deletes a
@@ -93,6 +94,72 @@ class TypeResolverSliceTest extends Test {
 		// A custom-named read accessor (`getF`) runs code on read — not a plain field.
 		final src: String = 'class C { var f(getF, never):Int; function m():Int { final dead = this.f; return 1; } }';
 		Assert.equals(0, fixEdits(src).length, 'a custom-method read accessor may run code — kept');
+	}
+
+	public function testNonNullValueType(): Void {
+		Assert.isTrue(
+			nonNull('class C { static function m(x:Int):Void { if (x != null) {} } }'),
+			'an Int operand is non-null regardless of null-safety'
+		);
+	}
+
+	public function testNonNullNominalUnderNullSafety(): Void {
+		Assert.isTrue(
+			nonNull('@:nullSafety class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			'a nominal operand under @:nullSafety is provably non-null'
+		);
+	}
+
+	public function testNonNullNullWrapperRejected(): Void {
+		Assert.isFalse(
+			nonNull('@:nullSafety class C { static function m(x:Null<Foo>):Void { if (x != null) {} } }'),
+			'Null<Foo> stays nullable even under null-safety'
+		);
+	}
+
+	public function testNonNullOptionalParamRejected(): Void {
+		Assert.isFalse(
+			nonNull('@:nullSafety class C { static function m(?x:Foo):Void { if (x != null) {} } }'),
+			'an optional parameter is nullable despite a nominal annotation'
+		);
+	}
+
+	public function testNonNullWithoutNullSafetyRejected(): Void {
+		Assert.isFalse(
+			nonNull('class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			'a nominal operand without null-safety is not provably non-null'
+		);
+	}
+
+	private function nonNull(src: String): Bool {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(src);
+		final shape: RefShape = plugin.refShape();
+		final declaredTypes: Map<Int, String> = plugin.declaredTypes(src);
+		final operand: Null<QueryNode> = nullCheckOperand(tree, shape);
+		Assert.notNull(operand, 'fixture must contain a `… != null` comparison');
+		return operand != null && TypeResolver.isProvablyNonNull(operand, tree, shape, declaredTypes);
+	}
+
+	private function nullCheckOperand(tree: QueryNode, shape: RefShape): Null<QueryNode> {
+		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
+		final nullLit: Null<String> = shape.nullLiteralKind;
+		if (nullLit == null) return null;
+		var found: Null<QueryNode> = null;
+		function walk(n: QueryNode): Void {
+			if (found != null) return;
+			if (n.children.length == 2 && equalityKinds.contains(n.kind)) {
+				final leftIsNull: Bool = n.children[0].kind == nullLit;
+				final rightIsNull: Bool = n.children[1].kind == nullLit;
+				if (leftIsNull != rightIsNull) {
+					found = leftIsNull ? n.children[1] : n.children[0];
+					return;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
 	}
 
 }

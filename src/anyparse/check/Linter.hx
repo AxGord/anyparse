@@ -76,7 +76,8 @@ final class Linter {
 			new MagicNumber(),
 			new RedundantThis(),
 			new UnnecessaryNullCheck(),
-			new RedundantCast()
+			new RedundantCast(),
+			new RedundantNullCoalescing()
 		];
 	}
 

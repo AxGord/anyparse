@@ -930,6 +930,19 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Index every node of one of `kinds` by its `from:to` span key — the lookup table
+	 * a span-keyed-violation `fix` uses to recover the AST node behind a stored span.
+	 * Shared by the `redundant-cast` / `redundant-null-coalescing` autofixes.
+	 */
+	public static function indexNodesByKind(node: QueryNode, kinds: Array<String>, out: Map<String, QueryNode>): Void {
+		if (kinds.contains(node.kind)) {
+			final span: Null<Span> = node.span;
+			if (span != null) out['${span.from}:${span.to}'] = node;
+		}
+		for (c in node.children) indexNodesByKind(c, kinds, out);
+	}
+
+	/**
 	 * Drop every edit whose span is fully contained in another edit's span,
 	 * keeping the outer (larger) one. Span-deletion edits from independent sources
 	 * — several checks batched by `apq lint --fix`, or one check's nested findings

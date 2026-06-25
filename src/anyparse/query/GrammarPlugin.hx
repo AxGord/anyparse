@@ -799,6 +799,14 @@ typedef RefShape = {
 	 * an operand bound to an optional parameter. Optional; unset disables the skip.
 	 */
 	@:optional var optionalParamKind: String;
+
+	/**
+	 * The null-coalescing operator node kind (`a ?? b`, Haxe `NullCoal`) — the
+	 * `redundant-null-coalescing` check flags one whose left operand is provably
+	 * non-null (`TypeResolver.isProvablyNonNull`), making the right operand dead.
+	 * Optional; unset makes the check a no-op.
+	 */
+	@:optional var nullCoalesceKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

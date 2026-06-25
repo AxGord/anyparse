@@ -50,8 +50,6 @@ final class UnnecessaryNullCheck implements Check {
 		if (equalityKinds.length == 0 || nullLitKind == null) return [];
 		final nullLit: String = nullLitKind;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final nonNullableTypeNames: Array<String> = shape.nonNullableTypeNames ?? [];
-		final nullSafetyMetaName: Null<String> = shape.nullSafetyMetaName;
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -68,7 +66,7 @@ final class UnnecessaryNullCheck implements Check {
 					final rightIsNull: Bool = node.children[1].kind == nullLit;
 					if (leftIsNull != rightIsNull) {
 						final operand: QueryNode = leftIsNull ? node.children[1] : node.children[0];
-						if (isProvablyNonNull(operand, root, shape, nonNullableTypeNames, nullSafetyMetaName, declaredTypes)) violations.push({
+						if (TypeResolver.isProvablyNonNull(operand, root, shape, declaredTypes)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'unnecessary-null-check',
@@ -88,29 +86,6 @@ final class UnnecessaryNullCheck implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
-	}
-
-	/**
-	 * Whether `operand` is a plain identifier resolvable to a provably non-null type —
-	 * a `nonNullableTypeNames` value type, or any recovered nominal type while the
-	 * enclosing declaration is null-checked (`nullSafetyMetaName`).
-	 */
-	private static function isProvablyNonNull(
-		operand: QueryNode, root: QueryNode, shape: RefShape, nonNullableTypeNames: Array<String>, nullSafetyMetaName: Null<String>,
-		declaredTypes: Map<Int, String>
-	): Bool {
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(operand, root, shape);
-		if (bindingFrom == null) return false;
-		final optionalParamKind: Null<String> = shape.optionalParamKind;
-		if (optionalParamKind != null && TypeResolver.bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
-		final typeName: Null<String> = declaredTypes[bindingFrom];
-		if (typeName == null) return false;
-		if (nonNullableTypeNames.contains(typeName)) return true;
-		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
-		if (nullableWrapperTypeNames.contains(typeName)) return false;
-		final opSpan: Null<Span> = operand.span;
-		return nullSafetyMetaName != null && opSpan != null
-			&& TypeResolver.enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, shape.nullSafetyDisableArg);
 	}
 
 }

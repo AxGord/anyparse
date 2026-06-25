@@ -452,6 +452,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			andOperatorText: '&&',
 			ternaryKind: 'Ternary',
 			nullLiteralKind: 'NullLit',
+			nullCoalesceKind: 'NullCoal',
 			eqKind: 'Eq',
 			notEqKind: 'NotEq',
 			newExprKind: 'NewExpr',

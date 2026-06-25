@@ -153,6 +153,33 @@ final class TypeResolver {
 		return enclosingMetaPresent(tree, decl.fullSpan, metaName, disableArg);
 	}
 
+	/**
+	 * Whether `operand` is a plain identifier resolvable to a provably non-null
+	 * type — a `RefShape.nonNullableTypeNames` value type (null-safety-independent),
+	 * or any recovered nominal type while the enclosing declaration is null-checked
+	 * (`RefShape.nullSafetyMetaName`). An operand bound to an optional parameter, to a
+	 * `RefShape.nullableWrapperTypeNames` type (`Null<…>` / `Dynamic` / `Any`), or with
+	 * no recovered nominal type keeps the conservative default and is NOT proven
+	 * non-null. Shared by every null-aware check (`unnecessary-null-check`,
+	 * `redundant-null-coalescing`).
+	 */
+	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Bool {
+		final bindingFrom: Null<Int> = identBindingFrom(operand, root, shape);
+		if (bindingFrom == null) return false;
+		final optionalParamKind: Null<String> = shape.optionalParamKind;
+		if (optionalParamKind != null && bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
+		final typeName: Null<String> = declaredTypes[bindingFrom];
+		if (typeName == null) return false;
+		final nonNullableTypeNames: Array<String> = shape.nonNullableTypeNames ?? [];
+		if (nonNullableTypeNames.contains(typeName)) return true;
+		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
+		if (nullableWrapperTypeNames.contains(typeName)) return false;
+		final nullSafetyMetaName: Null<String> = shape.nullSafetyMetaName;
+		final opSpan: Null<Span> = operand.span;
+		return nullSafetyMetaName != null && opSpan != null
+			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, shape.nullSafetyDisableArg);
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
