@@ -318,6 +318,7 @@ import unit.FragmentedDocCommentCheckTest;
 import unit.UnnecessaryNullCheckCheckTest;
 import unit.RedundantCastCheckTest;
 import unit.RedundantNullCoalescingCheckTest;
+import unit.UnnecessarySafeNavCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -603,6 +604,7 @@ class RunTests {
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantThisCheckTest());
 		addCase(new UnnecessaryNullCheckCheckTest());
+		addCase(new UnnecessarySafeNavCheckTest());
 		addCase(new RedundantCastCheckTest());
 		addCase(new RedundantNullCoalescingCheckTest());
 		addCase(new TypeResolverSliceTest());
