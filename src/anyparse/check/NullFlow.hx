@@ -129,7 +129,7 @@ final class NullFlow {
 	private static final IF_KINDS: Array<String> = ['IfStmt', 'IfExpr', 'Ternary'];
 
 	/** Loop constructs — every name they assign is cleared before the body so a back-edge carries no stale fact. */
-	private static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr', 'DoWhileExpr'];
+	private static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr'];
 
 	/** Multi-branch constructs analyzed with one isolated state per branch. */
 	private static final BRANCHY_KINDS: Array<String> = [
