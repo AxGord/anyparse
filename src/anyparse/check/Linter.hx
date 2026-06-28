@@ -83,7 +83,8 @@ final class Linter {
 			new ImpossibleIsCheck(),
 			new UnreachableCatch(),
 			new ImpossibleCast(),
-			new RedundantUpcast()
+			new RedundantUpcast(),
+			new DeadNullGuard()
 		];
 	}
 
