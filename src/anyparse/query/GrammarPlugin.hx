@@ -825,6 +825,13 @@ typedef RefShape = {
 	 * subtype-after-supertype unreachability is detected.
 	 */
 	@:optional var catchAllTypeNames: Array<String>;
+
+	/**
+	 * The runtime-CHECKED cast node kind (Haxe `cast(x, T)` — `TypedCastExpr`), which does a
+	 * runtime type test and throws on mismatch — distinct from the compile-time `(x : T)`
+	 * ascription. The `impossible-cast` check reads it. Optional; unset makes the check a no-op.
+	 */
+	@:optional var checkedCastKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

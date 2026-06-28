@@ -226,6 +226,21 @@ final class TypeResolver {
 		return dot == -1 ? s : s.substring(dot + 1);
 	}
 
+	/**
+	 * The cast target type whose payload span key falls within `castSpan` — the earliest
+	 * such key (the outermost payload of a nested cast). Shared by `redundant-cast` and
+	 * `impossible-cast`.
+	 */
+	public static function castTargetWithin(castSpan: Span, castTargets: Map<Int, String>): Null<String> {
+		var best: Null<String> = null;
+		var bestKey: Int = -1;
+		for (from => ty in castTargets) if (from >= castSpan.from && from < castSpan.to && (best == null || from < bestKey)) {
+			best = ty;
+			bestKey = from;
+		}
+		return best;
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;

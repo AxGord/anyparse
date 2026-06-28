@@ -64,7 +64,7 @@ final class RedundantCast implements Check {
 					final span: Null<Span> = node.span;
 					if (span != null && node.children.length == 1) {
 						final operandSource: Null<String> = operandType(node.children[0], root, shape, declaredTypeSources);
-						final targetSource: Null<String> = castTargetWithin(span, castTargets);
+						final targetSource: Null<String> = TypeResolver.castTargetWithin(span, castTargets);
 						if (operandSource != null && targetSource != null && TypeResolver.sameTypeSource(
 							operandSource, targetSource, importMap
 						)) violations.push({
@@ -105,17 +105,6 @@ final class RedundantCast implements Check {
 			edits.push({ span: span, text: source.substring(opSpan.from, opSpan.to) });
 		}
 		return edits;
-	}
-
-	/** The cast target type whose payload span key falls within `castSpan` — the earliest such key (the outermost payload of a nested cast). */
-	private static function castTargetWithin(castSpan: Span, castTargets: Map<Int, String>): Null<String> {
-		var best: Null<String> = null;
-		var bestKey: Int = -1;
-		for (from => ty in castTargets) if (from >= castSpan.from && from < castSpan.to && (best == null || from < bestKey)) {
-			best = ty;
-			bestKey = from;
-		}
-		return best;
 	}
 
 	/** The verbatim source of the identifier `operand`'s declared `:Type` annotation, or null. */
