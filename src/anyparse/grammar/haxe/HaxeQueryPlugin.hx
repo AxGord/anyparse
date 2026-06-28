@@ -426,6 +426,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nullSafetyMetaName: '@:nullSafety',
 			typedCastKinds: ['TypedCastExpr', 'ECheckTypeExpr'],
 			nullSafeAccessKind: 'SafeFieldAccess',
+			isExprKind: 'Is',
 			nullableOperandKinds: ['Call', 'FieldAccess', 'SafeFieldAccess'],
 			notKind: 'Not',
 			blockStmtKind: 'BlockStmt',

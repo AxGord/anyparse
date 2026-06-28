@@ -65,7 +65,9 @@ final class RedundantCast implements Check {
 					if (span != null && node.children.length == 1) {
 						final operandSource: Null<String> = operandType(node.children[0], root, shape, declaredTypeSources);
 						final targetSource: Null<String> = castTargetWithin(span, castTargets);
-						if (operandSource != null && targetSource != null && sameType(operandSource, targetSource, importMap)) violations.push({
+						if (operandSource != null && targetSource != null && TypeResolver.sameTypeSource(
+							operandSource, targetSource, importMap
+						)) violations.push({
 							file: entry.file,
 							span: span,
 							rule: 'redundant-cast',
@@ -122,41 +124,6 @@ final class RedundantCast implements Check {
 	): Null<String> {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(operand, root, shape);
 		return bindingFrom == null ? null : declaredTypeSources[bindingFrom];
-	}
-
-	/**
-	 * Whether two type SOURCES denote the same type. Exact (whitespace-insensitive)
-	 * equality is the common case; when the spellings differ, both are canonicalized
-	 * to an FQN via `TypeResolver.canonicalTypeName` + the file's `importMap` and
-	 * compared — so `Eof` (imported `haxe.io.Eof`) matches a qualified `haxe.io.Eof`,
-	 * while `haxe.io.Eof` stays distinct from `sys.io.Eof`. A name that canonicalizes
-	 * to null (a generic / function / anon type, or an unresolved bare name) yields no
-	 * cross-spelling match — a safe miss. Sound within one file: an unqualified name
-	 * binds to exactly one type, so equal FQNs are the same type.
-	 *
-	 * Whitespace is insignificant in a type EXCEPT inside a string-literal const type
-	 * parameter (`Foo<"a b">`), so when either source carries a quote the comparison
-	 * falls back to verbatim equality.
-	 */
-	private static function sameType(a: String, b: String, importMap: Map<String, String>): Bool {
-		final quoted: Bool = a.indexOf('"') != -1 || a.indexOf("'") != -1 || b.indexOf('"') != -1 || b.indexOf("'") != -1;
-		if (quoted) return a == b;
-		final na: String = stripWs(a);
-		final nb: String = stripWs(b);
-		if (na == nb) return true;
-		final ca: Null<String> = TypeResolver.canonicalTypeName(na, importMap);
-		final cb: Null<String> = TypeResolver.canonicalTypeName(nb, importMap);
-		return ca != null && cb != null && ca == cb;
-	}
-
-	/** `s` with every space / tab / newline removed (whitespace is insignificant in a type). */
-	private static function stripWs(s: String): String {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
-		}
-		return buf.toString();
 	}
 
 }

@@ -807,6 +807,16 @@ typedef RefShape = {
 	 * Optional; unset makes the check a no-op.
 	 */
 	@:optional var nullCoalesceKind: String;
+
+	/**
+	 * The `is` type-check expression kind (`x is T`) — the `redundant-is-check`
+	 * check flags one whose value operand is a plain identifier of declared type
+	 * `T` (and provably non-null), so the test is always true. The node's
+	 * `children[0]` is the value operand, `children[1]` the checked type (its span
+	 * covers the full written type, generics included). Optional; unset makes the
+	 * check a no-op.
+	 */
+	@:optional var isExprKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

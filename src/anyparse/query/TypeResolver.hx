@@ -180,6 +180,31 @@ final class TypeResolver {
 			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, shape.nullSafetyDisableArg);
 	}
 
+	/**
+	 * Whether two type SOURCES denote the same type. Exact (whitespace-insensitive)
+	 * equality is the common case; when the spellings differ, both are canonicalized
+	 * to an FQN via `canonicalTypeName` + the file's `importMap` and compared — so
+	 * `Eof` (imported `haxe.io.Eof`) matches a qualified `haxe.io.Eof`, while
+	 * `haxe.io.Eof` stays distinct from `sys.io.Eof`. A name that canonicalizes to
+	 * null (a generic / function / anon type, or an unresolved bare name) yields no
+	 * cross-spelling match — a safe miss. Sound within one file: an unqualified name
+	 * binds to exactly one type, so equal FQNs are the same type.
+	 *
+	 * Whitespace is insignificant in a type EXCEPT inside a string-literal const type
+	 * parameter (`Foo<"a b">`), so when either source carries a quote the comparison
+	 * falls back to verbatim equality.
+	 */
+	public static function sameTypeSource(a: String, b: String, importMap: Map<String, String>): Bool {
+		final quoted: Bool = a.indexOf('"') != -1 || a.indexOf("'") != -1 || b.indexOf('"') != -1 || b.indexOf("'") != -1;
+		if (quoted) return a == b;
+		final na: String = stripWs(a);
+		final nb: String = stripWs(b);
+		if (na == nb) return true;
+		final ca: Null<String> = canonicalTypeName(na, importMap);
+		final cb: Null<String> = canonicalTypeName(nb, importMap);
+		return ca != null && cb != null && ca == cb;
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
@@ -236,6 +261,16 @@ final class TypeResolver {
 		if (node.name == name) return true;
 		for (c in node.children) if (subtreeHasName(c, name)) return true;
 		return false;
+	}
+
+	/** `s` with every space / tab / newline removed (whitespace is insignificant in a type). */
+	private static function stripWs(s: String): String {
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...s.length) {
+			final c: Int = StringTools.fastCodeAt(s, i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
+		}
+		return buf.toString();
 	}
 
 }
