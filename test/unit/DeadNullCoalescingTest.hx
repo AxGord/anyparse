@@ -55,12 +55,13 @@ class DeadNullCoalescingTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	public function testFixIsNoop(): Void {
+	public function testFixUnwrapsToLeft(): Void {
 		final check: DeadNullCoalescing = new DeadNullCoalescing();
 		final src: String = 'class C { function f(?x:String) { if (x != null) { var n = x ?? "d"; } } }';
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		Assert.equals(0, edits.length);
+		Assert.equals(1, edits.length);
+		Assert.equals('x', edits[0].text);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -74,6 +75,13 @@ class DeadNullCoalescingTest extends Test {
 		Assert.notNull(Linter.byId('dead-null-coalescing'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('dead-null-coalescing'));
+	}
+
+	/**
+	 * Early-return narrowing reaches a `??` after the guard.
+	 */
+	public function testEarlyReturnNarrowing(): Void {
+		Assert.equals(1, violations('class C { function f(?x:String) { if (x == null) return; var n = x ?? "d"; } }').length);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -10,6 +10,7 @@ import anyparse.query.TypeResolver;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags a null-coalescing (`a ?? b`) whose left operand is already non-null **by
@@ -26,8 +27,7 @@ import haxe.Exception;
  *
  * Conservative throughout (see `NullFlow`): every uncertainty collapses to
  * `Unknown`, so only a genuinely dead fallback is reported. `Severity.Info`;
- * report-only for now — the unwrap rewrite the point-wise check applies is deferred
- * here until the flow engine is hardened.
+ * `fix` unwraps to the left operand, the same rewrite `redundant-null-coalescing` applies (sound whenever the proven flow facts hold).
  */
 @:nullSafety(Strict)
 final class DeadNullCoalescing implements Check {
@@ -84,7 +84,26 @@ final class DeadNullCoalescing implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final shape: RefShape = plugin.refShape();
+		final nullCoalesceKind: Null<String> = shape.nullCoalesceKind;
+		if (nullCoalesceKind == null) return [];
+		final coalKind: String = nullCoalesceKind;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) return [];
+		final byKey: Map<String, QueryNode> = [];
+		RefactorSupport.indexNodesByKind(tree, [coalKind], byKey);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
+			if (node == null || node.children.length != 2) continue;
+			final left: QueryNode = node.children[0];
+			final leftSpan: Null<Span> = left.span;
+			if (leftSpan == null) continue;
+			edits.push({ span: span, text: source.substring(leftSpan.from, leftSpan.to) });
+		}
+		return edits;
 	}
 
 }

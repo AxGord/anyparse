@@ -101,6 +101,23 @@ class DeadNullGuardTest extends Test {
 		Assert.isTrue(ids.contains('dead-null-guard'));
 	}
 
+	/**
+	 * After `if (x == null) return;` the fall-through path has x non-null.
+	 */
+	public function testEarlyReturnNarrowing(): Void {
+		Assert.equals(1, violations('class C { function f(?x:String) { if (x == null) return; if (x != null) trace(x); } }').length);
+	}
+
+	/**
+	 * Both arms assign a non-null value, so x is non-null after the if/else (join).
+	 */
+	public function testIfElseJoinNarrowing(): Void {
+		Assert.equals(
+			1,
+			violations('class C { function f(?x:Foo) { if (c()) x = new Foo(); else x = new Foo(); if (x != null) trace(x); } }').length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadNullGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

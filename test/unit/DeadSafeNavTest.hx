@@ -57,12 +57,13 @@ class DeadSafeNavTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	public function testFixIsNoop(): Void {
+	public function testFixRewritesToDot(): Void {
 		final check: DeadSafeNav = new DeadSafeNav();
 		final src: String = 'class C { function f(?x:String) { if (x != null) { var n = x?.length; } } }';
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		Assert.equals(0, edits.length);
+		Assert.equals(1, edits.length);
+		Assert.equals('.', edits[0].text);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -75,6 +76,13 @@ class DeadSafeNavTest extends Test {
 		Assert.notNull(Linter.byId('dead-safe-nav'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('dead-safe-nav'));
+	}
+
+	/**
+	 * Early-return narrowing reaches a `?.` after the guard.
+	 */
+	public function testEarlyReturnNarrowing(): Void {
+		Assert.equals(1, violations('class C { function f(?x:String) { if (x == null) return; var n = x?.length; } }').length);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -24,6 +24,7 @@ private typedef FlowCtx = {
 	var loopKinds: Array<String>;
 	var branchyKinds: Array<String>;
 	var blockKinds: Array<String>;
+	var controlExitKinds: Array<String>;
 	var nonNullRhsKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var nestedFnKinds: Array<String>;
@@ -55,8 +56,7 @@ private typedef FlowCtx = {
  *   write to a name — even one a `bindingSpan` resolver would attribute to a
  *   different same-named sibling-scope local — clears the fact. Over-killing is
  *   a safe miss; under-killing (the unsound direction) cannot happen.
- * - **Conservative joins (no fixpoint yet).** After an `if` / `switch` / `try`
- *   every name assigned anywhere inside is cleared; a loop clears every name it
+ * - **Joins (loops have no fixpoint).** After an `if`, the two arms exit states are intersected (a name survives only if non-null on both fall-through paths), and an arm that returns / throws contributes no path — so `if (x == null) return;` narrows the fall-through. `switch` / `try` clear every name assigned inside (conservative); a loop clears every name it
  *   assigns *before* the body, so a back-edge never carries a stale fact.
  * - **Closures.** A name mutated inside any nested function value is excluded
  *   from narrowing for the whole function (a closure call could reassign it).
@@ -140,7 +140,9 @@ final class NullFlow {
 		return operand.kind == identKind ? operand : null;
 	}
 
-	/** Analyze one function body from a fresh (all-`Unknown`) entry state. */
+	/**
+	 * Analyze one function body from a fresh (all-`Unknown`) entry state.
+	 */
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, identKind: String, visit: (QueryNode, String -> Bool) -> Void
 	): Void {
@@ -157,6 +159,7 @@ final class NullFlow {
 			loopKinds: LOOP_KINDS,
 			branchyKinds: BRANCHY_KINDS,
 			blockKinds: BLOCK_KINDS,
+			controlExitKinds: shape.controlExitKinds ?? [],
 			nonNullRhsKinds: NON_NULL_RHS_KINDS,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			nestedFnKinds: NESTED_FN_KINDS,
@@ -232,19 +235,34 @@ final class NullFlow {
 		final thenArm: QueryNode = node.children[1];
 		final elseArm: Null<QueryNode> = node.children.length > 2 ? node.children[2] : null;
 		walk(cond, state, ctx);
+		// Then-arm: narrow by the `!= null` conjuncts, walked to its exit state.
 		final thenState: Array<String> = state.copy();
 		final narrowedThen: Array<String> = [];
 		collectNarrow(cond, narrowedThen, ctx, ctx.notEqKind, 'And');
 		for (n in narrowedThen) markNonNull(thenState, n);
 		walk(thenArm, thenState, ctx);
-		if (elseArm != null) {
-			final elseState: Array<String> = state.copy();
-			final narrowedElse: Array<String> = [];
-			collectNarrow(cond, narrowedElse, ctx, ctx.eqKind, 'Or');
-			for (n in narrowedElse) markNonNull(elseState, n);
-			walk(elseArm, elseState, ctx);
-		}
-		killWritten(node, state, ctx);
+		// Else path: the explicit arm, or the implicit fall-through, narrowed by the
+		// `== null` disjuncts (the negated condition — `!(a || b)` = `!a && !b`).
+		final elseState: Array<String> = state.copy();
+		final narrowedElse: Array<String> = [];
+		collectNarrow(cond, narrowedElse, ctx, ctx.eqKind, 'Or');
+		for (n in narrowedElse) markNonNull(elseState, n);
+		if (elseArm != null) walk(elseArm, elseState, ctx);
+		// Join: a name is non-null after the `if` only if non-null on every path that
+		// falls through to here. An arm that returns / throws contributes no path, so
+		// the surviving arm's state passes through unintersected — this is what gives
+		// early-return narrowing (`if (x == null) return;` leaves x non-null after).
+		final thenExits: Bool = armExits(thenArm, ctx);
+		final elseExits: Bool = elseArm != null && armExits(elseArm, ctx);
+		final post: Array<String> = if (thenExits && elseExits)
+			[];
+		else if (thenExits)
+			elseState;
+		else if (elseExits)
+			thenState;
+		else
+			intersect(thenState, elseState);
+		setState(state, post);
 	}
 
 	/** Loop: clear every name the loop assigns before walking it (back-edge soundness); the post-state is that cleared state. */
@@ -343,6 +361,30 @@ final class NullFlow {
 	/** Record `name` as `NonNull` in `state` (the set of names provably non-null by flow), deduplicated. */
 	private static inline function markNonNull(state: Array<String>, name: String): Void {
 		if (!state.contains(name)) state.push(name);
+	}
+
+	/**
+	 * Whether `arm` definitely transfers control out instead of falling through to the
+	 * statement after the enclosing `if` — a `return` / `throw` (`RefShape.controlExitKinds`),
+	 * or a block whose last statement does. Conservative: anything it cannot prove exits
+	 * (including `break` / `continue`) is treated as falling through, which only ever loses
+	 * precision in the join, never soundness.
+	 */
+	private static function armExits(arm: QueryNode, ctx: FlowCtx): Bool {
+		if (ctx.controlExitKinds.contains(arm.kind)) return true;
+		if (ctx.blockKinds.contains(arm.kind) && arm.children.length > 0) return armExits(arm.children[arm.children.length - 1], ctx);
+		return false;
+	}
+
+	/** The names present in both `a` and `b` — a name is non-null after a join only if non-null on both arms. */
+	private static function intersect(a: Array<String>, b: Array<String>): Array<String> {
+		return [for (n in a) if (b.contains(n)) n];
+	}
+
+	/** Replace the contents of `state` in place with `names` (the running state is mutated for the caller). */
+	private static inline function setState(state: Array<String>, names: Array<String>): Void {
+		state.resize(0);
+		for (n in names) state.push(n);
 	}
 
 }

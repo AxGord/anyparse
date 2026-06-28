@@ -26,8 +26,7 @@ import haxe.Exception;
  *
  * Conservative throughout (see `NullFlow`): every uncertainty collapses to
  * `Unknown`, so only a genuinely redundant `?.` is reported. `Severity.Info`;
- * report-only for now — the `?.`→`.` rewrite the point-wise check applies is
- * deferred here until the flow engine is hardened.
+ * `fix` rewrites `?.`→`.`, the same unambiguous rewrite `unnecessary-safe-nav` applies (sound whenever the proven flow facts hold).
  */
 @:nullSafety(Strict)
 final class DeadSafeNav implements Check {
@@ -84,7 +83,17 @@ final class DeadSafeNav implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final marker: String = '?.';
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final rel: Int = source.substring(span.from, span.to).indexOf(marker);
+			if (rel < 0) continue;
+			final at: Int = span.from + rel;
+			edits.push({ span: new Span(at, at + marker.length), text: '.' });
+		}
+		return edits;
 	}
 
 }
