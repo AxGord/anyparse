@@ -79,7 +79,8 @@ final class Linter {
 			new RedundantCast(),
 			new RedundantNullCoalescing(),
 			new UnnecessarySafeNav(),
-			new RedundantIsCheck()
+			new RedundantIsCheck(),
+			new ImpossibleIsCheck()
 		];
 	}
 

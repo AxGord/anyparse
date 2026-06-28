@@ -236,6 +236,20 @@ final class SymbolIndex {
 		return supertypeDeclares(typeName, field, []);
 	}
 
+	/**
+	 * Whether `a` and `b` are provably UNRELATED classes — both resolve to a unique
+	 * indexed CLASS decl, are distinct, and neither is a transitive supertype of the
+	 * other with BOTH supertype closures fully resolved inside the index. Sound for the
+	 * always-false `is` check: two unrelated classes share no common subtype under Haxe
+	 * single inheritance, so a value of one can never be an instance of the other. Names
+	 * are SIMPLE; an ambiguous simple name (0 or >1 indexed decls) → false. Resolution is by SIMPLE name (the index models no packages), so a simple-name collision with an external supertype is the residual soundness boundary.
+	 */
+	public function unrelatedClasses(a: String, b: String): Bool {
+		if (a == b) return false;
+		if (!isUniqueClass(a) || !isUniqueClass(b)) return false;
+		return closureExcludes(a, b, [a]) && closureExcludes(b, a, [b]);
+	}
+
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
@@ -249,6 +263,37 @@ final class SymbolIndex {
 	private function declaresMember(typeName: String, field: String): Bool {
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) if (t.members.exists(m -> m.name == field)) return true;
 		return false;
+	}
+
+	/** Exactly one indexed decl is named `name`, and it is a class. */
+	private function isUniqueClass(name: String): Bool {
+		final ds: Array<TypeDeclInfo> = declsNamed(name);
+		return ds.length == 1 && ds[0].kind == 'ClassDecl';
+	}
+
+	/** Every indexed type decl whose simple name is `name`, across all files. */
+	private function declsNamed(name: String): Array<TypeDeclInfo> {
+		final out: Array<TypeDeclInfo> = [];
+		for (fi in _files) for (t in fi.types) if (t.name == name) out.push(t);
+		return out;
+	}
+
+	/**
+	 * Whether `name`'s transitive supertype closure is FULLY index-resolved AND excludes
+	 * `target`. A supertype name absent or ambiguous in the index (an external type, or a
+	 * project file not in the set) makes the relation unknown → false, as does reaching
+	 * `target` itself. `seen` guards cycles.
+	 */
+	private function closureExcludes(name: String, target: String, seen: Array<String>): Bool {
+		final ds: Array<TypeDeclInfo> = declsNamed(name);
+		if (ds.length != 1) return false;
+		for (sup in ds[0].supertypes) {
+			if (sup == target) return false;
+			if (seen.contains(sup)) continue;
+			seen.push(sup);
+			if (!closureExcludes(sup, target, seen)) return false;
+		}
+		return true;
 	}
 
 	/**

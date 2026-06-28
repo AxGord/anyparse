@@ -320,6 +320,7 @@ import unit.RedundantCastCheckTest;
 import unit.RedundantNullCoalescingCheckTest;
 import unit.UnnecessarySafeNavCheckTest;
 import unit.RedundantIsCheckTest;
+import unit.ImpossibleIsCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -609,6 +610,7 @@ class RunTests {
 		addCase(new RedundantCastCheckTest());
 		addCase(new RedundantNullCoalescingCheckTest());
 		addCase(new RedundantIsCheckTest());
+		addCase(new ImpossibleIsCheckTest());
 		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
