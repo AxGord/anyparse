@@ -325,6 +325,8 @@ import unit.UnreachableCatchTest;
 import unit.ImpossibleCastTest;
 import unit.RedundantUpcastTest;
 import unit.DeadNullGuardTest;
+import unit.DeadSafeNavTest;
+import unit.DeadNullCoalescingTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -619,6 +621,8 @@ class RunTests {
 		addCase(new ImpossibleCastTest());
 		addCase(new RedundantUpcastTest());
 		addCase(new DeadNullGuardTest());
+		addCase(new DeadSafeNavTest());
+		addCase(new DeadNullCoalescingTest());
 		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());

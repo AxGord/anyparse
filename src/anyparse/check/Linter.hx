@@ -84,7 +84,9 @@ final class Linter {
 			new UnreachableCatch(),
 			new ImpossibleCast(),
 			new RedundantUpcast(),
-			new DeadNullGuard()
+			new DeadNullGuard(),
+			new DeadNullCoalescing(),
+			new DeadSafeNav()
 		];
 	}
 

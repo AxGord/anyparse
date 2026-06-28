@@ -97,7 +97,7 @@ class NamingCheckTest extends Test {
 		Assert.notNull(Linter.byId('naming'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('naming'));
-		Assert.equals(57, Linter.builtins().length);
+		Assert.equals(59, Linter.builtins().length);
 	}
 
 	public function testSkipParseNoCrash(): Void {

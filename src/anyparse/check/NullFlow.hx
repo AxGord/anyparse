@@ -15,6 +15,7 @@ private typedef FlowCtx = {
 	var identKind: String;
 	var assignKind: Null<String>;
 	var notEqKind: Null<String>;
+	var eqKind: Null<String>;
 	var nullLitKind: Null<String>;
 	var parenKind: Null<String>;
 	var writeKinds: Array<String>;
@@ -39,8 +40,7 @@ private typedef FlowCtx = {
  * ## What it proves
  *
  * A name is `NonNull`-by-flow at a point when it is non-null on **every** path
- * reaching that point — established only by a flow event: a `n != null` guard
- * narrowing the controlled branch, or an assignment of a syntactically non-null
+ * reaching that point — established only by a flow event: a guard narrowing a branch (a `!= null` then-arm or an `== null` else-arm), or an assignment of a syntactically non-null
  * value (`new T(...)`, a non-null literal). It seeds **no** facts from declared
  * types — declared-non-null is the point-wise checks' domain
  * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only
@@ -147,6 +147,7 @@ final class NullFlow {
 		final ctx: FlowCtx = {
 			identKind: identKind,
 			assignKind: shape.assignKind,
+			eqKind: shape.eqKind,
 			notEqKind: shape.notEqKind,
 			nullLitKind: shape.nullLiteralKind,
 			parenKind: shape.parenKind,
@@ -231,12 +232,18 @@ final class NullFlow {
 		final thenArm: QueryNode = node.children[1];
 		final elseArm: Null<QueryNode> = node.children.length > 2 ? node.children[2] : null;
 		walk(cond, state, ctx);
-		final narrowed: Array<String> = [];
-		guardNonNullNames(cond, narrowed, ctx);
 		final thenState: Array<String> = state.copy();
-		for (n in narrowed) markNonNull(thenState, n);
+		final narrowedThen: Array<String> = [];
+		collectNarrow(cond, narrowedThen, ctx, ctx.notEqKind, 'And');
+		for (n in narrowedThen) markNonNull(thenState, n);
 		walk(thenArm, thenState, ctx);
-		if (elseArm != null) walk(elseArm, state.copy(), ctx);
+		if (elseArm != null) {
+			final elseState: Array<String> = state.copy();
+			final narrowedElse: Array<String> = [];
+			collectNarrow(cond, narrowedElse, ctx, ctx.eqKind, 'Or');
+			for (n in narrowedElse) markNonNull(elseState, n);
+			walk(elseArm, elseState, ctx);
+		}
 		killWritten(node, state, ctx);
 	}
 
@@ -308,23 +315,28 @@ final class NullFlow {
 	}
 
 	/**
-	 * The names a condition proves non-null for its controlled (then / true)
-	 * branch — a bare `n != null`, each `!= null` conjunct of an `&&`, through a
-	 * parenthesized wrapper. An `||`, an `== null`, or any other shape narrows
-	 * nothing.
+	 * Collect into `out` the names a condition proves non-null for one branch — the
+	 * then-arm via `(notEqKind, 'And')` (each `!= null` conjunct), the else-arm via
+	 * `(eqKind, 'Or')` (each `== null` disjunct — the negated condition). A bare
+	 * comparison, every matching child of the combining operator, and a parenthesized
+	 * wrapper are descended; any other shape narrows nothing. Soundness rests on the
+	 * duality: the then-arm holds the `&&` of the condition, the else-arm the negation
+	 * (`!(a || b)` = `!a && !b`), so an `== null` disjunct proves non-null when false.
 	 */
-	private static function guardNonNullNames(cond: QueryNode, out: Array<String>, ctx: FlowCtx): Void {
+	private static function collectNarrow(
+		cond: QueryNode, out: Array<String>, ctx: FlowCtx, cmpKind: Null<String>, combineKind: String
+	): Void {
 		final kind: String = cond.kind;
-		if (kind == ctx.notEqKind) {
+		if (cmpKind != null && kind == cmpKind) {
 			final operand: Null<QueryNode> = nullComparisonOperand(cond, ctx.identKind, ctx.nullLitKind);
 			if (operand != null) {
 				final nm: Null<String> = operand.name;
 				if (nm != null) out.push(nm);
 			}
-		} else if (kind == 'And') {
-			for (c in cond.children) guardNonNullNames(c, out, ctx);
+		} else if (kind == combineKind) {
+			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind);
 		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
-			guardNonNullNames(cond.children[0], out, ctx);
+			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind);
 		}
 	}
 
