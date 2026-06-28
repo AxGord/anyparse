@@ -5,46 +5,41 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeResolver;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
 /**
- * Flags a null comparison (`x != null` / `x == null`) whose operand is already
- * provably non-null **by flow** on every path reaching it — a dead guard: the
- * controlled branch is constant (always taken for `!=`, never for `==`).
+ * Flags a null comparison (`x == null` / `x != null`) whose operand is provably
+ * **null** by flow on every path reaching it — a constant comparison: `== null`
+ * is always true, `!= null` always false, so the controlled branch is dead.
  *
- * ## Flow-only — complements the point-wise checks, never duplicates them
- *
- * Non-null-ness is established by `NullFlow` purely from flow events: an earlier
- * `if (x != null)` narrowing this path, or a syntactically-non-null assignment
- * (`x = new T()`). It deliberately does NOT seed declared types, and it skips
- * any operand the declared prover `TypeResolver.isProvablyNonNull` already
- * proves non-null — those belong to `unnecessary-null-check`. So a redundant
- * null comparison is reported exactly once: by `unnecessary-null-check` when the
- * declared type proves it, by `dead-null-guard` when only the flow does.
+ * The mirror of `dead-null-guard` (which flags a non-null operand): there a
+ * `!= null` is always true; here a known-null operand makes `== null` always
+ * true. Null-ness comes purely from `NullFlow`'s flow events — an earlier
+ * `x = null` / `var x = null`, or the `== null` arm of a guard narrowing this
+ * path. There is no point-wise twin: no declared type is "always null" (a
+ * `Null<T>` is merely nullable), so unlike `dead-null-guard` it has nothing to
+ * defer to and no `isProvablyNonNull` skip.
  *
  * Conservative throughout (see `NullFlow`): every uncertainty — a join, a loop
  * back-edge, a closure-captured name, a macro subtree — collapses to `Unknown`,
- * so the check reports only a genuinely dead guard, never a load-bearing one.
+ * so only a genuinely constant comparison is reported.
  *
- * `Severity.Info`; report-only — the correct rewrite (drop the guard and keep
- * the body, or collapse an `&&` conjunct) is context-dependent, so `fix` is a
- * no-op, mirroring `unnecessary-null-check`.
+ * `Severity.Info`; report-only — the correct rewrite (drop the dead branch,
+ * keep the live one) is context-dependent, mirroring `dead-null-guard`.
  */
 @:nullSafety(Strict)
-final class DeadNullGuard implements Check {
+final class AlwaysNullComparison implements Check {
 
 	public function new() {}
 
 	public function id(): String {
-		return 'dead-null-guard';
+		return 'always-null-comparison';
 	}
 
 	public function description(): String {
-		return 'a null comparison whose operand is already non-null on every path reaching it';
+		return 'a null comparison whose operand is provably null on every path reaching it — the comparison is constant';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -55,31 +50,31 @@ final class DeadNullGuard implements Check {
 		if (equalityKinds.length == 0 || identKind == null || nullLitKind == null) return [];
 		final nullLit: String = nullLitKind;
 		final ident: String = identKind;
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final eqKind: Null<String> = shape.eqKind;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) continue;
-			final root: QueryNode = tree;
-			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
-			NullFlow.analyze(root, shape, (node, facts) -> {
+			NullFlow.analyze(tree, shape, (node, facts) -> {
 				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
 				final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, ident, nullLit);
 				final span: Null<Span> = node.span;
 				if (operand == null || span == null) return;
 				final name: Null<String> = operand.name;
 				if (name == null) return;
-				// Owned by `unnecessary-null-check` when the declared type proves it.
-				if (TypeResolver.isProvablyNonNull(operand, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name))
+				if (facts.isNull(name)) {
+					final alwaysTrue: Bool = eqKind != null && node.kind == eqKind;
 					violations.push({
 						file: entry.file,
 						span: span,
-						rule: 'dead-null-guard',
+						rule: 'always-null-comparison',
 						severity: Severity.Info,
-						message: 'null check is redundant — operand is already non-null on this path'
+						message: alwaysTrue
+							? 'null comparison is always true — operand is null on every path'
+							: 'null comparison is always false — operand is null on every path'
 					});
+				}
 			});
 		}
 		return violations;

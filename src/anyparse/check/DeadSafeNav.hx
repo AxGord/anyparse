@@ -58,7 +58,7 @@ final class DeadSafeNav implements Check {
 			if (tree == null) continue;
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
-			NullFlow.analyze(root, shape, (node, query) -> {
+			NullFlow.analyze(root, shape, (node, facts) -> {
 				if (node.kind != navKind || node.children.length != 1) return;
 				final receiver: QueryNode = node.children[0];
 				final span: Null<Span> = node.span;
@@ -67,7 +67,7 @@ final class DeadSafeNav implements Check {
 				if (name == null) return;
 				// Owned by `unnecessary-safe-nav` when the declared type proves it.
 				if (TypeResolver.isProvablyNonNull(receiver, root, shape, declaredTypes)) return;
-				if (query(name))
+				if (facts.nonNull(name))
 					violations.push({
 						file: entry.file,
 						span: span,
