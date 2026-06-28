@@ -467,6 +467,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			supertypeClauseKinds: ['ExtendsClause', 'ImplementsClause'],
 			noBodyKind: 'NoBody',
 			catchClauseKind: 'CatchClause',
+			catchAllTypeNames: ['Dynamic', 'Any'],
 			controlExitKinds: ['ThrowStmt', 'ThrowExpr', 'ReturnStmt', 'VoidReturnStmt'],
 			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
 			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],

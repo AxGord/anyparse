@@ -105,10 +105,7 @@ final class TypeResolver {
 	 */
 	public static function canonicalTypeName(typeSrc: String, importMap: Map<String, String>): Null<String> {
 		for (i in 0...typeSrc.length) {
-			final c: Int = StringTools.fastCodeAt(typeSrc, i);
-			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
-				|| c == '_'.code || c == '.'.code;
-			if (!ok) return null;
+			if (!isNominalChar(StringTools.fastCodeAt(typeSrc, i))) return null;
 		}
 		return typeSrc.indexOf('.') != -1 ? typeSrc : importMap[typeSrc];
 	}
@@ -205,6 +202,30 @@ final class TypeResolver {
 		return ca != null && cb != null && ca == cb;
 	}
 
+	/**
+	 * The simple name of a plain nominal type SOURCE `typeSrc` — whitespace stripped, the
+	 * last `.`-segment. Null when `typeSrc` is null or NOT a plain nominal (a generic /
+	 * function / anonymous type — any char outside `[A-Za-z0-9_.]`). Lets a check key a
+	 * `SymbolIndex` lookup (simple-name based) off a written type while rejecting shapes
+	 * that can never name a single indexed class. Shared by `impossible-is-check` and
+	 * `unreachable-catch`.
+	 */
+	public static function simpleNominalName(typeSrc: Null<String>): Null<String> {
+		if (typeSrc == null) return null;
+		final src: String = typeSrc;
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...src.length) {
+			final c: Int = StringTools.fastCodeAt(src, i);
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) continue;
+			if (!isNominalChar(c)) return null;
+			buf.addChar(c);
+		}
+		final s: String = buf.toString();
+		if (s == '') return null;
+		final dot: Int = s.lastIndexOf('.');
+		return dot == -1 ? s : s.substring(dot + 1);
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
@@ -271,6 +292,12 @@ final class TypeResolver {
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
 		}
 		return buf.toString();
+	}
+
+	/** Whether `c` is a character of a plain nominal type reference — `[A-Za-z0-9_.]`. */
+	private static inline function isNominalChar(c: Int): Bool {
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
+			|| c == '.'.code;
 	}
 
 }

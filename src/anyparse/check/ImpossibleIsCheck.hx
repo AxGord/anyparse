@@ -74,8 +74,10 @@ final class ImpossibleIsCheck implements Check {
 					final operand: QueryNode = node.children[0];
 					final typeSpan: Null<Span> = node.children[1].span;
 					if (span != null && typeSpan != null) {
-						final sName: Null<String> = simpleName(TypeResolver.identTypeName(operand, root, shape, declaredTypes));
-						final tName: Null<String> = simpleName(nominalName(entry.source.substring(typeSpan.from, typeSpan.to)));
+						final sName: Null<String> = TypeResolver.simpleNominalName(TypeResolver.identTypeName(
+							operand, root, shape, declaredTypes
+						));
+						final tName: Null<String> = TypeResolver.simpleNominalName(entry.source.substring(typeSpan.from, typeSpan.to));
 						if (sName != null && tName != null && index.unrelatedClasses(sName, tName)) violations.push({
 							file: entry.file,
 							span: span,
@@ -96,33 +98,6 @@ final class ImpossibleIsCheck implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		return [];
-	}
-
-	/**
-	 * The written type `src` reduced to a plain nominal (only `[A-Za-z0-9_.]`, whitespace
-	 * stripped), or null for a generic / function / anonymous type — those can never be a
-	 * provably-unrelated class pair.
-	 */
-	private static function nominalName(src: String): Null<String> {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...src.length) {
-			final c: Int = StringTools.fastCodeAt(src, i);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) continue;
-			final ok: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
-				|| c == '_'.code || c == '.'.code;
-			if (!ok) return null;
-			buf.addChar(c);
-		}
-		final s: String = buf.toString();
-		return s == '' ? null : s;
-	}
-
-	/** The simple name (last `.`-segment) of a dotted nominal; null in → null out. */
-	private static function simpleName(name: Null<String>): Null<String> {
-		if (name == null) return null;
-		final n: String = name;
-		final dot: Int = n.lastIndexOf('.');
-		return dot == -1 ? n : n.substring(dot + 1);
 	}
 
 }

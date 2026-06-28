@@ -250,6 +250,18 @@ final class SymbolIndex {
 		return closureExcludes(a, b, [a]) && closureExcludes(b, a, [b]);
 	}
 
+	/**
+	 * Whether `sub` is a transitive (proper) SUBTYPE of `sup` — `sup`'s simple name
+	 * appears in `sub`'s transitive supertype closure (extends + implements). Positive
+	 * direction: an unindexed or ambiguous supertype link simply ends that branch (a safe
+	 * MISS, never a false claim of subtyping); not reflexive (`sub == sup` → false — the
+	 * caller decides same-type separately). Names are SIMPLE; a same-named unrelated type
+	 * in the chain is the residual soundness boundary, as in `unrelatedClasses`.
+	 */
+	public function isSubtype(sub: String, sup: String): Bool {
+		return closureContains(sub, sup, [sub]);
+	}
+
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
@@ -294,6 +306,19 @@ final class SymbolIndex {
 			if (!closureExcludes(sup, target, seen)) return false;
 		}
 		return true;
+	}
+
+	/** Whether `target` appears in `name`'s transitive supertype closure. `seen` guards cycles. */
+	private function closureContains(name: String, target: String, seen: Array<String>): Bool {
+		final ds: Array<TypeDeclInfo> = declsNamed(name);
+		if (ds.length != 1) return false;
+		for (sup in ds[0].supertypes) {
+			if (sup == target) return true;
+			if (seen.contains(sup)) continue;
+			seen.push(sup);
+			if (closureContains(sup, target, seen)) return true;
+		}
+		return false;
 	}
 
 	/**

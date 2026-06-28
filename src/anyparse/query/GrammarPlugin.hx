@@ -817,6 +817,14 @@ typedef RefShape = {
 	 * check a no-op.
 	 */
 	@:optional var isExprKind: String;
+
+	/**
+	 * Type names that, as an EARLIER catch-clause exception type, catch every thrown
+	 * value (Haxe `Dynamic` / `Any`), making any later clause unreachable. The
+	 * `unreachable-catch` check reads these. Optional; unset → only same-type and
+	 * subtype-after-supertype unreachability is detected.
+	 */
+	@:optional var catchAllTypeNames: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

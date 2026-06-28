@@ -80,7 +80,8 @@ final class Linter {
 			new RedundantNullCoalescing(),
 			new UnnecessarySafeNav(),
 			new RedundantIsCheck(),
-			new ImpossibleIsCheck()
+			new ImpossibleIsCheck(),
+			new UnreachableCatch()
 		];
 	}
 
