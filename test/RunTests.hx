@@ -323,6 +323,7 @@ import unit.RedundantIsCheckTest;
 import unit.ImpossibleIsCheckTest;
 import unit.UnreachableCatchTest;
 import unit.ImpossibleCastTest;
+import unit.RedundantUpcastTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -615,6 +616,7 @@ class RunTests {
 		addCase(new ImpossibleIsCheckTest());
 		addCase(new UnreachableCatchTest());
 		addCase(new ImpossibleCastTest());
+		addCase(new RedundantUpcastTest());
 		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
