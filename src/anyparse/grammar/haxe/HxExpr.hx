@@ -116,9 +116,7 @@ package anyparse.grammar.haxe;
  *    the regex on the first byte and `tryBranch` rolls back. Used by
  *    `@:privateAccess (X).object` and similar argument-position metas.
  *  - `IdentExpr` — bare identifier (`other`). **Must appear last**
- *    among the pure atom branches: the identifier regex is permissive
- *    and would otherwise match `null` / `true` / `false` as bare
- *    identifiers.
+ *    among the pure atom branches: the identifier regex is permissive and would otherwise match `null` / `true` / `false` as bare identifiers. The terminal is the guarded `HxExprIdentLit` (not the plain `HxIdentLit`): control-flow keywords are rejected up front so a failed keyword-atom branch fail-rewinds honestly instead of re-matching its keyword as a call head (`if (a == b)` → `Call(IdentExpr if, …)`), which would poison ordered-choice fallbacks like `CondSpliceStmt`.
  *  - `DollarBlockExpr` / `DollarReifExpr` / `DollarIdentExpr` — macro
  *    reification escapes (`${expr}`, `$name{expr}`, `$ident`). Exact
  *    expression-position mirror of the `HxStringSegment` interpolation
@@ -391,6 +389,9 @@ enum HxExpr {
 	@:kw('for') @:fmt(forPolicy)
 	ForExpr(stmt: HxForExpr);
 
+	@:kw('for') @:fmt(forPolicy)
+	ForReifExpr(inner: HxForReif);
+
 	@:kw('while') @:fmt(whilePolicy)
 	WhileExpr(stmt: HxWhileExpr);
 
@@ -472,7 +473,7 @@ enum HxExpr {
 
 	MetaExpr(v: HxMetaExpr);
 
-	IdentExpr(v: HxIdentLit);
+	IdentExpr(v: HxExprIdentLit);
 
 	@:prefix('++')
 	PreIncr(operand: HxExpr);

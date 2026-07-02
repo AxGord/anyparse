@@ -396,6 +396,12 @@ enum HxStatement {
 	@:kw('do') @:trail(';')
 	DoWhileStmt(stmt: HxDoWhileStmt);
 
+	@:kw('break') @:trail(';')
+	BreakStmt;
+
+	@:kw('continue') @:trail(';')
+	ContinueStmt;
+
 	@:kw('try') @:fmt(tryPolicy, forwardNewlineForBody)
 	TryCatchStmt(stmt: HxTryCatchStmt);
 

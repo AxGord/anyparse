@@ -254,7 +254,7 @@ final class ExtractMethod {
 				found = true;
 				return;
 			}
-			if (node.kind == 'IdentExpr' && (node.name == 'break' || node.name == 'continue')) {
+			if (node.kind == 'BreakStmt' || node.kind == 'ContinueStmt') {
 				found = true;
 				return;
 			}

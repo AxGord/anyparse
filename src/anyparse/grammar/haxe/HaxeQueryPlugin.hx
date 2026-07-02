@@ -471,7 +471,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			noBodyKind: 'NoBody',
 			catchClauseKind: 'CatchClause',
 			catchAllTypeNames: ['Dynamic', 'Any'],
-			controlExitKinds: ['ThrowStmt', 'ThrowExpr', 'ReturnStmt', 'VoidReturnStmt'],
+			controlExitKinds: [
+				'ThrowStmt',
+				'ThrowExpr',
+				'ReturnStmt',
+				'VoidReturnStmt',
+				'BreakStmt',
+				'ContinueStmt'
+			],
 			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
 			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],
 			memberDeclKinds: ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'],
@@ -493,7 +500,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionalIfKeyword: '#if',
 			conditionalElseKeywords: ['#else', '#elseif'],
 			stringInterpIdentKind: 'Ident',
-			loopJumpNames: ['break', 'continue'],
+
 			declTypeChildKinds: ['Anon'],
 			defaultBranchKind: 'DefaultBranch',
 			plainCasePatternKind: 'Plain',

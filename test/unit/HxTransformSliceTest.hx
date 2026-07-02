@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
 import anyparse.grammar.haxe.HxModuleAst;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxIntLit;
+import anyparse.grammar.haxe.HxExprIdentLit;
 
 /**
  * Coverage for the macro-generated DEEP multi-type transform over the
@@ -69,6 +70,7 @@ class HxTransformSliceTest extends Test {
 		final ast: HxModule = HaxeModuleParser.parse(src);
 		final out: String = HxModuleWriter.write(HxModuleAst.transform(ast, {
 			hxIdentLit: renameFooToBar,
+			hxExprIdentLit: renameExprFooToBar,
 		}));
 		// Every `foo` identifier became `bar`; `keep` is untouched.
 		Assert.isTrue(out.indexOf('foo') == -1, 'a `foo` survived the rename in: <$out>');
@@ -90,6 +92,10 @@ class HxTransformSliceTest extends Test {
 	/** Rename the identifier `foo` to `bar`; pass everything else through. */
 	private static function renameFooToBar(id: HxIdentLit): HxIdentLit {
 		return (id: String) == 'foo' ? ('bar': HxIdentLit) : id;
+	}
+
+	private static function renameExprFooToBar(id: HxExprIdentLit): HxExprIdentLit {
+		return (id: String) == 'foo' ? ('bar': HxExprIdentLit) : id;
 	}
 
 	// ---------------- functional: double integer literals ----------------
