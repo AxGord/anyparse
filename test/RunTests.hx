@@ -337,6 +337,7 @@ import unit.HxAnonTypeSourceTrailCommaSliceTest;
 import unit.HxFnMemberTrailSemiSliceTest;
 import unit.IfFalseDeadCodeCheckTest;
 import unit.HxExprIdentGuardSliceTest;
+import unit.HxThinArrowTrailingLambdaSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -509,6 +510,7 @@ class RunTests {
 		addCase(new HxAnonTypeSourceTrailCommaSliceTest());
 		addCase(new HxFnMemberTrailSemiSliceTest());
 		addCase(new HxExprIdentGuardSliceTest());
+		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
 		addCase(new HxBinaryChainWrapSliceTest());
 		addCase(new HxBinopGroupWrapSliceTest());

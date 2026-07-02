@@ -6594,13 +6594,29 @@ class WriterLowering {
 		// — the next Text from `$rightCall` flushes the OptSpace.
 		// Tight ops keep the original single-Text shape (no spaces).
 		final opEmitExpr: Expr = infixPolicyFlag != null ? whitespacePolicyInfix(opText, infixPolicyFlag) : macro _dt($v{opWithSpaces});
+		// ω-thin-arrow-body-marker: the infix `->` lambda (`arg -> body`,
+		// Pratt path — no typedef field to carry `@:fmt(arrowBodyLineWrap)`
+		// the way `HxThinParenLambda.body` does) opts into the same
+		// `_dwb(_dile(...))` arrow-body wrap marker via a ctor-level
+		// `@:fmt(arrowBodyLineWrap)`. Besides the line-wrap itself, the
+		// marker is what `WrapList.isArrowBodyMarker` detects — without it
+		// a trailing `arg -> { … }` call arg never reaches the sole-arrow /
+		// multi-arg block-lambda glue shapes and the enclosing call opens
+		// every arg one indent deeper instead of keeping the head glued.
+		final rightEmit: Expr = branch.fmtHasFlag('arrowBodyLineWrap')
+			? macro {
+				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+				final _doc: anyparse.core.Doc = $rightCall;
+				_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
+			}
+			: rightCall;
 		final innerExpr: Expr = isAssign && !isTight
 			? macro _dc([
 				$leftCall,
 				_dt(' '),
 				_dt($v{opText}),
 				_dop(' '),
-				$rightCall,
+				$rightEmit,
 			])
 			: macro _dc([
 				$leftCall,

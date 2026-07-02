@@ -632,7 +632,7 @@ enum HxExpr {
 	@:infix('||=', 0, 'Right') @:fmt(propagateExprPosition)
 	BoolOrAssign(left: HxExpr, right: HxExpr);
 
-	@:infix('->', 0, 'Right') @:fmt(propagateExprPosition)
+	@:infix('->', 0, 'Right') @:fmt(propagateExprPosition, arrowBodyLineWrap)
 	ThinArrow(left: HxExpr, right: HxExpr);
 
 	@:infix('=>', 0, 'Right') @:fmt(propagateExprPosition)
