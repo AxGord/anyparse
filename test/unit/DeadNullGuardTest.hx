@@ -252,6 +252,48 @@ class DeadNullGuardTest extends Test {
 		);
 	}
 
+	public function testShortCircuitAndRhsWriteNotFlagged(): Void {
+		// The `&&` right side runs only when c is true — its write is one path, so the guard after is live.
+		Assert.equals(
+			0,
+			violations('class C { function f(c:Bool) { var x = null; var ok = c && (x = "v") != null; if (x != null) trace(x); } }').length
+		);
+	}
+
+	public function testShortCircuitOrRhsWriteNotFlagged(): Void {
+		// The `||` mirror: the right side runs only when c is false.
+		Assert.equals(
+			0,
+			violations('class C { function f(c:Bool) { var x = null; var ok = c || (x = "v") != null; if (x != null) trace(x); } }').length
+		);
+	}
+
+	public function testDuplicateConjunctFlagged(): Void {
+		// The second conjunct sees the first one's narrowing — `x != null && x != null` is dead.
+		Assert.equals(1, violations('class C { function f(?x:String) { if (x != null && x != null) trace(x); } }').length);
+	}
+
+	public function testCondWriteStaleNarrowingNotFlagged(): Void {
+		// The condition writes x after comparing it — its narrowing is stale, the inner guard is live.
+		Assert.equals(
+			0,
+			violations('class C { function f(?x:String) { if (x != null && (x = null) == null) { if (x != null) trace(x); } } }').length
+		);
+	}
+
+	public function testNullCoalFallbackWriteIsConditional(): Void {
+		// A `??` fallback runs only when the left side is null — its write is one path.
+		Assert.equals(
+			0,
+			violations('class C { function f(a:Null<String>) { var x = null; var r = a ?? (x = "v"); if (x == null) trace(r); } }').length
+		);
+	}
+
+	public function testMetaArgWriteNotExecuted(): Void {
+		// A metadata argument never runs — `@:m(x = "v")` must not mark x non-null.
+		Assert.equals(0, violations('class C { function f() { var x = null; @:m(x = "v") trace(1); if (x != null) trace(2); } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadNullGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

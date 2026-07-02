@@ -191,6 +191,24 @@ class AlwaysNullComparisonTest extends Test {
 		);
 	}
 
+	public function testDuplicateNullConjunctFlagged(): Void {
+		// The second conjunct sees the first one's known-null narrowing — only it is constant.
+		Assert.equals(1, violations('class C { function f(?x:String) { if (x == null && x == null) trace(1); } }').length);
+	}
+
+	public function testShortCircuitRhsWriteIsConditional(): Void {
+		// A null write inside the `&&` right side is one path — the comparison after is not constant.
+		Assert.equals(
+			0,
+			violations('class C { function f(c:Bool) { var x = "a"; var b = c && (x = null) == null; if (x == null) trace(1); } }').length
+		);
+	}
+
+	public function testMetaArgWriteStaysNull(): Void {
+		// The meta-arg write never executes, so x stays known-null — the guard is constant-false.
+		Assert.equals(1, violations('class C { function f() { var x = null; @:m(x = "v") trace(1); if (x != null) trace(2); } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new AlwaysNullComparison().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

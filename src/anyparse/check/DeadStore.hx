@@ -214,6 +214,7 @@ final class DeadStore implements Check {
 	 */
 	private static function walkBack(node: QueryNode, live: Array<String>, scope: QueryNode, ctx: LiveCtx): Void {
 		final kind: String = node.kind;
+		if (NullFlow.META_KINDS.contains(kind)) return;
 		if (ctx.opaqueKinds.contains(kind)) {
 			setTop(live, ctx);
 			return;

@@ -206,6 +206,12 @@ class DeadStoreTest extends Test {
 		);
 	}
 
+	public function testMetaArgWriteDoesNotKill(): Void {
+		// A metadata argument never runs — `@:m(y = 2)` is not a store and must not
+		// kill the initializer's liveness before the real read.
+		Assert.equals(0, violations('class C { function f():Void { var y = 1; @:m(y = 2) trace(y); } }').length);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('dead-store'));
 	}

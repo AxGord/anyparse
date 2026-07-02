@@ -10,15 +10,18 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 /**
- * Flags a field / method access (`a.b` / `a.m()`) whose receiver is provably
- * **null** by flow on every path reaching it — a guaranteed null dereference
- * that throws at runtime. The headline bug-finder of the definite-null arc: the
- * first check that reports an actual defect rather than a redundancy.
+ * Flags a dereference whose receiver is provably **null** by flow on every path
+ * reaching it — a guaranteed null dereference that throws at runtime. The
+ * headline bug-finder of the definite-null arc: the first check that reports an
+ * actual defect rather than a redundancy.
  *
- * One node kind (`fieldAccessKind`) covers both forms: `x.field` is a
- * `FieldAccess` on `x`, and `x.method()` is a `Call` whose callee is the same
- * `FieldAccess` on `x`. The null-safe `x?.b` is a distinct kind that
- * short-circuits and is never flagged.
+ * Four receiver forms are covered: a field / method access (`x.b` / `x.m()` —
+ * one node kind, `fieldAccessKind`, covers both, since `x.m()` is a `Call`
+ * whose callee is the same `FieldAccess`), a force-unwrap access (`x!.b`,
+ * `forceFieldAccessKind` — forcing a known-null is exactly the crash the sigil
+ * promises away), an index access (`x[i]`, `indexAccessKind`), and a bare call
+ * (`x()`, `callKind` with a plain-identifier callee). The null-safe `x?.b` is a
+ * distinct kind that short-circuits and is never flagged.
  *
  * Null-ness comes purely from `NullFlow`'s flow events — an earlier `x = null` /
  * `var x = null`, or the `== null` arm of a guard narrowing this path — and only
@@ -40,23 +43,29 @@ final class NullDereference implements Check {
 	}
 
 	public function description(): String {
-		return 'a field / method access whose receiver is provably null on every path reaching it — a guaranteed null dereference';
+		return
+			'a dereference (field / index / force-unwrap access or call) whose receiver is provably null on every path reaching it — a guaranteed null dereference';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		final identKind: Null<String> = shape.identKind;
-		if (fieldAccessKind == null || identKind == null) return [];
-		final faKind: String = fieldAccessKind;
+		if (identKind == null) return [];
 		final ident: String = identKind;
+		// Field-shaped receivers must be the node's sole child; index/call receivers
+		// are the first of several (index expression / call arguments follow).
+		final soleChildKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
+		final firstChildKinds: Array<String> = [for (k in [shape.indexAccessKind, shape.callKind]) if (k != null) k];
+		if (soleChildKinds.length == 0 && firstChildKinds.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) continue;
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
-				if (node.kind != faKind || node.children.length != 1) return;
+				final sole: Bool = soleChildKinds.contains(node.kind) && node.children.length == 1;
+				final first: Bool = firstChildKinds.contains(node.kind) && node.children.length >= 1;
+				if (!sole && !first) return;
 				final receiver: QueryNode = node.children[0];
 				final span: Null<Span> = node.span;
 				if (receiver.kind != ident || span == null) return;

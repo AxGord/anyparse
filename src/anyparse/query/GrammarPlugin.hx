@@ -458,6 +458,20 @@ typedef RefShape = {
 	@:optional var fieldAccessKind: String;
 
 	/**
+	 * The force-unwrap field-access node kind (`a!.b`) — same child shape as
+	 * `fieldAccessKind` (the receiver is `children[0]`); `null-dereference` flags
+	 * one whose receiver is provably null by flow. Optional.
+	 */
+	@:optional var forceFieldAccessKind: String;
+
+	/**
+	 * The index-access node kind (`a[i]`) — the receiver is `children[0]`, the
+	 * index expression the second child; `null-dereference` flags one whose
+	 * receiver is provably null by flow. Optional.
+	 */
+	@:optional var indexAccessKind: String;
+
+	/**
 	 * Mutable statement-position local declaration kinds — a plain local `var`
 	 * (NOT `final`, params, `for` iterators, `catch` vars, or class fields). The
 	 * `prefer-final` check flags one never reassigned in its scope and rewrites it

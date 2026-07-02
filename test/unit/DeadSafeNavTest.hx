@@ -85,6 +85,18 @@ class DeadSafeNavTest extends Test {
 		Assert.equals(1, violations('class C { function f(?x:String) { if (x == null) return; var n = x?.length; } }').length);
 	}
 
+	public function testConjunctNarrowedSafeNavFlagged(): Void {
+		// The `&&` right side sees the left conjunct's narrowing — the `?.` can never short-circuit.
+		Assert.equals(1, violations('class C { function f(?x:String) { if (x != null && x?.length == 1) trace(x); } }').length);
+	}
+
+	public function testOrChainWriteNotFlagged(): Void {
+		// A disjunct writes x after the `== null` comparison — the stale narrowing must not flag the `?.`.
+		Assert.equals(
+			0, violations('class C { function f(?x:String) { if (x == null || (x = null) != null || x?.length == 0) trace(1); } }').length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadSafeNav().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

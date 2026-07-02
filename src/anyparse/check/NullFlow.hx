@@ -63,6 +63,7 @@ private typedef FlowCtx = {
 	var loopJumpNames: Array<String>;
 	var catchClauseKind: Null<String>;
 	var nullCoalAssignKind: Null<String>;
+	var nullCoalKind: Null<String>;
 	var captured: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
@@ -115,11 +116,13 @@ private typedef FlowCtx = {
  *   state with each catch clause's — where a clause starts from the entry state
  *   with every name the body writes cleared, since the throw may fire at any
  *   point inside the body. A loop clears every name it assigns *before* the
- *   body, so a back-edge never carries a stale fact.
+ *   body, so a back-edge never carries a stale fact. A short-circuit boolean
+ *   (`a && b` / `a || b`) walks its right-hand side as a conditional path — on
+ *   a copy narrowed by the left side (`&&` as a then-arm, `||` as an else-arm) —
+ *   and intersects the exit back, so a write inside the RHS never leaks a fact onto the skip path; a plain `??` fallback gets the same conditional join. Narrowing from a condition never keeps a fact for a name the condition itself writes — that comparison may predate the write.
  * - **Closures.** A name mutated inside any nested function value is excluded
  *   from both polarities for the whole function (a closure call could reassign it).
- * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not
- *   descended into.
+ * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not descended into, and metadata annotations (`META_KINDS`) are skipped entirely — their arguments are compile-time data, never runtime code.
  *
  * Pure, stateless class (mirrors `TypeResolver`).
  */
@@ -151,6 +154,14 @@ final class NullFlow {
 	/** Multi-branch construct kinds — the union of `SWITCH_KINDS` and `TRY_KINDS`; the `dead-store` liveness walk treats them uniformly. */
 	public static final BRANCHY_KINDS: Array<String> = SWITCH_KINDS.concat(TRY_KINDS);
 
+	/**
+	 * Metadata annotation kinds (`@:name(args)` / `@:name` / raw) — their argument
+	 * expressions are compile-time data, never runtime code, so the flow walks
+	 * skip these subtrees entirely (no facts change, no consumer visits). Mirrors
+	 * the plugin's `metaShape().metaKinds`. Shared with `DeadStore`.
+	 */
+	public static final META_KINDS: Array<String> = ['MetaCall', 'Meta', 'PlainMeta'];
+
 	/** Expression kinds whose value can never be null — a safe non-null assignment RHS. */
 	private static final NON_NULL_RHS_KINDS: Array<String> = [
 		'NewExpr',
@@ -166,6 +177,16 @@ final class NullFlow {
 
 	/** Sequential statement-list containers — children share one running state. */
 	private static final BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt', 'BlockExpr'];
+
+	/**
+	 * The short-circuit boolean-and node kind — its right side is a conditional path, and then-arm narrowing combines over its conjuncts.
+	 */
+	private static final BOOL_AND_KIND: String = 'And';
+
+	/**
+	 * The short-circuit boolean-or node kind — its right side is a conditional path, and else-arm narrowing combines over its disjuncts.
+	 */
+	private static final BOOL_OR_KIND: String = 'Or';
 
 	private function new() {}
 
@@ -321,6 +342,7 @@ final class NullFlow {
 			loopJumpNames: shape.loopJumpNames ?? [],
 			catchClauseKind: shape.catchClauseKind,
 			nullCoalAssignKind: shape.nullCoalAssignKind,
+			nullCoalKind: shape.nullCoalesceKind,
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
 			source: source,
@@ -337,6 +359,7 @@ final class NullFlow {
 	 */
 	private static function walk(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final kind: String = node.kind;
+		if (META_KINDS.contains(kind)) return;
 		if (ctx.opaqueKinds.contains(kind) || ctx.nestedFnKinds.contains(kind)) {
 			killWritten(node, state, ctx);
 			return;
@@ -354,6 +377,10 @@ final class NullFlow {
 			handleSwitch(node, state, ctx);
 		else if (ctx.tryKinds.contains(kind))
 			handleTry(node, state, ctx);
+		else if (kind == BOOL_AND_KIND || kind == BOOL_OR_KIND)
+			handleShortCircuit(node, state, ctx);
+		else if (ctx.nullCoalKind != null && kind == ctx.nullCoalKind)
+			handleNullCoalescing(node, state, ctx);
 		else if (ctx.blockKinds.contains(kind))
 			handleBlock(node, state, ctx);
 		else
@@ -406,6 +433,45 @@ final class NullFlow {
 	}
 
 	/**
+	 * A short-circuit boolean (`a && b` / `a || b`): the right-hand side runs only
+	 * when the left one lets it, so its effects are a conditional path. The RHS is
+	 * walked on a copy of the running state — narrowed by the LHS the same way an
+	 * `if` narrows its arms (`&&` behaves as a then-arm, `||` as an else-arm) — and
+	 * the exit state is intersected back (the skip path keeps the pre-RHS facts).
+	 */
+	private static function handleShortCircuit(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (node.children.length < 2) {
+			for (c in node.children) walk(c, state, ctx);
+			return;
+		}
+		final lhs: QueryNode = node.children[0];
+		walk(lhs, state, ctx);
+		final isAnd: Bool = node.kind == BOOL_AND_KIND;
+		final rhsState: FlowState = isAnd
+			? narrowedCopy(lhs, state, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND)
+			: narrowedCopy(lhs, state, ctx, ctx.eqKind, ctx.notEqKind, BOOL_OR_KIND);
+		for (i in 1...node.children.length) walk(node.children[i], rhsState, ctx);
+		setState(state, intersect(state, rhsState));
+	}
+
+	/**
+	 * A null-coalescing `a ?? b`: the fallback runs only when the left side is
+	 * null, so its effects are a conditional path — walked on a copy of the
+	 * running state and intersected back, like a short-circuit boolean's right
+	 * side (no narrowing: the left operand is an arbitrary expression).
+	 */
+	private static function handleNullCoalescing(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (node.children.length < 2) {
+			for (c in node.children) walk(c, state, ctx);
+			return;
+		}
+		walk(node.children[0], state, ctx);
+		final rhsState: FlowState = copyState(state);
+		for (i in 1...node.children.length) walk(node.children[i], rhsState, ctx);
+		setState(state, intersect(state, rhsState));
+	}
+
+	/**
 	 * Local declaration: set the declared name to `NonNull` for a non-null
 	 * initializer, to `Null` for a null-literal initializer, else clear both. A
 	 * multi-binding declaration (`var a = 1, b = 2;`) projects as one node whose
@@ -443,26 +509,14 @@ final class NullFlow {
 		walk(cond, state, ctx);
 		// Then-arm: narrow by the condition's conjuncts — `!= null` proves non-null,
 		// `== null` proves null — walked to its exit state.
-		final thenState: FlowState = copyState(state);
-		final thenNonNull: Array<String> = [];
-		collectNarrow(cond, thenNonNull, ctx, ctx.notEqKind, 'And');
-		for (n in thenNonNull) markNonNull(thenState, n);
-		final thenKnown: Array<String> = [];
-		collectNarrow(cond, thenKnown, ctx, ctx.eqKind, 'And');
-		for (n in thenKnown) markKnown(thenState, n);
+		final thenState: FlowState = narrowedCopy(cond, state, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND);
 		walk(thenArm, thenState, ctx);
 		// An unbraced arm declaration (`if (c) var v = null;`) never passes through
 		// `handleBlock`'s exit clearing — drop its facts before the join.
 		clearDeclaredIn(thenArm, thenState, ctx);
 		// Else path: the negated condition (`!(a || b)` = `!a && !b`), so an `== null`
 		// disjunct proves non-null and a `!= null` disjunct proves null.
-		final elseState: FlowState = copyState(state);
-		final elseNonNull: Array<String> = [];
-		collectNarrow(cond, elseNonNull, ctx, ctx.eqKind, 'Or');
-		for (n in elseNonNull) markNonNull(elseState, n);
-		final elseKnown: Array<String> = [];
-		collectNarrow(cond, elseKnown, ctx, ctx.notEqKind, 'Or');
-		for (n in elseKnown) markKnown(elseState, n);
+		final elseState: FlowState = narrowedCopy(cond, state, ctx, ctx.eqKind, ctx.notEqKind, BOOL_OR_KIND);
 		if (elseArm != null) {
 			walk(elseArm, elseState, ctx);
 			clearDeclaredIn(elseArm, elseState, ctx);
@@ -535,19 +589,33 @@ final class NullFlow {
 		final exitStates: Array<FlowState> = [];
 		for (b in branches) {
 			final branchState: FlowState = copyState(state);
-			if (b.kind == ctx.caseBranchKind && b.children.length > 0) clearPatternNames(b.children[0], branchState, ctx);
+			clearBranchPatterns(b, branchState, ctx);
 			visitNode(b, branchState, ctx);
 			for (c in b.children) walk(c, branchState, ctx);
 			// Exit clearing: the branch body is not block-wrapped, so a shadow's facts —
 			// a local declaration's or a written pattern capture's — must be dropped here.
 			clearDeclaredIn(b, branchState, ctx);
-			if (b.kind == ctx.caseBranchKind && b.children.length > 0) clearPatternNames(b.children[0], branchState, ctx);
+			clearBranchPatterns(b, branchState, ctx);
 			final last: Null<QueryNode> = b.children.length > 0 ? b.children[b.children.length - 1] : null;
 			if (last == null || !armExits(last, ctx)) exitStates.push(branchState);
 		}
 		var post: Null<FlowState> = hasDefault ? null : copyState(state);
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
 		setState(state, post ?? { nonNull: [], known: [] });
+	}
+
+	/**
+	 * Clears every name a case branch's patterns mention — the first pattern child
+	 * plus every comma alternative (`case a(v), b(v):` projects one leading
+	 * `plainCasePatternKind` child per alternative). Pattern idents are fresh
+	 * bindings (captures) or enum-constructor names, never runtime reads of an
+	 * outer local, so an outer fact must not survive into them.
+	 */
+	private static function clearBranchPatterns(b: QueryNode, branchState: FlowState, ctx: FlowCtx): Void {
+		if (b.kind != ctx.caseBranchKind || b.children.length == 0) return;
+		clearPatternNames(b.children[0], branchState, ctx);
+		for (c in b.children) if (ctx.plainCasePatternKind != null && c.kind == ctx.plainCasePatternKind)
+			clearPatternNames(c, branchState, ctx);
 	}
 
 	/**
@@ -661,6 +729,42 @@ final class NullFlow {
 			if (target.kind == ctx.identKind && name != null) clearName(state, name);
 		}
 		for (c in node.children) killWritten(c, state, ctx);
+	}
+
+	/**
+	 * Names assigned anywhere inside `node`'s subtree — the write-target idents of
+	 * every `writeKinds` node. The collect-only sibling of `killWritten`.
+	 */
+	private static function collectWrites(node: QueryNode, out: Array<String>, ctx: FlowCtx): Void {
+		if (ctx.writeKinds.contains(node.kind) && node.children.length >= 1) {
+			final target: QueryNode = node.children[0];
+			final name: Null<String> = target.name;
+			if (target.kind == ctx.identKind && name != null && !out.contains(name)) out.push(name);
+		}
+		for (c in node.children) collectWrites(c, out, ctx);
+	}
+
+	/**
+	 * A copy of `base` narrowed by `cond`'s null comparisons for one outcome
+	 * polarity: `cmpNonNull`-kind comparisons (combined over `combineKind`) prove
+	 * their operand non-null, `cmpKnown`-kind ones prove it null. A name the
+	 * condition itself writes is excluded from both — its comparison may predate
+	 * the write, so that narrowing would be stale (the write's own effect already
+	 * reached `base` when the condition was walked).
+	 */
+	private static function narrowedCopy(
+		cond: QueryNode, base: FlowState, ctx: FlowCtx, cmpNonNull: Null<String>, cmpKnown: Null<String>, combineKind: String
+	): FlowState {
+		final out: FlowState = copyState(base);
+		final written: Array<String> = [];
+		collectWrites(cond, written, ctx);
+		final nonNull: Array<String> = [];
+		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind);
+		for (n in nonNull) if (!written.contains(n)) markNonNull(out, n);
+		final known: Array<String> = [];
+		collectNarrow(cond, known, ctx, cmpKnown, combineKind);
+		for (n in known) if (!written.contains(n)) markKnown(out, n);
+		return out;
 	}
 
 	/** The names mutated inside any nested function value within `body` — excluded from narrowing for the whole function. */
