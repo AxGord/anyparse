@@ -133,6 +133,64 @@ class AlwaysNullComparisonTest extends Test {
 		);
 	}
 
+	public function testTryWriteNotTrustedInCatch(): Void {
+		// The body overwrote the known-null `x` before the call that may throw — the catch must not report always-true.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f() { var x:Null<String> = null; try { x = "a"; risky(); } catch (e:haxe.Exception) { if (x == null) trace(1); } } }'
+			).length
+		);
+	}
+
+	public function testCaseShadowDeclDoesNotLeak(): Void {
+		// The case body is not block-wrapped — the inner shadow declaration's null fact must be dropped at branch exit.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(o:Int) { var v:Null<String> = "s"; switch o { case 1: var v:Null<String> = null; trace(v); case _: v = null; } if (v == null) trace(1); } }'
+			).length
+		);
+	}
+
+	public function testCaptureWriteDoesNotLeak(): Void {
+		// `case Some(v): v = null;` writes the INNER capture — the outer `v` is untouched on that path.
+		Assert.equals(
+			0,
+			violations(
+				'enum E { Some(s:String); None; } class C { function f(o:E) { var v:Null<String> = "s"; switch o { case Some(v): v = null; case _: v = null; } if (v == null) trace(1); } }'
+			).length
+		);
+	}
+
+	public function testCatchVarWriteDoesNotLeak(): Void {
+		// A write to the catch variable inside the clause targets the inner binding, not the outer `e`.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f() { var e:Null<String> = null; try { e = "s"; mayThrow(); e = null; } catch (e:haxe.Exception) { trace(e); } if (e == null) trace(1); } }'
+			).length
+		);
+	}
+
+	public function testCoalAssignRhsIsConditional(): Void {
+		// The `??=` right-hand side runs only when the target is null — its write to `y` may not have happened.
+		Assert.equals(
+			0,
+			violations('class C { function f(?x:String) { var y:Null<String> = "s"; x ??= { y = null; "d"; }; if (y == null) trace(1); } }').length
+		);
+	}
+
+	public function testUnbracedIfArmDeclDoesNotLeak(): Void {
+		// `if (c) var v = null;` declares a shadow in an unbraced arm — its fact must not survive the join.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(c:Bool) { var v:Null<String> = "s"; if (c) var v:Null<String> = null; else v = null; if (v == null) trace(1); } }'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new AlwaysNullComparison().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

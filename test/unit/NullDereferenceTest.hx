@@ -97,6 +97,31 @@ class NullDereferenceTest extends Test {
 		Assert.isTrue(ids.contains('null-dereference'));
 	}
 
+	public function testCasePatternCaptureNotFlagged(): Void {
+		// `case Some(x)` binds a fresh `x` shadowing the known-null outer local — its deref is fine.
+		Assert.equals(
+			0,
+			violations(
+				'enum E { Some(s:String); None; } class C { function f(k:E) { var x:Null<String> = null; switch k { case Some(x): trace(x.length); case None: } } }'
+			).length
+		);
+	}
+
+	public function testCatchVarShadowNotFlagged(): Void {
+		// The catch variable `e` is a fresh binding shadowing the known-null outer `e`.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f() { var e:Null<String> = null; try { risky(); } catch (e:haxe.Exception) { trace(e.message); } } }'
+			).length
+		);
+	}
+
+	public function testSwitchSubjectWriteFlagged(): Void {
+		// The subject expression assigns null on the running state — every branch sees it.
+		Assert.equals(1, violations('class C { function f(?x:String) { switch (x = null) { case _: trace(x.length); } } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new NullDereference().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

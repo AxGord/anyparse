@@ -493,6 +493,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			stringInterpIdentKind: 'Ident',
 			loopJumpNames: ['break', 'continue'],
 			declTypeChildKinds: ['Anon'],
+			defaultBranchKind: 'DefaultBranch',
+			plainCasePatternKind: 'Plain',
+			wildcardPatternName: '_',
+			exprStatementKind: 'ExprStmt',
+			nullCoalAssignKind: 'NullCoalAssign',
 		};
 	}
 

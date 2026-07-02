@@ -858,6 +858,43 @@ typedef RefShape = {
 	 * Optional.
 	 */
 	@:optional var declTypeChildKinds: Array<String>;
+
+	/**
+	 * The `default:` branch kind of a `switch` (Haxe `DefaultBranch` — a distinct
+	 * kind from `caseBranchKind`, with the branch body as its children) — the
+	 * null-flow engine joins it as an always-matching branch. Optional.
+	 */
+	@:optional var defaultBranchKind: String;
+
+	/**
+	 * The case-pattern wrapper kind (Haxe `Plain` — a `CaseBranch`'s first child;
+	 * a guard does NOT change the wrapper — it projects as a bare parenthesized
+	 * expression sibling between the pattern and the body statements) — the
+	 * null-flow engine recognises an exhaustive wildcard case through it,
+	 * rejecting guarded branches via that sibling. Optional.
+	 */
+	@:optional var plainCasePatternKind: String;
+
+	/**
+	 * The wildcard pattern identifier (Haxe `_`) — an unguarded case whose whole
+	 * pattern is this identifier matches every subject, making the switch
+	 * exhaustive for the null-flow join. Optional.
+	 */
+	@:optional var wildcardPatternName: String;
+
+	/**
+	 * The expression-statement wrapper kind (Haxe `ExprStmt`) — a loop jump
+	 * (`loopJumpNames`) appears as this wrapping a lone identifier, which the
+	 * null-flow engine treats as a branch exit. Optional.
+	 */
+	@:optional var exprStatementKind: String;
+
+	/**
+	 * The null-coalescing assignment kind (Haxe `x ??= e` — `NullCoalAssign`) —
+	 * assigning a definitely non-null value through it leaves the target non-null
+	 * on every path, which the null-flow engine narrows on. Optional.
+	 */
+	@:optional var nullCoalAssignKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

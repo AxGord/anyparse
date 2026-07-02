@@ -141,6 +141,117 @@ class DeadNullGuardTest extends Test {
 		);
 	}
 
+	public function testTryWriteNotTrustedInCatch(): Void {
+		// `x` is narrowed before the try; the try body rewrites it before the call that may throw — the catch must not trust any try-body write.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?x:String) { x = "a"; try { x = null; risky(); } catch (e:haxe.Exception) { if (x != null) trace(x); } } }'
+			).length
+		);
+	}
+
+	public function testTryJoinCatchExits(): Void {
+		// The catch returns, so only the completed-body path falls through — its narrowing survives.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(?x:String) { try { x = "a"; } catch (e:haxe.Exception) { return; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
+	public function testSwitchJoinWildcardDefault(): Void {
+		// One case exits, the wildcard case narrows — every fall-through path has `x` non-null.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(k:Int, ?x:String) { switch k { case 1: return; case _: x = "a"; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
+	public function testSwitchWithoutDefaultNotNarrowed(): Void {
+		// No default and no wildcard: a subject matching no case falls through un-narrowed.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(k:Int, ?x:String) { switch k { case 1: return; case 2: x = "a"; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
+	public function testContinueExitNarrows(): Void {
+		// `continue` exits the arm — the rest of the iteration only runs with `x` non-null.
+		Assert.equals(
+			1,
+			violations('class C { function f(c:Bool, ?x:String) { while (c) { if (x == null) continue; if (x != null) trace(x); } } }').length
+		);
+	}
+
+	public function testBreakStateDoesNotLeakPastLoop(): Void {
+		// The engine never propagates loop-body facts outward (the body runs on a discarded copy) —
+		// pinned because the break path escaping with `x` null is the semantic counter-example
+		// against any future join of body-end state into the post-loop state.
+		Assert.equals(
+			0,
+			violations('class C { function f(c:Bool, ?x:String) { while (c) { if (x == null) break; } if (x == null) trace(1); } }').length
+		);
+	}
+
+	public function testNullCoalAssignNarrows(): Void {
+		// `x ??= "d"` leaves `x` non-null whichever side survives.
+		Assert.equals(1, violations('class C { function f(?x:String) { x ??= "d"; if (x != null) trace(x); } }').length);
+	}
+
+	public function testSwitchJoinDefaultKeyword(): Void {
+		// The `default:` keyword branch is exhaustive like the wildcard — every fall-through path narrows.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(k:Int, ?x:String) { switch k { case 1: return; default: x = "a"; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
+	public function testSwitchBlockArmExitCounts(): Void {
+		// A branch whose last statement is a nested block ending in `return` exits — armExits recurses into blocks.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(k:Int, ?x:String) { switch k { case 1: { trace(1); return; } case _: x = "a"; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
+	public function testBreakExitNarrows(): Void {
+		// `break` exits the arm — the rest of the iteration only runs with `x` non-null.
+		Assert.equals(
+			1,
+			violations('class C { function f(c:Bool, ?x:String) { while (c) { if (x == null) break; if (x != null) trace(x); } } }').length
+		);
+	}
+
+	public function testGuardedWildcardNotExhaustive(): Void {
+		// `case _ if (c):` can still fail to match — the no-branch-matched path stays in the join.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(k:Int, c:Bool, ?x:String) { switch k { case 1: x = "a"; case _ if (c): x = "b"; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
+	public function testGuardedCommaWildcardNotExhaustive(): Void {
+		// `case _, 4 if (c):` carries a guard past the comma alternatives — still not exhaustive.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(k:Int, c:Bool, ?x:String) { switch k { case 1: x = "a"; case _, 4 if (c): x = "b"; } if (x != null) trace(x); } }'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadNullGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

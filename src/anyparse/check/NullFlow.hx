@@ -48,12 +48,21 @@ private typedef FlowCtx = {
 	var declTypeChildKinds: Array<String>;
 	var ifKinds: Array<String>;
 	var loopKinds: Array<String>;
-	var branchyKinds: Array<String>;
+	var switchKinds: Array<String>;
+	var tryKinds: Array<String>;
 	var blockKinds: Array<String>;
 	var controlExitKinds: Array<String>;
 	var nonNullRhsKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var nestedFnKinds: Array<String>;
+	var caseBranchKind: Null<String>;
+	var defaultBranchKind: Null<String>;
+	var plainCasePatternKind: Null<String>;
+	var wildcardPatternName: Null<String>;
+	var exprStmtKind: Null<String>;
+	var loopJumpNames: Array<String>;
+	var catchClauseKind: Null<String>;
+	var nullCoalAssignKind: Null<String>;
 	var captured: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
@@ -74,7 +83,9 @@ private typedef FlowCtx = {
  * only by a flow event: a guard narrowing a branch (a `!= null` then-arm / `== null`
  * else-arm proves non-null; the mirror proves null), or an assignment of a
  * syntactically definite value (`new T(...)` / a non-null literal is non-null,
- * the `null` literal is null). It seeds **no** facts from declared types —
+ * the `null` literal is null; a `??=` of a non-null value leaves the target
+ * non-null whichever side survives, and its right-hand side's effects are
+ * joined in as conditional). It seeds **no** facts from declared types —
  * declared-non-null is the point-wise checks' domain
  * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only
  * complement, so a flow consumer never duplicates a point-wise finding.
@@ -88,14 +99,23 @@ private typedef FlowCtx = {
  *   write to a name — even one a `bindingSpan` resolver would attribute to a
  *   different same-named sibling-scope local — clears the fact on both
  *   polarities. Over-killing is a safe miss; under-killing (the unsound
- *   direction) cannot happen.
+ *   direction) cannot happen. A binding the walk KNOWS shadows an outer name
+ *   (a case-pattern capture, a catch variable, a declaration in a body that is
+ *   not block-wrapped) is cleared at its scope's entry AND exit, so neither an
+ *   outer fact leaks in nor a shadow-write fact leaks out.
  * - **Joins (loops have no fixpoint).** After an `if`, the two arms' exit states
  *   are intersected per polarity (a name keeps a polarity only if it held it on
- *   both fall-through paths), and an arm that returns / throws contributes no
- *   path — so `if (x == null) return;` narrows the fall-through to non-null.
- *   `switch` / `try` clear every name assigned inside (conservative); a loop
- *   clears every name it assigns *before* the body, so a back-edge never carries
- *   a stale fact.
+ *   both fall-through paths), and an arm that exits — `return` / `throw` / a
+ *   loop jump — contributes no path, so `if (x == null) return;` narrows the
+ *   fall-through to non-null. A `switch` intersects its branches' exit states
+ *   the same way, plus the no-branch-matched path unless a `default:` or an
+ *   unguarded `case _:` proves exhaustiveness (a guarded wildcard never counts;
+ *   names written inside case guards are cleared up front, since guards of
+ *   earlier branches run during dispatch). A `try` intersects the body's exit
+ *   state with each catch clause's — where a clause starts from the entry state
+ *   with every name the body writes cleared, since the throw may fire at any
+ *   point inside the body. A loop clears every name it assigns *before* the
+ *   body, so a back-edge never carries a stale fact.
  * - **Closures.** A name mutated inside any nested function value is excluded
  *   from both polarities for the whole function (a closure call could reassign it).
  * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not
@@ -122,16 +142,14 @@ final class NullFlow {
 	/** Loop constructs — every name they assign is cleared before the body so a back-edge carries no stale fact. */
 	public static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr'];
 
-	/** Multi-branch constructs analyzed with one isolated state per branch. */
-	public static final BRANCHY_KINDS: Array<String> = [
-		'SwitchStmt',
-		'SwitchStmtBare',
-		'SwitchExpr',
-		'SwitchExprBare',
-		'TryCatchStmt',
-		'TryCatchStmtBare',
-		'TryExpr'
-	];
+	/** `switch` construct kinds — joined branch-per-branch by the flow walk (statement and expression forms, bare and parenthesized subjects). */
+	public static final SWITCH_KINDS: Array<String> = ['SwitchStmt', 'SwitchStmtBare', 'SwitchExpr', 'SwitchExprBare'];
+
+	/** `try` construct kinds — the body and each catch clause joined by the flow walk. */
+	public static final TRY_KINDS: Array<String> = ['TryCatchStmt', 'TryCatchStmtBare', 'TryExpr'];
+
+	/** Multi-branch construct kinds — the union of `SWITCH_KINDS` and `TRY_KINDS`; the `dead-store` liveness walk treats them uniformly. */
+	public static final BRANCHY_KINDS: Array<String> = SWITCH_KINDS.concat(TRY_KINDS);
 
 	/** Expression kinds whose value can never be null — a safe non-null assignment RHS. */
 	private static final NON_NULL_RHS_KINDS: Array<String> = [
@@ -288,12 +306,21 @@ final class NullFlow {
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
 			ifKinds: IF_KINDS,
 			loopKinds: LOOP_KINDS,
-			branchyKinds: BRANCHY_KINDS,
+			switchKinds: SWITCH_KINDS,
+			tryKinds: TRY_KINDS,
 			blockKinds: BLOCK_KINDS,
 			controlExitKinds: shape.controlExitKinds ?? [],
 			nonNullRhsKinds: NON_NULL_RHS_KINDS,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			nestedFnKinds: NESTED_FN_KINDS,
+			caseBranchKind: shape.caseBranchKind,
+			defaultBranchKind: shape.defaultBranchKind,
+			plainCasePatternKind: shape.plainCasePatternKind,
+			wildcardPatternName: shape.wildcardPatternName,
+			exprStmtKind: shape.exprStatementKind,
+			loopJumpNames: shape.loopJumpNames ?? [],
+			catchClauseKind: shape.catchClauseKind,
+			nullCoalAssignKind: shape.nullCoalAssignKind,
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
 			source: source,
@@ -314,11 +341,7 @@ final class NullFlow {
 			killWritten(node, state, ctx);
 			return;
 		}
-		final facts: NullFacts = {
-			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
-			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n)
-		};
-		ctx.visit(node, facts);
+		visitNode(node, state, ctx);
 		if (ctx.writeKinds.contains(kind))
 			handleWrite(node, state, ctx);
 		else if (ctx.localDeclKinds.contains(kind))
@@ -327,16 +350,22 @@ final class NullFlow {
 			handleIf(node, state, ctx);
 		else if (ctx.loopKinds.contains(kind))
 			handleLoop(node, state, ctx);
-		else if (ctx.branchyKinds.contains(kind))
-			handleBranchy(node, state, ctx);
+		else if (ctx.switchKinds.contains(kind))
+			handleSwitch(node, state, ctx);
+		else if (ctx.tryKinds.contains(kind))
+			handleTry(node, state, ctx);
 		else if (ctx.blockKinds.contains(kind))
 			handleBlock(node, state, ctx);
 		else
 			for (c in node.children) walk(c, state, ctx);
 	}
 
-	/** Assignment / compound-assignment / increment: narrow the target to `NonNull` for a plain assign of a non-null value, to `Null` for a plain assign of the null literal, else clear it on both polarities. */
+	/** Assignment / compound-assignment / increment: narrow the target to `NonNull` for a plain assign of a non-null value, to `Null` for a plain assign of the null literal, else clear it on both polarities. A `??=` is routed to its own transfer — its right-hand side runs conditionally. */
 	private static function handleWrite(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (node.kind == ctx.nullCoalAssignKind) {
+			handleNullCoalAssign(node, state, ctx);
+			return;
+		}
 		for (c in node.children) walk(c, state, ctx);
 		if (node.children.length == 0) return;
 		final target: QueryNode = node.children[0];
@@ -347,6 +376,31 @@ final class NullFlow {
 			markNonNull(state, name);
 		else if (node.kind == ctx.assignKind && isNullLitRhs(rhs, ctx))
 			markKnown(state, name);
+		else
+			clearName(state, name);
+	}
+
+	/**
+	 * `x ??= e`: the right-hand side runs only when `x` is null, so its side
+	 * effects are joined in — the post-state intersects the RHS-skipped and
+	 * RHS-executed paths. The target itself ends `NonNull` when the RHS is
+	 * syntactically non-null (whichever side survives, the result is non-null),
+	 * else `Unknown`.
+	 */
+	private static function handleNullCoalAssign(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (node.children.length == 0) return;
+		final target: QueryNode = node.children[0];
+		walk(target, state, ctx);
+		final rhs: Null<QueryNode> = node.children.length >= 2 ? node.children[1] : null;
+		if (rhs != null) {
+			final rhsState: FlowState = copyState(state);
+			walk(rhs, rhsState, ctx);
+			setState(state, intersect(state, rhsState));
+		}
+		final name: Null<String> = target.name;
+		if (target.kind != ctx.identKind || name == null) return;
+		if (isNonNullRhs(rhs, ctx))
+			markNonNull(state, name);
 		else
 			clearName(state, name);
 	}
@@ -397,6 +451,9 @@ final class NullFlow {
 		collectNarrow(cond, thenKnown, ctx, ctx.eqKind, 'And');
 		for (n in thenKnown) markKnown(thenState, n);
 		walk(thenArm, thenState, ctx);
+		// An unbraced arm declaration (`if (c) var v = null;`) never passes through
+		// `handleBlock`'s exit clearing — drop its facts before the join.
+		clearDeclaredIn(thenArm, thenState, ctx);
 		// Else path: the negated condition (`!(a || b)` = `!a && !b`), so an `== null`
 		// disjunct proves non-null and a `!= null` disjunct proves null.
 		final elseState: FlowState = copyState(state);
@@ -406,7 +463,10 @@ final class NullFlow {
 		final elseKnown: Array<String> = [];
 		collectNarrow(cond, elseKnown, ctx, ctx.notEqKind, 'Or');
 		for (n in elseKnown) markKnown(elseState, n);
-		if (elseArm != null) walk(elseArm, elseState, ctx);
+		if (elseArm != null) {
+			walk(elseArm, elseState, ctx);
+			clearDeclaredIn(elseArm, elseState, ctx);
+		}
 		// Join: a fact holds after the `if` only if it holds on every path that falls
 		// through to here. An arm that returns / throws contributes no path, so the
 		// surviving arm's state passes through unintersected — this gives early-return
@@ -431,10 +491,150 @@ final class NullFlow {
 		for (c in node.children) walk(c, bodyState, ctx);
 	}
 
-	/** `switch` / `try`: analyze each child branch in an isolated copy of the entry state; clear all names assigned anywhere in the construct. */
-	private static function handleBranchy(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		for (c in node.children) walk(c, copyState(state), ctx);
-		killWritten(node, state, ctx);
+	/** Fire the consumer callback at `node` with the facts holding in `state`. */
+	private static function visitNode(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		final facts: NullFacts = {
+			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
+			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n)
+		};
+		ctx.visit(node, facts);
+	}
+
+	/**
+	 * `switch`: the subject transfers on the running state; each branch is then
+	 * analyzed in isolation from the post-subject state — with every identifier in
+	 * the case pattern cleared first, because a pattern capture is a fresh binding
+	 * shadowing any same-named outer local (clearing a constructor or guard
+	 * identifier alongside is only a safe miss). Every name a case GUARD writes is
+	 * cleared from the shared post-subject state up front: guards of the branches
+	 * before the taken one run during dispatch, so their writes may have happened
+	 * on any path. The post-state intersects the exit states of the branches that
+	 * fall through; a branch whose last statement exits (`return` / `throw` / a
+	 * loop jump) contributes no path. Unless the switch is provably exhaustive — a
+	 * `default:` branch or an unguarded wildcard `case _:` — the no-branch-matched
+	 * path (the post-subject state itself) joins the intersection.
+	 */
+	private static function handleSwitch(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		final branches: Array<QueryNode> = [];
+		var hasDefault: Bool = false;
+		for (c in node.children) {
+			if (c.kind == ctx.caseBranchKind) {
+				branches.push(c);
+				if (isWildcardCase(c, ctx)) hasDefault = true;
+			} else if (c.kind == ctx.defaultBranchKind) {
+				branches.push(c);
+				hasDefault = true;
+			} else {
+				walk(c, state, ctx);
+			}
+		}
+		for (b in branches) {
+			final guard: Null<QueryNode> = caseGuard(b, ctx);
+			if (guard != null) killWritten(guard, state, ctx);
+		}
+		final exitStates: Array<FlowState> = [];
+		for (b in branches) {
+			final branchState: FlowState = copyState(state);
+			if (b.kind == ctx.caseBranchKind && b.children.length > 0) clearPatternNames(b.children[0], branchState, ctx);
+			visitNode(b, branchState, ctx);
+			for (c in b.children) walk(c, branchState, ctx);
+			// Exit clearing: the branch body is not block-wrapped, so a shadow's facts —
+			// a local declaration's or a written pattern capture's — must be dropped here.
+			clearDeclaredIn(b, branchState, ctx);
+			if (b.kind == ctx.caseBranchKind && b.children.length > 0) clearPatternNames(b.children[0], branchState, ctx);
+			final last: Null<QueryNode> = b.children.length > 0 ? b.children[b.children.length - 1] : null;
+			if (last == null || !armExits(last, ctx)) exitStates.push(branchState);
+		}
+		var post: Null<FlowState> = hasDefault ? null : copyState(state);
+		for (e in exitStates) post = post == null ? e : intersect(post, e);
+		setState(state, post ?? { nonNull: [], known: [] });
+	}
+
+	/**
+	 * `try`: the body is analyzed from the entry state. Each catch clause starts
+	 * from the entry state with every name the body writes cleared — the throw may
+	 * fire at any point inside the body, so no body write may be trusted there —
+	 * and with its own catch variable cleared (a fresh binding shadowing any
+	 * same-named outer local). The post-state intersects the exit states of the
+	 * body and of every clause that falls through; a body or clause ending in an
+	 * exit contributes no path.
+	 */
+	private static function handleTry(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (node.children.length == 0) return;
+		final body: QueryNode = node.children[0];
+		final tryState: FlowState = copyState(state);
+		walk(body, tryState, ctx);
+		final catchEntry: FlowState = copyState(state);
+		killWritten(body, catchEntry, ctx);
+		final exitStates: Array<FlowState> = [];
+		if (!armExits(body, ctx)) exitStates.push(tryState);
+		for (i in 1...node.children.length) {
+			final clause: QueryNode = node.children[i];
+			final clauseState: FlowState = copyState(catchEntry);
+			final varName: Null<String> = clause.name;
+			final isCatch: Bool = clause.kind == ctx.catchClauseKind;
+			if (isCatch && varName != null) clearName(clauseState, varName);
+			visitNode(clause, clauseState, ctx);
+			for (c in clause.children) walk(c, clauseState, ctx);
+			// Exit clearing: a write to the catch variable or to a bare-body shadow
+			// declaration must not leak out under the outer binding's name.
+			clearDeclaredIn(clause, clauseState, ctx);
+			if (isCatch && varName != null) clearName(clauseState, varName);
+			final last: Null<QueryNode> = clause.children.length > 0 ? clause.children[clause.children.length - 1] : null;
+			if (last == null || !armExits(last, ctx)) exitStates.push(clauseState);
+		}
+		var post: Null<FlowState> = null;
+		for (e in exitStates) post = post == null ? e : intersect(post, e);
+		setState(state, post ?? { nonNull: [], known: [] });
+	}
+
+	/**
+	 * Whether `branch` is an unguarded wildcard case (`case _:`) — its pattern is the
+	 * plain wrapper holding just the wildcard identifier, so it matches every subject
+	 * and makes the switch exhaustive. A guard keeps the plain pattern wrapper and
+	 * projects as a bare parenthesized-expression sibling child before the body
+	 * statements — a guarded wildcard can still fail to match, so it never counts.
+	 */
+	private static function isWildcardCase(branch: QueryNode, ctx: FlowCtx): Bool {
+		if (branch.children.length == 0 || ctx.wildcardPatternName == null) return false;
+		if (caseGuard(branch, ctx) != null) return false;
+		final pattern: QueryNode = branch.children[0];
+		if (pattern.kind != ctx.plainCasePatternKind || pattern.children.length != 1) return false;
+		final ident: QueryNode = pattern.children[0];
+		return ident.kind == ctx.identKind && ident.name == ctx.wildcardPatternName;
+	}
+
+	/**
+	 * The guard expression of a case branch (`case p if (c):` — a bare parenthesized
+	 * expression between the pattern alternatives and the body), or null when
+	 * unguarded. Scans past the leading pattern children so a comma-alternative form
+	 * (`case _, 4 if (c):`) is caught too; an expression-switch arm value that
+	 * happens to be parenthesized may be mistaken for a guard, which only errs
+	 * conservative (a non-exhaustive verdict / an extra write kill).
+	 */
+	private static function caseGuard(branch: QueryNode, ctx: FlowCtx): Null<QueryNode> {
+		if (ctx.parenKind == null) return null;
+		for (i in 1...branch.children.length) if (branch.children[i].kind == ctx.parenKind) return branch.children[i];
+		return null;
+	}
+
+	/** Clear every identifier name in a case-pattern subtree from `state` — a pattern capture is a fresh binding shadowing any same-named outer local, so no outer fact may survive into the branch. */
+	private static function clearPatternNames(pattern: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		final name: Null<String> = pattern.name;
+		if (pattern.kind == ctx.identKind && name != null) clearName(state, name);
+		for (c in pattern.children) clearPatternNames(c, state, ctx);
+	}
+
+	/**
+	 * Clear from `state` every fact for a name locally declared anywhere in `scope`.
+	 * A construct whose body is not block-wrapped (a case body, an unbraced `if`
+	 * arm, a bare catch body) never passes through `handleBlock`'s exit clearing,
+	 * so an inner declaration's fact would otherwise leak out of the construct
+	 * under the outer binding's name — a false fact, since the outer binding's
+	 * runtime value is untouched by writes to the shadow.
+	 */
+	private static function clearDeclaredIn(scope: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		for (n in collectDeclared(scope, ctx.localDeclKinds)) clearName(state, n);
 	}
 
 	/** Statement-list block: children share one running state; block-local declarations are cleared on exit so their facts do not leak out. */
@@ -535,15 +735,27 @@ final class NullFlow {
 
 	/**
 	 * Whether `arm` definitely transfers control out instead of falling through to the
-	 * statement after the enclosing `if` — a `return` / `throw` (`RefShape.controlExitKinds`),
-	 * or a block whose last statement does. Conservative: anything it cannot prove exits
-	 * (including `break` / `continue`) is treated as falling through, which only ever loses
-	 * precision in the join, never soundness.
+	 * statement after the enclosing construct — a `return` / `throw`
+	 * (`RefShape.controlExitKinds`), a loop jump (`break` / `continue` project as plain
+	 * identifiers named so, bare or wrapped in an expression statement), or a block whose
+	 * last statement does. Conservative: anything it cannot prove exits is treated as
+	 * falling through, which only ever loses precision in the join, never soundness. A
+	 * loop jump is a sound exit for every join it participates in: the jumped-to point is
+	 * past the enclosing construct, and the state it carries never feeds a post-loop
+	 * state (a loop's post-state is its entry with every loop-written name cleared).
 	 */
 	private static function armExits(arm: QueryNode, ctx: FlowCtx): Bool {
 		if (ctx.controlExitKinds.contains(arm.kind)) return true;
+		if (isLoopJump(arm, ctx)) return true;
+		if (arm.kind == ctx.exprStmtKind && arm.children.length == 1 && isLoopJump(arm.children[0], ctx)) return true;
 		if (ctx.blockKinds.contains(arm.kind) && arm.children.length > 0) return armExits(arm.children[arm.children.length - 1], ctx);
 		return false;
+	}
+
+	/** Whether `node` is a bare loop-jump identifier (`break` / `continue` — `RefShape.loopJumpNames`). */
+	private static function isLoopJump(node: QueryNode, ctx: FlowCtx): Bool {
+		final name: Null<String> = node.name;
+		return node.kind == ctx.identKind && name != null && ctx.loopJumpNames.contains(name);
 	}
 
 	/** The facts holding on both `a` and `b` — a name keeps a polarity after a join only if it held it on both arms. */
