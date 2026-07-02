@@ -122,7 +122,9 @@ final class ExtractVar {
 	 * be applied. The source is never mutated — the caller decides whether
 	 * to write the result.
 	 */
-	public static function extractVar(source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin): ExtractResult {
+	public static function extractVar(
+		source: String, line: Int, col: Int, name: String, plugin: GrammarPlugin, ?exactTo: Int
+	): ExtractResult {
 		if (!RefactorSupport.isIdentifier(name)) return Err('new name "$name" is not a valid identifier');
 
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
@@ -133,12 +135,16 @@ final class ExtractVar {
 		// line:col is 1-based, as apq refs / ast --at / source print.
 		final cursor: Int = Span.offsetOf(source, line, col);
 
-		final target: Null<QueryNode> = selectTargetExpr(tree, cursor);
+		final target: Null<QueryNode> = selectTargetExpr(tree, cursor, exactTo);
 		if (target == null) return Err('no expression starts at position $line:$col (point at the first token of an expression)');
 		final expr: QueryNode = target;
 		final exprSpan: Null<Span> = expr.span;
 		if (exprSpan == null) return Err('no expression starts at position $line:$col (point at the first token of an expression)');
 		final targetSpan: Span = exprSpan;
+		// A PEG span can swallow trailing trivia — trim it so neither the hoisted
+		// text nor the replaced range carries a dangling space.
+		var effTo: Int = targetSpan.to;
+		while (effTo > targetSpan.from && isWsCode(StringTools.fastCodeAt(source, effTo - 1))) effTo--;
 
 		final enclosingStmt: Null<QueryNode> = findEnclosingBlockStmt(tree, expr);
 		if (enclosingStmt == null) return Err('"$name": cannot extract — the enclosing statement is not inside a { } block');
@@ -159,14 +165,14 @@ final class ExtractVar {
 		final indent: String = source.substring(lineStart, hoistSpan.from);
 		if (!isAllWhitespace(indent)) return Err('"$name": enclosing statement shares its line — cannot extract cleanly');
 
-		final exprText: String = source.substring(targetSpan.from, targetSpan.to);
+		final exprText: String = source.substring(targetSpan.from, effTo);
 
 		final insertEdit: { span: Span, text: String } = {
 			span: new Span(lineStart, lineStart),
 			text: indent + 'final ' + name + ' = ' + exprText + ';\n',
 		};
 		final replaceEdit: { span: Span, text: String } = {
-			span: new Span(targetSpan.from, targetSpan.to),
+			span: new Span(targetSpan.from, effTo),
 			text: name,
 		};
 
@@ -208,18 +214,17 @@ final class ExtractVar {
 	}
 
 	/**
-	 * The outermost EXPRESSION node whose `span.from` equals `cursor`: the
-	 * expression-kind node starting at the cursor with the maximum
-	 * `span.to`. Structural nodes (statements, declarations, members,
-	 * param wrappers) are skipped so pointing at the first token of
-	 * `a + b * 2` selects the whole `Add`, not the bare `IdentExpr a`.
-	 * Null when no expression starts at the cursor.
+	 * The expression to extract: the LARGEST non-structural node starting exactly
+	 * at `cursor` — co-starting operator chains (`a * 2 + 1` over `a * 2`) resolve
+	 * to the widest, which is what a first-token cursor means. `exactTo` (from a
+	 * `--match` address, whose node span is fully known) instead demands the exact
+	 * end too, so a pattern extracts precisely the matched subexpression.
 	 */
-	private static function selectTargetExpr(tree: QueryNode, cursor: Int): Null<QueryNode> {
+	private static function selectTargetExpr(tree: QueryNode, cursor: Int, ?exactTo: Int): Null<QueryNode> {
 		var best: Null<QueryNode> = null;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (span != null && span.from == cursor && !isStructural(node.kind)) {
+			if (span != null && span.from == cursor && !isStructural(node.kind) && (exactTo == null || span.to == exactTo)) {
 				final current: Null<QueryNode> = best;
 				final bestSpan: Null<Span> = current == null ? null : current.span;
 				if (bestSpan == null || span.to > bestSpan.to) best = node;
@@ -292,6 +297,11 @@ final class ExtractVar {
 			if (c != ' '.code && c != '\t'.code && c != '\r'.code) return false;
 		}
 		return true;
+	}
+
+	/** Whitespace test for the trailing-trivia trim. */
+	private static inline function isWsCode(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 }

@@ -18,7 +18,7 @@ import haxe.Exception;
  * FIRST TOKEN of the element to remove (the `apq refs` print-column
  * convention), and the whole file is re-emitted through the writer (which
  * fixes residual whitespace and re-parse-validates). The element node is
- * resolved with `RefactorSupport.nodeAtFrom` + `parentOf`; the deletion
+ * resolved with `RefactorSupport.elementAtFrom` + `parentOf`; the deletion
  * span (modifier / meta group folded, one comma swallowed for comma lists)
  * and the writer finalize live in `RefactorSupport.deleteNode`, shared with
  * the by-name remove wrappers (`RemoveImport` / `RemoveMember`).

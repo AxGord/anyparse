@@ -773,6 +773,9 @@ final class Cli {
 		var scope: Null<String> = null;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var newName: Null<String> = null;
 
 		var i: Int = 0;
@@ -781,6 +784,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--scope':
@@ -795,7 +804,7 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null)
+					else if (posSpec == null && selectExpr == null && matchExpr == null && newName == null && isPosSpec(a))
 						posSpec = a;
 					else if (newName == null)
 						newName = a;
@@ -806,14 +815,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null || newName == null) {
-			stderr('apq rename: expected <file> <line>:<col> <newName>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || newName == null) {
+			stderr("apq rename: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName>\n");
 			printRenameUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq rename: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -824,7 +828,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('rename', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		if (pos == null) return EXIT_RUNTIME;
 
 		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
 
@@ -922,16 +928,22 @@ final class Cli {
 	private static function runMove(args: Array<String>): Int {
 		final o: MoveOpts = parseMoveArgs(args);
 		if (o.errExit != null) return o.errExit;
-		// parseMoveArgs proved file/destFile/scope/pos non-null before
+		// parseMoveArgs proved file/destFile/scope/address non-null before
 		// returning with errExit:null; Strict won't narrow struct fields, so
 		// re-bind into locals and throw on the provably-unreachable null.
 		final cursorFile: Null<String> = o.file;
 		final destFile: Null<String> = o.destFile;
 		final scopeDir: Null<String> = o.scope;
-		final pos: Null<Position> = o.pos;
-		if (cursorFile == null || destFile == null || scopeDir == null || pos == null)
+		if (cursorFile == null || destFile == null || scopeDir == null)
 			throw new Exception('apq move: null arg after validation (unreachable)');
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
+
+		final cursorSource: String = try readSourceForParse(cursorFile) catch (exception: Exception) {
+			stderr('apq move: $cursorFile: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final pos: Null<Position> = resolveAddressPos('move', cursorSource, plugin, o.posSpec, o.selectExpr, o.matchExpr, o.nth);
+		if (pos == null) return EXIT_RUNTIME;
 
 		// Gather scope files = expandInputs(scope) ∪ {cursorFile, destFile}.
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scopeDir], '.hx');
@@ -1319,6 +1331,9 @@ final class Cli {
 		var write: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -1326,6 +1341,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -1347,14 +1368,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null) {
-			stderr('apq inline: expected <file> <line>:<col>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
+			stderr("apq inline: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>')\n");
 			printInlineUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq inline: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -1364,7 +1380,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('inline', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: InlineResult = Inline.inlineVar(source, pos.line, pos.col, plugin, shape);
 		switch result {
@@ -1404,6 +1422,9 @@ final class Cli {
 		var write: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -1411,6 +1432,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -1432,14 +1459,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null) {
-			stderr('apq inline-method: expected <file> <line>:<col>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
+			stderr("apq inline-method: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>')\n");
 			printInlineMethodUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq inline-method: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -1449,7 +1471,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('inline-method', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: EditResult = InlineMethod.inlineMethod(source, pos.line, pos.col, plugin, shape);
 		switch result {
@@ -1486,6 +1510,8 @@ final class Cli {
 		var write: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var name: Null<String> = null;
 
 		var i: Int = 0;
@@ -1494,6 +1520,10 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -1506,7 +1536,7 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null)
+					else if (posSpec == null && matchExpr == null && name == null && isPosSpec(a))
 						posSpec = a;
 					else if (name == null)
 						name = a;
@@ -1517,14 +1547,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null || name == null) {
-			stderr('apq extract-var: expected <file> <line>:<col> <name>\n');
+		if (file == null || (posSpec == null && matchExpr == null) || name == null) {
+			stderr("apq extract-var: expected <file> (<line>:<col> | --match '<expr-pattern>') <name>\n");
 			printExtractVarUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq extract-var: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -1535,8 +1560,32 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final result: ExtractResult = ExtractVar.extractVar(source, pos.line, pos.col, nameStr, plugin);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		// A --match address knows the expression's EXACT span — both ends are
+		// passed through so a co-starting wider operator chain (`a * 2 + 1` over
+		// a matched `a * 2`) cannot swallow the extraction.
+		var exactTo: Null<Int> = null;
+		var pos: Null<Position> = null;
+		if (matchExpr != null) {
+			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+			if (tree == null) {
+				stderr('apq extract-var: $filePath does not parse\n');
+				return EXIT_RUNTIME;
+			}
+			switch Address.resolve(tree, source, plugin, { match: matchExpr, nth: nth }) {
+				case Ok(offset, node):
+					pos = new Span(offset, offset).lineCol(source);
+					exactTo = node?.span?.to;
+				case Err(message):
+					stderr('apq extract-var: $message\n');
+					return EXIT_RUNTIME;
+			}
+		} else {
+			pos = resolveAddressPos('extract-var', source, plugin, posSpec, null, null, null);
+		}
+		if (pos == null) return EXIT_RUNTIME;
+		final loc: Position = pos;
+		final result: ExtractResult = ExtractVar.extractVar(source, loc.line, loc.col, nameStr, plugin, exactTo);
 		switch result {
 			case Ok(text):
 				if (write) {
@@ -1611,6 +1660,9 @@ final class Cli {
 		var write: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var paramText: Null<String> = null;
 
 		var i: Int = 0;
@@ -1619,6 +1671,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -1631,7 +1689,7 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null)
+					else if (posSpec == null && selectExpr == null && matchExpr == null && paramText == null && isPosSpec(a))
 						posSpec = a;
 					else if (paramText == null)
 						paramText = a;
@@ -1642,14 +1700,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null || paramText == null) {
-			stderr('apq add-param: expected <file> <line>:<col> <paramText>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || paramText == null) {
+			stderr("apq add-param: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <paramText>\n");
 			printAddParamUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq add-param: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -1660,7 +1713,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('add-param', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		if (pos == null) return EXIT_RUNTIME;
 		final result: AddParamResult = AddParam.addParam(source, pos.line, pos.col, paramStr, plugin);
 		switch result {
 			case Ok(text):
@@ -1830,7 +1885,7 @@ final class Cli {
 		final file: Null<String> = o.file;
 		if (file == null || code == null) {
 			stderr(
-				'apq add-element: expected <file> (--after <line>:<col> | --before <line>:<col> | --append <line>:<col>) (<code> | --from-file <path> | -)\n'
+				"apq add-element: expected <file> (--after | --before | --append) (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -)\n"
 			);
 			printAddElementUsage();
 			return EXIT_USAGE;
@@ -1841,17 +1896,18 @@ final class Cli {
 		// Exactly one of --after / --before / --append must be given.
 		final targetCount: Int = (afterSpec != null ? 1 : 0) + (beforeSpec != null ? 1 : 0) + (appendSpec != null ? 1 : 0);
 		if (targetCount != 1) {
-			stderr('apq add-element: provide exactly one of --after <line>:<col>, --before <line>:<col>, or --append <line>:<col>\n');
+			stderr('apq add-element: provide exactly one of --after, --before, or --append\n');
 			return EXIT_USAGE;
 		}
 
 		// targetCount == 1 guarantees exactly one spec is non-null; the
 		// `cast` commits the narrowing the analyzer can't prove across the
-		// struct-field rebind.
+		// struct-field rebind. An empty spec = valueless mode flag — the
+		// address comes from --select / --match instead.
 		final posSpec: String = afterSpec ?? beforeSpec ?? (cast appendSpec: String);
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq add-element: malformed position "$posSpec" — expected <line>:<col>\n');
+		final atSpec: Null<String> = posSpec == '' ? null : posSpec;
+		if (atSpec == null && o.selectExpr == null && o.matchExpr == null) {
+			stderr("apq add-element: no target address — give a position or --select '<sel>' / --match '<pattern>'\n");
 			return EXIT_USAGE;
 		}
 
@@ -1862,7 +1918,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
+		final pos: Null<Position> = resolveAddressPos('add-element', source, plugin, atSpec, o.selectExpr, o.matchExpr, o.nth);
+		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = if (appendSpec != null)
 			AddElement.appendElement(source, pos.line, pos.col, codeStr, o.reformat, plugin, optsJson);
@@ -1902,6 +1960,9 @@ final class Cli {
 		var withDoc: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -1909,6 +1970,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--reformat':
@@ -1934,14 +2001,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null) {
-			stderr('apq remove-element: expected <file> <line>:<col>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
+			stderr("apq remove-element: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>')\n");
 			printRemoveElementUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq remove-element: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -1950,7 +2012,9 @@ final class Cli {
 			stderr('apq remove-element: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('remove-element', source, plugin, posSpec, selectExpr, matchExpr, nth);
+		if (pos == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		return finishEdit(
 			'remove-element', filePath, write, RemoveElement.removeElement(source, pos.line, pos.col, reformat, plugin, withDoc, optsJson)
@@ -2110,39 +2174,22 @@ final class Cli {
 		}
 		final file: Null<String> = o.file;
 		if (file == null || newSource == null) {
-			stderr('apq replace-node: expected <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -)\n');
+			stderr(
+				"apq replace-node: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (<newSource> | --from-file <path> | -)\n"
+			);
 			printReplaceNodeUsage();
 			return EXIT_USAGE;
 		}
 		final selectExpr: Null<String> = o.selectExpr;
 		final atSpec: Null<String> = o.atSpec;
+		final matchExpr: Null<String> = o.matchExpr;
 		final kind: Null<String> = o.kind;
-		// Exactly one of --select / --at must be given.
-		if ((selectExpr == null) == (atSpec == null)) {
-			stderr('apq replace-node: provide exactly one of --select <sel> or --at <line>:<col>\n');
+		// Exactly one of --select / --match / --at must be given.
+		final modes: Int = (selectExpr != null ? 1 : 0) + (matchExpr != null ? 1 : 0) + (atSpec != null ? 1 : 0);
+		if (modes != 1) {
+			stderr("apq replace-node: provide exactly one of --select '<sel>', --match '<pattern>', or --at <line>[:<col>]\n");
 			return EXIT_USAGE;
 		}
-		// --kind narrows --at to a node of that kind; it has no meaning with --select.
-		if (kind != null && atSpec == null) {
-			stderr('apq replace-node: --kind requires --at <line>:<col>\n');
-			return EXIT_USAGE;
-		}
-
-		final target: ReplaceTarget = if (selectExpr != null)
-			BySelector(selectExpr);
-		else if (atSpec != null) {
-			final pos: Null<Position> = parseLineCol(atSpec);
-			if (pos == null) {
-				stderr('apq replace-node: malformed position "$atSpec" — expected <line>:<col>\n');
-				return EXIT_USAGE;
-			}
-			kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
-		} else {
-			// Unreachable given the exactly-one guard above; keeps the
-			// if-expression exhaustive and null-safe.
-			stderr('apq replace-node: provide exactly one of --select <sel> or --at <line>:<col>\n');
-			return EXIT_USAGE;
-		};
 
 		final filePath: String = file;
 		final newSrc: String = newSource;
@@ -2150,8 +2197,47 @@ final class Cli {
 			stderr('apq replace-node: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final target: Null<ReplaceTarget> = if (atSpec != null) {
+			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
+			final pos: Null<Position> = resolveAddressPos('replace-node', source, plugin, atSpec, null, null, null);
+			if (pos == null)
+				null;
+			else
+				kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
+		} else {
+			// --select / --match resolve through the shared address layer (exactly-one
+			// discipline, --nth pick, candidate-listing errors); the caching plugin
+			// guarantees the resolved node belongs to the op's own parse. `--kind`
+			// here LIFTS the resolved node to its innermost enclosing node of that
+			// kind — a pattern matches the expression (`addCase(x)` = the Call),
+			// while a statement edit wants the ExprStmt.
+			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+			if (tree == null) {
+				stderr('apq replace-node: $filePath does not parse\n');
+				null;
+			} else
+				switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: o.nth }) {
+					case Ok(_, node):
+						if (node == null) {
+							null;
+						} else if (kind != null) {
+							final lifted: Null<QueryNode> = Address.liftToKind(tree, node, kind, plugin.selectKindEquivalence());
+							if (lifted == null) {
+								stderr('apq replace-node: the resolved ${node.kind} node has no enclosing "$kind" node\n');
+								null;
+							} else
+								ByNode(lifted);
+						} else
+							ByNode(node);
+					case Err(message):
+						stderr('apq replace-node: $message\n');
+						null;
+				}
+		};
+		if (target == null) return EXIT_RUNTIME;
+
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		return finishEdit(
 			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson)
@@ -2179,6 +2265,9 @@ final class Cli {
 		var write: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var permSpec: Null<String> = null;
 
 		var i: Int = 0;
@@ -2187,6 +2276,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -2199,7 +2294,9 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null)
+					else if (
+						posSpec == null && selectExpr == null && matchExpr == null && permSpec == null && isPosSpec(a) && a.indexOf(',') < 0
+					)
 						posSpec = a;
 					else if (permSpec == null)
 						permSpec = a;
@@ -2210,14 +2307,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null || permSpec == null) {
-			stderr('apq change-sig: expected <file> <line>:<col> <perm>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || permSpec == null) {
+			stderr("apq change-sig: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <perm>\n");
 			printChangeSigUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq change-sig: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 
@@ -2228,7 +2320,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('change-sig', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: ChangeSigResult = ChangeSig.changeSig(source, pos.line, pos.col, permStr, plugin, shape);
 		switch result {
@@ -2271,6 +2365,9 @@ final class Cli {
 		var write: Bool = false;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var indexSpec: Null<String> = null;
 
 		var i: Int = 0;
@@ -2279,6 +2376,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -2291,7 +2394,10 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null)
+					// With a named address the position slot is skipped — every later
+					// positional is the index (which is also digits-only, so the slot
+					// routing must not steal it).
+					else if (posSpec == null && selectExpr == null && matchExpr == null && indexSpec == null && a.indexOf(':') >= 0)
 						posSpec = a;
 					else if (indexSpec == null)
 						indexSpec = a;
@@ -2302,14 +2408,9 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null || indexSpec == null) {
-			stderr('apq remove-param: expected <file> <line>:<col> <index>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || indexSpec == null) {
+			stderr("apq remove-param: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <index>\n");
 			printRemoveParamUsage();
-			return EXIT_USAGE;
-		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq remove-param: malformed position "$posSpec" — expected <line>:<col>\n');
 			return EXIT_USAGE;
 		}
 		final index: Null<Int> = RefactorSupport.parseStrictInt(indexSpec);
@@ -2325,7 +2426,9 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos('remove-param', source, plugin, posSpec, selectExpr, matchExpr, nth, true);
+		if (pos == null) return EXIT_RUNTIME;
 		final shape: RefShape = plugin.refShape();
 		final result: RemoveParamResult = RemoveParam.removeParam(source, pos.line, pos.col, paramIndex, plugin, shape);
 		switch result {
@@ -6677,22 +6780,30 @@ final class Cli {
 
 	private static function printAddElementUsage(): Void {
 		sysPrint(
-			'Usage: apq add-element <file> (--after <l>:<c> | --before <l>:<c> | --append <l>:<c>) (<code> | --from-file <path> | -) [options]\n'
+			"Usage: apq add-element <file> (--after | --before | --append) (<l>[:<c>] | --select '<sel>' | --match '<pattern>') (<code> | --from-file <path> | -) [options]\n"
 		);
 		sysPrint('\n');
 		sysPrint('Insert <code> as a new element into a list-shaped slot. With --after / --before,\n');
-		sysPrint('<l>:<c> points at an existing SIBLING element (a statement in a block, a case in\n');
-		sysPrint('a switch, an array / object / call-argument element). With --append, it points at\n');
+		sysPrint('the address is an existing SIBLING element (a statement in a block, a case in\n');
+		sysPrint('a switch, an array / object / call-argument element). With --append, it is\n');
 		sysPrint('the CONTAINER itself (block / array / object / call / new / class / switch); the\n');
 		sysPrint('element is added as the last child — which also works on an empty container that\n');
 		sysPrint('has no sibling to point at. The slot separator (comma or newline) is added\n');
 		sysPrint('automatically; the element is writer-formatted + re-parse-validated. The element\n');
 		sysPrint('text may be inline, from --from-file, or stdin when it is the literal `-`.\n');
 		sysPrint('\n');
+		sysPrint('Addressing (the mode flag takes an inline position, or combine it with --select / --match):\n');
+		sysPrint("  <l>[:<c>]           1-based position; column omitted = the line's first\n");
+		sysPrint('                      non-whitespace character\n');
+		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		sysPrint('                      (descendant); must resolve to exactly one node\n');
+		sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
+		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
+		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --after <l>:<c>   Insert after the sibling element at this position\n');
-		sysPrint('  --before <l>:<c>  Insert before the sibling element at this position\n');
-		sysPrint('  --append <l>:<c>  Append as the last child of the container at this position\n');
+		sysPrint('  --after [<l>[:<c>]]   Insert after the addressed sibling element\n');
+		sysPrint('  --before [<l>[:<c>]]  Insert before the addressed sibling element\n');
+		sysPrint('  --append [<l>[:<c>]]  Append as the last child of the addressed container\n');
 		sysPrint('  --from-file <path> Read the element text from a file instead of the argument\n');
 		sysPrint('  --write           Overwrite the file in place (default: print to stdout)\n');
 		sysPrint('  --reformat        Canonicalise the whole file if it is not already canonical\n');
@@ -6701,13 +6812,21 @@ final class Cli {
 	}
 
 	private static function printRemoveElementUsage(): Void {
-		sysPrint('Usage: apq remove-element <file> <line>:<col> [options]\n');
+		sysPrint("Usage: apq remove-element <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') [options]\n");
 		sysPrint('\n');
-		sysPrint('Remove the sibling element whose first token is at <line>:<col> — a statement\n');
-		sysPrint('in a block, a case in a switch, an array / object / call-argument element, or a\n');
-		sysPrint('class member (with its modifier / meta group). The structural inverse of\n');
-		sysPrint('add-element; one separating comma is removed for comma lists. The result is\n');
-		sysPrint('writer-formatted + re-parse-validated.\n');
+		sysPrint('Remove the sibling element at the address — a statement in a block, a case in\n');
+		sysPrint('a switch, an array / object / call-argument element, or a class member (with\n');
+		sysPrint('its modifier / meta group). The structural inverse of add-element; one\n');
+		sysPrint('separating comma is removed for comma lists. The result is writer-formatted +\n');
+		sysPrint('re-parse-validated.\n');
+		sysPrint('\n');
+		sysPrint('Addressing:\n');
+		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
+		sysPrint('                      non-whitespace character\n');
+		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		sysPrint('                      (descendant); must resolve to exactly one node\n');
+		sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
+		sysPrint('  --nth <k>           Pick the k-th (1-based) of several --select/--match matches\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --with-doc      Also remove the element\'s leading doc comment\n');
@@ -6748,7 +6867,7 @@ final class Cli {
 	}
 
 	private static function printInlineMethodUsage(): Void {
-		sysPrint('Usage: apq inline-method <file> <line>:<col> [options]\n');
+		sysPrint("Usage: apq inline-method <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') [options]\n");
 		sysPrint('\n');
 		sysPrint('Inline the single-return function declared at <line>:<col> into every\n');
 		sysPrint('in-file call site (arguments substituted for parameters) and delete the\n');
@@ -6878,7 +6997,7 @@ final class Cli {
 	}
 
 	private static function printRenameUsage(): Void {
-		sysPrint('Usage: apq rename <file> <line>:<col> <newName> [--write] [--scope <dir>]\n');
+		sysPrint("Usage: apq rename <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <newName> [--write] [--scope <dir>]\n");
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -6908,7 +7027,9 @@ final class Cli {
 	}
 
 	private static function printMoveUsage(): Void {
-		sysPrint('Usage: apq move <file> <line>:<col> <dest-file> --scope <dir> [--write]\n');
+		sysPrint(
+			"Usage: apq move <file> (<line>:<col> | --select 'ClassDecl:<Name>' | --match '<pattern>') <dest-file> --scope <dir> [--write]\n"
+		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --scope <dir>       Directory whose .hx imports are fixed (required)\n');
@@ -6933,7 +7054,7 @@ final class Cli {
 	}
 
 	private static function printInlineUsage(): Void {
-		sysPrint('Usage: apq inline <file> <line>:<col> [--write]\n');
+		sysPrint("Usage: apq inline <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') [--write]\n");
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -6953,7 +7074,7 @@ final class Cli {
 	}
 
 	private static function printExtractVarUsage(): Void {
-		sysPrint('Usage: apq extract-var <file> <line>:<col> <name> [--write]\n');
+		sysPrint("Usage: apq extract-var <file> (<line>:<col> | --match '<expr-pattern>') <name> [--write]\n");
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -6974,7 +7095,7 @@ final class Cli {
 	}
 
 	private static function printAddParamUsage(): Void {
-		sysPrint('Usage: apq add-param <file> <line>:<col> <paramText> [--write]\n');
+		sysPrint("Usage: apq add-param <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') <paramText> [--write]\n");
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -7040,15 +7161,22 @@ final class Cli {
 
 	private static function printReplaceNodeUsage(): Void {
 		sysPrint(
-			'Usage: apq replace-node <file> (--select <sel> | --at <line>:<col>) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n'
+			"Usage: apq replace-node <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n"
 		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --select <sel>      Address the node by an ast-style selector\n');
-		sysPrint('                      (Kind / Kind:name / A > B); must match exactly one\n');
-		sysPrint('  --at <line>:<col>   Address the innermost node at the cursor\n');
-		sysPrint('  --kind <Kind>      With --at: the innermost node of <Kind> at the cursor\n');
-		sysPrint('                      (reaches a co-starting operator / wrapper node)\n');
+		sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
+		sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
+		sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
+		sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
+		sysPrint('                      same exactly-one / --nth discipline\n');
+		sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
+		sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
+		sysPrint("                      = the line's first non-whitespace character\n");
+		sysPrint('  --kind <Kind>       With --at: the innermost node of <Kind> at the cursor.\n');
+		sysPrint('                      With --select / --match: LIFT the resolved node to its\n');
+		sysPrint('                      innermost enclosing <Kind> (a pattern matches the Call —\n');
+		sysPrint('                      lift to ExprStmt to replace the whole statement)\n');
 		sysPrint('  --with-doc          Also replace the leading doc comment (rewrite its docs)\n');
 		sysPrint('  --from-file <path>  Read <newSource> from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
@@ -7058,20 +7186,20 @@ final class Cli {
 		sysPrint('The new source may be inline, read from a file with --from-file, or read\n');
 		sysPrint('from stdin when it is the literal `-` (heredoc-friendly for code with `$`\n');
 		sysPrint('or quotes the shell would mangle). Replace the source span of a single\n');
-		sysPrint('node with <newSource>. Provide\n');
-		sysPrint('exactly one of --select or --at. --at uses the same column convention\n');
-		sysPrint('`apq refs` prints (NOT the raw 1-indexed `ast --at`). The result is\n');
-		sysPrint('WRITER-FORMATTED — the whole file is re-emitted through the writer (which\n');
-		sysPrint('also re-parse-validates), so the replacement is laid out by the grammar\'s\n');
-		sysPrint('rules. The file must already be canonical; otherwise it is refused unless\n');
-		sysPrint('--reformat is given. Quote <newSource> if it contains spaces. A target\n');
-		sysPrint('that resolves to no / multiple nodes, a non-canonical file without\n');
-		sysPrint('--reformat, or an unparseable result, exits non-zero with the file\n');
-		sysPrint('untouched.\n');
+		sysPrint('node with <newSource>. Provide exactly one of --select / --match / --at.\n');
+		sysPrint('The result is WRITER-FORMATTED — the whole file is re-emitted through the\n');
+		sysPrint("writer (which also re-parse-validates), so the replacement is laid out by\n");
+		sysPrint("the grammar's rules. The file must already be canonical; otherwise it is\n");
+		sysPrint('refused unless --reformat is given. Quote <newSource> if it contains\n');
+		sysPrint('spaces. A target that resolves to no / multiple nodes, a non-canonical\n');
+		sysPrint('file without --reformat, or an unparseable result, exits non-zero with\n');
+		sysPrint('the file untouched.\n');
 	}
 
 	private static function printChangeSigUsage(): Void {
-		sysPrint('Usage: apq change-sig <file> <line>:<col> <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)\n');
+		sysPrint(
+			"Usage: apq change-sig <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)\n"
+		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -7096,7 +7224,9 @@ final class Cli {
 	}
 
 	private static function printRemoveParamUsage(): Void {
-		sysPrint('Usage: apq remove-param <file> <line>:<col> <index> [--write]  (index = 0-based parameter to remove)\n');
+		sysPrint(
+			"Usage: apq remove-param <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <index> [--write]  (index = 0-based parameter to remove)\n"
+		);
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -7981,14 +8111,11 @@ final class Cli {
 		}
 		final file: Null<String> = o.file;
 		final pos: Null<String> = o.pos;
-		if (file == null || pos == null || docText == null) {
-			stderr('apq set-doc: expected <file> <line>:<col> (<text> | --from-file <path> | -)\n');
+		if (file == null || (pos == null && o.selectExpr == null && o.matchExpr == null) || docText == null) {
+			stderr(
+				"apq set-doc: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -)\n"
+			);
 			printSetDocUsage();
-			return EXIT_USAGE;
-		}
-		final loc: Null<Position> = parseLineCol(pos);
-		if (loc == null) {
-			stderr('apq set-doc: bad position "$pos" (expected <line>:<col>)\n');
 			return EXIT_USAGE;
 		}
 
@@ -7998,14 +8125,26 @@ final class Cli {
 			stderr('apq set-doc: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
+		final loc: Null<Position> = resolveAddressPos('set-doc', source, plugin, pos, o.selectExpr, o.matchExpr, o.nth);
+		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		final result: EditResult = SetDoc.setDoc(source, loc.line, loc.col, docStr, o.reformat, plugin, optsJson);
 		return emitEditResult('set-doc', filePath, result, o.write);
 	}
 
 	private static function printSetDocUsage(): Void {
-		sysPrint('Usage: apq set-doc <file> <line>:<col> (<text> | --from-file <path> | -) [--reformat] [--write]\n');
+		sysPrint(
+			"Usage: apq set-doc <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -) [--reformat] [--write]\n"
+		);
+		sysPrint('\n');
+		sysPrint('Addressing:\n');
+		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
+		sysPrint('                      non-whitespace character\n');
+		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
+		sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
+		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --from-file <path>  Read the doc text from a file instead of the argument\n');
@@ -8013,11 +8152,11 @@ final class Cli {
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint('Add or replace the doc-comment of the declaration at <line>:<col> (the apq\n');
-		sysPrint('refs column convention). The text is formatted into a doc-comment block and\n');
-		sysPrint('spliced before the declaration; an existing leading doc comment is replaced,\n');
-		sysPrint('the declaration itself is left untouched. The text may be inline, --from-file,\n');
-		sysPrint('or - for stdin (heredoc-friendly, multi-line). Writer-formatted + validated.\n');
+		sysPrint('Add or replace the doc-comment of the addressed declaration. The text is\n');
+		sysPrint('formatted into a doc-comment block and spliced before the declaration; an\n');
+		sysPrint('existing leading doc comment is replaced, the declaration itself is left\n');
+		sysPrint('untouched. The text may be inline, --from-file, or - for stdin\n');
+		sysPrint('(heredoc-friendly, multi-line). Writer-formatted + validated.\n');
 	}
 
 	/**
@@ -8034,6 +8173,9 @@ final class Cli {
 		var reformat: Bool = false;
 		var file: Null<String> = null;
 		var pos: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		final changes: Array<String> = [];
 
 		var i: Int = 0;
@@ -8042,6 +8184,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -8056,21 +8204,18 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (pos == null)
+					else if (pos == null && selectExpr == null && matchExpr == null && isPosSpec(a))
 						pos = a;
 					else
 						changes.push(a);
 			}
 			i++;
 		}
-		if (file == null || pos == null || changes.length == 0) {
-			stderr('apq set-modifier: expected <file> <line>:<col> <change>... (e.g. public, +static, -inline)\n');
+		if (file == null || (pos == null && selectExpr == null && matchExpr == null) || changes.length == 0) {
+			stderr(
+				"apq set-modifier: expected <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <change>... (e.g. public, +static, -inline)\n"
+			);
 			printSetModifierUsage();
-			return EXIT_USAGE;
-		}
-		final loc: Null<Position> = parseLineCol(pos);
-		if (loc == null) {
-			stderr('apq set-modifier: bad position "$pos" (expected <line>:<col>)\n');
 			return EXIT_USAGE;
 		}
 
@@ -8079,7 +8224,9 @@ final class Cli {
 			stderr('apq set-modifier: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
-		final plugin: GrammarPlugin = pickPlugin(lang);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final loc: Null<Position> = resolveAddressPos('set-modifier', source, plugin, pos, selectExpr, matchExpr, nth);
+		if (loc == null) return EXIT_RUNTIME;
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		switch SetModifier.setModifier(source, loc.line, loc.col, changes, reformat, plugin, optsJson) {
 			case Ok(text):
@@ -8096,21 +8243,31 @@ final class Cli {
 	}
 
 	private static function printSetModifierUsage(): Void {
-		sysPrint('Usage: apq set-modifier <file> <line>:<col> <change>... [--reformat] [--write]\n');
+		sysPrint(
+			"Usage: apq set-modifier <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') <change>... [--reformat] [--write]\n"
+		);
 		sysPrint('\n');
 		sysPrint('Changes:\n');
 		sysPrint('  public | private    Set the visibility\n');
 		sysPrint('  +<mod> | -<mod>     Add / remove a boolean modifier\n');
 		sysPrint('                      (static, inline, override, macro, extern, dynamic)\n');
 		sysPrint('\n');
+		sysPrint('Addressing:\n');
+		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
+		sysPrint('                      non-whitespace character\n');
+		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
+		sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
+		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
+		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
-		sysPrint('Flip the visibility / add or remove modifiers of the declaration at the\n');
-		sysPrint('cursor without retyping it — the safe replacement for replace-node on a\n');
-		sysPrint('modifier. `final` is not handled (it wraps the declaration; use replace-node).\n');
+		sysPrint('Flip the visibility / add or remove modifiers of the addressed declaration\n');
+		sysPrint('without retyping it — the safe replacement for replace-node on a modifier.\n');
+		sysPrint('`final` is not handled (it wraps the declaration; use replace-node).\n');
 		sysPrint('The result is WRITER-FORMATTED + re-parse-validated.\n');
 	}
 
@@ -10290,7 +10447,22 @@ final class Cli {
 
 		switch format {
 			case 'json':
-				sysPrint(LintFormat.json(ordered, sourceOf));
+				// Each record carries the finding's canonical edit-stable selector
+				// (`address`) — directly usable as a mutation-op --select argument.
+				// The caching plugin parses each file once across all findings.
+				final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin('haxe'));
+				sysPrint(LintFormat.json(
+					ordered, sourceOf, v -> {
+						final span: Null<Span> = v.span;
+						final source: Null<String> = sourceOf[v.file];
+						if (span == null || source == null) return null;
+						final tree: Null<QueryNode> =
+							try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+						if (tree == null) return null;
+						final node: Null<QueryNode> = Engine.at(tree, span.from);
+						return node == null ? null : Address.describe(tree, source, node, plugin.selectKindEquivalence());
+					}
+				));
 			case 'checkstyle':
 				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
 			case _:
@@ -11262,6 +11434,9 @@ final class Cli {
 			fromFile: null,
 			file: null,
 			pos: null,
+			selectExpr: null,
+			matchExpr: null,
+			nth: null,
 			docText: null,
 			errExit: code
 		};
@@ -11274,6 +11449,9 @@ final class Cli {
 		var fromFile: Null<String> = null;
 		var file: Null<String> = null;
 		var pos: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var docText: Null<String> = null;
 
 		var i: Int = 0;
@@ -11282,6 +11460,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--from-file':
 					fromFile = expectValue(args, ++i, '--from-file');
 				case '--reformat':
@@ -11298,7 +11482,7 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (pos == null)
+					else if (pos == null && selectExpr == null && matchExpr == null && isPosSpec(a))
 						pos = a;
 					else if (docText == null)
 						docText = a;
@@ -11316,6 +11500,9 @@ final class Cli {
 			fromFile: fromFile,
 			file: file,
 			pos: pos,
+			selectExpr: selectExpr,
+			matchExpr: matchExpr,
+			nth: nth,
 			docText: docText,
 			errExit: null
 		};
@@ -11404,7 +11591,10 @@ final class Cli {
 			write: false,
 			scope: null,
 			file: null,
-			pos: null,
+			posSpec: null,
+			selectExpr: null,
+			matchExpr: null,
+			nth: null,
 			destFile: null,
 			errExit: code
 		};
@@ -11416,6 +11606,9 @@ final class Cli {
 		var scope: Null<String> = null;
 		var file: Null<String> = null;
 		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var destFileArg: Null<String> = null;
 
 		var i: Int = 0;
@@ -11424,6 +11617,12 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--write':
 					write = true;
 				case '--scope':
@@ -11438,7 +11637,7 @@ final class Cli {
 					}
 					if (file == null)
 						file = a;
-					else if (posSpec == null)
+					else if (posSpec == null && selectExpr == null && matchExpr == null && destFileArg == null && isPosSpec(a))
 						posSpec = a;
 					else if (destFileArg == null)
 						destFileArg = a;
@@ -11449,8 +11648,8 @@ final class Cli {
 			}
 			i++;
 		}
-		if (file == null || posSpec == null || destFileArg == null) {
-			stderr('apq move: expected <file> <line>:<col> <dest-file>\n');
+		if (file == null || (posSpec == null && selectExpr == null && matchExpr == null) || destFileArg == null) {
+			stderr("apq move: expected <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') <dest-file>\n");
 			printMoveUsage();
 			return moveParseExit(EXIT_USAGE);
 		}
@@ -11459,17 +11658,15 @@ final class Cli {
 			printMoveUsage();
 			return moveParseExit(EXIT_USAGE);
 		}
-		final pos: Null<Position> = parseLineCol(posSpec);
-		if (pos == null) {
-			stderr('apq move: malformed position "$posSpec" — expected <line>:<col>\n');
-			return moveParseExit(EXIT_USAGE);
-		}
 		return {
 			lang: lang,
 			write: write,
 			scope: scope,
 			file: file,
-			pos: pos,
+			posSpec: posSpec,
+			selectExpr: selectExpr,
+			matchExpr: matchExpr,
+			nth: nth,
 			destFile: destFileArg,
 			errExit: null
 		};
@@ -11691,6 +11888,8 @@ final class Cli {
 			reformat: false,
 			selectExpr: null,
 			atSpec: null,
+			matchExpr: null,
+			nth: null,
 			kind: null,
 			withDoc: false,
 			file: null,
@@ -11706,6 +11905,8 @@ final class Cli {
 		var reformat: Bool = false;
 		var selectExpr: Null<String> = null;
 		var atSpec: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var kind: Null<String> = null;
 		var withDoc: Bool = false;
 		var file: Null<String> = null;
@@ -11722,6 +11923,10 @@ final class Cli {
 					selectExpr = expectValue(args, ++i, '--select');
 				case '--at':
 					atSpec = expectValue(args, ++i, '--at');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--kind':
 					kind = expectValue(args, ++i, '--kind');
 				case '--with-doc':
@@ -11757,6 +11962,8 @@ final class Cli {
 			reformat: reformat,
 			selectExpr: selectExpr,
 			atSpec: atSpec,
+			matchExpr: matchExpr,
+			nth: nth,
 			kind: kind,
 			withDoc: withDoc,
 			file: file,
@@ -12140,6 +12347,9 @@ final class Cli {
 			afterSpec: null,
 			beforeSpec: null,
 			appendSpec: null,
+			selectExpr: null,
+			matchExpr: null,
+			nth: null,
 			file: null,
 			code: null,
 			fromFile: null,
@@ -12154,6 +12364,9 @@ final class Cli {
 		var afterSpec: Null<String> = null;
 		var beforeSpec: Null<String> = null;
 		var appendSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
 		var file: Null<String> = null;
 		var code: Null<String> = null;
 		var fromFile: Null<String> = null;
@@ -12164,12 +12377,21 @@ final class Cli {
 			switch a {
 				case '--lang':
 					lang = expectValue(args, ++i, '--lang');
+				// The mode flags take a position value only when one follows —
+				// `--after --select '<sel>'` and a trailing `--append` are valueless
+				// (the address then comes from --select / --match); '' marks the mode.
 				case '--after':
-					afterSpec = expectValue(args, ++i, '--after');
+					afterSpec = isPosToken(args, i) ? args[++i] : '';
 				case '--before':
-					beforeSpec = expectValue(args, ++i, '--before');
+					beforeSpec = isPosToken(args, i) ? args[++i] : '';
 				case '--append':
-					appendSpec = expectValue(args, ++i, '--append');
+					appendSpec = isPosToken(args, i) ? args[++i] : '';
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
 				case '--from-file':
 					fromFile = expectValue(args, ++i, '--from-file');
 				case '--write':
@@ -12202,11 +12424,76 @@ final class Cli {
 			afterSpec: afterSpec,
 			beforeSpec: beforeSpec,
 			appendSpec: appendSpec,
+			selectExpr: selectExpr,
+			matchExpr: matchExpr,
+			nth: nth,
 			file: file,
 			code: code,
 			fromFile: fromFile,
 			errExit: null
 		};
+	}
+
+	/**
+	 * Resolve the shared address flags (`<line>[:<col>]` / `--select` /
+	 * `--match` [+ `--nth`]) to a 1-based position, printing the op-prefixed
+	 * error on failure. The file is parsed here — pass a CACHING plugin so the
+	 * op's own parse reuses the identical tree (node identity matters to
+	 * `RefactorSupport.parentOf`-based span logic downstream, and the shared
+	 * cache makes this parse free). `preferName` shifts a select/match-resolved
+	 * NAMED node's position to its name token — the cursor-based fn-ops
+	 * (rename / change-sig / …) resolve an identifier at the cursor, so the
+	 * address must land on the name, not the `function` keyword; element ops
+	 * keep the first-token position.
+	 *
+	 * A position / pattern resolution also echoes the target's CANONICAL
+	 * selector (`Address.describe`) to stderr — the edit-stable address a
+	 * follow-up op can use without re-locating after this edit shifts lines.
+	 */
+	private static function resolveAddressPos(
+		op: String, source: String, plugin: GrammarPlugin, at: Null<String>, select: Null<String>, matchPat: Null<String>, nth: Null<Int>,
+		preferName: Bool = false
+	): Null<Position> {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: Exception) {
+			stderr('apq $op: source does not parse: ${exception.message}\n');
+			return null;
+		};
+		return switch Address.resolve(tree, source, plugin, {
+			at: at,
+			select: select,
+			match: matchPat,
+			nth: nth
+		}) {
+			case Ok(offset, node):
+				if (node != null && select == null)
+					stderr('apq $op: target ${Address.describe(tree, source, node, plugin.selectKindEquivalence())}\n');
+				final named: Null<Int> = preferName && at == null && node != null ? Address.nameTokenOffset(source, node) : null;
+				new Span(named ?? offset, named ?? offset).lineCol(source);
+			case Err(message):
+				stderr('apq $op: $message\n');
+				null;
+		};
+	}
+
+	/**
+	 * Whether the token after a mode flag is a position value (`<line>[:<col>]`
+	 * starts with a digit) — an `--after` / `--before` / `--append` followed by
+	 * another flag or the stdin marker is valueless (the address then comes from
+	 * `--select` / `--match`).
+	 */
+	private static function isPosToken(args: Array<String>, i: Int): Bool {
+		if (i + 1 >= args.length) return false;
+		final next: String = args[i + 1];
+		if (next.length == 0) return false;
+		final c: Int = StringTools.fastCodeAt(next, 0);
+		return c >= '0'.code && c <= '9'.code;
+	}
+
+	/** Whether a bare argument is a position spec (`<line>[:<col>]` — starts with a digit) rather than another positional. */
+	private static function isPosSpec(s: String): Bool {
+		if (s.length == 0) return false;
+		final c: Int = StringTools.fastCodeAt(s, 0);
+		return c >= '0'.code && c <= '9'.code;
 	}
 
 }
@@ -12414,9 +12701,11 @@ typedef SetDocOpts = {
 	var fromFile: Null<String>;
 	var file: Null<String>;
 	var pos: Null<String>;
+	var selectExpr: Null<String>;
+	var matchExpr: Null<String>;
+	var nth: Null<Int>;
 	var docText: Null<String>;
-	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
-	// the caller returns this immediately and ignores the rest of the struct.
+	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
 };
 @:nullSafety(Strict)
@@ -12444,10 +12733,13 @@ typedef MoveOpts = {
 	var write: Bool;
 	var scope: Null<String>;
 	var file: Null<String>;
-	var pos: Null<Position>;
+	var posSpec: Null<String>;
+	var selectExpr: Null<String>;
+	var matchExpr: Null<String>;
+	var nth: Null<Int>;
 	var destFile: Null<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag / missing
-	// --scope / malformed position -> EXIT_USAGE); the caller returns this immediately.
+	// --scope / missing address -> EXIT_USAGE); the caller returns this immediately.
 	var errExit: Null<Int>;
 };
 @:nullSafety(Strict)
@@ -12487,13 +12779,14 @@ typedef ReplaceNodeOpts = {
 	var reformat: Bool;
 	var selectExpr: Null<String>;
 	var atSpec: Null<String>;
+	var matchExpr: Null<String>;
+	var nth: Null<Int>;
 	var kind: Null<String>;
 	var withDoc: Bool;
 	var file: Null<String>;
 	var newSource: Null<String>;
 	var fromFile: Null<String>;
-	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);
-	// the caller returns this immediately and ignores the rest of the struct.
+	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
 };
 @:nullSafety(Strict)
@@ -12540,6 +12833,9 @@ typedef AddElementOpts = {
 	var afterSpec: Null<String>;
 	var beforeSpec: Null<String>;
 	var appendSpec: Null<String>;
+	var selectExpr: Null<String>;
+	var matchExpr: Null<String>;
+	var nth: Null<Int>;
 	var file: Null<String>;
 	var code: Null<String>;
 	var fromFile: Null<String>;

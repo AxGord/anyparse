@@ -251,4 +251,62 @@ class ApqSelectorTest extends Test {
 		return new QueryNode('module', null, [cls]);
 	}
 
+	public function testDescendantParse(): Void {
+		final s: Selector = Selector.parse('ClassDecl >> IntLit');
+		Assert.equals(2, s.segments.length);
+		Assert.isFalse(s.segments[0].descendant);
+		Assert.isTrue(s.segments[1].descendant);
+	}
+
+	public function testDescendantParseWhitespace(): Void {
+		final s: Selector = Selector.parse('A  >>  B:c > D');
+		Assert.equals(3, s.segments.length);
+		Assert.isTrue(s.segments[1].descendant);
+		Assert.equals('c', s.segments[1].name);
+		Assert.isFalse(s.segments[2].descendant);
+	}
+
+	public function testDescendantMatchesDeep(): Void {
+		// IntLit is 3 levels below ClassDecl — `>` misses it, `>>` reaches it.
+		final tree: QueryNode = mkTree();
+		Assert.equals(0, Engine.select(tree, Selector.parse('ClassDecl > IntLit')).length);
+		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('ClassDecl >> IntLit'));
+		Assert.equals(1, r.length);
+		Assert.equals('IntLit', r[0].kind);
+	}
+
+	public function testDescendantThenChild(): Void {
+		// `A >> B > C`: B anywhere below A, C a direct child of B.
+		final tree: QueryNode = mkTree();
+		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('module >> ReturnExpr > IntLit'));
+		Assert.equals(1, r.length);
+	}
+
+	public function testDescendantNamed(): Void {
+		final tree: QueryNode = mkTree();
+		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('ClassDecl:Foo >> FnMember:bar'));
+		Assert.equals(1, r.length);
+		Assert.equals('bar', r[0].name);
+	}
+
+	public function testDescendantNestedAncestorsNoDuplicates(): Void {
+		// Two nested A ancestors above one B — the descendant walk reaches B through
+		// both contexts; the match list must still hold it once.
+		final b: QueryNode = new QueryNode('B', null, []);
+		final innerA: QueryNode = new QueryNode('A', null, [b]);
+		final outerA: QueryNode = new QueryNode('A', null, [innerA]);
+		final tree: QueryNode = new QueryNode('module', null, [outerA]);
+		Assert.equals(1, Engine.select(tree, Selector.parse('A >> B')).length);
+	}
+
+	public function testDescendantDoesNotMatchSelf(): Void {
+		// `A >> A` must find a NESTED A, never the anchor itself.
+		final innerA: QueryNode = new QueryNode('A', 'inner', []);
+		final outerA: QueryNode = new QueryNode('A', 'outer', [innerA]);
+		final tree: QueryNode = new QueryNode('module', null, [outerA]);
+		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('A:outer >> A'));
+		Assert.equals(1, r.length);
+		Assert.equals('inner', r[0].name);
+	}
+
 }

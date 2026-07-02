@@ -19,11 +19,22 @@ final class LintFormat {
 	/**
 	 * Render `violations` as a pretty-printed JSON array of
 	 * `{file, line, col, severity, rule, message}` records. A violation with
-	 * no span resolves `line`/`col` to null. Escaping is delegated to
-	 * `Json.stringify`.
+	 * no span resolves `line`/`col` to null. `addressOf` (when given) adds an
+	 * `address` field — the finding's canonical edit-stable selector
+	 * (`Address.describe`), directly usable as a mutation-op `--select`
+	 * argument. Escaping is delegated to `Json.stringify`.
 	 */
-	public static function json(violations: Array<Violation>, sourceOf: Map<String, String>): String {
-		final records: Array<Dynamic> = [for (v in violations) recordOf(v, sourceOf)];
+	public static function json(violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>): String {
+		final records: Array<Dynamic> = [
+			for (v in violations) {
+				final record: Dynamic = recordOf(v, sourceOf);
+				if (addressOf != null) {
+					final address: Null<String> = addressOf(v);
+					if (address != null) Reflect.setField(record, 'address', address);
+				}
+				record;
+			}
+		];
 		return Json.stringify(records, null, '  ');
 	}
 

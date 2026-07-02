@@ -22,6 +22,15 @@ enum ReplaceTarget {
 	ByPosition(line: Int, col: Int);
 	ByKindPosition(line: Int, col: Int, kind: String);
 
+	/**
+	 * A pre-resolved node — the CLI's shared address layer (`Address.resolve`)
+	 * already picked it. The node MUST come from `plugin.parseFile(source)` of
+	 * the SAME (caching) plugin instance the op receives, so the internal
+	 * re-parse returns the identical tree and `RefactorSupport.parentOf`
+	 * recognises the node by reference.
+	 */
+	ByNode(node: QueryNode);
+
 }
 
 /**
@@ -68,6 +77,11 @@ final class ReplaceNode {
 				if (matches.length > 1)
 					return Err('--select "$selectorExpr" matched ${matches.length} nodes — ambiguous; narrow with Kind:name or A > B');
 				matches[0];
+
+			case ByNode(n):
+				// Pre-resolved by the CLI's shared address layer (`Address`); the
+				// caching plugin guarantees `n` belongs to the tree parsed above.
+				n;
 
 			case ByPosition(line, col):
 				// line:col is 1-based, as apq refs / ast --at / source print.

@@ -227,7 +227,7 @@ These are intentionally deferred to keep the v1 surface small and the semantics 
 
 The v1 syntax is the **smallest set that is still useful** — concrete fragments with hole metavariables. Every deferred feature can be added later without breaking the existing syntax.
 
-## Selector syntax for `ast --select` (frozen for v1)
+## Selector syntax for `ast --select` (v2)
 
 The selector is a minimal path language for navigating to subtrees.
 
@@ -237,6 +237,7 @@ The selector is a minimal path language for navigating to subtrees.
 | `<kind>:<name>`     | Match a node of this kind with the given name    |
 | `<kind> <name>`     | Space is an accepted alias for `:`               |
 | `A > B`             | `B` is a direct child of `A`                     |
+| `A >> B`            | `B` is an any-depth descendant of `A` (v2)       |
 
 Kind names come from the grammar plugin's public AST vocabulary — typically the user-facing node names (class, function, field, etc.), not internal type-name details.
 
@@ -244,17 +245,53 @@ Example concept:
 
 ```
 apq ast file.hx --select 'class:Foo > function:bar'
+apq ast file.hx --select 'function:bar >> VarStmt:tmp'   # a local, nesting-agnostic
 ```
 
-Returns the AST of the `bar` method inside class `Foo`.
+The descendant combinator is what makes the `file → class → method → local`
+addressing path practical: `>` requires knowing the exact intermediate nesting
+(method body blocks etc.), `>>` does not.
 
-### Non-features in v1
+### Non-features
 
 - Attribute filters (`class[name=Foo]` style). Phase 2+ candidate.
-- Descendant combinator (` ` between selectors). Phase 2+ candidate.
 - Pseudo-selectors (`:first-child`, `:has(...)`). Phase 2+ candidate.
+- Ordinals inside the selector (`#n`) — disambiguation is the CLI-level
+  `--nth <k>` flag (1-based, document order), shared by every op that accepts
+  `--select` / `--match`.
 
-A more expressive selector layer can be added later; the v1 grammar is forward-compatible.
+A more expressive selector layer can be added later; the grammar is forward-compatible.
+
+## Op addressing: `--select` / `--match` / `--nth` / positions
+
+Every mutation op resolves its target through one shared address layer
+(`anyparse.query.Address`). Accepted forms:
+
+| Form                 | Meaning |
+|----------------------|---------|
+| `<line>[:<col>]`     | 1-based position; **column omitted = the line's first non-whitespace character** (line numbers come from lint / compiler output; the column is the fiddly part) |
+| `--select '<sel>'`   | Selector v2 path; must resolve to exactly one node |
+| `--match '<pattern>'`| An `apq search` structural pattern (`$x` metavars); the matched node is the target |
+| `--nth <k>`          | Picks the k-th (1-based, document order) of several `--select` / `--match` matches |
+
+Rules and properties:
+
+- Exactly one of position / `--select` / `--match` per op invocation.
+- An ambiguous `--select` / `--match` fails with a candidate listing (position
+  + kind of the first few matches) ready for an `--nth` pick.
+- Named/pattern addresses are **edit-stable**: they survive edits above them,
+  so a chain of ops needs no re-locate step between edits (a position rots as
+  soon as an earlier edit shifts lines).
+- On a position / `--match` resolution the op echoes the target's **canonical
+  selector** to stderr (`apq <op>: target FnMember:walk`) — the edit-stable
+  address to use for follow-ups.
+- `replace-node --kind <Kind>` combined with `--select` / `--match` LIFTS the
+  resolved node to its innermost enclosing `<Kind>` — a pattern matches the
+  expression (`addCase(x)` = the `Call`), while a statement edit wants the
+  `ExprStmt`. (With `--at` it keeps its original meaning: the innermost node
+  of `<Kind>` at the cursor.)
+- `lint --format json` records carry an `address` field — the finding's
+  canonical selector, directly usable as an op's `--select` argument.
 
 ## Output formats
 

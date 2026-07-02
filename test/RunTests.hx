@@ -330,6 +330,8 @@ import unit.DeadNullCoalescingTest;
 import unit.AlwaysNullComparisonTest;
 import unit.NullDereferenceTest;
 import unit.DeadStoreTest;
+import unit.AddressTest;
+import unit.AddressCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -555,6 +557,8 @@ class RunTests {
 		addCase(new HxVarTrailOptShapeSliceTest());
 		addCase(new HxFillLinePerGapSepTest());
 		addCase(new ApqSelectorTest());
+		addCase(new AddressTest());
+		addCase(new AddressCliTest());
 		addCase(new ApqAstIntegrationTest());
 		addCase(new ApqIfStmtChildOrderTest());
 		addCase(new ApqJsonSchemaProbe());

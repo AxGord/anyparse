@@ -116,18 +116,38 @@ final class Engine {
 	private static function walkSelect(node: QueryNode, sel: Selector, segIdx: Int, out: Array<QueryNode>, ?equiv: KindEquivalence): Void {
 		// At each segIdx, try to match the current segment against `node`.
 		// If matched and last segment: collect `node`. If matched and more segments:
-		// recurse into children with segIdx+1.
+		// recurse into the next-segment scope — direct children for `>`, the whole
+		// subtree for `>>` (the next segment's `descendant` flag decides).
 		// Also, regardless of match, recurse into children with segIdx=0
 		// so the first segment can fire deeper in the tree (top-level any-depth match).
 		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
 		if (matched) {
 			if (segIdx == sel.segments.length - 1) {
-				out.push(node);
+				pushUnique(out, node);
+			} else if (sel.segments[segIdx + 1].descendant) {
+				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
 			} else {
 				for (c in node.children) walkSelect(c, sel, segIdx + 1, out, equiv);
 			}
 		}
 		if (segIdx == 0) for (c in node.children) walkSelect(c, sel, 0, out, equiv);
+	}
+
+	/** Try segment `segIdx` at `node` and every node below it — the `>>` scope. A match continues the chain exactly like `walkSelect`; the search keeps descending regardless, so every descendant occurrence is found. */
+	private static function walkDescendant(
+		node: QueryNode, sel: Selector, segIdx: Int, out: Array<QueryNode>, ?equiv: KindEquivalence
+	): Void {
+		final matched: Bool = sel.segments[segIdx].matches(node, equiv);
+		if (matched) {
+			if (segIdx == sel.segments.length - 1) {
+				pushUnique(out, node);
+			} else if (sel.segments[segIdx + 1].descendant) {
+				for (c in node.children) walkDescendant(c, sel, segIdx + 1, out, equiv);
+			} else {
+				for (c in node.children) walkSelect(c, sel, segIdx + 1, out, equiv);
+			}
+		}
+		for (c in node.children) walkDescendant(c, sel, segIdx, out, equiv);
 	}
 
 	/**
@@ -179,6 +199,11 @@ final class Engine {
 			curWidth = r.width;
 		}
 		return { node: curBest, width: curWidth };
+	}
+
+	/** Collect `node` once — nested `>>` ancestor contexts can reach the same descendant through several chains (reference identity). */
+	private static inline function pushUnique(out: Array<QueryNode>, node: QueryNode): Void {
+		if (!out.contains(node)) out.push(node);
 	}
 
 }
