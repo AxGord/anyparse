@@ -197,4 +197,39 @@ class ApqMatcherTest extends Test {
 		Assert.isFalse(plugin.parsePattern("return $x").isDegenerate(), 'return-stmt has structure');
 	}
 
+	/**
+	 * A modifier-bearing declaration fragment must not become a degenerate
+	 * `(Static)` pattern that matches every static modifier — the Decl
+	 * extraction is completeness-gated (a partial extraction is rejected).
+	 */
+	public function testModifierDeclFragmentNotDegenerate(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+			static final A:Array<String> = [];
+			static final B:Array<String> = [];
+		}';
+		final tree: QueryNode = plugin.parseFile(source);
+		final matches: Array<Match> = try {
+			final pattern: Pattern = plugin.parsePattern('static final A:Array<String> = []');
+			Matcher.search(pattern, tree);
+		} catch (exception: haxe.Exception) [];
+		// Either the pattern is refused outright or it matches nothing —
+		// two silent matches on the bare modifiers is the corruption regression.
+		Assert.equals(0, matches.length);
+	}
+
+	/**
+	 * A statement fragment missing only its `;` terminator parses via the
+	 * automatic `;`-appended retry and matches the local declaration.
+	 */
+	public function testMissingSemicolonStatementRetry(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final source: String = 'class X {
+			static function f() { var a:Array<String> = []; trace(a); }
+		}';
+		final tree: QueryNode = plugin.parseFile(source);
+		final pattern: Pattern = plugin.parsePattern('var a:Array<String> = []');
+		Assert.equals(1, Matcher.search(pattern, tree).length);
+	}
+
 }

@@ -21,17 +21,27 @@ final class Patch {
 
 	/**
 	 * Replace the unique occurrence of `oldText` inside the node addressed by
-	 * `target` with `newText`. The fragment is matched byte-exact first; a
-	 * multi-line fragment that misses byte-exact (typically copied from the
-	 * DEDENTED `apq source --select` output) is re-matched line-wise with each
-	 * line's indentation ignored. Returns `Ok(rewritten)` or an `Err` describing
-	 * why the patch could not be applied.
+	 * `target` with `newText` — the single-pair form of `patchNodeMany`.
 	 */
 	public static function patchNode(
 		source: String, target: ReplaceTarget, oldText: String, newText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
 	): EditResult {
-		if (oldText.length == 0) return Err('the old fragment is empty — copy it verbatim from `apq source --select`');
-		if (oldText == newText) return Err('the old and new fragments are identical — nothing to change');
+		return patchNodeMany(source, target, [{ oldText: oldText, newText: newText }], reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Apply several fragment pairs to ONE addressed node in a single writer
+	 * round-trip. Every pair's old fragment is located against the ORIGINAL
+	 * node source (byte-exact first, then line-wise with indentation ignored —
+	 * the dedented `apq source --select` form) and must occur exactly once;
+	 * the matched ranges must not overlap. Returns `Ok(rewritten)` or an `Err`
+	 * naming the offending pair.
+	 */
+	public static function patchNodeMany(
+		source: String, target: ReplaceTarget, pairs: Array<{ oldText: String, newText: String }>, reformat: Bool, plugin: GrammarPlugin,
+		?optsJson: String
+	): EditResult {
+		if (pairs.length == 0) return Err('no fragment pairs given');
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'
 		)
@@ -49,28 +59,57 @@ final class Patch {
 		// --select` prints, so a fragment copied from that output matches as-is.
 		final groupSpan: Span = RefactorSupport.declGroupSpan(node, RefactorSupport.parentOf(tree, node), span);
 		final slice: String = source.substring(groupSpan.from, groupSpan.to);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (i in 0...pairs.length) {
+			final label: String = pairs.length > 1 ? 'pair ${i + 1}: ' : '';
+			final oldText: String = pairs[i].oldText;
+			if (oldText.length == 0) return Err('${label}the old fragment is empty — copy it verbatim from `apq source --select`');
+			if (oldText == pairs[i].newText) return Err('${label}the old and new fragments are identical — nothing to change');
+			final located: { from: Int, to: Int, error: Null<String> } = locate(slice, oldText, node.kind, label);
+			final failure: Null<String> = located.error;
+			if (failure != null) return Err(failure);
+			edits.push({
+				span: new Span(groupSpan.from + located.from, groupSpan.from + located.to),
+				text: pairs[i].newText
+			});
+		}
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> a.span.from - b.span.from);
+		for (i in 1...sorted.length) if (sorted[i].span.from < sorted[i - 1].span.to)
+			return Err('the matched fragments overlap — merge the overlapping pairs into one');
+		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Locate `oldText` within `slice` — byte-exact first, then the dedented
+	 * line-wise fallback — enforcing the exactly-once discipline. A failure is
+	 * reported through `error` (with the multi-pair `label` prefix).
+	 */
+	private static function locate(
+		slice: String, oldText: String, kind: String, label: String
+	): { from: Int, to: Int, error: Null<String> } {
 		final first: Int = slice.indexOf(oldText);
 		if (first >= 0) {
 			if (slice.indexOf(oldText, first + 1) >= 0)
-				return Err(
-					'the old fragment occurs ${countOccurrences(slice, oldText)} times in the resolved ${node.kind} node'
-					+ ' — widen the snippet until it is unique'
-				);
-			final at: Int = groupSpan.from + first;
-			return RefactorSupport.canonicalize(
-				source, [{ span: new Span(at, at + oldText.length), text: newText }], reformat, plugin, optsJson
-			);
+				return
+					fail(
+						'${label}the old fragment occurs ${countOccurrences(slice, oldText)} times in the resolved $kind node — widen the snippet until it is unique'
+					);
+			return { from: first, to: first + oldText.length, error: null };
 		}
 		final dedented: { from: Int, to: Int, count: Int } = findDedented(slice, oldText);
-		return dedented.count == 0
-			? Err('the old fragment does not occur in the resolved ${node.kind} node — copy it verbatim from `apq source --select`')
-			: dedented.count > 1
-				? Err(
-					'the old fragment occurs ${dedented.count} times in the resolved ${node.kind} node — widen the snippet until it is unique'
-				)
-				: RefactorSupport.canonicalize(source, [
-					{ span: new Span(groupSpan.from + dedented.from, groupSpan.from + dedented.to), text: newText }
-				], reformat, plugin, optsJson);
+		if (dedented.count == 0)
+			return fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`');
+		if (dedented.count > 1)
+			return
+				fail(
+					'${label}the old fragment occurs ${dedented.count} times in the resolved $kind node — widen the snippet until it is unique'
+				);
+		return { from: dedented.from, to: dedented.to, error: null };
+	}
+
+	private static inline function fail(message: String): { from: Int, to: Int, error: Null<String> } {
+		return { from: -1, to: -1, error: message };
 	}
 
 	/**

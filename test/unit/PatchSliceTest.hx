@@ -88,6 +88,60 @@ class PatchSliceTest extends Test {
 		assertPatch(source, BySelector('FnMember:f'), 'return 1;', 'return 2;', expected);
 	}
 
+	public function testTwoPairsApplied(): Void {
+		// Both pairs land in one writer round-trip, matched against the ORIGINAL text.
+		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\ttrace(1);\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\ttrace(2);\n' + '\t\treturn 3;\n' + '\t}\n' + '}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'trace(1);', newText: 'trace(2);' },
+			{ oldText: 'return 1;', newText: 'return 3;' }
+		];
+		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	public function testOverlappingPairsRefused(): Void {
+		// The second pair's range sits inside the first one's — must refuse.
+		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1 + 2;\n' + '\t}\n' + '}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'return 1 + 2;', newText: 'return 9;' },
+			{ oldText: '1 + 2', newText: '3' }
+		];
+		assertManyRefused(source, pairs);
+	}
+
+	public function testDuplicateOldPairsRefused(): Void {
+		// Two pairs matching the SAME range overlap by definition.
+		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'return 1;', newText: 'return 2;' },
+			{ oldText: 'return 1;', newText: 'return 3;' }
+		];
+		assertManyRefused(source, pairs);
+	}
+
+	public function testSecondPairNotFoundRefused(): Void {
+		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final pairs: Array<{ oldText: String, newText: String }> = [
+			{ oldText: 'return 1;', newText: 'return 2;' },
+			{ oldText: 'missing();', newText: 'present();' }
+		];
+		assertManyRefused(source, pairs);
+	}
+
+	private function assertManyRefused(source: String, pairs: Array<{ oldText: String, newText: String }>): Void {
+		switch Patch.patchNodeMany(source, BySelector('FnMember:f'), pairs, false, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.fail('expected Err (refusal), got Ok:\n$text');
+			case Err(_):
+				Assert.pass();
+		}
+	}
+
 	private function assertPatch(source: String, target: ReplaceTarget, oldText: String, newText: String, expected: String): Void {
 		switch Patch.patchNode(source, target, oldText, newText, false, new HaxeQueryPlugin()) {
 			case Ok(text):

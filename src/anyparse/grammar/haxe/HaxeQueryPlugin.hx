@@ -534,13 +534,22 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			{ wrap: wrapAsExpr, extract: extractFirstExpr, category: PatternCategory.Expr },
 			{ wrap: wrapAsMetaArgs, extract: extractFirstMeta, category: PatternCategory.MetaArgs },
 		];
-		for (attempt in attempts) {
-			final wrapped: String = attempt.wrap(substituted);
+		// A declaration / statement fragment whose only defect is the missing
+		// terminator (`final x:T = []`) parses with a `;` appended — retried as a
+		// SECOND variant through the SAME category ladder, so it lands in its
+		// proper category with correct spans (a single-category retry mis-spans).
+		for (variant in [substituted, substituted + ';']) for (attempt in attempts) {
+			final wrapped: String = attempt.wrap(variant);
 			final tree: Null<QueryNode> = try parseFile(wrapped) catch (e: ParseError) null
 			catch (e: Exception) null;
 			if (tree == null) continue;
 			final extracted: Null<QueryNode> = attempt.extract(tree);
 			if (extracted == null) continue;
+			// A Decl extraction must CONSUME the whole fragment: modifiers
+			// project as separate sibling nodes, so `static final x = []`
+			// extracts a bare `(Static)` leaf — a degenerate pattern that would
+			// silently match every static modifier. Reject partial extractions.
+			if (attempt.category == PatternCategory.Decl && !consumesVariant(extracted, variant)) continue;
 			final reclassified: QueryNode = Metavar.reclassify(extracted);
 			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
 		}
@@ -548,7 +557,21 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// string, so leaking it (`expected HxDecl at 0`) only misleads.
 		// Report the actionable fact: the fragment is not valid in any
 		// supported pattern position.
-		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument';
+		throw 'pattern: not valid as a declaration, statement, expression, or metadata argument'
+			+ ' (a statement fragment is retried with a trailing ";" automatically; a MODIFIER-bearing declaration'
+			+ ' cannot be a pattern — modifiers project as separate nodes; for those and for non-standalone fragments'
+			+ ' such as object fields use `apq patch` or `replace-node --select`)';
+	}
+
+	/**
+	 * Whether the extracted pattern root's span covers (nearly) the whole
+	 * variant text — the guard against a partial Decl extraction (slack of one
+	 * byte tolerates a span that excludes the trailing `;`).
+	 */
+	private static function consumesVariant(extracted: QueryNode, variant: String): Bool {
+		final span: Null<Span> = extracted.span;
+		if (span == null) return true;
+		return span.to - span.from >= StringTools.trim(variant).length - 1;
 	}
 
 	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */

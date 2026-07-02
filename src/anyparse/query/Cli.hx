@@ -2276,9 +2276,11 @@ final class Cli {
 			printPatchUsage();
 			return EXIT_USAGE;
 		}
-		final parts: Null<{ oldText: String, newText: String }> = splitPatchPayload(payload, o.sep);
-		if (parts == null) {
-			stderr('apq patch: the payload has no separator line "${o.sep}" between the old and the new fragment\n');
+		final pairs: Null<Array<{ oldText: String, newText: String }>> = splitPatchPayload(payload, o.sep);
+		if (pairs == null) {
+			stderr(
+				'apq patch: the payload must alternate old / new fragments separated by "${o.sep}" lines — an EVEN number of sections (2 = one pair, 4 = two pairs, …)\n'
+			);
 			return EXIT_USAGE;
 		}
 
@@ -2294,23 +2296,29 @@ final class Cli {
 		if (target == null) return EXIT_RUNTIME;
 
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
-		return finishEdit(
-			'patch', filePath, o.write, Patch.patchNode(source, target, parts.oldText, parts.newText, o.reformat, plugin, optsJson)
-		);
+		return finishEdit('patch', filePath, o.write, Patch.patchNodeMany(source, target, pairs, o.reformat, plugin, optsJson));
 	}
 
 	/**
-	 * Split a patch payload into the old and the new fragment on the FIRST line
-	 * whose trimmed content equals `sep`. Returns null when no separator line
-	 * exists. The fragments keep their internal newlines verbatim; the newline
-	 * on each side of the separator line belongs to the separator, not the
-	 * fragments.
+	 * Split a patch payload into (old, new) fragment pairs on the lines whose
+	 * trimmed content equals `sep`: two sections = one pair, 2N sections = N
+	 * pairs. Returns null when there is no separator line or the section count
+	 * is odd. The fragments keep their internal newlines verbatim; the newline
+	 * on each side of a separator line belongs to the separator. A new fragment
+	 * that must itself contain separator-looking lines needs `--sep`.
 	 */
-	private static function splitPatchPayload(payload: String, sep: String): Null<{ oldText: String, newText: String }> {
+	private static function splitPatchPayload(payload: String, sep: String): Null<Array<{ oldText: String, newText: String }>> {
 		final lines: Array<String> = payload.split('\n');
-		for (i in 0...lines.length) if (StringTools.trim(lines[i]) == sep)
-			return { oldText: lines.slice(0, i).join('\n'), newText: lines.slice(i + 1).join('\n') };
-		return null;
+		final sections: Array<Array<String>> = [[]];
+		for (l in lines) if (StringTools.trim(l) == sep)
+			sections.push([]);
+		else
+			sections[sections.length - 1].push(l);
+		if (sections.length < 2 || sections.length % 2 != 0) return null;
+		return [
+			for (i in 0...(sections.length >> 1))
+				{ oldText: sections[i * 2].join('\n'), newText: sections[i * 2 + 1].join('\n') }
+		];
 	}
 
 	/**
@@ -12167,9 +12175,13 @@ final class Cli {
 		sysPrint('  EOF\n');
 		sysPrint('\n');
 		sysPrint('Copy the old fragment VERBATIM from `apq source --select` — it must occur\n');
-		sysPrint('exactly once within the resolved node (widen it until unique). The result\n');
-		sysPrint('is writer-formatted and re-parse-validated like replace-node; the file\n');
-		sysPrint('must already be canonical unless --reformat is given.\n');
+		sysPrint('exactly once within the resolved node (widen it until unique); a multi-line\n');
+		sysPrint('fragment is matched with per-line indentation ignored, so the dedented\n');
+		sysPrint('`apq source --select` output works as-is. SEVERAL pairs may be applied in\n');
+		sysPrint('one call: alternate old / new sections (an even count) — old1 ==== new1\n');
+		sysPrint('==== old2 ==== new2 — matched against the ORIGINAL node text, ranges must\n');
+		sysPrint('not overlap. The result is writer-formatted and re-parse-validated like\n');
+		sysPrint('replace-node; the file must already be canonical unless --reformat is given.\n');
 	}
 
 	private static inline function mentionsParseExit(code: Int): MentionsOpts {

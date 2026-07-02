@@ -185,9 +185,11 @@ or a trailing `//` — reaching inline comments that aren't declaration doc-bloc
 `patch` is the surgical counterpart of `replace-node` for small edits: it replaces ONE
 unique fragment inside the addressed node (the payload is the old fragment, a `====`
 separator line, and the new fragment), so changing three lines does not resend the whole
-declaration. The fragment is matched byte-exact first, then line-wise with indentation
-ignored (a multi-line fragment copied from the dedented `source --select` output works
-as-is), and must occur exactly once within the node.
+declaration — and several pairs can be applied in one call by alternating sections
+(`old1 ==== new1 ==== old2 ==== new2`), all matched against the original node text with
+non-overlapping ranges. A fragment is matched byte-exact first, then line-wise with
+indentation ignored (a multi-line fragment copied from the dedented `source --select`
+output works as-is), and must occur exactly once within the node.
 
 `rewrite '<pattern>' '<replacement>'` is structural search-and-replace — the fusion of
 the structural `search` with a span-replace. Every node matching the pattern (with `$x`
