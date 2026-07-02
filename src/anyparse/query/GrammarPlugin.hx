@@ -832,6 +832,32 @@ typedef RefShape = {
 	 * ascription. The `impossible-cast` check reads it. Optional; unset makes the check a no-op.
 	 */
 	@:optional var checkedCastKind: String;
+
+	/**
+	 * Identifier names that project as a plain identifier expression but denote a
+	 * loop jump (Haxe `break` / `continue` surface as `IdentExpr` nodes named so,
+	 * not as dedicated kinds) — the `dead-store` check treats one as jumping to an
+	 * unknown point, conservatively making every variable live. Optional; unset
+	 * loses that protection only for grammars that project jumps this way.
+	 */
+	@:optional var loopJumpNames: Array<String>;
+
+	/**
+	 * The string-interpolation identifier kind (Haxe `Ident` — a simple `$name`
+	 * inside a single-quoted string projects as this, not as `identKind`) — the
+	 * `dead-store` check counts one as a read so an interpolated-only use keeps its
+	 * variable's stores live. Optional.
+	 */
+	@:optional var stringInterpIdentKind: String;
+
+	/**
+	 * Node kinds a local declaration projects for its TYPE ANNOTATION (Haxe `Anon`
+	 * — only a top-level anonymous-struct annotation survives projection; nominal
+	 * and function types are dropped) — a decl's initializer is its last child
+	 * EXCLUDING these, so flow engines must not mistake the type for the init.
+	 * Optional.
+	 */
+	@:optional var declTypeChildKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

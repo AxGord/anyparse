@@ -490,6 +490,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionalMemberKind: 'Conditional',
 			conditionalIfKeyword: '#if',
 			conditionalElseKeywords: ['#else', '#elseif'],
+			stringInterpIdentKind: 'Ident',
+			loopJumpNames: ['break', 'continue'],
+			declTypeChildKinds: ['Anon'],
 		};
 	}
 

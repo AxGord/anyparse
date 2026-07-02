@@ -56,7 +56,7 @@ final class AlwaysNullComparison implements Check {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) continue;
-			NullFlow.analyze(tree, shape, (node, facts) -> {
+			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
 				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
 				final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, ident, nullLit);
 				final span: Null<Span> = node.span;

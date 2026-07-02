@@ -59,7 +59,7 @@ final class DeadNullCoalescing implements Check {
 			if (tree == null) continue;
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
-			NullFlow.analyze(root, shape, (node, facts) -> {
+			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (node.kind != coalKind || node.children.length != 2) return;
 				final left: QueryNode = node.children[0];
 				final span: Null<Span> = node.span;

@@ -118,6 +118,29 @@ class DeadNullGuardTest extends Test {
 		);
 	}
 
+	public function testAnonTypedDeclNarrows(): Void {
+		// An anonymous-struct type annotation projects as a decl child before the init —
+		// `NullFlow.declInit` must still see the constructor init and narrow the name.
+		Assert.equals(1, violations('class C { function f():Void { var x:{ f:Int } = new Foo(); if (x != null) trace(x); } }').length);
+	}
+
+	public function testMultiBindingDeclNotNarrowed(): Void {
+		// `var a = null, b = 's'` projects as ONE node — no init can be attributed to
+		// `a`, so its fact collapses to Unknown and neither polarity fires.
+		Assert.equals(0, violations("class C { function f():Void { var a = null, b = 's'; if (a != null) trace(a); } }").length);
+	}
+
+	public function testNestedFnLocalDoesNotHijackFieldWrite(): Void {
+		// `x` is declared only inside the nested function — the outer bare write goes
+		// to a same-named FIELD, which a call could mutate; it must not be narrowed.
+		Assert.equals(
+			0,
+			violations(
+				'class C { var x:Foo; function f():Void { function g():Void { var x = null; trace(x); } x = new Foo(); if (x != null) trace(x); g(); } }'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadNullGuard().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

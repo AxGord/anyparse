@@ -55,7 +55,7 @@ final class NullDereference implements Check {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree == null) continue;
-			NullFlow.analyze(tree, shape, (node, facts) -> {
+			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
 				if (node.kind != faKind || node.children.length != 1) return;
 				final receiver: QueryNode = node.children[0];
 				final span: Null<Span> = node.span;

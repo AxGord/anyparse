@@ -63,7 +63,7 @@ final class DeadNullGuard implements Check {
 			if (tree == null) continue;
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(entry.source) : [];
-			NullFlow.analyze(root, shape, (node, facts) -> {
+			NullFlow.analyze(root, shape, entry.source, (node, facts) -> {
 				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;
 				final operand: Null<QueryNode> = NullFlow.nullComparisonOperand(node, ident, nullLit);
 				final span: Null<Span> = node.span;

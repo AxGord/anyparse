@@ -8412,7 +8412,7 @@ final class Cli {
 			return null;
 		};
 
-		var node: Null<QueryNode> = null;
+		var node: Null<QueryNode>;
 		if (selectExpr != null) {
 			final selector: Selector = try Selector.parse(selectExpr) catch (exception: Exception) {
 				stderr('apq source: malformed selector "$selectExpr": ${exception.message}\n');

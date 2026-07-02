@@ -5,6 +5,8 @@ import anyparse.query.QueryNode;
 
 using Lambda;
 
+import anyparse.runtime.Span;
+
 /**
  * The null facts holding at one visited node's entry, queried by a consumer.
  * `nonNull(name)` answers whether `name` is provably non-null by flow there;
@@ -43,6 +45,7 @@ private typedef FlowCtx = {
 	var parenKind: Null<String>;
 	var writeKinds: Array<String>;
 	var localDeclKinds: Array<String>;
+	var declTypeChildKinds: Array<String>;
 	var ifKinds: Array<String>;
 	var loopKinds: Array<String>;
 	var branchyKinds: Array<String>;
@@ -53,6 +56,7 @@ private typedef FlowCtx = {
 	var nestedFnKinds: Array<String>;
 	var captured: Array<String>;
 	var ownNames: Array<String>;
+	var source: String;
 	var visit: (QueryNode, NullFacts) -> Void;
 }
 
@@ -102,6 +106,33 @@ private typedef FlowCtx = {
 @:nullSafety(Strict)
 final class NullFlow {
 
+	/** Nested function-value kinds — a separate flow context; their bodies are not walked with the outer state. */
+	public static final NESTED_FN_KINDS: Array<String> = [
+		'FnExpr',
+		'NamedFnExpr',
+		'ThinParenLambdaExpr',
+		'ParenLambdaExpr',
+		'LocalFnStmt',
+		'LocalInlineFnStmt'
+	];
+
+	/** Branch constructs with two mutually-exclusive value arms — analyzed with isolated branch states. */
+	public static final IF_KINDS: Array<String> = ['IfStmt', 'IfExpr', 'Ternary'];
+
+	/** Loop constructs — every name they assign is cleared before the body so a back-edge carries no stale fact. */
+	public static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr'];
+
+	/** Multi-branch constructs analyzed with one isolated state per branch. */
+	public static final BRANCHY_KINDS: Array<String> = [
+		'SwitchStmt',
+		'SwitchStmtBare',
+		'SwitchExpr',
+		'SwitchExprBare',
+		'TryCatchStmt',
+		'TryCatchStmtBare',
+		'TryExpr'
+	];
+
 	/** Expression kinds whose value can never be null — a safe non-null assignment RHS. */
 	private static final NON_NULL_RHS_KINDS: Array<String> = [
 		'NewExpr',
@@ -115,33 +146,6 @@ final class NullFlow {
 		'BoolLit'
 	];
 
-	/** Nested function-value kinds — a separate flow context; their bodies are not walked with the outer state. */
-	private static final NESTED_FN_KINDS: Array<String> = [
-		'FnExpr',
-		'NamedFnExpr',
-		'ThinParenLambdaExpr',
-		'ParenLambdaExpr',
-		'LocalFnStmt',
-		'LocalInlineFnStmt'
-	];
-
-	/** Branch constructs with two mutually-exclusive value arms — analyzed with isolated branch states. */
-	private static final IF_KINDS: Array<String> = ['IfStmt', 'IfExpr', 'Ternary'];
-
-	/** Loop constructs — every name they assign is cleared before the body so a back-edge carries no stale fact. */
-	private static final LOOP_KINDS: Array<String> = ['WhileStmt', 'DoWhileStmt', 'ForStmt', 'WhileExpr', 'ForExpr'];
-
-	/** Multi-branch constructs analyzed with one isolated state per branch. */
-	private static final BRANCHY_KINDS: Array<String> = [
-		'SwitchStmt',
-		'SwitchStmtBare',
-		'SwitchExpr',
-		'SwitchExprBare',
-		'TryCatchStmt',
-		'TryCatchStmtBare',
-		'TryExpr'
-	];
-
 	/** Sequential statement-list containers — children share one running state. */
 	private static final BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt', 'BlockExpr'];
 
@@ -151,33 +155,16 @@ final class NullFlow {
 	 * Walk every function unit in `root` (`RefShape.functionKinds`) in flow
 	 * order, calling `visit(node, facts)` pre-order at each node, where `facts`
 	 * answers whether a name is provably non-null (`facts.nonNull`) or provably
-	 * null (`facts.isNull`) by flow at that node's entry. A consumer inspects
-	 * only the node kinds it cares about. A grammar lacking the required shape
-	 * fields makes this a no-op.
+	 * null (`facts.isNull`) by flow at that node's entry. `source` is the file's
+	 * verbatim text (multi-binding declarations are detected textually). A
+	 * consumer inspects only the node kinds it cares about. A grammar lacking the
+	 * required shape fields makes this a no-op.
 	 */
-	public static function analyze(root: QueryNode, shape: RefShape, visit: (QueryNode, NullFacts) -> Void): Void {
+	public static function analyze(root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void): Void {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
-		final functionKinds: Array<String> = shape.functionKinds ?? [];
-		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
-		if (functionKinds.length == 0 || bodyKinds.length == 0) return;
 		final id: String = identKind;
-		final paramKinds: Array<String> = shape.paramKinds ?? [];
-		function findFns(node: QueryNode): Void {
-			if (functionKinds.contains(node.kind)) {
-				final body: Null<QueryNode> = node.children.find(c -> bodyKinds.contains(c.kind));
-				if (body != null) {
-					final paramNames: Array<String> = [];
-					for (c in node.children) {
-						final nm: Null<String> = c.name;
-						if (paramKinds.contains(c.kind) && nm != null) paramNames.push(nm);
-					}
-					analyzeBody(body, shape, id, paramNames, visit);
-				}
-			}
-			for (c in node.children) findFns(c);
-		}
-		findFns(root);
+		forEachFunctionUnit(root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit));
 	}
 
 	/**
@@ -198,6 +185,86 @@ final class NullFlow {
 	}
 
 	/**
+	 * The initializer expression of a local declaration node, or null when it has
+	 * none. A declaration's initializer is its LAST child — a top-level
+	 * anonymous-struct type annotation also projects as a child
+	 * (`RefShape.declTypeChildKinds`), before the initializer, so the last child
+	 * is the init only when it is not one of those. Shared with the `dead-store`
+	 * liveness walk.
+	 */
+	public static function declInit(node: QueryNode, declTypeChildKinds: Array<String>): Null<QueryNode> {
+		if (node.children.length == 0) return null;
+		final last: QueryNode = node.children[node.children.length - 1];
+		return declTypeChildKinds.contains(last.kind) ? null : last;
+	}
+
+	/**
+	 * The names locally declared anywhere in `node`'s subtree, EXCLUDING nested
+	 * function values — a closure-internal local is a different unit's binding
+	 * (treating it as an own name would hijack a same-named outer field write).
+	 * Shared with the `dead-store` liveness walk.
+	 */
+	public static function collectDeclared(node: QueryNode, localDeclKinds: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		function walkDecl(n: QueryNode): Void {
+			if (NESTED_FN_KINDS.contains(n.kind)) return;
+			final name: Null<String> = n.name;
+			if (localDeclKinds.contains(n.kind) && name != null) out.push(name);
+			for (c in n.children) walkDecl(c);
+		}
+		walkDecl(node);
+		return out;
+	}
+
+	/**
+	 * Enumerate every function unit in `root` (`RefShape.functionKinds`), calling
+	 * `each(body, paramNames)` with the unit's body node and its parameter names.
+	 * The shared unit-discovery walk of the flow engines (`NullFlow` and the
+	 * `dead-store` liveness walk).
+	 */
+	public static function forEachFunctionUnit(root: QueryNode, shape: RefShape, each: (QueryNode, Array<String>) -> Void): Void {
+		final functionKinds: Array<String> = shape.functionKinds ?? [];
+		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
+		if (functionKinds.length == 0 || bodyKinds.length == 0) return;
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		function findFns(node: QueryNode): Void {
+			if (functionKinds.contains(node.kind)) {
+				final body: Null<QueryNode> = node.children.find(c -> bodyKinds.contains(c.kind));
+				if (body != null) {
+					final paramNames: Array<String> = [];
+					for (c in node.children) {
+						final nm: Null<String> = c.name;
+						if (paramKinds.contains(c.kind) && nm != null) paramNames.push(nm);
+					}
+					each(body, paramNames);
+				}
+			}
+			for (c in node.children) findFns(c);
+		}
+		findFns(root);
+	}
+
+	/**
+	 * Whether a local declaration node declares MORE than one binding
+	 * (`var a = 1, b = 2;`) — projected as a single node carrying only the FIRST
+	 * binding's name with every binding's initializer as a child, so no
+	 * per-binding init attribution is possible. Detected structurally (two or
+	 * more non-type children) or textually (a comma in the declaration's source
+	 * outside brackets and string literals — catches the one-child
+	 * `var a, b = e;` form; a comma inside a generic annotation like
+	 * `Map<Int, String>` also trips it, which only drops a fact — a safe miss).
+	 * A node with no span reports multi (conservative).
+	 */
+	public static function isMultiBinding(node: QueryNode, source: String, declTypeChildKinds: Array<String>): Bool {
+		var exprChildren: Int = 0;
+		for (c in node.children) if (!declTypeChildKinds.contains(c.kind)) exprChildren++;
+		if (exprChildren > 1) return true;
+		final span: Null<Span> = node.span;
+		if (span == null) return true;
+		return hasTopLevelComma(source, span.from, span.to);
+	}
+
+	/**
 	 * Analyze one function body from a fresh (all-`Unknown`) entry state. Only the
 	 * unit's own names (its parameters plus locally-declared `var`/`final`s) are
 	 * ever narrowed — a captured outer variable or an implicit-`this` field is a
@@ -205,7 +272,8 @@ final class NullFlow {
 	 * the language's own strict null-safety, which narrows locals but not fields).
 	 */
 	private static function analyzeBody(
-		body: QueryNode, shape: RefShape, identKind: String, paramNames: Array<String>, visit: (QueryNode, NullFacts) -> Void
+		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
+		visit: (QueryNode, NullFacts) -> Void
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final ctx: FlowCtx = {
@@ -217,6 +285,7 @@ final class NullFlow {
 			parenKind: shape.parenKind,
 			writeKinds: shape.writeParentKinds ?? [],
 			localDeclKinds: localDeclKinds,
+			declTypeChildKinds: shape.declTypeChildKinds ?? [],
 			ifKinds: IF_KINDS,
 			loopKinds: LOOP_KINDS,
 			branchyKinds: BRANCHY_KINDS,
@@ -227,6 +296,7 @@ final class NullFlow {
 			nestedFnKinds: NESTED_FN_KINDS,
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
+			source: source,
 			visit: visit
 		};
 		final state: FlowState = { nonNull: [], known: [] };
@@ -281,12 +351,23 @@ final class NullFlow {
 			clearName(state, name);
 	}
 
-	/** Local declaration: set the declared name to `NonNull` for a non-null initializer, to `Null` for a null-literal initializer, else clear both. */
+	/**
+	 * Local declaration: set the declared name to `NonNull` for a non-null
+	 * initializer, to `Null` for a null-literal initializer, else clear both. A
+	 * multi-binding declaration (`var a = 1, b = 2;`) projects as one node whose
+	 * name and initializers cannot be attributed to each other — every child is
+	 * still walked (their reads and nested writes transfer), but the name's fact
+	 * collapses to `Unknown`.
+	 */
 	private static function handleDecl(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		final init: Null<QueryNode> = node.children.length >= 1 ? node.children[0] : null;
-		if (init != null) walk(init, state, ctx);
+		for (c in node.children) walk(c, state, ctx);
 		final name: Null<String> = node.name;
 		if (name == null) return;
+		if (isMultiBinding(node, ctx.source, ctx.declTypeChildKinds)) {
+			clearName(state, name);
+			return;
+		}
+		final init: Null<QueryNode> = declInit(node, ctx.declTypeChildKinds);
 		if (isNonNullRhs(init, ctx))
 			markNonNull(state, name);
 		else if (isNullLitRhs(init, ctx))
@@ -380,18 +461,6 @@ final class NullFlow {
 			if (target.kind == ctx.identKind && name != null) clearName(state, name);
 		}
 		for (c in node.children) killWritten(c, state, ctx);
-	}
-
-	/** The names locally declared anywhere in `node`'s subtree. */
-	private static function collectDeclared(node: QueryNode, localDeclKinds: Array<String>): Array<String> {
-		final out: Array<String> = [];
-		function walkDecl(n: QueryNode): Void {
-			final name: Null<String> = n.name;
-			if (localDeclKinds.contains(n.kind) && name != null) out.push(name);
-			for (c in n.children) walkDecl(c);
-		}
-		walkDecl(node);
-		return out;
 	}
 
 	/** The names mutated inside any nested function value within `body` — excluded from narrowing for the whole function. */
@@ -491,6 +560,32 @@ final class NullFlow {
 		for (n in next.nonNull) state.nonNull.push(n);
 		state.known.resize(0);
 		for (n in next.known) state.known.push(n);
+	}
+
+	/** Whether `source[from..to)` contains a comma outside every bracket pair and string literal. */
+	private static function hasTopLevelComma(source: String, from: Int, to: Int): Bool {
+		var depth: Int = 0;
+		var quote: Int = 0;
+		var i: Int = from;
+		final end: Int = to <= source.length ? to : source.length;
+		while (i < end) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (quote != 0) {
+				if (c == '\\'.code)
+					i++;
+				else if (c == quote) quote = 0;
+			} else if (c == "'".code || c == '"'.code) {
+				quote = c;
+			} else if (c == '('.code || c == '['.code || c == '{'.code) {
+				depth++;
+			} else if (c == ')'.code || c == ']'.code || c == '}'.code) {
+				depth--;
+			} else if (c == ','.code && depth == 0) {
+				return true;
+			}
+			i++;
+		}
+		return false;
 	}
 
 }

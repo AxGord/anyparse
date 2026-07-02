@@ -329,6 +329,7 @@ import unit.DeadSafeNavTest;
 import unit.DeadNullCoalescingTest;
 import unit.AlwaysNullComparisonTest;
 import unit.NullDereferenceTest;
+import unit.DeadStoreTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -600,6 +601,7 @@ class RunTests {
 		addCase(new SwallowedExceptionCheckTest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
+		addCase(new ModifierOrderCheckTest());
 		addCase(new MemberOrderCheckTest());
 		addCase(new FragmentedDocCommentCheckTest());
 		addCase(new ExplicitTypeCheckTest());
@@ -626,6 +628,7 @@ class RunTests {
 		addCase(new DeadSafeNavTest());
 		addCase(new AlwaysNullComparisonTest());
 		addCase(new NullDereferenceTest());
+		addCase(new DeadStoreTest());
 		addCase(new DeadNullCoalescingTest());
 		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
