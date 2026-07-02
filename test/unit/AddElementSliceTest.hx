@@ -270,4 +270,17 @@ class AddElementSliceTest extends Test {
 		assertAdd(source, 3, 13, After, 'xyz', true, expected);
 	}
 
+	/**
+	 * A `;`-terminated element aimed at a comma-separated container is refused
+	 * with the replace-node recipe — a statement never belongs in call
+	 * arguments, and the old behaviour surfaced only as a cryptic parse error.
+	 */
+	public function testStatementIntoCommaListRefused(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tfoo(1, 2);\n\t}\n}\n';
+		// Sibling insert: the cursor on `1` addresses a call-argument slot.
+		assertRefused(source, 3, 7, After, 'bar();', true);
+		// Append: the cursor on the callee resolves the Call container.
+		assertAppendRefused(source, 3, 3, 'bar();', true);
+	}
+
 }

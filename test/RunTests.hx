@@ -332,6 +332,7 @@ import unit.NullDereferenceTest;
 import unit.DeadStoreTest;
 import unit.AddressTest;
 import unit.AddressCliTest;
+import unit.PatchSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -584,6 +585,7 @@ class RunTests {
 		addCase(new AddImportSliceTest());
 		addCase(new AddElementSliceTest());
 		addCase(new ReplaceNodeSliceTest());
+		addCase(new PatchSliceTest());
 		addCase(new RemoveElementSliceTest());
 		addCase(new RemoveImportSliceTest());
 		addCase(new RemoveMemberSliceTest());

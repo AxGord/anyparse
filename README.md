@@ -182,6 +182,12 @@ retyping the declaration (the safe replacement for editing a modifier via `repla
 `set-comment` is the comment counterpart of `set-doc`: it replaces the comment at a
 cursor — a block comment whole, a contiguous run of full-line `//` comments as one unit,
 or a trailing `//` — reaching inline comments that aren't declaration doc-blocks.
+`patch` is the surgical counterpart of `replace-node` for small edits: it replaces ONE
+unique fragment inside the addressed node (the payload is the old fragment, a `====`
+separator line, and the new fragment), so changing three lines does not resend the whole
+declaration. The fragment is matched byte-exact first, then line-wise with indentation
+ignored (a multi-line fragment copied from the dedented `source --select` output works
+as-is), and must occur exactly once within the node.
 
 `rewrite '<pattern>' '<replacement>'` is structural search-and-replace — the fusion of
 the structural `search` with a span-replace. Every node matching the pattern (with `$x`

@@ -517,6 +517,8 @@ final class Cli {
 				return runAddElement(rest);
 			case 'replace-node':
 				return runReplaceNode(rest);
+			case 'patch':
+				return runPatch(rest);
 			case 'remove-element':
 				return runRemoveElement(rest);
 			case 'remove-import':
@@ -2180,16 +2182,6 @@ final class Cli {
 			printReplaceNodeUsage();
 			return EXIT_USAGE;
 		}
-		final selectExpr: Null<String> = o.selectExpr;
-		final atSpec: Null<String> = o.atSpec;
-		final matchExpr: Null<String> = o.matchExpr;
-		final kind: Null<String> = o.kind;
-		// Exactly one of --select / --match / --at must be given.
-		final modes: Int = (selectExpr != null ? 1 : 0) + (matchExpr != null ? 1 : 0) + (atSpec != null ? 1 : 0);
-		if (modes != 1) {
-			stderr("apq replace-node: provide exactly one of --select '<sel>', --match '<pattern>', or --at <line>[:<col>]\n");
-			return EXIT_USAGE;
-		}
 
 		final filePath: String = file;
 		final newSrc: String = newSource;
@@ -2198,50 +2190,127 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
-
-		final target: Null<ReplaceTarget> = if (atSpec != null) {
-			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
-			final pos: Null<Position> = resolveAddressPos('replace-node', source, plugin, atSpec, null, null, null);
-			if (pos == null)
-				null;
-			else
-				kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
-		} else {
-			// --select / --match resolve through the shared address layer (exactly-one
-			// discipline, --nth pick, candidate-listing errors); the caching plugin
-			// guarantees the resolved node belongs to the op's own parse. `--kind`
-			// here LIFTS the resolved node to its innermost enclosing node of that
-			// kind — a pattern matches the expression (`addCase(x)` = the Call),
-			// while a statement edit wants the ExprStmt.
-			final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree == null) {
-				stderr('apq replace-node: $filePath does not parse\n');
-				null;
-			} else
-				switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: o.nth }) {
-					case Ok(_, node):
-						if (node == null) {
-							null;
-						} else if (kind != null) {
-							final lifted: Null<QueryNode> = Address.liftToKind(tree, node, kind, plugin.selectKindEquivalence());
-							if (lifted == null) {
-								stderr('apq replace-node: the resolved ${node.kind} node has no enclosing "$kind" node\n');
-								null;
-							} else
-								ByNode(lifted);
-						} else
-							ByNode(node);
-					case Err(message):
-						stderr('apq replace-node: $message\n');
-						null;
-				}
-		};
+		final target: Null<ReplaceTarget> = resolveEditTarget(
+			'replace-node', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
+		);
 		if (target == null) return EXIT_RUNTIME;
 
 		final optsJson: Null<String> = discoverFormatConfig(filePath);
 		return finishEdit(
 			'replace-node', filePath, o.write, ReplaceNode.replaceNode(source, target, newSrc, o.reformat, plugin, o.withDoc, optsJson)
 		);
+	}
+
+	/**
+	 * Resolve the shared addressing flags (`--select` / `--match` / `--at`, plus
+	 * the `--kind` narrow / lift) to a `ReplaceTarget` — the common front half of
+	 * `replace-node` and `patch`. Exactly one addressing mode must be given.
+	 * Returns null after printing the reason to stderr.
+	 */
+	private static function resolveEditTarget(
+		opName: String, source: String, filePath: String, plugin: GrammarPlugin, selectExpr: Null<String>, matchExpr: Null<String>,
+		atSpec: Null<String>, nth: Null<Int>, kind: Null<String>
+	): Null<ReplaceTarget> {
+		final modes: Int = (selectExpr != null ? 1 : 0) + (matchExpr != null ? 1 : 0) + (atSpec != null ? 1 : 0);
+		if (modes != 1) {
+			stderr('apq $opName: provide exactly one of --select \'<sel>\', --match \'<pattern>\', or --at <line>[:<col>]\n');
+			return null;
+		}
+		if (atSpec != null) {
+			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
+			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null);
+			if (pos == null) return null;
+			return kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
+		}
+		// --select / --match resolve through the shared address layer (exactly-one
+		// discipline, --nth pick, candidate-listing errors); the caching plugin
+		// guarantees the resolved node belongs to the op's own parse. `--kind`
+		// here LIFTS the resolved node to its innermost enclosing node of that
+		// kind — a pattern matches the expression (`addCase(x)` = the Call),
+		// while a statement edit wants the ExprStmt.
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) {
+			stderr('apq $opName: $filePath does not parse\n');
+			return null;
+		}
+		return switch Address.resolve(tree, source, plugin, { select: selectExpr, match: matchExpr, nth: nth }) {
+			case Ok(_, node):
+				if (node == null) {
+					null;
+				} else if (kind != null) {
+					final lifted: Null<QueryNode> = Address.liftToKind(tree, node, kind, plugin.selectKindEquivalence());
+					if (lifted == null) {
+						stderr('apq $opName: the resolved ${node.kind} node has no enclosing "$kind" node\n');
+						null;
+					} else
+						ByNode(lifted);
+				} else
+					ByNode(node);
+			case Err(message):
+				stderr('apq $opName: $message\n');
+				null;
+		};
+	}
+
+	/**
+	 * `apq patch <file> (--select | --match | --at) (- | --from-file <path>)` —
+	 * replace ONE unique fragment inside the addressed node. The payload holds
+	 * the old fragment, a separator line (`====` by default, `--sep` overrides),
+	 * and the new fragment — so a small edit does not resend the whole
+	 * declaration. The old fragment must occur exactly once within the resolved
+	 * node's source. Finalized like replace-node: writer-formatted, re-parse
+	 * validated, canonical-gated unless `--reformat`.
+	 */
+	private static function runPatch(args: Array<String>): Int {
+		final o: PatchOpts = parsePatchArgs(args);
+		if (o.errExit != null) return o.errExit;
+		var payload: Null<String> = o.payload;
+		if (o.fromFile != null || payload == '-') {
+			final resolved: Null<String> = resolveCodeArg('patch', payload, o.fromFile, true);
+			if (resolved == null) return EXIT_RUNTIME;
+			payload = resolved;
+		}
+		final file: Null<String> = o.file;
+		if (file == null || payload == null) {
+			stderr("apq patch: expected <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>)\n");
+			printPatchUsage();
+			return EXIT_USAGE;
+		}
+		final parts: Null<{ oldText: String, newText: String }> = splitPatchPayload(payload, o.sep);
+		if (parts == null) {
+			stderr('apq patch: the payload has no separator line "${o.sep}" between the old and the new fragment\n');
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq patch: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(o.lang));
+		final target: Null<ReplaceTarget> = resolveEditTarget(
+			'patch', source, filePath, plugin, o.selectExpr, o.matchExpr, o.atSpec, o.nth, o.kind
+		);
+		if (target == null) return EXIT_RUNTIME;
+
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		return finishEdit(
+			'patch', filePath, o.write, Patch.patchNode(source, target, parts.oldText, parts.newText, o.reformat, plugin, optsJson)
+		);
+	}
+
+	/**
+	 * Split a patch payload into the old and the new fragment on the FIRST line
+	 * whose trimmed content equals `sep`. Returns null when no separator line
+	 * exists. The fragments keep their internal newlines verbatim; the newline
+	 * on each side of the separator line belongs to the separator, not the
+	 * fragments.
+	 */
+	private static function splitPatchPayload(payload: String, sep: String): Null<{ oldText: String, newText: String }> {
+		final lines: Array<String> = payload.split('\n');
+		for (i in 0...lines.length) if (StringTools.trim(lines[i]) == sep)
+			return { oldText: lines.slice(0, i).join('\n'), newText: lines.slice(i + 1).join('\n') };
+		return null;
 	}
 
 	/**
@@ -6663,6 +6732,7 @@ final class Cli {
 		sysPrint('  add-import    Add an import / using to a module (writer-formatted, canonical-gated)\n');
 		sysPrint('  add-element   Insert a sibling element — statement/case/list elem (--after/--before)\n');
 		sysPrint('  replace-node  Replace a node\'s source span (--select / --at; writer-formatted)\n');
+		sysPrint('  patch         Replace ONE unique fragment inside a node (old ==== new, stdin)\n');
 		sysPrint('  remove-element Remove a sibling element by cursor (inverse of add-element)\n');
 		sysPrint('  remove-import Remove an import / using by module path (backend of lint --fix)\n');
 		sysPrint('  remove-member Remove a member by --type + name (inverse of add-member)\n');
@@ -11973,6 +12043,135 @@ final class Cli {
 		};
 	}
 
+	private static function parsePatchArgs(args: Array<String>): PatchOpts {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var selectExpr: Null<String> = null;
+		var atSpec: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
+		var kind: Null<String> = null;
+		var sep: String = '====';
+		var file: Null<String> = null;
+		var payload: Null<String> = null;
+		var fromFile: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--at':
+					atSpec = expectValue(args, ++i, '--at');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+				case '--kind':
+					kind = expectValue(args, ++i, '--kind');
+				case '--sep':
+					sep = expectValue(args, ++i, '--sep');
+				case '--from-file':
+					fromFile = expectValue(args, ++i, '--from-file');
+				case '--write':
+					write = true;
+				case '--reformat':
+					reformat = true;
+				case '-h', '--help':
+					printPatchUsage();
+					return patchParseExit(EXIT_OK);
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq patch: unknown option "$a"\n');
+						return patchParseExit(EXIT_USAGE);
+					}
+					if (file == null)
+						file = a;
+					else if (payload == null)
+						payload = a;
+					else {
+						stderr('apq patch: unexpected extra argument "$a"\n');
+						return patchParseExit(EXIT_USAGE);
+					}
+			}
+			i++;
+		}
+		return {
+			lang: lang,
+			write: write,
+			reformat: reformat,
+			selectExpr: selectExpr,
+			atSpec: atSpec,
+			matchExpr: matchExpr,
+			nth: nth,
+			kind: kind,
+			sep: sep,
+			file: file,
+			payload: payload,
+			fromFile: fromFile,
+			errExit: null
+		};
+	}
+
+	private static function patchParseExit(code: Int): PatchOpts {
+		return {
+			lang: 'haxe',
+			write: false,
+			reformat: false,
+			selectExpr: null,
+			atSpec: null,
+			matchExpr: null,
+			nth: null,
+			kind: null,
+			sep: '====',
+			file: null,
+			payload: null,
+			fromFile: null,
+			errExit: code
+		};
+	}
+
+	private static function printPatchUsage(): Void {
+		sysPrint(
+			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) [--sep <marker>] [--reformat] [--write]\n"
+		);
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
+		sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
+		sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
+		sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
+		sysPrint('                      same exactly-one / --nth discipline\n');
+		sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
+		sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
+		sysPrint("                      = the line's first non-whitespace character\n");
+		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
+		sysPrint('  --sep <marker>      Separator line between the fragments (default: ====)\n');
+		sysPrint('  --from-file <path>  Read the payload from a file instead of stdin\n');
+		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+		sysPrint('Replace ONE unique fragment inside the addressed node without resending\n');
+		sysPrint('the whole declaration. The payload is the OLD fragment, a separator line\n');
+		sysPrint('(a line that is exactly the marker, default `====`), and the NEW fragment:\n');
+		sysPrint('\n');
+		sysPrint("  apq patch File.hx --select 'FnMember:walk' --write - <<'EOF'\n");
+		sysPrint('  old line;\n');
+		sysPrint('  ====\n');
+		sysPrint('  new line;\n');
+		sysPrint('  EOF\n');
+		sysPrint('\n');
+		sysPrint('Copy the old fragment VERBATIM from `apq source --select` — it must occur\n');
+		sysPrint('exactly once within the resolved node (widen it until unique). The result\n');
+		sysPrint('is writer-formatted and re-parse-validated like replace-node; the file\n');
+		sysPrint('must already be canonical unless --reformat is given.\n');
+	}
+
 	private static inline function mentionsParseExit(code: Int): MentionsOpts {
 		return {
 			lang: '',
@@ -12785,6 +12984,23 @@ typedef ReplaceNodeOpts = {
 	var withDoc: Bool;
 	var file: Null<String>;
 	var newSource: Null<String>;
+	var fromFile: Null<String>;
+	// Non-null = parsing hit a terminal case; the caller returns it immediately.
+	var errExit: Null<Int>;
+};
+@:nullSafety(Strict)
+typedef PatchOpts = {
+	var lang: String;
+	var write: Bool;
+	var reformat: Bool;
+	var selectExpr: Null<String>;
+	var atSpec: Null<String>;
+	var matchExpr: Null<String>;
+	var nth: Null<Int>;
+	var kind: Null<String>;
+	var sep: String;
+	var file: Null<String>;
+	var payload: Null<String>;
 	var fromFile: Null<String>;
 	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;

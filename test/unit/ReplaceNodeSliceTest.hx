@@ -172,6 +172,19 @@ class ReplaceNodeSliceTest extends Test {
 	}
 
 	/**
+	 * A bare modifier keyword as `newSource` is refused — it would replace the
+	 * WHOLE resolved declaration (body included) with the orphan keyword, which
+	 * attaches to the next decl and may still parse (the silent-corruption trap
+	 * `set-modifier` exists for).
+	 */
+	public function testBareModifierNewSourceRefused(): Void {
+		final source: String = 'class C {\n'
+			+ '\tprivate static function walk():Void {\n' + '\t\ttrace(1);\n' + '\t}\n' + '\n' + '\tfunction next():Void {}\n' + '}\n';
+		assertRefused(source, BySelector('FnMember:walk'), 'public');
+		assertRefused(source, ByPosition(2, 2), ' final ');
+	}
+
+	/**
 	 * The auto-fold absorbs only the leading DOC run, not a distinct block comment
 	 * above it: a leading block-comment banner survives when the new source opens
 	 * with a doc.

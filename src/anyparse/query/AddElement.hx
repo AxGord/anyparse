@@ -127,6 +127,17 @@ final class AddElement {
 		var isComma: Bool = RefactorSupport.adjacentToComma(source, span);
 		if (!isComma && parent != null) isComma = RefactorSupport.COMMA_CONTAINER_KINDS.contains(parent.kind);
 
+		// A `;`-terminated element can never belong to a comma-separated list —
+		// the cursor resolved to a call-argument / array / object slot while the
+		// caller almost certainly meant a sibling STATEMENT. Refuse with the
+		// recipe instead of the cryptic parse error the splice would produce.
+		if (isComma && StringTools.endsWith(trimmed, ';'))
+			return Err(
+				'the element ends with ";" but the target is a comma-separated list (call arguments / array / object) — '
+				+ 'to add a sibling STATEMENT next to a bare-call statement, use '
+				+ '`apq replace-node --match \'<the call>\' --kind ExprStmt` replacing the one statement with two'
+			);
+
 		final edit: { span: Span, text: String } = switch side {
 			case After:
 				{ span: new Span(span.to, span.to), text: isComma ? ', ' + trimmed : '\n' + trimmed };
@@ -255,6 +266,13 @@ final class AddElement {
 		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
 
 		final isComma: Bool = RefactorSupport.COMMA_CONTAINER_KINDS.contains(containerKind);
+		// Same statement-into-comma-list refusal as the sibling insert path: a
+		// `;`-terminated element never belongs in call arguments / array / object.
+		if (isComma && StringTools.endsWith(trimmed, ';'))
+			return Err(
+				'the element ends with ";" but the container is a comma-separated list (call arguments / array / object) — '
+				+ 'to append a STATEMENT to the enclosing block, point --append at the block, not the call'
+			);
 		final at: Int = lastContent + 1;
 		final text: String = empty ? trimmed : (isComma ? ', ' + trimmed : '\n' + trimmed);
 

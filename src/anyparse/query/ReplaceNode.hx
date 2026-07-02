@@ -34,6 +34,18 @@ enum ReplaceTarget {
 }
 
 /**
+ * Outcome of resolving a `ReplaceTarget` to one node — shared by
+ * `ReplaceNode.replaceNode` and `Patch.patchNode` so the four addressing
+ * modes behave identically in both ops.
+ */
+enum ResolvedTarget {
+
+	Resolved(node: QueryNode);
+	Failed(message: String);
+
+}
+
+/**
  * Replace the source span of a single AST node with new source text —
  * a structural REPLACE operation built on the query engine.
  *
@@ -62,42 +74,25 @@ final class ReplaceNode {
 		source: String, target: ReplaceTarget, newSource: String, reformat: Bool, plugin: GrammarPlugin, withDoc: Bool = false,
 		?optsJson: String
 	): EditResult {
+		// A bare modifier keyword is never a valid whole-node replacement: the
+		// resolved target is the co-starting wrapper spanning the ENTIRE
+		// declaration, so `'public'` would silently drop the declaration body
+		// (the orphan keyword attaches to the next decl and may still parse).
+		final trimmedNew: String = StringTools.trim(newSource);
+		if (MODIFIER_KEYWORDS.contains(trimmedNew))
+			return Err(
+				'newSource is the bare modifier keyword "$trimmedNew" — this would replace the WHOLE resolved node with it, '
+				+ 'silently dropping the declaration body. Flip modifiers with `apq set-modifier`, '
+				+ 'or pass the complete corrected declaration as newSource.'
+			);
 		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return Err(
 			'source does not parse: ${exception.toString()}'
 		)
 		catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 
-		final node: QueryNode = switch target {
-			case BySelector(selectorExpr):
-				final selector: Selector = try Selector.parse(selectorExpr) catch (exception: Exception) return Err(
-					'malformed selector "$selectorExpr": ${exception.message}'
-				);
-				final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
-				if (matches.length == 0) return Err('--select "$selectorExpr" matched no nodes');
-				if (matches.length > 1)
-					return Err('--select "$selectorExpr" matched ${matches.length} nodes — ambiguous; narrow with Kind:name or A > B');
-				matches[0];
-
-			case ByNode(n):
-				// Pre-resolved by the CLI's shared address layer (`Address`); the
-				// caching plugin guarantees `n` belongs to the tree parsed above.
-				n;
-
-			case ByPosition(line, col):
-				// line:col is 1-based, as apq refs / ast --at / source print.
-				final cursor: Int = Span.offsetOf(source, line, col);
-				final hit: Null<QueryNode> = Engine.at(tree, cursor);
-				if (hit == null) return Err('position $line:$col is not on a node');
-				hit;
-
-			case ByKindPosition(line, col, kind):
-				// `--at <l>:<c> --kind <Kind>`: the innermost node of `kind`
-				// containing the cursor — reaches a co-starting wrapper / operator
-				// node that plain `--at` (innermost overall) skips past to a child.
-				final cursor: Int = Span.offsetOf(source, line, col);
-				final hit: Null<QueryNode> = Engine.atKind(tree, cursor, kind, plugin.selectKindEquivalence());
-				if (hit == null) return Err('position $line:$col is not on a "$kind" node');
-				hit;
+		final node: QueryNode = switch resolveTarget(source, tree, target, plugin) {
+			case Resolved(n): n;
+			case Failed(message): return Err(message);
 		};
 
 		final span: Null<Span> = node.span;
@@ -123,6 +118,57 @@ final class ReplaceNode {
 		final edit: { span: Span, text: String } = { span: finalSpan, text: newSource };
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
+
+	/**
+	 * Resolve `target` to exactly one node of `tree` — the four addressing
+	 * modes (`--select` / pre-resolved / `--at` / `--at --kind`) shared by
+	 * `replaceNode` and `Patch.patchNode`.
+	 */
+	public static function resolveTarget(source: String, tree: QueryNode, target: ReplaceTarget, plugin: GrammarPlugin): ResolvedTarget {
+		return switch target {
+			case BySelector(selectorExpr):
+				final selector: Selector = try Selector.parse(selectorExpr) catch (exception: Exception) return Failed(
+					'malformed selector "$selectorExpr": ${exception.message}'
+				);
+				final matches: Array<QueryNode> = Engine.select(tree, selector, plugin.selectKindEquivalence());
+				if (matches.length == 0) return Failed('--select "$selectorExpr" matched no nodes');
+				if (matches.length > 1)
+					return Failed('--select "$selectorExpr" matched ${matches.length} nodes — ambiguous; narrow with Kind:name or A > B');
+				Resolved(matches[0]);
+
+			case ByNode(n):
+				// Pre-resolved by the CLI's shared address layer (`Address`); the
+				// caching plugin guarantees `n` belongs to the tree parsed above.
+				Resolved(n);
+
+			case ByPosition(line, col):
+				// line:col is 1-based, as apq refs / ast --at / source print.
+				final cursor: Int = Span.offsetOf(source, line, col);
+				final hit: Null<QueryNode> = Engine.at(tree, cursor);
+				hit == null ? Failed('position $line:$col is not on a node') : Resolved(hit);
+
+			case ByKindPosition(line, col, kind):
+				// `--at <l>:<c> --kind <Kind>`: the innermost node of `kind`
+				// containing the cursor — reaches a co-starting wrapper / operator
+				// node that plain `--at` (innermost overall) skips past to a child.
+				final cursor: Int = Span.offsetOf(source, line, col);
+				final hit: Null<QueryNode> = Engine.atKind(tree, cursor, kind, plugin.selectKindEquivalence());
+				hit == null ? Failed('position $line:$col is not on a "$kind" node') : Resolved(hit);
+		};
+	}
+
+	/** Modifier keywords a `newSource` must never consist of (see the guard in `replaceNode`). */
+	private static final MODIFIER_KEYWORDS: Array<String> = [
+		'public',
+		'private',
+		'static',
+		'inline',
+		'override',
+		'final',
+		'macro',
+		'extern',
+		'dynamic'
+	];
 
 	/** Whether `source`, ignoring leading whitespace, opens with a block comment (`/*`, including the `/**` doc form). */
 	private static function startsWithBlockComment(source: String): Bool {
