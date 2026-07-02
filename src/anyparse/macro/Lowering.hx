@@ -431,7 +431,12 @@ class Lowering {
 			else
 				$opChain;
 		}
-		return buildPrattLoopExpr(returnCT, atomCall, opChain);
+		// ω-cond-splice: word-like op literals of the ENUM (not only the
+		// Pratt tier — the postfix tier's `#if` splice dispatch re-probes
+		// from the position this loop exits at). Drives the conditional
+		// no-match position restore in `buildPrattLoopExpr`.
+		final wordOps: Array<String> = [for (op in collectAllOps(node)) if (endsWithWordChar(op)) op];
+		return buildPrattLoopExpr(returnCT, atomCall, opChain, wordOps);
 	}
 
 	private function tryBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
@@ -543,11 +548,10 @@ class Lowering {
 			final op: String = branch.annotations.get('postfix.op');
 			final close: Null<String> = branch.annotations.get('postfix.close');
 			final ctor: String = branch.annotations.get('base.ctor');
-			if (endsWithWordChar(op)) {
-				Context.fatalError(
-					'Lowering: @:postfix operator must be symbolic (word-like postfix ops not supported yet): "$op"', Context.currentPos()
-				);
-			}
+			// Word-like postfix ops (ω-cond-splice: '#if' as the dispatch of
+			// `CondSpliceTail`) route through `matchKw` in
+			// `buildPostfixOpMatchExpr` — word-boundary-checked, so an
+			// identifier merely PREFIXED by the op text never commits.
 			final children: Array<ShapeNode> = branch.children;
 			if (children.length == 0 || children[0].kind != Ref) {
 				Context.fatalError(
@@ -608,7 +612,8 @@ class Lowering {
 		final opTrailCapture: Expr = wantOpTrail
 			? macro final _opTrailComment: Null<String> = collectTrailingFull(ctx)
 			: macro final _opTrailComment: Null<String> = null;
-		return buildPostfixLoopExpr(returnCT, coreCall, opTrailCapture, opChain);
+		final postfixWordOps: Array<String> = [for (op in collectAllOps(node)) if (endsWithWordChar(op)) op];
+		return buildPostfixLoopExpr(returnCT, coreCall, opTrailCapture, opChain, postfixWordOps);
 	}
 
 	private function lowerEnumBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
@@ -1231,9 +1236,13 @@ class Lowering {
 		// because termination semantic is undefined without it.
 		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
 		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-		if (sepText != null && !blockEndedFlag) {
+		// ω-sep-faithful: valid alternative — same permissive-matchLit +
+		// per-element `sepAfter` capture (the D4 loop below), writer-side
+		// re-emission keyed purely on that captured signal.
+		final kwStarSepFaithful: Bool = starNode.annotations.get('lit.sepFaithful') == true;
+		if (sepText != null && !blockEndedFlag && !kwStarSepFaithful) {
 			Context.fatalError(
-				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
+				'Lowering: @:optional @:kw Star + @:sep requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) or sepFaithful — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -1413,9 +1422,15 @@ class Lowering {
 		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse')) {
 			Context.fatalError('Lowering: @:trivia + @:sep requires @:trail (close-peek) or @:tryparse', Context.currentPos());
 		}
-		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag) {
+		// ω-sep-faithful: `@:sep(text, sepFaithful)` supplies the same
+		// termination semantic as blockEnded for the tryparse loop
+		// (sep-absent exits via element-parse fail-rewind), so it is a
+		// valid alternative — the difference is writer-side only
+		// (source-faithful sep re-emission instead of `}`/`;` elision).
+		final sepFaithfulFlag: Bool = starNode.annotations.get('lit.sepFaithful') == true;
+		if (sepText != null && starNode.hasMeta(':tryparse') && !blockEndedFlag && !sepFaithfulFlag) {
 			Context.fatalError(
-				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) — termination semantic undefined otherwise',
+				'Lowering: @:trivia + @:sep + @:tryparse requires the blockEnded flag (@:sep(text, tailRelax, blockEnded)) or sepFaithful (@:sep(text, sepFaithful)) — termination semantic undefined otherwise',
 				Context.currentPos()
 			);
 		}
@@ -1593,6 +1608,12 @@ class Lowering {
 			// emit; nestBody keeps the orphan-trail capture on parse
 			// failure.
 			if (sepText != null) {
+				// ω-sep-faithful: mirror the plain path's `@:fmt(sepBeforeOpt)`
+				// pre-loop leading-sep peek (Slice 18f) so trivia-collecting
+				// conditional element bodies (`#if X, elem #end`) capture the
+				// leading sep into the `<localName>SepBefore` slot the ctor
+				// call references.
+				if (starNode.fmtHasFlag('sepBeforeOpt')) emitSepBeforeOptStep(localName, parseSteps, sepText.charCodeAt(0));
 				parseSteps.push(buildTriviaTryparseSepBody(
 					elemCT, elemCall, accumRef, sepText, trailPresentLocal, trailBBLocal, trailLCLocal, trailBALocal, nestBody
 				));
@@ -2320,7 +2341,7 @@ class Lowering {
 		};
 	}
 
-	private function buildPrattLoopExpr(returnCT: ComplexType, atomCall: Expr, opChain: Expr): Expr {
+	private function buildPrattLoopExpr(returnCT: ComplexType, atomCall: Expr, opChain: Expr, ?wordOps: Array<String>): Expr {
 		// ω-trivia-sep: in Trivia mode, save pos BEFORE the per-iteration
 		// `skipWs`. On no-match, scan the consumed range for comment
 		// markers — if any are present, rewind to preserve the comment
@@ -2353,11 +2374,23 @@ class Lowering {
 			: macro {
 				var left: $returnCT = $atomCall;
 				while (true) {
+					// ω-cond-splice: save BEFORE skipWs and restore on no-match
+					// ONLY when a word-like op (`#if` splice dispatch) is the
+					// next token — an ENCLOSING atom's postfix loop reads the
+					// operand↔`#if` gap for its same-line gate, and an inner
+					// loop that consumed the newline on its way out would blind
+					// it. The restore is CONDITIONAL because `@:raw` siblings
+					// (`${expr}` string interpolation) expect the whitespace
+					// consumed — an unconditional restore breaks them.
+					final _preWsPos: Int = ctx.pos;
 					skipWs(ctx);
 					final _savedPos: Int = ctx.pos;
 					var _matched: Bool = true;
 					$opChain;
-					if (!_matched) break;
+					if (!_matched) {
+						${buildWordOpRestoreExpr(wordOps)};
+						break;
+					}
 				}
 				return left;
 			};
@@ -2969,10 +3002,16 @@ class Lowering {
 				if ($closeNotNextExpr) {
 					_args.push($elemCall);
 					skipWs(ctx);
-					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
-						skipWs(ctx);
-						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+					// Permissive sep (ω-span-sep-permissive) — see
+					// lowerStarSepBranch for rationale; same trivia-loop
+					// alignment applied to the postfix Star-suffix loop
+					// (call args).
+					while ($closeNotNextExpr) {
+						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						}
 						_args.push($elemCall);
 						skipWs(ctx);
 					}
@@ -3242,7 +3281,9 @@ class Lowering {
 		};
 	}
 
-	private function buildPostfixLoopExpr(returnCT: ComplexType, coreCall: Expr, opTrailCapture: Expr, opChain: Expr): Expr {
+	private function buildPostfixLoopExpr(
+		returnCT: ComplexType, coreCall: Expr, opTrailCapture: Expr, opChain: Expr, ?wordOps: Array<String>
+	): Expr {
 		// Trivia mode adds the per-iteration operand-trail capture and the
 		// no-match scan-back (comment-rewind / newline-stash); plain mode is
 		// the bare matchExpr dispatch loop.
@@ -3266,10 +3307,17 @@ class Lowering {
 			: macro {
 				var left: $returnCT = $coreCall;
 				while (true) {
+					final _preWsPos: Int = ctx.pos;
 					skipWs(ctx);
 					var _matched: Bool = true;
 					$opChain;
-					if (!_matched) break;
+					if (!_matched) {
+						// ω-cond-splice: conditional restore — see
+						// buildPrattLoopExpr (unconditional restore breaks
+						// `@:raw` interpolation siblings).
+						${buildWordOpRestoreExpr(wordOps)};
+						break;
+					}
 				}
 				return left;
 			};
@@ -3297,7 +3345,16 @@ class Lowering {
 		// Prepend `!peekLit(longerOp)` guards for every op literal that
 		// strictly starts with `op`. Short-circuits so matchLit is not
 		// called when a longer op is about to match.
-		var matchExpr: Expr = macro matchLit(ctx, $v{op});
+		// Word-like postfix ops (ω-cond-splice `#if`) additionally require
+		// SAME-LINE adjacency to the operand: a `#if` on its own line after
+		// a no-semi block-ended statement is a structured STATEMENT
+		// conditional, not an infix splice-tail — without the newline gate
+		// the splice raw-swallows it and the enclosing statement then fails
+		// on the next token (caught live in dogfood:
+		// `@:privateAccess {…}` + own-line `#if debug var t…#end`).
+		var matchExpr: Expr = endsWithWordChar(op)
+			? macro !hasNewlineIn(ctx.input, _preWsPos, ctx.pos) && matchKw(ctx, $v{op})
+			: macro matchLit(ctx, $v{op});
 		for (other in allOps) {
 			if (other.length > op.length && StringTools.startsWith(other, op)) {
 				matchExpr = macro !peekLit(ctx, $v{other}) && $matchExpr;
@@ -3478,10 +3535,16 @@ class Lowering {
 				if ($closeNotNextExpr) {
 					$accumRef.push($elemCall);
 					skipWs(ctx);
-					while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-						ctx.pos++;
-						skipWs(ctx);
-						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+					// Permissive sep (ω-span-sep-permissive) — see
+					// lowerStarSepBranch for rationale; same trivia-loop
+					// alignment applied to the field-Star close loop
+					// (fn params, new-expr args).
+					while ($closeNotNextExpr) {
+						if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+							ctx.pos++;
+							skipWs(ctx);
+							if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+						}
 						$accumRef.push($elemCall);
 						skipWs(ctx);
 					}
@@ -3743,10 +3806,21 @@ class Lowering {
 			if ($closeNotNextExpr) {
 				_items.push($elemCall);
 				skipWs(ctx);
-				while (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
-					ctx.pos++;
-					skipWs(ctx);
-					if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+				// Permissive sep (ω-span-sep-permissive): consume one optional
+				// separator between elements and keep looping until the close —
+				// aligning with the trivia build's close-peek loop, which has
+				// always tolerated an omitted sep (`[1 2]`, `f(a b)`). Required
+				// for `#if`-guarded element groups whose commas live INSIDE the
+				// conditional body (`[a, #if x b, #end c]`) — the span build
+				// otherwise stops at the group boundary. Garbage input still
+				// fails: the element parse throws on anything that is not an
+				// element, and the close expect catches the rest.
+				while ($closeNotNextExpr) {
+					if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) == $v{sepCharCode}) {
+						ctx.pos++;
+						skipWs(ctx);
+						if (!($closeNotNextExpr)) break; // L1: tolerate trailing sep before close
+					}
 					_items.push($elemCall);
 					skipWs(ctx);
 				}
@@ -4423,8 +4497,16 @@ class Lowering {
 		// remains `HxStatement.ExprStmt`. Cascade-safe: `f() g()`
 		// inside a switch arm still throws (`g` is neither `case`
 		// nor `default`).
+		//
+		// `#end` / `#else` / `#elseif` disjuncts (slice ω-cond-body-nosemi):
+		// a no-semi last statement inside a `#if` conditional BODY is legal
+		// Haxe (dogfood shape: `haxe.Log.trace = (v) -> {…}` directly
+		// before `#end`). The conditional-body Star has no `}` close for the
+		// `peekLit` disjunct to see, so the preprocessor terminators must be
+		// first-class gate exits like `case`/`default` are for switch arms.
 		final gateCond: Null<Expr> = parseGateCall != null
-			? (macro ($parseGateCall || peekKw(ctx, 'else') || peekLit(ctx, '}') || peekKw(ctx, 'case') || peekKw(ctx, 'default')))
+			? (macro ($parseGateCall || peekKw(ctx, 'else') || peekLit(ctx, '}') || peekKw(ctx, 'case') || peekKw(ctx, 'default')
+				|| peekKw(ctx, '#end') || peekKw(ctx, '#else') || peekKw(ctx, '#elseif')))
 			: null;
 		if (parseGateCall != null && triviaTrailOpt)
 			steps.push(macro final _trailPresent: Bool = $gateCond
@@ -5910,6 +5992,26 @@ expectLit(ctx, $v{trailText}));
 				if (hasCondOpenNewlineSlot) parseSteps.push(macro final _condLeadEnd: Int = ctx.pos);
 			}
 		}
+	}
+
+	/**
+	 * ω-cond-splice: no-match position-restore guard for the plain
+	 * Pratt/postfix loops. Restores `ctx.pos` to the pre-skipWs save iff
+	 * the next token is one of the enum's WORD-LIKE op literals (`#if`)
+	 * — those dispatch on a same-line gate that needs the operand↔op gap
+	 * intact when an enclosing loop re-probes. Empty/absent word-op set
+	 * emits `{}` — grammars without word ops keep the historical
+	 * consumed-whitespace exit byte-for-byte (string-interpolation `@:raw`
+	 * siblings depend on it).
+	 */
+	private static function buildWordOpRestoreExpr(wordOps: Null<Array<String>>): Expr {
+		if (wordOps == null || wordOps.length == 0) return macro {};
+		var cond: Null<Expr> = null;
+		for (op in wordOps) {
+			final peek: Expr = macro peekKw(ctx, $v{op});
+			cond = cond == null ? peek : macro $cond || $peek;
+		}
+		return macro if ($cond) ctx.pos = _preWsPos;
 	}
 
 }

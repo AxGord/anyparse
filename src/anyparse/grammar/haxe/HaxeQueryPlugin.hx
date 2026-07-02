@@ -550,6 +550,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// extracts a bare `(Static)` leaf — a degenerate pattern that would
 			// silently match every static modifier. Reject partial extractions.
 			if (attempt.category == PatternCategory.Decl && !consumesVariant(extracted, variant)) continue;
+			// A bare-meta pattern (`@:foo($_)`) with the auto-appended `;`
+			// parses as `MetaStmt(meta, EmptyStmt)` since the MetaStmt slice —
+			// a degenerate statement that would shadow the MetaArgs attempt
+			// every meta pattern relied on. Reject it so the ladder falls
+			// through; real `@:meta <keyword-stmt>` patterns keep matching.
+			if (
+				attempt.category == PatternCategory.Stmt && extracted.kind == 'MetaStmt' && extracted.children.length > 0
+				&& extracted.children[extracted.children.length - 1].kind == 'EmptyStmt'
+			) continue;
 			final reclassified: QueryNode = Metavar.reclassify(extracted);
 			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
 		}

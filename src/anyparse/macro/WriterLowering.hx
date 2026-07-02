@@ -468,11 +468,19 @@ class WriterLowering {
 		final dcExpr: Expr = dcCall(dcArgs);
 		final pushElemExpr: Expr = lowerPostfixPushElem(c);
 		final tailExpr: Expr = lowerPostfixTailExpr(c, dcExpr);
+		// ω-sep-faithful outer elide: per-pair `sepBefore` flags mirror the
+		// Slice 18g array threading — `WrapList.emit` suppresses the engine's
+		// inter-element comma when the source elided it (canonical:
+		// `g(true #if FSE, true #end)` — no comma between the plain arg and
+		// the following conditional group; it lives INSIDE the group).
+		final sepFlagsInit: Expr = c.isTriviaStar ? macro _sepBeforeFlags.push(_i != 0 && !_args[_i - 1].sepAfter) : macro {};
 		return macro {
 			final _args = $argsAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
+			final _sepBeforeFlags: Array<Bool> = [];
 			var _i: Int = 0;
 			while (_i < _args.length) {
+				$sepFlagsInit;
 				$pushElemExpr;
 				_i++;
 			}
@@ -1241,14 +1249,25 @@ class WriterLowering {
 		// and the helper splices a no-op.
 		final tryparseSepText: Null<String> = starNode.annotations.get('lit.sepText');
 		final tryparseBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final tryparseSepFaithful: Bool = starNode.annotations.get('lit.sepFaithful') == true;
+		// ω-sep-faithful + Slice 18f: re-emit a source-captured LEADING sep
+		// (`#if X, elem #end`) from the `<field>SepBefore` slot — the trivia
+		// twin of the plain path's sepBeforeOptActive pad swap.
+		final tryparseSepBeforeAccess: Null<Expr> = (tryparseSepFaithful && starNode.fmtHasFlag('sepBeforeOpt'))
+			? switch fieldAccess.expr {
+				case EField(b, n): { expr: EField(b, n + 'SepBefore'), pos: fieldAccess.pos };
+				case _: null;
+			}
+			: null;
 		parts.push(triviaTryparseStarExpr(
 			fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
 			firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
 			propagateExprPosition, refuseFlatOnComplex, cascadeInfos.afterCtorInfos, cascadeInfos.beforeCtorInfos,
 			cascadeInfos.betweenCtorInfos, cascadeInfos.transitionAcrossInfos, cascadeInfos.headCtorInfos, metaLineEndOptField,
 			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
-			tryparseBlockEnded ? tryparseSepText : null, tryparseBlockEnded, tryparseHeritageWrap, tryparseCondBodyIndent,
-			tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail
+			(tryparseBlockEnded || tryparseSepFaithful) ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
+			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
+			tryparseSepBeforeAccess
 		));
 	}
 
@@ -2378,11 +2397,14 @@ class WriterLowering {
 		// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
 		// EOF mode (closeText == null, no @:tryparse) still rejects.
 		final writerBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		// ω-sep-faithful: valid alternative to blockEnded — sep re-emission
+		// keyed purely on the captured per-element `sepAfter`.
+		final writerSepFaithful: Bool = starNode.annotations.get('lit.sepFaithful') == true;
 		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse'))
 			Context.fatalError('WriterLowering: @:trivia + @:sep requires close-peek (@:trail) or @:tryparse', Context.currentPos());
-		if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded)
+		if (sepText != null && starNode.hasMeta(':tryparse') && !writerBlockEnded && !writerSepFaithful)
 			Context.fatalError(
-				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded))',
+				'WriterLowering: @:trivia + @:sep + @:tryparse requires blockEnded flag (@:sep(text, tailRelax, blockEnded)) or sepFaithful',
 				Context.currentPos()
 			);
 		// ω-orphan-trivia / ω-close-trailing: Seq-struct call sites
@@ -5756,9 +5778,14 @@ class WriterLowering {
 					macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
 				}
 				: macro false;
+			// ω-sep-faithful outer elide: thread the per-pair source sep flags
+			// (built in `lowerPostfixStar`'s element loop for trivia Stars) so
+			// the engine suppresses commas the source elided around conditional
+			// element groups. Plain mode passes an empty array — index misses
+			// read `false`, byte-identical to the previous `null`.
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
-				_de(), _de(), false, null, null, false, false, null, false, null, $keepCloseGluedExpr
+				_de(), _de(), false, null, null, false, false, _sepBeforeFlags, false, null, $keepCloseGluedExpr
 			);
 			if (c.isTriviaStar) {
 				final keepDoc: Expr = lowerPostfixKeepDoc(c);
@@ -6421,6 +6448,9 @@ class WriterLowering {
 				}
 				return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall, _dt($v{close})]);
 			}
+			// Word-like postfix ops (ω-cond-splice `#if`) sit between two
+			// token streams that would glue into one word — pad both sides.
+			if (~/[A-Za-z0-9_]$/.match(postfixOp)) return macro _dc([$operandCall, _dt($v{' ' + postfixOp + ' '}), $suffixCall]);
 			return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall]);
 		}
 		Context.fatalError('WriterLowering: unsupported postfix shape', Context.currentPos());
@@ -10951,6 +10981,10 @@ class WriterLowering {
 		// dispatch. Null sepText → byte-identical to pre-slice.
 		sepText: Null<String> = null,
 		blockEnded: Bool = false,
+		// ω-sep-faithful: source-fidelity sep re-emission (see
+		// triviaTryparseBlockEndedSepEmit) — comma-lists inside
+		// conditional element groups. Mutually exclusive with blockEnded.
+		sepFaithful: Bool = false,
 		// B4 ω-implements-extends-wrap: HxClassDecl/HxInterfaceDecl heritage
 		// Star. When true, MULTI-clause heritage uses fork FillLine layout
 		// (pack-from-front, break overflow clause at additionalIndent 2);
@@ -10981,7 +11015,11 @@ class WriterLowering {
 		// `triviaBlockStarExpr` SI-2 mechanism for BlockExpr / BlockStmt; the
 		// case body routes through THIS Star (`@:tryparse`), not
 		// `triviaBlockStarExpr`. False → byte-identical to the pre-slice call.
-		clearExprPositionNonTail: Bool = false
+		clearExprPositionNonTail: Bool = false,
+		// ω-sep-faithful + Slice 18f: runtime access to the `<field>SepBefore`
+		// slot; when non-null and true at write time, the leading pad becomes
+		// `sep + ' '` (re-emitting the source's leading sep inside the group).
+		sepBeforeAccess: Null<Expr> = null
 	): Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -11035,7 +11073,10 @@ class WriterLowering {
 		// ω-trivia-tryparse-linelength: swap hard `_dt(' ')` separators for
 		// `_dile(...)` line-length probes when the Star carries
 		// `@:fmt(lineLengthAwareSeps)`.
-		final padLeadingSpaceDoc: Expr = lineLengthAwareSeps ? macro _dile(opt.lineWidth, _dhl(), _dt(' ')) : macro _dt(' ');
+		final basePadLeadingSpaceDoc: Expr = lineLengthAwareSeps ? macro _dile(opt.lineWidth, _dhl(), _dt(' ')) : macro _dt(' ');
+		final padLeadingSpaceDoc: Expr = (sepBeforeAccess != null && sepText != null)
+			? macro ($sepBeforeAccess ? _dt($v{sepText + ' '}) : $basePadLeadingSpaceDoc)
+			: basePadLeadingSpaceDoc;
 		final subsequentSepDoc: Expr = lineLengthAwareSeps ? macro _dile(opt.lineWidth, _dhl(), _dt(' ')) : subsequentSepExpr;
 		final priorAfterTrailEmit: Expr = triviaTryparsePriorAfterTrailEmit(priorAfterTrailExpr);
 		final finalWrapDocs: Expr = triviaTryparseFinalWrapDocs(lineLengthAwareSeps);
@@ -11046,8 +11087,8 @@ class WriterLowering {
 		// `opt.<metaLineEndOptField>` (0 = None default, byte-identical).
 		final metaPolicyExpr: Expr = metaLineEndOptField != null ? optFieldAccess(metaLineEndOptField) : macro 0;
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
-		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded);
-		final tryparseBlockEndedTrailEmit: Expr = triviaTryparseBlockEndedTrailEmit(sepText, blockEnded);
+		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful);
+		final tryparseBlockEndedTrailEmit: Expr = triviaTryparseBlockEndedTrailEmit(sepText, blockEnded, sepFaithful);
 		final c: TryparseStarCtx = {
 			fieldAccess: fieldAccess,
 			trailBB: trailBB,
@@ -13389,7 +13430,17 @@ class WriterLowering {
 	 * statement-terminated elements. Null sepText / non-blockEnded ⇒ no-op.
 	 * Extracted from `triviaTryparseStarExpr`.
 	 */
-	private static function triviaTryparseBlockEndedSepEmit(sepText: Null<String>, blockEnded: Bool): Expr {
+	private static function triviaTryparseBlockEndedSepEmit(sepText: Null<String>, blockEnded: Bool, sepFaithful: Bool = false): Expr {
+		// ω-sep-faithful: source-fidelity mode — the sep re-emits iff the
+		// parser captured one after the prior element (`sepAfter`), with no
+		// `}`/`;` shape heuristics. Used by comma-lists inside conditional
+		// element groups (`HxConditionalArgs.body`), where a `}`-ending
+		// object-literal element still needs its comma.
+		if (sepText != null && sepFaithful) return macro {
+			if (_si > 0 && _arr[_si - 1].sepAfter) {
+				_docs.push(_dt($v{sepText}));
+			}
+		};
 		return (sepText != null && blockEnded)
 			? macro {
 				if (_si > 0 && _priorElemDoc != null && (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(
@@ -13407,7 +13458,15 @@ class WriterLowering {
 	 * element keeps its source `;`. Null sepText / non-blockEnded ⇒ no-op.
 	 * Extracted from `triviaTryparseStarExpr`.
 	 */
-	private static function triviaTryparseBlockEndedTrailEmit(sepText: Null<String>, blockEnded: Bool): Expr {
+	private static function triviaTryparseBlockEndedTrailEmit(sepText: Null<String>, blockEnded: Bool, sepFaithful: Bool = false): Expr {
+		// ω-sep-faithful: trailing sep before the enclosing `#end`/`#else`
+		// re-emits iff the source had it (`sepAfter` on the LAST element) —
+		// the mandatory-comma case `[a, #if x b, #end c]`.
+		if (sepText != null && sepFaithful) return macro {
+			if (_arr.length > 0 && _arr[_arr.length - 1].sepAfter) {
+				_docs.push(_dt($v{sepText}));
+			}
+		};
 		return (sepText != null && blockEnded)
 			? macro {
 				if (

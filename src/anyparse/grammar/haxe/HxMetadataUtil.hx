@@ -24,6 +24,7 @@ class HxMetadataUtil {
 		return switch m {
 			case PlainMeta(raw): (raw: String);
 			case MetaCall(_): throw 'HxMetadataUtil.source: structural MetaCall cannot be re-emitted as a String — switch on the variant directly';
+			case Conditional(_): throw 'HxMetadataUtil.source: structural Conditional cannot be re-emitted as a String — switch on the variant directly';
 			case Meta(name): '$name';
 		}
 	}

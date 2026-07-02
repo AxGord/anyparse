@@ -50,11 +50,13 @@ class Codegen {
 		fields.push(peekKwField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
+		// `hasNewlineIn` moved out of the trivia gate (ω-cond-splice): the
+		// word-op postfix dispatch's same-line gate reads it in EVERY build.
+		fields.push(hasNewlineInField());
 		if (trivia) {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
 			fields.push(collectTrailingFullField(formatInfo));
-			fields.push(hasNewlineInField());
 			if (formatInfo.commentPatterns.length > 0) fields.push(skipWsAndStashField(formatInfo));
 		}
 		return fields;

@@ -333,6 +333,9 @@ import unit.DeadStoreTest;
 import unit.AddressTest;
 import unit.AddressCliTest;
 import unit.PatchSliceTest;
+import unit.HxAnonTypeSourceTrailCommaSliceTest;
+import unit.HxFnMemberTrailSemiSliceTest;
+import unit.IfFalseDeadCodeCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -502,6 +505,8 @@ class RunTests {
 		addCase(new HxObjectLitBracesOptionsTest());
 		addCase(new HxObjectLitWrapRulesTest());
 		addCase(new HxObjectLitSourceTrailCommaSliceTest());
+		addCase(new HxAnonTypeSourceTrailCommaSliceTest());
+		addCase(new HxFnMemberTrailSemiSliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
 		addCase(new HxBinaryChainWrapSliceTest());
 		addCase(new HxBinopGroupWrapSliceTest());
@@ -602,6 +607,7 @@ class RunTests {
 		addCase(new MagicNumberCheckTest());
 		addCase(new CheckstyleConfigLoaderTest());
 		addCase(new DeadCodeCheckTest());
+		addCase(new IfFalseDeadCodeCheckTest());
 		addCase(new EmptyBlockCheckTest());
 		addCase(new UnusedParameterCheckTest());
 		addCase(new SwallowedExceptionCheckTest());

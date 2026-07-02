@@ -36,6 +36,7 @@ final class Linter {
 			new Complexity(),
 			new FoldStringLiterals(),
 			new DeadCode(),
+			new IfFalseDeadCode(),
 			new EmptyBlock(),
 			new IdenticalOperands(),
 			new SelfAssignment(),

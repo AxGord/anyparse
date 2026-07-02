@@ -274,7 +274,7 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *    `Same` (default) keeps empty bodies flat (`class C {}`,
  *    `function f() {}`). `Break` emits empty bodies across two lines
  *    with `}` on its own line at the parent's indent (`class C {\n}`).
- *    Mirrors haxe-formatter's `lineEnds.emptyCurly: same|break`.
+ *    Mirrors haxe-formatter's `lineEnds.emptyCurly: noBreak|break`.
  *    Override semantics, not floor: source-blank-line content between
  *    the open and close lit is irrelevant — the runtime decision is
  *    purely opt-driven for empty Stars.
@@ -1677,6 +1677,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	trailingCommaArgs: Bool,
 	trailingCommaParams: Bool,
 	trailingCommaObjectLits: Bool,
+	trailingCommaAnonTypes: Bool,
 	ifBody: BodyPolicy,
 	elseBody: BodyPolicy,
 	forBody: BodyPolicy,

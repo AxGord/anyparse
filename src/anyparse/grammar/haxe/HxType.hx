@@ -203,7 +203,7 @@ enum HxType {
 	 */
 	@:trivia @:lead('{') @:trail('}') @:sep(',') @:sepAlt(';') @:fmt(anonTypeBracesOpen, anonTypeBracesClose, wrapRules('anonTypeWrap'),
 		leftCurly('anonTypeLeftCurly'), rightCurly('anonTypeRightCurly'), beforeDocCommentEmptyLines, forceMultiInTypedef,
-		keepCurlyBlanks, typedefBodyBlanks, groupRestProbe)
+		keepCurlyBlanks, typedefBodyBlanks, groupRestProbe, trailingComma('trailingCommaAnonTypes'))
 	Anon(fields: Array<HxAnonMember>);
 
 	ArrowFn(fn: HxArrowFnType);

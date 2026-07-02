@@ -50,4 +50,12 @@ enum HxSwitchCase {
 	@:kw('default')
 	DefaultBranch(branch: HxDefaultBranch);
 
+	/**
+	 * `#if`-guarded run of whole case/default clauses — see
+	 * `HxConditionalCase` for the shape and the dispatch-order
+	 * interplay with statement-scope conditionals inside case bodies.
+	 */
+	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
+	Conditional(inner: HxConditionalCase);
+
 }

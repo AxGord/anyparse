@@ -448,6 +448,28 @@ enum HxExpr {
 	@:kw('#if') @:trail('#end')
 	ConditionalExpr(inner: HxConditionalExpr);
 
+	@:kw('#if') @:trail('#end')
+	ConditionalArgs(inner: HxConditionalArgs);
+
+	/**
+	 * Token-splice fallback for `#if` regions no structural
+	 * conditional can represent — see `HxCondSpliceExpr`.
+	 */
+	@:kw('#if')
+	CondSpliceExpr(inner: HxCondSpliceExpr);
+
+	/**
+	 * POST-operand token-splice conditional — an infix tail spliced
+	 * onto a complete operand: `A + B #if mobile - 120 #end` /
+	 * `a.wrong || b.wrong #if !mobile || c.wrong #end` (live dogfood shapes). The raw fragment (condition
+	 * + dangling operator run, `#end` swallowed — see
+	 * `HxCondSpliceRaw`) binds tightest as a postfix on the operand;
+	 * the writer re-emits it verbatim with single-space pads around
+	 * the word-like `#if` op.
+	 */
+	@:postfix('#if')
+	CondSpliceTail(operand: HxExpr, raw: HxCondSpliceRaw);
+
 	MetaExpr(v: HxMetaExpr);
 
 	IdentExpr(v: HxIdentLit);

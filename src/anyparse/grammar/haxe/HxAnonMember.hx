@@ -12,9 +12,7 @@ package anyparse.grammar.haxe;
  * metadata prefix is parsed once before the field-kind dispatch — no
  * redundant re-parsing on failed branches.
  *
- * Unlike `HxMemberDecl` there is no `modifiers` Star: anonymous
- * structure fields take no `public` / `static` access modifiers, so
- * only the metadata gap needs closing.
+ * `modifiers` mirrors `HxMemberDecl` (slice ω-anon-field-visibility): Haxe tolerates class-notation visibility on structure fields (`typedef T = { public var x:String; }` — live dogfood shape), so the same try-parse modifier Star precedes the field dispatch. The common no-modifier case yields an empty Star.
  *
  * `meta` carries no `@:lead` / `@:trail` / `@:sep`; it uses the
  * try-parse termination mode (loop attempts an element each iteration,
@@ -35,5 +33,6 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxAnonMember = {
 	@:trivia @:tryparse var meta: Array<HxMetadata>;
+	@:trivia @:tryparse var modifiers: Array<HxMemberModifier>;
 	var field: HxAnonField;
 }

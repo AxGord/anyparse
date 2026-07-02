@@ -420,6 +420,14 @@ enum HxStatement {
 	@:kw('#if') @:trail('#end') @:fmt(sharpCondParensGap, conditionalMarkerDedent)
 	Conditional(inner: HxConditionalStmt);
 
+	/**
+	 * Token-splice fallback for `#if` statement regions the structured
+	 * `Conditional` fail-rewinds on (dangling-else if-heads) — see
+	 * `HxCondSpliceStmt`. Tried directly after it.
+	 */
+	@:kw('#if')
+	CondSpliceStmt(inner: HxCondSpliceStmt);
+
 	@:kw('function')
 	LocalFnStmt(decl: HxFnDecl);
 
@@ -464,5 +472,15 @@ enum HxStatement {
 
 	@:trailOpt(';') @:fmt(trailOptParseGate('stmtExprNoSemi'))
 	ExprStmt(expr: HxExpr);
+
+	/**
+	 * Metadata-prefixed keyword statement — the fallback AFTER
+	 * `ExprStmt` so every shape the expression route already parses
+	 * (`@:meta expr;`) keeps its `ExprStmt(MetaExpr(...))`
+	 * representation byte-identically; only `@:meta if/try/...`
+	 * statements (whose branch consumed the terminator) reach here.
+	 * See `HxMetaStmt`.
+	 */
+	MetaStmt(inner: HxMetaStmt);
 
 }

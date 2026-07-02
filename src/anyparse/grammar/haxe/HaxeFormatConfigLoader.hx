@@ -536,6 +536,7 @@ final class HaxeFormatConfigLoader {
 			trailingCommaArgs: base.trailingCommaArgs,
 			trailingCommaParams: base.trailingCommaParams,
 			trailingCommaObjectLits: base.trailingCommaObjectLits,
+			trailingCommaAnonTypes: base.trailingCommaAnonTypes,
 			ifBody: base.ifBody,
 			elseBody: base.elseBody,
 			forBody: base.forBody,
@@ -973,6 +974,7 @@ final class HaxeFormatConfigLoader {
 		if (section.callArgumentDefault != null) opt.trailingCommaArgs = trailingCommaToBool(section.callArgumentDefault);
 		if (section.functionParameterDefault != null) opt.trailingCommaParams = trailingCommaToBool(section.functionParameterDefault);
 		if (section.objectLiteralDefault != null) opt.trailingCommaObjectLits = trailingCommaToBool(section.objectLiteralDefault);
+		if (section.anonTypeDefault != null) opt.trailingCommaAnonTypes = trailingCommaToBool(section.anonTypeDefault);
 	}
 
 	private static function applyLineEnds(section: HxFormatLineEndsSection, opt: HxModuleWriteOptions): Void {

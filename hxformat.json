@@ -169,7 +169,7 @@
 		}
 	},
 	"lineEnds": {
-		"emptyCurly": "same"
+		"emptyCurly": "noBreak"
 	},
 	"sameLine": {
 		"ifBody": "fitLine",

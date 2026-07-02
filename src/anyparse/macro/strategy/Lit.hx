@@ -169,16 +169,28 @@ class Lit implements Strategy {
 	private static function annotateSep(node: ShapeNode, entry: MetadataEntry): Void {
 		if (entry.params.length == 0 || entry.params.length > 3)
 			Context.fatalError(
-				'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
+				'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax | sepFaithful), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
 				entry.pos
 			);
 		node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
 		if (entry.params.length >= 2) switch entry.params[1].expr {
 			case EConst(CIdent('tailRelax')):
 				node.annotations.set('lit.sepTailRelax', true);
+			// `sepFaithful` (ω-sep-faithful): source-fidelity sep mode for
+			// comma-lists inside preprocessor-guarded element groups
+			// (`HxConditionalArgs.body` and kin). Parse side reuses the
+			// permissive trivia tryparse loop (per-element `sepAfter`
+			// capture); writer side re-emits the sep iff the element's
+			// captured `sepAfter` is true — no `}`/`;` byte-check, no
+			// per-construct knob. Mutually exclusive with `blockEnded`
+			// (2-arg form only).
+			case EConst(CIdent('sepFaithful')):
+				node.annotations.set('lit.sepFaithful', true);
 			case _:
-				Context.fatalError('@:sep second argument must be the ident `tailRelax`', entry.params[1].pos);
+				Context.fatalError('@:sep second argument must be the ident `tailRelax` or `sepFaithful`', entry.params[1].pos);
 		}
+		if (entry.params.length == 3 && node.annotations.get('lit.sepFaithful') == true)
+			Context.fatalError('@:sep `sepFaithful` does not combine with a third argument', entry.params[2].pos);
 		if (entry.params.length == 3) switch entry.params[2].expr {
 			case EConst(CIdent('blockEnded')):
 				node.annotations.set('lit.sepBlockEnded', true);

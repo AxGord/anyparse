@@ -13,7 +13,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 /**
  * ω-empty-curly-break — empty class / function bodies break to two
  * lines (`{\n}`) when `opt.emptyCurly == EmptyCurly.Break`. Drives
- * haxe-formatter's `lineEnds.emptyCurly: same|break` knob via the
+ * haxe-formatter's `lineEnds.emptyCurly: noBreak|break` knob via the
  * `@:fmt(emptyCurlyBreak)` flag on body Stars.
  *
  * Default `Same` keeps empty bodies flat — no regression on the bulk
@@ -58,8 +58,8 @@ class HxEmptyCurlyOptionsTest extends Test {
 		Assert.equals(EmptyCurly.Break, opts.emptyCurly);
 	}
 
-	public function testConfigLoaderMapsSame(): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"emptyCurly": "same"}}');
+	public function testConfigLoaderMapsNoBreak(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"lineEnds": {"emptyCurly": "noBreak"}}');
 		Assert.equals(EmptyCurly.Same, opts.emptyCurly);
 	}
 
@@ -80,7 +80,7 @@ class HxEmptyCurlyOptionsTest extends Test {
 
 	public function testBlockCurlySubKeyOverridesGlobalForBlockEmptyCurly(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"lineEnds": {"emptyCurly": "break", "blockCurly": {"emptyCurly": "same"}}}'
+			'{"lineEnds": {"emptyCurly": "break", "blockCurly": {"emptyCurly": "noBreak"}}}'
 		);
 		Assert.equals(EmptyCurly.Break, opts.emptyCurly);
 		Assert.equals(EmptyCurly.Same, opts.blockEmptyCurly);

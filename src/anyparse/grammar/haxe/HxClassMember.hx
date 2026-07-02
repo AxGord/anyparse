@@ -145,6 +145,17 @@ enum HxClassMember {
 	@:lit('...')
 	EllipsisMember;
 
+	/**
+	 * Stray `;` at class-member scope — legal Haxe the compiler
+	 * tolerates after any member (`function f():Void {};`, found live in dogfood sources).
+	 * Parsed as its own empty member so sibling spans stay untouched
+	 * (a `@:trailOpt(';')` on `FnMember` extended the member span over
+	 * the probe trivia and broke span-dependent ops). Literal-only
+	 * token with no payload — twin of `HxStatement.EmptyStmt`.
+	 */
+	@:lit(';')
+	EmptySemiMember;
+
 	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
 	Conditional(inner: HxConditionalMember);
 
