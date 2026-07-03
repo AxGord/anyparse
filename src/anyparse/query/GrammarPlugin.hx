@@ -966,6 +966,18 @@ typedef RefShape = {
 	 * makes the check a no-op.
 	 */
 	@:optional var nullableIndexTypeNames: Array<String>;
+
+	/**
+	 * Dotted `Type.method` signatures of INSTANCE calls whose result is nullable
+	 * (Haxe `Array.pop` / `Array.shift` / `List.pop`, each returning `Null<T>`) —
+	 * the call-result nullable sources the `possible-null-dereference` check
+	 * recognises alongside `nullableIndexTypeNames`. Matched structurally: a
+	 * `callKind` whose callee is a `fieldAccessKind` named `method` on an
+	 * `identKind` receiver whose declared outer-nominal type (via
+	 * `TypeResolver.identTypeName`) is `Type`. Optional; unset drops the
+	 * call-result half of the check.
+	 */
+	@:optional var nullableInstanceReturnCalls: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
