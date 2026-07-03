@@ -105,6 +105,20 @@ class PossibleNullDereferenceTest extends Test {
 		);
 	}
 
+	public function testMapGetFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { function f(m:Map<String,Int>) { m.get(k).toString(); } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('Map.get() can be null; this dereference has no null check', vs[0].message);
+	}
+
+	public function testListFirstFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(lst:List<Foo>) { var a = lst.first().bar; } }').length);
+	}
+
+	public function testGetOnNonMapNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(o:Foo) { o.get(k).bar(); } }').length);
+	}
+
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C { function f(m:Map<String,Int>) { var a = m[k].foo; } }';
 		final check: PossibleNullDereference = new PossibleNullDereference();

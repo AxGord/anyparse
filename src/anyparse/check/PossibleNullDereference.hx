@@ -41,8 +41,7 @@ import haxe.Exception;
  * There is no narrowing: `if (m.exists(k)) m[k].field`, `if (arr.length > 0)
  * arr.pop().f` and a guarded `findUser().f` are still flagged, since the guard is
  * invisible without flow. That is why the severity is `Info` (advisory), not the
- * `Warning` the flow-sensitive engine earns. `m.get(k)` (a `Call`, not `[]`) and a
- * cross-file return are future sub-patterns. Macro-reification subtrees
+ * `Warning` the flow-sensitive engine earns. A cross-file return is a future sub-pattern. Macro-reification subtrees
  * (`RefShape.opaqueKinds`) are not descended into.
  */
 @:nullSafety(Strict)
