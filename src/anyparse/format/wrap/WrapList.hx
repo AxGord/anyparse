@@ -2187,8 +2187,8 @@ class WrapList {
 		// mirrors fork's `wrapFillLine2AfterLast` accounting where each
 		// item carries its trailing comma in `firstLineLength`
 		// (slice ω-fill-tail-reserve).
-		final lastChunkTailReserve: Int = sep.length
-			+ 1 + (appendTrailingComma ? sep.length : 0) + DocMeasure.flatTokenWidth(closeInside) + close.length;
+		final lastChunkTailReserve: Int = sep.length + 1 + (appendTrailingComma ? sep.length : 0) + DocMeasure.flatTokenWidth(closeInside)
+			+ close.length;
 		final bodyParts: Array<Doc> = [];
 		var chunkStart: Int = 0;
 		for (i in 1...items.length + 1) {

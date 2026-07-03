@@ -3152,8 +3152,8 @@ final class Cli {
 		final start: Int = diffAt - BYTE_DIFF_LEAD < 0 ? 0 : diffAt - BYTE_DIFF_LEAD;
 		final expWin: String = escapeWindow(expected.substr(start, BYTE_DIFF_WINDOW));
 		final actWin: String = escapeWindow(actual.substr(start, BYTE_DIFF_WINDOW));
-		return 'apq writer-equals: byte-diff @ $diffAt'
-			+ '  exp=<$expWin>' + '  act=<$actWin>' + '  (exp.len=${expected.length}, act.len=${actual.length})';
+		return 'apq writer-equals: byte-diff @ $diffAt' + '  exp=<$expWin>' + '  act=<$actWin>'
+			+ '  (exp.len=${expected.length}, act.len=${actual.length})';
 	}
 
 	private static function escapeWindow(s: String): String {

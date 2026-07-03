@@ -268,4 +268,46 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
+	public function testPlainAddChainFillsNoHeadBreak(): Void {
+		// ω-opadd-plain-fillline regression: a plain assignment `+` chain
+		// under an `opAddSubChain.fillLine` cascade FILLS its head line to
+		// the budget (multiple operands) — it must NOT collapse to the
+		// former head-break shape (head operand alone on line 1, the whole
+		// tail glued flat on the continuation). The direct head-break was a
+		// re-measure workaround that diverged from the reference formatter,
+		// which fillLine-packs a bare-value add-chain.
+		final src: String = 'class C { static function m():Void { total = alphaaaa + betaaaaa + gammaaaa + deltaaaa + epsiloon; } }';
+		final cfg: String = '{ "wrapping": { "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"} ] } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.lineWidth = 60;
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		// Head line packs at least the first two operands (FillLine), so the
+		// head operand is NOT left alone on its own line.
+		Assert.isTrue(out.indexOf('total = alphaaaa + betaaaaa') != -1, 'expected FillLine head with >=2 operands in: <$out>');
+		Assert.isTrue(out.indexOf('total = alphaaaa\n') == -1, 'unexpected head-break (head operand alone) in: <$out>');
+	}
+
+	public function testCompareLeftAddChainKeepsHeadBreak(): Void {
+		// Guard the ONE legitimate head-break context (fork
+		// `opbool_reeval_strips_opadd_breaks`): an add-chain that is the LEFT
+		// operand of a never-wrap compare (`> upperLimit`) nested in an
+		// `onePerLineAfterFirst` opBool. This path is committed by leg 2
+		// (`CollapsePass.compareOpGluedToHeadBreak`), which survives the
+		// direct head-break removal — the wide call head stays alone on its
+		// continuation line and the `+ ... > upperLimit` tail glues flat one
+		// indent deeper.
+		final src: String = 'class Main { static function main() { if (conditionAlpha && computeValue(longParameterA, longParameterB, longParameterC) + additionalValue + extraOffset > upperLimit) { doWork(); } } }';
+		final cfg: String = '{ "wrapping": { "opBoolChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "onePerLineAfterFirst", "location": "beforeLast"} ] }, "opAddSubChain": { "defaultWrap": "noWrap", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"} ] }, "callParameter": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [ {"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"} ] } } }';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.lineWidth = 100;
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+		// The wide call head is alone on its continuation line...
+		Assert.isTrue(
+			out.indexOf('&& computeValue(longParameterA, longParameterB, longParameterC)\n') != -1,
+			'expected call head on its own line in: <$out>'
+		);
+		// ...and the add-tail + compare glue flat (single line) one indent deeper.
+		Assert.isTrue(out.indexOf('+ additionalValue + extraOffset > upperLimit') != -1, 'expected glued add-tail + compare in: <$out>');
+	}
+
 }

@@ -248,12 +248,17 @@ final class CollapsePass {
 	): Doc {
 		if (insideBroken) return WrapBoundary(rewrite(tagged.flat, decisions, true, width));
 		final broke: Bool = opens(tagged.marker, decisions);
-		// HEAD-BREAK re-measure: when the chain broke and the glued-flat tail
-		// fits at its captured continuation indent, commit to break-after-head.
-		final headBreak: Null<Doc> = broke ? commitHeadBreak(tagged, decisions, width) : null;
-		return headBreak != null
-			? WrapBoundary(headBreak)
-			: WrapBoundary(Group(IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width))));
+		// ω-opadd-plain-fillline: a top-level tagged opAddSub chain (NOT
+		// `insideBroken`, and NOT a compare-op-glue left — that path is intercepted
+		// by `compareOpGluedToHeadBreak` BEFORE this call) keeps its cascade-decided
+		// FillLine `brk`. The former direct head-break re-measure (head alone on
+		// line 1, the tail glued flat) diverged from the reference formatter, which
+		// FillLine-packs a plain assignment / return add-chain to the line budget.
+		// The one genuine head-break context — an add-chain that is the LEFT operand
+		// of a never-wrap compare nested in an `onePerLineAfterFirst` opBool — is
+		// committed by leg 2 (`compareOpGluedToHeadBreak`, which still calls
+		// `commitHeadBreak`), so no direct head-break is needed here.
+		return WrapBoundary(Group(IfBreak(rewrite(tagged.brk, decisions, broke, width), rewrite(tagged.flat, decisions, false, width))));
 	}
 
 	/**

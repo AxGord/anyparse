@@ -84,8 +84,8 @@ final class CollapsibleIf implements Check {
 			final ics: Null<Span> = innerCond.span;
 			final its: Null<Span> = innerThen.span;
 			if (cs == null || ts == null || ics == null || its == null) continue;
-			final merged: String = wrap(source.substring(cs.from, cs.to), outerCond, wrapKinds)
-				+ ' ' + andOp + ' ' + wrap(source.substring(ics.from, ics.to), innerCond, wrapKinds);
+			final merged: String = wrap(source.substring(cs.from, cs.to), outerCond, wrapKinds) + ' ' + andOp + ' '
+				+ wrap(source.substring(ics.from, ics.to), innerCond, wrapKinds);
 			edits.push({ span: cs, text: merged });
 			edits.push({ span: ts, text: source.substring(its.from, its.to) });
 		}
