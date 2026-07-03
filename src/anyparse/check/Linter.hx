@@ -91,7 +91,8 @@ final class Linter {
 			new AlwaysNullComparison(),
 			new NullDereference(),
 			new DeadStore(),
-			new ThreadSafety()
+			new ThreadSafety(),
+			new UncheckedNullable()
 		];
 	}
 

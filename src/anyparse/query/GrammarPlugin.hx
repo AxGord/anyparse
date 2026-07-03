@@ -926,6 +926,35 @@ typedef RefShape = {
 	 * dispatching to it). Optional — unset treats every function as runtime.
 	 */
 	@:optional var macroModifierKind: String;
+
+	/**
+	 * Operator node kinds that consume their operands as non-null numbers —
+	 * arithmetic (`+ - * / %`), relational (`< > <= >=`), bitwise (`& | ^`),
+	 * shift (`<< >> >>>`) and the unary `-` / `~`. The `unchecked-nullable`
+	 * check flags a `nullableNumericReturnCalls` result appearing directly as an
+	 * operand of one of these. Null-tolerant `==` / `!=` and the type-incompatible
+	 * logical `&&` / `||` are intentionally excluded. Optional; unset makes the
+	 * check a no-op.
+	 */
+	@:optional var numericOperatorKinds: Array<String>;
+
+	/**
+	 * Dotted `Receiver.method` signatures of calls whose result is a nullable
+	 * number (Haxe `Std.parseInt` / `Std.parseFloat`, both `Null<Int>` /
+	 * `Null<Float>`) — the nullable sources the `unchecked-nullable` check
+	 * recognises. Matched structurally: a `callKind` whose callee is a
+	 * `fieldAccessKind` named `method` on an `identKind` receiver named
+	 * `Receiver`. Optional; unset makes the check a no-op.
+	 */
+	@:optional var nullableNumericReturnCalls: Array<String>;
+
+	/**
+	 * String-literal node kinds (Haxe `SingleStringExpr` / `DoubleStringExpr`) —
+	 * the `unchecked-nullable` check skips a numeric-operator node bearing one
+	 * as an operand, since `+` there is string concatenation (`n + "x"`), not a
+	 * numeric use. Optional; unset removes that carve-out.
+	 */
+	@:optional var stringLiteralKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

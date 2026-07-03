@@ -512,6 +512,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			wildcardPatternName: '_',
 			exprStatementKind: 'ExprStmt',
 			nullCoalAssignKind: 'NullCoalAssign',
+			numericOperatorKinds: [
+				'Add', 'Sub', 'Mul', 'Div', 'Mod', 'Lt', 'Gt', 'LtEq', 'GtEq', 'BitAnd', 'BitOr', 'BitXor', 'Shl', 'Shr', 'UShr', 'Neg',
+				'BitNot',
+			],
+			nullableNumericReturnCalls: ['Std.parseInt', 'Std.parseFloat'],
+			stringLiteralKinds: ['SingleStringExpr', 'DoubleStringExpr'],
 		};
 	}
 
