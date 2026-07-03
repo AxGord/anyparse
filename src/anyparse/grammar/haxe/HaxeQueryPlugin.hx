@@ -520,6 +520,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			stringLiteralKinds: ['SingleStringExpr', 'DoubleStringExpr'],
 			nullableIndexTypeNames: ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'WeakMap'],
 			nullableInstanceReturnCalls: ['Array.pop', 'Array.shift', 'List.pop'],
+			nullableReturnMarkerTypes: ['Null'],
 		};
 	}
 
@@ -659,6 +660,20 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
 			if (span != null && Reflect.hasField(node, 'type')) {
 				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
+				if (nm != null)
+					out[span.from] = nm;
+			}
+		});
+		return out;
+	}
+
+	public function returnTypes(source: String): Map<Int, String> {
+		final out: Map<Int, String> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null && Reflect.hasField(node, 'returnType')) {
+				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'returnType'));
 				if (nm != null)
 					out[span.from] = nm;
 			}

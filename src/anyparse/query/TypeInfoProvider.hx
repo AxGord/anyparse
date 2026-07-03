@@ -23,6 +23,18 @@ interface TypeInfoProvider {
 	public function declaredTypes(source: String): Map<Int, String>;
 
 	/**
+	 * Maps each FUNCTION declaration's binding-span `from` (the same `from` a
+	 * scope-resolved call callee binds to) to the SIMPLE outer-nominal name of its
+	 * declared return type — `function f():Null<Foo>` → `Null`, `:Array<Int>` →
+	 * `Array`. The return-type counterpart of `declaredTypes` (which covers
+	 * value-carrying `:Type` fields, whose grammar field is `type`, NOT a
+	 * function's `returnType`). A function with no explicit return annotation, or a
+	 * non-nominal return, is absent. Lets a consumer resolve a call result's
+	 * nullability without the `QueryNode` projection carrying return types.
+	 */
+	public function returnTypes(source: String): Map<Int, String>;
+
+	/**
 	 * Maps a property-bearing member's binding-span `from` to whether its read
 	 * accessor is a getter (`get` / `dynamic` → true) vs a plain stored read. A
 	 * plain field (no accessor clause) is ABSENT. Lets a consumer decide whether

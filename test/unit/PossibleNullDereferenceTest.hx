@@ -83,6 +83,28 @@ class PossibleNullDereferenceTest extends Test {
 		Assert.equals(0, violations('class C { function f(arr:Array<Int>) { var v = arr.pop(); } }').length);
 	}
 
+	public function testNullReturnFunctionFlagged(): Void {
+		final vs: Array<Violation> =
+			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { findUser("x").bar(); } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('findUser() can be null; this dereference has no null check', vs[0].message);
+	}
+
+	public function testNonNullReturnFunctionNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function getFoo():Foo { return null; } function g() { getFoo().bar(); } }').length);
+	}
+
+	public function testUnannotatedReturnFunctionNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function compute() { return null; } function g() { compute().bar(); } }').length);
+	}
+
+	public function testBareNullReturnCallNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var v = findUser("x"); } }').length
+		);
+	}
+
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C { function f(m:Map<String,Int>) { var a = m[k].foo; } }';
 		final check: PossibleNullDereference = new PossibleNullDereference();

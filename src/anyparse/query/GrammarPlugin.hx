@@ -978,6 +978,17 @@ typedef RefShape = {
 	 * call-result half of the check.
 	 */
 	@:optional var nullableInstanceReturnCalls: Array<String>;
+
+	/**
+	 * Return-type outer-nominal names that mark a function's result as nullable —
+	 * Haxe's explicit `Null<T>` wrapper (outer name `Null`). The
+	 * `possible-null-dereference` check flags a deref of a call whose callee is a
+	 * plain identifier binding to a function whose `TypeInfoProvider.returnTypes`
+	 * entry is one of these. `Dynamic` / `Any` are intentionally excluded — a
+	 * deref of an untyped result is not a clear NPE. Optional; unset drops the
+	 * call-return half of the check.
+	 */
+	@:optional var nullableReturnMarkerTypes: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

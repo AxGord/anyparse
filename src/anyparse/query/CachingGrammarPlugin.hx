@@ -36,6 +36,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _typeRefCache: Map<String, QueryNode> = [];
 
 	private final _declaredTypeCache: Map<String, Map<Int, String>> = [];
+	private final _returnTypeCache: Map<String, Map<Int, String>> = [];
 
 	private final _accessorCache: Map<String, Map<Int, Bool>> = [];
 	private final _castTargetCache: Map<String, Map<Int, String>> = [];
@@ -107,6 +108,15 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
 		final result: Map<Int, String> = inner != null ? inner.declaredTypes(source) : [];
 		_declaredTypeCache[source] = result;
+		return result;
+	}
+
+	public function returnTypes(source: String): Map<Int, String> {
+		final cached: Null<Map<Int, String>> = _returnTypeCache[source];
+		if (cached != null) return cached;
+		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		final result: Map<Int, String> = inner != null ? inner.returnTypes(source) : [];
+		_returnTypeCache[source] = result;
 		return result;
 	}
 
