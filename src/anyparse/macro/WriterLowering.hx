@@ -798,6 +798,14 @@ class WriterLowering {
 		final spanInfo = detectCondWrapSpan(node);
 		var fieldIdx: Int = -1;
 		var spanStartPartsIdx: Int = -1;
+		// ω-condwrap-fitline-construct-group: parts index where the single-Ref
+		// condWrap field's emission begins. When the IMMEDIATELY following
+		// mandatory bodyPolicy Ref field is emitted, everything from this index
+		// through that field's finalize is spliced into ONE BodyGroup so the
+		// FitLine body layout can be the classic whole-construct soft line
+		// (see WrapBodyOpts.condFitGroup). -1 = no pending cond. Reset by any
+		// intervening field that is not the consumer.
+		var condFitGroupStartIdx: Int = -1;
 
 		// ω-multivar-wrap: detect the struct-level
 		// `@:fmt(multiVarWrap('<knob>', '<moreField>'))` opt-in (sole
@@ -853,6 +861,7 @@ class WriterLowering {
 			// (the @:trailOpt source-presence slot facts live in readFieldMeta.)
 
 			if (isStar) {
+				condFitGroupStartIdx = -1;
 				final starResult = emitStarField(
 					child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
 					prevBodyField, prevPadTrailing, fieldAccess, prevAnyStarNonEmpty, multiVarMoreField, isOptional
@@ -864,6 +873,9 @@ class WriterLowering {
 				isFirstField = false;
 				continue;
 			}
+
+			final isCondFitSetter: Bool = hasCondWrap && spanInfo == null;
+			if (isCondFitSetter) condFitGroupStartIdx = parts.length;
 
 			// D61: kw prefix + mandatory @:lead lead-in — see emitFieldLeadIn.
 			emitFieldLeadIn(
@@ -890,6 +902,12 @@ class WriterLowering {
 			final elseFieldName: Null<String> = (child.fmtHasFlag('fitLineIfWithElse') || fallbackFlag != null)
 				? optionalBodyFieldName
 				: null;
+			// ω-condwrap-fitline-construct-group: this field consumes the pending
+			// cond iff it is the mandatory bare-Ref bodyPolicy body immediately
+			// following the condWrap field (mirrors emitMandatoryRefField's
+			// emitBodyPolicyBareRef dispatch predicate).
+			final condFitGroupConsumer: Bool = condFitGroupStartIdx >= 0 && !isCondFitSetter && child.kind == Ref && !isOptional
+				&& bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw;
 			var justWrappedBody: Null<PrevBodyInfo> = null;
 			switch child.kind {
 				case Ref if (isOptional):
@@ -903,7 +921,7 @@ class WriterLowering {
 					final mandResult = emitMandatoryRefField(
 						child, parts, typePath, fieldAccess, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, kwLead, leadText, isRaw,
 						isFirstField, hasElseIf, elseFieldName, fallbackFlag, hasCondWrap, condWrapArgs, spanInfo != null, trailText,
-						prevTrailFieldName, prevAnyStarNonEmpty, prevPadTrailing
+						prevTrailFieldName, prevAnyStarNonEmpty, prevPadTrailing, condFitGroupConsumer
 					);
 					justWrappedBody = mandResult.justWrappedBody;
 					prevBareRefBody = mandResult.prevBareRefBody;
@@ -918,6 +936,38 @@ class WriterLowering {
 				hasStructFieldTrailOptSlot, structTrailOptAccess, thisPadTrailing, prevPadTrailing, justWrappedBody, spanInfo,
 				spanStartPartsIdx
 			);
+			// ω-condwrap-fitline-construct-group: the consumer body field (incl.
+			// its trail finalize) closes the construct group — splice
+			// [condFitGroupStartIdx, end) into one construct-level group. A
+			// non-consumer, non-setter field in between drops the pending cond
+			// instead. The group flavour is RUNTIME-conditional on the optional
+			// else sibling (ψ₁₂'s optionalBodyFieldName):
+			//  - NO else → BodyGroup. The trivia writer's per-element
+			//    trailing-comment fold (`foldTrailingIntoBodyGroup`) then
+			//    splices a trailing `// comment` INSIDE the group, so the
+			//    whole-construct fitsFlat measures it (`if (c) return x; // n`
+			//    breaks when the comment pushes the line over), and a parent
+			//    fit measure (chained `for (...) if (...) body` FitLines)
+			//    keeps deferring the nested construct like the body-level
+			//    BodyGroup it replaces.
+			//  - else PRESENT → plain Group, opaque to the fold: the element's
+			//    trailing comment belongs AFTER the whole if/else (a
+			//    construct-level BodyGroup swallowed it between the then-body
+			//    and `else`). Same render-time fitsFlat dispatch either way;
+			//    with an else the FitLine body already degrades to Next via
+			//    fitLineIfWithElse, so losing the comment from the measure
+			//    costs nothing.
+			if (condFitGroupConsumer) {
+				final grpBuf: Array<Expr> = parts.slice(condFitGroupStartIdx, parts.length);
+				parts.splice(condFitGroupStartIdx, parts.length - condFitGroupStartIdx);
+				final grpInner: Expr = grpBuf.length == 1 ? grpBuf[0] : dcCall(grpBuf);
+				if (optionalBodyFieldName != null) {
+					final elseAcc: Expr = { expr: EField(macro value, optionalBodyFieldName), pos: Context.currentPos() };
+					parts.push(macro $elseAcc == null ? _dbg($grpInner) : _dg($grpInner));
+				} else
+					parts.push(macro _dbg($grpInner));
+				condFitGroupStartIdx = -1;
+			} else if (!isCondFitSetter) condFitGroupStartIdx = -1;
 			prevAnyStarNonEmpty = null;
 			prevBodyField = finalizeResult.prevBodyField;
 			prevPadTrailing = finalizeResult.prevPadTrailing;
@@ -1447,9 +1497,8 @@ class WriterLowering {
 		// without wrap-rules).
 		final wrapRulesField: Null<String> = starNode.fmtReadString('wrapRules');
 		final leftCurlyOwnedBySep: Bool = hasKnobLeftCurly && wrapRulesField != null;
-		if (!leftCurlyOwnedBySep && (
-			!isFirstField || hasKnobLeftCurly
-		) && isSpacedLead(openText)) parts.push(leftCurlySeparator(starNode, isFirstField && hasKnobLeftCurly));
+		if (!leftCurlyOwnedBySep && (!isFirstField || hasKnobLeftCurly) && isSpacedLead(openText))
+			parts.push(leftCurlySeparator(starNode, isFirstField && hasKnobLeftCurly));
 		// ω-trivia-sep: sep-Star with @:trivia routes to a
 		// dedicated helper that drives multi-line vs flat layout
 		// from per-element `newlineBefore` / comment trivia.
@@ -2240,9 +2289,8 @@ class WriterLowering {
 		final softFill: Bool = starNode.fmtHasFlag('softFill');
 		if (softFill && lineLengthAwareSeps)
 			Context.fatalError('WriterLowering: @:fmt(softFill) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos());
-		if (softFill && !(
-			padLeading || padTrailing
-		)) Context.fatalError('WriterLowering: @:fmt(softFill) requires @:fmt(padLeading) or @:fmt(padTrailing)', Context.currentPos());
+		if (softFill && !(padLeading || padTrailing))
+			Context.fatalError('WriterLowering: @:fmt(softFill) requires @:fmt(padLeading) or @:fmt(padTrailing)', Context.currentPos());
 		final padFlags: PadFlags = {
 			padLeading: padLeading,
 			padTrailing: padTrailing,
@@ -6138,7 +6186,15 @@ class WriterLowering {
 				? _dn(_cols, _dc([_dhl(), _body]))
 				: _dc([_dop(' '), $gluedBody]))
 			: macro _dc([_dop(' '), $gluedBody]);
-		final fitInnerExpr: Expr = if (singleLineFlagName != null)
+		// ω-condwrap-fitline-construct-group: under a construct-level BodyGroup
+		// (see WrapBodyOpts.condFitGroup) the flat-body FitLine layout is the
+		// soft line — the group's whole-construct fitsFlat owns the same-vs-next
+		// decision, so a wrapped condition (hardlines in its committed shape)
+		// forces the body onto the next line. Multiline non-block bodies keep
+		// the glue branch (the group is already broken; OptSpace flushes).
+		final fitInnerExpr: Expr = if (opts.condFitGroup == true)
+			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1 ? $multilineGlue : _dn(_cols, _dc([_dl(), _body]));
+		else if (singleLineFlagName != null)
 			macro anyparse.format.wrap.WrapList.flatLength(_body) == -1
 				? $multilineGlue
 				: _dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _body])), _dc([_dop(' '), $gluedBody]));
@@ -7959,7 +8015,7 @@ class WriterLowering {
 	private function emitBodyPolicyBareRef(
 		child: ShapeNode, parts: Array<Expr>, prevTrailFieldName: Null<String>, isFirstField: Bool, fieldName: String,
 		bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr, fieldAccess: Expr, refName: String, hasElseIf: Bool,
-		elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, fallbackFlag: Null<String>
+		elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, fallbackFlag: Null<String>, condFitGroup: Bool
 	): PrevBodyInfo {
 		final kwPolicyFlag: Null<String> = child.fmtReadString('kwPolicy');
 		// ω-trivia-after-trail: when the IMMEDIATELY preceding
@@ -8073,6 +8129,7 @@ class WriterLowering {
 			bodyAllmanIndentArgs: bodyAllmanIndentArgs,
 			fallbackFlagName: fallbackFlag,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
+			condFitGroup: condFitGroup,
 		}));
 		return { access: fieldAccess, typePath: refName };
 	}
@@ -9514,7 +9571,7 @@ class WriterLowering {
 		bodyPolicyExprFlag: Null<String>, kwLead: Null<String>, leadText: Null<String>, isRaw: Bool, isFirstField: Bool, hasElseIf: Bool,
 		elseFieldName: Null<String>, fallbackFlag: Null<String>, hasCondWrap: Bool, condWrapArgs: Null<Array<String>>,
 		spanInfoPresent: Bool, trailText: Null<String>, prevTrailFieldName: Null<String>, prevAnyStarNonEmpty: Null<Expr>,
-		prevPadTrailing: Null<Expr>
+		prevPadTrailing: Null<Expr>, condFitGroup: Bool
 	): { justWrappedBody: Null<PrevBodyInfo>, prevBareRefBody: PrevBodyInfo } {
 		final refName: String = child.annotations.get('base.ref');
 		final writeFn: String = writeFnFor(refName);
@@ -9530,7 +9587,7 @@ class WriterLowering {
 			// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
 			emitBodyPolicyBareRef(
 				child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, fieldAccess,
-				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag
+				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag, condFitGroup
 			);
 		else {
 			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
@@ -14214,7 +14271,8 @@ class WriterLowering {
 					final _itemCtor: Null<String> = Type.enumConstructor(cast _t.node);
 					if (
 						_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr' || anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0
-					) _anyMultilineItem = true;
+					)
+						_anyMultilineItem = true;
 				}
 				_ti++;
 			}
@@ -15582,6 +15640,16 @@ typedef WrapBodyOpts = {
 	?inlineBlockBodyArgs: Array<String>,
 	?singleLineFlagName: Null<String>,
 	?singleLineMultiCtors: Null<Array<String>>,
+	// ω-condwrap-fitline-construct-group — true when lowerStruct wraps the
+	// preceding condWrap cond + this body into ONE construct-level BodyGroup.
+	// The FitLine layout then becomes the classic soft line (`Line(' ')` +
+	// body under Nest): flat when the WHOLE construct fits the line, broken
+	// when it does not — which also fires when the condition committed to
+	// its wrapped shape (its hardlines fail the group's fitsFlat), matching
+	// the fork's "body on the same line iff the whole statement fits" rule.
+	// Replaces the body-only `_dinfle` probe whose post-`)` column reset
+	// glued `) return x;` after a wrapped condition. Null/false → byte-inert.
+	?condFitGroup: Bool,
 	// ω-keep-chain (increment: opadd_chain_keep) — runtime `Bool` access to the
 	// ctor's captured `return`→value source newline (the `captureKwNewline` synth
 	// slot, ReturnStmt only). When true AND the body is already-multiline

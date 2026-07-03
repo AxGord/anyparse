@@ -138,9 +138,8 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (node.kind == 'MacroExpr') return;
 		final mods: Array<String> = modsOf(node, parent);
 		var category: Null<NamingCategory> = categoryOf(node, mods);
-		if (parent != null && parent.kind == 'EnumAbstractDecl' && (
-			node.kind == 'FinalMember' || node.kind == 'VarMember'
-		)) category = NamingCategory.EnumValue;
+		if (parent != null && parent.kind == 'EnumAbstractDecl' && (node.kind == 'FinalMember' || node.kind == 'VarMember'))
+			category = NamingCategory.EnumValue;
 		final name: Null<String> = node.name;
 		if (category != null && name != null) {
 			// Re-bind to non-null finals: strict null-safety does not narrow a

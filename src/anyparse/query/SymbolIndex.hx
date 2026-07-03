@@ -266,8 +266,10 @@ final class SymbolIndex {
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
 		seen.push(typeName);
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes)
-			if (declaresMember(sup, field) || supertypeDeclares(sup, field, seen)) return true;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) if (
+			declaresMember(sup, field) || supertypeDeclares(sup, field, seen)
+		)
+			return true;
 		return false;
 	}
 
@@ -462,32 +464,28 @@ final class SymbolIndex {
 	 */
 	private static function collectSupertypes(node: QueryNode): Array<String> {
 		final out: Array<String> = [];
-		collectInto(
-			node, n -> {
-				if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause')
-					for (c in n.children) {
-						final nm: Null<String> = c.name;
-						if (nm != null)
-							out.push(simpleName(nm));
-					}
-			}
-		);
+		collectInto(node, n -> {
+			if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause')
+				for (c in n.children) {
+					final nm: Null<String> = c.name;
+					if (nm != null)
+						out.push(simpleName(nm));
+				}
+		});
 		return out;
 	}
 
 	/** Simple names of every type referenced in an `@:access(...)` metadata in `tree`. */
 	private static function collectAccessGrants(tree: QueryNode): Array<String> {
 		final out: Array<String> = [];
-		collectInto(
-			tree, n -> {
-				if (n.kind == 'MetaCall' && n.name == '@:access')
-					for (c in n.children) {
-						final nm: Null<String> = c.name;
-						if (nm != null)
-							out.push(simpleName(nm));
-					}
-			}
-		);
+		collectInto(tree, n -> {
+			if (n.kind == 'MetaCall' && n.name == '@:access')
+				for (c in n.children) {
+					final nm: Null<String> = c.name;
+					if (nm != null)
+						out.push(simpleName(nm));
+				}
+		});
 		return out;
 	}
 
@@ -512,20 +510,18 @@ final class SymbolIndex {
 	 */
 	private static function collectMembers(node: QueryNode, accessors: Map<Int, Bool>): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
-		collectInto(
-			node, n -> {
-				if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind)) {
-					final nm: Null<String> = n.name;
-					final sp: Null<Span> = n.span;
-					if (nm != null && sp != null) {
-						// Re-bind to a non-null local — Strict null-safety takes a struct
-						// literal's field type from the declared type, not the narrowed one.
-						final memberName: String = nm;
-						out.push({ name: memberName, hasGetter: accessors[sp.from] ?? false });
-					}
+		collectInto(node, n -> {
+			if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind)) {
+				final nm: Null<String> = n.name;
+				final sp: Null<Span> = n.span;
+				if (nm != null && sp != null) {
+					// Re-bind to a non-null local — Strict null-safety takes a struct
+					// literal's field type from the declared type, not the narrowed one.
+					final memberName: String = nm;
+					out.push({ name: memberName, hasGetter: accessors[sp.from] ?? false });
 				}
 			}
-		);
+		});
 		return out;
 	}
 

@@ -477,7 +477,9 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ReturnStmt',
 				'VoidReturnStmt',
 				'BreakStmt',
-				'ContinueStmt'
+				'ContinueStmt',
+				'BreakExpr',
+				'ContinueExpr'
 			],
 			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
 			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],
@@ -565,7 +567,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			if (
 				attempt.category == PatternCategory.Stmt && extracted.kind == 'MetaStmt' && extracted.children.length > 0
 				&& extracted.children[extracted.children.length - 1].kind == 'EmptyStmt'
-			) continue;
+			)
+				continue;
 			final reclassified: QueryNode = Metavar.reclassify(extracted);
 			return new Pattern(reclassified, attempt.category, source, SEARCH_KIND_EQUIVALENCE);
 		}

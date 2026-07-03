@@ -437,6 +437,12 @@ enum HxExpr {
 	@:kw('throw')
 	ThrowExpr(value: HxExpr);
 
+	@:kw('break')
+	BreakExpr;
+
+	@:kw('continue')
+	ContinueExpr;
+
 	@:kw('inline')
 	InlineExpr(operand: HxExpr);
 

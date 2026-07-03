@@ -79,7 +79,8 @@ final class FragmentedDocComment implements Check {
 				var j: Int = i;
 				while (j + 1 < comments.length && isDocBlock(source, comments[j + 1]) && tightlyAdjacent(
 					source, comments[j], comments[j + 1]
-				)) j++;
+				))
+					j++;
 				if (j > i) runs.push(comments.slice(i, j + 1));
 				i = j + 1;
 			} else

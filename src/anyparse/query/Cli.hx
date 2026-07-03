@@ -742,10 +742,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('refs', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> =
-			limitEntries(
-				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = limitEntries(
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		);
 		if (o.json) {
 			sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource));
 		} else {
@@ -2576,10 +2575,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('uses', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> =
-			limitEntries(
-				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> = limitEntries(
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		);
 		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat));
 		return emptyExit(allEntries.length == 0);
 	}
@@ -2649,10 +2647,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('meta', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> =
-			limitEntries(
-				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> = limitEntries(
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		);
 		if (o.json) {
 			sysPrint(Json.renderMeta(shown));
 		} else {
@@ -3004,12 +3001,10 @@ final class Cli {
 	 */
 	private static function countRegexHits(re: EReg, s: String): Int {
 		var n: Int = 0;
-		re.map(
-			s, m -> {
-				n++;
-				m.matched(0);
-			}
-		);
+		re.map(s, m -> {
+			n++;
+			m.matched(0);
+		});
 		return n;
 	}
 
@@ -3288,10 +3283,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('lit', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
-			limitEntries(
-				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = limitEntries(
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		);
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
 		return emptyExit(allEntries.length == 0);
 	}
@@ -3415,10 +3409,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('cases', limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> =
-			limitEntries(
-				allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> = limitEntries(
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		);
 		for (entry in shown) sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
 		return emptyExit(allEntries.length == 0);
 	}
@@ -4056,11 +4049,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.matches.length;
 		final cappedLimit: Int = effectiveAutoLimit('search', o.limit, totalHits);
-		final shown: Array<{ file: String, source: String, matches: Array<Match> }> =
-			limitEntries(
-				allEntries, cappedLimit, e -> e.matches.length,
-				(e, k) -> { file: e.file, source: e.source, matches: e.matches.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = limitEntries(
+			allEntries, cappedLimit, e -> e.matches.length, (e, k) -> { file: e.file, source: e.source, matches: e.matches.slice(0, k) }
+		);
 		renderSearchResults(shown, o.json, o.flat);
 		return emptyExit(allEntries.length == 0);
 	}
@@ -9850,8 +9841,9 @@ final class Cli {
 			}
 			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
 			final filtered: Array<MetaHit> = raw.filter(
-				h -> (filter.annotation == null || h.annotation == filter.annotation) && argMatches(h.args, filter.argContains)
-				&& argFilterMatches(h.args, filter.argFilter) && (filter.onKind == null || h.declKind == filter.onKind)
+				h ->
+					(filter.annotation == null || h.annotation == filter.annotation) && argMatches(h.args, filter.argContains)
+					&& argFilterMatches(h.args, filter.argFilter) && (filter.onKind == null || h.declKind == filter.onKind)
 			);
 			if (filtered.length == 0) continue;
 			allEntries.push({ file: path, source: source, hits: filtered });
@@ -10529,18 +10521,16 @@ final class Cli {
 				// (`address`) — directly usable as a mutation-op --select argument.
 				// The caching plugin parses each file once across all findings.
 				final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin('haxe'));
-				sysPrint(LintFormat.json(
-					ordered, sourceOf, v -> {
-						final span: Null<Span> = v.span;
-						final source: Null<String> = sourceOf[v.file];
-						if (span == null || source == null) return null;
-						final tree: Null<QueryNode> =
-							try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-						if (tree == null) return null;
-						final node: Null<QueryNode> = Engine.at(tree, span.from);
-						return node == null ? null : Address.describe(tree, source, node, plugin.selectKindEquivalence());
-					}
-				));
+				sysPrint(LintFormat.json(ordered, sourceOf, v -> {
+					final span: Null<Span> = v.span;
+					final source: Null<String> = sourceOf[v.file];
+					if (span == null || source == null) return null;
+					final tree: Null<QueryNode> =
+						try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+					if (tree == null) return null;
+					final node: Null<QueryNode> = Engine.at(tree, span.from);
+					return node == null ? null : Address.describe(tree, source, node, plugin.selectKindEquivalence());
+				}));
 			case 'checkstyle':
 				sysPrint(LintFormat.checkstyle(ordered, sourceOf));
 			case _:
@@ -12328,10 +12318,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (e in litEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('mentions', limit, totalHits);
-		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> =
-			limitEntries(
-				litEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
-			);
+		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = limitEntries(
+			litEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+		);
 		sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));
 		return true;

@@ -226,13 +226,10 @@ final class RefactorSupport {
 	 */
 	public static function resolveCursorNode(tree: QueryNode, cursor: Int, source: String): Null<QueryNode> {
 		final tokenHit: Null<QueryNode> = innermostWhere(tree, cursor, node -> identTokenContains(node, cursor, source));
-		return tokenHit
-			?? innermostWhere(
-				tree, cursor, node -> {
-					final span: Null<Span> = node.span;
-					return span != null && span.from == cursor && isRenameableName(node.name);
-				}
-			);
+		return tokenHit ?? innermostWhere(tree, cursor, node -> {
+			final span: Null<Span> = node.span;
+			return span != null && span.from == cursor && isRenameableName(node.name);
+		});
 	}
 
 	/**
@@ -379,9 +376,8 @@ final class RefactorSupport {
 			final m: Null<TypeDeclMatch> = typeDeclOf(node);
 			if (m != null) {
 				final span: Span = m.fullSpan;
-				if (cursor >= span.from && cursor < span.to && (
-					identTokenContains(m.nameNode, cursor, source) || span.from == cursor
-				)) best = m;
+				if (cursor >= span.from && cursor < span.to && (identTokenContains(m.nameNode, cursor, source) || span.from == cursor))
+					best = m;
 			}
 			for (c in node.children) walk(c);
 		}

@@ -126,8 +126,9 @@ final class Naming implements Check {
 	/** The first rule in `policy` applicable to `decl` (category + modifier filters), or null. */
 	private static function applicableRule(decl: NamedDecl, policy: NamingPolicy): Null<NamingRule> {
 		return policy.find(
-			rule -> rule.category == decl.category && rule.requireMods.foreach(m -> decl.mods.contains(m))
-			&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
+			rule ->
+				rule.category == decl.category && rule.requireMods.foreach(m -> decl.mods.contains(m))
+				&& !rule.forbidMods.exists(m -> decl.mods.contains(m))
 		);
 	}
 

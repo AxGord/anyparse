@@ -686,45 +686,39 @@ final class CollapsePass {
 	/** True iff `d`'s subtree contains any `CollapseAddProbe` marker. */
 	private static function hasAddCandidate(d: Doc): Bool {
 		var found: Bool = false;
-		walk(
-			d, node -> {
-				if (!found)
-					switch node {
-						case CollapseAddProbe(_): found = true;
-						case _:
-					}
-			}
-		);
+		walk(d, node -> {
+			if (!found)
+				switch node {
+					case CollapseAddProbe(_): found = true;
+					case _:
+				}
+		});
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseBoolProbe` marker. */
 	private static function hasBoolCandidate(d: Doc): Bool {
 		var found: Bool = false;
-		walk(
-			d, node -> {
-				if (!found)
-					switch node {
-						case CollapseBoolProbe(_): found = true;
-						case _:
-					}
-			}
-		);
+		walk(d, node -> {
+			if (!found)
+				switch node {
+					case CollapseBoolProbe(_): found = true;
+					case _:
+				}
+		});
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any `CollapseChainProbe` marker. */
 	private static function hasChainCandidate(d: Doc): Bool {
 		var found: Bool = false;
-		walk(
-			d, node -> {
-				if (!found)
-					switch node {
-						case CollapseChainProbe(_): found = true;
-						case _:
-					}
-			}
-		);
+		walk(d, node -> {
+			if (!found)
+				switch node {
+					case CollapseChainProbe(_): found = true;
+					case _:
+				}
+		});
 		return found;
 	}
 
@@ -831,39 +825,33 @@ final class CollapsePass {
 	/** True iff `d`'s subtree contains a candidate paren that opens. */
 	private static function subtreeOpens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Bool {
 		var found: Bool = false;
-		walk(
-			d, node -> {
-				if (!found && isCandidate(node) && opens(node, decisions))
-					found = true;
-			}
-		);
+		walk(d, node -> {
+			if (!found && isCandidate(node) && opens(node, decisions))
+				found = true;
+		});
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains any collapse-candidate paren. */
 	private static function hasCandidate(d: Doc): Bool {
 		var found: Bool = false;
-		walk(
-			d, node -> {
-				if (!found && isCandidate(node))
-					found = true;
-			}
-		);
+		walk(d, node -> {
+			if (!found && isCandidate(node))
+				found = true;
+		});
 		return found;
 	}
 
 	/** True iff `d`'s subtree contains a `CollapseProbe` region. */
 	private static function containsCollapseProbe(d: Doc): Bool {
 		var found: Bool = false;
-		walk(
-			d, node -> {
-				if (!found)
-					switch node {
-						case CollapseProbe(_): found = true;
-						case _:
-					}
-			}
-		);
+		walk(d, node -> {
+			if (!found)
+				switch node {
+					case CollapseProbe(_): found = true;
+					case _:
+				}
+		});
 		return found;
 	}
 

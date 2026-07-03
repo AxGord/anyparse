@@ -144,7 +144,8 @@ final class UnusedParameter implements Check {
 		if (opaqueKinds.contains(node.kind)) return;
 		if (functionKinds.contains(node.kind) && parent != null && !isContractCandidate(parent, supertypeClauseKinds) && !hasNoBody(
 			node, noBodyKind
-		)) out.push({ fn: node, parent: parent });
+		))
+			out.push({ fn: node, parent: parent });
 		for (c in node.children) walk(out, c, node, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
 	}
 
@@ -225,7 +226,8 @@ final class UnusedParameter implements Check {
 			final sspan: Null<Span> = sib.span;
 			if (
 				visibilityKinds.contains(sib.kind) && sspan != null && StringTools.trim(source.substring(sspan.from, sspan.to)) == 'public'
-			) return true;
+			)
+				return true;
 			i--;
 		}
 		return false;

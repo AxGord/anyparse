@@ -36,7 +36,7 @@ final class HxExprIdentGuardSliceTest extends Test {
 	public function testControlFlowKeywordRejectedAsIdentAtom(): Void {
 		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(if); }'), ParseError);
 		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(else); }'), ParseError);
-		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(break); }'), ParseError);
+		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(case); }'), ParseError);
 	}
 
 	public function testKeywordPrefixedIdentsStillMatch(): Void {
@@ -46,6 +46,11 @@ final class HxExprIdentGuardSliceTest extends Test {
 
 	public function testBreakContinueParseAsDedicatedStmts(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\twhile (true) {\n\t\t\tbreak;\n\t\t\tcontinue;\n\t\t}\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	public function testBreakContinueStillLegalAsExpressionAtoms(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal source:String = try readSource(path) catch (_:Exception) continue;\n\t\tfinal other:String = try readSource(path) catch (_:Exception) break;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

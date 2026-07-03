@@ -254,7 +254,8 @@ final class MoveSymbol {
 			if (
 				name != null && span != null && typeRefShape.typeRefKinds.contains(node.kind) && span.from >= declSpan.from
 				&& span.to <= declSpan.to && name != typeName && !depNames.contains(name)
-			) depNames.push(name);
+			)
+				depNames.push(name);
 			for (c in node.children) collectDeps(c);
 		}
 		collectDeps(typeRefTree);
@@ -263,9 +264,9 @@ final class MoveSymbol {
 		for (dep in depNames) {
 			// The source's explicit import that provides `dep` (path's last
 			// segment is `dep`).
-			final provider: Null<ImportInfo> = cursorInfo.imports.find(imp -> (
-				imp.kind == ImportKind.Import || imp.kind == ImportKind.Using
-			) && lastSegment(imp.raw) == dep);
+			final provider: Null<ImportInfo> = cursorInfo.imports.find(
+				imp -> (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using) && lastSegment(imp.raw) == dep
+			);
 			if (provider == null) continue;
 			// Already present in the destination → no carry.
 			final already: Bool = destInfo.imports.exists(imp -> imp.kind == provider.kind && imp.raw == provider.raw);
@@ -324,7 +325,8 @@ final class MoveSymbol {
 			final span: Null<Span> = node.span;
 			if (!used && node.name == typeName && span != null && typeRefShape.typeRefKinds.contains(node.kind) && (
 				span.from < cut.from || span.from >= cut.to
-			)) used = true;
+			))
+				used = true;
 			for (c in node.children) walk(c);
 		}
 		walk(typeRefTree);

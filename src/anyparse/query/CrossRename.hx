@@ -235,9 +235,8 @@ final class CrossRename {
 			if (decl != null && decl.name == typeName) {
 				final nameSpan: Null<Span> = decl.nameNode.span;
 				if (nameSpan != null) add(RefactorSupport.identTokenOffset(source, nameSpan, typeName));
-			} else if (span != null && (
-				node.kind == 'ImportDecl' || node.kind == 'UsingDecl'
-			)) add(importSegmentOffset(source, span, node.name, typeName));
+			} else if (span != null && (node.kind == 'ImportDecl' || node.kind == 'UsingDecl'))
+				add(importSegmentOffset(source, span, node.name, typeName));
 			final children: Array<QueryNode> = node.children;
 			if (node.kind == 'FieldAccess' && children.length > 0) {
 				final recv: QueryNode = children[0];

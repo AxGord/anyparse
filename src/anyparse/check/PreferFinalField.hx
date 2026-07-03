@@ -154,7 +154,8 @@ final class PreferFinalField implements Check {
 				i -= 2;
 				while (i >= 1 && !(
 					StringTools.fastCodeAt(source, i - 1) == '/'.code && StringTools.fastCodeAt(source, i) == '*'.code
-				)) i--;
+				))
+					i--;
 				i -= 2;
 				continue;
 			}
@@ -203,7 +204,8 @@ final class PreferFinalField implements Check {
 					i += 2;
 					while (i + 1 < n && !(
 						StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code
-					)) i++;
+					))
+						i++;
 					i += 2;
 					continue;
 				}

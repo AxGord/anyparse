@@ -406,7 +406,8 @@ class WrapList {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
-			)) return rule.mode;
+			))
+				return rule.mode;
 		}
 		return rules.defaultMode;
 	}
@@ -465,7 +466,8 @@ class WrapList {
 		for (rule in rules.rules) {
 			if (matchesWithLineLengthState(
 				rule, itemCount, maxItemLen, totalItemLen, exceedsMaxLineLength, hasMultilineItems, lineLengthFires
-			)) return { mode: rule.mode, location: rule.location ?? fallback };
+			))
+				return { mode: rule.mode, location: rule.location ?? fallback };
 		}
 		return { mode: rules.defaultMode, location: fallback };
 	}

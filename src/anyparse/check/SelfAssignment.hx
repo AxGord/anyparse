@@ -79,9 +79,9 @@ final class SelfAssignment implements Check {
 			// only when a same-named local declaration encloses it (scope containment)
 			// AND lexically precedes it (`declEnd <= use`): before its declaration the
 			// name still resolves to the field, so an earlier `x = x` may force `set_x`.
-			for (c in candidates) if (
-				locals.exists(l -> l.name == c.name && l.scope.from <= c.span.from && c.span.to <= l.scope.to && l.declEnd <= c.span.from)
-			) violations.push({
+			for (c in candidates) if (locals.exists(
+				l -> l.name == c.name && l.scope.from <= c.span.from && c.span.to <= l.scope.to && l.declEnd <= c.span.from
+			)) violations.push({
 				file: entry.file,
 				span: c.span,
 				rule: 'self-assignment',
