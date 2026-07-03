@@ -682,6 +682,15 @@ typedef RefShape = {
 	@:optional var localFunctionKinds: Array<String>;
 
 	/**
+	 * Lambda / anonymous-function kinds — expression-position function values
+	 * (`x -> …`, `(a, b) -> …`, `function(…) { … }`). The call-graph layer
+	 * registers each as an anonymous function node (a `Contains` edge from its
+	 * enclosing function) and a `Ref` edge when passed as a call argument.
+	 * Unset → lambdas are invisible to the call graph.
+	 */
+	@:optional var lambdaKinds: Array<String>;
+
+	/**
 	 * Object-literal field kind — a numeric literal that is the DIRECT value of such
 	 * a field (`{ value: 30 }`) is declarative DATA, not logic, so `magic-number`
 	 * exempts it. A computed field value (`{ value: 30 * k }`) keeps the literal

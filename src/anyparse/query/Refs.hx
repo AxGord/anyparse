@@ -60,90 +60,7 @@ final class Refs {
 	 * per `shape`. Hits are returned in pre-order traversal.
 	 */
 	public static function find(name: String, tree: QueryNode, shape: RefShape): Array<RefHit> {
-		final out: Array<RefHit> = [];
-		final scopes: ScopeStack = new ScopeStack();
-		walk(name, tree, shape, scopes, out);
-		return out;
-	}
-
-	private static function walk(
-		target: String, node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Array<RefHit>, isWriteTarget: Bool = false,
-		macroEmit: Bool = false
-	): Void {
-		// Inside a macro-reification subtree (`opaqueKinds`, e.g. `macro { … }`) a
-		// plain identifier is a runtime emit spliced into generated code — NOT a
-		// reference to the enclosing scope — and a reified `var` is not a real
-		// binding. While in this `macroEmit` context suppress scope handling and
-		// ref emission; only a macro interpolation (`interpolationKinds`: `${…}` /
-		// `$v{…}`) re-opens normal resolution for its own subtree, where an
-		// identifier IS a genuine compile-time reference.
-		final isScope: Bool = !macroEmit && shape.scopeKinds.contains(node.kind);
-		if (isScope) {
-			final frame: ScopeFrame = new ScopeFrame(node);
-			collectDecls(target, node, shape, frame);
-			// Self-scoped decl (e.g. for-loop iterator): the scope node's
-			// own name binds INTO the frame it opens, visible only to
-			// reads inside the construct — opposite of a declHost name,
-			// which binds into the enclosing frame for siblings.
-			final selfSpan: Null<Span> = node.span;
-			if (selfSpan != null && node.name == target && shape.selfScopeDeclKinds.contains(node.kind)) frame.declare(target, selfSpan);
-			scopes.push(frame);
-		}
-		if (!macroEmit) {
-			final nname: Null<String> = node.name;
-			if (nname == target) {
-				final span: Null<Span> = node.span;
-				if (span != null) {
-					final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
-					if (kind != null) {
-						final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(target);
-						out.push(new RefHit(kind, target, span, bindingSpan));
-					}
-				}
-			}
-		}
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final interpolationKinds: Array<String> = shape.interpolationKinds ?? [];
-		// Enter macro-emit on a reification node; an interpolation node clears it
-		// for its subtree; otherwise inherit the parent's context.
-		final childMacroEmit: Bool = opaqueKinds.contains(node.kind) || (!interpolationKinds.contains(node.kind) && macroEmit);
-		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
-		final children: Array<QueryNode> = node.children;
-		for (i in 0...children.length) {
-			final childIsWriteTarget: Bool = isWriteParent && i == 0;
-			walk(target, children[i], shape, scopes, out, childIsWriteTarget, childMacroEmit);
-		}
-		if (isScope) scopes.pop();
-	}
-
-	/**
-	 * Pre-walk `scopeNode`'s descendants and record every matching
-	 * decl-host into `frame`. The walk stops at inner scope boundaries
-	 * so a same-named decl in a nested scope does NOT leak into the
-	 * outer frame. Starts from `scopeNode.children` — the scope node
-	 * itself is the binder of its own name (e.g. `FnMember.name`),
-	 * which belongs in the ENCLOSING scope, not in its own frame.
-	 */
-	private static function collectDecls(target: String, scopeNode: QueryNode, shape: RefShape, frame: ScopeFrame): Void {
-		for (c in scopeNode.children) collectInto(target, c, shape, frame);
-	}
-
-	private static function collectInto(target: String, node: QueryNode, shape: RefShape, frame: ScopeFrame): Void {
-		if (shape.scopeKinds.contains(node.kind)) {
-			// Decl on the inner scope-introducer itself (its own name slot)
-			// still belongs to THIS frame — the scope-node names itself in
-			// the enclosing scope, then opens a fresh scope for its body.
-			if (node.name == target && shape.declHostKinds.contains(node.kind)) {
-				final span: Null<Span> = node.span;
-				if (span != null) frame.declare(target, span);
-			}
-			return;
-		}
-		if (node.name == target && shape.declHostKinds.contains(node.kind)) {
-			final span: Null<Span> = node.span;
-			if (span != null) frame.declare(target, span);
-		}
-		for (c in node.children) collectInto(target, c, shape, frame);
+		return findMulti([name], tree, shape)[name] ?? [];
 	}
 
 	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
@@ -155,6 +72,89 @@ final class Refs {
 			: shape.selfScopeDeclKinds.contains(kind)
 				? RefKind.Decl
 				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : null;
+	}
+
+	/**
+	 * Multi-name variant of `find` — ONE tree walk resolving every name in
+	 * `names` simultaneously (duplicates tolerated). The call-graph layer needs
+	 * bindings for dozens of names per file; per-name `find` walks made that
+	 * quadratic. The result map is pre-seeded, so every requested name has an
+	 * entry and `exists()` doubles as the membership test during the walk.
+	 */
+	public static function findMulti(names: Array<String>, tree: QueryNode, shape: RefShape): Map<String, Array<RefHit>> {
+		final out: Map<String, Array<RefHit>> = [];
+		for (n in names) if (!out.exists(n)) out[n] = [];
+		if (names.length == 0) return out;
+		final scopes: ScopeStack = new ScopeStack();
+		walkMulti(tree, shape, scopes, out, false, false);
+		return out;
+	}
+
+	private static function walkMulti(
+		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, isWriteTarget: Bool, macroEmit: Bool
+	): Void {
+		// Inside a macro-reification subtree (`opaqueKinds`, e.g. `macro { … }`) a
+		// plain identifier is a runtime emit spliced into generated code — NOT a
+		// reference to the enclosing scope — and a reified `var` is not a real
+		// binding. While in this `macroEmit` context suppress scope handling and
+		// ref emission; only a macro interpolation (`interpolationKinds`: `${…}` /
+		// `$v{…}`) re-opens normal resolution for its own subtree, where an
+		// identifier IS a genuine compile-time reference.
+		final isScope: Bool = !macroEmit && shape.scopeKinds.contains(node.kind);
+		if (isScope) {
+			final frame: ScopeFrame = new ScopeFrame(node);
+			collectDeclsMulti(node, shape, frame, out);
+			final selfSpan: Null<Span> = node.span;
+			final selfName: Null<String> = node.name;
+			if (selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
+				frame.declare(selfName, selfSpan);
+			scopes.push(frame);
+		}
+		if (!macroEmit) {
+			final nname: Null<String> = node.name;
+			if (nname != null) {
+				final hits: Null<Array<RefHit>> = out[nname];
+				if (hits != null) {
+					final span: Null<Span> = node.span;
+					if (span != null) {
+						final kind: Null<RefKind> = classify(node.kind, shape, isWriteTarget);
+						if (kind != null) {
+							final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(nname);
+							hits.push(new RefHit(kind, nname, span, bindingSpan));
+						}
+					}
+				}
+			}
+		}
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final interpolationKinds: Array<String> = shape.interpolationKinds ?? [];
+		final childMacroEmit: Bool = opaqueKinds.contains(node.kind) || (!interpolationKinds.contains(node.kind) && macroEmit);
+		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
+		final children: Array<QueryNode> = node.children;
+		for (i in 0...children.length) walkMulti(children[i], shape, scopes, out, isWriteParent && i == 0, childMacroEmit);
+		if (isScope) scopes.pop();
+	}
+
+	private static function collectDeclsMulti(
+		scopeNode: QueryNode, shape: RefShape, frame: ScopeFrame, out: Map<String, Array<RefHit>>
+	): Void {
+		for (c in scopeNode.children) collectIntoMulti(c, shape, frame, out);
+	}
+
+	private static function collectIntoMulti(node: QueryNode, shape: RefShape, frame: ScopeFrame, out: Map<String, Array<RefHit>>): Void {
+		final name: Null<String> = node.name;
+		if (shape.scopeKinds.contains(node.kind)) {
+			if (name != null && out.exists(name) && shape.declHostKinds.contains(node.kind)) {
+				final span: Null<Span> = node.span;
+				if (span != null) frame.declare(name, span);
+			}
+			return;
+		}
+		if (name != null && out.exists(name) && shape.declHostKinds.contains(node.kind)) {
+			final span: Null<Span> = node.span;
+			if (span != null) frame.declare(name, span);
+		}
+		for (c in node.children) collectIntoMulti(c, shape, frame, out);
 	}
 
 }

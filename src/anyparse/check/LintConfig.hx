@@ -108,4 +108,17 @@ final class LintConfig {
 		return { enabled: enabled, severity: severity, props: props };
 	}
 
+	/**
+	 * A rule-specific list-of-strings option (e.g. `thread-safety` `sinks`),
+	 * or null when unset; a non-array value or non-string elements are dropped.
+	 */
+	public function stringListOption(id: String, key: String): Null<Array<String>> {
+		final rc: Null<RuleConfig> = _rules[id];
+		if (rc == null) return null;
+		final v: Null<Dynamic> = rc.props.get(key);
+		if (v == null || !(v is Array)) return null;
+		final raw: Array<Dynamic> = v;
+		return [for (e in raw) if (e is String) (e: String)];
+	}
+
 }

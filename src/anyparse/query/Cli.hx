@@ -52,6 +52,9 @@ import anyparse.query.NewFile.NewFileSpec;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.format.LintFormat;
 import anyparse.check.LintConfig;
+import anyparse.query.CallGraph.EdgeKind;
+import anyparse.query.CallGraph.FnNode;
+import anyparse.query.CallGraph.CallEdge;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -551,6 +554,12 @@ final class Cli {
 				return runMentions(rest);
 			case 'cases':
 				return runCases(rest);
+			case 'callees':
+				return runCallees(rest);
+			case 'callers':
+				return runCallers(rest);
+			case 'reach':
+				return runReach(rest);
 			case 'gates':
 				return runGates(rest);
 			case 'diff':
@@ -6741,6 +6750,9 @@ final class Cli {
 		sysPrint('  lit           Leaf-name probe (string literals, identifiers — prose-in-code)\n');
 		sysPrint('  mentions      Every named-leaf occurrence (uses + refs + lit --any-kind --exact)\n');
 		sysPrint('  cases         Precise case-pattern lookup (case Ctor: / case Ctor(_): / case A | Ctor:)\n');
+		sysPrint('  callees       Transitive call tree FROM a function (approximate call graph)\n');
+		sysPrint('  callers       Transitive call tree INTO a function (approximate call graph)\n');
+		sysPrint('  reach         Shortest call path(s) --from A --to B over the call graph\n');
 		sysPrint('  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names\n');
 		sysPrint('  diff          Structural AST diff between two files\n');
 		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
@@ -12694,6 +12706,259 @@ final class Cli {
 		if (s.length == 0) return false;
 		final c: Int = StringTools.fastCodeAt(s, 0);
 		return c >= '0'.code && c <= '9'.code;
+	}
+
+	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
+
+	private static inline final DEFAULT_REACH_PATHS: Int = 10;
+
+	/**
+	 * Shared scope→graph builder for the `callees` / `callers` / `reach`
+	 * subcommands: expands inputs, reads sources (kept for `line:col`
+	 * rendering), warms the parse cache with progress feedback, and builds
+	 * the `CallGraph`. Null on an empty scope (message already printed).
+	 */
+	private static function buildCallGraphScope(
+		cmd: String, inputSpecs: Array<String>, lang: String
+	): Null<{ graph: CallGraph, sources: Map<String, String> }> {
+		final cached: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
+		final paths: Array<String> = expanded.paths;
+		if (paths.length == 0) {
+			stderr('apq $cmd: no input files matched ${inputSpecs.join(' ')}\n');
+			return null;
+		}
+		final files: Array<{ file: String, source: String }> = [];
+		final sources: Map<String, String> = [];
+		var scanned: Int = 0;
+		for (path in paths) {
+			final source: String = readSourceForParse(path);
+			files.push({ file: path, source: source });
+			sources[path] = source;
+			try cached.parseFile(source) catch (exception: ParseError) {} catch (exception: Exception) {}
+			streamProgress(cmd, ++scanned, paths.length, expanded.singleFile);
+		}
+		final graph: CallGraph = CallGraph.build(files, cached);
+		if (graph.skippedFiles.length > 0) {
+			final shown: Array<String> = graph.skippedFiles.slice(0, SKIP_PATHS_SHOWN);
+			stderr('apq $cmd: WARNING ${graph.skippedFiles.length} file(s) failed to parse and are invisible to the graph:\n');
+			for (p in shown) stderr('  $p\n');
+			if (graph.skippedFiles.length > shown.length) stderr('  ... +${graph.skippedFiles.length - shown.length} more\n');
+			if (expanded.singleFile) return null;
+		}
+		return { graph: graph, sources: sources };
+	}
+
+	/** Parse a `--kinds call,ref,new,virtual,contains` value. Null on an unknown kind (message printed). */
+	private static function parseEdgeKinds(cmd: String, value: String): Null<Array<EdgeKind>> {
+		final result: Array<EdgeKind> = [];
+		for (part in value.split(',')) {
+			final token: String = StringTools.trim(part);
+			final kind: Null<EdgeKind> = switch token {
+				case 'call': Call;
+				case 'ref': Ref;
+				case 'new': New;
+				case 'virtual': Virtual;
+				case 'contains': Contains;
+				case _: null;
+			};
+			if (kind == null) {
+				stderr('apq $cmd: unknown edge kind "$token" (call, ref, new, virtual, contains)\n');
+				return null;
+			}
+			result.push(kind);
+		}
+		return result;
+	}
+
+	private static function runCallees(args: Array<String>): Int {
+		return runCallChains('callees', true, args);
+	}
+
+	private static function runCallers(args: Array<String>): Int {
+		return runCallChains('callers', false, args);
+	}
+
+	private static function runCallChains(cmd: String, outward: Bool, args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var depth: Int = 1;
+		var limit: Int = -1;
+		var kinds: Null<Array<EdgeKind>> = null;
+		var target: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--depth':
+					final raw: String = expectValue(args, ++i, '--depth');
+					final parsedDepth: Null<Int> = Std.parseInt(raw);
+					if (parsedDepth == null || parsedDepth < 1) {
+						stderr('apq $cmd: --depth expects a positive integer\n');
+						return EXIT_USAGE;
+					}
+					depth = parsedDepth;
+				case '--limit':
+					try limit = parseLimit(args, ++i) catch (exception: Exception) {
+						stderr('${exception.message}\n');
+						return EXIT_USAGE;
+					}
+				case '--kinds':
+					kinds = parseEdgeKinds(cmd, expectValue(args, ++i, '--kinds'));
+					if (kinds == null)
+						return EXIT_USAGE;
+				case '-h', '--help':
+					printCallChainsUsage(cmd, outward);
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq $cmd: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (target == null)
+						target = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (target == null) {
+			stderr('apq $cmd: missing <Type.method|method> argument\n');
+			printCallChainsUsage(cmd, outward);
+			return EXIT_USAGE;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq $cmd: missing <file-or-dir-or-glob> argument\n');
+			printCallChainsUsage(cmd, outward);
+			return EXIT_USAGE;
+		}
+		final targetStr: String = target;
+
+		final built: Null<{ graph: CallGraph, sources: Map<String, String> }> = buildCallGraphScope(cmd, inputSpecs, lang);
+		if (built == null) return EXIT_RUNTIME;
+		final graph: CallGraph = built.graph;
+		final sources: Map<String, String> = built.sources;
+		final matches: Array<FnNode> = graph.resolveTarget(targetStr);
+		if (matches.length == 0) {
+			stderr('apq $cmd: no function in scope matches "$targetStr"\n');
+			return emptyExit(true);
+		}
+		// --limit 0 = uncapped; unset = DEFAULT_CHAIN_LINES; the budget is
+		// shared across the multiple matches of a bare-name target
+		var budget: Int = limit == 0 ? 0 : (limit > 0 ? limit : DEFAULT_CHAIN_LINES);
+		for (m in matches) {
+			final rendered: String = CallChains.render(graph, m.id, depth, outward, kinds, f -> sources[f], budget);
+			sysPrint(rendered);
+			if (limit != 0) {
+				budget -= rendered.split('\n').length - 1;
+				if (budget <= 0) break;
+			}
+		}
+		if (graph.unresolved.length > 0)
+			stderr('apq $cmd: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
+		return emptyExit(false);
+	}
+
+	private static function runReach(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var maxPaths: Int = DEFAULT_REACH_PATHS;
+		var kinds: Null<Array<EdgeKind>> = null;
+		var from: Null<String> = null;
+		final toPatterns: Array<String> = [];
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--from':
+					from = expectValue(args, ++i, '--from');
+				case '--to':
+					toPatterns.push(expectValue(args, ++i, '--to'));
+				case '--max-paths':
+					final raw: String = expectValue(args, ++i, '--max-paths');
+					final parsedMax: Null<Int> = Std.parseInt(raw);
+					if (parsedMax == null || parsedMax < 1) {
+						stderr('apq reach: --max-paths expects a positive integer\n');
+						return EXIT_USAGE;
+					}
+					maxPaths = parsedMax;
+				case '--kinds':
+					kinds = parseEdgeKinds('reach', expectValue(args, ++i, '--kinds'));
+					if (kinds == null)
+						return EXIT_USAGE;
+				case '-h', '--help':
+					printReachUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq reach: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (from == null || toPatterns.length == 0) {
+			stderr('apq reach: both --from and --to are required\n');
+			printReachUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq reach: missing <file-or-dir-or-glob> argument\n');
+			printReachUsage();
+			return EXIT_USAGE;
+		}
+		final fromStr: String = from;
+
+		final built: Null<{ graph: CallGraph, sources: Map<String, String> }> = buildCallGraphScope('reach', inputSpecs, lang);
+		if (built == null) return EXIT_RUNTIME;
+		final graph: CallGraph = built.graph;
+		final sources: Map<String, String> = built.sources;
+		final fromIds: Array<String> = graph.matchIds(fromStr);
+		final toIds: Array<String> = [];
+		for (p in toPatterns) for (id in graph.matchIds(p)) if (!toIds.contains(id)) toIds.push(id);
+		if (fromIds.length == 0) {
+			stderr('apq reach: no function in scope matches --from "$fromStr"\n');
+			return emptyExit(true);
+		}
+		if (toIds.length == 0) {
+			stderr('apq reach: no function in scope matches --to ${toPatterns.join(', ')}\n');
+			return emptyExit(true);
+		}
+		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Virtual];
+		final found: Array<Array<CallEdge>> = Reach.paths(graph, fromIds, toIds, maxPaths, effectiveKinds);
+		for (path in found) sysPrint(Reach.render(graph, path, f -> sources[f]) + '\n');
+		if (found.length == 0) stderr('apq reach: no path found (${fromIds.length} from-node(s), ${toIds.length} to-node(s))\n');
+		if (graph.unresolved.length > 0)
+			stderr('apq reach: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
+		return emptyExit(found.length == 0);
+	}
+
+	private static function printCallChainsUsage(cmd: String, outward: Bool): Void {
+		final what: String = outward ? 'functions CALLED BY the target (out-edges)' : 'functions CALLING the target (in-edges)';
+		sysPrint('Usage: apq $cmd <Type.method|method> <file-or-dir-or-glob>... [options]\n\n');
+		sysPrint('Transitive call tree: $what.\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --depth <n>    Levels to expand (default 1)\n');
+		sysPrint('  --kinds <k,..> Edge kinds: call,ref,new,virtual,contains (default all)\n');
+		sysPrint('  --limit <n>    Max total tree lines across matches (default $DEFAULT_CHAIN_LINES; 0 = uncapped)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+	private static function printReachUsage(): Void {
+		sysPrint('Usage: apq reach --from <Type.method> --to <Type.method|Type.*> <file-or-dir-or-glob>... [options]\n\n');
+		sysPrint('Shortest call path(s) from --from to each --to (BFS; one path per pair).\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --to <target>     Repeatable; accepts Type.method, bare method, Type.*\n');
+		sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
+		sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual)\n');
+		sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
 	}
 
 }

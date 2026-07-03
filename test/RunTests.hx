@@ -340,6 +340,8 @@ import unit.HxExprIdentGuardSliceTest;
 import unit.HxThinArrowTrailingLambdaSliceTest;
 import unit.HxCondWrapFitLineSliceTest;
 import unit.HxCondSpliceFidelitySliceTest;
+import unit.CallGraphTest;
+import unit.ThreadSafetyCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -715,6 +717,8 @@ class RunTests {
 		addCase(new ApqDxTier2CliTest());
 		addCase(new SuppressionSliceTest());
 		addCase(new ApqExitOnEmptyCliTest());
+		addCase(new CallGraphTest());
+		addCase(new ThreadSafetyCheckTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

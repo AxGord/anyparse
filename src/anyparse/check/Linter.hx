@@ -90,7 +90,8 @@ final class Linter {
 			new DeadSafeNav(),
 			new AlwaysNullComparison(),
 			new NullDereference(),
-			new DeadStore()
+			new DeadStore(),
+			new ThreadSafety()
 		];
 	}
 
