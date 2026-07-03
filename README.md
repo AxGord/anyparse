@@ -35,7 +35,7 @@ What is **not** done yet, stated plainly:
 - The **query/refactoring CLI is Haxe-only** today. The grammar platform handles
   multiple formats (JSON / Haxe / `ar` binary / S-expr), but `hxq`/`apq` resolve only
   the Haxe grammar plugin — JSON-aware refactoring is not wired up.
-- The Haxe grammar covers the language broadly but not exhaustively (75 corpus fixtures
+- The Haxe grammar covers the language broadly but not exhaustively (59 corpus fixtures
   still fail to parse).
 - The generic `buildTransform` walks plain typed ASTs; a *format-preserving* transform
   (carrying comments/spans through) is a later slice.
