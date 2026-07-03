@@ -955,6 +955,17 @@ typedef RefShape = {
 	 * numeric use. Optional; unset removes that carve-out.
 	 */
 	@:optional var stringLiteralKinds: Array<String>;
+
+	/**
+	 * Nominal type names whose index-access `x[k]` yields a nullable value (Haxe's
+	 * `Map` family — `Map` / `StringMap` / `IntMap` / `ObjectMap` / `EnumValueMap`
+	 * / `WeakMap`, all returning `Null<V>`) — as opposed to `Array` / `String`,
+	 * whose index yields a non-null `T`. The `possible-null-dereference` check
+	 * flags a deref of an index-access whose receiver's declared type (outer
+	 * nominal, via `TypeResolver.identTypeName`) is one of these. Optional; unset
+	 * makes the check a no-op.
+	 */
+	@:optional var nullableIndexTypeNames: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

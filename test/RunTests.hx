@@ -343,6 +343,7 @@ import unit.HxCondSpliceFidelitySliceTest;
 import unit.CallGraphTest;
 import unit.ThreadSafetyCheckTest;
 import unit.UncheckedNullableTest;
+import unit.PossibleNullDereferenceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -635,6 +636,7 @@ class RunTests {
 		addCase(new PreferReadOnlyFieldCheckTest());
 		addCase(new IdenticalOperandsCheckTest());
 		addCase(new UncheckedNullableTest());
+		addCase(new PossibleNullDereferenceTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
