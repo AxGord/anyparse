@@ -45,6 +45,57 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m.get(k); u.bar(); } }').length);
 	}
 
+	public function testCrossFileInstanceReturnFlagged(): Void {
+		Assert.equals(
+			1, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
+			]).length
+		);
+	}
+
+	public function testCrossFileStaticReturnFlagged(): Void {
+		Assert.equals(
+			1, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public static function make():Null<Foo> return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function g() { var u = Helper.make(); u.name; } }' }
+			]).length
+		);
+	}
+
+	public function testCrossFileNonNullReturnNotFlagged(): Void {
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.plain(); u.name; } }' }
+			]).length
+		);
+	}
+
+	public function testCrossFileAmbiguousReturnNotFlagged(): Void {
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'A.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
+				{ file: 'B.hx', source: 'class Helper { public function findUser(s:String):Foo return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { var u = h.findUser(k); u.name; } }' }
+			]).length
+		);
+	}
+
+	public function testInferredLocalNotMisresolvedAsType(): Void {
+		// A bound local whose type is inferred (unannotated `var Box = new Safe()`) must NOT be
+		// reinterpreted as a same-named indexed class — the static-fallback collision (R1).
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'Box.hx', source: 'class Box { public function get():Null<Foo> return null; }' },
+				{
+					file: 'Main.hx',
+					source: 'class Safe { public function get():Foo return null; } class Main { function run() { var Box = new Safe(); var v = Box.get(); v.name; } }'
+				}
+			]).length
+		);
+	}
+
 	public function testSwitchNullCaseThenWildcardNotFlagged(): Void {
 		Assert.equals(
 			0,
@@ -64,6 +115,10 @@ class UnguardedNullableDerefTest extends Test {
 			0,
 			violations('class C { function f(m:Map<String,Foo>, x:Int) { var u = m[k]; switch (x) { case _ if (u != null): u.foo; } } }').length
 		);
+	}
+
+	public function testNullAssertionNarrowsNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.notNull(u); u.foo; } }').length);
 	}
 
 	public function testSwitchNoNullCaseFlagged(): Void {
@@ -171,6 +226,10 @@ class UnguardedNullableDerefTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function violationsFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new UnguardedNullableDeref().run(files, new HaxeQueryPlugin());
 	}
 
 }

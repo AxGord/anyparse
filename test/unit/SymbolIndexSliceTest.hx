@@ -77,6 +77,35 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * `returnNominalOf` resolves a member's return-type outer nominal (`Null<T>` → `Null`,
+	 * a plain return → its own nominal) and returns null for an unknown type / member.
+	 */
+	public function testReturnNominalOfResolves(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{
+				file: 'src/H.hx',
+				source: 'class H { public function findUser():Null<Foo> return null; public function plain():Foo return null; }'
+			}
+		], plugin());
+		Assert.equals('Null', index.returnNominalOf('H', 'findUser'));
+		Assert.equals('Foo', index.returnNominalOf('H', 'plain'));
+		Assert.isNull(index.returnNominalOf('H', 'missing'));
+		Assert.isNull(index.returnNominalOf('Missing', 'findUser'));
+	}
+
+	/**
+	 * `returnNominalOf` is conservative under a simple-name collision: two classes named the
+	 * same whose matching members disagree on the return nominal resolve to null (safe miss).
+	 */
+	public function testReturnNominalOfAmbiguous(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/A.hx', source: 'class H { public function findUser():Null<Foo> return null; }' },
+			{ file: 'src/B.hx', source: 'class H { public function findUser():Foo return null; }' }
+		], plugin());
+		Assert.isNull(index.returnNominalOf('H', 'findUser'));
+	}
+
+	/**
 	 * A file with no `package;` declaration has an empty package and a
 	 * module path equal to the file basename (the root package).
 	 */

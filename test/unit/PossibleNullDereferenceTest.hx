@@ -119,6 +119,24 @@ class PossibleNullDereferenceTest extends Test {
 		Assert.equals(0, violations('class C { function f(o:Foo) { o.get(k).bar(); } }').length);
 	}
 
+	public function testCrossFileDirectReturnFlagged(): Void {
+		final vs: Array<Violation> = violationsFiles([
+			{ file: 'Helper.hx', source: 'class Helper { public function findUser(s:String):Null<Foo> return null; }' },
+			{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { h.findUser(k).name; } }' }
+		]);
+		Assert.equals(1, vs.length);
+		Assert.equals('h.findUser() can be null; this dereference has no null check', vs[0].message);
+	}
+
+	public function testCrossFileNonNullDirectNotFlagged(): Void {
+		Assert.equals(
+			0, violationsFiles([
+				{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
+				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { h.plain().name; } }' }
+			]).length
+		);
+	}
+
 	public function testFixReturnsEmpty(): Void {
 		final src: String = 'class C { function f(m:Map<String,Int>) { var a = m[k].foo; } }';
 		final check: PossibleNullDereference = new PossibleNullDereference();
@@ -137,6 +155,10 @@ class PossibleNullDereferenceTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new PossibleNullDereference().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function violationsFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new PossibleNullDereference().run(files, new HaxeQueryPlugin());
 	}
 
 }

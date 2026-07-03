@@ -3,13 +3,12 @@ package anyparse.check;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.TypeResolver;
+import anyparse.query.SymbolIndex;
 
 /**
  * Recognises whether an expression is a **provably-nullable source** — the shared
  * type-driven predicate behind the point-wise `possible-null-dereference` check and
- * the flow-sensitive `unguarded-nullable-deref` seed. Three sources: a `Map`-family
- * index (`m[k]`, a `Null<V>`), an `Array` / `List` `pop` / `shift` call (a `Null<T>`),
- * and a call to a plain-identifier function whose declared return type is `Null<T>`.
+ * the flow-sensitive `unguarded-nullable-deref` seed. Four sources: a `Map`-family index (`m[k]`, a `Null<V>`), an `Array` / `List` / `Map` nullable-returning call (a `Null<T>` / `Null<V>`), a same-file plain-identifier call whose declared return is `Null<T>`, and — given a `SymbolIndex` — a cross-file `Type.static()` / `obj.method()` whose resolved return nominal is `Null` (conservative under a simple-name collision).
  *
  * The receiver type is load-bearing: `m[k]` and `arr[i]` share an AST — only the
  * declared type tells them apart (`TypeResolver.identTypeName` / `identBindingFrom`
@@ -61,12 +60,13 @@ final class NullableSource {
 	 * file's `TypeInfoProvider` maps.
 	 */
 	public static function describe(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, cfg: NullableSourceCfg
+		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, cfg: NullableSourceCfg,
+		?index: SymbolIndex
 	): Null<String> {
 		return
 			mapIndexSource(receiver, root, declaredTypes, cfg) ?? instanceCallSource(receiver, root, declaredTypes, cfg) ?? returnCallSource(
 				receiver, root, returnTypes, cfg
-			);
+			) ?? crossFileReturnCallSource(receiver, root, declaredTypes, cfg, index);
 	}
 
 	/** `'map access T[key]'` when `receiver` is a `nullableIndexTypes` index, else null. */
@@ -116,6 +116,40 @@ final class NullableSource {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(callee, root, cfg.shape);
 		final retType: Null<String> = bindingFrom == null ? null : returnTypes[bindingFrom];
 		return retType != null && cfg.returnMarkers.contains(retType) ? '${calleeName}()' : null;
+	}
+
+	/**
+	 * `'recv.method()'` when `receiver` is a call `recv.method()` whose resolved return OUTER
+	 * nominal is a `returnMarkers` (`Null`) — the CROSS-FILE `Null<T>`-return source. `recv`
+	 * resolves as an instance (its declared type via `TypeResolver.identTypeName`) or, failing
+	 * that, as a static receiver (its own name as a type); `index.returnNominalOf` supplies the
+	 * cross-file member nominal, conservative under a simple-name collision. Null when there is
+	 * no index, `recv` is not a plain identifier, or the lookup is unresolved / ambiguous — so
+	 * `this.f()` and an external-typed receiver are safe misses.
+	 */
+	private static function crossFileReturnCallSource(
+		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg, index: Null<SymbolIndex>
+	): Null<String> {
+		if (
+			index == null || cfg.callKind == null || cfg.fieldAccessKind == null || cfg.returnMarkers.length == 0
+			|| receiver.kind != cfg.callKind || receiver.children.length < 1
+		)
+			return null;
+		final callee: QueryNode = receiver.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != cfg.fieldAccessKind || method == null || callee.children.length != 1) return null;
+		final recv: QueryNode = callee.children[0];
+		final recvName: Null<String> = recv.name;
+		if (recv.kind != cfg.identKind || recvName == null) return null;
+		final idx: SymbolIndex = index;
+		// A BOUND local / param resolves via its DECLARED type only — bail when unannotated, so
+		// an inferred-type variable name is never reinterpreted as a same-named class. An UNBOUND
+		// name is a static / type receiver, looked up by its own name.
+		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
+		final lookupType: Null<String> = bindingFrom == null ? recvName : declaredTypes[bindingFrom];
+		if (lookupType == null) return null;
+		final retNominal: Null<String> = idx.returnNominalOf(lookupType, method);
+		return retNominal != null && cfg.returnMarkers.contains(retNominal) ? '${recvName}.${method}()' : null;
 	}
 
 	/** Split each dotted `Type.method` signature into its parts, dropping malformed entries. */

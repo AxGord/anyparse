@@ -1000,6 +1000,16 @@ typedef RefShape = {
 	 * flags them at `Info` (advisory). Optional; unset excludes nothing.
 	 */
 	@:optional var nullableFlowExcludedCalls: Array<String>;
+
+	/**
+	 * Dotted `Type.method` calls that ASSERT their single plain-identifier argument is
+	 * non-null (they throw otherwise) — e.g. the test framework's `Assert.notNull`. The
+	 * flow engine clears the argument's `MaybeNull` fact after such a call (`maybe`-only —
+	 * the six flow checks are unaffected), so a `var u = f(); Assert.notNull(u); u.field`
+	 * guard is honoured. A project lists its own precondition helpers here. Optional; unset
+	 * models no assertion narrowing.
+	 */
+	@:optional var nullAssertionCalls: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

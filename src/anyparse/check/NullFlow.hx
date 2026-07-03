@@ -64,6 +64,9 @@ private typedef FlowCtx = {
 	var catchClauseKind: Null<String>;
 	var nullCoalAssignKind: Null<String>;
 	var nullCoalKind: Null<String>;
+	var callKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var nullAssertionCalls: Array<String>;
 	var captured: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
@@ -345,6 +348,9 @@ final class NullFlow {
 			catchClauseKind: shape.catchClauseKind,
 			nullCoalAssignKind: shape.nullCoalAssignKind,
 			nullCoalKind: shape.nullCoalesceKind,
+			callKind: shape.callKind,
+			fieldAccessKind: shape.fieldAccessKind,
+			nullAssertionCalls: shape.nullAssertionCalls ?? [],
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
 			source: source,
@@ -384,7 +390,10 @@ final class NullFlow {
 			handleShortCircuit(node, state, ctx);
 		else if (ctx.nullCoalKind != null && kind == ctx.nullCoalKind)
 			handleNullCoalescing(node, state, ctx);
-		else if (ctx.blockKinds.contains(kind))
+		else if (ctx.callKind != null && kind == ctx.callKind) {
+			for (c in node.children) walk(c, state, ctx);
+			handleNullAssertionCall(node, state, ctx);
+		} else if (ctx.blockKinds.contains(kind))
 			handleBlock(node, state, ctx);
 		else
 			for (c in node.children) walk(c, state, ctx);
@@ -474,6 +483,26 @@ final class NullFlow {
 		final rhsState: FlowState = copyState(state);
 		for (i in 1...node.children.length) walk(node.children[i], rhsState, ctx);
 		setState(state, intersect(state, rhsState));
+	}
+
+	/**
+	 * A call to a `nullAssertionCalls` helper (`Assert.notNull(x)`) throws when its plain
+	 * identifier argument is null, so after it the argument is non-null. Clears the argument
+	 * from `state.maybe` (`maybe`-only — it adds no `NonNull` fact, so the seed-less consumers
+	 * are byte-identical), suppressing a `MaybeNull` false positive on a value asserted before
+	 * its dereference.
+	 */
+	private static function handleNullAssertionCall(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (ctx.fieldAccessKind == null || ctx.nullAssertionCalls.length == 0 || node.children.length < 2) return;
+		final callee: QueryNode = node.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != ctx.fieldAccessKind || method == null || callee.children.length != 1) return;
+		final recv: QueryNode = callee.children[0];
+		final recvName: Null<String> = recv.name;
+		if (recv.kind != ctx.identKind || recvName == null || !ctx.nullAssertionCalls.contains('${recvName}.${method}')) return;
+		final arg: QueryNode = node.children[1];
+		final argName: Null<String> = arg.name;
+		if (arg.kind == ctx.identKind && argName != null) state.maybe.remove(argName);
 	}
 
 	/**

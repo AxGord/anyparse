@@ -26,7 +26,7 @@ import anyparse.check.NullFlow.NullFacts;
  * source (`NullableSource.describe` over the file's `declaredTypes` / `returnTypes` —
  * a `Map`-family index or `.get`, or a `Null<T>`-returning call). The length-guarded collection accessors (`Array` / `List` `pop` / `shift` / `first` / `last`) are excluded from the seed — their dominant `while (c.length > 0) c.pop()` idiom is safe by a guard flow cannot model, so seeding them would be a systematic false positive; the point-wise `possible-null-dereference` still flags them at `Info`. The fact is narrowed away by the same guards the engine already models — an
  * `if (u != null)` arm, an early `if (u == null) return;`, an `&&` right side, a
- * non-null reassignment, a `??=`, a `switch` branch after a `case null:`, and a `case _ if (u != null):` guard — so a guarded deref is a safe miss. Only a function
+ * non-null reassignment, a `??=`, a `switch` branch after a `case null:`, a `case _ if (u != null):` guard, and a `nullAssertionCalls` helper (`Assert.notNull(u)`) — so a guarded deref is a safe miss. Only a function
  * unit's own names (parameters / locals) are tracked, so a field / static / `this` receiver is never reported. Residual false positives remain where the non-null guarantee lives in a value / relational invariant the name-keyed flow cannot see — an `m.exists(k)` guard before `m[k]`, a key just written (`m[k] = v; var u = m[k];`), a key drawn from `m.keys()`, or an alias (`var v = u; if (v != null) u.f;`); these are report-only Warning residuals, suppressible via `// noqa` or `apqlint.json`.
  *
  * Four receiver forms are covered, exactly as `null-dereference`: a field / method
@@ -76,6 +76,7 @@ final class UnguardedNullableDeref implements Check {
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final cfgValue: NullableSourceCfg = cfg;
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final ctx: Ctx = { ident: ident, soleChildKinds: soleChildKinds, firstChildKinds: firstChildKinds };
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -85,7 +86,8 @@ final class UnguardedNullableDeref implements Check {
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);
-			final seed: (QueryNode) -> Bool = rhs -> NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfgValue) != null;
+			final seed: (QueryNode) -> Bool = rhs ->
+				NullableSource.describe(rhs, root, declaredTypes, returnTypes, cfgValue, index) != null;
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> checkDeref(violations, entry.file, node, facts, ctx), seed);
 		}
 		return violations;

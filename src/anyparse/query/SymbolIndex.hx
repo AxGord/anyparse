@@ -55,6 +55,9 @@ typedef MemberInfo = {
 
 	/** True when the member is a property whose READ accessor is a getter (`get` / `dynamic`) — reading it runs code. A plain field / method is false. */
 	var hasGetter: Bool;
+
+	/** The member's return type OUTER nominal (last `.` segment, `Null<T>` → `Null`), or null for a field / `Void` / unannotated return. Drives cross-file `Null<T>`-return nullable-source resolution. */
+	var returnNominal: Null<String>;
 };
 
 typedef TypeDeclInfo = {
@@ -211,6 +214,25 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * The return-type OUTER nominal of type `typeName`'s member `memberName` — e.g. `Null`
+	 * for a `Null<T>`-returning method — or null when unknown or AMBIGUOUS. Conservative: a
+	 * name collision across files whose matches disagree on the nominal (or any match with no
+	 * return nominal) yields null, so a cross-file nullable-source resolution never fires on
+	 * an unresolved name. Resolution is by SIMPLE name (the index models no packages).
+	 */
+	public function returnNominalOf(typeName: String, memberName: String): Null<String> {
+		var found: Null<String> = null;
+		var count: Int = 0;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+			if (count == 0)
+				found = m.returnNominal;
+			else if (m.returnNominal != found) return null;
+			count++;
+		}
+		return count == 0 ? null : found;
+	}
+
+	/**
 	 * The single declaring file + decl span of the type named `typeName`, or null when
 	 * zero or more than one file declares it (ambiguous — a write-confinement query
 	 * cannot pin a unique decl range and must bail). The decl span is the type's full
@@ -342,7 +364,8 @@ final class SymbolIndex {
 				continue;
 			}
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
-			infos.push(extractFileInfo(entry.file, tree, accessors));
+			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
+			infos.push(extractFileInfo(entry.file, tree, accessors, returnTypes));
 		}
 		return new SymbolIndex(infos, skipped);
 	}
@@ -374,7 +397,9 @@ final class SymbolIndex {
 	 * using statements, and the top-level type declarations. The
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
-	private static function extractFileInfo(file: String, tree: QueryNode, accessors: Map<Int, Bool>): FileInfo {
+	private static function extractFileInfo(
+		file: String, tree: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>
+	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
 		final imports: Array<ImportInfo> = [];
@@ -392,7 +417,7 @@ final class SymbolIndex {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
-					members: collectMembers(node, accessors)
+					members: collectMembers(node, accessors, returnTypes)
 				});
 				continue;
 			}
@@ -508,7 +533,7 @@ final class SymbolIndex {
 	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
 	 * with its getter-property flag from the `accessors` span map (absent = plain).
 	 */
-	private static function collectMembers(node: QueryNode, accessors: Map<Int, Bool>): Array<MemberInfo> {
+	private static function collectMembers(node: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
 		collectInto(node, n -> {
 			if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind)) {
@@ -518,7 +543,7 @@ final class SymbolIndex {
 					// Re-bind to a non-null local — Strict null-safety takes a struct
 					// literal's field type from the declared type, not the narrowed one.
 					final memberName: String = nm;
-					out.push({ name: memberName, hasGetter: accessors[sp.from] ?? false });
+					out.push({ name: memberName, hasGetter: accessors[sp.from] ?? false, returnNominal: returnTypes[sp.from] });
 				}
 			}
 		});

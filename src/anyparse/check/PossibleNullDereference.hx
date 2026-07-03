@@ -41,7 +41,7 @@ import anyparse.check.NullableSource.NullableSourceCfg;
  * There is no narrowing: `if (m.exists(k)) m[k].field`, `if (arr.length > 0)
  * arr.pop().f` and a guarded `findUser().f` are still flagged, since the guard is
  * invisible without flow. That is why the severity is `Info` (advisory), not the
- * `Warning` the flow-sensitive engine earns. A cross-file return is a future sub-pattern. Macro-reification subtrees
+ * `Warning` the flow-sensitive engine earns. A cross-file `Type.static()` / `obj.method()` return IS now resolved via `SymbolIndex.returnNominalOf` (conservative under a simple-name collision); a bare `this.f()` stays a safe miss. Macro-reification subtrees
  * (`RefShape.opaqueKinds`) are not descended into.
  */
 @:nullSafety(Strict)
@@ -68,10 +68,12 @@ final class PossibleNullDereference implements Check {
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final cfgValue: NullableSourceCfg = cfg;
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final ctx: Ctx = {
 			derefKinds: derefKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			cfg: cfgValue
+			cfg: cfgValue,
+			index: index
 		};
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -101,7 +103,8 @@ final class PossibleNullDereference implements Check {
 		if (ctx.derefKinds.contains(node.kind) && node.children.length >= 1) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
-				final source: Null<String> = NullableSource.describe(node.children[0], root, declaredTypes, returnTypes, ctx.cfg);
+				final source: Null<String> =
+					NullableSource.describe(node.children[0], root, declaredTypes, returnTypes, ctx.cfg, ctx.index);
 				if (source != null) out.push({
 					file: file,
 					span: span,
@@ -121,4 +124,5 @@ private typedef Ctx = {
 	var derefKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var cfg: NullableSourceCfg;
+	var index: Null<SymbolIndex>;
 };
