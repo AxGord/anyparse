@@ -24,7 +24,9 @@ import anyparse.runtime.Span;
  * `marshals` target executes on MAIN; any other callback inherits the
  * registrar's context. A node with no resolved callers is ASSUMED main — the
  * over-approximation a finder wants (candidates for human review, never a
- * silent miss).
+ * silent miss). Sinks INSIDE a `marshals` function's own body are not
+ * reported: the marshal primitive IS the thread boundary, and its internal
+ * dispatch (context checks, queue pumping) is invisible to the graph.
  *
  * Configured per project in `apqlint.json` (the rule is inert without it):
  *
@@ -32,8 +34,13 @@ import anyparse.runtime.Span;
  *         "sinks":     ["app.Mutex.lock", "Sys.sleep", "sys.io.File.*"],
  *         "spawns":    ["app.Worker.spawn", "Thread.create"],
  *         "marshals":  ["app.Worker.runOnMain"],
- *         "lockPairs": ["app.Mutex.lock/unlock", "RwLock.lock/unlock"]
+ *         "lockPairs": ["app.Mutex.lock/unlock", "RwLock.lock/unlock"],
+ *         "exclude":   ["test"]
  *     }
+ *
+ * `exclude` drops files whose path contains an entry as a '/'-bounded
+ * segment run BEFORE the graph is built — test code exercising blocking
+ * calls on its own thread would otherwise pollute every context.
  *
  * Patterns are matched by their last two dot-segments (`SymbolIndex` models no
  * packages); `Type.*` covers every recorded member of a type. A `lockPairs`
@@ -67,7 +74,12 @@ final class ThreadSafety implements Check {
 		final marshals: Array<String> = config.stringListOption('thread-safety', 'marshals') ?? [];
 		final lockPairs: Array<String> = config.stringListOption('thread-safety', 'lockPairs') ?? [];
 
-		final graph: CallGraph = CallGraph.build(files, plugin);
+		final excludes: Array<String> = config.stringListOption('thread-safety', 'exclude') ?? [];
+		final scanned: Array<{ file: String, source: String }> = excludes.length == 0
+			? files
+			: files.filter(f -> !pathExcluded(f.file, excludes));
+		if (scanned.length == 0) return [];
+		final graph: CallGraph = CallGraph.build(scanned, plugin);
 		final sinkIds: Array<String> = matchAll(graph, sinks);
 		if (sinkIds.length == 0) return [];
 		final spawnIds: Array<String> = matchAll(graph, spawns);
@@ -81,7 +93,7 @@ final class ThreadSafety implements Check {
 		collectTaint(graph, sinkIds, taintHop);
 
 		final violations: Array<Violation> = [];
-		reportMainSinkCalls(graph, sinkIds, contexts, mainParent, violations);
+		reportMainSinkCalls(graph, sinkIds, marshalIds, contexts, mainParent, violations);
 		reportLockHeld(graph, lockPairs, sinkIds, taintHop, violations);
 		return violations;
 	}
@@ -175,12 +187,16 @@ final class ThreadSafety implements Check {
 
 	/** Finding (a): a MAIN-context function directly calls a sink. */
 	private static function reportMainSinkCalls(
-		graph: CallGraph, sinkIds: Array<String>, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>,
+		graph: CallGraph, sinkIds: Array<String>, marshalIds: Array<String>, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>,
 		violations: Array<Violation>
 	): Void {
 		for (edge in graph.edges) {
 			if (edge.kind != Call && edge.kind != New && edge.kind != Virtual) continue;
 			if (!sinkIds.contains(edge.to)) continue;
+			// a `marshals` function IS the thread boundary — its body dispatches
+			// between contexts in ways the graph cannot see; sinks inside it are
+			// the primitive's own machinery, not application-level main calls
+			if (marshalIds.contains(edge.from)) continue;
 			final ctx: Int = contexts[edge.from] ?? 0;
 			if (ctx & CTX_MAIN == 0) continue;
 			final chain: String = mainChain(edge.from, mainParent);
@@ -307,6 +323,18 @@ final class ThreadSafety implements Check {
 		}
 		if (taintHop[cursor] != null) parts.push('...');
 		return parts.join(' -> ');
+	}
+
+	/** True when `file` contains one of `patterns` as a '/'-bounded path-segment run. */
+	private static function pathExcluded(file: String, patterns: Array<String>): Bool {
+		final wrapped: String = '/' + StringTools.replace(file, '\\', '/') + '/';
+		for (p in patterns) {
+			var trimmed: String = p;
+			while (StringTools.startsWith(trimmed, '/')) trimmed = trimmed.substring(1);
+			while (StringTools.endsWith(trimmed, '/')) trimmed = trimmed.substring(0, trimmed.length - 1);
+			if (trimmed.length > 0 && wrapped.indexOf('/' + trimmed + '/') != -1) return true;
+		}
+		return false;
 	}
 
 }

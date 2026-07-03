@@ -918,6 +918,14 @@ typedef RefShape = {
 	 * on every path, which the null-flow engine narrows on. Optional.
 	 */
 	@:optional var nullCoalAssignKind: String;
+
+	/**
+	 * The `macro`-modifier node kind. A function declared with it runs at
+	 * COMPILE time — its body is not runtime code, so the call graph skips the
+	 * declaration entirely (a runtime call site expands in place instead of
+	 * dispatching to it). Optional — unset treats every function as runtime.
+	 */
+	@:optional var macroModifierKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

@@ -413,6 +413,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			callKind: 'Call',
 			caseBranchKind: 'CaseBranch',
 			parenKind: 'ParenExpr',
+			macroModifierKind: 'Macro',
 			boolLitKind: 'BoolLit',
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',

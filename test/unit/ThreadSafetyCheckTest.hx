@@ -138,4 +138,62 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
+	public function testTernarySpawnCallbackNotFlagged(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"spawns":["Runner.create"]}}}', [
+			'class A { var flag:Bool; function boot():Void Runner.create(flag ? work1 : work2); function work1():Void Sys.sleep(1); function work2():Void Sys.sleep(1); }',
+			'class Runner { public static function create(fn:()->Void):Void {} }',
+		]);
+		Assert.equals(0, vs.length);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testMarshalBodySinkNotFlagged(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"marshals":["Ui.marshal"]}}}', [
+			'class A { function boot():Void Ui.marshal(doWork); function doWork():Void {} }',
+			'class Ui { public static function marshal(fn:()->Void):Void { Sys.sleep(0.01); } }',
+		]);
+		Assert.equals(0, vs.length);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testExcludedPathNotScanned(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations(
+			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"exclude":["F0.hx"]}}}', ['class A { function boot():Void Sys.sleep(1); }',]
+		);
+		Assert.equals(0, vs.length);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testNonMatchingExcludeStillScanned(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations(
+			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"],"exclude":["elsewhere"]}}}',
+			['class A { function boot():Void Sys.sleep(1); }',]
+		);
+		Assert.equals(1, vs.length);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testMacroFunctionBodyNotRuntime(): Void {
+		#if (sys || nodejs)
+		final vs: Array<Violation> = violations(
+			'{"rules":{"thread-safety":{"sinks":["Sys.sleep"]}}}', ['class A { macro public static function gen():Void Sys.sleep(1); }',]
+		);
+		Assert.equals(0, vs.length);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

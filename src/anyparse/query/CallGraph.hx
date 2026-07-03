@@ -208,6 +208,7 @@ final class CallGraph {
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final macroKind: Null<String> = shape.macroModifierKind;
 		final moduleType: String = moduleTypeName(entry.file);
 		var lambdaCounter: Int = 0;
 
@@ -232,7 +233,20 @@ final class CallGraph {
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
 				registerNode(fnId, entry, typeName, null, span);
 			}
-			for (c in node.children) walk(c, typeName, fnId);
+			var macroPending: Bool = false;
+			for (c in node.children) {
+				if (macroKind != null && c.kind == macroKind) {
+					macroPending = true;
+					continue;
+				}
+				if (macroPending && fnKinds.contains(c.kind)) {
+					// `macro` function body — compile-time code, not runtime calls
+					macroPending = false;
+					continue;
+				}
+				if (c.children.length > 0 || c.name != null) macroPending = false;
+				walk(c, typeName, fnId);
+			}
 		}
 		walk(entry.tree, null, null);
 	}
@@ -352,6 +366,8 @@ final class CallGraph {
 		final forceAccessKind: Null<String> = shape.forceFieldAccessKind;
 		final newExprKind: Null<String> = shape.newExprKind;
 		final parenKind: Null<String> = shape.parenKind;
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		final macroKind: Null<String> = shape.macroModifierKind;
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final localFnKinds: Array<String> = shape.localFunctionKinds ?? [];
@@ -503,13 +519,20 @@ final class CallGraph {
 
 		function scanArgs(call: QueryNode, calleeId: Null<String>, currentType: Null<String>): Void {
 			final from: String = frameId(currentType);
-			for (i in 1...call.children.length) {
-				final arg: QueryNode = unwrap(call.children[i]);
+			function refArg(argRaw: QueryNode): Void {
+				final arg: QueryNode = unwrap(argRaw);
+				// a ternary-valued argument hands BOTH branch function-values to
+				// the callee — each branch is a callback in its own right
+				if (ternaryKind != null && arg.kind == ternaryKind && arg.children.length == 3) {
+					refArg(arg.children[1]);
+					refArg(arg.children[2]);
+					return;
+				}
 				final argSpan: Null<Span> = arg.span;
 				if (argSpan != null && lambdaKinds.contains(arg.kind)) {
 					final lambdaId: Null<String> = entry.fnBySpanFrom[argSpan.from];
 					if (lambdaId != null) addEdge(from, lambdaId, Ref, calleeId, file, argSpan);
-					continue;
+					return;
 				}
 				if (arg.kind == callKind && arg.children.length > 0) {
 					final inner: QueryNode = unwrap(arg.children[0]);
@@ -520,7 +543,7 @@ final class CallGraph {
 							consumedBindCalls.push(argSpan.from);
 						}
 					}
-					continue;
+					return;
 				}
 				if (arg.kind == identKind || arg.kind == fieldAccessKind) {
 					final target: Null<String> = methodValue(arg, currentType);
@@ -528,6 +551,7 @@ final class CallGraph {
 					if (target != null && node != null && !node.isExternal) addEdge(from, target, Ref, calleeId, file, argSpan);
 				}
 			}
+			for (i in 1...call.children.length) refArg(call.children[i]);
 		}
 
 		function handleCall(call: QueryNode, currentType: Null<String>): Void {
@@ -628,7 +652,20 @@ final class CallGraph {
 				handleCall(node, typeName);
 			else if (newExprKind != null && node.kind == newExprKind) handleNew(node, typeName);
 
-			for (c in node.children) walk(c, typeName);
+			var macroPending: Bool = false;
+			for (c in node.children) {
+				if (macroKind != null && c.kind == macroKind) {
+					macroPending = true;
+					continue;
+				}
+				if (macroPending && fnKinds.contains(c.kind)) {
+					// `macro` function body — compile-time code, not runtime calls
+					macroPending = false;
+					continue;
+				}
+				if (c.children.length > 0 || c.name != null) macroPending = false;
+				walk(c, typeName);
+			}
 			if (pushed) frames.pop();
 		}
 		walk(tree, null);
