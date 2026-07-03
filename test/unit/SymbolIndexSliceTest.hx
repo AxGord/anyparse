@@ -106,6 +106,30 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * `returnNominalOf` resolves an INHERITED member's return nominal through the (cross-file)
+	 * supertype closure when the subtype does not declare it directly.
+	 */
+	public function testReturnNominalOfInherited(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base { public function findUser():Null<Foo> return null; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		Assert.equals('Null', index.returnNominalOf('Sub', 'findUser'));
+	}
+
+	/**
+	 * A subtype's OWN member return shadows the base — the direct lookup runs before the
+	 * supertype walk, so an override's non-null return is not masked by the base's `Null<T>`.
+	 */
+	public function testReturnNominalOfOverrideShadowsBase(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base { public function findUser():Null<Foo> return null; }' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base { override public function findUser():Foo return null; }' }
+		], plugin());
+		Assert.equals('Foo', index.returnNominalOf('Sub', 'findUser'));
+	}
+
+	/**
 	 * A file with no `package;` declaration has an empty package and a
 	 * module path equal to the file basename (the root package).
 	 */

@@ -215,21 +215,16 @@ final class SymbolIndex {
 
 	/**
 	 * The return-type OUTER nominal of type `typeName`'s member `memberName` — e.g. `Null`
-	 * for a `Null<T>`-returning method — or null when unknown or AMBIGUOUS. Conservative: a
-	 * name collision across files whose matches disagree on the nominal (or any match with no
-	 * return nominal) yields null, so a cross-file nullable-source resolution never fires on
-	 * an unresolved name. Resolution is by SIMPLE name (the index models no packages).
+	 * for a `Null<T>`-returning method — or null when unknown or AMBIGUOUS. A direct member
+	 * wins; failing that, the member is resolved through the type's (unanimous) supertype
+	 * closure, so an INHERITED `Null<T>` method is caught (an override's own return shadows
+	 * the base, since the direct lookup runs first). Conservative: a simple-name collision
+	 * whose matches disagree on the nominal — direct or inherited — yields null, so a
+	 * cross-file nullable-source resolution never fires on an unresolved name. Resolution is by
+	 * SIMPLE name (the index models no packages).
 	 */
 	public function returnNominalOf(typeName: String, memberName: String): Null<String> {
-		var found: Null<String> = null;
-		var count: Int = 0;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
-			if (count == 0)
-				found = m.returnNominal;
-			else if (m.returnNominal != found) return null;
-			count++;
-		}
-		return count == 0 ? null : found;
+		return returnNominalWalk(typeName, memberName, []);
 	}
 
 	/**
@@ -299,6 +294,37 @@ final class SymbolIndex {
 	private function declaresMember(typeName: String, field: String): Bool {
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) if (t.members.exists(m -> m.name == field)) return true;
 		return false;
+	}
+
+	/**
+	 * `returnNominalOf`'s recursion: a direct member's return nominal (unanimous across
+	 * same-named types, else null), or — when no direct member — the unanimous nominal
+	 * resolved through the supertype closure. `seen` cycle-guards the walk.
+	 */
+	private function returnNominalWalk(typeName: String, memberName: String, seen: Array<String>): Null<String> {
+		if (seen.contains(typeName)) return null;
+		seen.push(typeName);
+		var found: Null<String> = null;
+		var direct: Int = 0;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+			if (direct == 0)
+				found = m.returnNominal;
+			else if (m.returnNominal != found) return null;
+			direct++;
+		}
+		if (direct > 0) return found;
+		var inherited: Null<String> = null;
+		var supers: Int = 0;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) {
+			final rn: Null<String> = returnNominalWalk(sup, memberName, seen);
+			if (rn != null) {
+				if (supers == 0)
+					inherited = rn;
+				else if (rn != inherited) return null;
+				supers++;
+			}
+		}
+		return inherited;
 	}
 
 	/** Exactly one indexed decl is named `name`, and it is a class. */
