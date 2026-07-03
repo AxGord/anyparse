@@ -434,6 +434,9 @@ enum HxExpr {
 	@:kw('return') @:fmt(propagateExprPosition)
 	ReturnExpr(value: HxExpr);
 
+	@:kw('return')
+	VoidReturnExpr;
+
 	@:kw('throw')
 	ThrowExpr(value: HxExpr);
 

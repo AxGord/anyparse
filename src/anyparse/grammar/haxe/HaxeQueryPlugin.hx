@@ -479,7 +479,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'BreakStmt',
 				'ContinueStmt',
 				'BreakExpr',
-				'ContinueExpr'
+				'ContinueExpr',
+				'VoidReturnExpr'
 			],
 			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
 			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],

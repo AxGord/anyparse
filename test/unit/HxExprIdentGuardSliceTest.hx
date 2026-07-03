@@ -54,6 +54,11 @@ final class HxExprIdentGuardSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+	public function testVoidReturnStillLegalAsExpressionAtom(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal target:Float = if (a > b) computeOne(); else if (a < c) computeTwo(); else return;\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
+	}
+
 	public function testBareIfHeadSpliceFallsToCondSpliceStmt(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\t#if js if (a == b) #end c = 0;\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
