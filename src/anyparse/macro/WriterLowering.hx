@@ -462,8 +462,16 @@ class WriterLowering {
 			elemCall: elemCall,
 		};
 		final sepListCall: Expr = lowerPostfixSepListCall(c);
-		final dcArgs: Array<Expr> = [operandCall];
-		if (openSpace != null) dcArgs.push(openSpace);
+		// ω-cond-end-call-glue: a callee whose trailing visible text ends with
+		// `#end` (a conditional group / splice callee:
+		// `#if a X #elseif b Y #end (args)`) keeps a space before the open
+		// paren — `#end('curl')` is not a shape any config's callParens policy
+		// produces from a human source. Runtime structural probe on the
+		// operand Doc (bound once as `_pfxOperand`); every non-`#end` callee
+		// keeps the pre-slice emission byte-identically.
+		final dcArgs: Array<Expr> = [macro _pfxOperand];
+		final condEndSpace: Expr = macro anyparse.format.wrap.WrapList.endsWithCondEnd(_pfxOperand) ? _dt(' ') : ${openSpace ?? macro _de()};
+		dcArgs.push(condEndSpace);
 		dcArgs.push(sepListCall);
 		final dcExpr: Expr = dcCall(dcArgs);
 		final pushElemExpr: Expr = lowerPostfixPushElem(c);
@@ -475,6 +483,7 @@ class WriterLowering {
 		// the following conditional group; it lives INSIDE the group).
 		final sepFlagsInit: Expr = c.isTriviaStar ? macro _sepBeforeFlags.push(_i != 0 && !_args[_i - 1].sepAfter) : macro {};
 		return macro {
+			final _pfxOperand: anyparse.core.Doc = $operandCall;
 			final _args = $argsAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
 			final _sepBeforeFlags: Array<Bool> = [];
@@ -4838,6 +4847,11 @@ class WriterLowering {
 		// keep-mode chain dispatch reads it directly off its hand-written
 		// `FieldAccess(_prev, _fld, _nl, _opTrail)` pattern. Postfix-only.
 		final hasChainLeadComment: Bool = TriviaTypeSynth.isPostfixChainCommentBranch(branch);
+		// ω-postfix-op-space: word-op postfix ctors with
+		// `@:fmt(capturePostfixOpSpace)` grow a positional `opSpaceBefore:Bool`
+		// arg (source had whitespace between operand and operator). Read via
+		// `altSlotAccess(..., PostfixOpSpace)` in the word-postfix pad emit.
+		final hasPostfixOpSpace: Bool = TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
 		// ω-open-trailing-alt: same-line trailing comment after the
 		// open lit grows a parallel positional arg next to closeTrailing.
 		// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
@@ -4877,7 +4891,7 @@ class WriterLowering {
 		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixCloseTrailing ? 3 : 0);
+			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 3 : 0);
 	}
 
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
@@ -6506,7 +6520,22 @@ class WriterLowering {
 			}
 			// Word-like postfix ops (ω-cond-splice `#if`) sit between two
 			// token streams that would glue into one word — pad both sides.
-			if (~/[A-Za-z0-9_]$/.match(postfixOp)) return macro _dc([$operandCall, _dt($v{' ' + postfixOp + ' '}), $suffixCall]);
+			// ω-postfix-op-space: a branch with `@:fmt(capturePostfixOpSpace)`
+			// re-emits the LEFT pad source-faithfully from the `opSpaceBefore`
+			// synth slot (`f()#if …` stays glued, `f() #if …` keeps its space);
+			// the right pad stays hard — the operator and its raw fragment
+			// would glue into one word otherwise. Plain mode has no slot and
+			// keeps the unconditional both-side pad.
+			if (~/[A-Za-z0-9_]$/.match(postfixOp)) {
+				final opSpaceAccess: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, PostfixOpSpace) : null;
+				return opSpaceAccess != null
+					? macro _dc([
+						$operandCall,
+						_dt(($opSpaceAccess ? ' ' : '') + $v{postfixOp + ' '}),
+						$suffixCall
+					])
+					: macro _dc([$operandCall, _dt($v{' ' + postfixOp + ' '}), $suffixCall]);
+			}
 			return macro _dc([$operandCall, _dt($v{postfixOp}), $suffixCall]);
 		}
 		Context.fatalError('WriterLowering: unsupported postfix shape', Context.currentPos());
@@ -11403,6 +11432,8 @@ class WriterLowering {
 		if (TriviaTypeSynth.isAltKwNewlineBranch(branch)) idx++;
 		if (slot == ChainNewline) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
+		if (slot == ChainLeadComment) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isPostfixChainCommentBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -11696,6 +11727,7 @@ class WriterLowering {
 			case KwNewline: TriviaTypeSynth.isAltKwNewlineBranch(branch);
 			case ChainNewline: TriviaTypeSynth.isAltChainNewlineBranch(branch);
 			case ChainLeadComment: TriviaTypeSynth.isPostfixChainCommentBranch(branch);
+			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
 		};
 	}
 
@@ -16679,6 +16711,7 @@ enum abstract AltSlot(Int) {
 	final KwNewline = 5;
 	final ChainNewline = 6;
 	final ChainLeadComment = 7;
+	final PostfixOpSpace = 8;
 
 }
 #end

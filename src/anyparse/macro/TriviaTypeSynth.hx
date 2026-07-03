@@ -392,6 +392,16 @@ class TriviaTypeSynth {
 	public static inline final CHAIN_NEWLINE_ARG_NAME: String = 'chainNewline';
 
 	/**
+	 * ω-postfix-op-space — positional arg name appended to a word-op
+	 * postfix ctor carrying `@:fmt(capturePostfixOpSpace)`
+	 * (`HxExpr.CondSpliceTail`). Holds whether the source had whitespace
+	 * between the operand and the operator (`f() #if …` vs `f()#if …`)
+	 * so the writer re-emits the gap source-faithfully instead of always
+	 * space-padding the word operator's left side.
+	 */
+	public static inline final POSTFIX_OP_SPACE_ARG_NAME: String = 'opSpaceBefore';
+
+	/**
 	 * ω-keep-chain-receiver-comment — positional arg name appended to the
 	 * `@:postfix('.')` method-chain ctor `HxExpr.FieldAccess` (alongside its
 	 * `chainNewline:Bool` slot). Holds the verbatim same-line trailing comment
@@ -691,6 +701,18 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * ω-postfix-op-space — true when the branch is a word-op postfix ctor
+	 * opting into source-faithful operator spacing via
+	 * `@:fmt(capturePostfixOpSpace)` (`HxExpr.CondSpliceTail`). Such a
+	 * branch grows a positional `opSpaceBefore:Bool` slot capturing
+	 * whether whitespace separated the operand from the operator; the
+	 * writer's word-postfix pad reads it instead of hardcoding `' op '`.
+	 */
+	public static function isPostfixOpSpaceBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 2 && branch.hasMeta(':postfix') && branch.fmtHasFlag('capturePostfixOpSpace');
+	}
+
+	/**
 	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
 	 * `pairedToRaw_<T>` static helpers for every paired type in the
 	 * batch. Phase A2 appends `rawToPaired_<T>` siblings.
@@ -883,6 +905,7 @@ class TriviaTypeSynth {
 		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
 		if (isPostfixChainCommentBranch(branch)) n++; // chainLeadComment (receiver-comment)
+		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
 		// count in sync so the `pairedToRaw` switch pattern's `_` placeholder
@@ -1062,6 +1085,7 @@ class TriviaTypeSynth {
 		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (isPostfixChainCommentBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (receiver-comment)
+		if (isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing
 			// ω-D9A-keep-callargs-v2: argsOpenNewline default for raw→paired
@@ -1825,6 +1849,13 @@ class TriviaTypeSynth {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 			args.push({ name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT });
+		}
+		// ω-postfix-op-space: word-op postfix ctors opting into source-faithful
+		// operator spacing grow `opSpaceBefore:Bool` as the LAST appended slot
+		// (mirrors the AltSlot declaration order the writer's walker relies on).
+		if (isPostfixOpSpaceBranch(branch)) {
+			final opSpaceBoolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
+			args.push({ name: POSTFIX_OP_SPACE_ARG_NAME, type: opSpaceBoolCT });
 		}
 		// ω-postfix-call-trailing: Star-suffix `@:postfix(open, close) @:sep(...)`
 		// branches whose Star already auto-collects per-arg trivia

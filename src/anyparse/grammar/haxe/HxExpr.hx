@@ -474,7 +474,7 @@ enum HxExpr {
 	 * the writer re-emits it verbatim with single-space pads around
 	 * the word-like `#if` op.
 	 */
-	@:postfix('#if')
+	@:postfix('#if') @:fmt(capturePostfixOpSpace)
 	CondSpliceTail(operand: HxExpr, raw: HxCondSpliceRaw);
 
 	MetaExpr(v: HxMetaExpr);

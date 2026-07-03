@@ -3179,6 +3179,14 @@ class Lowering {
 		// segment dot-boundary line breaks. Plain mode keeps the original
 		// 2-arg ctor arity (no slot; chain always glues via shapeNoWrap).
 		final captureChainNl: Bool = _ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+		// ω-postfix-op-space: a word-op postfix ctor with
+		// `@:fmt(capturePostfixOpSpace)` grows a positional `opSpaceBefore:Bool`
+		// synth arg in Trivia mode — whether the source had whitespace between
+		// the operand and the operator. At branch entry `ctx.pos` sits just past
+		// the matched operator and `_preWsPos` is the loop's pre-skipWs save, so
+		// the gap is non-empty iff their distance exceeds the operator length.
+		final captureOpSpace: Bool = _ctx.trivia && branch.fmtHasFlag('capturePostfixOpSpace');
+		final postfixOpLen: Int = (branch.annotations.get('postfix.op'): String).length;
 		// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
 		// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
 		// It reads `_opTrailComment` — the operand's trailing comment captured
@@ -3196,10 +3204,16 @@ class Lowering {
 						macro _chainNl,
 						macro _opTrailComment
 					]
-					: [
-						macro left,
-						macro _suffix
-					]
+					: captureOpSpace
+						? [
+							macro left,
+							macro _suffix,
+							macro _opSpaceBefore
+						]
+						: [
+							macro left,
+							macro _suffix
+						]
 			),
 			pos: Context.currentPos(),
 		};
@@ -3211,11 +3225,18 @@ class Lowering {
 					final _suffix: $suffixCT = $suffixCall;
 					left = $ctorCall;
 				}
-				: macro {
-					skipWs(ctx);
-					final _suffix: $suffixCT = $suffixCall;
-					left = $ctorCall;
-				}
+				: captureOpSpace
+					? macro {
+						final _opSpaceBefore: Bool = ctx.pos - _preWsPos > $v{postfixOpLen};
+						skipWs(ctx);
+						final _suffix: $suffixCT = $suffixCall;
+						left = $ctorCall;
+					}
+					: macro {
+						skipWs(ctx);
+						final _suffix: $suffixCT = $suffixCall;
+						left = $ctorCall;
+					}
 			: macro {
 				skipWs(ctx);
 				final _suffix: $suffixCT = $suffixCall;

@@ -2499,4 +2499,44 @@ class WrapList {
 		};
 	}
 
+	/**
+	 * ω-cond-end-call-glue: true when `d`'s trailing visible text ends with
+	 * the conditional-compilation close marker `#end` — a call whose CALLEE
+	 * is a conditional group (`#if a X #elseif b Y #end (args)`) must keep a
+	 * space before its open paren instead of the tight `callee(` glue, both
+	 * for readability and byte-parity with sources that write `#end (`.
+	 * Same trailing-edge walk as `endsWithCloseDelim` (flat side of the
+	 * `If*` conditionals, transparent wrappers descended).
+	 */
+	public static function endsWithCondEnd(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				return StringTools.endsWith(s, '#end');
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				node = flat;
+			case Concat(items):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+		}
+	}
+
 }

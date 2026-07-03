@@ -339,6 +339,7 @@ import unit.IfFalseDeadCodeCheckTest;
 import unit.HxExprIdentGuardSliceTest;
 import unit.HxThinArrowTrailingLambdaSliceTest;
 import unit.HxCondWrapFitLineSliceTest;
+import unit.HxCondSpliceFidelitySliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -513,6 +514,7 @@ class RunTests {
 		addCase(new HxExprIdentGuardSliceTest());
 		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxCondWrapFitLineSliceTest());
+		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
 		addCase(new HxBinaryChainWrapSliceTest());
 		addCase(new HxBinopGroupWrapSliceTest());
