@@ -177,6 +177,6 @@
 		"whileBody": "fitLine",
 		"functionBody": "fitLine",
 		"expressionIf": "next",
-		"comprehensionFor": "fitLine"
+		"comprehensionFor": "same"
 	}
 }

@@ -173,4 +173,5 @@ package anyparse.grammar.haxe.format;
 	@:optional var expressionIf: HxFormatBodyPolicy;
 
 	@:optional var expressionIfWithBlocks: Bool;
+	@:optional var comprehensionFor: HxFormatBodyPolicy;
 };

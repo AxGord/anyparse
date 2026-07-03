@@ -345,6 +345,7 @@ import unit.ThreadSafetyCheckTest;
 import unit.UncheckedNullableTest;
 import unit.PossibleNullDereferenceTest;
 import unit.UnguardedNullableDerefTest;
+import unit.HxComprehensionBracketPolicyTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -555,6 +556,7 @@ class RunTests {
 		addCase(new HxIndentCaseLabelsOptionsTest());
 		addCase(new HxIndentComplexValueExpressionsOptionsTest());
 		addCase(new HxIndentObjectLiteralOptionsTest());
+		addCase(new HxComprehensionBracketPolicyTest());
 		addCase(new HxTriviaTypesTest());
 		addCase(new HxTriviaParseTest());
 		addCase(new HxTriviaWriteTest());

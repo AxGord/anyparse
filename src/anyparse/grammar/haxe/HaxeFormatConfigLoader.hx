@@ -744,6 +744,14 @@ final class HaxeFormatConfigLoader {
 		if (cfg.trailingCommas != null) applyTrailingCommas(cfg.trailingCommas, result);
 		if (cfg.lineEnds != null) applyLineEnds(cfg.lineEnds, result);
 		if (cfg.whitespace != null) applyWhitespace(cfg.whitespace, result);
+		// haxe-formatter couples comprehension bracket padding to
+		// `sameLine.comprehensionFor`: `fitLine` pads the brackets
+		// (`[ for (x in y) x ]`) and overrides any `bracketConfig`
+		// `comprehensionBrackets` policy, while `same` (the fork default)
+		// leaves them tight (`[for (x in y) x]`). Applied AFTER
+		// `applyWhitespace` so the `fitLine` override wins over an explicit
+		// bracket policy, mirroring the fork's precedence.
+		applyComprehensionForPadding(cfg.sameLine, result);
 		// ω-D5-curly-blanks-fork-default: fork's `EmptyLinesConfig` declares
 		// `afterLeftCurly` / `beforeRightCurly` `@:default(Remove)`. Anyparse's
 		// `defaultWriteOptions` ships `Keep` (dogfood track preserves source
@@ -1746,6 +1754,17 @@ final class HaxeFormatConfigLoader {
 				if (compr.openingPolicy != null) opt.comprehensionBracketsOpen = whitespaceToRuntime(compr.openingPolicy);
 				if (compr.closingPolicy != null) opt.comprehensionBracketsClose = whitespaceToRuntime(compr.closingPolicy);
 			}
+		}
+	}
+
+	private static function applyComprehensionForPadding(section: Null<HxFormatSameLineSection>, opt: HxModuleWriteOptions): Void {
+		if (section == null) return;
+		// `comprehensionFor: fitLine` is the fork's trigger for padded
+		// comprehension brackets; every other value (incl. the `same`
+		// default) leaves the `bracketConfig` / default policy in place.
+		if (section.comprehensionFor == HxFormatBodyPolicy.FitLine) {
+			opt.comprehensionBracketsOpen = WhitespacePolicy.After;
+			opt.comprehensionBracketsClose = WhitespacePolicy.Before;
 		}
 	}
 
