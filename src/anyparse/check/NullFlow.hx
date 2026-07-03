@@ -10,24 +10,24 @@ import anyparse.runtime.Span;
 /**
  * The null facts holding at one visited node's entry, queried by a consumer.
  * `nonNull(name)` answers whether `name` is provably non-null by flow there;
- * `isNull(name)` whether it is provably null. Both honour the closure-captured
- * exclusion. At most one is ever true for a given name (a name is `NonNull`,
- * `Null`, or `Unknown`).
+ * `isNull(name)` whether it is provably null; `isMaybeNull(name)` whether it came from a nullable source and is not yet narrowed non-null (a mechanism-A seed, empty for the flow checks that pass none). Both honour the closure-captured
+ * exclusion. At most one of the three accessors is ever true for a given name (`NonNull`, `Null`, `MaybeNull`, or — none true — `Unknown`).
  */
 typedef NullFacts = {
 	var nonNull: String -> Bool;
 	var isNull: String -> Bool;
+	var isMaybeNull: String -> Bool;
 }
 
 /**
  * The per-path fact lattice carried through a `NullFlow` walk: the set of names
  * provably `NonNull` and the disjoint set provably `Null` at the current point.
- * A name absent from both is `Unknown`. Every transfer keeps the two sets
- * disjoint (marking one polarity clears the other).
+ * A name in the third `maybe` set is `MaybeNull`; a name absent from all three is `Unknown`. Every transfer keeps the three sets pairwise disjoint (marking one polarity clears the others).
  */
 private typedef FlowState = {
 	var nonNull: Array<String>;
 	var known: Array<String>;
+	var maybe: Array<String>;
 }
 
 /**
@@ -67,6 +67,7 @@ private typedef FlowCtx = {
 	var captured: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
+	var nullableSourceRhs: Null<QueryNode -> Bool>;
 	var visit: (QueryNode, NullFacts) -> Void;
 }
 
@@ -78,7 +79,7 @@ private typedef FlowCtx = {
  *
  * ## What it proves
  *
- * The lattice is three-valued per name: `NonNull`, `Null`, or `Unknown`. A name
+ * The lattice is four-valued per name: `NonNull`, `Null`, `MaybeNull` (a value from a nullable source, pending a narrowing — populated only when a consumer supplies the mechanism-A seed), or `Unknown`. A name
  * is `NonNull`-by-flow at a point when it is non-null on **every** path reaching
  * it, and `Null`-by-flow when it is null on every such path — each established
  * only by a flow event: a guard narrowing a branch (a `!= null` then-arm / `== null`
@@ -88,8 +89,7 @@ private typedef FlowCtx = {
  * non-null whichever side survives, and its right-hand side's effects are
  * joined in as conditional). It seeds **no** facts from declared types —
  * declared-non-null is the point-wise checks' domain
- * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only
- * complement, so a flow consumer never duplicates a point-wise finding.
+ * (`TypeResolver.isProvablyNonNull`); this engine is strictly the flow-only complement, so a flow consumer never duplicates a point-wise finding. The one exception is the optional `MaybeNull` seed (mechanism A): when a consumer supplies a `seed` predicate, a local assigned a value the predicate accepts (a nullable source) becomes `MaybeNull` until narrowed, backing the flow-sensitive `unguarded-nullable-deref` — inert for every consumer that passes no seed.
  *
  * ## Soundness invariant
  *
@@ -199,11 +199,13 @@ final class NullFlow {
 	 * consumer inspects only the node kinds it cares about. A grammar lacking the
 	 * required shape fields makes this a no-op.
 	 */
-	public static function analyze(root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void): Void {
+	public static function analyze(
+		root: QueryNode, shape: RefShape, source: String, visit: (QueryNode, NullFacts) -> Void, ?seed: (QueryNode) -> Bool
+	): Void {
 		final identKind: Null<String> = shape.identKind;
 		if (identKind == null) return;
 		final id: String = identKind;
-		forEachFunctionUnit(root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit));
+		forEachFunctionUnit(root, shape, (body, paramNames) -> analyzeBody(body, shape, source, id, paramNames, visit, seed));
 	}
 
 	/**
@@ -312,7 +314,7 @@ final class NullFlow {
 	 */
 	private static function analyzeBody(
 		body: QueryNode, shape: RefShape, source: String, identKind: String, paramNames: Array<String>,
-		visit: (QueryNode, NullFacts) -> Void
+		visit: (QueryNode, NullFacts) -> Void, seed: Null<(QueryNode) -> Bool>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final ctx: FlowCtx = {
@@ -346,9 +348,10 @@ final class NullFlow {
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
 			source: source,
+			nullableSourceRhs: seed,
 			visit: visit
 		};
-		final state: FlowState = { nonNull: [], known: [] };
+		final state: FlowState = { nonNull: [], known: [], maybe: [] };
 		walk(body, state, ctx);
 	}
 
@@ -403,6 +406,8 @@ final class NullFlow {
 			markNonNull(state, name);
 		else if (node.kind == ctx.assignKind && isNullLitRhs(rhs, ctx))
 			markKnown(state, name);
+		else if (node.kind == ctx.assignKind && isNullableSourceRhs(rhs, ctx))
+			markMaybe(state, name);
 		else
 			clearName(state, name);
 	}
@@ -492,6 +497,8 @@ final class NullFlow {
 			markNonNull(state, name);
 		else if (isNullLitRhs(init, ctx))
 			markKnown(state, name);
+		else if (isNullableSourceRhs(init, ctx))
+			markMaybe(state, name);
 		else
 			clearName(state, name);
 	}
@@ -528,7 +535,7 @@ final class NullFlow {
 		final thenExits: Bool = armExits(thenArm, ctx);
 		final elseExits: Bool = elseArm != null && armExits(elseArm, ctx);
 		final post: FlowState = if (thenExits && elseExits)
-			{ nonNull: [], known: [] };
+			{ nonNull: [], known: [], maybe: [] };
 		else if (thenExits)
 			elseState;
 		else if (elseExits)
@@ -549,7 +556,8 @@ final class NullFlow {
 	private static function visitNode(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final facts: NullFacts = {
 			nonNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.nonNull.contains(n),
-			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n)
+			isNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.known.contains(n),
+			isMaybeNull: n -> ctx.ownNames.contains(n) && !ctx.captured.contains(n) && state.maybe.contains(n)
 		};
 		ctx.visit(node, facts);
 	}
@@ -571,6 +579,7 @@ final class NullFlow {
 	private static function handleSwitch(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
 		final branches: Array<QueryNode> = [];
 		var hasDefault: Bool = false;
+		var subjectName: Null<String> = null;
 		for (c in node.children) {
 			if (c.kind == ctx.caseBranchKind) {
 				branches.push(c);
@@ -579,6 +588,7 @@ final class NullFlow {
 				branches.push(c);
 				hasDefault = true;
 			} else {
+				if (subjectName == null && c.kind == ctx.identKind) subjectName = c.name;
 				walk(c, state, ctx);
 			}
 		}
@@ -586,22 +596,45 @@ final class NullFlow {
 			final guard: Null<QueryNode> = caseGuard(b, ctx);
 			if (guard != null) killWritten(guard, state, ctx);
 		}
+		// Once a `case null:` branch consumes the null value, every LATER branch has a
+		// plain-identifier subject non-null, and a branch's own `!= null` guard proves its
+		// operands non-null in the body. Both narrowings live in `walkBranch` and are
+		// `maybe`-only, so the seed-less consumers (the six flow checks) stay byte-identical.
 		final exitStates: Array<FlowState> = [];
+		var nullConsumed: Bool = false;
 		for (b in branches) {
-			final branchState: FlowState = copyState(state);
-			clearBranchPatterns(b, branchState, ctx);
-			visitNode(b, branchState, ctx);
-			for (c in b.children) walk(c, branchState, ctx);
-			// Exit clearing: the branch body is not block-wrapped, so a shadow's facts —
-			// a local declaration's or a written pattern capture's — must be dropped here.
-			clearDeclaredIn(b, branchState, ctx);
-			clearBranchPatterns(b, branchState, ctx);
-			final last: Null<QueryNode> = b.children.length > 0 ? b.children[b.children.length - 1] : null;
-			if (last == null || !armExits(last, ctx)) exitStates.push(branchState);
+			final exit: Null<FlowState> = walkBranch(b, state, ctx, subjectName, nullConsumed);
+			if (exit != null) exitStates.push(exit);
+			if (isNullConsumingCase(b, ctx)) nullConsumed = true;
 		}
 		var post: Null<FlowState> = hasDefault ? null : copyState(state);
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
-		setState(state, post ?? { nonNull: [], known: [] });
+		setState(state, post ?? { nonNull: [], known: [], maybe: [] });
+	}
+
+	/**
+	 * Analyze one `switch` branch from `state`, returning its exit state — or null if the
+	 * branch's last statement exits (contributing no fall-through path). The subject is
+	 * narrowed to non-null (`maybe`-only) when `nullConsumed` (an earlier `case null:`
+	 * already consumed null), and each `!= null` guard conjunct clears its operand from
+	 * `maybe` — both suppress a `MaybeNull` false positive without adding a `NonNull` fact.
+	 */
+	private static function walkBranch(
+		b: QueryNode, state: FlowState, ctx: FlowCtx, subjectName: Null<String>, nullConsumed: Bool
+	): Null<FlowState> {
+		final branchState: FlowState = copyState(state);
+		clearBranchPatterns(b, branchState, ctx);
+		if (nullConsumed && subjectName != null) branchState.maybe.remove(subjectName);
+		final guard: Null<QueryNode> = caseGuard(b, ctx);
+		if (guard != null) clearMaybeByGuard(guard, branchState, ctx);
+		visitNode(b, branchState, ctx);
+		for (c in b.children) walk(c, branchState, ctx);
+		// Exit clearing: the branch body is not block-wrapped, so a shadow's facts must be
+		// dropped here (an inner local declaration or a written pattern capture).
+		clearDeclaredIn(b, branchState, ctx);
+		clearBranchPatterns(b, branchState, ctx);
+		final last: Null<QueryNode> = b.children.length > 0 ? b.children[b.children.length - 1] : null;
+		return last == null || !armExits(last, ctx) ? branchState : null;
 	}
 
 	/**
@@ -653,7 +686,7 @@ final class NullFlow {
 		}
 		var post: Null<FlowState> = null;
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
-		setState(state, post ?? { nonNull: [], known: [] });
+		setState(state, post ?? { nonNull: [], known: [], maybe: [] });
 	}
 
 	/**
@@ -684,6 +717,34 @@ final class NullFlow {
 		if (ctx.parenKind == null) return null;
 		for (i in 1...branch.children.length) if (branch.children[i].kind == ctx.parenKind) return branch.children[i];
 		return null;
+	}
+
+	/**
+	 * Clear from `state.maybe` every name a case guard proves non-null (its `!= null`
+	 * conjuncts). `maybe`-only: it adds no `NonNull` fact, so a seed-less consumer is
+	 * unaffected; the narrowing exists solely to suppress a `MaybeNull` false positive in
+	 * a `case _ if (u != null):` body.
+	 */
+	private static function clearMaybeByGuard(guard: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		final names: Array<String> = [];
+		collectNarrow(guard, names, ctx, ctx.notEqKind, BOOL_AND_KIND);
+		for (n in names) state.maybe.remove(n);
+	}
+
+	/**
+	 * Whether `b` is an unguarded case whose pattern matches the null literal
+	 * (`case null:` / `case null, x:`) — so it consumes the null value and every LATER
+	 * branch sees a plain-identifier subject non-null. A guard could fail to match, so a
+	 * guarded null case does not count (conservative).
+	 */
+	private static function isNullConsumingCase(b: QueryNode, ctx: FlowCtx): Bool {
+		final nl: Null<String> = ctx.nullLitKind;
+		if (b.kind != ctx.caseBranchKind || nl == null || caseGuard(b, ctx) != null) return false;
+		for (c in b.children) if (ctx.plainCasePatternKind != null && c.kind == ctx.plainCasePatternKind) for (p in c.children) if (
+			p.kind == nl
+		)
+			return true;
+		return false;
 	}
 
 	/** Clear every identifier name in a case-pattern subtree from `state` — a pattern capture is a fresh binding shadowing any same-named outer local, so no outer fact may survive into the branch. */
@@ -719,6 +780,12 @@ final class NullFlow {
 	/** Whether `rhs` is the null literal — a syntactically definite-null assignment value. */
 	private static function isNullLitRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
 		return rhs != null && ctx.nullLitKind != null && rhs.kind == ctx.nullLitKind;
+	}
+
+	/** Whether `rhs` is a nullable source per the consumer's seed predicate (mechanism A) — always false when no seed was supplied, so the flow checks never see a `MaybeNull` fact. */
+	private static function isNullableSourceRhs(rhs: Null<QueryNode>, ctx: FlowCtx): Bool {
+		final seed: Null<(QueryNode) -> Bool> = ctx.nullableSourceRhs;
+		return rhs != null && seed != null && seed(rhs);
 	}
 
 	/** Clear every name written anywhere in `node`'s subtree (any write-kind whose first child is a plain identifier) on both polarities. */
@@ -814,27 +881,37 @@ final class NullFlow {
 		}
 	}
 
-	/** Record `name` as `NonNull` in `state`, clearing any `Null` fact (the two sets stay disjoint), deduplicated. */
+	/** Record `name` as `NonNull` in `state`, clearing any `Null` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
 	private static inline function markNonNull(state: FlowState, name: String): Void {
 		if (!state.nonNull.contains(name)) state.nonNull.push(name);
 		state.known.remove(name);
+		state.maybe.remove(name);
 	}
 
-	/** Record `name` as `Null` in `state`, clearing any `NonNull` fact (the two sets stay disjoint), deduplicated. */
+	/** Record `name` as `Null` in `state`, clearing any `NonNull` / `MaybeNull` fact (the three sets stay disjoint), deduplicated. */
 	private static inline function markKnown(state: FlowState, name: String): Void {
 		if (!state.known.contains(name)) state.known.push(name);
 		state.nonNull.remove(name);
+		state.maybe.remove(name);
+	}
+
+	/** Record `name` as `MaybeNull` in `state` — a value from a nullable source, pending a narrowing — clearing any `NonNull` / `Null` fact (the three sets stay disjoint), deduplicated. */
+	private static inline function markMaybe(state: FlowState, name: String): Void {
+		if (!state.maybe.contains(name)) state.maybe.push(name);
+		state.nonNull.remove(name);
+		state.known.remove(name);
 	}
 
 	/** Drop every fact about `name` — it becomes `Unknown`. */
 	private static inline function clearName(state: FlowState, name: String): Void {
 		state.nonNull.remove(name);
 		state.known.remove(name);
+		state.maybe.remove(name);
 	}
 
 	/** A deep copy of `state` — an isolated branch state the caller can mutate without affecting the original. */
 	private static inline function copyState(state: FlowState): FlowState {
-		return { nonNull: state.nonNull.copy(), known: state.known.copy() };
+		return { nonNull: state.nonNull.copy(), known: state.known.copy(), maybe: state.maybe.copy() };
 	}
 
 	/**
@@ -866,7 +943,8 @@ final class NullFlow {
 	private static function intersect(a: FlowState, b: FlowState): FlowState {
 		return {
 			nonNull: [for (n in a.nonNull) if (b.nonNull.contains(n)) n],
-			known: [for (n in a.known) if (b.known.contains(n)) n]
+			known: [for (n in a.known) if (b.known.contains(n)) n],
+			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n]
 		};
 	}
 
@@ -876,6 +954,8 @@ final class NullFlow {
 		for (n in next.nonNull) state.nonNull.push(n);
 		state.known.resize(0);
 		for (n in next.known) state.known.push(n);
+		state.maybe.resize(0);
+		for (n in next.maybe) state.maybe.push(n);
 	}
 
 	/** Whether `source[from..to)` contains a comma outside every bracket pair and string literal. */

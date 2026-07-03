@@ -344,6 +344,7 @@ import unit.CallGraphTest;
 import unit.ThreadSafetyCheckTest;
 import unit.UncheckedNullableTest;
 import unit.PossibleNullDereferenceTest;
+import unit.UnguardedNullableDerefTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -637,6 +638,7 @@ class RunTests {
 		addCase(new IdenticalOperandsCheckTest());
 		addCase(new UncheckedNullableTest());
 		addCase(new PossibleNullDereferenceTest());
+		addCase(new UnguardedNullableDerefTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());

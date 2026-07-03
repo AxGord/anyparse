@@ -1,0 +1,176 @@
+package unit;
+
+import utest.Assert;
+import utest.Test;
+import anyparse.check.Check.Violation;
+import anyparse.check.Linter;
+import anyparse.check.Severity;
+import anyparse.check.UnguardedNullableDeref;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+
+/**
+ * The `unguarded-nullable-deref` check (mechanism A): a local bound from a nullable
+ * source (`map[key]`, `Array` / `List` `pop` / `shift`, a `Null<T>`-returning call)
+ * and dereferenced with no null check on the path is flagged `Warning`. The
+ * flow-sensitive sibling of the point-wise `possible-null-dereference` — it catches
+ * the binding-then-use `var u = m[k]; ...; u.f` that the point-wise check is blind to,
+ * while a guard (`if (u != null)`, early return, `&&`, non-null reassignment, `??=`)
+ * narrows the fact away. A non-nullable source, a direct-expression receiver, a
+ * closure body, a plain param, and a multi-binding declaration are safe misses.
+ */
+class UnguardedNullableDerefTest extends Test {
+
+	public function testMapBindingFieldFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { function f(m:Map<String,Int>) { var u = m[k]; g(); u.foo; } function g() {} }');
+		Assert.equals(1, vs.length);
+		Assert.equals('unguarded-nullable-deref', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
+	public function testArrayPopBindingNotFlagged(): Void {
+		// Array.pop / shift, List.pop / first / last are excluded from the flow seed:
+		// their dominant `while (c.length > 0) c.pop()` idiom is length-guarded, a guard
+		// flow cannot model, so seeding them would be a systematic false positive. The
+		// point-wise `possible-null-dereference` still flags them at `Info`.
+		Assert.equals(0, violations('class C { function f(arr:Array<Int>) { var u = arr.pop(); u.bar(); } }').length);
+	}
+
+	public function testLengthGuardedPopNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(arr:Array<Int>) { while (arr.length > 0) { var u = arr.pop(); u.foo; } } }').length
+		);
+	}
+
+	public function testMapGetBindingFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m.get(k); u.bar(); } }').length);
+	}
+
+	public function testSwitchNullCaseThenWildcardNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case null: return; case _: u.foo; } } }').length
+		);
+	}
+
+	public function testSwitchNullCaseNonExitingNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case null: trace(0); case _: u.foo; } } }').length
+		);
+	}
+
+	public function testCaseGuardNarrowsNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { function f(m:Map<String,Foo>, x:Int) { var u = m[k]; switch (x) { case _ if (u != null): u.foo; } } }').length
+		);
+	}
+
+	public function testSwitchNoNullCaseFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; switch (u) { case _: u.foo; } } }').length);
+	}
+
+	public function testNullReturnBindingFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var u = findUser("x"); u.baz; } }').length
+		);
+	}
+
+	public function testForceNavFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; u!.foo; } }').length);
+	}
+
+	public function testIndexDerefFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; u[0]; } }').length);
+	}
+
+	public function testBareCallFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { var u = findUser("x"); u(); } }').length
+		);
+	}
+
+	public function testReassignBindingFlagged(): Void {
+		Assert.equals(1, violations('class C { function f(m:Map<String,Int>) { var u = 0; u = m[k]; u.foo; } }').length);
+	}
+
+	public function testGuardedNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; if (u != null) u.foo; } }').length);
+	}
+
+	public function testEarlyReturnNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; if (u == null) return; u.foo; } }').length);
+	}
+
+	public function testShortCircuitNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k]; var ok = u != null && u.foo > 0; } }').length);
+	}
+
+	public function testReassignNonNullNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; u = new Foo(); u.foo; } }').length);
+	}
+
+	public function testNullCoalesceAssignNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; u ??= new Foo(); u.foo; } }').length);
+	}
+
+	public function testArrayIndexBindingNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(arr:Array<Int>) { var u = arr[i]; u.foo; } }').length);
+	}
+
+	public function testNonNullReturnBindingNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function getFoo():Foo { return null; } function g() { var u = getFoo(); u.bar(); } }').length
+		);
+	}
+
+	public function testReassignUnknownNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(m:Map<String,Int>) { var u = m[k]; u = compute(); u.foo; } function compute() { return null; } }'
+			).length
+		);
+	}
+
+	public function testDerefInClosureNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; var g = function() { return u.foo; }; } }').length
+		);
+	}
+
+	public function testDirectExprReceiverNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { m[k].foo; } }').length);
+	}
+
+	public function testMultiBindingNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(m:Map<String,Int>) { var u = m[k], v = 1; u.foo; } }').length);
+	}
+
+	public function testParamNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(u:Foo) { u.foo; } }').length);
+	}
+
+	public function testFixReturnsEmpty(): Void {
+		final src: String = 'class C { function f(m:Map<String,Int>) { var u = m[k]; u.foo; } }';
+		final check: UnguardedNullableDeref = new UnguardedNullableDeref();
+		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+	}
+
+	public function testRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('unguarded-nullable-deref'));
+		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		Assert.isTrue(ids.contains('unguarded-nullable-deref'));
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+}

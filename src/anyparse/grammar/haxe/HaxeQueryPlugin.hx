@@ -533,6 +533,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'WeakMap.get',
 			],
 			nullableReturnMarkerTypes: ['Null'],
+			nullableFlowExcludedCalls: ['Array.pop', 'Array.shift', 'List.pop', 'List.first', 'List.last'],
 		};
 	}
 

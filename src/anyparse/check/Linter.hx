@@ -93,7 +93,8 @@ final class Linter {
 			new DeadStore(),
 			new ThreadSafety(),
 			new UncheckedNullable(),
-			new PossibleNullDereference()
+			new PossibleNullDereference(),
+			new UnguardedNullableDeref()
 		];
 	}
 

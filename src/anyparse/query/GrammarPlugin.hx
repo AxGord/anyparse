@@ -989,6 +989,17 @@ typedef RefShape = {
 	 * call-return half of the check.
 	 */
 	@:optional var nullableReturnMarkerTypes: Array<String>;
+
+	/**
+	 * Dotted `Type.method` instance-call sources EXCLUDED from the flow-sensitive
+	 * `unguarded-nullable-deref` seed — the length-guarded collection accessors
+	 * (`Array.pop` / `Array.shift` / `List.pop` / `List.first` / `List.last`), whose
+	 * dominant real-world idiom (`while (c.length > 0) c.pop()`) is provably safe by a
+	 * guard flow cannot model, so seeding them as `MaybeNull` produces systematic false
+	 * positives at `Warning` severity. The point-wise `possible-null-dereference` still
+	 * flags them at `Info` (advisory). Optional; unset excludes nothing.
+	 */
+	@:optional var nullableFlowExcludedCalls: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

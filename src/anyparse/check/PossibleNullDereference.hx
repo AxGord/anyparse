@@ -6,10 +6,10 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeResolver;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.check.NullableSource.NullableSourceCfg;
 
 /**
  * Flags a dereference of a provably-nullable expression with no null check — a
@@ -62,26 +62,16 @@ final class PossibleNullDereference implements Check {
 		final shape: RefShape = plugin.refShape();
 		final identKind: Null<String> = shape.identKind;
 		final derefKinds: Array<String> = [for (k in [shape.fieldAccessKind, shape.forceFieldAccessKind]) if (k != null) k];
-		final nullableIndexTypes: Array<String> = shape.nullableIndexTypeNames ?? [];
-		final returnMarkers: Array<String> = shape.nullableReturnMarkerTypes ?? [];
-		final instanceSigs: Array<{ type: String, method: String }> = parseInstanceSigs(shape.nullableInstanceReturnCalls ?? []);
-		final noSource: Bool = nullableIndexTypes.length == 0 && instanceSigs.length == 0 && returnMarkers.length == 0;
-		if (identKind == null || derefKinds.length == 0 || noSource) return [];
+		final cfg: Null<NullableSourceCfg> = NullableSource.build(shape);
+		if (identKind == null || derefKinds.length == 0 || cfg == null) return [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
-		final identKindValue: String = identKind;
+		final cfgValue: NullableSourceCfg = cfg;
 		final ctx: Ctx = {
-			identKind: identKindValue,
 			derefKinds: derefKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			shape: shape,
-			indexAccessKind: shape.indexAccessKind,
-			nullableIndexTypes: nullableIndexTypes,
-			callKind: shape.callKind,
-			fieldAccessKind: shape.fieldAccessKind,
-			instanceSigs: instanceSigs,
-			returnMarkers: returnMarkers
+			cfg: cfgValue
 		};
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -102,7 +92,7 @@ final class PossibleNullDereference implements Check {
 		return [];
 	}
 
-	/** Walk `node`, flagging a deref whose receiver is a nullable-index access. */
+	/** Walk `node`, flagging a deref whose receiver is a nullable source. */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>,
 		returnTypes: Map<Int, String>, ctx: Ctx
@@ -111,7 +101,7 @@ final class PossibleNullDereference implements Check {
 		if (ctx.derefKinds.contains(node.kind) && node.children.length >= 1) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
-				final source: Null<String> = nullableSource(node.children[0], root, declaredTypes, returnTypes, ctx);
+				final source: Null<String> = NullableSource.describe(node.children[0], root, declaredTypes, returnTypes, ctx.cfg);
 				if (source != null) out.push({
 					file: file,
 					span: span,
@@ -124,89 +114,11 @@ final class PossibleNullDereference implements Check {
 		for (c in node.children) walk(out, file, c, root, declaredTypes, returnTypes, ctx);
 	}
 
-	/**
-	 * The nullable-source description of `receiver` when it is a provably-nullable
-	 * expression — a `Map`-family index (`m[k]`) or an `Array` / `List` `pop` /
-	 * `shift` call — else null. The receiver's declared type is resolved through
-	 * `TypeResolver.identTypeName`, so an `Array` index or a same-named method on
-	 * an unrelated type is a safe miss.
-	 */
-	private static function nullableSource(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, ctx: Ctx
-	): Null<String> {
-		return
-			mapIndexSource(receiver, root, declaredTypes, ctx) ?? instanceCallSource(receiver, root, declaredTypes, ctx) ?? returnCallSource(
-				receiver, root, returnTypes, ctx
-			);
-	}
-
-	/** `'map access T[key]'` when `receiver` is a `nullableIndexTypes` index, else null. */
-	private static function mapIndexSource(receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, ctx: Ctx): Null<String> {
-		if (
-			ctx.indexAccessKind == null || ctx.nullableIndexTypes.length == 0 || receiver.kind != ctx.indexAccessKind
-			|| receiver.children.length < 1
-		)
-			return null;
-		final ident: QueryNode = receiver.children[0];
-		if (ident.kind != ctx.identKind) return null;
-		final typeName: Null<String> = TypeResolver.identTypeName(ident, root, ctx.shape, declaredTypes);
-		return typeName != null && ctx.nullableIndexTypes.contains(typeName) ? 'map access ${typeName}[key]' : null;
-	}
-
-	/** `'T.method()'` when `receiver` is a `nullableInstanceReturnCalls` call, else null. */
-	private static function instanceCallSource(
-		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, ctx: Ctx
-	): Null<String> {
-		if (
-			ctx.callKind == null || ctx.fieldAccessKind == null || ctx.instanceSigs.length == 0 || receiver.kind != ctx.callKind
-			|| receiver.children.length < 1
-		)
-			return null;
-		final callee: QueryNode = receiver.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != ctx.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final recvIdent: QueryNode = callee.children[0];
-		if (recvIdent.kind != ctx.identKind) return null;
-		final typeName: Null<String> = TypeResolver.identTypeName(recvIdent, root, ctx.shape, declaredTypes);
-		if (typeName == null) return null;
-		for (sig in ctx.instanceSigs) if (sig.type == typeName && sig.method == method) return '${typeName}.${method}()';
-		return null;
-	}
-
-	/** `'name()'` when `receiver` is a call to a plain-identifier function with a `nullableReturnMarkerTypes` return, else null. */
-	private static function returnCallSource(receiver: QueryNode, root: QueryNode, returnTypes: Map<Int, String>, ctx: Ctx): Null<String> {
-		if (ctx.callKind == null || ctx.returnMarkers.length == 0 || receiver.kind != ctx.callKind || receiver.children.length < 1)
-			return null;
-		final callee: QueryNode = receiver.children[0];
-		final calleeName: Null<String> = callee.name;
-		if (callee.kind != ctx.identKind || calleeName == null) return null;
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(callee, root, ctx.shape);
-		final retType: Null<String> = bindingFrom == null ? null : returnTypes[bindingFrom];
-		return retType != null && ctx.returnMarkers.contains(retType) ? '${calleeName}()' : null;
-	}
-
-	/** Split each dotted `Type.method` signature into its parts, dropping malformed entries. */
-	private static function parseInstanceSigs(raw: Array<String>): Array<{ type: String, method: String }> {
-		final sigs: Array<{ type: String, method: String }> = [];
-		for (s in raw) {
-			final dot: Int = s.lastIndexOf('.');
-			if (dot > 0 && dot < s.length - 1) sigs.push({ type: s.substring(0, dot), method: s.substring(dot + 1) });
-		}
-		return sigs;
-	}
-
 }
 
 /** Resolved per-run constants threaded through the recursive walk. */
 private typedef Ctx = {
-	var identKind: String;
 	var derefKinds: Array<String>;
 	var opaqueKinds: Array<String>;
-	var shape: RefShape;
-	var indexAccessKind: Null<String>;
-	var nullableIndexTypes: Array<String>;
-	var callKind: Null<String>;
-	var fieldAccessKind: Null<String>;
-	var instanceSigs: Array<{ type: String, method: String }>;
-	var returnMarkers: Array<String>;
+	var cfg: NullableSourceCfg;
 };
