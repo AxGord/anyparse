@@ -420,6 +420,8 @@ class TriviaTypeSynth {
 	 */
 	public static inline final CHAIN_LEAD_COMMENT_ARG_NAME: String = 'chainLeadComment';
 
+	public static inline final OP_AFTER_COMMENT_ARG_NAME: String = 'opAfterComment';
+
 	private static inline final PAIRED_SUFFIX: String = 'T';
 	private static inline final SYNTH_SUBPACK: String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
@@ -686,6 +688,18 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * ω-keep-infix-postop-comment — true for an `@:infix` chain ctor
+	 * (Add/Sub/And/Or) carrying `@:fmt(captureChainNewline)`. Such ctors grow a
+	 * positional `opAfterComment:Null<String>` slot (after `chainLeadComment`)
+	 * holding the verbatim same-line comment trailing the OPERATOR (before the
+	 * right operand). Excludes the postfix FieldAccess ctor (no such operator
+	 * gap), so its arity is unchanged.
+	 */
+	public static function isInfixChainBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 2 && branch.hasMeta(':infix') && branch.fmtHasFlag('captureChainNewline');
+	}
+
+	/**
 	 * ω-keep-chain-receiver-comment — true when the branch is the
 	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
 	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
@@ -905,6 +919,7 @@ class TriviaTypeSynth {
 		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
 		if (isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
+		if (isInfixChainBranch(branch)) n++; // opAfterComment (infix post-operator comment)
 		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
@@ -1085,6 +1100,7 @@ class TriviaTypeSynth {
 		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
+		if (isInfixChainBranch(branch)) defaults.push(macro (null: Null<String>)); // opAfterComment (infix post-operator comment)
 		if (isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing
@@ -1856,6 +1872,14 @@ class TriviaTypeSynth {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 			args.push({ name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT });
+		}
+		// ω-keep-infix-postop-comment: infix chain ctors also grow an
+		// `opAfterComment:Null<String>` slot (after chainLeadComment) holding the
+		// comment trailing the operator. Infix-only (FieldAccess excluded).
+		if (isInfixChainBranch(branch)) {
+			final strCT2: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			final nullStrCT2: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT2)] });
+			args.push({ name: OP_AFTER_COMMENT_ARG_NAME, type: nullStrCT2 });
 		}
 		// ω-postfix-op-space: word-op postfix ctors opting into source-faithful
 		// operator spacing grow `opSpaceBefore:Bool` as the LAST appended slot

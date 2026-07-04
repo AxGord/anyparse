@@ -76,7 +76,8 @@ final class BinaryChainEmit {
 
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
-		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false
+		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
+		?afterComments: Array<Null<Doc>>
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -141,7 +142,7 @@ final class BinaryChainEmit {
 		}
 
 		function shapeAt(r: { mode: WrapMode, location: WrappingLocation }): Doc {
-			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
+			return shape(r.mode, r.location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak, afterComments);
 		}
 
 		function shapeNoWrapAt(location: WrappingLocation): Doc {
@@ -329,7 +330,7 @@ final class BinaryChainEmit {
 
 	private static function shape(
 		mode: WrapMode, location: WrappingLocation, items: Array<Doc>, ops: Array<String>, cols: Int, indentUnit: Int,
-		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false
+		?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, ?afterComments: Array<Null<Doc>>
 	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(items, ops);
@@ -348,7 +349,7 @@ final class BinaryChainEmit {
 			// When the signal is absent (null — plain mode / non-capturing
 			// ctor) shapeKeep degrades to shapeNoWrap → byte-inert.
 			case Keep:
-				shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak);
+				shapeKeep(items, ops, cols, location, sourceBreakBefore, headBreak, afterComments);
 			// ω-cascade-emits-comments: Ignore sister to Keep — the writer
 			// pre-empts at the trivia branch. Defensive fallback to
 			// shapeNoWrap on engine leakage.
@@ -392,9 +393,13 @@ final class BinaryChainEmit {
 	 */
 	private static function shapeKeep(
 		items: Array<Doc>, ops: Array<String>, cols: Int, location: WrappingLocation, ?sourceBreakBefore: Array<Bool>,
-		headBreak: Bool = false
+		headBreak: Bool = false, ?afterComments: Array<Null<Doc>>
 	): Doc {
 		final breaks: Array<Bool> = sourceBreakBefore ?? [];
+		// ω-keep-infix-postop-comment: a per-op comment trailing the operator
+		// (`a || // c\n b`) — emit `OP // c` on the current line and force a
+		// break before the next operand, regardless of the chain's location.
+		inline function _afterOf(i: Int): Null<Doc> return (afterComments != null && i < afterComments.length) ? afterComments[i] : null;
 		// First operand stays at the call-site column (unless `headBreak`);
 		// only the continuation tail is nested at the chain's one-tab indent,
 		// so a broken gap lands its line at `base + cols` while a glued gap
@@ -403,7 +408,12 @@ final class BinaryChainEmit {
 		switch location {
 			case BeforeLast:
 				for (i in 0...ops.length) {
-					if (i < breaks.length && breaks[i]) {
+					final _ac: Null<Doc> = _afterOf(i);
+					if (_ac != null) {
+						tail.push(Text(' ' + ops[i]));
+						tail.push(_ac);
+						tail.push(Line('\n'));
+					} else if (i < breaks.length && breaks[i]) {
 						tail.push(Line('\n'));
 						tail.push(Text(ops[i] + ' '));
 					} else {
@@ -413,7 +423,12 @@ final class BinaryChainEmit {
 				}
 			case AfterLast:
 				for (i in 0...ops.length) {
-					if (i < breaks.length && breaks[i]) {
+					final _ac: Null<Doc> = _afterOf(i);
+					if (_ac != null) {
+						tail.push(Text(' ' + ops[i]));
+						tail.push(_ac);
+						tail.push(Line('\n'));
+					} else if (i < breaks.length && breaks[i]) {
 						tail.push(Text(' ' + ops[i]));
 						tail.push(Line('\n'));
 					} else {

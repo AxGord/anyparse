@@ -2304,7 +2304,8 @@ class Lowering {
 							macro left,
 							macro _right,
 							macro _chainNl,
-							macro _opTrailComment
+							macro _opTrailComment,
+							macro _opAfterComment
 						]
 						: [
 							macro left,
@@ -2321,6 +2322,11 @@ class Lowering {
 				: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
 			final commitBody: Expr = captureChainNl
 				? macro {
+					// ω-keep-infix-postop-comment: capture a same-line comment
+					// trailing the operator (before the right operand) BEFORE
+					// `skipWsAndStash` would stash it into pendingTrivia (where it
+					// leaks into the next operand's parse). Rewinds when none.
+					final _opAfterComment: Null<String> = collectTrailingFull(ctx);
 					$skipCall;
 					final _chainNl: Bool = $chainNlValue;
 					if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false;

@@ -41,4 +41,14 @@ class HxInfixCommentWriteTest extends Test {
 		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tvar s = a + b /* c */ + d;\n\t}\n}\n', roundTrip(source));
 	}
 
+	public function testInfixPostOperatorLineCommentBoolChain(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar b = f1() || // one\n\t\t\tf2() || // two\n\t\t\tf3();\n\t}\n}';
+		Assert.equals(source + '\n', roundTrip(source));
+	}
+
+	public function testInfixPostOperatorLineCommentAddChain(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar s = a + // plus\n\t\t\tb;\n\t}\n}';
+		Assert.equals(source + '\n', roundTrip(source));
+	}
+
 }

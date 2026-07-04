@@ -4916,7 +4916,8 @@ class WriterLowering {
 		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 4 : 0);
+			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 4 : 0)
+			+ (TriviaTypeSynth.isInfixChainBranch(branch) ? 1 : 0);
 	}
 
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
@@ -6830,6 +6831,18 @@ class WriterLowering {
 		// Keep shape so the comment round-trips (line comment → operator on the
 		// continuation line; block comment → inline).
 		final hasLeadDecl: Expr = threadBreaks ? macro var _hasLeadComment: Bool = false : macro {};
+		// ω-keep-infix-postop-comment: per-op comment trailing the operator
+		// (parallel to _ops); null entries when no comment. Threaded to
+		// BinaryChainEmit so shapeKeep appends `OP // c` and forces a break.
+		final afterCommentsDecl: Expr = threadBreaks ? macro final _afterComments: Array<Null<anyparse.core.Doc>> = [] : macro {};
+		final outerAfterComment: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainAfterComment) : null;
+		final outerAfterPush: Expr = (threadBreaks && outerAfterComment != null)
+			? macro {
+				final _oac: Null<String> = ${outerAfterComment};
+				_afterComments.push(_oac != null ? trailingCommentDocVerbatim(_oac, opt) : null);
+				if (_oac != null) _hasLeadComment = true;
+			}
+			: macro {};
 		// Top-level gather: head operand, the outer operator, the outer
 		// ctor's source-newline (parallel to that operator), tail operand.
 		final outerBreakPush: Expr = threadBreaks ? macro _breaks.push(${outerChainNl}) : macro {};
@@ -6852,13 +6865,15 @@ class WriterLowering {
 			$outerLeadAttach;
 			_ops.push($v{opText});
 			$outerBreakPush;
+			$outerAfterPush;
 			_gather($i{argNames[1]});
 		};
 		// Thread `_breaks` (sourceBreakBefore) + `_headBreak` only in
 		// Trivia mode; Plain keeps the legacy 6-arg call (chain glues).
 		final emitCall: Expr = threadBreaks
 			? macro anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak, _hasLeadComment
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak, _hasLeadComment,
+				_afterComments
 			)
 			: macro anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced);
 		return macro {
@@ -6866,6 +6881,7 @@ class WriterLowering {
 			final _ops: Array<String> = [];
 			$breaksDecl;
 			$hasLeadDecl;
+			$afterCommentsDecl;
 			// ω-condwrap-call-arg-nest + ω-callarg-chain-nest: suppress
 			// the chain's OWN continuation `Nest(cols, …)` when an outer
 			// context already supplied the `+cols` indent — either a
@@ -6929,7 +6945,7 @@ class WriterLowering {
 		return threadBreaks
 			? isChainBool
 				? macro switch _e {
-					case Or(_l, _r, _nl, _lc):
+					case Or(_l, _r, _nl, _lc, _ac):
 						_gather(_l);
 						if (_lc != null) {
 							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
@@ -6937,8 +6953,10 @@ class WriterLowering {
 						}
 						_ops.push('||');
 						_breaks.push(_nl);
+						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+						if (_ac != null) _hasLeadComment = true;
 						_gather(_r);
-					case And(_l, _r, _nl, _lc):
+					case And(_l, _r, _nl, _lc, _ac):
 						_gather(_l);
 						if (_lc != null) {
 							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
@@ -6946,11 +6964,13 @@ class WriterLowering {
 						}
 						_ops.push('&&');
 						_breaks.push(_nl);
+						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+						if (_ac != null) _hasLeadComment = true;
 						_gather(_r);
 					case _: _items.push($leafCall);
 				}
 				: macro switch _e {
-					case Add(_l, _r, _nl, _lc):
+					case Add(_l, _r, _nl, _lc, _ac):
 						_gather(_l);
 						if (_lc != null) {
 							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
@@ -6958,8 +6978,10 @@ class WriterLowering {
 						}
 						_ops.push('+');
 						_breaks.push(_nl);
+						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+						if (_ac != null) _hasLeadComment = true;
 						_gather(_r);
-					case Sub(_l, _r, _nl, _lc):
+					case Sub(_l, _r, _nl, _lc, _ac):
 						_gather(_l);
 						if (_lc != null) {
 							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
@@ -6967,6 +6989,8 @@ class WriterLowering {
 						}
 						_ops.push('-');
 						_breaks.push(_nl);
+						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+						if (_ac != null) _hasLeadComment = true;
 						_gather(_r);
 					case _: _items.push($leafCall);
 				}
@@ -11511,6 +11535,8 @@ class WriterLowering {
 		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainLeadComment) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
+		if (slot == ChainAfterComment) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isInfixChainBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -11805,6 +11831,7 @@ class WriterLowering {
 			case ChainNewline: TriviaTypeSynth.isAltChainNewlineBranch(branch);
 			case ChainLeadComment: TriviaTypeSynth.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
+			case ChainAfterComment: TriviaTypeSynth.isInfixChainBranch(branch);
 		};
 	}
 
@@ -16865,6 +16892,7 @@ enum abstract AltSlot(Int) {
 	final ChainNewline = 6;
 	final ChainLeadComment = 7;
 	final PostfixOpSpace = 8;
+	final ChainAfterComment = 9;
 
 }
 #end
