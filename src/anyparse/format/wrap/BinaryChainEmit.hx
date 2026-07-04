@@ -76,7 +76,7 @@ final class BinaryChainEmit {
 
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
-		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false
+		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -147,6 +147,14 @@ final class BinaryChainEmit {
 		function shapeNoWrapAt(location: WrappingLocation): Doc {
 			return shape(NoWrap, location, items, ops, cols, indentUnit, sourceBreakBefore, headBreak);
 		}
+
+		// ω-keep-infix-operand-comment: when an operand carries a captured
+		// trailing comment, force the source-faithful `Keep` shape so a line
+		// comment's mandatory newline lands the operator on its own
+		// continuation line (`a // c` then `+ b`) while a block comment stays
+		// inline (`a /* c */ + b`, no source break). Location follows the
+		// rules' flat decision; `sourceBreakBefore` drives the per-gap break.
+		if (forceKeep) return WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: evalAt(true, []).location }));
 
 		// Force-break path: cascade evaluated only against
 		// `exceeds=true` (anyHardline already commits to break-mode

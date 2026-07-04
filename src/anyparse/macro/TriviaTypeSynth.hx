@@ -904,7 +904,7 @@ class TriviaTypeSynth {
 		if (isAltWrapOpenNewlineBranch(branch)) n++; // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) n++; // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
-		if (isPostfixChainCommentBranch(branch)) n++; // chainLeadComment (receiver-comment)
+		if (isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
 		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
@@ -1084,7 +1084,7 @@ class TriviaTypeSynth {
 		if (isAltWrapOpenNewlineBranch(branch)) defaults.push(macro false); // wrapOpenNewline
 		if (isAltKwNewlineBranch(branch)) defaults.push(macro false); // kwNewline (increment 1b)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
-		if (isPostfixChainCommentBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (receiver-comment)
+		if (isAltChainNewlineBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
 		if (isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing
@@ -1842,14 +1842,15 @@ class TriviaTypeSynth {
 			final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 			args.push({ name: CHAIN_NEWLINE_ARG_NAME, type: boolCT });
 		}
-		// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
+		// ω-keep-chain-receiver-comment + ω-keep-infix-operand-comment: every chain
+		// ctor — the `@:postfix('.')` FieldAccess AND the `@:infix` Add/Sub/And/Or —
 		// grows a `chainLeadComment:Null<String>` slot immediately after its
-		// `chainNewline:Bool` slot, holding the verbatim trailing comment of its
-		// operand captured at the dot gap. Postfix-only (isPostfixChainCommentBranch
-		// excludes the infix chain ctors), so it appends after chainNewline on the
-		// single FieldAccess branch and stays disjoint from the closeTrailing
-		// family below (FieldAccess carries no close delimiter).
-		if (isPostfixChainCommentBranch(branch)) {
+		// `chainNewline:Bool` slot, holding the verbatim trailing comment of its left
+		// operand captured before the operator (the dot gap for FieldAccess, the
+		// operator gap for the infix chain ctors). Gated by isAltChainNewlineBranch so
+		// it appends after chainNewline and stays disjoint from the closeTrailing
+		// family below (chain ctors carry no close delimiter).
+		if (isAltChainNewlineBranch(branch)) {
 			final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 			args.push({ name: CHAIN_LEAD_COMMENT_ARG_NAME, type: nullStrCT });

@@ -2303,7 +2303,8 @@ class Lowering {
 						? [
 							macro left,
 							macro _right,
-							macro _chainNl
+							macro _chainNl,
+							macro _opTrailComment
 						]
 						: [
 							macro left,
@@ -2362,6 +2363,14 @@ class Lowering {
 				var left: $returnCT = $atomCall;
 				while (true) {
 					final _preWsPos: Int = ctx.pos;
+					// ω-keep-infix-operand-comment: capture the left operand's
+					// same-line trailing comment before `skipWsAndStash` consumes it,
+					// mirroring the postfix loop's receiver-comment capture. Position-
+					// inert — collectTrailingFull rewinds when there is no comment, and
+					// on no operator match the `_hadComment` rewind (scanning from
+					// `_preWsPos`) restores a consumed comment; only a matched chain
+					// ctor reads it into its chainLeadComment slot.
+					final _opTrailComment: Null<String> = collectTrailingFull(ctx);
 					final _stashCount0: Int = ctx.pendingTrivia == null ? 0 : ctx.pendingTrivia.leadingComments.length;
 					skipWsAndStash(ctx);
 					final _savedPos: Int = ctx.pos;

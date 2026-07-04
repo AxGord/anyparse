@@ -4867,7 +4867,7 @@ class WriterLowering {
 		// so the general FieldAccess pattern destructures the right arity; the
 		// keep-mode chain dispatch reads it directly off its hand-written
 		// `FieldAccess(_prev, _fld, _nl, _opTrail)` pattern. Postfix-only.
-		final hasChainLeadComment: Bool = TriviaTypeSynth.isPostfixChainCommentBranch(branch);
+		final hasChainLeadComment: Bool = TriviaTypeSynth.isAltChainNewlineBranch(branch);
 		// ω-postfix-op-space: word-op postfix ctors with
 		// `@:fmt(capturePostfixOpSpace)` grow a positional `opSpaceBefore:Bool`
 		// arg (source had whitespace between operand and operator). Read via
@@ -6821,11 +6821,31 @@ class WriterLowering {
 			)
 			: macro _clearCallArgChainNest(opt);
 		final breaksDecl: Expr = threadBreaks ? macro final _breaks: Array<Bool> = [] : macro {};
+		// ω-keep-infix-operand-comment: trivia-only flag set by the gather when
+		// an operand carried a captured trailing comment; forces the chain's
+		// Keep shape so the comment round-trips (line comment → operator on the
+		// continuation line; block comment → inline).
+		final hasLeadDecl: Expr = threadBreaks ? macro var _hasLeadComment: Bool = false : macro {};
 		// Top-level gather: head operand, the outer operator, the outer
 		// ctor's source-newline (parallel to that operator), tail operand.
 		final outerBreakPush: Expr = threadBreaks ? macro _breaks.push(${outerChainNl}) : macro {};
+		// ω-keep-infix-operand-comment: the OUTER ctor's own operand-trailing
+		// comment (this branch's left operand, captured before the operator)
+		// attaches to the last gathered head item — the gather switch only sees
+		// NESTED chain ctors, so the top-level comment is threaded here.
+		final outerLeadComment: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainLeadComment) : null;
+		final outerLeadAttach: Expr = (threadBreaks && outerLeadComment != null)
+			? macro {
+				final _olc: Null<String> = ${outerLeadComment};
+				if (_olc != null) {
+					_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_olc, opt)]);
+					_hasLeadComment = true;
+				}
+			}
+			: macro {};
 		final gatherInvoke: Expr = macro {
 			_gather($i{argNames[0]});
+			$outerLeadAttach;
 			_ops.push($v{opText});
 			$outerBreakPush;
 			_gather($i{argNames[1]});
@@ -6834,13 +6854,14 @@ class WriterLowering {
 		// Trivia mode; Plain keeps the legacy 6-arg call (chain glues).
 		final emitCall: Expr = threadBreaks
 			? macro anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak
+				_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced, _breaks, _headBreak, _hasLeadComment
 			)
 			: macro anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $chainRulesExpr, _chainNestSuppress, _condWrapForced);
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [];
 			final _ops: Array<String> = [];
 			$breaksDecl;
+			$hasLeadDecl;
 			// ω-condwrap-call-arg-nest + ω-callarg-chain-nest: suppress
 			// the chain's OWN continuation `Nest(cols, …)` when an outer
 			// context already supplied the `+cols` indent — either a
@@ -6904,26 +6925,42 @@ class WriterLowering {
 		return threadBreaks
 			? isChainBool
 				? macro switch _e {
-					case Or(_l, _r, _nl):
+					case Or(_l, _r, _nl, _lc):
 						_gather(_l);
+						if (_lc != null) {
+							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+							_hasLeadComment = true;
+						}
 						_ops.push('||');
 						_breaks.push(_nl);
 						_gather(_r);
-					case And(_l, _r, _nl):
+					case And(_l, _r, _nl, _lc):
 						_gather(_l);
+						if (_lc != null) {
+							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+							_hasLeadComment = true;
+						}
 						_ops.push('&&');
 						_breaks.push(_nl);
 						_gather(_r);
 					case _: _items.push($leafCall);
 				}
 				: macro switch _e {
-					case Add(_l, _r, _nl):
+					case Add(_l, _r, _nl, _lc):
 						_gather(_l);
+						if (_lc != null) {
+							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+							_hasLeadComment = true;
+						}
 						_ops.push('+');
 						_breaks.push(_nl);
 						_gather(_r);
-					case Sub(_l, _r, _nl):
+					case Sub(_l, _r, _nl, _lc):
 						_gather(_l);
+						if (_lc != null) {
+							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+							_hasLeadComment = true;
+						}
 						_ops.push('-');
 						_breaks.push(_nl);
 						_gather(_r);
@@ -11468,7 +11505,7 @@ class WriterLowering {
 		if (slot == ChainNewline) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainLeadComment) return macro $i{argNames[idx]};
-		if (TriviaTypeSynth.isPostfixChainCommentBranch(branch)) idx++;
+		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -11761,7 +11798,7 @@ class WriterLowering {
 			case WrapOpenNewline: TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
 			case KwNewline: TriviaTypeSynth.isAltKwNewlineBranch(branch);
 			case ChainNewline: TriviaTypeSynth.isAltChainNewlineBranch(branch);
-			case ChainLeadComment: TriviaTypeSynth.isPostfixChainCommentBranch(branch);
+			case ChainLeadComment: TriviaTypeSynth.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
 		};
 	}
