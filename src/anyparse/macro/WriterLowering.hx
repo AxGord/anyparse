@@ -1152,12 +1152,18 @@ class WriterLowering {
 			macro _dt(' ');
 		};
 		final nestBody: Bool = starNode.fmtHasFlag('nestBody');
-		// Trailing slots only carry orphan trivia when nestBody is
-		// on (parser gates capture on the same flag). For catches
-		// the slots remain zero — forward null to keep the writer
-		// path byte-identical to the pre-nestBody shape.
-		final tryparseTrailBB: Null<Expr> = nestBody ? trailBBAccess : null;
-		final tryparseTrailLC: Null<Expr> = nestBody ? trailLCAccess : null;
+		// ω-cond-comp-branch-trail: conditional branch bodies (`@:fmt(padTrailing)`
+		// tryparse Stars) also carry orphan trailing trivia before `#end`/`#else`
+		// (the parser captures it on element-parse failure, same as nestBody). The
+		// slots stay empty for every other padTrailing Star, so the emit is
+		// byte-inert until the parser writes them.
+		final branchTrail: Bool = starNode.fmtHasFlag('padTrailing');
+		// Trailing slots carry orphan trivia when nestBody (case/default bodies)
+		// or padTrailing (conditional branch bodies) is on — the parser gates
+		// capture on the same flags. Otherwise zero; forward null to keep the
+		// writer path byte-identical.
+		final tryparseTrailBB: Null<Expr> = (nestBody || branchTrail) ? trailBBAccess : null;
+		final tryparseTrailLC: Null<Expr> = (nestBody || branchTrail) ? trailLCAccess : null;
 		final tryparseTrailBA: Null<Expr> = nestBody ? trailBAAccess : null;
 		// ω-close-trailing-alt: when prev field was a bare-Ref to a
 		// trivia-bearing type whose Alt has close-trailing branches
@@ -13385,7 +13391,7 @@ class WriterLowering {
 			// byte-identical).
 			if (_condIncrease && _padTrailing && _arr.length > 0)
 				_condTrailPad = _padHardline ? _dhl() : _dt(' ');
-			else if (_padTrailing && _arr.length > 0)
+			else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0)
 				_docs.push(_padHardline ? _dhl() : _dt(' '));
 			else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
 			// ω-trivia-tryparse-linelength: when the LAST element carries
@@ -13500,6 +13506,11 @@ class WriterLowering {
 				_dwb(_condTrailPad != null ? _dc([_nested, _condTrailPad]) : _nested);
 			} else {
 				for (_d in _trailDocs) _docs.push(_d);
+				// ω-cond-comp-branch-trail: the padTrailing pad (the newline before
+				// the `#end`/`#else` close marker) was deferred past the orphan
+				// trail comments so the marker lands on its own line instead of
+				// being commented out by a trailing `//` line comment.
+				if (_padTrailing && _trailLC.length > 0 && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
 				_dwb($finalWrapDocs);
 			}
 		};

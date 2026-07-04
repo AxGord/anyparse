@@ -356,6 +356,7 @@ import unit.HxCallArgCommentWriteTest;
 import unit.HxInfixCommentWriteTest;
 import unit.HxCaseCommentWriteTest;
 import unit.HxRhsCommentWriteTest;
+import unit.HxCondCommentWriteTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -579,6 +580,7 @@ class RunTests {
 		addCase(new HxCallArgCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
+		addCase(new HxCondCommentWriteTest());
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new HaxeWriterRoundTripTest());

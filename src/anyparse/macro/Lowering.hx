@@ -1310,7 +1310,10 @@ class Lowering {
 				pos: Context.currentPos(),
 			});
 		}
-		final loopBody: Expr = buildOptKwStarLoopBody(elemCT, elemCall, isTriviaCollects, sepText);
+		final loopBody: Expr = buildOptKwStarLoopBody(
+			elemCT, elemCall, isTriviaCollects, sepText, starNode.fmtHasFlag('padTrailing'), trailingBlankBeforeLocalName(localName),
+			trailingLeadingLocalName(localName)
+		);
 		final innerCommitAction: Expr = buildOptKwStarInnerCommit(hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal);
 		final preCommitCapture: Expr = if (hasKwTriviaSlots)
 			macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
@@ -1635,7 +1638,9 @@ class Lowering {
 			// not re-capture. Comments separated by a blank line still
 			// flow outward via rewind — preserving "blank line = belongs
 			// to next entity" convention.
-			parseSteps.push(buildTriviaTryparseNoSepBody(elemCT, elemCall, accumRef, trailBBLocal, trailLCLocal, trailBALocal, nestBody));
+			parseSteps.push(buildTriviaTryparseNoSepBody(
+				elemCT, elemCall, accumRef, trailBBLocal, trailLCLocal, trailBALocal, nestBody, starNode.fmtHasFlag('padTrailing')
+			));
 			return;
 		}
 		final terminationCheck: Expr = buildTriviaCloseTerminationCheck(closeText);
@@ -2479,25 +2484,37 @@ class Lowering {
 		};
 	}
 
-	private function buildOptKwStarLoopBody(elemCT: ComplexType, elemCall: Expr, isTriviaCollects: Bool, sepText: Null<String>): Expr {
-		// Tryparse loop body — element parse in a try/catch, rewind to
-		// `_savedPos` on failure. Trivia mode wraps in `Trivial<T>` and
-		// scans `_lead` / `_trailing` per element; plain mode pushes the
-		// raw element. Mirrors the regular tryparse Star paths.
-		//
-		// Slice D4: with `@:sep`, mirror the non-nestBody branch of
-		// `emitTriviaStarFieldSteps` (line ~3616) — capture trailing-before-
-		// sep, h-ws skip, matchLit(sep), set `Trivial.sepAfter` from the
-		// match result so the writer's `triviaTryparseStarExpr` blockEnded
-		// gate consults the source-fidelity signal. Plain mode just
-		// consumes the optional sep so the next iteration's element parse
-		// doesn't match a bare `;` as `HxStatement.EmptyStmt`.
+	private function buildOptKwStarLoopBody(
+		elemCT: ComplexType, elemCall: Expr, isTriviaCollects: Bool, sepText: Null<String>, branchTrail: Bool, trailBBLocal: String,
+		trailLCLocal: String
+	): Expr {
 		final hWsSkip: Expr = buildOptKwStarHWsSkipExpr();
+		// ω-cond-comp-branch-trail: on the terminating parse failure at
+		// `#end`/`#elseif`/`#else`, an orphan own-line comment (no blank-line
+		// separator) belongs to THIS branch body — capture it into the trailing
+		// slots and advance past it (mirror of the `nestBody` catch) instead of
+		// rewind+discard. Gated on `branchTrail` (`@:fmt(padTrailing)`).
+		final triviaCatch: Expr = branchTrail
+			? macro {
+				if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+					$i{trailBBLocal} = _lead.blankBefore;
+					$i{trailLCLocal} = _lead.leadingComments;
+					ctx.pos = _afterTriviaPos;
+				} else {
+					ctx.pos = _savedPos;
+				}
+				break;
+			}
+			: macro {
+				ctx.pos = _savedPos;
+				break;
+			};
 		return isTriviaCollects && sepText != null
 			? macro {
 				while (true) {
 					final _savedPos: Int = ctx.pos;
 					final _lead = collectTrivia(ctx);
+					final _afterTriviaPos: Int = ctx.pos;
 					try {
 						final _node: $elemCT = $elemCall;
 						final _trailingBeforeSep: Null<String> = collectTrailingFull(ctx);
@@ -2515,10 +2532,8 @@ class Lowering {
 							sepAfter: _sepAfter,
 							node: _node,
 						});
-					} catch (_e: anyparse.runtime.ParseError) {
-						ctx.pos = _savedPos;
-						break;
-					}
+					} catch (_e: anyparse.runtime.ParseError)
+						$triviaCatch;
 				}
 			}
 			: isTriviaCollects
@@ -2526,6 +2541,7 @@ class Lowering {
 					while (true) {
 						final _savedPos: Int = ctx.pos;
 						final _lead = collectTrivia(ctx);
+						final _afterTriviaPos: Int = ctx.pos;
 						try {
 							final _node: $elemCT = $elemCall;
 							final _trailing: Null<String> = collectTrailingFull(ctx);
@@ -2539,10 +2555,8 @@ class Lowering {
 								sepAfter: true,
 								node: _node,
 							});
-						} catch (_e: anyparse.runtime.ParseError) {
-							ctx.pos = _savedPos;
-							break;
-						}
+						} catch (_e: anyparse.runtime.ParseError)
+							$triviaCatch;
 					}
 				}
 				: sepText != null
@@ -2583,8 +2597,12 @@ class Lowering {
 				final _kwEndPos: Int = ctx.pos;
 				$i{afterKwLocal} = collectTrailing(ctx);
 				final _t = collectTrivia(ctx);
-				for (_c in _t.leadingComments) $i{kwLeadingLocal}.push(_c);
 				$i{bodyOnSameLineLocal} = !hasNewlineIn(ctx.input, _kwEndPos, ctx.pos);
+				// ω-cond-comp-elseBody-leading: route the own-line leading comments
+				// after the kw into pendingTrivia so the body Star's first
+				// collectTrivia attaches them to body[0] and emits them (the
+				// kw-Leading slot is NOT emitted for kw-Star fields — only kw-Ref).
+				// Mirrors the non-kw branch below; keeps the newline/blank signal.
 				// ω-cond-comp-elseBody-pad-stash: propagate the post-kw
 				// newline/blank signal forward so the loop's first-iteration
 				// `collectTrivia` (which drains `ctx.pendingTrivia`) sees it
@@ -2597,12 +2615,8 @@ class Lowering {
 				// drainer (`Codegen.collectTriviaField`). leadingComments
 				// drained into kwLeading above — re-stashing would emit them
 				// twice (once attached to the kw, once on body[0]).
-				if (_t.newlineBefore || _t.blankBefore || _t.blankAfterLeadingComments) ctx.pendingTrivia = {
-					blankBefore: _t.blankBefore,
-					blankAfterLeadingComments: _t.blankAfterLeadingComments,
-					newlineBefore: _t.newlineBefore,
-					leadingComments: [],
-				};
+				if (_t.newlineBefore || _t.blankBefore || _t.blankAfterLeadingComments || _t.leadingComments.length > 0)
+					ctx.pendingTrivia = _t;
 			}
 			: _ctx.trivia
 				? macro {
@@ -2712,7 +2726,7 @@ class Lowering {
 
 	private function buildTriviaTryparseNoSepBody(
 		elemCT: ComplexType, elemCall: Expr, accumRef: Expr, trailBBLocal: String, trailLCLocal: String, trailBALocal: String,
-		nestBody: Bool
+		nestBody: Bool, branchTrail: Bool
 	): Expr {
 		// Try-parse termination: each iteration saves `ctx.pos` before
 		// `collectTrivia`, attempts the element parse, and rewinds to the
@@ -2754,6 +2768,28 @@ class Lowering {
 		}
 		final nlAfterSepScan: Expr = buildPrattBlankNlAfterSepScan();
 		final restoreStash: Expr = buildPrattBlankRestoreStash();
+		// ω-cond-comp-branch-trail: for a `@:fmt(padTrailing)` conditional branch
+		// body (no `#else` — the `#if` body Star before `#end`), capture the
+		// orphan own-line trailing comment into the trail slots on the
+		// terminating parse failure (mirror the nestBody branch) instead of
+		// rewind+discard. Non-branchTrail Stars keep the plain rewind+stash.
+		final nonNestCatch: Expr = branchTrail
+			? macro {
+				if (!_lead.blankBefore && _lead.leadingComments.length > 0) {
+					$i{trailBBLocal} = _lead.blankBefore;
+					$i{trailLCLocal} = _lead.leadingComments;
+					ctx.pos = _leadStart;
+				} else {
+					ctx.pos = _savedPos;
+					$restoreStash;
+				}
+				break;
+			}
+			: macro {
+				ctx.pos = _savedPos;
+				$restoreStash;
+				break;
+			};
 		return macro {
 			while (true) {
 				final _savedPos: Int = ctx.pos;
@@ -2796,11 +2832,8 @@ class Lowering {
 						newlineAfterSep: _nlAfterSep,
 						node: _node,
 					});
-				} catch (_e: anyparse.runtime.ParseError) {
-					ctx.pos = _savedPos;
-					$restoreStash;
-					break;
-				}
+				} catch (_e: anyparse.runtime.ParseError)
+					$nonNestCatch;
 			}
 		};
 	}
