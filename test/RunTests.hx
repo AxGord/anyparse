@@ -348,6 +348,7 @@ import unit.UnguardedNullableDerefTest;
 import unit.HxComprehensionBracketPolicyTest;
 import unit.HxCallParamObjectLiteralSliceTest;
 import unit.HxCallParamFunctionLambdaSliceTest;
+import unit.HxComprehensionBlockHugSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -523,6 +524,7 @@ class RunTests {
 		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());
+		addCase(new HxComprehensionBlockHugSliceTest());
 		addCase(new HxCondWrapFitLineSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());

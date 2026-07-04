@@ -1354,6 +1354,8 @@ class WrapList {
 		// byte-identical.
 		flatTrailingComma: Bool = false
 	): Doc {
+		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(open, close, items, openInside, closeInside);
+		if (comprBlockHug != null) return comprBlockHug;
 		final soleArrowUniform: Null<Doc> = shapeSoleArrowUniform(mode, open, close, openInside, closeInside, items);
 		if (soleArrowUniform != null) return soleArrowUniform;
 		final soleArrowContGlue: Null<Doc> = shapeSoleArrowContGlue(
@@ -2590,6 +2592,108 @@ class WrapList {
 				firstVisibleTextIsFunctionKw(flat);
 			case _:
 				false;
+		};
+	}
+
+	/**
+	 * ω-comprehension-block-hug: true iff `item` is a `for` / `while`
+	 * comprehension element with a BLOCK body — the array-comprehension analog
+	 * of the block lambda. `for` / `while` are reserved keywords so an exact
+	 * first-visible-Text match is unambiguous; the forced-hardline test
+	 * (`flatLength < 0`) restricts to block bodies (a single-expression
+	 * comprehension body renders inline, carries no hardline, and must NOT
+	 * head-hug).
+	 */
+	static function isBlockBodyComprehensionItem(item: Doc): Bool {
+		final t: Null<String> = firstVisibleText(item);
+		// Require a `{ … }` BLOCK body (last token `}`), not merely any hardline:
+		// an expression-body comprehension that WRAPS also carries a hardline but
+		// its close is placed differently by the fork (`]` on its own line).
+		return (t == 'for' || t == 'while') && lastVisibleText(item) == '}' && flatLength(item) < 0;
+	}
+
+	/**
+	 * The whole trimmed first-visible-Text of `d`, or `null`. Left-spine walk
+	 * mirroring `firstVisibleTextStartsWith` but returning the token text.
+	 */
+	static function firstVisibleText(d: Doc): Null<String> {
+		return switch d {
+			case Text(s):
+				StringTools.trim(s);
+			case Concat(arr):
+				var found: Bool = false;
+				var r: Null<String> = null;
+				for (it in arr) if (!found) switch it {
+					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+						| OptHardlineSkipBeforeHardline:
+					case _:
+						found = true;
+						r = firstVisibleText(it);
+				}
+				r;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+				i
+			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				firstVisibleText(i);
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				firstVisibleText(flat);
+			case _:
+				null;
+		};
+	}
+
+	/**
+	 * ω-comprehension-block-hug: a single-element array whose element is a
+	 * block-body `for` / `while` comprehension keeps `[ for (...) {` glued on
+	 * the head line (block body indents underneath, `} ]` closes) instead of
+	 * leading-breaking the `[`. Fires ONLY when the comprehension brackets are
+	 * PADDED (`openInside`/`closeInside` non-empty) — the runtime signal that
+	 * `sameLine.comprehensionFor == fitLine` (fork's coupling); under `same`
+	 * the brackets are tight and this returns null (no hug), preserving the
+	 * unpadded house-style layout.
+	 */
+	static function shapeComprehensionBlockHug(
+		open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc
+	): Null<Doc> {
+		final padded: Bool = switch openInside {
+			case Empty:
+				false;
+			case _:
+				true;
+		};
+		if (padded && items.length == 1 && isBlockBodyComprehensionItem(items[0]))
+			return Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
+		return null;
+	}
+
+	/**
+	 * The trimmed last-visible-Text of `d`, or `null`. Right-spine mirror of
+	 * `firstVisibleText` — used to confirm a comprehension body is a `{ … }`
+	 * BLOCK (last token `}`), distinguishing it from an expression body that
+	 * merely wrapped (whose last token is the expression's own close).
+	 */
+	static function lastVisibleText(d: Doc): Null<String> {
+		return switch d {
+			case Text(s):
+				final t: String = StringTools.trim(s);
+				t == '' ? null : t;
+			case Concat(arr):
+				var r: Null<String> = null;
+				var i: Int = arr.length;
+				while (--i >= 0 && r == null) r = lastVisibleText(arr[i]);
+				r;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+				i
+			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				lastVisibleText(i);
+			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfFullLineExceeds(
+				_, brk, _
+			) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+				lastVisibleText(brk);
+			case _:
+				null;
 		};
 	}
 
