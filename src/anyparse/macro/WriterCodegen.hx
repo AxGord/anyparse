@@ -1897,6 +1897,11 @@ class WriterCodegen {
 			fields.push(setTypedefBodyField(optionsCT));
 			fields.push(clearTypedefBodyField(optionsCT));
 		}
+		// ω-enumabstract-begin-end: opt-fanout helper for
+		// `@:fmt(propagateEnumAbstractContext)` on `EnumAbstractDecl(decl)`.
+		// Set-only (an `enum abstract` body nests no further type decl, so no
+		// clear sister is needed). Gated on `_inEnumAbstract:Bool`.
+		if (optionsHasField(optionsTypePath, '_inEnumAbstract')) fields.push(setEnumAbstractField(optionsCT));
 		// ω-typedef-intersection-operand-break: opt-fanout helper for the
 		// per-element `& Type`-clause break in `HxTypedefDecl.intersections`.
 		// Idempotent sister to `_setTypedefBody`. Gated on
@@ -1997,6 +2002,34 @@ class WriterCodegen {
 			fields.push(setKeepChainInParenField(optionsCT));
 			fields.push(clearKeepChainInParenField(optionsCT));
 		}
+	}
+
+	/**
+	 * ω-enumabstract-begin-end — opt-fanout helper for
+	 * `@:fmt(propagateEnumAbstractContext)` on `EnumAbstractDecl(decl)`.
+	 * Idempotent sister to `_setTypedefBody`: returns `o` unchanged when
+	 * `_inEnumAbstract` is already `true`, else a `_copyOpt(o)` with the flag
+	 * set — so the inner `HxAbstractDecl` body's `beginEndType` count reads the
+	 * `enumAbstractBeginType` / `enumAbstractEndType` knobs instead of the
+	 * class-scoped `beginType` / `endType`. Emitted only when the opt typedef
+	 * declares `_inEnumAbstract:Bool`.
+	 */
+	private static function setEnumAbstractField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setEnumAbstract',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inEnumAbstract) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._inEnumAbstract = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
 	}
 
 }

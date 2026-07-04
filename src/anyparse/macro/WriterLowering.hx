@@ -1419,6 +1419,12 @@ class WriterLowering {
 		final emptyCurlyKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('emptyCurlyBreak');
 		final emptyCurlyKnob: Null<String> = (emptyCurlyKnobArgs != null && emptyCurlyKnobArgs.length >= 1) ? emptyCurlyKnobArgs[0] : null;
 		final beginEndType: Bool = starNode.fmtHasFlag('beginEndType');
+		// ω-enum-begin-end: `@:fmt(beginEndType('a', 'b'))` names the begin/end
+		// opt knobs to read (default class-scoped `beginType` / `endType`), so
+		// `HxEnumDecl.ctors` reads its own `enumBeginType` / `enumEndType`.
+		final beginEndKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beginEndType');
+		final beginTypeKnob: String = (beginEndKnobArgs != null && beginEndKnobArgs.length >= 2) ? beginEndKnobArgs[0] : "beginType";
+		final endTypeKnob: String = (beginEndKnobArgs != null && beginEndKnobArgs.length >= 2) ? beginEndKnobArgs[1] : "endType";
 		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
@@ -1461,7 +1467,7 @@ class WriterLowering {
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
-			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, false
+			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, false, beginTypeKnob, endTypeKnob
 		));
 	}
 
@@ -7376,12 +7382,16 @@ class WriterLowering {
 		final branch: ShapeNode = c.branch;
 		final argNames: Array<String> = c.argNames;
 		final propagateExpr: Bool = branch.fmtHasFlag('propagateExprPosition');
+		// ω-enumabstract-begin-end: `@:fmt(propagateEnumAbstractContext)` on the
+		// kw-Ref ctor `EnumAbstractDecl(decl)` flags the inner `HxAbstractDecl` opt.
+		final propagateEnumAbstract: Bool = branch.fmtHasFlag('propagateEnumAbstractContext');
 		final clearExpr: Bool = branch.fmtHasFlag('clearExprPosition');
 		final interpFlat: Bool = branch.fmtHasFlag('captureSource');
 		final parenHardFlatten: Bool = branch.fmtHasFlag('expressionParenHardFlatten');
 		final propagateFieldLevelVar: Bool = branch.fmtHasFlag('propagateFieldLevelVar');
 		var _o: Expr = macro opt;
 		if (propagateExpr) _o = macro _setExprPosition($_o);
+		if (propagateEnumAbstract) _o = macro _setEnumAbstract($_o);
 		if (clearExpr) {
 			final _operandAccess: Expr = macro $i{argNames[0]};
 			_o = macro (opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
@@ -9135,6 +9145,10 @@ class WriterLowering {
 		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
 		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
 		final propagateTypedef: Bool = child.fmtHasFlag('propagateTypedefContext');
+		// ω-enumabstract-begin-end: `@:fmt(propagateEnumAbstractContext)` on
+		// `EnumAbstractDecl(decl)` flags the inner `HxAbstractDecl` opt so its
+		// body reads the `enumAbstractBeginType` / `enumAbstractEndType` knobs.
+		final propagateEnumAbstract: Bool = child.fmtHasFlag('propagateEnumAbstractContext');
 		// ω-extern-class-no-blanks: `@:fmt(setBoolFlagFromStarCtor(optField,
 		// starField, ctorName))` allocates a fresh opt copy and sets
 		// `_wo.<optField> = true` iff the sibling `<starField>` Star contains
@@ -9159,6 +9173,7 @@ class WriterLowering {
 			if (propagateExpr) e = macro _setExprPosition($e);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e);
 			if (propagateTypedef) e = macro _setTypedefBody($e);
+			if (propagateEnumAbstract) e = macro _setEnumAbstract($e);
 			if (switchSubjectNoWrap) e = macro _setChainModeOverride($e, anyparse.format.wrap.WrapMode.NoWrap);
 			// The helper gates on `opt._inExprPosition` so only a value-if
 			// branch (not a statement-`if`) flips the narrow flag.
@@ -10444,7 +10459,13 @@ class WriterLowering {
 		// an enclosing arrow-body / return is dropped for statements whose value
 		// is discarded. The block's LAST statement (its yielded value) keeps the
 		// frame. False → byte-identical to the pre-slice element call.
-		clearExprPositionNonTail: Bool = false
+		clearExprPositionNonTail: Bool = false,
+		// ω-enum-begin-end: the opt field names read for the begin/end blank
+		// counts. Default class-scoped `beginType` / `endType`; a Star whose
+		// `@:fmt(beginEndType('a', 'b'))` names knobs (e.g. `HxEnumDecl.ctors`)
+		// reads those instead, so per-type-kind begin/end scopes never share.
+		beginTypeKnob: String = "beginType",
+		endTypeKnob: String = "endType"
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -10551,7 +10572,7 @@ class WriterLowering {
 		// trivia / ω-phase-g / ω-condcomp-stray-semi -> triviaBlockSepExprs (predicate
 		// build in triviaBlockPredCallExpr). The orchestrator now bundles every
 		// spliced Expr into a BlockStarCtx and delegates to triviaBlockMainExpr.
-		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks);
+		final beginEnd = triviaBlockBeginEndExpr(beginEndType, keepCurlyBlanks, beginTypeKnob, endTypeKnob);
 		final between = triviaBlockBetweenExprs(blankBeforeFinalDocInLeading, betweenMultilineCommentsBlanks);
 		final sep = triviaBlockSepExprs(sepText, blockEnded, blockEndedPredicate, blockEndedSchemaPath);
 		final leaf = triviaBlockLeafExprs(
@@ -13103,7 +13124,22 @@ class WriterLowering {
 			} else if (_flatCase) {
 				_docs.push(_dt(' '));
 			} else if (_nestBody) {
+				// ω-nestbody-blank: case / default body statements preserve a source
+				// blank line between elements (fork keeps inter-statement blanks in
+				// case / default bodies). Mirrors the `_t.newlineBefore` branch's
+				// cascade-blanks loop, gated on `_si > 0` so the body's first
+				// statement stays hugged under `case X:` / `default:` with no leading
+				// blank. `$cascadeBlanksCount` reduces to `_t.blankBefore ? 1 : 0`
+				// (case / default bodies carry no cascade infos).
 				_docs.push(_dhl());
+				if (_si > 0) {
+					final _blanks: Int = $cascadeBlanksCount;
+					var _bli: Int = 0;
+					while (_bli < _blanks) {
+						_docs.push(_dhl());
+						_bli++;
+					}
+				}
 			} else if (_si > 0 && _metaPolicy == 1) {
 				// ω-metadata-line-end-function: After policy collapses
 				// source-driven inter-meta sep to a forced hardline,
@@ -15183,11 +15219,11 @@ class WriterLowering {
 	 * `triviaBlockStarExpr` so the orchestrator stays under the complexity gate.
 	 */
 	private static function triviaBlockBeginEndExpr(
-		beginEndType: Bool, keepCurlyBlanks: Bool
+		beginEndType: Bool, keepCurlyBlanks: Bool, beginKnob: String, endKnob: String
 	): { final beginTypeExpr: Expr; final endTypeExpr: Expr; } {
 		final emitBeginExtras: Bool = beginEndType || keepCurlyBlanks;
-		final beginNExpr: Expr = triviaBlockBeginNExpr(beginEndType);
-		final endNExpr: Expr = triviaBlockEndNExpr(beginEndType);
+		final beginNExpr: Expr = triviaBlockBeginNExpr(beginEndType, beginKnob);
+		final endNExpr: Expr = triviaBlockEndNExpr(beginEndType, endKnob);
 		final beginTypeExpr: Expr = emitBeginExtras
 			? macro {
 				final _firstSourceBlank: Bool = _arr.length > 0 && _arr[0].blankBefore;
@@ -15554,10 +15590,13 @@ class WriterLowering {
 	 * the `afterLeftCurly` Keep-policy source-blank honour. Extracted from
 	 * `triviaBlockBeginEndExpr` so it stays under the complexity gate.
 	 */
-	private static function triviaBlockBeginNExpr(beginEndType: Bool): Expr {
+	private static function triviaBlockBeginNExpr(beginEndType: Bool, beginKnob: String): Expr {
+		// ω-enumabstract-begin-end: read the enum-abstract begin knob under the
+		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
+		final beginAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractBeginType : $p{["opt", beginKnob]});
 		return beginEndType
-			? macro (opt.beginType > 0
-				? opt.beginType
+			? macro ($beginAccess > 0
+				? $beginAccess
 				: (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0))
 			: macro (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0);
 	}
@@ -15568,10 +15607,13 @@ class WriterLowering {
 	 * `beforeRightCurly` Keep-policy source-blank honour. Extracted from
 	 * `triviaBlockBeginEndExpr`.
 	 */
-	private static function triviaBlockEndNExpr(beginEndType: Bool): Expr {
+	private static function triviaBlockEndNExpr(beginEndType: Bool, endKnob: String): Expr {
+		// ω-enumabstract-begin-end: read the enum-abstract end knob under the
+		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
+		final endAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractEndType : $p{["opt", endKnob]});
 		return beginEndType
-			? macro (opt.endType > 0
-				? opt.endType
+			? macro ($endAccess > 0
+				? $endAccess
 				: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0))
 			: macro (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
 	}

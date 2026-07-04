@@ -1739,6 +1739,23 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	betweenEnumCtors: Int,
 	beginType: Int,
 	endType: Int,
+	// ω-enum-begin-end: dedicated enum-body begin/end blank knobs (fork's
+	// `enumEmptyLines: TypedefFieldsEmptyLinesConfig`, `@:default(0)`). Kept
+	// distinct from the class-scoped `beginType` / `endType` so a config that
+	// sets `classEmptyLines.beginType` (shared knob) no longer leaks a leading
+	// blank into `enum` bodies. Read only by `HxEnumDecl.ctors`' parameterised
+	// `@:fmt(beginEndType('enumBeginType', 'enumEndType'))`.
+	enumBeginType: Int,
+	enumEndType: Int,
+	// ω-enumabstract-begin-end: dedicated `enum abstract` body begin/end blank
+	// knobs (fork's `enumAbstractEmptyLines: EnumAbstractFieldsEmptyLinesConfig`,
+	// `@:default(0)`). `enum abstract` shares the `HxAbstractDecl` grammar with a
+	// plain `abstract`, so the writer distinguishes them by the transient
+	// `_inEnumAbstract` flag (set by `EnumAbstractDecl(decl)`) rather than a
+	// per-type knob-name; when set, the `beginEndType` count reads these instead
+	// of the class-scoped `beginType` / `endType`.
+	enumAbstractBeginType: Int,
+	enumAbstractEndType: Int,
 	// ω-typedef-between-fields: dedicated typedef-RHS anon-body blank-line
 	// knobs (fork's `TypedefFieldsEmptyLinesConfig`), read only by the
 	// `@:sep`-Star force-multi branch under `_inTypedefBody`. Kept distinct
@@ -1868,6 +1885,11 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_classExtern: Bool,
 	_inAnonFnBody: Bool,
 	_inTypedefBody: Bool,
+	// ω-enumabstract-begin-end: set on the inner `HxAbstractDecl` opt when it is
+	// written as the body of an `enum abstract` (via `EnumAbstractDecl(decl)`'s
+	// `@:fmt(propagateEnumAbstractContext)`), so its `beginEndType` blank count
+	// reads `enumAbstractBeginType` / `enumAbstractEndType`. Default `false`.
+	_inEnumAbstract: Bool,
 	_fnSigBodyEmpty: Bool,
 	_chainModeOverride: Null<WrapMode>,
 	_callArgChainNest: Bool,

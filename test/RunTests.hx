@@ -350,6 +350,8 @@ import unit.HxCallParamObjectLiteralSliceTest;
 import unit.HxCallParamFunctionLambdaSliceTest;
 import unit.HxComprehensionBlockHugSliceTest;
 import unit.HxIfBodyBlockCaseBarrierTest;
+import unit.HxEnumScopeEmptyLinesSliceTest;
+import unit.HxCaseBodyBlankSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -544,6 +546,8 @@ class RunTests {
 		addCase(new HxAnonFuncParensOptionsTest());
 		addCase(new HxAnonFuncEmptyParensInnerSpaceOptionsTest());
 		addCase(new HxInterMemberBlankLinesOptionsTest());
+		addCase(new HxEnumScopeEmptyLinesSliceTest());
+		addCase(new HxCaseBodyBlankSliceTest());
 		addCase(new HxInterfaceInterMemberBlankLinesOptionsTest());
 		addCase(new HxAfterPackageSliceTest());
 		addCase(new HxBeforeUsingSliceTest());

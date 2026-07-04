@@ -31,5 +31,6 @@ package anyparse.grammar.haxe;
 typedef HxEnumDecl = {
 	@:kw('enum') var name: HxIdentLit;
 	@:optional @:lead('<') @:trail('>') @:sep(',') @:fmt(typeParamOpen, typeParamClose, wrapRules('typeParameterWrap'), groupRestProbe) var typeParams: Null<Array<HxTypeParamDecl>>;
-	@:fmt(beginEndType, existingBetweenFields, uniformBetween('betweenEnumCtors'), beforeDocCommentEmptyLines) @:lead('{') @:trail('}') @:trivia var ctors: Array<HxEnumMember>;
+	@:fmt(beginEndType('enumBeginType', 'enumEndType'), existingBetweenFields, uniformBetween('betweenEnumCtors'),
+		beforeDocCommentEmptyLines) @:lead('{') @:trail('}') @:trivia var ctors: Array<HxEnumMember>;
 }

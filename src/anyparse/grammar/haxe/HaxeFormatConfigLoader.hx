@@ -598,6 +598,10 @@ final class HaxeFormatConfigLoader {
 			betweenEnumCtors: base.betweenEnumCtors,
 			beginType: base.beginType,
 			endType: base.endType,
+			enumBeginType: base.enumBeginType,
+			enumEndType: base.enumEndType,
+			enumAbstractBeginType: base.enumAbstractBeginType,
+			enumAbstractEndType: base.enumAbstractEndType,
 			typedefBeginType: base.typedefBeginType,
 			typedefBetweenFields: base.typedefBetweenFields,
 			typedefExistingBetweenFields: base.typedefExistingBetweenFields,
@@ -685,6 +689,7 @@ final class HaxeFormatConfigLoader {
 			_classExtern: base._classExtern,
 			_inAnonFnBody: base._inAnonFnBody,
 			_inTypedefBody: base._inTypedefBody,
+			_inEnumAbstract: base._inEnumAbstract,
 			_fnSigBodyEmpty: base._fnSigBodyEmpty,
 			_chainModeOverride: base._chainModeOverride,
 			_callArgChainNest: base._callArgChainNest,
@@ -1606,8 +1611,8 @@ final class HaxeFormatConfigLoader {
 			if (enumSection.existingBetweenFields != null)
 				opt.existingBetweenFields = keepEmptyLinesToRuntime(enumSection.existingBetweenFields);
 			if (enumSection.betweenFields != null) opt.betweenEnumCtors = enumSection.betweenFields;
-			if (enumSection.beginType != null) opt.beginType = enumSection.beginType;
-			if (enumSection.endType != null) opt.endType = enumSection.endType;
+			if (enumSection.beginType != null) opt.enumBeginType = enumSection.beginType;
+			if (enumSection.endType != null) opt.enumEndType = enumSection.endType;
 		}
 		// ω-typedef-between-fields: `typedefEmptyLines` routes the four
 		// sub-keys to the dedicated typedef-scoped knobs (no shared-knob

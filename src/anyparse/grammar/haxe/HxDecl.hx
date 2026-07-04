@@ -131,7 +131,7 @@ enum HxDecl {
 	 * `@:enum` tag rides the `HxTopLevelDecl.meta` Star and reaches the
 	 * plain `AbstractDecl` branch.
 	 */
-	@:kw('enum')
+	@:kw('enum') @:fmt(propagateEnumAbstractContext)
 	EnumAbstractDecl(decl: HxAbstractDecl);
 
 	EnumDecl(decl: HxEnumDecl);
