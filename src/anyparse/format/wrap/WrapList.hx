@@ -1522,7 +1522,7 @@ class WrapList {
 		appendTrailingComma: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
 	): Null<Doc> {
 		var hasBlockLambda: Bool = false;
-		for (it in items) if (isArrowBodyMarker(it) && arrowBodyIsBlock(it)) {
+		for (it in items) if ((isArrowBodyMarker(it) && arrowBodyIsBlock(it)) || isFunctionBlockLambdaItem(it)) {
 			hasBlockLambda = true;
 			break;
 		}
@@ -2543,6 +2543,54 @@ class WrapList {
 				if (last == null) return false;
 				node = last;
 		}
+	}
+
+	/**
+	 * ω-callparam-function-block-lambda: true iff `item` is a `function`-
+	 * keyword anonymous-function expression argument with a BLOCK body — the
+	 * `function(){}` sibling of the arrow-body block lambda (`arrowBodyIsBlock`).
+	 * `function` is a reserved keyword so a first-visible-Text of exactly
+	 * `function` is unambiguously a function expr (never an identifier); the
+	 * forced-hardline test (`flatLength < 0`) restricts to block bodies (a
+	 * single-expression body `function() return e` renders inline, carries no
+	 * hardline, and must NOT lambda-hug). Fed into the same multi-arg glue gate
+	 * as the arrow markers so an OpenFL-style callback (`addEventListener(evt,
+	 * function(e) { … })`) keeps its head glued instead of opening the paren.
+	 */
+	static function isFunctionBlockLambdaItem(item: Doc): Bool {
+		return firstVisibleTextIsFunctionKw(item) && flatLength(item) < 0;
+	}
+
+	/**
+	 * Left-spine walk mirroring `firstVisibleTextStartsWith` but matching the
+	 * whole trimmed first-visible-Text against the `function` keyword.
+	 */
+	static function firstVisibleTextIsFunctionKw(d: Doc): Bool {
+		return switch d {
+			case Text(s):
+				StringTools.trim(s) == 'function';
+			case Concat(arr):
+				var found: Bool = false;
+				var hit: Bool = false;
+				for (it in arr) if (!found) switch it {
+					case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+						| OptHardlineSkipBeforeHardline:
+					case _:
+						found = true;
+						hit = firstVisibleTextIsFunctionKw(it);
+				}
+				hit;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+				i
+			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				firstVisibleTextIsFunctionKw(i);
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				firstVisibleTextIsFunctionKw(flat);
+			case _:
+				false;
+		};
 	}
 
 }
