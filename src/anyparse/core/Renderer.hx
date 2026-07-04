@@ -1360,13 +1360,12 @@ class Renderer {
 						mode: node.mode,
 						forceFlat: node.forceFlat
 					});
-					if (k > 0)
-						stack.push({
-							doc: sep,
-							indent: node.indent,
-							mode: node.mode,
-							forceFlat: node.forceFlat
-						});
+					if (k > 0) stack.push({
+						doc: sep,
+						indent: node.indent,
+						mode: node.mode,
+						forceFlat: node.forceFlat
+					});
 				}
 			case Flatten(inner) | HardFlatten(inner):
 				// Enter force-flat region (mirror render's Flatten arm):
@@ -1594,13 +1593,12 @@ class Renderer {
 						mode: node.mode,
 						forceFlat: node.forceFlat
 					});
-					if (k > 0)
-						stack.push({
-							doc: sep,
-							indent: node.indent,
-							mode: node.mode,
-							forceFlat: node.forceFlat
-						});
+					if (k > 0) stack.push({
+						doc: sep,
+						indent: node.indent,
+						mode: node.mode,
+						forceFlat: node.forceFlat
+					});
 				}
 			case Flatten(inner) | HardFlatten(inner):
 				// Enter force-flat region (mirror render's Flatten arm):
@@ -1696,8 +1694,7 @@ class Renderer {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 					// Measure-only capture: inside a force-flat region the
 					// flat branch is always taken (record `false` = no open).
-					if (decisions != null)
-						decisions.push({ node: f.doc, crosses: false });
+					if (decisions != null) decisions.push({ node: f.doc, crosses: false });
 				} else {
 					final fullLineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
 					// ω-collapse-commit: record the open/glued decision at
@@ -1924,8 +1921,7 @@ class Renderer {
 					while (k > 0) {
 						k--;
 						stack.push(new Frame(f.indent, MFlat, items[k], f.forceFlat, f.hardFlat));
-						if (k > 0)
-							stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat, f.hardFlat));
+						if (k > 0) stack.push(new Frame(f.indent, MFlat, sep, f.forceFlat, f.hardFlat));
 					}
 				} else {
 					// Per-item fill: push items[0] first, then a FillCont

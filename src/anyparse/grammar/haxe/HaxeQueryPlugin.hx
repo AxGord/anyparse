@@ -674,8 +674,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
 			if (span != null && Reflect.hasField(node, 'type')) {
 				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
-				if (nm != null)
-					out[span.from] = nm;
+				if (nm != null) out[span.from] = nm;
 			}
 		});
 		return out;
@@ -688,8 +687,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
 			if (span != null && Reflect.hasField(node, 'returnType')) {
 				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'returnType'));
-				if (nm != null)
-					out[span.from] = nm;
+				if (nm != null) out[span.from] = nm;
 			}
 		});
 		return out;
@@ -710,8 +708,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
 			if (span != null && Reflect.hasField(node, 'access')) {
 				final access: Dynamic = Reflect.field(node, 'access');
-				if (access != null)
-					out[span.from] = isGetterAccess(access);
+				if (access != null) out[span.from] = isGetterAccess(access);
 			}
 		});
 		return out;
@@ -730,8 +727,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
 			if (span != null && Reflect.hasField(node, 'type')) {
 				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
-				if (ts != null)
-					out[span.from] = source.substring(ts.from, ts.to);
+				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
 			}
 		});
 		return out;
@@ -752,8 +748,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr')
 			)) {
 				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
-				if (ts != null)
-					out[span.from] = source.substring(ts.from, ts.to);
+				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
 			}
 		});
 		return out;
@@ -790,8 +785,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, _span) -> {
 			if (Reflect.hasField(node, 'constraintMore') && Reflect.hasField(node, 'name')) {
 				final nm: Null<String> = extractName(Reflect.field(node, 'name'));
-				if (nm != null && !names.contains(nm))
-					names.push(nm);
+				if (nm != null && !names.contains(nm)) names.push(nm);
 			}
 		});
 		return names;
@@ -1011,8 +1005,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				// `HxArrowFnType`) yields null, and those are reached as `fn`
 				// VALUES of an enum ctor, never as a struct CARRYING an `fn`
 				// field — so no other node is affected.
-				if (Reflect.hasField(value, 'fn'))
-					return extractName(Reflect.field(value, 'fn'));
+				if (Reflect.hasField(value, 'fn')) return extractName(Reflect.field(value, 'fn'));
 			case TEnum(_):
 				// Slice 27 — transparent unwrap for the single-Ref wrapper
 				// enum `HxAnonVarBody` (`Optional(decl)` / `Plain(decl)`):
@@ -1029,8 +1022,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 					for (p in params) {
 						if (Std.isOfType(p, Span)) continue;
 						final n: Null<String> = extractName(p);
-						if (n != null)
-							return n;
+						if (n != null) return n;
 					}
 				}
 			case _:

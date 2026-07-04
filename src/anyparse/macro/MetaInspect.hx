@@ -166,8 +166,7 @@ final class MetaInspect {
 						case _:
 							ok = false;
 					}
-					if (ok)
-						out.push(group);
+					if (ok) out.push(group);
 				case _:
 			}
 		}

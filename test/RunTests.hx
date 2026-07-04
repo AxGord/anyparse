@@ -349,6 +349,7 @@ import unit.HxComprehensionBracketPolicyTest;
 import unit.HxCallParamObjectLiteralSliceTest;
 import unit.HxCallParamFunctionLambdaSliceTest;
 import unit.HxComprehensionBlockHugSliceTest;
+import unit.HxIfBodyBlockCaseBarrierTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -555,6 +556,7 @@ class RunTests {
 		addCase(new HxCaseBodyPolicySliceTest());
 		addCase(new HxCaseExprPositionPropagateTest());
 		addCase(new HxIfStmtExprPositionDispatchTest());
+		addCase(new HxIfBodyBlockCaseBarrierTest());
 		addCase(new HxCaseBodyShapeRefusalTest());
 		addCase(new HxFunctionBodyPolicySliceTest());
 		addCase(new HxUntypedBodyPolicySliceTest());

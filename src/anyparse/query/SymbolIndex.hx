@@ -516,12 +516,10 @@ final class SymbolIndex {
 	private static function collectSupertypes(node: QueryNode): Array<String> {
 		final out: Array<String> = [];
 		collectInto(node, n -> {
-			if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause')
-				for (c in n.children) {
-					final nm: Null<String> = c.name;
-					if (nm != null)
-						out.push(simpleName(nm));
-				}
+			if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause') for (c in n.children) {
+				final nm: Null<String> = c.name;
+				if (nm != null) out.push(simpleName(nm));
+			}
 		});
 		return out;
 	}
@@ -530,12 +528,10 @@ final class SymbolIndex {
 	private static function collectAccessGrants(tree: QueryNode): Array<String> {
 		final out: Array<String> = [];
 		collectInto(tree, n -> {
-			if (n.kind == 'MetaCall' && n.name == '@:access')
-				for (c in n.children) {
-					final nm: Null<String> = c.name;
-					if (nm != null)
-						out.push(simpleName(nm));
-				}
+			if (n.kind == 'MetaCall' && n.name == '@:access') for (c in n.children) {
+				final nm: Null<String> = c.name;
+				if (nm != null) out.push(simpleName(nm));
+			}
 		});
 		return out;
 	}

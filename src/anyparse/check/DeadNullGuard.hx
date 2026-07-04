@@ -72,14 +72,13 @@ final class DeadNullGuard implements Check {
 				if (name == null) return;
 				// Owned by `unnecessary-null-check` when the declared type proves it.
 				if (TypeResolver.isProvablyNonNull(operand, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name))
-					violations.push({
-						file: entry.file,
-						span: span,
-						rule: 'dead-null-guard',
-						severity: Severity.Info,
-						message: 'null check is redundant — operand is already non-null on this path'
-					});
+				if (facts.nonNull(name)) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'dead-null-guard',
+					severity: Severity.Info,
+					message: 'null check is redundant — operand is already non-null on this path'
+				});
 			});
 		}
 		return violations;

@@ -692,11 +692,11 @@ final class CollapsePass {
 	private static function hasAddCandidate(d: Doc): Bool {
 		var found: Bool = false;
 		walk(d, node -> {
-			if (!found)
-				switch node {
-					case CollapseAddProbe(_): found = true;
-					case _:
-				}
+			if (!found) switch node {
+				case CollapseAddProbe(_):
+					found = true;
+				case _:
+			}
 		});
 		return found;
 	}
@@ -705,11 +705,11 @@ final class CollapsePass {
 	private static function hasBoolCandidate(d: Doc): Bool {
 		var found: Bool = false;
 		walk(d, node -> {
-			if (!found)
-				switch node {
-					case CollapseBoolProbe(_): found = true;
-					case _:
-				}
+			if (!found) switch node {
+				case CollapseBoolProbe(_):
+					found = true;
+				case _:
+			}
 		});
 		return found;
 	}
@@ -718,11 +718,11 @@ final class CollapsePass {
 	private static function hasChainCandidate(d: Doc): Bool {
 		var found: Bool = false;
 		walk(d, node -> {
-			if (!found)
-				switch node {
-					case CollapseChainProbe(_): found = true;
-					case _:
-				}
+			if (!found) switch node {
+				case CollapseChainProbe(_):
+					found = true;
+				case _:
+			}
 		});
 		return found;
 	}
@@ -831,8 +831,7 @@ final class CollapsePass {
 	private static function subtreeOpens(d: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Bool {
 		var found: Bool = false;
 		walk(d, node -> {
-			if (!found && isCandidate(node) && opens(node, decisions))
-				found = true;
+			if (!found && isCandidate(node) && opens(node, decisions)) found = true;
 		});
 		return found;
 	}
@@ -841,8 +840,7 @@ final class CollapsePass {
 	private static function hasCandidate(d: Doc): Bool {
 		var found: Bool = false;
 		walk(d, node -> {
-			if (!found && isCandidate(node))
-				found = true;
+			if (!found && isCandidate(node)) found = true;
 		});
 		return found;
 	}
@@ -851,11 +849,11 @@ final class CollapsePass {
 	private static function containsCollapseProbe(d: Doc): Bool {
 		var found: Bool = false;
 		walk(d, node -> {
-			if (!found)
-				switch node {
-					case CollapseProbe(_): found = true;
-					case _:
-				}
+			if (!found) switch node {
+				case CollapseProbe(_):
+					found = true;
+				case _:
+			}
 		});
 		return found;
 	}

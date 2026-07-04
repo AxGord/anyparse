@@ -10179,8 +10179,7 @@ final class Cli {
 					open = true;
 				case '--raw':
 					raw = true;
-					if (i + 1 < args.length && args[i + 1] == '-')
-						i++;
+					if (i + 1 < args.length && args[i + 1] == '-') i++;
 
 				case '--implements':
 					iface = expectValue(args, ++i, '--implements');
@@ -12808,8 +12807,7 @@ final class Cli {
 					}
 				case '--kinds':
 					kinds = parseEdgeKinds(cmd, expectValue(args, ++i, '--kinds'));
-					if (kinds == null)
-						return EXIT_USAGE;
+					if (kinds == null) return EXIT_USAGE;
 				case '-h', '--help':
 					printCallChainsUsage(cmd, outward);
 					return EXIT_OK;
@@ -12890,8 +12888,7 @@ final class Cli {
 					maxPaths = parsedMax;
 				case '--kinds':
 					kinds = parseEdgeKinds('reach', expectValue(args, ++i, '--kinds'));
-					if (kinds == null)
-						return EXIT_USAGE;
+					if (kinds == null) return EXIT_USAGE;
 				case '-h', '--help':
 					printReachUsage();
 					return EXIT_OK;

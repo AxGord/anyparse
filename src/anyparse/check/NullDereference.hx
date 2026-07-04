@@ -71,14 +71,13 @@ final class NullDereference implements Check {
 				if (receiver.kind != ident || span == null) return;
 				final name: Null<String> = receiver.name;
 				if (name == null) return;
-				if (facts.isNull(name))
-					violations.push({
-						file: entry.file,
-						span: span,
-						rule: 'null-dereference',
-						severity: Severity.Warning,
-						message: 'null dereference — receiver is null on every path reaching it; this access throws at runtime'
-					});
+				if (facts.isNull(name)) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'null-dereference',
+					severity: Severity.Warning,
+					message: 'null dereference — receiver is null on every path reaching it; this access throws at runtime'
+				});
 			});
 		}
 		return violations;

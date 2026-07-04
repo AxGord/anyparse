@@ -67,14 +67,13 @@ final class DeadSafeNav implements Check {
 				if (name == null) return;
 				// Owned by `unnecessary-safe-nav` when the declared type proves it.
 				if (TypeResolver.isProvablyNonNull(receiver, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name))
-					violations.push({
-						file: entry.file,
-						span: span,
-						rule: 'dead-safe-nav',
-						severity: Severity.Info,
-						message: 'null-safe access is redundant — receiver is already non-null on this path'
-					});
+				if (facts.nonNull(name)) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'dead-safe-nav',
+					severity: Severity.Info,
+					message: 'null-safe access is redundant — receiver is already non-null on this path'
+				});
 			});
 		}
 		return violations;

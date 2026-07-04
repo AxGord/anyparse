@@ -288,6 +288,16 @@ typedef WriteOptions = {
 	// TRANSPARENT — `macro` does not change expression-vs-statement position.
 	// Null (every non-opt-in format) → the clear never fires, byte-identical.
 	?operandIsBlockExpr: Null<Dynamic -> Bool>,
+	// ω-value-yielded-if-tail-barrier (if-tail fork parity): `tailStmtReadsExprPosition(
+	// stmtNode) → Bool` — true iff a block / case body TAIL statement is an `if`
+	// (`HxStatement.IfStmt`) whose body dispatches on `_inExprPosition`. A block-
+	// brace-parented `if` is a STATEMENT (fork `isExpression` false), so a lambda
+	// / block tail `if` drops the inherited expression frame; a switch-case tail
+	// `if` reads the case's OWN incoming frame (value-yielded case keeps it,
+	// statement-switch case drops it) instead of the force-propagated one. `for` /
+	// `while` tails are excluded (the fork breaks their expression-position
+	// bodies). Null (non-opt-in format) → the frame is force-propagated as before.
+	?tailStmtReadsExprPosition: Null<Dynamic -> Bool>,
 	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>,
 	?betweenImportsTailLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
 	?betweenImportsHeadLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,

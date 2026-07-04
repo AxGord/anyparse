@@ -211,13 +211,11 @@ final class PreferFinal implements Check {
 				case '('.code | '['.code | '{'.code:
 					depth++;
 				case ')'.code | ']'.code | '}'.code:
-					if (depth > 0)
-						depth--;
+					if (depth > 0) depth--;
 				case '"'.code | "'".code:
 					i = skipString(s, i, c);
 				case ','.code:
-					if (depth == 0)
-						return true;
+					if (depth == 0) return true;
 				case _:
 			}
 			i++;

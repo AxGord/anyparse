@@ -5576,8 +5576,7 @@ class WriterLowering {
 					if (targetType == null) continue;
 					final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
 					final inner: Null<Expr> = buildMultilinePredicate(targetType, fieldExpr);
-					if (inner != null)
-						preds.push(inner);
+					if (inner != null) preds.push(inner);
 				// ω-typedef-between-blank: 4-arg runtime ctor match on a
 				// named field PLUS an opt-side runtime equality with a
 				// fully-qualified enum literal. Emits
@@ -12093,8 +12092,7 @@ class WriterLowering {
 									case Call(_, _, _, _, _):
 										_hasCallPrev = true;
 									case _:
-										if (_opTrail != null)
-											_recTrail = _opTrail;
+										if (_opTrail != null) _recTrail = _opTrail;
 								}
 								_cursor = _prev;
 							case _:
@@ -12133,8 +12131,7 @@ class WriterLowering {
 							case Call(_, _, _, _, _):
 								_hasCallPrev = true;
 							case _:
-								if (_opTrail != null)
-									_recTrail = _opTrail;
+								if (_opTrail != null) _recTrail = _opTrail;
 						}
 						_cursor = _prev;
 					case _:
@@ -12919,11 +12916,9 @@ class WriterLowering {
 					_ci2++;
 					switch (_cond.cond) {
 						case anyparse.format.wrap.WrapConditionType.ItemCountLargerThan:
-							if (_arr.length < _cond.value)
-								_ok = false;
+							if (_arr.length < _cond.value) _ok = false;
 						case anyparse.format.wrap.WrapConditionType.ItemCountLessThan:
-							if (_arr.length > _cond.value)
-								_ok = false;
+							if (_arr.length > _cond.value) _ok = false;
 						case anyparse.format.wrap.WrapConditionType.LineLengthLargerThan:
 							_llThr = _cond.value;
 						case anyparse.format.wrap.WrapConditionType.ExceedsMaxLineLength:
@@ -13445,8 +13440,25 @@ class WriterLowering {
 		// (the switch's yielded value at expression position) keeps the
 		// inherited frame. `_si` / `_arr` are in scope at the element-call
 		// splice. Flag off ⇒ the IDENTICAL `_writerOpt` Doc as before.
+		// ω-if-tail-fork-parity: a case-body TAIL that is an `if` (IfStmt) reads
+		// the case's OWN incoming `_inExprPosition` frame, NOT the force-propagated
+		// one — a value-yielded case (`return switch …`, incoming true) keeps the
+		// expression frame so the body breaks under `expressionIf:next`, while a
+		// statement-switch case (incoming false) drops it so the body inlines under
+		// `ifBody:fitLine`. Mirrors fork's `isExpression`→`isReturnExpression(case)`
+		// dispatch. Non-`if` tails (nested switch for issue-423 flattening, `for` /
+		// `while` bodies the fork breaks) keep the force-propagated `_writerOpt`.
 		final caseTailOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1 ? _writerOpt : _clearExprPosition(_writerOpt))
+			? macro (_si == _arr.length - 1
+				? {
+					final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
+					(_tailBarrierFn != null && _tailBarrierFn(_t.node) && !opt._inExprPosition
+						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
+							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine))
+						? _clearExprPosition(_writerOpt)
+						: _writerOpt;
+				}
+				: _clearExprPosition(_writerOpt))
 			: macro _writerOpt;
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
@@ -14718,8 +14730,25 @@ class WriterLowering {
 		// `clearExprPositionNonTail` is carried only by Haxe BlockExpr /
 		// BlockStmt, whose opt typedef always declares `_inValueIfBranch` —
 		// so the helper reference is safe inside this branch.
+		// ω-if-tail-fork-parity: a block-body TAIL that is an `if` (IfStmt) is a
+		// STATEMENT — its DIRECT parent is a block brace, for which fork's
+		// `isExpression` is unconditionally false → the body uses `sameLine.ifBody`,
+		// never `expressionIf`. So the inherited expression frame is DROPPED for a
+		// block tail `if` (lambda callback `if (cb != null) cb();` stays inline
+		// under `ifBody:fitLine`), regardless of the block's own expression context.
+		// Non-`if` tails (a tail switch whose cases flatten via the arrow / return
+		// walk-up, `for` / `while` bodies the fork breaks) keep the inherited frame.
 		final elemCallOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1 ? _clearValueIfBranch($elemOptExpr) : _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+			? macro (_si == _arr.length - 1
+				? {
+					final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
+					(_tailBarrierFn != null && _tailBarrierFn(_t.node)
+						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
+							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine))
+						? _clearValueIfBranch(_clearExprPosition($elemOptExpr))
+						: _clearValueIfBranch($elemOptExpr);
+				}
+				: _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
 			: elemOptExpr;
 		return {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),

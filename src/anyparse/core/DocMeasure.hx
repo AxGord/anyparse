@@ -66,8 +66,7 @@ final class DocMeasure {
 				case Text(s):
 					buf.add(s);
 				case Line(flat):
-					if (!(flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code))
-						buf.add(flat);
+					if (!(flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)) buf.add(flat);
 				case OptSpace(s):
 					buf.add(s);
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
@@ -90,8 +89,7 @@ final class DocMeasure {
 					while (k > 0) {
 						k--;
 						stack.push(items[k]);
-						if (k > 0)
-							stack.push(sep);
+						if (k > 0) stack.push(sep);
 					}
 			}
 		}
@@ -147,8 +145,7 @@ final class DocMeasure {
 				case Empty | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | OptSpaceSkipAfterHardline:
 				case Text(s) | OptSpace(s) | Line(s):
 					final t: String = StringTools.rtrim(s);
-					if (t.length > 0)
-						return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
+					if (t.length > 0) return StringTools.fastCodeAt(t, t.length - 1) == '}'.code;
 				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
 					inner
 				) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(

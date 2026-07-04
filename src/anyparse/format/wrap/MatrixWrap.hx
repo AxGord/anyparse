@@ -97,8 +97,7 @@ final class MatrixWrap {
 			switch node {
 				case Empty | Text(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
 				case Line(flat):
-					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code)
-						return true;
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return true;
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					return true;
 				case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(

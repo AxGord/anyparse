@@ -935,6 +935,36 @@ final class HxExprUtil {
 		return raw == null ? null : Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
 	}
 
+	/**
+	 * `tailStmtReadsExprPosition(stmtNode) → Bool` — true iff a block-body /
+	 * case-body TAIL statement is an `if` whose then/else body-placement
+	 * dispatches on `_inExprPosition` (`HxStatement.IfStmt`). Fork parity: an
+	 * `if` whose DIRECT parent is a block brace (fork `isExpression` is `false`
+	 * for a `BrOpen` parent) or a non-value-yielded switch-case colon is a
+	 * STATEMENT — its body uses `sameLine.ifBody`, never `sameLine.expressionIf`.
+	 * So when such an `if` is a block / case tail, the inherited expression-
+	 * position frame must be dropped (block barrier) or reduced to the case's
+	 * own incoming frame (case) instead of force-propagated. `for` / `while`
+	 * tails are intentionally excluded: the fork breaks their bodies at
+	 * expression position (no arrow / comprehension short-circuit applies), so
+	 * anyparse's existing force-propagation already matches. Returns `false`
+	 * for null / non-enum / non-`IfStmt` shapes. Wired on
+	 * `WriteOptions.tailStmtReadsExprPosition`.
+	 */
+	public static function tailStmtReadsExprPosition(raw: Null<Dynamic>): Bool {
+		final s: Null<Dynamic> = unwrap(raw);
+		if (s == null || Type.getEnum(s) == null || Type.enumConstructor(s) != 'IfStmt') return false;
+		// No-else only: an `if` WITH an `else` (or `else if` chain) keeps its
+		// inherited expression frame so the chain breaks together under
+		// `fitLineIfWithElse` — mirrors the `noSiblingFallback` no-else gate.
+		// Dropping the frame for a with-else tail would inline a trailing
+		// `else if` body that the fork breaks for chain consistency.
+		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
+		if (params == null || params.length == 0) return false;
+		final ifStruct: Null<Dynamic> = params[0];
+		return ifStruct != null && Reflect.field(ifStruct, 'elseBody') == null;
+	}
+
 }
 
 /**

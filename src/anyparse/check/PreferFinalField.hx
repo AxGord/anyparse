@@ -71,8 +71,7 @@ final class PreferFinalField implements Check {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (!exported)
-				considerField(violations, file, source, field, owner, index);
+			if (!exported) considerField(violations, file, source, field, owner, index);
 		});
 		return violations;
 	}

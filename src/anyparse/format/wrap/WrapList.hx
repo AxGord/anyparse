@@ -352,12 +352,13 @@ class WrapList {
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
-					if (depth == 1)
-						switch StringTools.trim(t) {
-							case '?' | ':': ternary = true;
-							case '+' | '-' | '||' | '&&': other = true;
-							case _:
-						}
+					if (depth == 1) switch StringTools.trim(t) {
+						case '?' | ':':
+							ternary = true;
+						case '+' | '-' | '||' | '&&':
+							other = true;
+						case _:
+					}
 				case _:
 			}
 		}
@@ -1028,11 +1029,11 @@ class WrapList {
 					w(sep, depth);
 					for (it in items) w(it, depth);
 				case Text(t):
-					if (depth == 1)
-						switch StringTools.trim(t) {
-							case '+' | '-' | '||' | '&&': found = true;
-							case _:
-						}
+					if (depth == 1) switch StringTools.trim(t) {
+						case '+' | '-' | '||' | '&&':
+							found = true;
+						case _:
+					}
 				case _:
 			}
 		}
@@ -1064,8 +1065,7 @@ class WrapList {
 				case WrapBoundary(i):
 					w(i, depth + 1);
 				case IfNaturalFirstLineFitsOpenDelim(_, _, _):
-					if (depth == 1)
-						found = true;
+					if (depth == 1) found = true;
 				case Concat(items):
 					for (it in items) w(it, depth);
 				case _:
@@ -1174,8 +1174,7 @@ class WrapList {
 				while (k > 0) {
 					k--;
 					stack.push(items[k]);
-					if (k > 0)
-						stack.push(sep);
+					if (k > 0) stack.push(sep);
 				}
 			case Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
 				inner
@@ -1796,8 +1795,7 @@ class WrapList {
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					return items.length > 0;
 				case Line(s):
-					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code)
-						return true;
+					if (s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code) return true;
 				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 					return true;
 				case _:

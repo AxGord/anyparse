@@ -68,14 +68,13 @@ final class DeadNullCoalescing implements Check {
 				if (name == null) return;
 				// Owned by `redundant-null-coalescing` when the declared type proves it.
 				if (TypeResolver.isProvablyNonNull(left, root, shape, declaredTypes)) return;
-				if (facts.nonNull(name))
-					violations.push({
-						file: entry.file,
-						span: span,
-						rule: 'dead-null-coalescing',
-						severity: Severity.Info,
-						message: 'right operand is dead — left operand is already non-null on this path'
-					});
+				if (facts.nonNull(name)) violations.push({
+					file: entry.file,
+					span: span,
+					rule: 'dead-null-coalescing',
+					severity: Severity.Info,
+					message: 'right operand is dead — left operand is already non-null on this path'
+				});
 			});
 		}
 		return violations;

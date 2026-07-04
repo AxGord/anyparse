@@ -66,8 +66,7 @@ final class PreferFinalPublicField implements Check {
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported)
-				considerField(violations, file, source, field, owner, index, writeIndex);
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex);
 		});
 		return violations;
 	}

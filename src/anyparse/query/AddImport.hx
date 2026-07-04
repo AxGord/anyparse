@@ -46,8 +46,7 @@ final class AddImport {
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl':
 				lastImport = c;
-				if (c.kind == targetKind && c.name == trimmed)
-					return Err('already imported: $trimmed');
+				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
 			case 'PackageDecl':
 				packageDecl = c;
 			case _:

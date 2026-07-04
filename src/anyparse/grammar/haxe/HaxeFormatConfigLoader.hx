@@ -700,6 +700,7 @@ final class HaxeFormatConfigLoader {
 			endsWithCloseBrace: base.endsWithCloseBrace,
 			caseBodyRefusesFlat: base.caseBodyRefusesFlat,
 			operandIsBlockExpr: base.operandIsBlockExpr,
+			tailStmtReadsExprPosition: base.tailStmtReadsExprPosition,
 			arrayBracketKind: base.arrayBracketKind,
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
@@ -1331,18 +1332,15 @@ final class HaxeFormatConfigLoader {
 			case 'if':
 				if (gap != null) opt.ifPolicy = gap;
 				if (insideOpen != null) opt.ifCondParensInsideOpen = insideOpen;
-				if (insideClose != null)
-					opt.ifCondParensInsideClose = insideClose;
+				if (insideClose != null) opt.ifCondParensInsideClose = insideClose;
 			case 'while':
 				if (gap != null) opt.whilePolicy = gap;
 				if (insideOpen != null) opt.whileCondParensInsideOpen = insideOpen;
-				if (insideClose != null)
-					opt.whileCondParensInsideClose = insideClose;
+				if (insideClose != null) opt.whileCondParensInsideClose = insideClose;
 			case 'switch':
 				if (gap != null) opt.switchPolicy = gap;
 				if (insideOpen != null) opt.switchCondParensInsideOpen = insideOpen;
-				if (insideClose != null)
-					opt.switchCondParensInsideClose = insideClose;
+				if (insideClose != null) opt.switchCondParensInsideClose = insideClose;
 			case _:
 				applyParenTripleCatchSharp(opt, category, gap, insideOpen, insideClose);
 		}
@@ -1356,13 +1354,11 @@ final class HaxeFormatConfigLoader {
 			case 'catch':
 				if (gap != null) opt.catchParensGap = gap;
 				if (insideOpen != null) opt.catchParensInsideOpen = insideOpen;
-				if (insideClose != null)
-					opt.catchParensInsideClose = insideClose;
+				if (insideClose != null) opt.catchParensInsideClose = insideClose;
 			case 'sharp':
 				if (gap != null) opt.sharpCondParensGap = gap;
 				if (insideOpen != null) opt.sharpCondParensInsideOpen = insideOpen;
-				if (insideClose != null)
-					opt.sharpCondParensInsideClose = insideClose;
+				if (insideClose != null) opt.sharpCondParensInsideClose = insideClose;
 			case _:
 		}
 	}

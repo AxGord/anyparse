@@ -318,8 +318,7 @@ final class MemberOrder implements Check {
 					depth++;
 				case ')':
 					depth--;
-					if (depth == 0 && i < cond.length - 1)
-						return false;
+					if (depth == 0 && i < cond.length - 1) return false;
 				case _:
 			}
 		}

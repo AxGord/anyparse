@@ -185,8 +185,7 @@ final class CallGraph {
 		return [
 			for (id in ids) {
 				final n: Null<FnNode> = nodes[id];
-				if (n != null)
-					n;
+				if (n != null) n;
 			}
 		];
 	}

@@ -215,15 +215,12 @@ class Lit implements Strategy {
 				// Required for grammars where the sep char can ALSO be a valid
 				// element body (Haxe `EmptyStmt` whose body IS `;`). Without this
 				// flag the default permissive-sep semantics applies.
-				if (callArgs.length == 2)
-					switch callArgs[1].expr {
-						case EConst(CIdent('sepStartsElement')):
-							node.annotations.set('lit.sepStartsElement', true);
-						case _:
-							Context.fatalError(
-								'@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`', callArgs[1].pos
-							);
-					}
+				if (callArgs.length == 2) switch callArgs[1].expr {
+					case EConst(CIdent('sepStartsElement')):
+						node.annotations.set('lit.sepStartsElement', true);
+					case _:
+						Context.fatalError('@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`', callArgs[1].pos);
+				}
 			case _:
 				Context.fatalError(
 					'@:sep third argument must be `blockEnded` or `blockEnded(\'<predicate>\'[, sepStartsElement])`', entry.params[2].pos

@@ -136,8 +136,7 @@ final class Suppression {
 		final rules: Array<String> = [
 			for (part in text.substr('noqa:'.length).split(',')) {
 				final id: String = part.trim();
-				if (id.length > 0)
-					id;
+				if (id.length > 0) id;
 			}
 		];
 		return {
