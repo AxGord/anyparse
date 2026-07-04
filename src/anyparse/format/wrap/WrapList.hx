@@ -1481,6 +1481,13 @@ class WrapList {
 		if (mode == FillLineWithLeadingBreak && items.length == 1 && !isArrowBodyMarker(items[0]) && !isMethodChainItem(items[0])) {
 			final glued: Doc = Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
 			final broken: Doc = shapeFillLineWithLeadingBreak(open, close, sep, items, openInside, closeInside, cols, appendTrailingComma);
+			// ω-callparam-single-objectlit: a sole OBJECT-LITERAL arg (`f({...})`)
+			// leading-breaks with the object kept FLAT on its own indented line iff
+			// the object fits there (fork keeps the object flat); if it exceeds its
+			// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
+			// explode). Arrays / nested calls keep the open-delim-glue path below.
+			if (firstVisibleTextStartsWith(items[0], '{'.code))
+				return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken);
 			return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		}
 		return null;
