@@ -1102,6 +1102,10 @@ class TriviaTypeSynth {
 			// falls back to the glued close — consistent with the sibling
 			// argsOpenNewline=false / closeTrailing=null fallbacks.
 			defaults.push(macro false); // argsCloseNewline
+			// ω-callarg-empty-inner-comment: argsInnerComment default for
+			// raw→paired wraps. `null` matches the parser's initial state for a
+			// call with no empty-parens inner comment.
+			defaults.push(macro (null: Null<String>)); // argsInnerComment
 		}
 		return defaults;
 	}
@@ -1898,6 +1902,12 @@ class TriviaTypeSynth {
 			// the `shapeFillLine` `isChainOPLBreak` own-line break. Reads via
 			// `argNames[4]` (argsOpenNewline stays at argNames[3]).
 			args.push({ name: 'argsCloseNewline', type: boolCT });
+			// ω-callarg-empty-inner-comment: empty-parens inner comment slot
+			// (`f(/* c */)`). Holds a comment captured between the postfix open
+			// and close when no argument consumed it; null otherwise. Sibling of
+			// closeTrailing (reuses `nullStrCT`), read by the writer via
+			// `argNames[5]`.
+			args.push({ name: 'argsInnerComment', type: nullStrCT });
 		}
 		return {
 			name: ctorName,

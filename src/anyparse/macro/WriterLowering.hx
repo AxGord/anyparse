@@ -482,6 +482,20 @@ class WriterLowering {
 		// `g(true #if FSE, true #end)` — no comma between the plain arg and
 		// the following conditional group; it lives INSIDE the group).
 		final sepFlagsInit: Expr = c.isTriviaStar ? macro _sepBeforeFlags.push(_i != 0 && !_args[_i - 1].sepAfter) : macro {};
+		// ω-callarg-empty-inner-comment: for an empty argument list carrying a
+		// captured inner comment (`f(/* c */)`), push the comment Doc into
+		// `_docs` before the sep-list renders `()` so it emits `(/* c */)`.
+		// Gated on the Call ctor having grown the `argsInnerComment` slot
+		// (argNames[5]); every other postfix Star has no slot and stays inert.
+		final innerCommentEmit: Expr = (c.isTriviaStar && c.argNames.length > 5)
+			? {
+				final innerRef: Expr = { expr: EConst(CIdent(c.argNames[5])), pos: Context.currentPos() };
+				macro if (_args.length == 0) {
+					final _ic: Null<String> = $innerRef;
+					if (_ic != null) _docs.push(leadingCommentDoc(_ic, opt));
+				};
+			}
+			: macro {};
 		return macro {
 			final _pfxOperand: anyparse.core.Doc = $operandCall;
 			final _args = $argsAccess;
@@ -493,6 +507,7 @@ class WriterLowering {
 				$pushElemExpr;
 				_i++;
 			}
+			$innerCommentEmit;
 			$tailExpr;
 		};
 	}
@@ -4897,7 +4912,7 @@ class WriterLowering {
 		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 3 : 0);
+			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 4 : 0);
 	}
 
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
@@ -11973,7 +11988,25 @@ class WriterLowering {
 				// `trailingCommentDocVerbatim` already prepends ' ' to
 				// the captured content, so the per-arg Doc is just
 				// `_elem ++ trailingDoc` — no extra `_dt(' ')`.
-				_docs.push(_tc != null ? _dc([_elem, trailingCommentDocVerbatim(_tc, opt)]) : _elem);
+				var _elemDoc: anyparse.core.Doc = _tc != null ? _dc([_elem, trailingCommentDocVerbatim(_tc, opt)]) : _elem;
+				// ω-callarg-leading-comment: glue a captured inline block leading
+				// comment before the argument (`/* c */ arg`). Only block comments
+				// with no internal newline are emitted inline; line comments and
+				// multi-line blocks (which need a hardline layout) are deferred to a
+				// dedicated slice.
+				final _lc: Array<String> = _args[_i].leadingComments;
+				if (_lc.length > 0) {
+					final _leadParts: Array<anyparse.core.Doc> = [];
+					for (_c in _lc) if (StringTools.startsWith(_c, '/*') && _c.indexOf('\n') < 0) {
+						_leadParts.push(leadingCommentDoc(_c, opt));
+						_leadParts.push(_dt(' '));
+					}
+					if (_leadParts.length > 0) {
+						_leadParts.push(_elemDoc);
+						_elemDoc = _dc(_leadParts);
+					}
+				}
+				_docs.push(_elemDoc);
 			}
 			: macro _docs.push($elemCall);
 	}
@@ -12099,7 +12132,7 @@ class WriterLowering {
 					// positional `argsCloseNewline`; the chain walk ignores it
 					// here (close placement is decided by the outer call's
 					// `lowerPostfixStar`, not the per-segment chain emit).
-					case Call(_op, _args, _trailClose, _, _):
+					case Call(_op, _args, _trailClose, _, _, _):
 						switch _op {
 							case FieldAccess(_prev, _fld, _nl, _opTrail):
 								final _argDocs: Array<anyparse.core.Doc> = $argDocsExpr;
@@ -12110,7 +12143,7 @@ class WriterLowering {
 								_segs.unshift(_segDoc);
 								_breaks.unshift(_nl);
 								switch _prev {
-									case Call(_, _, _, _, _):
+									case Call(_, _, _, _, _, _):
 										_hasCallPrev = true;
 									case _:
 										if (_opTrail != null) _recTrail = _opTrail;
@@ -12149,7 +12182,7 @@ class WriterLowering {
 							_breaks.unshift(_nl);
 						}
 						switch _prev {
-							case Call(_, _, _, _, _):
+							case Call(_, _, _, _, _, _):
 								_hasCallPrev = true;
 							case _:
 								if (_opTrail != null) _recTrail = _opTrail;

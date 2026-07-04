@@ -2970,7 +2970,8 @@ class Lowering {
 				macro _args,
 				macro _trailClose,
 				macro _argsOpenNewline,
-				macro _argsCloseNewline
+				macro _argsCloseNewline,
+				macro _argsInnerComment
 			]),
 			pos: Context.currentPos(),
 		};
@@ -3073,8 +3074,21 @@ class Lowering {
 			// non-whitespace byte, so the byte range covers exactly
 			// the post-open inter-token whitespace.
 			final _openPos: Int = ctx.pos;
-			skipWs(ctx);
+			// ω-callarg-empty-inner-comment: skip only whitespace (not comments)
+			// before the args loop, so the loop's `collectTrivia` can capture a
+			// leading comment on the first argument or an empty-parens inner
+			// comment. For comment-free calls this lands at the identical byte
+			// `skipWs` did, keeping the `argsOpenNewline` signal byte-identical.
+			while (ctx.pos < ctx.input.length) {
+				final _wc: Int = ctx.input.charCodeAt(ctx.pos);
+				if (_wc == ' '.code || _wc == '\t'.code || _wc == '\n'.code || _wc == '\r'.code) {
+					ctx.pos++;
+					continue;
+				}
+				break;
+			}
 			final _argsOpenNewline: Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
+			var _argsInnerComment: Null<String> = null;
 			final _args: Array<$wrappedCT> = [];
 			// ω-keep-callclose-newline: source-vertical signal for the
 			// gap before the postfix close literal. `collectTrivia`'s
@@ -3088,6 +3102,12 @@ class Lowering {
 				final _lead = collectTrivia(ctx);
 				if (!($closeNotNextExpr)) {
 					_argsCloseNewline = _lead.newlineBefore;
+					// ω-callarg-empty-inner-comment: an empty argument list whose
+					// only content is a comment (`f(/* c */)`) — the comment
+					// captured by `collectTrivia` belongs to no argument. Route it
+					// to the inner-comment slot so the writer emits it between the
+					// open and close literals.
+					if (_args.length == 0 && _lead.leadingComments.length > 0) _argsInnerComment = _lead.leadingComments.join(' ');
 					break;
 				}
 				final _node: $elemCT = $elemCall;
