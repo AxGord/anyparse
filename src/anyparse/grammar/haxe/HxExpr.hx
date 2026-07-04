@@ -524,13 +524,13 @@ enum HxExpr {
 	@:postfix('--')
 	PostDecr(operand: HxExpr);
 
-	@:infix('*', 9)
+	@:infix('*', 9) @:fmt(captureRhsTrail)
 	Mul(left: HxExpr, right: HxExpr);
 
-	@:infix('/', 9)
+	@:infix('/', 9) @:fmt(captureRhsTrail)
 	Div(left: HxExpr, right: HxExpr);
 
-	@:infix('%', 9)
+	@:infix('%', 9) @:fmt(captureRhsTrail)
 	Mod(left: HxExpr, right: HxExpr);
 
 	@:infix('+', 8) @:fmt(captureChainNewline)
@@ -539,46 +539,46 @@ enum HxExpr {
 	@:infix('-', 8) @:fmt(captureChainNewline)
 	Sub(left: HxExpr, right: HxExpr);
 
-	@:infix('<<', 7)
+	@:infix('<<', 7) @:fmt(captureRhsTrail)
 	Shl(left: HxExpr, right: HxExpr);
 
-	@:infix('>>>', 7)
+	@:infix('>>>', 7) @:fmt(captureRhsTrail)
 	UShr(left: HxExpr, right: HxExpr);
 
-	@:infix('>>', 7)
+	@:infix('>>', 7) @:fmt(captureRhsTrail)
 	Shr(left: HxExpr, right: HxExpr);
 
-	@:infix('|', 6)
+	@:infix('|', 6) @:fmt(captureRhsTrail)
 	BitOr(left: HxExpr, right: HxExpr);
 
-	@:infix('&', 6)
+	@:infix('&', 6) @:fmt(captureRhsTrail)
 	BitAnd(left: HxExpr, right: HxExpr);
 
-	@:infix('^', 6)
+	@:infix('^', 6) @:fmt(captureRhsTrail)
 	BitXor(left: HxExpr, right: HxExpr);
 
-	@:infix('==', 5)
+	@:infix('==', 5) @:fmt(captureRhsTrail)
 	Eq(left: HxExpr, right: HxExpr);
 
-	@:infix('!=', 5)
+	@:infix('!=', 5) @:fmt(captureRhsTrail)
 	NotEq(left: HxExpr, right: HxExpr);
 
-	@:infix('<=', 5)
+	@:infix('<=', 5) @:fmt(captureRhsTrail)
 	LtEq(left: HxExpr, right: HxExpr);
 
-	@:infix('>=', 5)
+	@:infix('>=', 5) @:fmt(captureRhsTrail)
 	GtEq(left: HxExpr, right: HxExpr);
 
-	@:infix('<', 5)
+	@:infix('<', 5) @:fmt(captureRhsTrail)
 	Lt(left: HxExpr, right: HxExpr);
 
-	@:infix('>', 5)
+	@:infix('>', 5) @:fmt(captureRhsTrail)
 	Gt(left: HxExpr, right: HxExpr);
 
 	@:infix('...', 5) @:fmt(tight)
 	Interval(left: HxExpr, right: HxExpr);
 
-	@:infix('is', 5)
+	@:infix('is', 5) @:fmt(captureRhsTrail)
 	Is(left: HxExpr, right: HxType);
 
 	@:infix('&&', 4) @:fmt(captureChainNewline)
@@ -587,7 +587,7 @@ enum HxExpr {
 	@:infix('||', 3) @:fmt(captureChainNewline)
 	Or(left: HxExpr, right: HxExpr);
 
-	@:infix('??', 2, 'Right')
+	@:infix('??', 2, 'Right') @:fmt(captureRhsTrail)
 	NullCoal(left: HxExpr, right: HxExpr);
 
 	@:ternary('?', ':', 1)

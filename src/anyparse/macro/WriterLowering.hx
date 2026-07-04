@@ -4917,7 +4917,7 @@ class WriterLowering {
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
 			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 4 : 0)
-			+ (TriviaTypeSynth.isInfixChainBranch(branch) ? 1 : 0);
+			+ (TriviaTypeSynth.isInfixChainBranch(branch) ? 1 : 0) + (TriviaTypeSynth.isRhsTrailBranch(branch) ? 1 : 0);
 	}
 
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
@@ -6638,6 +6638,10 @@ class WriterLowering {
 		// not wrap (no hardline → the legacy Group never broke → glued
 		// shape is byte-identical to the flat Group resolution).
 		final opAfterText: String = opText + ' ';
+		// ω-keep-infix-rhs-comment: append a captured right-operand trailing
+		// comment (position #3) after the binop, inside any precedence parens.
+		final rhsTrailAccess: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainRhsTrail) : null;
+		final rhsTrailExpr: Expr = rhsTrailAccess != null ? rhsTrailAccess : macro (null: Null<String>);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _left: anyparse.core.Doc = $leftCall;
@@ -6659,10 +6663,12 @@ class WriterLowering {
 					_left,
 					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
 				]));
+			final _rhsTrail: Null<String> = $rhsTrailExpr;
+			final _innerT: anyparse.core.Doc = _rhsTrail != null ? _dc([_inner, trailingCommentDocVerbatim(_rhsTrail, opt)]) : _inner;
 			if ($v{prec} < ctxPrec)
-				_dc([_dt('('), _inner, _dt(')')])
+				_dc([_dt('('), _innerT, _dt(')')])
 			else
-				_inner;
+				_innerT;
 		};
 	}
 
@@ -11537,6 +11543,8 @@ class WriterLowering {
 		if (TriviaTypeSynth.isAltChainNewlineBranch(branch)) idx++;
 		if (slot == ChainAfterComment) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isInfixChainBranch(branch)) idx++;
+		if (slot == ChainRhsTrail) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isRhsTrailBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -11832,6 +11840,7 @@ class WriterLowering {
 			case ChainLeadComment: TriviaTypeSynth.isAltChainNewlineBranch(branch);
 			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
 			case ChainAfterComment: TriviaTypeSynth.isInfixChainBranch(branch);
+			case ChainRhsTrail: TriviaTypeSynth.isRhsTrailBranch(branch);
 		};
 	}
 
@@ -16893,6 +16902,7 @@ enum abstract AltSlot(Int) {
 	final ChainLeadComment = 7;
 	final PostfixOpSpace = 8;
 	final ChainAfterComment = 9;
+	final ChainRhsTrail = 10;
 
 }
 #end

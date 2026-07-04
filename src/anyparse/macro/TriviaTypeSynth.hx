@@ -421,6 +421,7 @@ class TriviaTypeSynth {
 	public static inline final CHAIN_LEAD_COMMENT_ARG_NAME: String = 'chainLeadComment';
 
 	public static inline final OP_AFTER_COMMENT_ARG_NAME: String = 'opAfterComment';
+	public static inline final OP_RHS_TRAIL_COMMENT_ARG_NAME: String = 'opRhsTrailComment';
 
 	private static inline final PAIRED_SUFFIX: String = 'T';
 	private static inline final SYNTH_SUBPACK: String = 'trivia';
@@ -700,6 +701,17 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * ω-keep-infix-rhs-comment — true for any `@:infix` binop ctor carrying
+	 * `@:fmt(captureRhsTrail)`. Grows an `opRhsTrailComment:Null<String>` slot
+	 * (the LAST chain-family slot) holding the verbatim same-line comment
+	 * trailing the RIGHT operand (position #3). Independent of
+	 * `captureChainNewline`, so a chain ctor may carry both.
+	 */
+	public static function isRhsTrailBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 2 && branch.hasMeta(':infix') && branch.fmtHasFlag('captureRhsTrail');
+	}
+
+	/**
 	 * ω-keep-chain-receiver-comment — true when the branch is the
 	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
 	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
@@ -920,6 +932,7 @@ class TriviaTypeSynth {
 		if (isAltChainNewlineBranch(branch)) n++; // chainNewline (increment 2)
 		if (isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
 		if (isInfixChainBranch(branch)) n++; // opAfterComment (infix post-operator comment)
+		if (isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
 		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
 		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
@@ -1101,6 +1114,7 @@ class TriviaTypeSynth {
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro false); // chainNewline (increment 2)
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
 		if (isInfixChainBranch(branch)) defaults.push(macro (null: Null<String>)); // opAfterComment (infix post-operator comment)
+		if (isRhsTrailBranch(branch)) defaults.push(macro (null: Null<String>)); // opRhsTrailComment (infix right-operand trailing comment)
 		if (isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing
@@ -1880,6 +1894,13 @@ class TriviaTypeSynth {
 			final strCT2: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT2: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT2)] });
 			args.push({ name: OP_AFTER_COMMENT_ARG_NAME, type: nullStrCT2 });
+		}
+		// ω-keep-infix-rhs-comment: `opRhsTrailComment` slot on any @:infix ctor
+		// carrying @:fmt(captureRhsTrail) (position #3, right-operand trailing).
+		if (isRhsTrailBranch(branch)) {
+			final strCT3: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			final nullStrCT3: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT3)] });
+			args.push({ name: OP_RHS_TRAIL_COMMENT_ARG_NAME, type: nullStrCT3 });
 		}
 		// ω-postfix-op-space: word-op postfix ctors opting into source-faithful
 		// operator spacing grow `opSpaceBefore:Bool` as the LAST appended slot

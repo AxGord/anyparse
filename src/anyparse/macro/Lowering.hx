@@ -2295,49 +2295,50 @@ class Lowering {
 			//      probe. Plain mode keeps the 2-arg ctor (synth widens only
 			//      in Trivia).
 			final captureChainNl: Bool = _ctx.trivia && branch.fmtHasFlag('captureChainNewline');
+			// ω-keep-infix-rhs-comment: capture a same-line comment trailing the
+			// RIGHT operand (position #3 — before the enclosing `)`/`;`/`,`).
+			final captureRhsTrail: Bool = _ctx.trivia && branch.fmtHasFlag('captureRhsTrail');
 			final isBoolChainOp: Bool = opText == '&&' || opText == '||';
-			final ctorCall: Expr = {
-				expr: ECall(
-					ctorRef,
-					captureChainNl
-						? [
-							macro left,
-							macro _right,
-							macro _chainNl,
-							macro _opTrailComment,
-							macro _opAfterComment
-						]
-						: [
-							macro left,
-							macro _right
-						]
-				),
-				pos: Context.currentPos(),
-			};
+			final ctorArgs: Array<Expr> = [macro left, macro _right];
+			if (captureChainNl) {
+				ctorArgs.push(macro _chainNl);
+				ctorArgs.push(macro _opTrailComment);
+				ctorArgs.push(macro _opAfterComment);
+			}
+			if (captureRhsTrail) ctorArgs.push(macro _opRhsTrail);
+			final ctorCall: Expr = { expr: ECall(ctorRef, ctorArgs), pos: Context.currentPos() };
 			// `_chainNl` is declared in the commit block; the right-operand
 			// parse + ctor build live in the SAME block so it stays in scope
 			// for `$ctorCall`. Non-capturing branches keep the legacy body.
 			final chainNlValue: Expr = isBoolChainOp
 				? macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos) || (ctx.pendingTrivia != null && ctx.pendingTrivia.newlineBefore)
 				: macro hasNewlineIn(ctx.input, _preWsPos, ctx.pos);
-			final commitBody: Expr = captureChainNl
-				? macro {
-					// ω-keep-infix-postop-comment: capture a same-line comment
-					// trailing the operator (before the right operand) BEFORE
-					// `skipWsAndStash` would stash it into pendingTrivia (where it
-					// leaks into the next operand's parse). Rewinds when none.
-					final _opAfterComment: Null<String> = collectTrailingFull(ctx);
-					$skipCall;
-					final _chainNl: Bool = $chainNlValue;
-					if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false;
-					final _right: $rightCT = $rightCall;
-					left = $ctorCall;
-				}
-				: macro {
-					$skipCall;
-					final _right: $rightCT = $rightCall;
-					left = $ctorCall;
-				};
+			final commitParts: Array<Expr> = [];
+			// ω-keep-infix-postop-comment: capture a same-line comment trailing the
+			// operator (before the right operand) BEFORE `skipWsAndStash` stashes it
+			// into pendingTrivia (where it leaks into the next operand's parse).
+			if (captureChainNl) commitParts.push(macro final _opAfterComment: Null<String> = collectTrailingFull(ctx));
+			commitParts.push(skipCall);
+			if (captureChainNl) {
+				commitParts.push(macro final _chainNl: Bool = $chainNlValue);
+				commitParts.push(macro if (ctx.pendingTrivia != null) ctx.pendingTrivia.newlineBefore = false);
+			}
+			commitParts.push(macro final _right: $rightCT = $rightCall);
+			// Restrict RHS-trail to BLOCK comments (`/* */`): a same-line LINE
+			// comment after the operand belongs to an enclosing chain operator's
+			// line-break slot (chainLeadComment) or the statement trailing slot —
+			// stealing it here would collapse the chain and comment out the tail.
+			// Block comments are inline-safe, so keep + rewind line comments.
+			if (captureRhsTrail) {
+				commitParts.push(macro final _savedRhsPos: Int = ctx.pos);
+				commitParts.push(macro final _rhsRaw: Null<String> = collectTrailingFull(ctx));
+				commitParts.push(
+					macro final _opRhsTrail: Null<String> = (_rhsRaw != null && StringTools.startsWith(_rhsRaw, '/*')) ? _rhsRaw : null
+				);
+				commitParts.push(macro if (_opRhsTrail == null) ctx.pos = _savedRhsPos);
+			}
+			commitParts.push(macro left = $ctorCall);
+			final commitBody: Expr = macro $b{commitParts};
 			macro {
 				if ($v{precValue} < minPrec) {
 					ctx.pos = _savedPos;
