@@ -1487,8 +1487,7 @@ class WrapList {
 	}
 
 	/**
-	 * ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call whose LAST arg
-	 * is a block-bodied paren-param lambda (`f(x, () -> { … })`) keeps ALL args
+	 * ω-callparam-multiarg-block-lambda: a FLWLB MULTI-arg call ANY of whose args is a block-bodied paren-param lambda (`f((p) -> { … }, y)` / `f(x, () -> { … })`) keeps ALL args
 	 * GLUED to the open paren iff the glued flat first line (up to the block
 	 * `{`) fits `lineWidth`; the lambda's block body self-breaks at its `{` and
 	 * the enclosing `)` glues to the block close (`});`). Without this, the
@@ -1500,9 +1499,7 @@ class WrapList {
 	 * is never opened. The `reEvaluateMultiArgCallParamAfterContextWraps` pass
 	 * (713-748) then leaves the collapsed multi-arg call as-is.
 	 *
-	 * DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow,
-	 * all `items.length == 1`): this gates on `items.length > 1`, so sole-arrow
-	 * handling is untouched. The block-body discriminator is STRUCTURAL
+	 * DISJOINT from the sole-arrow paths above (inc5 / inc5-cont / ThinArrow, all `items.length == 1`): this gates on `items.length > 1`, so sole-arrow handling is untouched. The block-body lambda may sit at ANY position (first / middle / last); trailing args ride the block-close line (`}, y)`), matching fork applyArrowWrapping, which collapses the arrow head regardless of arg position. The block-body discriminator is STRUCTURAL
 	 * (`arrowBodyIsBlock` — the body's first visible Text is `{`), needing no
 	 * post-layout "did it break" fact: a block with statements always carries
 	 * hardlines.
@@ -1517,10 +1514,12 @@ class WrapList {
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
 	): Null<Doc> {
-		if (
-			mode == FillLineWithLeadingBreak && items.length > 1 && isArrowBodyMarker(items[items.length - 1])
-			&& arrowBodyIsBlock(items[items.length - 1])
-		) {
+		var hasBlockLambda: Bool = false;
+		for (it in items) if (isArrowBodyMarker(it) && arrowBodyIsBlock(it)) {
+			hasBlockLambda = true;
+			break;
+		}
+		if (mode == FillLineWithLeadingBreak && items.length > 1 && hasBlockLambda) {
 			final glueShape: Doc = multiArgBlockLambdaGlueShape(open, close, sep, items, openInside, closeInside, sepBeforeFlags);
 			final openShape: Doc = shapeFillLineWithLeadingBreak(
 				open, close, sep, items, openInside, closeInside, cols, appendTrailingComma
