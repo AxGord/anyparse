@@ -1385,7 +1385,9 @@ class TriviaTypeSynth {
 	 * the mandatory path. The absent branch leaves the slot null.
 	 */
 	private static function isTrailRef(child: ShapeNode): Bool {
-		return child.kind == Ref && child.readMetaString(':trail') != null;
+		// Mandatory Ref with @:trail, OR a @:fmt(captureTrailComment)-opted Star
+		// (case-pattern list) — both grow a `<field>AfterTrail:Null<String>` slot.
+		return child.readMetaString(':trail') != null && (child.kind == Ref || child.fmtHasFlag('captureTrailComment'));
 	}
 
 	private static function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {

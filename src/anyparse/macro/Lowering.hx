@@ -4721,7 +4721,9 @@ expectLit(ctx, $v{trailText}));
 		// expect a close. First consumer: `HxAbstractDecl.
 		// underlyingType` for the `@:coreType` bare-abstract
 		// shape `abstract Foo from Int to Int {}` (Slice 40).
-		final captureAfterTrail: Expr = hasOptionalRefAfterTrailSlot ? macro $i{'_afterTrail_$fieldName'} = collectTrailing(ctx) : macro {};
+		final captureAfterTrail: Expr = hasOptionalRefAfterTrailSlot
+			? macro $i{'_afterTrail_$fieldName'} = collectTrailingFull(ctx)
+			: macro {};
 		// ω-optional-ref-trailOpt (Session 11 path b): consume
 		// the per-field `@:trailOpt(';')` literal AFTER the
 		// sub-rule parse, INSIDE the lead/kw commit branch.
@@ -5266,7 +5268,11 @@ expectLit(ctx, $v{trailText}));
 	 * shape. Pure predicate lifted from `lowerStruct`.
 	 */
 	private function hasAfterTrailSlotField(child: ShapeNode, typePath: String, isStar: Bool, trailText: Null<String>): Bool {
-		return child.kind == Ref && !isStar && trailText != null && _ctx.trivia && isTriviaBearing(typePath);
+		// Mandatory Ref with @:trail, OR a @:fmt(captureTrailComment)-opted Star
+		// (case-pattern list ending in `:`) — capture a same-line comment after
+		// the trail literal so it stays cuddled to that token.
+		return trailText != null && _ctx.trivia && isTriviaBearing(typePath)
+			&& ((child.kind == Ref && !isStar) || (isStar && child.fmtHasFlag('captureTrailComment')));
 	}
 
 	/**
@@ -5852,6 +5858,24 @@ expectLit(ctx, $v{trailText}));
 		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, trailText: Null<String>, hasAfterTrailSlot: Bool, afterTrailLocal: String,
 		trailOptText: Null<String>, captureTrailPresentExpr: Expr
 	): Void {
+		// @:fmt(captureTrailComment) Star: the trail literal (e.g. `:`) is
+		// already consumed by `emitStarFieldSteps`, so capture the same-line
+		// trailing comment here into the same `<field>AfterTrail` slot the next
+		// sibling's writer reads. `collectTrailingFull` keeps the delimiters so
+		// block and line styles both round-trip verbatim.
+		if (isStar && !isOptional && trailText != null && hasAfterTrailSlot) {
+			parseSteps.push({
+				expr: EVars([
+					{
+						name: afterTrailLocal,
+						type: (macro :Null<String>),
+						expr: macro collectTrailingFull(ctx),
+						isFinal: true,
+					}
+				]),
+				pos: Context.currentPos(),
+			});
+		}
 		if (!isStar && !isOptional && trailText != null) {
 			parseSteps.push(macro skipWs(ctx));
 			parseSteps.push(macro expectLit(ctx, $v{trailText}));
@@ -5869,7 +5893,7 @@ expectLit(ctx, $v{trailText}));
 						{
 							name: afterTrailLocal,
 							type: (macro :Null<String>),
-							expr: macro collectTrailing(ctx),
+							expr: macro collectTrailingFull(ctx),
 							isFinal: true,
 						}
 					]),

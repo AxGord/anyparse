@@ -354,6 +354,7 @@ import unit.HxEnumScopeEmptyLinesSliceTest;
 import unit.HxCaseBodyBlankSliceTest;
 import unit.HxCallArgCommentWriteTest;
 import unit.HxInfixCommentWriteTest;
+import unit.HxCaseCommentWriteTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -576,6 +577,7 @@ class RunTests {
 		addCase(new HxTriviaWriteTest());
 		addCase(new HxCallArgCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
+		addCase(new HxCaseCommentWriteTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new HaxeWriterRoundTripTest());
 		addCase(new HxFormatterCorpusTest());

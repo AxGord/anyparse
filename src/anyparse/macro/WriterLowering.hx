@@ -892,7 +892,11 @@ class WriterLowering {
 				);
 				prevAnyStarNonEmpty = starResult.prevAnyStarNonEmpty;
 				prevBodyField = null;
-				prevTrailFieldName = null;
+				// ω-case-label-trail-comment: a @:fmt(captureTrailComment) Star (the
+				// case-pattern list ending in `:`) publishes its name so the NEXT
+				// sibling's tryparse-Star emit cuddles the captured same-line trail
+				// comment to the `:` token, like a mandatory Ref with @:trail.
+				prevTrailFieldName = (_ctx.trivia && child.fmtHasFlag('captureTrailComment')) ? fieldName : null;
 				prevPadTrailing = starResult.prevPadTrailing;
 				isFirstField = false;
 				continue;
@@ -6358,7 +6362,7 @@ class WriterLowering {
 				$coreWrapExpr;
 			else {
 				final _outer556: Array<anyparse.core.Doc> = [];
-				if (_at556 != null) _outer556.push(trailingCommentDoc(_at556, opt));
+				if (_at556 != null) _outer556.push(trailingCommentDocVerbatim(_at556, opt));
 				final _inner556: Array<anyparse.core.Doc> = [_dhl()];
 				for (_c556 in _bl556) {
 					_inner556.push(leadingCommentDoc(_c556, opt));
@@ -11285,6 +11289,7 @@ class WriterLowering {
 			cascadeHeadEmit: cascadeHeadEmit,
 			cascadeBlanksCount: cascadeBlanksCount,
 			priorAfterTrailEmit: priorAfterTrailEmit,
+			priorAfterTrailRaw: priorAfterTrailExpr != null ? priorAfterTrailExpr : macro (null: Null<String>),
 			padLeadingSpaceDoc: padLeadingSpaceDoc,
 			subsequentSepDoc: subsequentSepDoc,
 			firstSepExpr: firstSepExpr,
@@ -13052,6 +13057,7 @@ class WriterLowering {
 		final cascadeInitPrev: Expr = c.cascadeInitPrev;
 		final cascadeHeadEmit: Expr = c.cascadeHeadEmit;
 		final priorAfterTrailEmit: Expr = c.priorAfterTrailEmit;
+		final priorAfterTrailRaw: Expr = c.priorAfterTrailRaw;
 		final padLeadingSpaceDoc: Expr = c.padLeadingSpaceDoc;
 		final whileExpr: Expr = triviaTryparseWhileExpr(c);
 		final assemblyExpr: Expr = triviaTryparseAssemblyExpr(c);
@@ -13083,9 +13089,14 @@ class WriterLowering {
 			// gate is cond-comp-EXCLUSIVE (the expr-position `elseifs` Star has
 			// padTrailing ONLY) — every other tryparse-Star consumer leaves
 			// both false, so the empty body stays `_de()` byte-identical.
-			if (_arr.length == 0 && _trailLC.length == 0)
-				(_padLeading && _padTrailing) ? _dhl() : _de();
-			else {
+			if (_arr.length == 0 && _trailLC.length == 0) {
+				// ω-case-label-trail-comment: an EMPTY body (e.g. `case A: // c`
+				// with no statements) still cuddles the captured after-trail
+				// comment to the `:` token before the empty-body base Doc.
+				final _patEmpty: Null<String> = $priorAfterTrailRaw;
+				final _baseEmpty: anyparse.core.Doc = (_padLeading && _padTrailing) ? _dhl() : _de();
+				_patEmpty != null ? _dc([trailingCommentDocVerbatim(_patEmpty, opt), _baseEmpty]) : _baseEmpty;
+			} else {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _docs: Array<anyparse.core.Doc> = [];
 				// ω-cond-indent-policy: when active, the trailing pad hardline
@@ -13613,7 +13624,7 @@ class WriterLowering {
 			? macro {}
 			: macro {
 				final _pat: Null<String> = $priorAfterTrailExpr;
-				if (_pat != null) _docs.push(trailingCommentDoc(_pat, opt));
+				if (_pat != null) _docs.push(trailingCommentDocVerbatim(_pat, opt));
 			};
 	}
 
@@ -16401,6 +16412,7 @@ typedef TryparseStarCtx = {
 	final cascadeHeadEmit: Expr;
 	final cascadeBlanksCount: Expr;
 	final priorAfterTrailEmit: Expr;
+	final priorAfterTrailRaw: Expr;
 	final padLeadingSpaceDoc: Expr;
 	final subsequentSepDoc: Expr;
 	final firstSepExpr: Expr;
