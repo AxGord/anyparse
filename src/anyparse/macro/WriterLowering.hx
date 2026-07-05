@@ -7398,36 +7398,27 @@ class WriterLowering {
 							? (
 								opt._parenInCondition
 									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-									? _dfle(
-										opt.lineWidth, _dc([
-											$leadDoc,
-											_dn(_cols, _dc([_dhl(), _wrapInner])),
-											_dhl(),
-											_wrapTrail
-										]),
-										_dc([$leadDoc, _wrapInner, _wrapTrail])
-									)
-									: _dfle(
-										opt.lineWidth, _dc([
-											$leadDoc,
-											_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
-											_dhl(),
-											_wrapTrail
-										]),
-										_dc([$leadDoc, _wrapInner, _wrapTrail])
-									)
+									? _dfle(opt.lineWidth, _dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _wrapInner])),
+										_dhl(),
+										_wrapTrail
+									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+									: _dfle(opt.lineWidth, _dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
+										_dhl(),
+										_wrapTrail
+									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
 							)
 							: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
 								? _dc([$leadDoc, _wrapInner, _wrapTrail])
-								: _dfle(
-									opt.lineWidth, _dc([
-										$leadDoc,
-										_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
-										_dhl(),
-										_wrapTrail
-									]),
-									_dc([$leadDoc, _wrapInner, _wrapTrail])
-								);
+								: _dfle(opt.lineWidth, _dc([
+									$leadDoc,
+									_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+									_dhl(),
+									_wrapTrail
+								]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
 		};
 	}
 

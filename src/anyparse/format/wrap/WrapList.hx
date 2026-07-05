@@ -1257,16 +1257,23 @@ class WrapList {
 	}
 
 	/**
-	 * Returns the index of the SOLE multi-line arg in `items` when that arg is a
-	 * breaking collection literal (`startsWithCollectionDelim` AND `flatLength <
-	 * 0`), and EVERY other arg renders single-line (`flatLength >= 0`); else -1.
+	 * Returns the index of the SOLE multi-line arg in `items` when that arg's
+	 * multi-line-ness is owned by a breaking array literal — either the arg IS the
+	 * array (`startsWithCollectionDelim`) OR the array is nested and is the arg's
+	 * FIRST break (`firstBreakIsArrayDelim` — `new X([\n … \n], y)` / `f([\n …
+	 * \n])`) — AND `flatLength < 0`, while EVERY other arg renders single-line
+	 * (`flatLength >= 0`); else -1.
 	 *
 	 * The multi-arg-collection-glue intercept's structural predicate: gluing all
 	 * args inline is a valid fixed point ONLY when exactly one arg breaks and it
-	 * is the collection — the other (flat) args then ride the open-paren line
-	 * (before it) or the collection's close line (after it). A second multi-line
-	 * arg, or a multi-line arrow / method-chain / paren-expr arg, would place a
-	 * break in a spot the all-inline glue can't absorb, so we bail (-1).
+	 * is (or is built around) the array — the other (flat) args then ride the
+	 * open-paren line (before it) or the array's close line (after it). A second
+	 * multi-line arg, or a multi-line arrow / method-chain / paren-expr arg, would
+	 * place a break in a spot the all-inline glue can't absorb, so we bail (-1). A
+	 * nested-array arg is a valid fixed point only because its head up to `[` is
+	 * flat and its tail after `]` is flat too — `firstBreakIsArrayDelim` stops at
+	 * the FIRST line break, so a chain-owned bracket (reached past a soft break) is
+	 * refused.
 	 *
 	 * `flatLength(item) < 0` short-circuits on the first hardline per arg (no full
 	 * re-measure); the scan is O(Σ arg spines up to first hardline).
@@ -1278,7 +1285,10 @@ class WrapList {
 			// breaking collection — the all-inline glue is not a fixed point.
 			if (collIdx >= 0) return -1;
 			final it: Doc = items[i];
-			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !startsWithCollectionDelim(it)) return -1;
+			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !(
+				startsWithCollectionDelim(it) || firstBreakIsArrayDelim(it)
+			))
+				return -1;
 			collIdx = i;
 		}
 		return collIdx;
@@ -2693,6 +2703,58 @@ class WrapList {
 			case _:
 				null;
 		};
+	}
+
+	/**
+	 * True iff `d`'s FIRST structural break (soft or hard line) is immediately
+	 * preceded by an ARRAY open delimiter `[` — i.e. `d`'s multi-line-ness is
+	 * owned by a (possibly nested) array literal whose open bracket sits at the
+	 * end of the head line (`new X([\n … \n], y)`, `f([\n … \n])`). The
+	 * generalisation of `startsWithCollectionDelim` from "STARTS with `[`" to
+	 * "first BREAKS at `[`", so a call / `new` whose sole multi-line-ness is an
+	 * array arg is recognised as huggable: the head up to the bracket rides the
+	 * open-paren line, the bracket self-breaks one-per-line, and the arg tail
+	 * (`], y)`) plus any inline sibling args ride the array-close line
+	 * (`f(new X([\n … \n], y), z)`).
+	 *
+	 * ARRAY-ONLY (`[`, not `{`): an object / anon-type `{` at the first break is
+	 * excluded — a function-signature param `x: Null<{…}>` breaks at that `{` too,
+	 * and the fork opens the signature paren there rather than hugging it. Object-
+	 * literal call args that START with `{` keep the existing `startsWithCollection
+	 * Delim` path.
+	 *
+	 * A SOFT line reached before the bracket disqualifies `d`: the bracket then
+	 * sits inside a chain (opAdd / opBool / ternary continuation) whose own wrap
+	 * semantics the fork honours (it explodes the call rather than hugging).
+	 *
+	 * In-order left-spine DFS reusing `flatPushChildren`'s child order (so it
+	 * descends the SAME flat side that `flatLength` walked to prove `d` breaks —
+	 * the caller gates on `flatLength(d) < 0` first, so a raw hardline is
+	 * guaranteed reachable here). Tracks the last Text leaf's final char and, at
+	 * the first line break, answers whether that char is `[`. O(spine up to the
+	 * first break), no re-measure.
+	 */
+	private static function firstBreakIsArrayDelim(d: Doc): Bool {
+		final stack: Array<Doc> = [d];
+		var lastCh: Int = -1;
+		while (stack.length > 0) {
+			final node: Doc = stack.pop();
+			switch (node) {
+				case Text(s):
+					if (s.length > 0) lastCh = StringTools.fastCodeAt(s, s.length - 1);
+				case Line(_):
+					// A SOFT line (opAdd / opBool / ternary continuation) reaching before
+					// the bracket means the array is NOT the arg's first break — its owning
+					// chain has its own wrap semantics (fork explodes the call, does not
+					// hug). Stop here: only a `[` at the VERY first break qualifies.
+					return lastCh == '['.code;
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					return lastCh == '['.code;
+				case _:
+					flatPushChildren(node, stack);
+			}
+		}
+		return false;
 	}
 
 }
