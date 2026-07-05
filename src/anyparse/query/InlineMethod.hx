@@ -476,10 +476,9 @@ final class InlineMethod {
 			final args: Array<QueryNode> = call.children.slice(1);
 			if (args.length != params.length) {
 				final at: String = CallSites.posOf(source, call.span);
-				return
-					Err(
-						'call at $at passes ${args.length} args, expected ${params.length} — inline-method cannot fill omitted optional arguments'
-					);
+				return Err(
+					'call at $at passes ${args.length} args, expected ${params.length} — inline-method cannot fill omitted optional arguments'
+				);
 			}
 			// A dropped (0-use) or duplicated (2+-use) argument must be pure.
 			for (i in 0...params.length) {

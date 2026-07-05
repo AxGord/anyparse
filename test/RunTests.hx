@@ -342,6 +342,7 @@ import unit.HxThinArrowTrailingLambdaSliceTest;
 import unit.HxThinArrowIfElseBreakSliceTest;
 import unit.HxCondWrapFitLineSliceTest;
 import unit.HxCondPlainCallLeadingBreakSliceTest;
+import unit.HxReturnCallOpenParenSliceTest;
 import unit.HxCondSpliceFidelitySliceTest;
 import unit.CallGraphTest;
 import unit.ThreadSafetyCheckTest;
@@ -544,6 +545,7 @@ class RunTests {
 		addCase(new HxTernaryCollectionHugSliceTest());
 		addCase(new HxCondWrapFitLineSliceTest());
 		addCase(new HxCondPlainCallLeadingBreakSliceTest());
+		addCase(new HxReturnCallOpenParenSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
 		addCase(new HxBinaryChainWrapSliceTest());

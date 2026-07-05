@@ -234,10 +234,9 @@ final class CallSites {
 	private static function collectLocalFnCalls(tree: QueryNode, source: String, name: String): CollectResult {
 		final clashes: Int = countNameDecls(tree, name);
 		if (clashes > 1)
-			return
-				CErr(
-					'cannot prove all call sites target the local function "$name": another declaration named "$name" exists — refused when a local-function name is ambiguous'
-				);
+			return CErr(
+				'cannot prove all call sites target the local function "$name": another declaration named "$name" exists — refused when a local-function name is ambiguous'
+			);
 
 		final sites: Array<QueryNode> = [];
 		var error: Null<String> = null;

@@ -100,10 +100,9 @@ final class AddParam {
 		final trimmed: String = StringTools.trim(paramText);
 		if (trimmed.length == 0) return Err('add-param requires a non-empty parameter text');
 		if (!StringTools.startsWith(trimmed, '?') && trimmed.indexOf('=') < 0)
-			return
-				Err(
-					'add-param requires a default value (`name:T = v`) or optional `?name:T` — a required parameter would break existing call sites'
-				);
+			return Err(
+				'add-param requires a default value (`name:T = v`) or optional `?name:T` — a required parameter would break existing call sites'
+			);
 
 		final paramName: Null<String> = parseParamName(trimmed);
 		if (paramName == null) return Err('cannot read a parameter name from "$paramText"');

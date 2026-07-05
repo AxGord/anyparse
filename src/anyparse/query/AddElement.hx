@@ -110,10 +110,9 @@ final class AddElement {
 
 		final hit: Null<{ node: QueryNode, parent: Null<QueryNode> }> = RefactorSupport.elementAtFrom(tree, source, cursor);
 		if (hit == null)
-			return
-				Err(
-					'position $line:$col is not on the first token of an element — point at the first token of an existing statement / case / list element'
-				);
+			return Err(
+				'position $line:$col is not on the first token of an element — point at the first token of an existing statement / case / list element'
+			);
 		final element: QueryNode = hit.node;
 		final elemSpan: Null<Span> = element.span;
 		if (elemSpan == null) return Err('the element at $line:$col has no source span');
@@ -192,10 +191,9 @@ final class AddElement {
 
 		final container: Null<QueryNode> = findContainerAt(tree, source, cursor);
 		if (container == null)
-			return
-				Err(
-					'position $line:$col is not on the first token of a container — point at the first token of a block / array / object / call / class / switch'
-				);
+			return Err(
+				'position $line:$col is not on the first token of a container — point at the first token of a block / array / object / call / class / switch'
+			);
 		final containerSpan: Null<Span> = container.span;
 		return containerSpan == null
 			? Err('the container at $line:$col has no source span')

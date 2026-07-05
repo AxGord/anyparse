@@ -633,7 +633,7 @@ class Renderer {
 	 *
 	 * Used exclusively by the `IfNaturalFirstLineExceeds` render arm.
 	 */
-	private static function naturalFirstLineWidth(d: Doc, startCol: Int, indent: Int, width: Int): Int {
+	private static function naturalFirstLineWidth(d: Doc, startCol: Int, indent: Int, width: Int, resolveOpenDelim: Bool = false): Int {
 		var col: Int = startCol;
 		var aborted: Bool = false;
 		// Work items carry their own indent + mode + forceFlat — a faithful
@@ -663,7 +663,7 @@ class Renderer {
 				mode: Mode,
 				forceFlat: Bool
 			} = stack.pop();
-			final step: { add: Int, aborted: Bool } = naturalWidthStep(node, stack, width, col);
+			final step: { add: Int, aborted: Bool } = naturalWidthStep(node, stack, width, col, resolveOpenDelim);
 			col += step.add;
 			aborted = step.aborted;
 		}
@@ -1466,7 +1466,7 @@ class Renderer {
 			mode: Mode,
 			forceFlat: Bool
 		}>,
-		width: Int, col: Int
+		width: Int, col: Int, resolveOpenDelim: Bool = false
 	): { add: Int, aborted: Bool } {
 		switch node.doc {
 			case Empty:
@@ -1494,7 +1494,7 @@ class Renderer {
 			case _:
 				// Structural / descend arms contribute no width of their own —
 				// they only push the next natural frame(s).
-				naturalWidthStructural(node, stack, width, col);
+				naturalWidthStructural(node, stack, width, col, resolveOpenDelim);
 				return { add: 0, aborted: false };
 		}
 	}
@@ -1520,7 +1520,7 @@ class Renderer {
 			mode: Mode,
 			forceFlat: Bool
 		}>,
-		width: Int, col: Int
+		width: Int, col: Int, resolveOpenDelim: Bool = false
 	): Void {
 		switch node.doc {
 			case Nest(n, inner):
@@ -1577,7 +1577,9 @@ class Renderer {
 			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
 				// Self-reference: resolve recursively at the running col
 				// over a strictly smaller subtree (bounded by finite tree).
-				pushNaturalExceeds(stack, node, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width) >= nn);
+				pushNaturalExceeds(
+					stack, node, breakDoc, flatDoc, naturalFirstLineWidth(flatDoc, col, node.indent, width, resolveOpenDelim) >= nn
+				);
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
 				// Flat interleave tagged with node.mode (so a broken sep's
 				// Line terminates the first line). Slight over-measure when
@@ -1624,6 +1626,31 @@ class Renderer {
 					indent: node.indent,
 					mode: node.mode,
 					forceFlat: false
+				});
+			case IfNaturalFirstLineFitsOpenDelim(nn, breakDoc, flatDoc) if (resolveOpenDelim):
+				// ω-rhs-call-open: for a `return`/`=` RHS natural-first-line probe
+				// (`resolveOpenDelim`), resolve this open-delim decision the way
+				// render's own `IfNaturalFirstLineFitsOpenDelim` arm does — glue vs
+				// OPEN at the running column — instead of descending the GLUED
+				// `flatDoc` unconditionally. When the probe OPENS the delimiter
+				// (not gluable), the natural first line must cap at that open delim
+				// (the `breakDoc`'s leading `Line` terminates it), matching what
+				// render emits — so the enclosing `IfNaturalFirstLineExceeds` keeps
+				// the `return`/`=` glued and opens the call paren (fork parity)
+				// rather than mis-measuring the value's full flat width and breaking
+				// the operator. The `_fitsD` sub-measure stays legacy (no resolve),
+				// mirroring render's own glue probe. OUTSIDE a RHS probe
+				// (`resolveOpenDelim == false`, e.g. a nested open-delim inside a
+				// sibling expr-paren-open decision) the arm below keeps the flat
+				// descend — byte-inert.
+				final _fitsD: Bool = naturalFirstLineWidth(flatDoc, col, node.indent, width) < nn;
+				final _gluableD: Bool = naturalFirstLineGluable(flatDoc, col, node.indent, width);
+				final _glueD: Bool = _fitsD && _gluableD;
+				stack.push({
+					doc: _glueD ? flatDoc : breakDoc,
+					indent: node.indent,
+					mode: _glueD ? node.mode : MBreak,
+					forceFlat: node.forceFlat
 				});
 			case IfFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | CollapseProbe(
 				inner
@@ -2584,7 +2611,7 @@ class Renderer {
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 				} else {
-					final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width) >= n);
+					final naturalCrosses: Bool = (naturalFirstLineWidth(flatDoc, col, f.indent, width, true) >= n);
 					final pushMode: Mode = naturalCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, naturalCrosses ? breakDoc : flatDoc));
 				}
