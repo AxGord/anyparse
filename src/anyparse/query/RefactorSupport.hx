@@ -1240,7 +1240,8 @@ final class RefactorSupport {
 			final c: Int = StringTools.fastCodeAt(source, k);
 			if (c == '\n'.code)
 				newlines++;
-			else if (!isSpace(c)) return false;
+			else if (!isSpace(c))
+				return false;
 		}
 		return newlines == 1;
 	}

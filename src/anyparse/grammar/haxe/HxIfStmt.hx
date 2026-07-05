@@ -90,7 +90,7 @@ package anyparse.grammar.haxe;
 typedef HxIfStmt = {
 	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap'), condParensInside('ifCondParensInsideOpen', 'ifCondParensInsideClose'),
 		captureCondOpenNewline) var cond: HxExpr;
-	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse) var thenBody: HxStatement;
+	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'), fitLineIfWithElse, clearElseIfBranch) var thenBody: HxStatement;
 	@:optional @:trailOpt(';') @:kw('else') @:fmt(sameLine('sameLineElse'), shapeAware, semicolonNextLineElse,
-		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse) var elseBody: Null<HxStatement>;
+		bodyPolicy('elseBody', 'expressionElseBody'), elseIf, fitLineIfWithElse, propagateElseIfBranch) var elseBody: Null<HxStatement>;
 };

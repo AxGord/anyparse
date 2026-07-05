@@ -351,6 +351,7 @@ import unit.HxCallParamFunctionLambdaSliceTest;
 import unit.HxComprehensionBlockHugSliceTest;
 import unit.HxCallParamNestedArrayHugSliceTest;
 import unit.HxIfBodyBlockCaseBarrierTest;
+import unit.HxElseIfBodyBreakTest;
 import unit.HxEnumScopeEmptyLinesSliceTest;
 import unit.HxCaseBodyBlankSliceTest;
 import unit.HxCallArgCommentWriteTest;
@@ -570,6 +571,7 @@ class RunTests {
 		addCase(new HxCaseExprPositionPropagateTest());
 		addCase(new HxIfStmtExprPositionDispatchTest());
 		addCase(new HxIfBodyBlockCaseBarrierTest());
+		addCase(new HxElseIfBodyBreakTest());
 		addCase(new HxCaseBodyShapeRefusalTest());
 		addCase(new HxFunctionBodyPolicySliceTest());
 		addCase(new HxUntypedBodyPolicySliceTest());

@@ -1925,5 +1925,17 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// After space (`} & B`), mirroring fork's `MarkLineEnds` `lineEndAfter` on
 	// the `&` that follows a `BrClose`. Default false → single-line
 	// intersections (`A & B`, `A & {x:Int} & B`) stay glued byte-identically.
-	_intersectionOperandBreak: Bool
+	_intersectionOperandBreak: Bool,
+	// ω-elseif-body-break: write-time-only signal flagging that the current
+	// statement is being rendered as the direct `else` branch of an enclosing
+	// `if` (i.e. an `else if`). Set by `HxIfStmt.elseBody`'s
+	// `@:fmt(propagateElseIfBranch)` ONLY when the else-branch runtime ctor is
+	// `IfStmt`, and cleared on the inner `if`'s then-body recursion
+	// (`@:fmt(clearElseIfBranch)`) so it reaches exactly that one inner `if`'s
+	// body fit-gate and dies. Read by the `fitLineIfWithElse` body gate
+	// (`buildBodyFitExpr`) as an extra break trigger: mirrors haxe-formatter's
+	// `MarkSameLine.isPartOfIfElse` "if inside else" clause, so a fitting
+	// single-statement `else if (c) stmt;` degrades to `Next` under
+	// `sameLine.ifBody:fitLine` + `fitLineIfWithElse:false`. Default false.
+	_inElseIfBranch: Bool
 };

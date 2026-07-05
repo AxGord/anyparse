@@ -273,7 +273,8 @@ final class InlineMethod {
 				final callee: QueryNode = n.children[0];
 				if (callee.kind == 'IdentExpr' && callee.name == name)
 					found = true;
-				else if (callee.kind == 'FieldAccess' && callee.name == name) found = true;
+				else if (callee.kind == 'FieldAccess' && callee.name == name)
+					found = true;
 			}
 			for (c in n.children) walk(c);
 		}

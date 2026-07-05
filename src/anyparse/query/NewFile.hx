@@ -309,7 +309,8 @@ final class NewFile {
 				flush();
 				section = line.substr(3).trim();
 				buf.resize(0);
-			} else if (section != null) buf.push(line);
+			} else if (section != null)
+				buf.push(line);
 		}
 		flush();
 	}

@@ -147,7 +147,8 @@ final class PreferSwitch implements Check {
 			if (callKind != null && RefactorSupport.subtreeContainsKind(d, callKind)) return;
 			if (discriminant == null)
 				discriminant = d;
-			else if (!RefactorSupport.sameSource(discriminant, d, source)) return;
+			else if (!RefactorSupport.sameSource(discriminant, d, source))
+				return;
 			rungs++;
 			if (cur.children.length >= IF_WITH_ELSE_CHILD_COUNT && ifKinds.contains(cur.children[2].kind))
 				cur = cur.children[2];

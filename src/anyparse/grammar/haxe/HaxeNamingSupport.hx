@@ -178,7 +178,8 @@ final class HaxeNamingSupport implements NamingSupport {
 			final mod: Null<String> = MOD_KIND_TO_NAME[siblings[i].kind];
 			if (mod != null)
 				mods.push(mod);
-			else if (siblings[i].kind != 'Meta') break;
+			else if (siblings[i].kind != 'Meta')
+				break;
 			i--;
 		}
 		return mods;

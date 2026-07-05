@@ -151,7 +151,8 @@ final class SetModifier {
 				if (!remove) mods.push(name);
 			} else if (remove)
 				mods.remove(name)
-			else if (!mods.contains(name)) mods.push(name);
+			else if (!mods.contains(name))
+				mods.push(name);
 		}
 		final ordered: Array<String> = ORDER.filter(m -> mods.contains(m));
 		return ordered.length > 0 ? '${ordered.join(' ')} ' : '';

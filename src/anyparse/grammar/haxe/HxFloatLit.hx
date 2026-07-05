@@ -59,7 +59,8 @@ abstract HxFloatLit(String) from String to String {
 		var s: String = StringTools.replace(this, '_', '');
 		if (StringTools.endsWith(s, 'f32'))
 			s = s.substr(0, s.length - 3);
-		else if (StringTools.endsWith(s, 'f64')) s = s.substr(0, s.length - 3);
+		else if (StringTools.endsWith(s, 'f64'))
+			s = s.substr(0, s.length - 3);
 		return Std.parseFloat(s);
 	}
 

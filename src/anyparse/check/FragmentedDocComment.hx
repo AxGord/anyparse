@@ -124,7 +124,8 @@ final class FragmentedDocComment implements Check {
 			s = s.substr(2);
 		else if (s == '*')
 			s = '';
-		else if (StringTools.startsWith(s, '*')) s = s.substr(1);
+		else if (StringTools.startsWith(s, '*'))
+			s = s.substr(1);
 		return StringTools.rtrim(s);
 	}
 

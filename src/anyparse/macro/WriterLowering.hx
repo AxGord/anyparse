@@ -995,7 +995,8 @@ class WriterLowering {
 				} else
 					parts.push(macro _dbg($grpInner));
 				condFitGroupStartIdx = -1;
-			} else if (!isCondFitSetter) condFitGroupStartIdx = -1;
+			} else if (!isCondFitSetter)
+				condFitGroupStartIdx = -1;
 			prevAnyStarNonEmpty = null;
 			prevBodyField = finalizeResult.prevBodyField;
 			prevPadTrailing = finalizeResult.prevPadTrailing;
@@ -6255,7 +6256,11 @@ class WriterLowering {
 		};
 		return macro {
 			final _body: anyparse.core.Doc = $writeCall;
-			(opt.fitLineIfWithElse || $elseAccess == null) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
+			// ω-elseif-body-break: `_inElseIfBranch` (set by an enclosing `else if`
+			// via propagateElseIfBranch) is an extra break trigger even when this
+			// `if` has no `else` of its own — mirrors fork's `isPartOfIfElse`
+			// "if inside else" clause. Still suppressed by `fitLineIfWithElse`.
+			(opt.fitLineIfWithElse || ($elseAccess == null && !opt._inElseIfBranch)) ? $fitInnerExpr : _dn(_cols, _dc([_dhl(), _body]));
 		};
 	}
 
@@ -9249,6 +9254,11 @@ class WriterLowering {
 		// ω-expressionif-collapse (mechanism B set-site): `@:fmt(propagateValueIfBranch)`
 		// on a mandatory Ref (HxIfExpr.thenBranch) opts into the value-if-branch frame.
 		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
+		// ω-elseif-body-break: `@:fmt(clearElseIfBranch)` on the inner `if`'s
+		// then-body (HxIfStmt.thenBody) drops the one-level else-branch signal
+		// before rendering the body content, so a statement nested inside the
+		// else-if body is not itself treated as an else-branch.
+		final clearElseIfBranch: Bool = child.fmtHasFlag('clearElseIfBranch');
 		final optArgExpr: Expr = if (boolFlagArgs != null) {
 			macro _wo;
 		} else {
@@ -9261,6 +9271,7 @@ class WriterLowering {
 			// The helper gates on `opt._inExprPosition` so only a value-if
 			// branch (not a statement-`if`) flips the narrow flag.
 			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+			if (clearElseIfBranch) e = macro _clearElseIfBranch($e);
 			e;
 		};
 		final baseRawWriteCall: Expr = {
@@ -9490,11 +9501,32 @@ class WriterLowering {
 		final propagateExpr: Bool = child.fmtHasFlag('propagateExprPosition');
 		final propagateAnonFn: Bool = child.fmtHasFlag('propagateAnonFnContext');
 		final propagateValueIfBranch: Bool = child.fmtHasFlag('propagateValueIfBranch');
+		// ω-elseif-body-break: `@:fmt(propagateElseIfBranch)` on `HxIfStmt.elseBody`
+		// flags the else-branch recursion's opt with `_inElseIfBranch` — but ONLY
+		// when the else-branch runtime ctor is `IfStmt` (an `else if`), matched via
+		// the same trivia-aware ctor pattern as the elseIf glue. A block / simple
+		// else-branch leaves the flag untouched, so a fitting `if` nested inside an
+		// else-block body still keeps its own body inline.
+		final propagateElseIfBranch: Bool = child.fmtHasFlag('propagateElseIfBranch');
 		final optArgExpr: Expr = {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e);
 			if (propagateValueIfBranch) e = macro _setValueIfBranch($e);
+			if (propagateElseIfBranch) {
+				final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
+				if (ifPat != null) {
+					// else-if -> set; a non-if else-branch (block / simple stmt) must
+					// CLEAR the flag it may have inherited from a preceding chain link
+					// (`if {} else if {} else { … }`) — the block is not an else-branch-if.
+					final setExpr: Expr = macro _setElseIfBranch($e);
+					final clearExpr: Expr = macro _clearElseIfBranch($e);
+					e = {
+						expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
+						pos: Context.currentPos()
+					};
+				}
+			}
 			e;
 		};
 		final rawWriteCall: Expr = {
@@ -12029,12 +12061,14 @@ class WriterLowering {
 			while (_kj < _docs.length) {
 				if (_kj > 0)
 					_kInner.push(_args[_kj].newlineBefore ? _dhl() : _dt(' '));
-				else if (_kArgsOpenNewline) _kInner.push(_dhl());
+				else if (_kArgsOpenNewline)
+					_kInner.push(_dhl());
 				_kInner.push(_docs[_kj]);
 				final _kIsLast: Bool = _kj == _docs.length - 1;
 				if (!_kIsLast)
 					_kInner.push(_dt($v{elemSep}));
-				else if ($tcExpr) _kInner.push(_dt($v{elemSep}));
+				else if ($tcExpr)
+					_kInner.push(_dt($v{elemSep}));
 				_kj++;
 			}
 			final _kCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -13388,7 +13422,8 @@ class WriterLowering {
 				_condTrailPad = _padHardline ? _dhl() : _dt(' ');
 			else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0)
 				_docs.push(_padHardline ? _dhl() : _dt(' '));
-			else if (_metaPolicy != 0 && _arr.length > 0) _docs.push(_dhl());
+			else if (_metaPolicy != 0 && _arr.length > 0)
+				_docs.push(_dhl());
 			// ω-trivia-tryparse-linelength: when the LAST element carries
 			// a same-line `// trail`, a `//` line comment runs until the
 			// next physical newline, so an inline ` ` separator before

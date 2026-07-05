@@ -614,6 +614,58 @@ class WriterCodegen {
 	}
 
 	/**
+	 * ω-elseif-body-break — opt-fanout setter for `@:fmt(propagateElseIfBranch)`
+	 * on `HxIfStmt.elseBody`. Flips `_inElseIfBranch` on so the inner `else if`'s
+	 * then-body fit-gate breaks a fitting single-statement body (fork's
+	 * `MarkSameLine.isPartOfIfElse` "if inside else" clause). Idempotent: returns
+	 * `o` unchanged when the flag is already set. Emitted only when the opt
+	 * typedef carries `_inElseIfBranch:Bool`.
+	 */
+	private static function setElseIfBranchField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setElseIfBranch',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inElseIfBranch) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._inElseIfBranch = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * ω-elseif-body-break — sister clear to `_setElseIfBranch`. The signal is a
+	 * one-level marker (mirrors the fork's local tree check), so the inner
+	 * `if`'s then-body recursion (`@:fmt(clearElseIfBranch)`) drops it before
+	 * rendering the body content — a statement nested inside the else-if body is
+	 * not itself an else-branch. Idempotent: returns `o` unchanged when the flag
+	 * is already false (no allocation on the common non-else-if descent).
+	 */
+	private static function clearElseIfBranchField(optionsCT: ComplexType): Field {
+		return {
+			name: '_clearElseIfBranch',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inElseIfBranch) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._inElseIfBranch = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
 	 * ω-anonfunction-empty-curly — opt-fanout shim for the
 	 * `propagateAnonFnContext` meta. Idempotent sister to
 	 * `_setExprPosition` — returns `o` unchanged when `_inAnonFnBody`
@@ -1873,6 +1925,13 @@ class WriterCodegen {
 		if (optionsHasInExprPosition(optionsTypePath)) {
 			fields.push(setExprPositionField(optionsCT, hasValueIfBranch));
 			fields.push(clearExprPositionField(optionsCT));
+		}
+		// ω-elseif-body-break: opt-fanout helper pair for `propagateElseIfBranch`
+		// (HxIfStmt.elseBody set-site) and `clearElseIfBranch` (inner if's
+		// then-body one-level clear). Gated on `_inElseIfBranch:Bool` presence.
+		if (optionsHasField(optionsTypePath, '_inElseIfBranch')) {
+			fields.push(setElseIfBranchField(optionsCT));
+			fields.push(clearElseIfBranchField(optionsCT));
 		}
 		if (hasValueIfBranch) {
 			fields.push(setValueIfBranchField(optionsCT));

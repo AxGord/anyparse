@@ -649,7 +649,8 @@ final class CallGraph {
 
 			if (node.kind == callKind && node.children.length > 0)
 				handleCall(node, typeName);
-			else if (newExprKind != null && node.kind == newExprKind) handleNew(node, typeName);
+			else if (newExprKind != null && node.kind == newExprKind)
+				handleNew(node, typeName);
 
 			var macroPending: Bool = false;
 			for (c in node.children) {

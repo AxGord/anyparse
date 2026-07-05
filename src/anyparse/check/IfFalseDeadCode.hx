@@ -130,7 +130,8 @@ final class IfFalseDeadCode implements Check {
 					depth++;
 				else if (sliceStartsWith(slice, i, '#end'))
 					depth--;
-				else if (depth == 0 && sliceStartsWith(slice, i, marker)) return i;
+				else if (depth == 0 && sliceStartsWith(slice, i, marker))
+					return i;
 			}
 			i++;
 		}

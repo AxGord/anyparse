@@ -998,7 +998,8 @@ final class NullFlow {
 			if (quote != 0) {
 				if (c == '\\'.code)
 					i++;
-				else if (c == quote) quote = 0;
+				else if (c == quote)
+					quote = 0;
 			} else if (c == "'".code || c == '"'.code) {
 				quote = c;
 			} else if (c == '('.code || c == '['.code || c == '{'.code) {

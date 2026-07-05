@@ -225,7 +225,8 @@ final class DeadStore implements Check {
 			final name: Null<String> = node.name;
 			if (name != null && ctx.loopJumpNames.contains(name))
 				setTop(live, ctx);
-			else if (name != null) addLive(live, name);
+			else if (name != null)
+				addLive(live, name);
 			return;
 		}
 		if (ctx.interpIdentKind != null && kind == ctx.interpIdentKind) {

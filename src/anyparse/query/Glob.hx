@@ -69,7 +69,8 @@ final class Glob {
 			final path: String = dir + '/' + name;
 			if (FileSystem.isDirectory(path))
 				collect(path, extension, into);
-			else if (StringTools.endsWith(name, extension)) into.push(path);
+			else if (StringTools.endsWith(name, extension))
+				into.push(path);
 		}
 	}
 
@@ -84,7 +85,8 @@ final class Glob {
 			final rel: String = prefix == '' ? name : prefix + '/' + name;
 			if (FileSystem.isDirectory(fsPath))
 				collectMatching(fsPath, rel, re, into);
-			else if (re.match(rel)) into.push(rel);
+			else if (re.match(rel))
+				into.push(rel);
 		}
 	}
 

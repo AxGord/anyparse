@@ -1169,7 +1169,8 @@ final class Cli {
 		final rows: Array<SymbolQuery.SymbolRow> = SymbolQuery.declares(files, plugin, name);
 		if (rows.length == 0)
 			stderr('apq declares: no type named "$name" in ${inputSpecs.join(', ')}\n');
-		else if (rows.length > 1) stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
+		else if (rows.length > 1)
+			stderr('apq declares: ambiguous — ${rows.length} declarations of "$name"\n');
 		for (row in rows) sysPrint('${SymbolQuery.formatSymbolRow(row)}\n');
 		return EXIT_OK;
 	}
@@ -3671,7 +3672,8 @@ final class Cli {
 				inSingle = !inSingle;
 			else if (!inSingle && c == '"'.code)
 				inDouble = !inDouble;
-			else if (!inSingle && !inDouble && c == ','.code) return StringTools.trim(inner.substring(0, i));
+			else if (!inSingle && !inDouble && c == ','.code)
+				return StringTools.trim(inner.substring(0, i));
 		}
 		return StringTools.trim(inner);
 	}
@@ -8044,7 +8046,8 @@ final class Cli {
 
 		if (o.write)
 			stderr('apq fmt: formatted $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
-		else if (listMode && failed > 0) stderr('apq fmt: $failed file(s) failed to parse\n');
+		else if (listMode && failed > 0)
+			stderr('apq fmt: $failed file(s) failed to parse\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
@@ -8612,7 +8615,8 @@ final class Cli {
 
 		if (o.write)
 			stderr('apq comment-rewrite: rewrote ${tally.changed} file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
-		else if (listMode && failed > 0) stderr('apq comment-rewrite: $failed file(s) failed\n');
+		else if (listMode && failed > 0)
+			stderr('apq comment-rewrite: $failed file(s) failed\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
@@ -10239,7 +10243,8 @@ final class Cli {
 			final resolved: Null<String> = resolveCodeArg('new', o.bodiesArg == '-' ? '-' : null, o.bodiesFromFile);
 			if (resolved == null) return EXIT_RUNTIME;
 			bodiesRaw = resolved;
-		} else if (o.bodiesArg != null) bodiesRaw = o.bodiesArg;
+		} else if (o.bodiesArg != null)
+			bodiesRaw = o.bodiesArg;
 
 		final className: String = newFileClassName(filePath);
 		final pkg: String = derivePackage(filePath);

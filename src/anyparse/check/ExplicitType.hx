@@ -86,7 +86,8 @@ final class ExplicitType implements Check {
 		if (fields.contains(node.kind)) {
 			if (parentKind != enumAbstract && !hasTypeBeforeInit(node, source))
 				push(out, file, node.span, 'field declared without an explicit type');
-		} else if (functions.contains(node.kind)) checkFunction(out, file, source, node, params, bodies);
+		} else if (functions.contains(node.kind))
+			checkFunction(out, file, source, node, params, bodies);
 		for (c in node.children) walk(out, file, source, c, node.kind, fields, functions, params, bodies, enumAbstract);
 	}
 

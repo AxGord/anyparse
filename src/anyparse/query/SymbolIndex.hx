@@ -309,7 +309,8 @@ final class SymbolIndex {
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
 			if (direct == 0)
 				found = m.returnNominal;
-			else if (m.returnNominal != found) return null;
+			else if (m.returnNominal != found)
+				return null;
 			direct++;
 		}
 		if (direct > 0) return found;
@@ -320,7 +321,8 @@ final class SymbolIndex {
 			if (rn != null) {
 				if (supers == 0)
 					inherited = rn;
-				else if (rn != inherited) return null;
+				else if (rn != inherited)
+					return null;
 				supers++;
 			}
 		}
