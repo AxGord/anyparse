@@ -81,9 +81,10 @@ final class DuplicateTernaryBranches implements Check {
 	}
 
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String): Void {
-		if (node.kind == ternaryKind && node.children.length == TERNARY_CHILD_COUNT && RefactorSupport.sameSource(
-			node.children[1], node.children[2], source
-		)) {
+		if (
+			node.kind == ternaryKind && node.children.length == TERNARY_CHILD_COUNT
+			&& RefactorSupport.sameSource(node.children[1], node.children[2], source)
+		) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({

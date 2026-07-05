@@ -62,9 +62,11 @@ final class IdenticalOperands implements Check {
 		out: Array<Violation>, file: String, source: String, node: QueryNode, comparisonKinds: Array<String>, callKind: Null<String>
 	): Void {
 		final span: Null<Span> = node.span;
-		if (span != null && node.children.length == 2 && comparisonKinds.contains(node.kind) && RefactorSupport.sameSource(
-			node.children[0], node.children[1], source
-		) && !(callKind != null && RefactorSupport.subtreeContainsKind(node.children[0], callKind))) out.push({
+		if (
+			span != null && node.children.length == 2 && comparisonKinds.contains(node.kind)
+			&& RefactorSupport.sameSource(node.children[0], node.children[1], source)
+			&& !(callKind != null && RefactorSupport.subtreeContainsKind(node.children[0], callKind))
+		) out.push({
 			file: file,
 			span: span,
 			rule: 'identical-operands',

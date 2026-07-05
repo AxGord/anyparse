@@ -9031,9 +9031,10 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
-		if (o.candidatesRegex != null && (
-			o.probePath != null || o.predictStrip || o.clusterFilter != null || o.regressionProbe || o.predictRelax
-		)) {
+		if (
+			o.candidatesRegex != null
+			&& (o.probePath != null || o.predictStrip || o.clusterFilter != null || o.regressionProbe || o.predictRelax)
+		) {
 			stderr(
 				'apq recon: --candidates is mutually exclusive with --probe / --predict-strip / --cluster / --regression-probe / --predict-relax\n'
 			);
@@ -9087,8 +9088,11 @@ final class Cli {
 				return EXIT_USAGE;
 			}
 		}
-		if (o.permissiveConstruct && (o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe
-		|| o.clusterFilter != null || o.candidatesRegex != null || o.patterns.length > 0)) {
+		if (
+			o.permissiveConstruct
+			&& (o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe || o.clusterFilter != null
+			|| o.candidatesRegex != null || o.patterns.length > 0)
+		) {
 			stderr(
 				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
 			);

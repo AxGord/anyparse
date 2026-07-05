@@ -744,9 +744,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
 		if (root == null) return out;
 		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'type') && !Reflect.hasField(node, 'name') && (
-				Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr')
-			)) {
+			if (
+				span != null && Reflect.hasField(node, 'type') && !Reflect.hasField(node, 'name')
+				&& (Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr'))
+			) {
 				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
 				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
 			}

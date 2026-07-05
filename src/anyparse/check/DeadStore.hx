@@ -437,9 +437,10 @@ final class DeadStore implements Check {
 		final out: Array<String> = [];
 		function walkR(n: QueryNode): Void {
 			final name: Null<String> = n.name;
-			if (name != null && (
-				n.kind == ctx.identKind || (ctx.interpIdentKind != null && n.kind == ctx.interpIdentKind)
-			) && !out.contains(name))
+			if (
+				name != null && (n.kind == ctx.identKind || (ctx.interpIdentKind != null && n.kind == ctx.interpIdentKind))
+				&& !out.contains(name)
+			)
 				out.push(name);
 			for (c in n.children) walkR(c);
 		}

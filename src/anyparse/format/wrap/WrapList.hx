@@ -305,10 +305,17 @@ class WrapList {
 		final modeBreak: WrapMode = decideAt(true);
 		final flatBrk: Bool = modeFlat == FillLineWithLeadingBreak;
 		final breakBrk: Bool = modeBreak == FillLineWithLeadingBreak;
+		// ω-cond-plaincall-open: a no-keep-flat top-level chain (plain-call /
+		// nested-paren absorber; an arrow-lambda absorber stays a keep-flat
+		// candidate and takes the natural-first-line probe below) opens the cond
+		// paren on a genuine CONDITION-SPAN overflow. `IfWidthExceeds` measures
+		// only `col + (cond)` (the paren span at the condition column), NOT the
+		// body / else-if-tail lookahead `IfLineExceeds` adds — the latter over-
+		// fires inside an `else if` chain and opens a fitting short condition.
 		return flatBrk == breakBrk
 			? WrapBoundary(shapeFor(modeFlat))
 			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
-				? WrapBoundary(IfLineExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)))
+				? WrapBoundary(IfWidthExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)))
 				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
 
@@ -1328,7 +1335,8 @@ class WrapList {
 			// breaking collection — the all-inline glue is not a fixed point.
 			if (collIdx >= 0) return -1;
 			final it: Doc = items[i];
-			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !(
+			if (isArrowBodyMarker(it) || isMethodChainItem(it)
+			|| !(
 				startsWithCollectionDelim(it) || firstBreakIsArrayDelim(it)
 			))
 				return -1;

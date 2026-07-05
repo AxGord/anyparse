@@ -281,6 +281,20 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * True iff a NON-FIRST operand's flat text contains a thin-arrow `->`
+	 * (an arrow lambda absorbing the overflow). The keep-flat unwrap probe
+	 * (`IfNaturalFirstLineFitsOpenDelim`) faithfully mirrors the fork ONLY
+	 * when the overflow-absorbing operand is an arrow lambda whose body owns
+	 * the wrap: for a plain-call absorber the fork opens the condition paren
+	 * (breaks the chain) once the flat condition clearly exceeds, so it must
+	 * NOT take the keep-flat glue route.
+	 */
+	private static function laterOperandContainsArrow(items: Array<Doc>): Bool {
+		for (i in 1...items.length) if (DocMeasure.flatText(items[i]).indexOf('->') >= 0) return true;
+		return false;
+	}
+
+	/**
 	 * True iff every operator is an opAddSub chain operator (`+` / `-`) —
 	 * i.e. NOT an opBool (`&&`/`||`) or a ternary (`?`/`:`). Drives the
 	 * ω-unwrap-add-ops `CollapseAddProbe` marker: only a pure opAddSub
@@ -651,7 +665,8 @@ final class BinaryChainEmit {
 		//    paren-expr/array that itself leads with an open delim (excludes
 		//    condition_first_operand_paren_no_merge, where the fork breaks
 		//    the chain instead of gluing to operand-1's `(`).
-		final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0]);
+		final unwrapCandidate: Bool = condWrapForced && isChainOps(ops) && !leadingOperandOpensDelim(items[0])
+			&& laterOperandContainsArrow(items);
 		// `condWrapForced` forces the chain rules to {rules:[], defaultMode:FLWLB}
 		// (WriterCodegen._setChainModeOverride), so flat == brk == that one break
 		// mode here — pivot the NoWrap UNWRAP shape against the forced break shape.

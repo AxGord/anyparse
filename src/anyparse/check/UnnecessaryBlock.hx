@@ -112,9 +112,9 @@ final class UnnecessaryBlock implements Check {
 		bindingKinds: Array<String>, opaqueKinds: Array<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
-		if (blockKinds.contains(node.kind)) for (child in node.children) if (child.kind == blockStmtKind && !declaresBinding(
-			child, bindingKinds
-		)) {
+		if (blockKinds.contains(node.kind)) for (child in node.children) if (
+			child.kind == blockStmtKind && !declaresBinding(child, bindingKinds)
+		) {
 			final span: Null<Span> = child.span;
 			if (span != null) out.push({
 				file: file,

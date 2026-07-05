@@ -323,9 +323,10 @@ final class MoveSymbol {
 		var used: Bool = false;
 		function walk(node: QueryNode): Void {
 			final span: Null<Span> = node.span;
-			if (!used && node.name == typeName && span != null && typeRefShape.typeRefKinds.contains(node.kind) && (
-				span.from < cut.from || span.from >= cut.to
-			))
+			if (
+				!used && node.name == typeName && span != null && typeRefShape.typeRefKinds.contains(node.kind)
+				&& (span.from < cut.from || span.from >= cut.to)
+			)
 				used = true;
 			for (c in node.children) walk(c);
 		}

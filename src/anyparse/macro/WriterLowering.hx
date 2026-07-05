@@ -8301,9 +8301,10 @@ class WriterLowering {
 		final wpBefore: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'WhitespacePolicy', 'Before']);
 		return macro {
 			final _condStr: String = ($fieldAccess: String);
-			if (_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code && StringTools.fastCodeAt(
-				_condStr, _condStr.length - 1
-			) == ')'.code) {
+			if (
+				_condStr.length >= 2 && StringTools.fastCodeAt(_condStr, 0) == '('.code
+				&& StringTools.fastCodeAt(_condStr, _condStr.length - 1) == ')'.code
+			) {
 				final _inner: String = _condStr.substr(1, _condStr.length - 2);
 				final _op: anyparse.format.WhitespacePolicy = $openKnob;
 				final _cp: anyparse.format.WhitespacePolicy = $closeKnob;
@@ -11704,9 +11705,9 @@ class WriterLowering {
 				if (_firstSlot) {
 					_override = opt.afterFileHeaderComment;
 					_suppressBalc = true;
-				} else if ($v{betweenMultilineCommentsBlanks} && !_isLast && _isBlock && StringTools.startsWith(
-					_t.leadingComments[_ci + 1], '/*'
-				)) {
+				} else if (
+					$v{betweenMultilineCommentsBlanks} && !_isLast && _isBlock && StringTools.startsWith(_t.leadingComments[_ci + 1], '/*')
+				) {
 					_override = opt.betweenMultilineComments;
 				}
 				var _bi: Int = 0;
@@ -11768,9 +11769,10 @@ class WriterLowering {
 	private static function triviaEofTrailBetweenExpr(betweenMultilineCommentsBlanks: Bool): Expr {
 		return betweenMultilineCommentsBlanks
 			? macro {
-				if (_ti < _trailLC.length - 1 && StringTools.startsWith(_trailLC[_ti], '/*') && StringTools.startsWith(
-					_trailLC[_ti + 1], '/*'
-				)) {
+				if (
+					_ti < _trailLC.length - 1 && StringTools.startsWith(_trailLC[_ti], '/*')
+					&& StringTools.startsWith(_trailLC[_ti + 1], '/*')
+				) {
 					var _bbi: Int = 0;
 					while (_bbi < opt.betweenMultilineComments) {
 						_docs.push(_dhl());
@@ -13728,9 +13730,12 @@ class WriterLowering {
 		};
 		return (sepText != null && blockEnded)
 			? macro {
-				if (_si > 0 && _priorElemDoc != null && (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(
-					_priorElemDoc
-				) && !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node))))) {
+				if (
+					_si > 0 && _priorElemDoc != null
+					&& (_arr[_si - 1].sepAfter
+					|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
+					&& !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node))))
+				) {
 					_docs.push(_dt($v{sepText}));
 				}
 			}
@@ -14462,8 +14467,11 @@ class WriterLowering {
 				// a comprehension (`for`/`while` sole element), whose element genuinely starts on
 				// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
 				// newlines, so they are always counted.
-				if (_t.newlineBefore && !_ignoreEmit && !_matrixOff && !($v{reflowSourceMultiline} && _ti == 0 && !_keepEmit
-				&& Type.enumConstructor(cast _t.node) != 'ForExpr' && Type.enumConstructor(cast _t.node) != 'WhileExpr'))
+				if (
+					_t.newlineBefore && !_ignoreEmit && !_matrixOff
+					&& !($v{reflowSourceMultiline} && _ti == 0 && !_keepEmit && Type.enumConstructor(cast _t.node) != 'ForExpr'
+					&& Type.enumConstructor(cast _t.node) != 'WhileExpr')
+				)
 					_hasSourceNewlines = true;
 				if (_noWrapFlat) {
 					// `Type.enumConstructor` returns null for a non-enum
@@ -15380,9 +15388,10 @@ class WriterLowering {
 	): { final leadingSplitGateExpr: Expr; final blockLeadingBetweenExpr: Expr; final blockTrailBetweenExpr: Expr; } {
 		final leadingSplitGateExpr: Expr = blankBeforeFinalDocInLeading
 			? macro {
-				if (_ci > 0 && StringTools.startsWith(_t.leadingComments[_ci], '/**') && StringTools.startsWith(
-					_t.leadingComments[_ci - 1], '//'
-				)) {
+				if (
+					_ci > 0 && StringTools.startsWith(_t.leadingComments[_ci], '/**')
+					&& StringTools.startsWith(_t.leadingComments[_ci - 1], '//')
+				) {
 					var _isLastDoc: Bool = true;
 					var _ldi: Int = _ci + 1;
 					while (_ldi < _t.leadingComments.length) {
@@ -15398,9 +15407,10 @@ class WriterLowering {
 			: macro {};
 		final blockLeadingBetweenExpr: Expr = betweenMultilineCommentsBlanks
 			? macro {
-				if (_ci + 1 < _t.leadingComments.length && StringTools.startsWith(_t.leadingComments[_ci], '/*') && StringTools.startsWith(
-					_t.leadingComments[_ci + 1], '/*'
-				)) {
+				if (
+					_ci + 1 < _t.leadingComments.length && StringTools.startsWith(_t.leadingComments[_ci], '/*')
+					&& StringTools.startsWith(_t.leadingComments[_ci + 1], '/*')
+				) {
 					var _bbi: Int = 0;
 					while (_bbi < opt.betweenMultilineComments) {
 						_inner.push(_dhl());
@@ -15411,9 +15421,10 @@ class WriterLowering {
 			: macro {};
 		final blockTrailBetweenExpr: Expr = betweenMultilineCommentsBlanks
 			? macro {
-				if (_ti + 1 < _trailLC.length && StringTools.startsWith(_trailLC[_ti], '/*') && StringTools.startsWith(
-					_trailLC[_ti + 1], '/*'
-				)) {
+				if (
+					_ti + 1 < _trailLC.length && StringTools.startsWith(_trailLC[_ti], '/*')
+					&& StringTools.startsWith(_trailLC[_ti + 1], '/*')
+				) {
 					var _bbi: Int = 0;
 					while (_bbi < opt.betweenMultilineComments) {
 						_inner.push(_dhl());
@@ -15467,9 +15478,10 @@ class WriterLowering {
 		// `!priorPredCall` guard suppresses the spurious `;` between `#end` and the
 		// next stmt (a `#if … #end` ends with `d`, byte check misses).
 		final blockSepBeforeHardlineExpr: Expr = macro {
-			if (_si > 0 && _priorElemDoc != null && (
-				_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !($priorPredCall))
-			)) {
+			if (
+				_si > 0 && _priorElemDoc != null
+				&& (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !($priorPredCall)))
+			) {
 				_inner.push(_dt($v{sepText}));
 			}
 		};

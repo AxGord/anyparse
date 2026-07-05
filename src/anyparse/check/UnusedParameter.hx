@@ -142,9 +142,10 @@ final class UnusedParameter implements Check {
 		opaqueKinds: Array<String>, supertypeClauseKinds: Array<String>, noBodyKind: Null<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
-		if (functionKinds.contains(node.kind) && parent != null && !isContractCandidate(parent, supertypeClauseKinds) && !hasNoBody(
-			node, noBodyKind
-		))
+		if (
+			functionKinds.contains(node.kind) && parent != null && !isContractCandidate(parent, supertypeClauseKinds)
+			&& !hasNoBody(node, noBodyKind)
+		)
 			out.push({ fn: node, parent: parent });
 		for (c in node.children) walk(out, c, node, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
 	}

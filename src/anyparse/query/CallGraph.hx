@@ -562,9 +562,10 @@ final class CallGraph {
 			if (callee.kind == identKind && calleeName != null) {
 				calleeId = resolveBareCallee(calleeName, callee.span, currentType);
 				if (calleeId != null) addEdge(from, calleeId, Call, null, file, span);
-			} else if (callee.kind == fieldAccessKind || (
-				safeAccessKind != null && callee.kind == safeAccessKind
-			) || (forceAccessKind != null && callee.kind == forceAccessKind)) {
+			} else if (
+				callee.kind == fieldAccessKind || (safeAccessKind != null && callee.kind == safeAccessKind)
+				|| (forceAccessKind != null && callee.kind == forceAccessKind)
+			) {
 				if (calleeName != null && callee.children.length > 0) {
 					if (calleeName == 'bind') {
 						final callSpan: Null<Span> = call.span;

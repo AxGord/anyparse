@@ -434,9 +434,9 @@ final class MemberOrder implements Check {
 		if (shape.callKind != null) unsafe.push(shape.callKind);
 		if (shape.newExprKind != null) unsafe.push(shape.newExprKind);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
-		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields) if (g.node != f.node && f.isStatic == g.isStatic && orderFlips(
-			f, g, sorted
-		))
+		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields) if (
+			g.node != f.node && f.isStatic == g.isStatic && orderFlips(f, g, sorted)
+		)
 			return true;
 		return false;
 	}
@@ -449,9 +449,8 @@ final class MemberOrder implements Check {
 			final s: Null<Span> = init.span;
 			if (s == null) continue;
 			for (g in members) if (
-				g.isField && g.node != m.node && g.isStatic == m.isStatic && g.node.name != null && RefactorSupport.referencedInRange(
-					source, (g.node.name: String), s.from, s.to, []
-				) && orderFlips(m, g, sorted)
+				g.isField && g.node != m.node && g.isStatic == m.isStatic && g.node.name != null
+				&& RefactorSupport.referencedInRange(source, (g.node.name: String), s.from, s.to, []) && orderFlips(m, g, sorted)
 			)
 				return true;
 		}
