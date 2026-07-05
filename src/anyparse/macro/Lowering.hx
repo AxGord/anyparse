@@ -2667,6 +2667,7 @@ class Lowering {
 						$i{trailPresentLocal} = _sepAfter;
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
+							blankBefore2: _lead.blankBefore2,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
@@ -2708,6 +2709,7 @@ class Lowering {
 						$i{trailPresentLocal} = _sepAfter;
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
+							blankBefore2: _lead.blankBefore2,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
@@ -2744,6 +2746,7 @@ class Lowering {
 						final _trailing: Null<String> = collectTrailingFull(ctx);
 						$accumRef.push({
 							blankBefore: _lead.blankBefore,
+							blankBefore2: _lead.blankBefore2,
 							blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 							newlineBefore: _lead.newlineBefore,
 							leadingComments: _lead.leadingComments,
@@ -2823,6 +2826,7 @@ class Lowering {
 					$nlAfterSepScan;
 					$accumRef.push({
 						blankBefore: _lead.blankBefore,
+						blankBefore2: _lead.blankBefore2,
 						blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 						newlineBefore: _lead.newlineBefore,
 						leadingComments: _lead.leadingComments,
@@ -2906,6 +2910,7 @@ class Lowering {
 				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 				$accumRef.push({
 					blankBefore: _lead.blankBefore,
+					blankBefore2: _lead.blankBefore2,
 					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
@@ -3187,6 +3192,7 @@ class Lowering {
 				final _sepAfter: Bool = matchLit(ctx, $v{sepText});
 				_args.push({
 					blankBefore: _lead.blankBefore,
+					blankBefore2: _lead.blankBefore2,
 					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
@@ -4119,6 +4125,7 @@ class Lowering {
 				final _trailing: Null<String> = _trailingBeforeSep ?? (_sepAfter ? collectTrailingFull(ctx) : null);
 				_items.push({
 					blankBefore: _lead.blankBefore,
+					blankBefore2: _lead.blankBefore2,
 					blankAfterLeadingComments: _lead.blankAfterLeadingComments,
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,

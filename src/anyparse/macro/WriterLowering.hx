@@ -11030,7 +11030,7 @@ class WriterLowering {
 		// reverse, then after in reverse. Final priority (outermost wins
 		// first): after[0..N] > between[0..N] > transition[0..N] >
 		// before[0..N] > source-driven `(_t.blankBefore ? 1 : 0)`.
-		var blanksCountExpr: Expr = macro (_t.blankBefore ? 1 : 0);
+		var blanksCountExpr: Expr = macro (_t.blankBefore ? 1 + (_t.blankBefore2 != null ? _t.blankBefore2 : 0) : 0);
 		blanksCountExpr = foldBeforeCascade(blanksCountExpr, beforeInfos, pos);
 		blanksCountExpr = foldBetweenIfNotCascade(blanksCountExpr, betweenIfNotInfos, pos);
 		blanksCountExpr = foldBetweenCascade(blanksCountExpr, betweenInfos, pos);
@@ -13340,6 +13340,7 @@ class WriterLowering {
 	 * the separator cascade stays under the complexity gate.
 	 */
 	private static function triviaTryparseLeadCommentSepExpr(): Expr {
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _docs.push(_dhl()));
 		return macro {
 			// ω-D16-padleading-first-comment-no-dup: padLeading
 			// already emitted `_dhl()` for the first element when
@@ -13354,7 +13355,10 @@ class WriterLowering {
 			// inter-stmt path (`_si > 0`) and non-padLeading
 			// consumers stay byte-identical.
 			if (!(_si == 0 && _padLeading && _padHardline)) _docs.push(_dhl());
-			if (_t.blankBefore && _si > 0) _docs.push(_dhl());
+			if (_t.blankBefore && _si > 0) {
+				_docs.push(_dhl());
+				$blankExtras;
+			}
 			var _ci: Int = 0;
 			while (_ci < _t.leadingComments.length) {
 				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
@@ -14768,16 +14772,23 @@ class WriterLowering {
 			? macro (opt._inTypedefBody
 				&& (opt.typedefBetweenFields > 0 || opt.typedefExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove))
 			: macro false;
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		return beforeDocCommentEmptyLines
 			? macro {
 				$currHasDocComputeExpr;
 				final _stripBlank: Bool = $stripByCurrDocExpr || $typedefStripBetweenExpr;
 				final _addBlank: Bool = $addByCurrDocExpr;
 				final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
-				if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
+				if (_si > 0 && (_sourceBlank || _addBlank)) {
+					_inner.push(_dhl());
+					if (_sourceBlank) $blankExtras;
+				}
 			}
 			: macro {
-				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr)) _inner.push(_dhl());
+				if (_t.blankBefore && _si > 0 && !($typedefStripBetweenExpr)) {
+					_inner.push(_dhl());
+					$blankExtras;
+				}
 			};
 	}
 
@@ -15148,8 +15159,12 @@ class WriterLowering {
 		staticVarSubdiv: Bool, staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>, uniformBetween: Bool,
 		uniformBetweenOptField: Null<String>, anyEmptyLinesFlag: Bool
 	): Expr {
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		if (!anyEmptyLinesFlag) return macro {
-			if (_t.blankBefore && _si > 0) _inner.push(_dhl());
+			if (_t.blankBefore && _si > 0) {
+				_inner.push(_dhl());
+				$blankExtras;
+			}
 		};
 		final stripByDocExpr: Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
@@ -15280,6 +15295,7 @@ class WriterLowering {
 		final addByCurrDocExpr: Expr = g.addByCurrDocExpr;
 		final addByInterMemberExpr: Expr = g.addByInterMemberExpr;
 		final addByUniformBetweenExpr: Expr = g.addByUniformBetweenExpr;
+		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
 		return macro {
 			$currHasDocComputeExpr;
 			$currKindComputeExpr;
@@ -15299,7 +15315,10 @@ class WriterLowering {
 			final _addBlank: Bool = !$stripByCurrDocExpr && !$addSuppressOnSplitLeadingExpr
 				&& ($addByDocExpr || $addByCurrDocExpr || $addByInterMemberExpr || $addByUniformBetweenExpr);
 			final _sourceBlank: Bool = _t.blankBefore && !_stripBlank;
-			if (_si > 0 && (_sourceBlank || _addBlank)) _inner.push(_dhl());
+			if (_si > 0 && (_sourceBlank || _addBlank)) {
+				_inner.push(_dhl());
+				if (_sourceBlank) $blankExtras;
+			}
 		};
 	}
 
@@ -15744,6 +15763,26 @@ class WriterLowering {
 				? $endAccess
 				: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0))
 			: macro (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
+	}
+
+	/**
+	 * ω-blank2: emit `_t.blankBefore2` extra hardlines — the blank lines
+	 * beyond the first (already emitted for `blankBefore`) — via `pushExpr`.
+	 * `blankBefore2` is `@:optional` on the trivia struct, so a construction
+	 * site that never set it reads `null`, treated as zero. The Renderer caps
+	 * the run at `opt.maxConsecutiveBlanks`, so an over-emit collapses back;
+	 * this only widens a >1 source blank gap up to the configured maximum.
+	 * References the runtime `_t`; splice right after the `blankBefore` push.
+	 */
+	private static function blankBefore2ExtrasExpr(pushExpr: Expr): Expr {
+		return macro {
+			final _bb2: Int = _t.blankBefore2 != null ? _t.blankBefore2 : 0;
+			var _bbi: Int = 0;
+			while (_bbi < _bb2) {
+				$pushExpr;
+				_bbi++;
+			}
+		};
 	}
 
 }

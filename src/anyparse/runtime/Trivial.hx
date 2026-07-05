@@ -112,6 +112,7 @@ package anyparse.runtime;
  */
 typedef Trivial<T> = {
 	var blankBefore: Bool;
+	@:optional var blankBefore2: Int;
 	var blankAfterLeadingComments: Bool;
 	var newlineBefore: Bool;
 	var leadingComments: Array<String>;

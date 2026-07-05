@@ -567,6 +567,11 @@ class Codegen {
 		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentCaptureBlock(p)];
 		final body: Expr = macro {
 			var _blankBefore: Bool = false;
+			// ω-blank2: extra blank lines (beyond the first) preceding the
+			// node when no leading comment intervenes. Lets the writer
+			// reproduce a >1 blank gap up to `maxAnywhereInFile`; a single
+			// bool could only carry 0/1. 0 = one-or-fewer blanks.
+			var _blankBefore2: Int = 0;
 			var _blankAfterLeadingComments: Bool = false;
 			var _newlineBefore: Bool = false;
 			final _leading: Array<String> = [];
@@ -593,9 +598,10 @@ class Codegen {
 					// lets the writer reproduce `\n\n// c\n\nnode` faithfully
 					// — single-bool flag would conflate both gaps.
 					if (_nl >= 2) {
-						if (_leading.length == 0)
+						if (_leading.length == 0) {
 							_blankBefore = true;
-						else
+							if (_nl >= 3) _blankBefore2 = _nl - 2;
+						} else
 							_blankAfterLeadingComments = true;
 					}
 					continue;
@@ -618,6 +624,7 @@ class Codegen {
 			final _newlineAfterLeadingComments: Bool = _nl > 0;
 			return {
 				blankBefore: _blankBefore,
+				blankBefore2: _blankBefore2,
 				blankAfterLeadingComments: _blankAfterLeadingComments,
 				newlineBefore: _newlineBefore,
 				newlineAfterLeadingComments: _leading.length > 0 && _newlineAfterLeadingComments,
@@ -631,6 +638,7 @@ class Codegen {
 				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
 				ret: macro :{
 					blankBefore: Bool,
+					blankBefore2: Int,
 					blankAfterLeadingComments: Bool,
 					newlineBefore: Bool,
 					newlineAfterLeadingComments: Bool,

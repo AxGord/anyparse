@@ -357,6 +357,7 @@ import unit.HxInfixCommentWriteTest;
 import unit.HxCaseCommentWriteTest;
 import unit.HxRhsCommentWriteTest;
 import unit.HxCondCommentWriteTest;
+import unit.HxSourceBlankPreserveSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -558,6 +559,7 @@ class RunTests {
 		addCase(new HxBeforeUsingSliceTest());
 		addCase(new HxConditionalSourceBlankSliceTest());
 		addCase(new HxMaxAnywhereInFileSliceTest());
+		addCase(new HxSourceBlankPreserveSliceTest());
 		addCase(new HxMultilineDeclSliceTest());
 		addCase(new HxReturnBodySliceTest());
 		addCase(new HxThrowBodySliceTest());
