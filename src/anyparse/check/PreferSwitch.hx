@@ -299,14 +299,12 @@ final class PreferSwitch implements Check {
 			}
 			break;
 		}
-		return discText == null
-			? null
-			: {
-				discText: discText,
-				cases: cases,
-				elseBody: elseBody,
-				rungs: rungs
-			};
+		return discText == null ? null : {
+			discText: discText,
+			cases: cases,
+			elseBody: elseBody,
+			rungs: rungs
+		};
 	}
 
 }

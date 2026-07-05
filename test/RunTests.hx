@@ -360,6 +360,7 @@ import unit.HxCaseCommentWriteTest;
 import unit.HxRhsCommentWriteTest;
 import unit.HxCondCommentWriteTest;
 import unit.HxSourceBlankPreserveSliceTest;
+import unit.HxTernaryCollectionHugSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -377,11 +378,9 @@ class RunTests {
 		// so `APQ_TEST=RemoveParam` runs RemoveParamSliceTest and `APQ_TEST=Apq`
 		// runs all `Apq*` tests; comma-separated to run a slice + its siblings.
 		final filterEnv: Null<String> = Sys.getEnv('APQ_TEST');
-		final filters: Array<String> = filterEnv == null
-			? []
-			: [
-				for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') StringTools.trim(f)
-			];
+		final filters: Array<String> = filterEnv == null ? [] : [
+			for (f in filterEnv.split(',')) if (StringTools.trim(f) != '') StringTools.trim(f)
+		];
 		function addCase(testCase: utest.Test): Void {
 			if (filters.length == 0) {
 				runner.addCase(testCase);
@@ -537,6 +536,7 @@ class RunTests {
 		addCase(new HxCallParamFunctionLambdaSliceTest());
 		addCase(new HxComprehensionBlockHugSliceTest());
 		addCase(new HxCallParamNestedArrayHugSliceTest());
+		addCase(new HxTernaryCollectionHugSliceTest());
 		addCase(new HxCondWrapFitLineSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());

@@ -38,18 +38,16 @@ final class NullableSource {
 		final instanceSigs: Array<{ type: String, method: String }> = [
 			for (s in parseInstanceSigs(shape.nullableInstanceReturnCalls ?? [])) if (!excluded.contains('${s.type}.${s.method}')) s
 		];
-		return nullableIndexTypes.length == 0 && instanceSigs.length == 0 && returnMarkers.length == 0
-			? null
-			: {
-				identKind: identKind,
-				shape: shape,
-				indexAccessKind: shape.indexAccessKind,
-				nullableIndexTypes: nullableIndexTypes,
-				callKind: shape.callKind,
-				fieldAccessKind: shape.fieldAccessKind,
-				instanceSigs: instanceSigs,
-				returnMarkers: returnMarkers
-			};
+		return nullableIndexTypes.length == 0 && instanceSigs.length == 0 && returnMarkers.length == 0 ? null : {
+			identKind: identKind,
+			shape: shape,
+			indexAccessKind: shape.indexAccessKind,
+			nullableIndexTypes: nullableIndexTypes,
+			callKind: shape.callKind,
+			fieldAccessKind: shape.fieldAccessKind,
+			instanceSigs: instanceSigs,
+			returnMarkers: returnMarkers
+		};
 	}
 
 	/**

@@ -487,15 +487,13 @@ class WriterLowering {
 		// `_docs` before the sep-list renders `()` so it emits `(/* c */)`.
 		// Gated on the Call ctor having grown the `argsInnerComment` slot
 		// (argNames[5]); every other postfix Star has no slot and stays inert.
-		final innerCommentEmit: Expr = (c.isTriviaStar && c.argNames.length > 5)
-			? {
-				final innerRef: Expr = { expr: EConst(CIdent(c.argNames[5])), pos: Context.currentPos() };
-				macro if (_args.length == 0) {
-					final _ic: Null<String> = $innerRef;
-					if (_ic != null) _docs.push(leadingCommentDoc(_ic, opt));
-				};
-			}
-			: macro {};
+		final innerCommentEmit: Expr = (c.isTriviaStar && c.argNames.length > 5) ? {
+			final innerRef: Expr = { expr: EConst(CIdent(c.argNames[5])), pos: Context.currentPos() };
+			macro if (_args.length == 0) {
+				final _ic: Null<String> = $innerRef;
+				if (_ic != null) _docs.push(leadingCommentDoc(_ic, opt));
+			};
+		} : macro {};
 		return macro {
 			final _pfxOperand: anyparse.core.Doc = $operandCall;
 			final _args = $argsAccess;
@@ -1320,12 +1318,10 @@ class WriterLowering {
 		// slot (mandatory Ref with `@:trail` in trivia-bearing mode),
 		// thread its access so the Star can inline-emit the captured
 		// trail-of-prev-field comment cuddled to the prev token.
-		final tryparsePriorAfterTrailExpr: Null<Expr> = prevTrailFieldName == null
-			? null
-			: {
-				expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final tryparsePriorAfterTrailExpr: Null<Expr> = prevTrailFieldName == null ? null : {
+			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+			pos: Context.currentPos()
+		};
 		// ω-blockended-trivia-tryparse (Session 3): thread the Star's
 		// `@:sep('text', tailRelax, blockEnded)` annotation into
 		// `triviaTryparseStarExpr` so the helper can inject `;`
@@ -2385,50 +2381,39 @@ class WriterLowering {
 		final prevBareRefBody: Null<PrevBodyInfo> = args.prevBareRefBody;
 		final prevTrailFieldName: Null<String> = args.prevTrailFieldName;
 		final fieldName: Null<String> = starNode.annotations.get('base.fieldName');
-		final trailBBAccess: Null<Expr> = fieldName == null
-			? null
-			: {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final trailBBAccess: Null<Expr> = fieldName == null ? null : {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
+			pos: Context.currentPos()
+		};
 		// ω-keep-fnsig-newline: accessor for the close-newline slot, threaded
 		// into `triviaSepStarExpr` for the `_keepEmit` close placement.
-		final trailNLAccess: Null<Expr> = fieldName == null
-			? null
-			: {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX),
-				pos: Context.currentPos()
-			};
-		final trailLCAccess: Null<Expr> = fieldName == null
-			? null
-			: {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
-				pos: Context.currentPos()
-			};
-		final trailCloseAccess: Null<Expr> = fieldName == null || closeText == null
-			? null
-			: {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final trailNLAccess: Null<Expr> = fieldName == null ? null : {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_NEWLINE_BEFORE_SUFFIX),
+			pos: Context.currentPos()
+		};
+		final trailLCAccess: Null<Expr> = fieldName == null ? null : {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
+			pos: Context.currentPos()
+		};
+		final trailCloseAccess: Null<Expr> = fieldName == null || closeText == null ? null : {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX),
+			pos: Context.currentPos()
+		};
 		// ω-open-trailing: same-line `// comment` captured right after
 		// the open literal. Synthesised only when the Star carries
 		// `@:lead` AND not `@:tryparse` (parallel to TrailingClose's
 		// `@:trail` gate; tryparse writer helper does not consume the
 		// slot, and the synth gate omits it for tryparse Stars — see
 		// `TriviaTypeSynth.buildStarTrailingSlots`).
-		final trailOpenAccess: Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse')
-			? null
-			: {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final trailOpenAccess: Null<Expr> = fieldName == null || openText == null || starNode.hasMeta(':tryparse') ? null : {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX),
+			pos: Context.currentPos()
+		};
 		// ω-trail-blank-after: synth slot is only present on tryparse +
 		// nestBody Stars. Forward null elsewhere so the slot access
 		// doesn't reference a non-existent field.
-		final trailBAAccess: Null<Expr> = fieldName == null || !starNode.hasMeta(':tryparse') || !starNode.fmtHasFlag('nestBody')
-			? null
-			: {
+		final trailBAAccess: Null<Expr> =
+			fieldName == null || !starNode.hasMeta(':tryparse') || !starNode.fmtHasFlag('nestBody') ? null : {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_AFTER_SUFFIX),
 				pos: Context.currentPos()
 			};
@@ -2436,12 +2421,10 @@ class WriterLowering {
 		// sep-Stars with a close literal. Forward null elsewhere so the
 		// slot access doesn't reference a non-existent field. Mirrors
 		// the `@:trail` / `@:sep` parser-side gate in TriviaTypeSynth.
-		final trailPresentAccess: Null<Expr> = fieldName == null || sepText == null || closeText == null
-			? null
-			: {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final trailPresentAccess: Null<Expr> = fieldName == null || sepText == null || closeText == null ? null : {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
+			pos: Context.currentPos()
+		};
 		final triviaCtx: TriviaStarCtx = {
 			starNode: starNode,
 			fieldAccess: fieldAccess,
@@ -4250,12 +4233,10 @@ class WriterLowering {
 				final pattern: Expr = { expr: ECall(ctorIdent, binders), pos: pos };
 				cases.push({ values: [pattern], guard: null, expr: macro 1 });
 			} else {
-				final pattern: Expr = arity == 0
-					? ctorIdent
-					: {
-						expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-						pos: pos
-					};
+				final pattern: Expr = arity == 0 ? ctorIdent : {
+					expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
+					pos: pos
+				};
 				cases.push({ values: [pattern], guard: null, expr: macro 0 });
 			}
 		}
@@ -4640,12 +4621,10 @@ class WriterLowering {
 			// "Not enough arguments" at the generated switch.
 			final arity: Int = branch.children.length + branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			final pattern: Expr = arity == 0
-				? ctorIdent
-				: {
-					expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-					pos: pos
-				};
+			final pattern: Expr = arity == 0 ? ctorIdent : {
+				expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
+				pos: pos
+			};
 			final isMatch: Bool = ctorNames.indexOf(ctorName) >= 0;
 			if (isMatch) matched.push(ctorName);
 			final kindExpr: Expr = if (!isMatch)
@@ -5865,13 +5844,11 @@ class WriterLowering {
 			// close (`argsCloseNewline == false`). Only a trivia Star carrying
 			// `methodChain` has the parser slot; otherwise the signal is constant
 			// `false` (byte-inert legacy close placement).
-			final keepCloseGluedExpr: Expr = (c.isTriviaStar && c.methodChainField != null)
-				? {
-					final chainRulesExpr: Expr = optFieldAccess(c.methodChainField);
-					final closeNlExpr: Expr = { expr: EConst(CIdent(c.argNames[4])), pos: Context.currentPos() };
-					macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
-				}
-				: macro false;
+			final keepCloseGluedExpr: Expr = (c.isTriviaStar && c.methodChainField != null) ? {
+				final chainRulesExpr: Expr = optFieldAccess(c.methodChainField);
+				final closeNlExpr: Expr = { expr: EConst(CIdent(c.argNames[4])), pos: Context.currentPos() };
+				macro $chainRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.Keep && !$closeNlExpr;
+			} : macro false;
 			// ω-sep-faithful outer elide: thread the per-pair source sep flags
 			// (built in `lowerPostfixStar`'s element loop for trivia Stars) so
 			// the engine suppresses commas the source elided around conditional
@@ -6098,15 +6075,13 @@ class WriterLowering {
 		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
 		final wpAfter: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
 		final wpBoth: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final kwPolicyInlineSep: Null<Expr> = kwPolicyFlagName == null
-			? null
-			: {
-				final kwOpt: Expr = optFieldAccess(kwPolicyFlagName);
-				{
-					expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },], macro _de()),
-					pos: Context.currentPos(),
-				};
+		final kwPolicyInlineSep: Null<Expr> = kwPolicyFlagName == null ? null : {
+			final kwOpt: Expr = optFieldAccess(kwPolicyFlagName);
+			{
+				expr: ESwitch(kwOpt, [{ values: [wpAfter, wpBoth], expr: macro _dt(' '), guard: null },], macro _de()),
+				pos: Context.currentPos(),
 			};
+		};
 		// ω-keep-degraded-optspace: default kw→body separator is `_dop(' ')`
 		// (OptSpace, drops before break-mode hardline) instead of `_dt(' ')`
 		// (Text). When `Keep` policy degrades to `sameLayoutExpr` (no
@@ -6201,12 +6176,10 @@ class WriterLowering {
 			pos: Context.currentPos(),
 		};
 		final sameSepBlockSameLayout: Expr = kwPolicyInlineSep ?? macro _dt(' ');
-		final sameSepBlock: Expr = hasKwSlots
-			? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt)
-			: {
-				expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null },], sameSepBlockSameLayout),
-				pos: Context.currentPos(),
-			};
+		final sameSepBlock: Expr = hasKwSlots ? macro kwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $isNextExpr, opt) : {
+			expr: ESwitch(macro opt.leftCurly, [{ values: [nextPatLC], expr: macro _dhl(), guard: null },], sameSepBlockSameLayout),
+			pos: Context.currentPos(),
+		};
 		return macro _dc([$sameSepBlock, $writeCall]);
 	}
 
@@ -7967,25 +7940,23 @@ class WriterLowering {
 	private function buildBeforeLeadingSep(child: ShapeNode, fieldName: String, triviaSepExpr: Expr): Expr {
 		// Gated on `child.kind == Ref` to match `TriviaTypeSynth.isBareNonFirstRef`,
 		// the only host that grows the `BeforeLeading` slot.
-		return child.kind == Ref
-			? {
-				final leadAccess: Expr = beforeLeadingAccess(fieldName);
-				macro {
-					final _sep598: anyparse.core.Doc = $triviaSepExpr;
-					final _leadCm598: Array<String> = $leadAccess;
-					if (_leadCm598.length == 0)
-						_sep598;
-					else {
-						final _p598: Array<anyparse.core.Doc> = [_sep598];
-						for (_c598 in _leadCm598) {
-							_p598.push(leadingCommentDoc(_c598, opt));
-							_p598.push(_dhl());
-						}
-						_dc(_p598);
+		return child.kind == Ref ? {
+			final leadAccess: Expr = beforeLeadingAccess(fieldName);
+			macro {
+				final _sep598: anyparse.core.Doc = $triviaSepExpr;
+				final _leadCm598: Array<String> = $leadAccess;
+				if (_leadCm598.length == 0)
+					_sep598;
+				else {
+					final _p598: Array<anyparse.core.Doc> = [_sep598];
+					for (_c598 in _leadCm598) {
+						_p598.push(leadingCommentDoc(_c598, opt));
+						_p598.push(_dhl());
 					}
+					_dc(_p598);
 				}
 			}
-			: triviaSepExpr;
+		} : triviaSepExpr;
 	}
 
 	/**
@@ -8023,12 +7994,10 @@ class WriterLowering {
 		// not exist, so we pass a literal `false` → byte-inert
 		// (plain mode, non-keep modes, non-opted condWrap fields).
 		final hasCondOpenNewlineSlot: Bool = _ctx.trivia && isTriviaBearing(typePath) && child.fmtHasFlag('captureCondOpenNewline');
-		final condOpenNewlineExpr: Expr = hasCondOpenNewlineSlot
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: macro false;
+		final condOpenNewlineExpr: Expr = hasCondOpenNewlineSlot ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.CONDITION_OPEN_NEWLINE_SUFFIX),
+			pos: Context.currentPos()
+		} : macro false;
 		// ω-condition-wrap-keep: only the trivia-bearing Haxe cond
 		// path (slot present) sets `_keepChainInParen` — the
 		// `_setKeepChainInParen` helper exists only on opt types that
@@ -8155,12 +8124,10 @@ class WriterLowering {
 		// fired by `HxIfStmt.thenBody` after `cond`'s `)`
 		// trail. Plain mode and non-bearing rules see a null
 		// `prevTrailFieldName` and skip the threading.
-		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null
-			? null
-			: {
-				expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
-				pos: Context.currentPos()
-			};
+		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null ? null : {
+			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+			pos: Context.currentPos()
+		};
 		// ω-556-then-body-leading-comment: the bare non-first Ref
 		// body grows a `<field>BeforeLeading:Array<String>` slot
 		// (`isBareNonFirstRef`, same host as the BeforeNewline
@@ -8506,18 +8473,14 @@ class WriterLowering {
 			// non-optional precedent. First consumer:
 			// `HxConditionalDecl.elseBody`.
 			final useTriviaGap: Bool = _ctx.trivia;
-			final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
-				? {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
-					pos: Context.currentPos()
-				}
-				: null;
-			final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
-				? {
-					expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
-					pos: Context.currentPos()
-				}
-				: null;
+			final beforeKwLeadingExpr: Null<Expr> = useTriviaGap ? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
+				pos: Context.currentPos()
+			} : null;
+			final beforeKwTrailingExpr: Null<Expr> = useTriviaGap ? {
+				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
+				pos: Context.currentPos()
+			} : null;
 			final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
 			final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
 				? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
@@ -8901,50 +8864,40 @@ class WriterLowering {
 		// (the parent struct) and forward to `bodyPolicyWrap`
 		// which injects them into the kw→body separator.
 		final useTriviaGap: Bool = _ctx.trivia;
-		final afterKwExpr: Null<Expr> = useTriviaGap
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: null;
-		final kwLeadingExpr: Null<Expr> = useTriviaGap
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: null;
+		final afterKwExpr: Null<Expr> = useTriviaGap ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.AFTER_KW_SUFFIX),
+			pos: Context.currentPos()
+		} : null;
+		final kwLeadingExpr: Null<Expr> = useTriviaGap ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.KW_LEADING_SUFFIX),
+			pos: Context.currentPos()
+		} : null;
 		// ω-keep-policy: `<field>BodyOnSameLine:Bool` drives the
 		// `Keep` branch of `bodyPolicyWrap` / policySwitch.
-		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: null;
+		final bodyOnSameLineExpr: Null<Expr> = useTriviaGap ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BODY_ON_SAME_LINE_SUFFIX),
+			pos: Context.currentPos()
+		} : null;
 		// ω-trivia-before-kw: own-line comments captured between
 		// the preceding token and the kw (e.g. `} // c\nelse`)
 		// land in `<field>BeforeKwLeading`. When non-empty, the
 		// `kwBeforeDoc` runtime helper replaces the plain
 		// `sameLineSeparator` output with hardline-separated
 		// comments at the parent's indent level.
-		final beforeKwLeadingExpr: Null<Expr> = useTriviaGap
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: null;
+		final beforeKwLeadingExpr: Null<Expr> = useTriviaGap ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX),
+			pos: Context.currentPos()
+		} : null;
 		// ω-trivia-before-kw-trailing: same-line trailing comment
 		// captured between the preceding sibling's last token and
 		// the kw (e.g. `resize(); // first\nelse`) lands in
 		// `<field>BeforeKwTrailing`. When non-null, prepended
 		// before the (possibly leading-augmented) separator so
 		// the comment cuddles to the prior token.
-		final beforeKwTrailingExpr: Null<Expr> = useTriviaGap
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: null;
+		final beforeKwTrailingExpr: Null<Expr> = useTriviaGap ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX),
+			pos: Context.currentPos()
+		} : null;
 		final sepBaseExpr: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
 		final sepWithBeforeKwExpr: Expr = beforeKwLeadingExpr != null
 			? macro kwBeforeDoc($beforeKwLeadingExpr, $sepBaseExpr, opt)
@@ -9568,12 +9521,10 @@ class WriterLowering {
 		// space INSIDE optParts so the pad is emitted only when `_optVal != null`;
 		// the tracker expr `$fieldAccess != null` matches that runtime presence
 		// guard one-to-one. First consumer: `HxConditionalExpr.elseExpr`.
-		final thisPadTrailing: Null<Expr> = child.fmtHasFlag('padTrailing')
-			? {
-				optParts.push(padTrailingDoc(node, child, typePath));
-				macro $fieldAccess != null;
-			}
-			: null;
+		final thisPadTrailing: Null<Expr> = child.fmtHasFlag('padTrailing') ? {
+			optParts.push(padTrailingDoc(node, child, typePath));
+			macro $fieldAccess != null;
+		} : null;
 		final optBody: Expr = if (optParts.length == 1)
 			optParts[0]
 		else
@@ -9690,12 +9641,10 @@ class WriterLowering {
 		// preserves source presence of the trail rather than always re-emitting it.
 		final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref && child.annotations.get('lit.trailOptional') == true
 			&& _ctx.trivia && isTriviaBearing(typePath);
-		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot
-			? {
-				expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
-				pos: Context.currentPos()
-			}
-			: null;
+		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot ? {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
+			pos: Context.currentPos()
+		} : null;
 		return {
 			fieldName: fieldName,
 			kwLead: kwLead,
@@ -11840,12 +11789,10 @@ class WriterLowering {
 					isTransparent: true,
 				});
 			} else {
-				final pattern: Expr = arity == 0
-					? ctorIdent
-					: {
-						expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
-						pos: pos
-					};
+				final pattern: Expr = arity == 0 ? ctorIdent : {
+					expr: ECall(ctorIdent, [for (_ in 0...arity) macro _]),
+					pos: pos
+				};
 				patterns.push({ pattern: pattern, isMatch: false, isTransparent: false });
 			}
 		}
@@ -11903,12 +11850,10 @@ class WriterLowering {
 		inline function patternFor(branch: ShapeNode, ctorName: String, bindInner: Bool): Expr {
 			final arity: Int = branch.children.length;
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
-			return arity == 0
-				? ctorIdent
-				: {
-					expr: ECall(ctorIdent, [for (i in 0...arity) (bindInner && i == 0) ? macro _inner : macro _]),
-					pos: pos
-				};
+			return arity == 0 ? ctorIdent : {
+				expr: ECall(ctorIdent, [for (i in 0...arity) (bindInner && i == 0) ? macro _inner : macro _]),
+				pos: pos
+			};
 		}
 		// Nested classify cases for the look-through switch. The look-through
 		// is deliberately FUNCTION-ONLY: an inner `fnCtor` member yields kind
@@ -11928,14 +11873,12 @@ class WriterLowering {
 		// corpus, so fn-only is the byte-safe subset: two consecutive
 		// function-bearing conditional members get a `betweenFunctions` blank,
 		// nothing else changes.
-		final innerCases: Array<Case> = condCtor == null
-			? []
-			: [
-				for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
-					final ctorName: String = branch.annotations.get('base.ctor');
-					{ values: [patternFor(branch, ctorName, false)], guard: null, expr: (fnCtors.contains(ctorName) ? macro 2 : macro 0) };
-				}
-			];
+		final innerCases: Array<Case> = condCtor == null ? [] : [
+			for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
+				final ctorName: String = branch.annotations.get('base.ctor');
+				{ values: [patternFor(branch, ctorName, false)], guard: null, expr: (fnCtors.contains(ctorName) ? macro 2 : macro 0) };
+			}
+		];
 		final cases: Array<Case> = [];
 		for (branch in enumRule.children) {
 			final ctorName: Null<String> = branch.annotations.get('base.ctor');
@@ -12665,18 +12608,14 @@ class WriterLowering {
 			final tkbIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossB' + i)), pos: pos };
 			final hkaIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossA' + i)), pos: pos };
 			final hkbIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossB' + i)), pos: pos };
-			final tailAdapterAccess: Null<Expr> = info.tailAdapterOptField == null
-				? null
-				: {
-					expr: EField(macro opt, info.tailAdapterOptField),
-					pos: pos
-				};
-			final headAdapterAccess: Null<Expr> = info.headAdapterOptField == null
-				? null
-				: {
-					expr: EField(macro opt, info.headAdapterOptField),
-					pos: pos
-				};
+			final tailAdapterAccess: Null<Expr> = info.tailAdapterOptField == null ? null : {
+				expr: EField(macro opt, info.tailAdapterOptField),
+				pos: pos
+			};
+			final headAdapterAccess: Null<Expr> = info.headAdapterOptField == null ? null : {
+				expr: EField(macro opt, info.headAdapterOptField),
+				pos: pos
+			};
 			final tailMatchA: Expr = transitionAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA, pos);
 			final tailMatchB: Expr = transitionAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB, pos);
 			final headMatchA: Expr = transitionAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA, pos);
@@ -13643,16 +13582,12 @@ class WriterLowering {
 		// dispatch. Non-`if` tails (nested switch for issue-423 flattening, `for` /
 		// `while` bodies the fork breaks) keep the force-propagated `_writerOpt`.
 		final caseTailOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1
-				? {
-					final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
-					(_tailBarrierFn != null && _tailBarrierFn(_t.node) && !opt._inExprPosition
-						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
-							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine))
-						? _clearExprPosition(_writerOpt)
-						: _writerOpt;
-				}
-				: _clearExprPosition(_writerOpt))
+			? macro (_si == _arr.length - 1 ? {
+				final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
+				(_tailBarrierFn != null && _tailBarrierFn(_t.node) && !opt._inExprPosition && (
+					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
+				)) ? _clearExprPosition(_writerOpt) : _writerOpt;
+			} : _clearExprPosition(_writerOpt))
 			: macro _writerOpt;
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
@@ -13668,12 +13603,10 @@ class WriterLowering {
 		// `@:fmt(typedefIntersectionBreak)` lead breaks `&\n\t` before the
 		// operand; otherwise the shared `_writerOpt` (stays glued — no copy,
 		// no mutation of the shared opt).
-		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace
-			? {
-				expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
-				pos: Context.currentPos(),
-			}
-			: triviaElemCall;
+		final triviaElemCallMaybeBreak: Expr = operandBreakAfterMultilineBrace ? {
+			expr: ECall(macro $i{elemFn}, [macro _t.node, macro _elemOpt]),
+			pos: Context.currentPos(),
+		} : triviaElemCall;
 		// Single `final _elemOpt = …;` declaration spliced at loop scope (NOT a
 		// nested EBlock — that would isolate `_elemOpt` from the element call).
 		// Flag on ⇒ when the prior element rendered multi-line AND ended with a
@@ -14074,12 +14007,10 @@ class WriterLowering {
 		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
 		rightCurlyKnob: Null<String>
 	): SepStarChecks {
-		final keepCheckExpr: Expr = wrapRulesField != null
-			? {
-				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
-				macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
-			}
-			: macro false;
+		final keepCheckExpr: Expr = wrapRulesField != null ? {
+			final rulesAccess: Expr = optFieldAccess(wrapRulesField);
+			macro anyparse.format.wrap.WrapList.cascadeIsKeep($rulesAccess, _arr.length);
+		} : macro false;
 		// ω-cascade-emits-comments: Ignore-mode runtime check, sister to
 		// `keepCheckExpr`. Fires when the wrap-rules JSON config sets
 		// `"defaultWrap": "ignore"` (case-2, user-driven) OR the grammar
@@ -14099,12 +14030,10 @@ class WriterLowering {
 		// expression-position descent).
 		final ignoreBase: Expr = ignoreSourceNewlinesForWrap
 			? macro true
-			: (wrapRulesField != null
-				? {
-					final rulesAccess: Expr = optFieldAccess(wrapRulesField);
-					macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
-				}
-				: macro false);
+			: (wrapRulesField != null ? {
+				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
+				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
+			} : macro false);
 		final ignoreCheckExpr: Expr = reflowInExprPosition ? macro ($ignoreBase) || opt._inValueIfBranch : ignoreBase;
 		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
 		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
@@ -14122,12 +14051,10 @@ class WriterLowering {
 		// and (b) swap the force-multi per-element hardline for a space
 		// (break only after a line-comment) when a mid-list `//` forced the
 		// list into the trivia branch.
-		final noWrapFlatCheckExpr: Expr = wrapRulesField != null
-			? {
-				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
-				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap && $rulesAccess.rules.length == 0;
-			}
-			: macro false;
+		final noWrapFlatCheckExpr: Expr = wrapRulesField != null ? {
+			final rulesAccess: Expr = optFieldAccess(wrapRulesField);
+			macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.NoWrap && $rulesAccess.rules.length == 0;
+		} : macro false;
 		// ω-objectlit-leftCurly-cascade: when the call site delegates
 		// leftCurly emission to this helper (knob-form leftCurly + wrap-
 		// rules), build runtime accessors for the knob value that:
@@ -14148,12 +14075,10 @@ class WriterLowering {
 		//
 		// `wrapLeadFlatDoc` is always `_de()` — flat layout never wants
 		// a hardline before the open brace, regardless of knob value.
-		final knobNextOrEmpty: Expr = knobExpr == null
-			? macro _de()
-			: {
-				expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
-				pos: Context.currentPos(),
-			};
+		final knobNextOrEmpty: Expr = knobExpr == null ? macro _de() : {
+			expr: ESwitch(knobExpr, [{ values: [nextPat], expr: macro _doh(), guard: null }], macro _de()),
+			pos: Context.currentPos(),
+		};
 		final triviaLeadDoc: Expr = knobNextOrEmpty;
 		final wrapLeadFlatDoc: Expr = macro _de();
 		final wrapLeadBreakDoc: Expr = knobNextOrEmpty;
@@ -14169,12 +14094,10 @@ class WriterLowering {
 		// `RightCurlyPlacement.{Inline,Same}` semantic.
 		final rightCurlyKnobExpr: Null<Expr> = rightCurlyKnob == null ? null : optFieldAccess(rightCurlyKnob);
 		final inlinePat: Expr = MacroStringTools.toFieldExpr(['anyparse', 'format', 'RightCurlyPlacement', 'Inline']);
-		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null
-			? macro _dhl()
-			: {
-				expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
-				pos: Context.currentPos(),
-			};
+		final triviaTrailDoc: Expr = rightCurlyKnobExpr == null ? macro _dhl() : {
+			expr: ESwitch(rightCurlyKnobExpr, [{ values: [inlinePat], expr: macro _de(), guard: null }], macro _dhl()),
+			pos: Context.currentPos(),
+		};
 		// ω-wraplist-trailbreakdoc: wrap-engine close placement reads
 		// the same knob as the trivia branch's `triviaTrailDoc`.
 		// `WrapList.shapeOnePerLine` substitutes the result for the
@@ -14940,16 +14863,12 @@ class WriterLowering {
 		// Non-`if` tails (a tail switch whose cases flatten via the arrow / return
 		// walk-up, `for` / `while` bodies the fork breaks) keep the inherited frame.
 		final elemCallOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1
-				? {
-					final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
-					(_tailBarrierFn != null && _tailBarrierFn(_t.node)
-						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
-							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine))
-						? _clearValueIfBranch(_clearExprPosition($elemOptExpr))
-						: _clearValueIfBranch($elemOptExpr);
-				}
-				: _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+			? macro (_si == _arr.length - 1 ? {
+				final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
+				(_tailBarrierFn != null && _tailBarrierFn(_t.node) && (
+					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
+				)) ? _clearValueIfBranch(_clearExprPosition($elemOptExpr)) : _clearValueIfBranch($elemOptExpr);
+			} : _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
 			: elemOptExpr;
 		return {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
@@ -14967,12 +14886,10 @@ class WriterLowering {
 	private static function triviaBlockEmptyDocExpr(
 		openText: String, closeText: String, emptyText: String, emptyCurlyBreak: Bool, emptyCurlyKnob: Null<String>
 	): Expr {
-		final emptyCurlyAccess: Expr = emptyCurlyKnob != null
-			? {
-				expr: EField(macro opt, emptyCurlyKnob),
-				pos: Context.currentPos()
-			}
-			: macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
+		final emptyCurlyAccess: Expr = emptyCurlyKnob != null ? {
+			expr: EField(macro opt, emptyCurlyKnob),
+			pos: Context.currentPos()
+		} : macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
 		return emptyCurlyBreak
 			? macro ($emptyCurlyAccess == anyparse.format.EmptyCurly.Break
 				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
@@ -14988,18 +14905,14 @@ class WriterLowering {
 	 * `triviaBlockStarExpr`.
 	 */
 	private static function triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob: Null<String>, rightCurlyAnonFnKnob: Null<String>): Expr {
-		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null
-			? {
-				expr: EField(macro opt, rightCurlyKnob),
-				pos: Context.currentPos()
-			}
-			: null;
-		final rightCurlyAnonFnAccess: Null<Expr> = (rightCurlyKnob == null && rightCurlyAnonFnKnob != null)
-			? {
-				expr: EField(macro opt, rightCurlyAnonFnKnob),
-				pos: Context.currentPos()
-			}
-			: null;
+		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null ? {
+			expr: EField(macro opt, rightCurlyKnob),
+			pos: Context.currentPos()
+		} : null;
+		final rightCurlyAnonFnAccess: Null<Expr> = (rightCurlyKnob == null && rightCurlyAnonFnKnob != null) ? {
+			expr: EField(macro opt, rightCurlyAnonFnKnob),
+			pos: Context.currentPos()
+		} : null;
 		return if (rightCurlyAccess != null)
 			macro ($rightCurlyAccess == anyparse.format.RightCurlyPlacement.Inline ? _de() : _dhl());
 		else if (rightCurlyAnonFnAccess != null)
@@ -15023,39 +14936,35 @@ class WriterLowering {
 		// Conditional as doc-comment-led (the inner doc-comment lives on the
 		// inner member's leading, never on the `#if` directive). Spliced into
 		// `currHasDocComputeExpr` only when the look-through info resolved.
-		final condLeadingDocExpr: Expr = condLeadingDocInfo != null
-			? {
-				final pos: Position = Context.currentPos();
-				final classifierAccess: Expr = {
-					expr: EField(macro _t.node, condLeadingDocInfo.classifierFieldName),
-					pos: pos,
-				};
-				final bodyAccess: Expr = {
-					expr: EField(macro _inner, condLeadingDocInfo.bodyFieldName),
-					pos: pos,
-				};
-				final scanBody: Expr = macro {
-					final _condBody = $bodyAccess;
-					if (_condBody.length > 0) {
-						var _ctdi: Int = 0;
-						while (_ctdi < _condBody[0].leadingComments.length) {
-							if (StringTools.startsWith(_condBody[0].leadingComments[_ctdi], '/**')) {
-								_currHasDocComment = true;
-								break;
-							}
-							_ctdi++;
+		final condLeadingDocExpr: Expr = condLeadingDocInfo != null ? {
+			final pos: Position = Context.currentPos();
+			final classifierAccess: Expr = {
+				expr: EField(macro _t.node, condLeadingDocInfo.classifierFieldName),
+				pos: pos,
+			};
+			final bodyAccess: Expr = {
+				expr: EField(macro _inner, condLeadingDocInfo.bodyFieldName),
+				pos: pos,
+			};
+			final scanBody: Expr = macro {
+				final _condBody = $bodyAccess;
+				if (_condBody.length > 0) {
+					var _ctdi: Int = 0;
+					while (_ctdi < _condBody[0].leadingComments.length) {
+						if (StringTools.startsWith(_condBody[0].leadingComments[_ctdi], '/**')) {
+							_currHasDocComment = true;
+							break;
 						}
+						_ctdi++;
 					}
-				};
-				final lookThroughSwitch: Expr = {
-					expr: ESwitch(
-						classifierAccess, [{ values: [condLeadingDocInfo.condCasePattern], guard: null, expr: scanBody }], macro {}
-					),
-					pos: pos,
-				};
-				macro if (!_currHasDocComment) $lookThroughSwitch;
-			}
-			: macro {};
+				}
+			};
+			final lookThroughSwitch: Expr = {
+				expr: ESwitch(classifierAccess, [{ values: [condLeadingDocInfo.condCasePattern], guard: null, expr: scanBody }], macro {}),
+				pos: pos,
+			};
+			macro if (!_currHasDocComment) $lookThroughSwitch;
+		} : macro {};
 		return beforeDocCommentEmptyLines
 			? macro {
 				_currHasDocComment = false;
@@ -15082,38 +14991,34 @@ class WriterLowering {
 		interMember: Bool, interMemberInfo: Null<InterMemberClassifyInfo>, staticVarSubdiv: Bool,
 		staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>
 	): Expr {
-		final staticPromoteExpr: Expr = staticVarSubdiv
-			? {
-				final pos: Position = Context.currentPos();
-				final modAccess: Expr = {
-					expr: EField(macro _t.node, staticVarSubdivInfo.modifierFieldName),
-					pos: pos,
-				};
-				final staticIdent: Expr = { expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos };
-				macro {
-					if (_currKind == 1 || _currKind == 2) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
-						_currKind = _currKind == 1 ? 3 : 4;
-						break;
-					}
-				};
-			}
-			: macro {};
-		return interMember
-			? {
-				final classifierAccess: Expr = {
-					expr: EField(macro _t.node, interMemberInfo.classifierFieldName),
-					pos: Context.currentPos(),
-				};
-				final switchExpr: Expr = {
-					expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null),
-					pos: Context.currentPos(),
-				};
-				macro {
-					_currKind = $switchExpr;
-					$staticPromoteExpr;
-				};
-			}
-			: macro {};
+		final staticPromoteExpr: Expr = staticVarSubdiv ? {
+			final pos: Position = Context.currentPos();
+			final modAccess: Expr = {
+				expr: EField(macro _t.node, staticVarSubdivInfo.modifierFieldName),
+				pos: pos,
+			};
+			final staticIdent: Expr = { expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos };
+			macro {
+				if (_currKind == 1 || _currKind == 2) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
+					_currKind = _currKind == 1 ? 3 : 4;
+					break;
+				}
+			};
+		} : macro {};
+		return interMember ? {
+			final classifierAccess: Expr = {
+				expr: EField(macro _t.node, interMemberInfo.classifierFieldName),
+				pos: Context.currentPos(),
+			};
+			final switchExpr: Expr = {
+				expr: ESwitch(classifierAccess, interMemberInfo.classifyCases, null),
+				pos: Context.currentPos(),
+			};
+			macro {
+				_currKind = $switchExpr;
+				$staticPromoteExpr;
+			};
+		} : macro {};
 	}
 
 	/**

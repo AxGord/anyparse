@@ -314,13 +314,11 @@ class Lowering {
 	 *    gets postfix before the prefix ctor wraps it.
 	 */
 	private function lowerEnum(node: ShapeNode, typePath: String, atomsOnly: Bool, recurseFnName: String): Expr {
-		final branches: Array<ShapeNode> = atomsOnly
-			? [
-				for (b in node.children)
-					if (b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null
-						&& b.annotations.get('ternary.op') == null) b
-			]
-			: node.children;
+		final branches: Array<ShapeNode> = atomsOnly ? [
+			for (b in node.children)
+				if (b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null
+					&& b.annotations.get('ternary.op') == null) b
+		] : node.children;
 		final branchExprs: Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
 		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
 		final statements: Array<Expr> = branchExprs.concat([failExpr]);
@@ -4606,12 +4604,10 @@ class Lowering {
 				|| peekKw(ctx, '#end') || peekKw(ctx, '#else') || peekKw(ctx, '#elseif')))
 			: null;
 		if (parseGateCall != null && triviaTrailOpt)
-			steps.push(macro final _trailPresent: Bool = $gateCond
-				? matchLit(ctx, $v{trailText})
-				: {
-					expectLit(ctx, $v{trailText});
-					true;
-				});
+			steps.push(macro final _trailPresent: Bool = $gateCond ? matchLit(ctx, $v{trailText}) : {
+				expectLit(ctx, $v{trailText});
+				true;
+			});
 		else if (parseGateCall != null && trailOptional)
 			steps.push(macro if ($gateCond)
 matchLit(ctx, $v{trailText})

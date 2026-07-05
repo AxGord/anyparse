@@ -182,12 +182,10 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/** A comparison `a <op> b` rewritten with `newOp`, its boolean negation. */
 	private static function flip(node: QueryNode, source: String, newOp: String): Operand {
-		return node.children.length == 2
-			? {
-				src: src(node.children[0], source) + ' ' + newOp + ' ' + src(node.children[1], source),
-				prec: PREC_CMP
-			}
-			: wrapNot(node, source);
+		return node.children.length == 2 ? {
+			src: src(node.children[0], source) + ' ' + newOp + ' ' + src(node.children[1], source),
+			prec: PREC_CMP
+		} : wrapNot(node, source);
 	}
 
 	/** Operator-precedence rank of a node kind — higher binds tighter. */

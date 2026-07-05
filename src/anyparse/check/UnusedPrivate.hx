@@ -127,15 +127,13 @@ final class UnusedPrivate implements Check {
 			? null
 			: !RefactorSupport.isPrivateMemberConfined(owner, source, index)
 				? null
-				: RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])
-					? null
-					: {
-						file: file,
-						span: span,
-						rule: 'unused-private',
-						severity: Severity.Warning,
-						message: 'unused private \'${decl.name}\''
-					};
+				: RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span]) ? null : {
+					file: file,
+					span: span,
+					rule: 'unused-private',
+					severity: Severity.Warning,
+					message: 'unused private \'${decl.name}\''
+				};
 	}
 
 	/**

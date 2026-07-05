@@ -1220,11 +1220,9 @@ final class Cli {
 		}
 
 		final lintConfig: LintConfig = LintConfig.discover(paths[0] ?? '.');
-		final activeChecks: Array<Check> = o.ruleFilters.length == 0
-			? [
-				for (c in checks) if (lintConfig.enabledFor(c.id())) c
-			]
-			: checks;
+		final activeChecks: Array<Check> = o.ruleFilters.length == 0 ? [
+			for (c in checks) if (lintConfig.enabledFor(c.id())) c
+		] : checks;
 		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, lintConfig);
 
 		if (o.fix) return applyLintFixes(files, activeChecks, plugin, lintConfig);
@@ -9750,13 +9748,12 @@ final class Cli {
 		// grammar (`Kind` / `Kind:name` / `Kind > Child`) is deliberately
 		// minimal and stays that way — arity is a numeric predicate, not
 		// a structural one, and lives on the CLI instead of the path.
-		final raw: Array<QueryNode> = (o.minChildren < 0 && o.maxChildren < 0)
-			? preFilter
-			: [
-				for (m in preFilter)
-					if ((o.minChildren < 0 || m.children.length >= o.minChildren)
-						&& (o.maxChildren < 0 || m.children.length <= o.maxChildren)) m
-			];
+		final raw: Array<QueryNode> = (o.minChildren < 0 && o.maxChildren < 0) ? preFilter : [
+			for (m in preFilter)
+				if ((
+					o.minChildren < 0 || m.children.length >= o.minChildren
+				) && (o.maxChildren < 0 || m.children.length <= o.maxChildren)) m
+		];
 		if (raw.length == 0) reportAstSelectEmpty(tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length);
 		if (o.countOnly) {
 			for (m in raw) sysPrint('${m.children.length}\n');

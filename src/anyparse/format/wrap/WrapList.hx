@@ -1225,7 +1225,7 @@ class WrapList {
 	 * wrappers + the flat side of every render-decision. O(left-spine), no
 	 * re-measure.
 	 */
-	private static function startsWithCollectionDelim(d: Doc): Bool {
+	public static function startsWithCollectionDelim(d: Doc): Bool {
 		var node: Doc = d;
 		while (true) switch node {
 			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
@@ -2682,7 +2682,7 @@ class WrapList {
 	 * BLOCK (last token `}`), distinguishing it from an expression body that
 	 * merely wrapped (whose last token is the expression's own close).
 	 */
-	static function lastVisibleText(d: Doc): Null<String> {
+	public static function lastVisibleText(d: Doc): Null<String> {
 		return switch d {
 			case Text(s):
 				final t: String = StringTools.trim(s);

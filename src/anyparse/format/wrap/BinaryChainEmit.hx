@@ -164,13 +164,21 @@ final class BinaryChainEmit {
 		// a `LineLengthLargerThan` rule answer can flip with column.
 		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
 		// recursion (no IfBreak split — single shape per leaf).
-		return anyHardline
-			? WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt))
-			: extraThresholds.length == 0
-				? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, evalAt, shapeAt, shapeNoWrapAt)
-				: extraThresholds.length == 1
-					? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
-					: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
+		if (anyHardline) {
+			// ω-ternary-collection-hug: a breaking ternary whose sole multi-line
+			// branch is a bare collection literal (`cond ? flat : {…}`) HUGS —
+			// keep `cond ? A : {` on the head line and let the collection self-
+			// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
+			// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
+			if (extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0)
+				return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops)));
+			return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
+		}
+		return extraThresholds.length == 0
+			? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, evalAt, shapeAt, shapeNoWrapAt)
+			: extraThresholds.length == 1
+				? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
+				: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
 	}
 
 	/**
@@ -723,6 +731,45 @@ final class BinaryChainEmit {
 		// span (`items joined by ' op '`).
 		for (i in 0...ops.length) total += ops[i].length + 2;
 		return { total: total, maxLen: maxLen, anyHardline: anyHardline };
+	}
+
+
+	/**
+	 * ω-ternary-collection-hug: returns the index (1 = THEN, 2 = ELSE) of a
+	 * TERNARY chain's SOLE multi-line branch when that branch is a bare
+	 * collection literal — it STARTS with `{`/`[` and ENDS with the matching
+	 * `}`/`]`, so its multi-line-ness is owned entirely by the collection's own
+	 * internal breaks — while the condition and the OTHER branch both render
+	 * flat (`flatLength >= 0`). Returns -1 otherwise.
+	 *
+	 * The clean sub-pattern this predicate unlocks: `cond ? flat : {\n…\n}` (or
+	 * the mirror with a multi-line THEN). Such a ternary HUGS — `cond ? A : {`
+	 * rides the head/assignment line and the collection self-breaks — rather
+	 * than leading-break the whole ternary (`\n? A\n: B`). The hug is applied
+	 * only when the head up to the collection's open delim FITS the line
+	 * (`IfFirstLineExceeds` probe at the call site); an overflowing head keeps
+	 * the leading-break-all shape.
+	 *
+	 * Deliberately NARROW so the entangled overlapping sub-patterns keep the
+	 * leading-break-all shape: a SECOND multi-line branch (both-branch explode),
+	 * a multi-line CONDITION, a nested ternary branch (STARTS with an
+	 * identifier, not `{`/`[`), and a branch that is an opAdd / opBool CHAIN
+	 * built around a collection (`{…} + x` — ENDS with `x`, not `}`) all fail
+	 * the predicate.
+	 */
+	private static function ternaryHugCollectionBranchIndex(items: Array<Doc>, ops: Array<String>): Int {
+		if (items.length != 3 || ops.length != 2 || ops[0] != '?' || ops[1] != ':') return -1;
+		if (WrapList.flatLength(items[0]) < 0) return -1;
+		var idx: Int = -1;
+		for (i in 1...3) if (WrapList.flatLength(items[i]) < 0) {
+			if (idx != -1) return -1;
+			idx = i;
+		}
+		if (idx == -1) return -1;
+		final branch: Doc = items[idx];
+		if (!WrapList.startsWithCollectionDelim(branch)) return -1;
+		final last: Null<String> = WrapList.lastVisibleText(branch);
+		return (last == '}' || last == ']') ? idx : -1;
 	}
 
 }
