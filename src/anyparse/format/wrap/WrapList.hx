@@ -1363,6 +1363,25 @@ class WrapList {
 		// byte-identical.
 		flatTrailingComma: Bool = false
 	): Doc {
+		// ω-thinarrow-break if-else: a sole bare-ident arrow arg of a call / new-expr
+		// (`f(p -> if … else …)`) whose body is an ALREADY-multiline if/else breaks
+		// AFTER `->` with the enclosing `)` on its own line — regardless of the
+		// cascade-resolved wrap mode. Without this the arg's internal hardline renders
+		// hugged (`f(p -> if (…) {` … `})`), aligning `else` with the enclosing call
+		// statement instead of nesting it in the lambda body. Mirrors fork
+		// `applyArrowWrapping` + `isArrowBodyMultilineIfElse` (MarkWrapping.hx:2346/
+		// 2401). Gated to `(`-delimited constructs (call / new); a plain `if` (no
+		// else) / `switch` / `for` / `while` / `{ }`-block body has no top-level
+		// `else` and stays hugged, preserving the landed block/statement-body hugs.
+		// Only a BARE-ident arrow (`p -> …`, a leading-edge `Concat` recognised by
+		// `bareArrowSplit`) is handled; a paren-param arrow (`(p) -> …`) lowers to a
+		// `WrapBoundary` marker for which `bareArrowSplit` returns null, so it is
+		// excluded and keeps its current layout.
+		if (open == '(' && items.length == 1) {
+			final ifElseSplit: Null<{ head: Doc, body: Doc }> = bareArrowSplit(items[0]);
+			if (ifElseSplit != null && arrowBodyIsBrokenIfElse(ifElseSplit.body))
+				return bareArrowGlueShape(open, close, openInside, closeInside, ifElseSplit.head, ifElseSplit.body, cols);
+		}
 		final comprBlockHug: Null<Doc> = shapeComprehensionBlockHug(open, close, items, openInside, closeInside);
 		if (comprBlockHug != null) return comprBlockHug;
 		final soleArrowUniform: Null<Doc> = shapeSoleArrowUniform(mode, open, close, openInside, closeInside, items);
@@ -2650,6 +2669,67 @@ class WrapList {
 			case _:
 				null;
 		};
+	}
+
+	/**
+	 * ω-thinarrow-break if-else: `true` iff `body` is an ALREADY-multiline
+	 * `if … else` (or `else if` chain) — the one arrow-body shape the fork breaks
+	 * after `->` even when the glued head fits (`applyArrowWrapping` +
+	 * `isArrowBodyMultilineIfElse`, MarkWrapping.hx:2346/2401). Three structural
+	 * conditions, all cheap:
+	 *  - the body's first visible token is the `if` keyword;
+	 *  - the body carries a structural hardline (`flatLength < 0`) — i.e. it is
+	 *    ALREADY wrapped across lines (fork's `hasInnerBreakInRange`), so a
+	 *    single-line `if a else b` that merely fits its continuation line stays
+	 *    huggable;
+	 *  - the body has a TOP-LEVEL `else` (`hasTopLevelElse`) — an `else` that
+	 *    belongs to the OUTER if, not one nested inside the then-block. Mirrors the
+	 *    fork's `firstOf(Kwd(KwdElse))`, which inspects only the outer if's DIRECT
+	 *    children, so an outer if whose then-block merely CONTAINS a nested if/else
+	 *    (with no else of its own) stays huggable.
+	 * A plain `if` (no else) / `switch` / `for` / `while` body returns `false`,
+	 * keeping the landed block/statement-body hug intact.
+	 */
+	private static function arrowBodyIsBrokenIfElse(body: Doc): Bool {
+		return firstVisibleText(body) == 'if' && flatLength(body) < 0 && hasTopLevelElse(body, 0);
+	}
+
+	/**
+	 * Walks `body` for an `else` keyword Text at the if construct's own structural
+	 * level (`Nest` depth 0), skipping transparent wrappers and following
+	 * conditionals' FLAT branch (as `firstVisibleText` does). An `else` reached only
+	 * by descending into a `Nest` (a nested block body's indent) is ignored — it
+	 * belongs to an inner if, not the outer one.
+	 */
+	private static function hasTopLevelElse(d: Doc, depth: Int): Bool {
+		return switch d {
+			case Text(s):
+				depth == 0 && isElseKeyword(s);
+			case Concat(arr):
+				for (it in arr) if (hasTopLevelElse(it, depth)) return true;
+				false;
+			case Nest(_, inner):
+				hasTopLevelElse(inner, depth + 1);
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(i) | WrapBoundary(
+				i
+			) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				hasTopLevelElse(i, depth);
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+				hasTopLevelElse(flat, depth);
+			case _:
+				false;
+		};
+	}
+
+	/**
+	 * `true` iff the trimmed keyword Text `s` is (or begins with) the `else`
+	 * keyword — covers a standalone `else` token and a glued `else if` head.
+	 */
+	private static function isElseKeyword(s: String): Bool {
+		final t: String = StringTools.trim(s);
+		return t == 'else' || StringTools.startsWith(t, 'else ') || StringTools.startsWith(t, 'else\t');
 	}
 
 	/**
