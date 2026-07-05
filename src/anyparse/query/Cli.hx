@@ -5534,7 +5534,7 @@ final class Cli {
 		// Compute the gutter width from `end` so all rows line up; e.g.
 		// a 3-digit end-line gives a 3-char gutter.
 		final gutter: Int = ('$end').length;
-		for (ln in start...end + 1) {
+		for (ln in start ... end + 1) {
 			final marker: String = ln == failLine ? '>>' : '  ';
 			final num: String = padLeft('$ln', gutter);
 			final body: String = lines[ln - 1];
@@ -5854,7 +5854,7 @@ final class Cli {
 				if (identLen > 4)
 					buf.add('_');
 				else
-					for (k in i...j) buf.addChar(StringTools.fastCodeAt(raw, k));
+					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
 				i = j;
 			} else {
 				buf.addChar(c);
@@ -7958,7 +7958,7 @@ final class Cli {
 	 */
 	private static function commonIndentWidth(lines: Array<String>, from: Int, to: Int): Int {
 		var common: Null<String> = null;
-		for (n in from...to + 1) {
+		for (n in from ... to + 1) {
 			final line: String = lines[n - 1];
 			if (StringTools.trim(line).length != 0) {
 				final lead: String = leadingWhitespace(line);
@@ -11069,7 +11069,7 @@ final class Cli {
 	private static function emitSourceLines(lines: Array<String>, from: Int, to: Int, number: Bool, raw: Bool): Void {
 		final strip: Int = raw ? 0 : commonIndentWidth(lines, from, to);
 		final buf: StringBuf = new StringBuf();
-		for (n in from...to + 1) {
+		for (n in from ... to + 1) {
 			final line: String = lines[n - 1];
 			if (number) buf.add('$n\t');
 			buf.add(strip > 0 ? dedentLine(line, strip) : line);

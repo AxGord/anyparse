@@ -707,6 +707,49 @@ class WrapList {
 	}
 
 	/**
+	 * True iff the LAST rendered `Text` atom of `d` ends with a decimal digit
+	 * (`0`-`9`). Mirrors `endsWithCloseDelim`'s Doc-tail walk, changing only
+	 * the terminal predicate. Used by the interval writer to reproduce
+	 * haxe-formatter's LEXICAL fused `IntInterval` rule: a decimal digit that
+	 * directly abuts `...` in source (`0...n`, `i + 1...len`) lexes as one
+	 * tight token, so the operator stays tight regardless of `intervalPolicy`;
+	 * any other left-operand tail is a binary `OpInterval` honouring the
+	 * policy.
+	 */
+	public static function endsWithDecimalDigit(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				if (s.length == 0) return false;
+				final c: Int = StringTools.fastCodeAt(s, s.length - 1);
+				return c >= '0'.code && c <= '9'.code;
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+				_, _, flat
+			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				node = flat;
+			case Concat(items):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+		}
+	}
+
+	/**
 	 * True iff `d` is a binary-op chain whose TOP-LEVEL separators are all
 	 * `+` / `-` (opAddSub), with no top-level `||` / `&&` / `?` / `:`. The
 	 * walk descends through transparent render wrappers and the chain's own

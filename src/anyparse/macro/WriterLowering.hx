@@ -2884,7 +2884,7 @@ class WriterLowering {
 		final out: Array<{ guard: Expr, signal: Expr }> = [];
 		final startIdx: Int = parent.children.indexOf(child);
 		if (startIdx < 0) return out;
-		for (i in (startIdx + 1)...parent.children.length) {
+		for (i in (startIdx + 1) ... parent.children.length) {
 			final next: ShapeNode = parent.children[i];
 			final nextFieldName: Null<String> = next.annotations.get('base.fieldName');
 			if (nextFieldName == null) continue;
@@ -6570,7 +6570,7 @@ class WriterLowering {
 		final opText: String = getOperatorText(branch);
 		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
 		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
-		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3']);
+		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3', 'intervalPolicy']);
 		final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
 		final isAssign: Bool = prec == 0;
 		final opWithSpaces: String = isTight ? opText : ' ' + opText + ' ';
@@ -6673,7 +6673,7 @@ class WriterLowering {
 		final opText: String = getOperatorText(branch);
 		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
 		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
-		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3']);
+		final infixPolicyFlag: Null<String> = firstFmtFlag(branch, ['functionTypeHaxe3', 'intervalPolicy']);
 		final isTight: Bool = branch.fmtHasFlag('tight') || infixPolicyFlag != null;
 		final isAssign: Bool = prec == 0;
 		final opWithSpaces: String = isTight ? opText : ' ' + opText + ' ';
@@ -6693,7 +6693,9 @@ class WriterLowering {
 		// trailing-space-before-newline. Flat emission is unchanged
 		// — the next Text from `$rightCall` flushes the OptSpace.
 		// Tight ops keep the original single-Text shape (no spaces).
-		final opEmitExpr: Expr = infixPolicyFlag != null ? whitespacePolicyInfix(opText, infixPolicyFlag) : macro _dt($v{opWithSpaces});
+		final opEmitExpr: Expr = infixPolicyFlag != null && infixPolicyFlag != 'intervalPolicy'
+			? whitespacePolicyInfix(opText, infixPolicyFlag)
+			: macro _dt($v{opWithSpaces});
 		// ω-thin-arrow-body-marker: the infix `->` lambda (`arg -> body`,
 		// Pratt path — no typedef field to carry `@:fmt(arrowBodyLineWrap)`
 		// the way `HxThinParenLambda.body` does) opts into the same
@@ -6710,19 +6712,25 @@ class WriterLowering {
 				_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
 			}
 			: rightCall;
-		final innerExpr: Expr = isAssign && !isTight
-			? macro _dc([
-				$leftCall,
-				_dt(' '),
-				_dt($v{opText}),
-				_dop(' '),
-				$rightEmit,
-			])
-			: macro _dc([
-				$leftCall,
-				$opEmitExpr,
-				$rightCall,
-			]);
+		final ivOpExpr: Expr = intervalPolicyOp(opText);
+		final innerExpr: Expr = infixPolicyFlag == 'intervalPolicy'
+			? macro {
+				final _leftIv: anyparse.core.Doc = $leftCall;
+				_dc([_leftIv, $ivOpExpr, $rightCall]);
+			}
+			: isAssign && !isTight
+				? macro _dc([
+					$leftCall,
+					_dt(' '),
+					_dt($v{opText}),
+					_dop(' '),
+					$rightEmit,
+				])
+				: macro _dc([
+					$leftCall,
+					$opEmitExpr,
+					$rightCall,
+				]);
 		return macro {
 			final _inner: anyparse.core.Doc = $innerExpr;
 			if ($v{prec} < ctxPrec)
@@ -8778,7 +8786,7 @@ class WriterLowering {
 	 * `_de()`. Rewrites the slice in place. Extracted from `lowerStruct`.
 	 */
 	private function gateMultiVarMoreParts(parts: Array<Expr>, start: Int): Void {
-		for (i in start...parts.length) {
+		for (i in start ... parts.length) {
 			final entry: Expr = parts[i];
 			parts[i] = macro _suppressMoreEntry ? _de() : $entry;
 		}
@@ -10360,6 +10368,39 @@ class WriterLowering {
 		];
 		final optAccess: Expr = optFieldAccess(flagName);
 		return { expr: ESwitch(optAccess, cases, macro _dt($v{opText})), pos: Context.currentPos() };
+	}
+
+	/**
+	 * Interval operator (`...`) whitespace under `opt.intervalPolicy`. Mirror
+	 * of `whitespacePolicyInfix`, but a left operand whose rendered tail ends
+	 * with a DECIMAL digit directly abuts the `...` in source (haxe-formatter
+	 * fuses that into a single tight `IntInterval` token — `0...n`,
+	 * `i + 1...len`) and is emitted TIGHT regardless of the policy; every other
+	 * left-operand tail is a binary `OpInterval` that honours the policy.
+	 * `None` (default) keeps the whole operator tight, byte-identical to the
+	 * pre-slice `@:fmt(tight)` emission. Reads the runtime local `_leftIv:Doc`
+	 * (the already-rendered left operand). A decimal int operand written WITH a
+	 * source space (`1 ... n`) cannot be told apart from the fused form once
+	 * adjacency is dropped at parse time, so it stays tight — an accepted
+	 * residual.
+	 */
+	private static function intervalPolicyOp(opText: String): Expr {
+		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
+		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
+		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
+		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
+		final tightDoc: Expr = macro _dt($v{opText});
+		final fused: Expr = macro anyparse.format.wrap.WrapList.endsWithDecimalDigit(_leftIv);
+		final beforeExpr: Expr = macro $fused ? $tightDoc : _dt($v{' ' + opText});
+		final afterExpr: Expr = macro $fused ? $tightDoc : _dt($v{opText + ' '});
+		final bothExpr: Expr = macro $fused ? $tightDoc : _dt($v{' ' + opText + ' '});
+		final cases: Array<Case> = [
+			{ values: [beforePat], expr: beforeExpr, guard: null },
+			{ values: [afterPat], expr: afterExpr, guard: null },
+			{ values: [bothPat], expr: bothExpr, guard: null },
+		];
+		final optAccess: Expr = optFieldAccess('intervalPolicy');
+		return { expr: ESwitch(optAccess, cases, tightDoc), pos: Context.currentPos() };
 	}
 
 	/**

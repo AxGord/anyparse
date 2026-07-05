@@ -113,9 +113,9 @@ final class Diff {
 		final shared: Int = la < lb ? la : lb;
 		for (i in 0...shared) walk(a.children[i], b.children[i], out);
 		if (la > lb)
-			for (i in lb...la) walk(a.children[i], null, out);
+			for (i in lb ... la) walk(a.children[i], null, out);
 		else if (lb > la)
-			for (i in la...lb) walk(null, b.children[i], out);
+			for (i in la ... lb) walk(null, b.children[i], out);
 	}
 
 	private static inline function posOrZero(p: Null<Position>): String {

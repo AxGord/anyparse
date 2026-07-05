@@ -102,7 +102,7 @@ final class SetModifier {
 		while (startIndex > 0 && isModifierMeta(siblings[startIndex - 1].kind)) startIndex--;
 		final current: Array<String> = [];
 		var regionFrom: Int = coreSpan.from;
-		for (j in startIndex...declIndex) {
+		for (j in startIndex ... declIndex) {
 			final sib: QueryNode = siblings[j];
 			final sibSpan: Null<Span> = sib.span;
 			if (!MODIFIER_KINDS.contains(sib.kind) || sibSpan == null) continue;

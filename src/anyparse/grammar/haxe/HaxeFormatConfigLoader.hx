@@ -668,6 +668,7 @@ final class HaxeFormatConfigLoader {
 			indentVarTypeHintAnon: base.indentVarTypeHintAnon,
 			functionTypeHaxe4: base.functionTypeHaxe4,
 			functionTypeHaxe3: base.functionTypeHaxe3,
+			intervalPolicy: base.intervalPolicy,
 			arrowFunctions: base.arrowFunctions,
 			afterPackage: base.afterPackage,
 			beforePackage: base.beforePackage,
@@ -1653,6 +1654,7 @@ final class HaxeFormatConfigLoader {
 		if (section.typeParamOpenPolicy != null) opt.typeParamOpen = whitespaceToRuntime(section.typeParamOpenPolicy);
 		if (section.typeParamClosePolicy != null) opt.typeParamClose = whitespaceToRuntime(section.typeParamClosePolicy);
 		if (section.binopPolicy != null) opt.typeParamDefaultEquals = whitespaceToRuntime(section.binopPolicy);
+		if (section.intervalPolicy != null) opt.intervalPolicy = whitespaceToRuntime(section.intervalPolicy);
 		if (section.functionTypeHaxe4Policy != null) opt.functionTypeHaxe4 = whitespaceToRuntime(section.functionTypeHaxe4Policy);
 		if (section.functionTypeHaxe3Policy != null) opt.functionTypeHaxe3 = whitespaceToRuntime(section.functionTypeHaxe3Policy);
 		if (section.arrowFunctionsPolicy != null) opt.arrowFunctions = whitespaceToRuntime(section.arrowFunctionsPolicy);

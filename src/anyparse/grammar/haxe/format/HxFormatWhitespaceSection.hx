@@ -151,6 +151,8 @@ package anyparse.grammar.haxe.format;
 
 	@:optional var binopPolicy: HxFormatWhitespacePolicy;
 
+	@:optional var intervalPolicy: HxFormatWhitespacePolicy;
+
 	@:optional var functionTypeHaxe4Policy: HxFormatWhitespacePolicy;
 
 	@:optional var functionTypeHaxe3Policy: HxFormatWhitespacePolicy;

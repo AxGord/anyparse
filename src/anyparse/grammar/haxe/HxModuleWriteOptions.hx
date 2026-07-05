@@ -1837,6 +1837,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	indentVarTypeHintAnon: Bool,
 	functionTypeHaxe4: WhitespacePolicy,
 	functionTypeHaxe3: WhitespacePolicy,
+	intervalPolicy: WhitespacePolicy,
 	arrowFunctions: WhitespacePolicy,
 	afterPackage: Int,
 	beforePackage: Int,

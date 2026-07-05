@@ -575,7 +575,7 @@ enum HxExpr {
 	@:infix('>', 5) @:fmt(captureRhsTrail)
 	Gt(left: HxExpr, right: HxExpr);
 
-	@:infix('...', 5) @:fmt(tight)
+	@:infix('...', 5) @:fmt(intervalPolicy)
 	Interval(left: HxExpr, right: HxExpr);
 
 	@:infix('is', 5) @:fmt(captureRhsTrail)

@@ -781,6 +781,7 @@ final class HaxeFormat implements TextFormat {
 		indentVarTypeHintAnon: true,
 		functionTypeHaxe4: WhitespacePolicy.Both,
 		functionTypeHaxe3: WhitespacePolicy.None,
+		intervalPolicy: WhitespacePolicy.None,
 		arrowFunctions: WhitespacePolicy.Both,
 		afterPackage: 1,
 		beforePackage: 0,

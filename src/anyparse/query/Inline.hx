@@ -180,12 +180,12 @@ final class Inline {
 		var lineStart: Int = from;
 		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
 		// Everything in [lineStart, from) must be whitespace.
-		for (i in lineStart...from) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in lineStart ... from) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
 
 		var lineEnd: Int = to;
 		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
 		// Everything in [to, lineEnd) must be whitespace.
-		for (i in to...lineEnd) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in to ... lineEnd) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
 		// Consume the trailing line break itself so no blank line is left.
 		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
 

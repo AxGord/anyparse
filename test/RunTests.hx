@@ -118,6 +118,7 @@ import unit.HxTypedefAnonForceMultiTest;
 import unit.HxVarTypeHintAnonIndentTest;
 import unit.HxTypedefBetweenBlankTest;
 import unit.HxArrowFnTypeSliceTest;
+import unit.HxIntervalPolicySliceTest;
 import unit.HxArrowFnOldStyleRewriteTest;
 import unit.HxArrowFnExprSliceTest;
 import unit.HxArrayComprehensionSliceTest;
@@ -520,6 +521,7 @@ class RunTests {
 		addCase(new HxVarTypeHintAnonIndentTest());
 		addCase(new HxTypedefBetweenBlankTest());
 		addCase(new HxArrowFnTypeSliceTest());
+		addCase(new HxIntervalPolicySliceTest());
 		addCase(new HxArrowFnOldStyleRewriteTest());
 		addCase(new HxArrowFnExprSliceTest());
 		addCase(new HxArrayComprehensionSliceTest());

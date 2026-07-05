@@ -1236,7 +1236,7 @@ final class RefactorSupport {
 		if (!a.isLine || !b.isLine) return false;
 		if (!isFullLineComment(source, a.from) || !isFullLineComment(source, b.from)) return false;
 		var newlines: Int = 0;
-		for (k in a.to...b.from) {
+		for (k in a.to ... b.from) {
 			final c: Int = StringTools.fastCodeAt(source, k);
 			if (c == '\n'.code)
 				newlines++;

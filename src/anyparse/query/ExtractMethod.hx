@@ -232,7 +232,7 @@ final class ExtractMethod {
 
 	/** Index (>= `from`) of the statement whose span contains `offset`, or -1. */
 	private static function indexContaining(stmts: Array<QueryNode>, from: Int, offset: Int): Int {
-		for (i in from...stmts.length) {
+		for (i in from ... stmts.length) {
 			final sp: Null<Span> = stmts[i].span;
 			if (sp != null && sp.from <= offset && offset <= sp.to) return i;
 		}

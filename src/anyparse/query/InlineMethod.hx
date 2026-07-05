@@ -365,11 +365,11 @@ final class InlineMethod {
 
 		var lineStart: Int = from;
 		while (lineStart > 0 && source.charAt(lineStart - 1) != '\n') lineStart--;
-		for (i in lineStart...from) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in lineStart ... from) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
 
 		var lineEnd: Int = to;
 		while (lineEnd < source.length && source.charAt(lineEnd) != '\n') lineEnd++;
-		for (i in to...lineEnd) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
+		for (i in to ... lineEnd) if (!isSpace(StringTools.fastCodeAt(source, i))) return null;
 		if (lineEnd < source.length && source.charAt(lineEnd) == '\n') lineEnd++;
 
 		return new Span(lineStart, lineEnd);

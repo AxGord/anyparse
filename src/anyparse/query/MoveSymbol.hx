@@ -415,7 +415,7 @@ final class MoveSymbol {
 
 	/** Are `[from, to)` of `source` all whitespace (space / tab)? */
 	private static function isBlank(source: String, from: Int, to: Int): Bool {
-		for (i in from...to) {
+		for (i in from ... to) {
 			final c: String = source.charAt(i);
 			if (c != ' ' && c != '\t' && c != '\r') return false;
 		}
