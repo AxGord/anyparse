@@ -10918,6 +10918,7 @@ class WriterLowering {
 			wrapTrailBreakDoc: wrapTrailBreakDoc,
 			forceModeExpr: forceModeExpr,
 			flatTrailingCommaExpr: flatTrailingCommaExpr,
+			reflowSourceMultiline: reflowSourceMultiline,
 		});
 		final _sepCtx: SepStarCtx = {
 			openText: openText,
@@ -14425,21 +14426,27 @@ class WriterLowering {
 					$appendTrailingCommaExpr, $wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr,
 					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _smlKeep, null, false, $flatTrailingCommaExpr
 				);
-				// ω-array-reflow: a source-multiline list re-flowed through the
-				// cascade carries internal hardlines but lacks the BodyGroup
-				// wrapper the force-multi path (`_dwb(_dbg(...))`) applies.
-				// Without BodyGroup, an enclosing call-arg `Group.fitsFlat`
-				// SEES the list's hardline (BodyGroup is deferred from fitsFlat,
-				// a bare Concat/Nest is not) and commits the call to MBreak —
-				// stacking the call's continuation `Nest` on top of the list's
-				// own `Nest` (+1 indent) and, for a trailing-arg list, breaking
-				// the arg onto its own line. Wrapping the re-flowed list in
-				// BodyGroup defers its hardline exactly like force-multi: the
-				// call stays MFlat (no continuation-Nest bump) and the list's
-				// internal break decides independently at the call's flat
-				// indent. Only fires under `_smlKeep`; every other consumer
-				// keeps the bare cascade Doc.
-				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep ? _dbg(_wlResult) : _wlResult);
+				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
+				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-
+				// idempotency: a COMPACT source comprehension lowers to a bare counted `Group`
+				// (full flat width in a parent's `flatTokenWidth`), while a pre-EXPLODED one
+				// takes the `_smlKeep` path → `BodyGroup`, which `flatTokenWidth` defers to
+				// width 0. So the SAME comprehension AST measures wide on one pass and ~0 on
+				// the next → a wrap decision in an enclosing method-chain / `+` operator flips
+				// between passes. Force a comprehension to ALWAYS count (bare `Group`, real
+				// width) so the parent measure is trivia-independent and its wrap decision is
+				// stable. (Deferring to width 0 instead — the sister pre-exploded path — was
+				// tried and REGRESSED: an enclosing call then under-measures, commits to flat,
+				// and overflows into a mangled break — see
+				// `testChainOwnedArrayPastSoftBreakLeadingBreaks`.) Detect by AST structure
+				// (first element a `ForExpr`/`WhileExpr`), gated on the compile-time
+				// `reflowSourceMultiline` array-Star flag so the `Type.enumConstructor` probe
+				// never runs on a non-array Star (whose element node is a non-enum struct →
+				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
+				// behaviour untouched.
+				final _isComprehension: Bool = $v{c.reflowSourceMultiline} && _arr.length > 0
+					&& (Type.enumConstructor(cast _arr[0].node) == 'ForExpr' || Type.enumConstructor(cast _arr[0].node) == 'WhileExpr');
+				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult);
 			};
 		} else {
 			triviaSepFlatBranch(openText, closeText, sepText, triviaElemCall);
@@ -16440,6 +16447,7 @@ typedef SepStarNoTriviaCtx = {
 	final wrapTrailBreakDoc: Expr;
 	final forceModeExpr: Expr;
 	final flatTrailingCommaExpr: Expr;
+	final reflowSourceMultiline: Bool;
 };
 /**
  * Output bundle of `triviaSepTrailExprs` — the source-trailing-comma /

@@ -367,6 +367,7 @@ import unit.HxCondCommentWriteTest;
 import unit.HxSourceBlankPreserveSliceTest;
 import unit.HxTernaryCollectionHugSliceTest;
 import unit.HxCondElseifChainBlankTest;
+import unit.HxComprehensionChainIdempotencyTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -541,6 +542,7 @@ class RunTests {
 		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxThinArrowIfElseBreakSliceTest());
 		addCase(new HxArrowPlainIfOpenSliceTest());
+		addCase(new HxComprehensionChainIdempotencyTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());
 		addCase(new HxComprehensionBlockHugSliceTest());
