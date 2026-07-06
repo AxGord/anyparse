@@ -1102,11 +1102,30 @@ class Renderer {
 					if (k > 0) inner.push({ doc: sep, mode: MFlat });
 				}
 				return { add: 0, aborted: false };
+			case IfNaturalFirstLineExceeds(_, _, innerDoc):
+				// An `IfNaturalFirstLineExceeds` relocates its content to its own
+				// line when that content's natural first line overflows `lineWidth`
+				// (the typed var-init `=`-break emitted by
+				// `breakAfterLeadIfLhsTypeParamWrap`). A trailing-width lookahead
+				// must treat it as a break boundary: abort here instead of
+				// descending its flat branch, so the rest-probe stops at the `=`
+				// (matching fork's post-`=`-break `lengthAfter`) rather than
+				// counting a RHS that will actually break onto the next line, which
+				// would over-wrap the LHS type-param list. The BG-descending walk
+				// (`bgDescend == true`: the chain `IfFullLineExceeds` inline-body probe)
+				// instead descends the flat branch -- the chain-wrap decision assumes a
+				// flat body sharing the line, so it must measure the full trailing width
+				// (same category as the `BodyGroup` Departure-2 split).
+				if (bgDescend) {
+					inner.push({ doc: innerDoc, mode: MFlat });
+					return { add: 0, aborted: false };
+				}
+				return { add: 0, aborted: true };
 			case Group(innerDoc) | GroupWithRestProbe(innerDoc) | IfBreak(_, innerDoc) | IfWidthExceeds(_, _, innerDoc) | IfFirstLineExceeds(
 				_, _, innerDoc
-			) | IfLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(
-				_, _, innerDoc
-			) | IfArrowContinuationFits(_, _, _, _, innerDoc):
+			) | IfLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc) | IfArrowContinuationFits(
+				_, _, _, _, innerDoc
+			):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
