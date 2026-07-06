@@ -62,6 +62,6 @@ package anyparse.grammar.haxe;
 typedef HxConditionalMember = {
 	var cond: HxPpCondLit;
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body: Array<HxMemberDecl>;
-	@:trivia @:tryparse var elseifs: Array<HxElseifMember>;
+	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifMember>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var elseBody: Null<Array<HxMemberDecl>>;
 };

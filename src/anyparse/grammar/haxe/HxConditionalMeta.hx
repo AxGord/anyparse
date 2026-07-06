@@ -27,6 +27,6 @@ package anyparse.grammar.haxe;
 typedef HxConditionalMeta = {
 	var cond: HxPpCondLit;
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing) var body: Array<HxMetadata>;
-	@:trivia @:tryparse var elseifs: Array<HxElseifMeta>;
+	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifMeta>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxMetadata>>;
 };

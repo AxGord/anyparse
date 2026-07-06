@@ -1306,6 +1306,11 @@ class WriterLowering {
 		// elements is out of scope — flag's contract is "treat
 		// inter-element whitespace trivia as one space".
 		final tryparseForceInlineSep: Bool = starNode.fmtHasFlag('forceInlineSep');
+		// ω-cond-comp-elseif-double-newline: set on the cond-comp `elseifs`
+		// Stars (HxConditional*.elseifs) whose HxElseif* elements self-terminate
+		// with a padTrailing newline. See triviaTryparseStarExpr's
+		// elemSelfTrailsNewline param.
+		final tryparseElemSelfTrailsNewline: Bool = starNode.fmtHasFlag('elemSelfTrailsNewline');
 		// ω-typedef-intersection-operand-break: `@:fmt(
 		// operandBreakAfterMultilineBrace)` on a `@:trivia @:tryparse`
 		// Star makes each element whose PRECEDING element rendered
@@ -1348,7 +1353,7 @@ class WriterLowering {
 			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
 			(tryparseBlockEnded || tryparseSepFaithful) ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
 			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
-			tryparseSepBeforeAccess
+			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline
 		));
 	}
 
@@ -11247,7 +11252,16 @@ class WriterLowering {
 		// ω-sep-faithful + Slice 18f: runtime access to the `<field>SepBefore`
 		// slot; when non-null and true at write time, the leading pad becomes
 		// `sep + ' '` (re-emitting the source's leading sep inside the group).
-		sepBeforeAccess: Null<Expr> = null
+		sepBeforeAccess: Null<Expr> = null,
+		// ω-cond-comp-elseif-double-newline: elements of this Star each
+		// self-terminate with their own @:fmt(padTrailing) hardline (the
+		// cond-comp `elseifs` Stars — every HxElseif* ends its body with a
+		// padTrailing `\n` before the next `#elseif`/`#else`/`#end`). When true,
+		// the inter-element `_si > 0 && newlineBefore` separator skips its base
+		// `_dhl()` (the preceding element's padTrailing already supplied it);
+		// double-emitting inserts a spurious blank that COMPOUNDS on re-format.
+		// Blank-line extras (authored blanks) are still emitted. Default false.
+		elemSelfTrailsNewline: Bool = false
 	): Expr {
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
@@ -11351,6 +11365,7 @@ class WriterLowering {
 			lastTrailTerminatorEmit: lastTrailTerminatorEmit,
 			finalWrapDocs: finalWrapDocs,
 			forceInlineSep: forceInlineSep,
+			elemSelfTrailsNewline: elemSelfTrailsNewline,
 		};
 		return heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
 	}
@@ -13247,6 +13262,7 @@ class WriterLowering {
 		final subsequentSepDoc: Expr = c.subsequentSepDoc;
 		final firstSepExpr: Expr = c.firstSepExpr;
 		final forceInlineSep: Bool = c.forceInlineSep;
+		final elemSelfTrailsNewline: Bool = c.elemSelfTrailsNewline;
 		final leadCommentEmit: Expr = triviaTryparseLeadCommentSepExpr();
 		return macro {
 			if (_t.leadingComments.length > 0) {
@@ -13323,7 +13339,7 @@ class WriterLowering {
 				// path. With no cascade infos active, `$cascadeBlanksCount`
 				// reduces to `(_t.blankBefore ? 1 : 0)` — byte-identical
 				// to the prior single-blank emit.
-				_docs.push(_dhl());
+				if (!$v{elemSelfTrailsNewline}) _docs.push(_dhl());
 				final _blanks: Int = $cascadeBlanksCount;
 				var _bli: Int = 0;
 				while (_bli < _blanks) {
@@ -16494,6 +16510,7 @@ typedef TryparseStarCtx = {
 	final lastTrailTerminatorEmit: Expr;
 	final finalWrapDocs: Expr;
 	final forceInlineSep: Bool;
+	final elemSelfTrailsNewline: Bool;
 };
 typedef CascadeEmit = {
 	initPrev: Expr,

@@ -37,7 +37,7 @@ package anyparse.grammar.haxe;
 typedef HxConditionalCase = {
 	var cond: HxPpCondLit;
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent) var body: Array<HxSwitchCase>;
-	@:trivia @:tryparse var elseifs: Array<HxElseifCase>;
+	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifCase>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	var elseBody: Null<Array<HxSwitchCase>>;
 };

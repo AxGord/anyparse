@@ -365,6 +365,7 @@ import unit.HxRhsCommentWriteTest;
 import unit.HxCondCommentWriteTest;
 import unit.HxSourceBlankPreserveSliceTest;
 import unit.HxTernaryCollectionHugSliceTest;
+import unit.HxCondElseifChainBlankTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -595,6 +596,7 @@ class RunTests {
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
 		addCase(new HxCondCommentWriteTest());
+		addCase(new HxCondElseifChainBlankTest());
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new HaxeWriterRoundTripTest());

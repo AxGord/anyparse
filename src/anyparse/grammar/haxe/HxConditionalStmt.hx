@@ -63,7 +63,7 @@ typedef HxConditionalStmt = {
 	@:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var body: Array<HxStatement>;
-	@:trivia @:tryparse var elseifs: Array<HxElseifStmt>;
+	@:trivia @:tryparse @:fmt(elemSelfTrailsNewline) var elseifs: Array<HxElseifStmt>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var elseBody: Null<Array<HxStatement>>;
