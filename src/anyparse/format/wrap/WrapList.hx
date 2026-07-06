@@ -128,6 +128,22 @@ class WrapList {
 		final trailBreakDoc: Doc = trailBreak ?? Line('\n');
 		if (items.length == 0) return WrapBoundary(Text(open + (keepInnerWhenEmpty ? ' ' : '') + close));
 
+		// ω-arrowif-open: a call/array arg whose body is a PLAIN `if` (no else,
+		// not a `{}`-block) hides its inline then-branch behind a `BodyGroup`
+		// that every static width measure DEFERS to width 0 — under-measuring
+		// the arg so the `callParameter` cascade, the outer-Group fit, and the
+		// fill-pack all keep it hugged even when the body overflows. Re-tag its
+		// hardline-free `BodyGroup`s as `Group` (render-identical; only the
+		// measure differs) so the true width is visible and the call opens on
+		// the overflowing line, matching the fork's full-arrow-line measure.
+		// Copy-on-write: untouched when no such arg is present.
+		var groupified: Null<Array<Doc>> = null;
+		for (i in 0...items.length) if (isArrowPlainIfBody(items[i])) {
+			if (groupified == null) groupified = items.copy();
+			groupified[i] = groupifyInlineBodies(items[i]);
+		}
+		if (groupified != null) items = groupified;
+
 		final sepWidth: Int = sep.length + 1;
 		final measure: { total: Int, maxLen: Int, anyHardline: Bool } = measureItems(items, sepWidth);
 		final total: Int = measure.total;
@@ -2886,6 +2902,96 @@ class WrapList {
 			}
 		}
 		return false;
+	}
+
+
+	/**
+	 * True iff `item` is a paren/bare arrow-lambda arg whose body is a PLAIN
+	 * `if` (no top-level `else`) that is NOT a `{}`-block. Such an arrow hides
+	 * its `if`-then-branch behind a `BodyGroup`, which `DocMeasure.flatTokenWidth`
+	 * defers to width 0 — under-measuring the arg so the `callParameter` cascade
+	 * mis-picks NoWrap / fill-hug even when the body overflows. `emit` gates `groupifyInlineBodies` on this predicate so exactly this arg shape has its hardline-free `BodyGroup`s re-tagged as render-identical `Group`s, making the true width visible so an overflowing plain-`if` arrow opens the call (fork parity). Block-body arrows (`arrowBodyIsBlock`) and if-ELSE arrows
+	 * (`hasTopLevelElse`) are excluded: the former hugs (block owns its layout),
+	 * the latter is the landed thin-arrow if-else path.
+	 */
+	private static function isArrowPlainIfBody(item: Doc): Bool {
+		if (!isArrowBodyMarker(item) || arrowBodyIsBlock(item)) return false;
+		final body: Null<Doc> = arrowBodyDoc(item);
+		if (body == null) return false;
+		return firstVisibleText(body) == 'if' && !hasTopLevelElse(body, 0);
+	}
+
+
+	/**
+	 * Deep-map that re-tags every hardline-FREE `BodyGroup` inside `d` as a
+	 * plain `Group` (block bodies — `flatLength(inner) < 0` — stay deferred
+	 * `BodyGroup`s). At render time `Group` and `BodyGroup` are identical
+	 * (same `fitsFlat` decision), so the produced layout is byte-unchanged;
+	 * the ONLY difference is static width measurement — `DocMeasure
+	 * .flatTokenWidth` / `fitsFlat` DEFER a `BodyGroup` (width 0) but DESCEND a
+	 * `Group`. Applied by `emit` to an arrow-lambda arg whose body is a plain
+	 * `if` (`isArrowPlainIfBody`): the if-then-branch lives behind a
+	 * `BodyGroup`, so the whole arg under-measures and the `callParameter`
+	 * cascade / fill-pack / outer-Group fit all mis-hug even when the body
+	 * overflows. Exposing the true width lets the call open on the overflowing
+	 * line — matching the fork, which measures the full arrow line.
+	 */
+	private static function groupifyInlineBodies(d: Doc): Doc {
+		return switch d {
+			case Empty | Text(_) | Line(_) | OptSpace(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline
+				| OptSpaceSkipAfterHardline:
+				d;
+			case BodyGroup(inner):
+				flatLength(inner) >= 0 ? Group(groupifyInlineBodies(inner)) : BodyGroup(groupifyInlineBodies(inner));
+			case Group(inner):
+				Group(groupifyInlineBodies(inner));
+			case GroupWithRestProbe(inner):
+				GroupWithRestProbe(groupifyInlineBodies(inner));
+			case Nest(n, inner):
+				Nest(n, groupifyInlineBodies(inner));
+			case Flatten(inner):
+				Flatten(groupifyInlineBodies(inner));
+			case WrapBoundary(inner):
+				WrapBoundary(groupifyInlineBodies(inner));
+			case HardFlatten(inner):
+				HardFlatten(groupifyInlineBodies(inner));
+			case CollapseProbe(inner):
+				CollapseProbe(groupifyInlineBodies(inner));
+			case CollapseAddProbe(inner):
+				CollapseAddProbe(groupifyInlineBodies(inner));
+			case CollapseBoolProbe(inner):
+				CollapseBoolProbe(groupifyInlineBodies(inner));
+			case CollapseChainProbe(inner):
+				CollapseChainProbe(groupifyInlineBodies(inner));
+			case ConditionalMarkerZero(inner):
+				ConditionalMarkerZero(groupifyInlineBodies(inner));
+			case ConditionalMarkerDecrease(inner):
+				ConditionalMarkerDecrease(groupifyInlineBodies(inner));
+			case Concat(items):
+				Concat([for (it in items) groupifyInlineBodies(it)]);
+			case IfBreak(b, f):
+				IfBreak(groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfWidthExceeds(n, b, f):
+				IfWidthExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfFirstLineExceeds(n, b, f):
+				IfFirstLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfLineExceeds(n, b, f):
+				IfLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfFullLineExceeds(n, b, f):
+				IfFullLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfNaturalFirstLineExceeds(n, b, f):
+				IfNaturalFirstLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfNaturalFirstLineFitsOpenDelim(n, b, f):
+				IfNaturalFirstLineFitsOpenDelim(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfArrowContinuationFits(ei, fw, n, b, f):
+				IfArrowContinuationFits(ei, fw, n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case Fill(items, sep, tr):
+				Fill([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
+			case FillWithRestProbe(items, sep, tr):
+				FillWithRestProbe([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
+			case FillBreakAfterWrap(items, sep, tr):
+				FillBreakAfterWrap([for (it in items) groupifyInlineBodies(it)], groupifyInlineBodies(sep), tr);
+		};
 	}
 
 }

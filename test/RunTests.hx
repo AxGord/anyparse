@@ -340,6 +340,7 @@ import unit.IfFalseDeadCodeCheckTest;
 import unit.HxExprIdentGuardSliceTest;
 import unit.HxThinArrowTrailingLambdaSliceTest;
 import unit.HxThinArrowIfElseBreakSliceTest;
+import unit.HxArrowPlainIfOpenSliceTest;
 import unit.HxCondWrapFitLineSliceTest;
 import unit.HxCondPlainCallLeadingBreakSliceTest;
 import unit.HxReturnCallOpenParenSliceTest;
@@ -539,6 +540,7 @@ class RunTests {
 		addCase(new HxExprIdentGuardSliceTest());
 		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxThinArrowIfElseBreakSliceTest());
+		addCase(new HxArrowPlainIfOpenSliceTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());
 		addCase(new HxComprehensionBlockHugSliceTest());
