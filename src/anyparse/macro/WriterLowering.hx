@@ -1840,15 +1840,17 @@ class WriterLowering {
 		final useFill: Bool = starNode.fmtHasFlag('fill');
 		final fillDouble: Bool = starNode.fmtHasFlag('fillDoubleIndent');
 		// ω-functionsignature-body-aware-indent: `@:fmt(bodyAwareCompactIndent)`
-		// on the Star tells the wrapRules dispatch to thread
-		// `opt._fnSigBodyEmpty` into `WrapList.emit`'s `compactContinuation`
-		// param. The flag is set by the sibling struct-level meta
-		// `@:fmt(propagateFnBodyEmpty(<bodyField>))` and consumed only by
-		// the cascade engine. Fields without this meta pass `false` so
-		// only the opt-in site reacts; reads `opt._fnSigBodyEmpty` at
-		// runtime so non-HxFnDecl wraps inside descendant code (default
-		// values, body call args, …) see `false` (no propagation past
-		// the opt-fanout span — see `lowerStruct`'s save/restore).
+		// on the Star threads `true` into `WrapList.emit`'s `compactContinuation`
+		// param for EVERY function-signature wrap. Such signatures carry
+		// `ignoreSourceNewlinesForWrap`, so their ONLY break source is the
+		// cascade leading-break, which lands at `calcIndent + additionalIndent`
+		// (the additional-only continuation regime) — the same indent the
+		// multi-param one-per-line path uses. Threading `opt._fnSigBodyEmpty`
+		// here was too narrow: a NON-empty single-param signature (cascade
+		// `itemCount <= 1 -> noWrap`, its default fillLineWithLeadingBreak
+		// owning the overflow break) then took the fit-driven `1 + additional`
+		// paren-bump regime and gained an extra indent level. Fields without
+		// the flag pass `false` so only the opt-in site reacts.
 		final bodyAware: Bool = starNode.fmtHasFlag('bodyAwareCompactIndent');
 		// ω-group-rest-probe slice 2: `@:fmt(groupRestProbe)` opt-in for
 		// Star fields whose outer Group should bias toward MBreak when
@@ -1860,7 +1862,7 @@ class WriterLowering {
 		final groupRestProbe: Bool = starNode.fmtHasFlag('groupRestProbe');
 		final listCall: Expr = if (wrapRulesField != null) {
 			final rulesExpr: Expr = optFieldAccess(wrapRulesField);
-			final compactContExpr: Expr = bodyAware ? (macro opt._fnSigBodyEmpty) : (macro false);
+			final compactContExpr: Expr = macro $v{bodyAware};
 			macro anyparse.format.wrap.WrapList.emit(
 				$v{openText ?? ''}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, $keepInnerExpr, $rulesExpr,
 				$tcExpr, _de(), _de(), false, null, null, $compactContExpr, $v{groupRestProbe}
@@ -14344,14 +14346,15 @@ class WriterLowering {
 			final rulesExpr: Expr = optFieldAccess(c.wrapRulesField);
 			// ω-functionsignature-body-aware-indent: thread the field-level
 			// `@:fmt(bodyAwareCompactIndent)` opt-in into `WrapList.emit`'s
-			// 16th `compactContinuation` param. Reads `opt._fnSigBodyEmpty`
-			// at runtime — true only inside HxFnDecl's struct-emit span
-			// where `@:fmt(propagateFnBodyEmpty('body'))` flips the flag.
-			// Other sep-Star consumers (HxType.Anon.fields,
-			// HxObjectLit.fields, etc.) leave the flag clear and pass
-			// `macro false`, keeping the engine byte-identical to pre-slice
-			// for non-opt-in sites.
-			final compactContExpr: Expr = c.bodyAwareCompactIndent ? (macro opt._fnSigBodyEmpty) : (macro false);
+			// `compactContinuation` param as `true` for EVERY function-signature
+			// wrap (mirror of the plain-path site). Those signatures carry
+			// `ignoreSourceNewlinesForWrap`, so every break is the cascade
+			// leading-break at `calcIndent + additionalIndent` (additional-only);
+			// gating on `opt._fnSigBodyEmpty` left a NON-empty single-param
+			// signature one indent level too deep. Other sep-Star consumers
+			// (HxType.Anon.fields, HxObjectLit.fields, etc.) leave the flag
+			// clear and pass `macro false`.
+			final compactContExpr: Expr = macro $v{c.bodyAwareCompactIndent};
 			// ω-arraymatrix-wrap: when the Star opted into
 			// `@:fmt(arrayMatrixWrap)` (currently `HxExpr.ArrayExpr`) and the
 			// runtime policy preserves the source grid, attempt a one-pass
