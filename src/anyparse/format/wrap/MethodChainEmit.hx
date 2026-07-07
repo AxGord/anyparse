@@ -267,7 +267,7 @@ class MethodChainEmit {
 				ConditionalMarkerZero(inner), ConditionalMarkerDecrease(inner):
 				endsWithLineComment(inner);
 			case IfBreak(breakDoc, _), IfWidthExceeds(_, breakDoc, _), IfFirstLineExceeds(_, breakDoc, _), IfLineExceeds(_, breakDoc, _),
-				IfFullLineExceeds(_, breakDoc, _), IfNaturalFirstLineExceeds(_, breakDoc, _),
+				IfResidualLineExceeds(_, breakDoc, _), IfFullLineExceeds(_, breakDoc, _), IfNaturalFirstLineExceeds(_, breakDoc, _),
 				IfNaturalFirstLineFitsOpenDelim(_, breakDoc, _):
 				endsWithLineComment(breakDoc);
 			case _:

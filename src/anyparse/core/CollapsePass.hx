@@ -880,9 +880,9 @@ final class CollapsePass {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfFullLineExceeds(
+				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
-				) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
+				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
 					_, _, _, brk, fl
 				):
 					stack.push(brk);
@@ -940,6 +940,7 @@ final class CollapsePass {
 			case IfWidthExceeds(n, brk, fl): IfWidthExceeds(n, f(brk), f(fl));
 			case IfFirstLineExceeds(n, brk, fl): IfFirstLineExceeds(n, f(brk), f(fl));
 			case IfLineExceeds(n, brk, fl): IfLineExceeds(n, f(brk), f(fl));
+			case IfResidualLineExceeds(n, brk, fl): IfResidualLineExceeds(n, f(brk), f(fl));
 			case IfFullLineExceeds(n, brk, fl): IfFullLineExceeds(n, f(brk), f(fl));
 			case IfNaturalFirstLineExceeds(n, brk, fl): IfNaturalFirstLineExceeds(n, f(brk), f(fl));
 			case IfNaturalFirstLineFitsOpenDelim(n, brk, fl): IfNaturalFirstLineFitsOpenDelim(n, f(brk), f(fl));

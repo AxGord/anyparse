@@ -318,9 +318,11 @@ class Renderer {
 					// `col`/`width`/`f`, writes `stack`). See that helper for each
 					// per-ctor semantic.
 					pushStructural(f, stack, ctx.col, width);
-				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfFullLineExceeds(
+				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
 					_, _, _
-				) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
+				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
+					_, _, _, _, _
+				):
 					pushExceedsBranch(f, stack, ctx.col, width, decisions);
 				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
@@ -459,9 +461,9 @@ class Renderer {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfFullLineExceeds(
+				case IfBreak(brk, fl) | IfWidthExceeds(_, brk, fl) | IfFirstLineExceeds(_, brk, fl) | IfLineExceeds(_, brk, fl) | IfResidualLineExceeds(
 					_, brk, fl
-				) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
+				) | IfFullLineExceeds(_, brk, fl) | IfNaturalFirstLineExceeds(_, brk, fl) | IfNaturalFirstLineFitsOpenDelim(_, brk, fl) | IfArrowContinuationFits(
 					_, _, _, brk, fl
 				):
 					stack.push(brk);
@@ -873,9 +875,11 @@ class Renderer {
 			case Group(innerDoc) | BodyGroup(innerDoc) | GroupWithRestProbe(innerDoc):
 				inner.push({ doc: innerDoc, mode: MFlat });
 				return null;
-			case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfFullLineExceeds(
+			case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfResidualLineExceeds(
 				_, _, fl
-			) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(_, _, _, _, fl):
+			) | IfFullLineExceeds(_, _, fl) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
+				_, _, _, _, fl
+			):
 				inner.push({ doc: fl, mode: MFlat });
 				return null;
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
@@ -955,13 +959,13 @@ class Renderer {
 				return { add: 0, aborted: false };
 			case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
 				_, _, inner
-			) | IfLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
 				_, _, inner
-			) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(
 				inner
-			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+			) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
 				inner
-			):
+			) | ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend: structural wrappers (Nest /
 				// Group), the flat side of every render-time `If*` probe, the
 				// force-flat markers, and the cond-indent markers all contribute
@@ -1050,13 +1054,13 @@ class Renderer {
 				return { spend: 0, broke: false };
 			case Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
 				_, _, inner
-			) | IfLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
 				_, _, inner
-			) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(
 				inner
-			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+			) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
 				inner
-			):
+			) | ConditionalMarkerDecrease(inner):
 				// Single-child transparent descend at the same indent in MFlat.
 				// A `Group`'s nested flat content; the flat side of every
 				// render-time `If*` probe (the column/first-line/rest-of-stack/
@@ -1150,9 +1154,9 @@ class Renderer {
 				return { add: 0, aborted: true };
 			case Group(innerDoc) | GroupWithRestProbe(innerDoc) | IfBreak(_, innerDoc) | IfWidthExceeds(_, _, innerDoc) | IfFirstLineExceeds(
 				_, _, innerDoc
-			) | IfLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, innerDoc) | IfArrowContinuationFits(
-				_, _, _, _, innerDoc
-			):
+			) | IfLineExceeds(_, _, innerDoc) | IfResidualLineExceeds(_, _, innerDoc) | IfFullLineExceeds(_, _, innerDoc) | IfNaturalFirstLineFitsOpenDelim(
+				_, _, innerDoc
+			) | IfArrowContinuationFits(_, _, _, _, innerDoc):
 				// Static walk: descend in MFlat. Runtime Group decision is
 				// unknowable here; flat-side measurement matches the cascade
 				// rule semantic. The natural-first-line / rest-of-stack probes
@@ -1379,7 +1383,9 @@ class Renderer {
 					mode: node.mode,
 					forceFlat: node.forceFlat
 				});
-			case IfWidthExceeds(nn, breakDoc, flatDoc) | IfLineExceeds(nn, breakDoc, flatDoc) | IfFullLineExceeds(nn, breakDoc, flatDoc):
+			case IfWidthExceeds(nn, breakDoc, flatDoc) | IfLineExceeds(nn, breakDoc, flatDoc) | IfResidualLineExceeds(nn, breakDoc, flatDoc) | IfFullLineExceeds(
+				nn, breakDoc, flatDoc
+			):
 				// No rest-stack lookahead is needed here: the cond's own
 				// first line determines glue-vs-open; the trailing ` {`
 				// lookahead is already covered by the width arm of the
@@ -1620,6 +1626,17 @@ class Renderer {
 				pushNaturalExceeds(
 					stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) + naturalRestStackWidth(stack) >= nn
 				);
+			case IfResidualLineExceeds(nn, breakDoc, flatDoc):
+				// ω-arrow-residual-linewrap: the arrow-body wrap marker's natural
+				// resolution DEFERS the rest-of-line to this enclosing measurer —
+				// NO `naturalRestStackWidth` term (unlike the `IfLineExceeds` arm
+				// above). The arrow contributes only its own flat body width, so an
+				// enclosing `IfNaturalFirstLineFitsOpenDelim` (`&&`/`||` condition
+				// chain) / `IfNaturalFirstLineExceeds` (assignment) sees the arrow's
+				// FULL flat contribution and its own first-line overflow, and breaks
+				// FIRST instead of the arrow's break-point pre-empting it (fork's
+				// LATE-pass `applyArrowWrapping` — the arrow is last-resort).
+				pushNaturalExceeds(stack, node, breakDoc, flatDoc, col + DocMeasure.flatTokenWidth(flatDoc) >= nn);
 			case IfNaturalFirstLineExceeds(nn, breakDoc, flatDoc):
 				// Self-reference: resolve recursively at the running col
 				// over a strictly smaller subtree (bounded by finite tree).
@@ -1737,7 +1754,9 @@ class Renderer {
 		f: Frame, stack: Array<Frame>, col: Int, width: Int, decisions: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>>
 	): Void {
 		switch (f.doc) {
-			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _):
+			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
+				_, _, _
+			):
 				// Flat-width family — flat-token measurer feeds a `crosses`
 				// test, no measure-only capture. Delegated to the static
 				// `pushFlatWidthBranch`.
@@ -2587,7 +2606,7 @@ class Renderer {
 					final pushMode: Mode = firstLineCrosses ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, firstLineCrosses ? breakDoc : flatDoc));
 				}
-			case IfLineExceeds(n, breakDoc, flatDoc):
+			case IfLineExceeds(n, breakDoc, flatDoc) | IfResidualLineExceeds(n, breakDoc, flatDoc):
 				// Line-length-aware probe: rule fires when `col +
 				// DocMeasure.flatTokenWidth(flatDoc) +
 				// flatTokenWidthOfRestStack(stack) >= n`. The third term

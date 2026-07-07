@@ -277,6 +277,27 @@ enum Doc {
 	IfWidthExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 	IfFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 	IfLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Residual-line-aware probe (ω-arrow-residual-linewrap). Renders exactly
+	 * like `IfLineExceeds` at render time — fires `breakDoc` when `col +
+	 * flatTokenWidth(flatDoc) + flatTokenWidthOfRestStack(stack) >= n` — but
+	 * the natural-first-line WALK (`naturalWidthStructural`, consumed by an
+	 * enclosing `IfNaturalFirstLineFitsOpenDelim` / `IfNaturalFirstLineExceeds`
+	 * decision) resolves it WITHOUT the rest-of-stack lookahead: the arrow
+	 * contributes only its own flat body width and DEFERS the rest-of-line to
+	 * the enclosing measurer. So an enclosing construct (`&&`/`||` condition
+	 * chain, ternary, assignment) sees the arrow's full flat width and breaks
+	 * FIRST when the whole line overflows, instead of the arrow pre-empting it.
+	 *
+	 * Consumed ONLY by the arrow-body line-wrap marker
+	 * (`WrapBoundary(IfResidualLineExceeds(...))`, emitted for
+	 * `@:fmt(arrowBodyLineWrap)` `->`/`=>` bodies). A dedicated ctor keeps the
+	 * cond-wrap `IfLineExceeds` rest-stack semantic untouched — the two probes
+	 * consume the same `flatTokenWidthOfRestStack` walker at render time but
+	 * diverge only in the natural-walk resolution.
+	 */
+	IfResidualLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 	IfFullLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 	IfNaturalFirstLineExceeds(n: Int, breakDoc: Doc, flatDoc: Doc);
 

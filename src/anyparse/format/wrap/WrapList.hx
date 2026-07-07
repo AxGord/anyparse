@@ -365,9 +365,11 @@ class WrapList {
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
-				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfFullLineExceeds(
+				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfResidualLineExceeds(
 					_, b, _
-				) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _) | IfArrowContinuationFits(_, _, _, b, _):
+				) | IfFullLineExceeds(_, b, _) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _) | IfArrowContinuationFits(
+					_, _, _, b, _
+				):
 					w(b, depth);
 				case Concat(items):
 					for (it in items) w(it, depth);
@@ -567,7 +569,7 @@ class WrapList {
 				node = brk;
 			case IfFirstLineExceeds(_, brk, _):
 				node = brk;
-			case IfLineExceeds(_, brk, _):
+			case IfLineExceeds(_, brk, _) | IfResidualLineExceeds(_, brk, _):
 				node = brk;
 			case IfFullLineExceeds(_, brk, _):
 				node = brk;
@@ -661,9 +663,9 @@ class WrapList {
 				inner
 			) | ConditionalMarkerDecrease(inner):
 				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
 			):
 				node = flat;
@@ -712,9 +714,9 @@ class WrapList {
 				inner
 			) | ConditionalMarkerDecrease(inner):
 				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
 			):
 				node = flat;
@@ -755,9 +757,9 @@ class WrapList {
 				inner
 			) | ConditionalMarkerDecrease(inner):
 				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
 			):
 				node = flat;
@@ -806,9 +808,11 @@ class WrapList {
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
-				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f) | IfLineExceeds(_, b, f) | IfFullLineExceeds(
+				case IfBreak(b, f) | IfWidthExceeds(_, b, f) | IfFirstLineExceeds(_, b, f) | IfLineExceeds(_, b, f) | IfResidualLineExceeds(
 					_, b, f
-				) | IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f) | IfArrowContinuationFits(_, _, _, b, f):
+				) | IfFullLineExceeds(_, b, f) | IfNaturalFirstLineExceeds(_, b, f) | IfNaturalFirstLineFitsOpenDelim(_, b, f) | IfArrowContinuationFits(
+					_, _, _, b, f
+				):
 					// Both branches of a chain cascade carry the same
 					// separators; walk only the break branch to avoid
 					// double-counting.
@@ -1085,9 +1089,9 @@ class WrapList {
 					w(i, depth);
 				case WrapBoundary(i):
 					w(i, depth + 1);
-				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfFullLineExceeds(
+				case IfBreak(b, _) | IfWidthExceeds(_, b, _) | IfFirstLineExceeds(_, b, _) | IfLineExceeds(_, b, _) | IfResidualLineExceeds(
 					_, b, _
-				) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _):
+				) | IfFullLineExceeds(_, b, _) | IfNaturalFirstLineExceeds(_, b, _) | IfNaturalFirstLineFitsOpenDelim(_, b, _):
 					w(b, depth);
 				case Concat(items):
 					for (it in items) w(it, depth);
@@ -1227,7 +1231,7 @@ class WrapList {
 				stack.push(flatDoc);
 			case IfFirstLineExceeds(_, _, flatDoc):
 				stack.push(flatDoc);
-			case IfLineExceeds(_, _, flatDoc):
+			case IfLineExceeds(_, _, flatDoc) | IfResidualLineExceeds(_, _, flatDoc):
 				stack.push(flatDoc);
 			case IfFullLineExceeds(_, _, flatDoc):
 				stack.push(flatDoc);
@@ -1305,9 +1309,9 @@ class WrapList {
 				inner
 			) | ConditionalMarkerDecrease(inner):
 				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
 			):
 				node = flat;
@@ -1771,18 +1775,67 @@ class WrapList {
 	private static function arrowBodyCloseParenShape(open: String, close: String, openInside: Doc, closeInside: Doc, arrowItem: Doc): Doc {
 		final flatShape: Doc = Concat([Text(open), openInside, arrowItem, closeInside, Text(close)]);
 		final brkShape: Doc = Concat([Text(open), openInside, arrowItem, Line('\n'), closeInside, Text(close)]);
-		return Group(IfBreak(brkShape, flatShape));
+		// ω-arrow-residual-linewrap: couple the close `)` to the SAME residual
+		// decision as the arrow body, driving BOTH from ONE `IfResidualLineExceeds`
+		// so the arrow body AND the close `)` break together (fork's `arrow ->`
+		// break + `lineEndBefore(pClose)` close-own-line), or both stay glued.
+		// The decision node is placed AT THE ARROW BODY (after the `(params) ->`
+		// head, via `coupledArrowItem`) so its flat/break boundary is IDENTICAL
+		// to the arrow marker's own probe (same col, same `flatBody + close +
+		// rest` width). At the open paren it over-measured by one column at the
+		// exact-`lineWidth` boundary and broke a fitting `exists(arrow) ? a : b`
+		// fork keeps inline. Block-body lambdas keep the legacy `Group(IfBreak)`
+		// (whose `fitsFlat` defers the block `BodyGroup` to width 0) so the close
+		// stays glued (`})`) — the block owns its own multi-line layout.
+		if (arrowBodyIsBlock(arrowItem)) return Group(IfBreak(brkShape, flatShape));
+		final coupled: Null<Doc> = coupledArrowItem(arrowItem, closeInside, close);
+		return coupled != null ? Concat([Text(open), openInside, coupled]) : Group(IfBreak(brkShape, flatShape));
+	}
+
+	// ω-arrow-residual-linewrap: build the coupled arrow-body + close-paren shape.
+	// Splits `arrowItem` into its glued head (`(params) ->`) and the trailing
+	// arrow-body marker `WrapBoundary(IfResidualLineExceeds(n, brk, flat))`, then
+	// re-emits ONE decision node at the body position whose flat side glues the
+	// close (`flat close`) and whose break side puts the close on its own line
+	// (`brk \n close`). Returns null when `arrowItem` carries no marker.
+	// ω-arrow-residual-linewrap: return `item` with its trailing arrow-body marker
+	// replaced by the coupled decision node (`coupledMarker`), or null when `item`
+	// carries no marker. Recurses through a trailing `Concat` like the sibling
+	// marker walkers (`arrowBodyDoc` / `arrowBodyIsBlock`).
+	private static function coupledArrowItem(item: Doc, closeInside: Doc, close: String): Null<Doc> {
+		switch item {
+			case WrapBoundary(IfResidualLineExceeds(n, brk, fl)):
+				return coupledMarker(n, brk, fl, closeInside, close);
+			case Concat(arr) if (arr.length > 0):
+				final sub: Null<Doc> = coupledArrowItem(arr[arr.length - 1], closeInside, close);
+				if (sub == null) return null;
+				final copy: Array<Doc> = arr.copy();
+				copy[copy.length - 1] = sub;
+				return Concat(copy);
+			case _:
+				return null;
+		}
+	}
+
+	// ω-arrow-residual-linewrap: the single coupled decision node — flat glues the
+	// close after the arrow's flat body, break puts the close on its own line
+	// after the arrow's broken body. `WrapBoundary` preserves the marker's
+	// force-flat reset.
+	private static function coupledMarker(n: Int, brk: Doc, fl: Doc, closeInside: Doc, close: String): Doc {
+		return WrapBoundary(IfResidualLineExceeds(
+			n, Concat([brk, Line('\n'), closeInside, Text(close)]), Concat([fl, closeInside, Text(close)])
+		));
 	}
 
 	// ω-inc5: does the arrow body's FLAT side carry a structural hardline
 	// (multi-statement block / if-else-if chain) — i.e. the body wraps
-	// regardless of width? Walks to the marker `IfLineExceeds(_, _, flatBody)`
+	// regardless of width? Walks to the marker `IfResidualLineExceeds(_, _, flatBody)`
 	// and reports `flatLength(flatBody) < 0`. Used to keep the generic open-paren
 	// shape for a single-expression FLWLB body that fits one continuation line
 	// (fork `preferLambdaSignatureInlineOverWrap` 2986-2992).
 	private static function arrowBodyBreaks(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(IfLineExceeds(_, _, flatBody)): flatLength(flatBody) < 0;
+			case WrapBoundary(IfResidualLineExceeds(_, _, flatBody)): flatLength(flatBody) < 0;
 			case Concat(arr) if (arr.length > 0): arrowBodyBreaks(arr[arr.length - 1]);
 			case _: false;
 		};
@@ -1791,9 +1844,10 @@ class WrapList {
 	// ω-inc5-cont: the arrow body's FLAT side (the marker's `flatBody`), or null
 	// if `item` is not a recognized arrow-body marker. Used to inspect the body
 	// shape (e.g. `isTopLevelChain`) when deciding head-glue.
+
 	private static function arrowBodyDoc(item: Doc): Null<Doc> {
 		return switch item {
-			case WrapBoundary(IfLineExceeds(_, _, flatBody)): flatBody;
+			case WrapBoundary(IfResidualLineExceeds(_, _, flatBody)): flatBody;
 			case Concat(arr) if (arr.length > 0): arrowBodyDoc(arr[arr.length - 1]);
 			case _: null;
 		};
@@ -1809,7 +1863,7 @@ class WrapList {
 	// `anonFunctionCurly` newline policy).
 	private static function arrowBodyIsBlock(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(IfLineExceeds(_, _, flatBody)): firstVisibleTextStartsWith(flatBody, '{'.code);
+			case WrapBoundary(IfResidualLineExceeds(_, _, flatBody)): firstVisibleTextStartsWith(flatBody, '{'.code);
 			case Concat(arr) if (arr.length > 0): arrowBodyIsBlock(arr[arr.length - 1]);
 			case _: false;
 		};
@@ -1878,9 +1932,11 @@ class WrapList {
 		while (stack.length > 0) {
 			final node: Doc = stack.pop();
 			switch node {
-				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfFullLineExceeds(
+				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
 					_, _, _
-				) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(_, _, _, _, _):
+				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
+					_, _, _, _, _
+				):
 					return true;
 				case WrapBoundary(inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Nest(_, inner) | Flatten(inner) | HardFlatten(
 					inner
@@ -1962,9 +2018,9 @@ class WrapList {
 				inner
 			) | CollapseProbe(inner) | CollapseAddProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
 				isMethodChainItem(inner);
-			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfFullLineExceeds(
+			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
 				_, brk, _
-			) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
 				isMethodChainItem(brk);
 			case Concat(arr):
 				var hit: Bool = false;
@@ -2007,9 +2063,9 @@ class WrapList {
 				i
 			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				firstVisibleTextStartsWith(i, c);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
 				firstVisibleTextStartsWith(flat, c);
 			case _: false;
 		};
@@ -2454,7 +2510,7 @@ class WrapList {
 	 */
 	private static function isArrowBodyMarker(item: Doc): Bool {
 		return switch item {
-			case WrapBoundary(IfLineExceeds(_, brk, _)): isArrowBrkShape(brk);
+			case WrapBoundary(IfResidualLineExceeds(_, brk, _)): isArrowBrkShape(brk);
 			case Concat(arr) if (arr.length > 0): isArrowBodyMarker(arr[arr.length - 1]);
 			case _: false;
 		};
@@ -2584,7 +2640,7 @@ class WrapList {
 			case IfBreak(_, _): false;
 			case IfWidthExceeds(_, _, _): false;
 			case IfFirstLineExceeds(_, _, _): false;
-			case IfLineExceeds(_, _, _): false;
+			case IfLineExceeds(_, _, _) | IfResidualLineExceeds(_, _, _): false;
 			case IfFullLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineExceeds(_, _, _): false;
 			case IfNaturalFirstLineFitsOpenDelim(_, _, _): false;
@@ -2624,9 +2680,9 @@ class WrapList {
 				inner
 			) | ConditionalMarkerDecrease(inner):
 				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
 				_, _, _, _, flat
 			):
 				node = flat;
@@ -2680,9 +2736,9 @@ class WrapList {
 				i
 			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				firstVisibleTextIsFunctionKw(i);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
 				firstVisibleTextIsFunctionKw(flat);
 			case _:
 				false;
@@ -2729,9 +2785,9 @@ class WrapList {
 				i
 			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				firstVisibleText(i);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
 				firstVisibleText(flat);
 			case _:
 				null;
@@ -2781,9 +2837,9 @@ class WrapList {
 				i
 			) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				hasTopLevelElse(i, depth);
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfFullLineExceeds(
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
-			) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
 				hasTopLevelElse(flat, depth);
 			case _:
 				false;
@@ -2843,9 +2899,9 @@ class WrapList {
 				i
 			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
 				lastVisibleText(i);
-			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfFullLineExceeds(
+			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
 				_, brk, _
-			) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
 				lastVisibleText(brk);
 			case _:
 				null;
@@ -2977,6 +3033,8 @@ class WrapList {
 				IfFirstLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfLineExceeds(n, b, f):
 				IfLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
+			case IfResidualLineExceeds(n, b, f):
+				IfResidualLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfFullLineExceeds(n, b, f):
 				IfFullLineExceeds(n, groupifyInlineBodies(b), groupifyInlineBodies(f));
 			case IfNaturalFirstLineExceeds(n, b, f):

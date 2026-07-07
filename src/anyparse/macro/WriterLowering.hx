@@ -6718,7 +6718,7 @@ class WriterLowering {
 			? macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _doc: anyparse.core.Doc = $rightCall;
-				_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
+				_dwb(_dilr(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
 			}
 			: rightCall;
 		final ivOpExpr: Expr = intervalPolicyOp(opText);
@@ -9127,7 +9127,7 @@ class WriterLowering {
 			parts.push(macro {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _doc: anyparse.core.Doc = $writeCall;
-				_dwb(_dile(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
+				_dwb(_dilr(opt.lineWidth, _dn(_cols, _dc([_dhl(), _doc])), _doc));
 			});
 		} else {
 			parts.push(writeCall);

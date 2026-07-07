@@ -372,6 +372,16 @@ class WriterCodegen {
 				{ name: 'br', type: macro :anyparse.core.Doc },
 				{ name: 'fl', type: macro :anyparse.core.Doc }
 			], macro anyparse.core.Doc.IfLineExceeds(n, br, fl)),
+			// ω-arrow-residual-linewrap: render-identical sibling of `_dile`
+			// whose natural-first-line walk defers the rest-of-line to the
+			// enclosing measurer. Consumed by the `@:fmt(arrowBodyLineWrap)`
+			// arrow-body marker so an enclosing `&&`/`||` / ternary / assignment
+			// breaks first instead of the arrow pre-empting it.
+			docHelper('_dilr', [
+				{ name: 'n', type: macro :Int },
+				{ name: 'br', type: macro :anyparse.core.Doc },
+				{ name: 'fl', type: macro :anyparse.core.Doc }
+			], macro anyparse.core.Doc.IfResidualLineExceeds(n, br, fl)),
 			docHelper('_dfill', [
 				{ name: 'items', type: macro :Array<anyparse.core.Doc> },
 				{ name: 'sep', type: macro :anyparse.core.Doc }

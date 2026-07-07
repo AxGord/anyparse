@@ -78,9 +78,9 @@ final class DocMeasure {
 				case Concat(items):
 					var k: Int = items.length;
 					while (--k >= 0) stack.push(items[k]);
-				case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfFullLineExceeds(
+				case IfBreak(_, fl) | IfWidthExceeds(_, _, fl) | IfFirstLineExceeds(_, _, fl) | IfLineExceeds(_, _, fl) | IfResidualLineExceeds(
 					_, _, fl
-				) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
+				) | IfFullLineExceeds(_, _, fl) | IfNaturalFirstLineExceeds(_, _, fl) | IfNaturalFirstLineFitsOpenDelim(_, _, fl) | IfArrowContinuationFits(
 					_, _, _, _, fl
 				):
 					stack.push(fl);
@@ -154,11 +154,11 @@ final class DocMeasure {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfFullLineExceeds(
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfResidualLineExceeds(
 					_, _, flatDoc
-				) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
+				) | IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(
+					_, _, flatDoc
+				) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -202,11 +202,11 @@ final class DocMeasure {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfFullLineExceeds(
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfResidualLineExceeds(
 					_, _, flatDoc
-				) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
+				) | IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(
+					_, _, flatDoc
+				) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -248,11 +248,11 @@ final class DocMeasure {
 					stack.push(inner);
 				case Concat(items):
 					for (it in items) stack.push(it);
-				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfFullLineExceeds(
+				case IfBreak(_, flatDoc) | IfWidthExceeds(_, _, flatDoc) | IfFirstLineExceeds(_, _, flatDoc) | IfLineExceeds(_, _, flatDoc) | IfResidualLineExceeds(
 					_, _, flatDoc
-				) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(_, _, flatDoc) | IfArrowContinuationFits(
-					_, _, _, _, flatDoc
-				):
+				) | IfFullLineExceeds(_, _, flatDoc) | IfNaturalFirstLineExceeds(_, _, flatDoc) | IfNaturalFirstLineFitsOpenDelim(
+					_, _, flatDoc
+				) | IfArrowContinuationFits(_, _, _, _, flatDoc):
 					stack.push(flatDoc);
 				case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
 					for (it in items) stack.push(it);
@@ -307,13 +307,13 @@ final class DocMeasure {
 			// static token-width measurement.
 			case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
 				_, _, inner
-			) | IfLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(
+			) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
 				_, _, inner
-			) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+			) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(
 				inner
-			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+			) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
 				inner
-			):
+			) | ConditionalMarkerDecrease(inner):
 				stack.push(inner);
 				return 0;
 			case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):

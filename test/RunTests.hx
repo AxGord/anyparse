@@ -371,6 +371,7 @@ import unit.HxComprehensionChainIdempotencyTest;
 import unit.HxTypeParamFieldNoWrapSliceTest;
 import unit.HxFnSigExceedsBoundaryWrapTest;
 import unit.HxFnSigSingleParamWrapIndentTest;
+import unit.HxArrowResidualLineWrapSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -545,6 +546,7 @@ class RunTests {
 		addCase(new HxThinArrowTrailingLambdaSliceTest());
 		addCase(new HxThinArrowIfElseBreakSliceTest());
 		addCase(new HxArrowPlainIfOpenSliceTest());
+		addCase(new HxArrowResidualLineWrapSliceTest());
 		addCase(new HxFnSigExceedsBoundaryWrapTest());
 		addCase(new HxFnSigSingleParamWrapIndentTest());
 		addCase(new HxComprehensionChainIdempotencyTest());

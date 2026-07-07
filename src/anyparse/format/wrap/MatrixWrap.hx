@@ -111,11 +111,11 @@ final class MatrixWrap {
 				case Fill(parts, sep, _) | FillWithRestProbe(parts, sep, _) | FillBreakAfterWrap(parts, sep, _):
 					for (p in parts) stack.push(p);
 					stack.push(sep);
-				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat) | IfFirstLineExceeds(_, brk, flat) | IfLineExceeds(_, brk, flat) | IfFullLineExceeds(
+				case IfBreak(brk, flat) | IfWidthExceeds(_, brk, flat) | IfFirstLineExceeds(_, brk, flat) | IfLineExceeds(_, brk, flat) | IfResidualLineExceeds(
 					_, brk, flat
-				) | IfNaturalFirstLineExceeds(_, brk, flat) | IfNaturalFirstLineFitsOpenDelim(_, brk, flat) | IfArrowContinuationFits(
-					_, _, _, brk, flat
-				):
+				) | IfFullLineExceeds(_, brk, flat) | IfNaturalFirstLineExceeds(_, brk, flat) | IfNaturalFirstLineFitsOpenDelim(
+					_, brk, flat
+				) | IfArrowContinuationFits(_, _, _, brk, flat):
 					stack.push(brk);
 					stack.push(flat);
 			}
