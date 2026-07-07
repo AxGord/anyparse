@@ -5928,6 +5928,20 @@ class WriterLowering {
 			final firstArgNode: Expr = isTriviaStar ? macro _args[0].node : macro _args[0];
 			final firstArgObjLit: Expr = macro _args.length > 0 && Type.enumConstructor(cast $firstArgNode) == 'ObjectLit';
 			callInsideOpen = macro !opt.compressSuccessiveParenthesis && $firstArgObjLit ? _dt(' ') : $callInsideOpen;
+			// ω-switch-after-paren: a `switch` expression as the FIRST call
+			// argument spaces the open `(` — fork emits `f( switch x {` and
+			// keeps the close `)` tight to the switch's `}`. The space is the
+			// switch keyword's LEADING gap, gated on `opt.switchKwLeadingSpace`
+			// (the fork's `whitespace.switchPolicy` `before` / `around`); with
+			// the default (or `after` / `none`) there is no leading space and
+			// the `(` stays tight. Both `SwitchExpr` and `SwitchExprBare`
+			// count. Layered outside the objlit ternary so the switch space
+			// wins; a first arg is never both.
+			final firstArgSwitch: Expr = macro _args.length > 0 && opt.switchKwLeadingSpace && {
+				final _sc: String = Type.enumConstructor(cast $firstArgNode);
+				_sc == 'SwitchExpr' || _sc == 'SwitchExprBare';
+			};
+			callInsideOpen = macro $firstArgSwitch ? _dt(' ') : $callInsideOpen;
 		}
 		return { open: callInsideOpen, close: callInsideClose };
 	}
@@ -7237,6 +7251,29 @@ class WriterLowering {
 		// kwRefKwTrailSpace and kwRefParts for the per-flag detail.
 		final kwTrail: { strip: Bool, space: Null<Expr> } = kwRefKwTrailSpace(c, refName, ctorBodyPolicyFlag);
 		final parts: Array<Expr> = kwRefParts(c, bodyExpr, kwTrail.space, kwTrail.strip);
+		// ω-switch-after-paren: a `@:fmt(switchWrapSpace)` `@:wrap('(', ')')`
+		// ctor (`HxExpr.ParenExpr`) spaces the open `(` when its inner
+		// expression is a `switch` — fork emits `( switch x {`, close `)`
+		// tight to the switch's `}`. The space is the switch keyword's LEADING
+		// gap, gated on `opt.switchKwLeadingSpace` (the fork's
+		// `whitespace.switchPolicy` `before` / `around`); with the default (or
+		// `after` / `none`) the `(` stays tight. The inner is a single Ref, so
+		// its paired/plain value is `argNames[0]` directly (NOT Trivial<…>-
+		// wrapped — see breakAfterLeadIfLhsTypeParamWrap). Appending the
+		// conditional space to the lead Doc lands it after `(` in the flat wrap
+		// shape (the only shape a subject-fits switch takes; the switch's own
+		// `{ }` supplies the internal breaks). Runtime-gated on both the policy
+		// and the inner ctor so a non-switch paren (`(a + b)`) and a non-`around`
+		// config stay byte-identical; the flag scopes it off `HxType.Parens`.
+		if (branch.fmtHasFlag('switchWrapSpace') && parts.length == 3) {
+			final innerAccess: Expr = macro $i{argNames[0]};
+			final origLead: Expr = parts[0];
+			final switchGuard: Expr = macro opt.switchKwLeadingSpace && {
+				final _sc: String = Type.enumConstructor(cast $innerAccess);
+				_sc == 'SwitchExpr' || _sc == 'SwitchExprBare';
+			};
+			parts[0] = macro _dc([$origLead, $switchGuard ? _dt(' ') : _de()]);
+		}
 		// ω-paren-wrap-break: `@:wrap(open, close)` ctor (no kw, both lead
 		// and trail set) — the Group/hardline-before-close shape is built in
 		// kwRefWrapShape; null when not the wrap shape (falls through below).

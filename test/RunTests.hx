@@ -372,6 +372,7 @@ import unit.HxTypeParamFieldNoWrapSliceTest;
 import unit.HxFnSigExceedsBoundaryWrapTest;
 import unit.HxFnSigSingleParamWrapIndentTest;
 import unit.HxArrowResidualLineWrapSliceTest;
+import unit.HxSwitchAfterParenSpaceSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -417,6 +418,7 @@ class RunTests {
 		addCase(new HxPrattSliceTest());
 		addCase(new HxPrattOpsTest());
 		addCase(new HxParenSliceTest());
+		addCase(new HxSwitchAfterParenSpaceSliceTest());
 		addCase(new HxAssignSliceTest());
 		addCase(new HxBitwiseSliceTest());
 		addCase(new HxPrefixSliceTest());

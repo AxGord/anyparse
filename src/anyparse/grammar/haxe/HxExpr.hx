@@ -380,7 +380,7 @@ enum HxExpr {
 
 	ECheckTypeExpr(info: HxECheckType);
 
-	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten)
+	@:wrap('(', ')') @:fmt(captureWrapOpenNewline, propagateExprPosition, expressionParenHardFlatten, switchWrapSpace)
 	ParenExpr(inner: HxExpr);
 
 	ParenLambdaExpr(lambda: HxParenLambda);

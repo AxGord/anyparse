@@ -1720,6 +1720,15 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	forPolicy: WhitespacePolicy,
 	whilePolicy: WhitespacePolicy,
 	switchPolicy: WhitespacePolicy,
+
+	/**
+	 * Leading space before the `switch` keyword — the `before` / `around`
+	 * side of the fork's `whitespace.switchPolicy`, kept separate from the
+	 * (conflated) `switchPolicy` field so the `conditionParens` overwrite
+	 * does not erase it. Visible only when the keyword follows a tight `(`
+	 * (a call argument `f( switch …)` or an expression paren `( switch …)`).
+	 */
+	switchKwLeadingSpace: Bool,
 	tryPolicy: WhitespacePolicy,
 	elseIf: KeywordPlacement,
 	fitLineIfWithElse: Bool,

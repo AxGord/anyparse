@@ -692,6 +692,7 @@ final class HaxeFormat implements TextFormat {
 		forPolicy: WhitespacePolicy.After,
 		whilePolicy: WhitespacePolicy.After,
 		switchPolicy: WhitespacePolicy.After,
+		switchKwLeadingSpace: false,
 		tryPolicy: WhitespacePolicy.After,
 		elseIf: KeywordPlacement.Same,
 		fitLineIfWithElse: false,

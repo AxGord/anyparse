@@ -579,6 +579,7 @@ final class HaxeFormatConfigLoader {
 			forPolicy: base.forPolicy,
 			whilePolicy: base.whilePolicy,
 			switchPolicy: base.switchPolicy,
+			switchKwLeadingSpace: base.switchKwLeadingSpace,
 			tryPolicy: base.tryPolicy,
 			elseIf: base.elseIf,
 			fitLineIfWithElse: base.fitLineIfWithElse,
@@ -1661,7 +1662,17 @@ final class HaxeFormatConfigLoader {
 		if (section.ifPolicy != null) opt.ifPolicy = whitespaceToRuntime(section.ifPolicy);
 		if (section.forPolicy != null) opt.forPolicy = whitespaceToRuntime(section.forPolicy);
 		if (section.whilePolicy != null) opt.whilePolicy = whitespaceToRuntime(section.whilePolicy);
-		if (section.switchPolicy != null) opt.switchPolicy = whitespaceToRuntime(section.switchPolicy);
+		final switchPolicyRaw: Null<HxFormatWhitespacePolicy> = section.switchPolicy;
+		if (switchPolicyRaw != null) {
+			final swp: WhitespacePolicy = whitespaceToRuntime(switchPolicyRaw);
+			opt.switchPolicy = swp;
+			// ω-switch-after-paren: preserve the switch keyword's LEADING-space
+			// intent separately — `opt.switchPolicy` is later overwritten by the
+			// `conditionParens` catch-all (kw→cond gap), which would erase the
+			// `before` / `around` leading component the fork keys the
+			// `( switch …` / `f( switch …` space on.
+			opt.switchKwLeadingSpace = swp == WhitespacePolicy.Before || swp == WhitespacePolicy.Both;
+		}
 		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
 		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
 		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
