@@ -90,7 +90,9 @@ final class TypeResolver {
 	 * recovered nominal type (unannotated, parametric, or `Null<…>`-wrapped — all
 	 * absent from `declaredTypes`).
 	 */
-	public static function identTypeName(ident: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Null<String> {
+	public static function identTypeName(
+		ident: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
+	): Null<String> {
 		final bindingFrom: Null<Int> = identBindingFrom(ident, tree, shape);
 		return bindingFrom == null ? null : declaredTypes[bindingFrom];
 	}

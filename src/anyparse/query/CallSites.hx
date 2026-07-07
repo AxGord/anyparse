@@ -165,7 +165,9 @@ final class CallSites {
 	 * refusal — those could be this very function but cannot be proven, so
 	 * silently leaving their argument shape stale is not allowed.
 	 */
-	private static function collectMethodCalls(tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape): CollectResult {
+	private static function collectMethodCalls(
+		tree: QueryNode, source: String, name: String, binding: Int, shape: RefShape
+	): CollectResult {
 		final hits: Array<RefHit> = Refs.find(name, tree, shape);
 		final boundReads: Array<RefHit> = [
 			for (h in hits)

@@ -8115,7 +8115,9 @@ final class Cli {
 	 * path lets the caller carry the interface's sibling sub-types and decide the
 	 * interface import.
 	 */
-	private static function resolveInterface(iface: String, newPath: String): Null<{ source: String, ifaceModule: String, simple: String }> {
+	private static function resolveInterface(
+		iface: String, newPath: String
+	): Null<{ source: String, ifaceModule: String, simple: String }> {
 		final dot: Int = iface.lastIndexOf('.');
 		if (dot >= 0) {
 			final simple: String = iface.substr(dot + 1);

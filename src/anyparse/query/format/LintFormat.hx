@@ -24,7 +24,9 @@ final class LintFormat {
 	 * (`Address.describe`), directly usable as a mutation-op `--select`
 	 * argument. Escaping is delegated to `Json.stringify`.
 	 */
-	public static function json(violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>): String {
+	public static function json(
+		violations: Array<Violation>, sourceOf: Map<String, String>, ?addressOf: Violation -> Null<String>
+	): String {
 		final records: Array<Dynamic> = [
 			for (v in violations) {
 				final record: Dynamic = recordOf(v, sourceOf);

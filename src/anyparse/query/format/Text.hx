@@ -73,7 +73,9 @@ final class Text {
 		return buf.toString();
 	}
 
-	public static function renderUses(file: String, source: String, hits: Array<UsesHit>, doc: Bool, src: Bool, flat: Bool = false): String {
+	public static function renderUses(
+		file: String, source: String, hits: Array<UsesHit>, doc: Bool, src: Bool, flat: Bool = false
+	): String {
 		if (hits.length == 0) return '$file: no uses\n';
 		final buf: StringBuf = new StringBuf();
 		if (!flat) buf.add('$file:\n');

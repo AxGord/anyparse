@@ -511,7 +511,9 @@ class WriterLowering {
 	}
 
 	/** Enum Case 4 Star: `@:lead @:trail` with optional `@:sep`. */
-	private function lowerEnumStar(branch: ShapeNode, typePath: String, writeFnName: String, hasPratt: Bool, argNames: Array<String>): Expr {
+	private function lowerEnumStar(
+		branch: ShapeNode, typePath: String, writeFnName: String, hasPratt: Bool, argNames: Array<String>
+	): Expr {
 		final leadText: String = branch.annotations.get('lit.leadText');
 		final trailText: String = branch.annotations.get('lit.trailText');
 		final sepText: Null<String> = branch.annotations.get('lit.sepText');
@@ -12853,7 +12855,9 @@ class WriterLowering {
 	 * `blanksCountExpr` — fires `opt.<count>` blanks on an A→B or B→A
 	 * head/tail transition. Extracted from `buildCascadeEmit`.
 	 */
-	private static function foldTransitionCascade(blanksCountExpr: Expr, transitionInfos: Array<TransitionAcrossInfo>, pos: Position): Expr {
+	private static function foldTransitionCascade(
+		blanksCountExpr: Expr, transitionInfos: Array<TransitionAcrossInfo>, pos: Position
+	): Expr {
 		var result: Expr = blanksCountExpr;
 		for (i in 0...transitionInfos.length) {
 			final idx: Int = transitionInfos.length - 1 - i;

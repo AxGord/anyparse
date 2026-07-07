@@ -190,7 +190,9 @@ final class MemberOrder implements Check {
 	 * (an `#else`, an orphan comment) or a field-init order flip a text scan cannot prove
 	 * safe.
 	 */
-	private static function reorderSafe(members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape): Bool {
+	private static function reorderSafe(
+		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape
+	): Bool {
 		return !hasElseBetweenMembers(members, source, shape) && !hasOrphanComment(members, source)
 			&& !hasSideEffectingFieldFlip(members, sorted, shape) && !hasSiblingReadFlip(members, sorted, source);
 	}

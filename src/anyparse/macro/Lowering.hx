@@ -3470,7 +3470,9 @@ class Lowering {
 			};
 	}
 
-	private function buildTryparseSepLoop(elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr): Expr {
+	private function buildTryparseSepLoop(
+		elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
+	): Expr {
 		// Try-parse with sep peek (Slice 18). After each successful element,
 		// peeks the next non-whitespace char: if it equals the sep, consumes
 		// it and continues; otherwise breaks. On element-parse fail, rewinds

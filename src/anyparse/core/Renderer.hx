@@ -590,16 +590,31 @@ class Renderer {
 	 * remaining work once a hardline is seen.
 	 */
 	private static function flatTokenWidthFirstLine(d: Doc): Int {
+		return flatTokenWidthFirstLineWithBreak(d).width;
+	}
+
+	/**
+	 * Flat width of `d`'s first physical line (up to but excluding its first
+	 * hardline), paired with `broke` = whether such a hardline was reached
+	 * (`false` means the walk drained with no hardline — the content is fully
+	 * inline). Nested `BodyGroup`s are deferred by `flatFirstLineStep`, so a
+	 * cuddled block body reports just its leading ` {` prefix with `broke = true`
+	 * while an inline body reports its whole first line with `broke = false` —
+	 * the distinction the rest-probe uses to count a signature's trailing block
+	 * brace without pulling an inline for/while body onto the header line.
+	 * `flatTokenWidthFirstLine` is the width-only projection of this.
+	 */
+	private static function flatTokenWidthFirstLineWithBreak(d: Doc): { width: Int, broke: Bool } {
 		final stack: Array<Doc> = [d];
 		var total: Int = 0;
-		var aborted: Bool = false;
-		while (stack.length > 0 && !aborted) {
+		var broke: Bool = false;
+		while (stack.length > 0 && !broke) {
 			final node: Doc = stack.pop();
 			final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack);
 			total += step.add;
-			aborted = step.aborted;
+			broke = step.aborted;
 		}
-		return total;
+		return { width: total, broke: broke };
 	}
 
 	/**
@@ -1087,9 +1102,21 @@ class Renderer {
 				return { add: 0, aborted: true };
 			case BodyGroup(innerDoc):
 				// The sister-walker differentiator: Full descends inline body
-				// content; plain defers (BG decides own layout, Departure 2).
-				if (bgDescend) inner.push({ doc: innerDoc, mode: MFlat });
-				return { add: 0, aborted: false };
+				// content; plain defers (BG decides own layout, Departure 2) —
+				// EXCEPT a cuddled block body whose ` {` head rides the current
+				// rendered line before the body's own hardline. Count that leading
+				// prefix (the `{`) and terminate the trailing scan so the
+				// functionSignature rest-probe sees the true line width: a
+				// 141-column `):Ret {` signature must wrap, not hug at the 140
+				// limit (its `{` was the missing column). A fully inline body
+				// (no hardline on its first line) stays deferred, so the cond-wrap
+				// rest-probe never pulls an inline for/while body onto the header.
+				if (bgDescend) {
+					inner.push({ doc: innerDoc, mode: MFlat });
+					return { add: 0, aborted: false };
+				}
+				final prefix: { width: Int, broke: Bool } = flatTokenWidthFirstLineWithBreak(innerDoc);
+				return prefix.broke ? { add: prefix.width, aborted: true } : { add: 0, aborted: false };
 			case Concat(items):
 				var k: Int = items.length;
 				while (--k >= 0) inner.push({ doc: items[k], mode: node.mode });
