@@ -22,7 +22,10 @@ import anyparse.runtime.ParseError;
  *    lambdas and map entries inside array literals.
  *  - `ArrayExpr` — `@:lead('[') @:trail(']') @:sep(',')` Case 4 atom.
  *  - `ParenLambdaExpr` — bare-Ref Case 3 wrapping `HxParenLambda`
- *    typedef (tryBranch before `ParenExpr`).
+ *    typedef (tryBranch LAST among paren atoms — after `ECheckTypeExpr`
+ *    and `ParenExpr` — so it only catches the zero/multi/optional-param
+ *    `=>` forms; single-expression keys `(x) => v` / `(x : T) => v`
+ *    route through `ParenExpr` / `ECheckTypeExpr` + infix `=>`).
  *
  * Zero Lowering changes expected.
  */
@@ -112,16 +115,14 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		}
 	}
 
-	/** `(x) => x + 1` -> single-param paren lambda. */
-	public function testSingleParenLambda(): Void {
+	/** `(x) => x + 1` -> paren key + prec-0 infix `=>` (ParenLambdaExpr is now last). */
+	public function testSingleParenKeyArrow(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x) => x + 1; }');
 		switch decl.init {
-			case ParenLambdaExpr(lambda):
-				Assert.equals(1, lambda.params.length);
-				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name: String));
-				Assert.isNull(lambdaParamBody(lambda.params[0]).type);
+			case Arrow(ParenExpr(IdentExpr(name)), Add(IdentExpr(_), IntLit(_))):
+				Assert.equals('x', (name: String));
 			case null, _:
-				Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
+				Assert.fail('expected Arrow(ParenExpr(x), Add), got ${decl.init}');
 		}
 	}
 
@@ -144,16 +145,14 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		}
 	}
 
-	/** `(x:Int) => x` -> typed param lambda. */
-	public function testTypedParamLambda(): Void {
+	/** `(x:Int) => x` -> check-type key + prec-0 infix `=>` (spaced `:` via typeCheckColon). */
+	public function testTypedCheckTypeKeyArrow(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x:Int) => x; }');
 		switch decl.init {
-			case ParenLambdaExpr(lambda):
-				Assert.equals(1, lambda.params.length);
-				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name: String));
-				Assert.notNull(lambdaParamBody(lambda.params[0]).type);
+			case Arrow(ECheckTypeExpr(_), IdentExpr(name)):
+				Assert.equals('x', (name: String));
 			case null, _:
-				Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
+				Assert.fail('expected Arrow(ECheckTypeExpr, x), got ${decl.init}');
 		}
 	}
 
@@ -172,17 +171,17 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		}
 	}
 
-	/** `return (x) => x;` -> arrow in return. */
-	public function testParenLambdaInReturn(): Void {
+	/** `return (x) => x;` -> ReturnStmt(Arrow(ParenExpr, x)). */
+	public function testParenKeyArrowInReturn(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class C { function f():Int { return (x) => x; } }');
 		final fn: HxFnDecl = expectFnMember(ast.members[0].member);
 		final stmts: Array<HxStatement> = fnBodyStmts(fn);
 		Assert.equals(1, stmts.length);
 		switch stmts[0] {
-			case ReturnStmt(ParenLambdaExpr(lambda)):
-				Assert.equals(1, lambda.params.length);
+			case ReturnStmt(Arrow(ParenExpr(IdentExpr(name)), IdentExpr(_))):
+				Assert.equals('x', (name: String));
 			case null, _:
-				Assert.fail('expected ReturnStmt(ParenLambdaExpr)');
+				Assert.fail('expected ReturnStmt(Arrow(ParenExpr, x))');
 		}
 	}
 
@@ -337,21 +336,21 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 		}
 	}
 
-	/** `[(x) => x, (y) => y]` -> array of paren lambdas. */
-	public function testArrayOfLambdas(): Void {
+	/** `[(x) => x, (y) => y]` -> array of paren-key arrows (each `Arrow(ParenExpr, _)`). */
+	public function testArrayOfParenKeyArrows(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var a:Int = [(x) => x, (y) => y]; }');
 		switch decl.init {
 			case ArrayExpr(elems):
 				Assert.equals(2, elems.length);
 				switch elems[0] {
-					case ParenLambdaExpr(l):
-						Assert.equals('x', (lambdaParamBody(l.params[0]).name: String));
+					case Arrow(ParenExpr(IdentExpr(name)), IdentExpr(_)):
+						Assert.equals('x', (name: String));
 					case null, _:
-						Assert.fail('expected ParenLambdaExpr in first');
+						Assert.fail('expected Arrow(ParenExpr(x)) in first');
 				}
 				switch elems[1] {
-					case ParenLambdaExpr(l): Assert.equals('y', (lambdaParamBody(l.params[0]).name: String));
-					case null, _: Assert.fail('expected ParenLambdaExpr in second');
+					case Arrow(ParenExpr(IdentExpr(name)), IdentExpr(_)): Assert.equals('y', (name: String));
+					case null, _: Assert.fail('expected Arrow(ParenExpr(y)) in second');
 				}
 			case null, _:
 				Assert.fail('expected ArrayExpr, got ${decl.init}');

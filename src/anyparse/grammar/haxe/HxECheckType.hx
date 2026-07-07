@@ -14,10 +14,11 @@ package anyparse.grammar.haxe;
  * matches haxe-formatter's `whitespace.typeCheckColonPolicy: @:default(Around)`.
  *
  * The wrapping atom ctor (`ECheckTypeExpr` in `HxExpr`) is placed
- * AFTER `ParenLambdaExpr` and BEFORE `ParenExpr` so the lambda branch
- * gets first try (`(x : Int) => body` parses as the typed-param lambda,
- * not as `Arrow(ECheckType, body)`), and bare `(expr)` falls through to
- * `ParenExpr` after `tryBranch` rolls back the missing `:`.
+ * BEFORE both `ParenExpr` and `ParenLambdaExpr` so a typed map key
+ * `(x : Int) => body` parses as this check-type atom + prec-0 infix
+ * `=>` (`Arrow(ECheckType, body)`, matching haxe-formatter's
+ * `Binop(OpArrow, ECheckType(...), body)`), and bare `(expr)` falls
+ * through to `ParenExpr` after `tryBranch` rolls back the missing `:`.
  */
 @:peg
 typedef HxECheckType = {

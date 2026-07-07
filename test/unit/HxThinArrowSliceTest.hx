@@ -24,9 +24,11 @@ import anyparse.grammar.haxe.HxVarDecl;
  *    typed-param lambdas with `->` body.
  *
  * Source order in `HxExpr`:
- *  - `ThinParenLambdaExpr` BEFORE `ParenLambdaExpr` BEFORE `ParenExpr`
- *    so `tryBranch` tries the canonical `->` form first and falls
- *    through to the `=>` form, then to `ParenExpr`.
+ *  - `ThinParenLambdaExpr` FIRST, then `ECheckTypeExpr` / `ParenExpr`,
+ *    then `ParenLambdaExpr` LAST — so `tryBranch` tries the canonical
+ *    `->` form first, a single-expression `=>` key routes through
+ *    `ECheckTypeExpr` / `ParenExpr` + infix `=>`, and the legacy `=>`
+ *    lambda form catches only the zero/multi/optional-param shapes.
  *  - `ThinArrow` BEFORE `Arrow` in the operator list (D33 longest-
  *    match isn't load-bearing here — the literals don't share a
  *    prefix — but the canonical form still wins on declaration order).
@@ -240,15 +242,14 @@ class HxThinArrowSliceTest extends HxTestHelpers {
 		}
 	}
 
-	/** `(x) => x` still resolves to `ParenLambdaExpr`, not `ThinParenLambdaExpr`. */
-	public function testFatParenLambdaStillWorks(): Void {
+	/** `(x) => x` parses as `Arrow(ParenExpr, _)` — a paren key + prec-0 infix `=>` — now that `ParenLambdaExpr` is the last paren atom. */
+	public function testUntypedMapKeyParsesAsParenArrow(): Void {
 		final decl: HxVarDecl = parseSingleVarDecl('class C { var f:Int = (x) => x; }');
 		switch decl.init {
-			case ParenLambdaExpr(lambda):
-				Assert.equals(1, lambda.params.length);
-				Assert.equals('x', (lambdaParamBody(lambda.params[0]).name: String));
+			case Arrow(ParenExpr(IdentExpr(name)), _):
+				Assert.equals('x', (name: String));
 			case null, _:
-				Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
+				Assert.fail('expected Arrow(ParenExpr, _), got ${decl.init}');
 		}
 	}
 

@@ -9,11 +9,13 @@ import anyparse.grammar.haxe.HxExpr;
  * `(expr : Type)` to `HxExpr` (`ECheckTypeExpr(info:HxECheckType)`).
  *
  * Shape mirrors `HxTypedCast` — two-`Ref` field pair `(expr, type)`
- * separated by `:` instead of `,`. Placement in `HxExpr` is AFTER
- * `ParenLambdaExpr` and BEFORE `ParenExpr`: the lambda branch tries
- * first (so `(x : Int) => body` keeps its `ParenLambdaExpr` shape),
- * the bare-paren branch tries last (so `(expr)` falls through to
- * `ParenExpr` after `tryBranch` rolls back the missing `:`).
+ * separated by `:` instead of `,`. Placement in `HxExpr` is BEFORE
+ * both `ParenExpr` and `ParenLambdaExpr`: a typed map key
+ * `(x : Int) => body` parses as this check-type atom + prec-0 infix
+ * `=>` (`Arrow(ECheckTypeExpr(...), body)`), matching haxe-formatter's
+ * `Binop(OpArrow, ECheckType(...), body)`; a bare `(expr)` with no
+ * inner `:` falls through to `ParenExpr` after `tryBranch` rolls the
+ * check-type back.
  *
  * Writer side defaults to `WhitespacePolicy.Both` via the new
  * `typeCheckColon` knob, so default-config output spaces the `:`
@@ -133,16 +135,18 @@ class HxECheckTypeSliceTest extends HxTestHelpers {
 		}
 	}
 
-	public function testParenLambdaStillParses(): Void {
-		// `(x : Int) => x + 1` must keep parsing as ParenLambdaExpr —
-		// the lambda branch is BEFORE ECheckType in source order, so it
-		// gets first try and consumes the typed param + `=>` body.
+	public function testTypedMapKeyParsesAsCheckTypeArrow(): Void {
+		// `(x : Int) => x + 1` parses as a check-type key + prec-0 infix
+		// `=>`: `ParenLambdaExpr` is now LAST among the paren atoms, so a
+		// single-expression key routes through `ECheckTypeExpr` (spaced
+		// `:`) and the `Arrow` operator (spaced `=>`) — mirroring
+		// haxe-formatter's `Binop(OpArrow, ECheckType(...), body)`.
 		final decl = parseSingleVarDecl('class C { var f:Int = (x : Int) => x + 1; }');
 		switch decl.init {
-			case ParenLambdaExpr(_):
+			case Arrow(ECheckTypeExpr(_), _):
 				Assert.pass();
 			case null, _:
-				Assert.fail('expected ParenLambdaExpr, got ${decl.init}');
+				Assert.fail('expected Arrow(ECheckTypeExpr, _), got ${decl.init}');
 		}
 	}
 

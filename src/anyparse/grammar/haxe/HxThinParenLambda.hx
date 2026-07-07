@@ -9,9 +9,12 @@ package anyparse.grammar.haxe;
  * `(params) lead/trail/sep` Star pattern over `HxLambdaParam`, same
  * trailing-comma policy, same `@:lead('->')` body commit point.
  *
- * Placed before `HxParenLambda` in `HxExpr` atom order so `tryBranch`
- * tries the canonical `->` form first; non-arrow inputs fall through
- * to the legacy `=>` form, then to `ParenExpr`.
+ * Placed FIRST among the paren atoms in `HxExpr` order so `tryBranch`
+ * tries the canonical `->` form first. A non-`->` input then falls
+ * through to `ECheckTypeExpr` / `ParenExpr` (+ prec-0 infix `=>` for a
+ * map key), and only reaches the legacy `HxParenLambda` (`=>`) form
+ * last, for the zero/multi/optional-param shapes that cannot parse as
+ * an expression.
  *
  * `@:fmt(arrowFunctions)` on `body` gates the spacing around the `->`
  * separator on `opt.arrowFunctions:WhitespacePolicy`. Default `Both`

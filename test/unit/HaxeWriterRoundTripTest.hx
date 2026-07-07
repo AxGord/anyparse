@@ -338,10 +338,14 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf(' : Int') == -1, 'did not expect spaced ` : Int` in: <$out>');
 	}
 
-	function testLambdaParamTypeTightColon(): Void {
+	function testFatArrowKeyTypeSpacedColon(): Void {
+		// `(a:Int) => a + 1` is a check-type map key + prec-0 infix `=>`, NOT a
+		// lambda: `ParenLambdaExpr` is the last paren atom, so a single-expression
+		// key routes through `ECheckTypeExpr` + infix `=>`. haxe-formatter therefore
+		// spaces the `:` (`(a : Int)`, via the typeCheckColon policy) and the `=>`.
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse('class F { function f():Void { var x:Int = (a:Int) => a + 1; } }'));
-		Assert.isTrue(out.indexOf('(a:Int)') != -1, 'expected `(a:Int)` (tight colon) in: <$out>');
-		Assert.isTrue(out.indexOf('(a : Int)') == -1, 'did not expect spaced `(a : Int)` in: <$out>');
+		Assert.isTrue(out.indexOf('(a : Int) => a + 1') != -1, 'expected spaced `(a : Int) => a + 1` in: <$out>');
+		Assert.isTrue(out.indexOf('(a:Int)') == -1, 'did not expect tight `(a:Int)` in: <$out>');
 	}
 
 	function testNoLeadingSpaceBeforeMemberWithoutModifiers(): Void {
