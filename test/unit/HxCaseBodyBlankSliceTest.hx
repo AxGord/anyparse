@@ -26,7 +26,7 @@ class HxCaseBodyBlankSliceTest extends Test {
 		super();
 	}
 
-	function write(src: String): String {
+	private function write(src: String): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 

@@ -22,7 +22,7 @@ class HxSourceBlankPreserveSliceTest extends Test {
 		super();
 	}
 
-	function write(src: String, json: String, ?capOverride: Null<Int>): String {
+	private function write(src: String, json: String, ?capOverride: Null<Int>): String {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		if (capOverride != null) opts.maxConsecutiveBlanks = capOverride;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

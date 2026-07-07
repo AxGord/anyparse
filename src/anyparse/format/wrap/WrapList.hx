@@ -2080,12 +2080,12 @@ class WrapList {
 		// from `Flatten(items)` to `Group(IfBreak(close-on-own-line,
 		// close-glued))` so the outer call's `)` lands on its own line
 		// when the inner arrow body wraps. Group's `fitsFlat` walks the
-		// inner `IfLineExceeds.flat` (the inline lambda body), so MFlat
+		// inner `IfResidualLineExceeds.flat` (the inline lambda body), so MFlat
 		// fires iff the body fits — coupling the two wrap decisions.
 		// Mirrors fork's `applyArrowWrapping` parent-walk close-paren mark.
 		//
 		// Why escalate out of `Flatten`: under `Flatten`, the inner
-		// arrow-body wrap's `_dile` probe inside `_dwb` would still fire
+		// arrow-body wrap's `_dilr` probe inside `_dwb` would still fire
 		// independently (WrapBoundary resets forceFlat), but the outer
 		// close paren has no mechanism to follow that decision. Group +
 		// IfBreak emits both close placements and picks consistently.
@@ -2482,31 +2482,29 @@ class WrapList {
 	 * ω-arrow-body-close-paren-own-line slice 2: structural marker probe
 	 * for the arrow-body-line-wrap shape emitted by slice 1 at
 	 * `WriterLowering.hx:2703-2740`. Returns `true` when `item`'s tail
-	 * contains a `WrapBoundary(IfLineExceeds(_, Nest(_, Concat([Line('\n'), _])), _))`
+	 * contains a `WrapBoundary(IfResidualLineExceeds(_, Nest(_, Concat([Line('\n'), _])), _))`
 	 * marker — the slice-1 emit signature for `HxThinParenLambda.body` /
 	 * `HxParenLambda.body` under `@:fmt(arrowBodyLineWrap)`.
 	 *
 	 * Used by `shapeNoWrap` to route the outer Call's `(arg)` shape to
 	 * `Group(IfBreak(brk_close_on_own_line, flat_close_glued))` when the
 	 * sole arg is an arrow lambda whose body might wrap. The Group's
-	 * `fitsFlat` walks `IfLineExceeds.flat` (the inline body) so MFlat
-	 * fires iff the body fits — aligned with the inner `_dile` probe's
-	 * decision. Mirrors fork's `applyArrowWrapping` parent-walk that
-	 * marks the enclosing call's close paren on a separate line when the
-	 * arrow body wraps.
+	 * `fitsFlat` walks `IfResidualLineExceeds.flat` (the inline body) so
+	 * MFlat fires iff the body fits — aligned with the inner `_dilr`
+	 * probe's decision. Mirrors fork's `applyArrowWrapping` parent-walk
+	 * that marks the enclosing call's close paren on a separate line when
+	 * the arrow body wraps.
 	 *
 	 * Tail-walk: items[0] is the entire lambda Doc `Concat([Text('('),
 	 * params, Text(')'), Text('->'), OptSpace(' '), wrapped_body])`; the
 	 * marker is in the last element. Recurse on Concat tail until a
 	 * `WrapBoundary` is reached.
 	 *
-	 * False-positive footprint: `WrapBoundary(IfLineExceeds(...))` is
-	 * also emitted by `emitCondition` (cond-wrap, line 391) but its brk
-	 * shape is a Concat with explicit `Text(open)`/`Text(close)`
-	 * delimiters wrapping the cond, not a `Nest(_, Concat([Line('\n'),
-	 * _]))`. `HxAbstractDecl.clauses` uses `IfLineExceeds(_, _dhl(),
-	 * _dt(' '))` — brk is bare `Line('\n')`, also doesn't match the
-	 * Nest+Concat structure. Probe is narrow to slice-1's emit.
+	 * False-positive footprint: none by ctor alone since the residual
+	 * retag — `IfResidualLineExceeds` is emitted only by the arrow-body
+	 * wrap (`emitCondition`'s cond-wrap uses `IfWidthExceeds`;
+	 * `HxAbstractDecl.clauses` stays on `IfLineExceeds`). The brk-shape
+	 * check is belt-and-braces against future emitters.
 	 */
 	private static function isArrowBodyMarker(item: Doc): Bool {
 		return switch item {
@@ -2709,7 +2707,7 @@ class WrapList {
 	 * as the arrow markers so an OpenFL-style callback (`addEventListener(evt,
 	 * function(e) { … })`) keeps its head glued instead of opening the paren.
 	 */
-	static function isFunctionBlockLambdaItem(item: Doc): Bool {
+	private static function isFunctionBlockLambdaItem(item: Doc): Bool {
 		return firstVisibleTextIsFunctionKw(item) && flatLength(item) < 0;
 	}
 
@@ -2717,7 +2715,7 @@ class WrapList {
 	 * Left-spine walk mirroring `firstVisibleTextStartsWith` but matching the
 	 * whole trimmed first-visible-Text against the `function` keyword.
 	 */
-	static function firstVisibleTextIsFunctionKw(d: Doc): Bool {
+	private static function firstVisibleTextIsFunctionKw(d: Doc): Bool {
 		return switch d {
 			case Text(s):
 				StringTools.trim(s) == 'function';
@@ -2754,7 +2752,7 @@ class WrapList {
 	 * comprehension body renders inline, carries no hardline, and must NOT
 	 * head-hug).
 	 */
-	static function isBlockBodyComprehensionItem(item: Doc): Bool {
+	private static function isBlockBodyComprehensionItem(item: Doc): Bool {
 		final t: Null<String> = firstVisibleText(item);
 		// Require a `{ … }` BLOCK body (last token `}`), not merely any hardline:
 		// an expression-body comprehension that WRAPS also carries a hardline but
@@ -2766,7 +2764,7 @@ class WrapList {
 	 * The whole trimmed first-visible-Text of `d`, or `null`. Left-spine walk
 	 * mirroring `firstVisibleTextStartsWith` but returning the token text.
 	 */
-	static function firstVisibleText(d: Doc): Null<String> {
+	private static function firstVisibleText(d: Doc): Null<String> {
 		return switch d {
 			case Text(s):
 				StringTools.trim(s);
@@ -2865,7 +2863,7 @@ class WrapList {
 	 * the brackets are tight and this returns null (no hug), preserving the
 	 * unpadded house-style layout.
 	 */
-	static function shapeComprehensionBlockHug(
+	private static function shapeComprehensionBlockHug(
 		open: String, close: String, items: Array<Doc>, openInside: Doc, closeInside: Doc
 	): Null<Doc> {
 		final padded: Bool = switch openInside {

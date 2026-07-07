@@ -44,4 +44,21 @@ class HxCallArgCommentWriteTest extends Test {
 		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tp(/* a */ /* b */ q);\n\t}\n}\n', out);
 	}
 
+
+	/**
+	 * A line comment as the sole content of an empty arg list must NOT be
+	 * captured into the inner-comment slot: emitted inline it would swallow
+	 * the `)` (`g(// hmm);`) and produce unparseable output. The writer
+	 * drops it (pre-slice behavior) and the result stays parseable.
+	 */
+	public function testEmptyCallArgLineCommentStaysParseable(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(// hmm\n\t\t);\n\t}\n}';
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tg();\n\t}\n}\n', out);
+		// The output must reparse (round-trip contract).
+		final reparsed: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(out);
+		Assert.equals(out, HaxeModuleTriviaWriter.write(reparsed));
+	}
+
 }

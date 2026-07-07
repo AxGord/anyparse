@@ -3158,8 +3158,15 @@ class Lowering {
 					// only content is a comment (`f(/* c */)`) — the comment
 					// captured by `collectTrivia` belongs to no argument. Route it
 					// to the inner-comment slot so the writer emits it between the
-					// open and close literals.
-					if (_args.length == 0 && _lead.leadingComments.length > 0) _argsInnerComment = _lead.leadingComments.join(' ');
+					// open and close literals. Only inline block comments are
+					// captured (mirrors the ω-callarg-leading-comment gate): a
+					// line comment or multi-line block would be emitted inline
+					// before `)` and swallow it, producing unparseable output.
+					if (_args.length == 0 && _lead.leadingComments.length > 0) {
+						var _icInline: Bool = true;
+						for (_c in _lead.leadingComments) if (!StringTools.startsWith(_c, '/*') || _c.indexOf('\n') >= 0) _icInline = false;
+						if (_icInline) _argsInnerComment = _lead.leadingComments.join(' ');
+					}
 					break;
 				}
 				final _node: $elemCT = $elemCall;
