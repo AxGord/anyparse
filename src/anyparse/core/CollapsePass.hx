@@ -586,7 +586,7 @@ final class CollapsePass {
 		// after a dot-break, so its call args must break regardless. A last
 		// segment that FITS at the dot-broken indent keeps the chain dot-break
 		// (fork `breakLongMethodChains` per-dot overflow semantics).
-		final segLine: Null<Int> = dotBrokenLastSegLine(inner, glueShape, capturedNestBase(inner, decisions));
+		final segLine: Null<Int> = dotBrokenLastSegLine(inner, glueShape, capturedNestBase(d, decisions));
 		return segLine != null && segLine <= width
 			? rewrite(inner, decisions, insideBroken, width)
 			: rewrite(glueShape, decisions, insideBroken, width);
@@ -618,14 +618,13 @@ final class CollapsePass {
 	/**
 	 * ω-methodchain-reeval-after-callparam — the dot-break continuation BASE
 	 * indent captured by the renderer's measure pass: the sister decision
-	 * entry keyed by the probe's INNER doc (`crosses == false`, so `opens()`
-	 * stays inert) carries the FRAME indent the dot-break shape's `Nest` is
+	 * entry keyed by the probe marker itself with `crosses == false` (`capturedIndent` demands `crosses`, so the two probe-keyed entries never collide; the inner `IfFullLineExceeds` keeps its own entry unmasked for `opens()`) carries the FRAME indent the dot-break shape's `Nest` is
 	 * relative to. The marker's own `capturedIndent` is the VISUAL column of
 	 * a possibly mid-line chain start — an over-estimate of the continuation
 	 * base. Null when the probe never rendered through the measure pass.
 	 */
-	private static function capturedNestBase(inner: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Int> {
-		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == inner && !e.crosses);
+	private static function capturedNestBase(marker: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Int> {
+		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == marker && !e.crosses);
 		return entry == null ? null : entry.indent;
 	}
 

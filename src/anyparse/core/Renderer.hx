@@ -2121,13 +2121,18 @@ class Renderer {
 				// `reEvaluateMethodChainAfterCallParam`.
 				if (decisions != null) {
 					decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
-					// Sister entry keyed by the probe's INNER doc (`crosses ==
-					// false` → `opens()` stays inert): the FRAME indent — the base
-					// the dot-break shape's `Nest` is relative to.
+					// Sister entry keyed by the SAME probe node with `crosses ==
+					// false` (`capturedIndent` requires `crosses`, so the two
+					// probe-keyed entries never collide): the FRAME indent — the
+					// base the dot-break shape's `Nest` is relative to.
 					// `rewriteChainProbe` re-measures the last segment's own
 					// continuation line against it (the visual `col` above
-					// over-estimates a mid-line chain start).
-					decisions.push({ node: inner, crosses: false, indent: f.indent });
+					// over-estimates a mid-line chain start). NOT keyed by `inner`
+					// — the inner `IfFullLineExceeds` records its OWN decision
+					// entry AFTER this one, and a find-first sister on the same
+					// key would mask it for `opens()` (an isCandidate inner whose
+					// dot-break branch embeds a `CollapseProbe` region).
+					decisions.push({ node: f.doc, crosses: false, indent: f.indent });
 				}
 				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case _:
