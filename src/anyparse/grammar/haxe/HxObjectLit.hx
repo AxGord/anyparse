@@ -99,9 +99,22 @@ package anyparse.grammar.haxe;
  * source branch value. Source-multiline object literals in every OTHER
  * context (var-init, call-args, array-elements) keep their shape because
  * the flag is cleared on each expression-position descent.
+ *
+ * `@:fmt(arrowBodyOpenPadSuppress)` (slice ω-arrow-body-objlit-pad) —
+ * when `opt._inArrowLambdaBody` is set at write time (this literal is
+ * the leftmost leaf of an arrow-lambda body, propagated by
+ * `HxExpr.ThinArrow`'s right operand / `HxThinParenLambda.body`'s
+ * `@:fmt(propagateArrowLambdaBody)`), the open-side
+ * `objectLiteralBracesOpen` inner pad is dropped — mirroring fork
+ * `MarkWhitespace.successiveParenthesis`'s compress-mode `case Arrow:
+ * return;` which never applies the opening-brace policy to a `{` whose
+ * previous token is `->` (`u -> {email: v }`, not `u -> { email: v }`).
+ * The close-side pad is unaffected. Cleared by `_setExprPosition` on
+ * every fresh expression-position descent, so only the literal whose
+ * `{` sits right after the `->` token sees the flag.
  */
 @:peg
 typedef HxObjectLit = {
 	@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose, wrapRules('objectLiteralWrap'), leftCurly('objectLiteralLeftCurly'),
-		rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), reflowInExprPosition) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields: Array<HxObjectField>;
+		rightCurly('objectLiteralRightCurly'), trailingComma('trailingCommaObjectLits'), reflowInExprPosition, arrowBodyOpenPadSuppress) @:lead('{') @:trail('}') @:sep(',') @:trivia var fields: Array<HxObjectField>;
 }

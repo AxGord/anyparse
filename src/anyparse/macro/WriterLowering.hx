@@ -6703,7 +6703,16 @@ class WriterLowering {
 		final rightChild: ShapeNode = children[1];
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
-		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
+		// ω-arrow-body-objlit-pad: `@:fmt(propagateArrowLambdaBody)` on the
+		// infix `->` branch (HxExpr.ThinArrow) flags the RIGHT operand write.
+		// Composed outside `_setExprPosition` so its descent clear does not
+		// wipe the just-set flag. Left operand passes `opt` unchanged, so the
+		// flag survives leftmost descents — replicating the fork's
+		// token-adjacency (`{` directly after `->`) for free.
+		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateArrowLambdaBody')
+			? macro _setArrowLambdaBody(${rightOptBase ?? macro opt})
+			: rightOptBase;
 		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
 		final rightCall: Expr = isAsymmetric
 			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
@@ -9267,11 +9276,18 @@ class WriterLowering {
 		// before rendering the body content, so a statement nested inside the
 		// else-if body is not itself treated as an else-branch.
 		final clearElseIfBranch: Bool = child.fmtHasFlag('clearElseIfBranch');
+		// ω-arrow-body-objlit-pad: `@:fmt(propagateArrowLambdaBody)` on an
+		// arrow-lambda body Ref (HxThinParenLambda.body) flags the immediate
+		// body write so its leftmost-leaf object literal drops the open pad.
+		// Wrapped AFTER `_setExprPosition` so the descent clear inside it does
+		// not wipe the just-set flag.
+		final propagateArrowLambdaBody: Bool = child.fmtHasFlag('propagateArrowLambdaBody');
 		final optArgExpr: Expr = if (boolFlagArgs != null) {
 			macro _wo;
 		} else {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
+			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e);
 			if (propagateTypedef) e = macro _setTypedefBody($e);
 			if (propagateEnumAbstract) e = macro _setEnumAbstract($e);
@@ -10228,7 +10244,15 @@ class WriterLowering {
 	 */
 	private static function delimInsidePolicySpace(starNode: ShapeNode, flagNames: Array<String>, isClose: Bool): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(starNode, flagNames);
-		return flagName == null ? null : policyInsideSpace(flagName, isClose);
+		if (flagName == null) return null;
+		final sw: Expr = policyInsideSpace(flagName, isClose);
+		// ω-arrow-body-objlit-pad: `@:fmt(arrowBodyOpenPadSuppress)` on the
+		// Star drops the OPEN-side inner pad when `opt._inArrowLambdaBody` is
+		// set — the fork's `MarkWhitespace.successiveParenthesis` compress
+		// branch never applies the opening-brace policy to a `{` whose
+		// previous token is `->` (`case Arrow: return;`). The close side has
+		// no Arrow check in the fork, so `isClose` keeps the plain policy.
+		return !isClose && starNode.fmtHasFlag('arrowBodyOpenPadSuppress') ? macro opt._inArrowLambdaBody ? _de() : $sw : sw;
 	}
 
 	/**
@@ -14970,6 +14994,13 @@ class WriterLowering {
 		// `clearExprPositionNonTail` is carried only by Haxe BlockExpr /
 		// BlockStmt, whose opt typedef always declares `_inValueIfBranch` —
 		// so the helper reference is safe inside this branch.
+		// ω-arrow-body-objlit-pad: a block-shaped arrow body (`u -> { … }`) is
+		// the same opaque barrier for the open-pad suppression — the `{` that
+		// sat right after `->` was the BLOCK's brace, so no element's object
+		// literal is token-adjacent to the arrow; `_clearArrowLambdaBody` drops
+		// the flag for every block element (tail included). BlockExpr/BlockStmt's
+		// opt typedef always declares `_inArrowLambdaBody`, so the helper
+		// reference is safe inside this branch.
 		// ω-if-tail-fork-parity: a block-body TAIL that is an `if` (IfStmt) is a
 		// STATEMENT — its DIRECT parent is a block brace, for which fork's
 		// `isExpression` is unconditionally false → the body uses `sameLine.ifBody`,
@@ -14983,8 +15014,10 @@ class WriterLowering {
 				final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
 				(_tailBarrierFn != null && _tailBarrierFn(_t.node) && (
 					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
-				)) ? _clearValueIfBranch(_clearExprPosition($elemOptExpr)) : _clearValueIfBranch($elemOptExpr);
-			} : _clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+				)) ? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr))) : _clearArrowLambdaBody(
+					_clearValueIfBranch($elemOptExpr)
+				);
+			} : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr))))
 			: elemOptExpr;
 		return {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),

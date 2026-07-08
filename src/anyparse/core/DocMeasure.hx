@@ -51,6 +51,45 @@ final class DocMeasure {
 	}
 
 	/**
+	 * True when `d`'s flat rendering contains a FORCED hardline — a
+	 * `Line('\n'…)` on the flat path or inside a deferred `BodyGroup`
+	 * (multi-statement lambda body, trivia-bearing object literal). Walks
+	 * the same flat-side arms as `flatTokenWidth` but DESCENDS into
+	 * `BodyGroup` content (which `flatTokenWidth` defers as zero-width):
+	 * the question here is "does this content force its own line breaks",
+	 * not "how wide is it". Soft separators (`Line(' ')`, `OptSpace`,
+	 * `OptHardline*`) do not count — only an unconditional `'\n'`.
+	 */
+	public static function hasForcedBreak(d: Doc): Bool {
+		final stack: Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node: Doc = (cast stack.pop(): Doc);
+			switch (node) {
+				case Line(flat) if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code):
+					return true;
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+					| OptHardlineSkipBeforeHardline:
+				case Concat(items):
+					for (item in items) stack.push(item);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+					stack.push(sep);
+					for (item in items) stack.push(item);
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | IfBreak(_, inner) | IfWidthExceeds(
+					_, _, inner
+				) | IfFirstLineExceeds(_, _, inner) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(
+					_, _, inner
+				) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
+					_, _, _, _, inner
+				) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+					inner
+				) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+					stack.push(inner);
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Concatenates the visible flat text of `d` left-to-right (forced
 	 * hardlines contribute nothing). Stack-based walk mirroring
 	 * `flatTokenWidth` but accumulating the characters rather than just the

@@ -373,6 +373,8 @@ import unit.HxFnSigExceedsBoundaryWrapTest;
 import unit.HxFnSigSingleParamWrapIndentTest;
 import unit.HxArrowResidualLineWrapSliceTest;
 import unit.HxSwitchAfterParenSpaceSliceTest;
+import unit.HxMethodChainDotBreakOverReglueSliceTest;
+import unit.HxObjectLitArrowBodyPadSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -567,6 +569,8 @@ class RunTests {
 		addCase(new HxBinopGroupWrapSliceTest());
 		addCase(new HxMethodChainWrapCapabilityTest());
 		addCase(new HxMethodChainEmitTest());
+		addCase(new HxMethodChainDotBreakOverReglueSliceTest());
+		addCase(new HxObjectLitArrowBodyPadSliceTest());
 		addCase(new HxMethodChainCloseTrailingTest());
 		addCase(new HxWrapRulesIngestTest());
 		addCase(new PairedConvertersSmokeTest());

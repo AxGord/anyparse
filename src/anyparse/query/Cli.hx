@@ -752,7 +752,7 @@ final class Cli {
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('refs', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<RefHit> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		if (o.json) {
 			sysPrint(Json.renderRefs(shown, o.wantDoc, o.wantSource));
@@ -2584,7 +2584,7 @@ final class Cli {
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('uses', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<UsesHit> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		for (entry in shown) sysPrint(Text.renderUses(entry.file, entry.source, entry.hits, o.wantDoc, o.wantSource, o.flat));
 		return emptyExit(allEntries.length == 0);
@@ -2656,7 +2656,7 @@ final class Cli {
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('meta', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<MetaHit> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		if (o.json) {
 			sysPrint(Json.renderMeta(shown));
@@ -3292,7 +3292,7 @@ final class Cli {
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('lit', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, o.flat));
 		return emptyExit(allEntries.length == 0);
@@ -3418,7 +3418,7 @@ final class Cli {
 		for (e in allEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('cases', limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<CasesHit> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			allEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		for (entry in shown) sysPrint(Cases.render(entry.file, entry.source, entry.hits, flat));
 		return emptyExit(allEntries.length == 0);
@@ -4059,7 +4059,7 @@ final class Cli {
 		for (e in allEntries) totalHits += e.matches.length;
 		final cappedLimit: Int = effectiveAutoLimit('search', o.limit, totalHits);
 		final shown: Array<{ file: String, source: String, matches: Array<Match> }> = limitEntries(
-			allEntries, cappedLimit, e -> e.matches.length, (e, k) -> { file: e.file, source: e.source, matches: e.matches.slice(0, k) }
+			allEntries, cappedLimit, e -> e.matches.length, (e, k) -> {file: e.file, source: e.source, matches: e.matches.slice(0, k) }
 		);
 		renderSearchResults(shown, o.json, o.flat);
 		return emptyExit(allEntries.length == 0);
@@ -12338,7 +12338,7 @@ final class Cli {
 		for (e in litEntries) totalHits += e.hits.length;
 		final cappedLimit: Int = effectiveAutoLimit('mentions', limit, totalHits);
 		final shown: Array<{ file: String, source: String, hits: Array<LitHit> }> = limitEntries(
-			litEntries, cappedLimit, e -> e.hits.length, (e, k) -> { file: e.file, source: e.source, hits: e.hits.slice(0, k) }
+			litEntries, cappedLimit, e -> e.hits.length, (e, k) -> {file: e.file, source: e.source, hits: e.hits.slice(0, k) }
 		);
 		sysPrint('# lit (every leaf — case-patterns / imports / new exprs / field-name slots)\n');
 		for (entry in shown) sysPrint(Lit.render(entry.file, entry.source, entry.hits, flat));

@@ -504,21 +504,20 @@ class WriterCodegen {
 	 * call this helper), and is dropped the moment a propagating ctor
 	 * re-establishes expression position one level deeper.
 	 */
-	private static function setExprPositionField(optionsCT: ComplexType, clearsValueIfBranch: Bool): Field {
-		final body: Expr = clearsValueIfBranch
-			? macro {
-				if (o._inExprPosition && !o._inValueIfBranch) return o;
-				final _c: $optionsCT = _copyOpt(o);
-				_c._inExprPosition = true;
-				_c._inValueIfBranch = false;
-				return _c;
-			}
-			: macro {
-				if (o._inExprPosition) return o;
-				final _c: $optionsCT = _copyOpt(o);
-				_c._inExprPosition = true;
-				return _c;
-			};
+	private static function setExprPositionField(optionsCT: ComplexType, clearsValueIfBranch: Bool, clearsArrowLambdaBody: Bool): Field {
+		var guard: Expr = macro o._inExprPosition;
+		if (clearsValueIfBranch) guard = macro $guard && !o._inValueIfBranch;
+		if (clearsArrowLambdaBody) guard = macro $guard && !o._inArrowLambdaBody;
+		final clears: Array<Expr> = [];
+		if (clearsValueIfBranch) clears.push(macro _c._inValueIfBranch = false);
+		if (clearsArrowLambdaBody) clears.push(macro _c._inArrowLambdaBody = false);
+		final body: Expr = macro {
+			if ($guard) return o;
+			final _c: $optionsCT = _copyOpt(o);
+			_c._inExprPosition = true;
+			$b{clears};
+			return _c;
+		};
 		return {
 			name: '_setExprPosition',
 			access: [APrivate, AStatic, AInline],
@@ -585,6 +584,42 @@ class WriterCodegen {
 					if (!o._inValueIfBranch) return o;
 					final _c: $optionsCT = _copyOpt(o);
 					_c._inValueIfBranch = false;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function setArrowLambdaBodyField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setArrowLambdaBody',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inArrowLambdaBody) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._inArrowLambdaBody = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	private static function clearArrowLambdaBodyField(optionsCT: ComplexType): Field {
+		return {
+			name: '_clearArrowLambdaBody',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (!o._inArrowLambdaBody) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._inArrowLambdaBody = false;
 					return _c;
 				},
 			}),
@@ -1932,8 +1967,9 @@ class WriterCodegen {
 
 	private static function pushOptFanoutHelpers(fields: Array<Field>, optionsTypePath: String, optionsCT: ComplexType): Void {
 		final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
+		final hasArrowLambdaBody: Bool = optionsHasField(optionsTypePath, '_inArrowLambdaBody');
 		if (optionsHasInExprPosition(optionsTypePath)) {
-			fields.push(setExprPositionField(optionsCT, hasValueIfBranch));
+			fields.push(setExprPositionField(optionsCT, hasValueIfBranch, hasArrowLambdaBody));
 			fields.push(clearExprPositionField(optionsCT));
 		}
 		// ω-elseif-body-break: opt-fanout helper pair for `propagateElseIfBranch`
@@ -1946,6 +1982,17 @@ class WriterCodegen {
 		if (hasValueIfBranch) {
 			fields.push(setValueIfBranchField(optionsCT));
 			fields.push(clearValueIfBranchField(optionsCT));
+		}
+		// ω-arrow-body-objlit-pad: opt-fanout helper pair for
+		// `propagateArrowLambdaBody` (`HxExpr.ThinArrow` right operand /
+		// `HxThinParenLambda.body` set-sites) and the `_setExprPosition`
+		// descent clear. The setter has NO `_inExprPosition` gate — an
+		// arrow-lambda body is always an expression. Sister to
+		// `_setValueIfBranch`/`_clearValueIfBranch`. Gated on
+		// `_inArrowLambdaBody:Bool` field presence on the opt typedef.
+		if (hasArrowLambdaBody) {
+			fields.push(setArrowLambdaBodyField(optionsCT));
+			fields.push(clearArrowLambdaBodyField(optionsCT));
 		}
 		// ω-anonfunction-empty-curly: opt-fanout helper for
 		// `propagateAnonFnContext`. Returns the input opt unchanged when

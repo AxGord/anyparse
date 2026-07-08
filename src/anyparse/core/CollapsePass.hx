@@ -568,7 +568,26 @@ final class CollapsePass {
 		// The glued first line ends at the last segment's call open delim (its
 		// args break onto their own lines). It fits iff `col + prefix <= width`.
 		final prefix: Null<Int> = gluedFirstLineWidth(glueShape);
-		return prefix == null || col + prefix > width
+		if (prefix == null || col + prefix > width) return rewrite(inner, decisions, insideBroken, width);
+		// A segment whose args force their OWN line breaks (multi-statement
+		// lambda body, trivia-bearing object literal — a forced hardline /
+		// deferred `BodyGroup` in the glue shape) IS the fork's "INDEPENDENT
+		// callParameter break": the physical line is already split by the
+		// content regardless of the chain decision, so the dot-break gains
+		// nothing and the chain re-glues (`}).success(…)` stays glued). The
+		// flat-width measures below can't see this — `flatTokenWidth` defers
+		// `BodyGroup` as zero-width, so a deferred-body segment reads as
+		// "fits after dot-break" and would wrongly keep the dot-break.
+		if (DocMeasure.hasForcedBreak(glueShape)) return rewrite(glueShape, decisions, insideBroken, width);
+		// A fitting glued head is NOT sufficient: fork
+		// `reEvaluateMethodChainAfterCallParam` re-glues only in reaction to an
+		// INDEPENDENT callParameter break — i.e. when the dot-break is USELESS
+		// because the last segment overflows its own continuation line even
+		// after a dot-break, so its call args must break regardless. A last
+		// segment that FITS at the dot-broken indent keeps the chain dot-break
+		// (fork `breakLongMethodChains` per-dot overflow semantics).
+		final segLine: Null<Int> = dotBrokenLastSegLine(inner, glueShape, capturedNestBase(inner, decisions));
+		return segLine != null && segLine <= width
 			? rewrite(inner, decisions, insideBroken, width)
 			: rewrite(glueShape, decisions, insideBroken, width);
 	}
@@ -594,6 +613,61 @@ final class CollapsePass {
 		var total: Int = lastPrefix;
 		for (i in 0...parts.length - 1) total += DocMeasure.flatTokenWidth(parts[i]);
 		return total;
+	}
+
+	/**
+	 * ω-methodchain-reeval-after-callparam — the dot-break continuation BASE
+	 * indent captured by the renderer's measure pass: the sister decision
+	 * entry keyed by the probe's INNER doc (`crosses == false`, so `opens()`
+	 * stays inert) carries the FRAME indent the dot-break shape's `Nest` is
+	 * relative to. The marker's own `capturedIndent` is the VISUAL column of
+	 * a possibly mid-line chain start — an over-estimate of the continuation
+	 * base. Null when the probe never rendered through the measure pass.
+	 */
+	private static function capturedNestBase(inner: Doc, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>): Null<Int> {
+		final entry: Null<{ node: Doc, crosses: Bool, ?indent: Int }> = decisions.find(e -> e.node == inner && !e.crosses);
+		return entry == null ? null : entry.indent;
+	}
+
+	/**
+	 * ω-methodchain-reeval-after-callparam — the rendered width of the LAST
+	 * chain segment's own line under the dot-break shape: nest base + the
+	 * break shape's segment indent + the segment's flat width. Null when the
+	 * shapes don't destructure (non-Concat glue, no top-level `Nest` in the
+	 * break shape) or no nest base was captured.
+	 */
+	private static function dotBrokenLastSegLine(inner: Doc, glueShape: Doc, nestBase: Null<Int>): Null<Int> {
+		if (nestBase == null) return null;
+		final parts: Null<Array<Doc>> = switch glueShape {
+			case Concat(items) if (items.length >= 2): items;
+			case _: null;
+		};
+		if (parts == null) return null;
+		final breakShape: Null<Doc> = switch inner {
+			case IfFullLineExceeds(_, brk, _): brk;
+			case _: null;
+		};
+		final cols: Null<Int> = breakShape == null ? null : topLevelNestCols(breakShape);
+		return cols == null ? null : nestBase + cols + DocMeasure.flatTokenWidth(parts[parts.length - 1]);
+	}
+
+	/**
+	 * The `cols` of the first `Nest` among `d`'s direct `Concat` children —
+	 * the dot-break shapes nest their broken segments exactly one such level
+	 * deep (`MethodChainEmit.shapeOnePerLine*`). Null when `d` is not that
+	 * shape.
+	 */
+	private static function topLevelNestCols(d: Doc): Null<Int> {
+		final items: Null<Array<Doc>> = switch d {
+			case Concat(children): children;
+			case _: null;
+		};
+		if (items == null) return null;
+		final nest: Null<Doc> = items.find(i -> i.match(Nest(_, _)));
+		return switch nest {
+			case Nest(cols, _): cols;
+			case null, _: null;
+		};
 	}
 
 	/**

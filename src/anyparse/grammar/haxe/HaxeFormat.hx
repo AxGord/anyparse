@@ -802,6 +802,7 @@ final class HaxeFormat implements TextFormat {
 		_inExprPosition: false,
 		_inElseIfBranch: false,
 		_inValueIfBranch: false,
+		_inArrowLambdaBody: false,
 		_classExtern: false,
 		_inAnonFnBody: false,
 		_inTypedefBody: false,

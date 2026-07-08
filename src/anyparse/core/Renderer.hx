@@ -2119,7 +2119,16 @@ class Renderer {
 				// glued flat overflows but the glued first line (last call's args
 				// broken) fits at `col` — mirror fork
 				// `reEvaluateMethodChainAfterCallParam`.
-				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
+				if (decisions != null) {
+					decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
+					// Sister entry keyed by the probe's INNER doc (`crosses ==
+					// false` → `opens()` stays inert): the FRAME indent — the base
+					// the dot-break shape's `Nest` is relative to.
+					// `rewriteChainProbe` re-measures the last segment's own
+					// continuation line against it (the visual `col` above
+					// over-estimates a mid-line chain start).
+					decisions.push({ node: inner, crosses: false, indent: f.indent });
+				}
 				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case _:
 		}

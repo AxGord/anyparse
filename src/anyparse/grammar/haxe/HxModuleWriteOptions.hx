@@ -1892,6 +1892,20 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// never leaks into an object literal nested deeper than the immediate
 	// branch value. Default `false`.
 	_inValueIfBranch: Bool,
+	// ω-arrow-body-objlit-pad — sister to `_inValueIfBranch`, set ONLY on the
+	// immediate body of an arrow lambda (`HxExpr.ThinArrow` right operand /
+	// `HxThinParenLambda.body` carrying `@:fmt(propagateArrowLambdaBody)`).
+	// Read by `HxObjectLit.fields` (`@:fmt(arrowBodyOpenPadSuppress)`) to drop
+	// the `objectLiteralBracesOpen` inner pad — mirroring fork's
+	// `MarkWhitespace.successiveParenthesis` compress-mode `case Arrow:
+	// return;`, which never applies the opening-brace policy to a `{`/`(`/`[`
+	// whose previous token is `->` (so `u -> {email: v }`, not `u -> { email:
+	// v }`, under `objectLiteralBraces.openingPolicy: "after"`). Cleared by
+	// `_setExprPosition` on any descent into a fresh expression-position frame
+	// (call-arg / array-element / operand / paren inner), so only the
+	// LEFTMOST-LEAF object literal of the body — the one whose `{` sits right
+	// after the `->` token — sees the flag. Default `false`.
+	_inArrowLambdaBody: Bool,
 	_classExtern: Bool,
 	_inAnonFnBody: Bool,
 	_inTypedefBody: Bool,
