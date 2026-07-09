@@ -586,8 +586,19 @@ final class CollapsePass {
 		// after a dot-break, so its call args must break regardless. A last
 		// segment that FITS at the dot-broken indent keeps the chain dot-break
 		// (fork `breakLongMethodChains` per-dot overflow semantics).
-		final segLine: Null<Int> = dotBrokenLastSegLine(inner, glueShape, capturedNestBase(d, decisions));
-		return segLine != null && segLine <= width
+		final nestBase: Null<Int> = capturedNestBase(d, decisions);
+		final segLine: Null<Int> = dotBrokenLastSegLine(inner, glueShape, nestBase);
+		if (segLine != null && segLine <= width) return rewrite(inner, decisions, insideBroken, width);
+		// ω-methodchain-reeval-after-callparam refinement: the last segment
+		// overflows its dot-broken continuation line FLAT — but when it
+		// carries its own LEADING-BREAK callParameter wrap, that break
+		// rescues it (the argument moves to its own line and the segment's
+		// first line ends at its open delimiter), so the dot-break is NOT
+		// useless and the chain keeps it. Mirrors the glued-head prefix
+		// check above; a segment with no such wrap (overflow inside an
+		// unbreakable atom) still re-glues.
+		final segFirst: Null<Int> = dotBrokenLastSegPrefixLine(inner, glueShape, nestBase, width);
+		return segFirst != null && segFirst <= width
 			? rewrite(inner, decisions, insideBroken, width)
 			: rewrite(glueShape, decisions, insideBroken, width);
 	}
@@ -1034,6 +1045,148 @@ final class CollapsePass {
 			case FillWithRestProbe(items, sep, tr): FillWithRestProbe([for (it in items) f(it)], f(sep), tr);
 			case FillBreakAfterWrap(items, sep, tr): FillBreakAfterWrap([for (it in items) f(it)], f(sep), tr);
 			case _: d;
+		};
+	}
+
+
+	/**
+	 * Sister of `dotBrokenLastSegLine` for the self-rescue tier: the last
+	 * segment's dot-broken FIRST-line width assuming its own leading-break
+	 * callParameter wrap fires — `nestBase + cols + prefix-to-open-delim`.
+	 * Null when the segment carries no leading-break args wrap (its flat
+	 * overflow cannot be rescued) or any component is unmeasurable.
+	 */
+	private static function dotBrokenLastSegPrefixLine(inner: Doc, glueShape: Doc, nestBase: Null<Int>, width: Int): Null<Int> {
+		if (nestBase == null) return null;
+		final parts: Null<Array<Doc>> = switch glueShape {
+			case Concat(items) if (items.length >= 2): items;
+			case _: null;
+		};
+		if (parts == null) return null;
+		final last: Doc = parts[parts.length - 1];
+		final breakShape: Null<Doc> = switch inner {
+			case IfFullLineExceeds(_, brk, _): brk;
+			case _: null;
+		};
+		final cols: Null<Int> = breakShape == null ? null : topLevelNestCols(breakShape);
+		if (cols == null) return null;
+		final argsBrk: Null<Doc> = findLeadingBreakArgsBrk(last);
+		if (argsBrk == null || !singleArgBrkFitsOwnLine(argsBrk, nestBase + cols, width)) return null;
+		final prefix: Null<Int> = flatPrefixToOpenDelim(last);
+		return prefix == null ? null : nestBase + cols + prefix;
+	}
+
+	/**
+	 * Find a callParameter args wrap inside `d` whose break branch LEADING-BREAKS the argument onto its own line, returning that break branch (null when absent) — the glue-shape
+	 * `Group(IfBreak(brk, flat))` form or its dot-break-shape rest-aware
+	 * `IfLineExceeds(w, brk, flat)` swap. Only the segment Concat\x27s top-level items are probed (see `argsWrapBrk`); the wrap branches themselves are not descended.
+	 */
+	private static function findLeadingBreakArgsBrk(d: Doc): Null<Doc> {
+		return switch d {
+			case Concat(items):
+				var found: Null<Doc> = null;
+				for (it in items) if (found == null) found = argsWrapBrk(it);
+				found;
+			case _: argsWrapBrk(d);
+		};
+	}
+
+	/**
+	 * The per-item probe of `findLeadingBreakArgsBrk`: unwrap a
+	 * render-transparent `WrapBoundary`, then match the wrap ctor itself —
+	 * deeper subtrees are NOT descended, mirroring the emit-side
+	 * `MethodChainEmit.restAwareCallParamSegment` top-level scan that owns
+	 * the "at most one args wrap per segment" invariant.
+	 */
+	private static function argsWrapBrk(d: Doc): Null<Doc> {
+		return switch d {
+			case WrapBoundary(inner): argsWrapBrk(inner);
+			case Group(IfBreak(brk, _)): argsBrkLeadingBreaks(brk) ? brk : null;
+			case IfLineExceeds(_, brk, _): argsBrkLeadingBreaks(brk) ? brk : null;
+			case _: null;
+		};
+	}
+
+	/**
+	 * True iff a leading-break args break branch moves a SINGLE argument
+	 * onto its own line and that line FITS: the branch's argument `Nest`
+	 * content is one leading hardline plus argument items with no further
+	 * same-level `Line` separators (a multi-argument fill layout — where
+	 * gluing the chain is no worse — is excluded), and
+	 * `baseCols + nestCols + flat argument width <= width`.
+	 */
+	private static function singleArgBrkFitsOwnLine(brk: Doc, baseCols: Int, width: Int): Bool {
+		final items: Null<Array<Doc>> = switch brk {
+			case Concat(list): list;
+			case _: null;
+		};
+		if (items == null) return false;
+		for (it in items) switch it {
+			case Nest(cols, inner):
+				final innerItems: Array<Doc> = switch inner {
+					case Concat(list): list;
+					case _: [inner];
+				};
+				var i: Int = 0;
+				while (i < innerItems.length && innerItems[i] == Empty) i++;
+				// The leading hardline must be a BARE `Line` at this level —
+				// a hardline packed inside a nested item would leave the
+				// argument width unmeasured by the same-level sum below.
+				final leadIsBareHardline: Bool = i < innerItems.length && switch innerItems[i] {
+					case Line(s):
+						s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+					case _: false;
+				};
+				if (!leadIsBareHardline) return false;
+				i++;
+				var argWidth: Int = 0;
+				while (i < innerItems.length) {
+					switch innerItems[i] {
+						case Line(_):
+							return false;
+						case _:
+							argWidth += DocMeasure.flatTokenWidth(innerItems[i]);
+					}
+					i++;
+				}
+				return baseCols + cols + argWidth <= width;
+			case _:
+		}
+		return false;
+	}
+
+	/**
+	 * True iff a wrap break branch is a LEADING-BREAK shape: after an
+	 * optional open-delimiter `Text` atom and `Empty` padding, the first
+	 * element starts with a hard newline. Mirror of the emit-side
+	 * `MethodChainEmit.brkLeadingBreaks` (kept local — core must not
+	 * depend on the wrap package).
+	 */
+	private static function argsBrkLeadingBreaks(brk: Doc): Bool {
+		return switch brk {
+			case Concat(items):
+				var i: Int = 0;
+				if (i < items.length && items[i].match(Text(_))) i++;
+				while (i < items.length && items[i] == Empty) i++;
+				i < items.length && argsStartsWithHardline(items[i]);
+			case _: false;
+		};
+	}
+
+	/**
+	 * True iff `d`'s first visible content is a hard `Line('\n')` —
+	 * descends the argument `Nest` and leading `Concat` padding.
+	 */
+	private static function argsStartsWithHardline(d: Doc): Bool {
+		return switch d {
+			case Line(s):
+				s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+			case Nest(_, inner): argsStartsWithHardline(inner);
+			case Concat(items):
+				var i: Int = 0;
+				while (i < items.length && items[i] == Empty) i++;
+				i < items.length && argsStartsWithHardline(items[i]);
+			case _: false;
 		};
 	}
 
