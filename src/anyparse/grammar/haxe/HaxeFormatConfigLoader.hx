@@ -618,6 +618,7 @@ final class HaxeFormatConfigLoader {
 			anonTypeBracesClose: base.anonTypeBracesClose,
 			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
+			objectLiteralArrowBodyOpenPad: base.objectLiteralArrowBodyOpenPad,
 			accessBracketsOpen: base.accessBracketsOpen,
 			accessBracketsClose: base.accessBracketsClose,
 			arrayLiteralBracketsOpen: base.arrayLiteralBracketsOpen,
@@ -1736,6 +1737,12 @@ final class HaxeFormatConfigLoader {
 			if (objectLit != null) {
 				if (objectLit.openingPolicy != null) opt.objectLiteralBracesOpen = whitespaceToRuntime(objectLit.openingPolicy);
 				if (objectLit.closingPolicy != null) opt.objectLiteralBracesClose = whitespaceToRuntime(objectLit.closingPolicy);
+				// ω-arrow-body-objlit-pad-keep: `arrowBodyOpenPad: true` opts
+				// into keeping the open-side pad on arrow-lambda-body literals
+				// (`u -> { email: v }`) — a deliberate divergence from the
+				// fork, which always drops it (`MarkWhitespace.
+				// successiveParenthesis` compress-mode `case Arrow: return;`).
+				if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = objectLit.arrowBodyOpenPad;
 			}
 		}
 	}

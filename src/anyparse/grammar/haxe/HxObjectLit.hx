@@ -109,7 +109,7 @@ package anyparse.grammar.haxe;
  * `MarkWhitespace.successiveParenthesis`'s compress-mode `case Arrow:
  * return;` which never applies the opening-brace policy to a `{` whose
  * previous token is `->` (`u -> {email: v }`, not `u -> { email: v }`).
- * The close-side pad is unaffected. Cleared by `_setExprPosition` on
+ * The close-side pad is unaffected. Config `objectLiteralBraces.arrowBodyOpenPad: true` disables the suppression (keeps the pad — a deliberate divergence from the fork). Cleared by `_setExprPosition` on
  * every fresh expression-position descent, so only the literal whose
  * `{` sits right after the `->` token sees the flag.
  */

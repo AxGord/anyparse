@@ -79,4 +79,34 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
+
+	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
+
+	/**
+	 * ω-arrow-body-objlit-pad-keep: `arrowBodyOpenPad: true` disables the
+	 * arrow-body open-pad suppression — the literal keeps the configured
+	 * `openingPolicy` pad like every other context.
+	 */
+	public function testArrowBodyOpenPadKeptWithConfigKnob(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> { alpha: u.a, beta: u.b });\n\t}\n}';
+		Assert.equals(src, triviaWriteKeepPad(src));
+	}
+
+	public function testArrowBodyOpenPadAddedWithConfigKnob(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {alpha: u.a, beta: u.b });\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> { alpha: u.a, beta: u.b });\n\t}\n}';
+		Assert.equals(expected, triviaWriteKeepPad(src));
+	}
+
+	public function testParenLambdaBodyOpenPadKeptWithConfigKnob(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map((u, w) -> { alpha: u.a, beta: w.b });\n\t}\n}';
+		Assert.equals(src, triviaWriteKeepPad(src));
+	}
+
+	private inline function triviaWriteKeepPad(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG_KEEP_PAD);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
 }

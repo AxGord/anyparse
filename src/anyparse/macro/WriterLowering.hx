@@ -10252,7 +10252,13 @@ class WriterLowering {
 		// branch never applies the opening-brace policy to a `{` whose
 		// previous token is `->` (`case Arrow: return;`). The close side has
 		// no Arrow check in the fork, so `isClose` keeps the plain policy.
-		return !isClose && starNode.fmtHasFlag('arrowBodyOpenPadSuppress') ? macro opt._inArrowLambdaBody ? _de() : $sw : sw;
+		// `opt.objectLiteralArrowBodyOpenPad` (config `objectLiteralBraces.
+		// arrowBodyOpenPad: true`) disables the suppression — a deliberate
+		// config-gated divergence keeping arrow-body literals padded like
+		// every other object literal (`u -> { email: v }`).
+		return !isClose && starNode.fmtHasFlag('arrowBodyOpenPadSuppress')
+			? macro opt._inArrowLambdaBody && !opt.objectLiteralArrowBodyOpenPad ? _de() : $sw
+			: sw;
 	}
 
 	/**

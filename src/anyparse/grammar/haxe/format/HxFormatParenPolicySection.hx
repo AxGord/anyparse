@@ -29,4 +29,11 @@ package anyparse.grammar.haxe.format;
 	@:optional var closingPolicy: HxFormatWhitespacePolicy;
 
 	@:optional var removeInnerWhenEmpty: Bool;
+
+	// ω-arrow-body-objlit-pad-keep: `objectLiteralBraces`-only key —
+	// `true` keeps the `openingPolicy` inner pad on an object literal
+	// that is an arrow-lambda body (`u -> { email: v }`); absent /
+	// `false` mirrors the fork's compress-mode Arrow suppression
+	// (`u -> {email: v }`). Sibling kinds parse and ignore the key.
+	@:optional var arrowBodyOpenPad: Bool;
 };

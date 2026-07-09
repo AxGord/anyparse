@@ -1789,6 +1789,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	anonTypeBracesClose: WhitespacePolicy,
 	objectLiteralBracesOpen: WhitespacePolicy,
 	objectLiteralBracesClose: WhitespacePolicy,
+	// ω-arrow-body-objlit-pad-keep: when `true`, the open-side
+	// `objectLiteralBracesOpen` inner pad is applied EVEN when the literal
+	// is an arrow-lambda body (`u -> { email: v }`). Default `false`
+	// mirrors the fork's `MarkWhitespace.successiveParenthesis`
+	// compress-mode `case Arrow: return;` which drops the opening-brace
+	// pad after a `->` token (`u -> {email: v }`). Fed by
+	// `whitespace.bracesConfig.objectLiteralBraces.arrowBodyOpenPad`.
+	objectLiteralArrowBodyOpenPad: Bool,
 	accessBracketsOpen: WhitespacePolicy,
 	accessBracketsClose: WhitespacePolicy,
 	arrayLiteralBracketsOpen: WhitespacePolicy,
