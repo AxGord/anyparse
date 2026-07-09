@@ -127,7 +127,7 @@ class MethodChainEmit {
 			// `.field` onto a line comment.
 			return hasCommentBreak && mode != Keep
 				? shapeKeep(receiver, segments, cols, commentBreakMask(mode, segments.length, commentForcedBreak))
-				: shape(mode, receiver, segments, cols, sourceBreakBefore);
+				: shape(mode, receiver, segments, cols, opt.lineWidth, sourceBreakBefore);
 		}
 
 		// Normal path: cascade evaluated against (exceeds=false /
@@ -191,12 +191,14 @@ class MethodChainEmit {
 		return IfWidthExceeds(t, brk, flat);
 	}
 
-	private static function shape(mode: WrapMode, receiver: Doc, segments: Array<Doc>, cols: Int, ?sourceBreakBefore: Array<Bool>): Doc {
+	private static function shape(
+		mode: WrapMode, receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int, ?sourceBreakBefore: Array<Bool>
+	): Doc {
 		return switch mode {
 			case NoWrap: shapeNoWrap(receiver, segments);
-			case OnePerLine: shapeOnePerLine(receiver, segments, cols);
+			case OnePerLine: shapeOnePerLine(receiver, segments, cols, lineWidth);
 			case OnePerLineAfterFirst:
-				shapeOnePerLineAfterFirst(receiver, segments, cols);
+				shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth);
 			// ω-keep-chain (increment 9): JSON `"defaultWrap": "keep"` on
 			// method-chain configs (`methodChain.defaultWrap = "keep"`)
 			// reproduces the source's per-segment dot-boundary line breaks
@@ -220,7 +222,7 @@ class MethodChainEmit {
 			// Fall back to OnePerLineAfterFirst (the most common chain
 			// break shape) — a future slice can split if a fixture
 			// demands it.
-			case _: shapeOnePerLineAfterFirst(receiver, segments, cols);
+			case _: shapeOnePerLineAfterFirst(receiver, segments, cols, lineWidth);
 		};
 	}
 
@@ -384,7 +386,7 @@ class MethodChainEmit {
 		return false;
 	}
 
-	private static function shapeOnePerLineAfterFirst(receiver: Doc, segments: Array<Doc>, cols: Int): Doc {
+	private static function shapeOnePerLineAfterFirst(receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int): Doc {
 		// `receiver seg0` inline; remaining segments each on their own
 		// indented line. The macro-side dispatch guards with
 		// `segments.length >= 2`, so a one-segment input here is a
@@ -393,12 +395,13 @@ class MethodChainEmit {
 		// shape.
 		if (segments.length < 2)
 			throw 'MethodChainEmit.shapeOnePerLineAfterFirst: macro-side ≥2 guard violated (segments=${segments.length})';
+		final segs: Array<Doc> = restAwareCallParamSegments(segments, lineWidth);
 		final tail: Array<Doc> = [];
-		for (i in 1...segments.length) {
+		for (i in 1...segs.length) {
 			tail.push(Line('\n'));
-			tail.push(segments[i]);
+			tail.push(segs[i]);
 		}
-		return Concat([receiver, segments[0], Nest(cols, Concat(tail))]);
+		return Concat([receiver, segs[0], Nest(cols, Concat(tail))]);
 	}
 
 	/**
@@ -432,14 +435,15 @@ class MethodChainEmit {
 		return Concat([receiver, Nest(cols, Concat(tail))]);
 	}
 
-	private static function shapeOnePerLine(receiver: Doc, segments: Array<Doc>, cols: Int): Doc {
+	private static function shapeOnePerLine(receiver: Doc, segments: Array<Doc>, cols: Int, lineWidth: Int): Doc {
 		// Receiver inline, then ALL segments on their own indented
 		// lines (including the first). Mirrors fork's
 		// `WrappingType.onePerLine` shape for chain origin —
 		// the receiver stays at the call-site column and the chain
 		// breaks below it at one indent level deeper.
+		final segs: Array<Doc> = restAwareCallParamSegments(segments, lineWidth);
 		final tail: Array<Doc> = [];
-		for (s in segments) {
+		for (s in segs) {
 			tail.push(Line('\n'));
 			tail.push(s);
 		}
@@ -487,6 +491,114 @@ class MethodChainEmit {
 		// is a single dot-break only when `modeNY == modeYY` (no inner
 		// `IfWidthExceeds` split); tag using that break mode.
 		return WrapBoundary(modeNY == modeYY ? maybeTagReglue(ifFLE, modeNY, modeNN, segments, nestSuppress, segCallLeadingBreak) : ifFLE);
+	}
+
+
+	/**
+	 * ω-methodchain-callparam-restaware: within a DOT-BROKEN chain shape, a
+	 * segment's callParameter wrap (a cascade-disagree `Group(IfBreak(brk, flat))`
+	 * whose break branch LEADING-BREAKS the argument onto its own line) picks
+	 * flat-vs-break via the renderer's LOCAL `fitsFlat` — blind to the trailing
+	 * tokens (`;` / `: null` / `,`) that share the segment's physical line. The
+	 * fork's `exceedsMaxLineLength` measures the WHOLE physical line, so it
+	 * leading-breaks a segment that fits on its own but overflows once the
+	 * trailing content is counted (probe: `.concat(arg)` at 5 tabs = 137 stays
+	 * glued, at 6 tabs = 141 leading-breaks — the only delta is the trailing
+	 * `;`). Swap the segment's `Group(IfBreak(brk, flat))` for a rest-of-stack-
+	 * aware `IfLineExceeds(lineWidth, brk, flat)` (the rest walker aborts at the
+	 * next chain-internal hardline, so a mid-chain segment sees only its own
+	 * line while the last segment additionally sees the trailing terminator).
+	 * Only leading-break callParameter groups are rewritten — arrow-body close-
+	 * paren couplings (break keeps the argument glued) and non-`Group` wraps
+	 * (`IfFirstLineExceeds`) keep their existing local decision.
+	 */
+	private static function restAwareCallParamSegments(segments: Array<Doc>, lineWidth: Int): Array<Doc> {
+		return [for (seg in segments) restAwareCallParamSegment(seg, lineWidth)];
+	}
+
+	/**
+	 * Rewrite a single chain segment: find its outermost callParameter args
+	 * wrap and, when it is a leading-break `Group(IfBreak(brk, flat))`, swap it
+	 * for a rest-aware `IfLineExceeds`. A segment carries at most one such wrap,
+	 * so the first match wins; a non-call / non-matching segment is returned
+	 * unchanged.
+	 */
+	private static function restAwareCallParamSegment(seg: Doc, lineWidth: Int): Doc {
+		return switch seg {
+			case Concat(items):
+				final copy: Array<Doc> = items.copy();
+				var changed: Bool = false;
+				for (i in 0...copy.length) if (!changed) {
+					final swapped: Null<Doc> = restAwareArgsWrap(copy[i], lineWidth);
+					if (swapped != null) {
+						copy[i] = swapped;
+						changed = true;
+					}
+				}
+				changed ? Concat(copy) : seg;
+			case _: seg;
+		};
+	}
+
+	/**
+	 * Return the rest-aware replacement for a callParameter args wrap, or `null`
+	 * when `argsDoc` is not a leading-break `Group(IfBreak(...))` (possibly under
+	 * a render-transparent `WrapBoundary`). The `brk` / `flat` branches are NOT
+	 * descended — the argument's own inner wrapping (nested chains, lambdas)
+	 * stays intact.
+	 */
+	private static function restAwareArgsWrap(argsDoc: Doc, lineWidth: Int): Null<Doc> {
+		return switch argsDoc {
+			case WrapBoundary(inner):
+				final swapped: Null<Doc> = restAwareArgsWrap(inner, lineWidth);
+				swapped == null ? null : WrapBoundary(swapped);
+			case Group(IfBreak(brk, flat)) if (brkLeadingBreaks(brk)):
+				IfLineExceeds(lineWidth, brk, flat);
+			case _: null;
+		};
+	}
+
+	/**
+	 * True iff `brk` is a callParameter LEADING-BREAK shape — after the open
+	 * delimiter `Text`, the first non-`Empty` element pushes the argument onto
+	 * its own new line (a hard `Line('\n')`, possibly wrapped in the argument
+	 * `Nest`). Distinguishes the callParameter FLWLB / one-per-line break from
+	 * an arrow-body close-paren coupling, whose break keeps the argument glued
+	 * and only breaks the close delimiter.
+	 */
+	private static function brkLeadingBreaks(brk: Doc): Bool {
+		return switch brk {
+			case Concat(items):
+				var i: Int = 0;
+				if (i < items.length && isTextAtom(items[i])) i++;
+				while (i < items.length && items[i] == Empty) i++;
+				i < items.length && startsWithHardline(items[i]);
+			case _: false;
+		};
+	}
+
+	/**
+	 * True iff `d`'s first visible content is a hard `Line('\n')` — descends the
+	 * argument `Nest` and leading `Concat` padding.
+	 */
+	private static function startsWithHardline(d: Doc): Bool {
+		return switch d {
+			case Line(s):
+				s.length > 0 && StringTools.fastCodeAt(s, 0) == '\n'.code;
+			case Nest(_, inner): startsWithHardline(inner);
+			case Concat(items):
+				var i: Int = 0;
+				while (i < items.length && items[i] == Empty) i++;
+				i < items.length && startsWithHardline(items[i]);
+			case _: false;
+		};
+	}
+
+	private static inline function isTextAtom(d: Doc): Bool {
+		return switch d {
+			case Text(_): true;
+			case _: false;
+		};
 	}
 
 }
