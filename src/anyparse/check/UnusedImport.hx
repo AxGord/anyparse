@@ -31,9 +31,7 @@ using Lambda;
  * ## Conservative by design
  *
  * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
- * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If
- * that name occurs as no word-boundary token anywhere outside the import
- * statements, the import is unused → `Warning`. The remaining forms:
+ * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If that name occurs as no word-boundary token anywhere outside the import statements, the import is unused → `Warning` — except a plain module import whose module is IN the lint file set: it binds every top-level type of the module, so a reference to any SECONDARY type keeps it (see `secondaryTypeReferenced`). The remaining forms:
  *
  *  - `import pkg.*;` (wildcard) — brings in an unknown set of symbols; a bare
  *    reference can come from it without naming the package, so it stays an
@@ -62,13 +60,17 @@ final class UnusedImport implements Check {
 		for (entry in files) sourceOf[entry.file] = entry.source;
 
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		// Top-level type names per in-set module path — a plain module import
+		// binds ALL of them, so the used-check must consult every name.
+		final moduleTypes: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
 			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(violations, info.file, imp, source, importSpans, plugin);
+				addViolation(violations, info.file, imp, source, importSpans, plugin, moduleTypes);
 		}
 		return violations;
 	}
@@ -94,12 +96,11 @@ final class UnusedImport implements Check {
 
 	/**
 	 * Append the verdict for one import. A wildcard (`import pkg.*;`) is an
-	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every
-	 * other form is a `Warning` when its bound name is not referenced outside the
-	 * import statements.
+	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every other form is a `Warning` when its bound name is not referenced outside the import statements AND (for a plain in-set module import) no secondary top-level type of the module is referenced either.
 	 */
 	private static function addViolation(
-		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin
+		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin,
+		moduleTypes: Map<String, Array<String>>
 	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
@@ -108,9 +109,26 @@ final class UnusedImport implements Check {
 				addUsingViolation(out, file, imp, source, importSpans, plugin);
 			case _:
 				final bound: String = imp.alias ?? lastSegment(imp.raw);
-				if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans))
-					out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
+				if (RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) return;
+				// A plain `import pkg.Mod;` binds every top-level type of the
+				// module, not only the main one — a reference to a SECONDARY
+				// typedef/enum keeps the import even though `Mod` itself is
+				// never named (deleting it broke real builds). Only resolvable
+				// when the module is in the lint file set; an out-of-set module
+				// (stdlib, haxelib) falls back to the bound-name verdict. An
+				// alias import binds just the alias — never widened.
+				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, source, importSpans, moduleTypes)) return;
+				out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
 		}
+	}
+
+	/** True when any OTHER top-level type of in-set module `raw` is referenced in `source` outside the imports. */
+	private static function secondaryTypeReferenced(
+		raw: String, bound: String, source: String, importSpans: Array<Span>, moduleTypes: Map<String, Array<String>>
+	): Bool {
+		final types: Null<Array<String>> = moduleTypes[raw];
+		if (types == null) return false;
+		return types.exists(name -> name != bound && RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans));
 	}
 
 	private static function make(file: String, imp: ImportInfo, severity: Severity, message: String): Violation {

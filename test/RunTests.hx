@@ -220,6 +220,7 @@ import unit.RemoveMemberSliceTest;
 import unit.CrossRenameSliceTest;
 import unit.SymbolIndexSliceTest;
 import unit.SymbolQuerySliceTest;
+import unit.LintModuleSecondaryTypeSliceTest;
 import unit.LintSliceTest;
 import unit.LintFailOnCliTest;
 import unit.MoveSymbolSliceTest;
@@ -672,6 +673,7 @@ class RunTests {
 		addCase(new LintFixFixedPointCliTest());
 		addCase(new LintConfigTest());
 		addCase(new LintSliceTest());
+		addCase(new LintModuleSecondaryTypeSliceTest());
 		addCase(new LintFailOnCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());

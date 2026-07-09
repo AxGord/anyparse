@@ -120,6 +120,7 @@ final class RefactorSupport {
 		'ClassDecl',
 		'InterfaceDecl',
 		'EnumDecl',
+		'EnumAbstractDecl',
 		'TypedefDecl',
 		'AbstractDecl',
 	];
