@@ -109,4 +109,35 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
+
+	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+
+	/**
+	 * ω-arrow-body-objlit-reflow: `arrowBodyReflow: true` drops the source
+	 * newlines of an arrow-lambda-body literal so the wrap cascade re-flows
+	 * it by width — a source-multiline body collapses to the canonical
+	 * inline form when it fits.
+	 */
+	public function testArrowBodyMultilineSourceReflowsInline(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> { alpha: u.a, beta: u.b });\n\t}\n}';
+		Assert.equals(expected, triviaWriteReflow(src));
+	}
+
+	public function testArrowBodyMultilineSourceKeptWithoutReflowKnob(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
+		Assert.equals(src, triviaWriteKeepPad(src));
+	}
+
+	public function testNonArrowMultilineObjectLitKeptWithReflowKnob(): Void {
+		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entry = {\n\t\t\talpha: 1,\n\t\t\tbeta: 2\n\t\t};\n\t}\n}';
+		Assert.equals(src, triviaWriteReflow(src));
+	}
+
+	private inline function triviaWriteReflow(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG_REFLOW);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
 }

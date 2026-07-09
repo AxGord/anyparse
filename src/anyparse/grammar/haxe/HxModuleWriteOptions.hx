@@ -1797,6 +1797,13 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// pad after a `->` token (`u -> {email: v }`). Fed by
 	// `whitespace.bracesConfig.objectLiteralBraces.arrowBodyOpenPad`.
 	objectLiteralArrowBodyOpenPad: Bool,
+	// ω-arrow-body-objlit-reflow: when `true`, a source-multiline object
+	// literal that is an arrow-lambda body drops its source newlines and
+	// the wrap cascade re-flows it by width (`u -> { a: 1 }` when it
+	// fits). Default `false` keeps the legacy source-multiline force-multi
+	// shape (fork parity). Fed by `whitespace.bracesConfig.
+	// objectLiteralBraces.arrowBodyReflow`.
+	objectLiteralArrowBodyReflow: Bool,
 	accessBracketsOpen: WhitespacePolicy,
 	accessBracketsClose: WhitespacePolicy,
 	arrayLiteralBracketsOpen: WhitespacePolicy,

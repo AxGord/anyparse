@@ -14170,7 +14170,22 @@ class WriterLowering {
 				final rulesAccess: Expr = optFieldAccess(wrapRulesField);
 				macro $rulesAccess.defaultMode == anyparse.format.wrap.WrapMode.Ignore;
 			} : macro false);
-		final ignoreCheckExpr: Expr = reflowInExprPosition ? macro ($ignoreBase) || opt._inValueIfBranch : ignoreBase;
+		// ω-arrow-body-objlit-reflow: a FOURTH disjunct on the same
+		// `@:fmt(reflowInExprPosition)` Star (HxObjectLit.fields) — Ignore
+		// also fires when the literal is an arrow-lambda body (runtime
+		// `opt._inArrowLambdaBody`, the same signal the open-pad suppress
+		// consumes) AND the config opted in via `objectLiteralBraces.
+		// arrowBodyReflow: true`. A source-multiline arrow-body literal then
+		// drops its newlineBefore signals and the wrap cascade re-flows it
+		// by width — collapsing `u -> {\n a: 1\n}` to the canonical
+		// `u -> { a: 1 }` when it fits (a deliberate config-gated divergence:
+		// the fork keeps such literals source-multiline). Without the knob
+		// the legacy force-multi shape is kept; it also sidesteps the
+		// enclosing-chain BodyGroup under-measure that exploded the arrow
+		// (`u ->` newline `{…}`) non-idempotently.
+		final ignoreCheckExpr: Expr = reflowInExprPosition
+			? macro ($ignoreBase) || opt._inValueIfBranch || (opt._inArrowLambdaBody && opt.objectLiteralArrowBodyReflow)
+			: ignoreBase;
 		// ω-nowrap-flat: pure-`noWrap` runtime check, sister to
 		// `keepCheckExpr` / `ignoreCheckExpr`. Fires only when the
 		// wrap-rules JSON config selects `"defaultWrap": "noWrap"` with an

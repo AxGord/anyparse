@@ -732,6 +732,7 @@ final class HaxeFormat implements TextFormat {
 		objectLiteralBracesOpen: WhitespacePolicy.None,
 		objectLiteralBracesClose: WhitespacePolicy.None,
 		objectLiteralArrowBodyOpenPad: false,
+		objectLiteralArrowBodyReflow: false,
 		accessBracketsOpen: WhitespacePolicy.None,
 		accessBracketsClose: WhitespacePolicy.None,
 		arrayLiteralBracketsOpen: WhitespacePolicy.None,

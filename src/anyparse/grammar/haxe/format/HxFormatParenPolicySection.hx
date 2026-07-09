@@ -36,4 +36,11 @@ package anyparse.grammar.haxe.format;
 	// `false` mirrors the fork's compress-mode Arrow suppression
 	// (`u -> {email: v }`). Sibling kinds parse and ignore the key.
 	@:optional var arrowBodyOpenPad: Bool;
+
+	// ω-arrow-body-objlit-reflow: `objectLiteralBraces`-only key —
+	// `true` re-flows a source-multiline object literal that is an
+	// arrow-lambda body by width (collapses to `u -> { a: 1 }` when it
+	// fits); absent / `false` keeps the source-multiline shape (fork
+	// parity). Sibling kinds parse and ignore the key.
+	@:optional var arrowBodyReflow: Bool;
 };

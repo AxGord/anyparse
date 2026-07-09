@@ -619,6 +619,7 @@ final class HaxeFormatConfigLoader {
 			objectLiteralBracesOpen: base.objectLiteralBracesOpen,
 			objectLiteralBracesClose: base.objectLiteralBracesClose,
 			objectLiteralArrowBodyOpenPad: base.objectLiteralArrowBodyOpenPad,
+			objectLiteralArrowBodyReflow: base.objectLiteralArrowBodyReflow,
 			accessBracketsOpen: base.accessBracketsOpen,
 			accessBracketsClose: base.accessBracketsClose,
 			arrayLiteralBracketsOpen: base.arrayLiteralBracketsOpen,
@@ -1743,6 +1744,10 @@ final class HaxeFormatConfigLoader {
 				// fork, which always drops it (`MarkWhitespace.
 				// successiveParenthesis` compress-mode `case Arrow: return;`).
 				if (objectLit.arrowBodyOpenPad != null) opt.objectLiteralArrowBodyOpenPad = objectLit.arrowBodyOpenPad;
+				// ω-arrow-body-objlit-reflow: `arrowBodyReflow: true` re-flows a
+				// source-multiline arrow-body literal by width (sister divergence
+				// to `arrowBodyOpenPad`; the fork keeps such literals multi-line).
+				if (objectLit.arrowBodyReflow != null) opt.objectLiteralArrowBodyReflow = objectLit.arrowBodyReflow;
 			}
 		}
 	}
