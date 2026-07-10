@@ -161,6 +161,23 @@ final class CollapsePass {
 		final tagged: Null<{ marker: Doc, brk: Doc, flat: Doc }> = taggedAddChain(d);
 		if (tagged != null) return rewriteTaggedAddChain(tagged, decisions, insideBroken, width);
 
+		// PROBED tagged add-chain (ω-opadd-trailing-paren-glue): the same
+		// inverse intercept for a tagged chain wrapped in the natural-first-line
+		// glue probe (`IfNaturalFirstLineFitsOpenDelim`). Inside a broken outer
+		// chain the collapse wins and the probe is moot (the flat branch IS the
+		// glued shape); otherwise the probe is preserved around the rewritten
+		// IfBreak so the render-time glue decision still applies.
+		switch d {
+			case WrapBoundary(IfNaturalFirstLineFitsOpenDelim(n, Group(IfBreak(marker = CollapseAddProbe(brk), flat)), noWrap)):
+				if (insideBroken) return WrapBoundary(rewrite(flat, decisions, true, width));
+				final broke: Bool = opens(marker, decisions);
+				return WrapBoundary(IfNaturalFirstLineFitsOpenDelim(
+					n, Group(IfBreak(rewrite(brk, decisions, broke, width), rewrite(flat, decisions, false, width))),
+					rewrite(noWrap, decisions, false, width)
+				));
+			case _:
+		}
+
 		// OPBOOL-REEVAL direction (ω-opbool-reeval-after-callparam): a tagged
 		// opBool chain `CollapseBoolProbe(<trailing FillLine shape>)`. When the
 		// chain wrapped (marker crossed) AND a contained call operand overflows

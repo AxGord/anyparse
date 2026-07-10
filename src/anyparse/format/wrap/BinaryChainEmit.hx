@@ -321,12 +321,12 @@ final class BinaryChainEmit {
 	 * own operator instead (`condition_first_operand_paren_no_merge`).
 	 * Only a LATER operand-call absorbing the overflow is a valid unwrap.
 	 */
-	private static function leadingOperandOpensDelim(item0: Doc): Bool {
+	private static function leadingOperandOpensDelim(item0: Doc, parenOnly: Bool = false): Bool {
 		return switch item0 {
 			case Text(s):
 				s.length > 0
-					&& (StringTools.fastCodeAt(s, 0) == '('.code || StringTools.fastCodeAt(s, 0) == '['.code
-						|| StringTools.fastCodeAt(s, 0) == '{'.code);
+					&& (StringTools.fastCodeAt(s, 0) == '('.code || !parenOnly
+						&& (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code));
 			case Concat(arr):
 				var hit: Bool = false;
 				var done: Bool = false;
@@ -335,17 +335,17 @@ final class BinaryChainEmit {
 						| OptHardlineSkipBeforeHardline:
 					case _:
 						done = true;
-						hit = leadingOperandOpensDelim(it);
+						hit = leadingOperandOpensDelim(it, parenOnly);
 				}
 				hit;
 			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
 				i
 			) | CollapseBoolProbe(i) | CollapseChainProbe(i) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
-				leadingOperandOpensDelim(i);
+				leadingOperandOpensDelim(i, parenOnly);
 			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
 				_, _, flat
 			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat):
-				leadingOperandOpensDelim(flat);
+				leadingOperandOpensDelim(flat, parenOnly);
 			case _: false;
 		};
 	}
@@ -686,7 +686,24 @@ final class BinaryChainEmit {
 		// strips `+`/`-` line-ends inside a wrapped region without touching
 		// inner ternary/call breaks. opBool / ternary chains are NOT tagged
 		// (fork never `unwrapAddOps` them).
-		if (isAddSubOps(ops)) return WrapBoundary(Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat))));
+		if (isAddSubOps(ops)) {
+			final brkDoc: Doc = Group(IfBreak(CollapseAddProbe(shapeAt(brk)), shapeAt(flat)));
+			// ω-opadd-trailing-paren-glue: when the chain's LAST operand leads
+			// with a bare `(` (a paren-expr operand) and operand-1 does not, pivot
+			// the committed break shape against the NoWrap glue via the natural-
+			// first-line probe: the glue renders ONLY when the flat chain's first
+			// physical line ENDS at an open delimiter and fits — i.e. the paren
+			// operand leading-broke under a fillLine-family expressionWrapping
+			// (`a - b - (` head glued, inner nested, `)` on its own line; fork
+			// `unwrapAddOps`). At the universal default the paren-expr stays
+			// content-glued (`- (inner`), the probe never ends on an open delim,
+			// and the committed break shape renders unchanged (fork-corpus inert).
+			return WrapBoundary(
+				leadingOperandOpensDelim(items[items.length - 1], true) && !leadingOperandOpensDelim(items[0])
+					? IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkDoc, shapeNoWrapAt(flat.location))
+					: brkDoc
+			);
+		}
 		// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
 		// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
 		// (`AfterLast`) and that contains a function-call operand. TAG the broken
