@@ -741,6 +741,10 @@ class WriterLowering {
 		// fields back. Reset to `null` on any non-Star field, since the
 		// emitted content at that point forms its own boundary.
 		var prevAnyStarNonEmpty: Null<Expr> = null;
+		// ω-metastmt-sep: `true` while the previous field was a mandatory
+		// Ref (always emits content). Consumed by the Star branch below to
+		// seed `prevAnyStarNonEmpty` — see the comment at the reset site.
+		var prevFieldAlwaysEmits: Bool = false;
 		// ω-pad-trailing-ref: tracks the runtime-Bool expr representing
 		// the immediately preceding field's `@:fmt(padTrailing)` emission
 		// (or `null` when the previous field neither carried the flag
@@ -888,9 +892,10 @@ class WriterLowering {
 				condFitGroupStartIdx = -1;
 				final starResult = emitStarField(
 					child, parts, node, typePath, isFirstField, isRaw, stalePrevBareRefBody, prevTrailFieldName, kwLead, fieldName,
-					prevBodyField, prevPadTrailing, fieldAccess, prevAnyStarNonEmpty, multiVarMoreField, isOptional
+					prevBodyField, prevPadTrailing, fieldAccess, prevAnyStarNonEmpty, multiVarMoreField, isOptional, prevFieldAlwaysEmits
 				);
 				prevAnyStarNonEmpty = starResult.prevAnyStarNonEmpty;
+				prevFieldAlwaysEmits = false;
 				prevBodyField = null;
 				// ω-case-label-trail-comment: a @:fmt(captureTrailComment) Star (the
 				// case-pattern list ending in `:`) publishes its name so the NEXT
@@ -998,6 +1003,18 @@ class WriterLowering {
 			} else if (!isCondFitSetter)
 				condFitGroupStartIdx = -1;
 			prevAnyStarNonEmpty = null;
+			// ω-metastmt-sep: a mandatory Ref ALWAYS emits content, so a
+			// bare-tryparse Star that starts right after it must seed the
+			// cumulative `prevAnyStarNonEmpty` signal with `true` (inside
+			// `emitStarField`'s return, NOT before it — the inter-Star
+			// separator at the Star's own iteration must stay quiet so
+			// trivia Stars that emit their own leading hardline don't get
+			// a doubled break). Without the seed the next bare Ref's
+			// separator gate reads only the Star's emptiness and glues
+			// across the boundary (`@:nullSafety(Off)if` in `HxMetaStmt`
+			// where `rest` is empty). Optional Refs may emit nothing, so
+			// they don't set the flag.
+			prevFieldAlwaysEmits = child.kind == Ref && !isOptional;
 			prevBodyField = finalizeResult.prevBodyField;
 			prevPadTrailing = finalizeResult.prevPadTrailing;
 			prevTrailFieldName = finalizeResult.prevTrailFieldName;
@@ -9403,7 +9420,7 @@ class WriterLowering {
 		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, isFirstField: Bool, isRaw: Bool,
 		stalePrevBareRefBody: Null<PrevBodyInfo>, prevTrailFieldName: Null<String>, kwLead: Null<String>, fieldName: String,
 		prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, fieldAccess: Expr, prevAnyStarNonEmpty: Null<Expr>,
-		multiVarMoreField: Null<String>, isOptional: Bool
+		multiVarMoreField: Null<String>, isOptional: Bool, afterAlwaysEmits: Bool = false
 	): { prevAnyStarNonEmpty: Null<Expr>, prevPadTrailing: Null<Expr> } {
 		if (isOptional) {
 			// Optional close-peek Star (first consumer: `HxTypeRef.params`).
@@ -9445,8 +9462,16 @@ class WriterLowering {
 		// non-None); the Star is transparent when empty.
 		final thisPadTrailing: Null<Expr> = starPadTrailing(child, fieldAccess);
 		final thisTransparent: Expr = macro $fieldAccess.length == 0;
+		// ω-metastmt-sep: a bare-tryparse Star right after a mandatory Ref
+		// seeds the cumulative signal with `true` — the Ref's content is
+		// already on the line, so the NEXT bare Ref's separator must fire
+		// even when this Star is empty (`@:nullSafety(Off) if` keeps its
+		// space). Seeding in the RETURN (not before the inter-Star
+		// separator above) keeps that separator quiet for this Star.
 		return {
-			prevAnyStarNonEmpty: isBareTryparseStar(child) ? orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess) : null,
+			prevAnyStarNonEmpty: !isBareTryparseStar(child)
+				? null
+				: afterAlwaysEmits ? (macro true) : orStarNonEmpty(prevAnyStarNonEmpty, fieldAccess),
 			prevPadTrailing: composePadTrailing(prevPadTrailing, thisPadTrailing, thisTransparent),
 		};
 	}

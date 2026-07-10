@@ -79,6 +79,7 @@ import unit.HxStaticLocalStmtSliceTest;
 import unit.HxConditionalTypeSliceTest;
 import unit.HxAssignStmtNoSemiSliceTest;
 import unit.HxMetaExprStmtNoSemiSliceTest;
+import unit.HxMetaCallStmtSpaceTest;
 import unit.HxObjectLitStmtNoSemiSliceTest;
 import unit.HxArrayExprStmtNoSemiSliceTest;
 import unit.HxDollarBlockExprStmtNoSemiSliceTest;
@@ -449,6 +450,7 @@ class RunTests {
 		addCase(new HxConditionalTypeSliceTest());
 		addCase(new HxAssignStmtNoSemiSliceTest());
 		addCase(new HxMetaExprStmtNoSemiSliceTest());
+		addCase(new HxMetaCallStmtSpaceTest());
 		addCase(new HxObjectLitStmtNoSemiSliceTest());
 		addCase(new HxArrayExprStmtNoSemiSliceTest());
 		addCase(new HxDollarBlockExprStmtNoSemiSliceTest());
