@@ -3122,14 +3122,15 @@ final class Cli {
 		final sectionOpts: Null<String> = readWriteOptionsJsonOrNull(inputPathFinal);
 		final optsJson: Null<String> = sectionOpts ?? (configPath != null ? readFile(configPath) : null);
 
-		final emitted: Null<String> =
-			try (plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
-				stderr('apq writer-equals: $inputPathFinal: ${e.toString()}\n');
-				return EXIT_RUNTIME;
-			} catch (e: Exception) {
-				stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
+		final emitted: Null<String> = try (
+			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
+		) catch (e: ParseError) {
+			stderr('apq writer-equals: $inputPathFinal: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e: Exception) {
+			stderr('apq writer-equals: $inputPathFinal: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
 		if (emitted == null) {
 			final flagName: String = plain ? '--plain' : '(trivia)';
 			stderr('apq writer-equals: no writer wired up for lang "$lang" $flagName\n');
@@ -3228,9 +3229,9 @@ final class Cli {
 		// words stay `Literal`-only — they ambiguously match string content
 		// and an `IdentExpr` widening would add noise (e.g. `hxq lit 'foo'`
 		// inside a corpus of strings).
-		final effectiveKindFilter: Array<String> = kindFilter ?? (looksLikeMixedIdentifier(targetStr)
-			? ['Literal', 'IdentExpr']
-			: ['Literal']);
+		final effectiveKindFilter: Array<String> = kindFilter ?? (
+			looksLikeMixedIdentifier(targetStr) ? ['Literal', 'IdentExpr'] : ['Literal']
+		);
 		// Comment scan fires when the user explicitly opted in (`--include-comments`),
 		// when the kind filter is the catch-all (`--any-kind` ⇒ empty array),
 		// or when `Comment` appears in an explicit `--kind` list. The
@@ -4398,14 +4399,15 @@ final class Cli {
 	): Bool {
 		final label: String = plain ? 'plain' : 'trivia';
 		sysPrint('=== $label ===\n');
-		final emitted: Null<String> =
-			try (plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
-				stderr('apq writer-probe: $label: $file: ${e.toString()}\n');
-				return false;
-			} catch (e: Exception) {
-				stderr('apq writer-probe: $label: $file: ${e.message}\n');
-				return false;
-			}
+		final emitted: Null<String> = try (
+			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
+		) catch (e: ParseError) {
+			stderr('apq writer-probe: $label: $file: ${e.toString()}\n');
+			return false;
+		} catch (e: Exception) {
+			stderr('apq writer-probe: $label: $file: ${e.message}\n');
+			return false;
+		}
 		if (emitted == null) {
 			final flag: String = plain ? '--writer-output-plain' : '--writer-output';
 			stderr('apq writer-probe: $label: no writer wired up for lang "$lang" ($flag equivalent)\n');
@@ -5239,14 +5241,15 @@ final class Cli {
 			source;
 		};
 		final optsJson: Null<String> = readWriteOptionsJsonOrNull(inputPath);
-		final emittedRaw: Null<String> =
-			try (plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
-				sysPrint('WRITER FAIL :: ${e.toString()}\n');
-				return EXIT_RUNTIME;
-			} catch (e: Exception) {
-				sysPrint('WRITER FAIL :: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
+		final emittedRaw: Null<String> = try (
+			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
+		) catch (e: ParseError) {
+			sysPrint('WRITER FAIL :: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e: Exception) {
+			sysPrint('WRITER FAIL :: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
 		if (emittedRaw == null) {
 			final flagName: String = plain ? '--writer-equals-plain' : '--writer-equals';
 			stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
@@ -9605,9 +9608,9 @@ final class Cli {
 		// harness's writer settings in a single command. `--code` /
 		// `--stdin` modes have no path → defaults stay.
 		final optsJson: Null<String> = file != null ? readWriteOptionsJsonOrNull((file: String)) : null;
-		final emitted: Null<String> = try (writerOutputPlain
-			? plugin.writeRoundTripPlain(source, optsJson)
-			: plugin.writeRoundTrip(source, optsJson)) catch (e: ParseError) {
+		final emitted: Null<String> = try (
+			writerOutputPlain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
+		) catch (e: ParseError) {
 			stderr('apq ast: $fileLabel: ${e.toString()}\n');
 			return EXIT_RUNTIME;
 		} catch (e: Exception) {

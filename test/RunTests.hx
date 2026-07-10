@@ -378,6 +378,7 @@ import unit.HxSwitchAfterParenSpaceSliceTest;
 import unit.HxMethodChainDotBreakOverReglueSliceTest;
 import unit.HxObjectLitArrowBodyPadSliceTest;
 import unit.HxMethodChainCallParamRestAwareSliceTest;
+import unit.HxParenTernaryOpenWrapSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -510,6 +511,7 @@ class RunTests {
 		addCase(new HxStructFieldTrailPresentSliceTest());
 		addCase(new HxStringInterpNoFormatSliceTest());
 		addCase(new HxParenWrapSourceNewlineSliceTest());
+		addCase(new HxParenTernaryOpenWrapSliceTest());
 		addCase(new HxToplevelVarFnSliceTest());
 		addCase(new HxToplevelPackageSliceTest());
 		addCase(new HxToplevelImportUsingSliceTest());

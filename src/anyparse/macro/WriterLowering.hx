@@ -278,7 +278,9 @@ class WriterLowering {
 		// cascade default; mirror of the `lowerPostfixStar` path.
 		final chainArgWantsNest: Bool = cb.fmtHasFlag('callArgChainNest');
 		final segArgOpt: Expr = chainArgWantsNest
-			? macro ($callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak ? _setCallArgChainNest(opt) : opt)
+			? macro (
+				$callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak ? _setCallArgChainNest(opt) : opt
+			)
 			: macro opt;
 		// ω-methodchain-reeval-after-callparam (axis 1 discriminator): the chain
 		// re-glue (fork `reEvaluateMethodChainAfterCallParam`) fires ONLY when the
@@ -1082,9 +1084,11 @@ class WriterLowering {
 		// staying non-block in `bodyPolicyWrap`'s strict block-ctor
 		// override path.
 		final blockPatterns: Array<Expr> = sameLineName != null && prevBareRefBody != null && shapeAware
-			? (bareShapeAware
-				? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
-				: collectBlockCtorPatterns(prevBareRefBody.typePath))
+			? (
+				bareShapeAware
+					? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
+					: collectBlockCtorPatterns(prevBareRefBody.typePath)
+			)
 			: [];
 		final elemBodyField: Null<String> = sameLineName != null && blockPatterns.length > 0
 			? findElementBodyField(elemRefName, prevBareRefBody.typePath)
@@ -2076,9 +2080,11 @@ class WriterLowering {
 		final bareShapeAware: Bool = starNode.fmtHasFlag('bareBodyBreaks');
 		final shapeAware: Bool = blockShapeAware || bareShapeAware;
 		final blockPatterns: Array<Expr> = prevBareRefBody != null && shapeAware
-			? (bareShapeAware
-				? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
-				: collectBlockCtorPatterns(prevBareRefBody.typePath))
+			? (
+				bareShapeAware
+					? collectBlockShapeEquivalentPatterns(prevBareRefBody.typePath)
+					: collectBlockCtorPatterns(prevBareRefBody.typePath)
+			)
 			: [];
 		final elemBodyField: Null<String> = blockPatterns.length > 0 ? findElementBodyField(elemRefName, prevBareRefBody.typePath) : null;
 		if (blockPatterns.length == 0) {
@@ -5458,9 +5464,11 @@ class WriterLowering {
 			final prevWriteFn: String = writeFnFor(c.prevBody.typePath);
 			final prevAccess: Expr = c.prevBody.access;
 			final prevDoc: Expr = { expr: ECall(macro $i{prevWriteFn}, [prevAccess, macro opt]), pos: Context.currentPos() };
-			macro (!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)
-				? _dhl()
-				: ${c.flagBased});
+			macro (
+				!opt._inExprPosition && opt.ifElseSemicolonNextLine && anyparse.core.DocMeasure.endsWithSemi($prevDoc)
+					? _dhl()
+					: ${c.flagBased}
+			);
 		} else
 			c.flagBased;
 		return withPadTrailingDrop(c.prevPadTrailing, macro $isInlineExpr ? $inlineSep : ${c.shapeAwareSwitch});
@@ -6171,9 +6179,11 @@ class WriterLowering {
 		}
 		else
 			null;
-		return indentObjGuardedNext ?? (hasKwSlots
-			? macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
-			: macro _dn(_cols, _dc([_dhl(), $writeCall])));
+		return indentObjGuardedNext ?? (
+			hasKwSlots
+				? macro nextLayoutKwGapDoc($afterKwExpr, $kwLeadingExpr, _cols, $writeCall, opt)
+				: macro _dn(_cols, _dc([_dhl(), $writeCall]))
+		);
 	}
 
 	/**
@@ -7366,9 +7376,11 @@ class WriterLowering {
 		// `wrapOpenNewlineExpr` case (plain mode / no opt-in) is not
 		// spliced.
 		final hardlineOpenShape: Expr = wrapOpenNewlineExpr != null
-			? macro ($wrapOpenNewlineExpr
-				? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
-				: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]))
+			? macro (
+				$wrapOpenNewlineExpr
+					? _dc([$leadDoc, _dhl(), _wrapInner, _dhl(), _wrapTrail])
+					: _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail])
+			)
 			: macro _dc([$leadDoc, _wrapInner, _dhl(), _wrapTrail]);
 		// ω-keep-chain (increment: opbool-expr-paren-keep): an
 		// expression paren whose inner is a kept chain that DID NOT
@@ -7437,7 +7449,16 @@ class WriterLowering {
 									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
 							)
 							: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
-								? _dc([$leadDoc, _wrapInner, _wrapTrail])
+								? (
+									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+										? _dfle(opt.lineWidth, _dc([
+											$leadDoc,
+											_dn(_cols, _dc([_dhl(), _wrapInner])),
+											_dhl(),
+											_wrapTrail
+										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+										: _dc([$leadDoc, _wrapInner, _wrapTrail])
+								)
 								: _dfle(opt.lineWidth, _dc([
 									$leadDoc,
 									_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
@@ -7505,11 +7526,13 @@ class WriterLowering {
 		if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
 		if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
 		if (parenHardFlatten)
-			_o = macro (opt._parenInCondition
-				? _setChainModeOverride(
-					_clearParenInCondition($_o), anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
-				)
-				: $_o);
+			_o = macro (
+				opt._parenInCondition
+					? _setChainModeOverride(
+						_clearParenInCondition($_o), anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap)
+					)
+					: $_o
+			);
 		// ω-keep-chain (increment: opadd_chain_keep): a `ParenExpr`
 		// (`@:fmt(expressionParenHardFlatten)`) wrapping a chain marks the
 		// inner opt `_keepChainInParen`. A `WrapMode.Keep` chain reads it to
@@ -7747,9 +7770,13 @@ class WriterLowering {
 		// AlignedDecrease shifts every fresh line one level shallower. Every
 		// other policy leaves the ctor unwrapped → byte-identical.
 		return c.branch.fmtHasFlag('conditionalMarkerDedent')
-			? macro (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
-				? _dcmz($case3Doc)
-				: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc))
+			? macro (
+				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
+					? _dcmz($case3Doc)
+					: (
+						opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc
+					)
+			)
 			: case3Doc;
 	}
 
@@ -12872,8 +12899,12 @@ class WriterLowering {
 			// the head/tail-transparency override path with `betweenImports=0`.
 			// Default `false` preserves fork byte-identical behaviour — the
 			// override emits `$countAccess` unchanged.
-			final betweenChosen: Expr = macro (opt.keepSourceBlankAcrossConditional && _t.blankBefore && $countAccess < 1 ? 1 : $countAccess);
-			result = macro ($currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $betweenChosen : $fallback);
+			final betweenChosen: Expr = macro (
+				opt.keepSourceBlankAcrossConditional && _t.blankBefore && $countAccess < 1 ? 1 : $countAccess
+			);
+			result = macro (
+				$currKindIdent == 1 && $prevKindIdent == 1 && $adapterAccess != null && $differCall ? $betweenChosen : $fallback
+			);
 		}
 		return result;
 	}
@@ -12896,9 +12927,9 @@ class WriterLowering {
 			final prevTKAIdent: Expr = { expr: EConst(CIdent('_prevTailKindAcrossA' + idx)), pos: pos };
 			final prevTKBIdent: Expr = { expr: EConst(CIdent('_prevTailKindAcrossB' + idx)), pos: pos };
 			final fallback: Expr = result;
-			result = macro (($currHKAIdent == 1 && $prevTKBIdent == 1) || ($currHKBIdent == 1 && $prevTKAIdent == 1)
-				? $countAccess
-				: $fallback);
+			result = macro (
+				($currHKAIdent == 1 && $prevTKBIdent == 1) || ($currHKBIdent == 1 && $prevTKAIdent == 1) ? $countAccess : $fallback
+			);
 		}
 		return result;
 	}
@@ -14333,9 +14364,11 @@ class WriterLowering {
 		// Null fall-through preserves pre-slice cascade-driven layout
 		// for non-typedef anon consumers (var-type-hint, fn-return-type).
 		final forceModeExpr: Expr = forceMultiInTypedef
-			? macro (opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
-				? anyparse.format.wrap.WrapMode.OnePerLine
-				: (null: Null<anyparse.format.wrap.WrapMode>))
+			? macro (
+				opt._inTypedefBody && opt.anonTypeLeftCurly == anyparse.format.BracePlacement.Next
+					? anyparse.format.wrap.WrapMode.OnePerLine
+					: (null: Null<anyparse.format.wrap.WrapMode>)
+			)
 			: macro (null: Null<anyparse.format.wrap.WrapMode>);
 		return {
 			forceExceedsExpr: forceExceedsExpr,
@@ -14998,9 +15031,11 @@ class WriterLowering {
 			pos: Context.currentPos()
 		} : macro (opt._inAnonFnBody ? opt.anonFunctionEmptyCurly : opt.emptyCurly);
 		return emptyCurlyBreak
-			? macro ($emptyCurlyAccess == anyparse.format.EmptyCurly.Break
-				? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
-				: _dt($v{emptyText}))
+			? macro (
+				$emptyCurlyAccess == anyparse.format.EmptyCurly.Break
+					? _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})])
+					: _dt($v{emptyText})
+			)
 			: macro _dt($v{emptyText});
 	}
 
@@ -15766,9 +15801,11 @@ class WriterLowering {
 		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
 		final beginAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractBeginType : $p{["opt", beginKnob]});
 		return beginEndType
-			? macro ($beginAccess > 0
-				? $beginAccess
-				: (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0))
+			? macro (
+				$beginAccess > 0
+					? $beginAccess
+					: (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0)
+			)
 			: macro (opt.afterLeftCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _firstSourceBlank ? 1 : 0);
 	}
 
@@ -15782,9 +15819,11 @@ class WriterLowering {
 		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
 		final endAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractEndType : $p{["opt", endKnob]});
 		return beginEndType
-			? macro ($endAccess > 0
-				? $endAccess
-				: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0))
+			? macro (
+				$endAccess > 0
+					? $endAccess
+					: (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0)
+			)
 			: macro (opt.beforeRightCurly == anyparse.format.KeepEmptyLinesPolicy.Keep && _trailBB && _arr.length > 0 ? 1 : 0);
 	}
 

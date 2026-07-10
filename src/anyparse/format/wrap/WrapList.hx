@@ -352,7 +352,7 @@ class WrapList {
 	// the inner's TOP-LEVEL (WrapBoundary depth 1) operator separators are
 	// ternary `?`/`:` and NO `+`/`-`/`||`/`&&` appears at that level. Mirrors
 	// isTopLevelChain's depth-1 walk; routes a ternary-inner expr-paren to the
-	// keep-`(`-glued shape instead of the IfFullLineExceeds open.
+	// keep-`(`-glued shape instead of the IfFullLineExceeds open when expressionWrapping is at its universal default; a fillLine-family mode opens the paren (fork parity).
 	public static function isTopLevelTernary(d: Doc): Bool {
 		var ternary: Bool = false;
 		var other: Bool = false;

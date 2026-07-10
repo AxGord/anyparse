@@ -219,9 +219,11 @@ final class CallSites {
 			for (c in node.children) scan(c);
 		}
 		scan(tree);
-		return error ?? (thisAccess > thisSiteCount
-			? '"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked'
-			: null);
+		return error ?? (
+			thisAccess > thisSiteCount
+				? '"$name" is referenced as a value (not called) via `this.$name` — indirect calls through a captured reference cannot be tracked'
+				: null
+		);
 	}
 
 	/**
