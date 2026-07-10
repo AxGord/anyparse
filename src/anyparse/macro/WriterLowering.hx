@@ -6879,7 +6879,14 @@ class WriterLowering {
 		// sub-expression with strictly lower prec (ternary inside
 		// `||`, assign inside `+`) gets the parens it needs;
 		// same-class operators are consumed by the extractor.
-		final leafCall: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec);
+		// omega-call-grouprestprobe-subposition: a `Call` operand carries
+		// `@:fmt(groupRestProbe)`; its rest-of-line fit bias would otherwise
+		// count the whole chain tail (`+ x + (...)`) against the operand's own
+		// args and split a call that fits on its own (the chain head
+		// `f(a, b) + ...`). Suppress it so a chain operand wraps on its OWN
+		// overflow (plain Group); the chain absorbs the rest via its operator
+		// break / paren-open. Mirrors the `??`-operand gate in `lowerInfixBranch`.
+		final leafCall: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec, macro _setSuppressCallRestProbe(opt, true));
 		// ω-keep-chain (increment 2): in Trivia mode the chain ctors
 		// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
 		// per-operand source-newline). Bind it (`_nl`) and push into the

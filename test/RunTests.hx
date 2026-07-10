@@ -382,6 +382,7 @@ import unit.HxParenTernaryOpenWrapSliceTest;
 import unit.HxOpAddTrailingParenGlueSliceTest;
 import unit.HxCompareOperandBreakSliceTest;
 import unit.HxCallGroupRestProbeCasePatternTest;
+import unit.HxCallGroupRestProbeChainOperandTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -574,6 +575,7 @@ class RunTests {
 		addCase(new HxCondPlainCallLeadingBreakSliceTest());
 		addCase(new HxCompareOperandBreakSliceTest());
 		addCase(new HxCallGroupRestProbeCasePatternTest());
+		addCase(new HxCallGroupRestProbeChainOperandTest());
 		addCase(new HxReturnCallOpenParenSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
