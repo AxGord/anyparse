@@ -225,9 +225,7 @@ final class UnusedParameter implements Check {
 			final sib: QueryNode = sibs[i];
 			if (!visibilityKinds.contains(sib.kind) && !modifierKinds.contains(sib.kind)) break;
 			final sspan: Null<Span> = sib.span;
-			if (
-				visibilityKinds.contains(sib.kind) && sspan != null && StringTools.trim(source.substring(sspan.from, sspan.to)) == 'public'
-			)
+			if (visibilityKinds.contains(sib.kind) && sspan != null && StringTools.trim(source.substring(sspan.from, sspan.to)) == 'public')
 				return true;
 			i--;
 		}

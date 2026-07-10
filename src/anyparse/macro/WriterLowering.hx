@@ -14507,9 +14507,7 @@ class WriterLowering {
 					// `==` comparisons then simply miss. Typed `Null<String>`
 					// so the null path is explicit.
 					final _itemCtor: Null<String> = Type.enumConstructor(cast _t.node);
-					if (
-						_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr' || anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0
-					)
+					if (_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr' || anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0)
 						_anyMultilineItem = true;
 				}
 				_ti++;

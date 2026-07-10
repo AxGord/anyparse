@@ -10,7 +10,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 /**
  * ω-cond-plaincall-open: a condition whose `&&`/`||` chain has a PLAIN-CALL
  * (non-arrow-lambda) overflow-absorbing operand leading-breaks the WHOLE
- * condition once the flat condition span exceeds `maxLineLength`, instead of
+ * condition once the full header line exceeds `maxLineLength`, instead of
  * keeping the chain on the head line and wrapping the innermost call (which
  * dangles a trailing `.tail()) {`).
  *
@@ -18,11 +18,13 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * the natural FIRST line, so it wrongly glues once the inner call leading-
  * breaks and that first line ends short at the call's open delim. A chain
  * with no arrow-lambda absorber (`->` absent) is therefore routed through
- * the `IfWidthExceeds` span probe — which measures `col + (cond)` (the paren
- * span at the condition column) with NO body / else-if-tail lookahead — so a
- * FITTING condition stays flat and an overflowing one opens the paren.
- * `IfLineExceeds` would over-fire here: its rest-of-line lookahead sums the
- * `else if` tail and opens a short condition (see the else-if guard below).
+ * the `IfLineExceeds(lineWidth + 1)` probe — `col + (cond)` plus the
+ * rest-of-stack lookahead whose BodyGroup arm counts a cuddled block body's
+ * ` {` prefix and aborts at the body's own hardline. So a header exactly ONE
+ * column past the limit opens (its `{` was the missing column — fork parity,
+ * the fork measures the FULL physical line on a strict `>`), a header ON the
+ * limit stays flat, and the else-if tail past the body hardline stays
+ * invisible to the probe (see the else-if guard below).
  */
 @:nullSafety(Strict)
 final class HxCondPlainCallLeadingBreakSliceTest extends Test {
@@ -52,6 +54,25 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
 		opts.finalNewline = false;
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
+
+	public function testCuddledBraceOneColumnPastLimitOpensCondition(): Void {
+		// Header line = 141 columns at tab=4 — the trailing ` {` supplies the
+		// 141st column, so the condition must open (fork parity: the fork
+		// measures the FULL physical line including the cuddled brace).
+		final glued: String = 'class C {\n\tfunction f() {\n\t\tif (_aaaaBbbb1 && !_cccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
+		final opened: String = 'class C {\n\tfunction f() {\n\t\tif (\n\t\t\t_aaaaBbbb1 && !_cccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM\n\t\t) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
+		Assert.equals(opened, triviaWrite(glued));
+		Assert.equals(opened, triviaWrite(opened));
+	}
+
+
+	public function testHeaderExactlyOnLimitStaysFlat(): Void {
+		// Header line = exactly 140 columns — ON the limit is not past it
+		// (fork opens on a strict `>`), the condition stays glued.
+		final src: String = 'class C {\n\tfunction f() {\n\t\tif (_aaaaBbbb1 && !_ccccc && _ddddEeeee1 == null && fffffGggggHhhhh12 == 0 && !iiiiJjjj.startsWith(abc) && kkkkLlll.type != MMMMM) {\n\t\t\thandleItem();\n\t\t}\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
 	}
 
 }

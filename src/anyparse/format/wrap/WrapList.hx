@@ -319,14 +319,19 @@ class WrapList {
 		// ω-cond-plaincall-open: a no-keep-flat top-level chain (plain-call /
 		// nested-paren absorber; an arrow-lambda absorber stays a keep-flat
 		// candidate and takes the natural-first-line probe below) opens the cond
-		// paren on a genuine CONDITION-SPAN overflow. `IfWidthExceeds` measures
-		// only `col + (cond)` (the paren span at the condition column), NOT the
-		// body / else-if-tail lookahead `IfLineExceeds` adds — the latter over-
-		// fires inside an `else if` chain and opens a fitting short condition.
+		// paren on a genuine full-line overflow. `IfLineExceeds` measures
+		// `col + (cond)` plus the rest-of-stack lookahead, whose `restNodeWidth`
+		// BodyGroup arm counts a cuddled block body's ` {` prefix and aborts at
+		// the body's own hardline — so a `if (cond) {` header exactly one column
+		// past the limit opens (its `{` was the missing column), while the
+		// else-if tail past the body hardline stays invisible to the probe.
+		// `lineWidth + 1`: the probe fires on `>= n` while the fork opens on
+		// a strict `> maxLineLength` — a line landing exactly ON the limit
+		// stays glued.
 		return flatBrk == breakBrk
 			? WrapBoundary(shapeFor(modeFlat))
 			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
-				? WrapBoundary(IfWidthExceeds(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)))
+				? WrapBoundary(IfLineExceeds(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)))
 				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
 
