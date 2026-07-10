@@ -465,9 +465,9 @@ final class RefactorSupport {
 	): EditResult {
 		if (!reformat) {
 			final canon: Null<String> =
-				try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) return Err(
-					'source does not parse: ${exception.toString()}'
-				)
+				try plugin.writeRoundTrip(
+					source, optsJson
+				) catch (exception: ParseError) return Err('source does not parse: ${exception.toString()}')
 				catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 			if (canon == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
 			if (canon != source)
@@ -476,9 +476,9 @@ final class RefactorSupport {
 
 		final spliced: String = applyEdits(source, edits);
 		final result: Null<String> =
-			try plugin.writeRoundTrip(spliced, optsJson) catch (exception: ParseError) return Err(
-				'result does not parse: ${exception.toString()}'
-			)
+			try plugin.writeRoundTrip(
+				spliced, optsJson
+			) catch (exception: ParseError) return Err('result does not parse: ${exception.toString()}')
 			catch (exception: Exception) return Err('result does not parse: ${exception.message}');
 		return result == null ? Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result') : Ok(result);
 	}

@@ -1227,7 +1227,9 @@ class WriterLowering {
 			for (raw in flatChildOptRaw) {
 				final eq: Int = raw.indexOf('=');
 				if (eq <= 0 || eq >= raw.length - 1)
-					Context.fatalError('WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos());
+					Context.fatalError(
+						'WriterLowering: @:fmt(flatChildOpt(...)) arg must be "from=to", got "${raw}"', Context.currentPos()
+					);
 				out.push([raw.substr(0, eq), raw.substr(eq + 1)]);
 			}
 			out;
@@ -5871,9 +5873,19 @@ class WriterLowering {
 			// the engine suppresses commas the source elided around conditional
 			// element groups. Plain mode passes an empty array — index misses
 			// read `false`, byte-identical to the previous `null`.
+			// omega-call-grouprestprobe-subposition: the `Call` ctor carries
+			// `@:fmt(groupRestProbe)` so a statement/expression-position call
+			// subtracts the trailing `;`/rest-of-line width at the cascade-Group
+			// fit -- wrapping its args at limit+1 (fork parity). Gated OFF in a
+			// sub-position (`opt._suppressCallRestProbe`): a case-pattern ctor
+			// (`Nest(_, _)`) keeps its args glued (the `|` chain breaks instead),
+			// and a `??` operand keeps pristine plain-Group wrapping (the fork packs
+			// the chain, not the operand args). Every non-`groupRestProbe` postfix
+			// sep-list ctor passes a constant `false` -- byte-inert.
+			final groupRestProbeExpr: Expr = c.branch.fmtHasFlag('groupRestProbe') ? (macro !opt._suppressCallRestProbe) : (macro false);
 			final wrapListExpr: Expr = macro anyparse.format.wrap.WrapList.emit(
 				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $callInsideOpen, $callInsideClose, false, $rulesExpr, $tcExpr,
-				_de(), _de(), false, null, null, false, false, _sepBeforeFlags, false, null, $keepCloseGluedExpr
+				_de(), _de(), false, null, null, false, $groupRestProbeExpr, _sepBeforeFlags, false, null, $keepCloseGluedExpr
 			);
 			if (c.isTriviaStar) {
 				final keepDoc: Expr = lowerPostfixKeepDoc(c);
@@ -6461,7 +6473,12 @@ class WriterLowering {
 		final ternaryOp: String = branch.annotations.get('ternary.op');
 		final tPrec: Int = (branch.annotations.get('ternary.prec'): Int);
 		final sep: String = (branch.annotations.get('ternary.sep'): String);
-		final condCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1);
+		// ω-compare-operand-linewrap: mark the ternary CONDITION's opt so a
+		// `==`/`!=` compare that IS the condition suppresses its operand-overflow
+		// break (`lowerInfixBranch` reads `opt._inTernaryCond`) -- the fork breaks
+		// the ternary `?`/`:`, not the compare. Only the cond opt carries the
+		// flag; `middleCall` / `rightCall` use the plain `opt`.
+		final condCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, tPrec + 1, macro _setInTernaryCond(opt, true));
 		final middleCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, -1);
 		final rightCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[2]}, hasPratt, -1);
 		// ω-ternary-wrap: dispatch to the chain-emit engine with a
@@ -6609,10 +6626,24 @@ class WriterLowering {
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx);
+		// omega-call-grouprestprobe-subposition: `??` (Coalesce) is right-assoc and
+		// renders via this non-chain infix path (not the fillLine chain engine).
+		// Its outer-left operand carries the whole rest-chain on the line, so a
+		// `Call` operand's `@:fmt(groupRestProbe)` rest-probe over-counts and wraps
+		// args the fork keeps glued -- the fork packs the `??` chain left-to-right
+		// and breaks only the overflowing operand's brackets. Mark both operands
+		// `_suppressCallRestProbe` so a `Call` operand reverts to pristine
+		// plain-Group (wrap-on-own-overflow), matching the self-canonical shape.
+		// Other infix ops in this path (`*`/`/`/compare/`is`/shift/bitwise) keep
+		// the rest-probe -- their operand wrapping already matches the fork.
+		final suppressRestProbe: Bool = opText == '??';
+		final leftOptExpr: Null<Expr> = suppressRestProbe ? macro _setSuppressCallRestProbe(opt, true) : null;
+		final rightOptBase: Expr = rightOptExpr ?? macro opt;
+		final rightOptFinal: Null<Expr> = suppressRestProbe ? macro _setSuppressCallRestProbe($rightOptBase, true) : rightOptExpr;
+		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, leftOptExpr);
 		final rightCall: Expr = isAsymmetric
-			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
-			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
+			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptFinal)
+			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptFinal);
 		// Group/Line/Nest wrap for non-tight non-assign non-chain
 		// infix (compare, shift, bitwise, `is`, `??`, `*`/`/`/`%`): lets
 		// the renderer pick flat (Line(' ') → space) when the chain's
@@ -6644,6 +6675,27 @@ class WriterLowering {
 		// not wrap (no hardline → the legacy Group never broke → glued
 		// shape is byte-identical to the flat Group resolution).
 		final opAfterText: String = opText + ' ';
+		// ω-compare-operand-linewrap: fork parity for the glued compare arm.
+		// The fork's breakLongOpBoolOperandAtCompare +
+		// preferCompareBreakOverInnerCallParamWrap break a `==` / `!=` (ONLY
+		// those two ops) before the operator when the physical line genuinely
+		// overflows (strict `>` -- exactly-on-limit stays glued), preferring
+		// `call(args)\n\t== X` over wrapping the call's own args. The
+		// unconditional glue below (open/close-delim operand carries the wrap)
+		// is stale for Eq/NotEq: a bracketed operand whose own Group fits flat
+		// leaves the trailing `== CONST` invisible to any probe and the line
+		// lands >max (TM FileSystemBase.hx 170-col `|| call(...) == CONST)`).
+		// Gate with IfLineExceeds(lineWidth + 1) -- same probe + `+1` strict-`>`
+		// restoration as WrapList.emitCondition -- byte-inert unless the
+		// rendered line overflows. The probe sits AFTER `_left` in the Concat
+		// (wrapping only the `op right` tail) so its render-time col is the end
+		// of `_left`'s LAST rendered line: a left operand that wrapped its own
+		// call args (`call(\n\targs\n) != null`) leaves a short `)` line and the
+		// op stays glued. Where `_left` renders flat, col_afterLeft +
+		// flatWidth(op right) equals the whole-expr col_beforeLeft +
+		// flatWidth(left op right) (flat width is additive) so the decision is
+		// byte-identical to measuring the full compare.
+		final isCompareBreakOp: Bool = opText == '==' || opText == '!=';
 		// ω-keep-infix-rhs-comment: append a captured right-operand trailing
 		// comment (position #3) after the binop, inside any precedence parens.
 		final rhsTrailAccess: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainRhsTrail) : null;
@@ -6662,9 +6714,39 @@ class WriterLowering {
 			// glued so only the bracketed operand carries the break. Byte-
 			// inert when the left operand does not wrap (no committed hardline
 			// → the legacy Group never broke → glued shape is byte-identical).
+			final _glued: anyparse.core.Doc = _dc([_left, _dt($v{opWithSpaces}), _right]);
+			// ω-compare-operand-linewrap gate: the fork breaks `==`/`!=` before
+			// the op on a genuine line overflow in EVERY context -- a statement
+			// condition (`if (a == b)`), an assignment (`final x = call() == C`),
+			// and a `||`/`&&` operand -- via `breakLongOpBoolOperandAtCompare`
+			// plus the operand-overflow pass. The ONE exception is a ternary
+			// CONDITION (`x = call() == true ? a : b`): outside a condition-wrap
+			// the fork breaks the ternary (`?`/`:`) and leaves the compare glued,
+			// so `opt._inTernaryCond` (set only on the ternary cond's opt in
+			// `lowerTernaryBranch`) suppresses the break. But INSIDE a condition
+			// wrap (`if (call() == C ? a : b)`) the fork's
+			// `breakLongOpBoolOperandAtCompare` fires on the compare regardless of
+			// the enclosing ternary -- so the suppression is lifted when
+			// `opt._chainModeOverride == FillLineWithLeadingBreak` (the
+			// condition-wrap signal, set at the `@:fmt(condWrap)` site and NOT
+			// cleared through the ternary's `_copyOpt` override). The `_dile`
+			// probe below keeps a call-args-wrapping left operand glued
+			// (`call(\n\targs\n) != null`) because its short `)` last line does
+			// not overflow. Field reads are safe: only Haxe declares infix, so
+			// `lowerInfixBranch` is generated for Haxe alone.
+			final _compareBreakOnOverflow: Bool = $v{isCompareBreakOp}
+				&& (!opt._inTernaryCond || opt._chainModeOverride == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak);
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.WrapList.startsWithOpenDelim(_right)
 				|| anyparse.format.wrap.WrapList.endsWithCloseDelim(_left)
-				? _dc([_left, _dt($v{opWithSpaces}), _right])
+				? _compareBreakOnOverflow
+					? _dc([
+						_left,
+						_dile(
+							opt.lineWidth + 1, _dn(_cols, _dc([_dhl(), _dt($v{opAfterText}), _right])),
+							_dc([_dt($v{opWithSpaces}), _right])
+						)
+					])
+					: _glued
 				: _dg(_dc([
 					_left,
 					_dn(_cols, _dc([_dl(), _dt($v{opAfterText}), _right])),
@@ -9279,11 +9361,20 @@ class WriterLowering {
 		// Wrapped AFTER `_setExprPosition` so the descent clear inside it does
 		// not wipe the just-set flag.
 		final propagateArrowLambdaBody: Bool = child.fmtHasFlag('propagateArrowLambdaBody');
+		// omega-call-grouprestprobe-subposition: `@:fmt(suppressCallRestProbe)` on
+		// the case-pattern body Ref (HxCasePattern.expr) sets
+		// `_suppressCallRestProbe` on the descendant so a `Call` ctor pattern skips
+		// the `groupRestProbe` rest-of-line fit bias. Not cleared on descent ->
+		// nested ctors inherit it.
+		final suppressCallRestProbe: Bool = child.fmtHasFlag('suppressCallRestProbe');
 		final optArgExpr: Expr = if (boolFlagArgs != null) {
 			macro _wo;
 		} else {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
+			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
+			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
+			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true);
 			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e);
 			if (propagateTypedef) e = macro _setTypedefBody($e);
@@ -15261,8 +15352,12 @@ class WriterLowering {
 			: macro false;
 		final currHasDocComputeExpr: Expr = triviaBlockCurrHasDocComputeExpr(beforeDocCommentEmptyLines, condLeadingDocInfo);
 		final currHasSplitLeadingComputeExpr: Expr = triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields);
-		final currKindComputeExpr: Expr = triviaBlockCurrKindComputeExpr(interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo);
-		final addByInterMemberExpr: Expr = triviaBlockInterMemberAddExpr(interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo);
+		final currKindComputeExpr: Expr = triviaBlockCurrKindComputeExpr(
+			interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo
+		);
+		final addByInterMemberExpr: Expr = triviaBlockInterMemberAddExpr(
+			interMember, interMemberInfo, staticVarSubdiv, staticVarSubdivInfo
+		);
 		final addByUniformBetweenExpr: Expr = triviaBlockUniformBetweenAddExpr(uniformBetween, uniformBetweenOptField);
 		return triviaBlockBlankBeforeAssemblyExpr({
 			currHasDocComputeExpr: currHasDocComputeExpr,

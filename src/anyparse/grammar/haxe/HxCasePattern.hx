@@ -47,6 +47,12 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxCasePattern = {
-	var expr: HxCasePatternBody;
+	// `@:fmt(suppressCallRestProbe)` (omega-call-grouprestprobe-subposition) sets
+	// `opt._suppressCallRestProbe = true` on the pattern-body subtree so a `Call`
+	// ctor pattern (`Nest(_, _)` in `case Nest(_, _) | Concat(_):`) skips the
+	// `groupRestProbe` rest-of-line fit bias -- the fork breaks the `|` (BitOr)
+	// chain, not the ctor args. Not applied to `guard` (a genuine
+	// expression-position condition where calls should wrap normally).
+	@:fmt(suppressCallRestProbe) var expr: HxCasePatternBody;
 	@:optional @:kw('if') var guard: Null<HxExpr>;
 };

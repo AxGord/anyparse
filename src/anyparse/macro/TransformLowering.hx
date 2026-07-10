@@ -222,7 +222,9 @@ class TransformLowering {
 					// grammar type is never produced by the shape builder —
 					// named types always arrive as `Ref`. Guard so a future
 					// grammar surfaces the gap instead of silently copying.
-					Context.fatalError('TransformLowering: cannot rebuild ${node.kind} child reaching a grammar type', Context.currentPos());
+					Context.fatalError(
+						'TransformLowering: cannot rebuild ${node.kind} child reaching a grammar type', Context.currentPos()
+					);
 					throw 'unreachable';
 			};
 	}

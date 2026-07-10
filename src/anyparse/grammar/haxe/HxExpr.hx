@@ -520,7 +520,7 @@ enum HxExpr {
 	IndexAccess(operand: HxExpr, index: HxExpr);
 
 	@:postfix('(', ')') @:sep(',') @:fmt(trailingComma('trailingCommaArgs'), callParens, callParensInside, wrapRules('callParameterWrap'),
-		methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest)
+		methodChain('methodChainWrap'), propagateExprPosition, callArgChainNest, groupRestProbe)
 	Call(operand: HxExpr, args: Array<HxExpr>);
 
 	@:postfix('++')

@@ -1006,6 +1006,66 @@ class WriterCodegen {
 	}
 
 	/**
+	 * ω-compare-operand-linewrap — opt-fanout shim for the ternary condition
+	 * (`lowerTernaryBranch`). Sets `_inTernaryCond` to the supplied value
+	 * (idempotent: returns `o` unchanged when already equal). Read ONLY by the
+	 * `lowerInfixBranch` compare arm to suppress the `==`/`!=` operand-overflow
+	 * break for a compare that IS a ternary condition. Sister to
+	 * `_setParenInCondition`. Gated on `_inTernaryCond:Bool`.
+	 */
+	private static function setInTernaryCondField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setInTernaryCond',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._inTernaryCond == v) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._inTernaryCond = v;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * omega-call-grouprestprobe-subposition — opt-fanout shim for a `Call`
+	 * subtree that is NOT in statement/expression position (case-pattern body
+	 * via `HxCasePattern.expr`'s `@:fmt(suppressCallRestProbe)`; `??` operands
+	 * via `lowerInfixBranch`). Sets `_suppressCallRestProbe` to the supplied
+	 * value (idempotent: returns `o` unchanged when already equal). Read ONLY by
+	 * the `Call` ctor's `groupRestProbe` gate in `lowerPostfixSepListCall` to
+	 * skip the rest-of-line fit bias. Sister to `_setInTernaryCond`. Gated on
+	 * `_suppressCallRestProbe:Bool`.
+	 */
+	private static function setSuppressCallRestProbeField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setSuppressCallRestProbe',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [
+					{ name: 'o', type: optionsCT },
+					{ name: 'v', type: macro :Bool },
+				],
+				ret: optionsCT,
+				expr: macro {
+					if (o._suppressCallRestProbe == v) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._suppressCallRestProbe = v;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
 	 * ω-expr-paren-in-condition — sister reset helper to
 	 * `_setParenInCondition`. Returns `o` unchanged when `_parenInCondition`
 	 * is already `false`; otherwise returns a `_copyOpt(o)` with the flag
@@ -2087,6 +2147,18 @@ class WriterCodegen {
 		if (optionsHasField(optionsTypePath, '_parenInCondition')) {
 			fields.push(setParenInConditionField(optionsCT));
 			fields.push(clearParenInConditionField(optionsCT));
+		}
+		// ω-compare-operand-linewrap: gate `_setInTernaryCond` on the field it
+		// touches (its own block, matching the one-field-per-block precedent) so
+		// it is emitted iff the grammar declares `_inTernaryCond`.
+		if (optionsHasField(optionsTypePath, '_inTernaryCond')) {
+			fields.push(setInTernaryCondField(optionsCT));
+		}
+		// omega-call-grouprestprobe-subposition: gate `_setSuppressCallRestProbe`
+		// on the field it touches (one-field-per-block precedent) so it is emitted
+		// iff the grammar declares `_suppressCallRestProbe`.
+		if (optionsHasField(optionsTypePath, '_suppressCallRestProbe')) {
+			fields.push(setSuppressCallRestProbeField(optionsCT));
 		}
 		// ω-keep-kw-newline (increment 1b): opt-fanout helper pair for the
 		// VarStmt-family `@:fmt(captureKwNewline)` ctors. `_setVarKwNewline`

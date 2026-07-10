@@ -812,6 +812,8 @@ final class HaxeFormat implements TextFormat {
 		_callArgChainNest: false,
 		_suppressMore: false,
 		_parenInCondition: false,
+		_inTernaryCond: false,
+		_suppressCallRestProbe: false,
 		_varKwNewline: false,
 		_inFieldLevelVar: false,
 		_keepFlatInner: false,

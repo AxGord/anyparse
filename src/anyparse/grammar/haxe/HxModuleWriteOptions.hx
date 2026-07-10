@@ -1020,6 +1020,30 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_callArgChainNest: Bool,
 	_suppressMore: Bool,
 	_parenInCondition: Bool,
+	// ω-compare-operand-linewrap: set on the ternary CONDITION's opt (via
+	// `_setInTernaryCond`) so `lowerInfixBranch` suppresses the `==`/`!=`
+	// operand-overflow break for a compare that IS a ternary condition -- the
+	// fork breaks the ternary `?`/`:`, not the compare. Default false → every
+	// non-ternary compare (assignment / chain operand / statement condition)
+	// still breaks on a genuine line overflow.
+	_inTernaryCond: Bool,
+	// omega-call-grouprestprobe-subposition: set on a `Call` subtree that is NOT
+	// in statement/expression position, so the `Call` ctor skips the
+	// `groupRestProbe` rest-of-line fit bias. Two set-sites, both via
+	// `_setSuppressCallRestProbe`:
+	//  1. Case-pattern body (`HxCasePattern.expr`'s `@:fmt(suppressCallRestProbe)`):
+	//     a ctor pattern (`case Nest(_, _) | Concat(_):`) must NOT wrap its args
+	//     -- the fork breaks the `|` (BitOr) chain, not the ctor args.
+	//  2. `??` (Coalesce) operands (`lowerInfixBranch`): `??` is right-assoc and
+	//     renders via the non-chain infix path, so its outer-left operand carries
+	//     the whole rest-chain; the rest-probe would over-count and wrap operand
+	//     args the fork keeps glued (the fork packs left-to-right, breaking only
+	//     the overflowing operand's brackets). Reverts `??` operands to pristine
+	//     plain-Group (wrap-on-own-overflow), matching the self-canonical shape.
+	// Not cleared on descent, so nested `Call`s inherit it. Default false -> every
+	// statement/expression-position call keeps the rest-probe (wraps at limit+1,
+	// counting the trailing `;`).
+	_suppressCallRestProbe: Bool,
 	_varKwNewline: Bool,
 	_inFieldLevelVar: Bool,
 	// ω-keep-chain — set on the leaf-operand opt

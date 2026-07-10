@@ -701,6 +701,8 @@ final class HaxeFormatConfigLoader {
 			_callArgChainNest: base._callArgChainNest,
 			_suppressMore: base._suppressMore,
 			_parenInCondition: base._parenInCondition,
+			_inTernaryCond: base._inTernaryCond,
+			_suppressCallRestProbe: base._suppressCallRestProbe,
 			_varKwNewline: base._varKwNewline,
 			_inFieldLevelVar: base._inFieldLevelVar,
 			_keepFlatInner: base._keepFlatInner,
