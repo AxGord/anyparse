@@ -268,8 +268,7 @@ class Lowering {
 	 * at L1553 — same schema-instance channel as `trailOptParseGate` /
 	 * `unescapeChar`. The predicate is invoked between elements to decide
 	 * whether the separator is elidable based on the prior element's
-	 * AST shape (e.g. `HxStatement.ExprStmt(ArrayExpr(_))` → Slice 39
-	 * `;`-elision; `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
+	 * AST shape (e.g. `HxStatement.ExprStmt(ArrayExpr(_))` → `;`-elision; `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
 	 */
 	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr): Expr {
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
@@ -843,7 +842,7 @@ class Lowering {
 			final bodyOnSameLineLocal: String = '_bodyOnSameLine_$fieldName';
 			final beforeKwLeadingLocal: String = '_beforeKwLeading_$fieldName';
 			final beforeKwTrailingLocal: String = '_beforeKwTrailing_$fieldName';
-			// ω-optional-ref-trail (Slice 40): pre-declare the
+			// ω-optional-ref-trail: pre-declare the
 			// `<field>AfterTrail` capture local before the parse step so
 			// the optional-Ref's lead-led commit branch can assign into
 			// it after `expectLit(trail)`, while the absent branch leaves
@@ -875,7 +874,7 @@ class Lowering {
 			// Per-field trail. Skipped for Star fields — `emitStarFieldSteps`
 			// already emitted the close literal as part of the loop wrappers.
 			// Mandatory Ref path: the close + same-line `// comment`
-			// capture live here. Optional Ref + lead + trail (Slice 40):
+			// capture live here. Optional Ref + lead + trail:
 			// the trail consumption AND `collectTrailing` capture live
 			// inside the lead-led commit branch (see the Ref-with-trail
 			// splicing into `subCall` above); the slot is still emitted
@@ -990,7 +989,7 @@ class Lowering {
 	 *    absent, breaks. On element-parse fail, rewinds to before any
 	 *    whitespace skip and breaks (so the enclosing rule's close
 	 *    literal — e.g. `#end` on the wrapping ctor — sees the next
-	 *    token at its original position). Slice 18 use case:
+	 *    token at its original position). Use case:
 	 *    `HxConditionalObjectField.body` — comma-separated object-literal
 	 *    fields inside a `#if … #end` block, where `#end` is consumed by
 	 *    the enclosing `HxObjectField.Conditional` ctor, not by this
@@ -1049,7 +1048,7 @@ class Lowering {
 		});
 		final accumRef: Expr = macro $i{localName};
 		if (closeText == null && sepText != null && starNode.hasMeta(':tryparse')) {
-			// Try-parse with sep peek (Slice 18). After each successful
+			// Try-parse with sep peek. After each successful
 			// element, peeks the next non-whitespace char: if it equals
 			// the sep, consumes it and continues; otherwise breaks. On
 			// element-parse fail, restores `_savedPos` (taken BEFORE
@@ -1065,7 +1064,7 @@ class Lowering {
 			// element parse will fail on `#end` and rewind to just AFTER
 			// the consumed sep, so the enclosing close still sees `#end`.
 			//
-			// Slice 18f opt-in (`@:fmt(sepBeforeOpt)`): BEFORE entering the
+			// `@:fmt(sepBeforeOpt)` opt-in: BEFORE entering the
 			// element loop, peek-and-consume a single leading sep INSIDE
 			// the body (between enclosing kw and first element). Captures
 			// true/false into `<localName>SepBefore` for the writer's
@@ -1417,9 +1416,9 @@ class Lowering {
 		// non-blockEnded gracefully exits the tryparse loop (tryparse
 		// semantic: element is valid but no-more-sep means we're done).
 		// First consumers: HxCaseBranch.body, HxDefaultBranch.stmts —
-		// the case/default-body Stars that previously relied on per-
-		// statement `@:trailOpt(';')` to consume `;` and on element-
-		// parse failure to terminate at next `case`/`default`/`}`.
+		// the case/default-body Stars where per-
+		// statement `@:trailOpt(';')` consuming `;` and element-
+		// parse failure alone cannot terminate at next `case`/`default`/`}`.
 		if (sepText != null && closeText == null && !starNode.hasMeta(':tryparse')) {
 			Context.fatalError('Lowering: @:trivia + @:sep requires @:trail (close-peek) or @:tryparse', Context.currentPos());
 		}
@@ -1610,7 +1609,7 @@ class Lowering {
 			// failure.
 			if (sepText != null) {
 				// ω-sep-faithful: mirror the plain path's `@:fmt(sepBeforeOpt)`
-				// pre-loop leading-sep peek (Slice 18f) so trivia-collecting
+				// pre-loop leading-sep peek so trivia-collecting
 				// conditional element bodies (`#if X, elem #end`) capture the
 				// leading sep into the `<localName>SepBefore` slot the ctor
 				// call references.
@@ -1684,7 +1683,7 @@ class Lowering {
 		final sepMatchExpr: Expr = buildTriviaCloseSepMatchExpr(sepText, trailPresentLocal);
 		// ω-trivia-trailing-before-sep: capture trailing same-line comment
 		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
-		// previously broke sep-match (`,` not found after h-ws skip stops
+		// would break sep-match (`,` not found after h-ws skip stops
 		// at `/`) and then `collectTrailing` consumed `/*c*/` AFTER the
 		// failed sep-match — the `,` was never matched and the next
 		// iteration's element parse failed on `,`. Reorder: first probe
@@ -1765,7 +1764,7 @@ class Lowering {
 		// regex matches mid-string (the `^` anchor binds only to the FIRST
 		// alternative without an explicit non-capturing group — `^A|B` ≡
 		// `(^A)|B`, so the second alt silently scans the rest of input for
-		// an arbitrary match). Caught by Slice 36's `HxFloatLit` regex
+		// an arbitrary match). Caught by the `HxFloatLit` regex
 		// extension: `^[0-9]+\.[0-9]+|[0-9]+\.(?![\w.])` matched `1.` mid-
 		// buffer when the parser was sitting at an ident, overwriting the
 		// ident's position with the float slice. Defensive runtime check
@@ -2880,7 +2879,7 @@ class Lowering {
 	): Expr {
 		// ω-trivia-trailing-before-sep: capture trailing same-line comment
 		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
-		// previously broke sep-match (`,` not found after h-ws skip stops
+		// would break sep-match (`,` not found after h-ws skip stops
 		// at `/`) and then `collectTrailing` consumed `/*c*/` AFTER the
 		// failed sep-match — the `,` was never matched and the next
 		// iteration's element parse failed on `,`. Reorder: first probe
@@ -3480,7 +3479,7 @@ class Lowering {
 	private function buildTryparseSepLoop(
 		elemCall: Expr, accumRef: Expr, sepCharCode: Int, sepBlockEnded: Bool, predicateCall: Expr
 	): Expr {
-		// Try-parse with sep peek (Slice 18). After each successful element,
+		// Try-parse with sep peek. After each successful element,
 		// peeks the next non-whitespace char: if it equals the sep, consumes
 		// it and continues; otherwise breaks. On element-parse fail, rewinds
 		// to `_savedPos` (taken BEFORE `skipWs`) so the enclosing close sees
@@ -3664,7 +3663,7 @@ class Lowering {
 	}
 
 	private function emitSepBeforeOptStep(localName: String, parseSteps: Array<Expr>, sepCharCode: Int): Void {
-		// Slice 18f opt-in (`@:fmt(sepBeforeOpt)`): BEFORE entering the
+		// `@:fmt(sepBeforeOpt)` opt-in: BEFORE entering the
 		// element loop, peek-and-consume a single leading sep INSIDE the body
 		// (between enclosing kw and first element). Captures true/false into
 		// `<localName>SepBefore` for the writer's padLeading runtime gate to
@@ -3765,8 +3764,7 @@ class Lowering {
 	 * Case 5: unary-prefix branch (`@:prefix("-")`). A ctor with a single
 	 * `Ref` child that references the same enum: consume the prefix literal,
 	 * recurse into `recurseFnName` (the atom fn for Pratt enums), and build
-	 * the ctor around the returned operand. Extracted from `lowerEnumBranch`
-	 * so the dispatcher stays under the complexity gate.
+	 * the ctor around the returned operand.
 	 */
 	private function lowerPrefixBranch(branch: ShapeNode, typePath: String, ctorRef: Expr, recurseFnName: String, prefixOp: String): Expr {
 		final children: Array<ShapeNode> = branch.children;
@@ -3801,8 +3799,7 @@ class Lowering {
 	/**
 	 * Case 0: zero-arg ctor with `@:kw` (no `@:lit`). Emits `expectKw` with
 	 * word-boundary enforcement; when `@:trail` is present the trail literal
-	 * is emitted unconditionally after the keyword (D48). Extracted from
-	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 * is emitted unconditionally after the keyword (D48).
 	 */
 	private function lowerKwZeroArgBranch(branch: ShapeNode, ctorRef: Expr, kwLeadBranch: String): Expr {
 		final trailBranch: Null<String> = branch.annotations.get('lit.trailText');
@@ -3824,8 +3821,7 @@ class Lowering {
 	/**
 	 * Case 1: zero-arg ctor with `@:lit(single)`. A word-ending literal
 	 * routes through the word-boundary-checking `expectKw`; a symbolic
-	 * literal through plain `expectLit`. Extracted from `lowerEnumBranch` so
-	 * the dispatcher stays under the complexity gate.
+	 * literal through plain `expectLit`.
 	 */
 	private function lowerSingleLitBranch(ctorRef: Expr, lit: String): Expr {
 		final expectCall: Expr = endsWithWordChar(lit) ? macro expectKw(ctx, $v{lit}) : macro expectLit(ctx, $v{lit});
@@ -3840,8 +3836,7 @@ class Lowering {
 	 * Case 2: single-arg ctor with `@:lit(multi)` — literals map to ident
 	 * values of the field type. Each literal dispatches via `matchKw` (word-
 	 * like set) or `matchLit` (symbolic set); a mixed set is rejected at
-	 * macro time. Extracted from `lowerEnumBranch` so the dispatcher stays
-	 * under the complexity gate.
+	 * macro time.
 	 */
 	private function lowerMultiLitBranch(ctorRef: Expr, litList: Array<String>): Expr {
 		final wordLike: Bool = endsWithWordChar(litList[0]);
@@ -3871,8 +3866,7 @@ class Lowering {
 	/**
 	 * Case 4 (no-sep): `@:lead`/`@:trail` Star with no separator. The loop
 	 * terminates by peeking at the close literal instead of consuming a
-	 * separator between items. Extracted from `lowerEnumBranch` so the
-	 * dispatcher stays under the complexity gate.
+	 * separator between items.
 	 */
 	private function lowerStarNoSepBranch(
 		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr
@@ -3895,8 +3889,7 @@ class Lowering {
 	/**
 	 * Case 4 (plain @:sep): close-driven Star loop that consumes one
 	 * separator between elements and tolerates a trailing sep before the
-	 * close literal. Extracted from `lowerEnumBranch` so the dispatcher
-	 * stays under the complexity gate.
+	 * close literal.
 	 */
 	private function lowerStarSepBranch(
 		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int
@@ -3939,8 +3932,7 @@ class Lowering {
 	 * OPTIONAL separator (sepText or sepAltText) between elements. Mirrors
 	 * the trivia-build close-peek loop in plain mode so multi `;`-separated
 	 * anon fields parse under the non-trivia builds. Sole consumer:
-	 * `HxType.Anon`. Extracted from `lowerEnumBranch` so the dispatcher
-	 * stays under the complexity gate.
+	 * `HxType.Anon`.
 	 */
 	private function lowerStarSepAltBranch(
 		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
@@ -3970,8 +3962,7 @@ class Lowering {
 	 * when the prior element ended with `}`/`;` (byte-check) or a schema
 	 * predicate matches; `sepStartsElement` flips the byte-ambiguity policy
 	 * so the sep char belongs to the NEXT element. Strictly opt-in via
-	 * `lit.sepBlockEnded`. Extracted from `lowerEnumBranch` so the
-	 * dispatcher stays under the complexity gate.
+	 * `lit.sepBlockEnded`.
 	 */
 	private function lowerStarBlockEndedBranch(
 		branch: ShapeNode, leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr,
@@ -4001,8 +3992,7 @@ class Lowering {
 	 * collectTrivia -> parseElement -> collectTrailing pipeline that feeds
 	 * `Trivial<T>` structs into the accumulator, so leading/trailing
 	 * comments and blank-line signals survive round-trip. Supports `@:sep`
-	 * alongside `@:trivia` for close-peek Alt branches. Extracted from
-	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 * alongside `@:trivia` for close-peek Alt branches.
 	 */
 	private function lowerTriviaStarBranch(
 		branch: ShapeNode, ctorRef: Expr, leadText: String, trailText: String, sepText: Null<String>, elemCT: ComplexType, elemCall: Expr,
@@ -4116,7 +4106,7 @@ class Lowering {
 					break;
 				}
 				final _node: $elemCT = $elemCall;
-				// ω-trivia-trailing-before-sep (Slice 50 mirror of
+				// ω-trivia-trailing-before-sep (mirror of
 				// emitStarFieldSteps :3339): probe a same-line trailing
 				// comment BEFORE the sep-match so `elem /*c*/ , next`
 				// shape parses. Without this, the pre-sep horizontal-ws
@@ -4159,8 +4149,7 @@ class Lowering {
 	/**
 	 * Case 4 block-ended Star with `sepStartsElement` — the sep byte at pos
 	 * belongs to the NEXT element when the prior element is block-ended.
-	 * Extracted from `lowerStarBlockEndedBranch` so it stays under the
-	 * complexity gate.
+	 *
 	 */
 	private function lowerStarBlockEndedSepStarts(
 		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
@@ -4215,8 +4204,7 @@ class Lowering {
 	/**
 	 * Case 4 block-ended Star, sep-first policy — sep is consumed between
 	 * elements; block-ended exemption tolerates an omitted sep when the
-	 * prior element ended with `;`/`}` or the predicate matches. Extracted
-	 * from `lowerStarBlockEndedBranch` so it stays under the complexity gate.
+	 * prior element ended with `;`/`}` or the predicate matches.
 	 */
 	private function lowerStarBlockEndedSepLast(
 		leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr, ctorCall: Expr, sepCharCode: Int,
@@ -4274,15 +4262,14 @@ class Lowering {
 	 * 4's domain. Emits the kw (word-boundary checked) and/or lead literal,
 	 * the structurally-parsed inner Ref, and the optional trail literal,
 	 * threading the trivia-mode source-capture probes into the synth ctor.
-	 * Extracted from `lowerEnumBranch` so the dispatcher stays under the
-	 * complexity gate.
+	 *
 	 */
 	private function lowerKwRefBranch(branch: ShapeNode, typePath: String, ctorRef: Expr): Expr {
 		final children: Array<ShapeNode> = branch.children;
 		final leadText: Null<String> = branch.annotations.get('lit.leadText');
 		final trailText: Null<String> = branch.annotations.get('lit.trailText');
 		final refName: String = children[0].annotations.get('base.ref');
-		// ω-cast-bind-tightness (Slice 46): `@:fmt(atomOperand)` on a
+		// ω-cast-bind-tightness: `@:fmt(atomOperand)` on a
 		// single-Ref kw branch routes the operand parse to the
 		// `${parseFn}Atom` variant of the sub-rule instead of the
 		// full Pratt entry. The operand binds at atom level (atom
@@ -4427,8 +4414,7 @@ class Lowering {
 	/**
 	 * Append the kw/lead literal-consume steps (plus the trivia-mode newline
 	 * / source-position probes) to a `lowerKwRefBranch` step list. Either or
-	 * both of kw and lead may be absent. Extracted from `lowerKwRefBranch` so
-	 * it stays under the complexity gate.
+	 * both of kw and lead may be absent.
 	 */
 	private function appendKwRefLeadSteps(
 		steps: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, triviaKwNewline: Bool, triviaBodyPolicyKw: Bool,
@@ -4477,8 +4463,7 @@ class Lowering {
 	 * Append the optional trail-literal consume step to a `lowerKwRefBranch`
 	 * step list, threading the trivia-mode trailing-trivia stash, the
 	 * source-text slice, and the parse-gated optional-`;` decision (Slices
-	 * V/X2/X3/X4). Extracted from `lowerKwRefBranch` so it stays under the
-	 * complexity gate.
+	 * V/X2/X3/X4).
 	 */
 	private function appendKwRefTrailStep(
 		steps: Array<Expr>, trailText: String, triviaTrailOpt: Bool, triviaCaptureSource: Bool, trailOptional: Bool,
@@ -4537,12 +4522,12 @@ class Lowering {
 		// parse — `matchLit` peeks + consumes if present, but does
 		// NOT throw if absent. In trivia mode the captured presence
 		// flag flows into the synth ctor's extra `trailPresent:Bool`
-		// arg (slice ω-trailopt-source-track 2026-05-02). Plain
+		// arg (ω-trailopt-source-track). Plain
 		// mode keeps the original ctor arity and falls back to
 		// AST-shape gates such as `@:fmt(trailOptShapeGate(...))`
 		// in the writer.
 		// Consumers: `HxDecl.TypedefDecl` for `typedef Foo = T`
-		// without trailing `;` (slice ω-typedef-trailOpt);
+		// without trailing `;` (ω-typedef-trailOpt);
 		// `HxStatement.VarStmt` / `FinalStmt` for `var foo =
 		// switch (x) { case _: 1 }` without trailing `;` (slice
 		// ω-vardecl-trailOpt — the `}`-terminated rhs idiom).
@@ -4551,9 +4536,9 @@ class Lowering {
 		// made at runtime from the parsed child shape, so a
 		// non-brace expr still hits `expectLit` (throws → statement
 		// boundary preserved). Without the gate the emission is
-		// exactly the pre-slice three-line form (byte-identical for
+		// unchanged (byte-identical for
 		// every other ctor).
-		// ω-slice-X2: extend the Slice-V gate so the trail `;` is
+		// ω-slice-X2: extend the ω-slice-V gate so the trail `;` is
 		// ALSO optional when an `else` keyword immediately follows.
 		// An `ExprStmt` followed by `else` is only ever an
 		// if-then-body in valid Haxe (a stray `else` after any other
@@ -4564,14 +4549,14 @@ class Lowering {
 		// `HxIfStmt.elseBody`'s own `@:optional @:kw('else')`). Still
 		// `parseGateCall`-guarded (sole consumer `HxStatement.
 		// ExprStmt`) → byte-identical for every other ctor.
-		// ω-slice-X3 (Slice 44 — `}`-terminator): extend the gate
+		// ω-slice-X3 (`}`-terminator): extend the gate
 		// further so the trail `;` is optional when the next non-
 		// trivia byte is `}`. An `ExprStmt` followed by `}` is only
 		// ever the last stmt of an enclosing block in valid Haxe —
 		// the closing brace itself is unambiguously the statement
 		// separator, regardless of the just-parsed expr's kind. This
-		// generalises the per-ctor extensions accumulated across
-		// Slices 19/28/30/39/42/43 (BlockExpr / MetaExpr-ReturnExpr /
+		// generalises the earlier per-ctor extensions
+		// (BlockExpr / MetaExpr-ReturnExpr /
 		// ObjectLit / ArrayExpr / DollarBlockExpr / Is) — each only
 		// got `;` elision because its OWN tail token happened to
 		// close a brace/bracket; the principled invariant is
@@ -4581,9 +4566,9 @@ class Lowering {
 		// still throws on the missing `;`. The `peekLit` is
 		// non-consuming — the `}` belongs to the enclosing block's
 		// Star `@:trail('}')`. Sole consumer remains `HxStatement.
-		// ExprStmt`. Closes the `expected="//"` cluster's bare-call/
-		// bare-ident drivers (issue_357 array-comprehension etc.).
-		// ω-slice-X4 (Slice 51 — `case`/`default`-terminator): extend
+		// ExprStmt`.
+		//
+		// ω-slice-X4 (`case`/`default`-terminator): extend
 		// the gate further so the trail `;` is optional when the
 		// next non-trivia bytes form a word-boundary-checked
 		// `case` or `default` keyword. `case` and `default` are
@@ -4591,10 +4576,10 @@ class Lowering {
 		// an `ExprStmt` followed by either keyword can only be the
 		// last stmt of a switch arm — the next `case`/`default`
 		// label itself is unambiguously the arm separator,
-		// regardless of the just-parsed expr's kind. Closes the
-		// `Cli.hx` dogfooding gap (try-expr-catch `try x = foo()
+		// regardless of the just-parsed expr's kind.
+		// Motivating shape: try-expr-catch `try x = foo()
 		// catch (e:Exception) { … }` as the body of a switch arm
-		// followed by another `case`). Byte-twin of the `peekKw("else")`
+		// followed by another `case`. Byte-twin of the `peekKw("else")`
 		// disjunct above — same word-boundary check, same
 		// non-consuming nature (the `case`/`default` belongs to the
 		// enclosing switch's `Star` of case clauses). Sole consumer
@@ -4602,7 +4587,7 @@ class Lowering {
 		// inside a switch arm still throws (`g` is neither `case`
 		// nor `default`).
 		//
-		// `#end` / `#else` / `#elseif` disjuncts (slice ω-cond-body-nosemi):
+		// `#end` / `#else` / `#elseif` disjuncts (ω-cond-body-nosemi):
 		// a no-semi last statement inside a `#if` conditional BODY is legal
 		// Haxe (dogfood shape: `haxe.Log.trace = (v) -> {…}` directly
 		// before `#end`). The conditional-body Star has no `}` close for the
@@ -4634,8 +4619,7 @@ expectLit(ctx, $v{trailText}));
 	 * Build the synth-ctor call for a `lowerKwRefBranch` ctor, appending the
 	 * trivia-mode positional args (`_trailPresent` / `_sourceText` /
 	 * `_bodyOnSameLine` / `_wrapOpenNewline` / `_varKwNewline`) the active
-	 * capture channels carry. Extracted from `lowerKwRefBranch` so it stays
-	 * under the complexity gate.
+	 * capture channels carry.
 	 */
 	private function buildKwRefCtorCall(
 		ctorRef: Expr, triviaTrailOpt: Bool, triviaCaptureSource: Bool, triviaBodyPolicyKw: Bool, triviaWrapOpenNewline: Bool,
@@ -4653,8 +4637,7 @@ expectLit(ctx, $v{trailText}));
 	/**
 	 * Build the optional parse-gate predicate call (`@:fmt(trailOptParseGate(
 	 * '<adapter>'))`) reached via the schema instance, or `null` when the
-	 * branch carries no gate. Extracted from `lowerKwRefBranch` so it stays
-	 * under the complexity gate.
+	 * branch carries no gate.
 	 */
 	private function buildKwRefParseGateCall(branch: ShapeNode): Null<Expr> {
 		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
@@ -4670,8 +4653,7 @@ expectLit(ctx, $v{trailText}));
 	 * Case 4 dispatch: compute the shared close-peek locals (element call,
 	 * close-not-next / close-or-eof probes, ctor call) for a `@:lead`/
 	 * `@:trail` Star branch, then route to the trivia / sepAlt / block-ended
-	 * / plain-sep / no-sep arm. Extracted from `lowerEnumBranch` so the
-	 * dispatcher stays under the complexity gate.
+	 * / plain-sep / no-sep arm.
 	 */
 	private function lowerStarBranch(
 		branch: ShapeNode, ctorRef: Expr, leadText: String, trailText: String, sepText: Null<String>, sepAltText: Null<String>
@@ -4772,7 +4754,7 @@ expectLit(ctx, $v{trailText}));
 		// path so the commit-miss branch (lead absent) does not
 		// expect a close. First consumer: `HxAbstractDecl.
 		// underlyingType` for the `@:coreType` bare-abstract
-		// shape `abstract Foo from Int to Int {}` (Slice 40).
+		// shape `abstract Foo from Int to Int {}`.
 		final captureAfterTrail: Expr = hasOptionalRefAfterTrailSlot
 			? macro $i{'_afterTrail_$fieldName'} = collectTrailingFull(ctx)
 			: macro {};
@@ -5079,7 +5061,7 @@ expectLit(ctx, $v{trailText}));
 		if (_ctx.trivia && child.kind == Star && child.annotations.get('trivia.starCollects') == true) {
 			pushTrailingStarSlots(child, localName, fieldName, structFields);
 		}
-		// ω-condcomp-body-leading-sep (Slice 18f): @:fmt(sepBeforeOpt)
+		// ω-condcomp-body-leading-sep: @:fmt(sepBeforeOpt)
 		// on a Star field grows a `<field>SepBefore:Bool` slot fed by
 		// the local declared inside `emitStarFieldSteps`'s
 		// @:sep+@:tryparse-no-trail branch. The slot lives on the
@@ -5112,7 +5094,7 @@ expectLit(ctx, $v{trailText}));
 		hasStructFieldTrailOptSlot: Bool,
 		captureTrailPresentExpr: Expr
 	} {
-		// ω-optional-ref-trail (Slice 40): pre-declare the
+		// ω-optional-ref-trail: pre-declare the
 		// `<field>AfterTrail` capture local before the parse step so
 		// the optional-Ref's lead-led commit branch can assign into
 		// it after `expectLit(trail)`, while the absent branch leaves
@@ -5829,7 +5811,7 @@ expectLit(ctx, $v{trailText}));
 			// `_kwLeading_*` slots whose layout assumes no per-field
 			// trail). Defer until a grammar needs it; the lead-led
 			// shape (`@:optional @:lead('(') @:trail(')')`) is
-			// supported below — first consumer Slice 40 / `@:coreType`
+			// supported below — first consumer `@:coreType`
 			// bare abstract via `HxAbstractDecl.underlyingType`.
 			Context.fatalError('Lowering: @:optional @:kw combined with @:trail is deferred (field "$fieldName")', Context.currentPos());
 		}

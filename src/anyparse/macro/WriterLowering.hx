@@ -477,7 +477,7 @@ class WriterLowering {
 		final pushElemExpr: Expr = lowerPostfixPushElem(c);
 		final tailExpr: Expr = lowerPostfixTailExpr(c, dcExpr);
 		// ω-sep-faithful outer elide: per-pair `sepBefore` flags mirror the
-		// Slice 18g array threading — `WrapList.emit` suppresses the engine's
+		// array threading — `WrapList.emit` suppresses the engine's
 		// inter-element comma when the source elided it (canonical:
 		// `g(true #if FSE, true #end)` — no comma between the plain arg and
 		// the following conditional group; it lives INSIDE the group).
@@ -1338,7 +1338,7 @@ class WriterLowering {
 		final tryparseSepText: Null<String> = starNode.annotations.get('lit.sepText');
 		final tryparseBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
 		final tryparseSepFaithful: Bool = starNode.annotations.get('lit.sepFaithful') == true;
-		// ω-sep-faithful + Slice 18f: re-emit a source-captured LEADING sep
+		// ω-sep-faithful: re-emit a source-captured LEADING sep
 		// (`#if X, elem #end`) from the `<field>SepBefore` slot — the trivia
 		// twin of the plain path's sepBeforeOptActive pad swap.
 		final tryparseSepBeforeAccess: Null<Expr> = (tryparseSepFaithful && starNode.fmtHasFlag('sepBeforeOpt'))
@@ -1617,7 +1617,7 @@ class WriterLowering {
 			// drops `Trivial<T>.newlineBefore` signal, routes
 			// per-element block-trailing + leading comments
 			// through the cascade no-trivia branch. Currently
-			// `HxFnDecl.params` (Slice 4c).
+			// `HxFnDecl.params`.
 			final ignoreSourceNewlines: Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
 			// ω-bropen-keep-sep: read `@:fmt(keepCurlyBlanks)` on the
 			// struct-Star path. Sister to the enum-Alt path's read.
@@ -1637,10 +1637,10 @@ class WriterLowering {
 			// path (passed false) so matrix slots in after it.
 			final matrixWrapStar: Bool = starNode.fmtHasFlag('arrayMatrixWrap');
 			// ω-expressionif-collapse (mechanism A): the struct-Star
-			// trivia path previously passed literal `null, null` for
-			// the inside-of-delimiter spacing slots, so a Star carrying
+			// trivia path must not pass literal `null, null` for
+			// the inside-of-delimiter spacing slots — else a Star carrying
 			// `@:fmt(objectLiteralBracesOpen, objectLiteralBracesClose)`
-			// (HxObjectLit.fields) never produced `{ x }` padding. Read
+			// (HxObjectLit.fields) gets no `{ x }` padding. Read
 			// the policy Doc the same way the plain `@:sep` path
 			// (~5560) and the enum-Alt path (~2363) do —
 			// `delimInsidePolicySpace` returns null when no delim
@@ -2151,15 +2151,14 @@ class WriterLowering {
 		else
 			macro {};
 		final trailingPush: Expr = padTrailing ? macro _docs.push(_dt(' ')) : macro {};
-		// ω-condcomp-body-inter-sep (Slice 18f): the inter-element
-		// separator for this branch was historically `_dt(' ')` —
-		// designed for sep-less Stars where elements pack with one
-		// space (e.g. modifier runs). Sep-bearing Stars (e.g.
+		// ω-condcomp-body-inter-sep: the default inter-element
+		// separator for this branch is `_dt(' ')` — designed for
+		// sep-less Stars where elements pack with one space (e.g.
+		// modifier runs). Sep-bearing Stars (e.g.
 		// `HxConditionalParam.body` / `HxConditionalObjectField.body`
 		// with `@:sep(',')`) emit their actual sep + space so multi-
 		// element bodies round-trip the source comma. Falls back to
-		// `' '` when sepText is absent — sep-less Stars stay byte-
-		// identical to pre-slice behaviour.
+		// `' '` when sepText is absent.
 		final sepTextForInter: Null<String> = starNode.annotations.get('lit.sepText');
 		final interSepText: String = sepTextForInter != null ? sepTextForInter + ' ' : ' ';
 		if (softFill) {
@@ -2291,7 +2290,7 @@ class WriterLowering {
 		// trailing same-line content (members `{}` + close-trailing
 		// comment). First consumer is `HxAbstractDecl.clauses`.
 		final lineLengthAwareSeps: Bool = starNode.fmtHasFlag('lineLengthAwareSeps');
-		// ω-condcomp-body-leading-sep (Slice 18f): read the runtime
+		// ω-condcomp-body-leading-sep: read the runtime
 		// `<field>SepBefore:Bool` slot synthesised by
 		// `TriviaTypeSynth.isSepBeforeOptStarField`. When true at
 		// write time, prepend the sep literal to the leading pad
@@ -2305,9 +2304,9 @@ class WriterLowering {
 		//
 		// The slot lives on the trivia-paired typedef only (sister
 		// gate in `Lowering.lowerStruct` skips the plain-mode
-		// struct literal). Plain writer keeps the pre-slice
-		// `_dt(' ')` pad — no slot to read, byte-roundtrip parity
-		// with the no-slot pre-Slice-18f shape preserved.
+		// struct literal). Plain writer keeps the
+		// `_dt(' ')` pad — no slot
+		// to read.
 		final sepBeforeOpt: Bool = starNode.fmtHasFlag('sepBeforeOpt');
 		if (sepBeforeOpt && !padLeading)
 			Context.fatalError('WriterLowering: @:fmt(sepBeforeOpt) requires @:fmt(padLeading)', Context.currentPos());
@@ -2316,12 +2315,12 @@ class WriterLowering {
 				'WriterLowering: @:fmt(sepBeforeOpt) is not compatible with @:fmt(lineLengthAwareSeps)', Context.currentPos()
 			);
 		final sepBeforeOptActive: Bool = sepBeforeOpt && _ctx.trivia;
-		// ω-condcomp-body-softfill (Slice 18h): plain-mode
+		// ω-condcomp-body-softfill: plain-mode
 		// `@:sep + @:tryparse` Star with `@:fmt(padLeading[, padTrailing])`
 		// can opt into Wadler `Fill(items, sep)` inter-element layout via
 		// `@:fmt(softFill)`. Items pack inline up to the current line
 		// budget and break the sep before any overflow item at the
-		// surrounding Nest's indent. Closes `whitespace/issue_582…`:
+		// surrounding Nest's indent. Handles
 		// `#if air, p1, p2, …, pN #end` inside an outer function-
 		// signature Star whose source wraps the body across multiple
 		// lines. The flat sep is `Concat([Text(sepText), Line(' ')])` —
@@ -2373,8 +2372,7 @@ class WriterLowering {
 	 * tryparse / close / EOF trivia emit helper. Extracted to keep the orchestrator
 	 * under the complexity gate.
 	 * Builds the trailing-slot accessors + the `TriviaStarCtx` for a `@:trivia`
-	 * Star, from the resolved `StarFieldArgs`. Extracted from `emitTriviaStar` so
-	 * the dispatch stays under the complexity gate.
+	 * Star, from the resolved `StarFieldArgs`.
 	 */
 	private function buildTriviaStarCtx(args: StarFieldArgs): TriviaStarCtx {
 		final starNode: ShapeNode = args.starNode;
@@ -2677,7 +2675,7 @@ class WriterLowering {
 		}
 
 		if (raw) {
-			// ω-numeric-normalize-suffix (Slice 47): `@:writeNormalize('<id>')`
+			// ω-numeric-normalize-suffix: `@:writeNormalize('<id>')`
 			// on a `@:rawString` terminal wraps the emit through a built-in
 			// normalisation transform before `_dt`. Currently one variant —
 			// `'stripSuffixUnderscore'` — drops the optional underscore that
@@ -2685,8 +2683,8 @@ class WriterLowering {
 			// `_f64` → `f64`), matching haxe-formatter's canonicalisation
 			// convention: source-form `12_0_i32` round-trips as `12_0i32`,
 			// `1_2.3_4_f64` as `1_2.3_4f64`. Source-fidelity loss is the
-			// trade — haxe-formatter normalises here and no fixture preserves
-			// the underscore-before-suffix form on output. Generic enough
+			// trade — haxe-formatter normalises here.
+			// Generic enough
 			// for future numeric-shape canonicalisations; the registry is
 			// the switch below, keep it small.
 			final normalize: Null<String> = node.readMetaString(':writeNormalize');
@@ -2745,8 +2743,7 @@ class WriterLowering {
 	 * `sameLine.doWhile`/`tryCatch` defaults.
 	 *
 	 * Consumed by the two struct-field sites (non-optional kw, optional
-	 * Ref/lead) that previously hard-coded `' '` as the boundary
-	 * between a field and the preceding token. The try-parse Star
+	 * Ref/lead) for the boundary between a field and the preceding token. The try-parse Star
 	 * `@:fmt(sameLine(...))` site in `emitWriterStarField` has its own inline
 	 * handler (per-element separator, different semantic) and routes
 	 * `Keep` to `Same` since there is no per-element source-shape slot.
@@ -3349,7 +3346,7 @@ class WriterLowering {
 	 * kw→body separator runtime-switchably.
 	 *
 	 * First consumer: `HxFnBody.ExprBody`'s `@:fmt(bodyPolicy('functionBody'))`
-	 * (slice ω-functionBody-policy).
+	 * (ω-functionBody-policy).
 	 */
 	private function ctorHasBodyPolicy(refName: String, ctorName: String): Bool {
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
@@ -4012,11 +4009,7 @@ class WriterLowering {
 	/**
 	 * ω-bug-2c-inner-star — read every cascade `@:fmt(blankLines*)` meta
 	 * off a `@:trivia` Star ShapeNode and resolve them into the four
-	 * info arrays consumed by `buildCascadeEmit`. Centralises the
-	 * meta-read + transparent-merge + cross-validation block previously
-	 * inlined in the EOF-Star branch of `lowerStruct`, so the inner-Star
-	 * branch (`triviaTryparseStarExpr` consumers) can reuse the same
-	 * cascade infrastructure without duplication.
+	 * info arrays consumed by `buildCascadeEmit`. Centralises the meta-read + transparent-merge + cross-validation block shared by the EOF-Star branch of `lowerStruct` and the inner-Star branch (`triviaTryparseStarExpr` consumers).
 	 *
 	 * Recognised metas:
 	 *  - `blankLinesAfterCtor` / `blankLinesAfterCtorIf`
@@ -4171,7 +4164,7 @@ class WriterLowering {
 	 * a blank-line override only on shape-relevant elements (e.g.
 	 * "blank line around any multi-line type decl") instead of bare
 	 * ctor name (which would force the blank around empty-body decls
-	 * too — the previously regressed `class C<T> {}` case).
+	 * too, e.g. `class C<T> {}`).
 	 */
 	private function buildAfterCtorBlankInfoIf(elemRefName: String, args: Array<String>): AfterCtorBlankInfo {
 		if (args.length < 4)
@@ -4921,10 +4914,10 @@ class WriterLowering {
 		// ω-arraylit-trailing-comma-dispatch: enum-Alt branches
 		// (e.g. `HxExpr.ArrayExpr`) carry `@:fmt(trailingComma(
 		// '<knob>'))` but the trivia-mode emit at this site
-		// previously hardcoded `null, null` for `triviaSepStarExpr`'s
-		// 13th/14th params, ignoring the knob entirely. Sister
-		// dispatch-dual-path gap to [[feedback-wraprules-dispatch-
-		// dual-path]] — the struct-Star path at `lowerStruct`
+		// must thread the knob into `triviaSepStarExpr`'s
+		// 13th/14th params (hardcoded `null, null` ignores it). Sister
+		// dispatch-dual-path gap —
+		// the struct-Star path at `lowerStruct`
 		// already threads `trailingCommaField`. Companion sibling
 		// `ω-arraylit-source-trail-comma` adds the 13th param's
 		// counterpart via a synth-side positional `trailPresent:
@@ -5261,8 +5254,7 @@ class WriterLowering {
 				// which uses plain-mode `HxModuleWriter`). Type-position
 				// nodes (`HxType.Anon.fields`) don't carry trivia, so the
 				// plain-path dispatch is their only wrapRules surface —
-				// a `@:trivia` flip would synthesize unused machinery (see
-				// `feedback_trivia_not_freebie.md`).
+				// a `@:trivia` flip would synthesize unused machinery.
 				final isTriviaCollecting: Bool = starNode.annotations.get('trivia.starCollects') == true;
 				final wrapRulesField: Null<String> = isTriviaCollecting ? null : branch.fmtReadString('wrapRules');
 				final listCall: Expr = if (wrapRulesField != null) {
@@ -5306,8 +5298,7 @@ class WriterLowering {
 	 * Validate the modifier Star → enum → static-ctor chain that
 	 * `@:fmt(staticVarSubdivision)` relies on. Fatal-errors on any
 	 * misconfiguration; returns normally when the shape is sound.
-	 * Extracted from `buildStaticVarSubdivisionInfo` to keep that builder
-	 * below the complexity gate.
+	 *
 	 */
 	private function validateStaticVarSubdivision(elemRefName: String, modifierField: String, staticCtor: String): Void {
 		final elemRule: Null<ShapeNode> = _shape.rules.get(elemRefName);
@@ -5462,9 +5453,7 @@ class WriterLowering {
 	 * ω-leading-trivia-multiline — build the per-element `_t`-scoped
 	 * boolean for `@:fmt(multilineWhenLeadingTriviaSpansLines('<metaField>',
 	 * '<declField>'))`, OR-ed into the `'multiline'` predicate of every
-	 * predicate-gated blank rule. Returns null when the flag is absent
-	 * (byte-identical to pre-slice). Extracted from
-	 * `readCascadeInfosFromStar` to keep that reader below the gate.
+	 * predicate-gated blank rule. Returns null when the flag is absent.
 	 */
 	private function buildTriviaMultilineExpr(starNode: ShapeNode): Null<Expr> {
 		final triviaMultilineArgs: Null<Array<String>> = starNode.fmtReadStringArgs('multilineWhenLeadingTriviaSpansLines');
@@ -5486,9 +5475,7 @@ class WriterLowering {
 	 * Fold one `@:fmt(blankLinesBetweenSameCtor{Tail,Head}Transparent)`
 	 * arg-triple (classifierField, ctorName, adapterOptField) into the
 	 * per-classifier `transparentByClassifier` accumulator, validating
-	 * arity and one-shared-adapter-per-side. Extracted from
-	 * `readCascadeInfosFromStar` (was a local closure folding its guards
-	 * into the parent's complexity).
+	 * arity and one-shared-adapter-per-side.
 	 */
 	private function ingestTransparentArg(
 		transparentByClassifier: Map<String, TransparentEntry>, args: Array<String>, isTail: Bool, metaName: String
@@ -5528,8 +5515,7 @@ class WriterLowering {
 	 * Build the `betweenCtorInfos` + `transitionAcrossInfos` lists from
 	 * their arg-lists, threading each classifier's transparent-ctor entry,
 	 * then verify every accumulated transparent classifier has a matching
-	 * between/transition rule on the same Star. Extracted from
-	 * `readCascadeInfosFromStar` to keep that reader below the gate.
+	 * between/transition rule on the same Star.
 	 */
 	private function buildCtorBlankInfos(
 		elemRefName: String, betweenCtorAllArgs: Array<Array<String>>, transitionAcrossAllArgs: Array<Array<String>>,
@@ -5699,8 +5685,7 @@ class WriterLowering {
 	 * for `@:fmt(multilineWhenStarFieldWrapsCascade)` — mirrors
 	 * `WrapList.emit`'s width arithmetic (`, ` sep = +2 per non-last item)
 	 * over the Star field, firing when `WrapList.decideWithLineLengthState`
-	 * resolves to any non-NoWrap mode. Extracted from
-	 * `buildMultilineMetaPredicate` to keep that path below the gate.
+	 * resolves to any non-NoWrap mode.
 	 */
 	private function buildStarWrapsCascadePred(fieldExpr: Expr, cascadeAccess: Expr, itemFieldExpr: Expr): Expr {
 		// Width arithmetic mirrors `WrapList.emit`: each non-last item
@@ -5736,8 +5721,7 @@ class WriterLowering {
 
 	/**
 	 * Resolve the classifier enum (Alt) rule reached from the element Seq
-	 * rule's `fieldName` Ref. Extracted from `buildInterMemberClassifyInfo`
-	 * — the elemRule -> classifierNode -> enumRuleName -> enumRule chain
+	 * rule's `fieldName` Ref. Walks the elemRule -> classifierNode -> enumRuleName -> enumRule chain
 	 * with its validation gates.
 	 */
 	private function resolveInterMemberEnumRule(elemRefName: String, fieldName: String): ShapeNode {
@@ -5777,7 +5761,7 @@ class WriterLowering {
 
 	/**
 	 * Build the per-ctor switch patterns for a transition-across classifier.
-	 * Extracted from `buildTransitionAcrossInfo` — the per-branch loop that
+	 * The per-branch loop that
 	 * assigns each enum ctor to subset 1 (A) / 2 (B) / 3 (transparent) / 0
 	 * (other), binding the first synth arg to `_v0` for matched/transparent
 	 * ctors. Instance because `branchSynthExtraArity` reads `isTriviaBearing`.
@@ -5836,8 +5820,7 @@ class WriterLowering {
 	 * Build the args-list emission call for a postfix Star — the three-way
 	 * dispatch between the runtime `WrapList.emit` cascade (`@:fmt(wrapRules)`,
 	 * with a hand-built `Keep`-mode Doc for trivia Stars), the Wadler
-	 * `fillList` (`@:fmt(fill)`), and the default `sepList`. Extracted from
-	 * `lowerPostfixStar`; instance because `optFieldAccess` reads `ctx`.
+	 * `fillList` (`@:fmt(fill)`), and the default `sepList`. Instance method because `optFieldAccess` reads `ctx`.
 	 */
 	private function lowerPostfixSepListCall(c: PostfixStarCtx): Expr {
 		final postfixOp: String = c.postfixOp;
@@ -5890,8 +5873,7 @@ class WriterLowering {
 	 * Honours `@:fmt(callParensInside)` (runtime `callParensInsideOpen` /
 	 * `callParensInsideClose`) and, for a `(`-open ctor, the
 	 * compress-successive-parenthesis policy (a runtime space before a
-	 * leading object-literal arg). Extracted from `lowerPostfixStar`;
-	 * instance because `policyInsideSpace` reads `ctx`.
+	 * leading object-literal arg). Instance method because `policyInsideSpace` reads `ctx`.
 	 */
 	private function lowerPostfixCallInside(branch: ShapeNode, postfixOp: String, isTriviaStar: Bool): { open: Expr, close: Expr } {
 		// ω-call-parens-inside (Stage B): `@:fmt(callParensInside)` opts the
@@ -5949,7 +5931,7 @@ class WriterLowering {
 	/**
 	 * Build the body's writeCall, optionally wrapping it in the
 	 * `inlineBlockBodyIfFlag` runtime flatten (ω-expression-if-with-blocks).
-	 * Extracted from `bodyPolicyWrap`.
+	 *
 	 */
 	private function buildBodyWriteCall(opts: WrapBodyOpts): Expr {
 		final inlineBlockBodyArgs: Null<Array<String>> = opts.inlineBlockBodyArgs;
@@ -5988,8 +5970,7 @@ class WriterLowering {
 	 * Resolve the runtime body-policy flag Expr — the four-stage chain:
 	 * expr-position dual-flag (ω-issue-257), single-line-vs-multi (ω-return-
 	 * body-single-line), per-ctor policy overrides (ω-untyped-body-stmt-
-	 * override), and the no-sibling fallback (ω-expression-if-next). Extracted
-	 * from `bodyPolicyWrap`.
+	 * override), and the no-sibling fallback (ω-expression-if-next).
 	 */
 	private function resolveBodyOptFlag(opts: WrapBodyOpts): Expr {
 		final flagName: String = opts.flagName;
@@ -6054,8 +6035,7 @@ class WriterLowering {
 	 * Wrap a body Expr in the conditional value-expr `Nest(_cols, body)` per
 	 * `@:fmt(indentValueIfCtor('<ctor>', '<optField>'))` — the ω-issue-257
 	 * return-same-indent-value-expr / ω-value-if-block-body-no-indent rule.
-	 * Returns `bodyExpr` unchanged when `ifExprIndentArgs` is null. Extracted
-	 * from `bodyPolicyWrap`.
+	 * Returns `bodyExpr` unchanged when `ifExprIndentArgs` is null.
 	 */
 	private function wrapIfExprNest(bodyExpr: Expr, ifExprIndentArgs: Null<Array<String>>, bodyValueExpr: Expr): Expr {
 		if (ifExprIndentArgs == null) return bodyExpr;
@@ -6088,8 +6068,7 @@ class WriterLowering {
 	 * Build the `Same`-policy kw→body inline separator (ω-issue-316 / ω-tryBody
 	 * kwOwnsInlineSpace). Returns the `kwPolicyInlineSep` (null when no
 	 * `kwPolicy` knob) and `sameSepNb` (kwGapDoc with kw-trivia slots, the
-	 * kw-policy switch, or the default `_dop(' ')`). Extracted from
-	 * `bodyPolicyWrap`.
+	 * kw-policy switch, or the default `_dop(' ')`).
 	 */
 	private function buildBodyKwSep(opts: WrapBodyOpts, hasKwSlots: Bool): { kwPolicyInlineSep: Null<Expr>, sameSepNb: Expr } {
 		final kwPolicyFlagName: Null<String> = opts.kwPolicyFlagName;
@@ -6122,7 +6101,7 @@ class WriterLowering {
 
 	/**
 	 * Build the `Same`-policy layout Expr (ω-returnbody-widthaware + the
-	 * value-expr Nest wrap). Extracted from `bodyPolicyWrap`.
+	 * value-expr Nest wrap).
 	 */
 	private function buildBodySameLayout(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
 		final writeCall: Expr = shared.writeCall;
@@ -6144,7 +6123,7 @@ class WriterLowering {
 	 * Build the `Next`-policy layout Expr — the `indentObjGuardedNext` outer-
 	 * Nest-drop (ω-expr-body-indent-objectliteral), the kw-slot threaded
 	 * `nextLayoutKwGapDoc`, or the default `Nest(_cols, [hardline, body])`.
-	 * Extracted from `bodyPolicyWrap`.
+	 *
 	 */
 	private function buildBodyNextLayout(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
 		final writeCall: Expr = shared.writeCall;
@@ -6183,8 +6162,7 @@ class WriterLowering {
 	/**
 	 * Build the block-ctor layout Expr — the `Same`/`Next` leftCurly switch on
 	 * the separator before a `{`-opening body (ω-issue-316-curly-both),
-	 * threaded through `kwGapDoc` for kw-slot sites. Extracted from
-	 * `bodyPolicyWrap`.
+	 * threaded through `kwGapDoc` for kw-slot sites.
 	 */
 	private function buildBodyBlockLayout(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
 		final writeCall: Expr = shared.writeCall;
@@ -6210,7 +6188,7 @@ class WriterLowering {
 	 * Build the `FitLine`-policy layout Expr — the return-style natural-first-
 	 * line glue (ω-return-fitline-natural-glue), the keep-chain head-break
 	 * (ω-keep-chain), and the if/for/while wholesale `BodyGroup` break.
-	 * Extracted from `bodyPolicyWrap`.
+	 *
 	 */
 	private function buildBodyFitExpr(opts: WrapBodyOpts, shared: BodyWrapShared): Expr {
 		final writeCall: Expr = shared.writeCall;
@@ -6264,8 +6242,7 @@ class WriterLowering {
 	 * Build the `Keep`-policy layout Expr (ω-keep-policy) — runtime-dispatched
 	 * between same and next layouts via the parser's `bodyOnSameLine` slot,
 	 * with the block-ctor `blockLayoutExpr` route (ω-D8-keep-block-trivia) and
-	 * the `elseIf == Next` override (ω-D8-keep-elseif-override). Extracted from
-	 * `bodyPolicyWrap`.
+	 * the `elseIf == Next` override (ω-D8-keep-elseif-override).
 	 */
 	private function buildBodyKeepLayout(
 		opts: WrapBodyOpts, layouts: BodyLayouts, blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }, ifStmtPattern: Null<Expr>
@@ -6301,7 +6278,7 @@ class WriterLowering {
 	/**
 	 * Build the core body-wrap Expr — the policy switch (Same/Next/FitLine),
 	 * the block-ctor + elseIf outer overrides (bodySwitch), and the outer Keep
-	 * dispatch (ω-keep-policy). Extracted from `bodyPolicyWrap`.
+	 * dispatch (ω-keep-policy).
 	 */
 	private function buildBodyCoreWrap(
 		opts: WrapBodyOpts, optFlag: Expr, layouts: BodyLayouts, keepLayoutExpr: Expr,
@@ -6353,7 +6330,7 @@ class WriterLowering {
 	 * Wrap the core body Expr with the after-trail / before-leading comment
 	 * forced-Next-layout (ω-issue-316-then-trail / ω-556-then-body-leading-
 	 * comment). Returns `coreWrapExpr` unchanged when neither slot was
-	 * forwarded. Extracted from `bodyPolicyWrap`.
+	 * forwarded.
 	 */
 	private function wrapBodyAfterTrail(opts: WrapBodyOpts, coreWrapExpr: Expr, writeCall: Expr): Expr {
 		final afterTrailExpr: Null<Expr> = opts.afterTrailExpr;
@@ -6386,7 +6363,7 @@ class WriterLowering {
 	/**
 	 * Wrap the body Expr with the ω-issue-168 Allman-indent-for-ctor override
 	 * (`@:fmt(bodyAllmanIndentForCtor(...))`). Returns `wrapExpr` unchanged
-	 * when no args. Extracted from `bodyPolicyWrap`.
+	 * when no args.
 	 */
 	private function wrapBodyAllman(opts: WrapBodyOpts, wrapExpr: Expr, writeCall: Expr): Expr {
 		final bodyAllmanIndentArgs: Null<Array<String>> = opts.bodyAllmanIndentArgs;
@@ -6415,7 +6392,7 @@ class WriterLowering {
 	 * Wrap the body Expr with the ω-fnbody-meta-block-glue override — a
 	 * meta-wrapped block body (`@:meta { … }`) routes to the glued
 	 * `sameLayoutExpr`. Returns `finalWrapExpr` unchanged when no args.
-	 * Extracted from `bodyPolicyWrap`.
+	 *
 	 */
 	private function wrapBodyMetaBlockGlue(opts: WrapBodyOpts, finalWrapExpr: Expr, sameLayoutExpr: Expr): Expr {
 		final metaBlockGlueArgs: Null<Array<String>> = opts.metaBlockGlueArgs;
@@ -6447,9 +6424,7 @@ class WriterLowering {
 
 	/**
 	 * Ternary branch (`@:fmt`-driven `ternary.op`): dispatch to the
-	 * chain-emit engine with a degenerate 3-item / 2-op chain. Extracted
-	 * from `lowerEnumBranch` so the dispatcher stays under the complexity
-	 * gate.
+	 * chain-emit engine with a degenerate 3-item / 2-op chain.
 	 */
 	private function lowerTernaryBranch(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -6489,8 +6464,7 @@ class WriterLowering {
 	}
 
 	/**
-	 * Prefix branch (`prefix.op`): `op operand`. Extracted from
-	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 * Prefix branch (`prefix.op`): `op operand`.
 	 */
 	private function lowerPrefixBranch(c: LowerBranchCtx): Expr {
 		final prefixOp: String = c.branch.annotations.get('prefix.op');
@@ -6500,8 +6474,7 @@ class WriterLowering {
 
 	/**
 	 * Postfix branch (`postfix.op`): unary postfix (`x++`), bracketed
-	 * access (`arr[i]`), suffix-Ref, or Star-suffix forms. Extracted from
-	 * `lowerEnumBranch` so the dispatcher stays under the complexity gate.
+	 * access (`arr[i]`), suffix-Ref, or Star-suffix forms.
 	 */
 	private function lowerPostfixBranch(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -6578,8 +6551,7 @@ class WriterLowering {
 	 * Infix branch (`pratt.prec`): binary operator emit. Resolves the
 	 * operator shape (tight / assign / chain / group-wrap) and dispatches
 	 * to the matching sub-builder; the group/line/nest fallback stays
-	 * inline. Extracted from `lowerEnumBranch` so the dispatcher stays
-	 * under the complexity gate.
+	 * inline.
 	 */
 	private function lowerInfixBranch(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -6682,7 +6654,7 @@ class WriterLowering {
 	/**
 	 * Infix tight / assign sub-builder: tight operators (`...`, arrow
 	 * type) and assignment-class operators (prec 0) keep flat emission.
-	 * Extracted from `lowerInfixBranch` so each stays under the gate.
+	 *
 	 */
 	private function lowerInfixTightAssign(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -6779,8 +6751,7 @@ class WriterLowering {
 	 * once, and emit one `BinaryChainEmit` shape. The `_gather` switch is
 	 * built inline (vs an external helper) so its `case Or(...)` /
 	 * `case Add(...)` patterns resolve against the current writer's value
-	 * type (`HxExpr` plain / `HxExprT` trivia). Extracted from
-	 * `lowerInfixBranch` so each stays under the gate.
+	 * type (`HxExpr` plain / `HxExprT` trivia).
 	 */
 	private function lowerInfixChain(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -7054,8 +7025,7 @@ class WriterLowering {
 	 * enum-branch shape. Resolves the sub-call opt frame, the bodyPolicy /
 	 * indent wrap, the body-source-capture gate, the kw / lead / trail
 	 * parts, the `@:wrap` paren shape, and the conditional-marker scope.
-	 * Extracted from `lowerEnumBranch` so the dispatcher stays under the
-	 * complexity gate.
+	 *
 	 */
 	private function lowerKwRefBranch(c: LowerBranchCtx): Expr {
 		final branch: ShapeNode = c.branch;
@@ -7295,8 +7265,7 @@ class WriterLowering {
 	 * (`@:kw` no children), zero-arg single lit, and the multi-lit Bool
 	 * (`true`/`false` pair). Returns the matched Doc Expr, or null when
 	 * the branch is none of these (the dispatcher then falls through to
-	 * the Star / Ref / wrap shapes). Extracted from `lowerEnumBranch` so
-	 * the dispatcher stays under the complexity gate.
+	 * the Star / Ref / wrap shapes).
 	 */
 	private function lowerLitKwBranch(c: LowerBranchCtx): Null<Expr> {
 		final branch: ShapeNode = c.branch;
@@ -7328,8 +7297,7 @@ class WriterLowering {
 	 * branch with both lead and trail set renders as a Group whose break
 	 * shape lands the close delimiter on its own line. Returns the wrap
 	 * Doc Expr, or null when the branch is not the wrap shape (the caller
-	 * then falls through to the plain Case-3 concat). Extracted from
-	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 * then falls through to the plain Case-3 concat).
 	 */
 	private function kwRefWrapShape(c: LowerBranchCtx, parts: Array<Expr>, wrapOpenNewlineExpr: Null<Expr>): Null<Expr> {
 		final branch: ShapeNode = c.branch;
@@ -7369,8 +7337,7 @@ class WriterLowering {
 	 * `@:fmt(expressionParenHardFlatten)` wrap shape (ω-hardflatten
 	 * increment-2): expression-paren collapse consumer. Emits the
 	 * width-driven `IfFullLineExceeds(OPEN, GLUED)` cascade with the
-	 * keep-chain / pure-opAddSub / ternary special cases. Extracted from
-	 * `kwRefWrapShape` so each stays under the complexity gate.
+	 * keep-chain / pure-opAddSub / ternary special cases.
 	 */
 	private function kwRefWrapHardFlatten(leadDoc: Expr, innerDoc: Expr, trailDoc: Expr, wrapOpenNewlineExpr: Null<Expr>): Expr {
 		// Leading-hardline (opBool/ternary already one-per-line)
@@ -7468,8 +7435,7 @@ class WriterLowering {
 	 * `@:wrap` branch. When the ctor opted into
 	 * `@:fmt(captureWrapOpenNewline)` and the parser captured a source
 	 * `\n` after the open delim, routes the break shape to `(\n<inner>\n)`;
-	 * else falls back to the chain emit's open-delim glue. Extracted from
-	 * `kwRefWrapShape` so each stays under the complexity gate.
+	 * else falls back to the chain emit's open-delim glue.
 	 */
 	private function kwRefWrapSourceNewline(leadDoc: Expr, innerDoc: Expr, trailDoc: Expr, wrapOpenNewlineExpr: Null<Expr>): Expr {
 		return wrapOpenNewlineExpr != null
@@ -7499,8 +7465,7 @@ class WriterLowering {
 	 * per-ctor `@:fmt` opt-threading flags (propagateExprPosition /
 	 * clearExprPosition / propagateFieldLevelVar / captureSource /
 	 * expressionParenHardFlatten / keep-chain-in-paren / var-kw-newline)
-	 * onto `macro opt`. Extracted from `lowerKwRefBranch` so each stays
-	 * under the complexity gate.
+	 * onto `macro opt`.
 	 */
 	private function kwRefCtorOptArg(c: LowerBranchCtx, kwNewlineExpr: Null<Expr>): Expr {
 		final branch: ShapeNode = c.branch;
@@ -7552,8 +7517,7 @@ class WriterLowering {
 	 * entries (Case 3): the 3-arg form `(ctorName, optField,
 	 * leftCurlyField)` feeds the ObjectLit-indent path, the 2-arg form
 	 * `(ctorName, optField)` feeds the IfExpr-indent path. At most one of
-	 * each per ctor (else a macro fatalError). Extracted from
-	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 * each per ctor (else a macro fatalError).
 	 */
 	private function kwRefIndentEntries(branch: ShapeNode): { indentArgs: Null<Array<String>>, ifExprIndentArgs: Null<Array<String>> } {
 		var indentArgs: Null<Array<String>> = null;
@@ -7587,8 +7551,7 @@ class WriterLowering {
 	 * trailing space is stripped (sub-struct bodyPolicy / bodyBreak /
 	 * tight-lead / symbol-lead), and the runtime-switched trailing-space
 	 * Doc (control-flow / anon-fn-paren / cast-tight-on-paren policies).
-	 * Returns `{ strip, space }` for the parts assembly. Extracted from
-	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 * Returns `{ strip, space }` for the parts assembly.
 	 */
 	private function kwRefKwTrailSpace(
 		c: LowerBranchCtx, refName: String, ctorBodyPolicyFlag: Null<String>
@@ -7596,7 +7559,7 @@ class WriterLowering {
 		final branch: ShapeNode = c.branch;
 		final argNames: Array<String> = c.argNames;
 		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		// ω-kw-word-lead-spacing (Slice 37): a ctor-level `@:lead` whose
+		// ω-kw-word-lead-spacing: a ctor-level `@:lead` whose
 		// first char is a word character is a second keyword, NOT a tight
 		// symbol delimiter (`static var` / `inline function`) — it keeps
 		// the kw trailing space. Symbol leads (`(`, `{`, `:`, `->`, …) stay
@@ -7622,7 +7585,7 @@ class WriterLowering {
 				'sharpCondParensGap'
 			]);
 		final parenSidePolicySpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpacePolicyParenSide(branch, ['anonFuncParens']);
-		// ω-cast-tight-on-paren (Slice 46): `@:fmt(tightOnParenOperand(...))`
+		// ω-cast-tight-on-paren: `@:fmt(tightOnParenOperand(...))`
 		// suppresses the kw trailing space at runtime when the operand's
 		// enum ctor matches the list (`cast(x)` vs `cast x`).
 		final ctorTightSpace: Null<Expr> = stripKwTrailingSpace ? null : kwTrailingSpaceOnOperandCtor(branch, argNames);
@@ -7633,8 +7596,7 @@ class WriterLowering {
 	 * Assembles the `parts` Doc array for the kw-Ref branch (Case 3): the
 	 * kw prefix (with its trailing-space / deferred-space / stripped
 	 * variants), the lead delimiter, the body, and the trail delimiter
-	 * (with the trivia trail-presence gate). Extracted from
-	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 * (with the trivia trail-presence gate).
 	 */
 	private function kwRefParts(c: LowerBranchCtx, bodyExpr: Expr, kwTrailSpace: Null<Expr>, stripKwTrailingSpace: Bool): Array<Expr> {
 		final branch: ShapeNode = c.branch;
@@ -7669,9 +7631,9 @@ class WriterLowering {
 			}
 		}
 		if (leadText != null) {
-			// ω-kw-word-lead-spacing (Slice 37): word-keyword lead also gets
+			// ω-kw-word-lead-spacing: word-keyword lead also gets
 			// a trailing space so it doesn't fuse with the body's first
-			// token. Writer Slice 4: `@:fmt(spaceAfterLead)` adds a trailing
+			// token. `@:fmt(spaceAfterLead)` adds a trailing
 			// space to a symbol lead (`> Foo` structure-extension).
 			final spaceAfterLead: Bool = branch.fmtHasFlag('spaceAfterLead');
 			final leadEmit: String = (leadIsWord || spaceAfterLead) ? leadText + ' ' : leadText;
@@ -7681,8 +7643,8 @@ class WriterLowering {
 		if (trailText != null) {
 			// ω-trailopt-source-track: in trivia mode the parser captures
 			// `matchLit`'s presence into `argNames[1]`; gate trail emission on
-			// it directly (bypassing the Plain-mode AST-shape gate). Writer
-			// Slice 9: `@:fmt(spaceBeforeTrail)` prepends a space so a
+			// it directly (bypassing the Plain-mode AST-shape gate).
+			// `@:fmt(spaceBeforeTrail)` prepends a space so a
 			// word-start trail (`#end`) does not fuse with the body's last
 			// word character.
 			final isTriviaTrailOpt: Bool = _ctx.trivia && TriviaTypeSynth.isAltTrailOptBranch(branch);
@@ -7702,8 +7664,7 @@ class WriterLowering {
 	 * Builds the kw-Ref body Doc (Case 3): applies the
 	 * `@:fmt(indentValueIfCtor)` 3-arg ObjectLit-indent override on top of
 	 * `policyWrapped`, then the `@:fmt(captureSource)` verbatim-source gate
-	 * (trivia mode) and its force-flat HardFlatten pin. Extracted from
-	 * `lowerKwRefBranch` so each stays under the complexity gate.
+	 * (trivia mode) and its force-flat HardFlatten pin.
 	 */
 	private function kwRefBodyExpr(c: LowerBranchCtx, policyWrapped: Expr, subCall: Expr, indentArgs: Null<Array<String>>): Expr {
 		final branch: ShapeNode = c.branch;
@@ -7758,8 +7719,7 @@ class WriterLowering {
 	 * Finalises the kw-Ref Doc (Case 3): concats the parts, then wraps the
 	 * whole construct in the `@:fmt(conditionalMarkerDedent)` render-time
 	 * marker scope (`#if … #end` FixedZero / AlignedDecrease policies);
-	 * every other policy leaves it unwrapped (byte-identical). Extracted
-	 * from `lowerKwRefBranch` so each stays under the complexity gate.
+	 * every other policy leaves it unwrapped (byte-identical).
 	 */
 	private function kwRefFinalDoc(c: LowerBranchCtx, parts: Array<Expr>): Expr {
 		final case3Doc: Expr = parts.length == 1 ? parts[0] : dcCall(parts);
@@ -7835,8 +7795,7 @@ class WriterLowering {
 	 * decides whether the named function-body field is empty (drives
 	 * `opt._fnSigBodyEmpty`). Dispatches the empty-body switch on the body
 	 * field's actual enum type (`HxFnBody` / `HxFnExprBody` and their `T`
-	 * variants) and honours orphan-trivia in trivia mode. Extracted from
-	 * `finalizeStructReturn`.
+	 * variants) and honours orphan-trivia in trivia mode.
 	 */
 	private function buildFnBodyEmptyCheck(bodyTypeName: String, bodyAccess: Expr, bodyIsOptional: Bool): Expr {
 		// ω-fnbody-empty-honours-orphan-trivia: in trivia mode, a `{ // comment }`
@@ -7893,8 +7852,7 @@ class WriterLowering {
 	 * Emit the separator + writeCall for a bare-Ref NON-FIRST struct body field
 	 * (kw-less, lead-less, non-raw). Covers `@:fmt(allmanIndentForCtor)`,
 	 * `@:fmt(nestBodyOnSourceNewline)`, and the ω-issue-48-v2 BeforeNewline /
-	 * ω-598 leading-comment sep cascade. Pushes onto `parts`. Extracted from the
-	 * mandatory `case Ref` branch of `lowerStruct`.
+	 * ω-598 leading-comment sep cascade. Pushes onto `parts`.
 	 */
 	private function emitBareRefNonFirstBody(
 		child: ShapeNode, parts: Array<Expr>, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
@@ -7998,7 +7956,7 @@ class WriterLowering {
 	 * block comment between a member modifier and the `var` keyword) are emitted
 	 * glued to the preceding line, each followed by a hardline. Returns the
 	 * unmodified separator when the field is not a Ref (no `BeforeLeading` slot)
-	 * or the slot is empty. Extracted from `emitBareRefNonFirstBody`.
+	 * or the slot is empty.
 	 */
 	private function buildBeforeLeadingSep(child: ShapeNode, fieldName: String, triviaSepExpr: Expr): Expr {
 		// Gated on `child.kind == Ref` to match `TriviaTypeSynth.isBareNonFirstRef`,
@@ -8027,7 +7985,7 @@ class WriterLowering {
 	 * as a runtime `WrapList.emitCondition` call (replacing the bare lead+value+
 	 * trail pushes). Threads the chain-mode / paren-in-condition / cond-keep
 	 * shadows and the inner-pad / source-open-newline args, then pushes onto
-	 * `parts`. Extracted from the mandatory `case Ref` branch of `lowerStruct`.
+	 * `parts`.
 	 */
 	private function emitCondWrapSingleRef(
 		child: ShapeNode, parts: Array<Expr>, condWrapArgs: Array<String>, typePath: String, fieldName: String, leadText: Null<String>,
@@ -8102,7 +8060,7 @@ class WriterLowering {
 			// head at outer+cols, not compounding to outer+2cols) AND its
 			// own `_headBreak` is dropped (`brkShape`'s leading `Line`
 			// already put the head operand on its own line). Reuses the
-			// f9d6a53 `_keepChainInParen` channel (gated there on the
+			// `_keepChainInParen` channel (gated there on the
 			// chain config being Keep). `condKeepChainInParen` is a
 			// macro-time no-op (`opt`) for non-Haxe / non-bearing grammars
 			// so the Haxe-only `_setKeepChainInParen` helper is never
@@ -8121,8 +8079,7 @@ class WriterLowering {
 	 * `_dc([sepExpr, writeCall])` default for every unpaired ctor. Iterates in
 	 * reverse so the first-declared pair sits at the chain head. Shared by the
 	 * mandatory `case Ref` leftCurly path (with metaBlockGlue / BeforeNewline
-	 * slot) and the optional-Ref leftCurly path (null both). Extracted from
-	 * `lowerStruct`.
+	 * slot) and the optional-Ref leftCurly path (null both).
 	 */
 	private function buildBodyPolicyForCtorChain(
 		pairs: Array<Array<String>>, ctorExpr: Expr, sepExpr: Expr, writeCall: Expr, bodyValueExpr: Expr, refName: String,
@@ -8168,7 +8125,7 @@ class WriterLowering {
 	 * Reads the kwPolicy / after-trail / before-leading / before-newline /
 	 * policy-override / allman / inline-block companion metas, threads them into a
 	 * single `bodyPolicyWrap`, pushes onto `parts`, and returns the
-	 * `justWrappedBody` PrevBodyInfo. Extracted from `lowerStruct`.
+	 * `justWrappedBody` PrevBodyInfo.
 	 */
 	private function emitBodyPolicyBareRef(
 		child: ShapeNode, parts: Array<Expr>, prevTrailFieldName: Null<String>, isFirstField: Bool, fieldName: String,
@@ -8295,8 +8252,7 @@ class WriterLowering {
 	 * `@:fmt(setBoolFlagFromStarCtor(optField, starField, ctorName))` is present —
 	 * a block that allocates a fresh opt copy, probes the sibling Star for the
 	 * named ctor, sets `_wo.<optField>`, then issues `baseRawWriteCall`. Returns
-	 * `baseRawWriteCall` unchanged when the meta is absent. Extracted from the
-	 * mandatory `case Ref` branch of `lowerStruct`.
+	 * `baseRawWriteCall` unchanged when the meta is absent.
 	 */
 	private function buildBoolFlagRawWriteCall(
 		boolFlagArgs: Null<Array<String>>, baseRawWriteCall: Expr, typePath: String, propagateExpr: Bool
@@ -8344,8 +8300,7 @@ class WriterLowering {
 	 * `@:fmt(sharpCondParensInside('<openKnob>', '<closeKnob>'))` is present — a
 	 * runtime rewrite of the verbatim `#if (cond)` string that injects inner
 	 * parens padding per the named WhitespacePolicy knobs. Returns `rawWriteCall`
-	 * unchanged when the meta is absent. Extracted from the mandatory `case Ref`
-	 * branch of `lowerStruct`.
+	 * unchanged when the meta is absent.
 	 */
 	private function buildSharpInsideWriteCall(sharpInsideArgs: Null<Array<String>>, fieldAccess: Expr, rawWriteCall: Expr): Expr {
 		if (sharpInsideArgs == null || sharpInsideArgs.length != 2) return rawWriteCall;
@@ -8376,7 +8331,7 @@ class WriterLowering {
 	 * field into `optParts` (the `case Ref if (isOptional)` `leadText != null`
 	 * arm). Handles tight leads, `@:fmt(tightLead)`, `@:fmt(typeParamDefaultEquals)`,
 	 * the ω-N-break-after-eq bundle, and the optional-ref-trail / trailOpt pushes.
-	 * Extracted from `lowerStruct`.
+	 *
 	 */
 	private function emitOptionalRefLead(
 		child: ShapeNode, optParts: Array<Expr>, leadText: String, writeCall: Expr, prevBodyField: Null<PrevBodyInfo>, typePath: String,
@@ -8398,7 +8353,7 @@ class WriterLowering {
 			// flag path (`f():Void`).
 			optParts.push(whitespacePolicyLead(child, leadText, ['typeHintColon']));
 		} else if (isFieldTight) {
-			// Slice 26 — per-field `@:fmt(tightLead)`: opts an
+			// Per-field `@:fmt(tightLead)`: opts an
 			// optional Ref's `@:lead` into tight emission
 			// without joining the format-level `tightLeads`
 			// list. No leading separator, no trailing
@@ -8457,10 +8412,10 @@ class WriterLowering {
 		// the mandatory-Ref trail emit (`!isOptional` arm
 		// below). First consumer: `HxAbstractDecl.
 		// underlyingType` (`(T)` group) for the bare-abstract
-		// shape (Slice 40).
+		// shape.
 		if (trailText != null)
 			optParts.push(macro _dt($v{trailText}));
-		// ω-struct-trailopt-source-track (Session 14 Phase 4):
+		// ω-struct-trailopt-source-track:
 		// optional Ref + kw/lead + `@:trailOpt(LIT)` lands here
 		// as a parallel push (`trailText` covers `@:trail`,
 		// `trailOptText` covers `@:trailOpt`; the two are
@@ -8501,7 +8456,7 @@ class WriterLowering {
 	 * `HxTypeRef.params`). Builds the inner Star emission against a narrowed
 	 * `_optVal`, optionally splices the kw-led sep + kw-trivia layers, and pushes
 	 * a `_optVal != null` runtime gate onto `parts`. The caller owns the post-push
-	 * accumulator resets. Extracted from `lowerStruct`.
+	 * accumulator resets.
 	 */
 	private function emitOptionalStarField(
 		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, isFirstField: Bool, isRaw: Bool,
@@ -8582,7 +8537,7 @@ class WriterLowering {
 	 * on `prev && this.length > 0`; in trivia mode picks `_dhl()` / `_dt(' ')`
 	 * from the first element's `newlineBefore` (suppressing a doubled hardline
 	 * before a leading doc-comment), plain mode emits a space. Wrapped via
-	 * `withPadTrailingDrop`. Extracted from `lowerStruct`.
+	 * `withPadTrailingDrop`.
 	 */
 	private function buildInterStarSep(prevAnyStarNonEmpty: Expr, fieldAccess: Expr, prevPadTrailing: Null<Expr>): Expr {
 		final prev: Expr = prevAnyStarNonEmpty;
@@ -8620,7 +8575,7 @@ class WriterLowering {
 	 * `@:fmt(anonFuncParens)`, and the `catchParensGap` / `whilePolicy` kw-after
 	 * knobs each split the kw-trailing space into a runtime policy switch;
 	 * otherwise the kw carries a literal trailing space. Pushes onto `parts`.
-	 * Extracted from `lowerStruct`.
+	 *
 	 */
 	private function emitKwPrefix(
 		child: ShapeNode, parts: Array<Expr>, kwLead: String, isFirstField: Bool, isRaw: Bool, prevBodyField: Null<PrevBodyInfo>,
@@ -8686,7 +8641,7 @@ class WriterLowering {
 	 * spacing leads (objectFieldColon / typeHintColon / typedefAssign / …). The
 	 * `@:fmt(typedefIntersectionBreak)` field makes the `&`→operand whitespace a
 	 * runtime `opt._intersectionOperandBreak` decision. Pushes onto `parts`.
-	 * Extracted from `lowerStruct`.
+	 *
 	 */
 	private function emitMandatoryLead(child: ShapeNode, parts: Array<Expr>, leadText: String): Void {
 		// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
@@ -8781,7 +8736,7 @@ class WriterLowering {
 	 * Enforces a single string arg, a mandatory `@:lead`, a `@:trail` in single-Ref
 	 * mode (or a sibling `@:fmt(condWrapEnd)` for span mode, signalled by `hasSpan`),
 	 * a bare mandatory Ref kind, and no same-field `@:kw` in single-Ref mode. Throws
-	 * via `Context.fatalError` on any violation. Extracted from `lowerStruct`.
+	 * via `Context.fatalError` on any violation.
 	 */
 	private function validateCondWrap(
 		condWrapArgs: Array<String>, leadText: Null<String>, trailText: Null<String>, kwLead: Null<String>, hasSpan: Bool,
@@ -8813,7 +8768,7 @@ class WriterLowering {
 	 * when the field fires no trailing pad). A `@:fmt(padTrailing)` Star
 	 * pads when `_arr.length > 0`; a `@:fmt(metaLineEndPolicy('<optField>'))`
 	 * Star pads when the array is non-empty AND the runtime knob is non-None.
-	 * Extracted from `lowerStruct`'s non-optional Star branch.
+	 *
 	 */
 	private function starPadTrailing(child: ShapeNode, fieldAccess: Expr): Null<Expr> {
 		if (child.fmtHasFlag('padTrailing')) return macro $fieldAccess.length > 0;
@@ -8826,7 +8781,7 @@ class WriterLowering {
 	/**
 	 * ω-member-meta: OR this bare-tryparse Star's `_arr.length > 0` runtime
 	 * check into the cumulative `prevAnyStarNonEmpty` signal (or seed it when
-	 * no prior Star contributed). Extracted from `lowerStruct`.
+	 * no prior Star contributed).
 	 */
 	private function orStarNonEmpty(prev: Null<Expr>, fieldAccess: Expr): Expr {
 		final thisNonEmpty: Expr = macro $fieldAccess.length > 0;
@@ -8839,7 +8794,7 @@ class WriterLowering {
 	 * ω-multivar-wrap: gate every `parts` entry pushed for the `<moreField>`
 	 * Star (indices `[start, parts.length)`) on the runtime `_suppressMore`
 	 * entry flag, so a head-only recursive self-call drops the Star to
-	 * `_de()`. Rewrites the slice in place. Extracted from `lowerStruct`.
+	 * `_de()`. Rewrites the slice in place.
 	 */
 	private function gateMultiVarMoreParts(parts: Array<Expr>, start: Int): Void {
 		for (i in start ... parts.length) {
@@ -8854,14 +8809,14 @@ class WriterLowering {
 	 * `@:fmt(leftCurly)` is present mirrors the mandatory-Ref runtime ctor
 	 * switch (Allman `\n{` for BlockBody, ` ` for ExprBody) and routes
 	 * `@:fmt(bodyPolicyForCtor(...))` pairs through `buildBodyPolicyForCtorChain`.
-	 * Pushes into `optParts`. Extracted from `lowerStruct`'s optional-Ref arm.
+	 * Pushes into `optParts`.
 	 */
 	private function emitOptionalAbsentOnBody(child: ShapeNode, optParts: Array<Expr>, refName: String, writeCall: Expr): Void {
 		final lcSep: Null<Expr> = child.fmtHasFlag('leftCurly') ? leftCurlySeparator(child) : null;
 		final lcCtors: Array<String> = lcSep == null ? [] : leftCurlyTargetCtors(refName);
 		// ω-anonfnbody-keep: optional-Ref mirror of the
 		// mandatory-Ref `bodyPolicyForCtor` chain (see the
-		// `HxFnDecl.body` site below, slice ω-fnbody-keep). When
+		// `HxFnDecl.body` site below, ω-fnbody-keep). When
 		// `@:fmt(bodyPolicyForCtor('<ctor>', '<flagName>'))` pairs
 		// are present, route each matched runtime ctor through
 		// `bodyPolicyWrap` (which owns the signature→body
@@ -8891,7 +8846,7 @@ class WriterLowering {
 				// `Keep` degrades to the no-slot default. Supporting
 				// `Keep` here would require extending slot synthesis
 				// to optional Refs (a separate, larger change — the
-				// `sourceMultilineKeep` wall noted in slice ω-fnbody-keep).
+				// `sourceMultilineKeep` wall noted in ω-fnbody-keep).
 				final wrapBodyOnSameLineExpr: Null<Expr> = null;
 				optParts.push(buildBodyPolicyForCtorChain(
 					bodyPolicyForCtorPairs, ctorExpr, sepExpr, writeCall, macro _optVal, refName, wrapBodyOnSameLineExpr, null
@@ -8914,7 +8869,7 @@ class WriterLowering {
 	 * default `_dt(kwLead + ' ') + writeCall`. The ω-issue-316 kw-trivia slots
 	 * (`<field>AfterKw` / `KwLeading` / `BodyOnSameLine` / `BeforeKwLeading` /
 	 * `BeforeKwTrailing`) are read off `value` here in trivia mode. Pushes into
-	 * `optParts`. Extracted from `lowerStruct`'s optional-Ref arm.
+	 * `optParts`.
 	 */
 	private function emitOptionalKwBody(
 		child: ShapeNode, optParts: Array<Expr>, kwLead: String, fieldName: String, bodyPolicyFlag: Null<String>,
@@ -9018,7 +8973,7 @@ class WriterLowering {
 	 * `bodyPolicyWrap` path so the `)`→body separator survives; the surrounding
 	 * `_optVal != null` guard drops the absent case to `_de()`. First consumer:
 	 * `HxCatchClause.body` (bodyless `catch (e:T)`). Pushes into `optParts`.
-	 * Extracted from `lowerStruct`'s optional-Ref arm.
+	 *
 	 */
 	private function emitOptionalBodyPolicyOnly(
 		child: ShapeNode, optParts: Array<Expr>, bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr,
@@ -9045,8 +9000,7 @@ class WriterLowering {
 	 * `bodyPolicyForCtor` chain), `@:fmt(bodyBreak)` / `@:fmt(bareBodyBreaks)`
 	 * shape wraps, the bare-Ref non-first-body cascade, span-mode / single-Ref
 	 * `@:fmt(condWrap)`, the `@:fmt(arrowBodyLineWrap)` line-fit break, or the
-	 * default bare writeCall. Pushes into `parts`. Extracted from `lowerStruct`'s
-	 * mandatory-Ref arm.
+	 * default bare writeCall. Pushes into `parts`.
 	 */
 	private function emitBareRefNonBodyPolicy(
 		child: ShapeNode, parts: Array<Expr>, refName: String, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
@@ -9185,8 +9139,7 @@ class WriterLowering {
 	 * ctor switch (`buildLeftCurlySepExpr`) between the parent kw and the body's
 	 * first token, optionally routing matched `@:fmt(bodyPolicyForCtor(...))`
 	 * ctors through `buildBodyPolicyForCtorChain` (with `@:fmt(metaBlockGlue)`
-	 * descent naming). Pushes into `parts`. Extracted from
-	 * `emitBareRefNonBodyPolicy`.
+	 * descent naming). Pushes into `parts`.
 	 */
 	private function emitLeftCurlyBody(
 		child: ShapeNode, parts: Array<Expr>, refName: String, fieldName: String, typePath: String, fieldAccess: Expr, writeCall: Expr,
@@ -9237,7 +9190,7 @@ class WriterLowering {
 	 * argument, then layers `@:fmt(sharpCondParensInside)` and the
 	 * `@:fmt(indentValueIfCtor)` additive-Nest wrap (skipped when a same-field
 	 * `@:fmt(bodyPolicy)` routes it through the subtractive channel instead).
-	 * Extracted from `lowerStruct`'s mandatory-Ref arm.
+	 *
 	 */
 	private function buildMandatoryRefWriteCall(
 		child: ShapeNode, fieldAccess: Expr, typePath: String, writeFn: String, bodyPolicyFlag: Null<String>,
@@ -9323,7 +9276,7 @@ class WriterLowering {
 	 * cond-parens-inside-close knobs) and, in trivia-bearing mode, the
 	 * `@:trailOpt(LIT)` source-presence gate (`<field>TrailPresent` slot: `false`
 	 * -> `_de()`, else emit). Both are skipped inside a condWrap span. Pushes into
-	 * `parts`. Extracted from `lowerStruct`'s mandatory-Ref trail block.
+	 * `parts`.
 	 */
 	private function emitMandatoryRefTrail(
 		child: ShapeNode, parts: Array<Expr>, isOptional: Bool, trailText: Null<String>, trailOptText: Null<String>, hasCondWrap: Bool,
@@ -9338,7 +9291,7 @@ class WriterLowering {
 			'switchCondParensInsideClose',
 			'whileCondParensInsideClose'
 		]));
-		// ω-struct-trailopt-source-track (Session 14 Phase 4): mandatory-
+		// ω-struct-trailopt-source-track: mandatory-
 		// Ref `@:trailOpt(LIT)` field gates the trail emission on the
 		// synth slot `<field>TrailPresent:Null<Bool>` so the writer
 		// preserves source presence (true -> `;`, false -> ``) rather
@@ -9357,8 +9310,7 @@ class WriterLowering {
 	 * the accumulated cond-span Doc parts (from `spanStartPartsIdx` to the end of
 	 * `parts`) out and replace them with a single `WrapList.emitCondition` call —
 	 * the `(` / `)` literals and knob come from `spanInfo`, the inner condDoc is a
-	 * runtime `_dc([...])` composite. Rewrites `parts` in place. Extracted from
-	 * `lowerStruct`.
+	 * runtime `_dc([...])` composite. Rewrites `parts` in place.
 	 */
 	private function spliceCondWrapEnd(parts: Array<Expr>, spanStartPartsIdx: Int, knob: String, leadStr: String, trailStr: String): Void {
 		final spanLen: Int = parts.length - spanStartPartsIdx;
@@ -9385,8 +9337,7 @@ class WriterLowering {
 	 * `_suppressMoreEntry` snapshot drops the more-field to `_de()`, the head
 	 * binding plus each right-recursion link become head-only item Docs spliced
 	 * into one `WrapList.emit('', '', ',', …)` under the `<knob>` cascade; absent
-	 * the more-field it falls back to the plain `_dc([parts])`. Extracted from
-	 * `lowerStruct`'s dcExpr fold.
+	 * the more-field it falls back to the plain `_dc([parts])`.
 	 */
 	private function buildMultiVarWrapFold(parts: Array<Expr>, typePath: String, knobName: String, moreFieldName: String): Expr {
 		final headPlusMore: Expr = dcCall(parts);
@@ -9446,8 +9397,7 @@ class WriterLowering {
 	 * transparent guard into `prevPadTrailing` and recomputes the cumulative
 	 * `prevAnyStarNonEmpty` signal. Pushes into `parts`; returns the two
 	 * recomputed loop accumulators (the caller resets `prevBodyField` /
-	 * `prevTrailFieldName` to null and `isFirstField` to false). Extracted from
-	 * `lowerStruct`.
+	 * `prevTrailFieldName` to null and `isFirstField` to false).
 	 */
 	private function emitStarField(
 		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, isFirstField: Bool, isRaw: Bool,
@@ -9508,7 +9458,7 @@ class WriterLowering {
 	 * / lead-led / bodyPolicy-only / absent-on arms into `optParts`, appends the
 	 * optional-Ref `@:fmt(padTrailing)` pad, and pushes the `_optVal != null ?
 	 * optBody : _de()` guard onto `parts`. Returns this field's `thisPadTrailing`
-	 * runtime expr (or null). Extracted from `lowerStruct`.
+	 * runtime expr (or null).
 	 */
 	private function emitOptionalRefField(
 		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr,
@@ -9618,7 +9568,7 @@ class WriterLowering {
 	 * span-mode condWrap end. Pushes into `parts`; returns the recomputed loop
 	 * accumulators (`prevBodyField` / `prevPadTrailing` / `prevTrailFieldName`).
 	 * The caller resets `prevAnyStarNonEmpty` to null and `isFirstField` to false.
-	 * Extracted from `lowerStruct`. `isStar` is always false here (Star fields
+	 * `isStar` is always false here (Star fields
 	 * early-continue before this block).
 	 */
 	private function finalizeNonStarField(
@@ -9653,7 +9603,7 @@ class WriterLowering {
 		final thisTransparent: Null<Expr> = isOptional ? (macro $fieldAccess == null) : null;
 		// ω-trivia-after-trail: a mandatory Ref with `@:trail` in trivia-bearing
 		// mode publishes its name so the NEXT field's `bodyPolicyWrap` can read
-		// `value.<name>AfterTrail`. Slice 40: optional Refs with `@:lead + @:trail`
+		// `value.<name>AfterTrail`. Optional Refs with `@:lead + @:trail`
 		// also publish (mirror of the parser-side `hasAfterTrailSlot` extension).
 		final newPrevTrailFieldName: Null<String> = (trailText != null && _ctx.trivia && isTriviaBearing(typePath)) ? fieldName : null;
 		// ω-condwrap-forstmt: end of span-mode iteration — splice the accumulated
@@ -9672,7 +9622,7 @@ class WriterLowering {
 	 * trailOpt-slot facts) used by the field-emit branches of `lowerStruct`.
 	 * Validates a `@:fmt(condWrap)` field via `validateCondWrap` (throws on
 	 * violation). Pure w.r.t. loop state — the caller applies `isSpanStart` to
-	 * `spanStartPartsIdx`. Extracted from `lowerStruct`.
+	 * `spanStartPartsIdx`.
 	 */
 	private function readFieldMeta(
 		child: ShapeNode, spanInfo: Null<{
@@ -9706,7 +9656,7 @@ class WriterLowering {
 		if (condWrapArgs != null)
 			validateCondWrap(condWrapArgs, leadText, trailText, kwLead, spanInfo != null, isOptional, isStar, child.kind);
 		final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
-		// ω-struct-trailopt-source-track (Session 14 Phase 4): a trivia-bearing
+		// ω-struct-trailopt-source-track: a trivia-bearing
 		// struct-typedef Ref field carrying `@:trailOpt(LIT)` reads
 		// `value.<field>TrailPresent:Null<Bool>` (synth slot) so the writer
 		// preserves source presence of the trail rather than always re-emitting it.
@@ -9742,7 +9692,7 @@ class WriterLowering {
 	 * fires) or `emitBareRefNonBodyPolicy` (leftCurly / bodyBreak / non-first-body
 	 * / condWrap / arrowBodyLineWrap), and records the bare-Ref body tracker.
 	 * Pushes into `parts`; returns the `justWrappedBody` body-info (or null) and
-	 * the `prevBareRefBody` tracker. Extracted from `lowerStruct`.
+	 * the `prevBareRefBody` tracker.
 	 */
 	private function emitMandatoryRefField(
 		child: ShapeNode, parts: Array<Expr>, typePath: String, fieldAccess: Expr, fieldName: String, bodyPolicyFlag: Null<String>,
@@ -9788,7 +9738,7 @@ class WriterLowering {
 	 * (`emitKwPrefix`, when `@:kw` is present on a non-optional field — incl. the
 	 * `@:fmt(leftCurly)` BracePlacement split) and the mandatory `@:lead` literal
 	 * (`emitMandatoryLead`, when present on a non-optional, non-condWrap field).
-	 * Pushes into `parts`. Extracted from `lowerStruct`.
+	 * Pushes into `parts`.
 	 */
 	private function emitFieldLeadIn(
 		child: ShapeNode, parts: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, isOptional: Bool, isFirstField: Bool,
@@ -9992,8 +9942,7 @@ class WriterLowering {
 	 *
 	 * The bare flag `@:fmt(leftCurly)` reads the global `opt.leftCurly`
 	 * knob — every grammar site without an arg maps to the same runtime
-	 * option. The knob form `@:fmt(leftCurly('<knobName>'))` (slice
-	 * ω-objectlit-leftCurly) reads `opt.<knobName>` instead, enabling
+	 * option. The knob form `@:fmt(leftCurly('<knobName>'))` (ω-objectlit-leftCurly) reads `opt.<knobName>` instead, enabling
 	 * per-construct overrides like `objectLiteralLeftCurly` for
 	 * `HxObjectLit.fields`. Loader-side cascade decides whether the
 	 * per-construct knob follows the global or stands on its own.
@@ -10107,16 +10056,14 @@ class WriterLowering {
 	 *  - `Before` / `None` → `_de()` (no space).
 	 *
 	 * Consumed today by `@:fmt(ifPolicy)` on `HxStatement.IfStmt` and
-	 * `HxExpr.IfExpr` (slice ω-if-policy), by `@:fmt(forPolicy)` /
+	 * `HxExpr.IfExpr` (ω-if-policy), by `@:fmt(forPolicy)` /
 	 * `@:fmt(whilePolicy)` / `@:fmt(switchPolicy)` on the matching
-	 * stmt / expr ctors (slice ω-control-flow-policies) so a single
+	 * stmt / expr ctors (ω-control-flow-policies) so a single
 	 * config knob controls both statement- and expression-form
 	 * `for(...)` / `for (...)`, `while(...)` / `while (...)`,
 	 * `switch(cond)` / `switch (cond)` (and bare `switch cond`) spacing,
-	 * by `@:fmt(tryPolicy)` on `HxStatement.TryCatchStmt` (slice
-	 * ω-try-policy) gating `try {` / `try{`, and by
-	 * `@:fmt(anonFuncParens)` on `HxExpr.FnExpr(fn:HxFnExpr)` (slice
-	 * ω-anon-fn-paren-policy) gating `function (args)…` /
+	 * by `@:fmt(tryPolicy)` on `HxStatement.TryCatchStmt` (ω-try-policy) gating `try {` / `try{`, and by
+	 * `@:fmt(anonFuncParens)` on `HxExpr.FnExpr(fn:HxFnExpr)` (ω-anon-fn-paren-policy) gating `function (args)…` /
 	 * `function(args)…` independently of `funcParamParens` (which
 	 * targets `HxFnDecl.params`). The bare-body try sibling
 	 * `TryCatchStmtBare` does NOT carry the flag — its first field's
@@ -10141,7 +10088,7 @@ class WriterLowering {
 	 * / `None` mean no space in this slot.
 	 *
 	 * Consumed by `@:fmt(anonFuncParens)` on `HxExpr.FnExpr(fn:HxFnExpr)`
-	 * (slice ω-anon-fn-paren-policy) so the JSON config name
+	 * (ω-anon-fn-paren-policy) so the JSON config name
 	 * `whitespace.parenConfig.anonFuncParamParens.openingPolicy: "before"`
 	 * round-trips intuitively to `opt.anonFuncParens =
 	 * WhitespacePolicy.Before` and emits the expected `function (args)…`
@@ -10391,9 +10338,9 @@ class WriterLowering {
 	private static function whitespacePolicyLead(child: ShapeNode, leadText: String, flagNames: Array<String>): Expr {
 		final flagName: Null<String> = firstFmtFlag(child, flagNames);
 		if (flagName == null) {
-			// Writer Slice 10: opt-in `@:fmt(spaceAfterLead)` on a struct-
+			// Opt-in `@:fmt(spaceAfterLead)` on a struct-
 			// field mandatory `@:lead(LIT)` appends an OptSpace after the
-			// lead literal — mirror of Slice 4's enum-ctor `spaceAfterLead`
+			// lead literal — mirror of the enum-ctor `spaceAfterLead`
 			// path (line ~1075) for the struct-field side. Used by
 			// `HxVarMore.decl` (`@:lead(',')`) and `HxTypedCast.type`
 			// (`@:lead(',')`) to emit `, b` and `cast(x, T)` respectively
@@ -11321,7 +11268,7 @@ class WriterLowering {
 		// case body routes through THIS Star (`@:tryparse`), not
 		// `triviaBlockStarExpr`. False → byte-identical to the pre-slice call.
 		clearExprPositionNonTail: Bool = false,
-		// ω-sep-faithful + Slice 18f: runtime access to the `<field>SepBefore`
+		// ω-sep-faithful: runtime access to the `<field>SepBefore`
 		// slot; when non-null and true at write time, the leading pad becomes
 		// `sep + ' '` (re-emitting the source's leading sep inside the group).
 		sepBeforeAccess: Null<Expr> = null,
@@ -11657,9 +11604,7 @@ class WriterLowering {
 
 	/**
 	 * EOF-Star per-element while-loop emit. Builds `whileBodyParts` and
-	 * returns the `EWhile` spliced into `triviaEofElseBody`. Extracted from
-	 * `triviaEofStarExpr` (cascade fire + leading-comment emit + element
-	 * emit + track) so the orchestrator stays under the complexity gate.
+	 * returns the `EWhile` spliced into `triviaEofElseBody`. Per element: cascade fire + leading-comment emit + element emit + track.
 	 */
 	private static function triviaEofWhileExpr(c: EofStarCtx): Expr {
 		final blanksCountExpr: Expr = c.emit.blanksCount;
@@ -11719,7 +11664,7 @@ class WriterLowering {
 	 * EOF-Star empty-and-trail emit. Builds `elseBodyParts` (the non-empty
 	 * branch) and returns its `EBlock`: `_docs` init, optional `_hasPiu`
 	 * fileheader scan, head emit, the per-element `$whileExpr`, and the
-	 * orphan-trail emit. Extracted from `triviaEofStarExpr`.
+	 * orphan-trail emit.
 	 */
 	private static function triviaEofElseBody(c: EofStarCtx, whileExpr: Expr): Expr {
 		final headEmitExpr: Expr = c.emit.headEmit;
@@ -11876,8 +11821,7 @@ class WriterLowering {
 	 * branch as matched / tail-transparent / inert and binding `_v0` on
 	 * the payload arg. Returns the patterns plus the matched and
 	 * transparent-matched ctor-name sets the caller verifies against.
-	 * Extracted from `buildBetweenCtorBlankInfo` to keep that builder
-	 * below the complexity gate.
+	 *
 	 */
 	private static function buildBetweenCtorPatterns(
 		enumRule: ShapeNode, ctorNames: Array<String>, transparentCtorNames: Array<String>, pos: Position
@@ -11931,8 +11875,7 @@ class WriterLowering {
 
 	/**
 	 * Whether `branch` carries the synth trivia slot for `slot`, per the
-	 * matching `TriviaTypeSynth.isAlt*Branch` predicate. Extracted from
-	 * `altSlotAccess` to keep that offset walker below the complexity gate.
+	 * matching `TriviaTypeSynth.isAlt*Branch` predicate.
 	 */
 	private static function altSlotHasSlot(branch: ShapeNode, slot: AltSlot): Bool {
 		return switch slot {
@@ -11952,8 +11895,7 @@ class WriterLowering {
 
 	/**
 	 * Build the top-level classify switch cases for an inter-member-blank-
-	 * lines classifier. Extracted from `buildInterMemberClassifyInfo` — the
-	 * `kindFor`/`patternFor` local builders plus the look-through `innerCases`
+	 * lines classifier. The `kindFor`/`patternFor` local builders plus the look-through `innerCases`
 	 * and the per-ctor `cases` loop.
 	 */
 	private static function buildInterMemberClassifyCases(c: InterMemberCasesCtx): Array<Case> {
@@ -12039,8 +11981,7 @@ class WriterLowering {
 	 * Split the `@:fmt(blankLinesOnTransitionAcross)` arg list into subset A
 	 * and subset B around the `"|"` separator and run the pre-loop validation
 	 * gates (separator position, non-empty sides, A/B disjointness, and
-	 * matched-vs-transparent disjointness). Extracted from
-	 * `buildTransitionAcrossInfo`.
+	 * matched-vs-transparent disjointness).
 	 */
 	private static function splitTransitionAcrossCtors(args: Array<String>, transparentCtorNames: Array<String>): TransitionAcrossSplit {
 		final pipeIdx: Int = args.indexOf('|');
@@ -12077,7 +12018,7 @@ class WriterLowering {
 	 * Build one transition-across switch pattern: a bare ctor ident for arity
 	 * 0, else `Ctor(<arg0>, _, …)` where `arg0` is `_v0` when `bindFirst`
 	 * (matched subsets A/B bind the first payload) and `_` otherwise (subset
-	 * 0 ignores it). Extracted from `buildTransitionAcrossInfo`.
+	 * 0 ignores it).
 	 */
 	private static function transitionPattern(ctorIdent: Expr, arity: Int, bindFirst: Bool, pos: Position): Expr {
 		if (arity == 0) return ctorIdent;
@@ -12087,8 +12028,7 @@ class WriterLowering {
 
 	/**
 	 * Build the source-faithful `Keep`-mode args-list Doc for a trivia
-	 * postfix Star. Extracted from `lowerPostfixSepListCall` — the
-	 * `ω-D9A-keep-callargs` per-arg hand-built layout (`_dhl()` where source
+	 * postfix Star. The `ω-D9A-keep-callargs` per-arg hand-built layout (`_dhl()` where source
 	 * had a newline before the next arg, `_dt(' ')` otherwise) plus the
 	 * `argsOpenNewline` leading/trailing hardlines.
 	 */
@@ -12158,8 +12098,7 @@ class WriterLowering {
 	/**
 	 * Build the per-iteration `_docs.push(...)` statement for a postfix Star.
 	 * In trivia mode it appends the element's verbatim `trailingComment` after
-	 * the element Doc; plain mode pushes the bare element. Extracted from
-	 * `lowerPostfixStar`.
+	 * the element Doc; plain mode pushes the bare element.
 	 */
 	private static function lowerPostfixPushElem(c: PostfixStarCtx): Expr {
 		final elemCall: Expr = c.elemCall;
@@ -12197,7 +12136,7 @@ class WriterLowering {
 	 * Build the postfix Star's tail expression — the final Doc value of the
 	 * generated body. In trivia mode it appends the synth `closeTrailing`
 	 * slot's verbatim same-line comment after the assembled call Doc; plain
-	 * mode returns the call Doc directly. Extracted from `lowerPostfixStar`.
+	 * mode returns the call Doc directly.
 	 */
 	private static function lowerPostfixTailExpr(c: PostfixStarCtx, dcExpr: Expr): Expr {
 		// ω-postfix-call-trailing: when the synth pair grew a
@@ -12226,7 +12165,7 @@ class WriterLowering {
 	/**
 	 * Locate the Call-shaped sibling branch (a postfix Star carrying
 	 * `@:fmt(methodChain(...))`) within an enum node, erroring if absent.
-	 * Extracted from `wrapWithChainDispatch`.
+	 *
 	 */
 	private static function locateChainCallBranch(node: ShapeNode): ShapeNode {
 		var callBranch: Null<ShapeNode> = null;
@@ -12247,8 +12186,7 @@ class WriterLowering {
 	 * Docs (and parallel source-newline `_breaks` for `Keep` round-trip),
 	 * glues bare leading `.field` accesses, captures the receiver's dot-gap
 	 * trailing comment, and dispatches to `MethodChainEmit.emit` for a
-	 * 2+-segment chain whose receiver ends in a Call (`)`). Extracted from
-	 * `wrapWithChainDispatch`.
+	 * 2+-segment chain whose receiver ends in a Call (`)`).
 	 */
 	private static function wrapChainTriviaBody(c: ChainDispatchCtx): Expr {
 		final argsListExpr: Expr = c.argsListExpr;
@@ -12402,8 +12340,7 @@ class WriterLowering {
 	/**
 	 * Build the plain-mode method-chain walk body for `wrapWithChainDispatch`
 	 * — the no-trivia twin of `wrapChainTriviaBody` (2-arg Call/FieldAccess
-	 * ctor patterns, no `_breaks` / receiver-comment slots). Extracted from
-	 * `wrapWithChainDispatch`.
+	 * ctor patterns, no `_breaks` / receiver-comment slots).
 	 */
 	private static function wrapChainPlainBody(c: ChainDispatchCtx): Expr {
 		final argsListExpr: Expr = c.argsListExpr;
@@ -12471,8 +12408,7 @@ class WriterLowering {
 
 	/**
 	 * After-ctor cascade compute — single-axis kind tracker per info (plus a
-	 * tail-null tracker for tail-adapter infos). Appends to `acc`. Extracted
-	 * from `buildCascadeEmit`.
+	 * tail-null tracker for tail-adapter infos). Appends to `acc`.
 	 */
 	private static function emitAfterCompute(acc: CascadeAccum, afterInfos: Array<AfterCtorBlankInfo>, pos: Position): Void {
 		for (i in 0...afterInfos.length) {
@@ -12533,7 +12469,7 @@ class WriterLowering {
 	/**
 	 * Before-ctor cascade compute — same single-axis shape as after-ctor with
 	 * separate idents, plus an optional `prevExcludeCases` binary tracker.
-	 * Appends to `acc`. Extracted from `buildCascadeEmit`.
+	 * Appends to `acc`.
 	 */
 	private static function emitBeforeCompute(acc: CascadeAccum, beforeInfos: Array<BeforeCtorBlankInfo>, pos: Position): Void {
 		for (i in 0...beforeInfos.length) {
@@ -12570,7 +12506,7 @@ class WriterLowering {
 	/**
 	 * Between-ctor cascade compute — kind+path trackers on head AND tail axes,
 	 * transparent-wrapper support via the shared head/tail adapter pair.
-	 * Appends to `acc`. Extracted from `buildCascadeEmit`.
+	 * Appends to `acc`.
 	 */
 	private static function emitBetweenCompute(acc: CascadeAccum, betweenInfos: Array<BetweenCtorBlankInfo>, pos: Position): Void {
 		for (i in 0...betweenInfos.length) {
@@ -12683,8 +12619,7 @@ class WriterLowering {
 
 	/**
 	 * Between-same-ctor-if-not cascade compute — single-axis kind tracker per
-	 * info (ω-between-single-line-types). Appends to `acc`. Extracted from
-	 * `buildCascadeEmit`.
+	 * info (ω-between-single-line-types). Appends to `acc`.
 	 */
 	private static function emitBetweenIfNotCompute(
 		acc: CascadeAccum, betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo>, pos: Position
@@ -12706,7 +12641,7 @@ class WriterLowering {
 	/**
 	 * Build the `(_r != null && (_r.ctorName == "A" || …)) ? 1 : 0` adapter
 	 * match Expr for the transition cascade — `macro 0` when no adapter is
-	 * wired. Extracted from `emitTransitionCompute`.
+	 * wired.
 	 */
 	private static function transitionAdapterMatchExpr(adapterField: Null<String>, names: Array<String>, pos: Position): Expr {
 		if (adapterField == null) return macro 0;
@@ -12721,7 +12656,7 @@ class WriterLowering {
 	/**
 	 * Cross-subset transition cascade compute — A/B subset trackers on head
 	 * AND tail axes, transparent-wrapper support via the head/tail adapter
-	 * pair. Appends to `acc`. Extracted from `buildCascadeEmit`.
+	 * pair. Appends to `acc`.
 	 */
 	private static function emitTransitionCompute(acc: CascadeAccum, transitionInfos: Array<TransitionAcrossInfo>, pos: Position): Void {
 		for (i in 0...transitionInfos.length) {
@@ -12826,7 +12761,7 @@ class WriterLowering {
 	/**
 	 * Fold the before-ctor cascade ternaries onto `blanksCountExpr` (reverse
 	 * order so info[0] is outermost). Optional `prevExcludeCases` adds a
-	 * `_prevKindPrevExcl != 1` guard. Extracted from `buildCascadeEmit`.
+	 * `_prevKindPrevExcl != 1` guard.
 	 */
 	private static function foldBeforeCascade(blanksCountExpr: Expr, beforeInfos: Array<BeforeCtorBlankInfo>, pos: Position): Expr {
 		var result: Expr = blanksCountExpr;
@@ -12859,7 +12794,7 @@ class WriterLowering {
 	 * Fold the between-same-ctor-if-not cascade ternaries onto
 	 * `blanksCountExpr` — fires `opt.<f>` blanks when both prev and curr
 	 * trackers report 1 AND `opt > 0` (ω-between-single-line-types,
-	 * insertion-only). Extracted from `buildCascadeEmit`.
+	 * insertion-only).
 	 */
 	private static function foldBetweenIfNotCascade(
 		blanksCountExpr: Expr, betweenIfNotInfos: Array<BetweenSameCtorIfNotInfo>, pos: Position
@@ -12880,8 +12815,7 @@ class WriterLowering {
 	/**
 	 * Fold the between-ctor cascade ternaries onto `blanksCountExpr` —
 	 * head/tail kind+path match with a null-guarded `differ` adapter call and
-	 * the keep-source-blank-across-conditional widening. Extracted from
-	 * `buildCascadeEmit`.
+	 * the keep-source-blank-across-conditional widening.
 	 */
 	private static function foldBetweenCascade(blanksCountExpr: Expr, betweenInfos: Array<BetweenCtorBlankInfo>, pos: Position): Expr {
 		var result: Expr = blanksCountExpr;
@@ -12922,7 +12856,7 @@ class WriterLowering {
 	/**
 	 * Fold the cross-subset transition cascade ternaries onto
 	 * `blanksCountExpr` — fires `opt.<count>` blanks on an A→B or B→A
-	 * head/tail transition. Extracted from `buildCascadeEmit`.
+	 * head/tail transition.
 	 */
 	private static function foldTransitionCascade(
 		blanksCountExpr: Expr, transitionInfos: Array<TransitionAcrossInfo>, pos: Position
@@ -12947,8 +12881,7 @@ class WriterLowering {
 	/**
 	 * Fold the after-ctor cascade ternaries onto `blanksCountExpr` — fires
 	 * `opt.<f>` blanks when the previous element matched the ctor (tail-adapter
-	 * infos additionally require the tail leaf was NOT import/using). Extracted
-	 * from `buildCascadeEmit`.
+	 * infos additionally require the tail leaf was NOT import/using).
 	 */
 	private static function foldAfterCascade(blanksCountExpr: Expr, afterInfos: Array<AfterCtorBlankInfo>, pos: Position): Expr {
 		var result: Expr = blanksCountExpr;
@@ -12978,7 +12911,7 @@ class WriterLowering {
 	 * Build the head-of-Star blank-line emit block (ω-before-package). Each
 	 * info contributes a `_arr[0].node.<classifier>` switch; the cascade picks
 	 * the first matching `opt.<optField>` (source order = priority). Empty
-	 * `headInfos` → `macro {}`. Extracted from `buildCascadeEmit`.
+	 * `headInfos` → `macro {}`.
 	 */
 	private static function buildHeadEmit(headInfos: Array<HeadCtorBlankInfo>, pos: Position): Expr {
 		var headBlanksExpr: Expr = macro 0;
@@ -13009,8 +12942,7 @@ class WriterLowering {
 	 * MULTI-clause heritage packs clauses from the front via `Fill` and
 	 * breaks the overflow clause(s) at additionalIndent 2; single-clause
 	 * heritage stays byte-identical to the `lineLengthAwareSeps` path.
-	 * Extracted from `triviaTryparseStarExpr` so the orchestrator stays
-	 * under the complexity gate.
+	 *
 	 */
 	private static function triviaTryparseHeritageExpr(c: TryparseStarCtx): Expr {
 		final fieldAccess: Expr = c.fieldAccess;
@@ -13174,8 +13106,7 @@ class WriterLowering {
 	 * Tryparse-Star main (non-heritage) emit. Builds the per-element while
 	 * loop (via triviaTryparseWhileExpr) and the trailing assembly (via
 	 * triviaTryparseAssemblyExpr) inside the shared `_docs` scope.
-	 * Extracted from `triviaTryparseStarExpr` so the orchestrator stays
-	 * under the complexity gate.
+	 *
 	 */
 	private static function triviaTryparseMainExpr(c: TryparseStarCtx): Expr {
 		final fieldAccess: Expr = c.fieldAccess;
@@ -13623,7 +13554,7 @@ class WriterLowering {
 	 * ω-issue-423-mech-a). Builds the `_writerOpt` Expr: plain `opt`, a
 	 * flat-only `_copyOpt` + per-pair field override, or (when
 	 * `propagateExprPosition`) an unconditional copy setting
-	 * `_inExprPosition = true`. Extracted from `triviaTryparseStarExpr`.
+	 * `_inExprPosition = true`.
 	 */
 	private static function triviaTryparseWriterOptExpr(flatChildOptPairs: Null<Array<Array<String>>>, propagateExprPosition: Bool): Expr {
 		final hasFlatChildOpt: Bool = flatChildOptPairs != null && flatChildOptPairs.length > 0;
@@ -13668,8 +13599,7 @@ class WriterLowering {
 	 * Tryparse-Star `flatGateExpr` builder (ω-case-body-policy /
 	 * ω-issue-423-mech-a). Builds the runtime flatten gate from the
 	 * `@:fmt(bodyPolicy(...))` flag names: single-flag, dual-flag (dispatch
-	 * on `opt._inExprPosition`), or `false`. Extracted from
-	 * `triviaTryparseStarExpr`.
+	 * on `opt._inExprPosition`), or `false`.
 	 */
 	private static function triviaTryparseFlatGateExpr(caseBodyFlagNames: Null<Array<String>>): Expr {
 		if (caseBodyFlagNames != null && caseBodyFlagNames.length > 2)
@@ -13691,9 +13621,7 @@ class WriterLowering {
 	/**
 	 * Tryparse-Star element-call Expr group (caseTailOptArg / triviaElemCall /
 	 * triviaElemCallMaybeBreak / elemOptInit). Builds the per-element writer
-	 * call and the operand-break opt init. Extracted from
-	 * `triviaTryparseStarExpr` so the orchestrator stays under the
-	 * complexity gate.
+	 * call and the operand-break opt init.
 	 */
 	private static function triviaTryparseElemCallExprs(
 		elemFn: String, clearExprPositionNonTail: Bool, operandBreakAfterMultilineBrace: Bool
@@ -13760,7 +13688,7 @@ class WriterLowering {
 	 * Tryparse-Star `priorAfterTrailEmit` builder
 	 * (ω-trivia-tryparse-prior-after-trail): inline-emit the prev-field's
 	 * same-line trail comment before padLeading. Null slot ⇒ no-op.
-	 * Extracted from `triviaTryparseStarExpr`.
+	 *
 	 */
 	private static function triviaTryparsePriorAfterTrailEmit(priorAfterTrailExpr: Null<Expr>): Expr {
 		return priorAfterTrailExpr == null
@@ -13775,7 +13703,7 @@ class WriterLowering {
 	 * Tryparse-Star `finalWrapDocs` builder (ω-trivia-tryparse-linelength):
 	 * the default-branch terminal Doc — `_dc(_docs)` plus, when
 	 * `lineLengthAwareSeps`, a `_dn` nest and a last-element trail
-	 * terminator. Extracted from `triviaTryparseStarExpr`.
+	 * terminator.
 	 */
 	private static function triviaTryparseFinalWrapDocs(lineLengthAwareSeps: Bool): Expr {
 		return lineLengthAwareSeps
@@ -13790,7 +13718,7 @@ class WriterLowering {
 	 * Tryparse-Star `shapeRefusalExpr` builder (ω-issue-423-mech-b): the
 	 * extra `_flatCase` AND-clause deferring to the plugin-supplied
 	 * `caseBodyRefusesFlat` adapter. Default `false` ⇒ `macro true`.
-	 * Extracted from `triviaTryparseStarExpr`.
+	 *
 	 */
 	private static function triviaTryparseShapeRefusalExpr(refuseFlatOnComplex: Bool): Expr {
 		return refuseFlatOnComplex
@@ -13805,7 +13733,7 @@ class WriterLowering {
 	 * Tryparse-Star `tryparseBlockEndedSepEmit` builder
 	 * (ω-blockended-trivia-tryparse): inject `sepText` between two not-yet-
 	 * statement-terminated elements. Null sepText / non-blockEnded ⇒ no-op.
-	 * Extracted from `triviaTryparseStarExpr`.
+	 *
 	 */
 	private static function triviaTryparseBlockEndedSepEmit(sepText: Null<String>, blockEnded: Bool, sepFaithful: Bool = false): Expr {
 		// ω-sep-faithful: source-fidelity mode — the sep re-emits iff the
@@ -13836,7 +13764,7 @@ class WriterLowering {
 	 * Tryparse-Star `tryparseBlockEndedTrailEmit` builder
 	 * (ω-blockended-trivia-tryparse-trail): post-loop tail sep so the last
 	 * element keeps its source `;`. Null sepText / non-blockEnded ⇒ no-op.
-	 * Extracted from `triviaTryparseStarExpr`.
+	 *
 	 */
 	private static function triviaTryparseBlockEndedTrailEmit(sepText: Null<String>, blockEnded: Bool, sepFaithful: Bool = false): Expr {
 		// ω-sep-faithful: trailing sep before the enclosing `#end`/`#else`
@@ -13863,7 +13791,7 @@ class WriterLowering {
 	 * Tryparse-Star `condIncreaseGateExpr` builder (ω-cond-indent-policy):
 	 * runtime gate true when `condBodyIndent` AND the active
 	 * `opt.conditionalPolicy` is AlignedIncrease / AlignedDecrease.
-	 * Extracted from `triviaTryparseStarExpr`.
+	 *
 	 */
 	private static function triviaTryparseCondIncreaseGateExpr(condBodyIndent: Bool): Expr {
 		return condBodyIndent
@@ -13875,8 +13803,7 @@ class WriterLowering {
 	/**
 	 * Tryparse-Star `condNestedIncreaseGateExpr` builder (ω-cond-indent-policy
 	 * AlignedNestedIncrease): per-element gate true when `condBodyIndent` AND
-	 * the active `opt.conditionalPolicy` is AlignedNestedIncrease. Extracted
-	 * from `triviaTryparseStarExpr`.
+	 * the active `opt.conditionalPolicy` is AlignedNestedIncrease.
 	 */
 	private static function triviaTryparseCondNestedIncreaseGateExpr(condBodyIndent: Bool): Expr {
 		return condBodyIndent
@@ -13887,8 +13814,7 @@ class WriterLowering {
 	/**
 	 * Sep-Star no-wrap-rules flat fallback (the `wrapRulesField == null` arm
 	 * of the no-trivia branch): space-joined single-line layout. References
-	 * the runtime `_arr` local declared in the emitted scope. Extracted from
-	 * `triviaSepStarExpr` so the orchestrator stays under the complexity gate.
+	 * the runtime `_arr` local declared in the emitted scope.
 	 */
 	private static function triviaSepFlatBranch(openText: String, closeText: String, sepText: String, triviaElemCall: Expr): Expr {
 		return macro {
@@ -13913,7 +13839,7 @@ class WriterLowering {
 	 * content is a same-line block-style trailing comment after the open lit
 	 * (e.g. `[ /+ foo +/ ]` with block delimiters). References the runtime
 	 * `_trailOpen`/`_trailClose` locals declared in the emitted scope.
-	 * Extracted from `triviaSepStarExpr`.
+	 *
 	 */
 	private static function triviaSepEmptyOpenTrailExpr(openText: String, closeText: String): Expr {
 		return macro {
@@ -13934,9 +13860,7 @@ class WriterLowering {
 	 * Sep-Star force-multi per-element leading break dispatch: Keep-mode
 	 * source-aware break, noWrap-flat cuddle, or the legacy unconditional
 	 * hardline. References the runtime `_keepEmit`/`_noWrapFlatten`/`_si`/
-	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop. Extracted
-	 * from `triviaSepStarExpr` so the force-multi builder stays under the
-	 * complexity gate.
+	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
 	 */
 	private static function triviaSepForceMultiLeadExpr(): Expr {
 		return macro {
@@ -13983,8 +13907,7 @@ class WriterLowering {
 	 * builds `_line` from `_elem` with the inter/trailing comma honouring
 	 * source `sepAfter` / `appendTrailingComma`, and the trailing comment
 	 * before-or-after the sep. References the runtime `_elem`/`_line`/`_si`/
-	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop. Extracted
-	 * from `triviaSepStarExpr`.
+	 * `_t`/`_arr`/`_inner` locals declared in the force-multi loop.
 	 */
 	private static function triviaSepForceMultiLineExpr(appendTrailingCommaExpr: Expr, sepText: String): Expr {
 		return macro {
@@ -13995,9 +13918,9 @@ class WriterLowering {
 			// Trailing-position comma keeps the existing
 			// `appendTrailingComma` decision (source-present OR
 			// knob, computed by `appendTrailingCommaExpr`).
-			// Closes lineends/issue_111 where source had two
-			// `field:` slots with no separator between them; we
-			// previously emitted the comma unconditionally.
+			// Handles source with two
+			// `field:` slots and no separator between
+			// them.
 			final _isLast: Bool = _si == _arr.length - 1;
 			final _emitSep: Bool = _isLast ? $appendTrailingCommaExpr : _t.sepAfter;
 			final _tc: Null<String> = _t.trailingComment;
@@ -14113,8 +14036,7 @@ class WriterLowering {
 	 * consume (`keepCurlyBegin/End`, `typedefBegin/End/Between`, `blankBefore`,
 	 * `initCurrDocComment`), with the four intermediate predicates
 	 * (`stripByCurrDoc`/`addByCurrDoc`/`currHasDocCompute`/`typedefStripBetween`)
-	 * kept local. Extracted from `triviaSepStarExpr` so the orchestrator stays
-	 * under the complexity gate.
+	 * kept local.
 	 */
 	private static function triviaSepTypedefBlanksExprs(beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool): SepStarBlanks {
 		final _curly: SepStarKeepCurly = triviaSepKeepCurlyExprs(typedefBodyBlanks);
@@ -14136,8 +14058,7 @@ class WriterLowering {
 	 * placement Doc builders. Bundles the eight spliced Expr fragments the
 	 * sep-Star tail consumes, keeping the knob/pattern intermediates
 	 * (`ignoreBase`/`knobExpr`/`nextPat`/`knobNextOrEmpty`/`rightCurlyKnobExpr`/
-	 * `inlinePat`/`triviaTrailDoc`) local. Extracted from `triviaSepStarExpr`
-	 * so the orchestrator stays under the complexity gate; byte-identical.
+	 * `inlinePat`/`triviaTrailDoc`) local.
 	 */
 	private static function triviaSepCheckExprs(
 		wrapRulesField: Null<String>, ignoreSourceNewlinesForWrap: Bool, reflowInExprPosition: Bool, leftCurlyKnob: Null<String>,
@@ -14222,7 +14143,7 @@ class WriterLowering {
 		// between call args). Avoids the `,\n\n{` newline-collision
 		// bug when an outer wrap-engine sep and an inner leftCurly Next
 		// independently push a leading newline at the same insertion
-		// point (slice ω-opthardline).
+		// point (ω-opthardline).
 		//
 		// `wrapLeadFlatDoc` is always `_de()` — flat layout never wants
 		// a hardline before the open brace, regardless of knob value.
@@ -14289,9 +14210,7 @@ class WriterLowering {
 	/**
 	 * Sep-Star source-trailing-comma / force-exceeds / force-mode / keep-matrix
 	 * Expr builders. Bundles the five spliced Expr fragments the sep-Star tail
-	 * consumes, keeping the `knobAccessOrFalse` intermediate local. Extracted
-	 * from `triviaSepStarExpr` so the orchestrator stays under the complexity
-	 * gate; behaviour byte-identical.
+	 * consumes, keeping the `knobAccessOrFalse` intermediate local.
 	 */
 	private static function triviaSepTrailExprs(
 		trailingCommaField: Null<String>, trailPresentAccess: Null<Expr>, matrixWrap: Bool, forceMultiInTypedef: Bool, openText: String,
@@ -14406,9 +14325,7 @@ class WriterLowering {
 	 * Sep-Star no-trivia (wrap-cascade) branch builder: the `wrapRulesField !=
 	 * null` arm wraps each per-element Doc with its leading/trailing comments,
 	 * attempts a matrix grid, and defers layout to `WrapList.emit`; the null
-	 * arm falls back to the space-joined flat layout. Extracted from
-	 * `triviaSepStarExpr` so the orchestrator stays under the complexity gate;
-	 * behaviour byte-identical.
+	 * arm falls back to the space-joined flat layout.
 	 */
 	private static function triviaSepNoTriviaBranch(c: SepStarNoTriviaCtx): Expr {
 		final triviaElemCall: Expr = c.triviaElemCall;
@@ -14473,18 +14390,18 @@ class WriterLowering {
 			// the item, which would land INSIDE a `// ...` line comment;
 			// those route to the force-multi branch via `_requiresHardline`
 			// in the predicate split below). When the element has no
-			// trivia (the only case reached pre-slice), `_parts.length==1`
-			// collapses to the bare `_elemBase` Doc — byte-identical to
-			// the previous `_docs.push($triviaElemCall)` shape.
+			// trivia, `_parts.length==1`
+			// collapses to the bare
+			// `_elemBase` Doc.
 			macro {
 				final _docs: Array<anyparse.core.Doc> = [];
-				// Slice 18g: per-pair `sepBefore` flags so `WrapList.emit`
+				// ω-sep-faithful: per-pair `sepBefore` flags so `WrapList.emit`
 				// can suppress the engine's inter-element comma when the
 				// source elided it (canonical: `HxParam.Conditional` body
 				// leading-sep elides the outer `,` ahead of the `#if`).
 				// `_sepBeforeFlags[i] = !_arr[i-1].sepAfter` for i >= 1;
 				// slot 0 is unused. Trailing-comma stays on the existing
-				// `appendTrailingComma` axis. Closes whitespace/issue_582.
+				// `appendTrailingComma` axis.
 				final _sepBeforeFlags: Array<Bool> = [];
 				var _si2: Int = 0;
 				while (_si2 < _arr.length) {
@@ -14547,8 +14464,7 @@ class WriterLowering {
 	 * `_requiresHardline` / `_hasSourceNewlines` / `_hasInlineableTrivia` /
 	 * `_anyMultilineItem` accumulators (declared in the emitted scope) from each
 	 * element's blank/comment/source-newline signals. References the runtime
-	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals. Extracted from
-	 * `triviaSepStarExpr` so the orchestrator stays under the complexity gate.
+	 * `_keepEmit`/`_ignoreEmit`/`_noWrapFlat`/`_matrixOff` locals.
 	 */
 	private static function triviaSepPredicateScanExpr(reflowSourceMultiline: Bool, triviaElemCall: Expr): Expr {
 		return macro {
@@ -14606,7 +14522,7 @@ class WriterLowering {
 	 * true when a matrix-eligible Star under noWrap with no comment/blank
 	 * hardline forms a uniform source grid (`MatrixWrap.tryLayout != null`), else
 	 * false. References the runtime `_noWrapFlat`/`_anyMultilineItem`/
-	 * `_requiresHardline`/`_arr` locals. Extracted from `triviaSepStarExpr`.
+	 * `_requiresHardline`/`_arr` locals.
 	 */
 	private static function triviaSepMatrixSucceedsExpr(
 		matrixWrap: Bool, openText: String, closeText: String, sepText: String, appendTrailingCommaExpr: Expr, triviaElemCall: Expr
@@ -14635,8 +14551,7 @@ class WriterLowering {
 	 * forceMulti predicates (via the predicate-split machinery) and routes the
 	 * list to the keep-matrix grid, the force-multi loop, or the no-trivia
 	 * cascade. References the runtime `_arr`/`_trailLC`/`_trailOpen` locals.
-	 * Extracted from `triviaSepStarExpr` so the orchestrator stays under the
-	 * complexity gate; behaviour byte-identical.
+	 *
 	 */
 	private static function triviaSepDispatchExpr(c: SepStarDispatchCtx): Expr {
 		final keepCheckExpr: Expr = c.keepCheckExpr;
@@ -15050,8 +14965,7 @@ class WriterLowering {
 	 * Block-Star empty-body Doc build (ω-empty-curly-break / ω-anonfunction-
 	 * empty-curly / ω-blockempty). Resolves the empty-curly access (named knob
 	 * vs `_inAnonFnBody`-dispatched default) and dispatches `Break` vs flat
-	 * `{}`. Extracted from `triviaBlockStarExpr` so the orchestrator stays
-	 * under the complexity gate.
+	 * `{}`.
 	 */
 	private static function triviaBlockEmptyDocExpr(
 		openText: String, closeText: String, emptyText: String, emptyCurlyBreak: Bool, emptyCurlyKnob: Null<String>
@@ -15071,8 +14985,7 @@ class WriterLowering {
 	 * Block-Star before-`}` hardline build (ω-blockright-curly / ω-anonfunction-
 	 * right-curly). Reads the optional `rightCurly` / `rightCurlyAnonFn` knobs
 	 * and drops the hardline before `}` when the resolved placement is `Inline`.
-	 * Both knobs null → unconditional `_dhl()` (pre-slice). Extracted from
-	 * `triviaBlockStarExpr`.
+	 * Both knobs null → unconditional `_dhl()`.
 	 */
 	private static function triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob: Null<String>, rightCurlyAnonFnKnob: Null<String>): Expr {
 		final rightCurlyAccess: Null<Expr> = rightCurlyKnob != null ? {
@@ -15095,8 +15008,7 @@ class WriterLowering {
 	 * Block-Star current-element doc-comment compute (ω-cond-leading-doc-
 	 * lookthrough). Builds the `_currHasDocComment` per-iteration scan, folding
 	 * in the `#if … #end` inner-member look-through when `condLeadingDocInfo`
-	 * resolved. Extracted from `triviaBlockStarExpr` so the blank-before builder
-	 * stays under the complexity gate.
+	 * resolved.
 	 */
 	private static function triviaBlockCurrHasDocComputeExpr(
 		beforeDocCommentEmptyLines: Bool, condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>
@@ -15154,8 +15066,7 @@ class WriterLowering {
 	/**
 	 * Block-Star current-element kind compute (ω-class-static-var-cascade /
 	 * ω-abstract-static-fn-cascade). Builds the `_currKind` classifier switch
-	 * plus the static-promotion sibling-modifier scan. Extracted from
-	 * `triviaBlockStarExpr`.
+	 * plus the static-promotion sibling-modifier scan.
 	 */
 	private static function triviaBlockCurrKindComputeExpr(
 		interMember: Bool, interMemberInfo: Null<InterMemberClassifyInfo>, staticVarSubdiv: Bool,
@@ -15195,8 +15106,7 @@ class WriterLowering {
 	 * Block-Star inter-member add-blank rule (ω-extern-class-no-blanks /
 	 * ω-class-static-var-cascade / ω-abstract-static-fn-cascade). Builds the
 	 * runtime boolean that fires a blank between two members per the var/fn /
-	 * static-var/static-fn cascade, AND-ed out under extern context. Extracted
-	 * from `triviaBlockStarExpr`.
+	 * static-var/static-fn cascade, AND-ed out under extern context.
 	 */
 	private static function triviaBlockInterMemberAddExpr(
 		interMember: Bool, interMemberInfo: Null<InterMemberClassifyInfo>, staticVarSubdiv: Bool,
@@ -15251,8 +15161,7 @@ class WriterLowering {
 	 * doc-comment + existing-between + split-leading + interMember + uniform-
 	 * between gates, the `_currHasDocComment` / `_currKind` / `_currHasSplitLeading`
 	 * computes (via the cascade sub-helpers), and the final `_stripBlank` /
-	 * `_addBlank` / `_sourceBlank` decision. Extracted from `triviaBlockStarExpr`
-	 * so the orchestrator stays under the complexity gate.
+	 * `_addBlank` / `_sourceBlank` decision.
 	 */
 	private static function triviaBlockBlankBeforeExpr(
 		afterFieldsWithDocComments: Bool, existingBetweenFields: Bool, beforeDocCommentEmptyLines: Bool,
@@ -15316,9 +15225,7 @@ class WriterLowering {
 	/**
 	 * Block-Star interMember subdivision var-family add arms (kinds 1/3, the
 	 * instance-var / static-var rows): same-kind `betweenVars` + instance↔static
-	 * `afterStaticVars`. Returns the OR of the three var-family arms. Extracted
-	 * from `triviaBlockInterMemberAddExpr` so each helper stays under the
-	 * complexity gate.
+	 * `afterStaticVars`. Returns the OR of the three var-family arms.
 	 */
 	private static function triviaBlockSubdivVarArmsExpr(betweenVarsAccess: Expr, afterStaticVarsAccess: Expr): Expr {
 		return macro ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
@@ -15330,7 +15237,7 @@ class WriterLowering {
 	 * Block-Star interMember subdivision fn-family add arms (kinds 2/4, the
 	 * function / static-function rows): (4,4) `betweenStaticFunctions` + every
 	 * other fn-fn pair `betweenFunctions`. Returns the OR of the two fn-family
-	 * arms. Extracted from `triviaBlockInterMemberAddExpr`.
+	 * arms.
 	 */
 	private static function triviaBlockSubdivFnArmsExpr(betweenFnAccess: Expr, betweenStaticFnAccess: Expr): Expr {
 		return macro ((_prevKind == 4 && _currKind == 4 && $betweenStaticFnAccess > 0)
@@ -15340,8 +15247,7 @@ class WriterLowering {
 
 	/**
 	 * Block-Star interMember subdivision var↔fn transition arm: a {1,3}↔{2,4}
-	 * boundary fires `afterVars`. Returns the single transition arm. Extracted
-	 * from `triviaBlockInterMemberAddExpr`.
+	 * boundary fires `afterVars`. Returns the single transition arm.
 	 */
 	private static function triviaBlockSubdivVarFnArmExpr(afterVarsAccess: Expr): Expr {
 		return macro ((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4))
@@ -15351,8 +15257,7 @@ class WriterLowering {
 	/**
 	 * Block-Star interMember subdivision-active add rule (ω-class-static-var-
 	 * cascade / ω-abstract-static-fn-cascade). Composes the var-family / fn-family
-	 * / var↔fn arms, AND-ed out under extern context. Extracted from
-	 * `triviaBlockInterMemberAddExpr`.
+	 * / var↔fn arms, AND-ed out under extern context.
 	 */
 	private static function triviaBlockInterMemberSubdivExpr(
 		betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr, afterStaticVarsAccess: Expr, betweenStaticFnAccess: Expr
@@ -15366,8 +15271,7 @@ class WriterLowering {
 	/**
 	 * Block-Star interMember subdivision-off add rule (the pre-slice three arms):
 	 * same-var `betweenVars`, same-fn `betweenFunctions`, var↔fn `afterVars`,
-	 * AND-ed out under extern context. Extracted from
-	 * `triviaBlockInterMemberAddExpr`.
+	 * AND-ed out under extern context.
 	 */
 	private static function triviaBlockInterMemberPlainExpr(betweenVarsAccess: Expr, betweenFnAccess: Expr, afterVarsAccess: Expr): Expr {
 		return macro (!opt._classExtern
@@ -15380,8 +15284,7 @@ class WriterLowering {
 	 * the `macro {}` consumed when any empty-lines flag is active: runs the
 	 * per-element computes, derives `_stripBlank` / `_addBlank` / `_sourceBlank`
 	 * from the strip / add gate Exprs, and emits the inter-element `_dhl()`.
-	 * Extracted from `triviaBlockBlankBeforeExpr` so it stays under the complexity
-	 * gate.
+	 *
 	 */
 	private static function triviaBlockBlankBeforeAssemblyExpr(g: BlankGateExprs): Expr {
 		final currHasDocComputeExpr: Expr = g.currHasDocComputeExpr;
@@ -15427,7 +15330,7 @@ class WriterLowering {
 	 * Block-Star current-element split-leading scan (ω-extern-existing-between-
 	 * split-leading). Per-element scan that flips `_currHasSplitLeading` true when
 	 * the element's leading cluster ends in a `/**` doc comment whose immediate
-	 * predecessor is a `//` line comment. Extracted from `triviaBlockBlankBeforeExpr`.
+	 * predecessor is a `//` line comment.
 	 */
 	private static function triviaBlockCurrHasSplitLeadingComputeExpr(existingBetweenFields: Bool): Expr {
 		return existingBetweenFields
@@ -15447,8 +15350,7 @@ class WriterLowering {
 	/**
 	 * Block-Star uniform-between add-blank gate (ω-enum-empty-lines). Opt-in via
 	 * `@:fmt(uniformBetween('<optField>'))` — the named non-negative-Int knob is
-	 * consulted at the inter-element slot (`> 0` contributes a blank). Extracted
-	 * from `triviaBlockBlankBeforeExpr`.
+	 * consulted at the inter-element slot (`> 0` contributes a blank).
 	 */
 	private static function triviaBlockUniformBetweenAddExpr(uniformBetween: Bool, uniformBetweenOptField: Null<String>): Expr {
 		if (!uniformBetween) return macro false;
@@ -15463,8 +15365,7 @@ class WriterLowering {
 	 * Block-Star begin/end head-tail blank-line inserts (ω-class-begin-end-type /
 	 * ω-bropen-keep). Builds the `beginTypeExpr` / `endTypeExpr` pair: explicit
 	 * `beginType` / `endType` counts (type bodies) else the `afterLeftCurly` /
-	 * `beforeRightCurly` Keep-policy source-blank honour. Extracted from
-	 * `triviaBlockStarExpr` so the orchestrator stays under the complexity gate.
+	 * `beforeRightCurly` Keep-policy source-blank honour.
 	 */
 	private static function triviaBlockBeginEndExpr(
 		beginEndType: Bool, keepCurlyBlanks: Bool, beginKnob: String, endKnob: String
@@ -15502,7 +15403,7 @@ class WriterLowering {
 	 * between the last `//` and a trailing `/**` in a member's leading cluster)
 	 * and the `blockLeadingBetweenExpr` / `blockTrailBetweenExpr`
 	 * (ω-fileheader-multiline-comments — blank between adjacent block comments).
-	 * Extracted from `triviaBlockStarExpr`.
+	 *
 	 */
 	private static function triviaBlockBetweenExprs(
 		blankBeforeFinalDocInLeading: Bool, betweenMultilineCommentsBlanks: Bool
@@ -15565,7 +15466,7 @@ class WriterLowering {
 	 * Block-Star blockEnded schema-instance predicate-call build (ω-condcomp-stray-
 	 * semi, Stage A). Builds the `<schema>.instance.<predicate>(elemAccess)` call
 	 * Expr for a given element-access Expr, or `macro false` when no predicate is
-	 * wired. Extracted from `triviaBlockStarExpr`.
+	 * wired.
 	 */
 	private static function triviaBlockPredCallExpr(
 		blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>, elemAccess: Expr
@@ -15583,8 +15484,7 @@ class WriterLowering {
 	 * trivia, Session 3 + ω-phase-g + ω-condcomp-stray-semi). Builds the
 	 * `blockSepBeforeHardlineExpr` (inter-element sep when the prior element isn't
 	 * already statement-terminated) and the `blockTrailSepEmitExpr` (source-trail
-	 * sep after the last element). Null sepText / non-blockEnded → no-op. Extracted
-	 * from `triviaBlockStarExpr`.
+	 * sep after the last element). Null sepText / non-blockEnded → no-op.
 	 */
 	private static function triviaBlockSepExprs(
 		sepText: Null<String>, blockEnded: Bool, blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>
@@ -15626,8 +15526,7 @@ class WriterLowering {
 	 * `_currHasSplitLeading` / `_prevKind` / `_currKind`), the prior-kind track,
 	 * the `trackDocCommentExpr` after-element doc scan, the `innerWrapExpr`
 	 * (ω-indent-case-labels), and the `extraInnerTrailBlankExpr` (ω-block-orphan-
-	 * trail-blank). Extracted from `triviaBlockStarExpr` so the orchestrator stays
-	 * under the complexity gate.
+	 * trail-blank).
 	 */
 	private static function triviaBlockLeafExprs(
 		afterFieldsWithDocComments: Bool, beforeDocCommentEmptyLines: Bool, existingBetweenFields: Bool, interMember: Bool,
@@ -15678,7 +15577,7 @@ class WriterLowering {
 	 * before, leading-comment emit (with split-gate + between-blank), element emit
 	 * with trailing-comment fold, and prev-kind track. References the runtime
 	 * `_arr`/`_inner`/`_si`/`_priorElemDoc`/`opt` locals declared in the emitted
-	 * scope. Extracted from `triviaBlockStarExpr`.
+	 * scope.
 	 */
 	private static function triviaBlockWhileExpr(c: BlockStarCtx): Expr {
 		final initCurrKindExpr: Expr = c.initCurrKindExpr;
@@ -15722,8 +15621,7 @@ class WriterLowering {
 	 * Block-Star non-empty branch body. Builds the `_inner` accumulation, the
 	 * per-element while loop (via `triviaBlockWhileExpr`), the trailing-sep emit,
 	 * the orphan-trail-comment chain (or end-type tail), and the open/close-
-	 * trailing-comment `_parts` assembly wrapped in `_dwb(_dbg(...))`. Extracted
-	 * from `triviaBlockStarExpr`.
+	 * trailing-comment `_parts` assembly wrapped in `_dwb(_dbg(...))`.
 	 */
 	private static function triviaBlockElseBody(c: BlockStarCtx): Expr {
 		final initDocCommentExpr: Expr = c.initDocCommentExpr;
@@ -15792,8 +15690,7 @@ class WriterLowering {
 	 * the empty-Star fast paths (open-trailing-comment flat emit / empty-curly
 	 * dispatch) and the non-empty branch (via `triviaBlockElseBody`). References
 	 * the runtime `opt` local and the `BlockStarCtx`-bundled spliced Exprs.
-	 * Extracted from `triviaBlockStarExpr` so the orchestrator stays under the
-	 * complexity gate.
+	 *
 	 */
 	private static function triviaBlockMainExpr(c: BlockStarCtx): Expr {
 		final fieldAccess: Expr = c.fieldAccess;
@@ -15839,8 +15736,7 @@ class WriterLowering {
 	/**
 	 * Block-Star head blank-line count (ω-class-begin-end-type / ω-bropen-keep).
 	 * Resolves the begin-side blank count: explicit `beginType` (type bodies) else
-	 * the `afterLeftCurly` Keep-policy source-blank honour. Extracted from
-	 * `triviaBlockBeginEndExpr` so it stays under the complexity gate.
+	 * the `afterLeftCurly` Keep-policy source-blank honour.
 	 */
 	private static function triviaBlockBeginNExpr(beginEndType: Bool, beginKnob: String): Expr {
 		// ω-enumabstract-begin-end: read the enum-abstract begin knob under the
@@ -15856,8 +15752,7 @@ class WriterLowering {
 	/**
 	 * Block-Star tail blank-line count (ω-class-begin-end-type / ω-bropen-keep).
 	 * Resolves the end-side blank count: explicit `endType` (type bodies) else the
-	 * `beforeRightCurly` Keep-policy source-blank honour. Extracted from
-	 * `triviaBlockBeginEndExpr`.
+	 * `beforeRightCurly` Keep-policy source-blank honour.
 	 */
 	private static function triviaBlockEndNExpr(beginEndType: Bool, endKnob: String): Expr {
 		// ω-enumabstract-begin-end: read the enum-abstract end knob under the
@@ -15988,8 +15883,8 @@ typedef SameLineShapeAwareCtx = {
  *   - `widthAware`          — when `true`, the `Same` branch routes through `IfWidthExceeds` for line-fit-aware break.
  *   - `ifExprIndentArgs`    — `(ctorName, optField)` pair for the IfExpr-as-value RHS-style indent in flat path.
  *   - `fallbackFlagName`    — name of a fallback `BodyPolicy` flag activated when the sibling `else` is absent.
- *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies (slice ω-expression-if-with-blocks).
- *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor (slice ω-return-body-single-line).
+ *   - `inlineBlockBodyArgs` — `(flagName)` 1-tuple for the inline-collapse override on `BlockExpr` bodies (ω-expression-if-with-blocks).
+ *   - `singleLineFlagName`  — name of the `BodyPolicy` knob used when the value is NOT a control-flow / block ctor (ω-return-body-single-line).
  *   - `singleLineMultiCtors`— value ctor names treated as multi-line (keep the base policy); all other ctors read `singleLineFlagName`.
  */
 typedef WrapBodyOpts = {
@@ -16711,8 +16606,8 @@ typedef BeforeCtorBlankInfo = {
  * priority: after-ctor entries (outermost) > between entries >
  * before-ctor entries > source-driven `blankBefore`.
  *
- * `tailAdapterOptField` (slice ω-cond-comp-tail-transparency) and
- * `headAdapterOptField` (slice ω-imports-using-transition) name
+ * `tailAdapterOptField` (ω-cond-comp-tail-transparency) and
+ * `headAdapterOptField` (ω-imports-using-transition) name
  * optional function-typed fields on `WriteOptions`
  * (e.g. `betweenImportsTailLeafClassify` /
  * `betweenImportsHeadLeafClassify`, each

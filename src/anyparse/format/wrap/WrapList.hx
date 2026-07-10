@@ -40,8 +40,7 @@ class WrapList {
 	 * cuddled) tracks the wrap engine's flat/break decision. When the
 	 * cascade collapses to a single mode (no Group wrap), the
 	 * appropriate lead is selected via `isFlatMode`. Defaults to
-	 * `Empty`/`Empty` — pre-slice callers see no behavioural change.
-	 * Slice ω-objectlit-leftCurly-cascade — first consumer is
+	 * `Empty`/`Empty` — default-passing callers see no behavioural change. ω-objectlit-leftCurly-cascade — first consumer is
 	 * `triviaSepStarExpr` for `HxObjectLit.fields` knob-form leftCurly.
 	 *
 	 * `forceExceeds`: when `true`, both cascade evaluations
@@ -52,13 +51,12 @@ class WrapList {
 	 * separator AND whose `@:fmt(trailingComma(...))` knob is on — the
 	 * trailing-sep is treated as an explicit "stay multi-line" hint
 	 * even when item widths would otherwise collapse the list flat.
-	 * Slice ω-objectlit-source-trail-comma — first consumer is
+	 * ω-objectlit-source-trail-comma — first consumer is
 	 * `HxObjectLit.fields`.
 	 *
 	 * `trailBreak`: the Doc emitted immediately before `Text(close)` in
 	 * the `OnePerLine` shape. Null defaults to `Line('\n')` — the
-	 * legacy hardcoded close-on-own-line layout — so pre-slice callers
-	 * stay byte-identical. Per-construct `RightCurlyPlacement` knobs
+	 * legacy hardcoded close-on-own-line layout — so null-passing callers stay byte-identical. Per-construct `RightCurlyPlacement` knobs
 	 * pass `Empty` for `Inline` (close glued to last body token) or
 	 * `Line('\n')` for `Same`. Mirrors the trivia branch's
 	 * `triviaTrailDoc` in `WriterLowering.triviaSepStarExpr` so wrap-
@@ -66,21 +64,19 @@ class WrapList {
 	 * `RightCurlyPlacement.{Inline,Same}` semantic. Honoured by
 	 * `shapeOnePerLine` only — `OnePerLineAfterFirst` / `FillLine` glue
 	 * close by mode design and have no Inline-vs-Same axis to express.
-	 * Slice ω-wraplist-trailbreakdoc — first consumers are
+	 * ω-wraplist-trailbreakdoc — first consumers are
 	 * `HxObjectLit.fields` and `HxType.Anon` via `triviaSepStarExpr`.
 	 *
 	 * `forceMode`: optional `WrapMode` override that bypasses the
 	 * cascade and forces a single mode regardless of `evalAt(...)`.
-	 * `null` (default) is the pre-slice behaviour — the cascade runs
-	 * normally. Non-null short-circuits both `exceeds=false` and
+	 * `null` (default) — the cascade runs normally. Non-null short-circuits both `exceeds=false` and
 	 * `exceeds=true` evaluations to the supplied mode AND skips
 	 * extra-threshold enumeration, so the renderer commits
 	 * unconditionally to one shape (no `IfBreak` wrapping needed).
 	 * Used by `@:fmt(forceMultiInTypedef)` on typedef-RHS anon types
 	 * to thread `WrapMode.OnePerLine` when `opt._inTypedefBody=true`,
 	 * matching fork's `MarkLineEnds.markTypedef` parent-walk forcing
-	 * `=\n{\n\t...\n}` shape regardless of field count or fit.
-	 * Slice ω-typedef-anon-force-multi.
+	 * `=\n{\n\t...\n}` shape regardless of field count or fit. ω-typedef-anon-force-multi.
 	 *
 	 * `sepBeforeFlags`: optional per-element `Bool` array, length-aligned
 	 * with `items`. When `flags[i] == true`, the engine SKIPS the
@@ -91,13 +87,12 @@ class WrapList {
 	 * elides the outer comma in favour of the cond-comp block's own
 	 * leading sep). `flags[0]` is unused (no element precedes item 0)
 	 * and any out-of-bounds / null treats every slot as sep-emitting,
-	 * keeping pre-slice consumers byte-identical. The trailing-comma
+	 * keeping flag-less consumers byte-identical. The trailing-comma
 	 * decision stays on the existing `appendTrailingComma` axis.
 	 * Honoured by `shapeNoWrap`, `shapeOnePerLine`,
 	 * `shapeOnePerLineAfterFirst`, and `shapeFillLine` at chunk
 	 * boundaries; `shapeFillLineWithLeadingBreak`'s `Fill(items,
-	 * softSep)` packing keeps the legacy uniform softSep.
-	 * Slice 18g — first consumer is `HxFnDecl.params` via the wrap-rules
+	 * softSep)` packing keeps the legacy uniform softSep. First consumer is `HxFnDecl.params` via the wrap-rules
 	 * (`ignoreSourceNewlinesForWrap`) no-trivia branch in
 	 * `triviaSepStarExpr`.
 	 */
@@ -234,7 +229,7 @@ class WrapList {
 	 * `ExceedsMaxLineLength` rule are NOT supported here yet — first
 	 * consumer (`HxIfStmt.cond` / `HxWhileStmt.cond`) ships only the
 	 * fork's default `fillLineWithLeadingBreak` + `exceedsMaxLineLength:
-	 * 0 → noWrap` cascade. Slice ω-condition-wrap-wiring.
+	 * 0 → noWrap` cascade. ω-condition-wrap-wiring.
 	 */
 	public static function emitCondition(
 		open: String, close: String, condDoc: Doc, opt: WriteOptions, rules: WrapRules,
@@ -1414,8 +1409,7 @@ class WrapList {
 	 * already spans multiple lines, so collapsing it fully flat would
 	 * discard the author's "stay multi-line" intent; flooring keeps the
 	 * list broken while still letting width-driven modes (`FillLine`,
-	 * `FillLineWithLeadingBreak`) reflow it. No-op when `on` is false —
-	 * every pre-slice consumer stays byte-identical.
+	 * `FillLineWithLeadingBreak`) reflow it. No-op when `on` is false — gate-less consumers stay byte-identical.
 	 */
 	private static inline function floorSourceMultiline(mode: WrapMode, on: Bool): WrapMode {
 		return on && mode == NoWrap ? OnePerLine : mode;
@@ -1754,10 +1748,9 @@ class WrapList {
 	}
 
 	/**
-	 * Slice 18g: returns `true` when `sepBeforeFlags[i]` is set, meaning
+	 * Returns `true` when `sepBeforeFlags[i]` is set, meaning
 	 * the engine should skip the separator between items `[i-1]` and `i`.
-	 * Null / out-of-bounds is treated as "do not skip" — pre-slice
-	 * behaviour preserved.
+	 * Null / out-of-bounds is treated as "do not skip".
 	 */
 	private static inline function skipSepBefore(flags: Null<Array<Bool>>, i: Int): Bool {
 		return flags != null && i >= 0 && i < flags.length && flags[i];
@@ -2094,7 +2087,7 @@ class WrapList {
 		final inner: Array<Doc> = [];
 		for (i in 0...items.length) {
 			if (i > 0)
-				// Slice 18g: `sepBeforeFlags[i] == true` ⇒ source omitted
+				// `sepBeforeFlags[i] == true` ⇒ source omitted
 				// the comma between items[i-1] and items[i] (canonical:
 				// `Conditional` cond-comp ctor whose body leads with sep).
 				// Emit a bare space so tokens don't glue; everything else
@@ -2130,7 +2123,7 @@ class WrapList {
 			inner.push(Line('\n'));
 			inner.push(items[i]);
 			final isLast: Bool = i == items.length - 1;
-			// Slice 18g: when `sepBeforeFlags[i+1] == true`, the source had
+			// When `sepBeforeFlags[i+1] == true`, the source had
 			// no separator between this item and the next — suppress this
 			// item's trailing sep. Trailing-comma decision on the LAST item
 			// stays on `appendTrailingComma` (independent axis).
@@ -2152,7 +2145,7 @@ class WrapList {
 		if (items.length == 1) return Concat([Text(open), items[0], Text(close)]);
 		final tail: Array<Doc> = [];
 		for (i in 1...items.length) {
-			// Slice 18g: drop the trailing-sep on the previous item when
+			// Drop the trailing-sep on the previous item when
 			// the source elided the comma at this slot.
 			if (!skipSepBefore(sepBeforeFlags, i)) tail.push(Text(sep));
 			tail.push(Line('\n'));
@@ -2351,7 +2344,7 @@ class WrapList {
 		var chunkStart: Int = 0;
 		for (i in 1...items.length + 1) {
 			final atEnd: Bool = i == items.length;
-			// Slice 18g: `sepBeforeFlags[i] == true` also forces a chunk
+			// `sepBeforeFlags[i] == true` also forces a chunk
 			// split before `items[i]` so the inter-element slot routes
 			// through the chunk-boundary path (where the `Text(sep)`
 			// gate below honours the same flag). Without this, both
@@ -2364,7 +2357,7 @@ class WrapList {
 			final hardLed: Bool = !atEnd && (hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i));
 			if (atEnd || hardLed) {
 				if (chunkStart > 0) {
-					// Slice 18g: the inter-chunk sep belongs immediately
+					// The inter-chunk sep belongs immediately
 					// BEFORE `items[chunkStart]` (the first element of the
 					// current chunk we are about to push) — its flag is
 					// `sepBeforeFlags[chunkStart]`. When `true`, suppress
@@ -2555,7 +2548,7 @@ class WrapList {
 		// the Nest exit and `closeInside`. The `sep.length + 1` base
 		// covers (a) trailing softSep `,` landing on every wrapped
 		// line and (b) the fork-`>=` vs ours-`<=` semantic alignment.
-		// Slice ω-fill-tail-reserve.
+		// ω-fill-tail-reserve.
 		final tailReserve: Int = sep.length + 1 + (appendTrailingComma ? sep.length : 0);
 		// ω-fill-break-after-wrap: `FillBreakAfterWrap` forces the separator
 		// before an item to break when the preceding arg self-wrapped (e.g. a

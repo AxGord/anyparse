@@ -122,7 +122,7 @@ class InlineMethodSliceTest extends Test {
 	}
 
 	/** A cursor not on a function declaration / call is refused. */
-	public function testRefuseCursorNotOnFunction(): Void {
+	public function testRefuseCursorNotOnFn(): Void {
 		final source: String = 'class C {\n' + '\tvar n:Int = 0;\n' + '}';
 		assertRefused(source, 2, 6);
 	}

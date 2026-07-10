@@ -361,19 +361,16 @@ final class HxExprUtil {
 	 *    statement position is `HxStatement.BlockStmt`, never
 	 *    `ExprStmt(BlockExpr)`), reached when an Assign's RHS or the
 	 *    body of an `IfExpr` branch is `{ … }`.
-	 *  - `ObjectLit` — bare `{ foo: 1 }` at statement position
-	 *    (slice 30). `BlockStmt`'s greedy `{` attempt fails on the
+	 *  - `ObjectLit` — bare `{ foo: 1 }` at statement position. `BlockStmt`'s greedy `{` attempt fails on the
 	 *    `IDENT:` field shape, so `ExprStmt(ObjectLit)` is reached and
 	 *    the `}` is the statement's last token. NOT triggered through
-	 *    Assign-RHS — `x = {a: 1};` keeps `;` strict per the corpus
-	 *    contract (Slice 19 carve-out in the `*Assign` arm below).
+	 *    Assign-RHS — `x = {a: 1};` keeps `;` strict per the corpus contract (see the `*Assign` carve-out below).
 	 *  - `ArrayExpr` — bare `[1, 2, 3]` / `[if (foo) bar else foo, …]`
-	 *    at statement position (slice 39). The closing `]` is the
+	 *    at statement position. The closing `]` is the
 	 *    statement's last token, same as `}` for ObjectLit / BlockExpr.
 	 *    NOT triggered through Assign-RHS — `x = [1, 2];` keeps `;`
 	 *    strict (same carve-out as ObjectLit). Drives `sameline/issue_365_array_comprehension`.
-	 *  - `Is` — bare `x is Type` at statement position (slice 43).
-	 *    NOT brace-terminated — `Is`'s last token is the type-ref leaf
+	 *  - `Is` — bare `x is Type` at statement position. NOT brace-terminated — `Is`'s last token is the type-ref leaf
 	 *    (typically an ident like `String`). The corpus contract from
 	 *    `whitespace/issue_605_operator_is` allows `{x is String}` as
 	 *    a single-stmt block with no trailing `;` before the closing
@@ -390,11 +387,11 @@ final class HxExprUtil {
 	 * **`;` required** (gate false): every other shape — `Call`,
 	 * non-assign binop, ternary, etc. — BUT see below.
 	 *
-	 * **Note (Slice 44, ω-slice-X3): this predicate is no longer the sole
+	 * **Note (ω-slice-X3): this predicate is no longer the sole
 	 * authority on `ExprStmt`'s trail-`;` elision.** The parse-time gate in
 	 * `Lowering.hx` is a 3-disjunct OR — the intrinsic check here, plus
-	 * `peekKw(ctx, "else")` (Slice X2: if-then-body before `else`), plus
-	 * `peekLit(ctx, "}")` (Slice X3: any expr as the last stmt of an
+	 * `peekKw(ctx, "else")` (if-then-body before `else`), plus
+	 * `peekLit(ctx, "}")` (any expr as the last stmt of an
 	 * enclosing block). The peek-`}` disjunct generalises the per-ctor
 	 * direct-return arms above (every brace/bracket-terminated expr only
 	 * got `;` elision because its OWN tail token happened to close one —
@@ -413,14 +410,11 @@ final class HxExprUtil {
 	 * Distinct from `endsWithCloseBrace` (the writer-side `var x = …`
 	 * rhs predicate), which deliberately returns `false` for
 	 * `MacroExpr` / `BlockExpr` / `IfExpr` — the parser-statement gate
-	 * needs the opposite answer for `macro { … }` and the Slice 19
-	 * Assign / IfExpr cases. `endsWithCloseBrace` is reused read-only
+	 * needs the opposite answer for `macro { … }` and the Assign / IfExpr recursion cases. `endsWithCloseBrace` is reused read-only
 	 * for the non-recursive tail cases (`SwitchExpr` etc., where the
 	 * answer coincides) and is NOT modified — `HxClassMember.VarMember`/
 	 * `FinalMember`'s writer-side `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))`
-	 * gate keeps its stricter behaviour. Post Sessions 10.1-10.5 the
-	 * statement-side `Var`/`Final`/`StaticVar`/`StaticFinalStmt` ctors
-	 * no longer carry `trailOptShapeGate` — they own no `@:trailOpt(';')`
+	 * gate keeps its stricter behaviour. The statement-side `Var`/`Final`/`StaticVar`/`StaticFinalStmt` ctors do not carry `trailOptShapeGate` — they own no `@:trailOpt(';')`
 	 * at all; the BlockBody Star sep claims the trailing byte instead.
 	 *
 	 * `Dynamic` argument so the same predicate fires on Plain-mode
@@ -441,12 +435,12 @@ final class HxExprUtil {
 				case 'MacroClassExpr': true;
 				case 'MacroExpr':
 					macroExprNoSemi(e);
-				// Slice 28: walk through `@:meta expr` into its inner expression —
+				// Walk through `@:meta expr` into its inner expression —
 				// `@:nullSafety(Off) return switch (…) { … }` and
 				// `@:nullSafety(Off) if (…) { … }` end with the inner expr's `}`.
 				case 'MetaExpr':
 					metaExprNoSemi(e);
-				// Slice 28: walk through `return expr` into its operand —
+				// Walk through `return expr` into its operand —
 				// `return switch (…) { … }` ends with the switch's `}`. The
 				// statement-position `return` routes through `HxStatement.ReturnStmt`,
 				// so this branch only fires when something forces expression-mode
@@ -455,12 +449,12 @@ final class HxExprUtil {
 				case 'ReturnExpr':
 					final params: Null<Array<Dynamic>> = Type.enumParameters(e);
 					params != null && params.length != 0 && stmtExprNoSemi(params[0]);
-				// Slice 19: an `IfExpr` carries `thenBranch`/`elseBranch`; the
+				// An `IfExpr` carries `thenBranch`/`elseBranch`; the
 				// statement's last token is the else branch's last token, or
 				// the then branch's when there is no `else`.
 				case 'IfExpr':
 					ifExprNoSemi(e);
-				// Slice 19: recursion target. Standalone `{ … }` at statement
+				// Recursion target. Standalone `{ … }` at statement
 				// position is `HxStatement.BlockStmt`, so the brace-terminal
 				// ctors only fire when reached through Assign / IfExpr above.
 				case _:
@@ -475,25 +469,20 @@ final class HxExprUtil {
 	 *
 	 * Wired through `HaxeFormat.stmtNoSemi` as the schema-instance
 	 * predicate consumed by the `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))`
-	 * meta on BlockBody containers (Session 6 option b2 — AST-shape
-	 * adapter in the Star primitive). Sister of `stmtExprNoSemi`, which
+	 * meta on BlockBody containers (AST-shape adapter in the Star primitive). Sister of `stmtExprNoSemi`, which
 	 * operates on the inner `HxExpr` of `ExprStmt`; this predicate accepts
 	 * the wrapping `HxStatement` enum value and dispatches:
 	 *
 	 *  - `ExprStmt(expr)` → recurse `stmtExprNoSemi(expr)` (carve-out
 	 *    semantics for ObjectLit / ArrayExpr / IfExpr-with-else / Is / …).
-	 *    Migrated var-family ctors (`StaticVarStmt` / `StaticFinalStmt` /
-	 *    `VarStmt` / `FinalStmt` — Sessions 10.1-10.5) are NOT in this
+	 *    Var-family ctors (`StaticVarStmt` / `StaticFinalStmt` / `VarStmt` / `FinalStmt`) are NOT in this
 	 *    predicate: their per-stmt `@:trailOpt(';')` is gone, the BlockBody
 	 *    Star owns the trailing `;`, and the predicate returning FALSE for
 	 *    them is the correct signal that the Star must claim the byte.
 	 *  - Brace-terminated stmts (`BlockStmt` / `IfStmt` / `WhileStmt` /
 	 *    `ForStmt` / `SwitchStmt(Bare)` / `TryCatchStmt` / `LocalFnStmt` /
 	 *    `LocalInlineFnStmt` / `UntypedBlockStmt`) → true unconditionally
-	 *    (closing `}` is the stmt's last token). Post-Session-11 the
-	 *    parser-side `}` byte-check fast-path is removed — the AST branch
-	 *    is now the sole path for these ctors, alongside Conditional /
-	 *    EllipsisStmt below.
+	 *    (closing `}` is the stmt's last token). There is no parser-side `}` byte-check fast-path — the AST branch is the sole path for these ctors, alongside Conditional / EllipsisStmt below.
 	 *  - Sep-terminated stmts (`VoidReturnStmt` / `ThrowStmt` /
 	 *    `DoWhileStmt` / `ErrorStmt` / `EmptyStmt` / `TryCatchStmtBare`)
 	 *    → true (their `@:trail(';')` / `@:lit(';')` already consumed the
@@ -783,8 +772,7 @@ final class HxExprUtil {
 	}
 
 	/**
-	 * `*Assign` at statement position — recurse on the right operand.
-	 * Slice 30 / 39 / 42 / 43 carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
+	 * `*Assign` at statement position — recurse on the right operand. Carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
 	 * `x = ${expr}` and `x = a is Int` keep `;` strict (the corpus
 	 * contract — distinct from bare `{a: 1}` / `[1, 2, 3]` / `${expr}` /
 	 * `a is Int` at stmt position). The carve-out lives here, not in the

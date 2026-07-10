@@ -202,16 +202,14 @@ final class HaxeFormat implements TextFormat {
 	 * `caseBody` defaults to `Next` — single-stmt switch case bodies
 	 * stay on a fresh line below `case X:` for non-expression statement
 	 * bodies (block, var, if-stmt, …). `expressionCase` defaults to
-	 * `Keep` (slice ω-expression-case-keep-default 2026-05-03) — when
+	 * `Keep` (ω-expression-case-keep-default) — when
 	 * the body's first element had no preceding source newline, the
 	 * `case X: foo();` shape is preserved; otherwise the body keeps the
 	 * source's multiline layout. Setting either to `Same` flattens
 	 * single-stmt bodies unconditionally. `caseBody` corresponds to
 	 * haxe-formatter's `sameLine.caseBody: @:default(Next)`;
 	 * `expressionCase` to `sameLine.expressionCase: @:default(Same)`.
-	 * We pick `Keep` over upstream's `Same` to avoid the `;`-cascade
-	 * regression documented in `feedback_case_body_default_flip_regresses.md`
-	 * — Keep gates on source same-line-ness so multi-line source bodies
+	 * We pick `Keep` over upstream's `Same` to avoid a `;`-cascade regression — Keep gates on source same-line-ness so multi-line source bodies
 	 * keep their VarStmt `@:trailOpt(';')` cascade behaviour.
 	 *
 	 * `tryBody` (ω-tryBody) defaults to `Next` — matches upstream
@@ -479,7 +477,7 @@ final class HaxeFormat implements TextFormat {
 	 * separate axis (`@:fmt(functionTypeHaxe3)` on `HxType.Arrow` →
 	 * `opt.functionTypeHaxe3`, default `None` — see field doc below).
 	 *
-	 * `functionTypeHaxe3` default (Writer Slice 6) is `None` — the `->`
+	 * `functionTypeHaxe3` default is `None` — the `->`
 	 * separator inside an old-form curried arrow type (`HxType.Arrow`)
 	 * emits `Int->Bool` tight, matching haxe-formatter's
 	 * `whitespace.functionTypeHaxe3Policy: @:default(None)`. Setting to
@@ -913,7 +911,7 @@ final class HaxeFormat implements TextFormat {
 	/**
 	 * HxStatement-level sister of `stmtExprNoSemi`. Wired through
 	 * `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` on BlockBody
-	 * Star containers (Session 6 option b2 — AST-shape adapter). The
+	 * Star containers (AST-shape adapter). The
 	 * generated parser calls
 	 * `schema.instance.stmtNoSemi(_arr[_arr.length - 1])` after each
 	 * pushed element to decide whether the next-element gate may skip

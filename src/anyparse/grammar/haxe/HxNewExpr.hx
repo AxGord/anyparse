@@ -12,30 +12,20 @@ package anyparse.grammar.haxe;
  *
  * `type` is `HxNewTypeName` — `HxTypeName`'s byte-twin with an optional
  * `\$?` prefix on the first ident segment for macro type-reification
- * (`new $tp()`, `new $tp.Sub(args)`, Slice 54). Module- and
+ * (`new $tp()`, `new $tp.Sub(args)`). Module- and
  * pack-qualified constructor paths round-trip via the regex's dotted
- * continuation — `new haxe.Exception(...)`, `new haxe.ds.StringMap(...)`.
- * A bare `HxIdentLit` matched only the leading segment, leaving
- * `.Sub(...)` to be (mis-)absorbed by postfix field-access at statement
- * level and failing outright in switch-case-body position. The `$`
- * prefix is intentionally kept LOCAL to the constructor-target slot
+ * continuation — `new haxe.Exception(...)`, `new haxe.ds.StringMap(...)` — a single-segment terminal here would leave `.Sub(...)` to be mis-absorbed by postfix field-access. The `$` prefix is intentionally kept LOCAL to the constructor-target slot
  * (rather than widening `HxTypeName` itself) so the documented
  * `HxType.Named` vs `HxType.DollarType` dispatch contract is preserved
  * — a `$`-bearing `HxTypeName` on `HxTypeRef.name` would shadow
- * `DollarType` since `Named` is the first `HxType` branch. All three
- * terminals (`HxTypeName`, `HxNewTypeName`, `HxIdentLit`) are
- * `@:rawString abstract(String) from String to String`, so the
- * terminal swap is zero-ripple on the generic raw-String single-Ref
- * path; call-site string comparisons (`(ne.type : String)`) are
- * unaffected.
+ * `DollarType` since `Named` is the first `HxType` branch. Like `HxTypeName` and `HxIdentLit`, the terminal is `@:rawString abstract(String) from String to String`, so call-site string comparisons (`(ne.type : String)`) work directly.
  *
  * `params` carries the optional angle-bracketed type-parameter list
  * for `new Map<K, V>()` / `new Holder<A, B, C>(args)`. Byte-twin of
  * `HxTypeRef.params` — same `@:optional @:lead('<') @:trail('>')
  * @:sep(',')` shape over `Array<HxType>`, so the full type Alt
  * (named, function, anon-struct) composes naturally as a type-param.
- * Empty Star degrades to no output via the standard optional-Star
- * Lowering path. Zero new Lowering branches.
+ * Empty Star degrades to no output via the standard optional-Star Lowering path.
  *
  * The argument list reuses the sep-peek Star field pattern — same as
  * function parameters in `HxFnDecl` and call args in `HxExpr.Call`.

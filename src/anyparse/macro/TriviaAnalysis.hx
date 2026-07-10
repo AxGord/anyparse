@@ -15,9 +15,7 @@ import haxe.macro.Expr;
  *     branches (the postfix Star-suffix shape, e.g. `Call(operand, args)`)
  *     even without an explicit `@:trivia` — `Lowering`'s postfix-loop
  *     and `WriterLowering.lowerPostfixStar` route through dedicated
- *     paths that don't trigger `triviaSepStarExpr`'s over-break, so the
- *     auto-mark is safe and avoids the writer-side multi-line predicate
- *     regression parked in 2026-05-01. Stored as `trivia.starCollects = true`
+ *     paths that don't trigger `triviaSepStarExpr`'s over-break, so the auto-mark is safe. Stored as `trivia.starCollects = true`
  *     on the Star node itself, consulted later by Lowering when
  *     generating Trivia-mode Star-element parse loops.
  *
@@ -48,8 +46,8 @@ class TriviaAnalysis {
 		// reads `.node`/`.trailingComment` per arg in `lowerPostfixStar`.
 		// `@:trivia` is intentionally NOT used — it would route the
 		// writer through `triviaSepStarExpr` whose multi-line predicate
-		// over-breaks call-arg lists (parked 2026-05-01,
-		// `feedback_trivia_not_freebie.md`). The dedicated
+		// over-breaks call-arg lists.
+		// The dedicated
 		// `lowerPostfixStar` writer path is unaffected.
 		for (name => node in result.rules) markPostfixStarSuffix(node);
 		final directlyBearing: Map<String, Bool> = [];

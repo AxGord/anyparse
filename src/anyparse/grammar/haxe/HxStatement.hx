@@ -13,8 +13,7 @@ package anyparse.grammar.haxe;
  *    shape gate. The `static` prefix dispatches via `@:kw('static')` +
  *    `@:lead('var')` / `@:lead('final')` — kw+lead single-Ref pattern
  *    (precedent: `LocalInlineFnStmt` `@:kw('inline') @:lead('function')`,
- *    `HxDoWhileStmt`'s `@:kw('while') @:lead('(')`). Multi-var (Slice 2)
- *    and leading meta (Slice 20) compose for free via the shared
+ *    `HxDoWhileStmt`'s `@:kw('while') @:lead('(')`). Multi-var and leading meta compose for free via the shared
  *    `HxVarDecl` body — `static final @Test a = 1, b = 2;` round-trips
  *    without grammar additions. Placed before the bare `VarStmt` /
  *    `FinalStmt` because `static` is a distinct kw that never collides
@@ -50,8 +49,7 @@ package anyparse.grammar.haxe;
  *  - `ReturnStmt` — `return expr;` return statement with a value.
  *    Tried before `VoidReturnStmt` — if expression parsing fails
  *    (e.g. next token is `;`), tryBranch rolls back and the void
- *    variant is tried. The trailing `;` is `@:trailOpt(';')` (slice
- *    ω-return-trailopt 2026-05-03) — Haxe's parser allows
+ *    variant is tried. The trailing `;` is `@:trailOpt(';')` (ω-return-trailopt) — Haxe's parser allows
  *    `return expr` without `;` when the next token already terminates
  *    the statement (typically `}`), e.g. `return if (...) {} else {}`.
  *    Trivia mode preserves the source's `;` presence verbatim via the
@@ -61,11 +59,11 @@ package anyparse.grammar.haxe;
  *    `;` (no AST-shape gate wired) — corpus tests run trivia mode
  *    exclusively. `@:fmt(bodyPolicy('returnBody'))` on `value`
  *    routes the `return`→value separator through the runtime
- *    `BodyPolicy` switch (slice ω-return-body), mirroring how
+ *    `BodyPolicy` switch (ω-return-body), mirroring how
  *    `HxIfStmt.thenBody` / `HxForStmt.body` consume `ifBody` /
  *    `forBody`. `Same` keeps `return value;` flat when it fits in
  *    `opt.lineWidth`; otherwise the value breaks to the next line at
- *    one indent level deeper (slice ω-returnbody-widthaware via the
+ *    one indent level deeper (ω-returnbody-widthaware via the
  *    `@:fmt(widthAware)` companion meta — see below). `Next` always
  *    pushes the value to the next line at one indent level deeper.
  *    `FitLine` keeps it flat when it fits within `lineWidth`, otherwise
@@ -79,22 +77,7 @@ package anyparse.grammar.haxe;
  *    `BodyOnSameLine=false` (source had break) is unaffected — already
  *    breaks via `nextLayoutExpr`.
  *
- *    Known limitation (mech-(a) of the issue_257 compound, partial
- *    2026-05-07): the renderer probe uses `flatTokenWidth` which sums
- *    every token in the flat shape, treating forced hardlines as zero.
- *    For multi-line bodies whose first rendered line fits but whose
- *    total token width exceeds `lineWidth` (multi-branch `if-expr` under
- *    `expressionIf=keep` is the canonical example), the probe over-fires
- *    and breaks the body to next line. This accidentally matches the
- *    `Keep`-with-source-broken semantic (where break is what the user
- *    wrote), so `issue_257_return_keep` PASSES; it diverges from
- *    `Same`-with-multi-line-body (where the user asked for inline), so
- *    `issue_257_return_same` and `_same_indent_value_expr` still fail.
- *    Proper fix requires threading a `<refName>BeforeNewline:Bool` synth
- *    slot to kw-led ctor branches with `@:fmt(bodyPolicy)` AND a
- *    first-line-width measurement primitive (`IfFirstLineExceeds` Doc
- *    sibling, or the equivalent helper). Tracked under
- *    `feedback_issue_257_compound.md` mech-(a-residual).
+ *    Known limitation: the renderer probe uses `flatTokenWidth` which sums every token in the flat shape, treating forced hardlines as zero. For multi-line bodies whose first rendered line fits but whose total token width exceeds `lineWidth` (multi-branch `if-expr` under `expressionIf=keep` is the canonical example), the probe over-fires and breaks the body to next line — correct for `Keep`-with-source-broken (break is what the user wrote), wrong for `Same`-with-multi-line-body (the user asked for inline). A proper fix requires threading a `<refName>BeforeNewline:Bool` synth slot to kw-led ctor branches with `@:fmt(bodyPolicy)` AND a first-line-width measurement primitive (`IfFirstLineExceeds` Doc sibling, or the equivalent helper).
  *
  *    The parameterless `@:fmt(widthAware)` flag opts the field into the
  *    width-aware wrap inside `WriterLowering.bodyPolicyWrap`. Strictly
@@ -104,8 +87,7 @@ package anyparse.grammar.haxe;
  *    per-construct `wrapping.maxLineLength` rules — currently only
  *    return-shape consumers (`return`, eventually `throw`) match.
  *    Also carries `@:fmt(indentValueIfCtor('ObjectLit',
- *    'indentObjectLiteral', 'objectLiteralLeftCurly'))` (slice
- *    ω-return-indent-objectliteral) — when the value is an
+ *    'indentObjectLiteral', 'objectLiteralLeftCurly'))` (ω-return-indent-objectliteral) — when the value is an
  *    `ObjectLit` AND `opt.indentObjectLiteral=true` AND
  *    `opt.objectLiteralLeftCurly==Next`, the kw→body wrap routes
  *    through a `Nest(_cols, subCall)` shape that lets the
@@ -117,8 +99,7 @@ package anyparse.grammar.haxe;
  *    return-body site.
  *
  *    Sister entry `@:fmt(indentValueIfCtor('IfExpr',
- *    'indentComplexValueExpressions'))` (slice
- *    ω-issue-257-return-same-indent-value-expr) — when the value is
+ *    'indentComplexValueExpressions'))` (ω-issue-257-return-same-indent-value-expr) — when the value is
  *    an `IfExpr` AND `opt.indentComplexValueExpressions=true`, the
  *    flat-path body emit (Same / Keep+bodyOnSameLine / widthAware
  *    flat) is wrapped in `Nest(_cols, body)` so the multi-branch
@@ -168,12 +149,11 @@ package anyparse.grammar.haxe;
  *    is consumed by the branch's `@:trail`.
  *    `@:fmt(bodyPolicy('throwBody'))` on `expr` routes the
  *    `throw`→value separator through the runtime `BodyPolicy` switch
- *    (slice ω-throw-body), mirroring `ReturnStmt` exactly. `Same`
+ *    (ω-throw-body), mirroring `ReturnStmt` exactly. `Same`
  *    (default) keeps `throw value;` flat regardless of length; `Next`
  *    always pushes the value to the next line at one indent level
  *    deeper; `FitLine` keeps it flat when it fits within `lineWidth`,
- *    otherwise breaks. Default flipped from `FitLine` to `Same` in
- *    slice ω-throw-body-same-default — haxe-formatter has no
+ *    otherwise breaks. The default is `Same` (ω-throw-body-same-default) because haxe-formatter has no
  *    `throwBody` knob and leaves `throw <expr>` inline regardless of
  *    length, so a long chain-typed value wraps via its own internal
  *    fill rules (`opAddSubChain` / `opBoolChain` cascade) rather
@@ -192,13 +172,13 @@ package anyparse.grammar.haxe;
  *    use `@:tryparse` termination (D49). Each catch clause uses
  *    `@:kw('catch') @:lead('(')` on the same field (D50). Bodies
  *    are full `HxStatement`s (typically `BlockStmt`). Carries
- *    `@:fmt(tryPolicy)` (slice ω-try-policy) — runtime-switchable
+ *    `@:fmt(tryPolicy)` (ω-try-policy) — runtime-switchable
  *    `WhitespacePolicy` for the gap after the `try` keyword (default
  *    `After` → `try {`; `None` / `Before` collapse to `try{`). Mirrors
  *    `ifPolicy` / `forPolicy` / `whilePolicy` / `switchPolicy` on
  *    sibling control-flow ctors. Co-exists with `tryBody` on the
  *    sub-struct's `body` field via the `kwOwnsInlineSpace` mode in
- *    `WriterLowering.bodyPolicyWrap` (slice ω-tryBody): the parent
+ *    `WriterLowering.bodyPolicyWrap` (ω-tryBody): the parent
  *    Case 3 strips the kw-trail-space (so the kw-policy slot at this
  *    level is `null`) and the wrap's `Same` inline separator inside
  *    `HxTryCatchStmt.body` reads `opt.tryPolicy` to choose between
@@ -214,9 +194,7 @@ package anyparse.grammar.haxe;
  *    rolls back when `TryCatchStmt`'s `body:HxStatement` parse
  *    fails on a bare expression (no `;` after `EXPR`, next token
  *    is `catch`), and `TryCatchStmtBare` is tried next. Block-form
- *    input wins via the source-order precedence; bare-form fixtures
- *    that previously routed through `ExprStmt(TryExpr(...))` (with
- *    expression-form layout) now match here and pick up the
+ *    input wins via the source-order precedence; bare-form input that would otherwise route through `ExprStmt(TryExpr(...))` (with expression-form layout) matches here and picks up the
  *    `bareBodyBreaks` shape-aware multi-line layout. Intentionally
  *    does NOT carry `@:fmt(tryPolicy)`: the first field's
  *    `@:fmt(bareBodyBreaks)` triggers the `stripKwTrailingSpace`
@@ -249,8 +227,7 @@ package anyparse.grammar.haxe;
  *    parent `HxFnDecl.body` Ref-field's leftCurly Case 5 routes
  *    `UntypedBlockBody` through `spacePrefixCtors` + `ctorHasBodyPolicy`
  *    so the parent emits `_de()` and the wrap is the sole separator.
- *    Stmt-context handling lives at the parent site: slice
- *    ω-untyped-body-stmt-override wires
+ *    Stmt-context handling lives at the parent site: ω-untyped-body-stmt-override wires
  *    `@:fmt(bodyPolicyOverride('UntypedBlockStmt', 'untypedBody'))`
  *    on `HxTryCatchStmt.body` so the existing `tryBody` wrap reads
  *    `opt.untypedBody` instead of `opt.tryBody` at runtime when the
@@ -259,12 +236,10 @@ package anyparse.grammar.haxe;
  *    — matching haxe-formatter's `markUntyped` rule that
  *    `sameLine.untypedBody` only applies when the parent token is not
  *    a Block-typed `BrOpen`. The inner `untyped`→`{` gap is owned by
- *    `HxUntypedFnBody.block`'s `@:fmt(leftCurly)` (slice
- *    ω-untyped-leftCurly): under `leftCurly=Next` the brace drops onto
+ *    `HxUntypedFnBody.block`'s `@:fmt(leftCurly)` (ω-untyped-leftCurly): under `leftCurly=Next` the brace drops onto
  *    its own line regardless of the stmt-context, mirroring
  *    haxe-formatter's `lineEnds.leftCurly` global Allman placement.
- *    Carries `@:fmt(blockShape)` (slice ω-tryBody-next-default +
- *    sameLineCatch-shape-aware) so shape-aware writers that gate on
+ *    Carries `@:fmt(blockShape)` (ω-tryBody-next-default + sameLineCatch-shape-aware) so shape-aware writers that gate on
  *    "the prev body ends with `}`" treat it as block-equivalent. Used
  *    by `bareBodyBreaks` on `HxTryCatchStmt.catches` to keep the
  *    `} catch (...)` cuddle for `try untyped { … } catch (...)`. The
@@ -277,7 +252,7 @@ package anyparse.grammar.haxe;
  *
  *  - `Conditional` — `#if <cond> <stmts> [#else <stmts>] #end`
  *    preprocessor-guarded region wrapping function-body statements
- *    (slice ω-cond-comp-stmt). Mirror of `HxDecl.Conditional` /
+ *    (ω-cond-comp-stmt). Mirror of `HxDecl.Conditional` /
  *    `HxModifier.Conditional` at the statement scope: `@:kw('#if')`
  *    dispatches with a non-word-char boundary check (so `#iff` is
  *    rejected); `@:trail('#end')` consumes the closing directive
@@ -333,7 +308,7 @@ package anyparse.grammar.haxe;
  *    `IdentExpr` atom.
  *
  *    The trailing `;` is `@:trailOpt(';')` shape-gated parser-side via
- *    `@:fmt(trailOptParseGate('stmtExprNoSemi'))` (slice ω-slice-V).
+ *    `@:fmt(trailOptParseGate('stmtExprNoSemi'))` (ω-slice-V).
  *    The `;` is REQUIRED — the parser throws to terminate the
  *    statement, preserving multi-statement boundary detection in
  *    blocks / switch-arms (the statement Star loop relies on
@@ -413,7 +388,7 @@ enum HxStatement {
 
 	/**
 	 * `#error "msg"` / `#error 'msg'` preprocessor directive at
-	 * statement scope (slice ω-sharp-error). Reachable from
+	 * statement scope (ω-sharp-error). Reachable from
 	 * `HxConditionalStmt.body` (`Array<HxStatement>`) — `#if cs #error
 	 * '…' #end` inside a function body. `@:kw` + single Ref, no
 	 * `@:trail` (like `LocalFnStmt`); falls before the `ExprStmt`
@@ -450,9 +425,9 @@ enum HxStatement {
 	EmptyStmt;
 
 	/**
-	 * `....` placeholder statement (slice 35).
+	 * `....` placeholder statement.
 	 *
-	 * Statement-level twin of `HxClassMember.EllipsisMember` (slice 33).
+	 * Statement-level twin of `HxClassMember.EllipsisMember`.
 	 * Accepts the literal four-dot token as a function-body statement,
 	 * matching the haxe-formatter test corpus convention for elided
 	 * function bodies (`function f() { .... }` placeholder fixtures).

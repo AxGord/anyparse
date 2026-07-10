@@ -54,9 +54,6 @@ using anyparse.macro.MetaInspect;
  * the same `ShapeResult` are idempotent — the per-name `defined` map
  * short-circuits already-synthesised types. A future second trivia
  * grammar would get its own synth module under its own root pack.
- *
- * See `feedback_definetype_cycles.md` for the rolled-back ω₄b attempt
- * and the `onTypeNotFound` probe that led to this pivot.
  */
 class TriviaTypeSynth {
 
@@ -86,9 +83,7 @@ class TriviaTypeSynth {
 
 	/**
 	 * ω-trivia-before-kw — own-line comments captured BEFORE the optional
-	 * keyword commit point (e.g. `if (x) { }\n// comment\nelse { }`). The
-	 * pre-commit `skipWs` previously discarded this trivia; the new path
-	 * collects it and stashes here on commit-success. Empty array on the
+	 * keyword commit point (e.g. `if (x) { }\n// comment\nelse { }`). The pre-commit `skipWs` collects it and stashes it here on commit-success. Empty array on the
 	 * commit-miss path (rewind discards the captured trivia).
 	 */
 	public static inline final BEFORE_KW_LEADING_SUFFIX: String = 'BeforeKwLeading';
@@ -137,9 +132,7 @@ class TriviaTypeSynth {
 	 * paired Seq types alongside the same bare non-first Ref fields that grow
 	 * `BeforeNewline` (`isBareNonFirstRef`). Records the verbatim comments
 	 * captured in the gap between the preceding content and the sub-rule's
-	 * first token — the run that `BeforeNewline`'s `collectTrivia` scans but
-	 * whose `.leadingComments` was previously discarded (only the
-	 * `.newlineBefore` bool was kept). Load-bearing for
+	 * first token — the run that `BeforeNewline`'s `collectTrivia` scans; this slot keeps its `.leadingComments` (`BeforeNewline` itself keeps only the `.newlineBefore` bool). Load-bearing for
 	 * `lineends/issue_598_multiline_comment_var`: a multiline block comment
 	 * between a member modifier (`public`) and the `var` keyword is rejected
 	 * by the modifier Star's `collectTrailingFull` (internal newline) and
@@ -271,14 +264,7 @@ class TriviaTypeSynth {
 	 * round-tripping the source's "I want this list multi-line" intent.
 	 * First consumer: `HxObjectLit.fields`.
 	 *
-	 * Dual consumer (Session 14 Phase 2 scaffold,
-	 * `buildStructFieldTrailPresentSlot`): struct typedef Ref fields with
-	 * `@:trailOpt(LIT)` reuse the same suffix on an `@:optional Null<Bool>`
-	 * slot. Both consumers encode "trail literal was present in source";
-	 * disjoint host kinds (Star vs Ref) within one Seq cannot collide on
-	 * field name. Until Phase 4 wires the writer, the Phase 2 consumer's
-	 * slot is omitted from struct literals (no `Lowering` touch) and reads
-	 * `null` at runtime.
+	 * Dual consumer (`buildStructFieldTrailPresentSlot`): struct typedef Ref fields with `@:trailOpt(LIT)` reuse the same suffix on an `@:optional Null<Bool>` slot. Both consumers encode "trail literal was present in source"; disjoint host kinds (Star vs Ref) within one Seq cannot collide on field name. The writer does not yet read the struct-field slot — see `isStructFieldTrailOpt`.
 	 */
 	public static inline final TRAIL_PRESENT_SUFFIX: String = 'TrailPresent';
 
@@ -292,8 +278,7 @@ class TriviaTypeSynth {
 	 * `_dt(' ')` for `_dt(', ')`. Synthesised only for Stars opting in via
 	 * `@:fmt(sepBeforeOpt)` (which additionally REQUIRES `@:fmt(padLeading)`
 	 * and a `@:sep + @:tryparse` no-trail shape); other Stars skip the
-	 * slot. First consumer: `HxConditionalParam.body` (Slice 18f,
-	 * `whitespace/issue_582_type_hints_conditionals`).
+	 * slot. First consumer: `HxConditionalParam.body` (`whitespace/issue_582_type_hints_conditionals`).
 	 *
 	 * Limitation: an empty body (`#if X, #end`) drops the leading sep at
 	 * write time because the padLeading branch's empty-array short-circuit
@@ -540,25 +525,21 @@ class TriviaTypeSynth {
 
 	/**
 	 * True when a struct typedef field carries `@:trailOpt(...)`. The
-	 * struct-field analog of `isAltTrailOptBranch` — destined to gate
-	 * synthesis of a `_trailPresent_<fieldName>:Bool` slot on the
-	 * paired-T struct so the writer can preserve source presence of
-	 * the optional trail literal in trivia mode (today struct-field
-	 * `@:trailOpt` is parser-permissive but writer-canonical — always
-	 * re-emits, breaking source-preservation contracts for fixtures
-	 * like `wrapping/issue_366_nested_array_comprehension` where
-	 * fork's section-3 preserves the optional `;`).
-	 *
-	 * Phase 2 (Session 14) wires this as the gate inside `buildTypeDefinition`'s
-	 * Seq arm — every matching field grows an `@:optional Null<Bool>`
-	 * `<field>TrailPresent` slot via `buildStructFieldTrailPresentSlot`.
-	 * Phase 3 will add the parser-side capture (`matchLit` result),
-	 * Phase 4 the writer-side emit (gate trail re-emission on source
-	 * presence). See [[project-blockbody-star-session14-design]].
+	 * struct-field analog of `isAltTrailOptBranch`. Gates the
+	 * `buildTypeDefinition` Seq arm where every matching field grows an
+	 * `@:optional Null<Bool>` `<field>TrailPresent` slot (via
+	 * `buildStructFieldTrailPresentSlot`); the parser captures the
+	 * `matchLit` result into it. The writer does not yet read the slot —
+	 * struct-field `@:trailOpt` stays writer-canonical (always re-emits
+	 * the trail literal), so source presence of the optional trail (e.g.
+	 * the nested `;` in `wrapping/issue_366_nested_array_comprehension`)
+	 * is not yet preserved; wiring the writer-side gate is the remaining
+	 * step.
 	 *
 	 * Disjoint from `isAltTrailOptBranch` (struct typedef field vs
 	 * enum Alt branch — orthogonal contexts; same `@:trailOpt` meta
 	 * but different host kind).
+	 *
 	 */
 	public static function isStructFieldTrailOpt(field: ShapeNode): Bool {
 		return field.readMetaString(':trailOpt') != null;
@@ -914,7 +895,7 @@ class TriviaTypeSynth {
 				n += 3; // openTrailing + trailingBlankBefore + trailingLeading
 				// ω-arraylit-source-trail-comma: + trailPresent when @:sep is
 				// present (mirrors `buildEnumCtor` gate).
-				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+				// ω-blockended-trivia-meta-arity: hasMeta over
 				// readMetaString — must match `buildEnumCtor` L1093 gate so the
 				// paired-to-raw switch pattern's `_` placeholder count stays
 				// in sync with the Alt ctor's extra-arg count. Latent today
@@ -1002,7 +983,7 @@ class TriviaTypeSynth {
 					entries.push({ field: fieldName + TRAILING_OPEN_SUFFIX, expr: macro (null: Null<String>) });
 				if (child.hasMeta(':tryparse') && child.fmtHasFlag('nestBody'))
 					entries.push({ field: fieldName + TRAILING_BLANK_AFTER_SUFFIX, expr: macro false });
-				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+				// ω-blockended-trivia-meta-arity: hasMeta over
 				// readMetaString — gate must match `buildStarTrailingSlots`
 				// at L1002. Multi-arg `@:sep('text', tailRelax, blockEnded)`
 				// (3-arg form) lands on the same code path as 1-arg `@:sep(',')`.
@@ -1010,7 +991,7 @@ class TriviaTypeSynth {
 					entries.push({ field: fieldName + TRAIL_PRESENT_SUFFIX, expr: macro false });
 			}
 			// ω-condcomp-body-leading-sep: trivia-independent SepBefore
-			// default for raw→paired upcasts (Slice 18f). Sibling of the
+			// default for raw→paired upcasts. Sibling of the
 			// gate in `buildTypeDefinition`.
 			if (isSepBeforeOptStarField(child)) entries.push({ field: fieldName + SEP_BEFORE_SUFFIX, expr: macro false });
 			if (isBareNonFirstRef(child, origNode) || isBareFirstStarNlOptIn(child, origNode))
@@ -1029,7 +1010,7 @@ class TriviaTypeSynth {
 			// defaults to `false` → the writer falls back to the width-
 			// driven glue. Mirrors the `isPadTrailingTerminalRef` sibling.
 			if (isCondOpenNewlineRef(child)) entries.push({ field: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX, expr: macro false });
-			// ω-struct-trailopt-source-track (Session 14 Phase 3): struct
+			// ω-struct-trailopt-source-track: struct
 			// typedef fields carrying `@:trailOpt(LIT)` grow a
 			// `<field>TrailPresent:Null<Bool>` slot on the paired-T struct
 			// (synthesised by `buildStructFieldTrailPresentSlot`). Default
@@ -1100,7 +1081,7 @@ class TriviaTypeSynth {
 				// state — preWrite plugin rewrites don't preserve source
 				// trailing-sep presence, so the writer falls back to the
 				// knob-only path (`appendTrailingCommaExpr = knob`).
-				// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
+				// ω-blockended-trivia-meta-arity: hasMeta over
 				// readMetaString — must match `buildEnumCtor` L1076 gate so
 				// raw-to-paired ctor arg count matches the paired ctor's arity.
 				if (branch.hasMeta(':sep')) defaults.push(macro false);
@@ -1216,7 +1197,7 @@ class TriviaTypeSynth {
 					if (isTriviaStarField(child)) for (extra in buildStarTrailingSlots(child, pos)) fields.push(extra);
 					// ω-condcomp-body-leading-sep: independent of @:trivia.
 					// Add a `<field>SepBefore:Bool` slot for Stars opting into
-					// `@:fmt(sepBeforeOpt)` (Slice 18f). First consumer is
+					// `@:fmt(sepBeforeOpt)`. First consumer is
 					// `HxConditionalParam.body`, which is a NON-trivia Star —
 					// the slot synthesis must not be gated on `isTriviaStarField`.
 					if (isSepBeforeOptStarField(child)) {
@@ -1268,26 +1249,26 @@ class TriviaTypeSynth {
 					// single-Ref condWrap emit so a `WrapMode.Keep` condition
 					// reproduces the author's post-`(` break.
 					if (isCondOpenNewlineRef(child)) fields.push(buildCondOpenNewlineSlot(child, pos));
-					// ω-struct-trailopt-source-track (Session 14 Phase 2 scaffold):
+					// ω-struct-trailopt-source-track:
 					// struct typedef fields carrying `@:trailOpt(LIT)` grow an
 					// `@:optional` `<field>TrailPresent:Null<Bool>` slot. The
-					// `@:optional` + `Null<>` shape lets Phase 2 land additively
-					// without forcing every paired-struct literal in `Lowering`
-					// to populate the slot — Phase 3 will wire parser capture
-					// (matchLit result), Phase 4 will wire writer emit (gate
-					// trail re-emission on source presence). Until then, the
-					// slot is omitted from struct literals (no Lowering touch)
-					// and `null` at runtime, semantically "no source info".
+					// `@:optional` + `Null<>` shape keeps the slot additive —
+					// paired-struct literals in `Lowering` that omit the slot
+					// leave it `null` at runtime, semantically "no source
+					// info". The parser captures the `matchLit` result; the
+					// writer-side gate (trail re-emission on source presence)
+					// is not wired yet, so the captured value is currently
+					// unobserved (see `isStructFieldTrailOpt`).
 					//
 					// Sister to `buildStarTrailingSlots`'s `<field>TrailPresent`
 					// for Star `@:sep+@:trail` (same suffix constant — both
 					// encode "trail literal was present in source"; disjoint
 					// host context, no name collision possible within one Seq).
 					//
-					// Beneficiary fixtures (Session 14 design): `wrapping/
+					// Beneficiary fixtures: `wrapping/
 					// issue_366_nested_array_comprehension` (nested `;` preserved),
-					// `whitespace/issue_195`/`221` (do-while bare-body — Slice 36
-					// pivot). See [[project-blockbody-star-session14-design]].
+					// `whitespace/issue_195`/`221` (do-while bare-body
+					// form).
 					if (isStructFieldTrailOpt(child)) fields.push(buildStructFieldTrailPresentSlot(child, pos));
 				}
 				final anon: ComplexType = TAnonymous(fields);
@@ -1409,7 +1390,7 @@ class TriviaTypeSynth {
 	 * `@:trail` from `base.meta` directly (TriviaTypeSynth.arm runs
 	 * BEFORE the Lit strategy populates `lit.trailText`, same ordering
 	 * constraint as `isOptionalKw` / star-trailing predicates).
-	 * Optional Refs with `@:lead` + `@:trail` ARE included (Slice 40):
+	 * Optional Refs with `@:lead` + `@:trail` ARE included:
 	 * the lead-led commit branch in `Lowering` consumes the trail and
 	 * captures a same-line `// comment` into `<field>AfterTrail`, same as
 	 * the mandatory path. The absent branch leaves the slot null.
@@ -1433,15 +1414,16 @@ class TriviaTypeSynth {
 	}
 
 	/**
-	 * Session 14 Phase 2 scaffold: build the `<field>TrailPresent` slot for
-	 * struct typedef fields gated by `isStructFieldTrailOpt`. Slot is
-	 * `@:optional Null<Bool>` so paired-struct construction in `Lowering`
-	 * can omit it until Phase 3 (parser capture) and Phase 4 (writer emit)
-	 * land. After Phase 4, the slot semantically becomes "true → source
-	 * had trail literal; false → absent; null → no source info (e.g.
-	 * synthesised paired-T from a writer-only path)". Suffix shared with
-	 * `buildStarTrailingSlots`'s `@:sep+@:trail` Star case (disjoint host
-	 * — Ref vs Star within one Seq cannot collide on field name).
+	 * Build the `<field>TrailPresent` slot for struct typedef fields gated
+	 * by `isStructFieldTrailOpt`. Slot is `@:optional Null<Bool>` so
+	 * paired-struct construction in `Lowering` may omit it (`null` = "no
+	 * source info", e.g. a synthesised paired-T from a writer-only path;
+	 * `true`/`false` = source had / lacked the trail literal). The writer
+	 * does not yet consume the slot (see `isStructFieldTrailOpt`). Suffix
+	 * shared with `buildStarTrailingSlots`'s `@:sep+@:trail` Star case
+	 * (disjoint host — Ref vs Star within one Seq cannot collide on field
+	 * name).
+	 *
 	 */
 	private static function buildStructFieldTrailPresentSlot(child: ShapeNode, pos: Position): Field {
 		final fieldName: String = child.annotations.get('base.fieldName');
@@ -1581,7 +1563,7 @@ class TriviaTypeSynth {
 	}
 
 	/**
-	 * Slice 18f opt-in: non-trivia `@:sep + @:tryparse` no-`@:trail` Star
+	 * Opt-in: non-trivia `@:sep + @:tryparse` no-`@:trail` Star
 	 * field with `@:fmt(sepBeforeOpt)` requesting a `<field>SepBefore:Bool`
 	 * synth slot. The slot captures whether the source had a leading
 	 * separator inside the body (`#if cond, body` shape) for byte-roundtrip
@@ -1691,7 +1673,7 @@ class TriviaTypeSynth {
 		// Reads `:sep` / `:trail` directly from `base.meta` for the same
 		// pre-Lit-pass ordering reason as the gates above.
 		//
-		// ω-blockended-trivia-meta-arity (Session 3): `hasMeta` instead of
+		// ω-blockended-trivia-meta-arity: `hasMeta` instead of
 		// `readMetaString` so multi-arg `@:sep('text', tailRelax, blockEnded)`
 		// counts the same as 1-arg `@:sep(',')`. Parser-side gate reads
 		// `lit.sepText` (set by Lit strategy after both 1- and 3-arg forms)
@@ -1784,8 +1766,8 @@ class TriviaTypeSynth {
 				// invariant). Reuses `TRAIL_PRESENT_ARG_NAME` so the writer's
 				// runtime field-name probe stays consistent. Gated on `@:sep`
 				// so block-style trivia ctors (`BlockStmt`, `BlockExpr`) keep
-				// their pre-slice 5-arg shape.
-				// ω-blockended-trivia-meta-arity (Session 3): `hasMeta` over
+				// their 5-arg shape.
+				// ω-blockended-trivia-meta-arity: `hasMeta` over
 				// `readMetaString` so `@:sep('text', tailRelax, blockEnded)`
 				// (3-arg form) gates the same as 1-arg `@:sep(',')`. Sister
 				// fix in `buildStarTrailingSlots`.
@@ -1930,8 +1912,8 @@ class TriviaTypeSynth {
 			// Drives `WriterLowering.lowerPostfixStar`'s Keep-mode args[0]
 			// hardline + trailing-before-close hardline. The per-element
 			// `Trivial.newlineBefore` for args[0] is polluted by upstream
-			// `ctx.pendingTrivia` drained from kw-Ref rules (see
-			// project_phase3_slice_d9a_revert "Critical engine finding"),
+			// `ctx.pendingTrivia` drained from kw-Ref rules
+			// ahead of the per-iter trivia collection,
 			// so the open-newline signal needs its own slot captured by
 			// `Lowering` BEFORE the per-iter `skipWs(ctx)` / `collectTrivia(ctx)`
 			// can lose it. Co-occurs with `closeTrailing` so the writer

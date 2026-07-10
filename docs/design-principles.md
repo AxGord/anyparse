@@ -84,9 +84,4 @@ These are the non-negotiable rules of anyparse. Each one exists because of a spe
 
 ## Decision-making heuristic
 
-When in doubt, ask both questions. If a decision satisfies both, it is probably right. If only one, reconsider.
-
-1. **Does this solve a concrete validation case?** (ax3, haxe-formatter, or any explicit target grammar)
-2. **Does this generalize to the next ten formats or languages we have not thought of yet?**
-
-A decision that only solves a concrete case without generalizing makes the project narrower. A decision that only generalizes without solving anything concrete makes the project abstract and unshippable. We need both at every step.
+The two-questions test (concrete validation case + generalizes to the next ten formats) is defined in the root `CLAUDE.md` "Strategic framing" section — the canonical copy. Both must hold for every decision.

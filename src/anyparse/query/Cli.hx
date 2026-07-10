@@ -289,7 +289,7 @@ typedef PredictRelaxResult = {
 };
 
 /**
- * One Slice-40-relaxation candidate surfaced by `apq recon
+ * One field-optionalization candidate surfaced by `apq recon
  * --permissive-construct`. The same data `gates --mechanism
  * mandatory-ref-lead-trail` reports for a single mandatory `@:lead` +
  * `@:trail` Ref field, plus the extracted bracket-pair tokens the
@@ -3430,7 +3430,7 @@ final class Cli {
 	 * `@:fmt(trailOptShapeGate('<predicate>'))`. THE structural answer
 	 * to "which ctors gate their trailing terminator on a runtime
 	 * predicate, and what predicate?" — the data you need before
-	 * picking a gate-relaxation slice (Slice 30 / 39 pattern). Without
+	 * picking a gate-relaxation change. Without
 	 * this, the gate predicate is invisible until you grep the grammar
 	 * by hand.
 	 *
@@ -4416,8 +4416,8 @@ final class Cli {
 		// DX v10: source-preservation note. The trivia pipeline is meant
 		// to round-trip source bytes verbatim (subject to the writer's
 		// fidelity); a byte-diff signals an actual writer-fidelity gap
-		// (e.g. `HxVarMore` `,` collapses the space, `static var` was
-		// pre-Slice-37 producing `staticvar`). Plain pipeline is allowed
+		// (e.g. `HxVarMore` `,` collapsing the space, or `static var`
+		// emitted as `staticvar`). Plain pipeline is allowed
 		// to canonicalise, so the check is trivia-only. The note is
 		// stderr — stdout stays the labelled output, exit code unchanged.
 		if (!plain) writerProbeSourcePreservationNote(source, emitted);
@@ -4612,7 +4612,7 @@ final class Cli {
 			plugin.reconParse(source);
 			// Already-parseable file given to predict-relax. Not an
 			// error — could be a `--probe` call on a fixture that
-			// landed after a recent slice. Surface as NoTarget with a
+			// landed after a recent grammar change. Surface as NoTarget with a
 			// distinct message so the user knows.
 			return {
 				kind: NoTarget,
@@ -4817,7 +4817,7 @@ final class Cli {
 	}
 	/**
 	 * `apq recon --permissive-construct` — field-optionalization
-	 * predictor for Slice 40's `@:optional + @:lead + @:trail` mechanism.
+	 * predictor for the `@:optional + @:lead + @:trail` relaxation mechanism.
 	 * Walks every `mandatory-ref-lead-trail` candidate surfaced by
 	 * `gates --mechanism mandatory-ref-lead-trail`, simulates the
 	 * relaxation by stripping the `<lead>...<trail>` bracket-pair from
@@ -4837,7 +4837,7 @@ final class Cli {
 	 *
 	 * Multi-char macro/string leads (`${`, `"`, `'`) are filtered out at
 	 * candidate-collection time — they describe interpolation/string
-	 * delimiters that don't relax via Slice 40's mechanism.
+	 * delimiters that don't relax via the bracket-pair optionalization mechanism.
 	 *
 	 * Output: one block per candidate that has ≥1 UNBLOCK or STILL FAIL
 	 * (NO-MATCH-only candidates are summarized in the footer to keep the
@@ -4910,7 +4910,7 @@ final class Cli {
 	 *
 	 * Filters out macro/string-lead candidates (`${`, `$`, `'`, `"`) —
 	 * they describe interpolation/string delimiters whose `@:optional`
-	 * relaxation isn't the Slice 40 mechanism. Single-char leads only —
+	 * relaxation isn't the bracket-pair mechanism. Single-char leads only —
 	 * the strip function depth-tracker assumes one byte per lead/trail.
 	 */
 	private static function collectPermissiveCandidates(plugin: GrammarPlugin, lang: String): Array<PermissiveCandidate> {
@@ -5558,7 +5558,7 @@ final class Cli {
 	 *    moved BACKWARD — strip may have damaged earlier syntax, or your
 	 *    substitution model doesn't match the actual blocker mechanism;
 	 *    verify with `apq probe` on the unstripped fragment)` — the
-	 *    common Slice 39-style failure mode where token substitution
+	 *    common failure mode where token substitution
 	 *    can't model gate-relaxation.
 	 *  - Same line, col differs → ` (was L:C)` — neutral; the strip
 	 *    shifted things within one line, usually inconsequential.
@@ -6699,9 +6699,7 @@ final class Cli {
 	 * threshold AND prints a stderr nudge so the user sees the truncation
 	 * happened. Otherwise returns `limit` unchanged.
 	 *
-	 * Killer case: `apq lit '/*' src/ --any-kind` previously flooded ~165KB
-	 * of leaf hits. Now it caps to `AUTO_LIMIT_THRESHOLD` automatically and
-	 * surfaces the count so the user can re-run with an explicit `--limit N`
+	 * Killer case: `apq lit '/*' src/ --any-kind` would flood ~165KB of leaf hits; the guard caps to `AUTO_LIMIT_THRESHOLD` automatically and surfaces the count so the user can re-run with an explicit `--limit N`
 	 * for a precise budget.
 	 *
 	 * `--limit 0` (any explicit value) is honoured verbatim — the guard
@@ -9167,8 +9165,8 @@ final class Cli {
 		// `<path> :: N matches` for every file with ≥1 hit (sorted by
 		// count desc). Closes the gap where the histogram clusters by
 		// exact forward-locus, so a construct that lives in different
-		// multi-blocker fixtures (Slice 38's `new T<...>(` → 5 surfaced,
-		// 6 actually present) is undercounted. Mutually exclusive with
+		// multi-blocker fixtures (e.g. `new T<...>(` sites split across
+		// files) is undercounted. Mutually exclusive with
 		// --predict-strip / --cluster / --probe / --regression-probe.
 		var candidatesRegex: Null<String> = null;
 		// `--predict-relax`: terminator-insertion predictor. For each
@@ -9184,12 +9182,12 @@ final class Cli {
 		var predictRelax: Bool = false;
 		// `--permissive-construct`: field-optionalization predictor.
 		// Walks every `mandatory-ref-lead-trail` candidate from
-		// `gates --mechanism mandatory-ref-lead-trail` (Slice 40's relax-
+		// `gates --mechanism mandatory-ref-lead-trail` (the relax-
 		// candidate inventory), strips the bracket-pair `<lead>...<trail>`
 		// from each skip-parse fixture, and re-parses. Aggregates
 		// UNBLOCK / STILL FAIL / NO MATCH per candidate so the user sees
 		// which field-optionalization would unblock which fixtures
-		// BEFORE committing to a Slice 40-style edit. Mutex with every
+		// BEFORE committing to the grammar edit. Mutex with every
 		// other recon mode — it's its own pipeline.
 		var permissiveConstruct: Bool = false;
 		// `--source`: drill-mode-only flag. When set in combination with
@@ -9203,7 +9201,7 @@ final class Cli {
 		// (`70× expected hint is empty after quote-strip` / `12× expected
 		// HxDecl` / …). Footer keys live in a different namespace than
 		// `--cluster <key>` (which drills by normalised forward-locus on
-		// `r.clusterKey`); there was previously no path from the footer
+		// `r.clusterKey`); this flag is the only path from the footer
 		// aggregate to the file list. Active only in sweep predict-relax
 		// mode; mutex with `--cluster` (one drill at a time) and `--probe`
 		// (single-file, no aggregation).
@@ -9219,13 +9217,13 @@ final class Cli {
 		// predict-strip call cover every site of a construct in the
 		// corpus (e.g. `new [A-Z]\w*<[^>]+>\(` matches every templated
 		// constructor call, not just one literal pair) — closes the
-		// pain where Slice 38's recon under-counted because the
+		// pain where a literal-only sweep under-counts because the
 		// histogram clusters by exact forward-locus shape.
 		var regexMode: Bool = false;
 		// `--writer-equals [--writer-equals-plain] [--expected <path>]`:
 		// chain a writer round-trip + byte-equality check onto a probe-mode
 		// PARSE OK. Closes the "predicted +1 via predict-strip, got skip→fail
-		// because the writer round-trip diverges" gap that bit Slice 50 —
+		// because the writer round-trip diverges" gap —
 		// running predict-strip alone tells you ONLY about parse, not byte-
 		// PASS. The combo flag is probe-only (single-file) because the
 		// expected comparison needs a paired source/expected (sections 2/3
@@ -9534,8 +9532,8 @@ final class Cli {
 					// Append `@from-to` byte-range annotation to every
 					// rendered node — same-span duplicates (e.g. parser bug
 					// emitting two nodes at the same source position) become
-					// a trivial visual signal in the S-expr output. Slice 36's
-					// `^A|B` regex bug produced `(Ternary (FloatLit 1. @4-6)
+					// a trivial visual signal in the S-expr output. E.g. an
+					// `^A|B` regex bug once produced `(Ternary (FloatLit 1. @4-6)
 					// (FloatLit 1. @4-6) (FloatLit 2. @11-13))` — two
 					// FloatLits at the same span ⇒ mid-buffer match
 					// overwrote an earlier ident. Plain `(no-spans)` form
@@ -10953,7 +10951,7 @@ final class Cli {
 	}
 
 	/**
-	 * Classify one decl-group's metas as a Slice 40 permissive candidate:
+	 * Classify one decl-group's metas as a permissive-construct candidate:
 	 * a non-@:optional single Ref with single-char @:lead + @:trail and no
 	 * @:sep (Star). Macro/string delimiters (quotes, `$`) are excluded.
 	 * Returns null when the group is not a candidate.
@@ -10964,7 +10962,7 @@ final class Cli {
 		final leadStr: String = (m.lead: String);
 		final trailStr: String = (m.trail: String);
 		// Skip macro/string delimiters — their @:optional
-		// relaxation isn't the Slice 40 mechanism (interpolation,
+		// relaxation isn't the bracket-pair mechanism (interpolation,
 		// string body, etc.).
 		if (leadStr.length != 1 || trailStr.length != 1) return null;
 		if (leadStr == '"' || leadStr == "'") return null;
@@ -11122,9 +11120,7 @@ final class Cli {
 
 	/**
 	 * Whether a decl group's metas qualify under the requested mechanism.
-	 * `optional-ref` = optional single Ref (excluding Star @:sep); the two
-	 * *-trail / mandatory variants are Slice 40's exact / pre-Slice-40
-	 * shapes; `kw-lead` = any keyword-dispatched field.
+	 * `optional-ref` = optional single Ref (excluding Star @:sep); `optional-ref-trail` = the relaxed bracket-pair shape, `mandatory-ref-lead-trail` = its unrelaxed precursor; `kw-lead` = any keyword-dispatched field.
 	 */
 	private static function mechanismMatches(m: MechanismMetas, mechanism: String): Bool {
 		return switch mechanism {
@@ -11134,10 +11130,10 @@ final class Cli {
 				// declName / declKind manually if you need both.
 				m.hasOptional && (m.lead != null || m.kw != null || m.absentOn != null) && m.sep == null;
 			case 'optional-ref-trail':
-				// Slice 40's exact signature: optional + lead + trail, no sep.
+				// The relaxed bracket-pair signature: optional + lead + trail, no sep.
 				m.hasOptional && m.lead != null && m.trail != null && m.sep == null;
 			case 'mandatory-ref-lead-trail':
-				// Pre-Slice-40 shape on a single Ref — the predict-optional
+				// Unrelaxed bracket-pair shape on a single Ref — the predict-optional
 				// fallback candidates (turn `@:lead + @:trail` into
 				// `@:optional @:lead + @:trail`). Exclude Star (`@:sep`)
 				// — angle-bracket arrays are not the target.
@@ -12364,18 +12360,18 @@ final class Cli {
 		// `trail-opt`-only scope (`@:fmt(trailOptParseGate(...))` /
 		// `trailOptShapeGate(...)`) to other Lowering mechanisms whose
 		// `--predict-relax`-style relaxation potential we want to
-		// inventory ahead of a slice:
+		// inventory ahead of a grammar change:
 		//   - `optional-ref` — fields with `@:optional` + `@:lead` /
 		//     `@:kw` / `@:absentOn`. Already-relaxed precedent sites.
-		//   - `optional-ref-trail` — Slice 40's new pattern (`@:optional`
+		//   - `optional-ref-trail` — the relaxed bracket-pair pattern (`@:optional`
 		//     + `@:lead` + `@:trail` on a single Ref), used by
 		//     `HxAbstractDecl.underlyingType`. THE list of bracket-pair
-		//     fields you could optionalize via the Slice 40 mechanism.
+		//     fields you could optionalize via this mechanism.
 		//   - `mandatory-ref-lead-trail` — Ref fields with `@:lead` +
 		//     `@:trail` (bracket pair) WITHOUT `@:optional`. The
-		//     pre-Slice-40 shape — candidates to relax via Slice 40's
+		//     unrelaxed shape — candidates to relax via the optional-ref-trail
 		//     mechanism. THIS IS THE PREDICT-OPTIONAL FALLBACK list.
-		//   - `kw-lead` — fields with `@:kw`. Slice precedent for word-
+		//   - `kw-lead` — fields with `@:kw`. Precedent sites for word-
 		//     keyword dispatch on a single field.
 		// Default value `trail-opt` preserves the bare `gates` output
 		// 1:1 (existing tests assume this).

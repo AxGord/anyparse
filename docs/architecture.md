@@ -272,9 +272,14 @@ Every `@:peg`-annotated type generates two parser artifacts:
 - Cache, cancellation, token stream — all configurable on the `Parser` context.
 - Required for IDE, linters, refactor tools, anything showing user-facing error messages.
 
-Choosing mode:
+**Current implementation status: Fast-mode only.** The real pipeline is
+`@:build`-driven (`Build.buildParser` on a marker class, e.g. `JValueFastParser`);
+Tolerant-mode codegen is stubbed (see roadmap Phase 2 non-deliverables). The
+mode-selection API below and the "Tolerant by default" policy are the *planned*
+design, not current behavior:
 
 ```haxe
+// PLANNED — not implemented yet
 @:peg @:generate([Fast, Tolerant])
 class JValue { ... }
 
@@ -285,7 +290,7 @@ var v1 = JValueParser.parse(bytes);              // bare JValue
 var v2 = JValueTolerantParser.parse(bytes, ctx);     // ParseResult<Node<JValue>>
 ```
 
-**Default is Tolerant.** Fast is opt-in per grammar, only when profiling shows the extra overhead of Tolerant matters.
+**Planned default is Tolerant** (Fast opt-in per grammar when profiling justifies it).
 
 ## Writer and formatter
 

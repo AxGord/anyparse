@@ -6,12 +6,15 @@ package anyparse.grammar.haxe.format;
  * Only keys whose runtime knob already exists on `HxModuleWriteOptions`
  * are modelled here. Missing keys (`catchPolicy`, `ternaryPolicy`, …)
  * are silently dropped by the ByName struct parser's
- * `UnknownPolicy.Skip` — they land with the slice that introduces the
- * matching writer knob.
+ * `UnknownPolicy.Skip` — each is modelled when its matching writer
+ * knob lands.
  *
- * Added in slice ψ₇ (feeds `opt.objectFieldColon`).
+ * Key → knob wiring:
  *
- * Extended in slice ω-E-whitespace:
+ * ψ₇:
+ *  - `objectFieldColonPolicy` feeds `opt.objectFieldColon`.
+ *
+ * ω-E-whitespace:
  *  - `typeHintColonPolicy` feeds `opt.typeHintColon` (the `:` on
  *    `HxVarDecl.type`, `HxParam.type`, `HxFnDecl.returnType`).
  *  - `parenConfig` is the nested section that houses
@@ -19,11 +22,11 @@ package anyparse.grammar.haxe.format;
  *    `opt.funcParamParens` (the space before the `(` on
  *    `HxFnDecl.params`).
  *
- * Extended in slice ω-call-parens:
+ * ω-call-parens:
  *  - `parenConfig.callParens.openingPolicy` feeds `opt.callParens`
  *    (the space before the `(` on `HxExpr.Call.args`).
  *
- * Extended in slice ω-typeparam-spacing:
+ * ω-typeparam-spacing:
  *  - `typeParamOpenPolicy` feeds `opt.typeParamOpen` (the `<` of every
  *    type-parameter list, both `HxTypeRef.params` and the declare-site
  *    `typeParams` fields).
@@ -31,7 +34,7 @@ package anyparse.grammar.haxe.format;
  *    `>`). Combined `typeParamOpenPolicy: "after"` +
  *    `typeParamClosePolicy: "before"` produces `Array< Int >`.
  *
- * Extended in slice ω-anontype-braces:
+ * ω-anontype-braces:
  *  - `bracesConfig.anonTypeBraces.openingPolicy` feeds
  *    `opt.anonTypeBracesOpen` (the `{` of `HxType.Anon`).
  *  - `bracesConfig.anonTypeBraces.closingPolicy` feeds
@@ -39,7 +42,7 @@ package anyparse.grammar.haxe.format;
  *    `openingPolicy: "around"` + `closingPolicy: "around"` produces
  *    `{ x:Int }`.
  *
- * Extended in slice ω-typeparam-default-equals:
+ * ω-typeparam-default-equals:
  *  - `binopPolicy` feeds `opt.typeParamDefaultEquals` (the `=` joining
  *    a declare-site type-parameter to its default type on
  *    `HxTypeParamDecl.defaultValue`). Upstream's `binopPolicy` controls
@@ -48,14 +51,14 @@ package anyparse.grammar.haxe.format;
  *    sites adopting their own `@:fmt(...)` flag should extend this
  *    mapping rather than introduce a separate JSON key.
  *
- * Extended in slice ω-line-comment-space:
+ * ω-line-comment-space:
  *  - `addLineCommentSpace` feeds `opt.addLineCommentSpace`. Bool — when
  *    `true` (haxe-formatter default) `//foo` is rewritten to `// foo`;
  *    decoration runs (`//*****`, `//------`, `////`) survive tight. The
  *    knob is consumed by `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`
  *    inside the writer's leading / trailing line-comment helpers.
  *
- * Extended in slice ω-arrow-fn-type:
+ * ω-arrow-fn-type:
  *  - `functionTypeHaxe4Policy` feeds `opt.functionTypeHaxe4` (the `->`
  *    separator inside a new-form arrow function type, `HxArrowFnType.
  *    ret`'s `@:lead('->')`). `Around` (default) emits
@@ -63,9 +66,9 @@ package anyparse.grammar.haxe.format;
  *    sibling `functionTypeHaxe3Policy` (old-form curried `Int->Bool`)
  *    feeds `opt.functionTypeHaxe3` via the same enum / same collapse —
  *    default `None` emits the tight `Int->Bool`, `"around"` flips to
- *    spaced `Int -> Bool`. Wired in Writer Slice 6.
+ *    spaced `Int -> Bool`.
  *
- * Extended in slice ω-arrow-fn-expr:
+ * ω-arrow-fn-expr:
  *  - `arrowFunctionsPolicy` feeds `opt.arrowFunctions` (the `->`
  *    separator inside a parenthesised arrow lambda expression,
  *    `HxThinParenLambda.body`'s `@:lead('->')`). `Around` (default)
@@ -75,7 +78,7 @@ package anyparse.grammar.haxe.format;
  *    (`HxExpr.ThinArrow`) rides the Pratt infix path which adds
  *    surrounding spaces by default and is unaffected.
  *
- * Extended in slice ω-check-type:
+ * ω-check-type:
  *  - `typeCheckColonPolicy` feeds `opt.typeCheckColon` (the `:` inside
  *    a type-check expression `(expr : Type)`, `HxECheckType.type`'s
  *    `@:lead(':')`). `Around` (default) emits `("" : String)`; `None`
@@ -84,7 +87,7 @@ package anyparse.grammar.haxe.format;
  *    `None` (`x:Int`) while the type-check default stays `Around` —
  *    upstream's two `:` sites use opposite conventions.
  *
- * Extended in slice ω-if-policy:
+ * ω-if-policy:
  *  - `ifPolicy` feeds `opt.ifPolicy` (the gap between the `if` keyword
  *    and the opening `(` of the condition; consumed by both
  *    `HxStatement.IfStmt` and `HxExpr.IfExpr` via `@:fmt(ifPolicy)` on
@@ -95,7 +98,7 @@ package anyparse.grammar.haxe.format;
  *    before `if` from the preceding token) — this knob only controls
  *    the after-`if` gap.
  *
- * Extended in slice ω-control-flow-policies:
+ * ω-control-flow-policies:
  *  - `forPolicy` / `whilePolicy` / `switchPolicy` feed
  *    `opt.forPolicy` / `opt.whilePolicy` / `opt.switchPolicy`. Same
  *    shape as `ifPolicy` — gates the trailing space after `for`,
@@ -105,7 +108,7 @@ package anyparse.grammar.haxe.format;
  *    `@:fmt(<knobName>)`. Default `After`; `"onlyBefore"` / `"none"`
  *    collapse the gap.
  *
- * Extended in slice ω-try-policy:
+ * ω-try-policy:
  *  - `tryPolicy` feeds `opt.tryPolicy`. Same shape as `ifPolicy` —
  *    gates the trailing space after the `try` keyword. Consumed by
  *    `HxStatement.TryCatchStmt` only (block-body form) via
@@ -116,7 +119,7 @@ package anyparse.grammar.haxe.format;
  *    `stripKwTrailingSpace` predicate which gates the slot to `null`
  *    regardless of policy.
  *
- * Extended in slice ω-string-interp-noformat:
+ * ω-string-interp-noformat:
  *  - `formatStringInterpolation` feeds `opt.formatStringInterpolation`.
  *    Bool — when `true` (default) `${expr}` segments are re-rendered
  *    by recursing into the parsed `HxExpr`; when `false` the writer
@@ -127,7 +130,7 @@ package anyparse.grammar.haxe.format;
  *    by Lowering Case 3 when the grammar ctor carries
  *    `@:fmt(captureSource)`.
  *
- * Extended in slice ω-compress-successive-paren:
+ * ω-compress-successive-paren:
  *  - `compressSuccessiveParenthesis` feeds
  *    `opt.compressSuccessiveParenthesis`. Bool — when `true`
  *    (haxe-formatter default) a call-arg open `(` glues tight to a

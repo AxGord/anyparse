@@ -3,7 +3,7 @@ package anyparse.grammar.haxe;
 /**
  * Body of a `#if <cond> <params> [#elseif …] [#else <params>] #end`
  * preprocessor-guarded region wrapping whole function-parameter entries.
- * The fn-param-scope twin of `HxConditionalObjectField` (Slice 18) /
+ * The fn-param-scope twin of `HxConditionalObjectField` /
  * `HxConditionalMember` / `HxConditionalStmt` / `HxConditionalDecl`: the
  * enclosing `HxParam.Conditional` ctor consumes the `#if` keyword and the
  * trailing `#end`; this typedef covers the content between them — the
@@ -11,9 +11,9 @@ package anyparse.grammar.haxe;
  * optional `#elseif` clause chain, and an optional `#else` clause with
  * its own param Star.
  *
- * `body` Star uses Slice 18's `@:sep(',') @:tryparse` (no `@:trail`)
- * Lowering branch: comma-separated `HxParam` elements terminated by
- * fail-rewind. The first `parseHxParam` call that hits `#end` (no
+ * `body` Star uses the `@:sep(',') @:tryparse` (no `@:trail`) Lowering
+ * branch: comma-separated `HxParam` elements terminated by fail-rewind.
+ * The first `parseHxParam` call that hits `#end` (no
  * `Required`/`Optional`/`Rest` dispatch and no `#if` ctor for nesting)
  * throws; the outer Star's `_savedPos` rewind restores the position so
  * the enclosing `HxParam.Conditional` ctor's `@:trail('#end')` sees `#end`
@@ -21,19 +21,19 @@ package anyparse.grammar.haxe;
  * ACCEPTED — `HxParam` is a bare sum-type, no mandatory wrapping struct
  * (same divergence as `HxObjectField` from the member-scope precedent).
  *
- * Slice 18f opt-in (`@:fmt(sepBeforeOpt)`): tolerates a LEADING separator
- * INSIDE the body, between `#if <cond>` and the first body element —
+ * `@:fmt(sepBeforeOpt)` opt-in: tolerates a LEADING separator INSIDE the
+ * body, between `#if <cond>` and the first body element —
  * `#if air, commandKey:Bool = false, ...` (fork fixture
- * `whitespace/issue_582_type_hints_conditionals`, line 3 col 10). Parser-
- * side: pre-loop sep-peek consumes the leading `,` and stores the result
- * in a `bodySepBefore:Bool` synth slot on the paired type. Writer-side:
- * the body's padLeading branch (`@:fmt(padLeading)` below) swaps the
+ * `whitespace/issue_582_type_hints_conditionals`). Parser-side: a
+ * pre-loop sep-peek consumes the leading `,` and stores the result in a
+ * `bodySepBefore:Bool` synth slot on the paired type. Writer-side: the
+ * body's padLeading branch (`@:fmt(padLeading)` below) swaps the
  * default `_dt(' ')` for `_dt(', ')` when `bodySepBefore` is true, re-
- * emitting the leading sep for byte-roundtrip. Combined slot+writer
- * mechanism is symmetric with Slice 12's `Trivial.sepAfter` (per-element
- * post-sep flag) and Slice 18's `<field>TrailPresent` (post-last-element
- * pre-close flag) — three orthogonal sep-position knobs covering the
- * leading / inter-element / trailing slots of a sep-tryparse Star.
+ * emitting the leading sep for byte-roundtrip. The combined slot+writer
+ * mechanism is symmetric with `Trivial.sepAfter` (per-element post-sep
+ * flag) and `<field>TrailPresent` (post-last-element pre-close flag) —
+ * three orthogonal sep-position knobs covering the leading /
+ * inter-element / trailing slots of a sep-tryparse Star.
  *
  * The body's `@:tryparse` Star naturally terminates after at least one
  * element when the next token is not a recognised `HxParam` dispatch —
@@ -47,9 +47,8 @@ package anyparse.grammar.haxe;
  * `HxFnDecl.params` records per-element `sepAfter:Bool` from the parser's
  * `matchLit(sep)` result. When the source omits the comma, `sepAfter=false`
  * propagates to the writer's `_emitSep` gate (`triviaSepStarExpr`), which
- * suppresses the inter-element comma. No new Lowering / Writer primitive
- * is required — Slice 18a piggybacks on the same mechanism that closed
- * lineends/issue_111.
+ * suppresses the inter-element comma — no dedicated Lowering / Writer
+ * primitive involved.
  *
  * `body` and `elseBody` carry `@:fmt(padLeading, padTrailing)` — same
  * pad pair as the member-scope and obj-lit-scope precedents — closing the
@@ -58,21 +57,20 @@ package anyparse.grammar.haxe;
  * grouping analogue at this scope, and inter-element trivia is the outer
  * `HxFnDecl.params` Star's job (`@:trivia` there).
  *
- * Trivia note (Slice 18 carry-over): this body Star deliberately does NOT
- * carry `@:trivia`. Lowering rejects `@:trivia + @:sep + @:tryparse` (no
- * current grammar combines them; the semantics of "trivia around a
- * sep-separated tryparse list" are undecided — Slice 18d follow-up).
- * Practical consequence: comments INSIDE a `#if … #end` param-list body
- * parse but do not round-trip byte-identical. Comments around the WHOLE
- * `Conditional` element (above `#if`, below `#end`) are preserved by
- * the outer `HxFnDecl.params` Star.
+ * Trivia note: this body Star deliberately does NOT carry `@:trivia`.
+ * Lowering rejects `@:trivia + @:sep + @:tryparse` (no current grammar
+ * combines them; the semantics of "trivia around a sep-separated
+ * tryparse list" are undecided). Practical consequence: comments INSIDE
+ * a `#if … #end` param-list body parse but do not round-trip
+ * byte-identical. Comments around the WHOLE `Conditional` element
+ * (above `#if`, below `#end`) are preserved by the outer
+ * `HxFnDecl.params` Star.
  *
  * `elseBody` is `@:optional @:kw('#else') @:tryparse` (no `@:sep` — the
- * `emitOptionalKwStarFieldSteps` Lowering path does NOT yet support sep
- * peek; extending it is the deferred Slice 18e). Consequence: a
- * comma-separated body inside `#else` will fail-rewind after the first
- * param if there's a comma waiting — the multi-field `#else` case lands
- * in fail not pass for the campaign metric, the single-field case works.
+ * `emitOptionalKwStarFieldSteps` Lowering path does not support sep
+ * peek). Consequence: a comma-separated body inside `#else` fail-rewinds
+ * after the first param when a comma follows — a multi-param `#else`
+ * body does not parse; the single-param case works.
  */
 @:peg
 typedef HxConditionalParam = {

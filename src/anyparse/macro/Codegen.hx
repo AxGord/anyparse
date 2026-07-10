@@ -271,8 +271,7 @@ class Codegen {
 	 * matched, the post-op `skipWs` would otherwise drop any line/block
 	 * comment between the operator token and the next operand. Stashing
 	 * into `pendingTrivia` lets the next `collectTrivia` drain them as
-	 * leading-of-next-thing — orphan trivia rather than data loss
-	 * (per user permission "вытаскивать в конец выражения").
+	 * leading-of-next-thing — orphan trivia rather than data loss.
 	 */
 	private static function skipWsAndStashField(formatInfo: FormatReader.FormatInfo): Field {
 		final commentStmts: Array<Expr> = [for (p in formatInfo.commentPatterns) commentSkipAndStashBlock(p)];
@@ -411,7 +410,7 @@ class Codegen {
 	 * the prefix of `elsewhere`. Distinct from `matchKw` (which consumes
 	 * on a successful boundary-checked match) — `peekKw` leaves `ctx.pos`
 	 * untouched in every path. Sole consumer: the `ExprStmt` trail-`;`
-	 * gate in `Lowering` (Slice-V plus ω-slice-X2/X3/X4), which treats `;`
+	 * gate in `Lowering` (ω-slice-V, ω-slice-X2/X3/X4), which treats `;`
 	 * as optional when `else` / `case` / `default` follows the just-parsed
 	 * expression (each keyword is reserved and unambiguously signals a
 	 * statement-arm separator — if-then-body, switch case label, switch
@@ -576,7 +575,7 @@ class Codegen {
 			var _newlineBefore: Bool = false;
 			final _leading: Array<String> = [];
 			// Drain any trivia that a previous rule captured between an
-			// @:optional @:kw commit and its sub-rule call (slice ω₆b).
+			// @:optional @:kw commit and its sub-rule call (ω₆b).
 			final _pt = ctx.pendingTrivia;
 			if (_pt != null) {
 				_blankBefore = _pt.blankBefore;
@@ -814,9 +813,7 @@ class Codegen {
 	 * (e.g. `// foo` or `/* foo *\/`). Used exclusively by close-trailing
 	 * slots (ω-close-trailing / ω-close-trailing-alt) where the writer
 	 * must preserve source style — a captured `/* catch *\/` round-trips
-	 * as `/* catch *\/`, not as `// catch` (the pre-slice behaviour of
-	 * feeding the stripped body through the line-style-only
-	 * `trailingCommentDoc`). Per-element and AfterKw slots keep
+	 * as `/* catch *\/`, not as `// catch` (which feeding the stripped body through the line-style-only `trailingCommentDoc` would produce). Per-element and AfterKw slots keep
 	 * `collectTrailing` because their writer helpers deliberately
 	 * normalise to line style — a stronger contract only applies to the
 	 * close-trailing slot.

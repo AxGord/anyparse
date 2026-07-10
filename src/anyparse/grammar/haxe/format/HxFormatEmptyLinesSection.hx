@@ -10,24 +10,24 @@ package anyparse.grammar.haxe.format;
  * `afterReturn`, `beforeBlocks`, `afterBlocks`, `enumAbstractEmptyLines`,
  * `macroClassEmptyLines`,
  * `conditionalsEmptyLines`, …) are silently dropped
- * by the ByName struct parser's `UnknownPolicy.Skip` — they land with
- * the slice that introduces the matching writer knob.
+ * by the ByName struct parser's `UnknownPolicy.Skip` — each is
+ * modelled when its matching writer knob lands.
  *
- * `afterFieldsWithDocComments` added in slice ω-C-empty-lines-doc
- * (feeds `opt.afterFieldsWithDocComments`).
+ * `afterFieldsWithDocComments` (ω-C-empty-lines-doc) feeds
+ * `opt.afterFieldsWithDocComments`.
  *
- * `beforeDocCommentEmptyLines` added in slice ω-C-empty-lines-before-doc
- * (feeds `opt.beforeDocCommentEmptyLines`).
+ * `beforeDocCommentEmptyLines` (ω-C-empty-lines-before-doc) feeds
+ * `opt.beforeDocCommentEmptyLines`.
  *
- * `classEmptyLines` nested section added in slice
- * ω-C-empty-lines-between-fields (feeds `opt.existingBetweenFields`
- * through `HxFormatClassEmptyLinesConfig.existingBetweenFields`). Only
+ * `classEmptyLines` nested section (ω-C-empty-lines-between-fields)
+ * feeds `opt.existingBetweenFields`
+ * through `HxFormatClassEmptyLinesConfig.existingBetweenFields`. Only
  * the `existingBetweenFields` sub-key is modelled today; the other
- * per-slot sub-keys (`beginType`, `endType`, `betweenVars`, …) land
- * with the slices that introduce their matching writer knobs.
+ * per-slot sub-keys (`beginType`, `endType`, `betweenVars`, …) are
+ * modelled when their matching writer knobs land.
  *
- * `externClassEmptyLines` nested section added in slice
- * ω-extern-existing-between-split-leading. Reuses
+ * `externClassEmptyLines` nested section
+ * (ω-extern-existing-between-split-leading). Reuses
  * `HxFormatClassEmptyLinesConfig` (fork shares the
  * `EmptyLinesFieldsConfig` shape across regular / extern / macro class
  * scopes). Only the `existingBetweenFields` sub-key is consumed today
@@ -35,22 +35,22 @@ package anyparse.grammar.haxe.format;
  * sub-keys land alongside their extern-scoped runtime knobs as future
  * fixtures need them.
  *
- * `interfaceEmptyLines` nested section added in slice
- * ω-iface-interblank (feeds `opt.interfaceBetweenVars`,
+ * `interfaceEmptyLines` nested section (ω-iface-interblank) feeds
+ * `opt.interfaceBetweenVars`,
  * `opt.interfaceBetweenFunctions`, `opt.interfaceAfterVars` through
- * `HxFormatInterfaceEmptyLinesConfig`). Mirrors `classEmptyLines` for
+ * `HxFormatInterfaceEmptyLinesConfig`. Mirrors `classEmptyLines` for
  * interface members but with separate runtime knobs and 0/0/0 defaults
  * matching haxe-formatter's `InterfaceFieldsEmptyLinesConfig`.
  *
- * `enumEmptyLines` nested section added in slice ω-enum-empty-lines.
+ * `enumEmptyLines` nested section (ω-enum-empty-lines).
  * Drives blank-line behaviour inside `enum` bodies — its `betweenFields`
  * sub-key feeds the dedicated `opt.betweenEnumCtors` knob; the rest
  * (`existingBetweenFields`, `beginType`, `endType`) share the global
  * runtime knobs with class / interface / abstract sections (last-write
  * wins for fixtures that mix sections).
  *
- * `typedefEmptyLines` nested section added in slice
- * ω-typedef-between-fields. Drives blank-line behaviour inside a
+ * `typedefEmptyLines` nested section
+ * (ω-typedef-between-fields). Drives blank-line behaviour inside a
  * `typedef Foo = { … }` anonymous-struct body via DEDICATED runtime
  * knobs (`opt.typedefBeginType`, `opt.typedefBetweenFields`,
  * `opt.typedefExistingBetweenFields`, `opt.typedefEndType`) — kept
@@ -59,10 +59,10 @@ package anyparse.grammar.haxe.format;
  * class-body Star path that consumes the shared `beginType` / `endType`.
  * Mirrors fork's distinct `TypedefFieldsEmptyLinesConfig`. All four
  * knobs default to the no-blank baseline (`0` / `Keep`), so fixtures
- * that omit `typedefEmptyLines` are byte-identical to pre-slice.
+ * that omit `typedefEmptyLines` see no blank-line rewriting here.
  *
- * `abstractEmptyLines` nested section added in slice
- * ω-abstract-static-fn-cascade. Reuses `HxFormatClassEmptyLinesConfig`
+ * `abstractEmptyLines` nested section
+ * (ω-abstract-static-fn-cascade). Reuses `HxFormatClassEmptyLinesConfig`
  * (fork shares `ClassFieldsEmptyLinesConfig` across class / abstract /
  * extern scopes). Only the `betweenStaticFunctions` sub-key is consumed
  * today (feeds the shared `opt.betweenStaticFunctions` knob through the
@@ -72,8 +72,8 @@ package anyparse.grammar.haxe.format;
  * sections), landing alongside their abstract-scoped runtime knobs as
  * future fixtures need them.
  *
- * `afterPackage` added in slice ω-after-package (feeds
- * `opt.afterPackage`). Non-negative Int — exact number of blank lines
+ * `afterPackage` (ω-after-package) feeds
+ * `opt.afterPackage`. Non-negative Int — exact number of blank lines
  * the writer emits between a top-level `package …;` directive and the
  * next declaration. Override semantics, not floor: the source-captured
  * blank-line count is always replaced with this value, so `0` strips
@@ -81,29 +81,29 @@ package anyparse.grammar.haxe.format;
  * emits two blank lines even when the source had none. Default `1`
  * matches haxe-formatter's `emptyLines.afterPackage: @:default(1)`.
  *
- * `beforePackage` added in slice ω-before-package (feeds
- * `opt.beforePackage`). Non-negative Int — exact number of blank lines
+ * `beforePackage` (ω-before-package) feeds
+ * `opt.beforePackage`. Non-negative Int — exact number of blank lines
  * the writer emits at file head BEFORE a leading `package …;` decl.
  * Override semantics, head-of-Star only: applied once at the start of
  * the module. Default `0` matches haxe-formatter's
  * `emptyLines.beforePackage: @:default(0)`.
  *
- * `importAndUsing` nested section added in slice ω-imports-using-blank
- * (feeds `opt.beforeUsing` through `HxFormatImportAndUsingConfig`).
+ * `importAndUsing` nested section (ω-imports-using-blank)
+ * feeds `opt.beforeUsing` through `HxFormatImportAndUsingConfig`.
  * Mirrors haxe-formatter's `emptyLines.importAndUsing` group;
  * `beforeUsing` (ω-imports-using-blank) and
  * `betweenImports` + `betweenImportsLevel` (ω-imports-using-between)
- * are modelled today, the remaining sub-key (`beforeType`) lands with
- * the slice that introduces its matching writer knob.
+ * are modelled today, the remaining sub-key (`beforeType`) is
+ * modelled when its matching writer knob lands.
  *
- * `afterFileHeaderComment` / `betweenMultilineComments` added in slice
- * ω-fileheader-multiline-comments. Non-negative Int knobs that drive
+ * `afterFileHeaderComment` / `betweenMultilineComments`
+ * (ω-fileheader-multiline-comments). Non-negative Int knobs that drive
  * the writer's per-leadingComments-array blank-line policy. See
  * `HxModuleWriteOptions.afterFileHeaderComment` /
  * `HxModuleWriteOptions.betweenMultilineComments` for full semantics.
  *
- * `maxAnywhereInFile` added in slice ω-max-anywhere-in-file (feeds
- * `opt.maxConsecutiveBlanks` on the generic base `WriteOptions`).
+ * `maxAnywhereInFile` (ω-max-anywhere-in-file) feeds
+ * `opt.maxConsecutiveBlanks` on the generic base `WriteOptions`.
  * Non-negative Int — the writer's final-pass cap on consecutive
  * `lineEnd` runs in the rendered output: at most this many blank lines
  * between any two non-empty lines. Default `1` matches haxe-formatter's
@@ -112,8 +112,8 @@ package anyparse.grammar.haxe.format;
  * never produces that value — the runtime `-1` sentinel is reserved for
  * non-Haxe grammars whose defaults leave the cap off.
  *
- * `betweenSingleLineTypes` added in slice ω-between-single-line-types
- * (feeds `opt.betweenSingleLineTypes`). Non-negative Int — number of
+ * `betweenSingleLineTypes` (ω-between-single-line-types) feeds
+ * `opt.betweenSingleLineTypes`. Non-negative Int — number of
  * blank lines emitted between any consecutive pair of single-line type
  * decls (typedef / class / interface / abstract / enum where neither
  * matches the grammar-derived `multiline` predicate). Insertion-only:
