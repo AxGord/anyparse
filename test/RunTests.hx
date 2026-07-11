@@ -363,6 +363,7 @@ import unit.HxElseIfBodyBreakTest;
 import unit.HxEnumScopeEmptyLinesSliceTest;
 import unit.HxCaseBodyBlankSliceTest;
 import unit.HxCallArgCommentWriteTest;
+import unit.HxParamCommentWriteTest;
 import unit.HxInfixCommentWriteTest;
 import unit.HxCaseCommentWriteTest;
 import unit.HxRhsCommentWriteTest;
@@ -628,6 +629,7 @@ class RunTests {
 		addCase(new HxTriviaParseTest());
 		addCase(new HxTriviaWriteTest());
 		addCase(new HxCallArgCommentWriteTest());
+		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
 		addCase(new HxCondCommentWriteTest());

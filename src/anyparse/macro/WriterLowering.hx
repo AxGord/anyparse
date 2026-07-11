@@ -14562,12 +14562,23 @@ class WriterLowering {
 				// slot 0 is unused. Trailing-comma stays on the existing
 				// `appendTrailingComma` axis.
 				final _sepBeforeFlags: Array<Bool> = [];
+				// A block trailing comment captured AFTER the separator
+				// (trailingBeforeSep == false) is deferred here and emitted as
+				// an inline leading prefix of the NEXT item, so WrapList.emit
+				// places it after the comma, matching the force-multi path's
+				// after-sep emission (see triviaSepForceMultiLineExpr).
+				var _pendingAfterSep: Null<String> = null;
 				var _si2: Int = 0;
 				while (_si2 < _arr.length) {
 					final _t = _arr[_si2];
 					_sepBeforeFlags.push(_si2 != 0 && !_arr[_si2 - 1].sepAfter);
 					final _elemBase: anyparse.core.Doc = $triviaElemCall;
 					final _parts: Array<anyparse.core.Doc> = [];
+					if (_pendingAfterSep != null) {
+						_parts.push(leadingCommentDoc(_pendingAfterSep, opt));
+						_parts.push(_dt(' '));
+						_pendingAfterSep = null;
+					}
 					var _ci2: Int = 0;
 					while (_ci2 < _t.leadingComments.length) {
 						_parts.push(leadingCommentDoc(_t.leadingComments[_ci2], opt));
@@ -14576,7 +14587,12 @@ class WriterLowering {
 					}
 					_parts.push(_elemBase);
 					final _tc2: Null<String> = _t.trailingComment;
-					if (_tc2 != null && StringTools.startsWith(_tc2, '/*')) _parts.push(trailingCommentDocVerbatim(_tc2, opt));
+					if (_tc2 != null && StringTools.startsWith(_tc2, '/*')) {
+						if (_t.trailingBeforeSep || _si2 == _arr.length - 1)
+							_parts.push(trailingCommentDocVerbatim(_tc2, opt));
+						else
+							_pendingAfterSep = _tc2;
+					}
 					_docs.push(_parts.length == 1 ? _parts[0] : _dc(_parts));
 					_si2++;
 				}
