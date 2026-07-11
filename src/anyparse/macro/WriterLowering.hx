@@ -278,9 +278,7 @@ class WriterLowering {
 		// cascade default; mirror of the `lowerPostfixStar` path.
 		final chainArgWantsNest: Bool = cb.fmtHasFlag('callArgChainNest');
 		final segArgOpt: Expr = chainArgWantsNest
-			? macro (
-				$callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak ? _setCallArgChainNest(opt) : opt
-			)
+			? macro ($callRulesExpr.defaultMode == anyparse.format.wrap.WrapMode.FillLineWithLeadingBreak ? _setCallArgChainNest(opt) : opt)
 			: macro opt;
 		// ω-methodchain-reeval-after-callparam (axis 1 discriminator): the chain
 		// re-glue (fork `reEvaluateMethodChainAfterCallParam`) fires ONLY when the
@@ -7524,13 +7522,13 @@ class WriterLowering {
 							? (
 								opt._parenInCondition
 									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-									? _dfle(opt.lineWidth, _dc([
+									? _dfle(opt.lineWidth + 1, _dc([
 										$leadDoc,
 										_dn(_cols, _dc([_dhl(), _wrapInner])),
 										_dhl(),
 										_wrapTrail
 									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
-									: _dfle(opt.lineWidth, _dc([
+									: _dfle(opt.lineWidth + 1, _dc([
 										$leadDoc,
 										_dn(_cols, _dc([_dhl(), _dcp(_dhf(_wrapInner))])),
 										_dhl(),
@@ -7540,7 +7538,7 @@ class WriterLowering {
 							: anyparse.format.wrap.WrapList.isTopLevelTernary(_wrapInner)
 								? (
 									anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
-										? _dfle(opt.lineWidth, _dc([
+										? _dfle(opt.lineWidth + 1, _dc([
 											$leadDoc,
 											_dn(_cols, _dc([_dhl(), _wrapInner])),
 											_dhl(),
@@ -7548,7 +7546,7 @@ class WriterLowering {
 										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
 										: _dc([$leadDoc, _wrapInner, _wrapTrail])
 								)
-								: _dfle(opt.lineWidth, _dc([
+								: _dfle(opt.lineWidth + 1, _dc([
 									$leadDoc,
 									_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
 									_dhl(),
@@ -7862,9 +7860,7 @@ class WriterLowering {
 			? macro (
 				opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.FixedZero
 					? _dcmz($case3Doc)
-					: (
-						opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc
-					)
+					: (opt.conditionalPolicy == anyparse.format.ConditionalIndentationPolicy.AlignedDecrease ? _dcmd($case3Doc) : $case3Doc)
 			)
 			: case3Doc;
 	}

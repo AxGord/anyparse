@@ -55,4 +55,47 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
+
+	/**
+	 * omega-ternary-paren-open BOUNDARY: an expression paren wrapping a top-level
+	 * ternary whose flat line is EXACTLY maxLineLength (140) stays FLAT under a
+	 * fillLine expressionWrapping mode — the open probe uses strict `>` (fork
+	 * parity: a line AT the limit does not exceed it). Guards the off-by-one where
+	 * the paren opened at exactly the limit.
+	 */
+	public function testExactMaxLineLengthKeepsParenTernaryFlat(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn baseSpan != null ? baseSpan - (headNode != null ? headNode.width - gapMetr + headNode.padStart * 2 : 0) - tailPad * 2 : null;\n\t}\n}';
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\treturn baseSpan != null ? baseSpan - (headNode != null ? headNode.width - gapMetr + headNode.padStart * 2 : 0) - tailPad * 2 : null;\n\t}\n\n}',
+			triviaWrite(src, CFG)
+		);
+	}
+
+
+	/**
+	 * omega-ternary-paren-open BOUNDARY (opAddSub sibling): an expression paren
+	 * wrapping a pure opAddSub chain whose flat line is EXACTLY maxLineLength (140)
+	 * stays FLAT — same strict-`>` open probe as the ternary branch.
+	 */
+	public function testExactMaxLineLengthKeepsParenOpAddSubFlat(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn baseSpan != null ? baseSpanValue - (headWidthValueX + gapMetricValueXY + padStartValFinalXX) - tailPaddingValueHereXX : null;\n\t}\n}';
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\treturn baseSpan != null ? baseSpanValue - (headWidthValueX + gapMetricValueXY + padStartValFinalXX) - tailPaddingValueHereXX : null;\n\t}\n\n}',
+			triviaWrite(src, CFG)
+		);
+	}
+
+	/**
+	 * omega-ternary-paren-open BOUNDARY (opBool sibling): an expression paren
+	 * wrapping an opBool chain whose flat line is EXACTLY maxLineLength (140) stays
+	 * FLAT — same strict-`>` open probe as the ternary branch.
+	 */
+	public function testExactMaxLineLengthKeepsParenOpBoolFlat(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\tif (isArrowBodyMarkerLongName || isMethodChainItemLong || !(startsCollectionDelimHere || firstBreakIsArrayDelimValXXXXX)) return -1;\n\t}\n}';
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\tif (isArrowBodyMarkerLongName || isMethodChainItemLong || !(startsCollectionDelimHere || firstBreakIsArrayDelimValXXXXX)) return -1;\n\t}\n\n}',
+			triviaWrite(src, CFG)
+		);
+	}
+
 }

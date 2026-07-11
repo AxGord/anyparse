@@ -1355,11 +1355,7 @@ class WrapList {
 			// breaking collection — the all-inline glue is not a fixed point.
 			if (collIdx >= 0) return -1;
 			final it: Doc = items[i];
-			if (isArrowBodyMarker(it) || isMethodChainItem(it)
-			|| !(
-				startsWithCollectionDelim(it) || firstBreakIsArrayDelim(it)
-			))
-				return -1;
+			if (isArrowBodyMarker(it) || isMethodChainItem(it) || !(startsWithCollectionDelim(it) || firstBreakIsArrayDelim(it))) return -1;
 			collIdx = i;
 		}
 		return collIdx;

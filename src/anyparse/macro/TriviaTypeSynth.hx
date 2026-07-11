@@ -1327,9 +1327,7 @@ class TriviaTypeSynth {
 
 	private static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
 		return child.kind == Ref && (child.annotations.get('base.optional') != true && (child.readMetaString(':kw') == null && (
-			child.readMetaString(':lead') == null && (
-				child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst')
-			)
+			child.readMetaString(':lead') == null && (child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst'))
 		)));
 	}
 
@@ -1347,9 +1345,7 @@ class TriviaTypeSynth {
 	 */
 	private static function isBareFirstStarNlOptIn(child: ShapeNode, parent: ShapeNode): Bool {
 		return child.kind == Star && (child.annotations.get('base.optional') != true && (child.readMetaString(':kw') == null && (
-			child.readMetaString(':lead') == null && (
-				child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst')
-			)
+			child.readMetaString(':lead') == null && (child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst'))
 		)));
 	}
 

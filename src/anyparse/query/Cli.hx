@@ -7704,9 +7704,7 @@ final class Cli {
 		for (p in parts) {
 			if (p.length == 0) return null;
 			final first: Int = StringTools.fastCodeAt(p, 0);
-			final firstOk: Bool = (first >= 'a'.code && first <= 'z'.code) || (
-				first >= 'A'.code && first <= 'Z'.code
-			) || first == '_'.code;
+			final firstOk: Bool = (first >= 'a'.code && first <= 'z'.code) || (first >= 'A'.code && first <= 'Z'.code) || first == '_'.code;
 			if (!firstOk) return null;
 			for (idx in 1...p.length) {
 				final c: Int = StringTools.fastCodeAt(p, idx);
