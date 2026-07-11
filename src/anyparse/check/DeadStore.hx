@@ -158,8 +158,7 @@ final class DeadStore implements Check {
 	 * over-killing is safe).
 	 */
 	private static function analyzeBody(
-		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, identKind: String,
-		paramNames: Array<String>
+		out: Array<Violation>, file: String, source: String, body: QueryNode, shape: RefShape, identKind: String, paramNames: Array<String>
 	): Void {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final controlExitKinds: Array<String> = shape.controlExitKinds ?? [];

@@ -118,8 +118,7 @@ final class ThreadSafety implements Check {
 	 * edge that first carried MAIN into a node — the chain evidence.
 	 */
 	private static function propagateContexts(
-		graph: CallGraph, spawnIds: Array<String>, marshalIds: Array<String>, contexts: Map<String, Int>,
-		mainParent: Map<String, CallEdge>
+		graph: CallGraph, spawnIds: Array<String>, marshalIds: Array<String>, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>
 	): Void {
 		final queue: Array<String> = [];
 		for (id => node in graph.nodes) {

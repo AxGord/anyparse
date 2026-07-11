@@ -6083,8 +6083,7 @@ expectLit(ctx, $v{trailText}));
 	 * lifted from `lowerStruct`.
 	 */
 	private static function emitFieldLeadIn(
-		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>,
-		hasCondOpenNewlineSlot: Bool
+		parseSteps: Array<Expr>, isStar: Bool, isOptional: Bool, kwLead: Null<String>, leadText: Null<String>, hasCondOpenNewlineSlot: Bool
 	): Void {
 		if (!isStar && !isOptional) {
 			if (kwLead != null) {

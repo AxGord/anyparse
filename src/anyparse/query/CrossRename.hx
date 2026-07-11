@@ -323,8 +323,7 @@ final class CrossRename {
 	 * or when nothing changed; otherwise `Ok` with the per-file changes + advisory.
 	 */
 	private static function applyTypeRename(
-		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
-		refShape: RefShape
+		parsed: Array<ParsedFile>, typeName: String, newName: String, plugin: GrammarPlugin, typeRefShape: TypeRefShape, refShape: RefShape
 	): CrossRenameResult {
 		final changes: Array<FileChange> = [];
 		for (entry in parsed) {

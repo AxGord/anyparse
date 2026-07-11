@@ -5290,8 +5290,7 @@ class WriterLowering {
 				final listCall: Expr = if (wrapRulesField != null) {
 					final rulesExpr: Expr = optFieldAccess(wrapRulesField);
 					macro anyparse.format.wrap.WrapList.emit(
-						$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr,
-						$tcExpr
+						$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr
 					);
 				} else {
 					macro sepList(
@@ -5368,8 +5367,7 @@ class WriterLowering {
 		final modifierEnum: Null<ShapeNode> = _shape.rules.get(modifierEnumName);
 		if (modifierEnum == null || modifierEnum.kind != Alt)
 			Context.fatalError(
-				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)',
-				Context.currentPos()
+				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)', Context.currentPos()
 			);
 		var staticBranchFound: Bool = false;
 		for (branch in modifierEnum.children) if (branch.annotations.get('base.ctor') == staticCtor) {
@@ -5901,8 +5899,7 @@ class WriterLowering {
 		if (c.branch.fmtHasFlag('fill')) {
 			final fillDouble: Bool = c.branch.fmtHasFlag('fillDoubleIndent');
 			return macro fillList(
-				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false,
-				$v{fillDouble}
+				$v{postfixOp}, $v{postfixClose}, $v{elemSep}, _docs, opt, $tcExpr, $callInsideOpen, $callInsideClose, false, $v{fillDouble}
 			);
 		}
 		return macro sepList(
@@ -7673,8 +7670,7 @@ class WriterLowering {
 				ifExprIndentArgs = entry;
 			case _:
 				Context.fatalError(
-					'WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}',
-					Context.currentPos()
+					'WriterLowering: @:fmt(indentValueIfCtor(...)) on ctor requires 2 or 3 args, got ${entry.length}', Context.currentPos()
 				);
 		}
 		return { indentArgs: indentArgs, ifExprIndentArgs: ifExprIndentArgs };

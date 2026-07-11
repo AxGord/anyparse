@@ -57,7 +57,7 @@ final class HxCallParamNestedArrayHugSliceTest extends Test {
 	}
 
 	public function testNestedCallNoArrayLeadingBreaks(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(\n\t\t\tnew Row(longArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longEchoValue),\n\t\t\tfalse\n\t\t);\n\t}\n}';
+		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(\n\t\t\tnew Row(longArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longEchoValue), false\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

@@ -2523,7 +2523,20 @@ class Renderer {
 			// on `fillLineStart >= 0` so non-opting / force-flat Fills
 			// stay byte-identical via the legacy `fits` probe alone.
 			final prevWrapped: Bool = f.fillLineStart >= 0 && ctx.lineCount > f.fillLineStart;
-			final fits: Bool = !prevWrapped && fitsFlat(width - ctx.col - tailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]));
+			// The LAST item of a leading-break fill (FillBreakAfterWrap;
+			// `fillLineStart >= 0`) has no following item on its line -- the close
+			// sits on its own line -- so the per-line trailing-comma component of
+			// `tailReserve` must not bind it. Reserve only the genuine same-line
+			// tail (an optional trailing comma, measured by
+			// `flatTokenWidthOfRestStack`) plus the `+ 1` fork-`>=` boundary
+			// alignment, the same term the shape's `sep.length + 1` reserve carries.
+			// Without it a last param that fits broke onto its own line a column early.
+			final effTailReserve: Int = f.fillLineStart >= 0 && idx == fillRest.length - 1
+				? flatTokenWidthOfRestStack(stack) + 1
+				: tailReserve;
+			final fits: Bool = !prevWrapped && fitsFlat(
+				width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]])
+			);
 			if (idx + 1 < fillRest.length) {
 				// Snapshot the line where `fillRest[idx]` STARTS: when the
 				// separator breaks (`!fits`) the item begins on the next
