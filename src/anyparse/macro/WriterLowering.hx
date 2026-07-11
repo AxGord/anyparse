@@ -7770,7 +7770,20 @@ class WriterLowering {
 				parts.push(macro _dop(' '));
 			} else {
 				final kwText: String = stripKwTrailingSpace ? kwLead : kwLead + ' ';
-				parts.push(macro _dt($v{kwText}));
+				final kwDoc: Expr = macro _dt($v{kwText});
+				// condsplice-case-marker-dedent: a `#if` token-splice wrapping switch
+				// case/default clauses parses as a CondSpliceStmt INSIDE the case body's
+				// nest, so its leading `#if` lands one level too deep vs the verbatim
+				// `case`/`#else`/`#end` (source-preserved at the case-list level). When
+				// the plugin's raw-shape adapter confirms case clauses (vs a dangling-else
+				// splice), dedent the `#if` marker one level via ConditionalMarkerDecrease.
+				if (branch.fmtHasFlag('condSpliceCaseMarkerDedent')) {
+					final rawAccess: Expr = macro $i{argNames[0]}.raw;
+					parts.push(
+						macro opt.condSpliceRawWrapsCases != null && opt.condSpliceRawWrapsCases($rawAccess) ? _dcmd($kwDoc) : $kwDoc
+					);
+				} else
+					parts.push(kwDoc);
 			}
 		}
 		if (leadText != null) {

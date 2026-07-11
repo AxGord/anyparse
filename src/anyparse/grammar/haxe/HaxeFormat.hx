@@ -823,6 +823,7 @@ final class HaxeFormat implements TextFormat {
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
 		caseBodyRefusesFlat: HxExprUtil.refusesCaseFlat,
+		condSpliceRawWrapsCases: HxExprUtil.condSpliceRawWrapsCases,
 		operandIsBlockExpr: HxExprUtil.operandIsBlockExpr,
 		tailStmtReadsExprPosition: HxExprUtil.tailStmtReadsExprPosition,
 		arrayBracketKind: HxExprUtil.arrayBracketKind,

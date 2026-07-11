@@ -953,6 +953,51 @@ final class HxExprUtil {
 		return ifStruct != null && Reflect.field(ifStruct, 'elseBody') == null;
 	}
 
+
+	/**
+	 * True iff a `#if <cond> … #end` token-splice raw fragment wraps whole
+	 * `case` / `default` clauses (a switch-case-label splice) rather than
+	 * statements or expressions (a dangling-else splice). Drives the
+	 * writer-side `@:fmt(condSpliceCaseMarkerDedent)` marker dedent: a
+	 * case-label splice's leading `#if` aligns one indent level shallower
+	 * (the case-list level, matching its verbatim `case` / `#else` / `#end`
+	 * markers) than the case body it parses inside, while a dangling-else
+	 * splice keeps its `#if` at the enclosing statement indent. Wired on
+	 * `WriteOptions.condSpliceRawWrapsCases` so the engine dispatches
+	 * through the plugin without engine to plugin coupling. Scans for a line
+	 * whose first non-whitespace token is the `case` / `default` keyword.
+	 */
+	public static function condSpliceRawWrapsCases(raw: Null<Dynamic>): Bool {
+		if (raw == null) return false;
+		final s: String = Std.string(raw);
+		final n: Int = s.length;
+		var atLineStart: Bool = true;
+		for (i in 0...n) {
+			final c: Int = StringTools.fastCodeAt(s, i);
+			if (c == '\n'.code)
+				atLineStart = true;
+			else if (atLineStart && c != ' '.code && c != '\t'.code) {
+				if (keywordAt(s, i, 'case') || keywordAt(s, i, 'default')) return true;
+				atLineStart = false;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * True iff `s` matches keyword `kw` at index `at` with a trailing word
+	 * boundary (next char is not an identifier char).
+	 */
+	private static function keywordAt(s: String, at: Int, kw: String): Bool {
+		final kl: Int = kw.length;
+		if (at + kl > s.length) return false;
+		for (k in 0...kl) if (StringTools.fastCodeAt(s, at + k) != StringTools.fastCodeAt(kw, k)) return false;
+		if (at + kl >= s.length) return true;
+		final next: Int = StringTools.fastCodeAt(s, at + kl);
+		return !((next >= 'a'.code && next <= 'z'.code) || (next >= 'A'.code && next <= 'Z'.code) || (next >= '0'.code && next <= '9'.code)
+			|| next == '_'.code);
+	}
+
 }
 
 /**

@@ -404,9 +404,17 @@ enum HxStatement {
 	/**
 	 * Token-splice fallback for `#if` statement regions the structured
 	 * `Conditional` fail-rewinds on (dangling-else if-heads) — see
-	 * `HxCondSpliceStmt`. Tried directly after it.
+	 * `HxCondSpliceStmt`. Tried directly after it. Also catches a `#if`
+	 * wrapping switch `case` / `default` labels with a shared body after
+	 * `#end` (no case-list-scope production represents that shape); the
+	 * `@:fmt(condSpliceCaseMarkerDedent)` flag then dedents the `#if`
+	 * marker one level to the case-list indent when the raw fragment wraps
+	 * case clauses (see `WriterLowering.kwRefParts` /
+	 * `HxExprUtil.condSpliceRawWrapsCases`), aligning it with the verbatim
+	 * `case` / `#else` / `#end` markers; a dangling-else splice is left at
+	 * the statement indent.
 	 */
-	@:kw('#if')
+	@:kw('#if') @:fmt(condSpliceCaseMarkerDedent)
 	CondSpliceStmt(inner: HxCondSpliceStmt);
 
 	@:kw('function')

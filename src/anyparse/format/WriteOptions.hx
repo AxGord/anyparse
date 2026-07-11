@@ -216,6 +216,14 @@ typedef WriteOptions = {
 	 *    "complex" (Haxe: logical `&&` / `||`) breaks. Mirrors fork's
 	 *    `MarkSameLine.markExpressionCase` body-shape heuristic.
 	 *
+	 *  - `condSpliceRawWrapsCases(raw) → Bool` — true iff a `#if … #end`
+	 *    token-splice raw fragment wraps whole `case` / `default` clauses
+	 *    (a switch-case-label splice). Drives `@:fmt(condSpliceCaseMarkerDedent)`
+	 *    on the `HxStatement.CondSpliceStmt` `#if` marker: a case-label
+	 *    splice dedents its leading `#if` one indent level (to the case-list
+	 *    level, matching the verbatim `case` / `#else` / `#end` markers),
+	 *    while a dangling-else splice keeps `#if` at the statement indent.
+	 *
 	 *  - `betweenImportsPathDiffers(prevPath, currPath, level) → Bool` —
 	 *    true iff the two paths fall into different groups at the
 	 *    configured granularity. Drives the
@@ -278,6 +286,7 @@ typedef WriteOptions = {
 	 */
 	?endsWithCloseBrace: Null<Dynamic -> Bool>,
 	?caseBodyRefusesFlat: Null<Dynamic -> Bool>,
+	?condSpliceRawWrapsCases: Null<Dynamic -> Bool>,
 	// ω-value-yielded-if-tail-barrier (macro-block clear): `operandIsBlockExpr(
 	// operandNode) → Bool` — true iff a `macro <operand>` reification's operand
 	// is a block (`macro { … }`). Drives `@:fmt(clearExprPosition)` on

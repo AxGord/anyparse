@@ -712,6 +712,7 @@ final class HaxeFormatConfigLoader {
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
 			caseBodyRefusesFlat: base.caseBodyRefusesFlat,
+			condSpliceRawWrapsCases: base.condSpliceRawWrapsCases,
 			operandIsBlockExpr: base.operandIsBlockExpr,
 			tailStmtReadsExprPosition: base.tailStmtReadsExprPosition,
 			arrayBracketKind: base.arrayBracketKind,
