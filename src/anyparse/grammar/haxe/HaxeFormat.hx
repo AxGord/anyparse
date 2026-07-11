@@ -1059,6 +1059,30 @@ final class HaxeFormat implements TextFormat {
 	}
 
 	/**
+	 * Default `WrapRules` cascade for a `for`/`while` array COMPREHENSION
+	 * (`[for (x in xs) body]`) under `sameLine.comprehensionFor: fitLine`. A
+	 * comprehension has a single generator element whose flat width routinely
+	 * exceeds the generic `defaultArrayLiteralWrap` fixed thresholds
+	 * (`anyItemLength > 30`, `totalItemLength >= 80`); applying them breaks the
+	 * `[` onto its own line as soon as the for-expr passes ~80 chars, ignoring
+	 * `maxLineLength`. The fit policy instead keeps the comprehension flat while
+	 * the physical line fits and breaks one-per-line only on genuine
+	 * `maxLineLength` overflow. Returned as a fresh struct on each call for parity
+	 * with the sibling `default*Wrap` builders.
+	 */
+	public static function defaultComprehensionWrap(): WrapRules {
+		return {
+			rules: [
+				{
+					mode: WrapMode.OnePerLine,
+					conditions: [{ cond: WrapConditionType.ExceedsMaxLineLength, value: 1 }],
+				},
+			],
+			defaultMode: WrapMode.NoWrap,
+		};
+	}
+
+	/**
 	 * Default `WrapRules` cascade for `HxVarDecl.more` — the binding list
 	 * of a multi-variable declaration (`var a = 1, b = 2, c = 3;`).
 	 * Ported from haxe-formatter's `wrapping.multiVar` rule set in

@@ -14598,10 +14598,23 @@ class WriterLowering {
 				// trailing expression falls through to the wrap cascade.
 				var _matrixDoc: Null<anyparse.core.Doc> = null;
 				$matrixComputeExpr;
+				// ω-comprehension-fitline: a for/while comprehension under
+				// comprehensionFor:fitLine (padded brackets) is fit-driven. Use the fit
+				// cascade instead of the generic arrayWrap fixed thresholds (which break the
+				// sole for-expr item past ~80 chars regardless of maxLineLength), AND drop
+				// source-multiline-keep so an already-wrapped but fitting comprehension
+				// reflows flat (fork parity) rather than staying pinned open.
+				final _isComprehension: Bool = $v{c.reflowSourceMultiline} && _arr.length > 0
+					&& (Type.enumConstructor(cast _arr[0].node) == 'ForExpr' || Type.enumConstructor(cast _arr[0].node) == 'WhileExpr');
+				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
+				final _effRules: anyparse.format.wrap.WrapRules = _comprehensionFit
+					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
+					: $rulesExpr;
+				final _effSmlKeep: Bool = _comprehensionFit ? false : _smlKeep;
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
-					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, $rulesExpr,
+					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules,
 					$appendTrailingCommaExpr, $wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr,
-					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _smlKeep, null, false, $flatTrailingCommaExpr
+					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _effSmlKeep, null, false, $flatTrailingCommaExpr
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
 				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-
@@ -14621,8 +14634,6 @@ class WriterLowering {
 				// never runs on a non-array Star (whose element node is a non-enum struct →
 				// the cast would throw). Non-comprehension arrays keep their `_smlKeep` reflow
 				// behaviour untouched.
-				final _isComprehension: Bool = $v{c.reflowSourceMultiline} && _arr.length > 0
-					&& (Type.enumConstructor(cast _arr[0].node) == 'ForExpr' || Type.enumConstructor(cast _arr[0].node) == 'WhileExpr');
 				_matrixDoc != null ? _dbg(_matrixDoc) : (_smlKeep && !_isComprehension ? _dbg(_wlResult) : _wlResult);
 			};
 		} else {
