@@ -3022,7 +3022,8 @@ class Lowering {
 				macro _trailClose,
 				macro _argsOpenNewline,
 				macro _argsCloseNewline,
-				macro _argsInnerComment
+				macro _argsInnerComment,
+				macro _callLeadingComment
 			]),
 			pos: Context.currentPos(),
 		};
@@ -3140,6 +3141,28 @@ class Lowering {
 			}
 			final _argsOpenNewline: Bool = hasNewlineIn(ctx.input, _openPos, ctx.pos);
 			var _argsInnerComment: Null<String> = null;
+			// ω-keep-call-leading-comment: a pre-callee inline block comment leaked
+			// into `ctx.pendingTrivia` by the upstream operator/keyword
+			// `skipWsAndStash` (`a * /* c */ f()`, `/* c */ f()`) would otherwise be
+			// drained by this loop's `collectTrivia` into args[0]'s leading / the
+			// inner slot — relocating it INSIDE the parens. Claim it here, BEFORE
+			// the loop, so the writer emits it before the operand. Only inline block
+			// comments (mirrors the argsInnerComment gate); a line / multi-line
+			// block stays in pendingTrivia (existing drop behavior, unchanged). The
+			// newline / blank signals on pendingTrivia are preserved for args[0].
+			var _callLeadingComment: Null<String> = null;
+			{
+				final _clPending = ctx.pendingTrivia;
+				if (_clPending != null && _clPending.leadingComments.length > 0) {
+					var _clInline: Bool = true;
+					for (_c in _clPending.leadingComments) if (!StringTools.startsWith(_c, '/*') || _c.indexOf('\n') >= 0)
+						_clInline = false;
+					if (_clInline) {
+						_callLeadingComment = _clPending.leadingComments.join(' ');
+						while (_clPending.leadingComments.length > 0) _clPending.leadingComments.pop();
+					}
+				}
+			}
 			final _args: Array<$wrappedCT> = [];
 			// ω-keep-callclose-newline: source-vertical signal for the
 			// gap before the postfix close literal. `collectTrivia`'s

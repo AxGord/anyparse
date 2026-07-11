@@ -494,8 +494,20 @@ class WriterLowering {
 				if (_ic != null) _docs.push(leadingCommentDoc(_ic, opt));
 			};
 		} : macro {};
+		// ω-keep-call-leading-comment: prepend the parser-captured pre-callee
+		// comment (argNames[6]) before the operand Doc so a call emits
+		// `/* c */ f()` instead of relocating it inside the parens. Gated on the
+		// slot existing; every non-Call postfix Star lacks it and stays inert.
+		final callLeadingBind: Expr = (c.isTriviaStar && c.argNames.length > 6) ? {
+			final clcRef: Expr = { expr: EConst(CIdent(c.argNames[6])), pos: Context.currentPos() };
+			macro {
+				final _clc: Null<String> = $clcRef;
+				_clc != null ? _dc([leadingCommentDoc(_clc, opt), _dt(' '), _pfxOperandBase]) : _pfxOperandBase;
+			};
+		} : macro _pfxOperandBase;
 		return macro {
-			final _pfxOperand: anyparse.core.Doc = $operandCall;
+			final _pfxOperandBase: anyparse.core.Doc = $operandCall;
+			final _pfxOperand: anyparse.core.Doc = $callLeadingBind;
 			final _args = $argsAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
 			final _sepBeforeFlags: Array<Bool> = [];
@@ -4907,11 +4919,12 @@ class WriterLowering {
 		// next postfix iteration. Disjoint from the four Alt-side
 		// predicates (different ctor shapes), so the predicates compose
 		// additively in `extraArgs` without collision.
-		// ω-keep-callclose-newline: the synth now grows THREE positionals on
-		// these branches — closeTrailing (argNames[2]), argsOpenNewline
-		// (argNames[3]), argsCloseNewline (argNames[4]); `extraArgs` below
-		// reserves all three so the writer-side arg names stay aligned with
-		// the parser-pushed ctor arity.
+		// ω-keep-callclose-newline: the synth grows FIVE positionals on these
+		// branches — closeTrailing (argNames[2]), argsOpenNewline (argNames[3]),
+		// argsCloseNewline (argNames[4]), argsInnerComment (argNames[5]),
+		// callLeadingComment (argNames[6]); `extraArgs` below reserves all five
+		// so the writer-side arg names stay aligned with the parser-pushed ctor
+		// arity.
 		final hasPostfixCloseTrailing: Bool = TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
 		// ω-orphan-trivia-alt: when the branch grows openTrailing it
 		// also grows trailingBlankBefore (`argNames[3]`) and
@@ -4934,7 +4947,7 @@ class WriterLowering {
 		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 4 : 0)
+			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
 			+ (TriviaTypeSynth.isInfixChainBranch(branch) ? 1 : 0) + (TriviaTypeSynth.isRhsTrailBranch(branch) ? 1 : 0);
 	}
 

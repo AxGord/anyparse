@@ -915,11 +915,12 @@ class TriviaTypeSynth {
 		if (isInfixChainBranch(branch)) n++; // opAfterComment (infix post-operator comment)
 		if (isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
 		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
-		// ω-D9A-keep-callargs-v2: postfix close-trailing gate adds TWO slots
-		// — closeTrailing + argsOpenNewline (see `buildEnumCtor`). Keep the
-		// count in sync so the `pairedToRaw` switch pattern's `_` placeholder
-		// count matches the paired ctor's arity.
-		if (isPostfixCloseTrailingBranch(branch)) n += 2;
+		// ω-D9A-keep-callargs-v2 + siblings: the postfix close-trailing gate adds
+		// FIVE slots in `buildEnumCtor` — closeTrailing, argsOpenNewline,
+		// argsCloseNewline, argsInnerComment, callLeadingComment. Keep the count in
+		// sync so the `pairedToRaw` switch pattern's `_` placeholder count matches
+		// the paired ctor's arity.
+		if (isPostfixCloseTrailingBranch(branch)) n += 5;
 		return n;
 	}
 
@@ -1117,6 +1118,10 @@ class TriviaTypeSynth {
 			// raw→paired wraps. `null` matches the parser's initial state for a
 			// call with no empty-parens inner comment.
 			defaults.push(macro (null: Null<String>)); // argsInnerComment
+			// ω-keep-call-leading-comment: callLeadingComment default for raw→paired
+			// wraps. `null` matches the parser's initial state for a call with no
+			// pre-callee leading comment.
+			defaults.push(macro (null: Null<String>)); // callLeadingComment
 		}
 		return defaults;
 	}
@@ -1934,6 +1939,14 @@ class TriviaTypeSynth {
 			// closeTrailing (reuses `nullStrCT`), read by the writer via
 			// `argNames[5]`.
 			args.push({ name: 'argsInnerComment', type: nullStrCT });
+			// ω-keep-call-leading-comment: an inline block comment that precedes
+			// the callee of a call (`/* c */ f()` / `a * /* c */ f()`) — captured
+			// by the parser from `ctx.pendingTrivia` BEFORE the args loop can
+			// drain it into an argument's leading slot. Holds the pre-callee
+			// comment so the writer emits it before the operand instead of
+			// relocating it inside the argument list; null otherwise. Read by the
+			// writer via `argNames[6]`.
+			args.push({ name: 'callLeadingComment', type: nullStrCT });
 		}
 		return {
 			name: ctorName,

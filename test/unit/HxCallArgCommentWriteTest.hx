@@ -61,4 +61,34 @@ class HxCallArgCommentWriteTest extends Test {
 		Assert.equals(out, HaxeModuleTriviaWriter.write(reparsed));
 	}
 
+
+	/**
+	 * A block comment PRECEDING the callee of a call — standalone
+	 * (`/* keep *\/ g()`), after an operator (`a * /* keep *\/ g()`), or before
+	 * a call that has arguments (`/* keep *\/ g(arg)`) — stays before the call
+	 * instead of being relocated inside the argument list. The pre-callee
+	 * comment is captured from pending trivia before the args loop can drain it
+	 * into an argument's leading slot.
+	 */
+	public function testCallLeadingBlockCommentStandaloneRoundTrip(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tx = /* keep */ g();\n\t}\n}';
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tx = /* keep */ g();\n\t}\n}\n', out);
+	}
+
+	public function testCallLeadingBlockCommentAfterOperatorRoundTrip(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tx = a * /* keep */ g();\n\t}\n}';
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tx = a * /* keep */ g();\n\t}\n}\n', out);
+	}
+
+	public function testCallLeadingBlockCommentWithArgRoundTrip(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tx = /* keep */ g(arg);\n\t}\n}';
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		final out: String = HaxeModuleTriviaWriter.write(ast);
+		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tx = /* keep */ g(arg);\n\t}\n}\n', out);
+	}
+
 }
