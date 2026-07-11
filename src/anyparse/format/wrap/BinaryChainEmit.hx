@@ -588,7 +588,13 @@ final class BinaryChainEmit {
 		// `condition_wrapping_priority_over_opbool`. For a non-suppressed chain
 		// (`cols == indentUnit`) both arms are byte-identical.
 		final nestCols: Int = location == AfterLast && isAddSubOps(ops) ? indentUnit : cols;
-		return Group(Nest(nestCols, Fill(enriched, Line(' '))));
+		// tailReserve = 1: match the fork's fill boundary, which breaks a chain
+		// operand that reaches EXACTLY `maxLineLength` (`>=`), unlike the Wadler-
+		// inclusive raw `Fill` whose `fitsFlat` accepts a zero-budget exact fit.
+		// Without it a middle operand ending flush at the limit stays on the packed
+		// line and an inner group (e.g. a call operand) then splits its own args
+		// instead of the chain breaking at the operator.
+		return Group(Nest(nestCols, Fill(enriched, Line(' '), 1)));
 	}
 
 	/**
