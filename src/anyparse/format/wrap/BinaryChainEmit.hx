@@ -698,8 +698,13 @@ final class BinaryChainEmit {
 			// `unwrapAddOps`). At the universal default the paren-expr stays
 			// content-glued (`- (inner`), the probe never ends on an open delim,
 			// and the committed break shape renders unchanged (fork-corpus inert).
+			// The last operand must ALSO END with its close delim (a BARE paren
+			// operand) via `endsWithCloseDelim`, so `(a - b) / 2` -- which leads with
+			// `(` but is a Div whose paren is only the numerator -- does NOT glue: the
+			// chain breaks `beforeLast` and the operand stays flat on its own line.
 			return WrapBoundary(
-				leadingOperandOpensDelim(items[items.length - 1], true) && !leadingOperandOpensDelim(items[0])
+				leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
+				&& !leadingOperandOpensDelim(items[0])
 					? IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkDoc, shapeNoWrapAt(flat.location))
 					: brkDoc
 			);
