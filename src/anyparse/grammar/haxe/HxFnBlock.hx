@@ -33,11 +33,23 @@ package anyparse.grammar.haxe;
  * this session — the full BlockBody Star migration (move `;` from
  * per-stmt to BlockBody-level only) is a follow-up that deletes the
  * `stmtExprNoSemi` carve-outs in `HxExprUtil`.
+ *
+ * `@:fmt(clearExprPositionNonTail)` on `stmts` (ω-anon-fn-body-stmt-
+ * position) mirrors `HxExpr.BlockExpr`: a function body is a statement
+ * context, so when this block is reached with a leaked
+ * `_inExprPosition` frame (an anonymous `function() { ... }` / named
+ * `function f() { ... }` expression in call-arg or var-init position),
+ * every non-tail statement clears the frame and a tail `if` drops it
+ * via the `tailStmtReadsExprPosition` barrier -- so a statement `if` in
+ * the body dispatches through `sameLine.ifBody`, never `expressionIf`,
+ * matching the arrow `() -> { ... }` block body and the class-method
+ * body. Inert for the method / named-decl bodies (already
+ * `_inExprPosition = false`).
  */
 @:peg
 @:fmt(multilineWhenFieldNonEmpty('stmts'))
 typedef HxFnBlock = {
-	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'))
+	@:fmt(emptyCurlyBreak, keepCurlyBlanks, rightCurlyAnonFnOverride('anonFunctionRightCurly'), clearExprPositionNonTail)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	var stmts: Array<HxStatement>;

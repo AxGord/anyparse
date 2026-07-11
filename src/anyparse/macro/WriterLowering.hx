@@ -1511,13 +1511,20 @@ class WriterLowering {
 		final rightCurlyAnonFnKnob: Null<String> = (rightCurlyAnonFnArgs != null && rightCurlyAnonFnArgs.length >= 1)
 			? rightCurlyAnonFnArgs[0]
 			: null;
+		// ω-anon-fn-body-stmt-position: HxFnExpr / HxFnDecl / HxUntypedFnBody
+		// bodies share HxFnBlock.stmts; when it carries
+		// @:fmt(clearExprPositionNonTail) (mirroring HxExpr.BlockExpr) the block
+		// clears the leaked expression-position frame for its statements, so a
+		// statement `if` in an anon-fn body inlines via `ifBody` instead of
+		// `expressionIf`. Struct-block Stars without the flag stay byte-identical.
+		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
 		parts.push(triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
-			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, false, beginTypeKnob, endTypeKnob
+			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob
 		));
 	}
 
@@ -15077,16 +15084,17 @@ class WriterLowering {
 		// every block element (tail included). The broad `_inExprPosition`
 		// frame still threads through (only non-tail clears it, per SI-2), so
 		// this composes with the existing tail-keeps-expr-position rule.
-		// `clearExprPositionNonTail` is carried only by Haxe BlockExpr /
-		// BlockStmt, whose opt typedef always declares `_inValueIfBranch` —
-		// so the helper reference is safe inside this branch.
+		// `clearExprPositionNonTail` is carried only by Haxe block constructs
+		// (BlockExpr / BlockStmt / HxFnBlock.stmts), whose shared
+		// `HxModuleWriteOptions` always declares `_inValueIfBranch` — so the
+		// helper reference is safe inside this branch.
 		// ω-arrow-body-objlit-pad: a block-shaped arrow body (`u -> { … }`) is
 		// the same opaque barrier for the open-pad suppression — the `{` that
 		// sat right after `->` was the BLOCK's brace, so no element's object
 		// literal is token-adjacent to the arrow; `_clearArrowLambdaBody` drops
-		// the flag for every block element (tail included). BlockExpr/BlockStmt's
-		// opt typedef always declares `_inArrowLambdaBody`, so the helper
-		// reference is safe inside this branch.
+		// the flag for every block element (tail included). Those block
+		// constructs' shared `HxModuleWriteOptions` always declares
+		// `_inArrowLambdaBody`, so the helper reference is safe inside this branch.
 		// ω-if-tail-fork-parity: a block-body TAIL that is an `if` (IfStmt) is a
 		// STATEMENT — its DIRECT parent is a block brace, for which fork's
 		// `isExpression` is unconditionally false → the body uses `sameLine.ifBody`,

@@ -157,6 +157,7 @@ import unit.HxCatchBodySliceTest;
 import unit.HxCaseBodyPolicySliceTest;
 import unit.HxCaseExprPositionPropagateTest;
 import unit.HxIfStmtExprPositionDispatchTest;
+import unit.HxAnonFnBodyStmtPositionSliceTest;
 import unit.HxCaseBodyShapeRefusalTest;
 import unit.HxFunctionBodyPolicySliceTest;
 import unit.HxUntypedBodyPolicySliceTest;
@@ -612,6 +613,7 @@ class RunTests {
 		addCase(new HxCaseBodyPolicySliceTest());
 		addCase(new HxCaseExprPositionPropagateTest());
 		addCase(new HxIfStmtExprPositionDispatchTest());
+		addCase(new HxAnonFnBodyStmtPositionSliceTest());
 		addCase(new HxIfBodyBlockCaseBarrierTest());
 		addCase(new HxElseIfBodyBreakTest());
 		addCase(new HxCaseBodyShapeRefusalTest());
