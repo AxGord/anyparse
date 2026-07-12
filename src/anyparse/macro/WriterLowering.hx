@@ -6524,7 +6524,17 @@ class WriterLowering {
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
 			final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
-			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(_items, _ops, opt, $rulesExpr, false);
+			// ternary-rest-aware: pass `ternaryRestAware=true` only for a
+			// leading-break call-argument ternary (`_callArgChainNest`), so the
+			// chain-emit engine measures the argument's trailing comma. Exclude
+			// the string-interpolation context (`_chainModeOverride == NoWrap`,
+			// set at the `${...}` body): `_callArgChainNest` leaks into an
+			// interpolation whose enclosing string is the call argument, but the
+			// fork never wraps an interpolation body — keep it on `Group(IfBreak)`.
+			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
+				_items, _ops, opt, $rulesExpr, false, false, null, false, false, null,
+				opt._callArgChainNest && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap
+			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
 			else
@@ -7789,9 +7799,9 @@ class WriterLowering {
 				// splice), dedent the `#if` marker one level via ConditionalMarkerDecrease.
 				if (branch.fmtHasFlag('condSpliceCaseMarkerDedent')) {
 					final rawAccess: Expr = macro $i{argNames[0]}.raw;
-					parts.push(
-						macro opt.condSpliceRawWrapsCases != null && opt.condSpliceRawWrapsCases($rawAccess) ? _dcmd($kwDoc) : $kwDoc
-					);
+					parts.push(macro opt.condSpliceRawWrapsCases != null && opt.condSpliceRawWrapsCases($rawAccess)
+						? _dcmd($kwDoc)
+						: $kwDoc);
 				} else
 					parts.push(kwDoc);
 			}

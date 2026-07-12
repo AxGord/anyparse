@@ -389,6 +389,7 @@ import unit.HxCallGroupRestProbeChainOperandTest;
 import unit.HxFnSigFillLastParamBoundaryTest;
 import unit.HxChainFillBoundaryCallOperandTest;
 import unit.HxCallGroupRestProbeNestedArgTest;
+import unit.HxTernaryCallArgRestAwareTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -522,6 +523,7 @@ class RunTests {
 		addCase(new HxStringInterpNoFormatSliceTest());
 		addCase(new HxParenWrapSourceNewlineSliceTest());
 		addCase(new HxParenTernaryOpenWrapSliceTest());
+		addCase(new HxTernaryCallArgRestAwareTest());
 		addCase(new HxOpAddTrailingParenGlueSliceTest());
 		addCase(new HxToplevelVarFnSliceTest());
 		addCase(new HxToplevelPackageSliceTest());

@@ -596,6 +596,34 @@ class Renderer {
 	}
 
 	/**
+	 * Width of a `Fill` separator's content that survives on the CURRENT
+	 * rendered line when the separator BREAKS — i.e. up to (not including) its
+	 * first `Line` (soft OR hard). A broken soft `Line` drops its flat space,
+	 * so a `,`-then-soft-space separator (commaPolicy:after) contributes only
+	 * the leading `,`. `flatTokenWidthFirstLine` counts a soft `Line`'s space
+	 * (it stops only at a HARD line), over-reporting the on-line separator
+	 * width by one; the rest-stack lookahead — which is entered only from a
+	 * FillCont frame already committed to break mode — needs the broken width.
+	 */
+	private static function sepWidthBeforeBreak(d: Doc): Int {
+		final stack: Array<Doc> = [d];
+		var total: Int = 0;
+		var aborted: Bool = false;
+		while (stack.length > 0 && !aborted) {
+			final node: Doc = stack.pop();
+			switch (node) {
+				case Line(_):
+					aborted = true;
+				case _:
+					final step: { add: Int, aborted: Bool } = flatFirstLineStep(node, stack);
+					total += step.add;
+					aborted = step.aborted;
+			}
+		}
+		return total;
+	}
+
+	/**
 	 * Flat width of `d`'s first physical line (up to but excluding its first
 	 * hardline), paired with `broke` = whether such a hardline was reached
 	 * (`false` means the walk drained with no hardline — the content is fully
@@ -786,9 +814,19 @@ class Renderer {
 				// per-item path), the next emission likely starts with a
 				// hardline at the Fill's indent. Treat as a hardline
 				// boundary so the lookahead never crosses a Fill
-				// continuation. Conservative under-count for the rare case
-				// where Fill items still pack flat is acceptable here —
-				// chain dispatch sites don't sit inside Fill primitives.
+				// continuation.
+				//
+				// EXCEPTION — the Fill's pending SEPARATOR still lands on the
+				// CURRENT rendered line (a trailing `,` under
+				// commaPolicy:after) before that next-item hardline. A chain /
+				// ternary element rendered INSIDE this Fill (a call argument
+				// that is itself a `?:` / `+` construct) would otherwise stop
+				// here at `rest = 0` and under-measure its physical line by the
+				// separator width — the fork counts the trailing comma in the
+				// element's line length. Add only the separator's FIRST-LINE
+				// width (up to its own hardline: the comma, not the break),
+				// then abort at the Fill boundary as before.
+				if (f.fillSep != null) total += sepWidthBeforeBreak(f.fillSep);
 				aborted = true;
 				continue;
 			}

@@ -77,7 +77,7 @@ final class BinaryChainEmit {
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
-		?afterComments: Array<Null<Doc>>
+		?afterComments: Array<Null<Doc>>, ternaryRestAware: Bool = false
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -175,7 +175,7 @@ final class BinaryChainEmit {
 			return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
 		}
 		return extraThresholds.length == 0
-			? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, evalAt, shapeAt, shapeNoWrapAt)
+			? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
 			: extraThresholds.length == 1
 				? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
 				: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
@@ -647,7 +647,7 @@ final class BinaryChainEmit {
 	 * unwrap shape that bypasses the cascade-decided mode.
 	 */
 	private static function emitNoThreshold(
-		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, nestSuppress: Bool, condWrapForced: Bool,
+		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, nestSuppress: Bool, condWrapForced: Bool, ternaryRestAware: Bool,
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
 		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
 	): Doc {
@@ -735,7 +735,26 @@ final class BinaryChainEmit {
 		final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
 			&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
 		final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
-		return WrapBoundary(Group(IfBreak(brkShape, shapeAt(flat))));
+		// ternary-rest-aware: a ternary that is a leading-break CALL ARGUMENT
+		// (`ternaryRestAware`, set from `_callArgChainNest` at the ternary's
+		// lowering) reaches this plain Group(IfBreak) fall-through. A plain
+		// Group's fitsFlat measures `col + flatWidth` and IGNORES the
+		// rest-of-stack — including the Fill's pending separator (the on-line
+		// trailing `,` of the argument), which the walker now counts — so such
+		// a ternary whose flat body ends exactly at lineWidth stays flat while
+		// its physical line (with the comma) overflows; the fork wraps it. Swap
+		// to the rest-stack-aware `IfLineExceeds` at `lineWidth + 1` (render
+		// fires on `>= n`, so `+1` restores strict `>`). Gated to the call-arg
+		// case: an assignment-RHS or string-interpolation ternary keeps the
+		// plain `Group(IfBreak)` pivot (its rest-of-stack — the closing quote /
+		// `;` — must not force an over-eager break). opBool `&&`/`||` chains
+		// (non-ternary ops) also keep the `Group(IfBreak)` pivot.
+		final isTernaryOps: Bool = ops.length == 2 && ops[0] == '?' && ops[1] == ':';
+		return WrapBoundary(
+			isTernaryOps && ternaryRestAware
+				? IfLineExceeds(opt.lineWidth + 1, brkShape, shapeAt(flat))
+				: Group(IfBreak(brkShape, shapeAt(flat)))
+		);
 	}
 
 	/**
