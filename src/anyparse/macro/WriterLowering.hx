@@ -431,6 +431,16 @@ class WriterLowering {
 				? _setCallArgChainNest($elemOptArg)
 				: $elemOptArg;
 		}
+		// omega-call-grouprestprobe-subposition (nested call argument): the two
+		// `wrapRules('callParameterWrap')` Stars (`HxExpr.Call` / `HxNewExpr`) write
+		// each element with `_suppressCallRestProbe` set, so a `Call` in argument
+		// position does NOT rest-probe the outer call's sibling args + trailing `;`.
+		// The outer call opens its paren first; the inner call stays flat (fork
+		// parity). `HxNewExpr` args lack `groupRestProbe`, so this gates on the shared
+		// `callParameterWrap` cascade, not that flag. Compile-time gate -> byte-inert
+		// for every non-call sep-list Star (type-params, function sigs, arrays, object
+		// lits). Mirrors the case-pattern / `??` / chain-operand guards.
+		if (wrapRulesField == 'callParameterWrap') elemOptArg = macro _setSuppressCallRestProbe($elemOptArg, true);
 		final elemCallArgs: Array<Expr> = [elemRead, elemOptArg];
 		if (isSelfRef && hasPratt) elemCallArgs.push(macro -1);
 		final elemCall: Expr = {
@@ -11026,12 +11036,28 @@ class WriterLowering {
 		// (`typedef T = {a:{b:Int}}` — inner `{b:Int}`) reverts to
 		// default fit-driven wrap. Sister to `_clearAnonFnBody` on the
 		// block-Star path.
-		final elemOptArg: Expr = if (forceMultiInTypedef)
+		final elemOptBase: Expr = if (forceMultiInTypedef)
 			macro _clearTypedefBody(opt);
 		else if (propagateExprPosition)
 			macro _setExprPosition(opt);
 		else
 			macro opt;
+		// omega-call-grouprestprobe-subposition (nested call argument, struct-Star
+		// path): a `callParameterWrap` sep-Star is `HxNewExpr.args` (`HxExpr.Call`
+		// goes through `lowerPostfixStar`), so write each element with
+		// `_suppressCallRestProbe` set -- a nested `Call` argument does NOT rest-probe
+		// the outer `new` call's sibling args + trailing `;`; the outer call opens its
+		// paren first and the inner call stays flat. Mirror of the postfix-Star gate.
+		// An object-literal / array sep-Star instead CLEARS the flag: its field-values
+		// / elements each get their own wrapped line, so a nested `Call` there
+		// rest-probes only its own element tail and must stay free to wrap -- otherwise
+		// suppress inherited from an enclosing call-arg (`f({date: g(...)})`) would
+		// leave an over-long field value glued past `maxLineLength`.
+		final elemOptArg: Expr = switch wrapRulesField {
+			case 'callParameterWrap': macro _setSuppressCallRestProbe($elemOptBase, true);
+			case 'objectLiteralWrap', 'arrayLiteralWrap': macro _setSuppressCallRestProbe($elemOptBase, false);
+			case null, _: elemOptBase;
+		}
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemOptArg]),
 			pos: Context.currentPos(),

@@ -1029,7 +1029,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_inTernaryCond: Bool,
 	// omega-call-grouprestprobe-subposition: set on a `Call` subtree that is NOT
 	// in statement/expression position, so the `Call` ctor skips the
-	// `groupRestProbe` rest-of-line fit bias. Two set-sites, both via
+	// `groupRestProbe` rest-of-line fit bias. Set-sites, all via
 	// `_setSuppressCallRestProbe`:
 	//  1. Case-pattern body (`HxCasePattern.expr`'s `@:fmt(suppressCallRestProbe)`):
 	//     a ctor pattern (`case Nest(_, _) | Concat(_):`) must NOT wrap its args
@@ -1040,6 +1040,14 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	//     args the fork keeps glued (the fork packs left-to-right, breaking only
 	//     the overflowing operand's brackets). Reverts `??` operands to pristine
 	//     plain-Group (wrap-on-own-overflow), matching the self-canonical shape.
+	//  3. opAddSub / opBool chain leaf operands (`lowerInfixChain`): a `Call` leaf
+	//     -- especially the head -- would rest-probe the whole chain tail and split
+	//     its own args though the call fits its line; the chain absorbs the overflow
+	//     via its operator break / paren-open instead.
+	//  4. Nested call arguments (`lowerPostfixStar`, the two `callParameterWrap`
+	//     Stars = `HxExpr.Call` / `HxNewExpr`): a `Call` in argument position would
+	//     count the outer call's sibling args + trailing `;`; suppressing lets the
+	//     OUTER call wrap (open its paren) first while the inner call stays flat.
 	// Not cleared on descent, so nested `Call`s inherit it. Default false -> every
 	// statement/expression-position call keeps the rest-probe (wraps at limit+1,
 	// counting the trailing `;`).
