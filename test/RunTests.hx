@@ -392,6 +392,7 @@ import unit.HxCallGroupRestProbeNestedArgTest;
 import unit.HxTernaryCallArgRestAwareTest;
 import unit.HxExprParenDivOpenBoundaryTest;
 import unit.HxOpAddParenInnerBreakTest;
+import unit.HxCondSpliceChainWrapSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -594,6 +595,7 @@ class RunTests {
 		addCase(new HxChainFillBoundaryCallOperandTest());
 		addCase(new HxReturnCallOpenParenSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
+		addCase(new HxCondSpliceChainWrapSliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
 		addCase(new HxBinaryChainWrapSliceTest());
 		addCase(new HxBinopGroupWrapSliceTest());

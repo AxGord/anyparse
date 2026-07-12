@@ -9419,6 +9419,14 @@ class WriterLowering {
 		// the `groupRestProbe` rest-of-line fit bias. Not cleared on descent ->
 		// nested ctors inherit it.
 		final suppressCallRestProbe: Bool = child.fmtHasFlag('suppressCallRestProbe');
+		// omega-condsplice-tail-nest: `@:fmt(chainNestSuppress)` on a mandatory Ref
+		// (HxCondSpliceExpr.tail) suppresses the descendant chain's OWN continuation
+		// Nest so a `#if … #end` token-splice tail co-indents with the ENCLOSING chain
+		// instead of compounding a second indent level. Reuses the call-arg chain-nest
+		// channel (`_setCallArgChainNest` → `_chainNestSuppress`); the flag is consumed
+		// and cleared at the tail's outermost chain, so only a bare-ternary tail could
+		// reach the sister `ternaryRestAware` coupling.
+		final chainNestSuppress: Bool = child.fmtHasFlag('chainNestSuppress');
 		final optArgExpr: Expr = if (boolFlagArgs != null) {
 			macro _wo;
 		} else {
@@ -9427,6 +9435,7 @@ class WriterLowering {
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
 			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true);
+			if (chainNestSuppress) e = macro _setCallArgChainNest($e);
 			if (propagateArrowLambdaBody) e = macro _setArrowLambdaBody($e);
 			if (propagateAnonFn) e = macro _setAnonFnBody($e);
 			if (propagateTypedef) e = macro _setTypedefBody($e);

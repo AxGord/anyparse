@@ -2588,9 +2588,19 @@ class Renderer {
 			final effTailReserve: Int = f.fillLineStart >= 0 && idx == fillRest.length - 1
 				? flatTokenWidthOfRestStack(stack) + 1
 				: tailReserve;
-			final fits: Bool = !prevWrapped && fitsFlat(
-				width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]])
-			);
+			// omega-fill-embedded-firstline: a fill item whose flat projection carries
+			// an embedded `\n` inside a `Text` (a `#if … #end` token-splice raw) is a
+			// multi-line token whose full flat width overflows any budget. Probe only
+			// its FIRST line against the remaining column so the head packs onto the
+			// current line (fork re-flows a splice operand this way) and the verbatim
+			// newline breaks the rest; `-1` = no embedded break → the standard probe.
+			final embW: Int = embeddedFirstLineWidth(Concat([fillSep, fillRest[idx]]));
+			final fits: Bool = !prevWrapped
+				&& (
+					embW >= 0
+						? embW <= width - ctx.col
+						: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
+				);
 			if (idx + 1 < fillRest.length) {
 				// Snapshot the line where `fillRest[idx]` STARTS: when the
 				// separator breaks (`!fits`) the item begins on the next
@@ -2805,6 +2815,70 @@ class Renderer {
 				}
 			case _:
 		}
+	}
+
+
+	/**
+	 * First-line column width of `d`'s flat projection WHEN that projection
+	 * contains an embedded `\n` inside a `Text` leaf — a verbatim multi-line
+	 * token such as a `#if … #end` token-splice raw (`HxCondSpliceRaw`), whose
+	 * bytes (source newline included) are emitted through a single `Text`.
+	 * Returns the width up to (not including) that first embedded newline;
+	 * returns `-1` when no such embedded-`Text` newline is reached before a
+	 * real hardline (`Line('\n')` / `OptHardline`) or the end of the walk — the
+	 * caller then falls back to the standard `fitsFlat` budget probe, so a
+	 * genuinely single-line item, or one opening with a real one-per-line
+	 * hardline, keeps its existing fill behaviour.
+	 *
+	 * Lets a `Fill` pack such a multi-line token when its FIRST line fits the
+	 * remaining budget (matching haxe-formatter, which re-flows the head of a
+	 * token-splice operand onto the packed chain line) instead of breaking the
+	 * whole operand onto its own line because its full flat width overflows.
+	 */
+	private static function embeddedFirstLineWidth(d: Doc): Int {
+		final stack: Array<Doc> = [d];
+		var total: Int = 0;
+		while (stack.length > 0) {
+			final node: Doc = stack.pop();
+			switch (node) {
+				case Text(s):
+					final nl: Int = s.indexOf('\n');
+					if (nl >= 0) return total + nl;
+					total += s.length;
+				case OptSpace(s):
+					total += s.length;
+				case OptSpaceSkipAfterHardline:
+					total += 1;
+				case Line(flat):
+					if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return -1;
+					total += flat.length;
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					return -1;
+				case Empty | BodyGroup(_):
+					// Empty adds nothing; BodyGroup defers its own layout decision.
+				case Concat(items):
+					var i: Int = items.length;
+					while (--i >= 0) stack.push(items[i]);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+					var k: Int = items.length;
+					while (k > 0) {
+						k--;
+						stack.push(items[k]);
+						if (k > 0) stack.push(sep);
+					}
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | IfBreak(_, inner) | IfWidthExceeds(_, _, inner) | IfFirstLineExceeds(
+					_, _, inner
+				) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(_, _, inner) | IfNaturalFirstLineExceeds(
+					_, _, inner
+				) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(_, _, _, _, inner) | Flatten(inner) | WrapBoundary(
+					inner
+				) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(
+					inner
+				) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+					stack.push(inner);
+			}
+		}
+		return -1;
 	}
 
 }

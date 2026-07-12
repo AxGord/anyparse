@@ -24,5 +24,5 @@ package anyparse.grammar.haxe;
 @:peg
 typedef HxCondSpliceExpr = {
 	var raw: HxCondSpliceRaw;
-	var tail: HxExpr;
+	@:fmt(chainNestSuppress) var tail: HxExpr;
 }
