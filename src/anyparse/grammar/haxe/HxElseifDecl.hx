@@ -38,7 +38,7 @@ typedef HxElseifDecl = {
 	))
 	@:fmt(blankLinesOnTransitionAcross(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl',
-		'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
+		'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl', 'EnumAbstractDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
 	))
 	@:fmt(blankLinesBetweenSameCtorByLevel(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'

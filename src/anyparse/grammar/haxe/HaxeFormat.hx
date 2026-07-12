@@ -597,7 +597,8 @@ final class HaxeFormat implements TextFormat {
 	 * @:default(1)`. Driven by
 	 * `@:fmt(blankLinesOnTransitionAcross('decl', 'ImportDecl',
 	 * 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl',
-	 * 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'TypedefDecl',
+	 * 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl',
+	 * 'AbstractClassDecl', 'EnumAbstractDecl', 'TypedefDecl',
 	 * 'FnDecl', 'beforeType'))` on `HxModule.decls`,
 	 * `HxConditionalDecl.body` / `elseBody`, and `HxElseifDecl.body`
 	 * (mirrored cluster), consumed by the trivia-mode EOF Star path in

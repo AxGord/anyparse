@@ -223,7 +223,7 @@ typedef HxModule = {
 	))
 	@:fmt(blankLinesOnTransitionAcross(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl', '|', 'ClassDecl', 'InterfaceDecl',
-		'AbstractDecl', 'EnumDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
+		'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl', 'EnumAbstractDecl', 'TypedefDecl', 'FnDecl', 'beforeType'
 	))
 	@:fmt(blankLinesBetweenSameCtorByLevel(
 		'decl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'betweenImportsLevel', 'betweenImports', 'betweenImportsPathDiffers'
@@ -234,15 +234,17 @@ typedef HxModule = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	@:fmt(blankLinesAfterCtorIf(
-		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'
+		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl',
+		'EnumAbstractDecl', 'FnDecl', 'TypedefDecl', 'afterMultilineDecl'
 	))
 	@:fmt(blankLinesAfterCtorIfTailLeafNull('decl', 'Conditional', 'tailLeafKeepsBlankAfterConditional', 'afterConditionalBlock'))
 	@:fmt(blankLinesBeforeCtorIfPrevNot(
-		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional',
-		'beforeMultilineDecl'
+		'decl', 'multiline', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl',
+		'EnumAbstractDecl', 'FnDecl', 'TypedefDecl', '|', 'Conditional', 'beforeMultilineDecl'
 	))
 	@:fmt(blankLinesBetweenSameCtorIfNot(
-		'decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'betweenSingleLineTypes'
+		'decl', 'multiline', 'TypedefDecl', 'ClassDecl', 'InterfaceDecl', 'AbstractDecl', 'EnumDecl', 'FinalDecl', 'AbstractClassDecl',
+		'EnumAbstractDecl', 'betweenSingleLineTypes'
 	))
 	@:fmt(multilineWhenLeadingTriviaSpansLines('meta', 'decl'))
 	@:fmt(blankBeforeOrphanLineCommentTrail)

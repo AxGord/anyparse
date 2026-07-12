@@ -120,8 +120,71 @@ class HxMultilineDeclSliceTest extends Test {
 		Assert.equals('package;\n\nclass Foo {\n\tvar x:Int;\n}\n\nfunction bar() {}\n', out);
 	}
 
+	public function testBlankAfterMultilineFinalClass(): Void {
+		final out: String = write('final class Foo {\n\tvar x:Int;\n}\nfunction bar() {}');
+		Assert.equals(
+			'final class Foo {\n\tvar x:Int;\n}\n\nfunction bar() {}\n', out, 'final class (ClassForm) is a multi-line type decl'
+		);
+	}
+
+	public function testBlankBeforeMultilineFinalClass(): Void {
+		final out: String = write('function a() {}\nfinal class B {\n\tvar y:Int;\n}');
+		Assert.equals('function a() {}\n\nfinal class B {\n\tvar y:Int;\n}\n', out);
+	}
+
+	public function testMultilineAbstractClassGetsBlank(): Void {
+		final out: String = write('abstract class Foo {\n\tvar x:Int;\n}\nclass C {}');
+		Assert.equals('abstract class Foo {\n\tvar x:Int;\n}\n\nclass C {}\n', out);
+	}
+
+	public function testMultilineEnumAbstractGetsBlank(): Void {
+		final out: String = write('enum abstract E(Int) {\n\tvar A = 1;\n}\nclass C {}');
+		Assert.equals('enum abstract E(Int) {\n\tvar A = 1;\n}\n\nclass C {}\n', out);
+	}
+
+	public function testEmptyFinalClassStaysFlat(): Void {
+		final out: String = write('final class A {}\nfinal class B {}');
+		Assert.equals('final class A {}\nfinal class B {}\n', out, 'empty-body final class is single-line — predicate gate stays inert');
+	}
+
+	public function testBeforeTypeCollapsesBlanksBeforeFinalClass(): Void {
+		final out: String = writeUncapped('import a.B;\n\n\nfinal class Foo {\n\tvar x:Int;\n}');
+		Assert.equals(
+			'import a.B;\n\nfinal class Foo {\n\tvar x:Int;\n}\n', out,
+			'beforeType overrides the import->final-class gap to exactly one blank'
+		);
+	}
+
+	public function testBeforeTypeCollapsesBlanksBeforeAbstractClass(): Void {
+		final out: String = writeUncapped('import a.B;\n\n\nabstract class Foo {\n\tvar x:Int;\n}');
+		Assert.equals('import a.B;\n\nabstract class Foo {\n\tvar x:Int;\n}\n', out);
+	}
+
+	public function testBeforeTypeCollapsesBlanksBeforeEnumAbstract(): Void {
+		final out: String = writeUncapped('import a.B;\n\n\nenum abstract E(Int) {\n\tvar A = 1;\n}');
+		Assert.equals('import a.B;\n\nenum abstract E(Int) {\n\tvar A = 1;\n}\n', out);
+	}
+
+	public function testBetweenSingleLineFinalClassesHonorsConfig(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"emptyLines":{"betweenSingleLineTypes":1}}');
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse('final class A {}\nfinal class B {}'), opts);
+		Assert.equals(
+			'final class A {}\n\nfinal class B {}\n', out,
+			'single-line final class pair honors betweenSingleLineTypes like a plain class pair'
+		);
+	}
+
 	private inline function write(src: String): String {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
+	}
+
+	private inline function writeUncapped(src: String): String {
+		// Disable the final-pass blank cap so the beforeType override (source
+		// 2 blanks -> 1) is visible rather than masked by the default
+		// maxConsecutiveBlanks:1 collapsing the gap regardless.
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.maxConsecutiveBlanks = -1;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 	private inline function writeWithCounts(src: String, after: Int, before: Int): String {

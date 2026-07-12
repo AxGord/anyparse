@@ -93,6 +93,7 @@ typedef FileInfo = {
 	 */
 	var accessGrants: Array<String>;
 }
+
 @:nullSafety(Strict)
 final class SymbolIndex {
 
