@@ -9755,9 +9755,8 @@ final class Cli {
 		// a structural one, and lives on the CLI instead of the path.
 		final raw: Array<QueryNode> = (o.minChildren < 0 && o.maxChildren < 0) ? preFilter : [
 			for (m in preFilter)
-				if ((
-					o.minChildren < 0 || m.children.length >= o.minChildren
-				) && (o.maxChildren < 0 || m.children.length <= o.maxChildren)) m
+				if ((o.minChildren < 0 || m.children.length >= o.minChildren) && (o.maxChildren < 0 || m.children.length <= o.maxChildren))
+					m
 		];
 		if (raw.length == 0) reportAstSelectEmpty(tree, selectExpr, fileLabel, o.minChildren, o.maxChildren, preFilter.length);
 		if (o.countOnly) {

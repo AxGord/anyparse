@@ -315,8 +315,11 @@ class Lowering {
 	private function lowerEnum(node: ShapeNode, typePath: String, atomsOnly: Bool, recurseFnName: String): Expr {
 		final branches: Array<ShapeNode> = atomsOnly ? [
 			for (b in node.children)
-				if (b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null
-					&& b.annotations.get('ternary.op') == null) b
+				if (
+					b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null
+					&& b.annotations.get('ternary.op') == null
+				)
+					b
 		] : node.children;
 		final branchExprs: Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
 		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;

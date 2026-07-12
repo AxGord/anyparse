@@ -11986,7 +11986,9 @@ class WriterLowering {
 	 * the `_suppressBalc` fileheader override branch.
 	 */
 	private static function triviaEofBalcExpr(afterFileHeaderCommentBlanks: Bool, betweenMultilineCommentsBlanks: Bool): Expr {
-		return (afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks)
+		return (
+			afterFileHeaderCommentBlanks || betweenMultilineCommentsBlanks
+		)
 			? macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0 && !_suppressBalc) _docs.push(_dhl())
 			: macro if (_t.blankAfterLeadingComments && _t.leadingComments.length > 0) _docs.push(_dhl());
 	}
@@ -14787,8 +14789,10 @@ class WriterLowering {
 	private static function triviaSepMatrixSucceedsExpr(
 		matrixWrap: Bool, openText: String, closeText: String, sepText: String, appendTrailingCommaExpr: Expr, triviaElemCall: Expr
 	): Expr {
-		return macro if ($v{matrixWrap} && _noWrapFlat && !_anyMultilineItem && !_requiresHardline
-			&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap) {
+		return macro if (
+			$v{matrixWrap} && _noWrapFlat && !_anyMultilineItem && !_requiresHardline
+			&& opt.arrayMatrixWrap != anyparse.format.ArrayMatrixWrap.NoMatrixWrap
+		) {
 			final _pdocs: Array<anyparse.core.Doc> = [];
 			final _prow: Array<Bool> = [];
 			var _pi: Int = 0;

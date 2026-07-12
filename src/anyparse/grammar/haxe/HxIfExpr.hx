@@ -133,7 +133,7 @@ package anyparse.grammar.haxe;
  */
 @:peg
 typedef HxIfExpr = {
-	@:lead('(') @:trail(')') var cond: HxExpr;
+	@:lead('(') @:trail(')') @:fmt(condWrap('conditionWrap')) var cond: HxExpr;
 	@:trailOpt(';') @:fmt(bodyPolicy('ifBody', 'expressionIfBody'),
 		indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'), noSiblingFallback('ifBody'),
 		inlineBlockBodyIfFlag('expressionIfWithBlocks'), propagateValueIfBranch) var thenBranch: HxExpr;
