@@ -310,7 +310,23 @@ class WrapList {
 			return mode == FillLineWithLeadingBreak ? brkShape : flatShape;
 		}
 
-		if (hasHardline) return WrapBoundary(shapeFor(decideAt(true)));
+		// A hardline cond whose break comes from a TRAILING container (array /
+		// object / call that leading-breaks after its open delimiter) keeps the
+		// paren GLUED (`for (x in [\n...\n])`, `if ([\n...\n].has(x))`, fork
+		// parity) instead of opening `(\n\tcond\n)`. A top-level `&&`/`||`/`+`/`-`
+		// chain still OPENS even when its last operand ends in a container (fork
+		// wraps the chain, not the paren) -- so only a NON-chain cond takes the
+		// glue probe, mirroring the non-hardline path's `isTopLevelChain &&
+		// !chainKeepFlatCandidate` split. Non-FLWLB modes stay flat-glued.
+		if (hasHardline) {
+			final hlMode: WrapMode = decideAt(true);
+			final chainOpens: Bool = isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc);
+			return WrapBoundary(
+				hlMode == FillLineWithLeadingBreak && !chainOpens
+					? IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkShape, flatShape)
+					: shapeFor(hlMode)
+			);
+		}
 
 		final modeFlat: WrapMode = decideAt(false);
 		final modeBreak: WrapMode = decideAt(true);
