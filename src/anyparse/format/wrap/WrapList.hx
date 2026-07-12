@@ -784,7 +784,7 @@ class WrapList {
 	 * with no operator separators at all (single operand) is NOT a pure
 	 * opAddSub chain.
 	 */
-	public static function isPureOpAddSubChain(d: Doc): Bool {
+	public static function isPureOpAddSubChain(d: Doc, multIsOther: Bool = false): Bool {
 		// Operator separators recorded per WrapBoundary depth. The chain's
 		// own top-level separators sit at the SHALLOWEST depth that has any
 		// operator (the chain emit wraps its whole output in a WrapBoundary,
@@ -825,7 +825,13 @@ class WrapList {
 				case Text(t):
 					switch StringTools.trim(t) {
 						case '+' | '-': record(true, depth);
-						case '||' | '&&' | '?' | ':': record(false, depth);
+						case '||' | '&&' | '?' | ':':
+							record(false, depth);
+						// ω-opadd-trailing-paren-break: opt-in — a `*`/`/`/`%` at a
+						// shallower depth marks the top level as opMult, so a paren
+						// wrapping `(b - c) * s` is NOT a pure opAddSub sub-chain (the
+						// nested `-` would otherwise falsely qualify it).
+						case '*' | '/' | '%' if (multIsOther): record(false, depth);
 						case _:
 					}
 				case _:

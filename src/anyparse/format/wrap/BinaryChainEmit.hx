@@ -708,12 +708,33 @@ final class BinaryChainEmit {
 			// operand) via `endsWithCloseDelim`, so `(a - b) / 2` -- which leads with
 			// `(` but is a Div whose paren is only the numerator -- does NOT glue: the
 			// chain breaks `beforeLast` and the operand stays flat on its own line.
-			return WrapBoundary(
-				leadingOperandOpensDelim(items[items.length - 1], true) && WrapList.endsWithCloseDelim(items[items.length - 1])
-				&& !leadingOperandOpensDelim(items[0])
-					? IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkDoc, shapeNoWrapAt(flat.location))
-					: brkDoc
-			);
+			final isBareParenTail: Bool = leadingOperandOpensDelim(items[items.length - 1], true)
+				&& WrapList.endsWithCloseDelim(items[items.length - 1]) && !leadingOperandOpensDelim(items[0]);
+			if (!isBareParenTail) return WrapBoundary(brkDoc);
+			final glueProbe: Doc = IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, brkDoc, shapeNoWrapAt(flat.location));
+			// ω-opadd-trailing-paren-break: a 2-operand `a + (bare paren)` at the
+			// trailing-`;` boundary — the fork BREAKS the chain (`a\n+ (paren)`) when
+			// the paren fits its own continuation line, rather than gluing to an opened
+			// paren. The flat line overflows only via the un-counted `= ` pending space
+			// + `;`, so detect it with the pending-aware `IfFullLineExceeds(lineWidth +
+			// 1)`; `IfArrowContinuationFits` then routes a paren that FITS its
+			// continuation to a forced beforeLast break and a WIDER paren to the glue
+			// probe (fork `unwrapAddOps`). Scoped to `items.length == 2` so the forced
+			// `OnePerLineAfterFirst` equals the fillLine-beforeLast shape; 3+-operand
+			// chains keep the glue probe unchanged (no bac488c regression).
+			// Break the chain ONLY when the bare-paren operand wraps a same-class
+			// opAddSub subexpression (`(b - c)`) — the fork treats it as part of
+			// the add chain. A paren wrapping a ternary / other-class operator
+			// (`(cond ? a : b)`, `((b - c) * s)`) is content the fork keeps GLUED
+			// (opens the paren, `unwrapAddOps`), so it stays on the glue probe.
+			if (items.length != 2 || !WrapList.isPureOpAddSubChain(items[items.length - 1], true)) return WrapBoundary(glueProbe);
+			final cols: Int = nestSuppress ? 0 : (opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth);
+			final contWidth: Int = ops[ops.length - 1].length + 1 + DocMeasure.flatTokenWidth(items[items.length - 1]);
+			final forcedBreak: Doc = shapeOnePerLineAfterFirst(items, ops, cols, BeforeLast);
+			return WrapBoundary(IfLineExceeds(
+				opt.lineWidth, IfArrowContinuationFits(cols, contWidth, opt.lineWidth, glueProbe, forcedBreak),
+				shapeNoWrapAt(flat.location)
+			));
 		}
 		// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an opBool
 		// chain (`&&`/`||`) whose BROKEN shape is FillLine operator-TRAILING
