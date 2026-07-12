@@ -75,4 +75,37 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+
+	public function testNonChainCallCondExactlyOnLimitStaysFlat(): Void {
+		// A non-chain single-call condition (`!f(...)`, no `&&`/`||` operator)
+		// whose header line is EXACTLY 140 columns stays glued - a line ON the
+		// limit is not past it (fork parity: the fork opens on a strict `>`).
+		// This exercises the NON-chain branch of `emitCondition`
+		// (`IfNaturalFirstLineFitsOpenDelim(lineWidth + 1)`), sibling to the
+		// chain branch's `IfLineExceeds(lineWidth + 1)`: its natural-first-line
+		// fit probe glues on `< lineWidth + 1` (i.e. `<= lineWidth`), so the
+		// `+ 1` is what keeps a header landing exactly on the limit flat.
+		final src: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, itemIdentifier))\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+		Assert.equals(src, triviaWrite(src));
+	}
+
+	public function testNonChainCallCondWrappedSourceCollapses(): Void {
+		// The same 140-column condition, authored with the cond on its own line,
+		// collapses back to the glued single-line form (idempotent thereafter).
+		final flat: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, itemIdentifier))\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+		final wrapped: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (\n\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL01, itemStamp, itemIdentifier)\n\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+		Assert.equals(flat, triviaWrite(wrapped));
+		Assert.equals(flat, triviaWrite(flat));
+	}
+
+	public function testNonChainCallCondOneColumnPastLimitOpens(): Void {
+		// One column past the limit (141) opens the cond paren (strict `>`
+		// maxLineLength), guarding the other side of the exactly-on-limit
+		// boundary; the opened form is idempotent.
+		final flat: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, itemIdentifier))\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+		final opened: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (\n\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, itemIdentifier)\n\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
+		Assert.equals(opened, triviaWrite(flat));
+		Assert.equals(opened, triviaWrite(opened));
+	}
+
 }

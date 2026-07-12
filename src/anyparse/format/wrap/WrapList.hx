@@ -348,7 +348,7 @@ class WrapList {
 			? WrapBoundary(shapeFor(modeFlat))
 			: isTopLevelChain(condDoc) && !chainKeepFlatCandidate(condDoc)
 				? WrapBoundary(IfLineExceeds(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)))
-				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth, shapeFor(modeBreak), shapeFor(modeFlat)));
+				: WrapBoundary(IfNaturalFirstLineFitsOpenDelim(opt.lineWidth + 1, shapeFor(modeBreak), shapeFor(modeFlat)));
 	}
 
 	/**
