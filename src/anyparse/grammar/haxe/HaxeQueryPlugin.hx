@@ -417,6 +417,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			boolLitKind: 'BoolLit',
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',
+			emptyMemberKind: 'EmptySemiMember',
 			localDeclKinds: ['VarStmt', 'FinalStmt'],
 			mutableLocalDeclKinds: ['VarStmt'],
 			ifStatementKinds: ['IfStmt'],

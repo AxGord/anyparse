@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
@@ -11,15 +12,16 @@ import haxe.Exception;
 
 /**
  * Flags a stray empty statement — a lone `;` with no expression (SonarLint
- * S1116), usually an editing leftover or a misplaced terminator. Purely
+ * S1116), usually an editing leftover or a misplaced terminator. Covers both a
+ * statement-scope `;` (inside a body, e.g. the trailing `;` of `g();;`) and a
+ * member-scope `;` (after a class member, e.g. `function f():Void {};`). Purely
  * structural. `Warning`; `fix` deletes the `;` — the whole physical line when the
- * `;` sits alone on it (so no blank residue is left), otherwise only the `;`
- * itself (e.g. the trailing `;` of `g();;`).
+ * `;` sits alone on it (so no blank residue is left), otherwise only the `;` itself.
  *
  * ## Grammar-agnostic
  *
- * The empty-statement node kind comes from `RefShape.emptyStmtKind`; unset makes
- * the check a no-op.
+ * The node kinds come from `RefShape.emptyStmtKind` (statement scope) and
+ * `RefShape.emptyMemberKind` (member scope); with neither set the check is a no-op.
  */
 @:nullSafety(Strict)
 final class EmptyStatement implements Check {
@@ -35,13 +37,18 @@ final class EmptyStatement implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final emptyStmtKind: Null<String> = plugin.refShape().emptyStmtKind;
-		if (emptyStmtKind == null) return [];
+		final shape: RefShape = plugin.refShape();
+		final stmtKind: Null<String> = shape.emptyStmtKind;
+		final memberKind: Null<String> = shape.emptyMemberKind;
+		final emptyKinds: Array<String> = [];
+		if (stmtKind != null) emptyKinds.push(stmtKind);
+		if (memberKind != null) emptyKinds.push(memberKind);
+		if (emptyKinds.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, emptyStmtKind);
+			if (tree != null) walk(violations, entry.file, tree, emptyKinds);
 		}
 		return violations;
 	}
@@ -59,8 +66,8 @@ final class EmptyStatement implements Check {
 	}
 
 	/** Walk `node`, flagging every empty statement reached. */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, emptyStmtKind: String): Void {
-		if (node.kind == emptyStmtKind) {
+	private static function walk(out: Array<Violation>, file: String, node: QueryNode, emptyKinds: Array<String>): Void {
+		if (emptyKinds.contains(node.kind)) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
 				file: file,
@@ -70,7 +77,7 @@ final class EmptyStatement implements Check {
 				message: 'empty statement'
 			});
 		}
-		for (c in node.children) walk(out, file, c, emptyStmtKind);
+		for (c in node.children) walk(out, file, c, emptyKinds);
 	}
 
 	/**

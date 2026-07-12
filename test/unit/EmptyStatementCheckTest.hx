@@ -42,6 +42,29 @@ class EmptyStatementCheckTest extends Test {
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t}\n}', applyFix(src));
 	}
 
+	public function testEmptyMemberFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tfunction f():Void {}\n\t;\n\tfunction g():Void {}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals('empty-statement', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals('empty statement', vs[0].message);
+	}
+
+	public function testFixDeletesOwnLineMemberSemicolon(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {}\n\t;\n\tfunction g():Void {}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {}\n\tfunction g():Void {}\n}', applyFix(src));
+	}
+
+	public function testFixDeletesGluedMemberSemicolon(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {};\n}';
+		Assert.equals('class C {\n\tfunction f():Void {}\n}', applyFix(src));
+	}
+
+	public function testFixDeletesMixedStatementAndMemberSemicolons(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tg();;\n\t}\n\t;\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t}\n}', applyFix(src));
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('empty-statement'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];

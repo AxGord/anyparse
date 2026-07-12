@@ -352,11 +352,19 @@ typedef RefShape = {
 	@:optional var branchConditionKinds: Array<String>;
 
 	/**
-	 * The empty-statement node kind — a stray `;`. The `empty-statement` check
-	 * flags every one and its `--fix` deletes it. Optional; unset makes the check
-	 * a no-op.
+	 * The statement-scope empty-statement node kind — a stray `;` inside a body.
+	 * The `empty-statement` check flags every one and its `--fix` deletes it.
+	 * Optional; unset makes the check ignore statement-scope strays.
 	 */
 	@:optional var emptyStmtKind: String;
+
+	/**
+	 * The member-scope empty-statement node kind — a stray `;` after a class
+	 * member (e.g. `function f():Void {};`). Flagged by the same `empty-statement`
+	 * check alongside `emptyStmtKind`. Optional; unset makes the check ignore
+	 * member-scope strays.
+	 */
+	@:optional var emptyMemberKind: String;
 
 	/**
 	 * Statement-position local declaration kinds — a plain local `var` / `final`
