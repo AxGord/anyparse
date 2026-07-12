@@ -323,7 +323,7 @@ class Renderer {
 				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
 					_, _, _, _, _
 				):
-					pushExceedsBranch(f, stack, ctx.col, width, decisions);
+					pushExceedsBranch(f, stack, ctx.col, ctx.pendingOptSpace != null ? ctx.pendingOptSpace.length : 0, width, decisions);
 				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
 					// mutation (reads `lineCount` for the break-after-wrap snapshot,
@@ -1789,7 +1789,8 @@ class Renderer {
 	 * semantic.
 	 */
 	private static function pushExceedsBranch(
-		f: Frame, stack: Array<Frame>, col: Int, width: Int, decisions: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>>
+		f: Frame, stack: Array<Frame>, col: Int, pendingSpace: Int, width: Int,
+		decisions: Null<Array<{ node: Doc, crosses: Bool, ?indent: Int }>>
 	): Void {
 		switch (f.doc) {
 			case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
@@ -1826,7 +1827,22 @@ class Renderer {
 					// flat branch is always taken (record `false` = no open).
 					if (decisions != null) decisions.push({ node: f.doc, crosses: false });
 				} else {
-					final fullLineCrosses: Bool = (col + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n);
+					// `pendingSpace` restores an un-flushed OptSpace preceding this
+					// paren (`x = (chain) / 2` — the ` ` after `=` is pending, not
+					// yet in `col`, but it lands on the flat line before the open
+					// delim). Without it a paren-open probe under-counts the
+					// physical line by one and a `(chain) OP y;` at exactly
+					// maxLineLength + 1 stays glued (fork opens it).
+					//
+					// GATED on `n > width`: only the strict-`>` paren-open probes
+					// (`expressionParenHardFlatten`, emitted at `lineWidth + 1`)
+					// want it. Other IfFullLineExceeds consumers — e.g. a rest-aware
+					// method-chain break emitted at `lineWidth` (n == width) — are
+					// calibrated to the un-flushed column and would over-fire (wrap
+					// a chain that fits) if the pending space were added.
+					final effPending: Int = n > width ? pendingSpace : 0;
+					final fullLineCrosses: Bool = (col + effPending + DocMeasure.flatTokenWidth(flatDoc)
+						+ flatTokenWidthOfRestStackFull(stack) >= n);
 					// ω-collapse-commit: record the open/glued decision at
 					// this node's true render column for the Doc→Doc pass.
 					// Keyed by node identity (enum `==` is reference equality
