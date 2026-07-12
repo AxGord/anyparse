@@ -9991,9 +9991,9 @@ final class Cli {
 		final capped: Array<{ loc: String, line: String }> = (effectiveLimit >= 0 && heur.length > effectiveLimit)
 			? heur.slice(0, effectiveLimit)
 			: heur;
-		final hint: String = (
-			capped.length < heur.length
-		) ? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap') : '';
+		final hint: String = (capped.length < heur.length)
+			? (limit >= 0 ? '' : ' — pass --all to show all, --limit N for explicit cap')
+			: '';
 		sysPrint(
 			'# heuristic field-access (member-name superset of "$typeName" — VERIFY each; '
 			+ 'name-based, over-matches; ${capped.length}/${heur.length} shown$hint)\n'

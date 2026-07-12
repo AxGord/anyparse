@@ -756,26 +756,22 @@ final class BinaryChainEmit {
 		final boolReevalTag: Bool = isOpBoolOps(ops) && brk.location == AfterLast
 			&& (brk.mode == FillLine || brk.mode == FillLineWithLeadingBreak) && !nestSuppress && containsCallOperand(items);
 		final brkShape: Doc = boolReevalTag ? CollapseBoolProbe(shapeAt(brk)) : shapeAt(brk);
-		// ternary-rest-aware: a ternary that is a leading-break CALL ARGUMENT
-		// (`ternaryRestAware`, set from `_callArgChainNest` at the ternary's
-		// lowering) reaches this plain Group(IfBreak) fall-through. A plain
-		// Group's fitsFlat measures `col + flatWidth` and IGNORES the
-		// rest-of-stack — including the Fill's pending separator (the on-line
-		// trailing `,` of the argument), which the walker now counts — so such
-		// a ternary whose flat body ends exactly at lineWidth stays flat while
-		// its physical line (with the comma) overflows; the fork wraps it. Swap
-		// to the rest-stack-aware `IfLineExceeds` at `lineWidth + 1` (render
-		// fires on `>= n`, so `+1` restores strict `>`). Gated to the call-arg
-		// case: an assignment-RHS or string-interpolation ternary keeps the
-		// plain `Group(IfBreak)` pivot (its rest-of-stack — the closing quote /
-		// `;` — must not force an over-eager break). opBool `&&`/`||` chains
-		// (non-ternary ops) also keep the `Group(IfBreak)` pivot.
+		// ternary-rest-aware: a ternary the caller flagged `ternaryRestAware`
+		// (every host context except an interpolation body or an explicit
+		// expression paren, see `lowerTernaryBranch`) reaches this pivot. A plain
+		// `Group(IfBreak)`'s fitsFlat measures `col + flatWidth` and IGNORES the
+		// rest-of-stack (the statement `;`, an enclosing argument `,`), so a ternary
+		// whose flat body ends exactly at lineWidth stays glued while its physical
+		// line overflows; the fork wraps it. Swap to `GroupWithRestProbe`, which
+		// keeps the same fitsFlat decision (a break-mode `flat` cascade with inner
+		// hardlines makes fitsFlat refuse to flatten and commit to break, where a
+		// flatTokenWidth probe would collapse those hardlines to 0-width and stay
+		// under threshold) but subtracts `flatTokenWidthOfRestStack(stack)` from the
+		// budget, so the trailing content is counted. opBool `&&`/`||` chains
+		// (non-ternary ops) keep the plain `Group(IfBreak)` pivot.
 		final isTernaryOps: Bool = ops.length == 2 && ops[0] == '?' && ops[1] == ':';
-		return WrapBoundary(
-			isTernaryOps && ternaryRestAware
-				? IfLineExceeds(opt.lineWidth + 1, brkShape, shapeAt(flat))
-				: Group(IfBreak(brkShape, shapeAt(flat)))
-		);
+		final ifBreak: Doc = IfBreak(brkShape, shapeAt(flat));
+		return WrapBoundary(isTernaryOps && ternaryRestAware ? GroupWithRestProbe(ifBreak) : Group(ifBreak));
 	}
 
 	/**

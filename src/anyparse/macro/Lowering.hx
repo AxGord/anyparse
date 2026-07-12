@@ -4793,7 +4793,9 @@ expectLit(ctx, $v{trailText}));
 		// post-switch `lit.trailOptional` block (~L2500) is
 		// gated `!isOptional`, so this arm is the optional+kw
 		// path's sole emitter.
-		final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true ? child.annotations.get('lit.trailText') : null;
+		final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
+			? child.annotations.get('lit.trailText')
+			: null;
 		final subCall: Expr = if (trailText != null)
 			macro {
 				final _v = $subCallRaw;

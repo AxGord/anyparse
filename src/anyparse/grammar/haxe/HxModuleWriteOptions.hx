@@ -1071,6 +1071,10 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// break already supplies the +cols, so chain operators co-indent with the
 	// head rather than compounding to +2cols). Non-keep chains ignore it (gated
 	// on `isKeep`). Default false → Plain / direct-value chains byte-inert.
+	// Also read by `WriterLowering.lowerTernaryBranch` as the "inside an explicit
+	// expression paren" signal: a rest-aware ternary is EXCLUDED when this is set
+	// (the paren owns the wrap). Keep the setter firing for ANY expression paren,
+	// not only Keep chains, or that ternary gate silently breaks.
 	_keepChainInParen: Bool,
 	// ω-typedef-intersection-operand-break — set per-element by
 	// `HxTypedefDecl.intersections`'s trivia-Star loop on the opt passed to a

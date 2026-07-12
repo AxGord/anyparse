@@ -480,7 +480,9 @@ class WriterLowering {
 		// operand Doc (bound once as `_pfxOperand`); every non-`#end` callee
 		// keeps the pre-slice emission byte-identically.
 		final dcArgs: Array<Expr> = [macro _pfxOperand];
-		final condEndSpace: Expr = macro anyparse.format.wrap.WrapList.endsWithCondEnd(_pfxOperand) ? _dt(' ') : ${openSpace ?? macro _de()};
+		final condEndSpace: Expr = macro anyparse.format.wrap.WrapList.endsWithCondEnd(_pfxOperand)
+			? _dt(' ')
+			: ${openSpace ?? macro _de()};
 		dcArgs.push(condEndSpace);
 		dcArgs.push(sepListCall);
 		final dcExpr: Expr = dcCall(dcArgs);
@@ -6524,16 +6526,23 @@ class WriterLowering {
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
 			final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
-			// ternary-rest-aware: pass `ternaryRestAware=true` only for a
-			// leading-break call-argument ternary (`_callArgChainNest`), so the
-			// chain-emit engine measures the argument's trailing comma. Exclude
-			// the string-interpolation context (`_chainModeOverride == NoWrap`,
-			// set at the `${...}` body): `_callArgChainNest` leaks into an
-			// interpolation whose enclosing string is the call argument, but the
-			// fork never wraps an interpolation body — keep it on `Group(IfBreak)`.
+			// ternary-rest-aware: measure the ternary's trailing rest-of-stack
+			// (the statement `;`, an enclosing argument `,`, ...) so a ternary whose
+			// flat body ends AT the line limit but whose physical line overflows
+			// breaks its `?`/`:` - the plain `Group(IfBreak)` pivot measures only
+			// `col + flatWidth` and ignores that trailing content, leaving such a
+			// ternary glued while the fork wraps it (which then opened an inner
+			// branch paren or spilled past the limit). The fork wraps the ternary
+			// in every host context (return / assignment / bare statement /
+			// array / object field / lambda body / call argument) EXCEPT two,
+			// where it keeps the ternary flat and wraps the host instead: a
+			// string-interpolation body (`_chainModeOverride == NoWrap`, set at the
+			// `${...}` body - the fork never wraps an interpolation) and a ternary
+			// kept inside an explicit expression paren (`_keepChainInParen` - that
+			// paren owns the wrap and opens itself, `return a + (cond ? b : c)`).
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
 				_items, _ops, opt, $rulesExpr, false, false, null, false, false, null,
-				opt._callArgChainNest && opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap
+				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen
 			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
@@ -7799,9 +7808,9 @@ class WriterLowering {
 				// splice), dedent the `#if` marker one level via ConditionalMarkerDecrease.
 				if (branch.fmtHasFlag('condSpliceCaseMarkerDedent')) {
 					final rawAccess: Expr = macro $i{argNames[0]}.raw;
-					parts.push(macro opt.condSpliceRawWrapsCases != null && opt.condSpliceRawWrapsCases($rawAccess)
-						? _dcmd($kwDoc)
-						: $kwDoc);
+					parts.push(
+						macro opt.condSpliceRawWrapsCases != null && opt.condSpliceRawWrapsCases($rawAccess) ? _dcmd($kwDoc) : $kwDoc
+					);
 				} else
 					parts.push(kwDoc);
 			}
@@ -8360,9 +8369,9 @@ class WriterLowering {
 		// Currently consumed by `HxTryCatchStmt.body` for
 		// `untypedBody=Keep` source-shape preservation.
 		final firstFieldNlOptIn: Bool = isFirstField && child.fmtHasFlag('beforeNewlineSlotFirst');
-		final bodyOnSameLineExpr: Null<Expr> = _ctx.trivia && (
-			!isFirstField || firstFieldNlOptIn
-		) ? beforeNewlineNotAccess(fieldName) : null;
+		final bodyOnSameLineExpr: Null<Expr> = _ctx.trivia && (!isFirstField || firstFieldNlOptIn)
+			? beforeNewlineNotAccess(fieldName)
+			: null;
 		// ω-556-then-body-leading-comment: own-line leading-comment
 		// slot, same gate as `bodyOnSameLineExpr` (the BeforeNewline
 		// sibling shares the `isBareNonFirstRef` host).
@@ -15443,9 +15452,11 @@ class WriterLowering {
 		// `leadingComments` carries the "split" shape (a trailing `/**` doc-comment
 		// preceded by `//` line-comments), fork's `existingBetweenFields=Remove`
 		// strips the inter-member source blank under the extern-scoped policy.
-		final stripBySplitLeadingExpr: Expr = existingBetweenFields ? macro (
-			opt._classExtern && _currHasSplitLeading && opt.externExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove
-		) : macro false;
+		final stripBySplitLeadingExpr: Expr = existingBetweenFields
+			? macro (
+				opt._classExtern && _currHasSplitLeading && opt.externExistingBetweenFields == anyparse.format.KeepEmptyLinesPolicy.Remove
+			)
+			: macro false;
 		// Companion suppress: in extern context fork never re-adds a blank at the
 		// inter-member slot when the next member's leading carries the split shape.
 		final addSuppressOnSplitLeadingExpr: Expr = existingBetweenFields ? macro (opt._classExtern && _currHasSplitLeading) : macro false;
