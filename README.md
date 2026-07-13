@@ -178,6 +178,7 @@ All resolve against real scopes (never by-name text replace), preserve formattin
 | `extract-superclass` | generate a superclass, pull a chosen `--members` set up into it (bodies + carried imports), and make the class `extends` it — no constructor on the superclass (the source constructor is unchanged), no call sites change; refuses stranded references and a class that already extends one |
 | `safe-delete` | remove a member only when no reference to it survives across the scope — the guarded, cross-file, any-visibility form of `remove-member`; any `x.member` access or bare in-type reference blocks the deletion (self-recursion excluded) and is listed |
 | `encapsulate-field` | turn a stored `var` field into an `@:isVar` property with `get_`/`set_` accessors — the field stays the backing storage so no reference is renamed; requires a plain, non-final, non-static, explicitly-typed instance field |
+| `make-final` | turn a mutable `var` field into `final` when it is never reassigned after its single initialisation (any write outside the constructor, cross-file `obj.field =` included, refuses) — unblocks the `move-member` instance path, whose final-fields contract needs it |
 | `symbols` / `importers` / `declares` | list top-level type declarations across a scope / files importing a module / the declaration site(s) of one named type |
 
 A second family — `add-member`, `add-import`, `add-element`, `replace-node` — *inserts*

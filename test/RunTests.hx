@@ -403,6 +403,7 @@ import unit.InheritanceMoveSliceTest;
 import unit.ExtractSuperclassSliceTest;
 import unit.SafeDeleteSliceTest;
 import unit.EncapsulateFieldSliceTest;
+import unit.MakeFinalSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -719,6 +720,7 @@ class RunTests {
 		addCase(new ExtractSuperclassSliceTest());
 		addCase(new SafeDeleteSliceTest());
 		addCase(new EncapsulateFieldSliceTest());
+		addCase(new MakeFinalSliceTest());
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());

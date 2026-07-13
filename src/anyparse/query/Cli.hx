@@ -505,6 +505,8 @@ final class Cli {
 				return runSafeDelete(rest);
 			case 'encapsulate-field':
 				return runEncapsulateField(rest);
+			case 'make-final':
+				return runMakeFinal(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6741,6 +6743,7 @@ final class Cli {
 		sysPrint('  extract-superclass  Generate a superclass, pull members up into it + extend it\n');
 		sysPrint('  safe-delete   Remove a member only if unreferenced across the scope\n');
 		sysPrint('  encapsulate-field   Turn a var field into a get/set property (@:isVar)\n');
+		sysPrint('  make-final    Turn a never-reassigned var field into final\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13621,6 +13624,97 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
 		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
+		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function runMakeFinal(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var typeName: Null<String> = null;
+		var scopeDir: Null<String> = null;
+		var write: Bool = false;
+		var file: Null<String> = null;
+		var fieldName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					typeName = expectValue(args, ++i, '--type');
+				case '--scope':
+					scopeDir = expectValue(args, ++i, '--scope');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printMakeFinalUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq make-final: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (fieldName == null)
+						fieldName = a;
+					else {
+						stderr('apq make-final: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || fieldName == null) {
+			stderr('apq make-final: missing required arguments (need <file> <field>)\n');
+			printMakeFinalUsage();
+			return EXIT_USAGE;
+		}
+		final filePath: String = file;
+		final fieldNameNN: String = fieldName;
+		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = scopeDir == null ? [
+			{
+				file: filePath,
+				source: try readFile(filePath) catch (exception: haxe.Exception) {
+					stderr('apq make-final: $filePath: ${exception.message}\n');
+					return EXIT_RUNTIME;
+				}
+			}
+		] : collectScopeFiles('make-final', scopeDir, [filePath]);
+		if (scopeFiles == null) return EXIT_RUNTIME;
+
+		final result: EditResult = MakeFinal.makeFinal(filePath, typeNameNN, fieldNameNN, scopeFiles, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq make-final: made "$fieldNameNN" final in $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq make-final: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printMakeFinalUsage(): Void {
+		sysPrint('Usage: apq make-final <file> <field> [--scope <dir>] [options]\n\n');
+		sysPrint('Turn a mutable var field into final when it is never reassigned after its\n');
+		sysPrint('single initialisation — unblocks the move-member instance path (whose\n');
+		sysPrint('sibling-fields contract accepts only final fields). Any write outside the\n');
+		sysPrint('constructor refuses the change. --scope widens the reassignment check to\n');
+		sysPrint('cross-file obj.field writes.\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
+		sysPrint('  --scope <dir>  Widen the reassignment check across the scope\n');
 		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
