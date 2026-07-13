@@ -399,6 +399,7 @@ import unit.ClustersTest;
 import unit.MoveMemberSliceTest;
 import unit.CrossRenameMemberSliceTest;
 import unit.ExtractInterfaceSliceTest;
+import unit.InheritanceMoveSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -711,6 +712,7 @@ class RunTests {
 		addCase(new CrossRenameSliceTest());
 		addCase(new CrossRenameMemberSliceTest());
 		addCase(new ExtractInterfaceSliceTest());
+		addCase(new InheritanceMoveSliceTest());
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());

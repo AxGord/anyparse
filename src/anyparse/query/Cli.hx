@@ -495,6 +495,10 @@ final class Cli {
 				return runMoveMember(rest);
 			case 'extract-interface':
 				return runExtractInterface(rest);
+			case 'pull-up':
+				return runInheritanceMove(rest, true);
+			case 'push-down':
+				return runInheritanceMove(rest, false);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6726,6 +6730,8 @@ final class Cli {
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
 		sysPrint('  move-member   Move a static member to another type (same package), rewriting call sites\n');
 		sysPrint('  extract-interface  Generate an interface from a class\'s public methods + implement it\n');
+		sysPrint('  pull-up       Move an instance member up to its superclass\n');
+		sysPrint('  push-down     Move an instance member down to a subclass\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13260,6 +13266,90 @@ final class Cli {
 		sysPrint('  --out <path>       Interface file path (default: sibling <IfaceName>.hx)\n');
 		sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
 		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function runInheritanceMove(args: Array<String>, up: Bool): Int {
+		final cmd: String = up ? 'pull-up' : 'push-down';
+		var lang: String = 'haxe';
+		var srcType: Null<String> = null;
+		var targetType: Null<String> = null;
+		var scopeDir: Null<String> = null;
+		var write: Bool = false;
+		var srcFile: Null<String> = null;
+		var memberName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					srcType = expectValue(args, ++i, '--type');
+				case '--to':
+					targetType = expectValue(args, ++i, '--to');
+				case '--scope':
+					scopeDir = expectValue(args, ++i, '--scope');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printInheritanceMoveUsage(up);
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq $cmd: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (srcFile == null)
+						srcFile = a;
+					else if (memberName == null)
+						memberName = a;
+					else {
+						stderr('apq $cmd: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (srcFile == null || memberName == null || targetType == null || scopeDir == null) {
+			stderr('apq $cmd: missing required arguments\n');
+			printInheritanceMoveUsage(up);
+			return EXIT_USAGE;
+		}
+		final srcFileNN: String = srcFile;
+		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final targetTypeName: String = targetType;
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles(cmd, scopeDir, [srcFileNN]);
+		if (scopeFiles == null) return EXIT_RUNTIME;
+
+		final result: MoveResult = up
+			? InheritanceMove.pullUp(srcFileNN, srcTypeName, memberName, targetTypeName, scopeFiles, plugin)
+			: InheritanceMove.pushDown(srcFileNN, srcTypeName, memberName, targetTypeName, scopeFiles, plugin);
+		return emitMoveResult(cmd, result, srcFileNN, srcFileNN, write);
+	}
+
+	private static function printInheritanceMoveUsage(up: Bool): Void {
+		final cmd: String = up ? 'pull-up' : 'push-down';
+		final rel: String = up ? 'superclass' : 'subclass';
+		sysPrint('Usage: apq $cmd <srcFile> <member> --to <$rel> --scope <dir> [options]\n\n');
+		if (up) {
+			sysPrint('Move an instance member from a subclass up to its superclass. No call\n');
+			sysPrint('sites change (subclass instances still see the inherited member). Refuses\n');
+			sysPrint('when the moved body references a subclass-only member.\n\n');
+		} else {
+			sysPrint('Move an instance member from a superclass down to a subclass. No call\n');
+			sysPrint('sites are rewritten; callers holding a superclass-typed receiver stop\n');
+			sysPrint('compiling (a loud error, never a silent change).\n\n');
+		}
+		sysPrint('Options:\n');
+		sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
+		sysPrint('  --to <$rel>  Target type name (must be in the direct inheritance relation)\n');
+		sysPrint('  --scope <dir>  Scope to locate the target type (dir/glob; srcFile auto-included)\n');
+		sysPrint('  --write        Apply in place (default: print a per-file summary)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 }
