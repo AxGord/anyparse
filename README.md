@@ -167,7 +167,7 @@ All resolve against real scopes (never by-name text replace), preserve formattin
 
 | Command | Operation |
 |---|---|
-| `rename` | rename the binding at the cursor + its in-file occurrences; `--scope <dir>` does a cross-file **type** rename (decl, type positions, `new`/cast/`extends`, import/using segments, `T.staticMethod()`) atomically |
+| `rename` | rename the binding at the cursor + its in-file occurrences; `--scope <dir>` renames cross-file whatever the cursor lands on — a **type** (decl, type positions, `new`/cast/`extends`, import/using segments, `T.staticMethod()`) or a **member** (method/field: decl, in-type refs, `Src.member` for statics, `obj.member` for type-resolved instance receivers) atomically |
 | `inline` / `inline-method` | inline a local variable into its reads / a single-return function into its call sites |
 | `extract-var` / `extract-method` | hoist an expression into a `final`, or a statement run into a local function |
 | `change-sig` / `add-param` / `remove-param` | reorder params + call-site args / append a backward-compatible param / drop a param + its arguments |

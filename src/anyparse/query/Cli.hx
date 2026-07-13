@@ -905,9 +905,15 @@ final class Cli {
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
 		final refShape: RefShape = plugin.refShape();
-		final result: CrossRenameResult = CrossRename.crossRenameType(
-			filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape, refShape
-		);
+		// Dispatch on what the cursor lands on: a TYPE declaration renames
+		// through CrossRename, a MEMBER declaration through CrossRenameMember.
+		final onType: Bool = try {
+			final tree: QueryNode = plugin.parseFile(source);
+			RefactorSupport.resolveTypeDeclAtCursor(tree, Span.offsetOf(source, line, col), source) != null;
+		} catch (exception: Exception) false;
+		final result: CrossRenameResult = onType
+			? CrossRename.crossRenameType(filePath, source, line, col, newName, scopeFiles, plugin, typeRefShape, refShape)
+			: CrossRenameMember.crossRenameMember(filePath, source, line, col, newName, scopeFiles, plugin, refShape);
 		switch result {
 			case Ok(changes, advisory):
 				var totalOccurrences: Int = 0;
@@ -7075,7 +7081,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --scope <dir>       Cross-file TYPE rename across every .hx under <dir>\n');
+		sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
@@ -7087,8 +7093,9 @@ final class Cli {
 		sysPrint('a renameable identifier, or an unparseable result, exits non-zero with\n');
 		sysPrint('the file untouched.\n');
 		sysPrint('\n');
-		sysPrint('With --scope <dir> the cursor MUST be on a TYPE declaration (class /\n');
-		sysPrint('interface / enum / typedef / abstract); that type is renamed across\n');
+		sysPrint('With --scope <dir> the cursor selects a TYPE or a MEMBER declaration.\n');
+		sysPrint('On a TYPE declaration (class /\n');
+		sysPrint('interface / enum / typedef / abstract) that type is renamed across\n');
 		sysPrint('every .hx file under <dir> — type positions, new T, cast, extends /\n');
 		sysPrint('implements, type params, the decl name, import / using segments, and\n');
 		sysPrint('static-receiver accesses (T.staticMethod() / T.CONST whose receiver is\n');
@@ -7098,6 +7105,15 @@ final class Cli {
 		sysPrint('if the type is declared in more than one file under scope, if any scope\n');
 		sysPrint('file does not parse, or if any rewritten file fails to re-parse — the\n');
 		sysPrint('write is atomic. Without --write a per-file occurrence summary is printed.\n');
+		sysPrint('\n');
+		sysPrint('On a MEMBER declaration (field / method, e.g. --select FnMember:foo)\n');
+		sysPrint('that member is renamed across scope: the decl, in-type references, and\n');
+		sysPrint('qualified accesses — Src.member for a static member, obj.member whose\n');
+		sysPrint('receiver resolves to the source type for an instance member. Receivers\n');
+		sysPrint('whose type does not resolve, super-access, using-extension calls, and\n');
+		sysPrint('overrides are left as loud compile errors. Refuses an override member,\n');
+		sysPrint('a name already declared on the type, or a type declared more than once\n');
+		sysPrint('under scope.\n');
 	}
 
 	private static function printMoveUsage(): Void {

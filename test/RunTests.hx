@@ -397,6 +397,7 @@ import unit.HxCondForContainerGlueSliceTest;
 import unit.HxIfExprCondWrapSliceTest;
 import unit.ClustersTest;
 import unit.MoveMemberSliceTest;
+import unit.CrossRenameMemberSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -707,6 +708,7 @@ class RunTests {
 		addCase(new RemoveImportSliceTest());
 		addCase(new RemoveMemberSliceTest());
 		addCase(new CrossRenameSliceTest());
+		addCase(new CrossRenameMemberSliceTest());
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());
