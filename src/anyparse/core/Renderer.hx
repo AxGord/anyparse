@@ -1841,8 +1841,9 @@ class Renderer {
 					// calibrated to the un-flushed column and would over-fire (wrap
 					// a chain that fits) if the pending space were added.
 					final effPending: Int = n > width ? pendingSpace : 0;
-					final fullLineCrosses: Bool = (col + effPending + DocMeasure.flatTokenWidth(flatDoc)
-						+ flatTokenWidthOfRestStackFull(stack) >= n);
+					final fullLineCrosses: Bool = (
+						col + effPending + DocMeasure.flatTokenWidth(flatDoc) + flatTokenWidthOfRestStackFull(stack) >= n
+					);
 					// ω-collapse-commit: record the open/glued decision at
 					// this node's true render column for the Doc→Doc pass.
 					// Keyed by node identity (enum `==` is reference equality

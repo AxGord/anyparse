@@ -7592,8 +7592,7 @@ class WriterLowering {
 						? _dc([$leadDoc, _dn(_cols, _dc([_dhl(), _wrapInner])), _dhl(), _wrapTrail])
 						: anyparse.format.wrap.WrapList.isPureOpAddSubChain(_wrapInner)
 							? (
-								opt._parenInCondition
-									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+								anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
 									? _dfle(opt.lineWidth + 1, _dc([
 										$leadDoc,
 										_dn(_cols, _dc([_dhl(), _wrapInner])),

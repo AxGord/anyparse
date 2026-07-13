@@ -26,6 +26,7 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 	private static final EXPR_WRAP_SECTION: String = '"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},';
 
 	private static final SRC: String = 'class Sample {\n\tfunction run() {\n\t\tspriteMarkItem.x = offsetX + (node.bucket ? MeasureMap.PANEL_ROW_GRID_INDENT_MARK_ICON : !_fixedMarkSearch ? MeasureMap.PANEL_ROW_GRID_INDENT_MARK_ICON : MeasureMap.PANEL_ROW_GRID_INDENT_MARK_ICON_FIXED_MARK_SEARCH);\n\t}\n}';
+	private static final SRC_OPADDSUB: String = "class Sample {\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null ? ((headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: ' + headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue) : '';\n\t}\n}";
 
 	public function new(): Void {
 		super();
@@ -95,6 +96,33 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		Assert.equals(
 			'class Sample {\n\n\tfunction run() {\n\t\tif (isArrowBodyMarkerLongName || isMethodChainItemLong || !(startsCollectionDelimHere || firstBreakIsArrayDelimValXXXXX)) return -1;\n\t}\n\n}',
 			triviaWrite(src, CFG)
+		);
+	}
+
+
+	/**
+	 * omega-ternary-paren-open (opAddSub sibling): an expression paren whose inner
+	 * is a top-level opAddSub chain OPENS under a fillLine-family expressionWrapping
+	 * mode when it overflows — break after `(`, chain nested one level, close `)` on
+	 * its own line. Position-agnostic: fires for a ternary branch here, not only a
+	 * condition operand (the arm previously gated the open on `_parenInCondition`).
+	 */
+	public function testFillLineExpressionWrapOpensParenOpAddSub(): Void {
+		Assert.equals(
+			"class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n\t\t\t? (\n\t\t\t\t(headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: '\n\t\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue\n\t\t\t)\n\t\t\t: '';\n\t}\n\n}",
+			triviaWrite(SRC_OPADDSUB, CFG)
+		);
+	}
+
+
+	/**
+	 * Without expressionWrapping the opAddSub paren stays glued (`? ((`) — the config
+	 * gate keeps fork default-config parity (corpus byte-inert).
+	 */
+	public function testDefaultExpressionWrapKeepsParenOpAddSubGlued(): Void {
+		Assert.equals(
+			"class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n\t\t\t? ((headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: '\n\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue)\n\t\t\t: '';\n\t}\n\n}",
+			triviaWrite(SRC_OPADDSUB, CFG.replace(EXPR_WRAP_SECTION, ''))
 		);
 	}
 
