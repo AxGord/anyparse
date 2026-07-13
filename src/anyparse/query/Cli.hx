@@ -55,6 +55,7 @@ import anyparse.check.LintConfig;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.CallEdge;
+import anyparse.query.Clusters.ClusterReport;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -560,6 +561,8 @@ final class Cli {
 				return runCallers(rest);
 			case 'reach':
 				return runReach(rest);
+			case 'clusters':
+				return runClusters(rest);
 			case 'gates':
 				return runGates(rest);
 			case 'diff':
@@ -6754,6 +6757,7 @@ final class Cli {
 		sysPrint('  callees       Transitive call tree FROM a function (approximate call graph)\n');
 		sysPrint('  callers       Transitive call tree INTO a function (approximate call graph)\n');
 		sysPrint('  reach         Shortest call path(s) --from A --to B over the call graph\n');
+		sysPrint('  clusters      Partition a type\'s members by call-edge connectivity (hub bucket + components)\n');
 		sysPrint('  gates         List @:fmt(trailOptParseGate/trailOptShapeGate) annotations + predicate names\n');
 		sysPrint('  diff          Structural AST diff between two files\n');
 		sysPrint('  strip         Sed-strip + parse-check (sole-blocker confirmation)\n');
@@ -9090,9 +9094,10 @@ final class Cli {
 			}
 		}
 		if (
-			o.permissiveConstruct
-			&& (o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe || o.clusterFilter != null
-			|| o.candidatesRegex != null || o.patterns.length > 0)
+			o.permissiveConstruct && (
+				o.probePath != null || o.predictStrip || o.predictRelax || o.regressionProbe || o.clusterFilter != null
+				|| o.candidatesRegex != null || o.patterns.length > 0
+			)
 		) {
 			stderr(
 				'apq recon: --permissive-construct is its own mode — mutually exclusive with --probe / --predict-strip / --predict-relax / --regression-probe / --cluster / --candidates / --replace/--with/--delete\n'
@@ -12960,6 +12965,83 @@ final class Cli {
 		sysPrint('  --max-paths <n>   Cap on reported paths (default $DEFAULT_REACH_PATHS)\n');
 		sysPrint('  --kinds <k,..>    Edge kinds to traverse (default call,ref,new,virtual)\n');
 		sysPrint('  --lang <name>     Grammar plugin (default haxe)\n');
+	}
+
+	private static function runClusters(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var hubCount: Null<Int> = null;
+		var kinds: Null<Array<EdgeKind>> = null;
+		var target: Null<String> = null;
+		final inputSpecs: Array<String> = [];
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--hubs':
+					final raw: String = expectValue(args, ++i, '--hubs');
+					final parsed: Null<Int> = Std.parseInt(raw);
+					if (parsed == null || parsed < 0) {
+						stderr('apq clusters: --hubs expects a non-negative integer (0 = no hub extraction)\n');
+						return EXIT_USAGE;
+					}
+					hubCount = parsed;
+				case '--kinds':
+					kinds = parseEdgeKinds('clusters', expectValue(args, ++i, '--kinds'));
+					if (kinds == null) return EXIT_USAGE;
+				case '-h', '--help':
+					printClustersUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq clusters: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (target == null)
+						target = a;
+					else
+						inputSpecs.push(a);
+			}
+			i++;
+		}
+		if (target == null) {
+			stderr('apq clusters: missing <TypeName> argument\n');
+			printClustersUsage();
+			return EXIT_USAGE;
+		}
+		if (inputSpecs.length == 0) {
+			stderr('apq clusters: missing <file-or-dir-or-glob> argument\n');
+			printClustersUsage();
+			return EXIT_USAGE;
+		}
+		final typeName: String = target;
+
+		final built: Null<{ graph: CallGraph, sources: Map<String, String> }> = buildCallGraphScope('clusters', inputSpecs, lang);
+		if (built == null) return EXIT_RUNTIME;
+		final graph: CallGraph = built.graph;
+		final sources: Map<String, String> = built.sources;
+		final report: Null<ClusterReport> = Clusters.analyze(graph, typeName, hubCount, kinds);
+		if (report == null) {
+			stderr('apq clusters: no type in scope has members named "$typeName"\n');
+			return emptyExit(true);
+		}
+		sysPrint(Clusters.render(graph, report, f -> sources[f]));
+		if (graph.unresolved.length > 0)
+			stderr('apq clusters: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
+		return emptyExit(false);
+	}
+
+	private static function printClustersUsage(): Void {
+		sysPrint('Usage: apq clusters <TypeName> <file-or-dir-or-glob>... [options]\n\n');
+		sysPrint('Partition analytics over the call graph: cluster the members of one type\n');
+		sysPrint('by intra-type call-edge connectivity, extracting high-fan-in hub members\n');
+		sysPrint('into a utils bucket first (else one hub glues everything into a blob).\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --hubs <n>     Extract exactly the top-n fan-in hubs (0 = off; default auto)\n');
+		sysPrint('  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains (default call,ref,new)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 }

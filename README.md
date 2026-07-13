@@ -155,6 +155,7 @@ For the full flag set on any command: `hxq <cmd> --help`.
 | `mentions` / `lit` / `cases` | every named occurrence / string-or-ident leaves / switch case-patterns |
 | `callees` / `callers` | transitive call tree out of / into a function (`--depth`), over the approximate project-wide call graph (name + declared-type resolution, `Null<T>` unwrapped; virtual edges to subtype overrides; `Ref` edges for lambdas / method values / `.bind` with the receiving call recorded as `via`; out-of-scope targets become `[external]` nodes; unresolved sites counted honestly) |
 | `reach` | shortest call path(s) `--from A --to B` (repeatable `--to`, `Type.*` patterns) over the same graph — "does main-context code reach this blocking call, and through which chain" |
+| `clusters` | partition analytics for one type over the same graph — "along which lines does this god-type split": members grouped by undirected intra-type call-edge connectivity after high-fan-in hubs are extracted into a utils bucket (`--hubs <n>`, `0` = off, default auto; lambdas condensed into their enclosing member); each component reports its directional hub traffic (the future module interface), plus resolved/unresolved coverage counts |
 | `meta` | declarations carrying a given `@:metadata` |
 | `diff` | structural AST diff between two files |
 | `source` | raw verbatim lines — `--range`, or one node's source by name/position (`--select` / `--at`); no-parse mode reads files the grammar can't yet read |

@@ -395,6 +395,7 @@ import unit.HxOpAddParenInnerBreakTest;
 import unit.HxCondSpliceChainWrapSliceTest;
 import unit.HxCondForContainerGlueSliceTest;
 import unit.HxIfExprCondWrapSliceTest;
+import unit.ClustersTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -822,6 +823,7 @@ class RunTests {
 		addCase(new SuppressionSliceTest());
 		addCase(new ApqExitOnEmptyCliTest());
 		addCase(new CallGraphTest());
+		addCase(new ClustersTest());
 		addCase(new ThreadSafetyCheckTest());
 		utest.ui.Report.create(runner);
 		runner.run();

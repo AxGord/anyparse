@@ -164,10 +164,7 @@ class CallGraphTest extends Test {
 	}
 
 	private function graphOf(sources: Array<String>): CallGraph {
-		final files: Array<{ file: String, source: String }> = [
-			for (i in 0...sources.length) { file: 'F$i.hx', source: sources[i] }
-		];
-		return CallGraph.build(files, new HaxeQueryPlugin());
+		return QueryTestHelpers.graphOf(sources);
 	}
 
 	private function edges(g: CallGraph, from: String, to: String, kind: EdgeKind): Array<CallEdge> {
