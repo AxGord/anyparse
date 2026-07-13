@@ -503,6 +503,8 @@ final class Cli {
 				return runExtractSuperclass(rest);
 			case 'safe-delete':
 				return runSafeDelete(rest);
+			case 'encapsulate-field':
+				return runEncapsulateField(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6738,6 +6740,7 @@ final class Cli {
 		sysPrint('  push-down     Move an instance member down to a subclass\n');
 		sysPrint('  extract-superclass  Generate a superclass, pull members up into it + extend it\n');
 		sysPrint('  safe-delete   Remove a member only if unreferenced across the scope\n');
+		sysPrint('  encapsulate-field   Turn a var field into a get/set property (@:isVar)\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13535,6 +13538,88 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type)\n');
 		sysPrint('  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)\n');
+		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
+		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function runEncapsulateField(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var typeName: Null<String> = null;
+		var reformat: Bool = false;
+		var write: Bool = false;
+		var file: Null<String> = null;
+		var fieldName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					typeName = expectValue(args, ++i, '--type');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printEncapsulateFieldUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq encapsulate-field: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (fieldName == null)
+						fieldName = a;
+					else {
+						stderr('apq encapsulate-field: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || fieldName == null) {
+			stderr('apq encapsulate-field: missing required arguments (need <file> <field>)\n');
+			printEncapsulateFieldUsage();
+			return EXIT_USAGE;
+		}
+		final filePath: String = file;
+		final fieldNameNN: String = fieldName;
+		final typeNameNN: String = typeName ?? RefactorSupport.baseNameOf(filePath);
+		final source: String = try readFile(filePath) catch (exception: haxe.Exception) {
+			stderr('apq encapsulate-field: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq encapsulate-field: encapsulated "$fieldNameNN" in $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq encapsulate-field: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printEncapsulateFieldUsage(): Void {
+		sysPrint('Usage: apq encapsulate-field <file> <field> [options]\n\n');
+		sysPrint('Turn a stored var field into a property with get / set accessors\n');
+		sysPrint('(via @:isVar, so the field stays the backing storage and no reference\n');
+		sysPrint('is renamed). Requires a plain, non-final, non-static instance var with\n');
+		sysPrint('an explicit type.\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
 		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
 		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
