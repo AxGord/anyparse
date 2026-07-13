@@ -208,6 +208,22 @@ final class CollapsePass {
 			case _:
 		}
 
+		// FORWARD glue for a cond-forced fillLine chain (`WrapBoundary(Group(Nest(
+		// Fill)))`, a single-shape chain with NO 2-state `IfBreak` for
+		// `chainGluedIfOpens` to commit). When its LAST operand is a paren that
+		// commits open, the soft-line break before it is spurious (the fork glues
+		// the operators up to the open `(` and lets the paren take the wraps). Glue
+		// the packed operands into one flat line; the opening paren renders its own
+		// break. Mirrors `chainGluedIfOpens`/`collapseChainBreaksAfter` for the
+		// fillLine shape the If*-pivot matcher cannot reach.
+		switch d {
+			case WrapBoundary(Group(Nest(nc, Fill(fitems, _, _)))) if (
+fitems.length > 1
+				&& subtreeOpens(fitems[fitems.length - 1], decisions)
+):
+				return WrapBoundary(Group(Nest(nc, gluedFillChain(fitems, decisions, width))));
+			case _:
+		}
 		return mapChildren(d, child -> rewrite(child, decisions, insideBroken, width));
 	}
 
@@ -910,7 +926,17 @@ final class CollapsePass {
 	 */
 	private static function isCandidate(d: Doc): Bool {
 		return switch d {
-			case IfFullLineExceeds(_, open, _): containsCollapseProbe(open);
+			case IfFullLineExceeds(_, open, _):
+				// Second disjunct: the cond-opBool/opAddSub open shape WriterLowering
+				// emits WITHOUT a `CollapseProbe` (it drops `_dcp` for `_parenInCondition`
+				// parens so `collapseParenCommitsOpen`'s fit-gate cannot re-glue them —
+				// re-adding a marker here would re-trigger it). Matched by raw shape
+				// (leading-break Nest + open/close delimiters); the `opens(d)` gate at
+				// every consumer keeps a false shape-match inert.
+				containsCollapseProbe(open) || ( switch open {
+					case Concat([_, Nest(_, Concat([Line(_), _])), Line(_), _]): true;
+					case _: false;
+				});
 			case _: false;
 		};
 	}
@@ -1205,6 +1231,24 @@ final class CollapsePass {
 				i < items.length && argsStartsWithHardline(items[i]);
 			case _: false;
 		};
+	}
+
+
+	/**
+	 * Renders a fillLine chain's packed operands as one glued flat line (operands
+	 * joined by the flat separator space), recursing so the opening last-operand
+	 * paren commits to its open branch. Used by the forward-glue for a cond-forced
+	 * fillLine chain whose last operand opens.
+	 */
+	private static function gluedFillChain(
+		items: Array<Doc>, decisions: Array<{ node: Doc, crosses: Bool, ?indent: Int }>, width: Int
+	): Doc {
+		final glued: Array<Doc> = [];
+		for (i in 0...items.length) {
+			if (i > 0) glued.push(Text(' '));
+			glued.push(rewrite(items[i], decisions, false, width));
+		}
+		return Concat(glued);
 	}
 
 }

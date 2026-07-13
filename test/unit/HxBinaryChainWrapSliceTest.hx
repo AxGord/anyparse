@@ -51,6 +51,16 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 
+	/**
+	 * Shared input for the two cond-chain paren-open/head-glue guard tests
+	 * (`testParenOpensForOpBoolChainOperandInCondition` and
+	 * `testCondChainHeadGluesToOpeningParen`): a 7-operand `||` subchain as the
+	 * last operand of a condition `&&` chain, plus a non-NoWrap wrapping config.
+	 */
+	private static final CONDITION_CHAIN_SRC: String = 'class C { static function m():Void { if (alphaCondVal && betaCondVal && (cccccccccccc || dddddddddddd || eeeeeeeeeeee || ffffffffffff || gggggggggggg || hhhhhhhhhhhh || iiiiiiiiiiii)) return; } }';
+
+	private static final CONDITION_CHAIN_CFG: String = '{ "wrapping": { "conditionWrapping": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 0 }], "type": "noWrap" }] }, "expressionWrapping": { "defaultWrap": "fillLineWithLeadingBreak", "rules": [{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 0 }], "type": "noWrap" }] }, "opBoolChain": { "defaultWrap": "noWrap", "rules": [{ "conditions": [{ "cond": "exceedsMaxLineLength", "value": 1 }], "type": "fillLine", "location": "beforeLast" }] } } }';
+
 	public function testShortBoolChainStaysFlat(): Void {
 		final src: String = 'class C { var x:Bool = a || b || c; }';
 		final out: String = writeWithLineWidth(src, 80);
@@ -307,6 +317,40 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		);
 		// ...and the add-tail + compare glue flat (single line) one indent deeper.
 		Assert.isTrue(out.indexOf('+ additionalValue + extraOffset > upperLimit') != -1, 'expected glued add-tail + compare in: <$out>');
+	}
+
+	public function testParenOpensForOpBoolChainOperandInCondition(): Void {
+		// A parenthesized opBool subchain that is an OPERAND of a condition's
+		// `&&`/`||` chain OPENS (`&& (\n ... \n)`) when its content cannot fit
+		// on one line, rather than staying glued with the `(` fused to the
+		// first operand. Mirrors the opAddSub-in-condition path: config-gated
+		// on `expressionWrapping` being non-NoWrap (so the default corpus
+		// config stays byte-inert) AND the paren sitting inside a condition
+		// (`_parenInCondition`). A small group that still fits keeps glued.
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONDITION_CHAIN_CFG);
+		opts.lineWidth = 80;
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(CONDITION_CHAIN_SRC), opts);
+		// Open head: `(` ends the `&&` line, the first operand drops below.
+		Assert.isTrue(out.indexOf('&& (\n') != -1, 'expected paren to OPEN (`&& (` alone) in: <$out>');
+		// Close `)` lands on its own line, not glued to the last operand.
+		Assert.isTrue(out.indexOf('iiiiiiiiiiii\n') != -1, 'expected close `)` NOT glued to last operand in: <$out>');
+	}
+
+	public function testCondChainHeadGluesToOpeningParen(): Void {
+		// When a condition's `&&` chain has an opening paren as its LAST operand,
+		// the chain head glues up to the open `(` (`a && b && (`) instead of
+		// breaking the soft-line before the last operator (`a && b` / `&& (`).
+		// The cond-forced fillLine chain is a single-shape `Fill` with no 2-state
+		// pivot for the If*-based forward-glue to commit, so a dedicated Fill
+		// forward-glue (last operand opens -> render the packed operands glued)
+		// mirrors `collapseChainBreaksAfter` for this shape.
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONDITION_CHAIN_CFG);
+		opts.lineWidth = 80;
+		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(CONDITION_CHAIN_SRC), opts);
+		// Head stays on the open-paren line: `... betaCondVal && (` then a break.
+		Assert.isTrue(out.indexOf('betaCondVal && (\n') != -1, 'expected chain head glued to `(` in: <$out>');
+		// NOT broken before the last operator (a broken shape ends a line with betaCondVal).
+		Assert.isTrue(out.indexOf('betaCondVal\n') == -1, 'chain head should not break before `&& (` in: <$out>');
 	}
 
 }

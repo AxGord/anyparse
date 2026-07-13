@@ -2595,12 +2595,11 @@ class Renderer {
 			// current line (fork re-flows a splice operand this way) and the verbatim
 			// newline breaks the rest; `-1` = no embedded break → the standard probe.
 			final embW: Int = embeddedFirstLineWidth(Concat([fillSep, fillRest[idx]]));
-			final fits: Bool = !prevWrapped
-				&& (
-					embW >= 0
-						? embW <= width - ctx.col
-						: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
-				);
+			final fits: Bool = !prevWrapped && (
+				embW >= 0
+					? embW <= width - ctx.col
+					: fitsFlat(width - ctx.col - effTailReserve - restW, f.indent, Concat([fillSep, fillRest[idx]]))
+			);
 			if (idx + 1 < fillRest.length) {
 				// Snapshot the line where `fillRest[idx]` STARTS: when the
 				// separator breaks (`!fits`) the item begins on the next

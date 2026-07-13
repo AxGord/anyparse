@@ -7618,12 +7618,20 @@ class WriterLowering {
 										]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
 										: _dc([$leadDoc, _wrapInner, _wrapTrail])
 								)
-								: _dfle(opt.lineWidth + 1, _dc([
-									$leadDoc,
-									_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
-									_dhl(),
-									_wrapTrail
-								]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
+								: opt._parenInCondition
+									&& anyparse.format.wrap.WrapList.effectiveExpressionWrapMode(opt.expressionWrappingWrap) != null
+									? _dfle(opt.lineWidth + 1, _dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _wrapInner])),
+										_dhl(),
+										_wrapTrail
+									]), _dc([$leadDoc, _wrapInner, _wrapTrail]))
+									: _dfle(opt.lineWidth + 1, _dc([
+										$leadDoc,
+										_dn(_cols, _dc([_dhl(), _dcp(_wrapInner)])),
+										_dhl(),
+										_wrapTrail
+									]), _dc([$leadDoc, _wrapInner, _wrapTrail]));
 		};
 	}
 
@@ -14010,10 +14018,11 @@ class WriterLowering {
 		return (sepText != null && blockEnded)
 			? macro {
 				if (
-					_si > 0 && _priorElemDoc != null
-					&& (_arr[_si - 1].sepAfter
-					|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
-					&& !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node))))
+					_si > 0 && _priorElemDoc != null && (
+						_arr[_si - 1].sepAfter
+						|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
+						&& !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node)))
+					)
 				) {
 					_docs.push(_dt($v{sepText}));
 				}
@@ -14786,9 +14795,10 @@ class WriterLowering {
 				// its own line after `[`. Other elements (index > 0) carry only genuine INTERNAL
 				// newlines, so they are always counted.
 				if (
-					_t.newlineBefore && !_ignoreEmit && !_matrixOff
-					&& !($v{reflowSourceMultiline} && _ti == 0 && !_keepEmit && Type.enumConstructor(cast _t.node) != 'ForExpr'
-					&& Type.enumConstructor(cast _t.node) != 'WhileExpr')
+					_t.newlineBefore && !_ignoreEmit && !_matrixOff && !(
+						$v{reflowSourceMultiline} && _ti == 0 && !_keepEmit && Type.enumConstructor(cast _t.node) != 'ForExpr'
+						&& Type.enumConstructor(cast _t.node) != 'WhileExpr'
+					)
 				)
 					_hasSourceNewlines = true;
 				if (_noWrapFlat) {
