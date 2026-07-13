@@ -499,6 +499,8 @@ final class Cli {
 				return runInheritanceMove(rest, true);
 			case 'push-down':
 				return runInheritanceMove(rest, false);
+			case 'extract-superclass':
+				return runExtractSuperclass(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6732,6 +6734,7 @@ final class Cli {
 		sysPrint('  extract-interface  Generate an interface from a class\'s public methods + implement it\n');
 		sysPrint('  pull-up       Move an instance member up to its superclass\n');
 		sysPrint('  push-down     Move an instance member down to a subclass\n');
+		sysPrint('  extract-superclass  Generate a superclass, pull members up into it + extend it\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13350,6 +13353,100 @@ final class Cli {
 		sysPrint('  --scope <dir>  Scope to locate the target type (dir/glob; srcFile auto-included)\n');
 		sysPrint('  --write        Apply in place (default: print a per-file summary)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function runExtractSuperclass(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var srcType: Null<String> = null;
+		var members: Null<String> = null;
+		var out: Null<String> = null;
+		var write: Bool = false;
+		var srcFile: Null<String> = null;
+		var superName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					srcType = expectValue(args, ++i, '--type');
+				case '--members':
+					members = expectValue(args, ++i, '--members');
+				case '--out':
+					out = expectValue(args, ++i, '--out');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printExtractSuperclassUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq extract-superclass: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (srcFile == null)
+						srcFile = a;
+					else if (superName == null)
+						superName = a;
+					else {
+						stderr('apq extract-superclass: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (srcFile == null || superName == null || members == null) {
+			stderr('apq extract-superclass: missing required arguments (need <srcFile> <SuperName> --members m1,m2)\n');
+			printExtractSuperclassUsage();
+			return EXIT_USAGE;
+		}
+		final srcFileNN: String = srcFile;
+		final superNameNN: String = superName;
+		final membersNN: String = members;
+		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final memberNames: Array<String> = membersNN.split(',').map(StringTools.trim).filter(n -> n != '');
+		final slash: Int = srcFileNN.lastIndexOf('/');
+		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
+		final superFile: String = out ?? '$dir$superNameNN.hx';
+
+		final source: String = try readFile(srcFileNN) catch (exception: haxe.Exception) {
+			stderr('apq extract-superclass: $srcFileNN: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final result: MoveResult = ExtractSuperclass.extract(srcFileNN, srcTypeName, superNameNN, superFile, memberNames, source, plugin);
+		switch result {
+			case Ok(changes, advisory):
+				if (write) {
+					for (c in changes) writeFile(c.file, c.newSource);
+					stderr('apq extract-superclass: wrote ${changes.length} file(s)\n');
+				} else {
+					for (c in changes) sysPrint('${c.file}: ${c.file == superFile ? 'created' : 'updated'}\n');
+					sysPrint('total: ${changes.length} file(s)\n');
+				}
+				if (advisory != null) stderr('apq extract-superclass: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq extract-superclass: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printExtractSuperclassUsage(): Void {
+		sysPrint('Usage: apq extract-superclass <srcFile> <SuperName> --members m1,m2 [options]\n\n');
+		sysPrint('Generate a superclass, pull the named instance members up into it, and\n');
+		sysPrint('make the class extend it. The superclass lands in the source package\n');
+		sysPrint('(sibling <SuperName>.hx by default) with no constructor, carrying the\n');
+		sysPrint('imports the moved bodies reference. No call sites change (inheritance).\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --members m1,m2    Members to pull up (required)\n');
+		sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
+		sysPrint('  --out <path>       Superclass file path (default: sibling <SuperName>.hx)\n');
+		sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
+		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
 	}
 
 }
