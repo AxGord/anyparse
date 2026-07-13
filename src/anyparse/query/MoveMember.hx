@@ -27,13 +27,48 @@ private typedef MemberGroup = {
 }
 
 /**
+ * One member being moved: its resolved group, member-node span, cut
+ * span, and staticness (instance members obey the sibling-fields
+ * contract — see the class doc).
+ */
+private typedef MovedMember = {
+	var name: String;
+	var group: MemberGroup;
+	var span: Span;
+	var cut: Span;
+	var isStatic: Bool;
+}
+
+/**
+ * A destination field to mirror under `--scaffold`: its name and the
+ * verbatim source of its declared type on the source type.
+ */
+private typedef ScaffoldField = {
+	var name: String;
+	var type: String;
+}
+
+/**
+ * Accumulator for `scanSibling`: satisfied final-field deps, moved
+ * members needing `@:access`, and the three violation buckets that are
+ * reported TOGETHER so one run surfaces the whole dependency closure.
+ */
+private typedef SiblingScanState = {
+	var fieldDeps: Array<String>;
+	var accessMembers: Array<String>;
+	var staysBehind: Array<String>;
+	var mutableDeps: Array<String>;
+	var missingDestFields: Array<String>;
+}
+
+/**
  * Everything `move` needs after resolution: endpoints, parsed trees,
- * the member group and its cut span, and the indexed file infos.
+ * the resolved moved-member set (source order), and the indexed file
+ * infos.
  */
 private typedef MovePrep = {
 	var srcFile: String;
 	var srcTypeName: String;
-	var memberName: String;
 	var destTypeName: String;
 	var index: SymbolIndex;
 	var sourceOf: Map<String, String>;
@@ -41,9 +76,8 @@ private typedef MovePrep = {
 	var srcTree: QueryNode;
 	var srcSource: String;
 	var srcDecl: TypeDeclMatch;
-	var group: MemberGroup;
-	var memberSpan: Span;
-	var cut: Span;
+	var moved: Array<MovedMember>;
+	var closureAdded: Array<String>;
 	var destFile: String;
 	var destDecl: TypeDeclMatch;
 	var destSource: String;
@@ -51,9 +85,6 @@ private typedef MovePrep = {
 	var destInfo: FileInfo;
 }
 
-/**
- * Internal result of `resolveMove` — mirrors `MoveSymbol`'s prep enum.
- */
 private enum PrepResult {
 
 	POk(prep: MovePrep);
@@ -62,43 +93,63 @@ private enum PrepResult {
 }
 
 /**
- * Scope-correct, format-preserving move of one STATIC member (method,
+ * Internal result of `resolveViaField`: an existing routing field, a
+ * name to scaffold (`--scaffold`), or a refusal.
+ */
+private enum ViaResult {
+
+	VOk(name: String);
+	VScaffold(name: String);
+	VErr(message: String);
+
+}
+
+/**
+ * Scope-correct, format-preserving move of one or more members (method,
  * `var` or `final` field) from one type to another within the SAME
  * PACKAGE — the Apply verb of the god-type decomposition loop:
- * `clusters` proposes a cut, `move-member` executes it one member at a
- * time. Reuses `MoveSymbol`'s result shape and import machinery.
+ * `clusters` proposes a cut, `move-member` executes it. Reuses
+ * `MoveSymbol`'s result shape and import machinery.
  *
  * ## What is rewritten
  *
- *  - The member's decl (with its doc comment and modifier / `@:meta`
+ *  - Each member's decl (with its doc comment and modifier / `@:meta`
  *    run) is cut from the source type and appended to the destination
- *    type's body.
- *  - Every qualified access `Src.member` across the scope becomes
- *    `Dest.member` (receiver idents shadowed by a local value binding
- *    are left alone, mirroring `CrossRename`).
- *  - Bare accesses to the member inside the source file become
- *    `Dest.member` (scope-resolved through `Refs`, so shadowing locals
- *    are untouched); bare SELF-references inside the moved body stay
- *    bare — they resolve at the destination.
- *  - Bare accesses INSIDE the moved body to OTHER members of the source
- *    type are qualified as `Src.other` (same-package visible at the
- *    destination). When any such member is private, the moved decl gains
- *    an `@:access(<pkg>.<Src>)` line and the advisory says so.
+ *    type's body, in source order.
+ *  - STATIC members: every qualified access `Src.member` across the
+ *    scope becomes `Dest.member` (receiver idents shadowed by a local
+ *    value binding are left alone, mirroring `CrossRename`); bare
+ *    accesses inside the source file become `Dest.member`.
+ *  - INSTANCE members (sibling-fields contract): remaining bare callers
+ *    in the source type are rewired through a source-type field of type
+ *    `Dest` (`--via`, auto-detected when the type has exactly one);
+ *    moved bodies may keep reading FINAL fields that the destination
+ *    declares under the same names — the caller must construct the
+ *    destination with the same values (advisory). Receiver-qualified
+ *    external calls (`x.member()`) are NOT rewritten — they fail the
+ *    next compile loudly.
+ *  - References between moved members stay bare — they resolve at the
+ *    destination. Bare self-references inside a moved body stay bare.
+ *  - Bare accesses INSIDE a moved body to STATIC members staying on the
+ *    source type are qualified as `Src.other` (same-package visible at
+ *    the destination). When any such member is private, the moved decl
+ *    gains an `@:access(<pkg>.<Src>)` line and the advisory says so.
  *  - A private (or default-visibility) member that still has callers
  *    after the move is promoted to `public` at the destination, noted
  *    in the advisory. With no remaining callers the visibility is kept.
  *  - The destination file gains the type-position imports the moved
- *    body depends on (best-effort, `MoveSymbol.dependencyImportsToCarry`);
+ *    bodies depend on (best-effort, `MoveSymbol.dependencyImportsToCarry`);
  *    a rewritten caller file in ANOTHER package gains an import of the
  *    destination type.
  *
  * ## Refusals (correctness boundary)
  *
- * Instance members (no `static` modifier) are refused — their `this`
- * semantics do not survive a move. A cross-package destination is
- * refused for the same reason as `MoveSymbol`. A `using` of the source
- * type anywhere in scope is refused (extension-call sites are not
- * findable syntactically), as is a static import
+ * A moved body that references `this`, calls an instance member staying
+ * on the source type, or reads a MUTABLE instance field is refused — the
+ * sibling-fields contract covers final fields only. A cross-package
+ * destination is refused for the same reason as `MoveSymbol`. A `using`
+ * of the source type anywhere in scope is refused (extension-call sites
+ * are not findable syntactically), as is a static import
  * (`import pkg.Mod.Src.member`). A destination that already declares a
  * member of the same name is refused.
  *
@@ -114,57 +165,80 @@ final class MoveMember {
 	private static final ADVISORY: String = 'import-carrying is best-effort (type-position dependencies only) — a missed import fails the destination compile loudly; references through strings, Reflect, or macro-built identifiers are not rewritten.';
 
 	/**
-	 * Move `memberName` from `srcTypeName` (declared in `srcFile`) to
+	 * DATA-field member kinds (`RefactorSupport.FIELD_MEMBER_KINDS` also
+	 * contains function kinds — its name is broader than it reads).
+	 */
+	private static final DATA_FIELD_KINDS: Array<String> = ['VarMember', 'FinalMember', 'VarField', 'FinalField'];
+
+	private static final FINAL_FIELD_KINDS: Array<String> = ['FinalMember', 'FinalField'];
+
+	/**
+	 * Move `memberNames` from `srcTypeName` (declared in `srcFile`) to
 	 * `destTypeName` (declared anywhere under scope, same package).
+	 * `viaField` names the source-type field of type `destTypeName` that
+	 * remaining bare instance callers are rewired through (auto-detected
+	 * when the source type has exactly one such field). When `closure` is
+	 * set, the move set is first grown to the transitive closure of the
+	 * instance methods the seed members call. When `scaffold` is set, a
+	 * missing destination final field / constructor and a missing via field
+	 * are GENERATED (into an empty destination and the source constructor)
+	 * instead of refused.
 	 * Returns `Ok` with the per-file rewrites (source, destination and
 	 * every rewritten caller file) plus a non-null advisory, or `Err`.
 	 */
 	public static function move(
-		srcFile: String, srcTypeName: String, memberName: String, destTypeName: String,
-		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape
+		srcFile: String, srcTypeName: String, memberNames: Array<String>, destTypeName: String, viaField: Null<String>, closure: Bool,
+		scaffold: Bool, scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin, typeRefShape: TypeRefShape
 	): MoveResult {
 		if (srcTypeName == destTypeName) return Err('source and destination type are the same — nothing to move');
-		final prep: MovePrep = switch resolveMove(srcFile, srcTypeName, memberName, destTypeName, scopeFiles, plugin) {
+		if (memberNames.length == 0) return Err('no members named — nothing to move');
+		final prep: MovePrep = switch resolveMove(srcFile, srcTypeName, memberNames, destTypeName, closure, scopeFiles, plugin) {
 			case PErr(message): return Err(message);
 			case POk(p): p;
 		};
 		final captures: Array<String> = casePatternCaptures(prep.srcTree);
-		if (captures.contains(memberName))
-			return Err(
-				'a switch case pattern in $srcFile binds "$memberName" — reference resolution cannot tell the '
-				+ 'capture from the member; rename the capture first'
-			);
+		final guard: Null<String> = moveGuardError(prep, captures);
+		if (guard != null) return Err(guard);
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		final movedTextEdits: Array<{ span: Span, text: String }> = [];
 		final callerFilesNeedingImport: Array<String> = [];
-		var outsideCallers: Int = collectQualifiedEdits(prep, plugin, editsByFile, movedTextEdits, callerFilesNeedingImport);
-		outsideCallers += collectBareCallerEdits(prep, plugin, editsByFile);
-
-		final movedSlice: String = prep.srcSource.substring(prep.cut.from, prep.cut.to);
 		final advisoryExtras: Array<String> = [];
-		promotionEdit(prep, outsideCallers, movedTextEdits, advisoryExtras);
-		final sibling: { error: Null<String>, needsAccess: Bool } = collectSiblingEdits(prep, movedSlice, captures, plugin, movedTextEdits);
-		final siblingError: Null<String> = sibling.error;
-		if (siblingError != null) return Err(siblingError);
-		if (sibling.needsAccess) accessEdit(prep, movedTextEdits, advisoryExtras);
+		if (prep.closureAdded.length > 0)
+			advisoryExtras.push('--closure pulled in ${prep.closureAdded.length} instance member(s): ${quoted(prep.closureAdded)}');
+		final outsideCallersOf: Map<String, Int> = [for (m in prep.moved) m.name => 0];
+		for (m in prep.moved) if (m.isStatic)
+			outsideCallersOf[m.name] = collectQualifiedEdits(prep, m, plugin, editsByFile, movedTextEdits, callerFilesNeedingImport);
 
-		// Build the moved text (shift collected edits into slice space).
-		final shifted: Array<{ span: Span, text: String }> = [
-			for (e in movedTextEdits) { span: new Span(e.span.from - prep.cut.from, e.span.to - prep.cut.from), text: e.text }
-		];
-		final movedBlock: String = trimBlankEdges(RefactorSupport.applyEdits(movedSlice, shifted));
+		// Sibling scan first — its missing-dest-final-fields drive both the
+		// `new Dest(...)` wiring args and the destination scaffold.
+		final sibling: {
+			error: Null<String>,
+			fieldDeps: Array<String>,
+			accessMembers: Array<String>,
+			missingDestFields: Array<String>
+		} = collectSiblingEdits(prep, captures, scaffold, plugin, movedTextEdits);
+		if (sibling.error != null) return Err(sibling.error);
+		final scaffoldFields: Array<ScaffoldField> = if (sibling.missingDestFields.length > 0) {
+			switch resolveScaffoldFields(prep, sibling.missingDestFields, plugin) {
+				case { error: e } if (e != null): return Err(e);
+				case { fields: f }: f;
+			}
+		} else
+			[];
+		applySiblingOutcome(prep, sibling.accessMembers, sibling.fieldDeps, movedTextEdits, advisoryExtras);
 
-		// Source cut + destination insert: replace the whitespace run before
-		// the closing `}` with a normalized frame — blank line, member, blank line.
-		editsFor(editsByFile, prep.srcFile).push({ span: prep.cut, text: '' });
-		final bodyClose: Null<Int> = typeBodyClose(prep.destSource, prep.destDecl);
-		if (bodyClose == null) return Err('"$destTypeName" has no brace body to receive the member');
-		var wsStart: Int = bodyClose;
-		while (wsStart > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
-		editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: '\n\n$movedBlock\n\n' });
+		final rewireError: Null<String> = collectCallerRewires(
+			prep, viaField, scaffold, scaffoldFields, plugin, editsByFile, outsideCallersOf, advisoryExtras
+		);
+		if (rewireError != null) return Err(rewireError);
+		for (m in prep.moved) promotionEdit(prep, m, outsideCallersOf[m.name] ?? 0, movedTextEdits, advisoryExtras);
 
+		// Destination scaffold (fields + constructor) — either prepended to
+		// the moved-member insert (no dest ctor) or replacing a trivial one.
+		final destError: Null<String> = assembleDestination(prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras);
+		if (destError != null) return Err(destError);
 		pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
-		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberName, advisoryExtras);
+		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberNames.join(', '), advisoryExtras);
 	}
 
 	/**
@@ -320,7 +394,7 @@ final class MoveMember {
 	 * parseable scope, no `using` / static import of the source type.
 	 */
 	private static function resolveMove(
-		srcFile: String, srcTypeName: String, memberName: String, destTypeName: String,
+		srcFile: String, srcTypeName: String, memberNames: Array<String>, destTypeName: String, closure: Bool,
 		scopeFiles: Array<{ file: String, source: String }>, plugin: GrammarPlugin
 	): PrepResult {
 		final index: SymbolIndex = SymbolIndex.build(scopeFiles, plugin);
@@ -332,17 +406,11 @@ final class MoveMember {
 		final trees: Map<String, QueryNode> = [];
 		for (entry in scopeFiles) trees[entry.file] = try plugin.parseFile(entry.source) catch (exception: Exception) {
 			return PErr('${entry.file} does not parse: ${exception.message}');
-		}
+		};
 		final srcTree: Null<QueryNode> = trees[srcFile];
 		if (srcTree == null) return PErr('source file $srcFile is not indexed');
 		final srcDecl: Null<TypeDeclMatch> = uniqueTypeDecl(srcTree, srcTypeName);
 		if (srcDecl == null) return PErr('no unique type "$srcTypeName" in $srcFile');
-		final group: Null<MemberGroup> = memberGroupOf(srcDecl, memberName);
-		if (group == null) return PErr('type "$srcTypeName" has no member "$memberName"');
-		if (!group.modifiers.exists(m -> m.kind == 'Static'))
-			return PErr('member "$memberName" is not static — this increment moves static members only');
-		final memberSpan: Null<Span> = group.member.span;
-		if (memberSpan == null) return PErr('member "$memberName" carries no span');
 		final destHit: Null<{ file: String, decl: TypeDeclMatch }> = switch findTypeAcrossScope(scopeFiles, trees, destTypeName) {
 			case FErr(message): return PErr(message);
 			case FOk(hit): hit;
@@ -350,7 +418,15 @@ final class MoveMember {
 		if (destHit == null) return PErr('no type "$destTypeName" declared under scope');
 		final destSource: Null<String> = sourceOf[destHit.file];
 		if (destSource == null) return PErr('destination file ${destHit.file} is not in the scope file set');
-		if (memberGroupOf(destHit.decl, memberName) != null) return PErr('type "$destTypeName" already declares a member "$memberName"');
+		final effectiveNames: Array<String> = closure
+			? expandInstanceCallClosure(srcDecl, srcTree, srcSource, memberNames, plugin)
+			: memberNames;
+		final closureAdded: Array<String> = [for (name in effectiveNames) if (!memberNames.contains(name)) name];
+		final moved: Array<MovedMember> = [];
+		final memberError: Null<String> = resolveMovedMembers(
+			srcDecl, destHit.decl, srcSource, srcTypeName, destTypeName, effectiveNames, moved
+		);
+		if (memberError != null) return PErr(memberError);
 		final srcInfo: Null<FileInfo> = index.fileInfo(srcFile);
 		final destInfo: Null<FileInfo> = index.fileInfo(destHit.file);
 		if (srcInfo == null || destInfo == null) return PErr('scope files are not indexed');
@@ -359,22 +435,19 @@ final class MoveMember {
 				'cross-package move not supported in this increment '
 				+ '(source package "${srcInfo.pkg}" != destination package "${destInfo.pkg}")'
 			);
-		final guard: Null<String> = scopeGuardError(scopeFiles, index, srcTypeName, memberName, destTypeName);
+		final guard: Null<String> = scopeGuardError(scopeFiles, index, srcTypeName, memberNames, destTypeName);
 		if (guard != null) return PErr(guard);
 		// Re-bind the null-checked locals: Strict does not propagate
 		// narrowing into anonymous struct fields.
 		final srcSourceNN: String = srcSource;
 		final srcTreeNN: QueryNode = srcTree;
 		final srcDeclNN: TypeDeclMatch = srcDecl;
-		final groupNN: MemberGroup = group;
-		final memberSpanNN: Span = memberSpan;
 		final destSourceNN: String = destSource;
 		final srcInfoNN: FileInfo = srcInfo;
 		final destInfoNN: FileInfo = destInfo;
 		return POk({
 			srcFile: srcFile,
 			srcTypeName: srcTypeName,
-			memberName: memberName,
 			destTypeName: destTypeName,
 			index: index,
 			sourceOf: sourceOf,
@@ -382,9 +455,8 @@ final class MoveMember {
 			srcTree: srcTreeNN,
 			srcSource: srcSourceNN,
 			srcDecl: srcDeclNN,
-			group: groupNN,
-			memberSpan: memberSpanNN,
-			cut: cutSpanOf(srcSourceNN, groupNN),
+			moved: moved,
+			closureAdded: closureAdded,
 			destFile: destHit.file,
 			destDecl: destHit.decl,
 			destSource: destSourceNN,
@@ -398,7 +470,7 @@ final class MoveMember {
 	 * sites are not findable) or a static import of the member.
 	 */
 	private static function scopeGuardError(
-		scopeFiles: Array<{ file: String, source: String }>, index: SymbolIndex, srcTypeName: String, memberName: String,
+		scopeFiles: Array<{ file: String, source: String }>, index: SymbolIndex, srcTypeName: String, memberNames: Array<String>,
 		destTypeName: String
 	): Null<String> {
 		for (entry in scopeFiles) {
@@ -410,7 +482,7 @@ final class MoveMember {
 				if (imp.kind == ImportKind.Using && lastSegment(imp.raw) == destTypeName)
 					return '${entry.file} has "using ${imp.raw}" — moving a member into a type under `using` could '
 						+ 'hijack extension calls, refusing';
-				if (imp.kind == ImportKind.Import && StringTools.endsWith(imp.raw, '.$srcTypeName.$memberName'))
+				if (imp.kind == ImportKind.Import && memberNames.exists(name -> StringTools.endsWith(imp.raw, '.$srcTypeName.$name')))
 					return '${entry.file} has a static import "${imp.raw}" — refusing';
 			}
 		}
@@ -436,19 +508,19 @@ final class MoveMember {
 	 * rewritten within the moved text.
 	 */
 	private static function collectQualifiedEdits(
-		prep: MovePrep, plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
+		prep: MovePrep, m: MovedMember, plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>,
 		movedTextEdits: Array<{ span: Span, text: String }>, callerFilesNeedingImport: Array<String>
 	): Int {
 		var outsideCallers: Int = 0;
 		for (file => tree in prep.trees) {
 			final source: Null<String> = prep.sourceOf[file];
 			if (source == null) continue;
-			for (offset in qualifiedReceiverOffsets(source, tree, prep.srcTypeName, prep.memberName, plugin)) {
+			for (offset in qualifiedReceiverOffsets(source, tree, prep.srcTypeName, m.name, plugin)) {
 				final edit: { span: Span, text: String } = {
 					span: new Span(offset, offset + prep.srcTypeName.length),
 					text: prep.destTypeName,
 				};
-				if (file == prep.srcFile && offset >= prep.cut.from && offset < prep.cut.to) {
+				if (file == prep.srcFile && insideAnyCut(prep, offset)) {
 					movedTextEdits.push(edit);
 				} else {
 					editsFor(editsByFile, file).push(edit);
@@ -468,46 +540,55 @@ final class MoveMember {
 	 * THIS binding: qualified to the destination. Bare self-references
 	 * inside the cut move along and stay bare.
 	 */
-	private static function collectBareCallerEdits(
-		prep: MovePrep, plugin: GrammarPlugin, editsByFile: Map<String, Array<{ span: Span, text: String }>>
-	): Int {
-		var outsideCallers: Int = 0;
-		for (hit in Refs.find(prep.memberName, prep.srcTree, plugin.refShape())) {
+	private static function collectBareCallerHits(prep: MovePrep, plugin: GrammarPlugin): Array<{ m: MovedMember, offset: Int }> {
+		final out: Array<{ m: MovedMember, offset: Int }> = [];
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti([for (m in prep.moved) m.name], prep.srcTree, plugin.refShape());
+		for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) {
 			if (hit.kind == RefKind.Decl) continue;
 			final binding: Null<Span> = hit.bindingSpan;
-			if (binding == null || binding.from != prep.memberSpan.from) continue;
-			if (hit.span.from >= prep.cut.from && hit.span.from < prep.cut.to) continue;
-			editsFor(editsByFile, prep.srcFile).push({
-				span: new Span(hit.span.from, hit.span.from),
-				text: '${prep.destTypeName}.',
-			});
-			outsideCallers++;
+			if (binding == null || binding.from != m.span.from) continue;
+			if (insideAnyCut(prep, hit.span.from)) continue;
+			out.push({ m: m, offset: hit.span.from });
 		}
-		return outsideCallers;
+		return out;
 	}
 
 	/**
-	 * Bare accesses INSIDE the moved body to other members of the source
-	 * type: qualified as `Src.other`. `needsAccess` is true when any
-	 * referenced sibling is non-public (the caller then adds `@:access`);
-	 * `error` refuses when a case pattern captures a sibling name (the
-	 * resolver cannot tell the capture from the member).
+	 * Classifies references from the moved bodies to siblings staying on the
+	 * source type (via `scanSibling`): static siblings are qualified `Src.x`
+	 * in place; instance-method or mutable-field or missing-final-field
+	 * dependencies are collected into `error` (all reported together);
+	 * final-field reads the destination mirrors go to `fieldDeps`; moved
+	 * members touching a private static sibling go to `accessMembers` (the
+	 * caller then adds `@:access`). Refuses up front when a case pattern
+	 * captures a sibling name (the resolver cannot tell capture from member).
 	 */
 	private static function collectSiblingEdits(
-		prep: MovePrep, movedSlice: String, captures: Array<String>, plugin: GrammarPlugin,
-		movedTextEdits: Array<{ span: Span, text: String }>
-	): { error: Null<String>, needsAccess: Bool } {
+		prep: MovePrep, captures: Array<String>, scaffold: Bool, plugin: GrammarPlugin, movedTextEdits: Array<{ span: Span, text: String }>
+	): {
+		error: Null<String>,
+		fieldDeps: Array<String>,
+		accessMembers: Array<String>,
+		missingDestFields: Array<String>
+	} {
+		final movedNames: Array<String> = [for (m in prep.moved) m.name];
+		final slices: String = [for (m in prep.moved) prep.srcSource.substring(m.cut.from, m.cut.to)].join('\n');
 		final candidates: Array<MemberGroup> = [
 			for (sibling in membersOf(prep.srcDecl)) {
 				final siblingName: Null<String> = sibling.member.name;
 				if (
-					siblingName != null && sibling.member.span != null && siblingName != prep.memberName
-					&& movedSlice.indexOf(siblingName) != -1
+					siblingName != null && sibling.member.span != null && !movedNames.contains(siblingName)
+					&& slices.indexOf(siblingName) != -1
 				)
 					sibling;
 			}
 		];
-		if (candidates.length == 0) return { error: null, needsAccess: false };
+		if (candidates.length == 0) return {
+			error: null,
+			fieldDeps: [],
+			accessMembers: [],
+			missingDestFields: []
+		};
 		// Conservative: a captured sibling name refuses even before hit
 		// filtering — Refs cannot tell the capture from the member.
 		for (sibling in candidates) {
@@ -515,16 +596,36 @@ final class MoveMember {
 			if (captures.contains(siblingName)) return {
 				error: 'a switch case pattern in ${prep.srcFile} binds "$siblingName" — cannot safely qualify the '
 					+ 'moved body\'s reference to it; rename the capture first',
-				needsAccess: false,
+				fieldDeps: [],
+				accessMembers: [],
+				missingDestFields: [],
 			};
 		}
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(
 			[for (s in candidates) s.member.name ?? ''], prep.srcTree, plugin.refShape()
 		);
-		var needsAccess: Bool = false;
-		for (sibling in candidates) if (qualifySiblingHits(prep, sibling, hitsByName[sibling.member.name ?? ''] ?? [], movedTextEdits))
-			needsAccess = true;
-		return { error: null, needsAccess: needsAccess };
+		final state: SiblingScanState = {
+			fieldDeps: [],
+			accessMembers: [],
+			staysBehind: [],
+			mutableDeps: [],
+			missingDestFields: [],
+		};
+		for (sibling in candidates) scanSibling(prep, sibling, hitsByName[sibling.member.name ?? ''] ?? [], movedTextEdits, state);
+		final problems: Array<String> = siblingProblems(prep, state, scaffold);
+		return problems.length > 0
+			? {
+				error: problems.join('; '),
+				fieldDeps: [],
+				accessMembers: [],
+				missingDestFields: []
+			}
+			: {
+				error: null,
+				fieldDeps: state.fieldDeps,
+				accessMembers: state.accessMembers,
+				missingDestFields: state.missingDestFields,
+			};
 	}
 
 	/**
@@ -533,19 +634,22 @@ final class MoveMember {
 	 * default-visibility decl.
 	 */
 	private static function promotionEdit(
-		prep: MovePrep, outsideCallers: Int, movedTextEdits: Array<{ span: Span, text: String }>, advisoryExtras: Array<String>
+		prep: MovePrep, m: MovedMember, outsideCallers: Int, movedTextEdits: Array<{ span: Span, text: String }>,
+		advisoryExtras: Array<String>
 	): Void {
-		if (prep.group.modifiers.exists(m -> m.kind == 'Public') || outsideCallers == 0) return;
-		final privateSpan: Null<Span> = prep.group.modifiers.find(m -> m.kind == 'Private')?.span;
+		if (m.group.modifiers.exists(mod -> mod.kind == 'Public') || outsideCallers == 0) return;
+		final privateSpan: Null<Span> = m.group.modifiers.find(mod -> mod.kind == 'Private')?.span;
 		if (privateSpan != null) {
 			movedTextEdits.push({ span: privateSpan, text: 'public' });
 		} else {
 			// Insert after any leading @:meta run — `public` before a meta
 			// line would not parse.
-			final at: Int = prep.group.modifiers.find(m -> m.kind != 'Meta')?.span?.from ?? prep.memberSpan.from;
+			final at: Int = m.group.modifiers.find(mod -> mod.kind != 'Meta')?.span?.from ?? m.span.from;
 			movedTextEdits.push({ span: new Span(at, at), text: 'public ' });
 		}
-		advisoryExtras.push('visibility promoted to public ($outsideCallers caller site(s) remain outside "${prep.destTypeName}")');
+		advisoryExtras.push(
+			'visibility of "${m.name}" promoted to public ($outsideCallers caller site(s) remain outside "${prep.destTypeName}")'
+		);
 	}
 
 	/**
@@ -553,21 +657,23 @@ final class MoveMember {
 	 * comment) — the moved body references private members of the source.
 	 */
 	private static function accessEdit(
-		prep: MovePrep, movedTextEdits: Array<{ span: Span, text: String }>, advisoryExtras: Array<String>
+		prep: MovePrep, m: MovedMember, movedTextEdits: Array<{ span: Span, text: String }>, advisoryExtras: Array<String>
 	): Void {
 		final accessPath: String = prep.srcInfo.pkg == '' ? prep.srcTypeName : '${prep.srcInfo.pkg}.${prep.srcTypeName}';
-		final lineStart: Int = lineStartOf(prep.srcSource, prep.group.groupSpan.from);
-		final indent: String = prep.srcSource.substring(lineStart, prep.group.groupSpan.from);
+		final lineStart: Int = lineStartOf(prep.srcSource, m.group.groupSpan.from);
+		final indent: String = prep.srcSource.substring(lineStart, m.group.groupSpan.from);
 		// A decl sharing its line with other code (one-line class) gets the
 		// meta inline — the "indent" would otherwise capture that code.
 		if (isAllWhitespace(indent))
 			movedTextEdits.push({ span: new Span(lineStart, lineStart), text: '$indent@:access($accessPath)\n' });
 		else
 			movedTextEdits.push({
-				span: new Span(prep.group.groupSpan.from, prep.group.groupSpan.from),
+				span: new Span(m.group.groupSpan.from, m.group.groupSpan.from),
 				text: '@:access($accessPath) ',
 			});
-		advisoryExtras.push('moved body references private member(s) of "${prep.srcTypeName}" — added @:access($accessPath)');
+		advisoryExtras.push(
+			'moved body of "${m.name}" references private member(s) of "${prep.srcTypeName}" — added @:access($accessPath)'
+		);
 	}
 
 	/**
@@ -579,9 +685,11 @@ final class MoveMember {
 		prep: MovePrep, typeRefShape: TypeRefShape, callerFilesNeedingImport: Array<String>, plugin: GrammarPlugin,
 		editsByFile: Map<String, Array<{ span: Span, text: String }>>
 	): Void {
-		final carried: Array<ImportInfo> = MoveSymbol.dependencyImportsToCarry(
-			prep.srcSource, prep.group.groupSpan, prep.srcInfo, prep.destInfo, plugin, typeRefShape, prep.srcTypeName
-		);
+		final carried: Array<ImportInfo> = [];
+		for (m in prep.moved)
+			for (imp in MoveSymbol.dependencyImportsToCarry(
+				prep.srcSource, m.group.groupSpan, prep.srcInfo, prep.destInfo, plugin, typeRefShape, prep.srcTypeName
+			)) if (!carried.exists(c -> c.raw == imp.raw && c.kind == imp.kind)) carried.push(imp);
 		if (carried.length > 0) {
 			final insertAt: Int = MoveSymbol.importInsertionOffset(prep.destSource, prep.destInfo);
 			final lines: String = [
@@ -668,24 +776,532 @@ final class MoveMember {
 	}
 
 	/**
-	 * Qualify one sibling's inside-cut hits as `Src.<sibling>`; true when
-	 * anything was qualified and the sibling is non-public (needs @:access).
+	 * Classifies each in-cut reference to one sibling into `state`: a static
+	 * sibling is qualified `Src.<sibling>` in place (and its host recorded in
+	 * `accessMembers` when the sibling is private); a final-field read goes to
+	 * `fieldDeps` if the destination mirrors it, else `missingDestFields`; a
+	 * mutable field goes to `mutableDeps`; an instance method goes to
+	 * `staysBehind`. Mutates `state` and `movedTextEdits`; returns nothing.
 	 */
-	private static function qualifySiblingHits(
-		prep: MovePrep, sibling: MemberGroup, hits: Array<RefHit>, movedTextEdits: Array<{ span: Span, text: String }>
-	): Bool {
+	private static function scanSibling(
+		prep: MovePrep, sibling: MemberGroup, hits: Array<RefHit>, movedTextEdits: Array<{ span: Span, text: String }>,
+		state: SiblingScanState
+	): Void {
 		final siblingSpan: Null<Span> = sibling.member.span;
-		if (siblingSpan == null) return false;
-		var qualified: Bool = false;
+		if (siblingSpan == null) return;
+		final siblingName: String = sibling.member.name ?? '';
+		final siblingStatic: Bool = sibling.modifiers.exists(m -> m.kind == 'Static');
+		final siblingPublic: Bool = sibling.modifiers.exists(m -> m.kind == 'Public');
 		for (hit in hits) {
 			if (hit.kind == RefKind.Decl) continue;
 			final binding: Null<Span> = hit.bindingSpan;
 			if (binding == null || binding.from != siblingSpan.from) continue;
-			if (hit.span.from < prep.cut.from || hit.span.from >= prep.cut.to) continue;
-			movedTextEdits.push({ span: new Span(hit.span.from, hit.span.from), text: '${prep.srcTypeName}.' });
-			qualified = true;
+			final host: Null<MovedMember> = prep.moved.find(m -> hit.span.from >= m.cut.from && hit.span.from < m.cut.to);
+			if (host == null) continue;
+			if (siblingStatic) {
+				movedTextEdits.push({ span: new Span(hit.span.from, hit.span.from), text: '${prep.srcTypeName}.' });
+				if (!siblingPublic && !state.accessMembers.contains(host.name)) state.accessMembers.push(host.name);
+			} else if (DATA_FIELD_KINDS.contains(sibling.member.kind)) {
+				// Sibling-fields contract: a moved body may keep reading a
+				// FINAL field IF the destination declares a same-named final
+				// field wired with the same value at construction.
+				if (!FINAL_FIELD_KINDS.contains(sibling.member.kind)) {
+					pushUnique(state.mutableDeps, siblingName);
+				} else {
+					final destField: Null<MemberGroup> = memberGroupOf(prep.destDecl, siblingName);
+					if (destField == null || !FINAL_FIELD_KINDS.contains(destField.member.kind))
+						pushUnique(state.missingDestFields, siblingName);
+					else
+						pushUnique(state.fieldDeps, siblingName);
+				}
+			} else {
+				pushUnique(state.staysBehind, siblingName);
+			}
 		}
-		return qualified && !sibling.modifiers.exists(m -> m.kind == 'Public');
+	}
+
+	private static inline function insideAnyCut(prep: MovePrep, offset: Int): Bool {
+		return prep.moved.exists(m -> offset >= m.cut.from && offset < m.cut.to);
+	}
+
+	/**
+	 * Whether any moved body references `this` (an `IdentExpr` named `this`
+	 * inside a cut span) — such a reference cannot survive a move.
+	 */
+	private static function thisInsideCuts(prep: MovePrep): Bool {
+		var found: Bool = false;
+		function walk(node: QueryNode): Void {
+			if (found) return;
+			final span: Null<Span> = node.span;
+			if (node.kind == 'IdentExpr' && node.name == 'this' && span != null && insideAnyCut(prep, span.from)) {
+				found = true;
+				return;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(prep.srcTree);
+		return found;
+	}
+
+	/**
+	 * Resolves the source-type instance field of type `destTypeName` that
+	 * remaining bare instance callers are rewired through: an explicit
+	 * `viaField` is validated, otherwise the unique candidate is picked.
+	 */
+	private static function resolveViaField(prep: MovePrep, viaField: Null<String>, scaffold: Bool, plugin: GrammarPlugin): ViaResult {
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(prep.srcSource) : [];
+		final fields: Array<MemberGroup> = [
+			for (g in membersOf(prep.srcDecl))
+				if (DATA_FIELD_KINDS.contains(g.member.kind) && !g.modifiers.exists(mod -> mod.kind == 'Static')) g
+		];
+		if (viaField != null) {
+			final g: Null<MemberGroup> = fields.find(f -> f.member.name == viaField);
+			if (g == null)
+				return scaffold
+					? scaffoldViaResult(prep, viaField)
+					: VErr('"${prep.srcTypeName}" has no instance field "$viaField" (--via)');
+			final gSpan: Null<Span> = g.member.span;
+			final declaredType: Null<String> = gSpan != null ? declared[gSpan.from] : null;
+			if (declaredType != null && declaredType != prep.destTypeName)
+				return VErr('--via field "$viaField" is declared as "$declaredType", not "${prep.destTypeName}"');
+			return VOk(viaField);
+		}
+		final candidates: Array<String> = [
+			for (g in fields) {
+				final gSpan: Null<Span> = g.member.span;
+				final name: Null<String> = g.member.name;
+				if (gSpan != null && name != null && declared[gSpan.from] == prep.destTypeName) name;
+			}
+		];
+		return switch candidates {
+			case [one]: VOk(one);
+			case []: scaffold
+				? scaffoldViaResult(prep, deriveViaName(prep.destTypeName))
+				: VErr(
+					'caller(s) of the moved instance member(s) remain in "${prep.srcTypeName}" but it has no field of '
+					+ 'type "${prep.destTypeName}" to route them through — add one '
+					+ '(e.g. `private final _x: ${prep.destTypeName}`), wire it in the constructor, pass --via <field>, or --scaffold'
+				);
+			case many: VErr(
+				'multiple fields of type "${prep.destTypeName}" on "${prep.srcTypeName}" (${many.join(', ')}) ' + '— pass --via <field>'
+			);
+		};
+	}
+
+	/**
+	 * Up-front refusals independent of the edit collection: a moved member
+	 * whose name a case pattern captures, or (for an instance move) a moved
+	 * body referencing `this` — which would silently re-bind to the
+	 * destination. Returns the message, or null when clear.
+	 */
+	private static function moveGuardError(prep: MovePrep, captures: Array<String>): Null<String> {
+		for (m in prep.moved) if (captures.contains(m.name))
+			return 'a switch case pattern in ${prep.srcFile} binds "${m.name}" — reference resolution cannot tell the '
+				+ 'capture from the member; rename the capture first';
+		return prep.moved.exists(m -> !m.isStatic) && thisInsideCuts(prep)
+			? 'a moved body references "this", which would re-bind to "${prep.destTypeName}" — rewrite to bare member access first'
+			: null;
+	}
+
+	/**
+	 * Rewrites the bare in-src callers of every moved member: a static
+	 * member qualifies as `Dest.m`, an instance member routes through the
+	 * via field on the source type. Returns an error message, or null.
+	 */
+	private static function collectCallerRewires(
+		prep: MovePrep, viaField: Null<String>, scaffold: Bool, scaffoldFields: Array<ScaffoldField>, plugin: GrammarPlugin,
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, outsideCallersOf: Map<String, Int>, advisoryExtras: Array<String>
+	): Null<String> {
+		final bareHits: Array<{ m: MovedMember, offset: Int }> = collectBareCallerHits(prep, plugin);
+		for (h in bareHits) if (h.m.isStatic) {
+			editsFor(editsByFile, prep.srcFile).push({ span: new Span(h.offset, h.offset), text: '${prep.destTypeName}.' });
+			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
+		}
+		final instanceHits: Array<{ m: MovedMember, offset: Int }> = bareHits.filter(h -> !h.m.isStatic);
+		if (instanceHits.length == 0) return null;
+		final via: { name: String, scaffold: Bool } = switch resolveViaField(prep, viaField, scaffold, plugin) {
+			case VErr(message): return message;
+			case VOk(name): { name: name, scaffold: false };
+			case VScaffold(name): { name: name, scaffold: true };
+		};
+		if (via.scaffold) {
+			final srcCtor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl);
+			final ctorSpan: Null<Span> = srcCtor != null ? srcCtor.member.span : null;
+			if (ctorSpan != null && instanceHits.exists(h -> h.offset >= ctorSpan.from && h.offset < ctorSpan.to))
+				return 'a moved instance member is called inside the "${prep.srcTypeName}" constructor — the scaffolded via '
+					+ 'field would be read before it is initialized; move the call out of the constructor or wire the via field manually';
+		}
+		for (h in instanceHits) {
+			editsFor(editsByFile, prep.srcFile).push({ span: new Span(h.offset, h.offset), text: '${via.name}.' });
+			outsideCallersOf[h.m.name] = (outsideCallersOf[h.m.name] ?? 0) + 1;
+		}
+		if (via.scaffold) {
+			final error: Null<String> = scaffoldViaField(prep, via.name, scaffoldFields, editsByFile);
+			if (error != null) return error;
+			advisoryExtras.push(
+				'--scaffold added via field "${via.name}" wired `new ${prep.destTypeName}(...)` in the "${prep.srcTypeName}" constructor'
+			);
+		} else {
+			advisoryExtras.push('bare instance caller(s) in "${prep.srcTypeName}" rewired through "${via.name}"');
+		}
+		return null;
+	}
+
+	/**
+	 * Builds each moved member's text block, shifting the collected
+	 * source-coordinate edits into the member's slice space.
+	 */
+	private static function buildMovedBlocks(prep: MovePrep, movedTextEdits: Array<{ span: Span, text: String }>): Array<String> {
+		return [
+			for (m in prep.moved) {
+				final shifted: Array<{ span: Span, text: String }> = [
+					for (e in movedTextEdits)
+						if (e.span.from >= m.cut.from && e.span.from < m.cut.to)
+							{ span: new Span(e.span.from - m.cut.from, e.span.to - m.cut.from), text: e.text }
+				];
+				trimBlankEdges(RefactorSupport.applyEdits(prep.srcSource.substring(m.cut.from, m.cut.to), shifted));
+			}
+		];
+	}
+
+	/**
+	 * Resolves each named member into a `MovedMember` (source order,
+	 * non-overlapping cut spans), filling `moved`. Returns an error
+	 * message, or null.
+	 */
+	private static function resolveMovedMembers(
+		srcDecl: TypeDeclMatch, destDecl: TypeDeclMatch, srcSource: String, srcTypeName: String, destTypeName: String,
+		memberNames: Array<String>, moved: Array<MovedMember>
+	): Null<String> {
+		for (name in memberNames) {
+			if (moved.exists(m -> m.name == name)) return 'member "$name" is listed twice';
+			if (name == 'new') return 'cannot move a constructor';
+			final group: Null<MemberGroup> = memberGroupOf(srcDecl, name);
+			if (group == null) return 'type "$srcTypeName" has no member "$name"';
+			final memberSpan: Null<Span> = group.member.span;
+			if (memberSpan == null) return 'member "$name" carries no span';
+			if (memberGroupOf(destDecl, name) != null) return 'type "$destTypeName" already declares a member "$name"';
+			// Re-bind: Strict does not propagate narrowing into anonymous
+			// struct fields.
+			final groupNN: MemberGroup = group;
+			final memberSpanNN: Span = memberSpan;
+			moved.push({
+				name: name,
+				group: groupNN,
+				span: memberSpanNN,
+				cut: cutSpanOf(srcSource, groupNN),
+				isStatic: groupNN.modifiers.exists(m -> m.kind == 'Static'),
+			});
+		}
+		moved.sort((a, b) -> a.cut.from - b.cut.from);
+		for (i in 1...moved.length) if (moved[i].cut.from < moved[i - 1].cut.to)
+			return 'members "${moved[i - 1].name}" and "${moved[i].name}" resolve to overlapping source spans';
+		return null;
+	}
+
+	private static inline function quoted(names: Array<String>): String {
+		return names.map(n -> '"$n"').join(', ');
+	}
+
+	private static inline function pushUnique(names: Array<String>, name: String): Void {
+		if (!names.contains(name)) names.push(name);
+	}
+
+	/**
+	 * `--closure` expansion: grows `seed` to the transitive closure of
+	 * instance-METHOD siblings called from the moved bodies (the members
+	 * that would otherwise force a "staysBehind" refusal, one per manual
+	 * iteration). Static siblings (qualified `Src.x`) and data-field reads
+	 * (sibling-fields contract) are NOT pulled in — only non-static
+	 * function members reached by a real in-body reference. Terminates by
+	 * fixpoint over the finite member set.
+	 */
+	private static function expandInstanceCallClosure(
+		srcDecl: TypeDeclMatch, srcTree: QueryNode, srcSource: String, seed: Array<String>, plugin: GrammarPlugin
+	): Array<String> {
+		final names: Array<String> = seed.copy();
+		final allMembers: Array<MemberGroup> = membersOf(srcDecl);
+		final byName: Map<String, MemberGroup> = [];
+		for (g in allMembers) {
+			final nm: Null<String> = g.member.name;
+			if (nm != null) byName[nm] = g;
+		}
+		while (true) {
+			final cuts: Array<Span> = [
+				for (name in names) {
+					final g: Null<MemberGroup> = byName[name];
+					if (g != null) cutSpanOf(srcSource, g);
+				}
+			];
+			final added: Array<String> = instanceCallsInto(allMembers, names, cuts, srcSource, srcTree, plugin);
+			if (added.length == 0) break;
+			for (name in added) names.push(name);
+		}
+		return names;
+	}
+
+	/**
+	 * The non-static function siblings (not already in `names`) reached by
+	 * a real in-body reference from within `cuts` — one closure step.
+	 */
+	private static function instanceCallsInto(
+		allMembers: Array<MemberGroup>, names: Array<String>, cuts: Array<Span>, srcSource: String, srcTree: QueryNode,
+		plugin: GrammarPlugin
+	): Array<String> {
+		final slices: String = [for (c in cuts) srcSource.substring(c.from, c.to)].join('\n');
+		final candidates: Array<MemberGroup> = [
+			for (g in allMembers) {
+				final nm: Null<String> = g.member.name;
+				if (
+					nm != null && g.member.span != null && !names.contains(nm) && RefactorSupport.FN_DECL_KINDS.contains(g.member.kind)
+					&& !g.modifiers.exists(mod -> mod.kind == 'Static') && slices.indexOf(nm) != -1
+				)
+					g;
+			}
+		];
+		if (candidates.length == 0) return [];
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(
+			[for (c in candidates) c.member.name ?? ''], srcTree, plugin.refShape()
+		);
+		final added: Array<String> = [];
+		for (c in candidates) {
+			final cSpan: Null<Span> = c.member.span;
+			final nm: String = c.member.name ?? '';
+			if (cSpan != null && calledFromCuts(hitsByName[nm] ?? [], cSpan, cuts)) pushUnique(added, nm);
+		}
+		return added;
+	}
+
+	/**
+	 * Whether any of `hits` (references to the member declared at `declSpan`)
+	 * lands inside one of the `cuts` — i.e. the member is called from within
+	 * a moved body.
+	 */
+	private static function calledFromCuts(hits: Array<RefHit>, declSpan: Span, cuts: Array<Span>): Bool {
+		for (hit in hits) {
+			if (hit.kind == RefKind.Decl) continue;
+			final binding: Null<Span> = hit.bindingSpan;
+			if (binding == null || binding.from != declSpan.from) continue;
+			if (cuts.exists(cut -> hit.span.from >= cut.from && hit.span.from < cut.to)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The refusal messages for the three violation buckets `scanSibling`
+	 * fills — reported together so one run surfaces the whole closure.
+	 */
+	private static function siblingProblems(prep: MovePrep, state: SiblingScanState, scaffold: Bool): Array<String> {
+		final problems: Array<String> = [];
+		if (state.staysBehind.length > 0)
+			problems.push(
+				'moved bodies call instance member(s) ${quoted(state.staysBehind)} which stay on '
+				+ '"${prep.srcTypeName}" — add them to the move list or move them first (or pass --closure)'
+			);
+		if (state.mutableDeps.length > 0)
+			problems.push(
+				'moved bodies read mutable instance field(s) ${quoted(state.mutableDeps)} — shared mutable state '
+				+ 'cannot be mirrored onto "${prep.destTypeName}"; make them final or refactor first'
+			);
+		// A missing final field on the destination is a hard error UNLESS
+		// --scaffold is on, which generates the field + constructor instead.
+		if (!scaffold && state.missingDestFields.length > 0)
+			problems.push(
+				'moved bodies read final field(s) ${quoted(state.missingDestFields)} — "${prep.destTypeName}" must '
+				+ 'declare them as same-named final fields (sibling-fields contract) wired in its constructor (or pass --scaffold)'
+			);
+		return problems;
+	}
+
+	/**
+	 * Applies `collectSiblingEdits`'s outcome: `@:access` per moved member
+	 * whose body reads a private static sibling, plus the final-field-dep
+	 * advisory (the caller must construct the destination with the same
+	 * values).
+	 */
+	private static function applySiblingOutcome(
+		prep: MovePrep, accessMembers: Array<String>, fieldDeps: Array<String>, movedTextEdits: Array<{ span: Span, text: String }>,
+		advisoryExtras: Array<String>
+	): Void {
+		for (m in prep.moved) if (accessMembers.contains(m.name)) accessEdit(prep, m, movedTextEdits, advisoryExtras);
+		if (fieldDeps.length > 0)
+			advisoryExtras.push(
+				'moved bodies read final field(s) ${quoted(fieldDeps)} — construct "${prep.destTypeName}" with the same values'
+			);
+	}
+
+	private static inline function deriveViaName(destTypeName: String): String {
+		return destTypeName == '' ? '_via' : '_${destTypeName.charAt(0).toLowerCase()}${destTypeName.substr(1)}';
+	}
+
+	private static inline function paramNameOf(fieldName: String): String {
+		return StringTools.startsWith(fieldName, '_') ? fieldName.substr(1) : fieldName;
+	}
+
+	private static inline function constructorGroupOf(decl: TypeDeclMatch): Null<MemberGroup> {
+		return memberGroupOf(decl, 'new');
+	}
+
+	/**
+	 * A `new() {}` with no parameters and an empty body — the auto-emitted
+	 * constructor of a fresh `hxq new` class, safe for `--scaffold` to
+	 * replace with a real one.
+	 */
+	private static function isTrivialCtor(source: String, group: MemberGroup): Bool {
+		final hasParam: Bool = group.member.children.exists(c -> c.kind == 'Required' || c.kind == 'Optional');
+		if (hasParam) return false;
+		final body: Null<QueryNode> = group.member.children.find(c -> c.kind == 'BlockBody');
+		if (body == null || body.children.length > 0) return false;
+		final bodySpan: Null<Span> = body.span;
+		// No parameters, no statement children, and nothing but whitespace
+		// between the braces — a comment is trivia (not a child) and must
+		// not be silently clobbered.
+		return bodySpan != null && isAllWhitespace(source.substring(bodySpan.from + 1, bodySpan.to - 1));
+	}
+
+	private static function ctorBodyClose(source: String, ctorMember: QueryNode): Null<Int> {
+		final span: Null<Span> = ctorMember.span;
+		if (span == null) return null;
+		var close: Int = span.to - 1;
+		if (close >= source.length) close = source.length - 1;
+		while (close >= span.from && RefactorSupport.isSpace(StringTools.fastCodeAt(source, close))) close--;
+		return close < span.from || StringTools.fastCodeAt(source, close) != '}'.code ? null : close;
+	}
+
+	/**
+	 * The `private final <name>: <type>;` declarations plus a constructor
+	 * assigning each, ready to splice into an empty destination.
+	 */
+	private static function scaffoldDestBlock(fields: Array<ScaffoldField>): String {
+		final fieldLines: String = [for (f in fields) '\tprivate final ${f.name}: ${f.type};'].join('\n');
+		final params: String = [for (f in fields) '${paramNameOf(f.name)}: ${f.type}'].join(', ');
+		final assigns: String = [
+			for (f in fields) {
+				final p: String = paramNameOf(f.name);
+				'\t\t' + (p == f.name ? 'this.${f.name} = $p;' : '${f.name} = $p;');
+			}
+		].join('\n');
+		return '$fieldLines\n\n\tpublic function new($params) {\n$assigns\n\t}';
+	}
+
+	/**
+	 * Resolves the verbatim declared type of each named source field via
+	 * `TypeInfoProvider.declaredTypeSources`. Returns an error when a field
+	 * has no explicit nominal annotation to mirror onto the destination.
+	 */
+	private static function resolveScaffoldFields(
+		prep: MovePrep, names: Array<String>, plugin: GrammarPlugin
+	): { error: Null<String>, fields: Array<ScaffoldField> } {
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		if (provider == null) return { error: 'cannot --scaffold: the grammar does not expose declared field types', fields: [] };
+		final typeSources: Map<Int, String> = provider.declaredTypeSources(prep.srcSource);
+		final members: Array<MemberGroup> = membersOf(prep.srcDecl);
+		final fields: Array<ScaffoldField> = [];
+		for (name in names) {
+			final g: Null<MemberGroup> = members.find(mm -> mm.member.name == name);
+			final gSpan: Null<Span> = g != null ? g.member.span : null;
+			final type: Null<String> = gSpan != null ? typeSources[gSpan.from] : null;
+			if (type == null) return {
+				error: 'cannot --scaffold field "$name": its type on "${prep.srcTypeName}" is not an explicit nominal annotation',
+				fields: [],
+			};
+			final typeNN: String = type;
+			fields.push({ name: name, type: typeNN });
+		}
+		return { error: null, fields: fields };
+	}
+
+	/**
+	 * Emits the mirrored final fields + constructor onto the destination.
+	 * With no destination constructor the block is returned to prepend to
+	 * the moved-member insert; with a trivial `new() {}` the block replaces
+	 * it in place; a real constructor is refused.
+	 */
+	private static function applyDestScaffold(
+		prep: MovePrep, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>
+	): { error: Null<String>, prependBlock: String } {
+		final block: String = scaffoldDestBlock(fields);
+		final ctor: Null<MemberGroup> = constructorGroupOf(prep.destDecl);
+		if (ctor == null) return { error: null, prependBlock: block };
+		if (!isTrivialCtor(prep.destSource, ctor)) return {
+			error: '"${prep.destTypeName}" already has a constructor — --scaffold targets an empty destination '
+				+ '(a bare `new() {}` or no constructor)',
+			prependBlock: '',
+		};
+		final from: Int = lineStartOf(prep.destSource, ctor.groupSpan.from);
+		editsFor(editsByFile, prep.destFile).push({ span: new Span(from, ctor.groupSpan.to), text: block });
+		return { error: null, prependBlock: '' };
+	}
+
+	/**
+	 * Adds the via field to the source type and wires
+	 * `<via> = new <Dest>(<fields>);` at the end of its constructor. Refuses
+	 * when the source type has no constructor to wire into.
+	 */
+	private static function scaffoldViaField(
+		prep: MovePrep, viaName: String, fields: Array<ScaffoldField>, editsByFile: Map<String, Array<{ span: Span, text: String }>>
+	): Null<String> {
+		final ctor: Null<MemberGroup> = constructorGroupOf(prep.srcDecl);
+		if (ctor == null) return 'cannot --scaffold via field "$viaName": "${prep.srcTypeName}" has no constructor to wire it in';
+		final fieldFrom: Int = lineStartOf(prep.srcSource, ctor.groupSpan.from);
+		editsFor(editsByFile, prep.srcFile).push({
+			span: new Span(fieldFrom, fieldFrom),
+			text: '\tprivate final $viaName: ${prep.destTypeName};\n\n',
+		});
+		final bodyClose: Null<Int> = ctorBodyClose(prep.srcSource, ctor.member);
+		if (bodyClose == null) return 'cannot --scaffold via field "$viaName": could not locate the "${prep.srcTypeName}" constructor body';
+		var wsStart: Int = bodyClose;
+		while (wsStart > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(prep.srcSource, wsStart - 1))) wsStart--;
+		final args: String = [for (f in fields) f.name].join(', ');
+		editsFor(editsByFile, prep.srcFile).push({
+			span: new Span(wsStart, bodyClose),
+			text: '\n\t\t$viaName = new ${prep.destTypeName}($args);\n\t',
+		});
+		return null;
+	}
+
+	/**
+	 * Cuts the moved members from the source and pushes the destination
+	 * insert: the scaffold block (fields + constructor) when generating,
+	 * then a blank-framed run of the moved members before the closing `}`.
+	 * Returns an error message, or null.
+	 */
+	private static function assembleDestination(
+		prep: MovePrep, scaffoldFields: Array<ScaffoldField>, movedTextEdits: Array<{ span: Span, text: String }>,
+		editsByFile: Map<String, Array<{ span: Span, text: String }>>, advisoryExtras: Array<String>
+	): Null<String> {
+		var destPrepend: String = '';
+		if (scaffoldFields.length > 0) {
+			final scaf: { error: Null<String>, prependBlock: String } = applyDestScaffold(prep, scaffoldFields, editsByFile);
+			if (scaf.error != null) return scaf.error;
+			destPrepend = scaf.prependBlock;
+			advisoryExtras.push('--scaffold generated ${scaffoldFields.length} final field(s) + constructor on "${prep.destTypeName}"');
+		}
+		final blocks: Array<String> = buildMovedBlocks(prep, movedTextEdits);
+		for (m in prep.moved) editsFor(editsByFile, prep.srcFile).push({ span: m.cut, text: '' });
+		final bodyClose: Null<Int> = typeBodyClose(prep.destSource, prep.destDecl);
+		if (bodyClose == null) return '"${prep.destTypeName}" has no brace body to receive the member';
+		var wsStart: Int = bodyClose;
+		while (wsStart > 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(prep.destSource, wsStart - 1))) wsStart--;
+		final destFrame: String = destPrepend == '' ? '\n\n${blocks.join('\n\n')}\n\n' : '\n\n$destPrepend\n\n${blocks.join('\n\n')}\n\n';
+		editsFor(editsByFile, prep.destFile).push({ span: new Span(wsStart, bodyClose), text: destFrame });
+		return null;
+	}
+
+
+	/**
+	 * Wraps a scaffold via name in a `VScaffold`, refusing when the name
+	 * already collides with a source member (a duplicate field or an
+	 * ambiguous reference would otherwise be generated silently).
+	 */
+	private static function scaffoldViaResult(prep: MovePrep, name: String): ViaResult {
+		return memberGroupOf(prep.srcDecl, name) != null
+			? VErr(
+				'cannot --scaffold via field "$name": "${prep.srcTypeName}" already declares a member with that name '
+				+ '— pass a different --via'
+			)
+			: VScaffold(name);
 	}
 
 }

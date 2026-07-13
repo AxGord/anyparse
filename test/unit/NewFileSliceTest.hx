@@ -176,6 +176,15 @@ class NewFileSliceTest extends Test {
 		Assert.isFalse(FileSystem.exists(p));
 		cleanup(dir);
 	}
+	/** `--kind class` with no other shape flag creates an empty class (regression: it was rejected as "no intent" — only `--class` worked). */
+	public function testCliKindClassEmpty(): Void {
+		final dir: String = tmpDir();
+		final p: String = '$dir/Empty.hx';
+		Assert.equals(0, Cli.run(['new', p, '--kind', 'class', '--write']));
+		Assert.isTrue(FileSystem.exists(p));
+		Assert.isTrue(File.getContent(p).contains('class Empty'));
+		cleanup(dir);
+	}
 
 	private static function tmpDir(): String {
 		counter++;

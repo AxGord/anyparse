@@ -10165,6 +10165,10 @@ final class Cli {
 					asClass = true;
 				case '--kind':
 					kind = expectValue(args, ++i, '--kind');
+					// An explicit `--kind class` is intent, same as `--class`;
+					// without this it collapses to the default and runNew's
+					// hasIntent check rejects it.
+					if (kind == 'class') asClass = true;
 				case '--extends':
 					extendsList.push(expectValue(args, ++i, '--extends'));
 				case '--underlying':
@@ -13037,9 +13041,12 @@ final class Cli {
 		var srcType: Null<String> = null;
 		var destType: Null<String> = null;
 		var scopeDir: Null<String> = null;
+		var via: Null<String> = null;
+		var closure: Bool = false;
+		var scaffold: Bool = false;
 		var write: Bool = false;
 		var srcFile: Null<String> = null;
-		var memberName: Null<String> = null;
+		var memberArg: Null<String> = null;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -13053,6 +13060,12 @@ final class Cli {
 					destType = expectValue(args, ++i, '--to');
 				case '--scope':
 					scopeDir = expectValue(args, ++i, '--scope');
+				case '--via':
+					via = expectValue(args, ++i, '--via');
+				case '--closure':
+					closure = true;
+				case '--scaffold':
+					scaffold = true;
 				case '--write':
 					write = true;
 				case '-h', '--help':
@@ -13065,8 +13078,8 @@ final class Cli {
 					}
 					if (srcFile == null)
 						srcFile = a;
-					else if (memberName == null)
-						memberName = a;
+					else if (memberArg == null)
+						memberArg = a;
 					else {
 						stderr('apq move-member: unexpected argument "$a"\n');
 						return EXIT_USAGE;
@@ -13074,11 +13087,12 @@ final class Cli {
 			}
 			i++;
 		}
-		if (srcFile == null || memberName == null || destType == null || scopeDir == null) {
+		if (srcFile == null || memberArg == null || destType == null || scopeDir == null) {
 			stderr('apq move-member: missing required arguments\n');
 			printMoveMemberUsage();
 			return EXIT_USAGE;
 		}
+		final memberNames: Array<String> = memberArg.split(',').map(StringTools.trim).filter(n -> n != '');
 		final srcFileNN: String = srcFile;
 		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
 		final destTypeName: String = destType;
@@ -13088,20 +13102,28 @@ final class Cli {
 		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final result: MoveResult = MoveMember.move(
-			srcFileNN, srcTypeName, memberName, destTypeName, scopeFiles, plugin, plugin.typeRefShape()
+			srcFileNN, srcTypeName, memberNames, destTypeName, via, closure, scaffold, scopeFiles, plugin, plugin.typeRefShape()
 		);
 		return emitMoveResult('move-member', result, srcFileNN, srcFileNN, write);
 	}
 
 	private static function printMoveMemberUsage(): Void {
-		sysPrint('Usage: apq move-member <srcFile> <member> --to <DestType> --scope <dir> [options]\n\n');
-		sysPrint('Move one STATIC member (method / var / final) to another type in the SAME\n');
-		sysPrint('package, rewriting Src.member -> Dest.member across the scope, qualifying\n');
-		sysPrint('bare references, carrying imports; atomic (all files re-parse or none).\n\n');
+		sysPrint('Usage: apq move-member <srcFile> <member[,member...]> --to <DestType> --scope <dir> [options]\n\n');
+		sysPrint('Move one or more members (method / var / final) to another type in the\n');
+		sysPrint('SAME package. Static: Src.member -> Dest.member across the scope, bare\n');
+		sysPrint('references qualified, imports carried. Instance (sibling-fields contract):\n');
+		sysPrint('moved bodies may read final fields the destination declares under the same\n');
+		sysPrint('names; remaining bare callers are rewired through a Src field of type Dest\n');
+		sysPrint('(--via, auto-detected when unique); calls between moved members stay bare;\n');
+		sysPrint('receiver-qualified external calls (x.member()) are NOT rewritten. Atomic\n');
+		sysPrint('(all files re-parse or none).\n\n');
 		sysPrint('Options:\n');
 		sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
 		sysPrint('  --to <Dest>    Destination type name (must exist under --scope)\n');
 		sysPrint('  --scope <dir>  Rewrite scope (dir/glob; srcFile auto-included)\n');
+		sysPrint('  --via <field>  Src instance field of type Dest routing remaining callers\n');
+		sysPrint('  --closure      Auto-expand the set to instance methods it calls (transitive)\n');
+		sysPrint('  --scaffold     Generate the dest final fields + ctor and the via field wiring\n');
 		sysPrint('  --write        Apply in place (default: print per-file summary)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
