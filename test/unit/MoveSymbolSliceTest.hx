@@ -175,12 +175,30 @@ class MoveSymbolSliceTest extends Test {
 	 * different package would break its same-package auto-visible
 	 * dependencies, so the op refuses.
 	 */
-	public function testCrossPackageRefused(): Void {
-		final a: String = 'package pkg;\n' + '\n' + 'class Foo {}';
-		final b: String = 'package other;\n' + '\n' + 'class B {}';
+	public function testCrossPackageMoves(): Void {
+		final a: String = 'package pkg;\n\nclass Foo {\n\tpublic var x:Int = 1;\n}';
+		final b: String = 'package other;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nimport pkg.A.Foo;\n\nclass User {\n\tvar f:Foo;\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'other/B.hx', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'other/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
+		]);
+		Assert.isFalse(StringTools.contains(changeFor(changes, 'pkg/A.hx').newSource, 'class Foo'), 'Foo left A');
+		Assert.isTrue(StringTools.contains(changeFor(changes, 'other/B.hx').newSource, 'class Foo'), 'Foo landed in B');
+		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
+		Assert.isTrue(StringTools.contains(newUser, 'import other.B.Foo;'), 'importer repointed cross-package');
+		Assert.isTrue(StringTools.contains(newUser, 'var f:Foo;'), 'bare type position stays');
+	}
+
+	public function testCrossPackageFqnRefused(): Void {
+		final a: String = 'package pkg;\n\nclass Foo {}';
+		final b: String = 'package other;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nclass User {\n\tvar f:pkg.A.Foo;\n}';
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 3, 7, 'other/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
 		], plugin(), typeRefShape());
 		assertErr(result);
 	}

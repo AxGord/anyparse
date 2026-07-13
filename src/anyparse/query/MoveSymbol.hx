@@ -95,7 +95,7 @@ typedef MoveChange = {
 final class MoveSymbol {
 
 	/** The advisory appended to every successful move. */
-	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver (T.staticMethod()) or a value position are not auto-detected and may need a manual import; same-package moves only.';
+	private static final ADVISORY: String = 'verify imports in the destination — dependencies reached via a static receiver (T.staticMethod()) or a value position are not auto-detected and may need a manual import. A cross-package move repoints importers and the source/dest imports; a fully-qualified pkg.Type code reference is refused.';
 
 	/**
 	 * Move the type declaration at `line:col` (in `cursorFile`) into
@@ -140,6 +140,10 @@ final class MoveSymbol {
 		final destSource: Null<String> = sourceOf[destFile];
 		if (destSource == null) return Err('destination file $destFile is not in the scope file set');
 		final oldImportPath: Null<String> = index.importPathOf(typeName);
+		if (cursorInfo.pkg != destInfo.pkg) {
+			final fqnErr: Null<String> = crossPackageFqnRefusal(index, sourceOf, oldImportPath, typeName);
+			if (fqnErr != null) return Err(fqnErr);
+		}
 		final carried: Array<ImportInfo> = dependencyImportsToCarry(
 			cursorSource, declSpan, cursorInfo, destInfo, plugin, typeRefShape, typeName
 		);
@@ -501,11 +505,6 @@ final class MoveSymbol {
 		final destInfo: Null<FileInfo> = index.fileInfo(destFile);
 		if (destInfo == null) return PErr('destination file $destFile is not a parseable file under scope');
 		if (cursorInfo == null) return PErr('$cursorFile is not indexed');
-		if (cursorInfo.pkg != destInfo.pkg)
-			return PErr(
-				'cross-package move not supported in this increment '
-				+ '(source package "${cursorInfo.pkg}" != destination package "${destInfo.pkg}")'
-			);
 
 		// Narrow the null-checked locals for the struct literal (Strict does
 		// not propagate narrowing into anonymous struct fields).
@@ -584,6 +583,45 @@ final class MoveSymbol {
 			changes.push({ file: file, newSource: newSource });
 		}
 		return changes.length == 0 ? Err('move of "$typeName" changed nothing') : Ok(changes, ADVISORY);
+	}
+
+
+	/**
+	 * Cross-package refusal: a fully-qualified code reference to the moved
+	 * type (`a.b.T` in a type position, `new a.b.T()`, `a.b.T.staticCall()`)
+	 * cannot be safely repointed — the package segment would dangle after the
+	 * move, and the type's import path spans several representations. Bare
+	 * `T` references (reached through an import) ARE handled; the import
+	 * statement itself is excluded. Returns a refusal listing the first
+	 * offending file, or null. Word-bounded so `a.b.Talon` / `xa.b.T` never
+	 * match; import / using statements of the same path are skipped.
+	 */
+	private static function crossPackageFqnRefusal(
+		index: SymbolIndex, sourceOf: Map<String, String>, oldImportPath: Null<String>, typeName: String
+	): Null<String> {
+		if (oldImportPath == null) return null;
+		final path: String = oldImportPath;
+		for (file => source in sourceOf) {
+			final info: Null<FileInfo> = index.fileInfo(file);
+			if (info == null) continue;
+			final infoNN: FileInfo = info;
+			var from: Int = 0;
+			while (true) {
+				final at: Int = source.indexOf(path, from);
+				if (at < 0) break;
+				from = at + 1;
+				final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
+				final afterIdx: Int = at + path.length;
+				final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+				if (!beforeOk || !afterOk) continue;
+				var inImport: Bool = false;
+				for (imp in infoNN.imports) if (imp.raw == path && at >= imp.span.from && at < imp.span.to) inImport = true;
+				if (!inImport)
+					return 'cross-package move: "$file" references "$path" by its fully-qualified path — repointing it is unsafe; '
+						+ 'convert it to a bare "$typeName" (with an import) first';
+			}
+		}
+		return null;
 	}
 
 }
