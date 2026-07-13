@@ -501,6 +501,8 @@ final class Cli {
 				return runInheritanceMove(rest, false);
 			case 'extract-superclass':
 				return runExtractSuperclass(rest);
+			case 'safe-delete':
+				return runSafeDelete(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6735,6 +6737,7 @@ final class Cli {
 		sysPrint('  pull-up       Move an instance member up to its superclass\n');
 		sysPrint('  push-down     Move an instance member down to a subclass\n');
 		sysPrint('  extract-superclass  Generate a superclass, pull members up into it + extend it\n');
+		sysPrint('  safe-delete   Remove a member only if unreferenced across the scope\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13447,6 +13450,94 @@ final class Cli {
 		sysPrint('  --out <path>       Superclass file path (default: sibling <SuperName>.hx)\n');
 		sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
 		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function runSafeDelete(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var srcType: Null<String> = null;
+		var scopeDir: Null<String> = null;
+		var reformat: Bool = false;
+		var write: Bool = false;
+		var srcFile: Null<String> = null;
+		var memberName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					srcType = expectValue(args, ++i, '--type');
+				case '--scope':
+					scopeDir = expectValue(args, ++i, '--scope');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printSafeDeleteUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq safe-delete: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (srcFile == null)
+						srcFile = a;
+					else if (memberName == null)
+						memberName = a;
+					else {
+						stderr('apq safe-delete: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (srcFile == null || memberName == null || scopeDir == null) {
+			stderr('apq safe-delete: missing required arguments (need <srcFile> <member> --scope <dir>)\n');
+			printSafeDeleteUsage();
+			return EXIT_USAGE;
+		}
+		final srcFileNN: String = srcFile;
+		final memberNameNN: String = memberName;
+		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles('safe-delete', scopeDir, [srcFileNN]);
+		if (scopeFiles == null) return EXIT_RUNTIME;
+
+		final result: EditResult = SafeDelete.safeDelete(
+			srcFileNN, srcTypeName, memberNameNN, reformat, scopeFiles, plugin, plugin.refShape()
+		);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(srcFileNN, text);
+					stderr('apq safe-delete: removed "$memberNameNN" from $srcFileNN\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq safe-delete: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printSafeDeleteUsage(): Void {
+		sysPrint('Usage: apq safe-delete <srcFile> <member> --scope <dir> [options]\n\n');
+		sysPrint('Remove a member only when no reference to it survives under the scope —\n');
+		sysPrint('the guarded, cross-file, any-visibility form of remove-member. Any\n');
+		sysPrint('x.member field access or bare in-type reference blocks the deletion and\n');
+		sysPrint('is listed. Self-references (recursion) do not count.\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type)\n');
+		sysPrint('  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)\n');
+		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
+		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
 }

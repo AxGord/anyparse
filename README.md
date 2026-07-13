@@ -176,6 +176,7 @@ All resolve against real scopes (never by-name text replace), preserve formattin
 | `extract-interface` | generate an interface from a class's public instance methods (or a `--members` subset) and make the class `implements` it — signatures sliced `[FnMember, body)`, referenced imports carried, the interface written to a sibling file; no call sites change (additive) |
 | `pull-up` / `push-down` | move an instance member along the inheritance axis (to a direct super/subclass) — no call sites change (inheritance keeps it visible); pull-up refuses when the body references a subclass-only member, push-down warns that superclass-typed callers stop compiling |
 | `extract-superclass` | generate a superclass, pull a chosen `--members` set up into it (bodies + carried imports), and make the class `extends` it — no constructor on the superclass (the source constructor is unchanged), no call sites change; refuses stranded references and a class that already extends one |
+| `safe-delete` | remove a member only when no reference to it survives across the scope — the guarded, cross-file, any-visibility form of `remove-member`; any `x.member` access or bare in-type reference blocks the deletion (self-recursion excluded) and is listed |
 | `symbols` / `importers` / `declares` | list top-level type declarations across a scope / files importing a module / the declaration site(s) of one named type |
 
 A second family — `add-member`, `add-import`, `add-element`, `replace-node` — *inserts*
