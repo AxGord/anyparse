@@ -404,6 +404,7 @@ import unit.ExtractSuperclassSliceTest;
 import unit.SafeDeleteSliceTest;
 import unit.EncapsulateFieldSliceTest;
 import unit.MakeFinalSliceTest;
+import unit.IntroduceParameterObjectSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -721,6 +722,7 @@ class RunTests {
 		addCase(new SafeDeleteSliceTest());
 		addCase(new EncapsulateFieldSliceTest());
 		addCase(new MakeFinalSliceTest());
+		addCase(new IntroduceParameterObjectSliceTest());
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());

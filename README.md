@@ -179,6 +179,7 @@ All resolve against real scopes (never by-name text replace), preserve formattin
 | `safe-delete` | remove a member only when no reference to it survives across the scope — the guarded, cross-file, any-visibility form of `remove-member`; any `x.member` access or bare in-type reference blocks the deletion (self-recursion excluded) and is listed |
 | `encapsulate-field` | turn a stored `var` field into an `@:isVar` property with `get_`/`set_` accessors — the field stays the backing storage so no reference is renamed; requires a plain, non-final, non-static, explicitly-typed instance field |
 | `make-final` | turn a mutable `var` field into `final` when it is never reassigned after its single initialisation (any write outside the constructor, cross-file `obj.field =` included, refuses) — unblocks the `move-member` instance path, whose final-fields contract needs it |
+| `introduce-parameter-object` | replace a contiguous run of a function's parameters with one object parameter of a generated `typedef` — rewrites the signature, the body's references (`x` → `point.x`), and every resolvable in-file call site (`f(1, 2)` → `f({x: 1, y: 2})`); reuses the `remove-param` call-site completeness proof; a short `$x` string-interpolation use is refused |
 | `symbols` / `importers` / `declares` | list top-level type declarations across a scope / files importing a module / the declaration site(s) of one named type |
 
 A second family — `add-member`, `add-import`, `add-element`, `replace-node` — *inserts*

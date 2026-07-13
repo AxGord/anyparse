@@ -507,6 +507,8 @@ final class Cli {
 				return runEncapsulateField(rest);
 			case 'make-final':
 				return runMakeFinal(rest);
+			case 'introduce-parameter-object':
+				return runIntroduceParameterObject(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6744,6 +6746,7 @@ final class Cli {
 		sysPrint('  safe-delete   Remove a member only if unreferenced across the scope\n');
 		sysPrint('  encapsulate-field   Turn a var field into a get/set property (@:isVar)\n');
 		sysPrint('  make-final    Turn a never-reassigned var field into final\n');
+		sysPrint('  introduce-parameter-object  Fold contiguous params into one object param\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13715,6 +13718,108 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
 		sysPrint('  --scope <dir>  Widen the reassignment check across the scope\n');
+		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function runIntroduceParameterObject(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var params: Null<String> = null;
+		var typeName: Null<String> = null;
+		var objName: Null<String> = null;
+		var write: Bool = false;
+		var file: Null<String> = null;
+		var posSpec: Null<String> = null;
+		var selectExpr: Null<String> = null;
+		var matchExpr: Null<String> = null;
+		var nth: Null<Int> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--params':
+					params = expectValue(args, ++i, '--params');
+				case '--as':
+					typeName = expectValue(args, ++i, '--as');
+				case '--name':
+					objName = expectValue(args, ++i, '--name');
+				case '--select':
+					selectExpr = expectValue(args, ++i, '--select');
+				case '--match':
+					matchExpr = expectValue(args, ++i, '--match');
+				case '--nth':
+					nth = Std.parseInt(expectValue(args, ++i, '--nth'));
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printIntroduceParameterObjectUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq introduce-parameter-object: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else if (posSpec == null && selectExpr == null && matchExpr == null && isPosSpec(a))
+						posSpec = a;
+					else {
+						stderr('apq introduce-parameter-object: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || params == null || typeName == null || (posSpec == null && selectExpr == null && matchExpr == null)) {
+			stderr('apq introduce-parameter-object: need <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName>\n');
+			printIntroduceParameterObjectUsage();
+			return EXIT_USAGE;
+		}
+		final filePath: String = file;
+		final paramsNN: String = params;
+		final typeNameNN: String = typeName;
+		final source: String = try readFile(filePath) catch (exception: haxe.Exception) {
+			stderr('apq introduce-parameter-object: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final pos: Null<Position> = resolveAddressPos(
+			'introduce-parameter-object', source, plugin, posSpec, selectExpr, matchExpr, nth, true
+		);
+		if (pos == null) return EXIT_RUNTIME;
+		final paramNames: Array<String> = paramsNN.split(',').map(StringTools.trim).filter(n -> n != '');
+
+		final result: EditResult = IntroduceParameterObject.introduce(
+			source, pos.line, pos.col, paramNames, typeNameNN, objName, plugin, plugin.refShape()
+		);
+		switch result {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq introduce-parameter-object: folded ${paramNames.length} parameter(s) into "$typeNameNN" in $filePath\n');
+				} else {
+					sysPrint(text);
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq introduce-parameter-object: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printIntroduceParameterObjectUsage(): Void {
+		sysPrint('Usage: apq introduce-parameter-object <file> (<l>:<c> | --select | --match) --params a,b --as <TypeName> [options]\n\n');
+		sysPrint('Replace a contiguous run of a function\'s parameters with one object\n');
+		sysPrint('parameter of a generated typedef. The signature, the body\'s references,\n');
+		sysPrint('and every resolvable in-file call site are rewritten together.\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --params a,b   The contiguous parameters to fold (required)\n');
+		sysPrint('  --as <Type>    Name of the generated typedef (required)\n');
+		sysPrint('  --name <obj>   Object parameter name (default: lower-camel of the type)\n');
 		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
