@@ -199,6 +199,8 @@ final class MoveMember {
 		final captures: Array<String> = casePatternCaptures(prep.srcTree);
 		final guard: Null<String> = moveGuardError(prep, captures);
 		if (guard != null) return Err(guard);
+		final fqnRefusal: Null<String> = crossPackageFqnRefusal(prep);
+		if (fqnRefusal != null) return Err(fqnRefusal);
 		final editsByFile: Map<String, Array<{ span: Span, text: String }>> = [];
 		final movedTextEdits: Array<{ span: Span, text: String }> = [];
 		final callerFilesNeedingImport: Array<String> = [];
@@ -238,6 +240,7 @@ final class MoveMember {
 		final destError: Null<String> = assembleDestination(prep, scaffoldFields, movedTextEdits, editsByFile, advisoryExtras);
 		if (destError != null) return Err(destError);
 		pushImportEdits(prep, typeRefShape, callerFilesNeedingImport, plugin, editsByFile);
+		pushCrossPackageImports(prep, editsByFile, movedTextEdits);
 		return applyAndValidate(editsByFile, prep.sourceOf, plugin, memberNames.join(', '), advisoryExtras);
 	}
 
@@ -430,11 +433,8 @@ final class MoveMember {
 		final srcInfo: Null<FileInfo> = index.fileInfo(srcFile);
 		final destInfo: Null<FileInfo> = index.fileInfo(destHit.file);
 		if (srcInfo == null || destInfo == null) return PErr('scope files are not indexed');
-		if (srcInfo.pkg != destInfo.pkg)
-			return PErr(
-				'cross-package move not supported in this increment '
-				+ '(source package "${srcInfo.pkg}" != destination package "${destInfo.pkg}")'
-			);
+		final pkgErr: Null<String> = crossPackageStaticGuard(srcInfo, destInfo, moved);
+		if (pkgErr != null) return PErr(pkgErr);
 		final guard: Null<String> = scopeGuardError(scopeFiles, index, srcTypeName, memberNames, destTypeName);
 		if (guard != null) return PErr(guard);
 		// Re-bind the null-checked locals: Strict does not propagate
@@ -1302,6 +1302,80 @@ final class MoveMember {
 				+ '— pass a different --via'
 			)
 			: VScaffold(name);
+	}
+
+
+	/**
+	 * Cross-package refusal: a fully-qualified caller `pkg.Src.member` cannot
+	 * be safely repointed, because rewriting only the `Src` segment yields
+	 * `pkg.Dest.member` in the SOURCE package — wrong when Dest lives
+	 * elsewhere, and silently wrong if the source package happens to declare
+	 * its own `Dest`. Refuse when the move is cross-package and any such
+	 * caller exists. Null otherwise. Bare `Src.member` callers are safe (they
+	 * pick up the destination import).
+	 */
+	private static function crossPackageFqnRefusal(prep: MovePrep): Null<String> {
+		if (prep.srcInfo.pkg == prep.destInfo.pkg) return null;
+		final movedNames: Array<String> = [for (m in prep.moved) m.name];
+		final offenders: Array<String> = [];
+		function walk(node: QueryNode): Void {
+			final children: Array<QueryNode> = node.children;
+			final nm: Null<String> = node.name;
+			if (node.kind == 'FieldAccess' && nm != null && movedNames.contains(nm) && children.length > 0) {
+				final recv: QueryNode = children[0];
+				if (recv.kind == 'FieldAccess' && recv.name == prep.srcTypeName && !offenders.contains(nm)) offenders.push(nm);
+			}
+			for (c in children) walk(c);
+		}
+		for (file => tree in prep.trees) walk(tree);
+		return offenders.length == 0
+			? null
+			: 'cross-package move: member(s) ${quoted(offenders)} are called via a fully-qualified '
+				+ '"${prep.srcTypeName}.<member>" receiver — repointing the package segment is unsafe; '
+				+ 'convert those call sites to a bare "${prep.srcTypeName}.<member>" (with an import) first';
+	}
+
+	/**
+	 * Cross-package import wiring: after a static cross-package move the source
+	 * file references `Dest` (rewritten callers) and the destination file may
+	 * reference `Src` (sibling-qualified `Src.other` calls in the moved body).
+	 * Add the missing imports on each side (deduped by `addImportEdit`). A
+	 * no-op within one package.
+	 */
+	private static function pushCrossPackageImports(
+		prep: MovePrep, editsByFile: Map<String, Array<{ span: Span, text: String }>>, movedTextEdits: Array<{ span: Span, text: String }>
+	): Void {
+		if (prep.srcInfo.pkg == prep.destInfo.pkg) return;
+		final srcEdits: Array<{ span: Span, text: String }> = editsByFile[prep.srcFile] ?? [];
+		if (srcEdits.exists(e -> e.text != '' && StringTools.contains(e.text, prep.destTypeName))) {
+			final destPath: String = prep.destTypeName == RefactorSupport.baseNameOf(prep.destFile)
+				? prep.destInfo.module
+				: '${prep.destInfo.module}.${prep.destTypeName}';
+			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.srcSource, prep.srcInfo, destPath);
+			if (edit != null) editsFor(editsByFile, prep.srcFile).push(edit);
+		}
+		if (movedTextEdits.exists(e -> StringTools.contains(e.text, '${prep.srcTypeName}.'))) {
+			final srcPath: String = prep.srcTypeName == RefactorSupport.baseNameOf(prep.srcFile)
+				? prep.srcInfo.module
+				: '${prep.srcInfo.module}.${prep.srcTypeName}';
+			final edit: Null<{ span: Span, text: String }> = MoveSymbol.addImportEdit(prep.destSource, prep.destInfo, srcPath);
+			if (edit != null) editsFor(editsByFile, prep.destFile).push(edit);
+		}
+	}
+
+
+	/**
+	 * The refusal for a cross-package move of an INSTANCE member — this
+	 * increment repoints qualified static callers and wires the src/dest
+	 * imports, but an instance move across packages would also need the via
+	 * field's type imported into the source and is deferred. Null within one
+	 * package or for an all-static move.
+	 */
+	private static function crossPackageStaticGuard(srcInfo: FileInfo, destInfo: FileInfo, moved: Array<MovedMember>): Null<String> {
+		return srcInfo.pkg != destInfo.pkg && moved.exists(m -> !m.isStatic)
+			? 'cross-package move supports static members only in this increment '
+				+ '(source package "${srcInfo.pkg}" != destination package "${destInfo.pkg}")'
+			: null;
 	}
 
 }

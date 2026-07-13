@@ -204,13 +204,29 @@ class MoveMemberSliceTest extends Test {
 		]));
 	}
 
-	public function testCrossPackageDestRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+	public function testCrossPackageInstanceRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic function new() {}\n\tpublic function util():Int return 1;\n}';
 		final b: String = 'package other;\n\nclass B {}';
 		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'other/B.hx', source: b },
 		]));
+	}
+
+	public function testCrossPackageStaticSucceeds(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package other;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nimport pkg.A;\n\nclass User {\n\tfunction go():Int return A.util(1);\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'other/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
+		]);
+		final newB: String = changeFor(changes, 'other/B.hx').newSource;
+		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
+		Assert.isTrue(StringTools.contains(newB, 'function util'), 'util lands in B');
+		Assert.isTrue(StringTools.contains(newUser, 'B.util(1)'), 'caller repointed to B');
+		Assert.isTrue(StringTools.contains(newUser, 'import other.B;'), 'cross-package caller gains the dest import');
 	}
 
 	public function testUnknownMemberRefused(): Void {
@@ -740,6 +756,18 @@ class MoveMemberSliceTest extends Test {
 		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
 		Assert.isTrue(StringTools.contains(newB, 'B.util(5)'), 'dest-file caller should repoint');
 		Assert.isTrue(StringTools.contains(newB, 'private static function util'), 'no promotion for a dest-file caller');
+	}
+
+
+	public function testCrossPackageFqnCallerRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package other;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nclass User {\n\tfunction go():Int return pkg.A.util(1);\n}';
+		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'other/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
+		]));
 	}
 
 }
