@@ -43,9 +43,9 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  *  - `testNonChainOpFallsBackToG1`: `<<` is not in the chain class set
  *    → falls through to existing G.1 per-binary Group emission. Smoke
  *    that the chain-class guard is correct.
- *  - `testNullCoalNotChain`: `??` chain (right-assoc, prec=2) is not
- *    in the chain class set — falls back to G.1 like other non-chain
- *    operators. Confirms the guard is opText-based, not prec-based.
+ *  - `testNullCoalShortChainStaysFlat`: a short `??` chain that fits stays
+ *    inline (NoWrap) -- the null-coalescing analog of the `||` short-chain
+ *    case. (Overflow-glued `??` is covered by `HxBinopGroupWrapSliceTest`.)
  *  - `testIdempotencyLongBoolChain`: round-trip stable after the new
  *    chain emission shape.
  */
@@ -133,14 +133,13 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('\n\t\t\t<< ') != -1, 'expected G.1 fallback continuation in: <$out>');
 	}
 
-	public function testNullCoalNotChain(): Void {
-		// `??` is not a chain class (haxe-formatter has no opNullCoalChain).
-		// Falls back to G.1 emission. Pre-existing G.1 test already
-		// covers this; restating here as a regression guard for the
-		// chain-class membership check.
-		final src: String = 'class C { static function m():Void { var v:Int = aaaaaaaaaaaa ?? bbbbbbbbbbbb ?? cccccccccccc ?? dddddddddddd ?? eeeeeeeeeeee; } }';
+	public function testNullCoalShortChainStaysFlat(): Void {
+		// Guard: a short `??` chain that fits stays inline (NoWrap), matching
+		// `testShortBoolChainStaysFlat` for `||`.
+		final src: String = 'class C { var x = aaaa ?? bbbb ?? cccc; }';
 		final out: String = writeWithLineWidth(src, 80);
-		Assert.isTrue(out.indexOf('?? bbbbbbbbbbbb') != -1, 'expected `?? bbb` in: <$out>');
+		Assert.isTrue(out.indexOf('aaaa ?? bbbb ?? cccc') != -1, 'short `??` chain stayed flat in: <$out>');
+		Assert.isTrue(out.indexOf('aaaa ??\n') == -1, 'short `??` chain unexpectedly broke in: <$out>');
 	}
 
 	public function testAssignTrailingSpaceDropsBeforeRhsBreak(): Void {

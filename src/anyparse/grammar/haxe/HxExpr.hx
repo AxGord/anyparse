@@ -592,7 +592,7 @@ enum HxExpr {
 	@:infix('||', 3) @:fmt(captureChainNewline)
 	Or(left: HxExpr, right: HxExpr);
 
-	@:infix('??', 2, 'Right') @:fmt(captureRhsTrail)
+	@:infix('??', 2, 'Right') @:fmt(captureChainNewline)
 	NullCoal(left: HxExpr, right: HxExpr);
 
 	@:ternary('?', ':', 1)

@@ -38,8 +38,9 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  *  - `testAssignmentBreakLandsInsideRhs`: `var dirty:Bool = a || b || c
  *    || d || e || f;` with prec=1 RHS (`||`) wide enough to break — the
  *    `=` itself stays flat, only the RHS Or-Group breaks.
- *  - `testRightAssocNullCoalChainBreaks`: `a ?? b ?? c ?? d ?? e ?? f`
- *    breaks at each `??` despite right-associativity.
+ *  - `testRightAssocNullCoalChainStaysGlued`: `a ?? b ?? c ?? d ?? e ?? f`
+ *    stays glued past the width -- `??` routes through the chain engine
+ *    under a NoWrap cascade, never breaking at the operator (fork parity).
  *  - `testIsAsymmetricStaysGlued`: `x is SomeType` keeps single-pair
  *    flat even with the asymmetric writer path (smoke for the
  *    `isAsymmetric` branch composing with the new Group wrap).
@@ -96,12 +97,15 @@ class HxBinopGroupWrapSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('dirty = aaaaaaaaaaaa') != -1, '`dirty = aaaa…` lead-line shape preserved in: <$out>');
 	}
 
-	public function testRightAssocNullCoalChainBreaks(): Void {
-		// `??` is prec=2 right-assoc, NOT prec=0 → Group wrap applies.
+	public function testRightAssocNullCoalChainStaysGlued(): Void {
+		// `??` (prec=2, right-assoc) routes through the chain engine under a
+		// NoWrap cascade -- it no longer takes the per-binary Group path, so a
+		// comment-free bare-operand chain stays glued past the width (fork
+		// parity), never breaking at the operator.
 		final src: String = 'class C { static function m():Void { var v:Int = aaaaaaaaaaaa ?? bbbbbbbbbbbb ?? cccccccccccc ?? dddddddddddd ?? eeeeeeeeeeee; } }';
 		final out: String = writeWithLineWidth(src, 80);
-		Assert.isTrue(out.indexOf('?? bbbbbbbbbbbb') != -1, 'expected `?? bbb` in: <$out>');
-		Assert.isTrue(out.indexOf('\n\t\t\t?? ') != -1, 'expected continuation `\\n\\t\\t\\t?? ` in: <$out>');
+		Assert.isTrue(out.indexOf('aaaaaaaaaaaa ?? bbbbbbbbbbbb') != -1, 'operands stay glued in: <$out>');
+		Assert.isTrue(out.indexOf('\n\t\t\t?? ') == -1, 'no leading `??` operator break in: <$out>');
 	}
 
 	public function testIsAsymmetricStaysGlued(): Void {

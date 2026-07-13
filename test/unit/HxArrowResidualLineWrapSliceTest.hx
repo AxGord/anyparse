@@ -62,6 +62,24 @@ final class HxArrowResidualLineWrapSliceTest extends Test {
 		);
 	}
 
+	/** A `??` chain of calls with a `//` comment after each operator keeps EVERY comment (Keep shape forced by the attached line comment): each `??` trails its own line at a flat continuation indent. The plain infix path dropped these. */
+	public function testNullCoalescePostOpCommentsPreserved(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn pathList.findEntry(path -> isAvailableAt(path)) ?? // primary lookup by direct match\n\t\t\tpathList.findEntry(path -> isNamedAt(path)) ?? // secondary lookup by name only\n\t\t\tpathList.findEntry(path -> isAnyAt(path));\n\t}\n}';
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\treturn pathList.findEntry(path -> isAvailableAt(path)) ?? // primary lookup by direct match\n\t\t\tpathList.findEntry(path -> isNamedAt(path)) ?? // secondary lookup by name only\n\t\t\tpathList.findEntry(path -> isAnyAt(path));\n\t}\n\n}',
+			triviaWrite(src)
+		);
+	}
+
+	/** A short 2-operand `??` with a trailing `//` comment stays multi-line to keep the comment -- it would otherwise collapse to one line and drop it. */
+	public function testNullCoalesceShortChainCommentPreserved(): Void {
+		final src: String = 'class Sample {\n\tfunction run() {\n\t\treturn primaryLookupValueForEntry ?? // fall back when the primary is null here\n\t\t\tsecondaryLookupValueForEntry;\n\t}\n}';
+		Assert.equals(
+			'class Sample {\n\n\tfunction run() {\n\t\treturn primaryLookupValueForEntry ?? // fall back when the primary is null here\n\t\t\tsecondaryLookupValueForEntry;\n\t}\n\n}',
+			triviaWrite(src)
+		);
+	}
+
 	private inline function triviaWrite(src: String): String {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CFG);
 		opts.finalNewline = false;

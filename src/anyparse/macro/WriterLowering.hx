@@ -6659,8 +6659,9 @@ class WriterLowering {
 		final opWithSpaces: String = isTight ? opText : ' ' + opText + ' ';
 		final isChainBool: Bool = opText == '||' || opText == '&&';
 		final isChainAddSub: Bool = opText == '+' || opText == '-';
+		final isChainNullCoal: Bool = opText == '??';
 		if (isTight || isAssign) return lowerInfixTightAssign(c);
-		if (isChainBool || isChainAddSub) return lowerInfixChain(c);
+		if (isChainBool || isChainAddSub || isChainNullCoal) return lowerInfixChain(c);
 		// Asymmetric infix mirror of Lowering.lowerPrattLoop: when the
 		// right child references a different enum (e.g. `Is(left:HxExpr,
 		// right:HxType)`), the right operand uses that type's own writer
@@ -6670,26 +6671,12 @@ class WriterLowering {
 		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
-		// omega-call-grouprestprobe-subposition: `??` (Coalesce) is right-assoc and
-		// renders via this non-chain infix path (not the fillLine chain engine).
-		// Its outer-left operand carries the whole rest-chain on the line, so a
-		// `Call` operand's `@:fmt(groupRestProbe)` rest-probe over-counts and wraps
-		// args the fork keeps glued -- the fork packs the `??` chain left-to-right
-		// and breaks only the overflowing operand's brackets. Mark both operands
-		// `_suppressCallRestProbe` so a `Call` operand reverts to pristine
-		// plain-Group (wrap-on-own-overflow), matching the self-canonical shape.
-		// Other infix ops in this path (`*`/`/`/compare/`is`/shift/bitwise) keep
-		// the rest-probe -- their operand wrapping already matches the fork.
-		final suppressRestProbe: Bool = opText == '??';
-		final leftOptExpr: Null<Expr> = suppressRestProbe ? macro _setSuppressCallRestProbe(opt, true) : null;
-		final rightOptBase: Expr = rightOptExpr ?? macro opt;
-		final rightOptFinal: Null<Expr> = suppressRestProbe ? macro _setSuppressCallRestProbe($rightOptBase, true) : rightOptExpr;
-		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, leftOptExpr);
+		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, null);
 		final rightCall: Expr = isAsymmetric
-			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptFinal)
-			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptFinal);
+			? makeWriteCall(writeFnFor(rightRef), macro $i{argNames[1]}, false, -1, rightOptExpr)
+			: makeWriteCall(writeFnName, macro $i{argNames[1]}, hasPratt, rightCtx, rightOptExpr);
 		// Group/Line/Nest wrap for non-tight non-assign non-chain
-		// infix (compare, shift, bitwise, `is`, `??`, `*`/`/`/`%`): lets
+		// infix (compare, shift, bitwise, `is`, `*`/`/`/`%`): lets
 		// the renderer pick flat (Line(' ') → space) when the chain's
 		// full flat width fits in the remaining columns, else break.
 		// Per-binary Group cascading from G.1 (ω-binop-group-wrap).
@@ -6697,7 +6684,7 @@ class WriterLowering {
 		// ω-binop-open-delim-glue (opadd_chain* B1-remainder): these
 		// operators are NOT wrap-points in the fork — `MarkWrapping`
 		// wrap-marks ONLY `Binop(OpAdd)` / `Binop(OpLt)` (type param) /
-		// `Binop(OpArrow)`; `*`/`/`/`%`/`>`/`<<`/`&`/`is`/`??`/compare
+		// `Binop(OpArrow)`; `*`/`/`/`%`/`>`/`<<`/`&`/`is`/compare
 		// never break at the operator, only their bracketed operands
 		// break. The legacy `Group(Concat([left, Nest(cols, [Line, op,
 		// right])]))` breaks the soft `Line` whenever the content carries
@@ -6916,8 +6903,21 @@ class WriterLowering {
 		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
 		final opText: String = getOperatorText(branch);
 		final isChainBool: Bool = opText == '||' || opText == '&&';
-		final chainRulesField: String = isChainBool ? 'opBoolChainWrap' : 'opAddSubChainWrap';
-		final chainRulesExpr: Expr = optFieldAccess(chainRulesField);
+		final isChainNullCoal: Bool = opText == '??';
+		final isChainAddSub: Bool = opText == '+' || opText == '-';
+		final chainRulesField: String = isChainAddSub ? 'opAddSubChainWrap' : 'opBoolChainWrap';
+		// `??` (right-assoc null-coalescing) does NOT wrap at the operator: the fork
+		// keeps the chain glued and lets an overflowing operand break its own
+		// brackets. Route it through the chain engine only to preserve post-`??`
+		// line comments (the plain path dropped them) -- a comment forces the Keep
+		// shape via `_hasLeadComment`, while a comment-free `??` chain stays glued
+		// under this NoWrap cascade.
+		final chainRulesExpr: Expr = isChainNullCoal
+			? macro ({
+				rules: [],
+				defaultMode: anyparse.format.wrap.WrapMode.NoWrap
+			}: anyparse.format.wrap.WrapRules)
+			: optFieldAccess(chainRulesField);
 		final argTypeCT: ComplexType = ruleValueCT(typePath);
 		// Leaf operands render at the chain's own precedence. A
 		// sub-expression with strictly lower prec (ternary inside
@@ -6929,7 +6929,7 @@ class WriterLowering {
 		// args and split a call that fits on its own (the chain head
 		// `f(a, b) + ...`). Suppress it so a chain operand wraps on its OWN
 		// overflow (plain Group); the chain absorbs the rest via its operator
-		// break / paren-open. Mirrors the `??`-operand gate in `lowerInfixBranch`.
+		// break / paren-open. Applies to every chain operand, `??` included.
 		final leafCall: Expr = makeWriteCall(writeFnName, macro _e, hasPratt, prec, macro _setSuppressCallRestProbe(opt, true));
 		// ω-keep-chain (increment 2): in Trivia mode the chain ctors
 		// Add/Sub/And/Or carry a 3rd `chainNewline:Bool` synth arg (the
@@ -6948,7 +6948,7 @@ class WriterLowering {
 		// keeps `_breaks` declaration and the gatherSwitch's `_breaks.push`
 		// strictly in lockstep (no half-wired state).
 		final threadBreaks: Bool = _ctx.trivia && outerChainNl != null;
-		final gatherSwitch: Expr = infixChainGatherSwitch(isChainBool, threadBreaks, leafCall);
+		final gatherSwitch: Expr = infixChainGatherSwitch(isChainBool, isChainNullCoal, threadBreaks, leafCall);
 		// `_breaks` (parallel to `_ops`) only exists in Trivia mode.
 		// ω-keep-chain head break (increment 2): a `return`→head source
 		// newline is delivered via the shared `opt._varKwNewline` channel
@@ -7102,7 +7102,33 @@ class WriterLowering {
 	 * macro Expr so its `case Or(...)` patterns resolve against the
 	 * current writer's value type.
 	 */
-	private function infixChainGatherSwitch(isChainBool: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
+	private function infixChainGatherSwitch(isChainBool: Bool, isChainNullCoal: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
+		// `??` is right-assoc (`NullCoal(a, NullCoal(b, c))`); the recurse-left /
+		// push-op / recurse-right gather still yields items in infix order with a
+		// per-gap `_afterComments` entry, so the flat chain-emit preserves the
+		// post-`??` line comments the plain infix path used to drop.
+		if (isChainNullCoal) return threadBreaks
+			? macro switch _e {
+				case NullCoal(_l, _r, _nl, _lc, _ac):
+					_gather(_l);
+					if (_lc != null) {
+						_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+						_hasLeadComment = true;
+					}
+					_ops.push('??');
+					_breaks.push(_nl);
+					_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+					if (_ac != null) _hasLeadComment = true;
+					_gather(_r);
+				case _: _items.push($leafCall);
+			}
+			: macro switch _e {
+				case NullCoal(_l, _r):
+					_gather(_l);
+					_ops.push('??');
+					_gather(_r);
+				case _: _items.push($leafCall);
+			};
 		return threadBreaks
 			? isChainBool
 				? macro switch _e {

@@ -172,13 +172,12 @@ class WrapList {
 		// on typedef-RHS anon types via the runtime gate
 		// `opt._inTypedefBody ? WrapMode.OnePerLine : null`.
 		function evalAt(exceeds: Bool, firing: Array<Int>): WrapMode {
-			return forceMode
-				?? floorSourceMultiline(
-					decideWithLineLengthState(
-						rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
-					),
-					sourceMultilineKeep
-				);
+			return forceMode ?? floorSourceMultiline(
+				decideWithLineLengthState(
+					rules, items.length, maxLen, total, exceeds, anyHardline, t -> t == opt.lineWidth ? exceeds : firing.contains(t)
+				),
+				sourceMultilineKeep
+			);
 		}
 
 		// Per-state shape builder: picks the right lead based on the
@@ -1490,11 +1489,10 @@ class WrapList {
 			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, groupRestProbe, sepBeforeFlags,
 			keepCloseGlued, lineWidth
 		);
-		return multiArgCollection
-			?? shapeByMode(
-				mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe,
-				sepBeforeFlags, sourceBreakBefore, keepCloseGlued, flatTrailingComma
-			);
+		return multiArgCollection ?? shapeByMode(
+			mode, open, close, sep, items, openInside, closeInside, cols, appendTrailingComma, trailBreak, groupRestProbe, sepBeforeFlags,
+			sourceBreakBefore, keepCloseGlued, flatTrailingComma
+		);
 	}
 
 	/**
