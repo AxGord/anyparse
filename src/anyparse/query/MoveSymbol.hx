@@ -240,7 +240,7 @@ final class MoveSymbol {
 	 * module, nor needed — only the source's genuine cross-module
 	 * explicit imports are carried.
 	 */
-	private static function dependencyImportsToCarry(
+	public static function dependencyImportsToCarry(
 		source: String, declSpan: Span, cursorInfo: FileInfo, destInfo: FileInfo, plugin: GrammarPlugin, typeRefShape: TypeRefShape,
 		typeName: String
 	): Array<ImportInfo> {
@@ -340,7 +340,7 @@ final class MoveSymbol {
 	 * existing import (or after the package declaration). Returns null
 	 * when the import is already present.
 	 */
-	private static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
+	public static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
 		final already: Bool = info.imports.exists(imp -> imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
 		final insertAt: Int = importInsertionOffset(source, info);
@@ -353,7 +353,7 @@ final class MoveSymbol {
 	 * package declaration, else the very start of the file. The returned
 	 * offset is always a line start, so the caller appends `text + '\n'`.
 	 */
-	private static function importInsertionOffset(source: String, info: FileInfo): Int {
+	public static function importInsertionOffset(source: String, info: FileInfo): Int {
 		var anchorEnd: Int = -1;
 		for (imp in info.imports) if (imp.span.to > anchorEnd) anchorEnd = imp.span.to;
 		if (anchorEnd < 0) {

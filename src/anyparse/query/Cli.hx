@@ -491,6 +491,8 @@ final class Cli {
 				return runRename(rest);
 			case 'move':
 				return runMove(rest);
+			case 'move-member':
+				return runMoveMember(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -959,27 +961,12 @@ final class Cli {
 		if (pos == null) return EXIT_RUNTIME;
 
 		// Gather scope files = expandInputs(scope) ∪ {cursorFile, destFile}.
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scopeDir], '.hx');
-		final paths: Array<String> = expanded.paths;
-		if (!paths.contains(cursorFile)) paths.push(cursorFile);
-		if (!paths.contains(destFile)) paths.push(destFile);
-		if (paths.length == 0) {
-			stderr('apq move: --scope $scopeDir matched no .hx files\n');
-			return EXIT_RUNTIME;
-		}
-
-		final scopeFiles: Array<{ file: String, source: String }> = [];
-		for (path in paths) {
-			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
-				stderr('apq move: $path: ${exception.message}\n');
-				return EXIT_RUNTIME;
-			};
-			scopeFiles.push({ file: path, source: fileSource });
-		}
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles('move', scopeDir, [cursorFile, destFile]);
+		if (scopeFiles == null) return EXIT_RUNTIME;
 
 		final typeRefShape: TypeRefShape = plugin.typeRefShape();
 		final result: MoveResult = MoveSymbol.moveType(cursorFile, pos.line, pos.col, destFile, scopeFiles, plugin, typeRefShape);
-		return emitMoveResult(result, cursorFile, destFile, o.write);
+		return emitMoveResult('move', result, cursorFile, destFile, o.write);
 	}
 
 	/**
@@ -6729,6 +6716,7 @@ final class Cli {
 		sysPrint('  refs          Symbol references (value bindings; scope-aware)\n');
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
+		sysPrint('  move-member   Move a static member to another type (same package), rewriting call sites\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -11760,12 +11748,12 @@ final class Cli {
 		};
 	}
 
-	private static function emitMoveResult(result: MoveResult, cursorFile: String, destFile: String, write: Bool): Int {
+	private static function emitMoveResult(cmd: String, result: MoveResult, cursorFile: String, destFile: String, write: Bool): Int {
 		switch result {
 			case Ok(changes, advisory):
 				if (write) {
 					for (c in changes) writeFile(c.file, c.newSource);
-					stderr('apq move: wrote ${changes.length} file(s)\n');
+					stderr('apq $cmd: wrote ${changes.length} file(s)\n');
 				} else {
 					for (c in changes) {
 						final tag: String = c.file == cursorFile || c.file == destFile ? 'moved' : 'updated';
@@ -11773,10 +11761,10 @@ final class Cli {
 					}
 					sysPrint('total: ${changes.length} file(s)\n');
 				}
-				if (advisory != null) stderr('apq move: $advisory\n');
+				if (advisory != null) stderr('apq $cmd: $advisory\n');
 				return EXIT_OK;
 			case Err(message):
-				stderr('apq move: $message\n');
+				stderr('apq $cmd: $message\n');
 				return EXIT_RUNTIME;
 		}
 	}
@@ -13042,6 +13030,101 @@ final class Cli {
 		sysPrint('  --hubs <n>     Extract exactly the top-n fan-in hubs (0 = off; default auto)\n');
 		sysPrint('  --kinds <k,..> Edge kinds for connectivity: call,ref,new,virtual,contains (default call,ref,new)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+	private static function runMoveMember(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var srcType: Null<String> = null;
+		var destType: Null<String> = null;
+		var scopeDir: Null<String> = null;
+		var write: Bool = false;
+		var srcFile: Null<String> = null;
+		var memberName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					srcType = expectValue(args, ++i, '--type');
+				case '--to':
+					destType = expectValue(args, ++i, '--to');
+				case '--scope':
+					scopeDir = expectValue(args, ++i, '--scope');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printMoveMemberUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq move-member: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (srcFile == null)
+						srcFile = a;
+					else if (memberName == null)
+						memberName = a;
+					else {
+						stderr('apq move-member: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (srcFile == null || memberName == null || destType == null || scopeDir == null) {
+			stderr('apq move-member: missing required arguments\n');
+			printMoveMemberUsage();
+			return EXIT_USAGE;
+		}
+		final srcFileNN: String = srcFile;
+		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final destTypeName: String = destType;
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+
+		final scopeFiles: Null<Array<{ file: String, source: String }>> = collectScopeFiles('move-member', scopeDir, [srcFileNN]);
+		if (scopeFiles == null) return EXIT_RUNTIME;
+
+		final result: MoveResult = MoveMember.move(
+			srcFileNN, srcTypeName, memberName, destTypeName, scopeFiles, plugin, plugin.typeRefShape()
+		);
+		return emitMoveResult('move-member', result, srcFileNN, srcFileNN, write);
+	}
+
+	private static function printMoveMemberUsage(): Void {
+		sysPrint('Usage: apq move-member <srcFile> <member> --to <DestType> --scope <dir> [options]\n\n');
+		sysPrint('Move one STATIC member (method / var / final) to another type in the SAME\n');
+		sysPrint('package, rewriting Src.member -> Dest.member across the scope, qualifying\n');
+		sysPrint('bare references, carrying imports; atomic (all files re-parse or none).\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <Src>   Source type name (default: the file\'s main type)\n');
+		sysPrint('  --to <Dest>    Destination type name (must exist under --scope)\n');
+		sysPrint('  --scope <dir>  Rewrite scope (dir/glob; srcFile auto-included)\n');
+		sysPrint('  --write        Apply in place (default: print per-file summary)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+	/**
+	 * Expand a --scope dir/glob and read every file plus the extras (the
+	 * op's own files), reporting read failures; null aborts the op.
+	 */
+	private static function collectScopeFiles(
+		cmd: String, scopeDir: String, extraFiles: Array<String>
+	): Null<Array<{ file: String, source: String }>> {
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([scopeDir], '.hx');
+		final paths: Array<String> = expanded.paths;
+		for (extra in extraFiles) if (!paths.contains(extra)) paths.push(extra);
+		final scopeFiles: Array<{ file: String, source: String }> = [];
+		for (path in paths) {
+			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
+				stderr('apq $cmd: $path: ${exception.message}\n');
+				return null;
+			};
+			scopeFiles.push({ file: path, source: fileSource });
+		}
+		return scopeFiles;
 	}
 
 }

@@ -396,6 +396,7 @@ import unit.HxCondSpliceChainWrapSliceTest;
 import unit.HxCondForContainerGlueSliceTest;
 import unit.HxIfExprCondWrapSliceTest;
 import unit.ClustersTest;
+import unit.MoveMemberSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -788,6 +789,7 @@ class RunTests {
 		addCase(new CommentRewriteSliceTest());
 		addCase(new SetModifierSliceTest());
 		addCase(new MoveSymbolSliceTest());
+		addCase(new MoveMemberSliceTest());
 		addCase(new ApqMetaTest());
 		addCase(new ApqMetaEnumCtorSliceTest());
 		addCase(new ApqMetaAnonFieldSliceTest());

@@ -172,6 +172,7 @@ All resolve against real scopes (never by-name text replace), preserve formattin
 | `extract-var` / `extract-method` | hoist an expression into a `final`, or a statement run into a local function |
 | `change-sig` / `add-param` / `remove-param` | reorder params + call-site args / append a backward-compatible param / drop a param + its arguments |
 | `move` | move a type declaration to another file in the same package, carrying deps and repointing importers |
+| `move-member` | move one STATIC member to another type in the same package — the Apply verb of the `clusters` decomposition loop: `Src.member` callers rewritten across `--scope`, bare in-file callers qualified, sibling references qualified back (`@:access` for private targets), visibility promoted when callers remain, imports carried; atomic (all rewritten files re-parse or none) |
 | `symbols` / `importers` / `declares` | list top-level type declarations across a scope / files importing a module / the declaration site(s) of one named type |
 
 A second family — `add-member`, `add-import`, `add-element`, `replace-node` — *inserts*
