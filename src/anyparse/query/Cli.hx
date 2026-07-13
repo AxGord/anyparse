@@ -493,6 +493,8 @@ final class Cli {
 				return runMove(rest);
 			case 'move-member':
 				return runMoveMember(rest);
+			case 'extract-interface':
+				return runExtractInterface(rest);
 			case 'symbols':
 				return runSymbols(rest);
 			case 'importers':
@@ -6723,6 +6725,7 @@ final class Cli {
 		sysPrint('  rename        Scope-correct, format-preserving symbol rename\n');
 		sysPrint('  move          Move a type declaration to another file (same package)\n');
 		sysPrint('  move-member   Move a static member to another type (same package), rewriting call sites\n');
+		sysPrint('  extract-interface  Generate an interface from a class\'s public methods + implement it\n');
 		sysPrint('  symbols       List top-level type declarations across a scope (cross-file)\n');
 		sysPrint('  importers     List files importing a given module (cross-file)\n');
 		sysPrint('  declares      Declaration site(s) of one named type (ambiguity check)\n');
@@ -13163,6 +13166,100 @@ final class Cli {
 			scopeFiles.push({ file: path, source: fileSource });
 		}
 		return scopeFiles;
+	}
+
+
+	private static function runExtractInterface(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var srcType: Null<String> = null;
+		var members: Null<String> = null;
+		var out: Null<String> = null;
+		var write: Bool = false;
+		var srcFile: Null<String> = null;
+		var ifaceName: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					srcType = expectValue(args, ++i, '--type');
+				case '--members':
+					members = expectValue(args, ++i, '--members');
+				case '--out':
+					out = expectValue(args, ++i, '--out');
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printExtractInterfaceUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq extract-interface: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (srcFile == null)
+						srcFile = a;
+					else if (ifaceName == null)
+						ifaceName = a;
+					else {
+						stderr('apq extract-interface: unexpected argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (srcFile == null || ifaceName == null) {
+			stderr('apq extract-interface: missing required arguments\n');
+			printExtractInterfaceUsage();
+			return EXIT_USAGE;
+		}
+		final srcFileNN: String = srcFile;
+		final ifaceNameNN: String = ifaceName;
+		final srcTypeName: String = srcType ?? RefactorSupport.baseNameOf(srcFileNN);
+		final memberNames: Null<Array<String>> = members == null ? null : members.split(',').map(StringTools.trim).filter(n -> n != '');
+		final slash: Int = srcFileNN.lastIndexOf('/');
+		final dir: String = slash < 0 ? '' : srcFileNN.substring(0, slash + 1);
+		final ifaceFile: String = out ?? '$dir$ifaceNameNN.hx';
+
+		final source: String = try readFile(srcFileNN) catch (exception: haxe.Exception) {
+			stderr('apq extract-interface: $srcFileNN: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		final result: MoveResult = ExtractInterface.extract(srcFileNN, srcTypeName, ifaceNameNN, ifaceFile, memberNames, source, plugin);
+		switch result {
+			case Ok(changes, advisory):
+				if (write) {
+					for (c in changes) writeFile(c.file, c.newSource);
+					stderr('apq extract-interface: wrote ${changes.length} file(s)\n');
+				} else {
+					for (c in changes) sysPrint('${c.file}: ${c.file == ifaceFile ? 'created' : 'updated'}\n');
+					sysPrint('total: ${changes.length} file(s)\n');
+				}
+				if (advisory != null) stderr('apq extract-interface: $advisory\n');
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq extract-interface: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+	private static function printExtractInterfaceUsage(): Void {
+		sysPrint('Usage: apq extract-interface <srcFile> <IfaceName> [options]\n\n');
+		sysPrint('Generate an interface from a class\'s public instance methods and make\n');
+		sysPrint('the class implement it. The interface lands in the source type\'s package\n');
+		sysPrint('(sibling file <IfaceName>.hx by default), carrying the imports its\n');
+		sysPrint('signatures reference; the class gains an "implements <IfaceName>" clause.\n');
+		sysPrint('No call sites change (an interface is additive).\n\n');
+		sysPrint('Options:\n');
+		sysPrint('  --type <Src>       Source class name (default: the file\'s main type)\n');
+		sysPrint('  --members m1,m2    Only these methods (default: every public method)\n');
+		sysPrint('  --out <path>       Interface file path (default: sibling <IfaceName>.hx)\n');
+		sysPrint('  --write            Apply in place (default: print a per-file summary)\n');
+		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
 	}
 
 }
