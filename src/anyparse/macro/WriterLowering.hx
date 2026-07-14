@@ -5960,7 +5960,7 @@ class WriterLowering {
 		// `true`. In anyparse the inter-bracket pad lives in the WrapList /
 		// fillList / sepList `openInside` slot — so when the open delim is a
 		// `(` (compile-time `postfixOp == '('`) we make `openInside` a
-		// runtime-conditional space: emit `_dt(' ')` iff
+		// runtime-conditional space: emit `_dop(' ')` iff
 		// `!opt.compressSuccessiveParenthesis` AND the first call argument
 		// renders as an object literal (its enum ctor is `ObjectLit`). Only
 		// the first arg can sit directly after `(` (later args are preceded
@@ -5973,7 +5973,7 @@ class WriterLowering {
 		if (postfixOp == '(') {
 			final firstArgNode: Expr = isTriviaStar ? macro _args[0].node : macro _args[0];
 			final firstArgObjLit: Expr = macro _args.length > 0 && Type.enumConstructor(cast $firstArgNode) == 'ObjectLit';
-			callInsideOpen = macro !opt.compressSuccessiveParenthesis && $firstArgObjLit ? _dt(' ') : $callInsideOpen;
+			callInsideOpen = macro !opt.compressSuccessiveParenthesis && $firstArgObjLit ? _dop(' ') : $callInsideOpen;
 			// ω-switch-after-paren: a `switch` expression as the FIRST call
 			// argument spaces the open `(` — fork emits `f( switch x {` and
 			// keeps the close `)` tight to the switch's `}`. The space is the
