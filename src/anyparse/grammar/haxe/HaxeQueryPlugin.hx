@@ -500,6 +500,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			mutableFieldDeclKinds: ['VarMember'],
 			voidReturnKind: 'VoidReturnStmt',
 			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
+			negationKind: 'Neg',
 			objectFieldKind: 'Field',
 			sizeFieldNames: ['length'],
 			positionMethodNames: ['substr', 'substring', 'charAt', 'charCodeAt', 'indexOf', 'lastIndexOf', 'hex'],

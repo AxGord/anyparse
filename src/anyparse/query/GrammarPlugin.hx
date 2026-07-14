@@ -1065,6 +1065,14 @@ typedef RefShape = {
 	 * to per-`case` cyclomatic counting.
 	 */
 	@:optional var switchKinds: Array<String>;
+
+	/**
+	 * The unary-negation node kind (`Neg`) — a `-1` initializer parses as a negation
+	 * wrapping a non-negative literal (`Neg(IntLit 1)`). Lets `prefer-enum-abstract`
+	 * see a negative-literal constant (`X_UNKNOWN = -1`) as numeric. Optional; unset
+	 * treats a negation-wrapped value as non-numeric.
+	 */
+	@:optional var negationKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

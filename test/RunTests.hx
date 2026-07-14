@@ -405,6 +405,7 @@ import unit.SafeDeleteSliceTest;
 import unit.EncapsulateFieldSliceTest;
 import unit.MakeFinalSliceTest;
 import unit.IntroduceParameterObjectSliceTest;
+import unit.PreferEnumAbstractCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -734,6 +735,7 @@ class RunTests {
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
 		addCase(new MagicNumberCheckTest());
+		addCase(new PreferEnumAbstractCheckTest());
 		addCase(new CheckstyleConfigLoaderTest());
 		addCase(new DeadCodeCheckTest());
 		addCase(new IfFalseDeadCodeCheckTest());

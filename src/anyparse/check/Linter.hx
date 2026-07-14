@@ -75,6 +75,7 @@ final class Linter {
 			new UnnecessaryBlock(),
 			new RedundantVoidReturn(),
 			new MagicNumber(),
+			new PreferEnumAbstract(),
 			new RedundantThis(),
 			new UnnecessaryNullCheck(),
 			new RedundantCast(),
