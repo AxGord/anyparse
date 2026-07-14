@@ -178,6 +178,14 @@ class CallGraphTest extends Test {
 		Assert.equals(0, edges(g, 'A.a', 'A.work', Call).length);
 	}
 
+	public function testMacroModifierFunctionNotWalked(): Void {
+		// A `macro`-modified function is compile-time code — it is neither registered as a
+		// node nor its body walked, so no call edge is fabricated from it.
+		final g: CallGraph = graphOf(['class A { macro static function m() { work(); } function work():Void {} }']);
+		Assert.isNull(g.node('A.m'));
+		Assert.equals(0, edges(g, 'A.m', 'A.work', Call).length);
+	}
+
 	private function graphOf(sources: Array<String>): CallGraph {
 		return QueryTestHelpers.graphOf(sources);
 	}

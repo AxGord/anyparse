@@ -100,9 +100,7 @@ class ExplicitTypeCheckTest extends Test {
 		final src: String = 'enum abstract E(Int) {\n\tvar A = 1;\n}';
 		sys.io.File.saveContent(path, src);
 		Assert.isTrue(new ExplicitType().run([{ file: path, source: src }], new HaxeQueryPlugin()).length >= 1);
-		sys.FileSystem.deleteFile(path);
-		sys.FileSystem.deleteFile('$dir/checkstyle.json');
-		sys.FileSystem.deleteDirectory(dir);
+		CliFixture.removeDir(dir);
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -283,6 +281,15 @@ class ExplicitTypeCheckTest extends Test {
 		// Deliberately over-conservative: a throw anywhere in the own scope, even
 		// behind an `if`, suppresses the fix though `trace(1)` alone would be Void.
 		Assert.equals(0, fixCount("class C { public function f() { if (c) throw 'x'; trace(1); } }"));
+	}
+
+	public function testFixMultipleNonCastFieldsNoCastTargets(): Void {
+		// Several fixable violations, none a cast — the lazy cast-target lookup (a second
+		// full parse) is never built, yet every field is annotated from its literal.
+		final out: String = applyFix('class C { var a = 0; var b = "hi"; var c = true; }');
+		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
+		Assert.isTrue(out.indexOf('b:String =') != -1, 'got: $out');
+		Assert.isTrue(out.indexOf('c:Bool =') != -1, 'got: $out');
 	}
 
 	private function applyFix(src: String): String {

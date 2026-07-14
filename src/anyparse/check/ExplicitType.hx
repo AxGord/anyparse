@@ -91,21 +91,9 @@ final class ExplicitType implements Check {
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
 		collectInitializerEdits(tree, source, violations, shape, plugin, fixable, edits);
-		// Void return-type pass: annotate a flagged function `: Void` when its own scope
-		// holds no value-return — nested functions and lambdas do not count.
 		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
 		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
-		final valueReturns: Array<String> = shape.valueReturnKinds ?? [];
-		final blockBody: Null<String> = shape.blockBodyKind;
-		if (functions.length > 0 && valueReturns.length > 0 && blockBody != null) {
-			final stop: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
-			final throwKinds: Array<String> = shape.throwKinds ?? [];
-			final flagged: Map<String, Violation> = [];
-			for (v in violations) if (v.span != null) flagged['${v.span.from}:${v.span.to}'] = v;
-			collectVoidEdits(
-				tree, source, functions, memberKinds, valueReturns, throwKinds, stop, blockBody, shape.macroModifierKind, flagged, edits
-			);
-		}
+		collectVoidReturnEdits(tree, source, shape, violations, functions, memberKinds, edits);
 		return edits;
 	}
 
@@ -200,7 +188,7 @@ final class ExplicitType implements Check {
 	 */
 	private static function inferType(
 		init: QueryNode, source: String, literalTypes: Map<String, String>, numeric: Array<String>, negKind: Null<String>,
-		newKind: Null<String>, castKinds: Array<String>, castTargets: Map<Int, String>
+		newKind: Null<String>, castKinds: Array<String>, castTargets: () -> Map<Int, String>
 	): Null<String> {
 		final direct: Null<String> = literalTypes[init.kind];
 		if (direct != null) return direct;
@@ -210,7 +198,7 @@ final class ExplicitType implements Check {
 		}
 		if (newKind != null && init.kind == newKind) return newTypeSource(init, source);
 		final span: Null<Span> = init.span;
-		return span != null && castKinds.contains(init.kind) ? TypeResolver.castTargetWithin(span, castTargets) : null;
+		return span != null && castKinds.contains(init.kind) ? TypeResolver.castTargetWithin(span, castTargets()) : null;
 	}
 
 	/**
@@ -265,65 +253,60 @@ final class ExplicitType implements Check {
 
 
 	/**
-	 * Collect a `: Void` return-type edit for every flagged function in `node`'s subtree
-	 * whose body is a block with no value-return or throw in its own scope. `sawMacro`
-	 * tracks whether a `macro` modifier precedes a function within its sibling modifier
-	 * run — a macro function returns `Expr` implicitly, so it is left report-only. Reset
-	 * at each member so one member's modifiers never leak to the next.
+	 * The `: Void` return-type pass of `fix()`: annotate every flagged function whose
+	 * block body holds no value-return or throw in its own scope. The invariants are
+	 * captured by the local `walk` / `editVoid` closures — mirroring the recursive-walker
+	 * shape used elsewhere (`CallGraph.collectNodes`) — instead of being threaded through
+	 * every recursive call. A `macro`-modified function returns `Expr` implicitly and is
+	 * left report-only, detected via `RefactorSupport.macroModifierPrecedes` whose run
+	 * ends at the previous member declaration.
 	 */
-	private static function collectVoidEdits(
-		node: QueryNode, source: String, functions: Array<String>, members: Array<String>, valueReturns: Array<String>,
-		throwKinds: Array<String>, stop: Array<String>, blockBody: String, macroKind: Null<String>, flaggedKeys: Map<String, Violation>,
+	private static function collectVoidReturnEdits(
+		tree: QueryNode, source: String, shape: RefShape, violations: Array<Violation>, functions: Array<String>, members: Array<String>,
 		edits: Array<{ span: Span, text: String }>
 	): Void {
-		var sawMacro: Bool = false;
-		for (child in node.children) {
-			if (macroKind != null && child.kind == macroKind)
-				sawMacro = true;
-			else {
-				if (!sawMacro && functions.contains(child.kind))
-					voidEdit(child, source, valueReturns, throwKinds, stop, blockBody, flaggedKeys, edits);
-				if (members.contains(child.kind)) sawMacro = false;
-			}
-			collectVoidEdits(child, source, functions, members, valueReturns, throwKinds, stop, blockBody, macroKind, flaggedKeys, edits);
+		final valueReturns: Array<String> = shape.valueReturnKinds ?? [];
+		if (functions.length == 0 || valueReturns.length == 0) return;
+		final blockBody: Null<String> = shape.blockBodyKind;
+		if (blockBody == null) return;
+		final blockBodyKind: String = blockBody;
+		final stop: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		final throwKinds: Array<String> = shape.throwKinds ?? [];
+		final macroKind: Null<String> = shape.macroModifierKind;
+		final flagged: Map<String, Violation> = [];
+		for (v in violations) {
+			final vspan: Null<Span> = v.span;
+			if (vspan != null) flagged['${vspan.from}:${vspan.to}'] = v;
 		}
+		final boundary: QueryNode -> Bool = c -> members.contains(c.kind);
+
+		function editVoid(fn: QueryNode): Void {
+			final span: Null<Span> = fn.span;
+			if (span == null || !flagged.exists('${span.from}:${span.to}')) return;
+			final body: Null<QueryNode> = fn.children.find(c -> c.kind == blockBodyKind);
+			// A throw in the function's own scope makes its return type unify with any type
+			// (a caller may use the call as a value), so `: Void` would be unsound — leave it
+			// report-only, as with a value-return.
+			if (
+				body == null || RefactorSupport.subtreeContainsKindStopping(body, valueReturns, stop)
+				|| RefactorSupport.subtreeContainsKindStopping(body, throwKinds, stop)
+			)
+				return;
+			final at: Int = voidInsertPoint(span.from, body, source);
+			if (at >= 0) edits.push({ span: new Span(at, at), text: ':Void' });
+		}
+
+		function walk(node: QueryNode): Void {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final child: QueryNode = kids[i];
+				if (functions.contains(child.kind) && !RefactorSupport.macroModifierPrecedes(kids, i, macroKind, boundary)) editVoid(child);
+				walk(child);
+			}
+		}
+		walk(tree);
 	}
 
-	/**
-	 * Append a `: Void` return-type edit for `fn` when it is a flagged function whose
-	 * body is a `{ … }` block holding no value-return and no throw in its own scope. An
-	 * unflagged function, an expression-bodied or bodyless member, or a function whose
-	 * own scope reaches a value-return or a throw (without crossing a nested function /
-	 * lambda) is left untouched.
-	 */
-	private static function voidEdit(
-		fn: QueryNode, source: String, valueReturns: Array<String>, throwKinds: Array<String>, stop: Array<String>, blockBody: String,
-		flaggedKeys: Map<String, Violation>, edits: Array<{ span: Span, text: String }>
-	): Void {
-		final span: Null<Span> = fn.span;
-		if (span == null || !flaggedKeys.exists('${span.from}:${span.to}')) return;
-		final body: Null<QueryNode> = fn.children.find(c -> c.kind == blockBody);
-		// A throw in the function's own scope makes its return type unify with any
-		// type (a caller may use the call as a value), so `: Void` would be unsound —
-		// leave it report-only, as with a value-return.
-		if (body == null || containsInOwnScope(body, valueReturns, stop) || containsInOwnScope(body, throwKinds, stop)) return;
-		final at: Int = voidInsertPoint(span.from, body, source);
-		if (at >= 0) edits.push({ span: new Span(at, at), text: ':Void' });
-	}
-
-
-	/**
-	 * Whether `node`'s subtree holds a node of one of `kinds` in the SAME function
-	 * scope — descending through blocks / branches / loops / try-catch but stopping at
-	 * a nested function or lambda (`stop`), whose contents belong to that inner scope.
-	 * Used for both value-returns and throws; a match in the own scope makes the
-	 * `: Void` inference unsafe.
-	 */
-	private static function containsInOwnScope(node: QueryNode, kinds: Array<String>, stop: Array<String>): Bool {
-		return node.children.exists(
-			child -> !stop.contains(child.kind) && (kinds.contains(child.kind) || containsInOwnScope(child, kinds, stop))
-		);
-	}
 
 	/**
 	 * The offset right after the parameter list's `)` — where `: Void` is inserted,
@@ -365,8 +348,19 @@ final class ExplicitType implements Check {
 		final castKinds: Array<String> = shape.typedCastKinds ?? [];
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(tree, fixable, byKey);
+		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
+		// so compute it lazily and cache it — a fix whose violations key nothing into `byKey`,
+		// or whose initializers are never casts, never pays for it.
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final castTargets: Map<Int, String> = provider != null ? provider.castTargetSources(source) : [];
+		var castTargetsCache: Null<Map<Int, String>> = null;
+		function castTargets(): Map<Int, String> {
+			final existing: Null<Map<Int, String>> = castTargetsCache;
+			if (existing != null) return existing;
+			final p: Null<TypeInfoProvider> = provider;
+			final computed: Map<Int, String> = p != null ? p.castTargetSources(source) : [];
+			castTargetsCache = computed;
+			return computed;
+		}
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;

@@ -326,6 +326,36 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether a `macro` modifier (kind `macroKind`) precedes the sibling at `index`
+	 * within its modifier run. A member's modifiers project as separate childless,
+	 * nameless sibling nodes immediately before it (`public static macro function f`
+	 * → `(Public)(Static)(Macro)(FnMember f)`), so the run is scanned BACKWARD from
+	 * `index`: a `macroKind` sibling means the member is macro-modified; a sibling for
+	 * which `isResetBoundary` holds ends the run — the previous member or annotation,
+	 * whose modifiers are not this one's. Pure modifier nodes (childless, nameless,
+	 * non-boundary) are skipped over. `macroKind` null → always false.
+	 *
+	 * The reset boundary is the caller's, because it differs by intent: the call graph
+	 * ends a run at ANY named or child-bearing node, the void-return check at a member
+	 * declaration. Both agree for every valid Haxe modifier arrangement (the macro
+	 * modifier always sits in a contiguous childless run right before its function), so
+	 * the parameter preserves each caller's exact policy rather than unifying them.
+	 */
+	public static function macroModifierPrecedes(
+		siblings: Array<QueryNode>, index: Int, macroKind: Null<String>, isResetBoundary: QueryNode -> Bool
+	): Bool {
+		if (macroKind == null) return false;
+		var i: Int = index - 1;
+		while (i >= 0) {
+			final sib: QueryNode = siblings[i];
+			if (sib.kind == macroKind) return true;
+			if (isResetBoundary(sib)) return false;
+			i--;
+		}
+		return false;
+	}
+
+	/**
 	 * Recognise `node` as a top-level type declaration, normalised across
 	 * the plain and `final`-wrapped shapes (see `TypeDeclMatch`). Returns
 	 * null when `node` is neither a plain type-decl nor a `final class`
@@ -924,6 +954,20 @@ final class RefactorSupport {
 		if (node.kind == kind) return true;
 		for (c in node.children) if (subtreeContainsKind(c, kind)) return true;
 		return false;
+	}
+
+	/**
+	 * Whether the subtree rooted at `node` contains — within the same scope — any node
+	 * whose kind is in `kinds`, descending through children but STOPPING at (and not
+	 * matching) a node whose kind is in `stopKinds`. The root `node` itself is not
+	 * tested; only its descendants. The kind-set + stop-set generalization of
+	 * `subtreeContainsKind`: the stop-set bounds the walk to one scope — e.g. a
+	 * value-return / throw search that must not cross into a nested function or lambda.
+	 */
+	public static function subtreeContainsKindStopping(node: QueryNode, kinds: Array<String>, stopKinds: Array<String>): Bool {
+		return node.children.exists(
+			child -> !stopKinds.contains(child.kind) && (kinds.contains(child.kind) || subtreeContainsKindStopping(child, kinds, stopKinds))
+		);
 	}
 
 	/**

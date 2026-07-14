@@ -175,6 +175,7 @@ final class CallGraph {
 		final macroKind: Null<String> = shape.macroModifierKind;
 		final moduleType: String = moduleTypeName(entry.file);
 		var lambdaCounter: Int = 0;
+		final macroBoundary: QueryNode -> Bool = c -> c.children.length > 0 || c.name != null;
 
 		function walk(node: QueryNode, currentType: Null<String>, parentFn: Null<String>): Void {
 			// a macro-reification subtree is generated-code emission, not runtime
@@ -197,18 +198,14 @@ final class CallGraph {
 				fnId = '${parentFn ?? (typeName ?? moduleType)}#$lambdaCounter';
 				registerNode(fnId, entry, typeName, null, span);
 			}
-			var macroPending: Bool = false;
-			for (c in node.children) {
-				if (macroKind != null && c.kind == macroKind) {
-					macroPending = true;
-					continue;
-				}
-				if (macroPending && fnKinds.contains(c.kind)) {
+			final kids: Array<QueryNode> = node.children;
+			for (i in 0...kids.length) {
+				final c: QueryNode = kids[i];
+				if (macroKind != null && c.kind == macroKind) continue;
+				if (fnKinds.contains(c.kind) && RefactorSupport.macroModifierPrecedes(kids, i, macroKind, macroBoundary)) {
 					// `macro` function body — compile-time code, not runtime calls
-					macroPending = false;
 					continue;
 				}
-				if (c.children.length > 0 || c.name != null) macroPending = false;
 				walk(c, typeName, fnId);
 			}
 		}
