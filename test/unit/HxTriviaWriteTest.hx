@@ -115,8 +115,8 @@ class HxTriviaWriteTest extends Test {
 	 * before the captured trail comments).
 	 */
 	public function testTrailingCommentAfterLastStmtInBlockRoundTrip(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\t{\n' + '\t\t\tx;\n' + '\t\t\t// after last\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\t{\n' + '\t\t\tx;\n' + '\t\t\t// after last\n' + '\t\t}\n'
+			+ '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -152,8 +152,8 @@ class HxTriviaWriteTest extends Test {
 	 * the source's `;-trailing-comment+else` shape.
 	 */
 	public function testSameLineCommentBeforeElseAfterStmtRoundTrip(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond)\n' + '\t\t\ta(); // first\n' + '\t\telse\n' + '\t\t\tb(); // second\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond)\n' + '\t\t\ta(); // first\n' + '\t\telse\n'
+			+ '\t\t\tb(); // second\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -169,8 +169,8 @@ class HxTriviaWriteTest extends Test {
 	 * `thenBody` and the writer had no slot to re-emit it from.
 	 */
 	public function testSameLineCommentAfterIfCondRoundTrip(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond) // afterCond\n' + '\t\t\tresize(1);\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) // afterCond\n' + '\t\t\tresize(1);\n' + '\t}\n'
+			+ '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -187,8 +187,8 @@ class HxTriviaWriteTest extends Test {
 	 * body])` silently dropped the comment.
 	 */
 	public function testSameLineCommentAfterElseNonBlockRoundTrip(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond)\n' + '\t\t\ta();\n' + '\t\telse // afterElse\n' + '\t\t\tb();\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond)\n' + '\t\t\ta();\n' + '\t\telse // afterElse\n'
+			+ '\t\t\tb();\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -409,8 +409,8 @@ class HxTriviaWriteTest extends Test {
 	 * is byte-identical to pre-slice output (sameLine `} else`).
 	 */
 	public function testNoCommentBetweenBraceAndElseStaysSameLine(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t} else {\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t} else {\n'
+			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -436,8 +436,8 @@ class HxTriviaWriteTest extends Test {
 	 * pass is gated by the haxe-formatter `^[/\*\-\s]+` regex.
 	 */
 	public function testLeadingLineCommentDecorationKeepsTight(): Void {
-		final source: String = 'class Main {\n'
-			+ '\t//*******\n' + '\t//---------\n' + '\t////////////\n' + '\t// already-spaced\n' + '\tvar x:Int;\n' + '}';
+		final source: String = 'class Main {\n' + '\t//*******\n' + '\t//---------\n' + '\t////////////\n' + '\t// already-spaced\n'
+			+ '\tvar x:Int;\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);

@@ -24,7 +24,7 @@ class HxTriviaParseTest extends Test {
 
 	// Force the Trivia-mode parser's @:build to complete before this
 	// test's method bodies reference the synth module types. The
-	// pattern mirrors `HxTriviaTypesTest._forceBuild` — initialisation
+	// pattern mirrors `HxTriviaTypesTest.forceBuild` — initialisation
 	// order between a marker class's build phase and a consumer's
 	// top-of-file type references is not guaranteed without this hook.
 	//
@@ -199,8 +199,8 @@ class HxTriviaParseTest extends Test {
 	 * the next statement, which is where it semantically belongs.
 	 */
 	public function testCommentBetweenStmtsAfterIfWithoutElsePreserved(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond) doFirst();\n' + '\t\t// between stmts\n' + '\t\tdoSecond();\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) doFirst();\n' + '\t\t// between stmts\n'
+			+ '\t\tdoSecond();\n' + '\t}\n' + '}';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final cls: anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
@@ -252,8 +252,8 @@ class HxTriviaParseTest extends Test {
 	 * first statement (which was the ω₆b behavior).
 	 */
 	public function testSameLineCommentAfterElseKwCapturedOnHxIfStmt(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond) { a; } else // after else\n' + '\t\t{\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) { a; } else // after else\n' + '\t\t{\n'
+			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final cls: anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
@@ -328,8 +328,8 @@ class HxTriviaParseTest extends Test {
 	 * discarded by the pre-commit `skipWs`.
 	 */
 	public function testOwnLineCommentBetweenBraceAndElseKwCapturedOnHxIfStmt(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond) { a; }\n' + '\t\t// before else\n' + '\t\telse { b; }\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) { a; }\n' + '\t\t// before else\n'
+			+ '\t\telse { b; }\n' + '\t}\n' + '}';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final cls: anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;
@@ -360,8 +360,8 @@ class HxTriviaParseTest extends Test {
 	 * slot via `collectTrailingFull`, not here.)
 	 */
 	public function testOwnLineBlockCommentBetweenBraceAndElseKwCapturedOnHxIfStmt(): Void {
-		final source: String = 'class Foo {\n'
-			+ '\tfunction bar() {\n' + '\t\tif (cond) { a; }\n' + '\t\t/* before else */\n' + '\t\telse { b; }\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) { a; }\n' + '\t\t/* before else */\n'
+			+ '\t\telse { b; }\n' + '\t}\n' + '}';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final cls: anyparse.grammar.haxe.trivia.Pairs.HxClassDeclT = switch m.decls[0].node.decl {
 			case ClassDecl(decl): decl;

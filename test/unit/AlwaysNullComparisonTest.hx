@@ -68,7 +68,9 @@ class AlwaysNullComparisonTest extends Test {
 
 	public function testIfElseJoinNarrowing(): Void {
 		// Both arms assign null, so x is known-null after the if/else (join).
-		Assert.equals(1, violations('class C { function f(?x:Foo) { if (c()) x = null; else x = null; if (x == null) trace(1); } }').length);
+		Assert.equals(
+			1, violations('class C { function f(?x:Foo) { if (c()) x = null; else x = null; if (x == null) trace(1); } }').length
+		);
 	}
 
 	public function testAlwaysTrueMessage(): Void {

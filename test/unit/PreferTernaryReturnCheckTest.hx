@@ -133,7 +133,9 @@ class PreferTernaryReturnCheckTest extends Test {
 
 	/** A null-check WITHOUT accessing the same ident still flags (no narrowing to lose). Value returns keep this off the stuck-boolean gate. */
 	public function testNullCheckWithoutAccessFlagged(): Void {
-		Assert.equals(1, violations("class C {\n\tfunction f(s:Null<S>):Int {\n\t\tif (s != null) return 1;\n\t\treturn 0;\n\t}\n}").length);
+		Assert.equals(
+			1, violations("class C {\n\tfunction f(s:Null<S>):Int {\n\t\tif (s != null) return 1;\n\t\treturn 0;\n\t}\n}").length
+		);
 	}
 
 	/** A null-checked ident reused via INDEX access (`x[0]`) is guarded too (not just field/call). */

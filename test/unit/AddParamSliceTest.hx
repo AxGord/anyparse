@@ -72,8 +72,8 @@ class AddParamSliceTest extends Test {
 	 */
 	public function testAddToLocalFunction(): Void {
 		final source: String = 'class C {\n' + '\tfunction m():Void {\n' + '\t\tfunction loc(x:Int):Int return x;\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfunction m():Void {\n' + '\t\tfunction loc(x:Int, y:Int = 1):Int return x;\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfunction m():Void {\n' + '\t\tfunction loc(x:Int, y:Int = 1):Int return x;\n' + '\t}\n'
+			+ '}';
 		// Line 3 col 12 — the `loc` local-function name token.
 		assertAdd(source, 3, 12, 'y:Int = 1', expected);
 	}

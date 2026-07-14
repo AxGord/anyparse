@@ -91,8 +91,9 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 	public function testNamedFnExprInObjectLitFieldValue(): Void {
 		// Whole-module round-trip — exact shape from
 		// indentation/issue_557_anon_struct_with_assignment.hxtest.
-		final body: Array<HxStatement> =
-			parseBody('class C { static function main() { var example:{ function test():Void; } = { test: function test():Void {} }; } }');
+		final body: Array<HxStatement> = parseBody(
+			'class C { static function main() { var example:{ function test():Void; } = { test: function test():Void {} }; } }'
+		);
 		Assert.equals(1, body.length);
 		Assert.pass();
 	}

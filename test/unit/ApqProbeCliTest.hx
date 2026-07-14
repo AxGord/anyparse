@@ -40,14 +40,12 @@ class ApqProbeCliTest extends Test {
 	}
 
 	public function testInlineCodeWithWriterOutputDiff(): Void {
-		Assert.equals(
-			0, Cli.run([
-				'probe',
-				'class C { static function f() { return 1; } }',
-				'--writer-output',
-				'--diff'
-			])
-		);
+		Assert.equals(0, Cli.run([
+			'probe',
+			'class C { static function f() { return 1; } }',
+			'--writer-output',
+			'--diff'
+		]));
 	}
 
 	public function testInlineCodeWithWriterOutputPlain(): Void {

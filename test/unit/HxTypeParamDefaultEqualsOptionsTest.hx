@@ -131,14 +131,12 @@ final class HxTypeParamDefaultEqualsOptionsTest extends Test {
 	}
 
 	private inline function assertSpacedUnderAllPolicies(src: String, expected: String, label: String): Void {
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith(src, policy);
 			Assert.isTrue(out.indexOf(expected) != -1, '$label `=` should stay spaced under typeParamDefaultEquals $policy in: <$out>');
 		}

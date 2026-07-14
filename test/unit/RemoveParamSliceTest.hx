@@ -56,8 +56,8 @@ class RemoveParamSliceTest extends Test {
 	public function testRemoveFirstParam(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:String, c:Int):Void {}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, "x", 3);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tpublic function f(b:String, c:Int):Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf("x", 3);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tpublic function f(b:String, c:Int):Void {}\n' + '\tpublic function caller():Void {\n'
+			+ '\t\tf("x", 3);\n' + '\t}\n' + '}';
 		assertRemove(source, 2, 9, 0, expected, true);
 	}
 
@@ -69,8 +69,8 @@ class RemoveParamSliceTest extends Test {
 	public function testRemoveLastParam(): Void {
 		final source: String = 'class C {\n' + '\tpublic function f(a:Int, b:String, c:Int):Void {}\n'
 			+ '\tpublic function caller():Void {\n' + '\t\tf(1, "x", 3);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tpublic function f(a:Int, b:String):Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf(1, "x");\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tpublic function f(a:Int, b:String):Void {}\n' + '\tpublic function caller():Void {\n'
+			+ '\t\tf(1, "x");\n' + '\t}\n' + '}';
 		assertRemove(source, 2, 9, 2, expected, true);
 	}
 
@@ -108,10 +108,10 @@ class RemoveParamSliceTest extends Test {
 	 * goes, leaving an empty `()` parameter / argument list.
 	 */
 	public function testRemoveLoneParamLeavesEmptyParens(): Void {
-		final source: String = 'class C {\n'
-			+ '\tpublic function f(a:Int):Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf(1);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tpublic function f():Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf();\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tpublic function f(a:Int):Void {}\n' + '\tpublic function caller():Void {\n'
+			+ '\t\tf(1);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tpublic function f():Void {}\n' + '\tpublic function caller():Void {\n' + '\t\tf();\n'
+			+ '\t}\n' + '}';
 		assertRemove(source, 2, 9, 0, expected, true);
 	}
 

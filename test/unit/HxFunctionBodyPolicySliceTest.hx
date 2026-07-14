@@ -65,7 +65,9 @@ class HxFunctionBodyPolicySliceTest extends Test {
 
 	public function testNoBodyUnaffected(): Void {
 		final out: String = writeWith('interface I { function f():Void; }', BodyPolicy.Next);
-		Assert.isTrue(out.indexOf('function f():Void;') != -1, 'NoBody `function f():Void;` must stay flat regardless of policy in: <$out>');
+		Assert.isTrue(
+			out.indexOf('function f():Void;') != -1, 'NoBody `function f():Void;` must stay flat regardless of policy in: <$out>'
+		);
 	}
 
 	public function testConfigLoaderMapsFunctionBodySame(): Void {

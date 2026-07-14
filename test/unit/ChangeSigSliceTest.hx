@@ -137,8 +137,8 @@ class ChangeSigSliceTest extends Test {
 	 */
 	public function testRefuseAmbiguousLocalFunctionName(): Void {
 		final source: String = 'class C {\n' + '\tpublic function run():Void {\n' + '\t\tfunction add(x:Int, y:Int):Int return x + y;\n'
-			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n' + '\t\t\tvar z = add(3, 4);\n'
-			+ '\t\t}\n' + '\t}\n' + '}';
+			+ '\t\tvar r = add(1, 2);\n' + '\t\t{\n' + '\t\t\tfunction add(p:Int, q:Int):Int return p - q;\n'
+			+ '\t\t\tvar z = add(3, 4);\n' + '\t\t}\n' + '\t}\n' + '}';
 		assertRefused(source, 3, 12, '1,0');
 	}
 

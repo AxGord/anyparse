@@ -66,8 +66,7 @@ class DeadNullCoalescingTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
-			0,
-			new DeadNullCoalescing().run([{ file: 'Bad.hx', source: 'class Bad { function f() { x ?? ' }], new HaxeQueryPlugin()).length
+			0, new DeadNullCoalescing().run([{ file: 'Bad.hx', source: 'class Bad { function f() { x ?? ' }], new HaxeQueryPlugin()).length
 		);
 	}
 

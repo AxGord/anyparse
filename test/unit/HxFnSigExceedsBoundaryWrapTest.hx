@@ -37,7 +37,10 @@ final class HxFnSigExceedsBoundaryWrapTest extends Test {
 	/** GUARD: a signature whose flat width is EXACTLY 140 (at the limit, not over) stays hugged on one line. */
 	public function testAtBoundaryStaysUnwrapped(): Void {
 		final src: String = 'class M {\n\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}';
-		Assert.equals('class M {\n\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}', triviaWrite(src));
+		Assert.equals(
+			'class M {\n\tprivate static function mergeCoachUser(a:Array<FileListShareCoachUser>, b:Array<FileListShareCoachUser>):Array<FileListShareCoachUser> {\n\t\treturn a;\n\t}\n}',
+			triviaWrite(src)
+		);
 	}
 
 	private inline function triviaWrite(src: String): String {

@@ -77,16 +77,18 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 	}
 
 	public function testForStmtKeyValueBlockBodyUsesBoth(): Void {
-		final body: Array<HxStatement> =
-			parseBody('class C { function f(m:Map<String,Int>):Void { for (key => val in m) { trace(key); trace(val); } } }');
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f(m:Map<String,Int>):Void { for (key => val in m) { trace(key); trace(val); } } }'
+		);
 		final fs: HxForStmt = expectForStmt(body[0]);
 		Assert.equals('key', (fs.varName: String));
 		Assert.equals('val', (fs.valueName: String));
 	}
 
 	public function testNestedForStmtKeyValue(): Void {
-		final body: Array<HxStatement> =
-			parseBody('class C { function f(m:Map<Int,Int>, n:Map<Int,Int>):Void { for (k => v in m) for (k2 => v2 in n) trace(k); } }');
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f(m:Map<Int,Int>, n:Map<Int,Int>):Void { for (k => v in m) for (k2 => v2 in n) trace(k); } }'
+		);
 		final outer: HxForStmt = expectForStmt(body[0]);
 		Assert.equals('k', (outer.varName: String));
 		Assert.equals('v', (outer.valueName: String));

@@ -33,8 +33,8 @@ class InlineMethodSliceTest extends Test {
 	public function testInlineBinaryBothCallSites(): Void {
 		final source: String = 'class C {\n' + '\tfunction add(a:Int, b:Int):Int return a + b;\n' + '\tfunction use():Int {\n'
 			+ '\t\tvar x = add(1, 2) * add(3, 4);\n' + '\t\treturn x;\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfunction use():Int {\n' + '\t\tvar x = (1 + 2) * (3 + 4);\n' + '\t\treturn x;\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfunction use():Int {\n' + '\t\tvar x = (1 + 2) * (3 + 4);\n' + '\t\treturn x;\n'
+			+ '\t}\n' + '}';
 		assertInline(source, 2, 11, expected);
 	}
 
@@ -53,8 +53,8 @@ class InlineMethodSliceTest extends Test {
 	 * both forms collect through `CallSites` and inline.
 	 */
 	public function testInlineFinalMethodThisAndBareCalls(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfinal function dbl(a:Int):Int return a * 2;\n' + '\tfunction use():Int { return this.dbl(5) + dbl(6); }\n' + '}';
+		final source: String = 'class C {\n' + '\tfinal function dbl(a:Int):Int return a * 2;\n'
+			+ '\tfunction use():Int { return this.dbl(5) + dbl(6); }\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction use():Int { return (5 * 2) + (6 * 2); }\n' + '}';
 		assertInline(source, 2, 17, expected);
 	}
@@ -77,8 +77,8 @@ class InlineMethodSliceTest extends Test {
 	 * becomes `'x=${7 + 1}'`.
 	 */
 	public function testInlineComplexInterpolationSubstituted(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction cpx(a:Int):String return \'x=$${a + 1}\';\n' + '\tfunction u() { cpx(7); }\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction cpx(a:Int):String return \'x=$${a + 1}\';\n' + '\tfunction u() { cpx(7); }\n'
+			+ '}';
 		final expected: String = 'class C {\n' + '\tfunction u() { \'x=$${7 + 1}\'; }\n' + '}';
 		assertInline(source, 2, 11, expected);
 	}
@@ -100,8 +100,8 @@ class InlineMethodSliceTest extends Test {
 	 * that side effect — refused.
 	 */
 	public function testRefuseDroppedImpureArgument(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction ignore(a:Int):Int return 0;\n' + '\tfunction side():Int return 9;\n' + '\tfunction u() { ignore(side()); }\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction ignore(a:Int):Int return 0;\n' + '\tfunction side():Int return 9;\n'
+			+ '\tfunction u() { ignore(side()); }\n' + '}';
 		assertRefused(source, 2, 11);
 	}
 
@@ -116,8 +116,8 @@ class InlineMethodSliceTest extends Test {
 	 * by an arbitrary argument expression — refused.
 	 */
 	public function testRefuseSimpleInterpolation(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction interp(a:Int):String return \'x=$$a\';\n' + '\tfunction u() { interp(7); }\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction interp(a:Int):String return \'x=$$a\';\n' + '\tfunction u() { interp(7); }\n'
+			+ '}';
 		assertRefused(source, 2, 11);
 	}
 

@@ -17,7 +17,7 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 
-	public function testMetaCallBeforeUnbracedIfKeepsSpace():Void {
+	public function testMetaCallBeforeUnbracedIfKeepsSpace(): Void {
 		writerEquals(
 			'class C {\n\tfunction f():Void {\n\t\t@:nullSafety(Off) if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
 			'class C {\n\tfunction f():Void {\n\t\t@:nullSafety(Off) if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
@@ -25,7 +25,7 @@ class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 		);
 	}
 
-	public function testBareMetaBeforeUnbracedIfKeepsSpace():Void {
+	public function testBareMetaBeforeUnbracedIfKeepsSpace(): Void {
 		writerEquals(
 			'class C {\n\tfunction f():Void {\n\t\t@:unreflective if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
 			'class C {\n\tfunction f():Void {\n\t\t@:unreflective if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n',
@@ -38,7 +38,7 @@ class HxMetaCallStmtSpaceTest extends HxTestHelpers {
 	// separate pre-existing gap: the inter-Star separator after a
 	// mandatory Ref stays quiet because trivia Stars that emit their
 	// own leading hardline would get a doubled break.
-	public function testMetaCallPlusBareMetaBeforeUnbracedIfKeepsStmtSpace():Void {
+	public function testMetaCallPlusBareMetaBeforeUnbracedIfKeepsStmtSpace(): Void {
 		final written: String = HxModuleWriter.write(
 			HaxeModuleParser.parse(
 				'class C {\n\tfunction f():Void {\n\t\t@:a(b) @:c if (value != null) target.field = value;\n\t\tnext = 1;\n\t}\n}\n'

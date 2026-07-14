@@ -37,40 +37,31 @@ class ApqDxTier4CliTest extends Test {
 	// --- 1. ast --count ---
 
 	public function testAstCountOnModuleRoot(): Void {
-		Assert.equals(
-			0, Cli.run([
-				'probe',
-				'class A {} class B {}',
-				'--count'
-			]),
-			'probe --count on a 2-class module exits clean'
-		);
+		Assert.equals(0, Cli.run([
+			'probe',
+			'class A {} class B {}',
+			'--count'
+		]), 'probe --count on a 2-class module exits clean');
 	}
 
 	public function testAstCountWithSelectExitsClean(): Void {
-		Assert.equals(
-			0, Cli.run([
-				'probe',
-				'class M { var a:Int; var b:Int; }',
-				'--select',
-				'ClassDecl',
-				'--count'
-			]),
-			'probe --count --select ClassDecl emits per-match counts'
-		);
+		Assert.equals(0, Cli.run([
+			'probe',
+			'class M { var a:Int; var b:Int; }',
+			'--select',
+			'ClassDecl',
+			'--count'
+		]), 'probe --count --select ClassDecl emits per-match counts');
 	}
 
 	public function testAstCountNoSelectNoMatchStillExitsClean(): Void {
 		// `--count` without `--select` always emits ONE number — the root's
 		// direct-child count. Never fails on shape; just prints 0 if empty.
-		Assert.equals(
-			0, Cli.run([
-				'probe',
-				'',
-				'--count'
-			]),
-			'probe --count on empty source still exits clean'
-		);
+		Assert.equals(0, Cli.run([
+			'probe',
+			'',
+			'--count'
+		]), 'probe --count on empty source still exits clean');
 	}
 
 	// --- 2. apq gates ---
@@ -168,34 +159,28 @@ class ApqDxTier4CliTest extends Test {
 	}
 
 	public function testPredictRelaxRejectsReplaceWith(): Void {
-		Assert.equals(
-			2, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--replace',
-				'x',
-				'--with',
-				'y',
-				'/some/dir'
-			]),
-			'--predict-relax does not take --replace/--with (token comes from parser hint)'
-		);
+		Assert.equals(2, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--replace',
+			'x',
+			'--with',
+			'y',
+			'/some/dir'
+		]), '--predict-relax does not take --replace/--with (token comes from parser hint)');
 	}
 
 	public function testPredictRelaxIncompatibleWithPredictStrip(): Void {
-		Assert.equals(
-			2, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--predict-strip',
-				'--replace',
-				'x',
-				'--with',
-				'y',
-				'/some/dir'
-			]),
-			'--predict-relax and --predict-strip are mutually exclusive (opposite models)'
-		);
+		Assert.equals(2, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--predict-strip',
+			'--replace',
+			'x',
+			'--with',
+			'y',
+			'/some/dir'
+		]), '--predict-relax and --predict-strip are mutually exclusive (opposite models)');
 	}
 
 	// --- 4. Top-level usage mentions new subcommands ---

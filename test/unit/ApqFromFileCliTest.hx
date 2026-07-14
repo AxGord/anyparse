@@ -77,17 +77,15 @@ class ApqFromFileCliTest extends Test {
 		// A --from-file / stdin source carries a trailing newline (a heredoc always appends one);
 		// the splice op must strip it so it does not surface as a stray blank line before `}`.
 		final repl: String = CliFixture.write('apq_trailrepl', 'function f():Int {\n\t\treturn 99;\n\t}\n');
-		Assert.equals(
-			0, Cli.run([
-				'replace-node',
-				fixture,
-				'--select',
-				'FnMember:f',
-				'--from-file',
-				repl,
-				'--write'
-			])
-		);
+		Assert.equals(0, Cli.run([
+			'replace-node',
+			fixture,
+			'--select',
+			'FnMember:f',
+			'--from-file',
+			repl,
+			'--write'
+		]));
 		final result: String = File.getContent(fixture);
 		Assert.isTrue(result.indexOf('return 99') >= 0, 'replacement applied');
 		Assert.isTrue(result.indexOf('}\n\n}') < 0, 'no stray blank line before the closing brace');

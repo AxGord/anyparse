@@ -18,10 +18,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 class SwallowedExceptionCheckTest extends Test {
 
 	public function testSwallowingCatchFlagged(): Void {
-		final vs: Array<Violation> =
-			violations(
-				'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace("oops");\n\t\t}\n\t}\n}'
-			);
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace("oops");\n\t\t}\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('swallowed-exception', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);

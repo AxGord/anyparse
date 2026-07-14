@@ -22,8 +22,8 @@ import sys.FileSystem;
  */
 class ApqAstChildCountTest extends Test {
 
-	private static inline final FIXTURE: String = 'enum X {\n'
-		+ '	Zero;\n' + '	One(a:Int);\n' + '	Two(a:Int, b:Int);\n' + '	Three(a:Int, b:Int, c:Int);\n' + '}\n';
+	private static inline final FIXTURE: String = 'enum X {\n' + '	Zero;\n' + '	One(a:Int);\n' + '	Two(a:Int, b:Int);\n'
+		+ '	Three(a:Int, b:Int, c:Int);\n' + '}\n';
 
 	public function testMinChildrenKeepsMultiArgOnly(): Void {
 		#if sys
@@ -57,19 +57,16 @@ class ApqAstChildCountTest extends Test {
 		#if sys
 		final fixture: String = writeFixture(FIXTURE);
 		// min=2 max=2 → only Two survives (Three has 3 Requireds, One has 1).
-		Assert.equals(
-			0, Cli.run([
-				'ast',
-				'--select',
-				'ParamCtor',
-				'--min-children',
-				'2',
-				'--max-children',
-				'2',
-				fixture
-			]),
-			'inclusive bounds isolate the exact-arity ctor'
-		);
+		Assert.equals(0, Cli.run([
+			'ast',
+			'--select',
+			'ParamCtor',
+			'--min-children',
+			'2',
+			'--max-children',
+			'2',
+			fixture
+		]), 'inclusive bounds isolate the exact-arity ctor');
 		FileSystem.deleteFile(fixture);
 		#else
 		Assert.pass('non-sys target');

@@ -41,34 +41,28 @@ class ApqDepthSemanticsTest extends Test {
 	public function testDepthZeroWithSelect(): Void {
 		// With --select VarMember → root is the selected VarMember.
 		// --depth 0 shows just `(VarMember x)`, no IntLit child.
-		Assert.equals(
-			0, Cli.run([
-				'ast',
-				'--code',
-				'class C { var x:Int = 0; }',
-				'--select',
-				'VarMember',
-				'--depth',
-				'0'
-			]),
-			'--depth 0 with --select shows just the matched node, exits 0'
-		);
+		Assert.equals(0, Cli.run([
+			'ast',
+			'--code',
+			'class C { var x:Int = 0; }',
+			'--select',
+			'VarMember',
+			'--depth',
+			'0'
+		]), '--depth 0 with --select shows just the matched node, exits 0');
 	}
 
 	public function testDepthOneWithSelect(): Void {
 		// With --select VarMember and --depth 1, we get the IntLit child.
-		Assert.equals(
-			0, Cli.run([
-				'ast',
-				'--code',
-				'class C { var x:Int = 0; }',
-				'--select',
-				'VarMember',
-				'--depth',
-				'1'
-			]),
-			'--depth 1 with --select shows one level of children, exits 0'
-		);
+		Assert.equals(0, Cli.run([
+			'ast',
+			'--code',
+			'class C { var x:Int = 0; }',
+			'--select',
+			'VarMember',
+			'--depth',
+			'1'
+		]), '--depth 1 with --select shows one level of children, exits 0');
 	}
 
 	public function testDepthZeroWithAt(): Void {

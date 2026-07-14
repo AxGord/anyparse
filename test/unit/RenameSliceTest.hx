@@ -126,10 +126,10 @@ class RenameSliceTest extends Test {
 	 * exactly like a plain `FnMember`.
 	 */
 	public function testRenameFinalMethod(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfinal function d(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\td(1);\n' + '\t\tthis.d(2);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfinal function ren(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\tren(1);\n' + '\t\tthis.ren(2);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfinal function d(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\td(1);\n'
+			+ '\t\tthis.d(2);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfinal function ren(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\tren(1);\n'
+			+ '\t\tthis.ren(2);\n' + '\t}\n' + '}';
 		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, 'ren', expected);
 	}

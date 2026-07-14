@@ -40,8 +40,8 @@ class CrossRenameSliceTest extends Test {
 		final a: String = 'class Foo {\n' + '\tpublic function new() {}\n' + '}';
 		final b: String = 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n' + '\t\treturn new Foo();\n' + '\t}\n' + '}';
 		final expectedA: String = 'class Bar {\n' + '\tpublic function new() {}\n' + '}';
-		final expectedB: String = 'class Use {\n'
-			+ '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
+		final expectedB: String = 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n'
+			+ '}';
 		// `class Foo` — `Foo` starts at col 7.
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
@@ -64,11 +64,11 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testFinalClassRename(): Void {
 		final a: String = 'final class Foo {\n' + '\tpublic function new() {}\n' + '}';
-		final b: String = 'import pkg.Foo;\n'
-			+ 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n' + '\t\treturn new Foo();\n' + '\t}\n' + '}';
+		final b: String = 'import pkg.Foo;\n' + 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n'
+			+ '\t\treturn new Foo();\n' + '\t}\n' + '}';
 		final expectedA: String = 'final class Bar {\n' + '\tpublic function new() {}\n' + '}';
-		final expectedB: String = 'import pkg.Bar;\n'
-			+ 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n' + '}';
+		final expectedB: String = 'import pkg.Bar;\n' + 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n'
+			+ '\t\treturn new Bar();\n' + '\t}\n' + '}';
 		// `final class Foo` — `Foo` starts at col 13 (after
 		// `final class `).
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 13, 'Bar', [
@@ -252,12 +252,12 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testStaticReceiverRenamed(): Void {
 		final a: String = 'class Foo {\n' + '\tpublic static function create():Foo return null;\n' + '\tpublic static var CONST = 1;\n' + '}';
-		final b: String = 'import pkg.Foo;\n'
-			+ 'class C {\n' + '\tfunction m() {\n' + '\t\tFoo.create();\n' + '\t\tvar v = Foo.CONST;\n' + '\t}\n' + '}';
-		final expectedA: String = 'class Bar {\n'
-			+ '\tpublic static function create():Bar return null;\n' + '\tpublic static var CONST = 1;\n' + '}';
-		final expectedB: String = 'import pkg.Bar;\n'
-			+ 'class C {\n' + '\tfunction m() {\n' + '\t\tBar.create();\n' + '\t\tvar v = Bar.CONST;\n' + '\t}\n' + '}';
+		final b: String = 'import pkg.Foo;\n' + 'class C {\n' + '\tfunction m() {\n' + '\t\tFoo.create();\n' + '\t\tvar v = Foo.CONST;\n'
+			+ '\t}\n' + '}';
+		final expectedA: String = 'class Bar {\n' + '\tpublic static function create():Bar return null;\n'
+			+ '\tpublic static var CONST = 1;\n' + '}';
+		final expectedB: String = 'import pkg.Bar;\n' + 'class C {\n' + '\tfunction m() {\n' + '\t\tBar.create();\n'
+			+ '\t\tvar v = Bar.CONST;\n' + '\t}\n' + '}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -301,8 +301,8 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testBareValuePositionNotRenamed(): Void {
 		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
-		final b: String = 'class C {\n' + '\tfunction m(e) {\n' + '\t\tvar c = Foo;\n' + '\t\tvar r = switch e {\n' + '\t\t\tcase Foo: 1;\n'
-			+ '\t\t\tcase _: 0;\n' + '\t\t};\n' + '\t}\n' + '}';
+		final b: String = 'class C {\n' + '\tfunction m(e) {\n' + '\t\tvar c = Foo;\n' + '\t\tvar r = switch e {\n'
+			+ '\t\t\tcase Foo: 1;\n' + '\t\t\tcase _: 0;\n' + '\t\t};\n' + '\t}\n' + '}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -321,8 +321,7 @@ class CrossRenameSliceTest extends Test {
 	 * explicit by re-parsing each `newSource`).
 	 */
 	private function okChanges(
-		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String,
-		scopeFiles: Array<{ file: String, source: String }>
+		cursorFile: String, cursorSource: String, line: Int, col: Int, newName: String, scopeFiles: Array<{ file: String, source: String }>
 	): Array<FileChange> {
 		final result: CrossRenameResult = CrossRename.crossRenameType(
 			cursorFile, cursorSource, line, col, newName, scopeFiles, plugin(), typeRefShape(), refShape()

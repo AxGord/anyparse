@@ -96,8 +96,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testTrailingCommasAllYesFlipsAll(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"trailingCommas": {' + '"arrayLiteralDefault": "yes",' + '"callArgumentDefault": "yes",' + '"functionParameterDefault": "yes"'
-			+ '}}'
+			'{"trailingCommas": {' + '"arrayLiteralDefault": "yes",' + '"callArgumentDefault": "yes",'
+			+ '"functionParameterDefault": "yes"' + '}}'
 		);
 		Assert.isTrue(opts.trailingCommaArrays);
 		Assert.isTrue(opts.trailingCommaArgs);
@@ -525,7 +525,9 @@ class HaxeFormatConfigLoaderTest extends Test {
 		);
 		opts.finalNewline = false;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected source blank line stripped with `remove` in: <$out>');
+		Assert.isTrue(
+			out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected source blank line stripped with `remove` in: <$out>'
+		);
 	}
 
 	public function testEmptyLinesExistingBetweenFieldsRemoveDoesNotBlockAddByDoc(): Void {

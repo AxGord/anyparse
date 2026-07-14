@@ -41,8 +41,8 @@ class InlineSliceTest extends Test {
 	 * — `x * 2` becomes `(a + b) * 2`.
 	 */
 	public function testInlineBinaryParenthesisesInTighterContext(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar x = a + b;\n' + '\t\treturn x * 2;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar x = a + b;\n' + '\t\treturn x * 2;\n'
+			+ '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\treturn (a + b) * 2;\n' + '\t}\n' + '}';
 		assertInline(source, 3, 3, expected);
 	}
@@ -74,10 +74,10 @@ class InlineSliceTest extends Test {
 	 * line vanishes cleanly (no orphan blank line).
 	 */
 	public function testInlineMultipleReadsRemovesDeclLine(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 2;\n' + '\t\tvar y = x;\n' + '\t\treturn y + x;\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar y = (a + 2);\n' + '\t\treturn y + (a + 2);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 2;\n' + '\t\tvar y = x;\n'
+			+ '\t\treturn y + x;\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar y = (a + 2);\n' + '\t\treturn y + (a + 2);\n'
+			+ '\t}\n' + '}';
 		assertInline(source, 3, 3, expected);
 	}
 
@@ -86,8 +86,8 @@ class InlineSliceTest extends Test {
 	 * duplicating its (now mutable) value would be incorrect.
 	 */
 	public function testRefuseReassignedVariable(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar x = 1;\n' + '\t\tx = 2;\n' + '\t\treturn x;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar x = 1;\n' + '\t\tx = 2;\n' + '\t\treturn x;\n'
+			+ '\t}\n' + '}';
 		assertRefused(source, 3, 3);
 	}
 
@@ -96,8 +96,8 @@ class InlineSliceTest extends Test {
 	 * across N reads would invoke it N times.
 	 */
 	public function testRefuseInitializerWithCall(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction g():Int return 1;\n' + '\tfunction f():Int {\n' + '\t\tvar x = g();\n' + '\t\treturn x + x;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction g():Int return 1;\n' + '\tfunction f():Int {\n' + '\t\tvar x = g();\n'
+			+ '\t\treturn x + x;\n' + '\t}\n' + '}';
 		assertRefused(source, 4, 3);
 	}
 
@@ -106,8 +106,8 @@ class InlineSliceTest extends Test {
 	 * elsewhere: moving the read past the reassignment changes its value.
 	 */
 	public function testRefuseInitializerReadsReassignedFreeVar(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 1;\n' + '\t\ta = 9;\n' + '\t\treturn x;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tvar x = a + 1;\n' + '\t\ta = 9;\n' + '\t\treturn x;\n'
+			+ '\t}\n' + '}';
 		assertRefused(source, 3, 3);
 	}
 
@@ -126,8 +126,8 @@ class InlineSliceTest extends Test {
 	 * loop binding is not an inlinable local var / final.
 	 */
 	public function testRefuseCursorOnForIterator(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f():Int {\n' + '\t\tvar t = 0;\n' + '\t\tfor (i in 0...10) t += i;\n' + '\t\treturn t;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar t = 0;\n' + '\t\tfor (i in 0...10) t += i;\n'
+			+ '\t\treturn t;\n' + '\t}\n' + '}';
 		// Line 4 col 3 — the `for` decl (iterator `i`).
 		assertRefused(source, 4, 3);
 	}

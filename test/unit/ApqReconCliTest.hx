@@ -300,20 +300,17 @@ class ApqReconCliTest extends Test {
 		final fixture: String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
 		final fixturePath: String = '$dir/probe.hxtest';
 		File.saveContent(fixturePath, fixture);
-		Assert.equals(
-			1, Cli.run([
-				'recon',
-				'--probe',
-				fixturePath,
-				'--predict-strip',
-				'--source',
-				'--replace',
-				'XYZ',
-				'--with',
-				'WAT'
-			]),
-			'--predict-strip --probe --source on STILL FAIL exits runtime (parse still fails)'
-		);
+		Assert.equals(1, Cli.run([
+			'recon',
+			'--probe',
+			fixturePath,
+			'--predict-strip',
+			'--source',
+			'--replace',
+			'XYZ',
+			'--with',
+			'WAT'
+		]), '--predict-strip --probe --source on STILL FAIL exits runtime (parse still fails)');
 		cleanupDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -330,18 +327,15 @@ class ApqReconCliTest extends Test {
 		final fixture: String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
 		final fixturePath: String = '$dir/probe.hxtest';
 		File.saveContent(fixturePath, fixture);
-		Assert.equals(
-			0, Cli.run([
-				'recon',
-				'--probe',
-				fixturePath,
-				'--predict-strip',
-				'--source',
-				'--delete',
-				' XYZ'
-			]),
-			'--predict-strip --probe --source on UNBLOCK is a clean exit'
-		);
+		Assert.equals(0, Cli.run([
+			'recon',
+			'--probe',
+			fixturePath,
+			'--predict-strip',
+			'--source',
+			'--delete',
+			' XYZ'
+		]), '--predict-strip --probe --source on UNBLOCK is a clean exit');
 		cleanupDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -355,19 +349,16 @@ class ApqReconCliTest extends Test {
 		final dir: String = mkTempDir('apq_recon_predict_source_sweep');
 		final fixture: String = '{}\n---\n\nclass C { var x:Int = 0 XYZ; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
 		File.saveContent('$dir/bad.hxtest', fixture);
-		Assert.equals(
-			0, Cli.run([
-				'recon',
-				'--predict-strip',
-				'--source',
-				'--replace',
-				'XYZ',
-				'--with',
-				'WAT',
-				dir
-			]),
-			'--predict-strip --source sweep STILL FAIL still emits, exits 0 (pattern matched)'
-		);
+		Assert.equals(0, Cli.run([
+			'recon',
+			'--predict-strip',
+			'--source',
+			'--replace',
+			'XYZ',
+			'--with',
+			'WAT',
+			dir
+		]), '--predict-strip --source sweep STILL FAIL still emits, exits 0 (pattern matched)');
 		cleanupDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -499,19 +490,16 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPredictRelaxIncompatibleWithPredictStrip(): Void {
-		Assert.equals(
-			2, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--predict-strip',
-				'--replace',
-				'x',
-				'--with',
-				'y',
-				'/some/dir'
-			]),
-			'--predict-relax and --predict-strip are mutually exclusive'
-		);
+		Assert.equals(2, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--predict-strip',
+			'--replace',
+			'x',
+			'--with',
+			'y',
+			'/some/dir'
+		]), '--predict-relax and --predict-strip are mutually exclusive');
 	}
 
 	public function testReconPredictRelaxIncompatibleWithRegressionProbe(): Void {
@@ -570,32 +558,26 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconNoTargetClusterIncompatibleWithCluster(): Void {
-		Assert.equals(
-			2, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--no-target-cluster',
-				'foo',
-				'--cluster',
-				'bar',
-				'/some/dir'
-			]),
-			'--cluster and --no-target-cluster are mutually exclusive (different drill namespaces)'
-		);
+		Assert.equals(2, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--no-target-cluster',
+			'foo',
+			'--cluster',
+			'bar',
+			'/some/dir'
+		]), '--cluster and --no-target-cluster are mutually exclusive (different drill namespaces)');
 	}
 
 	public function testReconNoTargetClusterIncompatibleWithProbe(): Void {
-		Assert.equals(
-			2, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--no-target-cluster',
-				'foo',
-				'--probe',
-				'/some/file'
-			]),
-			'--no-target-cluster requires sweep mode — mutex with --probe'
-		);
+		Assert.equals(2, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--no-target-cluster',
+			'foo',
+			'--probe',
+			'/some/file'
+		]), '--no-target-cluster requires sweep mode — mutex with --probe');
 	}
 
 	public function testReconNoTargetClusterZeroMatchExitsRuntime(): Void {
@@ -605,16 +587,13 @@ class ApqReconCliTest extends Test {
 		// diagnostic on stderr.
 		final dir: String = mkTempDir('apq_recon_no_target_cluster_miss');
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
-		Assert.equals(
-			1, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--no-target-cluster',
-				'this-message-does-not-exist',
-				dir
-			]),
-			'--no-target-cluster with no matching expected-msg exits runtime'
-		);
+		Assert.equals(1, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--no-target-cluster',
+			'this-message-does-not-exist',
+			dir
+		]), '--no-target-cluster with no matching expected-msg exits runtime');
 		cleanupDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -653,16 +632,13 @@ class ApqReconCliTest extends Test {
 		final fixture: String = '{}\n---\n\n{foo: bar}\n\n---\n\n{foo: bar}\n';
 		final fixturePath: String = '$dir/probe.hxtest';
 		File.saveContent(fixturePath, fixture);
-		Assert.equals(
-			1, Cli.run([
-				'recon',
-				'--probe',
-				fixturePath,
-				'--predict-relax',
-				'--source'
-			]),
-			'--predict-relax --probe --source on NO TARGET exits runtime (no terminator to inject)'
-		);
+		Assert.equals(1, Cli.run([
+			'recon',
+			'--probe',
+			fixturePath,
+			'--predict-relax',
+			'--source'
+		]), '--predict-relax --probe --source on NO TARGET exits runtime (no terminator to inject)');
 		cleanupDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -694,17 +670,14 @@ class ApqReconCliTest extends Test {
 		// → 0 matched records → runtime exit (parallel of the
 		// non-`--source` test above), proves the combination is accepted.
 		final dir: String = mkTempDir('apq_recon_relax_no_target_source');
-		Assert.equals(
-			1, Cli.run([
-				'recon',
-				'--predict-relax',
-				'--no-target-cluster',
-				'anything',
-				'--source',
-				dir
-			]),
-			'--predict-relax --no-target-cluster --source on empty corpus is a runtime exit'
-		);
+		Assert.equals(1, Cli.run([
+			'recon',
+			'--predict-relax',
+			'--no-target-cluster',
+			'anything',
+			'--source',
+			dir
+		]), '--predict-relax --no-target-cluster --source on empty corpus is a runtime exit');
 		cleanupDir(dir);
 		#else
 		Assert.pass('non-sys target');
@@ -721,19 +694,16 @@ class ApqReconCliTest extends Test {
 	}
 
 	public function testReconPermissiveConstructIncompatibleWithPredictStrip(): Void {
-		Assert.equals(
-			2, Cli.run([
-				'recon',
-				'--permissive-construct',
-				'--predict-strip',
-				'--replace',
-				'x',
-				'--with',
-				'y',
-				'/some/dir'
-			]),
-			'--permissive-construct is its own mode — mutually exclusive with --predict-strip'
-		);
+		Assert.equals(2, Cli.run([
+			'recon',
+			'--permissive-construct',
+			'--predict-strip',
+			'--replace',
+			'x',
+			'--with',
+			'y',
+			'/some/dir'
+		]), '--permissive-construct is its own mode — mutually exclusive with --predict-strip');
 	}
 
 	public function testReconPermissiveConstructIncompatibleWithCluster(): Void {
@@ -794,7 +764,9 @@ class ApqReconCliTest extends Test {
 		);
 		final savedCwd: String = Sys.getCwd();
 		Sys.setCwd(dir);
-		Assert.equals(0, Cli.run(['recon', '--regression-probe', dir]), 'unblocked fixture (was SKIP_PARSE, now parses) is a clean OK exit');
+		Assert.equals(
+			0, Cli.run(['recon', '--regression-probe', dir]), 'unblocked fixture (was SKIP_PARSE, now parses) is a clean OK exit'
+		);
 		Sys.setCwd(savedCwd);
 		cleanupDir('$dir/bin');
 		cleanupDir(dir);

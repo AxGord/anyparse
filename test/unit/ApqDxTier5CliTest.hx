@@ -72,30 +72,24 @@ class ApqDxTier5CliTest extends Test {
 		// `ast --select` on a single file where the kind is not present
 		// surfaces "Kinds present here: …" plus the new cross-project
 		// hint. Exit stays clean (the walker is read-only).
-		Assert.equals(
-			0, Cli.run([
-				'probe',
-				'class C {}',
-				'--select',
-				'HxCatchClause'
-			]),
-			'ast --select on a TypeName not present in source exits clean'
-		);
+		Assert.equals(0, Cli.run([
+			'probe',
+			'class C {}',
+			'--select',
+			'HxCatchClause'
+		]), 'ast --select on a TypeName not present in source exits clean');
 	}
 
 	public function testAstSelectLowercaseSelectorStillExitsClean(): Void {
 		// Lowercase selector — the cross-project hint stays silent
 		// (field-shape, not a TypeName). The existing kinds-present
 		// fallback fires.
-		Assert.equals(
-			0, Cli.run([
-				'probe',
-				'class C {}',
-				'--select',
-				'unknownField'
-			]),
-			'ast --select on a lowercase token exits clean with kinds-present fallback'
-		);
+		Assert.equals(0, Cli.run([
+			'probe',
+			'class C {}',
+			'--select',
+			'unknownField'
+		]), 'ast --select on a lowercase token exits clean with kinds-present fallback');
 	}
 
 	// --- 3. probe staging ---
@@ -121,8 +115,7 @@ class ApqDxTier5CliTest extends Test {
 		Assert.equals('class First {}', firstStaged, 'first probe staged');
 		Assert.equals(0, Cli.run(['probe', 'class Second { var b:Bool; }']), 'second probe exits clean');
 		Assert.equals(
-			'class Second { var b:Bool; }', File.getContent(stagedPath),
-			'second probe overwrites the scratch file (single-slot by design)'
+			'class Second { var b:Bool; }', File.getContent(stagedPath), 'second probe overwrites the scratch file (single-slot by design)'
 		);
 	}
 	#end
@@ -169,7 +162,8 @@ class ApqDxTier5CliTest extends Test {
 		// → delete the file we created.
 		if (cacheStash != null)
 			File.saveContent(cachePath, cacheStash);
-		else if (FileSystem.exists(cachePath)) FileSystem.deleteFile(cachePath);
+		else if (FileSystem.exists(cachePath))
+			FileSystem.deleteFile(cachePath);
 		if (raised != null) throw raised;
 	}
 	#end

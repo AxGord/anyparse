@@ -57,10 +57,9 @@ class UnreachableCatchTest extends Test {
 
 	public function testThreeClausesOnlyMiddleFlagged(): Void {
 		// Base, Sub, Other — only Sub is covered (by Base); Other is unrelated.
-		final vs: Array<Violation> =
-			violations(
-				'class Base {} class Sub extends Base {} class Other {} class C { function f() { try { g(); } catch (e:Base) {} catch (e:Sub) {} catch (e:Other) {} } }'
-			);
+		final vs: Array<Violation> = violations(
+			'class Base {} class Sub extends Base {} class Other {} class C { function f() { try { g(); } catch (e:Base) {} catch (e:Sub) {} catch (e:Other) {} } }'
+		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('Base') != -1);
 	}

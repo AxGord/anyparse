@@ -54,7 +54,9 @@ class RedundantUpcastTest extends Test {
 	}
 
 	public function testCompileTimeCheckNotFlagged(): Void {
-		Assert.equals(0, violations('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = (s : Base); } }').length);
+		Assert.equals(
+			0, violations('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = (s : Base); } }').length
+		);
 	}
 
 	public function testNonIdentifierOperandNotFlagged(): Void {

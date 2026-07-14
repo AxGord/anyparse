@@ -50,10 +50,9 @@ class UnusedParameterCheckTest extends Test {
 	}
 
 	public function testLocalFunctionParameterFlagged(): Void {
-		final vs: Array<Violation> =
-			violations(
-				'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\tinner(1);\n\t}\n}'
-			);
+		final vs: Array<Violation> = violations(
+			'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\tinner(1);\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('unused parameter \'value\'', vs[0].message);
 		// A named local function called directly is the autofixable subset.

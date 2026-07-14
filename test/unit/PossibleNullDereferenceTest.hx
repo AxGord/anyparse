@@ -84,8 +84,9 @@ class PossibleNullDereferenceTest extends Test {
 	}
 
 	public function testNullReturnFunctionFlagged(): Void {
-		final vs: Array<Violation> =
-			violations('class C { function findUser(s:String):Null<Foo> { return null; } function g() { findUser("x").bar(); } }');
+		final vs: Array<Violation> = violations(
+			'class C { function findUser(s:String):Null<Foo> { return null; } function g() { findUser("x").bar(); } }'
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('findUser() can be null; this dereference has no null check', vs[0].message);
 	}
@@ -129,12 +130,10 @@ class PossibleNullDereferenceTest extends Test {
 	}
 
 	public function testCrossFileNonNullDirectNotFlagged(): Void {
-		Assert.equals(
-			0, violationsFiles([
-				{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
-				{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { h.plain().name; } }' }
-			]).length
-		);
+		Assert.equals(0, violationsFiles([
+			{ file: 'Helper.hx', source: 'class Helper { public function plain():Foo return null; }' },
+			{ file: 'Caller.hx', source: 'class Caller { function f(h:Helper) { h.plain().name; } }' }
+		]).length);
 	}
 
 	public function testFixReturnsEmpty(): Void {

@@ -17,10 +17,9 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 class DuplicateCaseCheckTest extends Test {
 
 	public function testDuplicateLiteralCaseFlagged(): Void {
-		final vs: Array<Violation> =
-			violations(
-				'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase _: c();\n\t\t}\n\t}\n}'
-			);
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase _: c();\n\t\t}\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('duplicate-case', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);

@@ -33,8 +33,8 @@ class AddMemberSliceTest extends Test {
 	 */
 	public function testUglyMemberIsCanonicalised(): Void {
 		final source: String = 'class C {\n' + '\tvar x:Int;\n' + '}\n';
-		final expected: String = 'class C {\n'
-			+ '\tvar x:Int;\n' + '\n' + '\tpublic function g(a:Int, b:Int):Int {\n' + '\t\treturn a + b;\n' + '\t}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g(a:Int, b:Int):Int {\n'
+			+ '\t\treturn a + b;\n' + '\t}\n' + '}\n';
 		assertAdd(source, 'C', 'public    function  g(a:Int,b:Int):Int{return a+b;}', expected);
 	}
 
@@ -152,8 +152,8 @@ class AddMemberSliceTest extends Test {
 	 * final class is the last decl.
 	 */
 	public function testAppendToNonLastFinalClass(): Void {
-		final source: String = 'final class C {\n'
-			+ '\tvar x:Int;\n' + '}\n' + '\n' + '/**\n' + ' * Doc.\n' + ' */\n' + 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
+		final source: String = 'final class C {\n' + '\tvar x:Int;\n' + '}\n' + '\n' + '/**\n' + ' * Doc.\n' + ' */\n' + 'typedef T = {\n'
+			+ '\tvar y:Int;\n' + '}\n';
 		final expected: String = 'final class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g():Void {}\n' + '}\n' + '\n' + '/**\n'
 			+ ' * Doc.\n' + ' */\n' + 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
 		assertAdd(source, 'C', 'public function g():Void {}', expected);

@@ -64,14 +64,12 @@ class HxObjectFieldColonOptionsTest extends Test {
 
 	public function testVarTypeAnnotationStaysTightRegardlessOfPolicy(): Void {
 		final src: String = 'class C { var x:Int = 0; }';
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith(src, policy);
 			Assert.isTrue(out.indexOf('var x:Int') != -1, 'var type annotation should stay tight under policy $policy in: <$out>');
 		}
@@ -79,14 +77,12 @@ class HxObjectFieldColonOptionsTest extends Test {
 
 	public function testFunctionReturnTypeStaysTightRegardlessOfPolicy(): Void {
 		final src: String = 'class C { function f():Void {} }';
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith(src, policy);
 			Assert.isTrue(
 				out.indexOf('function f():Void') != -1, 'return type annotation should stay tight under policy $policy in: <$out>'
@@ -96,14 +92,12 @@ class HxObjectFieldColonOptionsTest extends Test {
 
 	public function testFunctionParamTypeStaysTightRegardlessOfPolicy(): Void {
 		final src: String = 'class C { function f(p:Int):Void {} }';
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith(src, policy);
 			Assert.isTrue(out.indexOf('p:Int') != -1, 'param type annotation should stay tight under policy $policy in: <$out>');
 		}

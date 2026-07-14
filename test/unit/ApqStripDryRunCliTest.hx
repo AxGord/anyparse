@@ -48,21 +48,19 @@ class ApqStripDryRunCliTest extends Test {
 		// typo-guard's whole purpose).
 		#if sys
 		final input: String = CliFixture.write('apq_strip_dry', 'class C { var x:Int = 1; }');
-		Assert.equals(
-			1, Cli.run([
-				'strip',
-				input,
-				'--replace',
-				'var x',
-				'--with',
-				'final x',
-				'--replace',
-				'BOGUS',
-				'--with',
-				'',
-				'--dry-run',
-			])
-		);
+		Assert.equals(1, Cli.run([
+			'strip',
+			input,
+			'--replace',
+			'var x',
+			'--with',
+			'final x',
+			'--replace',
+			'BOGUS',
+			'--with',
+			'',
+			'--dry-run',
+		]));
 		FileSystem.deleteFile(input);
 		#else
 		Assert.pass('non-sys target');

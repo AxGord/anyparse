@@ -20,7 +20,7 @@ import anyparse.grammar.haxe.HxModule;
  *
  * The synth module is registered during `HaxeModuleTriviaParser`'s
  * @:build — so any consumer that references `*T` types must be
- * typed **after** that marker class. The `_forceBuild` static below
+ * typed **after** that marker class. The `forceBuild` static below
  * keys on the marker class reference and is processed before any
  * method body is typed, so subsequent FQN uses of the synth types
  * inside method bodies resolve. Static-top-of-file `import` of the

@@ -77,14 +77,12 @@ class HxIfPolicyOptionsTest extends Test {
 	public function testElseKwUnaffectedByIfPolicy(): Void {
 		// `else` ctor has no `@:fmt(ifPolicy)`, so its kw trailing space
 		// must stay fixed regardless of the configured policy.
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { if (a) b; else c; } }', policy);
 			Assert.isTrue(
 				out.indexOf('else c') != -1 || out.indexOf('else\n') != -1,
@@ -94,28 +92,24 @@ class HxIfPolicyOptionsTest extends Test {
 	}
 
 	public function testForKwUnaffectedByIfPolicy(): Void {
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { for (i in 0...10) trace(i); } }', policy);
 			Assert.isTrue(out.indexOf('for (i in') != -1, 'for kw should keep trailing space under policy $policy in: <$out>');
 		}
 	}
 
 	public function testWhileKwUnaffectedByIfPolicy(): Void {
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { while (a) b; } }', policy);
 			Assert.isTrue(out.indexOf('while (a)') != -1, 'while kw should keep trailing space under policy $policy in: <$out>');
 		}

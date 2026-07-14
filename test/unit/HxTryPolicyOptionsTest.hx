@@ -61,42 +61,36 @@ class HxTryPolicyOptionsTest extends Test {
 	public function testCatchKwUnaffectedByTryPolicy(): Void {
 		// `catch` kw is on the field-level `HxCatchClause.name`, not the
 		// enum branch — kwTrailingSpacePolicy doesn't reach it.
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { try { a; } catch (e:Any) {} } }', policy);
 			Assert.isTrue(out.indexOf('catch (e') != -1, 'catch kw should keep its layout under policy $policy in: <$out>');
 		}
 	}
 
 	public function testIfKwUnaffectedByTryPolicy(): Void {
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { if (a) b; } }', policy);
 			Assert.isTrue(out.indexOf('if (a)') != -1, 'if kw should keep its trailing space under tryPolicy $policy in: <$out>');
 		}
 	}
 
 	public function testForKwUnaffectedByTryPolicy(): Void {
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { for (i in 0...10) trace(i); } }', policy);
 			Assert.isTrue(out.indexOf('for (i in') != -1, 'for kw should keep trailing space under tryPolicy $policy in: <$out>');
 		}

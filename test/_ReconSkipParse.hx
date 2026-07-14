@@ -68,8 +68,7 @@ final class _ReconSkipParse { // noqa: naming
 					case '--all':
 						topN = 999999;
 					case _:
-						if (!StringTools.startsWith(a, '--') && probePath == null)
-							probePath = a;
+						if (!StringTools.startsWith(a, '--') && probePath == null) probePath = a;
 				}
 				i++;
 			}
@@ -129,7 +128,9 @@ final class _ReconSkipParse { // noqa: naming
 		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
 		final shown: Int = entries.length > topN ? topN : entries.length;
 		Sys.println('');
-		Sys.println('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---');
+		Sys.println(
+			'--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---'
+		);
 		for (idx in 0...shown) {
 			final entry = entries[idx];
 			final c: ReconCluster = entry.cluster;
@@ -188,7 +189,7 @@ final class _ReconSkipParse { // noqa: naming
 				if (identLen > 4)
 					buf.add('_');
 				else
-					for (k in i...j) buf.addChar(StringTools.fastCodeAt(raw, k));
+					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
 				i = j;
 			} else {
 				buf.addChar(c);
@@ -199,12 +200,10 @@ final class _ReconSkipParse { // noqa: naming
 	}
 
 	private static function probeFile(path: String): Void {
-		final src: String = StringTools.endsWith(path, HXTEST_EXT)
-			? {
-				final tc: Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest(path);
-				tc == null ? '' : tc.input;
-			}
-			: sys.io.File.getContent(path);
+		final src: String = StringTools.endsWith(path, HXTEST_EXT) ? {
+			final tc: Null<HxTestCase> = HxFormatterCorpusHelpers.readHxTest(path);
+			tc == null ? '' : tc.input;
+		} : sys.io.File.getContent(path);
 		try {
 			HaxeModuleTriviaParser.parse(src);
 			Sys.println('PARSE OK');

@@ -17,34 +17,34 @@ class ProbeMetadataLineEnd extends Test {
 
 	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
-	private static final SRC: String = 'class Main {\n'
-		+ '\t@Test @doc("a") function main() {}\n\n' + '\t@Test\n\t@doc("b") function main() {}\n}\n';
+	private static final SRC: String = 'class Main {\n' + '\t@Test @doc("a") function main() {}\n\n'
+		+ '\t@Test\n\t@doc("b") function main() {}\n}\n';
 
 	public function testNonePreservesSource(): Void {
 		final out: String = render(MetadataLineEndPolicy.None);
-		final expected: String = 'class Main {\n'
-			+ '\t@Test @doc("a") function main() {}\n\n' + '\t@Test\n\t@doc("b") function main() {}\n}\n';
+		final expected: String = 'class Main {\n' + '\t@Test @doc("a") function main() {}\n\n'
+			+ '\t@Test\n\t@doc("b") function main() {}\n}\n';
 		Assert.equals(expected, out);
 	}
 
 	public function testAfterForcesOnePerLine(): Void {
 		final out: String = render(MetadataLineEndPolicy.After);
-		final expected: String = 'class Main {\n'
-			+ '\t@Test\n\t@doc("a")\n\tfunction main() {}\n\n' + '\t@Test\n\t@doc("b")\n\tfunction main() {}\n}\n';
+		final expected: String = 'class Main {\n' + '\t@Test\n\t@doc("a")\n\tfunction main() {}\n\n'
+			+ '\t@Test\n\t@doc("b")\n\tfunction main() {}\n}\n';
 		Assert.equals(expected, out);
 	}
 
 	public function testAfterLastPreservesInterButForcesTrailing(): Void {
 		final out: String = render(MetadataLineEndPolicy.AfterLast);
-		final expected: String = 'class Main {\n'
-			+ '\t@Test @doc("a")\n\tfunction main() {}\n\n' + '\t@Test\n\t@doc("b")\n\tfunction main() {}\n}\n';
+		final expected: String = 'class Main {\n' + '\t@Test @doc("a")\n\tfunction main() {}\n\n'
+			+ '\t@Test\n\t@doc("b")\n\tfunction main() {}\n}\n';
 		Assert.equals(expected, out);
 	}
 
 	public function testForceAfterLastCollapsesInterAndForcesTrailing(): Void {
 		final out: String = render(MetadataLineEndPolicy.ForceAfterLast);
-		final expected: String = 'class Main {\n'
-			+ '\t@Test @doc("a")\n\tfunction main() {}\n\n' + '\t@Test @doc("b")\n\tfunction main() {}\n}\n';
+		final expected: String = 'class Main {\n' + '\t@Test @doc("a")\n\tfunction main() {}\n\n'
+			+ '\t@Test @doc("b")\n\tfunction main() {}\n}\n';
 		Assert.equals(expected, out);
 	}
 

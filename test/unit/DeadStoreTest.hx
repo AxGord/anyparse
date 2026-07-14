@@ -184,8 +184,7 @@ class DeadStoreTest extends Test {
 		// A literal `throw` inside `try` continues at the (unmodeled) catch, which may
 		// read anything — it must not clear liveness like a `return` does.
 		Assert.equals(
-			0,
-			violations('class C { function f():Void { var x = 1; try { x = 2; throw mk(); } catch (e:Dynamic) { trace(x); } } }').length
+			0, violations('class C { function f():Void { var x = 1; try { x = 2; throw mk(); } catch (e:Dynamic) { trace(x); } } }').length
 		);
 	}
 

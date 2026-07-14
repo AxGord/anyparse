@@ -81,10 +81,10 @@ class PatchSliceTest extends Test {
 	public function testFragmentOutsideNodeNotSeen(): Void {
 		// The same fragment exists in g(), but the search region is f() only —
 		// the patch is unambiguous and touches only f's occurrence.
-		final source: String = 'class C {\n'
-			+ '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '\n' + '\tfunction g():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n'
-			+ '\tfunction f():Int {\n' + '\t\treturn 2;\n' + '\t}\n' + '\n' + '\tfunction g():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '\n' + '\tfunction g():Int {\n'
+			+ '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 2;\n' + '\t}\n' + '\n' + '\tfunction g():Int {\n'
+			+ '\t\treturn 1;\n' + '\t}\n' + '}\n';
 		assertPatch(source, BySelector('FnMember:f'), 'return 1;', 'return 2;', expected);
 	}
 

@@ -8,6 +8,7 @@ import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.grammar.haxe.HxMemberDecl;
 
 /**
  * Tests for `@:overload(function...)` metadata args going through the
@@ -116,7 +117,7 @@ class HxOverloadMetaSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('@:overload(function()') >= 0, 'expected default tight `function()` inside `@:overload(...)` in: <$out>');
 	}
 
-	private function expectClassMembers(ast: HxModule) {
+	private function expectClassMembers(ast: HxModule): Array<HxMemberDecl> {
 		return switch ast.decls[0].decl {
 			case ClassDecl(c): c.members;
 			case _: throw 'expected ClassDecl, got ${ast.decls[0].decl}';

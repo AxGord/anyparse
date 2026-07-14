@@ -79,8 +79,9 @@ class RedundantElseCheckTest extends Test {
 	}
 
 	public function testFixDeNestsBlockElse(): Void {
-		final es: Array<{ span: Span, text: String }> =
-			edits('class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tb();\n\t\t}\n\t}\n}');
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tb();\n\t\t}\n\t}\n}'
+		);
 		Assert.equals(1, es.length);
 		Assert.equals('if (a) {\n\t\t\treturn 1;\n\t\t}\nb();', es[0].text);
 	}

@@ -33,10 +33,10 @@ class ExtractVarSliceTest extends Test {
 	 * decl to `var y = t;`.
 	 */
 	public function testExtractBinaryRhsGrabsOutermost(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b * 2;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tfinal t = a + b * 2;\n' + '\t\tvar y = t;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b * 2;\n' + '\t\treturn y;\n'
+			+ '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tfinal t = a + b * 2;\n' + '\t\tvar y = t;\n'
+			+ '\t\treturn y;\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the `a` in `a + b * 2`.
 		assertExtract(source, 3, 11, 't', expected);
 	}
@@ -47,8 +47,8 @@ class ExtractVarSliceTest extends Test {
 	 */
 	public function testExtractCallArgument(): Void {
 		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tg(a + b);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tfinal t = a + b;\n' + '\t\tg(t);\n' + '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tfinal t = a + b;\n' + '\t\tg(t);\n' + '\t}\n'
+			+ '}';
 		// Line 3 col 5 — the `a` inside `g(a + b)`.
 		assertExtract(source, 3, 5, 't', expected);
 	}
@@ -59,10 +59,10 @@ class ExtractVarSliceTest extends Test {
 	 * argument.
 	 */
 	public function testExtractWholeCall(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tvar r = g(a + b);\n' + '\t\ttrace(r);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tfinal t = g(a + b);\n' + '\t\tvar r = t;\n' + '\t\ttrace(r);\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tvar r = g(a + b);\n' + '\t\ttrace(r);\n'
+			+ '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\tfinal t = g(a + b);\n' + '\t\tvar r = t;\n'
+			+ '\t\ttrace(r);\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the `g` callee of `g(a + b)`.
 		assertExtract(source, 3, 11, 't', expected);
 	}
@@ -73,8 +73,8 @@ class ExtractVarSliceTest extends Test {
 	 * inserted above the `if`, whose condition becomes `if (c)`.
 	 */
 	public function testExtractIfCondition(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int):Int {\n' + '\t\tif (a > 0) {\n' + '\t\t\treturn 1;\n' + '\t\t}\n' + '\t\treturn 0;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tif (a > 0) {\n' + '\t\t\treturn 1;\n' + '\t\t}\n'
+			+ '\t\treturn 0;\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int):Int {\n' + '\t\tfinal c = a > 0;\n' + '\t\tif (c) {\n'
 			+ '\t\t\treturn 1;\n' + '\t\t}\n' + '\t\treturn 0;\n' + '\t}\n' + '}';
 		// Line 3 col 7 — the `a` in `if (a > 0)`.
@@ -86,8 +86,8 @@ class ExtractVarSliceTest extends Test {
 	 * the enclosing statement's deeper indent on the hoisted line.
 	 */
 	public function testIndentationPreservedInNestedBlock(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Void {\n' + '\t\twhile (a > 0) {\n' + '\t\t\tg(a + b);\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\twhile (a > 0) {\n' + '\t\t\tg(a + b);\n'
+			+ '\t\t}\n' + '\t}\n' + '}';
 		final expected: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Void {\n' + '\t\twhile (a > 0) {\n'
 			+ '\t\t\tfinal t = a + b;\n' + '\t\t\tg(t);\n' + '\t\t}\n' + '\t}\n' + '}';
 		// Line 4 col 6 — the `a` inside the braced while body's `g(a + b)`.
@@ -100,8 +100,8 @@ class ExtractVarSliceTest extends Test {
 	 * so the enclosing statement is not inside a `{ }` block.
 	 */
 	public function testRefuseBracelessBranchSubExpr(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tif (a > 0) return a + b;\n' + '\t\treturn 0;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tif (a > 0) return a + b;\n' + '\t\treturn 0;\n'
+			+ '\t}\n' + '}';
 		// Line 3 col 21 — the `a` in the braceless then-branch `a + b`.
 		assertRefused(source, 3, 21, 't');
 	}
@@ -111,8 +111,8 @@ class ExtractVarSliceTest extends Test {
 	 * between tokens): no expression node begins there.
 	 */
 	public function testRefuseCursorNotOnExpressionStart(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b;\n' + '\t\treturn y;\n' + '\t}\n'
+			+ '}';
 		// Line 3 col 12 — the space between `a` and `+`.
 		assertRefused(source, 3, 12, 't');
 	}
@@ -122,8 +122,8 @@ class ExtractVarSliceTest extends Test {
 	 * rejected before any source inspection.
 	 */
 	public function testRefuseInvalidName(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfunction f(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b;\n' + '\t\treturn y;\n' + '\t}\n'
+			+ '}';
 		// Line 3 col 11 — the `a`; name `1bad` is not a valid identifier.
 		assertRefused(source, 3, 11, '1bad');
 	}
@@ -146,10 +146,10 @@ class ExtractVarSliceTest extends Test {
 	 * scope exactly like a plain `FnMember` body.
 	 */
 	public function testExtractInsideFinalMethod(): Void {
-		final source: String = 'class C {\n'
-			+ '\tfinal function d(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b * 2;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n'
-			+ '\tfinal function d(a:Int, b:Int):Int {\n' + '\t\tfinal t = a + b * 2;\n' + '\t\tvar y = t;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
+		final source: String = 'class C {\n' + '\tfinal function d(a:Int, b:Int):Int {\n' + '\t\tvar y = a + b * 2;\n' + '\t\treturn y;\n'
+			+ '\t}\n' + '}';
+		final expected: String = 'class C {\n' + '\tfinal function d(a:Int, b:Int):Int {\n' + '\t\tfinal t = a + b * 2;\n'
+			+ '\t\tvar y = t;\n' + '\t\treturn y;\n' + '\t}\n' + '}';
 		// Line 3 col 11 — the `a` in `a + b * 2`.
 		assertExtract(source, 3, 11, 't', expected);
 	}

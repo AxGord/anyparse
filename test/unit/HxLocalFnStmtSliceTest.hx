@@ -98,10 +98,9 @@ class HxLocalFnStmtSliceTest extends HxTestHelpers {
 	// --- dogfood shape: typed inline helper between statements ---
 
 	public function testDogfoodInlineHelperPattern(): Void {
-		final body: Array<HxStatement> =
-			parseBody(
-				'class C { function f():Void { inline function addEdge(from:String, to:String):Void { trace(from); } addEdge("a", "b"); } }'
-			);
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f():Void { inline function addEdge(from:String, to:String):Void { trace(from); } addEdge("a", "b"); } }'
+		);
 		Assert.equals(2, body.length);
 		final decl: HxFnDecl = expectInlineLocalFn(body[0]);
 		Assert.equals('addEdge', (decl.name: String));

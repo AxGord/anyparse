@@ -77,14 +77,12 @@ class HxAnonFuncParensOptionsTest extends Test {
 		// Declaration-form `function m()` follows `funcParamParens` (None
 		// by default), independent of `anonFuncParens`. Flipping the anon
 		// knob to Before must NOT add a space inside the declaration.
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith('class C { static function m() { trace(0); } }', policy);
 			Assert.isTrue(
 				out.indexOf('function m()') != -1, 'fn-decl `function m()` should stay tight under anonFuncParens=$policy in: <$out>'

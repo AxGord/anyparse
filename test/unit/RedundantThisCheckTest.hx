@@ -70,8 +70,9 @@ class RedundantThisCheckTest extends Test {
 	}
 
 	public function testSkipParseNoCrash(): Void {
-		Assert.equals(0, new RedundantThis().run([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }], new HaxeQueryPlugin())
-			.length);
+		Assert.equals(
+			0, new RedundantThis().run([{ file: 'Bad.hx', source: 'class Bad { function f() { ' }], new HaxeQueryPlugin()).length
+		);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

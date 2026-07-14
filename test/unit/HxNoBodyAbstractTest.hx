@@ -37,7 +37,7 @@ class HxNoBodyAbstractTest extends HxTestHelpers {
 		final out: Array<HxFnDecl> = [];
 		for (mb in iface.members) {
 			final member: HxClassMember = mb.member;
-			out.push(switch member {
+			out.push( switch member {
 				case FnMember(d): d;
 				case _: throw 'expected FnMember';
 			});

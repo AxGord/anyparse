@@ -69,14 +69,12 @@ final class HxTypedefAssignOptionsTest extends Test {
 
 	public function testVarInitAssignStaysSpacedRegardlessOfTypedefPolicy(): Void {
 		final src: String = 'class C { var x:Int = 0; }';
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith(src, policy);
 			Assert.isTrue(out.indexOf('var x:Int = 0;') != -1, 'var init `=` should stay spaced under typedefAssign $policy in: <$out>');
 		}
@@ -84,14 +82,12 @@ final class HxTypedefAssignOptionsTest extends Test {
 
 	public function testFunctionParamDefaultStaysSpacedRegardlessOfTypedefPolicy(): Void {
 		final src: String = 'class C { function f(x:Int = 0):Void {} }';
-		for (
-			policy in [
-				WhitespacePolicy.None,
-				WhitespacePolicy.Before,
-				WhitespacePolicy.After,
-				WhitespacePolicy.Both
-			]
-		) {
+		for (policy in [
+			WhitespacePolicy.None,
+			WhitespacePolicy.Before,
+			WhitespacePolicy.After,
+			WhitespacePolicy.Both
+		]) {
 			final out: String = writeWith(src, policy);
 			Assert.isTrue(out.indexOf('x:Int = 0') != -1, 'param default `=` should stay spaced under typedefAssign $policy in: <$out>');
 		}

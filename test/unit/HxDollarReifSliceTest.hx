@@ -146,7 +146,9 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// verbatim in the HxFieldNameLit slice, so the writer's
 		// `'.' + field` emission round-trips byte-for-byte with no
 		// format-side change (Slice 4).
-		roundTrip("class C { static function f() { if ($struct.$name == null) $struct.$name = obj.observables.$name; } }", 'L-dollar-field');
+		roundTrip(
+			"class C { static function f() { if ($struct.$name == null) $struct.$name = obj.observables.$name; } }", 'L-dollar-field'
+		);
 	}
 
 	// -------- $-reification in TYPE position (Slice apq-P5-T) --------

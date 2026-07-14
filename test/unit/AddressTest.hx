@@ -203,8 +203,7 @@ class AddressTest extends Test {
 		switch Address.resolve(tree, SRC, plugin, { select: 'VarStmt:x' }) {
 			case Ok(_, node):
 				final n: Null<QueryNode> = node;
-				if (n != null)
-					Assert.equals('VarStmt:x', Address.describe(tree, SRC, n, plugin.selectKindEquivalence()));
+				if (n != null) Assert.equals('VarStmt:x', Address.describe(tree, SRC, n, plugin.selectKindEquivalence()));
 			case Err(message):
 				Assert.fail(message);
 		}
@@ -236,8 +235,7 @@ class AddressTest extends Test {
 		switch Address.resolve(tree, src, plugin, { select: 'FnMember:g >> VarStmt:v' }) {
 			case Ok(_, node):
 				final n: Null<QueryNode> = node;
-				if (n != null)
-					Assert.equals('FnMember:g >> VarStmt:v', Address.describe(tree, src, n, plugin.selectKindEquivalence()));
+				if (n != null) Assert.equals('FnMember:g >> VarStmt:v', Address.describe(tree, src, n, plugin.selectKindEquivalence()));
 			case Err(message):
 				Assert.fail(message);
 		}

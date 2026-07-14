@@ -113,8 +113,7 @@ class DeadNullGuardTest extends Test {
 	 */
 	public function testIfElseJoinNarrowing(): Void {
 		Assert.equals(
-			1,
-			violations('class C { function f(?x:Foo) { if (c()) x = new Foo(); else x = new Foo(); if (x != null) trace(x); } }').length
+			1, violations('class C { function f(?x:Foo) { if (c()) x = new Foo(); else x = new Foo(); if (x != null) trace(x); } }').length
 		);
 	}
 
@@ -276,8 +275,7 @@ class DeadNullGuardTest extends Test {
 	public function testCondWriteStaleNarrowingNotFlagged(): Void {
 		// The condition writes x after comparing it — its narrowing is stale, the inner guard is live.
 		Assert.equals(
-			0,
-			violations('class C { function f(?x:String) { if (x != null && (x = null) == null) { if (x != null) trace(x); } } }').length
+			0, violations('class C { function f(?x:String) { if (x != null && (x = null) == null) { if (x != null) trace(x); } } }').length
 		);
 	}
 
