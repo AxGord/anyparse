@@ -5987,7 +5987,7 @@ class WriterLowering {
 				final _sc: String = Type.enumConstructor(cast $firstArgNode);
 				_sc == 'SwitchExpr' || _sc == 'SwitchExprBare';
 			};
-			callInsideOpen = macro $firstArgSwitch ? _dt(' ') : $callInsideOpen;
+			callInsideOpen = macro $firstArgSwitch ? _dop(' ') : $callInsideOpen;
 		}
 		return { open: callInsideOpen, close: callInsideClose };
 	}

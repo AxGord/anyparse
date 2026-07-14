@@ -34,7 +34,7 @@ class HxTriviaParseTest extends Test {
 	// inline `switch fn.body { case BlockBody(b): b.stmts; case _: throw }`
 	// to extract the Trivial-wrapped statement array (`b` is the
 	// paired `HxFnBlockT` carrying the trivia + orphan slots).
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testLeadingLineCommentOnDecl(): Void {
 		final source: String = '// hello world\nclass Foo {}';

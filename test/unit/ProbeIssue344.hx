@@ -19,7 +19,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class ProbeIssue344 extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testIssue344(): Void {
 		final src: String = '#if js\n'

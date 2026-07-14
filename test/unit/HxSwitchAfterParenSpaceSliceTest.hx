@@ -77,4 +77,19 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
 	}
 
+
+	// Regression (ω-switch-after-paren trailing-space): a switch-FIRST call arg
+	// that WRAPS with a leading break (a second arg forces one-per-line) must
+	// NOT leave the switch-after-paren space as trailing whitespace before the
+	// break — the open `(` sits alone on its line (`caller(` + newline), not
+	// `caller( ` + newline. The openInside space is an `OptSpace`, which the
+	// renderer drops before a break-mode `Line`.
+	public function testCallArgSwitchWrapDropsTrailingSpace(): Void {
+		final cfg: String = '{"whitespace": {"switchPolicy": "around"}, "wrapping": {"callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}}';
+		final input: String = 'class C {\n\tfunction m() {\n\t\tcaller(switch mode { case One: alpha; case Two: beta; }, other);\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction m() {\n\t\tcaller(\n\t\t\tswitch mode {\n\t\t\t\tcase One: alpha;\n\t\t\t\tcase Two: beta;\n\t\t\t},\n\t\t\tother\n\t\t);\n\t}\n}\n';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts));
+	}
+
 }

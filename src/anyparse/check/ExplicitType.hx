@@ -12,12 +12,14 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 
+using Lambda;
+
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
  * field with no `:Type`, a function parameter with no `:Type`, or a function with
  * no return type. Stating types everywhere is a documented project rule; the check
  * holds without a type-checker because the omission is purely syntactic.
- * A conservative autofix fills in a statically-certain initializer type; the rest stays report-only.
+ * A conservative autofix fills in a statically-certain initializer type, plus a : Void return type when a block-bodied function has no value-return in its own scope (nested functions and lambdas excluded); the rest stays report-only.
  *
  * ## Grammar-agnostic
  *
@@ -111,6 +113,17 @@ final class ExplicitType implements Check {
 			if (typeSource == null) continue;
 			final at: Int = insertPoint(node, node.children[0], source);
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
+		}
+		// Void return-type pass: annotate a flagged function `: Void` when its own scope
+		// holds no value-return — nested functions and lambdas do not count.
+		final memberKinds: Array<String> = shape.memberDeclKinds ?? [];
+		final functions: Array<String> = [for (k in memberKinds) if (!fields.contains(k)) k];
+		final valueReturns: Array<String> = shape.valueReturnKinds ?? [];
+		final blockBody: Null<String> = shape.blockBodyKind;
+		if (functions.length > 0 && valueReturns.length > 0 && blockBody != null) {
+			final stop: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
+			final flagged: Array<String> = [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}'];
+			collectVoidEdits(tree, source, functions, memberKinds, valueReturns, stop, blockBody, shape.macroModifierKind, flagged, edits);
 		}
 		return edits;
 	}
@@ -267,6 +280,76 @@ final class ExplicitType implements Check {
 		var pos: Int = span.from + eq;
 		while (pos > span.from && StringTools.isSpace(source, pos - 1)) pos--;
 		return pos;
+	}
+
+
+	/**
+	 * Collect a `: Void` return-type edit for every flagged function in `node`'s subtree
+	 * whose body is a block with no value-return in its own scope. `sawMacro` tracks
+	 * whether a `macro` modifier precedes a function within its sibling modifier run — a
+	 * macro function returns `Expr` implicitly, so it is left report-only. Reset at each
+	 * member so one member's modifiers never leak to the next.
+	 */
+	private static function collectVoidEdits(
+		node: QueryNode, source: String, functions: Array<String>, members: Array<String>, valueReturns: Array<String>,
+		stop: Array<String>, blockBody: String, macroKind: Null<String>, flaggedKeys: Array<String>,
+		edits: Array<{ span: Span, text: String }>
+	): Void {
+		var sawMacro: Bool = false;
+		for (child in node.children) {
+			if (macroKind != null && child.kind == macroKind)
+				sawMacro = true;
+			else {
+				if (!sawMacro && functions.contains(child.kind)) voidEdit(child, source, valueReturns, stop, blockBody, flaggedKeys, edits);
+				if (members.contains(child.kind)) sawMacro = false;
+			}
+			collectVoidEdits(child, source, functions, members, valueReturns, stop, blockBody, macroKind, flaggedKeys, edits);
+		}
+	}
+
+	/**
+	 * Append a `: Void` return-type edit for `fn` when it is a flagged function whose body
+	 * is a `{ … }` block holding no value-return in its own scope. An unflagged function,
+	 * an expression-bodied or bodyless member, or a function with a value-return reachable
+	 * without crossing a nested function / lambda is left untouched.
+	 */
+	private static function voidEdit(
+		fn: QueryNode, source: String, valueReturns: Array<String>, stop: Array<String>, blockBody: String, flaggedKeys: Array<String>,
+		edits: Array<{ span: Span, text: String }>
+	): Void {
+		final span: Null<Span> = fn.span;
+		if (span == null || !flaggedKeys.contains('${span.from}:${span.to}')) return;
+		final body: Null<QueryNode> = fn.children.find(c -> c.kind == blockBody);
+		if (body == null || hasOwnValueReturn(body, valueReturns, stop)) return;
+		final at: Int = voidInsertPoint(span.from, body, source);
+		if (at >= 0) edits.push({ span: new Span(at, at), text: ':Void' });
+	}
+
+
+	/**
+	 * Whether `node`'s subtree holds a value-return in the SAME function scope —
+	 * descending through blocks / branches / loops / try-catch but stopping at a nested
+	 * function or lambda (`stop`), whose returns belong to that inner scope. A bare
+	 * `return;` is not a value-return and never matches.
+	 */
+	private static function hasOwnValueReturn(node: QueryNode, valueReturns: Array<String>, stop: Array<String>): Bool {
+		return node.children.exists(
+			child -> !stop.contains(child.kind) && (valueReturns.contains(child.kind) || hasOwnValueReturn(child, valueReturns, stop))
+		);
+	}
+
+	/**
+	 * The offset right after the parameter list's `)` — where `: Void` is inserted, before
+	 * the body — found by scanning back from the block body's `{` to the closing `)`.
+	 * Returns -1 when no `)` precedes the body within the function (never expected for a
+	 * well-formed declaration).
+	 */
+	private static function voidInsertPoint(lo: Int, body: QueryNode, source: String): Int {
+		final bodySpan: Null<Span> = body.span;
+		if (bodySpan == null) return -1;
+		var pos: Int = bodySpan.from;
+		while (pos > lo && StringTools.fastCodeAt(source, pos - 1) != ')'.code) pos--;
+		return pos > lo ? pos : -1;
 	}
 
 }

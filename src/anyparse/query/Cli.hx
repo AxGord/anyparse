@@ -1232,13 +1232,30 @@ final class Cli {
 			sourceOf[path] = fileSource;
 		}
 
-		final lintConfig: LintConfig = LintConfig.discover(paths[0] ?? '.');
-		final activeChecks: Array<Check> = o.ruleFilters.length == 0 ? [
-			for (c in checks) if (lintConfig.enabledFor(c.id())) c
+		// Per-file config: discover an apqlint.json by walking up from EACH linted
+		// file's directory, memoised per directory so a large run walks the tree once
+		// per directory, not once per file. Mirrors the per-file hxformat.json the
+		// writer-emit ops discover; a single-config project resolves the same config
+		// for every file, so behaviour there is unchanged.
+		final configByDir: Map<String, LintConfig> = [];
+		final resolveConfig: (String) -> LintConfig = function(file: String): LintConfig {
+			final dir: String = haxe.io.Path.directory(file);
+			final cached: Null<LintConfig> = configByDir[dir];
+			if (cached != null) return cached;
+			final discovered: LintConfig = LintConfig.discover(file);
+			configByDir[dir] = discovered;
+			return discovered;
+		};
+		// An explicit --rule selection bypasses `enabled:false` (existing semantics);
+		// otherwise a check runs when it is enabled for at least one file, and
+		// `Linter.run` drops its findings on the files that disable it.
+		final applyEnablement: Bool = o.ruleFilters.length == 0;
+		final activeChecks: Array<Check> = applyEnablement ? [
+			for (c in checks) if (Lambda.exists(files, f -> resolveConfig(f.file).enabledFor(c.id()))) c
 		] : checks;
-		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, lintConfig);
+		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, resolveConfig, applyEnablement);
 
-		if (o.fix) return applyLintFixes(files, activeChecks, plugin, lintConfig);
+		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement);
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat);
@@ -1274,7 +1291,8 @@ final class Cli {
 	 * Exit is always success — `--fix` is best-effort.
 	 */
 	private static function applyLintFixes(
-		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, lintConfig: LintConfig
+		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
+		applyEnablement: Bool
 	): Int {
 		final maxPasses: Int = 10;
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
@@ -1314,7 +1332,8 @@ final class Cli {
 			}
 			passes++;
 			final pass: LintPassResult = applyLintPass(
-				active, files, cached, activeScopeChecks, fullScopeChecks, checks, lintConfig, optsByFile, passes, noted, changedFiles
+				active, files, cached, activeScopeChecks, fullScopeChecks, checks, resolveConfig, applyEnablement, optsByFile, passes,
+				noted, changedFiles
 			);
 			fixedCount += pass.fixedDelta;
 			active = pass.nextActive;
@@ -10844,14 +10863,14 @@ final class Cli {
 	 */
 	private static function applyLintPass(
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: GrammarPlugin,
-		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, lintConfig: LintConfig,
-		optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>
+		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
+		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>
 	): LintPassResult {
 		// Rebuild over the CURRENT (mutated) sources — naming's cross-file
 		// rename consults the index, so it must reflect this pass's input.
 		final index: SymbolIndex = SymbolIndex.build(files, cached);
-		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, lintConfig);
-		for (v in Linter.run(files, cached, fullScopeChecks, lintConfig)) violations.push(v);
+		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
+		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		final nextActive: Array<{ file: String, source: String }> = [];
 		var fixedDelta: Int = 0;
 		for (entry in active) {

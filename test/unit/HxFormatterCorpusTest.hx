@@ -46,8 +46,8 @@ import anyparse.runtime.ParseError;
 @:nullSafety(Strict)
 class HxFormatterCorpusTest extends Test {
 
-	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	private static inline final SAMELINE_SUBDIR: String = 'test/testcases/sameline';
 	private static inline final WHITESPACE_SUBDIR: String = 'test/testcases/whitespace';
@@ -218,9 +218,7 @@ class HxFormatterCorpusTest extends Test {
 				sweepFixtures.push({ path: relPath, status: 'SKIP_WRITE' });
 				continue;
 			};
-			final actual: String = actualRaw.length > 0 && StringTools.fastCodeAt(actualRaw, actualRaw.length - 1) == '\n'.code
-				? actualRaw.substr(0, actualRaw.length - 1)
-				: actualRaw;
+			final actual: String = stripTrailingNewline(actualRaw);
 			if (actual == tc.expected) {
 				pass++;
 				sweepFixtures.push({ path: relPath, status: 'PASS' });
@@ -287,7 +285,7 @@ class HxFormatterCorpusTest extends Test {
 			if (Reflect.hasField(obj, 'fail') && Std.isOfType(Reflect.field(obj, 'fail'), Int)) prevFail = Reflect.field(obj, 'fail');
 			if (Reflect.hasField(obj, 'skipParse') && Std.isOfType(Reflect.field(obj, 'skipParse'), Int))
 				prevSkipParse = Reflect.field(obj, 'skipParse');
-		} catch (_: Exception) {}
+		} catch (_: Exception) {/* prior snapshot unreadable/malformed — no baseline delta */}
 		final deltaStr: String = if (prevPass != null && prevFail != null && prevSkipParse != null) {
 			final dPass: Int = sweepPass - (prevPass: Int);
 			final dFail: Int = sweepFail - (prevFail: Int);
@@ -325,9 +323,9 @@ class HxFormatterCorpusTest extends Test {
 			if (FileSystem.exists(SWEEP_JSON_PATH)) try {
 				final prior: String = sys.io.File.getContent(SWEEP_JSON_PATH);
 				sys.io.File.saveContent(SWEEP_PREV_PATH, prior);
-			} catch (_: Exception) {}
+			} catch (_: Exception) {/* prior snapshot unreadable — skip its backup */}
 			sys.io.File.saveContent(SWEEP_JSON_PATH, json);
-		} catch (_: Exception) {}
+		} catch (_: Exception) {/* snapshot write failed — non-fatal for this run */}
 		#end
 	}
 
@@ -359,7 +357,7 @@ class HxFormatterCorpusTest extends Test {
 					for (item in arr) if (Std.isOfType(item, String) && (item: String) == relPath) return true;
 				}
 			}
-		} catch (_: Exception) {}
+		} catch (_: Exception) {/* malformed config JSON — treat as not-excluded */}
 		return false;
 	}
 
@@ -422,6 +420,15 @@ class HxFormatterCorpusTest extends Test {
 			}
 		}
 		return buf.toString();
+	}
+
+	/**
+	 * Strips a single trailing `\n` from `s` (writer output normalisation for
+	 * the fixture comparison). Pulled out of `runCategory` to keep that driver
+	 * under the cyclomatic-complexity budget.
+	 */
+	private static function stripTrailingNewline(s: String): String {
+		return s.length > 0 && StringTools.fastCodeAt(s, s.length - 1) == '\n'.code ? s.substr(0, s.length - 1) : s;
 	}
 
 }

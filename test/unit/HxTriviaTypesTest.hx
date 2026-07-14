@@ -48,7 +48,7 @@ class HxTriviaTypesTest extends Test {
 	// any `*T` reference. Without this forced reference the typing
 	// order between the marker class and the synth module is
 	// implementation-defined.
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testMarkerClassBuilds(): Void {
 		// Calling parse() proves the @:build pipeline completed without

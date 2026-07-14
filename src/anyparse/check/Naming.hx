@@ -145,14 +145,15 @@ final class Naming implements Check {
 
 	/**
 	 * Is the rename of `decl`'s binding provably complete within `source`?
-	 * Function-body-scoped bindings always are; a private field is only when the
-	 * cross-file `index` plus in-file checks prove it cannot be referenced from
-	 * outside its file. Every other category (types, public members) is not.
+	 * Function-body-scoped bindings always are; a private field or private
+	 * static-final constant is only when the cross-file `index` plus in-file
+	 * checks prove it cannot be referenced from outside its file. Every other
+	 * category (types, public members) is not.
 	 */
 	private static function isRenameSafe(decl: NamedDecl, source: String, index: Null<SymbolIndex>): Bool {
 		final category: NamingCategory = decl.category;
 		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
-		if (category == NamingCategory.Field && !decl.mods.contains('public') && index != null) {
+		if ((category == NamingCategory.Field || category == NamingCategory.Constant) && !decl.mods.contains('public') && index != null) {
 			final owner: Null<String> = decl.enclosingType;
 			return owner != null && RefactorSupport.isPrivateMemberConfined(owner, source, index);
 		}

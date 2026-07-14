@@ -29,8 +29,8 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class HxAfterLeftCurlySliceTest extends Test {
 
-	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testDefaultOptionsKeepAfterLeftCurly(): Void {
 		Assert.equals(KeepEmptyLinesPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.afterLeftCurly);

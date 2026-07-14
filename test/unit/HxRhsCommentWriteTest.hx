@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxRhsCommentWriteTest extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testComparisonTrailingBlockComment(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar a = x == y /* eq */;\n\t}\n}';

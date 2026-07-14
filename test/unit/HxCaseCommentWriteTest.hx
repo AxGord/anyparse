@@ -13,7 +13,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCaseCommentWriteTest extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testCaseLabelLineCommentStaysOnColonLine(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: // note\n\t\t\t\trun();\n\t\t}\n\t}\n}';

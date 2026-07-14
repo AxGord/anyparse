@@ -191,9 +191,58 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(0, fixCount('class C { var a = c ? 1 : 2; }'));
 	}
 
-	public function testFixSkipsMissingReturnType(): Void {
-		// A missing return type needs inference over the body — never annotated by this fix.
-		Assert.equals(0, fixCount('class C { public function f() {} }'));
+	public function testFixVoidMethodAnnotated(): Void {
+		// A block-bodied method with no return at all returns Void.
+		final out: String = applyFix('class C { public function f() {} }');
+		Assert.isTrue(out.indexOf('f():Void') != -1, 'got: $out');
+	}
+
+	public function testFixVoidMethodWithBareReturn(): Void {
+		// A bare `return;` is not a value-return — the method is still Void.
+		final out: String = applyFix('class C { public function f() { if (a) return; } }');
+		Assert.isTrue(out.indexOf('f():Void') != -1, 'got: $out');
+	}
+
+	public function testFixSkipsValueReturn(): Void {
+		// `return 5;` is a value-return — its type is unknown without inference, so skip.
+		Assert.equals(0, fixCount('class C { public function f() { return 5; } }'));
+	}
+
+	public function testFixSkipsValueReturnInExpression(): Void {
+		// A `return <expr>` in expression position (`ReturnExpr`, inside a ternary) is still
+		// a value-return in the function's own scope — must not be annotated Void.
+		Assert.equals(0, fixCount('class C { public function f() { var y = c ? return 5 : 3; } }'));
+	}
+
+	public function testFixVoidDespiteLambdaValueReturn(): Void {
+		// The lambda's `return x` belongs to the lambda, not to `f` — `f`'s own scope has no
+		// value-return, so it is Void. The critical do-not-descend-into-lambdas case.
+		final src: String = 'class C { public function f() { arr.map(x -> { return x; }); } }';
+		Assert.equals(1, fixCount(src));
+		Assert.isTrue(applyFix(src).indexOf('f():Void') != -1, 'got: ${applyFix(src)}');
+	}
+
+	public function testFixVoidDespiteNestedLocalFnValueReturn(): Void {
+		// The nested local function's `return 7` is its own; `f` is Void. Only `f` is fixed.
+		final src: String = 'class C { public function f() { function g() { return 7; } g(); } }';
+		Assert.equals(1, fixCount(src));
+		Assert.isTrue(applyFix(src).indexOf('f():Void') != -1, 'got: ${applyFix(src)}');
+	}
+
+	public function testFixSkipsMacroFunction(): Void {
+		// A macro function returns `Expr` implicitly — annotating Void would break it.
+		Assert.equals(0, fixCount('class C { macro static function f() {} }'));
+	}
+
+	public function testFixSkipsExpressionBodyReturn(): Void {
+		// An expression-bodied `function f() return 5;` is a value-return — report-only.
+		Assert.equals(0, fixCount('class C { public function f() return 5; }'));
+	}
+
+	public function testFixSkipsExpressionBodyBareCall(): Void {
+		// An expression-bodied `function f() expr;` has an unknown return type — skip; only a
+		// `{ … }` block body is annotated. Guards the block-body restriction.
+		Assert.equals(0, fixCount('class C { public function f() trace("x"); }'));
 	}
 
 	public function testFixSkipsUntypedParamNoDefault(): Void {

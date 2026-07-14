@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCallArgCommentWriteTest extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testEmptyCallArgInnerBlockCommentRoundTrip(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(/* null */);\n\t}\n}';

@@ -64,7 +64,7 @@ class LintConfigTest extends Test {
 		Assert.equals(Severity.Warning, base[0].severity, 'unused-import is Warning by default');
 
 		final promoted: Array<Violation> = Linter.run(
-			files, plugin, [new UnusedImport()], LintConfig.parse('{"rules":{"unused-import":{"severity":"error"}}}')
+			files, plugin, [new UnusedImport()], (_) -> LintConfig.parse('{"rules":{"unused-import":{"severity":"error"}}}')
 		);
 		Assert.equals(1, promoted.length);
 		Assert.equals(Severity.Error, promoted[0].severity, 'the config promotes it to Error');

@@ -28,8 +28,8 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCondCompStmtTrailOptSliceTest extends Test {
 
-	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testVarStmtCallRhsInsideIfEndKeepsSemiTight(): Void {
 		roundTrip(

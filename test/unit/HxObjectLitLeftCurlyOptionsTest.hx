@@ -27,8 +27,8 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxObjectLitLeftCurlyOptionsTest extends Test {
 
-	private static final _forceParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function new(): Void {
 		super();

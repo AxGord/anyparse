@@ -16,7 +16,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCondElseifChainBlankTest extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testStmtChainNoSpuriousBlank(): Void {
 		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#elseif d\n\t\treturn 4;\n\t\t#end\n\t}\n}';

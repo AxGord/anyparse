@@ -501,8 +501,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			publicDefaultMetaNames: ['@:publicFields'],
 			mutableFieldDeclKinds: ['VarMember'],
 			voidReturnKind: 'VoidReturnStmt',
-			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
-			negationKind: 'Neg',
+			valueReturnKinds: ['ReturnStmt', 'ReturnExpr'],
+			blockBodyKind: 'BlockBody',
 			literalTypeNames: [
 				'IntLit' => 'Int',
 				'HexLit' => 'Int',
@@ -511,6 +511,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'SingleStringExpr' => 'String',
 				'DoubleStringExpr' => 'String'
 			],
+			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
+			negationKind: 'Neg',
 			objectFieldKind: 'Field',
 			sizeFieldNames: ['length'],
 			positionMethodNames: ['substr', 'substring', 'charAt', 'charCodeAt', 'indexOf', 'lastIndexOf', 'hex'],

@@ -406,6 +406,7 @@ import unit.EncapsulateFieldSliceTest;
 import unit.MakeFinalSliceTest;
 import unit.IntroduceParameterObjectSliceTest;
 import unit.PreferEnumAbstractCheckTest;
+import unit.LintPerFileConfigCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -413,7 +414,7 @@ import unit.PreferEnumAbstractCheckTest;
 **/
 class RunTests {
 
-	public static function main() {
+	public static function main(): Void {
 		final runner = new utest.Runner();
 
 		// Optional test-class filter for a fast dev inner-loop: APQ_TEST is a
@@ -727,6 +728,7 @@ class RunTests {
 		addCase(new SymbolIndexSliceTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());
+		addCase(new LintPerFileConfigCliTest());
 		addCase(new LintFixFixedPointCliTest());
 		addCase(new LintConfigTest());
 		addCase(new LintSliceTest());

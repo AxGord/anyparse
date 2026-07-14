@@ -20,7 +20,7 @@ import anyparse.format.CommentEmptyLinesPolicy;
  */
 class Probe147 extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testIssue147(): Void {
 		final src: String = 'extern class Selection {\n\t/**\n\t * A.\n\t */\n\tvar isReversed:Bool;\n\n\t/**\n\t * B.\n\t */\n\t// foo\n\tfunction new():Void;\n\n\t/**\n\t * C.\n\t */\n\t// foo\n\t// foo\n\tfunction main():Void;\n\n\t/**\n\t * D.\n\t */\n\t// foo\n\t// foo\n\t/**\n\t * E.\n\t */\n\tfunction main2():Void;\n}\n';

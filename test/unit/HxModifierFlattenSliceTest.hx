@@ -28,8 +28,8 @@ import anyparse.grammar.haxe.HxModuleWriter;
  */
 class HxModifierFlattenSliceTest extends Test {
 
-	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-	private static final _forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	// -- Trivia pipeline: multi-line modifier list FLATTENS to single line --
 

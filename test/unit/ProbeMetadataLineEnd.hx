@@ -15,7 +15,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  */
 class ProbeMetadataLineEnd extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	private static final SRC: String = 'class Main {\n'
 		+ '\t@Test @doc("a") function main() {}\n\n' + '\t@Test\n\t@doc("b") function main() {}\n}\n';

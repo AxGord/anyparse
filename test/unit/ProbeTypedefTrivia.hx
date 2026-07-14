@@ -21,7 +21,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
  */
 class ProbeTypedefTrivia extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testIssue216PreservesDocCommentAfterUnsemicolonedTypedef(): Void {
 		final src: String = 'typedef Foo = Int\n\n/** Docs for Bar **/\ntypedef Bar = Float\n';

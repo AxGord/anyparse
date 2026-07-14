@@ -73,7 +73,8 @@ final class HaxeNamingSupport implements NamingSupport {
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^([A-Z][A-Z0-9_]*|[a-z][a-zA-Z0-9]*)$", ''),
-				label: 'UPPER_SNAKE or camelCase static final'
+				label: 'UPPER_SNAKE or camelCase static final',
+				normalize: stripUnderscorePrefix
 			},
 			{
 				category: NamingCategory.Field,
@@ -216,6 +217,22 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
 		return name.length == 0 ? null : '_' + name.charAt(0).toLowerCase() + name.substr(1);
+	}
+
+	/**
+	 * The mechanical fix for a static final wrongly given a private-field `_`
+	 * prefix (`_forceBuild`): strip the leading underscore(s), keeping the result
+	 * only when it is a valid camelCase identifier (`_forceBuild` → `forceBuild`).
+	 * A stripped name that is not camelCase (`_FORCE_build`, `_foo_bar`) has no
+	 * mechanical correction → null (report-only). Not `inline` — passed as a
+	 * `NamingRule.normalize` function value.
+	 */
+	private static function stripUnderscorePrefix(name: String): Null<String> {
+		var i: Int = 0;
+		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
+		if (i == 0) return null;
+		final stripped: String = name.substr(i);
+		return new EReg("^[a-z][a-zA-Z0-9]*$", '').match(stripped) ? stripped : null;
 	}
 
 	/**

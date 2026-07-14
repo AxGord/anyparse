@@ -1099,6 +1099,25 @@ typedef RefShape = {
 	 */
 	@:optional var literalTypeNames: Map<String, String>;
 
+	/**
+	 * Node kinds that constitute a value-returning `return <expr>` — both the statement
+	 * form (`ReturnStmt`) and the expression form (`ReturnExpr`, e.g. a `return` inside
+	 * a ternary or an expression-bodied function). The `explicit-type` autofix infers a
+	 * `: Void` return type only when a function's own scope holds NONE of these; a bare
+	 * `return;` (the separate `voidReturnKind`) does not count. Optional; unset disables
+	 * the Void return-type inference.
+	 */
+	@:optional var valueReturnKinds: Array<String>;
+
+	/**
+	 * The block-body node kind (`BlockBody`) — a function whose body is a `{ … }` block.
+	 * The `explicit-type` autofix infers a `: Void` return type only for such functions;
+	 * an expression-bodied (`function f() expr;`) or bodyless (interface / extern) member
+	 * is left report-only, its return type being uncertain. Optional; unset disables the
+	 * Void return-type inference.
+	 */
+	@:optional var blockBodyKind: String;
+
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

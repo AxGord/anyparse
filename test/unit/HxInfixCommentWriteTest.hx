@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxInfixCommentWriteTest extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testInfixLeadingLineCommentForcesWrap(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar s = a // note\n\t\t\t+ b;\n\t}\n}';

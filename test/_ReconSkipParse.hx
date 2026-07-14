@@ -30,9 +30,11 @@ typedef ReconCluster = {
 	var rawSample: String;
 };
 
-final class _ReconSkipParse {
+// Deliberate recon fixture: the leading-underscore type name mirrors a skip-parse
+// probe subject and is intentional, not a real naming-convention violation.
+final class _ReconSkipParse { // noqa: naming
 
-	private static final _forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	private static final SUBDIRS: Array<String> = [
 		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',
@@ -44,7 +46,9 @@ final class _ReconSkipParse {
 	private static inline final TOP_N_DEFAULT: Int = 30;
 	private static inline final EXAMPLES_PER_CLUSTER: Int = 2;
 
-	public static function main(): Void {
+	// Recon driver: the dense arg-parse + per-bucket sweep loop is intentional for a
+	// throwaway fixture, so the elevated cyclomatic complexity is accepted here.
+	public static function main(): Void { // noqa: complexity
 		final args: Array<String> = Sys.args();
 		// Parse args: `--top N` / `--all` are flags for sweep-mode; any
 		// non-flag arg is the single-file probe path.

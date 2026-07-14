@@ -109,9 +109,17 @@ final class Linter {
 	 * return all violations, check by check in registry order. A check
 	 * must be skip-parse tolerant (see `Check`); the linter does not catch
 	 * per-check exceptions.
+	 *
+	 * `resolveConfig` maps a file path to the `apqlint.json` in effect there
+	 * (walk-up discovered, per-directory memoised by the caller): each finding
+	 * is remapped to its own file's configured severity, and — unless
+	 * `applyEnablement` is false, as it is for an explicit `--rule` selection —
+	 * dropped when that file disables its rule. A null resolver leaves every
+	 * finding untouched.
 	 */
 	public static function run(
-		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>, ?config: LintConfig
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>,
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
 		// Parse each file once and share the trees across all checks — each check
@@ -119,11 +127,20 @@ final class Linter {
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
 		final out: Array<Violation> = [];
 		for (check in active) for (violation in check.run(files, cached)) out.push(violation);
-		if (config != null) for (violation in out) {
-			final sev: Null<Severity> = config.severityFor(violation.rule);
-			if (sev != null) violation.severity = sev;
+		if (resolveConfig == null) return Suppression.apply(out, files);
+		// Per-file config: resolve the apqlint.json for each finding's OWN file, drop
+		// it when its rule is disabled there (unless an explicit --rule selection
+		// bypasses enablement), then apply that file's severity override.
+		final kept: Array<Violation> = [];
+		for (violation in out) {
+			final config: LintConfig = resolveConfig(violation.file);
+			if (!applyEnablement || config.enabledFor(violation.rule)) {
+				final sev: Null<Severity> = config.severityFor(violation.rule);
+				if (sev != null) violation.severity = sev;
+				kept.push(violation);
+			}
 		}
-		return Suppression.apply(out, files);
+		return Suppression.apply(kept, files);
 	}
 
 }

@@ -14,7 +14,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  */
 class HxCondCommentWriteTest extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
+	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testElseBranchLeadingComment(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\t#if a\n\t\treturn 0;\n\t\t#else\n\t\t// note\n\t\treturn 1;\n\t\t#end\n\t}\n}';

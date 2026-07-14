@@ -12,7 +12,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
  */
 class AllmanProbe extends Test {
 
-	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
+	private static final forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testAllmanEmptyClass(): Void {
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse('class Main\n{\n}');
