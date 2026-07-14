@@ -1110,6 +1110,15 @@ typedef RefShape = {
 	@:optional var valueReturnKinds: Array<String>;
 
 	/**
+	 * Node kinds that constitute a `throw` (Haxe `ThrowStmt` / `ThrowExpr`). The
+	 * `explicit-type` autofix skips its `: Void` inference for a function whose own
+	 * scope contains one: a throw-only body unifies with any return type, so
+	 * annotating `: Void` would break a caller that uses the call as a value.
+	 * Optional; unset disables the throw guard.
+	 */
+	@:optional var throwKinds: Array<String>;
+
+	/**
 	 * The block-body node kind (`BlockBody`) — a function whose body is a `{ … }` block.
 	 * The `explicit-type` autofix infers a `: Void` return type only for such functions;
 	 * an expression-bodied (`function f() expr;`) or bodyless (interface / extern) member

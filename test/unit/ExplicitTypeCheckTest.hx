@@ -253,6 +253,38 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(0, fixCount('class C { public var b; }'));
 	}
 
+	public function testFixVoidSkipsBlockCommentWithParen(): Void {
+		// A block comment containing ')' between the parameter list and the body must
+		// not be taken for the parameter close — the finding stays report-only.
+		Assert.equals(0, fixCount('class C { public function f() /* twelve (12) */ { trace(1); } }'));
+	}
+
+	public function testFixVoidSkipsLineCommentWithParen(): Void {
+		// A trailing `//` comment containing ')' forces the body brace onto the next
+		// line; the comment's ')' must not be mistaken for the parameter close.
+		final src: String = 'class C {\n\tpublic function f() // twelve (12)\n\t{\n\t\ttrace(1);\n\t}\n}';
+		Assert.equals(0, fixCount(src));
+	}
+
+	public function testFixVoidPlainFunctionAnnotated(): Void {
+		// Sanity: with no comment between the parameter list and the body, the plain
+		// function is still annotated `: Void`.
+		final out: String = applyFix('class C { public function f() { trace(1); } }');
+		Assert.isTrue(out.indexOf('f():Void') != -1, 'got: $out');
+	}
+
+	public function testFixVoidSkipsThrowOnlyBody(): Void {
+		// A throw-only body unifies with any return type (a caller may use the call as
+		// a value), so `: Void` would be unsound — report-only.
+		Assert.equals(0, fixCount("class C { public function f() { throw 'x'; } }"));
+	}
+
+	public function testFixVoidSkipsGuardedThrow(): Void {
+		// Deliberately over-conservative: a throw anywhere in the own scope, even
+		// behind an `if`, suppresses the fix though `trace(1)` alone would be Void.
+		Assert.equals(0, fixCount("class C { public function f() { if (c) throw 'x'; trace(1); } }"));
+	}
+
 	private function applyFix(src: String): String {
 		final check: ExplicitType = new ExplicitType();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
