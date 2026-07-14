@@ -2,19 +2,13 @@ package unit;
 
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxCaseBranch;
-import anyparse.grammar.haxe.HxCasePatternBody;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxDefaultBranch;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxNewExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxType;
-import anyparse.grammar.haxe.HxSwitchCase;
 import anyparse.grammar.haxe.HxSwitchStmt;
-import anyparse.runtime.ParseError;
 
 /**
  * Tests for slice mu_1: switch statement and new expression.
@@ -683,8 +677,9 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 	}
 
 	public function testSwitchExprInObjectField(): Void {
-		final body: Array<HxStatement> =
-			parseBody('class C { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }');
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f():Void { var o:Dynamic = {label: switch (x) { case 1: "a"; case _: "b"; }}; } }'
+		);
 		Assert.equals(1, body.length);
 	}
 

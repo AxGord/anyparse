@@ -1,7 +1,6 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxExpr;
@@ -10,7 +9,6 @@ import anyparse.grammar.haxe.HxIfStmt;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxVarDecl;
-import anyparse.grammar.haxe.HxWhileStmt;
 
 /**
  * Tests for slice κ₁: ??= operator, if/else, while, and block statements.
@@ -441,8 +439,9 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 	public function testEmptyStatementInSwitchCaseBody(): Void {
 		// The WrapList.isOPLShape blocker shape: a brace-closed nested
 		// switch as a case body, followed by the optional trailing `;`.
-		final body: Array<HxStatement> =
-			parseBody('class C { function f():Void { switch a { case 1: switch b { case _: trace(9); }; case _: trace(0); } } }');
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f():Void { switch a { case 1: switch b { case _: trace(9); }; case _: trace(0); } } }'
+		);
 		Assert.equals(1, body.length);
 		// `switch a {…}` (no parens) → SwitchStmtBare; the inner
 		// `switch b {…}` likewise. Mirrors WrapList.isOPLShape's

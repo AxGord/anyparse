@@ -7,7 +7,6 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
-import anyparse.runtime.ParseError;
 
 /**
  * Slice `ω-hxtype-arrow` — function-arrow type variant on `HxType`.
@@ -148,7 +147,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Int->?Int->Void; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
 		final leaves: Array<String> = [];
-		arrowLeaves(
+		arrowLeaves( 
 			switch v.type {
 				case null: throw 'null type';
 				case t: t;
@@ -162,7 +161,7 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Int->?Int->?Int->?Int->?Int->Void; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
 		final leaves: Array<String> = [];
-		arrowLeaves(
+		arrowLeaves( 
 			switch v.type {
 				case null: throw 'null type';
 				case t: t;
