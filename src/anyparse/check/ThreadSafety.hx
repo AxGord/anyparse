@@ -6,6 +6,7 @@ import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.check.Check.ConfigAware;
 
 /**
  * Config-driven thread-context analysis over the approximate `CallGraph` —
@@ -47,7 +48,7 @@ import anyparse.runtime.Span;
  * entry is `<lock pattern>/<unlock member name>` on the same type.
  */
 @:nullSafety(Strict)
-final class ThreadSafety implements Check {
+final class ThreadSafety implements Check implements ConfigAware {
 
 	private static inline final CTX_MAIN: Int = 1;
 
@@ -55,7 +56,14 @@ final class ThreadSafety implements Check {
 
 	private static inline final CHAIN_CAP: Int = 8;
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'thread-safety';
@@ -67,7 +75,7 @@ final class ThreadSafety implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		if (files.length == 0) return [];
-		final config: LintConfig = LintConfig.discover(files[0].file);
+		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, files[0].file);
 		final sinks: Array<String> = config.stringListOption('thread-safety', 'sinks') ?? [];
 		if (sinks.length == 0) return [];
 		final spawns: Array<String> = config.stringListOption('thread-safety', 'spawns') ?? [];

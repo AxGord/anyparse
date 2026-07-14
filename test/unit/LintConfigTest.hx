@@ -77,4 +77,16 @@ class LintConfigTest extends Test {
 		Assert.isNull(cfg.severityFor('naming'), 'a non-string severity yields no override');
 	}
 
+	/**
+	 * `resolveWith` uses an injected resolver when present and falls back to
+	 * `discover` when null — the seam the option-reading checks resolve config
+	 * through, so a direct `check.run` (null resolver) still discovers correctly.
+	 */
+	public function testResolveWithUsesResolverElseDiscovers(): Void {
+		final viaResolver: LintConfig = LintConfig.resolveWith((_) -> LintConfig.parse('{"rules":{"complexity":{"max":5}}}'), 'X.hx');
+		Assert.equals(5, viaResolver.intOption('complexity', 'max'), 'a provided resolver is used');
+		final viaDiscover: LintConfig = LintConfig.resolveWith(null, 'no/such/dir/X.hx');
+		Assert.isNull(viaDiscover.intOption('complexity', 'max'), 'a null resolver falls back to discover (empty when no file on disk)');
+	}
+
 }

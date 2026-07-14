@@ -3,6 +3,9 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
+import anyparse.check.Complexity;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.check.Check.Violation;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -23,6 +26,9 @@ class LintPerFileConfigCliTest extends Test {
 	// in writer-canonical form so the `--fix` delete re-canonicalises cleanly.
 	private static final UNUSED: String = 'package p;\n\nimport a.b.Unused;\n\nclass C {}\n';
 
+	// A function of cyclomatic score 2 (one `&&`) — flagged only when complexity.max is tightened to 1.
+	private static final SCORE_TWO: String = 'package p;\n\nclass C {\n\tpublic function f(a:Bool, b:Bool):Bool {\n\t\treturn a && b;\n\t}\n}\n';
+
 	public function testEnablementIsPerFile(): Void {
 		#if (sys || nodejs)
 		final off: String = dirWith('Foo.hx', UNUSED, '{"rules":{"unused-import":{"enabled":false}}}');
@@ -34,8 +40,8 @@ class LintPerFileConfigCliTest extends Test {
 		// whose Warning still trips. The single-config-from-paths[0] bug returns 0.
 		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', off, on]), 'OFF disable must not leak to ON (config dir first)');
 		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', on, off]), 'ON Warning trips regardless of order');
-		cleanup(off);
-		cleanup(on);
+		CliFixture.removeDir(off);
+		CliFixture.removeDir(on);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -52,8 +58,8 @@ class LintPerFileConfigCliTest extends Test {
 		Assert.equals(
 			1, Cli.run(['lint', '--fail-on', 'error', plain, promote]), 'promotion applies per-file even when config dir is second'
 		);
-		cleanup(promote);
-		cleanup(plain);
+		CliFixture.removeDir(promote);
+		CliFixture.removeDir(plain);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -69,8 +75,44 @@ class LintPerFileConfigCliTest extends Test {
 		final bar: String = File.getContent('$on/Bar.hx');
 		Assert.isTrue(foo.indexOf('a.b.Unused') >= 0, 'disabled rule leaves Foo.hx unchanged');
 		Assert.isTrue(bar.indexOf('a.b.Unused') == -1, 'enabled rule fixes Bar.hx (not blocked by the sibling OFF config)');
-		cleanup(off);
-		cleanup(on);
+		CliFixture.removeDir(off);
+		CliFixture.removeDir(on);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testOptionCheckPerFileInCombinedRun(): Void {
+		#if (sys || nodejs)
+		// Tightening complexity.max to 1 in
+		// ONE directory flags it there; the sibling with no config keeps the built-in max
+		// and stays silent — the option-reading `complexity` check must honour EACH file's
+		// own apqlint.json in a combined run, now fed by the memoised resolver.
+		final tight: String = dirWith('Foo.hx', SCORE_TWO, '{"rules":{"complexity":{"max":1}}}');
+		final loose: String = dirWith('Bar.hx', SCORE_TWO, null);
+		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', tight]), 'max 1 flags the score-2 function');
+		Assert.equals(0, Cli.run(['lint', '--fail-on', 'warning', loose]), 'default max leaves the score-2 function alone');
+		// Combined either order: the tightened max applies to its own dir only, so the
+		// paths[0]-config-for-all bug (loose first) would leave Foo unflagged and return 0.
+		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', tight, loose]), 'tight config applies (config dir first)');
+		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', loose, tight]), 'tight config applies even when config dir is second');
+		CliFixture.removeDir(tight);
+		CliFixture.removeDir(loose);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testDirectCheckRunDiscoversConfig(): Void {
+		#if (sys || nodejs)
+		// A check invoked directly (as unit callers do) gets no injected resolver and must
+		// still discover the on-disk apqlint.json by walking up from the file path — the
+		// fallback that keeps checks usable outside the CLI.
+		final dir: String = dirWith('Foo.hx', SCORE_TWO, '{"rules":{"complexity":{"max":1}}}');
+		final vs: Array<Violation> = new Complexity().run([{ file: '$dir/Foo.hx', source: SCORE_TWO }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length, 'direct run discovers the on-disk max:1 and flags the score-2 function');
+		Assert.equals('complexity', vs[0].rule);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -81,15 +123,6 @@ class LintPerFileConfigCliTest extends Test {
 		final files: Array<{ name: String, source: String }> = [{ name: name, source: source }];
 		if (config != null) files.push({ name: 'apqlint.json', source: config });
 		return CliFixture.writeDir('perfilecfg', files);
-	}
-
-	private function cleanup(dir: String): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (name in FileSystem.readDirectory(dir)) {
-			final p: String = '$dir/$name';
-			if (!FileSystem.isDirectory(p)) FileSystem.deleteFile(p);
-		}
-		FileSystem.deleteDirectory(dir);
 	}
 	#end
 

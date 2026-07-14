@@ -95,6 +95,15 @@ final class LintConfig {
 	}
 
 	/**
+	 * The config for `path` using `resolve` when the linter injected its memoised
+	 * per-file resolver, else `discover(path)` — so an option-reading check threads
+	 * the shared resolver in a CLI run but still resolves correctly when run directly.
+	 */
+	public static function resolveWith(resolve: Null<(String) -> LintConfig>, path: String): LintConfig {
+		return resolve != null ? resolve(path) : discover(path);
+	}
+
+	/**
 	 * Parse `apqlint.json` content. Tolerant: malformed JSON, a non-object root,
 	 * or a missing `rules` object all yield an empty config — never throws, so a
 	 * broken config degrades to default behaviour rather than failing the lint.

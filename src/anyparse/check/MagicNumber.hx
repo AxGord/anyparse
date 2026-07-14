@@ -8,6 +8,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.check.Check.ConfigAware;
 
 /**
  * Flags a numeric literal used in executable code whose value is not a small
@@ -44,12 +45,19 @@ import haxe.Exception;
  * `numericLiteralKinds` (or no `functionKinds`) makes the check a no-op.
  */
 @:nullSafety(Strict)
-final class MagicNumber implements Check {
+final class MagicNumber implements Check implements ConfigAware {
 
 	/** Conventional values that carry no hidden meaning and are never flagged. */
 	private static final EXEMPT: Array<Float> = [-1, 0, 1, 2];
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'magic-number';
@@ -73,7 +81,8 @@ final class MagicNumber implements Check {
 				// Exempt base: a project checkstyle `MagicNumber.ignoreNumbers`, else the built-in default;
 				// the apqlint `ignore` list adds to it.
 				final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
-				final ignore: Array<Float> = LintConfig.discover(entry.file).numberListOption('magic-number', 'ignore') ?? [];
+				final ignore: Array<Float> = LintConfig.resolveWith(_resolveConfig, entry.file)
+					.numberListOption('magic-number', 'ignore') ?? [];
 				final exempt: Array<Float> = base.concat(ignore);
 				walk(violations, entry.file, tree, null, false, false, cfg, exempt);
 			}

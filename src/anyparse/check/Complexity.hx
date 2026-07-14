@@ -8,6 +8,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.check.Check.ConfigAware;
 
 /**
  * Flags functions whose cyclomatic complexity exceeds a threshold — a metric
@@ -39,7 +40,7 @@ import haxe.Exception;
  * grammar plugin maxComplexity seam.
  */
 @:nullSafety(Strict)
-final class Complexity implements Check {
+final class Complexity implements Check implements ConfigAware {
 
 	/**
 	 * The complexity above which a function is flagged — the conventional checkstyle
@@ -48,7 +49,14 @@ final class Complexity implements Check {
 	 */
 	private static inline final DEFAULT_MAX_COMPLEXITY: Int = 20;
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'complexity';
@@ -79,7 +87,7 @@ final class Complexity implements Check {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
 			if (tree != null) {
-				final max: Int = LintConfig.discover(entry.file)
+				final max: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 					.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
 				walk(violations, entry.file, tree, cfg, max);
 			}

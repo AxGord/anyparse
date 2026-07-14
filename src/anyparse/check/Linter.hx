@@ -7,6 +7,7 @@ using Lambda;
 
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.check.SimplifyBooleanTernary;
+import anyparse.check.Check.ConfigAware;
 
 /**
  * Runs a set of `Check`s over a file set and concatenates their
@@ -108,23 +109,34 @@ final class Linter {
 	 * Run each check in `checks` (default: `builtins()`) over `files` and
 	 * return all violations, check by check in registry order. A check
 	 * must be skip-parse tolerant (see `Check`); the linter does not catch
-	 * per-check exceptions.
+	 * per-check exceptions. `ConfigAware` checks receive `resolveConfig`
+	 * (or null) before running, so they read their per-file options through it.
 	 *
 	 * `resolveConfig` maps a file path to the `apqlint.json` in effect there
 	 * (walk-up discovered, per-directory memoised by the caller): each finding
-	 * is remapped to its own file's configured severity, and — unless
-	 * `applyEnablement` is false, as it is for an explicit `--rule` selection —
-	 * dropped when that file disables its rule. A null resolver leaves every
-	 * finding untouched.
+	 * is remapped to its own file's configured severity, and — ONLY when
+	 * `applyEnablement` is true — DROPPED when that file disables its rule. A
+	 * null resolver leaves every finding untouched.
+	 *
+	 * `applyEnablement` defaults to FALSE: a programmatic caller passing a
+	 * resolver for severity/options is NOT silently robbed of findings whose
+	 * rule a config disables (the trap when it defaulted true) — matching
+	 * `--rule` semantics, where an explicitly selected check runs regardless
+	 * of `enabled`. The CLI's non-`--rule` path passes true explicitly to keep
+	 * config-disabled rules out of a full report.
 	 */
 	public static function run(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?checks: Array<Check>,
-		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = true
+		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
 		// Parse each file once and share the trees across all checks — each check
 		// parses independently otherwise, so N checks over M files is N*M parses.
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
+		// Thread the caller's memoised per-file config resolver into the option-reading
+		// checks so they don't re-walk ancestor dirs + re-parse the JSON per file; a null
+		// resolver resets them to their own `LintConfig.discover` fallback.
+		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		final out: Array<Violation> = [];
 		for (check in active) for (violation in check.run(files, cached)) out.push(violation);
 		if (resolveConfig == null) return Suppression.apply(out, files);

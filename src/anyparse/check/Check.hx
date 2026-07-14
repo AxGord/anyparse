@@ -65,3 +65,20 @@ interface Check {
 	): Array<{ span: Span, text: String }>;
 
 }
+
+/**
+ * A `Check` that reads per-file `apqlint.json` OPTIONS (e.g. complexity `max`,
+ * magic-number `ignore`, thread-safety `sinks`) while it runs — as opposed to
+ * enablement / severity, which the framework applies after the fact. `Linter.run`
+ * injects the caller's memoised per-file resolver so a large run does not re-walk
+ * the ancestor directories and re-parse the JSON once per file per check. A check
+ * invoked directly (a unit `check.run`) is never injected and falls back to its own
+ * `LintConfig.discover`, so it still resolves config correctly — just unmemoised.
+ */
+@:nullSafety(Strict)
+interface ConfigAware {
+
+	/** Inject the linter's per-file config resolver, or null to fall back to `discover`. */
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void;
+
+}
