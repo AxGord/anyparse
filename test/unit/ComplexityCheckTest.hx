@@ -27,10 +27,9 @@ class ComplexityCheckTest extends Test {
 
 	public function testOverThresholdFlagged(): Void {
 		// 20 `&&` -> 20 decision points -> score 21 > 20.
-		final vs: Array<Violation> =
-			violations(
-				'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
-			);
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction big(a:Bool):Bool {\n\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.equals('complexity', vs[0].rule);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -49,7 +48,8 @@ class ComplexityCheckTest extends Test {
 	}
 
 	public function testMixedConstructsCounted(): Void {
-		// if/while/for/case/catch/ternary/?? plus a long && chain — well over the threshold (score 24).
+		// if/while/for/switch/catch/ternary/?? plus a long && chain — over the threshold
+		// (score 21: the switch counts once now, not once per case).
 		final src: String = 'class C {\n' + '\tfunction mixed(a:Int):Int {\n' + '\t\tif (a > 0) return 1;\n' + '\t\tif (a > 1) return 2;\n'
 			+ '\t\twhile (a > 2) a--;\n' + '\t\tfor (i in 0...a) trace(i);\n'
 			+ '\t\tswitch a { case 1: trace(1); case 2: trace(2); case 3: trace(3); case _: trace(0); }\n'
@@ -66,20 +66,18 @@ class ComplexityCheckTest extends Test {
 		// A local function is NOT a separate unit: `inner`'s 20 `&&` count toward
 		// `outer` (score 21), so a block cannot be hidden from the metric by being
 		// wrapped in a local function. `inner` is not reported on its own.
-		final vs: Array<Violation> =
-			violations(
-				'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
-			);
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction outer():Void {\n\t\tfunction inner(a:Bool):Bool {\n\t\t\treturn a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\t}\n\t\tinner(true);\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'outer'"));
 	}
 
 	public function testLambdaFoldsIntoEnclosing(): Void {
 		// The lambda's 20 `&&` count toward `withLambda` (lambdas are not function units).
-		final vs: Array<Violation> =
-			violations(
-				'class C {\n\tfunction withLambda():Bool {\n\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\treturn g(true);\n\t}\n}'
-			);
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction withLambda():Bool {\n\t\tfinal g = (a:Bool) -> a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a && a;\n\t\treturn g(true);\n\t}\n}'
+		);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'withLambda'"));
 	}
@@ -162,6 +160,40 @@ class ComplexityCheckTest extends Test {
 		sys.FileSystem.deleteFile(path);
 		sys.FileSystem.deleteFile('$dir/checkstyle.json');
 		sys.FileSystem.deleteDirectory(dir);
+	}
+
+	public function testDispatcherSwitchNotInflated(): Void {
+		// A flat 30-way dispatcher — each case a single call — is ONE decision (which
+		// arm is taken), not 30. Under the old per-case count it scored 31 and flagged;
+		// the cognitive-switch count scores it 2, so a command dispatcher is not a false hotspot.
+		final arms: String = [for (i in 0...30) '\t\t\tcase $i: run$i();'].join('\n');
+		final src: String = 'class C {\n\tfunction dispatch(x:Int):Void {\n\t\tswitch x {\n' + arms
+			+ '\n\t\t\tcase _: none();\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testSwitchBodyBranchesStillCount(): Void {
+		// The switch is +1, but branches INSIDE a case body still count via recursion — a
+		// switch whose arm carries a 20-`&&` chain scores 22 and stays flagged, so the
+		// exemption removes only case-count inflation, never real branching.
+		final chain: String = [for (_ in 0...21) 'a'].join(' && ');
+		final src: String = 'class C {\n\tfunction f(a:Bool):Bool {\n\t\tswitch a {\n\t\t\tcase true: return ' + chain
+			+ ';\n\t\t\tcase _: return false;\n\t\t}\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'f'"));
+	}
+
+	public function testConditionalGuardedSwitchCountedOnce(): Void {
+		// Regression: a switch with an `#if`-guarded case run wraps those cases in a
+		// conditional node that ALSO holds `CaseBranch` children. The switch is identified
+		// by KIND, not by "has a case child", so that wrapper is NOT counted as a second
+		// switch. 18 `&&` + this switch scores exactly 20 (not flagged); the old wrapper
+		// double-count would have tipped it to 21 (flagged).
+		final chain: String = [for (_ in 0...19) 'a'].join(' && ');
+		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = ' + chain
+			+ ';\n\t\tswitch x {\n\t\t\t#if debug\n\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 }

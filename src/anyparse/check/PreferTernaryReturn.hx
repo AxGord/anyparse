@@ -197,7 +197,8 @@ final class PreferTernaryReturn implements Check {
 		final condition: String = wrapCondition(source.substring(condSpan.from, condSpan.to), match.condition.kind, shape);
 		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
 		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
-		final text: String = 'return ' + condition + ' ? ' + thenSource + ' : ' + elseSource + ';';
+		final preserved: String = preservedComments(source, ifSpan, nextSpan, [condSpan, thenSpan, elseSpan]);
+		final text: String = preserved + 'return ' + condition + ' ? ' + thenSource + ' : ' + elseSource + ';';
 		return { span: new Span(ifSpan.from, nextSpan.to), text: text };
 	}
 
@@ -229,6 +230,31 @@ final class PreferTernaryReturn implements Check {
 		final notKind: Null<String> = shape.notKind;
 		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
 		return !RefactorSupport.provablyBoolOperand(aBool ? b : a, boolOpKinds, shape.parenKind);
+	}
+
+	/**
+	 * Verbatim source of every comment inside the replaced `[ifSpan.from, nextSpan.to)`
+	 * region that is NOT already carried inside a copied expression span
+	 * (`condSpan` / `thenSpan` / `elseSpan`), joined as a newline-terminated leading
+	 * block. Prepending it to the ternary-return replacement PRESERVES — rather than
+	 * drops — the explanatory comments that sat on the collapsed guard (e.g. a comment
+	 * between the two statements, or one inside the then-block before its `return`).
+	 * Empty when the folded region held no such comment.
+	 */
+	private static function preservedComments(source: String, ifSpan: Span, nextSpan: Span, kept: Array<Span>): String {
+		final out: StringBuf = new StringBuf();
+		for (tok in RefactorSupport.collectCommentTokens(source)) {
+			if (tok.from < ifSpan.from || tok.to > nextSpan.to) continue;
+			var insideKept: Bool = false;
+			for (k in kept) if (tok.from >= k.from && tok.to <= k.to) {
+				insideKept = true;
+				break;
+			}
+			if (insideKept) continue;
+			out.add(StringTools.trim(source.substring(tok.from, tok.to)));
+			out.add('\n');
+		}
+		return out.toString();
 	}
 
 }

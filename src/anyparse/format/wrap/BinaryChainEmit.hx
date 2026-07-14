@@ -155,8 +155,6 @@ final class BinaryChainEmit {
 		// continuation line (`a // c` then `+ b`) while a block comment stays
 		// inline (`a /* c */ + b`, no source break). Location follows the
 		// rules' flat decision; `sourceBreakBefore` drives the per-gap break.
-		if (forceKeep) return WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: evalAt(true, []).location }));
-
 		// Force-break path: cascade evaluated only against
 		// `exceeds=true` (anyHardline already commits to break-mode
 		// per the prior decoupling slice). Thresholds still
@@ -164,23 +162,24 @@ final class BinaryChainEmit {
 		// a `LineLengthLargerThan` rule answer can flip with column.
 		// `buildBinaryThresholdTree` handles 0/1/N thresholds via
 		// recursion (no IfBreak split — single shape per leaf).
-		if (anyHardline) {
-			// ω-ternary-collection-hug: a breaking ternary whose sole multi-line
-			// branch is a bare collection literal (`cond ? flat : {…}`) HUGS —
-			// keep `cond ? A : {` on the head line and let the collection self-
-			// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
-			// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
-			return WrapBoundary(
-				extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0
-					? IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops))
-					: buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt)
-			);
-		}
-		return extraThresholds.length == 0
-			? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
-			: extraThresholds.length == 1
-				? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
-				: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
+		// ω-ternary-collection-hug: a breaking ternary whose sole multi-line
+		// branch is a bare collection literal (`cond ? flat : {…}`) HUGS —
+		// keep `cond ? A : {` on the head line and let the collection self-
+		// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
+		// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
+		return forceKeep
+			? WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: evalAt(true, []).location }))
+			: anyHardline
+				? WrapBoundary(
+					extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0
+						? IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops))
+						: buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt)
+				)
+				: extraThresholds.length == 0
+					? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)
+					: extraThresholds.length == 1
+						? emitSingleThreshold(extraThresholds[0], opt, evalAt, shapeAt)
+						: WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], null, evalAt, shapeAt));
 	}
 
 	/**
@@ -813,7 +812,6 @@ final class BinaryChainEmit {
 		for (i in 0...ops.length) total += ops[i].length + 2;
 		return { total: total, maxLen: maxLen, anyHardline: anyHardline };
 	}
-
 
 	/**
 	 * ω-ternary-collection-hug: returns the index (1 = THEN, 2 = ELSE) of a

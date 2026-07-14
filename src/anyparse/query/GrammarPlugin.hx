@@ -1037,6 +1037,34 @@ typedef RefShape = {
 	 * the carve-out.
 	 */
 	@:optional var bareConstructorTypeKinds: Array<String>;
+
+	/**
+	 * Method names that take or return a STRING POSITION / offset (`substr`,
+	 * `substring`, `charAt`, `charCodeAt`, `indexOf`, `lastIndexOf`, StringTools'
+	 * `hex`) — the `magic-number` check exempts a numeric literal that reaches such a
+	 * call's argument, directly or through `+`/`-` offset arithmetic (`s.charCodeAt(i
+	 * + 5)`, `s.substr(0, 4)`): the number is a position, not a hidden quantity.
+	 * Optional; unset removes the carve-out.
+	 */
+	@:optional var positionMethodNames: Array<String>;
+
+	/**
+	 * Additive-operator node kinds (`Add` / `Sub`) — let the `magic-number` check see
+	 * through `x + N` / `x - N` offset arithmetic when deciding whether a literal sits
+	 * in a size (`s.length - 3`) or string-position (`charCodeAt(i + 5)`) context.
+	 * Optional; unset removes those carve-outs.
+	 */
+	@:optional var additiveKinds: Array<String>;
+
+	/**
+	 * Switch node kinds (`SwitchStmt` / `SwitchStmtBare` / `SwitchExpr` /
+	 * `SwitchExprBare` for Haxe) — the `complexity` check counts a switch as ONE
+	 * decision (cognitive-complexity model) rather than one per `case`. Identified by
+	 * kind, not by "has a case child", so an `#if`-guarded case run wrapped in a
+	 * conditional node is not mistaken for a second switch. Optional; unset falls back
+	 * to per-`case` cyclomatic counting.
+	 */
+	@:optional var switchKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

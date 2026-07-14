@@ -30,7 +30,7 @@ import haxe.Exception;
  *     not in `RefShape.localDeclKinds`): `var x = 5000;` / `final x = 5000;`
  *     already give the literal a name, which is exactly the extraction the rule
  *     asks for. A literal nested in an initializer expression (`var x = 5000 *
- *     k`) is still in logic and is flagged. A literal that is the direct value of an object-literal field (`RefShape.objectFieldKind`, e.g. `{ value: 30 }`) is likewise declarative data and exempt; a computed field value keeps the literal under the operator and stays flagged. A literal in the index slot of a subscript (`RefShape.indexAccessKind`, e.g. `args[3]`) is a position, not a hidden quantity, and a literal compared against a size-like field access (`RefShape.sizeFieldNames`, e.g. `args.length == 3`) is a structural arity check — both exempt; a computed index (`args[i + 3]`) or a comparison against a plain value (`score == 100`) stays flagged.
+ *     k`) is still in logic and is flagged. A literal that is the direct value of an object-literal field (`RefShape.objectFieldKind`, e.g. `{ value: 30 }`) is likewise declarative data and exempt; a computed field value keeps the literal under the operator and stays flagged. A literal in the index slot of a subscript (`RefShape.indexAccessKind`, e.g. `args[3]`) is a position, not a hidden quantity, and a literal compared against a size-like field access (`RefShape.sizeFieldNames`, e.g. `args.length == 3`) is a structural arity check — both exempt; a computed index (`args[i + 3]`) or a comparison against a plain value (`score == 100`) stays flagged. A literal reaching a string-position method argument (`positionMethodNames`, e.g. `s.charCodeAt(i + 5)` / `s.substr(0, 4)`), directly or through `+` / `-` offset arithmetic (`additiveKinds`), is a position, and a literal offset from a size field (`s.length - 3`) is a count offset — both exempt, while a bare offset with no size sibling (`from + 3`) stays flagged.
  *  3. its numeric value is not in the exempt set `{0, 1, 2}` plus any number
  *     listed in the `magic-number` `ignore` option of a discovered
  *     `apqlint.json`. A negative literal parses as a negation wrapping a
@@ -64,16 +64,7 @@ final class MagicNumber implements Check {
 		final numericKinds: Array<String> = shape.numericLiteralKinds ?? [];
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		if (numericKinds.length == 0 || functionKinds.length == 0) return [];
-		final cfg: MagicNumberCfg = {
-			numericKinds: numericKinds,
-			functionKinds: functionKinds,
-			localDeclKinds: shape.localDeclKinds ?? [],
-			objectFieldKind: shape.objectFieldKind ?? '',
-			indexAccessKind: shape.indexAccessKind ?? '',
-			comparisonKinds: shape.comparisonKinds ?? [],
-			fieldAccessKind: shape.fieldAccessKind ?? '',
-			sizeFieldNames: shape.sizeFieldNames ?? []
-		};
+		final cfg: MagicNumberCfg = buildCfg(shape, numericKinds, functionKinds);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
@@ -84,7 +75,7 @@ final class MagicNumber implements Check {
 				final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
 				final ignore: Array<Float> = LintConfig.discover(entry.file).numberListOption('magic-number', 'ignore') ?? [];
 				final exempt: Array<Float> = base.concat(ignore);
-				walk(violations, entry.file, tree, null, false, cfg, exempt);
+				walk(violations, entry.file, tree, null, false, false, cfg, exempt);
 			}
 		}
 		return violations;
@@ -99,23 +90,28 @@ final class MagicNumber implements Check {
 
 	/**
 	 * Walk `node`, tracking whether we are inside a function unit (`inFunction`,
-	 * sticky once set) and the `parent` node (for sibling/context checks). Flag a
-	 * numeric literal in logic that is neither a named-binding initializer, an
-	 * object-field value, an array index, nor a collection-size comparison, and
-	 * whose value is not exempt.
+	 * sticky once set), the `parent` node (for sibling/context checks), and whether
+	 * we sit in a string-POSITION context (`positionCtx` — inside a position-method
+	 * call's arguments, propagated through offset arithmetic). Flag a numeric literal
+	 * in logic that is not a named-binding initializer, an object-field value, an
+	 * array index, a collection-size comparison or arithmetic, or a string position,
+	 * and whose value is not exempt.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, parent: Null<QueryNode>, inFunction: Bool, cfg: MagicNumberCfg,
-		exempt: Array<Float>
+		out: Array<Violation>, file: String, node: QueryNode, parent: Null<QueryNode>, inFunction: Bool, positionCtx: Bool,
+		cfg: MagicNumberCfg, exempt: Array<Float>
 	): Void {
 		final parentKind: String = parent != null ? parent.kind : '';
 		final here: Bool = inFunction || cfg.functionKinds.contains(node.kind);
 		if (
 			here && cfg.numericKinds.contains(node.kind) && !cfg.localDeclKinds.contains(parentKind) && parentKind != cfg.objectFieldKind
-			&& !isArrayIndex(parent, cfg) && !isSizeComparison(node, parent, cfg)
+			&& !isArrayIndex(parent, cfg) && !hasSizeFieldSibling(node, parent, cfg, cfg.comparisonKinds)
+			&& !hasSizeFieldSibling(node, parent, cfg, cfg.additiveKinds) && !positionCtx
 		)
 			flag(out, file, node, exempt);
-		for (child in node.children) walk(out, file, child, node, here, cfg, exempt);
+		final posCall: Bool = isPositionCall(node, cfg);
+		for (i in 0...node.children.length)
+			walk(out, file, node.children[i], node, here, childPositionCtx(node, i, positionCtx, posCall, cfg), cfg, exempt);
 	}
 
 	/** Append a `Warning` unless the literal's value is exempt or unparseable. */
@@ -159,17 +155,55 @@ final class MagicNumber implements Check {
 		return parent != null && cfg.indexAccessKind != '' && parent.kind == cfg.indexAccessKind;
 	}
 
+	/** A `Call` to one of `positionMethodNames` — its callee node's name is the invoked string-position method. */
+	private static function isPositionCall(node: QueryNode, cfg: MagicNumberCfg): Bool {
+		if (cfg.callKind == '' || node.kind != cfg.callKind || node.children.length == 0) return false;
+		final calleeName: Null<String> = node.children[0].name;
+		return calleeName != null && cfg.positionMethodNames.contains(calleeName);
+	}
+
 	/**
-	 * A literal in a size comparison against a collection-size field access
-	 * (`args.length == 3`, `args.length >= 3`) — a structural element-count check
-	 * whose number is contextual to the collection, whether an exact arity (`==` /
-	 * `!=`) or a size bound (`<` / `<=` / `>` / `>=`). Exempted across all
-	 * `comparisonKinds`; a comparison against a plain value (`score == 100`) has no
-	 * size sibling and stays flagged.
-	 *
+	 * The position-context flag for the `childIndex`-th child: true inside a
+	 * position-method call's ARGUMENTS (index >= 1 — the callee at 0 is excluded),
+	 * propagated through `+`/`-` offset arithmetic and parentheses, and reset to false
+	 * at any other node — so `substr(0, foo(x * 5))` exempts the `0` but not the `5`
+	 * under the unrelated inner call.
 	 */
-	private static function isSizeComparison(node: QueryNode, parent: Null<QueryNode>, cfg: MagicNumberCfg): Bool {
-		if (parent == null || cfg.fieldAccessKind == '' || !cfg.comparisonKinds.contains(parent.kind)) return false;
+	private static function childPositionCtx(node: QueryNode, childIndex: Int, currentCtx: Bool, posCall: Bool, cfg: MagicNumberCfg): Bool {
+		if (posCall) return childIndex >= 1;
+		if (cfg.additiveKinds.contains(node.kind) || node.kind == cfg.parenKind) return currentCtx;
+		return false;
+	}
+
+	/** Resolve the kind/name config once per run from `shape` — threads one struct into the recursion instead of a dozen scalars. */
+	private static function buildCfg(shape: RefShape, numericKinds: Array<String>, functionKinds: Array<String>): MagicNumberCfg {
+		return {
+			numericKinds: numericKinds,
+			functionKinds: functionKinds,
+			localDeclKinds: shape.localDeclKinds ?? [],
+			objectFieldKind: shape.objectFieldKind ?? '',
+			indexAccessKind: shape.indexAccessKind ?? '',
+			comparisonKinds: shape.comparisonKinds ?? [],
+			fieldAccessKind: shape.fieldAccessKind ?? '',
+			sizeFieldNames: shape.sizeFieldNames ?? [],
+			callKind: shape.callKind ?? '',
+			parenKind: shape.parenKind ?? '',
+			positionMethodNames: shape.positionMethodNames ?? [],
+			additiveKinds: shape.additiveKinds ?? []
+		};
+	}
+
+	/**
+	 * A literal that sits under an operator of `opKinds` (comparison or additive) with a
+	 * collection-size field-access sibling (`args.length == 3`, `s.length - 3`) — a
+	 * structural size check or count offset, whose number is contextual to the
+	 * collection, not a hidden quantity. A comparison / offset against a plain value
+	 * (`score == 100`, `from + 3`) has no size sibling and stays flagged.
+	 */
+	private static function hasSizeFieldSibling(
+		node: QueryNode, parent: Null<QueryNode>, cfg: MagicNumberCfg, opKinds: Array<String>
+	): Bool {
+		if (parent == null || cfg.fieldAccessKind == '' || !opKinds.contains(parent.kind)) return false;
 		for (sib in parent.children) {
 			final sibName: Null<String> = sib.name;
 			if (sib != node && sib.kind == cfg.fieldAccessKind && sibName != null && cfg.sizeFieldNames.contains(sibName)) return true;
@@ -181,7 +215,7 @@ final class MagicNumber implements Check {
 
 /**
  * Resolved kind config for the magic-number walk, built once per run so the
- * recursion threads one struct instead of eight scalars.
+ * recursion threads one struct instead of a dozen scalars.
  */
 private typedef MagicNumberCfg = {
 	final numericKinds: Array<String>;
@@ -192,4 +226,8 @@ private typedef MagicNumberCfg = {
 	final comparisonKinds: Array<String>;
 	final fieldAccessKind: String;
 	final sizeFieldNames: Array<String>;
+	final callKind: String;
+	final parenKind: String;
+	final positionMethodNames: Array<String>;
+	final additiveKinds: Array<String>;
 };

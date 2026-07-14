@@ -178,7 +178,7 @@ final class HaxeNamingSupport implements NamingSupport {
 			final mod: Null<String> = MOD_KIND_TO_NAME[siblings[i].kind];
 			if (mod != null)
 				mods.push(mod);
-			else if (siblings[i].kind != 'Meta')
+			else if (!isMetaKind(siblings[i].kind))
 				break;
 			i--;
 		}
@@ -243,7 +243,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		var i: Int = siblings.indexOf(node) - 1;
 		while (i >= 0) {
 			final kind: String = siblings[i].kind;
-			if (kind == 'Meta') return true;
+			if (isMetaKind(kind)) return true;
 			if (!MOD_KIND_TO_NAME.exists(kind)) break;
 			i--;
 		}
@@ -286,6 +286,11 @@ final class HaxeNamingSupport implements NamingSupport {
 			}
 		}
 		return false;
+	}
+
+	/** Whether `kind` is a metadata sibling — a bare `@:tag` (`Meta`) or an argumented `@:tag(...)` (`MetaCall`, e.g. `@:op(A < B)`). */
+	private static function isMetaKind(kind: String): Bool {
+		return kind == 'Meta' || kind == 'MetaCall';
 	}
 
 }

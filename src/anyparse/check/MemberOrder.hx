@@ -17,7 +17,7 @@ import haxe.Exception;
  */
 typedef OrderedMember = {
 	var node: QueryNode;
-	var rank: Int;
+	var rank: MemberRank;
 	var index: Int;
 	var span: Span;
 	var isField: Bool;
@@ -153,16 +153,20 @@ final class MemberOrder implements Check {
 	}
 
 	/** The canonical-order rank of a member given its static / public flags and whether it is a field. */
-	private static function rankOf(node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, shape: RefShape): Int {
+	private static function rankOf(node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, shape: RefShape): MemberRank {
 		if (isField) {
-			if (isStatic) return isPublic ? 0 : 1;
+			if (isStatic) return isPublic ? StaticPublicField : StaticPrivateField;
 			final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
-			return !mutable ? (isPublic ? 2 : 4) : (isPublic ? 3 : 5);
+			return !mutable
+				? (isPublic ? PublicImmutableField : PrivateImmutableField)
+				: (isPublic ? PublicMutableField : PrivateMutableField);
 		}
 		final name: String = node.name ?? '';
 		return shape.constructorName != null && name == shape.constructorName
-			? 6
-			: isAccessor(name, shape) ? 7 : isStatic ? (isPublic ? 10 : 11) : (isPublic ? 8 : 9);
+			? Constructor
+			: isAccessor(name, shape)
+				? Accessor
+				: isStatic ? (isPublic ? StaticPublicMethod : StaticPrivateMethod) : (isPublic ? PublicMethod : PrivateMethod);
 	}
 
 	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */
@@ -173,10 +177,10 @@ final class MemberOrder implements Check {
 
 	/** The first member whose rank is below a preceding member's — the order break — or null when sorted. */
 	private static function firstOutOfOrder(members: Array<OrderedMember>): Null<OrderedMember> {
-		var maxRank: Int = -1;
+		var prev: Null<MemberRank> = null;
 		for (m in members) {
-			if (m.rank < maxRank) return m;
-			maxRank = m.rank;
+			if (prev != null && m.rank < prev) return m;
+			prev = m.rank;
 		}
 		return null;
 	}
@@ -485,4 +489,32 @@ final class MemberOrder implements Check {
 		});
 	}
 
+}
+
+/**
+ * The canonical member-order ranks — a smaller rank sorts earlier. Fields precede
+ * the constructor precede accessors precede methods; within each group public
+ * precedes private; static fields lead, static methods trail. A distinct type
+ * rather than a bare `Int` so a rank can never be confused with an unrelated count;
+ * the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
+ * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison
+ * on an abstract).
+ */
+private enum abstract MemberRank(Int) {
+	final StaticPublicField = 0;
+	final StaticPrivateField = 1;
+	final PublicImmutableField = 2;
+	final PublicMutableField = 3;
+	final PrivateImmutableField = 4;
+	final PrivateMutableField = 5;
+	final Constructor = 6;
+	final Accessor = 7;
+	final PublicMethod = 8;
+	final PrivateMethod = 9;
+	final StaticPublicMethod = 10;
+	final StaticPrivateMethod = 11;
+
+	@:op(A < B) static function lt(a: MemberRank, b: MemberRank): Bool;
+
+	@:op(A - B) static function sub(a: MemberRank, b: MemberRank): Int;
 }

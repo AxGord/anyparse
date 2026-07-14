@@ -20,10 +20,9 @@ import haxe.Exception;
  * Cyclomatic complexity = 1 + the number of decision points in a function. A
  * decision point is any node whose kind the grammar lists in
  * `RefShape.branchKinds` — for Haxe: `if` / `else-if`, `while` / `do-while`,
- * `for` (incl. comprehensions), each `switch` case, each `catch`, the boolean
+ * `for` (incl. comprehensions), each `switch` (counted once, not per-case), each `catch`, the boolean
  * `&&` / `||`, the ternary `?:`, and `??`. (`&&` / `||` are counted, matching
- * checkstyle's `CyclomaticComplexity`; the `case _` default is counted too — a
- * consistent +1 per switch, kept for grammar-neutrality.)
+ * checkstyle's `CyclomaticComplexity`; a `switch` counts once — which arm is taken — not once per case, so a flat dispatcher / arg-parser is not inflated; branches inside case bodies still count (see `countIn`).)
  *
  * Each function unit (`RefShape.functionKinds`) is measured independently: when
  * counting a function's branches the walk descends through nested local functions and
@@ -68,8 +67,13 @@ final class Complexity implements Check {
 		// hidden from the metric by wrapping it in a local function. Only top-level /
 		// member functions are measured (and reported) on their own.
 		final measured: Array<String> = [for (k in functionKinds) if (!localFunctionKinds.contains(k)) k];
-		final branchKinds: Array<String> = shape.branchKinds ?? [];
 		if (measured.length == 0) return [];
+		final cfg: ComplexityCfg = {
+			functionKinds: measured,
+			branchKinds: shape.branchKinds ?? [],
+			caseBranchKind: shape.caseBranchKind ?? '',
+			switchKinds: shape.switchKinds ?? []
+		};
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
@@ -77,7 +81,7 @@ final class Complexity implements Check {
 			if (tree != null) {
 				final max: Int = LintConfig.discover(entry.file)
 					.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
-				walk(violations, entry.file, tree, measured, branchKinds, max);
+				walk(violations, entry.file, tree, cfg, max);
 			}
 		}
 		return violations;
@@ -95,23 +99,19 @@ final class Complexity implements Check {
 	 * cyclomatic score exceeds the threshold. The whole tree is walked so nested
 	 * functions are each reached and measured on their own.
 	 */
-	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>, max: Int
-	): Void {
-		if (functionKinds.contains(node.kind)) checkFunction(out, file, node, functionKinds, branchKinds, max);
-		for (c in node.children) walk(out, file, c, functionKinds, branchKinds, max);
+	private static function walk(out: Array<Violation>, file: String, node: QueryNode, cfg: ComplexityCfg, max: Int): Void {
+		if (cfg.functionKinds.contains(node.kind)) checkFunction(out, file, node, cfg, max);
+		for (c in node.children) walk(out, file, c, cfg, max);
 	}
 
 	/**
 	 * Append a `Warning` if `fn`'s cyclomatic score exceeds the threshold. Bails
 	 * (no finding) when the function node has no span to report.
 	 */
-	private static function checkFunction(
-		out: Array<Violation>, file: String, fn: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>, max: Int
-	): Void {
+	private static function checkFunction(out: Array<Violation>, file: String, fn: QueryNode, cfg: ComplexityCfg, max: Int): Void {
 		final span: Null<Span> = fn.span;
 		if (span == null) return;
-		final score: Int = 1 + countBranches(fn, functionKinds, branchKinds);
+		final score: Int = 1 + countBranches(fn, cfg);
 		if (score <= max) return;
 		final name: String = fn.name ?? '<anonymous>';
 		out.push({
@@ -125,21 +125,49 @@ final class Complexity implements Check {
 
 	/**
 	 * The number of decision points in `fn`'s body — every descendant whose kind
-	 * is in `branchKinds`, NOT descending into a nested function unit (which is
-	 * measured on its own). Counts the function node's descendants, not the node.
+	 * is a branch, NOT descending into a nested function unit (which is measured on
+	 * its own). Counts the function node's descendants, not the node.
 	 */
-	private static function countBranches(fn: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>): Int {
+	private static function countBranches(fn: QueryNode, cfg: ComplexityCfg): Int {
 		var count: Int = 0;
-		for (child in fn.children) count += countIn(child, functionKinds, branchKinds);
+		for (child in fn.children) count += countIn(child, cfg);
 		return count;
 	}
 
-	/** Branch count of the subtree rooted at `node`, stopping at nested function units. */
-	private static function countIn(node: QueryNode, functionKinds: Array<String>, branchKinds: Array<String>): Int {
-		if (functionKinds.contains(node.kind)) return 0;
-		var count: Int = branchKinds.contains(node.kind) ? 1 : 0;
-		for (child in node.children) count += countIn(child, functionKinds, branchKinds);
+	/**
+	 * Branch count of the subtree rooted at `node`, stopping at nested function units.
+	 * A `switch` (a node whose kind is in `cfg.switchKinds`) counts as ONE decision —
+	 * which arm is taken — not one per case: counting each case inflated a flat
+	 * dispatcher / arg-parser into a false hotspot. Identifying the switch BY KIND (not
+	 * "has a case child") is what keeps an `#if`-guarded case run — wrapped in a
+	 * conditional node that also holds `CaseBranch` children — from counting a second
+	 * time. The `case` nodes themselves are excluded from the per-branch +1; branches
+	 * nested inside case BODIES still count via the recursion, so a switch whose arms do
+	 * real work stays flagged. `cfg.switchKinds` empty ⇒ per-`case` cyclomatic fallback.
+	 */
+	private static function countIn(node: QueryNode, cfg: ComplexityCfg): Int {
+		if (cfg.functionKinds.contains(node.kind)) return 0;
+		final cognitive: Bool = cfg.switchKinds.length > 0;
+		var count: Int = 0;
+		if (cognitive && cfg.switchKinds.contains(node.kind))
+			count++;
+		else if (cfg.branchKinds.contains(node.kind) && !(cognitive && node.kind == cfg.caseBranchKind))
+			count++;
+		for (child in node.children) count += countIn(child, cfg);
 		return count;
 	}
 
 }
+
+/**
+ * Resolved kind config for the complexity walk, built once per run so the
+ * recursion threads one struct. `functionKinds` is the MEASURED set (member
+ * functions — recursion stops at them; nested local functions fold into the
+ * enclosing measured function). `switchKinds` empty ⇒ per-`case` fallback.
+ */
+private typedef ComplexityCfg = {
+	final functionKinds: Array<String>;
+	final branchKinds: Array<String>;
+	final caseBranchKind: String;
+	final switchKinds: Array<String>;
+};

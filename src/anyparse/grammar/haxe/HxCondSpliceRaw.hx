@@ -28,6 +28,6 @@ package anyparse.grammar.haxe;
  * `@:rawString` — byte-exact round-trip through `_dt(value)`, no
  * unescape pass; the writer re-emits the fragment verbatim.
  */
-@:re("(?:(?!#end)[\\s\\S])*#end")
+@:re('(?:(?!#end)[\\s\\S])*#end')
 @:rawString
 abstract HxCondSpliceRaw(String) from String to String {}

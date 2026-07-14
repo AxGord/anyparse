@@ -193,7 +193,6 @@ class MagicNumberCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tfunction f(args:Array<String>, i:Int):String { return args[i + 3]; }\n}').length);
 	}
 
-
 	public function testSizeComparisonExempt(): Void {
 		// A literal compared against a `.length` field access is a structural arity
 		// check — exempt. A comparison against a plain value keeps the literal magic.
@@ -205,6 +204,33 @@ class MagicNumberCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	public function testPositionMethodArgExempt(): Void {
+		// A literal reaching a string-position method's argument — directly or through
+		// `+` / `-` offset arithmetic (`charCodeAt(i + 5)`, `substr(0, 4)`) — is a position.
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(s:String, i:Int):Int { return s.charCodeAt(i + 5) + s.substr(0, 4).length; }\n}').length
+		);
+	}
+
+	public function testSizeArithmeticExempt(): Void {
+		// A literal offset from a collection-size field (`s.length - 3`, `a[a.length - 3]`)
+		// is structural, like the size-comparison carve-out.
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(s:String, a:Array<Int>):Int { return (s.length - 3) + a[a.length - 3]; }\n}').length
+		);
+	}
+
+	public function testBareOffsetStillFlagged(): Void {
+		// A bare `x + N` with no size sibling and not a position-call arg stays flagged —
+		// the offset carve-outs are narrow (mirrors testThreeIsMagic).
+		Assert.equals(1, violations('class C {\n\tfunction f(pos:Int):Int { return pos + 7; }\n}').length);
+	}
+
+	public function testNonPositionCallArgStillFlagged(): Void {
+		// Only the listed position methods are exempt; an ordinary method call's numeric arg flags.
+		Assert.equals(1, violations('class C {\n\tfunction f(s:String):Int { return s.myMethod(7); }\n}').length);
 	}
 
 }

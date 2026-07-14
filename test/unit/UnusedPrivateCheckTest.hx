@@ -178,4 +178,14 @@ class UnusedPrivateCheckTest extends Test {
 		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
+
+	public function testOpAnnotatedMemberNotFlagged(): Void {
+		// An `@:op(A < B)` operator overload is invoked via the operator, never by name,
+		// and projects as a `MetaCall` (argumented meta) sibling — the annotated-member skip
+		// must recognize `MetaCall`, not only a bare `Meta`, else the operator method is a
+		// false unused-private (surfaced by MemberRank's `@:op` in the member-order check).
+		final src: String = 'enum abstract R(Int) {\n\tfinal A = 0;\n\tfinal B = 1;\n\t@:op(A < B) static function lt(a:R, b:R):Bool;\n}';
+		Assert.equals(0, one(src).length);
+	}
+
 }
