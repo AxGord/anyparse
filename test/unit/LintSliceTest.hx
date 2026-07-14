@@ -506,4 +506,35 @@ class LintSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+
+	/**
+	 * A STATIC wildcard `import pkg.Codes.*;` on an IN-SET type is verified by its
+	 * members: a bare reference to one of the type's enum-abstract values (`EXIT_OK`)
+	 * keeps the import — no finding, where the old check always emitted an `Info`.
+	 */
+	public function testStaticWildcardMemberUsed(): Void {
+		final codes: String = 'package pkg;\nenum abstract Codes(Int) {\n\tfinal EXIT_OK = 0;\n\tfinal EXIT_FAIL = 1;\n}';
+		final user: String = 'package pkg;\nimport pkg.Codes.*;\nclass User {\n\tfunction f():Int return EXIT_OK;\n}';
+		final files = [{ file: 'pkg/Codes.hx', source: codes }, { file: 'pkg/User.hx', source: user }];
+		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		Assert.equals(0, vs.length);
+	}
+
+
+	/**
+	 * A STATIC wildcard on an in-set type NONE of whose members is referenced is
+	 * verified-unused → a deletable `Warning`, not the old unverifiable `Info`.
+	 */
+	public function testStaticWildcardUnusedIsWarning(): Void {
+		final codes: String = 'package pkg;\nenum abstract Codes(Int) {\n\tfinal EXIT_OK = 0;\n\tfinal EXIT_FAIL = 1;\n}';
+		final user: String = 'package pkg;\nimport pkg.Codes.*;\nclass User {\n\tfunction f():Int return 5;\n}';
+		final files = [{ file: 'pkg/Codes.hx', source: codes }, { file: 'pkg/User.hx', source: user }];
+		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('unused-import', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('wildcard'));
+		Assert.equals('pkg/User.hx', vs[0].file);
+	}
+
 }

@@ -33,9 +33,11 @@ using Lambda;
  * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
  * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If that name occurs as no word-boundary token anywhere outside the import statements, the import is unused → `Warning` — except a plain module import whose module is IN the lint file set: it binds every top-level type of the module, so a reference to any SECONDARY type keeps it (see `secondaryTypeReferenced`), and a reference to a bare CONSTRUCTOR of an in-set enum / enum-abstract type keeps it too (`enumCtorReferenced` — resolved only when the enum module is itself in the lint set, so run `--fix` project-wide). The remaining forms:
  *
- *  - `import pkg.*;` (wildcard) — brings in an unknown set of symbols; a bare
- *    reference can come from it without naming the package, so it stays an
- *    unverifiable `Info`.
+ *  - `import pkg.Type.*;` (static wildcard) — when `Type` is in the lint set,
+ *    its static fields / enum(-abstract) values / constructors are known, so a
+ *    bare reference to any keeps the import and none referenced is a deletable
+ *    `Warning` (`addWildViolation`). A package `import pkg.*;` or a wildcard on
+ *    an out-of-set type has an unknown symbol set and stays an unverifiable `Info`.
  *  - `using pkg.Mod;` — in use when its bound name is referenced (a static /
  *    type use such as `StringTools.fastCodeAt`) OR one of the extension methods
  *    it provides is called as `.method(`. Verified-unused when the module's
@@ -74,13 +76,22 @@ final class UnusedImport implements Check {
 			final path: String = t.isMain ? info.module : '${info.module}.${t.name}';
 			enumCtorsByPath[path] = [for (m in t.members) m.name];
 		}
+		// Every in-set type's members keyed by its importable path — a static
+		// wildcard `import pkg.Type.*;` brings ALL of them (static fields, enum /
+		// enum-abstract values, enum constructors) into unqualified scope, so a
+		// bare reference to any one keeps the import.
+		final membersByPath: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) for (t in info.types) {
+			final memberPath: String = t.isMain ? info.module : '${info.module}.${t.name}';
+			membersByPath[memberPath] = [for (m in t.members) m.name];
+		}
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
 			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(violations, info.file, imp, source, importSpans, plugin, moduleTypes, enumCtorsByPath);
+				addViolation(violations, info.file, imp, source, importSpans, plugin, moduleTypes, enumCtorsByPath, membersByPath);
 		}
 		return violations;
 	}
@@ -110,11 +121,11 @@ final class UnusedImport implements Check {
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin,
-		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>
+		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>
 	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
-				out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': usage not tracked'));
+				addWildViolation(out, file, imp, source, importSpans, membersByPath);
 			case ImportKind.Using:
 				addUsingViolation(out, file, imp, source, importSpans, plugin);
 			case _:
@@ -199,6 +210,33 @@ final class UnusedImport implements Check {
 		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
 		if (ctors == null) return false;
 		return ctors.exists(name -> RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans));
+	}
+
+	/**
+	 * Verdict for a wildcard import. A STATIC wildcard `import pkg.Type.*;` whose
+	 * `Type` is in the lint set (`membersByPath` has its path) brings that type's
+	 * static fields / enum(-abstract) values / enum constructors into unqualified
+	 * scope: it is in use when any of those member names is referenced outside the
+	 * imports, and a verified-unused `Warning` (deletable) when none is. A package
+	 * wildcard `import pkg.*;` or a wildcard on an out-of-set type has an unknown
+	 * symbol set, so it stays an unverifiable `Info`.
+	 */
+	private static function addWildViolation(
+		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>,
+		membersByPath: Map<String, Array<String>>
+	): Void {
+		final members: Null<Array<String>> = membersByPath[stripWildStar(imp.raw)];
+		if (members == null) {
+			out.push(make(file, imp, Severity.Info, 'wildcard import \'${imp.raw}\': usage not tracked'));
+			return;
+		}
+		if (members.exists(name -> RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans))) return;
+		out.push(make(file, imp, Severity.Warning, 'unused wildcard import \'${imp.raw}\': no member referenced'));
+	}
+
+	/** `pkg.Type.*` -> `pkg.Type` (the path whose members the static wildcard imports); unchanged when it has no trailing `.*`. */
+	private static function stripWildStar(raw: String): String {
+		return StringTools.endsWith(raw, '.*') ? raw.substr(0, raw.length - 2) : raw;
 	}
 
 }
