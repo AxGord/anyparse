@@ -150,7 +150,7 @@ class NewFileSliceTest extends Test {
 		File.saveContent(p, 'package;\nclass Existing {}\n');
 		Assert.equals(1, Cli.run(['new', p, '--class']));
 		Assert.equals('package;\nclass Existing {}\n', File.getContent(p));
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 	}
 	/** `--write` with a disk-resolved sibling interface produces the file. */
 	public function testWriteResolvesSiblingInterface(): Void {
@@ -163,7 +163,7 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(text.contains('implements Iface'));
 		Assert.isTrue(text.contains('public function go():Int'));
 		Assert.isTrue(text.contains('return 1;'));
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 	}
 	/** An interface that cannot be located on disk is an error. */
 	public function testMissingInterfaceIsError(): Void {
@@ -171,7 +171,7 @@ class NewFileSliceTest extends Test {
 		final p: String = '$dir/Impl.hx';
 		Assert.equals(1, Cli.run(['new', p, '--implements', 'Nope']));
 		Assert.isFalse(FileSystem.exists(p));
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 	}
 	/** `--kind class` with no other shape flag creates an empty class (regression: it was rejected as "no intent" — only `--class` worked). */
 	public function testCliKindClassEmpty(): Void {
@@ -180,7 +180,7 @@ class NewFileSliceTest extends Test {
 		Assert.equals(0, Cli.run(['new', p, '--kind', 'class', '--write']));
 		Assert.isTrue(FileSystem.exists(p));
 		Assert.isTrue(File.getContent(p).contains('class Empty'));
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 	}
 	#end
 
@@ -421,10 +421,6 @@ class NewFileSliceTest extends Test {
 		final dir: String = '$base/tmp_apq_new_${Sys.time()}_$counter';
 		FileSystem.createDirectory(dir);
 		return dir;
-	}
-	private static function cleanup(dir: String): Void {
-		for (entry in FileSystem.readDirectory(dir)) FileSystem.deleteFile('$dir/$entry');
-		FileSystem.deleteDirectory(dir);
 	}
 	#end
 

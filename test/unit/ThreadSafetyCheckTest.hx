@@ -7,9 +7,6 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.ThreadSafety;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-#if (sys || nodejs)
-import sys.FileSystem;
-#end
 
 /**
  * The `thread-safety` check: MAIN/BG context propagation over the call graph
@@ -190,8 +187,7 @@ class ThreadSafetyCheckTest extends Test {
 			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
 		];
 		final result: Array<Violation> = new ThreadSafety().run(files, new HaxeQueryPlugin());
-		if (FileSystem.exists('$dir/apqlint.json')) FileSystem.deleteFile('$dir/apqlint.json');
-		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+		CliFixture.removeDir(dir);
 		return result;
 	}
 	#end

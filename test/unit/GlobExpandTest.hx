@@ -26,7 +26,7 @@ class GlobExpandTest extends Test {
 
 	public function teardown(): Void {
 		final root: Null<String> = _root;
-		if (root != null && FileSystem.exists(root)) deleteTree(root);
+		if (root != null && FileSystem.exists(root)) CliFixture.removeDir(root);
 		_root = null;
 	}
 	#end
@@ -126,17 +126,6 @@ class GlobExpandTest extends Test {
 		File.saveContent('$root/sub/other.hx', '');
 		File.saveContent('$root/sub/deep/HxDeep.hx', '');
 		return root;
-	}
-
-	private static function deleteTree(dir: String): Void {
-		for (name in FileSystem.readDirectory(dir)) {
-			final path: String = '$dir/$name';
-			if (FileSystem.isDirectory(path))
-				deleteTree(path);
-			else
-				FileSystem.deleteFile(path);
-		}
-		FileSystem.deleteDirectory(dir);
 	}
 	#end
 

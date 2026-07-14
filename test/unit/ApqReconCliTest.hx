@@ -71,7 +71,7 @@ class ApqReconCliTest extends Test {
 		#if sys
 		final dir: String = mkTempDir('apq_recon_empty');
 		Assert.equals(0, Cli.run(['recon', dir]), 'empty corpus is a clean 0-total sweep');
-		FileSystem.deleteDirectory(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -82,7 +82,7 @@ class ApqReconCliTest extends Test {
 		final dir: String = mkTempDir('apq_recon_good');
 		File.saveContent('$dir/good.hxtest', goodHxtest());
 		Assert.equals(0, Cli.run(['recon', dir]), 'all-OK sweep exits 0');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -95,7 +95,7 @@ class ApqReconCliTest extends Test {
 		File.saveContent('$dir/bad.hxtest', brokenHxtest());
 		// SKIPs are not errors — exit 0, histogram shows the cluster.
 		Assert.equals(0, Cli.run(['recon', dir]), 'sweep with one broken fixture still exits 0 (SKIP is data, not an error)');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -107,8 +107,8 @@ class ApqReconCliTest extends Test {
 		FileSystem.createDirectory('$dir/inner');
 		File.saveContent('$dir/inner/good.hxtest', goodHxtest());
 		Assert.equals(0, Cli.run(['recon', dir]), 'sweep recurses into nested subdirectories');
-		cleanupDir('$dir/inner');
-		cleanupDir(dir);
+		CliFixture.removeDir('$dir/inner');
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -122,7 +122,7 @@ class ApqReconCliTest extends Test {
 		final path: String = '$dir/ok.hxtest';
 		File.saveContent(path, goodHxtest());
 		Assert.equals(0, Cli.run(['recon', '--probe', path]), 'probe of a parseable .hxtest returns PARSE OK / exit 0');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -134,7 +134,7 @@ class ApqReconCliTest extends Test {
 		final path: String = '$dir/bad.hxtest';
 		File.saveContent(path, brokenHxtest());
 		Assert.equals(1, Cli.run(['recon', '--probe', path]), 'probe of an unparseable .hxtest is PARSE FAIL / exit 1');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -169,7 +169,7 @@ class ApqReconCliTest extends Test {
 			1, Cli.run(['recon', '--cluster', 'definitely-not-a-key', dir]),
 			'--cluster with no match is a runtime exit even with one broken fixture'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -182,7 +182,7 @@ class ApqReconCliTest extends Test {
 		Assert.equals(
 			1, Cli.run(['recon', '--cluster', 'xyz-not-present-anywhere', dir]), '--cluster with no exact-match key returns runtime exit'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -192,7 +192,7 @@ class ApqReconCliTest extends Test {
 		#if sys
 		final dir: String = mkTempDir('apq_recon_cluster_empty');
 		Assert.equals(1, Cli.run(['recon', '--cluster', 'anything', dir]), '--cluster on an empty sweep is a runtime exit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -231,7 +231,7 @@ class ApqReconCliTest extends Test {
 			0, Cli.run(['recon', '--predict-strip', '--delete', 'XYZ', dir]),
 			'--predict-strip with a matching pattern that unblocks the fixture exits clean'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -247,7 +247,7 @@ class ApqReconCliTest extends Test {
 			1, Cli.run(['recon', '--predict-strip', '--delete', 'NEVER_PRESENT_xyz', dir]),
 			'--predict-strip with a 0-match pattern raises the typo guard'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -268,7 +268,7 @@ class ApqReconCliTest extends Test {
 			0, Cli.run(['recon', '--predict-strip', '--replace', 'XYZ', '--with', 'WAT', dir]),
 			'--predict-strip STILL FAIL exits 0 when pattern matched (the file still fails to parse, but pattern hit ≥1)'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -311,7 +311,7 @@ class ApqReconCliTest extends Test {
 			'--with',
 			'WAT'
 		]), '--predict-strip --probe --source on STILL FAIL exits runtime (parse still fails)');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -336,7 +336,7 @@ class ApqReconCliTest extends Test {
 			'--delete',
 			' XYZ'
 		]), '--predict-strip --probe --source on UNBLOCK is a clean exit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -359,7 +359,7 @@ class ApqReconCliTest extends Test {
 			'WAT',
 			dir
 		]), '--predict-strip --source sweep STILL FAIL still emits, exits 0 (pattern matched)');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -372,7 +372,7 @@ class ApqReconCliTest extends Test {
 			1, Cli.run(['recon', '--cluster', 'anything', '--source', dir]),
 			'--cluster --source on an empty sweep is a runtime exit (no key match)'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -386,7 +386,7 @@ class ApqReconCliTest extends Test {
 			1, Cli.run(['recon', '--cluster', 'xyz-not-present', '--source', dir]),
 			'--cluster --source with a non-matching key exits runtime'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -423,7 +423,7 @@ class ApqReconCliTest extends Test {
 			0, Cli.run(['recon', '--regression-probe', dir]), '--regression-probe with no snapshot is a clean OK exit (no baseline)'
 		);
 		Sys.setCwd(savedCwd);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -450,8 +450,8 @@ class ApqReconCliTest extends Test {
 			'fixtures present locally but absent from snapshot are silent (no false flips)'
 		);
 		Sys.setCwd(savedCwd);
-		cleanupDir('$dir/bin');
-		cleanupDir(dir);
+		CliFixture.removeDir('$dir/bin');
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -473,8 +473,8 @@ class ApqReconCliTest extends Test {
 		Sys.setCwd(dir);
 		Assert.equals(1, Cli.run(['recon', '--regression-probe', dir]), 'regressed fixture (was PASS, now skip-parse) is a runtime exit');
 		Sys.setCwd(savedCwd);
-		cleanupDir('$dir/bin');
-		cleanupDir(dir);
+		CliFixture.removeDir('$dir/bin');
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -519,7 +519,7 @@ class ApqReconCliTest extends Test {
 			1, Cli.run(['recon', '--probe', path, '--predict-relax']),
 			'predict-relax on already-parseable file emits NO TARGET (no relaxation needed)'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -542,7 +542,7 @@ class ApqReconCliTest extends Test {
 			exitCode == 0 || exitCode == 1,
 			'predict-relax exits 0 (UNBLOCK) or 1 (STILL FAIL / NO TARGET) on real broken fixture, got $exitCode'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -594,7 +594,7 @@ class ApqReconCliTest extends Test {
 			'this-message-does-not-exist',
 			dir
 		]), '--no-target-cluster with no matching expected-msg exits runtime');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -609,7 +609,7 @@ class ApqReconCliTest extends Test {
 			1, Cli.run(['recon', '--predict-relax', '--no-target-cluster', 'anything', dir]),
 			'--no-target-cluster on an empty sweep is a runtime exit (no records to filter)'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -639,7 +639,7 @@ class ApqReconCliTest extends Test {
 			'--predict-relax',
 			'--source'
 		]), '--predict-relax --probe --source on NO TARGET exits runtime (no terminator to inject)');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -657,7 +657,7 @@ class ApqReconCliTest extends Test {
 			0, Cli.run(['recon', '--predict-relax', '--source', dir]),
 			'--predict-relax --source sweep on empty corpus exits 0 (NO TARGET stays collapsed)'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -678,7 +678,7 @@ class ApqReconCliTest extends Test {
 			'--source',
 			dir
 		]), '--predict-relax --no-target-cluster --source on empty corpus is a runtime exit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -745,7 +745,7 @@ class ApqReconCliTest extends Test {
 		// RUNTIME (no unblocks across empty fixture set). Crash would be
 		// the failure mode this test guards against.
 		Assert.isTrue(exitCode == 0 || exitCode == 1, 'permissive-construct exits 0 or 1 on empty corpus, got $exitCode');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -768,8 +768,8 @@ class ApqReconCliTest extends Test {
 			0, Cli.run(['recon', '--regression-probe', dir]), 'unblocked fixture (was SKIP_PARSE, now parses) is a clean OK exit'
 		);
 		Sys.setCwd(savedCwd);
-		cleanupDir('$dir/bin');
-		cleanupDir(dir);
+		CliFixture.removeDir('$dir/bin');
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -787,17 +787,6 @@ class ApqReconCliTest extends Test {
 		return dir;
 	}
 
-	private static function cleanupDir(dir: String): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final p: String = '$dir/$entry';
-			if (FileSystem.isDirectory(p))
-				cleanupDir(p);
-			else
-				FileSystem.deleteFile(p);
-		}
-		FileSystem.deleteDirectory(dir);
-	}
 
 	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;

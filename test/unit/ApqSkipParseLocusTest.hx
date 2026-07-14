@@ -29,7 +29,7 @@ class ApqSkipParseLocusTest extends Test {
 		#if sys
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['lit', 'nothingHere', dir]), 'scan with broken sibling file is a clean 0-hit, not an error');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -39,7 +39,7 @@ class ApqSkipParseLocusTest extends Test {
 		#if sys
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['refs', 'nothingHere', dir]), 'refs scan with broken sibling file is a clean 0-hit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -49,7 +49,7 @@ class ApqSkipParseLocusTest extends Test {
 		#if sys
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['uses', 'NotHere', dir]), 'uses scan with broken sibling file is a clean 0-hit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -59,7 +59,7 @@ class ApqSkipParseLocusTest extends Test {
 		#if sys
 		final dir: String = writeMixedDir();
 		Assert.equals(0, Cli.run(['meta', '@:absentMeta', dir]), 'meta scan with broken sibling file is a clean 0-hit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -86,11 +86,6 @@ class ApqSkipParseLocusTest extends Test {
 			{ name: 'Good.hx', source: 'class Good { var y:Int = 0; }' },
 			{ name: 'Bad.hx', source: 'class Bad { var z:' },
 		]);
-	}
-
-	private static function cleanupDir(dir: String): Void {
-		for (entry in FileSystem.readDirectory(dir)) FileSystem.deleteFile('$dir/$entry');
-		FileSystem.deleteDirectory(dir);
 	}
 	#end
 

@@ -133,7 +133,7 @@ class ApqDxTier4CliTest extends Test {
 		// commands — it's a no-result).
 		final exit: Int = Cli.run(['gates', dir]);
 		Assert.isTrue(exit == 0 || exit == 1, 'apq gates on empty dir returns 0 (empty walk) or 1 (no inputs matched), got $exit');
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -204,17 +204,6 @@ class ApqDxTier4CliTest extends Test {
 		return dir;
 	}
 
-	private static function cleanupDir(dir: String): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final p: String = '$dir/$entry';
-			if (FileSystem.isDirectory(p))
-				cleanupDir(p);
-			else
-				FileSystem.deleteFile(p);
-		}
-		FileSystem.deleteDirectory(dir);
-	}
 
 	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;

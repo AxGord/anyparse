@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
 #if (sys || nodejs)
-import sys.FileSystem;
 import sys.io.File;
 #end
 
@@ -28,7 +27,7 @@ class LintFixFixedPointCliTest extends Test {
 		Assert.equals(0, Cli.run(['lint', '--fix', path]), 'lint --fix exits ok');
 		final out: String = File.getContent(path);
 		Assert.isTrue(out.indexOf('else') == -1, 'every else de-nested in one invocation: $out');
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -43,7 +42,7 @@ class LintFixFixedPointCliTest extends Test {
 		final out: String = File.getContent(path);
 		Assert.isTrue(out.indexOf('trace') == -1, 'dead trace deleted: $out');
 		Assert.isTrue(out.indexOf('var x') == -1, 'now-unused local deleted in the same invocation: $out');
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -65,9 +64,7 @@ class LintFixFixedPointCliTest extends Test {
 		final outA: String = File.getContent('$dir/A.hx');
 		Assert.isTrue(outA.indexOf('else') == -1, 'redundant else de-nested (pass 1 ran): $outA');
 		Assert.isTrue(outA.indexOf('unused:Int') != -1, 'm parameter kept — A is unconfined via subtype B: $outA');
-		if (FileSystem.exists('$dir/A.hx')) FileSystem.deleteFile('$dir/A.hx');
-		if (FileSystem.exists('$dir/B.hx')) FileSystem.deleteFile('$dir/B.hx');
-		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -91,7 +88,7 @@ class LintFixFixedPointCliTest extends Test {
 			out.indexOf('helper(b:Int, c:Int)') != -1 && out.indexOf('helper(1, 10, 20)') != -1,
 			'unused-parameter dropped the param but prefer-ternary kept the call arg -> arity mismatch: $out'
 		);
-		cleanup(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -102,8 +99,8 @@ class LintFixFixedPointCliTest extends Test {
 	 * fix. `prefer-final-public-field` is in the `--fix` loop's `fullScopeIds`, so pass 2
 	 * over the subset {A} still includes B's `a.ext = 9` write and `ext` stays `var`.
 	 * Were the check active-scope, pass 2 would re-lint {A} alone, see no write, and
-	 * wrongly rewrite it to `final` — breaking B's write. Guard-free: File / FileSystem
-	 * are imported under the file's `#if (sys || nodejs)` and every test target satisfies it.
+	 * wrongly rewrite it to `final` — breaking B's write. Guard-free: File is
+	 * imported under the file's `#if (sys || nodejs)` and every test target satisfies it.
 	 */
 	public function testPreferFinalPublicFieldFullScopeAcrossPasses(): Void {
 		final a: String = 'package p;\n\nclass A {\n\tpublic var ext:Int = 0;\n\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return 2;\n\t}\n}\n';
@@ -113,17 +110,7 @@ class LintFixFixedPointCliTest extends Test {
 		final outA: String = File.getContent('$dir/A.hx');
 		Assert.isTrue(outA.indexOf('else') == -1, 'redundant else de-nested (pass 1 ran): $outA');
 		Assert.isTrue(outA.indexOf('public var ext') != -1, 'ext kept var — written cross-file from B: $outA');
-		if (FileSystem.exists('$dir/A.hx')) FileSystem.deleteFile('$dir/A.hx');
-		if (FileSystem.exists('$dir/B.hx')) FileSystem.deleteFile('$dir/B.hx');
-		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+		CliFixture.removeDir(dir);
 	}
-
-	#if (sys || nodejs)
-	private function cleanup(dir: String): Void {
-		final p: String = '$dir/Foo.hx';
-		if (FileSystem.exists(p)) FileSystem.deleteFile(p);
-		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
-	}
-	#end
 
 }

@@ -49,6 +49,25 @@ final class CliFixture {
 		return dir;
 	}
 
+	/**
+	 * Recursively delete `dir` and everything beneath it, tolerant of a
+	 * missing path — a `dir` that does not exist is a silent no-op. The
+	 * teardown counterpart to `writeDir`, centralizing the
+	 * readDirectory + deleteFile + deleteDirectory recursion each CLI
+	 * end-to-end test would otherwise reimplement.
+	 */
+	public static function removeDir(dir: String): Void {
+		if (!FileSystem.exists(dir)) return;
+		for (entry in FileSystem.readDirectory(dir)) {
+			final p: String = '$dir/$entry';
+			if (FileSystem.isDirectory(p))
+				removeDir(p);
+			else
+				FileSystem.deleteFile(p);
+		}
+		FileSystem.deleteDirectory(dir);
+	}
+
 	private static function tempDir(): String {
 		final tmpdir: Null<String> = Sys.getEnv('TMPDIR');
 		if (tmpdir != null && tmpdir.length > 0) return stripTrailingSlash(tmpdir);

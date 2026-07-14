@@ -1106,6 +1106,11 @@ typedef RefShape = {
 	 * `: Void` return type only when a function's own scope holds NONE of these; a bare
 	 * `return;` (the separate `voidReturnKind`) does not count. Optional; unset disables
 	 * the Void return-type inference.
+	 *
+	 * SEAM: must be a SUPERSET — it has to contain `returnStatementKind`'s kind plus
+	 * every expression-form return kind. `explicit-type`'s Void inference (this field)
+	 * and `prefer-ternary-return` (`returnStatementKind`) must agree on what a value
+	 * return is: a plugin that sets one without the other makes the two checks disagree.
 	 */
 	@:optional var valueReturnKinds: Array<String>;
 
@@ -1124,6 +1129,9 @@ typedef RefShape = {
 	 * an expression-bodied (`function f() expr;`) or bodyless (interface / extern) member
 	 * is left report-only, its return type being uncertain. Optional; unset disables the
 	 * Void return-type inference.
+	 *
+	 * SEAM: must be one of `functionBodyKinds` — the block flavor of that function-body
+	 * marker set (`BlockBody`, alongside `ExprBody` / `NoBody`).
 	 */
 	@:optional var blockBodyKind: String;
 

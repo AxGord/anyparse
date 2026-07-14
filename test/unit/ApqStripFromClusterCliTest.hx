@@ -55,7 +55,7 @@ class ApqStripFromClusterCliTest extends Test {
 		Assert.equals(
 			2, Cli.run(['strip', '--from-cluster', 'X', dir]), '--from-cluster without --replace/--with or --delete is a usage error'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -82,7 +82,7 @@ class ApqStripFromClusterCliTest extends Test {
 			1, Cli.run(['strip', '--from-cluster', 'anything', dir, '--delete', 'foo']),
 			'--from-cluster on an empty corpus is a runtime exit (no matching cluster key)'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -96,7 +96,7 @@ class ApqStripFromClusterCliTest extends Test {
 			1, Cli.run(['strip', '--from-cluster', 'xyz-not-a-real-key', dir, '--delete', 'foo']),
 			'--from-cluster with a missing cluster key is a runtime error'
 		);
-		cleanupDir(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -110,17 +110,6 @@ class ApqStripFromClusterCliTest extends Test {
 		final dir: String = '$base/${prefix}_${Sys.time()}_$counter';
 		FileSystem.createDirectory(dir);
 		return dir;
-	}
-	private static function cleanupDir(dir: String): Void {
-		if (!FileSystem.exists(dir)) return;
-		for (entry in FileSystem.readDirectory(dir)) {
-			final p: String = '$dir/$entry';
-			if (FileSystem.isDirectory(p))
-				cleanupDir(p);
-			else
-				FileSystem.deleteFile(p);
-		}
-		FileSystem.deleteDirectory(dir);
 	}
 	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;

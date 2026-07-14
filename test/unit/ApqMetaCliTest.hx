@@ -115,9 +115,7 @@ class ApqMetaCliTest extends Test {
 			{ name: 'bad.hx', source: 'class {' },
 		]);
 		Assert.equals(0, Cli.run(['meta', '@:foo', dir]));
-		FileSystem.deleteFile('$dir/good.hx');
-		FileSystem.deleteFile('$dir/bad.hx');
-		FileSystem.deleteDirectory(dir);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');
 		#end

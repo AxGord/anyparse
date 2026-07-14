@@ -27,8 +27,7 @@ import sys.FileSystem;
  * The wider gate makes these assertions run for real on that build —
  * exactly the binary path the pre-filter ships on — instead of falling
  * through to a `non-sys` no-op. Fixtures are written directly via
- * `sys.io.File` (the project's `CliFixture` is `#if sys`-only, so it is
- * not reused here).
+ * `sys.io.File`; teardown delegates to the shared `CliFixture.removeDir`.
  *
  * Two pre-filter paths are exercised:
  *
@@ -65,7 +64,7 @@ class ApqPrefilterCliTest extends Test {
 		Assert.equals(0, Cli.run(['lit', 'HxVarDecl', dir]));
 		Assert.equals(0, Cli.run(['mentions', 'HxVarDecl', dir]));
 		Assert.equals(0, Cli.run(['blast', 'HxVarDecl', dir]));
-		cleanupDir(dir, ['A.hx', 'B.hx', 'C.hx']);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys/nodejs target');
 		#end
@@ -83,7 +82,7 @@ class ApqPrefilterCliTest extends Test {
 		Assert.equals(0, Cli.run(['refs', 'TotallyAbsentName', dir]));
 		Assert.equals(0, Cli.run(['cases', 'TotallyAbsentName', dir]));
 		Assert.equals(0, Cli.run(['lit', 'TotallyAbsentName', dir]));
-		cleanupDir(dir, ['A.hx', 'B.hx']);
+		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys/nodejs target');
 		#end
@@ -139,11 +138,6 @@ class ApqPrefilterCliTest extends Test {
 		FileSystem.createDirectory(dir);
 		for (f in files) File.saveContent('$dir/${f.name}', f.source);
 		return dir;
-	}
-
-	private static function cleanupDir(dir: String, names: Array<String>): Void {
-		for (name in names) FileSystem.deleteFile('$dir/$name');
-		FileSystem.deleteDirectory(dir);
 	}
 	#end
 
