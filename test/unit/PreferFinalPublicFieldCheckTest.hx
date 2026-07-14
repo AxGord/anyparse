@@ -115,6 +115,20 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { public var x = ').length);
 	}
 
+	/** A field whose interface declares it as `var` must stay `var` — `final` breaks the contract. */
+	public function testInterfaceVarFieldNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
+			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; }' }
+		];
+		Assert.equals(0, new PreferFinalPublicField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** A field written inside a `macro {}` reification (emitted runtime code, unresolved receiver) is bailed, not flagged. */
+	public function testMacroEmittedWriteNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var x:Int = 0; function g():Dynamic { return macro foo.x = 1; } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -128,20 +142,6 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	/** A field whose interface declares it as `var` must stay `var` — `final` breaks the contract. */
-	public function testInterfaceVarFieldNotFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
-			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; }' }
-		];
-		Assert.equals(0, new PreferFinalPublicField().run(files, new HaxeQueryPlugin()).length);
-	}
-
-	/** A field written inside a `macro {}` reification (emitted runtime code, unresolved receiver) is bailed, not flagged. */
-	public function testMacroEmittedWriteNotFlagged(): Void {
-		Assert.equals(0, violations('class C { public var x:Int = 0; function g():Dynamic { return macro foo.x = 1; } }').length);
 	}
 
 }

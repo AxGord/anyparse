@@ -71,24 +71,6 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { public var x = ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: MemberOrder = new MemberOrder();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-	}
-
-	private function fixedSource(src: String): String {
-		final sorted: Array<{ span: Span, text: String }> = edits(src).copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
 	/** A field init whose CALL reads a sibling (indirect dep) must not be reordered across that sibling. */
 	public function testIndirectFieldDepNotFixed(): Void {
 		final src: String = 'class C { public function m():Void {} private static var log:Int = 0; public static var first:Int = push(); static function push():Int { return log; } }';
@@ -165,6 +147,24 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('#if SYS') < fixed.indexOf('docs for r'), 'doc moved inside the #if: $fixed');
 		Assert.isTrue(fixed.indexOf('docs for r') < fixed.indexOf('function r'), 'doc still immediately before its member: $fixed');
 		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function edits(src: String): Array<{ span: Span, text: String }> {
+		final check: MemberOrder = new MemberOrder();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+	}
+
+	private function fixedSource(src: String): String {
+		final sorted: Array<{ span: Span, text: String }> = edits(src).copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 	/** Whether `src` parses — used to assert a conditional-reorder rebuild round-trips through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips). */

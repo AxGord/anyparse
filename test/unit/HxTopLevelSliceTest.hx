@@ -6,11 +6,11 @@ import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxInterfaceDecl;
-import anyparse.grammar.haxe.HxModifier;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
+import anyparse.grammar.haxe.HxModifier;
 
 /**
  * Phase 3 top-level forms tests for the macro-generated Haxe parser.
@@ -49,7 +49,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsTypedefMissingEquals(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('typedef Foo Bar;'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('typedef Foo Bar;'), ParseError);
 	}
 
 	public function testTypedefMissingSemicolonAccepted(): Void {
@@ -113,7 +113,7 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsUnclosedEnum(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('enum Color { Red;'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('enum Color { Red;'), ParseError);
 	}
 
 	// -- Interface tests --
@@ -188,15 +188,15 @@ class HxTopLevelSliceTest extends HxTestHelpers {
 	}
 
 	public function testWordBoundaryTypedefine(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('typedefine Foo = Bar;'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('typedefine Foo = Bar;'), ParseError);
 	}
 
 	public function testWordBoundaryEnumerate(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('enumerate Color {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('enumerate Color {}'), ParseError);
 	}
 
 	public function testWordBoundaryInterfacing(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('interfacing IFoo {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('interfacing IFoo {}'), ParseError);
 	}
 
 	// -- Top-level modifier tests --

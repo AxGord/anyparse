@@ -33,7 +33,7 @@ final class HxCallGroupRestProbeChainOperandTest extends Test {
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));
 		Assert.isTrue(out.indexOf("w('some sample caption:', 100)") >= 0);
-		Assert.isTrue(out.indexOf("w(\n") < 0);
+		Assert.isTrue(out.indexOf('w(\n') < 0);
 	}
 
 	private inline function triviaWrite(src: String): String {

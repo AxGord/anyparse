@@ -115,17 +115,11 @@ class ApqHxqDxV10CliTest extends Test {
 		#if sys
 		final cur: String = CliFixture.writeAs(
 			'apq_sweep_v10_cur', 'json',
-			'{' + '"pass":2,"fail":1,"skipParse":0,' + '"fixtures":['
-			+ '{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"PASS"},'
-			+ '{"path":"test/testcases/whitespace/static_locals.hxtest","status":"FAIL"},'
-			+ '{"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}' + ']}'
+			'{"pass":2,"fail":1,"skipParse":0,"fixtures":[{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"PASS"},{"path":"test/testcases/whitespace/static_locals.hxtest","status":"FAIL"},{"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}]}'
 		);
 		final prev: String = CliFixture.writeAs(
 			'apq_sweep_v10_prev', 'json',
-			'{' + '"pass":1,"fail":1,"skipParse":1,' + '"fixtures":['
-			+ '{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"FAIL"},'
-			+ '{"path":"test/testcases/whitespace/static_locals.hxtest","status":"SKIP_PARSE"},'
-			+ '{"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}' + ']}'
+			'{"pass":1,"fail":1,"skipParse":1,"fixtures":[{"path":"test/testcases/whitespace/inline_calls.hxtest","status":"FAIL"},{"path":"test/testcases/whitespace/static_locals.hxtest","status":"SKIP_PARSE"},{"path":"test/testcases/whitespace/keep.hxtest","status":"PASS"}]}'
 		);
 		Assert.equals(0, Cli.run(['sweep', '--file', cur, '--diff', prev]));
 		FileSystem.deleteFile(cur);
@@ -138,10 +132,10 @@ class ApqHxqDxV10CliTest extends Test {
 	public function testSweepDiffIdenticalSnapshotsEmitsZeroChanged(): Void {
 		#if sys
 		final cur: String = CliFixture.writeAs(
-			'apq_sweep_v10_id', 'json', '{' + '"pass":1,"fail":0,"skipParse":0,' + '"fixtures":[{"path":"a","status":"PASS"}]}'
+			'apq_sweep_v10_id', 'json', '{"pass":1,"fail":0,"skipParse":0,"fixtures":[{"path":"a","status":"PASS"}]}'
 		);
 		final prev: String = CliFixture.writeAs(
-			'apq_sweep_v10_id', 'json', '{' + '"pass":1,"fail":0,"skipParse":0,' + '"fixtures":[{"path":"a","status":"PASS"}]}'
+			'apq_sweep_v10_id', 'json', '{"pass":1,"fail":0,"skipParse":0,"fixtures":[{"path":"a","status":"PASS"}]}'
 		);
 		Assert.equals(0, Cli.run(['sweep', '--file', cur, '--diff', prev]));
 		FileSystem.deleteFile(cur);
@@ -158,11 +152,11 @@ class ApqHxqDxV10CliTest extends Test {
 		#if sys
 		final cur: String = CliFixture.writeAs(
 			'apq_sweep_v10_compose', 'json',
-			'{' + '"pass":2,"fail":0,"skipParse":0,' + '"fixtures":[{"path":"a","status":"PASS"},{"path":"b","status":"PASS"}]}'
+			'{"pass":2,"fail":0,"skipParse":0,"fixtures":[{"path":"a","status":"PASS"},{"path":"b","status":"PASS"}]}'
 		);
 		final prev: String = CliFixture.writeAs(
 			'apq_sweep_v10_compose', 'json',
-			'{' + '"pass":1,"fail":1,"skipParse":0,' + '"fixtures":[{"path":"a","status":"PASS"},{"path":"b","status":"FAIL"}]}'
+			'{"pass":1,"fail":1,"skipParse":0,"fixtures":[{"path":"a","status":"PASS"},{"path":"b","status":"FAIL"}]}'
 		);
 		Assert.equals(0, Cli.run(['sweep', '--file', cur, '--prev', prev, '--diff', prev]));
 		FileSystem.deleteFile(cur);

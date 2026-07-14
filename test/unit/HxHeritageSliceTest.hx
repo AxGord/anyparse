@@ -22,20 +22,6 @@ import anyparse.runtime.ParseError;
  */
 class HxHeritageSliceTest extends HxTestHelpers {
 
-	private function clauseType(clause: HxHeritageClause): HxType {
-		return switch clause {
-			case ExtendsClause(type): type;
-			case ImplementsClause(type): type;
-		};
-	}
-
-	private function isExtends(clause: HxHeritageClause): Bool {
-		return switch clause {
-			case ExtendsClause(_): true;
-			case ImplementsClause(_): false;
-		};
-	}
-
 	public function testClassExtends(): Void {
 		final module: HxModule = HaxeModuleParser.parse('class Foo extends Bar {}');
 		Assert.equals(1, module.decls.length);
@@ -124,7 +110,21 @@ class HxHeritageSliceTest extends HxTestHelpers {
 	public function testWordBoundaryExtendslike(): Void {
 		// `extendsBar` is a single identifier, not `extends Bar`; the
 		// stray token where the `{` body is expected fails the parse.
-		Assert.raises(() -> HaxeModuleParser.parse('class Foo extendsBar {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('class Foo extendsBar {}'), ParseError);
+	}
+
+	private function clauseType(clause: HxHeritageClause): HxType {
+		return switch clause {
+			case ExtendsClause(type): type;
+			case ImplementsClause(type): type;
+		};
+	}
+
+	private function isExtends(clause: HxHeritageClause): Bool {
+		return switch clause {
+			case ExtendsClause(_): true;
+			case ImplementsClause(_): false;
+		};
 	}
 
 }

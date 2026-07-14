@@ -63,12 +63,12 @@ class AssignmentInConditionCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { if (a = b) ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new AssignmentInCondition().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testWhileExprAssignFlagged(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar x = while (a = b) r();\n\t}\n}').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new AssignmentInCondition().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

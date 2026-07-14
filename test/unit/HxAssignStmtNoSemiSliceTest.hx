@@ -148,7 +148,7 @@ class HxAssignStmtNoSemiSliceTest extends HxTestHelpers {
 	// originally guarded.
 
 	public function testAssignFollowedByIdentRegression(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tx = a + b\n\t\ty = c\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tx = a + b\n\t\ty = c\n\t}\n}'));
 	}
 
 	// -- Regression: pre-slice path — Assign+IfExpr WITH `;` still parses --

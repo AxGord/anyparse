@@ -49,14 +49,6 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	private function cleanup(dir: String): Void {
-		final p: String = '$dir/Foo.hx';
-		if (FileSystem.exists(p)) FileSystem.deleteFile(p);
-		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
-	}
-	#end
-
 	public function testCrossFileConfinementSafeAcrossPasses(): Void {
 		#if (sys || nodejs)
 		// A.hx holds a private method `m` with an unused parameter PLUS a
@@ -125,5 +117,13 @@ class LintFixFixedPointCliTest extends Test {
 		if (FileSystem.exists('$dir/B.hx')) FileSystem.deleteFile('$dir/B.hx');
 		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
 	}
+
+	#if (sys || nodejs)
+	private function cleanup(dir: String): Void {
+		final p: String = '$dir/Foo.hx';
+		if (FileSystem.exists(p)) FileSystem.deleteFile(p);
+		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+	}
+	#end
 
 }

@@ -63,17 +63,6 @@ final class Refs {
 		return findMulti([name], tree, shape)[name] ?? [];
 	}
 
-	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
-		// Decl-host takes precedence over identKind: a single grammar
-		// would normally place the decl name on a different ctor than
-		// the reference ctor, but the contract leaves the option open.
-		return shape.declHostKinds.contains(kind)
-			? RefKind.Decl
-			: shape.selfScopeDeclKinds.contains(kind)
-				? RefKind.Decl
-				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : null;
-	}
-
 	/**
 	 * Multi-name variant of `find` — ONE tree walk resolving every name in
 	 * `names` simultaneously (duplicates tolerated). The call-graph layer needs
@@ -88,6 +77,17 @@ final class Refs {
 		final scopes: ScopeStack = new ScopeStack();
 		walkMulti(tree, shape, scopes, out, false, false);
 		return out;
+	}
+
+	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
+		// Decl-host takes precedence over identKind: a single grammar
+		// would normally place the decl name on a different ctor than
+		// the reference ctor, but the contract leaves the option open.
+		return shape.declHostKinds.contains(kind)
+			? RefKind.Decl
+			: shape.selfScopeDeclKinds.contains(kind)
+				? RefKind.Decl
+				: kind == shape.identKind ? isWriteTarget ? RefKind.Write : RefKind.Read : null;
 	}
 
 	private static function walkMulti(

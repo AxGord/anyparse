@@ -20,14 +20,6 @@ import anyparse.grammar.haxe.HxTypeRef;
  */
 class HxConstStringTypeSliceTest extends HxTestHelpers {
 
-	private function expectConstString(t: Null<HxType>): HxDoubleStringLit {
-		return switch t {
-			case null: throw 'expected HxType.ConstStringType, got null';
-			case ConstStringType(v): v;
-			case _: throw 'expected HxType.ConstStringType, got non-ConstStringType variant';
-		};
-	}
-
 	public function testConstStringInTypeParam(): Void {
 		final module: HxModule = HaxeModuleParser.parse('abstract Tls<T>(hl.Abstract<"hl_tls">) {}');
 		Assert.equals(1, module.decls.length);
@@ -68,6 +60,14 @@ class HxConstStringTypeSliceTest extends HxTestHelpers {
 	public function testRoundTripMultipleParams(): Void {
 		// Const-string alongside a regular named type-param.
 		roundTrip('class Foo { var x:Map<"key", Int>; }', 'const-string-with-named-sibling');
+	}
+
+	private function expectConstString(t: Null<HxType>): HxDoubleStringLit {
+		return switch t {
+			case null: throw 'expected HxType.ConstStringType, got null';
+			case ConstStringType(v): v;
+			case _: throw 'expected HxType.ConstStringType, got non-ConstStringType variant';
+		};
 	}
 
 }

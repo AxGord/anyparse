@@ -32,7 +32,7 @@ final class HxCallGroupRestProbeNestedArgTest extends Test {
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));
 		Assert.isTrue(out.indexOf("w('SampleCaption', 207)") >= 0);
-		Assert.isTrue(out.indexOf("w(\n") < 0);
+		Assert.isTrue(out.indexOf('w(\n') < 0);
 	}
 
 	private inline function triviaWrite(src: String): String {

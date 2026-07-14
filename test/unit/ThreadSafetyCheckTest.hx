@@ -113,19 +113,6 @@ class ThreadSafetyCheckTest extends Test {
 		#end
 	}
 
-	#if (sys || nodejs)
-	private function violations(config: String, sources: Array<String>): Array<Violation> {
-		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);
-		final files: Array<{ file: String, source: String }> = [
-			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
-		];
-		final result: Array<Violation> = new ThreadSafety().run(files, new HaxeQueryPlugin());
-		if (FileSystem.exists('$dir/apqlint.json')) FileSystem.deleteFile('$dir/apqlint.json');
-		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
-		return result;
-	}
-	#end
-
 	public function testNestedSameTypeLockReacquireFlagged(): Void {
 		#if (sys || nodejs)
 		final vs: Array<Violation> = violations('{"rules":{"thread-safety":{"sinks":["Mut.lock"],"lockPairs":["Mut.lock/unlock"]}}}', [
@@ -195,5 +182,18 @@ class ThreadSafetyCheckTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	#if (sys || nodejs)
+	private function violations(config: String, sources: Array<String>): Array<Violation> {
+		final dir: String = CliFixture.writeDir('threadsafety', [{ name: 'apqlint.json', source: config }]);
+		final files: Array<{ file: String, source: String }> = [
+			for (i in 0...sources.length) { file: '$dir/F$i.hx', source: sources[i] }
+		];
+		final result: Array<Violation> = new ThreadSafety().run(files, new HaxeQueryPlugin());
+		if (FileSystem.exists('$dir/apqlint.json')) FileSystem.deleteFile('$dir/apqlint.json');
+		if (FileSystem.exists(dir)) FileSystem.deleteDirectory(dir);
+		return result;
+	}
+	#end
 
 }

@@ -2,7 +2,6 @@ package unit;
 
 import utest.Assert;
 import anyparse.grammar.haxe.HxCaseBranch;
-import anyparse.grammar.haxe.HxCasePatternBody;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
@@ -24,22 +23,6 @@ import anyparse.grammar.haxe.HxSwitchStmt;
  * `.pattern` → `.patterns` field reshape).
  */
 class HxMultiPatternCaseSliceTest extends HxTestHelpers {
-
-	private function parseSwitch(source: String): HxSwitchStmt {
-		final body: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl(source));
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case SwitchStmt(stmt): stmt;
-			case null, _: throw 'expected SwitchStmt, got ${body[0]}';
-		};
-	}
-
-	private function caseBranch(c: HxSwitchCase): HxCaseBranch {
-		return switch c {
-			case CaseBranch(b): b;
-			case null, _: throw 'expected CaseBranch, got $c';
-		};
-	}
 
 	// regression: single pattern is now a one-element list
 
@@ -120,6 +103,22 @@ class HxMultiPatternCaseSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected Plain(Call) pattern Foo(a)');
 		}
+	}
+
+	private function parseSwitch(source: String): HxSwitchStmt {
+		final body: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl(source));
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case SwitchStmt(stmt): stmt;
+			case null, _: throw 'expected SwitchStmt, got ${body[0]}';
+		};
+	}
+
+	private function caseBranch(c: HxSwitchCase): HxCaseBranch {
+		return switch c {
+			case CaseBranch(b): b;
+			case null, _: throw 'expected CaseBranch, got $c';
+		};
 	}
 
 }

@@ -18,8 +18,7 @@ class ExtractSuperclassSliceTest extends Test {
 
 	/** The chosen members land on the new superclass and leave the source; the source extends it. */
 	public function testExtractBasic(): Void {
-		final src: String = 'package pkg;\n\nclass Widget {\n' + '\tpublic var id:Int = 0;\n' + '\tpublic function new() {}\n'
-			+ '\tpublic function bump():Void { id = id + 1; }\n' + '\tpublic function render():String return \'w\';\n}';
+		final src: String = 'package pkg;\n\nclass Widget {\n\tpublic var id:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void { id = id + 1; }\n\tpublic function render():String return \'w\';\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Widget.hx', 'Widget', 'Base', 'pkg/Base.hx', ['id', 'bump'], src);
 		Assert.equals(2, changes.length);
 		final base: String = changeFor(changes, 'pkg/Base.hx').newSource;
@@ -34,23 +33,20 @@ class ExtractSuperclassSliceTest extends Test {
 
 	/** Imports the moved bodies reference are carried into the superclass. */
 	public function testImportCarry(): Void {
-		final src: String = 'package pkg;\n\nimport haxe.ds.Option;\n\nclass S {\n' + '\tpublic function new() {}\n'
-			+ '\tpublic function pick():Option<Int> return None;\n' + '\tpublic function keep():Void {}\n}';
+		final src: String = 'package pkg;\n\nimport haxe.ds.Option;\n\nclass S {\n\tpublic function new() {}\n\tpublic function pick():Option<Int> return None;\n\tpublic function keep():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['pick'], src);
 		Assert.isTrue(StringTools.contains(changeFor(changes, 'pkg/B.hx').newSource, 'import haxe.ds.Option;'), 'carries the import');
 	}
 
 	/** A moved member referencing a staying member is refused (stranding). */
 	public function testStrandedRefused(): Void {
-		final src: String = 'package pkg;\n\nclass S {\n' + '\tpublic function new() {}\n' + '\tpublic function helper():Int return 1;\n'
-			+ '\tpublic function calc():Int return helper();\n}';
+		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function helper():Int return 1;\n\tpublic function calc():Int return helper();\n}';
 		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['calc'], src, plugin()));
 	}
 
 	/** `extends` is inserted before an existing `implements` clause. */
 	public function testExtendsBeforeImplements(): Void {
-		final src: String = 'package pkg;\n\nclass S implements IThing {\n' + '\tpublic function new() {}\n'
-			+ '\tpublic function a():Void {}\n' + '\tpublic function thing():Void {}\n}';
+		final src: String = 'package pkg;\n\nclass S implements IThing {\n\tpublic function new() {}\n\tpublic function a():Void {}\n\tpublic function thing():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['a'], src);
 		Assert.isTrue(
 			StringTools.contains(changeFor(changes, 'pkg/S.hx').newSource, 'class S extends B implements IThing {'),
@@ -60,21 +56,19 @@ class ExtractSuperclassSliceTest extends Test {
 
 	/** A class that already extends a class is refused (single inheritance). */
 	public function testAlreadyExtendsRefused(): Void {
-		final src: String = 'package pkg;\n\nclass S extends Other {\n' + '\tpublic function new() { super(); }\n'
-			+ '\tpublic function a():Void {}\n}';
+		final src: String = 'package pkg;\n\nclass S extends Other {\n\tpublic function new() { super(); }\n\tpublic function a():Void {}\n}';
 		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['a'], src, plugin()));
 	}
 
 	/** A static member is refused. */
 	public function testStaticRefused(): Void {
-		final src: String = 'package pkg;\n\nclass S {\n' + '\tpublic function new() {}\n' + '\tpublic static function s():Void {}\n}';
+		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic static function s():Void {}\n}';
 		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['s'], src, plugin()));
 	}
 
 	/** An override member is refused. */
 	public function testOverrideRefused(): Void {
-		final src: String = 'package pkg;\n\nclass S {\n' + '\tpublic function new() {}\n'
-			+ '\toverride public function toString():String return \'s\';\n}';
+		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\toverride public function toString():String return \'s\';\n}';
 		assertErr(ExtractSuperclass.extract('pkg/S.hx', 'S', 'B', 'pkg/B.hx', ['toString'], src, plugin()));
 	}
 

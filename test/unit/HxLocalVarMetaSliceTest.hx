@@ -29,32 +29,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxLocalVarMetaSliceTest extends HxTestHelpers {
 
-	private function fnBodyStmtsFromSource(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	private function expectVarStmtDecl(stmt: HxStatement): HxVarDecl {
-		return switch stmt {
-			case VarStmt(decl): decl;
-			case _: throw 'expected VarStmt, got $stmt';
-		};
-	}
-
-	private function expectFinalStmtDecl(stmt: HxStatement): HxVarDecl {
-		return switch stmt {
-			case FinalStmt(decl): decl;
-			case _: throw 'expected FinalStmt, got $stmt';
-		};
-	}
-
-	private function metaName(m: HxMetadata): String {
-		return switch m {
-			case MetaCall(call): (call.name: String);
-			case _: HxMetadataUtil.source(m);
-		};
-	}
-
 	// -- Single meta before a local var name (the fork fixture) --
 
 	public function testSingleMetaBeforeLocalVarName(): Void {
@@ -120,6 +94,32 @@ class HxLocalVarMetaSliceTest extends HxTestHelpers {
 		Assert.equals(1, tail.meta.length);
 		Assert.equals('@:foo', metaName(tail.meta[0]));
 		Assert.equals('b', (tail.name: String));
+	}
+
+	private function fnBodyStmtsFromSource(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	private function expectVarStmtDecl(stmt: HxStatement): HxVarDecl {
+		return switch stmt {
+			case VarStmt(decl): decl;
+			case _: throw 'expected VarStmt, got $stmt';
+		};
+	}
+
+	private function expectFinalStmtDecl(stmt: HxStatement): HxVarDecl {
+		return switch stmt {
+			case FinalStmt(decl): decl;
+			case _: throw 'expected FinalStmt, got $stmt';
+		};
+	}
+
+	private function metaName(m: HxMetadata): String {
+		return switch m {
+			case MetaCall(call): (call.name: String);
+			case _: HxMetadataUtil.source(m);
+		};
 	}
 
 }

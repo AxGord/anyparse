@@ -1018,6 +1018,25 @@ typedef RefShape = {
 	 * models no assertion narrowing.
 	 */
 	@:optional var nullAssertionCalls: Array<String>;
+
+	/**
+	 * Field names that denote a collection's element count (`length`) — the
+	 * `magic-number` check exempts a numeric literal compared against such a
+	 * field access (`args.length == 3`), a self-documenting structural arity
+	 * check, while a threshold comparison against a domain value (`score ==
+	 * 100`) stays flagged. Optional; unset removes the carve-out.
+	 */
+	@:optional var sizeFieldNames: Array<String>;
+
+	/**
+	 * Type-declaration kinds whose CONSTRUCTORS/values are referenceable as bare
+	 * identifiers (Haxe `EnumDecl` / `EnumAbstractDecl`) — an `import pkg.Enum;`
+	 * of such a type is used when one of its constructors appears bare
+	 * (expected-type resolved), even though the type name never does. Lets
+	 * `unused-import` avoid deleting a needed enum import. Optional; unset drops
+	 * the carve-out.
+	 */
+	@:optional var bareConstructorTypeKinds: Array<String>;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

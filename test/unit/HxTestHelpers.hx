@@ -25,7 +25,6 @@ import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
 import anyparse.grammar.haxe.HxErrorMsg;
 import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxFnBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxInterfaceDecl;

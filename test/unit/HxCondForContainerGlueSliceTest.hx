@@ -40,13 +40,6 @@ final class HxCondForContainerGlueSliceTest extends Test {
 		Assert.equals(GLUED, triviaWrite(GLUED));
 	}
 
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
 	/**
 	 * A top-level `&&`/`||` chain condition whose LAST operand ends in a
 	 * multi-line container still OPENS the paren (the chain wraps, not the
@@ -62,6 +55,13 @@ final class HxCondForContainerGlueSliceTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
 		opts.finalNewline = false;
 		Assert.equals(opened, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(flat), opts));
+	}
+
+
+	private inline function triviaWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

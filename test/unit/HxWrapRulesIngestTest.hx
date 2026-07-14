@@ -32,8 +32,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testSingleRuleWithSingleConditionIngested(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"defaultWrap":"noWrap","rules":['
-			+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":4}]}' + ']}}}'
+			'{"wrapping":{"methodChain":{"defaultWrap":"noWrap","rules":[{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":4}]}]}}}'
 		);
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.defaultMode);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
@@ -46,11 +45,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testMultipleConditionsAndAllPredicates(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"noWrap","conditions":[' + '{"cond":"itemCount <= n","value":3},'
-			+ '{"cond":"exceedsMaxLineLength","value":0}' + ']},' + '{"type":"onePerLineAfterFirst","conditions":['
-			+ '{"cond":"anyItemLength >= n","value":30},' + '{"cond":"allItemLengths < n","value":50}' + ']},'
-			+ '{"type":"fillLine","conditions":[' + '{"cond":"totalItemLength <= n","value":80},'
-			+ '{"cond":"totalItemLength >= n","value":20}' + ']}' + ']}}}'
+			'{"wrapping":{"methodChain":{"rules":[{"type":"noWrap","conditions":[{"cond":"itemCount <= n","value":3},{"cond":"exceedsMaxLineLength","value":0}]},{"type":"onePerLineAfterFirst","conditions":[{"cond":"anyItemLength >= n","value":30},{"cond":"allItemLengths < n","value":50}]},{"type":"fillLine","conditions":[{"cond":"totalItemLength <= n","value":80},{"cond":"totalItemLength >= n","value":20}]}]}}}'
 		);
 		Assert.equals(3, opts.methodChainWrap.rules.length);
 		final r0: WrapRule = opts.methodChainWrap.rules[0];
@@ -77,9 +72,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testLineLengthCondIngested(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"onePerLineAfterFirst","conditions":['
-			+ '{"cond":"lineLength >= n","value":160}' + ']},' + '{"type":"noWrap","conditions":[' + '{"cond":"itemCount <= n","value":3}'
-			+ ']}' + ']}}}'
+			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLineAfterFirst","conditions":[{"cond":"lineLength >= n","value":160}]},{"type":"noWrap","conditions":[{"cond":"itemCount <= n","value":3}]}]}}}'
 		);
 		Assert.equals(2, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.OnePerLineAfterFirst, opts.methodChainWrap.rules[0].mode);
@@ -90,9 +83,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testUnknownCondDropsRule(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"onePerLineAfterFirst","conditions":['
-			+ '{"cond":"thisCondIsBogus >= n","value":42}' + ']},' + '{"type":"noWrap","conditions":['
-			+ '{"cond":"itemCount <= n","value":3}' + ']}' + ']}}}'
+			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLineAfterFirst","conditions":[{"cond":"thisCondIsBogus >= n","value":42}]},{"type":"noWrap","conditions":[{"cond":"itemCount <= n","value":3}]}]}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.NoWrap, opts.methodChainWrap.rules[0].mode);
@@ -100,8 +91,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testUnknownTypeDropsRule(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"customMode","conditions":[{"cond":"itemCount >= n","value":7}]},'
-			+ '{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":7}]}' + ']}}}'
+			'{"wrapping":{"methodChain":{"rules":[{"type":"customMode","conditions":[{"cond":"itemCount >= n","value":7}]},{"type":"onePerLine","conditions":[{"cond":"itemCount >= n","value":7}]}]}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
 		Assert.equals(WrapMode.OnePerLine, opts.methodChainWrap.rules[0].mode);
@@ -124,8 +114,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testArrayWrapAndAnonTypeShareTheSameIngest(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{' + '"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[]}]},'
-			+ '"anonType":{"rules":[{"type":"fillLine","conditions":[]}]}' + '}}'
+			'{"wrapping":{"arrayWrap":{"rules":[{"type":"onePerLine","conditions":[]}]},"anonType":{"rules":[{"type":"fillLine","conditions":[]}]}}}'
 		);
 		Assert.equals(1, opts.arrayLiteralWrap.rules.length);
 		Assert.equals(WrapMode.OnePerLine, opts.arrayLiteralWrap.rules[0].mode);
@@ -135,7 +124,7 @@ class HxWrapRulesIngestTest extends Test {
 
 	public function testEmptyConditionsArrayProducesAlwaysFiringRule(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"wrapping":{"methodChain":{"rules":[' + '{"type":"onePerLine","conditions":[]}' + ']}}}'
+			'{"wrapping":{"methodChain":{"rules":[{"type":"onePerLine","conditions":[]}]}}}'
 		);
 		Assert.equals(1, opts.methodChainWrap.rules.length);
 		Assert.equals(0, opts.methodChainWrap.rules[0].conditions.length);

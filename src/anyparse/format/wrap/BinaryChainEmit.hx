@@ -170,9 +170,11 @@ final class BinaryChainEmit {
 			// keep `cond ? A : {` on the head line and let the collection self-
 			// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
 			// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
-			if (extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0)
-				return WrapBoundary(IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops)));
-			return WrapBoundary(buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt));
+			return WrapBoundary(
+				extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0
+					? IfFirstLineExceeds(opt.lineWidth, shapeAt(evalAt(true, [])), shapeNoWrap(items, ops))
+					: buildBinaryThresholdTree(extraThresholds, [], true, evalAt, shapeAt)
+			);
 		}
 		return extraThresholds.length == 0
 			? emitNoThreshold(items, ops, opt, nestSuppress, condWrapForced, ternaryRestAware, evalAt, shapeAt, shapeNoWrapAt)

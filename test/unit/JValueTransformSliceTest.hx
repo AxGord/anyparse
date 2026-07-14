@@ -38,37 +38,6 @@ class JValueTransformSliceTest extends Test {
 		super();
 	}
 
-	// ---------------- deep per-type hooks ----------------
-
-	/** Deep transform: double every `JNumber` leaf, in one walk. */
-	private static function deepDouble(node: JValue): JValue {
-		return JValueAst.transform(node, {
-			jValue: function(v: JValue): JValue {
-				return switch v {
-					case JNumber(n): JNumber((n: Float) * 2);
-					case _: v;
-				};
-			},
-		});
-	}
-
-	/** Deep transform: upper-case every `JString` leaf (object keys left intact). */
-	private static function deepUpper(node: JValue): JValue {
-		return JValueAst.transform(node, {
-			jValue: function(v: JValue): JValue {
-				return switch v {
-					case JString(s): JString((s: String).toUpperCase());
-					case _: v;
-				};
-			},
-		});
-	}
-
-	/** Identity transform: empty `visit`, deep no-op. */
-	private static function deepIdentity(node: JValue): JValue {
-		return JValueAst.transform(node, {});
-	}
-
 	// ---------------- per-type-hook contract ----------------
 
 	public function testEmptyVisitIsIdentity(): Void {
@@ -94,11 +63,6 @@ class JValueTransformSliceTest extends Test {
 		final out: JValue = JValueAst.transform(ast, { jStringLit: (s: JStringLit) -> bang(s) });
 		final expected: JValue = JObject([{ key: 'a!', value: JString('x!') }]);
 		Assert.isTrue(JValueTools.equals(expected, out), 'jStringLit hook missed nested string terminals');
-	}
-
-	/** Append `!` to a JSON string terminal (transparent over String). */
-	private static function bang(s: JStringLit): JStringLit {
-		return (s: String) + '!';
 	}
 
 	public function testEntryHookSeesTransformedChildren(): Void {
@@ -237,6 +201,42 @@ class JValueTransformSliceTest extends Test {
 			return;
 		}
 		Assert.isTrue(JValueTools.equals(expected, reparsed), 'round-trip mismatch for $tag: reparsed=$reparsed');
+	}
+
+	// ---------------- deep per-type hooks ----------------
+
+	/** Deep transform: double every `JNumber` leaf, in one walk. */
+	private static function deepDouble(node: JValue): JValue {
+		return JValueAst.transform(node, {
+			jValue: function(v: JValue): JValue {
+				return switch v {
+					case JNumber(n): JNumber((n: Float) * 2);
+					case _: v;
+				};
+			},
+		});
+	}
+
+	/** Deep transform: upper-case every `JString` leaf (object keys left intact). */
+	private static function deepUpper(node: JValue): JValue {
+		return JValueAst.transform(node, {
+			jValue: function(v: JValue): JValue {
+				return switch v {
+					case JString(s): JString((s: String).toUpperCase());
+					case _: v;
+				};
+			},
+		});
+	}
+
+	/** Identity transform: empty `visit`, deep no-op. */
+	private static function deepIdentity(node: JValue): JValue {
+		return JValueAst.transform(node, {});
+	}
+
+	/** Append `!` to a JSON string terminal (transparent over String). */
+	private static function bang(s: JStringLit): JStringLit {
+		return (s: String) + '!';
 	}
 
 }

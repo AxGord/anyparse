@@ -22,12 +22,6 @@ class HxSourceBlankPreserveSliceTest extends Test {
 		super();
 	}
 
-	private function write(src: String, json: String, ?capOverride: Null<Int>): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
-		if (capOverride != null) opts.maxConsecutiveBlanks = capOverride;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
 	public function testTwoSourceBlanksPreservedWhenCapTwo(): Void {
 		// Two authored blank lines between two decls survive when the cap
 		// permits two — the pre-fix writer collapsed them to one.
@@ -78,6 +72,12 @@ class HxSourceBlankPreserveSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction a() {}\n\n\n\tfunction b() {}\n}';
 		final out: String = write(src, '{}');
 		Assert.equals('class C {\n\tfunction a() {}\n\n\tfunction b() {}\n}\n', out);
+	}
+
+	private function write(src: String, json: String, ?capOverride: Null<Int>): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
+		if (capOverride != null) opts.maxConsecutiveBlanks = capOverride;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

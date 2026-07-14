@@ -84,21 +84,6 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { var _x = ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function fixedSource(src: String): String {
-		final check: PreferFinalField = new PreferFinalField();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
 	/** A write whose name is separated from `=` by a comment is still detected — not flagged. */
 	public function testCommentInterruptedWriteNotFlagged(): Void {
 		Assert.equals(0, violations('class C { private var _x:Int = 0; function s():Void { _x /* c */ = 5; } }').length);
@@ -116,6 +101,21 @@ class PreferFinalFieldCheckTest extends Test {
 	/** A prefix `++`/`--` separated from the field by a comment is still detected — not flagged. */
 	public function testPrefixIncrementWithCommentNotFlagged(): Void {
 		Assert.equals(0, violations('class C { private var _d:Int = 4; function f():Void { ++ /* c */ _d; } }').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function fixedSource(src: String): String {
+		final check: PreferFinalField = new PreferFinalField();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }

@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HxCaseBranch;
 import anyparse.grammar.haxe.HxCasePattern;
-import anyparse.grammar.haxe.HxCasePatternBody;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchCase;
@@ -29,36 +28,6 @@ import anyparse.grammar.haxe.HxSwitchStmt;
  * idempotency.
  */
 class HxSwitchGuardSliceTest extends HxTestHelpers {
-
-	private function parseSwitch(source: String): HxSwitchStmt {
-		final body: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl(source));
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case SwitchStmt(stmt): stmt;
-			case null, _: throw 'expected SwitchStmt, got ${body[0]}';
-		};
-	}
-
-	private function caseBranch(c: HxSwitchCase): HxCaseBranch {
-		return switch c {
-			case CaseBranch(b): b;
-			case null, _: throw 'expected CaseBranch, got $c';
-		};
-	}
-
-	private function identName(e: HxExpr): String {
-		return switch e {
-			case IdentExpr(v): (v: String);
-			case e: throw 'expected IdentExpr, got $e';
-		};
-	}
-
-	private function plainExpr(p: HxCasePattern): HxExpr {
-		return switch p.expr {
-			case Plain(e): e;
-			case body: throw 'expected Plain pattern body, got $body';
-		};
-	}
 
 	public function testCaseWithGuardPresent(): Void {
 		final sw: HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case A if (b): y(); case _: z(); } } }');
@@ -145,6 +114,36 @@ class HxSwitchGuardSliceTest extends HxTestHelpers {
 		roundTrip(
 			'class C { function f(x:E):Void { switch (x) { case A if (b): y(); case C, D if (e): z(); case _: w(); } } }', 'switch-guard'
 		);
+	}
+
+	private function parseSwitch(source: String): HxSwitchStmt {
+		final body: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl(source));
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case SwitchStmt(stmt): stmt;
+			case null, _: throw 'expected SwitchStmt, got ${body[0]}';
+		};
+	}
+
+	private function caseBranch(c: HxSwitchCase): HxCaseBranch {
+		return switch c {
+			case CaseBranch(b): b;
+			case null, _: throw 'expected CaseBranch, got $c';
+		};
+	}
+
+	private function identName(e: HxExpr): String {
+		return switch e {
+			case IdentExpr(v): (v: String);
+			case e: throw 'expected IdentExpr, got $e';
+		};
+	}
+
+	private function plainExpr(p: HxCasePattern): HxExpr {
+		return switch p.expr {
+			case Plain(e): e;
+			case body: throw 'expected Plain pattern body, got $body';
+		};
 	}
 
 }

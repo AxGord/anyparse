@@ -47,8 +47,7 @@ class SymbolIndexSliceTest extends Test {
 	 * kinds, and the type declarations with the correct `isMain` flag.
 	 */
 	public function testFileInfoExtraction(): Void {
-		final source: String = 'package pkg.sub;\n' + 'import other.Thing;\n' + 'import other.Mod.Sub as Aliased;\n'
-			+ 'import other.deep.*;\n' + 'using other.Ext;\n' + 'class A {}\n' + 'typedef Helper = {};\n';
+		final source: String = 'package pkg.sub;\nimport other.Thing;\nimport other.Mod.Sub as Aliased;\nimport other.deep.*;\nusing other.Ext;\nclass A {}\ntypedef Helper = {};\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/sub/A.hx', source: source }], plugin());
 
 		final info: Null<FileInfo> = index.fileInfo('src/pkg/sub/A.hx');
@@ -264,17 +263,6 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isNull(index.fileInfo('src/pkg/Bad.hx'));
 	}
 
-	private function assertImport(imp: ImportInfo, raw: String, kind: ImportKind, alias: Null<String>): Void {
-		Assert.equals(raw, imp.raw);
-		Assert.isTrue(imp.kind == kind);
-		Assert.equals(alias, imp.alias);
-		Assert.notNull(imp.span);
-	}
-
-	private static function plugin(): HaxeQueryPlugin {
-		return new HaxeQueryPlugin();
-	}
-
 	/**
 	 * `hasSubtype` / `hasAccessGrant` — the inheritance and access-grant gates
 	 * of a cross-file-safe private-member rename, matched by simple type name.
@@ -291,6 +279,17 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.hasSubtype('Peer'));
 		Assert.isTrue(index.hasAccessGrant('Base'));
 		Assert.isFalse(index.hasAccessGrant('Sub'));
+	}
+
+	private function assertImport(imp: ImportInfo, raw: String, kind: ImportKind, alias: Null<String>): Void {
+		Assert.equals(raw, imp.raw);
+		Assert.isTrue(imp.kind == kind);
+		Assert.equals(alias, imp.alias);
+		Assert.notNull(imp.span);
+	}
+
+	private static function plugin(): HaxeQueryPlugin {
+		return new HaxeQueryPlugin();
 	}
 
 }

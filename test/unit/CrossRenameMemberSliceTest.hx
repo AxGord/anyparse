@@ -37,11 +37,9 @@ class CrossRenameMemberSliceTest extends Test {
 	 * file all rename; a sibling method's name is untouched.
 	 */
 	public function testStaticMethodAcrossScope(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic static function util(x:Int):Int return x + 1;\n'
-			+ '\tstatic function other():Int return Foo.util(2) + util(3);\n' + '}';
+		final a: String = 'class Foo {\n\tpublic static function util(x:Int):Int return x + 1;\n\tstatic function other():Int return Foo.util(2) + util(3);\n}';
 		final b: String = 'class C {\n\tfunction m():Int return Foo.util(4);\n}';
-		final expectedA: String = 'class Foo {\n' + '\tpublic static function calc(x:Int):Int return x + 1;\n'
-			+ '\tstatic function other():Int return Foo.calc(2) + calc(3);\n' + '}';
+		final expectedA: String = 'class Foo {\n\tpublic static function calc(x:Int):Int return x + 1;\n\tstatic function other():Int return Foo.calc(2) + calc(3);\n}';
 		final expectedB: String = 'class C {\n\tfunction m():Int return Foo.calc(4);\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'util', 'calc', [
 			{ file: 'a.hx', source: a },
@@ -60,11 +58,9 @@ class CrossRenameMemberSliceTest extends Test {
 	 * the source file, plus a `f.member` (f typed `Foo`) in another file.
 	 */
 	public function testInstanceMethodAcrossScope(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic function new() {}\n' + '\tpublic function greet():String return \'hi\';\n'
-			+ '\tpublic function talk(o:Foo):String return greet() + this.greet() + o.greet();\n' + '}';
+		final a: String = 'class Foo {\n\tpublic function new() {}\n\tpublic function greet():String return \'hi\';\n\tpublic function talk(o:Foo):String return greet() + this.greet() + o.greet();\n}';
 		final b: String = 'class C {\n\tfunction m() {\n\t\tvar f:Foo = new Foo();\n\t\tf.greet();\n\t}\n}';
-		final expectedA: String = 'class Foo {\n' + '\tpublic function new() {}\n' + '\tpublic function hail():String return \'hi\';\n'
-			+ '\tpublic function talk(o:Foo):String return hail() + this.hail() + o.hail();\n' + '}';
+		final expectedA: String = 'class Foo {\n\tpublic function new() {}\n\tpublic function hail():String return \'hi\';\n\tpublic function talk(o:Foo):String return hail() + this.hail() + o.hail();\n}';
 		final expectedB: String = 'class C {\n\tfunction m() {\n\t\tvar f:Foo = new Foo();\n\t\tf.hail();\n\t}\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'greet', 'hail', [
 			{ file: 'a.hx', source: a },
@@ -83,11 +79,9 @@ class CrossRenameMemberSliceTest extends Test {
 	 * another file renames too.
 	 */
 	public function testInstanceFieldAcrossScope(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic var count:Int = 0;\n'
-			+ '\tpublic function bump():Void this.count = this.count + count;\n' + '}';
+		final a: String = 'class Foo {\n\tpublic var count:Int = 0;\n\tpublic function bump():Void this.count = this.count + count;\n}';
 		final b: String = 'class C {\n\tfunction m(f:Foo):Int return f.count;\n}';
-		final expectedA: String = 'class Foo {\n' + '\tpublic var total:Int = 0;\n'
-			+ '\tpublic function bump():Void this.total = this.total + total;\n' + '}';
+		final expectedA: String = 'class Foo {\n\tpublic var total:Int = 0;\n\tpublic function bump():Void this.total = this.total + total;\n}';
 		final expectedB: String = 'class C {\n\tfunction m(f:Foo):Int return f.total;\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'count', 'total', [
 			{ file: 'a.hx', source: a },
@@ -108,8 +102,7 @@ class CrossRenameMemberSliceTest extends Test {
 	 */
 	public function testSameNameOtherTypeUntouched(): Void {
 		final a: String = 'class Foo {\n\tpublic function new() {}\n\tpublic function ping():Void {}\n}';
-		final o: String = 'class Bar {\n\tpublic function new() {}\n\tpublic function ping():Void {}\n'
-			+ '\tfunction use(b:Bar):Void b.ping();\n}';
+		final o: String = 'class Bar {\n\tpublic function new() {}\n\tpublic function ping():Void {}\n\tfunction use(b:Bar):Void b.ping();\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'ping', 'poke', [
 			{ file: 'a.hx', source: a },
 			{ file: 'o.hx', source: o },
@@ -156,10 +149,8 @@ class CrossRenameMemberSliceTest extends Test {
 	 * plain method — decl plus a bare in-file caller.
 	 */
 	public function testFinalMethod(): Void {
-		final a: String = 'final class Foo {\n' + '\tpublic function new() {}\n' + '\tpublic final function seal():Void {}\n'
-			+ '\tpublic function use():Void seal();\n' + '}';
-		final expectedA: String = 'final class Foo {\n' + '\tpublic function new() {}\n' + '\tpublic final function lock():Void {}\n'
-			+ '\tpublic function use():Void lock();\n' + '}';
+		final a: String = 'final class Foo {\n\tpublic function new() {}\n\tpublic final function seal():Void {}\n\tpublic function use():Void seal();\n}';
+		final expectedA: String = 'final class Foo {\n\tpublic function new() {}\n\tpublic final function lock():Void {}\n\tpublic function use():Void lock();\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 'seal', 'lock', [{ file: 'a.hx', source: a },]);
 		Assert.equals(1, changes.length);
 		Assert.equals(expectedA, changeFor(changes, 'a.hx').newSource);
@@ -198,8 +189,7 @@ class CrossRenameMemberSliceTest extends Test {
 	 * one scope frame, so a bare reference could be mis-attributed).
 	 */
 	public function testCaseCaptureCollisionRefused(): Void {
-		final a: String = 'class Foo {\n\tpublic function tag():Void {}\n\tpublic function pick(v:Any):Void {\n'
-			+ '\t\tswitch v {\n\t\t\tcase tag: trace(0);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
+		final a: String = 'class Foo {\n\tpublic function tag():Void {}\n\tpublic function pick(v:Any):Void {\n\t\tswitch v {\n\t\t\tcase tag: trace(0);\n\t\t\tcase _:\n\t\t}\n\t}\n}';
 		assertErr(run('a.hx', a, 'tag', 'label', [{ file: 'a.hx', source: a },]));
 	}
 

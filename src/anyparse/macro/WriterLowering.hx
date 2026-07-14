@@ -1497,8 +1497,8 @@ class WriterLowering {
 		// opt knobs to read (default class-scoped `beginType` / `endType`), so
 		// `HxEnumDecl.ctors` reads its own `enumBeginType` / `enumEndType`.
 		final beginEndKnobArgs: Null<Array<String>> = starNode.fmtReadStringArgs('beginEndType');
-		final beginTypeKnob: String = (beginEndKnobArgs != null && beginEndKnobArgs.length >= 2) ? beginEndKnobArgs[0] : "beginType";
-		final endTypeKnob: String = (beginEndKnobArgs != null && beginEndKnobArgs.length >= 2) ? beginEndKnobArgs[1] : "endType";
+		final beginTypeKnob: String = (beginEndKnobArgs != null && beginEndKnobArgs.length >= 2) ? beginEndKnobArgs[0] : 'beginType';
+		final endTypeKnob: String = (beginEndKnobArgs != null && beginEndKnobArgs.length >= 2) ? beginEndKnobArgs[1] : 'endType';
 		final keepCurlyBlanks: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 		final lineCommentTrailBlank: Bool = starNode.fmtHasFlag('blankBeforeOrphanLineCommentTrail');
 		final blankBeforeFinalDocInLeading: Bool = starNode.fmtHasFlag('blankBeforeFinalDocCommentInLeading');
@@ -6730,7 +6730,7 @@ class WriterLowering {
 		// ω-keep-infix-rhs-comment: append a captured right-operand trailing
 		// comment (position #3) after the binop, inside any precedence parens.
 		final rhsTrailAccess: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, children.length, argNames, ChainRhsTrail) : null;
-		final rhsTrailExpr: Expr = rhsTrailAccess != null ? rhsTrailAccess : macro (null: Null<String>);
+		final rhsTrailExpr: Expr = rhsTrailAccess ?? macro (null: Null<String>);
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 			final _left: anyparse.core.Doc = $leftCall;
@@ -10839,8 +10839,8 @@ class WriterLowering {
 		// counts. Default class-scoped `beginType` / `endType`; a Star whose
 		// `@:fmt(beginEndType('a', 'b'))` names knobs (e.g. `HxEnumDecl.ctors`)
 		// reads those instead, so per-type-kind begin/end scopes never share.
-		beginTypeKnob: String = "beginType",
-		endTypeKnob: String = "endType"
+		beginTypeKnob: String = 'beginType',
+		endTypeKnob: String = 'endType'
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -11330,7 +11330,7 @@ class WriterLowering {
 		// reverse, then after in reverse. Final priority (outermost wins
 		// first): after[0..N] > between[0..N] > transition[0..N] >
 		// before[0..N] > source-driven `(_t.blankBefore ? 1 : 0)`.
-		var blanksCountExpr: Expr = macro (_t.blankBefore ? 1 + (_t.blankBefore2 != null ? _t.blankBefore2 : 0) : 0);
+		var blanksCountExpr: Expr = macro (_t.blankBefore ? 1 + (_t.blankBefore2 ?? 0) : 0);
 		blanksCountExpr = foldBeforeCascade(blanksCountExpr, beforeInfos, pos);
 		blanksCountExpr = foldBetweenIfNotCascade(blanksCountExpr, betweenIfNotInfos, pos);
 		blanksCountExpr = foldBetweenCascade(blanksCountExpr, betweenInfos, pos);
@@ -11634,7 +11634,7 @@ class WriterLowering {
 			cascadeHeadEmit: cascadeHeadEmit,
 			cascadeBlanksCount: cascadeBlanksCount,
 			priorAfterTrailEmit: priorAfterTrailEmit,
-			priorAfterTrailRaw: priorAfterTrailExpr != null ? priorAfterTrailExpr : macro (null: Null<String>),
+			priorAfterTrailRaw: priorAfterTrailExpr ?? macro (null: Null<String>),
 			padLeadingSpaceDoc: padLeadingSpaceDoc,
 			subsequentSepDoc: subsequentSepDoc,
 			firstSepExpr: firstSepExpr,
@@ -16049,7 +16049,7 @@ class WriterLowering {
 	private static function triviaBlockBeginNExpr(beginEndType: Bool, beginKnob: String): Expr {
 		// ω-enumabstract-begin-end: read the enum-abstract begin knob under the
 		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
-		final beginAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractBeginType : $p{["opt", beginKnob]});
+		final beginAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractBeginType : $p{['opt', beginKnob]});
 		return beginEndType
 			? macro (
 				$beginAccess > 0
@@ -16067,7 +16067,7 @@ class WriterLowering {
 	private static function triviaBlockEndNExpr(beginEndType: Bool, endKnob: String): Expr {
 		// ω-enumabstract-begin-end: read the enum-abstract end knob under the
 		// `_inEnumAbstract` context flag, else the passed (default class-scoped) knob.
-		final endAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractEndType : $p{["opt", endKnob]});
+		final endAccess: Expr = macro (opt._inEnumAbstract ? opt.enumAbstractEndType : $p{['opt', endKnob]});
 		return beginEndType
 			? macro (
 				$endAccess > 0
@@ -16088,7 +16088,7 @@ class WriterLowering {
 	 */
 	private static function blankBefore2ExtrasExpr(pushExpr: Expr): Expr {
 		return macro {
-			final _bb2: Int = _t.blankBefore2 != null ? _t.blankBefore2 : 0;
+			final _bb2: Int = _t.blankBefore2 ?? 0;
 			var _bbi: Int = 0;
 			while (_bbi < _bb2) {
 				$pushExpr;

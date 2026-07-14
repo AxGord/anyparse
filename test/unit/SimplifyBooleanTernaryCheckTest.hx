@@ -90,34 +90,19 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 		Assert.isTrue(ids.contains('simplify-boolean-ternary'));
 	}
 
-	private function violations(body: String): Array<Violation> {
-		final src: String = 'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Dynamic ${body} }';
-		return new SimplifyBooleanTernary().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	/** The rewrite text the fix emits for the first ternary in `body` (empty if none). */
-	private function simplifyOf(body: String): String {
-		final src: String = 'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Dynamic ${body} }';
-		final check: SimplifyBooleanTernary = new SimplifyBooleanTernary();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		return edits.length > 0 ? edits[0].text : '';
-	}
-
 	/** A null-narrowing-guarded condition is left alone — flattening would break the narrowing. */
 	public function testNullNarrowingGuardNotSimplified(): Void {
-		Assert.equals("", simplifyOf("return c != null && c.foo() != null ? true : x > 0;"));
+		Assert.equals('', simplifyOf('return c != null && c.foo() != null ? true : x > 0;'));
 	}
 
 	/** A bare null-check (no access of the same ident) is still simplified. */
 	public function testBareNullCheckStillSimplified(): Void {
-		Assert.equals("c != null || x > 0", simplifyOf("return c != null ? true : x > 0;"));
+		Assert.equals('c != null || x > 0', simplifyOf('return c != null ? true : x > 0;'));
 	}
 
 	/** Index-access reuse guards the ternary form too. */
 	public function testIndexAccessGuardNotSimplified(): Void {
-		Assert.equals("", simplifyOf("return c != null && c[0] > 0 ? true : x > 0;"));
+		Assert.equals('', simplifyOf('return c != null && c[0] > 0 ? true : x > 0;'));
 	}
 
 	/** A `null` branch makes the ternary `Null<Bool>`, not a boolean expression — left alone. */
@@ -135,6 +120,21 @@ class SimplifyBooleanTernaryCheckTest extends Test {
 	public function testBareIdentBranchNotSimplified(): Void {
 		Assert.equals('', simplifyOf('return p ? true : c;'));
 		Assert.equals(0, violations('return p ? true : c;').length);
+	}
+
+	private function violations(body: String): Array<Violation> {
+		final src: String = 'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Dynamic ${body} }';
+		return new SimplifyBooleanTernary().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** The rewrite text the fix emits for the first ternary in `body` (empty if none). */
+	private function simplifyOf(body: String): String {
+		final src: String = 'class C { static function f(a: Int, b: Int, c: Bool, p: Bool, x: Int): Dynamic ${body} }';
+		final check: SimplifyBooleanTernary = new SimplifyBooleanTernary();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		return edits.length > 0 ? edits[0].text : '';
 	}
 
 }

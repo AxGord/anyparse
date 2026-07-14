@@ -263,9 +263,7 @@ final class SymbolIndex {
 	 * are SIMPLE; an ambiguous simple name (0 or >1 indexed decls) → false. Resolution is by SIMPLE name (the index models no packages), so a simple-name collision with an external supertype is the residual soundness boundary.
 	 */
 	public function unrelatedClasses(a: String, b: String): Bool {
-		if (a == b) return false;
-		if (!isUniqueClass(a) || !isUniqueClass(b)) return false;
-		return closureExcludes(a, b, [a]) && closureExcludes(b, a, [b]);
+		return a != b && isUniqueClass(a) && isUniqueClass(b) && closureExcludes(a, b, [a]) && closureExcludes(b, a, [b]);
 	}
 
 	/**
@@ -293,7 +291,7 @@ final class SymbolIndex {
 
 	/** Whether any indexed type named `typeName` directly declares a member named `field`. */
 	private function declaresMember(typeName: String, field: String): Bool {
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) if (t.members.exists(m -> m.name == field)) return true;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == field)) return true;
 		return false;
 	}
 
@@ -561,7 +559,10 @@ final class SymbolIndex {
 	private static function collectMembers(node: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
 		collectInto(node, n -> {
-			if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind)) {
+			// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
+			// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
+			// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
+			if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind) || n.kind == 'SimpleCtor' || n.kind == 'ParamCtor') {
 				final nm: Null<String> = n.name;
 				final sp: Null<Span> = n.span;
 				if (nm != null && sp != null) {

@@ -33,6 +33,8 @@ final class HxFormatterCorpusHelpers {
 	private static inline final SECTION_SEP: String = '\n---\n';
 	private static inline final EXPECTED_SECTIONS: Int = 3;
 
+	private function new(): Void {}
+
 	/**
 	 * Returns the absolute path to the haxe-formatter fork root, or
 	 * `null` if the environment variable is unset, empty, points at a
@@ -85,7 +87,5 @@ final class HxFormatterCorpusHelpers {
 		if (r.length > 0 && r.charAt(r.length - 1) == '\n') r = r.substr(0, r.length - 1);
 		return r;
 	}
-
-	private function new(): Void {}
 
 }

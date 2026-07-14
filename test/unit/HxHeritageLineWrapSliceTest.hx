@@ -26,12 +26,10 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testExtendsBreaksBeforeKeywordWhenLineExceedsMax(): Void {
-		final cfg: String = '{"wrapping":{"maxLineLength":140},'
-			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
+		final cfg: String = '{"wrapping":{"maxLineLength":140},"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		final input: String = '@:nullSafety final class GenericContainerXYZ extends FetchHelper<GenericContainerEntityXYZ, pkg.inner.bundles.GenericContainerXYZ, { enableExtraOptionXY:Bool }> {}';
-		final expected: String = '@:nullSafety final class GenericContainerXYZ\n'
-			+ '\textends FetchHelper<GenericContainerEntityXYZ, pkg.inner.bundles.GenericContainerXYZ, { enableExtraOptionXY:Bool }> {}';
+		final expected: String = '@:nullSafety final class GenericContainerXYZ\n\textends FetchHelper<GenericContainerEntityXYZ, pkg.inner.bundles.GenericContainerXYZ, { enableExtraOptionXY:Bool }> {}';
 		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
 		final actual: String = actualRaw.length > 0 && StringTools.fastCodeAt(actualRaw, actualRaw.length - 1) == '\n'.code
 			? actualRaw.substr(0, actualRaw.length - 1)
@@ -40,12 +38,10 @@ final class HxHeritageLineWrapSliceTest extends Test {
 	}
 
 	public function testExtendsBreaksBeforeKeywordBraceBoundary(): Void {
-		final cfg: String = '{"wrapping":{"maxLineLength":140},'
-			+ '"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
+		final cfg: String = '{"wrapping":{"maxLineLength":140},"whitespace":{"bracesConfig":{"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		final input: String = '@:nullSafety final class Languages extends APISmartEntity<Array<Language>, Array<Language>, Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
-		final expected: String = '@:nullSafety final class Languages\n'
-			+ '\textends APISmartEntity<Array<Language>, Array<Language>, Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
+		final expected: String = '@:nullSafety final class Languages\n\textends APISmartEntity<Array<Language>, Array<Language>, Array<Language>, { includeTranslations:Bool }, ErrorResponse> {}';
 		final actualRaw: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts);
 		final actual: String = actualRaw.length > 0 && StringTools.fastCodeAt(actualRaw, actualRaw.length - 1) == '\n'.code
 			? actualRaw.substr(0, actualRaw.length - 1)

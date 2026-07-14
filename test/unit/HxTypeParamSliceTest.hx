@@ -18,7 +18,6 @@ import anyparse.grammar.haxe.HxTypeParamDecl;
 import anyparse.grammar.haxe.HxTypeArg;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxVarDecl;
-import anyparse.runtime.ParseError;
 
 /**
  * Phase 3 type-parameter tests for `HxTypeRef`.

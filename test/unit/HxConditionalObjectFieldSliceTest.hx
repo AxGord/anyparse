@@ -1,11 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxConditionalObjectField;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxObjectField;
-import anyparse.grammar.haxe.HxObjectFieldBody;
 import anyparse.grammar.haxe.HxObjectLit;
 import anyparse.grammar.haxe.HxVarDecl;
 
@@ -39,14 +36,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  * limitation pending a follow-up extension of that path.
  */
 class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
-
-	private function objectLitOf(source: String): HxObjectLit {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case ObjectLit(lit): lit;
-			case _: throw 'expected ObjectLit, got ${decl.init}';
-		};
-	}
 
 	// -- `#if` wrapping a single field inside an object literal --
 
@@ -175,6 +164,14 @@ class HxConditionalObjectFieldSliceTest extends HxTestHelpers {
 		Assert.equals(2, cond.body.length);
 		Assert.equals('a', (expectObjectFieldBody(cond.body[0]).name: String));
 		Assert.equals('b', (expectObjectFieldBody(cond.body[1]).name: String));
+	}
+
+	private function objectLitOf(source: String): HxObjectLit {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case ObjectLit(lit): lit;
+			case _: throw 'expected ObjectLit, got ${decl.init}';
+		};
 	}
 
 }

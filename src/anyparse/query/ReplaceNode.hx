@@ -63,6 +63,19 @@ enum ResolvedTarget {
 @:nullSafety(Strict)
 final class ReplaceNode {
 
+	/** Modifier keywords a `newSource` must never consist of (see the guard in `replaceNode`). */
+	private static final MODIFIER_KEYWORDS: Array<String> = [
+		'public',
+		'private',
+		'static',
+		'inline',
+		'override',
+		'final',
+		'macro',
+		'extern',
+		'dynamic'
+	];
+
 	/**
 	 * Replace the node addressed by `target` in `source` with `newSource`.
 	 * `reformat` opts into a whole-file canonicalisation when the source is
@@ -156,19 +169,6 @@ final class ReplaceNode {
 				hit == null ? Failed('position $line:$col is not on a "$kind" node') : Resolved(hit);
 		};
 	}
-
-	/** Modifier keywords a `newSource` must never consist of (see the guard in `replaceNode`). */
-	private static final MODIFIER_KEYWORDS: Array<String> = [
-		'public',
-		'private',
-		'static',
-		'inline',
-		'override',
-		'final',
-		'macro',
-		'extern',
-		'dynamic'
-	];
 
 	/** Whether `source`, ignoring leading whitespace, opens with a block comment (`/*`, including the `/**` doc form). */
 	private static function startsWithBlockComment(source: String): Bool {

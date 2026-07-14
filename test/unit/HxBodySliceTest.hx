@@ -4,7 +4,6 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
@@ -302,7 +301,7 @@ class HxBodySliceTest extends HxTestHelpers {
 	}
 
 	public function testRejectsUnclosedBrace(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { function f():Void { 1;'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { function f():Void { 1;'), ParseError);
 	}
 
 	public function testBodyThroughModuleRoot(): Void {

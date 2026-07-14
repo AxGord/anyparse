@@ -16,11 +16,6 @@ class HxInfixCommentWriteTest extends Test {
 
 	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	private function roundTrip(source: String): String {
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		return HaxeModuleTriviaWriter.write(ast);
-	}
-
 	public function testInfixLeadingLineCommentForcesWrap(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar s = a // note\n\t\t\t+ b;\n\t}\n}';
 		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tvar s = a // note\n\t\t\t+ b;\n\t}\n}\n', roundTrip(source));
@@ -49,6 +44,11 @@ class HxInfixCommentWriteTest extends Test {
 	public function testInfixPostOperatorLineCommentAddChain(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar s = a + // plus\n\t\t\tb;\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
+	}
+
+	private function roundTrip(source: String): String {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		return HaxeModuleTriviaWriter.write(ast);
 	}
 
 }

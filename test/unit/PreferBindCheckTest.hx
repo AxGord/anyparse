@@ -69,16 +69,16 @@ class PreferBindCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { var g = () -> h(a, ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferBind().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testNestedLambdaFlaggedOnce(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> h(() -> k(1));\n\t}\n}').length);
 	}
 
 	public function testGenericCallNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> fn<Int>(x);\n\t}\n}').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferBind().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

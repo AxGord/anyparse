@@ -59,16 +59,16 @@ class RedundantMapIterKeyCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { for (_ => v in ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new RedundantMapIterKey().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testNestedDiscardedKeyLoopsBothFlagged(): Void {
 		Assert.equals(2, violations('class C {\n\tfunction f():Void {\n\t\tfor (_ => v in m) for (_ => w in v) g(w);\n\t}\n}').length);
 	}
 
 	public function testCommentParenDecoyNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tfor /*(*/ (_ => v in m) g(v);\n\t}\n}').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new RedundantMapIterKey().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

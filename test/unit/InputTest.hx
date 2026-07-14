@@ -14,48 +14,48 @@ import anyparse.runtime.StringInput;
  */
 class InputTest extends Test {
 
-	function testLengthMatchesSource() {
+	private function testLengthMatchesSource() {
 		final inp: Input = new StringInput('hello');
 		Assert.equals(5, inp.length);
 	}
 
-	function testLengthEmptySource() {
+	private function testLengthEmptySource() {
 		final inp: Input = new StringInput('');
 		Assert.equals(0, inp.length);
 	}
 
-	function testCharCodeAtFirst() {
+	private function testCharCodeAtFirst() {
 		final inp: Input = new StringInput('abc');
 		Assert.equals('a'.code, inp.charCodeAt(0));
 	}
 
-	function testCharCodeAtLast() {
+	private function testCharCodeAtLast() {
 		final inp: Input = new StringInput('abc');
 		Assert.equals('c'.code, inp.charCodeAt(2));
 	}
 
-	function testCharCodeAtNegative() {
+	private function testCharCodeAtNegative() {
 		final inp: Input = new StringInput('abc');
 		Assert.equals(-1, inp.charCodeAt(-1));
 	}
 
-	function testCharCodeAtPastEnd() {
+	private function testCharCodeAtPastEnd() {
 		final inp: Input = new StringInput('abc');
 		Assert.equals(-1, inp.charCodeAt(3));
 		Assert.equals(-1, inp.charCodeAt(999));
 	}
 
-	function testSubstringFull() {
+	private function testSubstringFull() {
 		final inp: Input = new StringInput('hello');
 		Assert.equals('hello', inp.substring(0, 5));
 	}
 
-	function testSubstringMiddle() {
+	private function testSubstringMiddle() {
 		final inp: Input = new StringInput('hello world');
 		Assert.equals('llo w', inp.substring(2, 7));
 	}
 
-	function testSubstringEmpty() {
+	private function testSubstringEmpty() {
 		final inp: Input = new StringInput('abc');
 		Assert.equals('', inp.substring(1, 1));
 	}

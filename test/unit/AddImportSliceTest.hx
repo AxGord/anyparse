@@ -21,55 +21,55 @@ class AddImportSliceTest extends Test {
 
 	/** Add an import after an existing one — same-kind imports group. */
 	public function testAddAfterExistingImport(): Void {
-		final source: String = 'package foo;\n' + '\n' + 'import a.B;\n' + '\n' + 'class C {}\n';
-		final expected: String = 'package foo;\n' + '\n' + 'import a.B;\n' + 'import c.D;\n' + '\n' + 'class C {}\n';
+		final source: String = 'package foo;\n\nimport a.B;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\nimport c.D;\n\nclass C {}\n';
 		assertAdd(source, 'c.D', false, expected);
 	}
 
 	/** With no imports but a `package`, the import opens a block after it. */
 	public function testAddAfterPackageOnly(): Void {
-		final source: String = 'package foo;\n' + '\n' + 'class C {}\n';
-		final expected: String = 'package foo;\n' + '\n' + 'import a.B;\n' + '\n' + 'class C {}\n';
+		final source: String = 'package foo;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\n\nclass C {}\n';
 		assertAdd(source, 'a.B', false, expected);
 	}
 
 	/** With no package and no imports, the import lands at the file start. */
 	public function testAddNoPackageNoImports(): Void {
 		final source: String = 'class C {}\n';
-		final expected: String = 'import a.B;\n' + '\n' + 'class C {}\n';
+		final expected: String = 'import a.B;\n\nclass C {}\n';
 		assertAdd(source, 'a.B', false, expected);
 	}
 
 	/** A `using` is added with the `using` keyword, in its own block. */
 	public function testAddUsing(): Void {
-		final source: String = 'package foo;\n' + '\n' + 'import a.B;\n' + '\n' + 'class C {}\n';
-		final expected: String = 'package foo;\n' + '\n' + 'import a.B;\n' + '\n' + 'using c.D;\n' + '\n' + 'class C {}\n';
+		final source: String = 'package foo;\n\nimport a.B;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\n\nusing c.D;\n\nclass C {}\n';
 		assertAdd(source, 'c.D', true, expected);
 	}
 
 	/** Refuse an import already present as the same kind. */
 	public function testRefuseDuplicateImport(): Void {
-		final source: String = 'import a.B;\n' + '\n' + 'class C {}\n';
+		final source: String = 'import a.B;\n\nclass C {}\n';
 		assertRefused(source, 'a.B', false);
 	}
 
 	/** `import a.B` does NOT block `using a.B` — dedup is per-kind. */
 	public function testUsingNotBlockedByImportOfSamePath(): Void {
-		final source: String = 'import a.B;\n' + '\n' + 'class C {}\n';
-		final expected: String = 'import a.B;\n' + '\n' + 'using a.B;\n' + '\n' + 'class C {}\n';
+		final source: String = 'import a.B;\n\nclass C {}\n';
+		final expected: String = 'import a.B;\n\nusing a.B;\n\nclass C {}\n';
 		assertAdd(source, 'a.B', true, expected);
 	}
 
 	/** Refuse a non-canonical file (no blank lines) without `--reformat`. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
-		final source: String = 'package foo;\n' + 'import a.B;\n' + 'class C {}\n';
+		final source: String = 'package foo;\nimport a.B;\nclass C {}\n';
 		assertRefused(source, 'c.D', false);
 	}
 
 	/** `reformat` proceeds on a non-canonical file, canonicalising it. */
 	public function testReformatProceedsOnNonCanonical(): Void {
-		final source: String = 'package foo;\n' + 'import a.B;\n' + 'class C {}\n';
-		final expected: String = 'package foo;\n' + '\n' + 'import a.B;\n' + 'import c.D;\n' + '\n' + 'class C {}\n';
+		final source: String = 'package foo;\nimport a.B;\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\nimport c.D;\n\nclass C {}\n';
 		assertAdd(source, 'c.D', false, expected, true);
 	}
 

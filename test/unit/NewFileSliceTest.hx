@@ -7,7 +7,6 @@ import anyparse.query.Cli;
 import anyparse.query.NewFile;
 import anyparse.query.NewFile.NewFileResult;
 import anyparse.query.NewFile.NewFileSpec;
-import anyparse.query.RefactorSupport.EditResult;
 #if (sys || nodejs)
 import sys.FileSystem;
 import sys.io.File;
@@ -32,8 +31,10 @@ using StringTools;
  */
 class NewFileSliceTest extends Test {
 
-	private static inline final IFACE: String = 'package p;\n' + 'import a.B;\n' + 'typedef T = { var v: Int; }\n' + 'interface I {\n'
-		+ '\tpublic function f(x: T): B;\n' + '\tpublic function g(): Void;\n' + '}\n';
+	private static inline final IFACE: String = 'package p;\nimport a.B;\ntypedef T = { var v: Int; }\ninterface I {\n\tpublic function f(x: T): B;\n\tpublic function g(): Void;\n}\n';
+	#if (sys || nodejs)
+	private static var counter: Int = 0;
+	#end
 
 	/** Every interface method is stubbed with its exact signature when no body is given. */
 	public function testStubsAllMethods(): Void {
@@ -142,8 +143,6 @@ class NewFileSliceTest extends Test {
 	}
 
 	#if (sys || nodejs)
-	private static var counter: Int = 0;
-
 	/** Create-only: an existing path is refused (`EXIT_RUNTIME`) and left untouched. */
 	public function testCreateOnlyRefusesExisting(): Void {
 		final dir: String = tmpDir();
@@ -153,7 +152,6 @@ class NewFileSliceTest extends Test {
 		Assert.equals('package;\nclass Existing {}\n', File.getContent(p));
 		cleanup(dir);
 	}
-
 	/** `--write` with a disk-resolved sibling interface produces the file. */
 	public function testWriteResolvesSiblingInterface(): Void {
 		final dir: String = tmpDir();
@@ -167,7 +165,6 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(text.contains('return 1;'));
 		cleanup(dir);
 	}
-
 	/** An interface that cannot be located on disk is an error. */
 	public function testMissingInterfaceIsError(): Void {
 		final dir: String = tmpDir();
@@ -185,41 +182,7 @@ class NewFileSliceTest extends Test {
 		Assert.isTrue(File.getContent(p).contains('class Empty'));
 		cleanup(dir);
 	}
-
-	private static function tmpDir(): String {
-		counter++;
-		final env: Null<String> = Sys.getEnv('TMPDIR');
-		final base: String = env != null && env.length > 0 ? env.endsWith('/') ? env.substr(0, env.length - 1) : env : '/tmp';
-		final dir: String = '$base/tmp_apq_new_${Sys.time()}_$counter';
-		FileSystem.createDirectory(dir);
-		return dir;
-	}
-
-	private static function cleanup(dir: String): Void {
-		for (entry in FileSystem.readDirectory(dir)) FileSystem.deleteFile('$dir/$entry');
-		FileSystem.deleteDirectory(dir);
-	}
 	#end
-
-	private inline function create(spec: NewFileSpec): NewFileResult {
-		return NewFile.create(spec, new HaxeQueryPlugin());
-	}
-
-	private function okText(res: NewFileResult): String {
-		return switch res.result {
-			case Ok(text): text;
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-				'';
-		};
-	}
-
-	private function isErr(res: NewFileResult): Bool {
-		return switch res.result {
-			case Ok(_): false;
-			case Err(_): true;
-		};
-	}
 
 	/** A created class is instantiable — a no-arg constructor is auto-emitted. */
 	public function testEmitsConstructor(): Void {
@@ -429,5 +392,40 @@ class NewFileSliceTest extends Test {
 				Assert.pass();
 		}
 	}
+
+	private inline function create(spec: NewFileSpec): NewFileResult {
+		return NewFile.create(spec, new HaxeQueryPlugin());
+	}
+
+	private function okText(res: NewFileResult): String {
+		return switch res.result {
+			case Ok(text): text;
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+				'';
+		};
+	}
+
+	private function isErr(res: NewFileResult): Bool {
+		return switch res.result {
+			case Ok(_): false;
+			case Err(_): true;
+		};
+	}
+
+	#if (sys || nodejs)
+	private static function tmpDir(): String {
+		counter++;
+		final env: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = env != null && env.length > 0 ? env.endsWith('/') ? env.substr(0, env.length - 1) : env : '/tmp';
+		final dir: String = '$base/tmp_apq_new_${Sys.time()}_$counter';
+		FileSystem.createDirectory(dir);
+		return dir;
+	}
+	private static function cleanup(dir: String): Void {
+		for (entry in FileSystem.readDirectory(dir)) FileSystem.deleteFile('$dir/$entry');
+		FileSystem.deleteDirectory(dir);
+	}
+	#end
 
 }

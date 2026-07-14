@@ -220,7 +220,7 @@ class HxAssignSliceTest extends HxTestHelpers {
 		// `a = ;` — the assign operator matches, skipWs runs, and
 		// then the right-hand `parseHxExpr` tries every atom branch
 		// and fails on the `;` terminator.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a = ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a = ; }'), ParseError);
 	}
 
 	public function testMulAssign(): Void {
@@ -500,7 +500,7 @@ class HxAssignSliceTest extends HxTestHelpers {
 		// runs, and then the right-hand `parseHxExpr` fails on the
 		// `;` terminator. Symmetric to `testRejectsAssignWithoutRhs`
 		// for the longest compound-assign literal in the grammar.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a >>>= ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a >>>= ; }'), ParseError);
 	}
 
 	public function testBoolAndAssign(): Void {

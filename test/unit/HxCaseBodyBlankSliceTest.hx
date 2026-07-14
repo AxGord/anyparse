@@ -26,10 +26,6 @@ class HxCaseBodyBlankSliceTest extends Test {
 		super();
 	}
 
-	private function write(src: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
-	}
-
 	public function testCaseBodyKeepsInterStatementBlank(): Void {
 		final out: String = write('class C { function f() { switch (x) { case 1: var a = 1;\n\n doThing(a); default: noop(); } } }');
 		Assert.isTrue(out.indexOf('var a = 1;\n\n') != -1, 'case body must keep the blank between its statements: <$out>');
@@ -49,6 +45,10 @@ class HxCaseBodyBlankSliceTest extends Test {
 		final out: String = write('class C { function f() { switch (x) { case 1: only(); default: noop(); } } }');
 		Assert.isTrue(out.indexOf('only();') != -1, 'the single case statement is emitted: <$out>');
 		Assert.isTrue(out.indexOf('\n\n') == -1, 'a single-statement case body must not introduce any blank line: <$out>');
+	}
+
+	private function write(src: String): String {
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson('{}'));
 	}
 
 }

@@ -7,8 +7,6 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
-using StringTools;
-
 /**
  * expr-paren-open pending-space: an `x = (chain) / lit;` whose parenthesised
  * opAddSub chain makes the physical line exceed maxLineLength OPENS the paren,

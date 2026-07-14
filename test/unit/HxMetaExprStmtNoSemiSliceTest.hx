@@ -92,7 +92,7 @@ class HxMetaExprStmtNoSemiSliceTest extends HxTestHelpers {
 	}
 
 	public function testMetaPlainExprFollowedByIdentRegression(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t\ty = 5\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\t@:nullSafety(Off) x + 1\n\t\ty = 5\n\t}\n}'));
 	}
 
 	// -- Regression: pre-slice path with `;` still parses --

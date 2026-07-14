@@ -450,14 +450,14 @@ class HxPrattOpsTest extends HxTestHelpers {
 
 	public function testRejectsTrailingLt(): Void {
 		// `1 <;` — `<` matches, right operand parser fails on `;`.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Bool = 1 <; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Bool = 1 <; }'), ParseError);
 	}
 
 	public function testRejectsLeadingLtEq(): Void {
 		// `<= 1;` — atom parser tries every branch, all fail on `<`
 		// because the identifier regex rejects it and no literal
 		// matches it as an atom.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Bool = <= 1; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Bool = <= 1; }'), ParseError);
 	}
 
 }

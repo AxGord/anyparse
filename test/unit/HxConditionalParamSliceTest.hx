@@ -39,11 +39,6 @@ import anyparse.grammar.haxe.HxParamBody;
  */
 class HxConditionalParamSliceTest extends HxTestHelpers {
 
-	private function paramsOf(source: String): Array<HxParam> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fn.params;
-	}
-
 	// -- Sole Conditional elem, single Optional inner (issue_345 surface, type simplified for structural focus) --
 	public function testSingleConditionalOnly(): Void {
 		final params: Array<HxParam> = paramsOf('class C { function foo(#if openfl ?vector:Int #end) {} }');
@@ -203,6 +198,11 @@ class HxConditionalParamSliceTest extends HxTestHelpers {
 		Assert.equals('x', (cond.cond: String));
 		Assert.equals(1, cond.body.length);
 		Assert.equals('b', (expectRequiredParam(cond.body[0]).name: String));
+	}
+
+	private function paramsOf(source: String): Array<HxParam> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fn.params;
 	}
 
 }

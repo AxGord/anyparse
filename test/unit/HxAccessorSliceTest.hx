@@ -23,26 +23,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxAccessorSliceTest extends HxTestHelpers {
 
-	private function memberVarDecl(source: String): HxVarDecl {
-		final module: HxModule = HaxeModuleParser.parse('class C { $source }');
-		final c: HxClassDecl = expectClassDecl(module.decls[0]);
-		Assert.equals(1, c.members.length);
-		return expectVarMember(c.members[0].member);
-	}
-
-	private function accessorIds(decl: HxVarDecl): Array<String> {
-		final clause: Null<HxAccessClause> = decl.access;
-		if (clause == null) throw 'expected accessor clause, got null';
-		return [for (id in clause.ids) (id: String)];
-	}
-
-	private function expectFinalMember(member: HxClassMember): HxVarDecl {
-		return switch member {
-			case FinalMember(decl): decl;
-			case _: throw 'expected FinalMember, got $member';
-		};
-	}
-
 	public function testGetSet(): Void {
 		final decl: HxVarDecl = memberVarDecl('var x(get, set):Int;');
 		Assert.equals('x', (decl.name: String));
@@ -137,6 +117,26 @@ class HxAccessorSliceTest extends HxTestHelpers {
 
 	public function testWriterTightOpenParenGetSet(): Void {
 		writerEquals('class C {\n\tvar x(get, set):Int;\n}', 'class C {\n\tvar x(get, set):Int;\n}\n', 'tight `(` on `(get, set)`');
+	}
+
+	private function memberVarDecl(source: String): HxVarDecl {
+		final module: HxModule = HaxeModuleParser.parse('class C { $source }');
+		final c: HxClassDecl = expectClassDecl(module.decls[0]);
+		Assert.equals(1, c.members.length);
+		return expectVarMember(c.members[0].member);
+	}
+
+	private function accessorIds(decl: HxVarDecl): Array<String> {
+		final clause: Null<HxAccessClause> = decl.access;
+		if (clause == null) throw 'expected accessor clause, got null';
+		return [for (id in clause.ids) (id: String)];
+	}
+
+	private function expectFinalMember(member: HxClassMember): HxVarDecl {
+		return switch member {
+			case FinalMember(decl): decl;
+			case _: throw 'expected FinalMember, got $member';
+		};
 	}
 
 }

@@ -25,19 +25,6 @@ import anyparse.grammar.haxe.HxTypedefDecl;
  */
 class HxAnonMemberSliceTest extends HxTestHelpers {
 
-	private function membersOf(source: String): Array<HxAnonMember> {
-		final module: HxModule = HaxeModuleParser.parse(source);
-		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
-		return expectAnonMembers(td.type);
-	}
-
-	private function metaName(m: HxMetadata): String {
-		return switch m {
-			case MetaCall(call): (call.name: String);
-			case _: HxMetadataUtil.source(m);
-		};
-	}
-
 	// -- Metadata before a class-notation `var` field --
 
 	public function testMetaCallBeforeVarField(): Void {
@@ -122,6 +109,19 @@ class HxAnonMemberSliceTest extends HxTestHelpers {
 		final src: String = "#if macro\ntypedef T = { @:lead('(') var x:Int; }\n#end";
 		final module: HxModule = HaxeModuleParser.parse(src);
 		Assert.equals(1, module.decls.length);
+	}
+
+	private function membersOf(source: String): Array<HxAnonMember> {
+		final module: HxModule = HaxeModuleParser.parse(source);
+		final td: HxTypedefDecl = expectTypedefDecl(module.decls[0]);
+		return expectAnonMembers(td.type);
+	}
+
+	private function metaName(m: HxMetadata): String {
+		return switch m {
+			case MetaCall(call): (call.name: String);
+			case _: HxMetadataUtil.source(m);
+		};
 	}
 
 }

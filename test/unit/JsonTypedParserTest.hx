@@ -3,9 +3,9 @@ package unit;
 import anyparse.runtime.ParseError;
 import unit.JsonTypedFixtures.TestConfig;
 import unit.JsonTypedFixtures.TestConfigParser;
-import unit.JsonTypedFixtures.TestPolicy;
 import utest.Assert;
 import utest.Test;
+import unit.JsonTypedFixtures.TestPolicy;
 
 /**
  * τ₄ — exercises the ByName struct lowering: JSON object →
@@ -62,21 +62,21 @@ class JsonTypedParserTest extends Test {
 
 	public function testMissingRequiredThrows(): Void {
 		final src: String = '{"count":1,"policy":"first","nested":{"kind":"k"}}';
-		Assert.raises(() -> TestConfigParser.parse(src), ParseError);
+		Assert.raises(TestConfigParser.parse.bind(src), ParseError);
 	}
 
 	public function testMissingNestedRequiredThrows(): Void {
 		final src: String = '{"name":"a","count":1,"policy":"first","nested":{}}';
-		Assert.raises(() -> TestConfigParser.parse(src), ParseError);
+		Assert.raises(TestConfigParser.parse.bind(src), ParseError);
 	}
 
 	public function testInvalidEnumValueThrows(): Void {
 		final src: String = '{"name":"a","count":1,"policy":"nope","nested":{"kind":"k"}}';
-		Assert.raises(() -> TestConfigParser.parse(src), ParseError);
+		Assert.raises(TestConfigParser.parse.bind(src), ParseError);
 	}
 
 	public function testEmptyObjectMissingAllThrows(): Void {
-		Assert.raises(() -> TestConfigParser.parse('{}'), ParseError);
+		Assert.raises(TestConfigParser.parse.bind('{}'), ParseError);
 	}
 
 	public function testStringEscapesDecoded(): Void {

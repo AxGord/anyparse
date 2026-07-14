@@ -29,10 +29,6 @@ import anyparse.runtime.ParseError;
  */
 class HxConditionalMemberSliceTest extends HxTestHelpers {
 
-	private function classMembersOf(source: String): HxClassDecl {
-		return HaxeParser.parse(source);
-	}
-
 	// -- `#if` wrapping a single member inside a class --
 
 	public function testSingleMemberConditional(): Void {
@@ -123,7 +119,7 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 	// both consistently.
 
 	public function testEmptyConditionalBodyRejectedLikeDeclScope(): Void {
-		Assert.raises(() -> classMembersOf('class C {\n\t#if sys\n\t#end\n}'), ParseError);
+		Assert.raises(classMembersOf.bind('class C {\n\t#if sys\n\t#end\n}'), ParseError);
 	}
 
 	// -- Regression: a class with NO member-`#if` is unaffected --
@@ -168,6 +164,10 @@ class HxConditionalMemberSliceTest extends HxTestHelpers {
 		final cond: HxConditionalMember = expectConditionalMember(abs.members[0].member);
 		Assert.equals('sys', (cond.cond: String));
 		Assert.equals('a', (expectFnMember(cond.body[0].member).name: String));
+	}
+
+	private function classMembersOf(source: String): HxClassDecl {
+		return HaxeParser.parse(source);
 	}
 
 }

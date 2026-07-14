@@ -4,7 +4,6 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -288,12 +287,12 @@ class HxBitwiseSliceTest extends HxTestHelpers {
 
 	public function testRejectsTrailingShl(): Void {
 		// `a <<;` — shift matches, right-operand parser fails on `;`.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a <<; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a <<; }'), ParseError);
 	}
 
 	public function testRejectsTrailingBitAnd(): Void {
 		// `a &;` — bitwise matches, right-operand parser fails on `;`.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a &; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a &; }'), ParseError);
 	}
 
 	// -------- end-to-end through HaxeModuleParser --------

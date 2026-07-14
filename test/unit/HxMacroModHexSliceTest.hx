@@ -28,14 +28,6 @@ import anyparse.grammar.haxe.HaxeParser;
  */
 class HxMacroModHexSliceTest extends HxTestHelpers {
 
-	private function hexOf(source: String): String {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case HexLit(v): (v: String);
-			case null, _: throw 'expected HexLit, got ${decl.init}';
-		}
-	}
-
 	public function testLowercaseHex(): Void {
 		Assert.equals('0x20', hexOf('class C { var x = 0x20; }'));
 	}
@@ -110,6 +102,14 @@ class HxMacroModHexSliceTest extends HxTestHelpers {
 				Assert.equals('buildParser', (decl.name: String));
 			case _:
 				Assert.fail('expected FnMember');
+		}
+	}
+
+	private function hexOf(source: String): String {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case HexLit(v): (v: String);
+			case null, _: throw 'expected HexLit, got ${decl.init}';
 		}
 	}
 

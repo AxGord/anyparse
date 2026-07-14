@@ -70,10 +70,6 @@ class RedundantCastCheckTest extends Test {
 		Assert.isTrue(ids.contains('redundant-cast'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new RedundantCast().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testNestedInnerCastResolvesOwnTarget(): Void {
 		// The inner `cast(x, String)` must resolve to String (a mismatch, not flagged), NOT
 		// inherit the outer cast's `Int` target — locks the `castTargetWithin` span lookup.
@@ -99,16 +95,6 @@ class RedundantCastCheckTest extends Test {
 	public function testCrossPackageNotFlagged(): Void {
 		// Same simple name, different package — source comparison keeps them distinct.
 		Assert.equals(0, violations('class C { function f(e:haxe.io.Eof) { final x:haxe.io.Eof = cast(e, sys.io.Eof); } }').length);
-	}
-
-	private function applyFix(src: String): String {
-		final check: RedundantCast = new RedundantCast();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
 	}
 
 	public function testStringConstTypeParamNotFlagged(): Void {
@@ -152,6 +138,20 @@ class RedundantCastCheckTest extends Test {
 		// `x` is the method type parameter `T`, NOT the imported `a.b.T`; the cast is a real
 		// coercion. The import-resolution must exclude type-param names to avoid a destructive FP.
 		Assert.equals(0, violations('import a.b.T; class C { function f<T>(x:T) { var a = cast(x, a.b.T); } }').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new RedundantCast().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function applyFix(src: String): String {
+		final check: RedundantCast = new RedundantCast();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var result: String = src;
+		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
+		return result;
 	}
 
 }

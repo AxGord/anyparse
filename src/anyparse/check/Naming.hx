@@ -172,12 +172,12 @@ final class Naming implements Check {
 		final newName: Null<String> = normalize(decl.name);
 		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
 		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
-		if (occurrences.length == 0) return null;
 		// Completeness: the scope resolver can miss a bare field reference (a
 		// field's decl-node span and its reference binding can disagree), so a
 		// rename not covering every textual occurrence of the name would leave a
 		// dangling reference — bail rather than emit a broken rename.
-		return decl.category == NamingCategory.Field && RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
+		return occurrences.length == 0 || decl.category == NamingCategory.Field
+			&& RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
 			? null
 			: {
 				occurrences: occurrences,

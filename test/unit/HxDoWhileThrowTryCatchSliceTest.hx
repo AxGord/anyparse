@@ -10,7 +10,6 @@ import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxTryCatchStmt;
-import anyparse.runtime.ParseError;
 
 /**
  * Tests for slice mu_2: throw, do-while, and try-catch statements.
@@ -27,42 +26,6 @@ import anyparse.runtime.ParseError;
  * `HxCatchClause.name`.
  */
 class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
-
-	/** Parse function body statements from a single-function class. */
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	/** Extract first statement as ThrowStmt expression. */
-	private function parseThrow(source: String): HxExpr {
-		final body: Array<HxStatement> = parseBody(source);
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case ThrowStmt(expr): expr;
-			case null, _: throw 'expected ThrowStmt';
-		};
-	}
-
-	/** Extract first statement as DoWhileStmt. */
-	private function parseDoWhile(source: String): HxDoWhileStmt {
-		final body: Array<HxStatement> = parseBody(source);
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case DoWhileStmt(stmt): stmt;
-			case null, _: throw 'expected DoWhileStmt';
-		};
-	}
-
-	/** Extract first statement as TryCatchStmt. */
-	private function parseTryCatch(source: String): HxTryCatchStmt {
-		final body: Array<HxStatement> = parseBody(source);
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case TryCatchStmt(stmt): stmt;
-			case null, _: throw 'expected TryCatchStmt';
-		};
-	}
 
 	// ---- Throw tests ----
 
@@ -490,6 +453,42 @@ class HxDoWhileThrowTryCatchSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected BlockStmt');
 		}
+	}
+
+	/** Parse function body statements from a single-function class. */
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	/** Extract first statement as ThrowStmt expression. */
+	private function parseThrow(source: String): HxExpr {
+		final body: Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case ThrowStmt(expr): expr;
+			case null, _: throw 'expected ThrowStmt';
+		};
+	}
+
+	/** Extract first statement as DoWhileStmt. */
+	private function parseDoWhile(source: String): HxDoWhileStmt {
+		final body: Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case DoWhileStmt(stmt): stmt;
+			case null, _: throw 'expected DoWhileStmt';
+		};
+	}
+
+	/** Extract first statement as TryCatchStmt. */
+	private function parseTryCatch(source: String): HxTryCatchStmt {
+		final body: Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case TryCatchStmt(stmt): stmt;
+			case null, _: throw 'expected TryCatchStmt';
+		};
 	}
 
 }

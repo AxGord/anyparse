@@ -413,7 +413,7 @@ import unit.IntroduceParameterObjectSliceTest;
 class RunTests {
 
 	public static function main() {
-		var runner = new utest.Runner();
+		final runner = new utest.Runner();
 
 		// Optional test-class filter for a fast dev inner-loop: APQ_TEST is a
 		// comma-separated list of substrings; only test classes whose fully

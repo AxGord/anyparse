@@ -16,11 +16,6 @@ class HxRhsCommentWriteTest extends Test {
 
 	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	private function roundTrip(source: String): String {
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		return HaxeModuleTriviaWriter.write(ast);
-	}
-
 	public function testComparisonTrailingBlockComment(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar a = x == y /* eq */;\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
@@ -49,6 +44,11 @@ class HxRhsCommentWriteTest extends Test {
 	public function testComparisonNoCommentUnaffected(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tvar a = x == y;\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
+	}
+
+	private function roundTrip(source: String): String {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		return HaxeModuleTriviaWriter.write(ast);
 	}
 
 }

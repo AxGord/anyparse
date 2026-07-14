@@ -48,8 +48,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testBareInFileCallersQualifiedAndRecursionKept(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tpublic static function run():Int return util(3);\n'
-			+ '\tpublic static function util(x:Int):Int {\n\t\treturn x <= 0 ? 0 : util(x - 1);\n\t}\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function run():Int return util(3);\n\tpublic static function util(x:Int):Int {\n\t\treturn x <= 0 ? 0 : util(x - 1);\n\t}\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -63,8 +62,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testSiblingReferenceQualifiedWithAccess(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tpublic static function util(x:Int):Int return scale(x) * 2;\n'
-			+ '\tstatic function scale(x:Int):Int return x + 10;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return scale(x) * 2;\n\tstatic function scale(x:Int):Int return x + 10;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -76,8 +74,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testPublicSiblingNeedsNoAccess(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tpublic static function util(x:Int):Int return scale(x) * 2;\n'
-			+ '\tpublic static function scale(x:Int):Int return x + 10;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return scale(x) * 2;\n\tpublic static function scale(x:Int):Int return x + 10;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -89,8 +86,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testPrivatePromotedWhenCallersRemain(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tpublic static function run():Int return util(3);\n'
-			+ '\tprivate static function util(x:Int):Int return x;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function run():Int return util(3);\n\tprivate static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final result: MoveResult = move('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -118,8 +114,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testDocAndMetaMoveWithMember(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n'
-			+ '\t/**\n\t * Doubles.\n\t */\n\t@:pure\n\tpublic static function util(x:Int):Int return x * 2;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\t/**\n\t * Doubles.\n\t */\n\t@:pure\n\tpublic static function util(x:Int):Int return x * 2;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -133,8 +128,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testDependencyImportCarried(): Void {
-		final a: String = 'package pkg;\n\nimport haxe.io.Bytes;\n\nclass A {\n'
-			+ '\tpublic static function util(b:Bytes):Int return b.length;\n}';
+		final a: String = 'package pkg;\n\nimport haxe.io.Bytes;\n\nclass A {\n\tpublic static function util(b:Bytes):Int return b.length;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -161,8 +155,7 @@ class MoveMemberSliceTest extends Test {
 	public function testValueShadowedReceiverUntouched(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
-		final user: String = 'package pkg;\n\nclass User {\n' + '\tfunction go(A:Dynamic):Int return A.util(1);\n'
-			+ '\tfunction real():Int return A.util(2);\n}';
+		final user: String = 'package pkg;\n\nclass User {\n\tfunction go(A:Dynamic):Int return A.util(1);\n\tfunction real():Int return A.util(2);\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
@@ -249,8 +242,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testStaticVarMoves(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tpublic static final LIMIT:Int = 42;\n'
-			+ '\tpublic static function run():Int return LIMIT + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static final LIMIT:Int = 42;\n\tpublic static function run():Int return LIMIT + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'LIMIT', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -277,8 +269,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceBareCallersRewiredThroughAutoVia(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _calc:B;\n' + '\tfunction run(x:Int):Int return norm(x);\n'
-			+ '\tfunction norm(x:Int):Int return x + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _calc:B;\n\tfunction run(x:Int):Int return norm(x);\n\tfunction norm(x:Int):Int return x + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'norm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -291,8 +282,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceCallersWithoutViaFieldRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tfunction run(x:Int):Int return norm(x);\n'
-			+ '\tfunction norm(x:Int):Int return x + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tfunction run(x:Int):Int return norm(x);\n\tfunction norm(x:Int):Int return x + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'norm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -301,8 +291,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceViaAmbiguousRefusedExplicitPicks(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _p:B;\n\tprivate final _q:B;\n'
-			+ '\tfunction run(x:Int):Int return norm(x);\n' + '\tfunction norm(x:Int):Int return x + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _p:B;\n\tprivate final _q:B;\n\tfunction run(x:Int):Int return norm(x);\n\tfunction norm(x:Int):Int return x + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final scope: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: a },
@@ -315,7 +304,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceFieldDepSatisfiedStaysBare(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate final _k:Int;\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -327,7 +316,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceFieldDepMissingOnDestRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tfunction m():Int return _k + 1;\n}';
 		final scope: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: 'package pkg;\n\nclass B {}' },
@@ -341,7 +330,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceMutableFieldDepRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate var _n:Int;\n' + '\tfunction m():Int return _n + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate var _n:Int;\n\tfunction m():Int return _n + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate var _n:Int;\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -350,8 +339,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceSiblingInstanceCallRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tfunction m(x:Int):Int return helper(x) * 2;\n'
-			+ '\tfunction helper(x:Int):Int return x + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tfunction m(x:Int):Int return helper(x) * 2;\n\tfunction helper(x:Int):Int return x + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -360,8 +348,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testInstanceStaticSiblingQualifiedWithAccess(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tfunction m(x:Int):Int return scale(x) * 2;\n'
-			+ '\tstatic function scale(x:Int):Int return x + 10;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tfunction m(x:Int):Int return scale(x) * 2;\n\tstatic function scale(x:Int):Int return x + 10;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -373,7 +360,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testThisReferenceRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tfunction m():Int return this._k;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tfunction m():Int return this._k;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate final _k:Int;\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -382,8 +369,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testGroupMoveMutualRecursionStaysBare(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tfunction even(n:Int):Bool return n == 0 ? true : odd(n - 1);\n'
-			+ '\tfunction odd(n:Int):Bool return n == 0 ? false : even(n - 1);\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tfunction even(n:Int):Bool return n == 0 ? true : odd(n - 1);\n\tfunction odd(n:Int):Bool return n == 0 ? false : even(n - 1);\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'even,odd', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -398,8 +384,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testGroupMoveMixedStaticAndInstance(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _h:B;\n' + '\tstatic function util(x:Int):Int return x * 2;\n'
-			+ '\tfunction m(x:Int):Int return util(x) + 1;\n' + '\tfunction go(x:Int):Int return m(x);\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _h:B;\n\tstatic function util(x:Int):Int return x * 2;\n\tfunction m(x:Int):Int return util(x) + 1;\n\tfunction go(x:Int):Int return m(x);\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util,m', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -413,8 +398,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testGroupMoveKeepsSourceOrder(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tstatic function first(x:Int):Int return x;\n'
-			+ '\tstatic function second(x:Int):Int return x * 2;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tstatic function first(x:Int):Int return x;\n\tstatic function second(x:Int):Int return x * 2;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'second,first', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -447,9 +431,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testClosureAutoExpandsInstanceCallSet(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _calc:B;\n' + '\tfunction run(x:Int):Int return top(x);\n'
-			+ '\tfunction top(x:Int):Int return mid(x) + 1;\n' + '\tfunction mid(x:Int):Int return leaf(x) * 2;\n'
-			+ '\tfunction leaf(x:Int):Int return x + 3;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _calc:B;\n\tfunction run(x:Int):Int return top(x);\n\tfunction top(x:Int):Int return mid(x) + 1;\n\tfunction mid(x:Int):Int return leaf(x) * 2;\n\tfunction leaf(x:Int):Int return x + 3;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		// Without --closure: moving only `top` refuses on `mid` staying behind.
 		assertErrContains(move('pkg/A.hx', 'A', 'top', 'B', [
@@ -484,8 +466,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testClosureStillRefusesThis(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tfunction m():Int return this._k + helper();\n'
-			+ '\tfunction helper():Int return 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tfunction m():Int return this._k + helper();\n\tfunction helper():Int return 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tprivate final _k:Int;\n}';
 		// Closure pulls in `helper`, but the surviving `this` still refuses.
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
@@ -495,8 +476,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testScaffoldGeneratesDestFieldsCtorAndVia(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n'
-			+ '\tfunction run():Int return m();\n' + '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n\tfunction run():Int return m();\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -517,8 +497,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testScaffoldExplicitViaName(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n'
-			+ '\tfunction run():Int return m();\n' + '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n\tfunction run():Int return m();\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -532,8 +511,7 @@ class MoveMemberSliceTest extends Test {
 
 	public function testScaffoldNoCtorOnDestPrepends(): Void {
 		// Dest declared with --raw style (no constructor at all).
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n'
-			+ '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -545,8 +523,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testScaffoldRefusesNonTrivialDestCtor(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n'
-			+ '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tvar n:Int;\n\tpublic function new() {\n\t\tn = 5;\n\t}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -555,8 +532,7 @@ class MoveMemberSliceTest extends Test {
 	}
 
 	public function testScaffoldWithoutFlagStillRefuses(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n'
-			+ '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -566,9 +542,7 @@ class MoveMemberSliceTest extends Test {
 
 	public function testScaffoldViaNameCollisionRefused(): Void {
 		// Src already has a member named `_b` (the derived via name for dest B).
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tprivate final _b:String;\n'
-			+ '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\t_b = "x";\n\t}\n' + '\tfunction run():Int return m();\n'
-			+ '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tprivate final _b:String;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\t_b = "x";\n\t}\n\tfunction run():Int return m();\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -579,8 +553,7 @@ class MoveMemberSliceTest extends Test {
 	public function testScaffoldCallerInsideCtorRefused(): Void {
 		// A rewired caller sits inside Src's ctor — via field would be read
 		// before it is initialized.
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n'
-			+ '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\tm();\n\t}\n' + '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t\tm();\n\t}\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
@@ -591,13 +564,115 @@ class MoveMemberSliceTest extends Test {
 	public function testScaffoldCommentOnlyDestCtorRefused(): Void {
 		// Dest ctor body has a comment (not a statement) — must NOT be
 		// treated as trivial and clobbered.
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n' + '\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n'
-			+ '\tfunction m():Int return _k + 1;\n}';
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate final _k:Int;\n\tpublic function new(k:Int) {\n\t\t_k = k;\n\t}\n\tfunction m():Int return _k + 1;\n}';
 		final b: String = 'package pkg;\n\nclass B {\n\tpublic function new() {\n\t\t// IMPORTANT: keep\n\t}\n}';
 		assertErrContains(move('pkg/A.hx', 'A', 'm', 'B', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
 		], null, null, true), 'already has a constructor');
+	}
+
+	public function testTwoQualifiedCallsOnOneLine(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nclass User {\n\tfunction go():Int return A.util(1) + A.util(2);\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
+		Assert.isTrue(StringTools.contains(newUser, 'B.util(1) + B.util(2)'), 'both same-line callers should repoint');
+	}
+
+	public function testSkipParseScopeFileRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/Broken.hx', source: 'class {{{' },
+		]));
+	}
+
+	/**
+	 * A switch case pattern binding the member's name: `Refs` cannot tell
+	 * the capture from the member, so the move must refuse rather than
+	 * silently rewrite match code.
+	 */
+	public function testCasePatternCaptureRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tstatic function run(o:Null<Int>):Int return switch o {\n\t\tcase util: util;\n\t\tcase _: 0;\n\t}\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]));
+	}
+
+	/**
+	 * Promotion of a default-visibility member carrying leading `@:meta`:
+	 * `public` must land after the meta, before `static`.
+	 */
+	public function testMetaMemberPromotionLandsAfterMeta(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function run():Int return util(3);\n\t@:keep static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(StringTools.contains(newB, '@:keep public static function util'), 'public should follow the meta');
+	}
+
+	public function testFullyQualifiedCallerRewritten(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final user: String = 'package app;\n\nclass User {\n\tfunction go():Int return pkg.A.util(1);\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'app/User.hx', source: user },
+		]);
+		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
+		Assert.isTrue(StringTools.contains(newUser, 'pkg.B.util(1)'), 'fully-qualified caller should repoint');
+	}
+
+	public function testUsingOfDestTypeRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nusing pkg.B;\n\nclass User {}';
+		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
+		]));
+	}
+
+	/**
+	 * A caller inside the destination file becomes a same-type qualified
+	 * access after the move — no promotion needed, visibility kept.
+	 */
+	public function testDestFileCallerStaysPrivate(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tprivate static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {\n\tpublic static function go():Int return A.util(5);\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(StringTools.contains(newB, 'B.util(5)'), 'dest-file caller should repoint');
+		Assert.isTrue(StringTools.contains(newB, 'private static function util'), 'no promotion for a dest-file caller');
+	}
+
+	public function testCrossPackageFqnCallerRefused(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
+		final b: String = 'package other;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nclass User {\n\tfunction go():Int return pkg.A.util(1);\n}';
+		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'other/B.hx', source: b },
+			{ file: 'pkg/User.hx', source: user },
+		]));
 	}
 
 	private function move(
@@ -660,114 +735,9 @@ class MoveMemberSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+
 	private static function typeRefShape(): TypeRefShape {
 		return new HaxeQueryPlugin().typeRefShape();
-	}
-
-	public function testTwoQualifiedCallsOnOneLine(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {}';
-		final user: String = 'package pkg;\n\nclass User {\n\tfunction go():Int return A.util(1) + A.util(2);\n}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
-		]);
-		final newUser: String = changeFor(changes, 'pkg/User.hx').newSource;
-		Assert.isTrue(StringTools.contains(newUser, 'B.util(1) + B.util(2)'), 'both same-line callers should repoint');
-	}
-
-	public function testSkipParseScopeFileRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/Broken.hx', source: 'class {{{' },
-		]));
-	}
-
-	/**
-	 * A switch case pattern binding the member's name: `Refs` cannot tell
-	 * the capture from the member, so the move must refuse rather than
-	 * silently rewrite match code.
-	 */
-	public function testCasePatternCaptureRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tstatic function run(o:Null<Int>):Int return switch o {\n'
-			+ '\t\tcase util: util;\n\t\tcase _: 0;\n\t}\n' + '\tpublic static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-		]));
-	}
-
-	/**
-	 * Promotion of a default-visibility member carrying leading `@:meta`:
-	 * `public` must land after the meta, before `static`.
-	 */
-	public function testMetaMemberPromotionLandsAfterMeta(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n' + '\tpublic static function run():Int return util(3);\n'
-			+ '\t@:keep static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-		]);
-		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.isTrue(StringTools.contains(newB, '@:keep public static function util'), 'public should follow the meta');
-	}
-
-	public function testFullyQualifiedCallerRewritten(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {}';
-		final user: String = 'package app;\n\nclass User {\n\tfunction go():Int return pkg.A.util(1);\n}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-			{ file: 'app/User.hx', source: user },
-		]);
-		final newUser: String = changeFor(changes, 'app/User.hx').newSource;
-		Assert.isTrue(StringTools.contains(newUser, 'pkg.B.util(1)'), 'fully-qualified caller should repoint');
-	}
-
-	public function testUsingOfDestTypeRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {}';
-		final user: String = 'package pkg;\n\nusing pkg.B;\n\nclass User {}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
-		]));
-	}
-
-	/**
-	 * A caller inside the destination file becomes a same-type qualified
-	 * access after the move — no promotion needed, visibility kept.
-	 */
-	public function testDestFileCallerStaysPrivate(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tprivate static function util(x:Int):Int return x;\n}';
-		final b: String = 'package pkg;\n\nclass B {\n\tpublic static function go():Int return A.util(5);\n}';
-		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'pkg/B.hx', source: b },
-		]);
-		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
-		Assert.isTrue(StringTools.contains(newB, 'B.util(5)'), 'dest-file caller should repoint');
-		Assert.isTrue(StringTools.contains(newB, 'private static function util'), 'no promotion for a dest-file caller');
-	}
-
-
-	public function testCrossPackageFqnCallerRefused(): Void {
-		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
-		final b: String = 'package other;\n\nclass B {}';
-		final user: String = 'package pkg;\n\nclass User {\n\tfunction go():Int return pkg.A.util(1);\n}';
-		assertErr(move('pkg/A.hx', 'A', 'util', 'B', [
-			{ file: 'pkg/A.hx', source: a },
-			{ file: 'other/B.hx', source: b },
-			{ file: 'pkg/User.hx', source: user },
-		]));
 	}
 
 }

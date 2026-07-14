@@ -103,7 +103,7 @@ class HxToplevelPackageSliceTest extends HxTestHelpers {
 		// keyword. The outer-loop `expected HxDecl` fan still surfaces
 		// the failure even though the branch-internal trail expectation
 		// is what actually trips.
-		Assert.raises(() -> HaxeModuleParser.parse('package foo'));
+		Assert.raises(HaxeModuleParser.parse.bind('package foo'));
 	}
 
 	public function testWriterEmitsPackageEmpty(): Void {

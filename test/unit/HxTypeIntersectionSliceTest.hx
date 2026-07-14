@@ -28,13 +28,6 @@ import anyparse.grammar.haxe.HxTypedefDecl;
 @:nullSafety(Strict)
 class HxTypeIntersectionSliceTest extends HxTestHelpers {
 
-	private function expectAnonFieldCount(t: HxType): Int {
-		return switch t {
-			case Anon(fields): fields.length;
-			case _: throw 'expected HxType.Anon, got ${t}';
-		};
-	}
-
 	public function testTwoNamedOperands(): Void {
 		final module: HxModule = HaxeModuleParser.parse('typedef X = A & B;');
 		Assert.equals(1, module.decls.length);
@@ -106,6 +99,13 @@ class HxTypeIntersectionSliceTest extends HxTestHelpers {
 		roundTrip('typedef X = A & { a:Int };', 'named-nonempty-anon');
 		roundTrip('typedef X = A & B & C;', 'chain');
 		roundTrip('typedef X = Int;', 'bare-unaffected');
+	}
+
+	private function expectAnonFieldCount(t: HxType): Int {
+		return switch t {
+			case Anon(fields): fields.length;
+			case _: throw 'expected HxType.Anon, got ${t}';
+		};
 	}
 
 }

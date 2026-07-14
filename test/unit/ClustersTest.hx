@@ -21,18 +21,14 @@ class ClustersTest extends Test {
 	/**
 	 * Two call-islands with no hub worth extracting: auto mode leaves the
 	 * members alone and reports the natural split.
-	 */
-	/**
 	 * Two 2-member islands glued by a logger every member calls.
 	 */
-	private static final HUB_GLUED: String = 'class A {' + ' function a():Void { b(); log(); }' + ' function b():Void log();'
-		+ ' function c():Void { d(); log(); }' + ' function d():Void log();' + ' function log():Void {}' + ' }';
+	private static final HUB_GLUED: String = 'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); } function d():Void log(); function log():Void {} }';
 
 	/**
 	 * HUB_GLUED with the hub calling back into the second island.
 	 */
-	private static final HUB_CALLBACK: String = 'class A {' + ' function a():Void { b(); log(); }' + ' function b():Void log();'
-		+ ' function c():Void { d(); log(); }' + ' function d():Void log();' + ' function log():Void d();' + ' }';
+	private static final HUB_CALLBACK: String = 'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); } function d():Void log(); function log():Void d(); }';
 
 	public function testTwoIslandsSplitWithoutHubs(): Void {
 		final r: Null<ClusterReport> = analyzeOf([
@@ -146,23 +142,12 @@ class ClustersTest extends Test {
 	}
 
 
-	private function analyzeOf(sources: Array<String>, typeName: String, ?hubCount: Int, ?kinds: Array<EdgeKind>): Null<ClusterReport> {
-		return Clusters.analyze(QueryTestHelpers.graphOf(sources), typeName, hubCount, kinds);
-	}
-
-
-	private function ids(component: Array<FnNode>): String {
-		return [for (n in component) n.id].join(',');
-	}
-
-
 	/**
 	 * Members linked only by a method-value reference stay together under
 	 * the default kinds and separate when narrowed to plain calls.
 	 */
 	public function testKindsFilterDropsRefEdges(): Void {
-		final source: String = 'class A {' + ' function a():Void run(b);' + ' function run(f:() -> Void):Void f();'
-			+ ' function b():Void {}' + ' }';
+		final source: String = 'class A { function a():Void run(b); function run(f:() -> Void):Void f(); function b():Void {} }';
 		final all: Null<ClusterReport> = analyzeOf([source], 'A');
 		Assert.notNull(all);
 		if (all == null) return;
@@ -202,6 +187,16 @@ class ClustersTest extends Test {
 		if (r == null) return;
 		Assert.equals('A.log,A.b,A.d', [for (h in r.hubs) h.id].join(','));
 		Assert.equals(2, r.components.length);
+	}
+
+
+	private function analyzeOf(sources: Array<String>, typeName: String, ?hubCount: Int, ?kinds: Array<EdgeKind>): Null<ClusterReport> {
+		return Clusters.analyze(QueryTestHelpers.graphOf(sources), typeName, hubCount, kinds);
+	}
+
+
+	private function ids(component: Array<FnNode>): String {
+		return [for (n in component) n.id].join(',');
 	}
 
 }

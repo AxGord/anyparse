@@ -10,109 +10,109 @@ import anyparse.runtime.Span;
  */
 class SpanTest extends Test {
 
-	function testZeroWidthSpanToString() {
+	private function testZeroWidthSpanToString() {
 		Assert.equals('7', new Span(7, 7).toString());
 	}
 
-	function testRangeSpanToString() {
+	private function testRangeSpanToString() {
 		Assert.equals('3..10', new Span(3, 10).toString());
 	}
 
-	function testLineColAtStart() {
+	private function testLineColAtStart() {
 		final s: Span = new Span(0, 0);
 		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(1, p.line);
 		Assert.equals(1, p.col);
 	}
 
-	function testLineColMidFirstLine() {
+	private function testLineColMidFirstLine() {
 		final s: Span = new Span(3, 3);
 		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(1, p.line);
 		Assert.equals(4, p.col);
 	}
 
-	function testLineColAtNewline() {
+	private function testLineColAtNewline() {
 		final s: Span = new Span(5, 5);
 		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(1, p.line);
 		Assert.equals(6, p.col);
 	}
 
-	function testLineColAfterNewline() {
+	private function testLineColAfterNewline() {
 		final s: Span = new Span(6, 6);
 		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(2, p.line);
 		Assert.equals(1, p.col);
 	}
 
-	function testLineColMidSecondLine() {
+	private function testLineColMidSecondLine() {
 		final s: Span = new Span(8, 8);
 		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(2, p.line);
 		Assert.equals(3, p.col);
 	}
 
-	function testLineColMultipleNewlines() {
+	private function testLineColMultipleNewlines() {
 		final s: Span = new Span(4, 4);
 		final p: { line: Int, col: Int } = s.lineCol('a\nb\nc\nd');
 		Assert.equals(3, p.line);
 		Assert.equals(1, p.col);
 	}
 
-	function testLineColPastEnd() {
+	private function testLineColPastEnd() {
 		final s: Span = new Span(100, 100);
 		final p: { line: Int, col: Int } = s.lineCol('hello\nworld');
 		Assert.equals(2, p.line);
 		Assert.equals(6, p.col);
 	}
 
-	function testLineColEmptySource() {
+	private function testLineColEmptySource() {
 		final s: Span = new Span(0, 0);
 		final p: { line: Int, col: Int } = s.lineCol('');
 		Assert.equals(1, p.line);
 		Assert.equals(1, p.col);
 	}
 
-	function testOffsetOfStart() {
+	private function testOffsetOfStart() {
 		Assert.equals(0, Span.offsetOf('hello\nworld', 1, 1));
 	}
 
-	function testOffsetOfMidFirstLine() {
+	private function testOffsetOfMidFirstLine() {
 		Assert.equals(3, Span.offsetOf('hello\nworld', 1, 4));
 	}
 
-	function testOffsetOfAfterNewline() {
+	private function testOffsetOfAfterNewline() {
 		Assert.equals(6, Span.offsetOf('hello\nworld', 2, 1));
 	}
 
-	function testOffsetOfMidSecondLine() {
+	private function testOffsetOfMidSecondLine() {
 		Assert.equals(8, Span.offsetOf('hello\nworld', 2, 3));
 	}
 
-	function testOffsetOfMultipleNewlines() {
+	private function testOffsetOfMultipleNewlines() {
 		Assert.equals(4, Span.offsetOf('a\nb\nc\nd', 3, 1));
 	}
 
-	function testOffsetOfColPastLineEndClampsToNewline() {
+	private function testOffsetOfColPastLineEndClampsToNewline() {
 		// col beyond line 1 content → clamp to the newline offset (5).
 		Assert.equals(5, Span.offsetOf('hello\nworld', 1, 99));
 	}
 
-	function testOffsetOfLinePastEndClampsToSourceLength() {
+	private function testOffsetOfLinePastEndClampsToSourceLength() {
 		Assert.equals(11, Span.offsetOf('hello\nworld', 99, 1));
 	}
 
-	function testOffsetOfEmptySource() {
+	private function testOffsetOfEmptySource() {
 		Assert.equals(0, Span.offsetOf('', 1, 1));
 	}
 
-	function testOffsetOfNonPositiveIsZero() {
+	private function testOffsetOfNonPositiveIsZero() {
 		Assert.equals(0, Span.offsetOf('hello', 0, 1));
 		Assert.equals(0, Span.offsetOf('hello', 1, 0));
 	}
 
-	function testOffsetOfRoundTripsLineCol() {
+	private function testOffsetOfRoundTripsLineCol() {
 		// offsetOf is the inverse of lineCol for in-range offsets.
 		final source: String = 'abc\nde\nfghi';
 		for (off in [0, 1, 3, 4, 6, 7, 10]) {
@@ -121,7 +121,7 @@ class SpanTest extends Test {
 		}
 	}
 
-	function testFieldsImmutable() {
+	private function testFieldsImmutable() {
 		final s: Span = new Span(2, 5);
 		Assert.equals(2, s.from);
 		Assert.equals(5, s.to);

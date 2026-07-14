@@ -86,6 +86,12 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/** An override inherits supertype visibility; it is still reported but the autofix must NOT force `private`. */
+	public function testFixSkipsOverride(): Void {
+		Assert.equals(1, violations('class C { override function f():Void {} }').length);
+		Assert.equals(-1, fixedSource('class C { override function f():Void {} }').indexOf('private'));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MissingVisibility().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -99,12 +105,6 @@ class MissingVisibilityCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	/** An override inherits supertype visibility; it is still reported but the autofix must NOT force `private`. */
-	public function testFixSkipsOverride(): Void {
-		Assert.equals(1, violations('class C { override function f():Void {} }').length);
-		Assert.equals(-1, fixedSource('class C { override function f():Void {} }').indexOf('private'));
 	}
 
 }

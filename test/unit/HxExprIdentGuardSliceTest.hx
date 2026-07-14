@@ -34,9 +34,9 @@ final class HxExprIdentGuardSliceTest extends Test {
 	}
 
 	public function testControlFlowKeywordRejectedAsIdentAtom(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(if); }'), ParseError);
-		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(else); }'), ParseError);
-		Assert.raises(() -> HaxeModuleParser.parse('class C { var x = f(case); }'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('class C { var x = f(if); }'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('class C { var x = f(else); }'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('class C { var x = f(case); }'), ParseError);
 	}
 
 	public function testKeywordPrefixedIdentsStillMatch(): Void {

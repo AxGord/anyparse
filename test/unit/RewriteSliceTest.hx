@@ -52,7 +52,7 @@ class RewriteSliceTest extends Test {
 	/** No match is an error. */
 	public function testNoMatchIsError(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\tfoo(a);\n\t}\n}';
-		Assert.isTrue(isErr(Rewrite.rewrite(src, "nope($x)", "x", true, new HaxeQueryPlugin())));
+		Assert.isTrue(isErr(Rewrite.rewrite(src, "nope($x)", 'x', true, new HaxeQueryPlugin())));
 	}
 
 	/** An integer shift on a non-integer metavar is refused. */

@@ -76,6 +76,10 @@ class PreferNullCoalescingCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	public function testIncrementGuardedNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('i++ != null ? i++ : y')).length);
+	}
+
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = ' + expr + ';\n\t}\n}';
 	}
@@ -90,10 +94,6 @@ class PreferNullCoalescingCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length == 1 ? edits[0].text : '<' + edits.length + ' edits>';
-	}
-
-	public function testIncrementGuardedNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('i++ != null ? i++ : y')).length);
 	}
 
 }

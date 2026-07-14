@@ -24,12 +24,6 @@ final class HxParamCommentWriteTest extends Test {
 		super();
 	}
 
-	private inline function fmt(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CFG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
 	/** The reported bug: a lone post-comma block comment must keep the comma before it, inline. */
 	public function testPostSepBlockCommentKeepsCommaBefore(): Void {
 		Assert.equals(
@@ -52,6 +46,12 @@ final class HxParamCommentWriteTest extends Test {
 			'class C {\n\n\tfunction foo(a:Int /* c */, b:Int):Void {}\n\n}',
 			fmt('class C {\n\tfunction foo(a:Int /* c */, b:Int):Void {}\n}')
 		);
+	}
+
+	private inline function fmt(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CFG);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

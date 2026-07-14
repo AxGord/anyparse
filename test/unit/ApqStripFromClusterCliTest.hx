@@ -21,6 +21,9 @@ import sys.io.File;
 @:nullSafety(Strict)
 class ApqStripFromClusterCliTest extends Test {
 
+	#if sys
+	private static var counter: Int = 0;
+	#end
 	public function testFromClusterRequiresCorpusRoot(): Void {
 		#if sys
 		final saved: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
@@ -100,8 +103,6 @@ class ApqStripFromClusterCliTest extends Test {
 	}
 
 	#if sys
-	private static var counter: Int = 0;
-
 	private static function mkTempDir(prefix: String): String {
 		counter++;
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
@@ -110,7 +111,6 @@ class ApqStripFromClusterCliTest extends Test {
 		FileSystem.createDirectory(dir);
 		return dir;
 	}
-
 	private static function cleanupDir(dir: String): Void {
 		if (!FileSystem.exists(dir)) return;
 		for (entry in FileSystem.readDirectory(dir)) {
@@ -122,11 +122,9 @@ class ApqStripFromClusterCliTest extends Test {
 		}
 		FileSystem.deleteDirectory(dir);
 	}
-
 	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
 	}
-
 	private static inline function brokenHxtest(): String {
 		return '{}\n---\n\nclass C { var x:\n\n---\n\nclass C {\n\tvar x:Int;\n}\n';
 	}

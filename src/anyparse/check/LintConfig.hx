@@ -73,6 +73,19 @@ final class LintConfig {
 	}
 
 	/**
+	 * A rule-specific list-of-strings option (e.g. `thread-safety` `sinks`),
+	 * or null when unset; a non-array value or non-string elements are dropped.
+	 */
+	public function stringListOption(id: String, key: String): Null<Array<String>> {
+		final rc: Null<RuleConfig> = _rules[id];
+		if (rc == null) return null;
+		final v: Null<Dynamic> = rc.props.get(key);
+		if (v == null || !(v is Array)) return null;
+		final raw: Array<Dynamic> = v;
+		return [for (e in raw) if (e is String) (e: String)];
+	}
+
+	/**
 	 * Discover an `apqlint.json` by walking up from `path`'s directory and parse
 	 * it; an empty config (every rule enabled, no overrides) when none is found.
 	 */
@@ -106,19 +119,6 @@ final class LintConfig {
 		final enabled: Null<Bool> = enabledRaw is Bool ? enabledRaw : null;
 		final severity: Null<Severity> = severityRaw != null && severityRaw is String ? Severity.fromName(severityRaw) : null;
 		return { enabled: enabled, severity: severity, props: props };
-	}
-
-	/**
-	 * A rule-specific list-of-strings option (e.g. `thread-safety` `sinks`),
-	 * or null when unset; a non-array value or non-string elements are dropped.
-	 */
-	public function stringListOption(id: String, key: String): Null<Array<String>> {
-		final rc: Null<RuleConfig> = _rules[id];
-		if (rc == null) return null;
-		final v: Null<Dynamic> = rc.props.get(key);
-		if (v == null || !(v is Array)) return null;
-		final raw: Array<Dynamic> = v;
-		return [for (e in raw) if (e is String) (e: String)];
 	}
 
 }

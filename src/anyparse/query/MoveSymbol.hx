@@ -188,47 +188,6 @@ final class MoveSymbol {
 	}
 
 	/**
-	 * The source range to CUT for the declaration whose own span is
-	 * `declSpan`: extended BACKWARD over the decl's leading indentation
-	 * and any contiguous preceding doc-comment / line-comment /
-	 * block-comment / `@:meta` lines (the `parseFile` tree drops trivia
-	 * and emits `@:meta` as separate preceding sibling nodes, so the cut
-	 * is computed from the raw source, not the tree), and FORWARD over
-	 * one trailing newline. Returns null when the declaration shares its
-	 * source line with other code (the line-up-to the decl is not pure
-	 * whitespace), which a whole-line cut cannot safely express.
-	 */
-	private static function computeCutSpan(source: String, declSpan: Span): Null<Span> {
-		// Start of the decl's own line.
-		final lineStart: Int = lineStartOf(source, declSpan.from);
-		// The characters between the line start and the decl must be pure
-		// whitespace (the decl's indentation) — otherwise the decl shares a
-		// line with other code and a whole-line cut would corrupt it.
-		if (!isBlank(source, lineStart, declSpan.from)) return null;
-
-		// Walk backward over contiguous preceding trivia / meta lines.
-		var cutStart: Int = lineStart;
-		while (cutStart > 0) {
-			// `cutStart` is at the start of the current line; step to the
-			// previous line.
-			final prevLineEnd: Int = cutStart - 1; // the '\n' terminating the previous line
-			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
-			final prevLine: String = source.substring(prevLineStart, prevLineEnd);
-			if (isContiguousTriviaLine(prevLine))
-				cutStart = prevLineStart;
-			else
-				break;
-		}
-
-		// Extend forward over one trailing newline so the cut removes the
-		// whole decl block including its line terminator.
-		var cutEnd: Int = declSpan.to;
-		if (cutEnd < source.length && source.charAt(cutEnd) == '\n') cutEnd++;
-
-		return new Span(cutStart, cutEnd);
-	}
-
-	/**
 	 * The explicit imports the moved decl's body depends on that the
 	 * destination lacks. A dependency name `D` is a type-position
 	 * reference (`Uses.find` on the `parseFileTypeRefs` tree) whose span
@@ -280,6 +239,83 @@ final class MoveSymbol {
 			if (!carried.exists(c -> c.kind == provider.kind && c.raw == provider.raw)) carried.push(provider);
 		}
 		return carried;
+	}
+
+	/**
+	 * An edit that inserts `import <path>;` into `info` (the source file
+	 * gaining a reference to the moved type), placed after the last
+	 * existing import (or after the package declaration). Returns null
+	 * when the import is already present.
+	 */
+	public static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
+		final already: Bool = info.imports.exists(imp -> imp.kind == ImportKind.Import && imp.raw == path);
+		if (already) return null;
+		final insertAt: Int = importInsertionOffset(source, info);
+		return { span: new Span(insertAt, insertAt), text: 'import $path;\n' };
+	}
+
+	/**
+	 * Offset at which a fresh import line should be inserted: the start of
+	 * the line AFTER the last existing import statement, else after the
+	 * package declaration, else the very start of the file. The returned
+	 * offset is always a line start, so the caller appends `text + '\n'`.
+	 */
+	public static function importInsertionOffset(source: String, info: FileInfo): Int {
+		var anchorEnd: Int = -1;
+		for (imp in info.imports) if (imp.span.to > anchorEnd) anchorEnd = imp.span.to;
+		if (anchorEnd < 0) {
+			// No imports — anchor after the package decl's line, if any.
+			final pkgIdx: Int = source.indexOf('package ');
+			if (pkgIdx == 0) {
+				final semi: Int = source.indexOf(';', pkgIdx);
+				if (semi >= 0) anchorEnd = semi + 1;
+			}
+		}
+		if (anchorEnd < 0) return 0;
+		// Step to the start of the next line after the anchor.
+		final nl: Int = source.indexOf('\n', anchorEnd);
+		return nl < 0 ? source.length : nl + 1;
+	}
+
+	/**
+	 * The source range to CUT for the declaration whose own span is
+	 * `declSpan`: extended BACKWARD over the decl's leading indentation
+	 * and any contiguous preceding doc-comment / line-comment /
+	 * block-comment / `@:meta` lines (the `parseFile` tree drops trivia
+	 * and emits `@:meta` as separate preceding sibling nodes, so the cut
+	 * is computed from the raw source, not the tree), and FORWARD over
+	 * one trailing newline. Returns null when the declaration shares its
+	 * source line with other code (the line-up-to the decl is not pure
+	 * whitespace), which a whole-line cut cannot safely express.
+	 */
+	private static function computeCutSpan(source: String, declSpan: Span): Null<Span> {
+		// Start of the decl's own line.
+		final lineStart: Int = lineStartOf(source, declSpan.from);
+		// The characters between the line start and the decl must be pure
+		// whitespace (the decl's indentation) — otherwise the decl shares a
+		// line with other code and a whole-line cut would corrupt it.
+		if (!isBlank(source, lineStart, declSpan.from)) return null;
+
+		// Walk backward over contiguous preceding trivia / meta lines.
+		var cutStart: Int = lineStart;
+		while (cutStart > 0) {
+			// `cutStart` is at the start of the current line; step to the
+			// previous line.
+			final prevLineEnd: Int = cutStart - 1; // the '\n' terminating the previous line
+			final prevLineStart: Int = lineStartOf(source, prevLineEnd);
+			final prevLine: String = source.substring(prevLineStart, prevLineEnd);
+			if (isContiguousTriviaLine(prevLine))
+				cutStart = prevLineStart;
+			else
+				break;
+		}
+
+		// Extend forward over one trailing newline so the cut removes the
+		// whole decl block including its line terminator.
+		var cutEnd: Int = declSpan.to;
+		if (cutEnd < source.length && source.charAt(cutEnd) == '\n') cutEnd++;
+
+		return new Span(cutStart, cutEnd);
 	}
 
 	/**
@@ -336,42 +372,6 @@ final class MoveSymbol {
 		}
 		walk(typeRefTree);
 		return used;
-	}
-
-	/**
-	 * An edit that inserts `import <path>;` into `info` (the source file
-	 * gaining a reference to the moved type), placed after the last
-	 * existing import (or after the package declaration). Returns null
-	 * when the import is already present.
-	 */
-	public static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
-		final already: Bool = info.imports.exists(imp -> imp.kind == ImportKind.Import && imp.raw == path);
-		if (already) return null;
-		final insertAt: Int = importInsertionOffset(source, info);
-		return { span: new Span(insertAt, insertAt), text: 'import $path;\n' };
-	}
-
-	/**
-	 * Offset at which a fresh import line should be inserted: the start of
-	 * the line AFTER the last existing import statement, else after the
-	 * package declaration, else the very start of the file. The returned
-	 * offset is always a line start, so the caller appends `text + '\n'`.
-	 */
-	public static function importInsertionOffset(source: String, info: FileInfo): Int {
-		var anchorEnd: Int = -1;
-		for (imp in info.imports) if (imp.span.to > anchorEnd) anchorEnd = imp.span.to;
-		if (anchorEnd < 0) {
-			// No imports — anchor after the package decl's line, if any.
-			final pkgIdx: Int = source.indexOf('package ');
-			if (pkgIdx == 0) {
-				final semi: Int = source.indexOf(';', pkgIdx);
-				if (semi >= 0) anchorEnd = semi + 1;
-			}
-		}
-		if (anchorEnd < 0) return 0;
-		// Step to the start of the next line after the anchor.
-		final nl: Int = source.indexOf('\n', anchorEnd);
-		return nl < 0 ? source.length : nl + 1;
 	}
 
 	/**

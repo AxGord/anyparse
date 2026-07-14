@@ -372,7 +372,7 @@ class HxArrowArraySliceTest extends HxTestHelpers {
 
 	/** Unclosed array `[1, 2` -> rejection. */
 	public function testRejectsUnclosedArray(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C { var a:Int = [1, 2; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class C { var a:Int = [1, 2; }'), ParseError);
 	}
 
 }

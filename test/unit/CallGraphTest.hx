@@ -7,7 +7,6 @@ import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.Reach;
-import anyparse.grammar.haxe.HaxeQueryPlugin;
 
 /**
  * The approximate call graph behind `apq callees` / `callers` / `reach` and
@@ -163,14 +162,6 @@ class CallGraphTest extends Test {
 		Assert.equals(0, g.edges.length);
 	}
 
-	private function graphOf(sources: Array<String>): CallGraph {
-		return QueryTestHelpers.graphOf(sources);
-	}
-
-	private function edges(g: CallGraph, from: String, to: String, kind: EdgeKind): Array<CallEdge> {
-		return [for (e in g.outEdges(from)) if (e.to == to && e.kind == kind) e];
-	}
-
 	public function testSuperCtorCallResolves(): Void {
 		final g: CallGraph = graphOf([
 			'class Sub extends Base { public function new() super(); }',
@@ -185,6 +176,14 @@ class CallGraphTest extends Test {
 			'class A { function a():haxe.macro.Expr return macro { work(); }; function work():Void {} }'
 		]);
 		Assert.equals(0, edges(g, 'A.a', 'A.work', Call).length);
+	}
+
+	private function graphOf(sources: Array<String>): CallGraph {
+		return QueryTestHelpers.graphOf(sources);
+	}
+
+	private function edges(g: CallGraph, from: String, to: String, kind: EdgeKind): Array<CallEdge> {
+		return [for (e in g.outEdges(from)) if (e.to == to && e.kind == kind) e];
 	}
 
 }

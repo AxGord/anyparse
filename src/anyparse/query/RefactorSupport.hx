@@ -1118,8 +1118,7 @@ final class RefactorSupport {
 		final span: Null<Span> = field.span;
 		if (span == null || field.children.length < 1) return false;
 		final initSpan: Null<Span> = field.children[0].span;
-		if (initSpan == null) return false;
-		return source.substring(span.from, initSpan.from).indexOf('(') < 0;
+		return initSpan != null && source.substring(span.from, initSpan.from).indexOf('(') < 0;
 	}
 
 	/** Extend a member's `span` back over own-line leading comments and forward over a same-line trailing comment, yielding its full source slot. */

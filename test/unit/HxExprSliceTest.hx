@@ -75,7 +75,7 @@ class HxExprSliceTest extends HxTestHelpers {
 	public function testRejectsEmptyInit(): Void {
 		// `var x:Int = ;` — the `=` is consumed, the sub-rule
 		// parseHxExpr(ctx) then sees `;` and every branch fails.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = ; }'), ParseError);
 	}
 
 	public function testAcceptsMissingSemicolonAfterInit(): Void {

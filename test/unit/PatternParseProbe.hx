@@ -26,7 +26,7 @@ class PatternParseProbe extends Test {
 		Assert.equals('IfStmt', pattern.root.kind);
 		final names: Array<String> = [];
 		collectMetavarNames(pattern.root, names);
-		Assert.isTrue(names.contains('x'), 'pattern must bind $$x — got ${names.join(",")}');
+		Assert.isTrue(names.contains('x'), 'pattern must bind $$x — got ${names.join(',')}');
 		Assert.isTrue(names.contains('f'), 'pattern must bind $$f');
 		Assert.isTrue(names.contains('_'), 'pattern must include a wildcard');
 		// `$x` reuses must produce two Metavar nodes with name `x`.
@@ -40,7 +40,7 @@ class PatternParseProbe extends Test {
 		Assert.equals(PatternCategory.Stmt, pattern.category);
 		final names: Array<String> = [];
 		collectMetavarNames(pattern.root, names);
-		Assert.isTrue(names.contains('E'), 'pattern must bind $$E — got ${names.join(",")}');
+		Assert.isTrue(names.contains('E'), 'pattern must bind $$E — got ${names.join(',')}');
 		Assert.isTrue(names.contains('_'), 'pattern must include wildcard arg');
 	}
 
@@ -49,7 +49,7 @@ class PatternParseProbe extends Test {
 		final pattern: Pattern = plugin.parsePattern('return null');
 		final names: Array<String> = [];
 		collectMetavarNames(pattern.root, names);
-		Assert.equals(0, names.length, 'literal-only pattern must have no metavars — got ${names.join(",")}');
+		Assert.equals(0, names.length, 'literal-only pattern must have no metavars — got ${names.join(',')}');
 	}
 
 	public function testDollarInsideStringNotSubstituted(): Void {
@@ -60,7 +60,7 @@ class PatternParseProbe extends Test {
 		final names: Array<String> = [];
 		collectMetavarNames(pattern.root, names);
 		Assert.isTrue(names.contains('name'), 'outside-string $$name must be a metavar');
-		Assert.isFalse(names.contains('x'), 'inside-string $$x must NOT be a metavar — got ${names.join(",")}');
+		Assert.isFalse(names.contains('x'), 'inside-string $$x must NOT be a metavar — got ${names.join(',')}');
 	}
 
 	public function testStmtPatternWithTrailingSemicolon(): Void {
@@ -74,7 +74,7 @@ class PatternParseProbe extends Test {
 		Assert.equals('ReturnStmt', pattern.root.kind);
 		final names: Array<String> = [];
 		collectMetavarNames(pattern.root, names);
-		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard — got ${names.join(",")}');
+		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard — got ${names.join(',')}');
 	}
 
 	public function testStmtPatternWithoutSemicolonStillParses(): Void {
@@ -100,7 +100,7 @@ class PatternParseProbe extends Test {
 		Assert.equals('Call', pattern.root.kind);
 		final names: Array<String> = [];
 		collectMetavarNames(pattern.root, names);
-		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard arg — got ${names.join(",")}');
+		Assert.isTrue(names.contains('_'), 'pattern must include the wildcard arg — got ${names.join(',')}');
 	}
 
 	public function testBareExpressionPatternIsNotStmtWrapped(): Void {

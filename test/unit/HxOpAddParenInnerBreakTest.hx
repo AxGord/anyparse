@@ -7,8 +7,6 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
-using StringTools;
-
 /**
  * opadd-trailing-paren-break: a 2-operand `a + (bare paren)` whose paren wraps a
  * same-class opAddSub subexpression (`(b - c)`) BREAKS the chain beforeLast when

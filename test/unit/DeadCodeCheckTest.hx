@@ -73,6 +73,14 @@ class DeadCodeCheckTest extends Test {
 		Assert.isTrue(ids.contains('dead-code'));
 	}
 
+	public function testFixNestedDeadRunDeletesOuter(): Void {
+		// An outer dead run contains a nested block with its own dead run; the outer
+		// deletion subsumes the inner one — `fix` returns a single non-overlapping
+		// edit and the whole outer run (incl. the nested block) is removed.
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\twhile (true) {\n\t\t\tbreak;\n\t\t\tinner();\n\t\t}\n\t\touter();\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\treturn;\n\t}\n}', applyFix(src));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadCode().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -86,14 +94,6 @@ class DeadCodeCheckTest extends Test {
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	public function testFixNestedDeadRunDeletesOuter(): Void {
-		// An outer dead run contains a nested block with its own dead run; the outer
-		// deletion subsumes the inner one — `fix` returns a single non-overlapping
-		// edit and the whole outer run (incl. the nested block) is removed.
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\twhile (true) {\n\t\t\tbreak;\n\t\t\tinner();\n\t\t}\n\t\touter();\n\t}\n}';
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\treturn;\n\t}\n}', applyFix(src));
 	}
 
 }

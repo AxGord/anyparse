@@ -30,16 +30,6 @@ import anyparse.grammar.haxe.HxModuleWriter;
 @:nullSafety(Strict)
 class HxIntervalPolicySliceTest extends HxTestHelpers {
 
-	private inline function writeWith(src: String, policy: WhitespacePolicy): String {
-		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(policy));
-	}
-
-	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.intervalPolicy = policy;
-		return opts;
-	}
-
 	public function testWriterTightFusedIntLitLeft(): Void {
 		final out: String = writeWith('class Foo { function f() { for (i in 0...n) g(); } }', WhitespacePolicy.Both);
 		Assert.isTrue(out.indexOf('for (i in 0...n)') != -1, 'expected fused `0...n` in: <$out>');
@@ -123,6 +113,16 @@ class HxIntervalPolicySliceTest extends HxTestHelpers {
 	public function testIntervalPolicyLoaderDefaultsToNoneWhenAbsent(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		Assert.equals(WhitespacePolicy.None, opts.intervalPolicy);
+	}
+
+	private inline function writeWith(src: String, policy: WhitespacePolicy): String {
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(policy));
+	}
+
+	private inline function makeOpts(policy: WhitespacePolicy): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.intervalPolicy = policy;
+		return opts;
 	}
 
 }

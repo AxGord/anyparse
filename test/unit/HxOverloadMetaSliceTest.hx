@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxDecl;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxModule;

@@ -20,52 +20,6 @@ class ArParserTest extends utest.Test {
 	/** File mode for a regular file with 0644 permissions (octal 100644). */
 	private static final MODE_REGULAR_FILE: Int = 33188;
 
-	/** Build a minimal ar archive in memory with one entry. */
-	private static function buildMinimalAr(): Bytes {
-		final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
-		// Magic
-		output.writeString('!<arch>\n');
-		// Entry header (60 bytes)
-		output.writeString('hello.txt/      '); // name: 16 bytes
-		output.writeString('1700000000  '); // mtime: 12 bytes
-		output.writeString('1000  '); // owner: 6 bytes
-		output.writeString('1000  '); // group: 6 bytes
-		output.writeString('100644  '); // mode: 8 bytes
-		output.writeString('5         '); // size: 10 bytes
-		output.writeString('`\n'); // fmag: 2 bytes
-		// Data (5 bytes)
-		output.writeString('hello');
-		// Padding (5 is odd → 1 byte pad)
-		output.writeByte(0x0A);
-		return output.getBytes();
-	}
-
-	/** Build an ar archive with two entries. */
-	private static function buildTwoEntryAr(): Bytes {
-		final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
-		output.writeString('!<arch>\n');
-		// Entry 1: even size (no padding)
-		output.writeString('file1.txt/      '); // 16
-		output.writeString('1700000001  '); // 12
-		output.writeString('0     '); // 6
-		output.writeString('0     '); // 6
-		output.writeString('100644  '); // 8
-		output.writeString('4         '); // 10
-		output.writeString('`\n'); // 2
-		output.writeString('abcd'); // 4 bytes (even, no pad)
-		// Entry 2: odd size (1 byte padding)
-		output.writeString('file2.txt/      '); // 16
-		output.writeString('1700000002  '); // 12
-		output.writeString('0     '); // 6
-		output.writeString('0     '); // 6
-		output.writeString('100644  '); // 8
-		output.writeString('3         '); // 10
-		output.writeString('`\n'); // 2
-		output.writeString('xyz'); // 3 bytes
-		output.writeByte(0x0A); // padding
-		return output.getBytes();
-	}
-
 	public function testParseMinimalAr(): Void {
 		final ar: ArArchive = ArArchiveParser.parse(buildMinimalAr());
 		Assert.equals(1, ar.entries.length);
@@ -126,7 +80,53 @@ class ArParserTest extends utest.Test {
 
 	public function testRejectsBadMagic(): Void {
 		final bad: Bytes = Bytes.ofString('BADMAGIC\nhello');
-		Assert.raises(() -> ArArchiveParser.parse(bad));
+		Assert.raises(ArArchiveParser.parse.bind(bad));
+	}
+
+	/** Build a minimal ar archive in memory with one entry. */
+	private static function buildMinimalAr(): Bytes {
+		final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
+		// Magic
+		output.writeString('!<arch>\n');
+		// Entry header (60 bytes)
+		output.writeString('hello.txt/      '); // name: 16 bytes
+		output.writeString('1700000000  '); // mtime: 12 bytes
+		output.writeString('1000  '); // owner: 6 bytes
+		output.writeString('1000  '); // group: 6 bytes
+		output.writeString('100644  '); // mode: 8 bytes
+		output.writeString('5         '); // size: 10 bytes
+		output.writeString('`\n'); // fmag: 2 bytes
+		// Data (5 bytes)
+		output.writeString('hello');
+		// Padding (5 is odd → 1 byte pad)
+		output.writeByte(0x0A);
+		return output.getBytes();
+	}
+
+	/** Build an ar archive with two entries. */
+	private static function buildTwoEntryAr(): Bytes {
+		final output: haxe.io.BytesOutput = new haxe.io.BytesOutput();
+		output.writeString('!<arch>\n');
+		// Entry 1: even size (no padding)
+		output.writeString('file1.txt/      '); // 16
+		output.writeString('1700000001  '); // 12
+		output.writeString('0     '); // 6
+		output.writeString('0     '); // 6
+		output.writeString('100644  '); // 8
+		output.writeString('4         '); // 10
+		output.writeString('`\n'); // 2
+		output.writeString('abcd'); // 4 bytes (even, no pad)
+		// Entry 2: odd size (1 byte padding)
+		output.writeString('file2.txt/      '); // 16
+		output.writeString('1700000002  '); // 12
+		output.writeString('0     '); // 6
+		output.writeString('0     '); // 6
+		output.writeString('100644  '); // 8
+		output.writeString('3         '); // 10
+		output.writeString('`\n'); // 2
+		output.writeString('xyz'); // 3 bytes
+		output.writeByte(0x0A); // padding
+		return output.getBytes();
 	}
 
 }

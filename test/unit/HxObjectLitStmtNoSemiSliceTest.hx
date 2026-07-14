@@ -114,7 +114,7 @@ class HxObjectLitStmtNoSemiSliceTest extends HxTestHelpers {
 	// stays strict.
 
 	public function testCallFollowedByIdentRegression(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'));
 	}
 
 	// -- Corpus driver: whitespace_after_object_literal input verbatim,

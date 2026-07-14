@@ -22,14 +22,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxInlineExprSliceTest extends HxTestHelpers {
 
-	private function initOf(source: String): HxExpr {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case null: throw 'expected init expr, got null';
-			case e: e;
-		}
-	}
-
 	public function testInlineCallExpr(): Void {
 		switch initOf('class C { var x = inline foo(); }') {
 			case InlineExpr(Call(IdentExpr(v), _)):
@@ -104,6 +96,14 @@ class HxInlineExprSliceTest extends HxTestHelpers {
 			'class C { static function f() { var a = inline g(); var b = inline new E(""); inline g(); use(inline g(3)); } }',
 			'inline-expr'
 		);
+	}
+
+	private function initOf(source: String): HxExpr {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case null: throw 'expected init expr, got null';
+			case e: e;
+		}
 	}
 
 }

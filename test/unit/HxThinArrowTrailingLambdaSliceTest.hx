@@ -36,12 +36,6 @@ final class HxThinArrowTrailingLambdaSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
 	public function testMultiArgLambdaFirstThenArgGluesHead(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback((resultValue) -> {\n\t\t\tprocess(resultValue);\n\t\t}, secondCallbackArg);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
@@ -60,6 +54,12 @@ final class HxThinArrowTrailingLambdaSliceTest extends Test {
 	public function testMultiArgNoLambdaStillLeadingBreaks(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.invokeHandlerCallback(\n\t\t\targumentAlphaLongValueHere, argumentBravoLongValueHere, argumentCharlieLongValueHere, argDeltaEpsilonZetaValue\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
+	}
+
+	private inline function triviaWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

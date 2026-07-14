@@ -5,11 +5,8 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxIdentLit;
 import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
-import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
 
 /**
@@ -89,22 +86,22 @@ class HaxeFirstSliceTest extends Test {
 		// `classy` must not match the `class` keyword — the Kw strategy
 		// enforces a word boundary, so the leading `class` rule fails
 		// and the overall parse fails because no other rule matches.
-		Assert.raises(() -> HaxeParser.parse('classy {}'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('classy {}'), ParseError);
 	}
 
 	public function testRejectsMissingClassName(): Void {
-		Assert.raises(() -> HaxeParser.parse('class { var x:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class { var x:Int; }'), ParseError);
 	}
 
 	public function testRejectsMissingClassBrace(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo var x:Int;'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo var x:Int;'), ParseError);
 	}
 
 	public function testRejectsUnknownMember(): Void {
 		// `let` is not a valid Haxe class-member introducer — the Alt
 		// tries both VarMember and FnMember and both fail their keyword
 		// match, so the loop throws on the first member.
-		Assert.raises(() -> HaxeParser.parse('class Foo { let x:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { let x:Int; }'), ParseError);
 	}
 
 	public function testSkipsLineComment(): Void {

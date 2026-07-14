@@ -21,14 +21,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxRegexLitSliceTest extends HxTestHelpers {
 
-	private function regexOf(source: String): String {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case RegexLit(v): (v: String);
-			case null, _: throw 'expected RegexLit, got ${decl.init}';
-		}
-	}
-
 	public function testSimpleRegex(): Void {
 		Assert.equals('~/foo/', regexOf('class C { var x = ~/foo/; }'));
 	}
@@ -64,6 +56,14 @@ class HxRegexLitSliceTest extends HxTestHelpers {
 
 	public function testRegexRoundTrip(): Void {
 		roundTrip('class C { var x = ~/^-?(?:0|[1-9][0-9]*)/; var y = ~/a\\/b/gi; }', 'L2-regex-lit');
+	}
+
+	private function regexOf(source: String): String {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case RegexLit(v): (v: String);
+			case null, _: throw 'expected RegexLit, got ${decl.init}';
+		}
 	}
 
 }

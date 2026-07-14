@@ -50,6 +50,11 @@ class UnnecessaryBlockCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/** A block declaring a local function is a real scope (unwrapping would hoist it) — left alone. */
+	public function testBlockWithLocalFunctionNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('{\n\t\t\tfunction h():Void {}\n\t\t\th();\n\t\t}')).length);
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t' + body + '\n\t}\n}';
 	}
@@ -67,11 +72,6 @@ class UnnecessaryBlockCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	/** A block declaring a local function is a real scope (unwrapping would hoist it) — left alone. */
-	public function testBlockWithLocalFunctionNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('{\n\t\t\tfunction h():Void {}\n\t\t\th();\n\t\t}')).length);
 	}
 
 }

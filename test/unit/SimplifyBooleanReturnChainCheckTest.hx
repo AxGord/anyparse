@@ -87,21 +87,6 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		Assert.isTrue(ids.contains('simplify-boolean-return-chain'));
 	}
 
-	private function violations(body: String): Array<Violation> {
-		final src: String = 'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int): Dynamic ${body} }';
-		return new SimplifyBooleanReturnChain().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	/** The rewrite text the fix emits for the first chain in `body` (empty if none). */
-	private function reduce(body: String): String {
-		final src: String = 'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int): Dynamic ${body} }';
-		final check: SimplifyBooleanReturnChain = new SimplifyBooleanReturnChain();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		return edits.length > 0 ? edits[0].text : '';
-	}
-
 	/** The `&& false` absorb arm: `b` would be dropped (`!b && false` -> false): refuse. */
 	public function testDegenerateAbsorbFalseArmNotFlagged(): Void {
 		Assert.equals(0, violations('{ if (a) return false; if (b) return false; return false; }').length);
@@ -125,6 +110,21 @@ class SimplifyBooleanReturnChainCheckTest extends Test {
 		// The first block carries another statement, so flattening it would drop `x++`:
 		// it is not a guard, leaving a single guard below the 2-guard threshold.
 		Assert.equals(0, violations('{ if (a) { x++; return true; } if (b) { return true; } return false; }').length);
+	}
+
+	private function violations(body: String): Array<Violation> {
+		final src: String = 'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int): Dynamic ${body} }';
+		return new SimplifyBooleanReturnChain().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** The rewrite text the fix emits for the first chain in `body` (empty if none). */
+	private function reduce(body: String): String {
+		final src: String = 'class C { static function f(a: Bool, b: Bool, c: Bool, x: Int): Dynamic ${body} }';
+		final check: SimplifyBooleanReturnChain = new SimplifyBooleanReturnChain();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		return edits.length > 0 ? edits[0].text : '';
 	}
 
 }

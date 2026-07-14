@@ -44,6 +44,17 @@ class SuppressionSliceTest extends Test {
 		Assert.equals(1, applyAt(src, 3, 6, 4, 8).length);
 	}
 
+	/**
+	 * A CHECKSTYLE:OFF/ON region silences a finding REPORTED inside it, but NOT a
+	 * wide finding reported OUTSIDE the region whose span merely straddles it
+	 * (region semantics match the report line, unlike a range-matched noqa).
+	 */
+	public function testCheckstyleRegionMatchesReportLineNotStraddle(): Void {
+		final src: String = 'package p;\nclass C {\n\tfunction f() {\n\t\t// CHECKSTYLE:OFF\n\t\tvar a = 1;\n\t\t// CHECKSTYLE:ON\n\t}\n}';
+		Assert.equals(1, applyAt(src, 3, 2, 7, 2).length);
+		Assert.equals(0, applyAt(src, 5, 3, 5, 11).length);
+	}
+
 	private function applyAt(src: String, fromLine: Int, fromCol: Int, toLine: Int, toCol: Int): Array<Violation> {
 		final v: Violation = {
 			file: 'p/C.hx',
@@ -53,17 +64,6 @@ class SuppressionSliceTest extends Test {
 			message: 'demo'
 		};
 		return Suppression.apply([v], [{ file: 'p/C.hx', source: src }]);
-	}
-
-	/**
-	 * A CHECKSTYLE:OFF/ON region silences a finding REPORTED inside it, but NOT a
-	 * wide finding reported OUTSIDE the region whose span merely straddles it
-	 * (region semantics match the report line, unlike a range-matched noqa).
-	 */
-	public function testCheckstyleRegionMatchesReportLineNotStraddle(): Void {
-		final src: String = "package p;\nclass C {\n\tfunction f() {\n\t\t// CHECKSTYLE:OFF\n\t\tvar a = 1;\n\t\t// CHECKSTYLE:ON\n\t}\n}";
-		Assert.equals(1, applyAt(src, 3, 2, 7, 2).length);
-		Assert.equals(0, applyAt(src, 5, 3, 5, 11).length);
 	}
 
 }

@@ -15,11 +15,6 @@ class HxCaseCommentWriteTest extends Test {
 
 	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	private function roundTrip(source: String): String {
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		return HaxeModuleTriviaWriter.write(ast);
-	}
-
 	public function testCaseLabelLineCommentStaysOnColonLine(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: // note\n\t\t\t\trun();\n\t\t}\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
@@ -38,6 +33,11 @@ class HxCaseCommentWriteTest extends Test {
 	public function testCaseLabelNoCommentUnaffected(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: run();\n\t\t}\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
+	}
+
+	private function roundTrip(source: String): String {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		return HaxeModuleTriviaWriter.write(ast);
 	}
 
 }

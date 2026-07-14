@@ -71,14 +71,14 @@ class HxVarStmtTrailOptSliceTest extends HxTestHelpers {
 		// agnostic. After S10.4 the BlockBody Star owns sep emission and
 		// `;` between non-block-ended stmts is required — matches real
 		// Haxe's strict rejection.
-		Assert.raises(() -> parseFunctionBody('var x = 5\nvar y = 6;'));
+		Assert.raises(parseFunctionBody.bind('var x = 5\nvar y = 6;'));
 	}
 
 	public function testFinalFollowedBySecondFinalNoSemi(): Void {
 		// Sister contract of `testVarFollowedBySecondVarNoSemi` — S10.5
 		// migrated `FinalStmt` to BlockBody Star sep-ownership, so the
 		// same strict-rejection contract applies to `final` declarations.
-		Assert.raises(() -> parseFunctionBody('final x = 5\nfinal y = 6;'));
+		Assert.raises(parseFunctionBody.bind('final x = 5\nfinal y = 6;'));
 	}
 
 	// ======== Trailing `;` still accepted (canonical input) ========

@@ -46,22 +46,6 @@ import anyparse.grammar.haxe.HxVarNameLit;
  */
 class HxCaseCaptureSliceTest extends HxTestHelpers {
 
-	private function parseSwitch(source: String): HxSwitchStmt {
-		final body: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl(source));
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case SwitchStmt(stmt): stmt;
-			case null, _: throw 'expected SwitchStmt, got ${body[0]}';
-		};
-	}
-
-	private function caseBranch(c: HxSwitchCase): HxCaseBranch {
-		return switch c {
-			case CaseBranch(b): b;
-			case null, _: throw 'expected CaseBranch, got $c';
-		};
-	}
-
 	public function testOuterCaptureSurfacesAsCaptureCtor(): Void {
 		final sw: HxSwitchStmt = parseSwitch('class C { function f(x:E):Void { switch (x) { case var bar: y(); case _: z(); } } }');
 		final p: HxCasePattern = caseBranch(sw.cases[0]).patterns[0];
@@ -142,10 +126,25 @@ class HxCaseCaptureSliceTest extends HxTestHelpers {
 		// Fork corpus shape — section-2 input, byte-identical to the
 		// section-3 expected output after trivia round-trip.
 		roundTrip(
-			'class Main {\n' + '\tstatic function main() {\n' + '\t\tswitch (foo) {\n' + '\t\t\tcase var bar:\n' + '\t\t\t\ttrace("");\n'
-			+ '\t\t\tcase Pattern(var foo, var bar):\n' + '\t\t\t\ttrace("");\n' + '\t\t}\n' + '\t}\n' + '}',
+			'class Main {\n\tstatic function main() {\n\t\tswitch (foo) {\n\t\t\tcase var bar:\n\t\t\t\ttrace("");\n\t\t\tcase Pattern(var foo, var bar):\n\t\t\t\ttrace("");\n\t\t}\n\t}\n}',
 			'issue_27_case_var_line_end'
 		);
+	}
+
+	private function parseSwitch(source: String): HxSwitchStmt {
+		final body: Array<HxStatement> = fnBodyStmts(parseSingleFnDecl(source));
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case SwitchStmt(stmt): stmt;
+			case null, _: throw 'expected SwitchStmt, got ${body[0]}';
+		};
+	}
+
+	private function caseBranch(c: HxSwitchCase): HxCaseBranch {
+		return switch c {
+			case CaseBranch(b): b;
+			case null, _: throw 'expected CaseBranch, got $c';
+		};
 	}
 
 }

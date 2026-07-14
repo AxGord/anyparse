@@ -7,8 +7,6 @@ import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 
-using StringTools;
-
 /**
  * ternary-rest-aware: a ternary that is a leading-break CALL ARGUMENT wraps
  * `cond ? then : else` when its physical line -- INCLUDING the trailing `,`

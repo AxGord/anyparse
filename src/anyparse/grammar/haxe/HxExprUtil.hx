@@ -681,6 +681,66 @@ final class HxExprUtil {
 	}
 
 	/**
+	 * `tailStmtReadsExprPosition(stmtNode) → Bool` — true iff a block-body /
+	 * case-body TAIL statement is an `if` whose then/else body-placement
+	 * dispatches on `_inExprPosition` (`HxStatement.IfStmt`). Fork parity: an
+	 * `if` whose DIRECT parent is a block brace (fork `isExpression` is `false`
+	 * for a `BrOpen` parent) or a non-value-yielded switch-case colon is a
+	 * STATEMENT — its body uses `sameLine.ifBody`, never `sameLine.expressionIf`.
+	 * So when such an `if` is a block / case tail, the inherited expression-
+	 * position frame must be dropped (block barrier) or reduced to the case's
+	 * own incoming frame (case) instead of force-propagated. `for` / `while`
+	 * tails are intentionally excluded: the fork breaks their bodies at
+	 * expression position (no arrow / comprehension short-circuit applies), so
+	 * anyparse's existing force-propagation already matches. Returns `false`
+	 * for null / non-enum / non-`IfStmt` shapes. Wired on
+	 * `WriteOptions.tailStmtReadsExprPosition`.
+	 */
+	public static function tailStmtReadsExprPosition(raw: Null<Dynamic>): Bool {
+		final s: Null<Dynamic> = unwrap(raw);
+		if (s == null || Type.getEnum(s) == null || Type.enumConstructor(s) != 'IfStmt') return false;
+		// No-else only: an `if` WITH an `else` (or `else if` chain) keeps its
+		// inherited expression frame so the chain breaks together under
+		// `fitLineIfWithElse` — mirrors the `noSiblingFallback` no-else gate.
+		// Dropping the frame for a with-else tail would inline a trailing
+		// `else if` body that the fork breaks for chain consistency.
+		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
+		if (params == null || params.length == 0) return false;
+		final ifStruct: Null<Dynamic> = params[0];
+		return ifStruct != null && Reflect.field(ifStruct, 'elseBody') == null;
+	}
+
+	/**
+	 * True iff a `#if <cond> … #end` token-splice raw fragment wraps whole
+	 * `case` / `default` clauses (a switch-case-label splice) rather than
+	 * statements or expressions (a dangling-else splice). Drives the
+	 * writer-side `@:fmt(condSpliceCaseMarkerDedent)` marker dedent: a
+	 * case-label splice's leading `#if` aligns one indent level shallower
+	 * (the case-list level, matching its verbatim `case` / `#else` / `#end`
+	 * markers) than the case body it parses inside, while a dangling-else
+	 * splice keeps its `#if` at the enclosing statement indent. Wired on
+	 * `WriteOptions.condSpliceRawWrapsCases` so the engine dispatches
+	 * through the plugin without engine to plugin coupling. Scans for a line
+	 * whose first non-whitespace token is the `case` / `default` keyword.
+	 */
+	public static function condSpliceRawWrapsCases(raw: Null<Dynamic>): Bool {
+		if (raw == null) return false;
+		final s: String = '$raw';
+		final n: Int = s.length;
+		var atLineStart: Bool = true;
+		for (i in 0...n) {
+			final c: Int = StringTools.fastCodeAt(s, i);
+			if (c == '\n'.code)
+				atLineStart = true;
+			else if (atLineStart && c != ' '.code && c != '\t'.code) {
+				if (keywordAt(s, i, 'case') || keywordAt(s, i, 'default')) return true;
+				atLineStart = false;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * `@:meta <operand>` wrapper — recurse on the wrapped expression
 	 * (`params[0].expr`).
 	 */
@@ -910,6 +970,7 @@ final class HxExprUtil {
 			};
 	}
 
+
 	/**
 	 * Unwrap a `Trivial<T>` wrapper struct around another struct (e.g.
 	 * `Trivial<HxTopLevelDeclT>` → `HxTopLevelDeclT`). Distinct from
@@ -921,67 +982,6 @@ final class HxExprUtil {
 	 */
 	private static inline function unwrapTrivialStruct(raw: Null<Dynamic>): Null<Dynamic> {
 		return raw == null ? null : Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
-	}
-
-	/**
-	 * `tailStmtReadsExprPosition(stmtNode) → Bool` — true iff a block-body /
-	 * case-body TAIL statement is an `if` whose then/else body-placement
-	 * dispatches on `_inExprPosition` (`HxStatement.IfStmt`). Fork parity: an
-	 * `if` whose DIRECT parent is a block brace (fork `isExpression` is `false`
-	 * for a `BrOpen` parent) or a non-value-yielded switch-case colon is a
-	 * STATEMENT — its body uses `sameLine.ifBody`, never `sameLine.expressionIf`.
-	 * So when such an `if` is a block / case tail, the inherited expression-
-	 * position frame must be dropped (block barrier) or reduced to the case's
-	 * own incoming frame (case) instead of force-propagated. `for` / `while`
-	 * tails are intentionally excluded: the fork breaks their bodies at
-	 * expression position (no arrow / comprehension short-circuit applies), so
-	 * anyparse's existing force-propagation already matches. Returns `false`
-	 * for null / non-enum / non-`IfStmt` shapes. Wired on
-	 * `WriteOptions.tailStmtReadsExprPosition`.
-	 */
-	public static function tailStmtReadsExprPosition(raw: Null<Dynamic>): Bool {
-		final s: Null<Dynamic> = unwrap(raw);
-		if (s == null || Type.getEnum(s) == null || Type.enumConstructor(s) != 'IfStmt') return false;
-		// No-else only: an `if` WITH an `else` (or `else if` chain) keeps its
-		// inherited expression frame so the chain breaks together under
-		// `fitLineIfWithElse` — mirrors the `noSiblingFallback` no-else gate.
-		// Dropping the frame for a with-else tail would inline a trailing
-		// `else if` body that the fork breaks for chain consistency.
-		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
-		if (params == null || params.length == 0) return false;
-		final ifStruct: Null<Dynamic> = params[0];
-		return ifStruct != null && Reflect.field(ifStruct, 'elseBody') == null;
-	}
-
-
-	/**
-	 * True iff a `#if <cond> … #end` token-splice raw fragment wraps whole
-	 * `case` / `default` clauses (a switch-case-label splice) rather than
-	 * statements or expressions (a dangling-else splice). Drives the
-	 * writer-side `@:fmt(condSpliceCaseMarkerDedent)` marker dedent: a
-	 * case-label splice's leading `#if` aligns one indent level shallower
-	 * (the case-list level, matching its verbatim `case` / `#else` / `#end`
-	 * markers) than the case body it parses inside, while a dangling-else
-	 * splice keeps its `#if` at the enclosing statement indent. Wired on
-	 * `WriteOptions.condSpliceRawWrapsCases` so the engine dispatches
-	 * through the plugin without engine to plugin coupling. Scans for a line
-	 * whose first non-whitespace token is the `case` / `default` keyword.
-	 */
-	public static function condSpliceRawWrapsCases(raw: Null<Dynamic>): Bool {
-		if (raw == null) return false;
-		final s: String = Std.string(raw);
-		final n: Int = s.length;
-		var atLineStart: Bool = true;
-		for (i in 0...n) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c == '\n'.code)
-				atLineStart = true;
-			else if (atLineStart && c != ' '.code && c != '\t'.code) {
-				if (keywordAt(s, i, 'case') || keywordAt(s, i, 'default')) return true;
-				atLineStart = false;
-			}
-		}
-		return false;
 	}
 
 	/**

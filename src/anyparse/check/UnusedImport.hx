@@ -31,7 +31,7 @@ using Lambda;
  * ## Conservative by design
  *
  * The bound name of an `import pkg.Mod;` / `import pkg.Mod.Sub;` is the leaf
- * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If that name occurs as no word-boundary token anywhere outside the import statements, the import is unused → `Warning` — except a plain module import whose module is IN the lint file set: it binds every top-level type of the module, so a reference to any SECONDARY type keeps it (see `secondaryTypeReferenced`). The remaining forms:
+ * segment (`Mod` / `Sub`); for `import pkg.Mod as Alias;` it is the alias. If that name occurs as no word-boundary token anywhere outside the import statements, the import is unused → `Warning` — except a plain module import whose module is IN the lint file set: it binds every top-level type of the module, so a reference to any SECONDARY type keeps it (see `secondaryTypeReferenced`), and a reference to a bare CONSTRUCTOR of an in-set enum / enum-abstract type keeps it too (`enumCtorReferenced` — resolved only when the enum module is itself in the lint set, so run `--fix` project-wide). The remaining forms:
  *
  *  - `import pkg.*;` (wildcard) — brings in an unknown set of symbols; a bare
  *    reference can come from it without naming the package, so it stays an
@@ -64,13 +64,23 @@ final class UnusedImport implements Check {
 		// binds ALL of them, so the used-check must consult every name.
 		final moduleTypes: Map<String, Array<String>> = [];
 		for (info in index.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
+		// Enum-constructor names per importable path (a main type binds under its
+		// module, a sub-module type under `module.Type`) — a bare `import pkg.Enum;`
+		// is in use when one of its constructors is referenced bare, even if `Enum`
+		// itself never appears.
+		final enumKinds: Array<String> = plugin.refShape().bareConstructorTypeKinds ?? [];
+		final enumCtorsByPath: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) for (t in info.types) if (enumKinds.contains(t.kind)) {
+			final path: String = t.isMain ? info.module : '${info.module}.${t.name}';
+			enumCtorsByPath[path] = [for (m in t.members) m.name];
+		}
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
 			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(violations, info.file, imp, source, importSpans, plugin, moduleTypes);
+				addViolation(violations, info.file, imp, source, importSpans, plugin, moduleTypes, enumCtorsByPath);
 		}
 		return violations;
 	}
@@ -100,7 +110,7 @@ final class UnusedImport implements Check {
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin,
-		moduleTypes: Map<String, Array<String>>
+		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>
 	): Void {
 		switch imp.kind {
 			case ImportKind.Wild:
@@ -118,6 +128,10 @@ final class UnusedImport implements Check {
 				// (stdlib, haxelib) falls back to the bound-name verdict. An
 				// alias import binds just the alias — never widened.
 				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, source, importSpans, moduleTypes)) return;
+				// A bare `import pkg.Enum;` whose constructor is used as a bare
+				// identifier (`Assert.equals(Private, m)`, expected-type resolved)
+				// is in use even though `Enum` itself is never named.
+				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, source, importSpans, enumCtorsByPath)) return;
 				out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
 		}
 	}
@@ -176,6 +190,15 @@ final class UnusedImport implements Check {
 	/** Whether `imp`'s full module path is in a checkstyle `ignoreModules` list. */
 	private static function moduleIgnored(imp: ImportInfo, ignore: Array<String>): Bool {
 		return ignore.contains(imp.raw);
+	}
+
+	/** True when any constructor of the enum-type imported by `raw` is referenced bare in `source` (outside the imports). */
+	private static function enumCtorReferenced(
+		raw: String, source: String, importSpans: Array<Span>, enumCtorsByPath: Map<String, Array<String>>
+	): Bool {
+		final ctors: Null<Array<String>> = enumCtorsByPath[raw];
+		if (ctors == null) return false;
+		return ctors.exists(name -> RefactorSupport.referencedInRange(source, name, 0, source.length, importSpans));
 	}
 
 }

@@ -6,8 +6,6 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.SymbolQuery;
 import anyparse.query.SymbolQuery.SymbolRow;
 
-using Lambda;
-
 /**
  * `SymbolQuery` — the CLI-facing reporting layer over `SymbolIndex`
  * (`apq symbols` / `apq importers`). Each test drives an IN-MEMORY

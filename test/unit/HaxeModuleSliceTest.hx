@@ -109,13 +109,13 @@ class HaxeModuleSliceTest extends HxTestHelpers {
 		// After parsing `class Foo {}`, the EOF-terminated loop tries to
 		// parse another HxDecl starting at `bogus` — that call expects the
 		// `class` keyword and fails with ParseError.
-		Assert.raises(() -> HaxeModuleParser.parse('class Foo {} bogus'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('class Foo {} bogus'), ParseError);
 	}
 
 	public function testRejectsIncompleteClass(): Void {
 		// Incomplete last decl — the inner class parser fails on the
 		// missing `{}` and the error propagates out of the module loop.
-		Assert.raises(() -> HaxeModuleParser.parse('class Foo {} class Bar'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('class Foo {} class Bar'), ParseError);
 	}
 
 }

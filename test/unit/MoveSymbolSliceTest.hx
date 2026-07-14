@@ -39,9 +39,9 @@ class MoveSymbolSliceTest extends Test {
 	 * repointed `pkg.A.Foo` -> `pkg.B.Foo`. Every changed file re-parses.
 	 */
 	public function testMoveAcrossSamePackage(): Void {
-		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tpublic var x:Int = 1;\n' + '}';
-		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
-		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
+		final a: String = 'package pkg;\n\nclass Foo {\n\tpublic var x:Int = 1;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nimport pkg.A.Foo;\n\nclass User {\n\tvar f:Foo;\n}';
 		// `class Foo` on line 3; `Foo` at col 7.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
@@ -75,9 +75,9 @@ class MoveSymbolSliceTest extends Test {
 	 * is repointed exactly as for a plain class.
 	 */
 	public function testMoveFinalClass(): Void {
-		final a: String = 'package pkg;\n' + '\n' + 'final class Foo {\n' + '\tpublic var x:Int = 1;\n' + '}';
-		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
-		final user: String = 'package pkg;\n' + '\n' + 'import pkg.A.Foo;\n' + '\n' + 'class User {\n' + '\tvar f:Foo;\n' + '}';
+		final a: String = 'package pkg;\n\nfinal class Foo {\n\tpublic var x:Int = 1;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final user: String = 'package pkg;\n\nimport pkg.A.Foo;\n\nclass User {\n\tvar f:Foo;\n}';
 		// `final class Foo` on line 3; `Foo` at col 13.
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 3, 13, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
@@ -107,8 +107,8 @@ class MoveSymbolSliceTest extends Test {
 	 * carries that import into B so the relocated body still resolves.
 	 */
 	public function testDependencyImportCarried(): Void {
-		final a: String = 'package pkg;\n' + '\n' + 'import ext.Ext;\n' + '\n' + 'class Foo {\n' + '\tvar e:Ext;\n' + '}';
-		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final a: String = 'package pkg;\n\nimport ext.Ext;\n\nclass Foo {\n\tvar e:Ext;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 5, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
@@ -126,8 +126,8 @@ class MoveSymbolSliceTest extends Test {
 	 * above the relocated decl.
 	 */
 	public function testDocCommentMovesWithType(): Void {
-		final a: String = 'package pkg;\n' + '\n' + '/** the foo */\n' + 'class Foo {}';
-		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final a: String = 'package pkg;\n\n/** the foo */\nclass Foo {}';
+		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
@@ -146,8 +146,8 @@ class MoveSymbolSliceTest extends Test {
 	 * scan picks it up from the raw source).
 	 */
 	public function testMetaMovesWithType(): Void {
-		final a: String = 'package pkg;\n' + '\n' + '@:keep\n' + 'class Foo {}';
-		final b: String = 'package pkg;\n' + '\n' + 'class B {}';
+		final a: String = 'package pkg;\n\n@:keep\nclass Foo {}';
+		final b: String = 'package pkg;\n\nclass B {}';
 		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 4, 7, 'pkg/B.hx', [
 			{ file: 'pkg/A.hx', source: a },
 			{ file: 'pkg/B.hx', source: b },
@@ -160,7 +160,7 @@ class MoveSymbolSliceTest extends Test {
 
 	/** Refusal: the cursor is not on a type declaration (a field). */
 	public function testCursorNotOnTypeDeclRefused(): Void {
-		final a: String = 'package pkg;\n' + '\n' + 'class Foo {\n' + '\tvar field:Int;\n' + '}';
+		final a: String = 'package pkg;\n\nclass Foo {\n\tvar field:Int;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';
 		// Line 4: the field name `field` at col 6 — a value decl, not a type.
 		final result: MoveResult = MoveSymbol.moveType('pkg/A.hx', 4, 6, 'pkg/B.hx', [

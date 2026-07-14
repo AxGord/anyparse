@@ -17,7 +17,7 @@ import sys.FileSystem;
  */
 class ApqExitOnEmptyCliTest extends Test {
 
-	private static final SRC: String = "package pkg;\nclass C {\n\tvar used:Int = 1;\n}";
+	private static final SRC: String = 'package pkg;\nclass C {\n\tvar used:Int = 1;\n}';
 
 	public function testRefsEmptyWithoutFlagExitsZero(): Void {
 		#if (sys || nodejs)

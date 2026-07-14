@@ -94,6 +94,67 @@ final class Address {
 		return null;
 	}
 
+	/**
+	 * Byte offset of the node's NAME token within its span — the first
+	 * word-boundary occurrence of `node.name` at-or-after `span.from` (a decl's
+	 * name follows its keyword: `function NAME`, `var NAME`, `class NAME`). The
+	 * cursor-based fn-ops resolve an identifier AT the cursor, so a named address
+	 * must land on the name, not the leading keyword. Null for an unnamed node or
+	 * a name its span does not contain.
+	 */
+	public static function nameTokenOffset(source: String, node: QueryNode): Null<Int> {
+		final name: Null<String> = node.name;
+		final span: Null<Span> = node.span;
+		if (name == null || span == null || name.length == 0) return null;
+		final stop: Int = span.to < source.length ? span.to : source.length;
+		var i: Int = span.from;
+		while (i + name.length <= stop) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0 || at + name.length > stop) return null;
+			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final afterIdx: Int = at + name.length;
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			if (beforeOk && afterOk) return at;
+			i = at + 1;
+		}
+		return null;
+	}
+
+	/**
+	 * The canonical, edit-stable address of `node` — the SHORTEST selector that
+	 * resolves to exactly it: the node's own `Kind[:name]` segment, prefixed with
+	 * named ancestors (`>>`) one at a time until unique, and disambiguated with
+	 * `--nth <k>` when names alone cannot tell instances apart. The follow-up op
+	 * in a chain can use it verbatim instead of a position that the first edit
+	 * may have shifted. Falls back to `<line>:<col>` for an unreachable node.
+	 */
+	public static function describe(tree: QueryNode, source: String, node: QueryNode, ?equiv: KindEquivalence): String {
+		final path: Null<Array<QueryNode>> = pathTo(tree, node);
+		final span: Null<Span> = node.span;
+		final posFallback: String = if (span != null) {
+			final pos: Position = span.lineCol(source);
+			'${pos.line}:${pos.col}';
+		} else
+			'?:?';
+		if (path == null) return posFallback;
+		var selector: String = segmentOf(node);
+		if (uniquelyResolves(tree, selector, node, equiv)) return selector;
+		// Prepend the nearest named ancestors until the selector is unique.
+		var i: Int = path.length - 2;
+		while (i >= 0) {
+			final ancestor: QueryNode = path[i];
+			if (ancestor.name != null) {
+				selector = segmentOf(ancestor) + ' >> ' + selector;
+				if (uniquelyResolves(tree, selector, node, equiv)) return selector;
+			}
+			i--;
+		}
+		// Names cannot disambiguate — pick the instance ordinal.
+		final matches: Array<QueryNode> = try Engine.select(tree, Selector.parse(selector), equiv) catch (exception: Exception) [];
+		final k: Int = matches.indexOf(node);
+		return k >= 0 ? '$selector --nth ${k + 1}' : posFallback;
+	}
+
 	/** A position `<line>[:<col>]`; a missing column snaps to the line's first non-whitespace character. */
 	private static function resolveAt(tree: QueryNode, source: String, at: String): AddressResult {
 		final colon: Int = at.indexOf(':');
@@ -203,70 +264,9 @@ final class Address {
 		return null;
 	}
 
-	/**
-	 * Byte offset of the node's NAME token within its span — the first
-	 * word-boundary occurrence of `node.name` at-or-after `span.from` (a decl's
-	 * name follows its keyword: `function NAME`, `var NAME`, `class NAME`). The
-	 * cursor-based fn-ops resolve an identifier AT the cursor, so a named address
-	 * must land on the name, not the leading keyword. Null for an unnamed node or
-	 * a name its span does not contain.
-	 */
-	public static function nameTokenOffset(source: String, node: QueryNode): Null<Int> {
-		final name: Null<String> = node.name;
-		final span: Null<Span> = node.span;
-		if (name == null || span == null || name.length == 0) return null;
-		final stop: Int = span.to < source.length ? span.to : source.length;
-		var i: Int = span.from;
-		while (i + name.length <= stop) {
-			final at: Int = source.indexOf(name, i);
-			if (at < 0 || at + name.length > stop) return null;
-			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
-			final afterIdx: Int = at + name.length;
-			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
-			if (beforeOk && afterOk) return at;
-			i = at + 1;
-		}
-		return null;
-	}
-
 	/** Identifier-character test for the name-token word-boundary scan. */
 	private static inline function isIdentChar(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
-	/**
-	 * The canonical, edit-stable address of `node` — the SHORTEST selector that
-	 * resolves to exactly it: the node's own `Kind[:name]` segment, prefixed with
-	 * named ancestors (`>>`) one at a time until unique, and disambiguated with
-	 * `--nth <k>` when names alone cannot tell instances apart. The follow-up op
-	 * in a chain can use it verbatim instead of a position that the first edit
-	 * may have shifted. Falls back to `<line>:<col>` for an unreachable node.
-	 */
-	public static function describe(tree: QueryNode, source: String, node: QueryNode, ?equiv: KindEquivalence): String {
-		final path: Null<Array<QueryNode>> = pathTo(tree, node);
-		final span: Null<Span> = node.span;
-		final posFallback: String = if (span != null) {
-			final pos: Position = span.lineCol(source);
-			'${pos.line}:${pos.col}';
-		} else
-			'?:?';
-		if (path == null) return posFallback;
-		var selector: String = segmentOf(node);
-		if (uniquelyResolves(tree, selector, node, equiv)) return selector;
-		// Prepend the nearest named ancestors until the selector is unique.
-		var i: Int = path.length - 2;
-		while (i >= 0) {
-			final ancestor: QueryNode = path[i];
-			if (ancestor.name != null) {
-				selector = segmentOf(ancestor) + ' >> ' + selector;
-				if (uniquelyResolves(tree, selector, node, equiv)) return selector;
-			}
-			i--;
-		}
-		// Names cannot disambiguate — pick the instance ordinal.
-		final matches: Array<QueryNode> = try Engine.select(tree, Selector.parse(selector), equiv) catch (exception: Exception) [];
-		final k: Int = matches.indexOf(node);
-		return k >= 0 ? '$selector --nth ${k + 1}' : posFallback;
 	}
 
 	/** One selector segment for a node: `Kind` or `Kind:name`. */

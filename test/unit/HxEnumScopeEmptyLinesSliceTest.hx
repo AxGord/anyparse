@@ -26,14 +26,10 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 class HxEnumScopeEmptyLinesSliceTest extends Test {
 
-	static inline final CLASS_BEGIN_END: String = '{"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
+	private static inline final CLASS_BEGIN_END: String = '{"emptyLines":{"classEmptyLines":{"beginType":1,"endType":1}}}';
 
 	public function new(): Void {
 		super();
-	}
-
-	private function write(src: String, json: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
 	}
 
 	public function testDefaultEnumScopeKnobsZero(): Void {
@@ -64,6 +60,10 @@ class HxEnumScopeEmptyLinesSliceTest extends Test {
 	public function testEnumEmptyLinesConfigRoutesToEnumScope(): Void {
 		final out: String = write('enum E { A; B; }', '{"emptyLines":{"enumEmptyLines":{"beginType":1}}}');
 		Assert.isTrue(out.indexOf('{\n\n\tA;') != -1, 'enumEmptyLines.beginType must inject a begin blank into the enum body: <$out>');
+	}
+
+	private function write(src: String, json: String): String {
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormatConfigLoader.loadHxFormatJson(json));
 	}
 
 }

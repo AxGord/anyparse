@@ -23,32 +23,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxStaticLocalStmtSliceTest extends HxTestHelpers {
 
-	private function fnBodyStmtsFromSource(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	private function expectStaticVarStmtDecl(stmt: HxStatement): HxVarDecl {
-		return switch stmt {
-			case StaticVarStmt(decl): decl;
-			case _: throw 'expected StaticVarStmt, got $stmt';
-		};
-	}
-
-	private function expectStaticFinalStmtDecl(stmt: HxStatement): HxVarDecl {
-		return switch stmt {
-			case StaticFinalStmt(decl): decl;
-			case _: throw 'expected StaticFinalStmt, got $stmt';
-		};
-	}
-
-	private function metaName(m: HxMetadata): String {
-		return switch m {
-			case MetaCall(call): (call.name: String);
-			case _: HxMetadataUtil.source(m);
-		};
-	}
-
 	// -- Static var with init --
 
 	public function testStaticVarStmt(): Void {
@@ -140,6 +114,32 @@ class HxStaticLocalStmtSliceTest extends HxTestHelpers {
 			case _:
 				Assert.fail('expected FinalStmt, got ${stmts[0]}');
 		}
+	}
+
+	private function fnBodyStmtsFromSource(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	private function expectStaticVarStmtDecl(stmt: HxStatement): HxVarDecl {
+		return switch stmt {
+			case StaticVarStmt(decl): decl;
+			case _: throw 'expected StaticVarStmt, got $stmt';
+		};
+	}
+
+	private function expectStaticFinalStmtDecl(stmt: HxStatement): HxVarDecl {
+		return switch stmt {
+			case StaticFinalStmt(decl): decl;
+			case _: throw 'expected StaticFinalStmt, got $stmt';
+		};
+	}
+
+	private function metaName(m: HxMetadata): String {
+		return switch m {
+			case MetaCall(call): (call.name: String);
+			case _: HxMetadataUtil.source(m);
+		};
 	}
 
 }

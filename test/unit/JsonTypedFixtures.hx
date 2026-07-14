@@ -9,8 +9,8 @@ package unit;
  * to the module — only the referenced `typedef` / `enum abstract`
  * leak out to the test body, which reaches the generated parser
  * through `TestConfigParser.parse`.
+ * Closed set of policy strings for `TestConfig.policy`.
  */
-/** Closed set of policy strings for `TestConfig.policy`. */
 enum abstract TestPolicy(String) from String to String {
 
 	final First = 'first';

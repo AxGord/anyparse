@@ -94,7 +94,7 @@ class HxStmtBlockEndNoSemiSliceTest extends HxTestHelpers {
 	// by an ident (next stmt) still throws on the missing `;`.
 
 	public function testBareCallFollowedByIdentRegression(): Void {
-		Assert.raises(() -> HaxeParser.parse('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'));
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tbar()\n\t}\n}'));
 	}
 
 }

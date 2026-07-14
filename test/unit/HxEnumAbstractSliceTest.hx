@@ -91,7 +91,7 @@ class HxEnumAbstractSliceTest extends HxTestHelpers {
 
 	public function testWordBoundaryEnumlike(): Void {
 		// `enumish` is not the `enum` keyword; with no matching decl this must fail.
-		Assert.raises(() -> HaxeModuleParser.parse('enumish abstract Foo(Int) {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('enumish abstract Foo(Int) {}'), ParseError);
 	}
 
 }

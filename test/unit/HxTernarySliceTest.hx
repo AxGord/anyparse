@@ -4,7 +4,6 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxStatement;
@@ -228,15 +227,15 @@ class HxTernarySliceTest extends HxTestHelpers {
 	// ---- rejections ----
 
 	public function testRejectsMissingMiddleAndColon(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a ? ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a ? ; }'), ParseError);
 	}
 
 	public function testRejectsMissingColon(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a ? b ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a ? b ; }'), ParseError);
 	}
 
 	public function testRejectsMissingRightOperand(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a ? b : ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a ? b : ; }'), ParseError);
 	}
 
 }

@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RemoveImport;
-import anyparse.query.RefactorSupport.EditResult;
 
 /**
  * `RemoveImport.removeImport` — remove an `import` / `using` by its exposed

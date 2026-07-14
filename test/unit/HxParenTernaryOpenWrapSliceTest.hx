@@ -50,13 +50,6 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		);
 	}
 
-	private inline function triviaWrite(src: String, cfg: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
 	/**
 	 * omega-ternary-paren-open BOUNDARY: an expression paren wrapping a top-level
 	 * ternary whose flat line is EXACTLY maxLineLength (140) stays FLAT under a
@@ -86,6 +79,7 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		);
 	}
 
+
 	/**
 	 * omega-ternary-paren-open BOUNDARY (opBool sibling): an expression paren
 	 * wrapping an opBool chain whose flat line is EXACTLY maxLineLength (140) stays
@@ -98,7 +92,6 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 			triviaWrite(src, CFG)
 		);
 	}
-
 
 	/**
 	 * omega-ternary-paren-open (opAddSub sibling): an expression paren whose inner
@@ -124,6 +117,13 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 			"class Sample {\n\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null\n\t\t\t? ((headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: '\n\t\t\t\t+ headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue)\n\t\t\t: '';\n\t}\n\n}",
 			triviaWrite(SRC_OPADDSUB, CFG.replace(EXPR_WRAP_SECTION, ''))
 		);
+	}
+
+
+	private inline function triviaWrite(src: String, cfg: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

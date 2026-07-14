@@ -83,7 +83,7 @@ class HxModifierSliceTest extends HxTestHelpers {
 		// HxClassMember.FinalMember consumes `final` then expects an
 		// identifier (gets `var` keyword) — parse error. Modern
 		// `final x:Int;` is the supported form (see HxFinalMemberSliceTest).
-		Assert.raises(() -> HaxeParser.parse('class Foo { final var x:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { final var x:Int; }'), ParseError);
 	}
 
 	public function testSingleModifierDynamic(): Void {
@@ -145,11 +145,11 @@ class HxModifierSliceTest extends HxTestHelpers {
 		// boundary check on `expectKw` prevents partial match, so the
 		// modifier loop breaks and `publicly` is tried as the member
 		// keyword, which also fails.
-		Assert.raises(() -> HaxeParser.parse('class Foo { publicly var x:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { publicly var x:Int; }'), ParseError);
 	}
 
 	public function testWordBoundaryStatically(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { statically var x:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { statically var x:Int; }'), ParseError);
 	}
 
 	public function testDuplicateModifiersAllowed(): Void {

@@ -70,6 +70,10 @@ class DoubleNegationCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	public function testMacroReificationSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar e = macro !!x;\n\t}\n}').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DoubleNegation().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -88,10 +92,6 @@ class DoubleNegationCheckTest extends Test {
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	public function testMacroReificationSkipped(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar e = macro !!x;\n\t}\n}').length);
 	}
 
 }

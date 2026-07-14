@@ -120,19 +120,6 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, new UnusedPrivate().fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
-	private function one(source: String): Array<Violation> {
-		return violations([{ file: 'C.hx', source: source }]);
-	}
-
-	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
-	}
-
-	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
-		final check: UnusedPrivate = new UnusedPrivate();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
 	public function testFixAppliedRemovesDeadMethodKeepsRest(): Void {
 		final src: String = 'class C {\n\tprivate function dead() {}\n\tpublic function keep() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
@@ -176,6 +163,19 @@ class UnusedPrivateCheckTest extends Test {
 	/** A test method in a class extending an INTERMEDIATE base that extends Test is exempt (transitive). */
 	public function testUtestMethodViaIntermediateBaseNotFlagged(): Void {
 		Assert.equals(0, one('class Base extends Test {}\nclass C extends Base {\n\tfunction testX() {}\n}').length);
+	}
+
+	private function one(source: String): Array<Violation> {
+		return violations([{ file: 'C.hx', source: source }]);
+	}
+
+	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
+	}
+
+	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
+		final check: UnusedPrivate = new UnusedPrivate();
+		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
 }

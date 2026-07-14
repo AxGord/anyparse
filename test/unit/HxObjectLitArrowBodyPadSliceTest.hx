@@ -23,6 +23,10 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
 
+	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
+
+	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -68,19 +72,11 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+
 	public function testInfixLeftOperandLeafDropsOpenPad(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal flags = users.filter(u -> {alpha: u.a }.alpha > 0);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
-
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
-	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
 
 	/**
 	 * ω-arrow-body-objlit-pad-keep: `arrowBodyOpenPad: true` disables the
@@ -103,15 +99,6 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		Assert.equals(src, triviaWriteKeepPad(src));
 	}
 
-	private inline function triviaWriteKeepPad(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG_KEEP_PAD);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
-	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
-
 	/**
 	 * ω-arrow-body-objlit-reflow: `arrowBodyReflow: true` drops the source
 	 * newlines of an arrow-lambda-body literal so the wrap cascade re-flows
@@ -124,6 +111,7 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		Assert.equals(expected, triviaWriteReflow(src));
 	}
 
+
 	public function testArrowBodyMultilineSourceKeptWithoutReflowKnob(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWriteKeepPad(src));
@@ -132,6 +120,18 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 	public function testNonArrowMultilineObjectLitKeptWithReflowKnob(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entry = {\n\t\t\talpha: 1,\n\t\t\tbeta: 2\n\t\t};\n\t}\n}';
 		Assert.equals(src, triviaWriteReflow(src));
+	}
+
+	private inline function triviaWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
+	private inline function triviaWriteKeepPad(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG_KEEP_PAD);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 	private inline function triviaWriteReflow(src: String): String {

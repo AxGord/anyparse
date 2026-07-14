@@ -549,13 +549,13 @@ class HxPostfixSliceTest extends HxTestHelpers {
 		// the suffix parse for `HxIdentLit` trips on `;` (the regex
 		// `[A-Za-z_][A-Za-z0-9_]*` needs at least one identifier
 		// character). A ParseError propagates out of the commit.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a.; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a.; }'), ParseError);
 	}
 
 	public function testRejectsUnclosedBracket(): Void {
 		// `var x:Int = a[1;` — postfix loop matches `[`, parses
 		// `1` as IntLit, expects `]`, and trips on `;`. Hard error.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = a[1; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = a[1; }'), ParseError);
 	}
 
 	// --- Slice 11: safe-navigation `?.` / force-navigation `!.` ---

@@ -5,7 +5,6 @@ import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxClassMember;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFinalModifierMember;
 import anyparse.grammar.haxe.HxInterfaceDecl;
 import anyparse.grammar.haxe.HxMemberDecl;
@@ -151,7 +150,7 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 		// none of which match `finalists`, so parse fails (no member
 		// keyword recognised). This is the same word-boundary guarantee
 		// HxModifier provided previously.
-		Assert.raises(() -> HaxeParser.parse('class A { finalists:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class A { finalists:Int; }'), ParseError);
 	}
 
 	public function testFinalMemberRejectsLegacyFinalVar(): Void {
@@ -159,7 +158,7 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 		// longer accepted at the member position. `final` is consumed as
 		// the FinalMember introducer; the body then expects an identifier
 		// for the var name and fails on the `var` reserved keyword.
-		Assert.raises(() -> HaxeParser.parse('class A { final var x:Int; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class A { final var x:Int; }'), ParseError);
 	}
 
 	// ======== FinalModifiedMember: `final` as a method modifier ========

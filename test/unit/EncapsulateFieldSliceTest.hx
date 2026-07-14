@@ -53,16 +53,13 @@ class EncapsulateFieldSliceTest extends Test {
 
 	/** An existing accessor blocks encapsulation. */
 	public function testAccessorExistsRefused(): Void {
-		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n' + '\tpublic function new() {}\n'
-			+ '\tfunction get_count():Int return count;\n}';
+		final src: String = 'package pkg;\n\nclass Model {\n\tpublic var count:Int = 0;\n\tpublic function new() {}\n\tfunction get_count():Int return count;\n}';
 		assertErr(EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
 	}
 
 	/** A field already declared as a property is refused. */
 	public function testAlreadyPropertyRefused(): Void {
-		final src: String = 'package pkg;\n\nclass Model {\n\t@:isVar public var count(get, set):Int = 0;\n'
-			+ '\tpublic function new() {}\n' + '\tfunction get_count():Int return count;\n'
-			+ '\tfunction set_count(v:Int):Int return count = v;\n}';
+		final src: String = 'package pkg;\n\nclass Model {\n\t@:isVar public var count(get, set):Int = 0;\n\tpublic function new() {}\n\tfunction get_count():Int return count;\n\tfunction set_count(v:Int):Int return count = v;\n}';
 		assertErr(EncapsulateField.encapsulate(src, 'Model', 'count', true, plugin()));
 	}
 

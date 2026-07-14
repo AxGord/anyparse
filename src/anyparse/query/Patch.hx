@@ -89,21 +89,27 @@ final class Patch {
 		slice: String, oldText: String, kind: String, label: String
 	): { from: Int, to: Int, error: Null<String> } {
 		final first: Int = slice.indexOf(oldText);
-		if (first >= 0) {
-			if (slice.indexOf(oldText, first + 1) >= 0)
-				return fail(
-					'${label}the old fragment occurs ${countOccurrences(slice, oldText)} times in the resolved $kind node — widen the snippet until it is unique'
-				);
-			return { from: first, to: first + oldText.length, error: null };
-		}
+		if (first >= 0) return slice.indexOf(oldText, first + 1) >= 0
+			? fail(
+				'${label}the old fragment occurs ${countOccurrences(slice, oldText)} times in the resolved $kind node — widen the snippet until it is unique'
+			)
+			: {
+				from: first,
+				to: first + oldText.length,
+				error: null
+			};
 		final dedented: { from: Int, to: Int, count: Int } = findDedented(slice, oldText);
-		if (dedented.count == 0)
-			return fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`');
-		if (dedented.count > 1)
-			return fail(
-				'${label}the old fragment occurs ${dedented.count} times in the resolved $kind node — widen the snippet until it is unique'
-			);
-		return { from: dedented.from, to: dedented.to, error: null };
+		return dedented.count == 0
+			? fail('${label}the old fragment does not occur in the resolved $kind node — copy it verbatim from `apq source --select`')
+			: dedented.count > 1
+				? fail(
+					'${label}the old fragment occurs ${dedented.count} times in the resolved $kind node — widen the snippet until it is unique'
+				)
+				: {
+					from: dedented.from,
+					to: dedented.to,
+					error: null
+				};
 	}
 
 	private static inline function fail(message: String): { from: Int, to: Int, error: Null<String> } {

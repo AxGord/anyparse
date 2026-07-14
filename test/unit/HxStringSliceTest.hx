@@ -320,12 +320,12 @@ class HxStringSliceTest extends HxTestHelpers {
 
 	/** Unterminated double-quoted string -> rejection. */
 	public function testRejectsUnterminatedDouble(): Void {
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:String = "hello; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:String = "hello; }'), ParseError);
 	}
 
 	/** Unterminated single-quoted string -> rejection. */
 	public function testRejectsUnterminatedSingle(): Void {
-		Assert.raises(() -> HaxeParser.parse("class Foo { var x:String = 'hello; }"), ParseError);
+		Assert.raises(HaxeParser.parse.bind("class Foo { var x:String = 'hello; }"), ParseError);
 	}
 
 	// -------- assertion helpers --------

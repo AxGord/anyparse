@@ -39,7 +39,7 @@ class ApqMatcherTest extends Test {
 				e == null ? '<none>' : (e.name ?? '<noname>');
 			}
 		];
-		Assert.isTrue(names.contains('IoError'), '$$E must bind to IoError — got ${names.join(",")}');
+		Assert.isTrue(names.contains('IoError'), '$$E must bind to IoError — got ${names.join(',')}');
 		Assert.isTrue(names.contains('RangeError'), '$$E must bind to RangeError');
 	}
 
@@ -103,8 +103,8 @@ class ApqMatcherTest extends Test {
 				v == null ? '<none>' : (v.name ?? '<noname>');
 			}
 		];
-		Assert.isTrue(names.contains('field'), '$$v must bind class-field var — got ${names.join(",")}');
-		Assert.isTrue(names.contains('local'), '$$v must bind local var — got ${names.join(",")}');
+		Assert.isTrue(names.contains('field'), '$$v must bind class-field var — got ${names.join(',')}');
+		Assert.isTrue(names.contains('local'), '$$v must bind local var — got ${names.join(',')}');
 	}
 
 	public function testVarEquivalenceIsScoped(): Void {
@@ -191,7 +191,7 @@ class ApqMatcherTest extends Test {
 		// A leaf pattern (bare ident / lone metavar) has no structure;
 		// a pattern with children does. Drives the CLI nudge.
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		Assert.isTrue(plugin.parsePattern("Anon").isDegenerate(), 'bare identifier is degenerate');
+		Assert.isTrue(plugin.parsePattern('Anon').isDegenerate(), 'bare identifier is degenerate');
 		Assert.isTrue(plugin.parsePattern("$x").isDegenerate(), 'lone metavar is degenerate');
 		Assert.isFalse(plugin.parsePattern("throw new $E($_)").isDegenerate(), 'throw-new has structure');
 		Assert.isFalse(plugin.parsePattern("return $x").isDegenerate(), 'return-stmt has structure');

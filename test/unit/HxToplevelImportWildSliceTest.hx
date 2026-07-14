@@ -128,11 +128,11 @@ class HxToplevelImportWildSliceTest extends HxTestHelpers {
 	}
 
 	public function testImportWildRequiresSemi(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('import haxe.*'));
+		Assert.raises(HaxeModuleParser.parse.bind('import haxe.*'));
 	}
 
 	public function testUsingWildRequiresSemi(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('using haxe.*'));
+		Assert.raises(HaxeModuleParser.parse.bind('using haxe.*'));
 	}
 
 	public function testWriterEmitsImportWild(): Void {

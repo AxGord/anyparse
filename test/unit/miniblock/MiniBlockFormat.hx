@@ -1,10 +1,8 @@
 package unit.miniblock;
 
 import anyparse.format.ArrayMatrixWrap;
-import anyparse.format.CommentStyle;
 import anyparse.format.ConditionalIndentationPolicy;
 import anyparse.format.Encoding;
-import anyparse.format.IndentChar;
 import anyparse.format.WriteOptions;
 import anyparse.format.text.FieldLookup;
 import anyparse.format.text.KeySyntax;

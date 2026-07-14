@@ -4,7 +4,6 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RemoveMember;
-import anyparse.query.RefactorSupport.EditResult;
 
 /**
  * `RemoveMember.removeMember` — remove a field / method by its type and

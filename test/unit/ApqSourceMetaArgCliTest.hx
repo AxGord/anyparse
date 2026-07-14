@@ -131,9 +131,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		// `@:fmt` fields without that arg do not. Both forms parse and the
 		// walk exits 0 (a match) — proving the inline `(arg)` split does not
 		// break the annotation tag itself.
-		final f: String = writeFile(
-			'class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '  @:fmt(somethingElse) var b:Int = 0;\n' + '}\n'
-		);
+		final f: String = writeFile('class X {\n  @:fmt(propagateExprPosition) var a:Int = 0;\n  @:fmt(somethingElse) var b:Int = 0;\n}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(propagateExprPosition)', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -145,7 +143,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		#if (sys || nodejs)
 		// `@:tag(arg)` also matches a call-form top-level arg `arg(...)`
 		// (callee match), not just the bare ident.
-		final f: String = writeFile('class X {\n' + '  @:fmt(trailingComma(\'trailingCommaArrays\')) var a:Int = 0;\n' + '}\n');
+		final f: String = writeFile('class X {\n  @:fmt(trailingComma(\'trailingCommaArrays\')) var a:Int = 0;\n}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(trailingComma)', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -157,9 +155,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		#if (sys || nodejs)
 		// Bare `@:fmt` (no inline arg) behaves exactly as before — every
 		// `@:fmt` field is in scope, exit 0.
-		final f: String = writeFile(
-			'class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '  @:fmt(somethingElse) var b:Int = 0;\n' + '}\n'
-		);
+		final f: String = writeFile('class X {\n  @:fmt(propagateExprPosition) var a:Int = 0;\n  @:fmt(somethingElse) var b:Int = 0;\n}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt', f]));
 		FileSystem.deleteFile(f);
 		#else
@@ -173,7 +169,7 @@ class ApqSourceMetaArgCliTest extends Test {
 		// clean "0 hits, exit 0" (nudge to stderr) — NOT a parse-failure
 		// hard error. The substring `propagate` (a prefix of the real flag)
 		// must NOT match: the filter is exact per arg, not a substring scan.
-		final f: String = writeFile('class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '}\n');
+		final f: String = writeFile('class X {\n  @:fmt(propagateExprPosition) var a:Int = 0;\n}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(zzzNoSuchFlag)', f]), 'unknown arg → empty');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(propagate)', f]), 'prefix is not a match');
 		FileSystem.deleteFile(f);
@@ -185,7 +181,7 @@ class ApqSourceMetaArgCliTest extends Test {
 	public function testMetaArgFilterComposesWithOnKind(): Void {
 		#if (sys || nodejs)
 		// Inline arg filter composes with `--on` (decl-kind scope).
-		final f: String = writeFile('class X {\n' + '  @:fmt(propagateExprPosition) var a:Int = 0;\n' + '}\n');
+		final f: String = writeFile('class X {\n  @:fmt(propagateExprPosition) var a:Int = 0;\n}\n');
 		Assert.equals(0, Cli.run(['meta', '@:fmt(propagateExprPosition)', '--on', 'VarMember', f]));
 		FileSystem.deleteFile(f);
 		#else

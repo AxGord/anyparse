@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxAnonField;
-import anyparse.grammar.haxe.HxAnonVarBody;
 import anyparse.grammar.haxe.HxClassDecl;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxType;
@@ -30,12 +29,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  * transforms); only the `,`-forms are round-tripped.
  */
 class HxAnonVarFieldSliceTest extends HxTestHelpers {
-
-	private function anonOf(source: String): Array<HxAnonField> {
-		final ast: HxClassDecl = HaxeParser.parse(source);
-		final v: HxVarDecl = expectVarMember(ast.members[0].member);
-		return expectAnon(v.type);
-	}
 
 	public function testSingleVarField(): Void {
 		final fields: Array<HxAnonField> = anonOf('class Foo { var s:{ var x:Int; }; }');
@@ -371,6 +364,12 @@ class HxAnonVarFieldSliceTest extends HxTestHelpers {
 	public function testOptionalKeywordFieldsRoundTrip(): Void {
 		roundTrip('class Foo { var s:{ var ?x:Int; }; }', 'var-opt-single');
 		roundTrip('class Foo { var s:{ final ?y:String; }; }', 'final-opt-single');
+	}
+
+	private function anonOf(source: String): Array<HxAnonField> {
+		final ast: HxClassDecl = HaxeParser.parse(source);
+		final v: HxVarDecl = expectVarMember(ast.members[0].member);
+		return expectAnon(v.type);
 	}
 
 }

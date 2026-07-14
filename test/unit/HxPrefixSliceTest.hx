@@ -252,7 +252,7 @@ class HxPrefixSliceTest extends HxTestHelpers {
 		// regex match), the atom function runs out of branches, and
 		// the failExpr raises a ParseError that propagates out
 		// through the prefix branch's try-wrapper in `tryBranch`.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = - ; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = - ; }'), ParseError);
 	}
 
 }

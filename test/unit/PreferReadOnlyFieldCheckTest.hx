@@ -96,6 +96,15 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { public var x = ').length);
 	}
 
+	/** A field declared `var` by an interface must stay externally writable — `(default, null)` breaks the contract. */
+	public function testInterfaceVarFieldNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
+			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; function s():Void { x = 1; } }' }
+		];
+		Assert.equals(0, new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -109,15 +118,6 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	/** A field declared `var` by an interface must stay externally writable — `(default, null)` breaks the contract. */
-	public function testInterfaceVarFieldNotFlagged(): Void {
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
-			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; function s():Void { x = 1; } }' }
-		];
-		Assert.equals(0, new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).length);
 	}
 
 }

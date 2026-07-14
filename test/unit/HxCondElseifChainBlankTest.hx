@@ -18,11 +18,6 @@ class HxCondElseifChainBlankTest extends Test {
 
 	private static final _forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
-	private function roundTrip(source: String): String {
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		return HaxeModuleTriviaWriter.write(ast);
-	}
-
 	public function testStmtChainNoSpuriousBlank(): Void {
 		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#elseif d\n\t\treturn 4;\n\t\t#end\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
@@ -42,6 +37,11 @@ class HxCondElseifChainBlankTest extends Test {
 	public function testAuthoredBlankBeforeElseifPreserved(): Void {
 		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\n\t\t#elseif c\n\t\treturn 3;\n\t\t#end\n\t}\n}';
 		Assert.equals(source + '\n', roundTrip(source));
+	}
+
+	private function roundTrip(source: String): String {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		return HaxeModuleTriviaWriter.write(ast);
 	}
 
 }

@@ -157,14 +157,12 @@ final class MemberOrder implements Check {
 		if (isField) {
 			if (isStatic) return isPublic ? 0 : 1;
 			final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
-			if (!mutable) return isPublic ? 2 : 4;
-			return isPublic ? 3 : 5;
+			return !mutable ? (isPublic ? 2 : 4) : (isPublic ? 3 : 5);
 		}
 		final name: String = node.name ?? '';
-		if (shape.constructorName != null && name == shape.constructorName) return 6;
-		if (isAccessor(name, shape)) return 7;
-		if (isStatic) return isPublic ? 10 : 11;
-		return isPublic ? 8 : 9;
+		return shape.constructorName != null && name == shape.constructorName
+			? 6
+			: isAccessor(name, shape) ? 7 : isStatic ? (isPublic ? 10 : 11) : (isPublic ? 8 : 9);
 	}
 
 	/** Whether `name` begins with a property-accessor prefix (`get_` / `set_`). */

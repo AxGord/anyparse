@@ -68,11 +68,11 @@ class HxImportAliasSliceTest extends HxTestHelpers {
 		// alias ident regex fails; rollback to plain ImportDecl is also
 		// rejected because the path-only branch can't terminate on the
 		// stray `as` text either.
-		Assert.raises(() -> HaxeModuleParser.parse('import Foo as ;'));
+		Assert.raises(HaxeModuleParser.parse.bind('import Foo as ;'));
 	}
 
 	public function testImportAliasRequiresSemi(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('import Foo as Bar'));
+		Assert.raises(HaxeModuleParser.parse.bind('import Foo as Bar'));
 	}
 
 	public function testWriterEmitsImportAlias(): Void {

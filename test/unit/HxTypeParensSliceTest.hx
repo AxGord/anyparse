@@ -29,22 +29,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxTypeParensSliceTest extends HxTestHelpers {
 
-	private function expectParensType(t: Null<HxType>): HxType {
-		return switch t {
-			case null: throw 'expected HxType.Parens, got null';
-			case Parens(inner): inner;
-			case _: throw 'expected HxType.Parens, got non-Parens variant';
-		};
-	}
-
-	private function expectArrowType(t: Null<HxType>): { left: HxType, right: HxType } {
-		return switch t {
-			case null: throw 'expected HxType.Arrow, got null';
-			case Arrow(l, r): { left: l, right: r };
-			case _: throw 'expected HxType.Arrow, got non-Arrow variant';
-		};
-	}
-
 	public function testSimpleParensAroundNamed(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:(Int); }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
@@ -155,6 +139,22 @@ class HxTypeParensSliceTest extends HxTestHelpers {
 		roundTrip('class Foo { var f:Array<(Int)>; }', 'parens-inside-typeparam');
 		roundTrip('class Foo { function bar():(Int) {} }', 'parens-return-type');
 		roundTrip('class Foo { function bar(x:(Int)):Void {} }', 'parens-param-type');
+	}
+
+	private function expectParensType(t: Null<HxType>): HxType {
+		return switch t {
+			case null: throw 'expected HxType.Parens, got null';
+			case Parens(inner): inner;
+			case _: throw 'expected HxType.Parens, got non-Parens variant';
+		};
+	}
+
+	private function expectArrowType(t: Null<HxType>): { left: HxType, right: HxType } {
+		return switch t {
+			case null: throw 'expected HxType.Arrow, got null';
+			case Arrow(l, r): { left: l, right: r };
+			case _: throw 'expected HxType.Arrow, got non-Arrow variant';
+		};
 	}
 
 }

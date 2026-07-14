@@ -50,13 +50,6 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
 	public function testCuddledBraceOneColumnPastLimitOpensCondition(): Void {
 		// Header line = 141 columns at tab=4 — the trailing ` {` supplies the
 		// 141st column, so the condition must open (fork parity: the fork
@@ -89,6 +82,7 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+
 	public function testNonChainCallCondWrappedSourceCollapses(): Void {
 		// The same 140-column condition, authored with the cond on its own line,
 		// collapses back to the glued single-line form (idempotent thereafter).
@@ -106,6 +100,12 @@ final class HxCondPlainCallLeadingBreakSliceTest extends Test {
 		final opened: String = 'class C {\n\tfunction m():Void {\n\t\tif (ready > 0) {\n\t\t\tif (\n\t\t\t\t!validateItemAction(itemPath, false, STATUS_REMOTE_UPDATED_CLIENT_MERGED_UPLOADED_LATER_LOCAL019, itemStamp, itemIdentifier)\n\t\t\t)\n\t\t\t\thandleValidationFailure(itemPath, itemStamp, itemIdentifier);\n\t\t}\n\t}\n}';
 		Assert.equals(opened, triviaWrite(flat));
 		Assert.equals(opened, triviaWrite(opened));
+	}
+
+	private inline function triviaWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

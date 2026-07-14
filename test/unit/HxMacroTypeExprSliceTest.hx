@@ -26,21 +26,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxMacroTypeExprSliceTest extends HxTestHelpers {
 
-	private function initOf(source: String): HxExpr {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case null: throw 'expected init expr, got null';
-			case e: e;
-		}
-	}
-
-	private function namedOf(t: HxType): String {
-		return switch t {
-			case Named(ref): (ref.name: String);
-			case e: throw 'expected Named type, got $e';
-		}
-	}
-
 	public function testMacroTypeSimple(): Void {
 		switch initOf('class C { var x = macro : Int; }') {
 			case MacroTypeExpr(t):
@@ -124,6 +109,21 @@ class HxMacroTypeExprSliceTest extends HxTestHelpers {
 			'class C { static function f() { var a = macro : Int; var b = macro : Array<String>; var c = macro : Int -> Void; var d = macro foo; } }',
 			'L-macro-type'
 		);
+	}
+
+	private function initOf(source: String): HxExpr {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case null: throw 'expected init expr, got null';
+			case e: e;
+		}
+	}
+
+	private function namedOf(t: HxType): String {
+		return switch t {
+			case Named(ref): (ref.name: String);
+			case e: throw 'expected Named type, got $e';
+		}
 	}
 
 }

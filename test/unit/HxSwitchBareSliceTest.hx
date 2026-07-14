@@ -21,20 +21,6 @@ import anyparse.grammar.haxe.HxSwitchStmtBare;
  */
 class HxSwitchBareSliceTest extends HxTestHelpers {
 
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	private function parseBareSwitch(source: String): HxSwitchStmtBare {
-		final body: Array<HxStatement> = parseBody(source);
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case SwitchStmtBare(stmt): stmt;
-			case null, _: throw 'expected SwitchStmtBare, got ${body[0]}';
-		};
-	}
-
 	// ---- Statement-position bare switch ----
 
 	public function testSwitchStmtBareIdentSubject(): Void {
@@ -184,6 +170,20 @@ class HxSwitchBareSliceTest extends HxTestHelpers {
 
 	public function testSwitchBareNestedRoundTrip(): Void {
 		roundTrip('class C { function f():Void { switch x { case 1: switch y { case 2: a; } } } }', 'switch-stmt-bare-nested');
+	}
+
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	private function parseBareSwitch(source: String): HxSwitchStmtBare {
+		final body: Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case SwitchStmtBare(stmt): stmt;
+			case null, _: throw 'expected SwitchStmtBare, got ${body[0]}';
+		};
 	}
 
 }

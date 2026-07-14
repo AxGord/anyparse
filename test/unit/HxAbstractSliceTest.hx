@@ -233,21 +233,21 @@ class HxAbstractSliceTest extends HxTestHelpers {
 	// -- Word boundary --
 
 	public function testWordBoundaryAbstractly(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('abstractly Foo(Int) {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('abstractly Foo(Int) {}'), ParseError);
 	}
 
 	// -- Rejections --
 
 	public function testRejectsMissingOpenParen(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('abstract Foo Int) {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('abstract Foo Int) {}'), ParseError);
 	}
 
 	public function testRejectsMissingCloseParen(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('abstract Foo(Int {}'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('abstract Foo(Int {}'), ParseError);
 	}
 
 	public function testRejectsMissingBody(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('abstract Foo(Int)'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('abstract Foo(Int)'), ParseError);
 	}
 
 }

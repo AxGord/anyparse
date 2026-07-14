@@ -98,6 +98,13 @@ class PreferSwitchCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	/** A chain carrying a comment is still flagged but not auto-converted (the comment would be lost). */
+	public function testCommentChainReportedNotFixed(): Void {
+		final src: String = wrap('if (x == 1) a(); // one\n\t\telse if (x == 2) b();');
+		Assert.equals(1, violations(src).length);
+		Assert.equals(-1, fixedSource(src).indexOf('switch'));
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
@@ -115,13 +122,6 @@ class PreferSwitchCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	/** A chain carrying a comment is still flagged but not auto-converted (the comment would be lost). */
-	public function testCommentChainReportedNotFixed(): Void {
-		final src: String = wrap('if (x == 1) a(); // one\n\t\telse if (x == 2) b();');
-		Assert.equals(1, violations(src).length);
-		Assert.equals(-1, fixedSource(src).indexOf('switch'));
 	}
 
 }

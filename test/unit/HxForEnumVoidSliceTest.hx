@@ -7,13 +7,10 @@ import anyparse.grammar.haxe.HxEnumCtor;
 import anyparse.grammar.haxe.HxEnumCtorDecl;
 import anyparse.grammar.haxe.HxEnumDecl;
 import anyparse.grammar.haxe.HxEnumMember;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxForStmt;
 import anyparse.grammar.haxe.HxMetadata;
 import anyparse.grammar.haxe.HxMetadataUtil;
 import anyparse.grammar.haxe.HxModule;
-import anyparse.grammar.haxe.HxParam;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.runtime.ParseError;
 
@@ -31,12 +28,6 @@ import anyparse.runtime.ParseError;
  * `@:trail` on zero-arg `@:kw` branches (D48).
  */
 class HxForEnumVoidSliceTest extends HxTestHelpers {
-
-	/** Parse function body statements from a single-function class. */
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
 
 	// ---- For statement tests ----
 
@@ -139,19 +130,19 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 	}
 
 	public function testWordBoundaryFormat(): Void {
-		Assert.raises(() -> parseBody('class C { function f():Void { format (x in items) x; } }'), ParseError);
+		Assert.raises(parseBody.bind('class C { function f():Void { format (x in items) x; } }'), ParseError);
 	}
 
 	public function testWordBoundaryForest(): Void {
-		Assert.raises(() -> parseBody('class C { function f():Void { forest (x in items) x; } }'), ParseError);
+		Assert.raises(parseBody.bind('class C { function f():Void { forest (x in items) x; } }'), ParseError);
 	}
 
 	public function testRejectsMissingIn(): Void {
-		Assert.raises(() -> parseBody('class C { function f():Void { for (x items) x; } }'), ParseError);
+		Assert.raises(parseBody.bind('class C { function f():Void { for (x items) x; } }'), ParseError);
 	}
 
 	public function testRejectsMissingCloseParen(): Void {
-		Assert.raises(() -> parseBody('class C { function f():Void { for (x in items x; } }'), ParseError);
+		Assert.raises(parseBody.bind('class C { function f():Void { for (x in items x; } }'), ParseError);
 	}
 
 	// ---- Enum ctor parameters tests ----
@@ -219,15 +210,6 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 		Assert.equals('Add', (add.name: String));
 		Assert.equals(2, add.params.length);
 		Assert.equals('Nil', (expectSimpleCtor(enumCtors(ed)[2]): String));
-	}
-
-	// ---- Slice apq-P5-I: metadata on enum constructors ----
-
-	private function metaName(m: HxMetadata): String {
-		return switch m {
-			case MetaCall(call): (call.name: String);
-			case _: HxMetadataUtil.source(m);
-		};
 	}
 
 	public function testMetaCallBeforeSimpleCtor(): Void {
@@ -366,6 +348,21 @@ class HxForEnumVoidSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected VoidReturnStmt');
 		}
+	}
+
+	/** Parse function body statements from a single-function class. */
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	// ---- Slice apq-P5-I: metadata on enum constructors ----
+
+	private function metaName(m: HxMetadata): String {
+		return switch m {
+			case MetaCall(call): (call.name: String);
+			case _: HxMetadataUtil.source(m);
+		};
 	}
 
 }

@@ -24,26 +24,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 
-	private function initOf(source: String): HxExpr {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case null: throw 'expected init expr, got null';
-			case e: e;
-		}
-	}
-
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	private function identName(e: HxExpr): String {
-		return switch e {
-			case IdentExpr(v): (v: String);
-			case other: throw 'expected IdentExpr, got $other';
-		}
-	}
-
 	public function testThenSemiBeforeElse(): Void {
 		switch initOf('class C { var x = if (a) b; else c; }') {
 			case IfExpr(ie):
@@ -131,6 +111,26 @@ class HxIfExprTrailSemiSliceTest extends HxTestHelpers {
 		roundTrip('class C { function f() { final x = if (a) g(); else if (b) h(); else k(); } }', 'if-expr-else-if-chain-semis');
 		// No-`;` regression form must also stay idempotent.
 		roundTrip('class C { function f() { final x = if (a) b else c; } }', 'if-expr-no-semi');
+	}
+
+	private function initOf(source: String): HxExpr {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case null: throw 'expected init expr, got null';
+			case e: e;
+		}
+	}
+
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	private function identName(e: HxExpr): String {
+		return switch e {
+			case IdentExpr(v): (v: String);
+			case other: throw 'expected IdentExpr, got $other';
+		}
 	}
 
 }

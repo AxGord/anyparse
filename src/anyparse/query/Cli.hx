@@ -450,6 +450,9 @@ final class Cli {
 	 */
 	private static var _requireMatch: Bool = false;
 
+	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
+	private static inline final DEFAULT_REACH_PATHS: Int = 10;
+
 	public static function main(): Void {
 		#if nodejs
 		// Set the exit code and let Node exit naturally — do NOT call
@@ -2238,8 +2241,7 @@ final class Cli {
 		if (atSpec != null) {
 			// `--kind` with `--at` narrows to the innermost node of that kind at the cursor.
 			final pos: Null<Position> = resolveAddressPos(opName, source, plugin, atSpec, null, null, null);
-			if (pos == null) return null;
-			return kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
+			return pos == null ? null : kind != null ? ByKindPosition(pos.line, pos.col, kind) : ByPosition(pos.line, pos.col);
 		}
 		// --select / --match resolve through the shared address layer (exactly-one
 		// discipline, --nth pick, candidate-listing errors); the caching plugin
@@ -2333,8 +2335,7 @@ final class Cli {
 			sections.push([]);
 		else
 			sections[sections.length - 1].push(l);
-		if (sections.length < 2 || sections.length % 2 != 0) return null;
-		return [
+		return sections.length < 2 || sections.length % 2 != 0 ? null : [
 			for (i in 0...(sections.length >> 1))
 				{ oldText: sections[i * 2].join('\n'), newText: sections[i * 2 + 1].join('\n') }
 		];
@@ -6500,7 +6501,7 @@ final class Cli {
 		#if nodejs
 		final fs: Dynamic = js.Lib.require('fs');
 		final buf: Dynamic = fs.readFileSync(0);
-		return (buf: Dynamic).toString('utf8');
+		return buf.toString('utf8');
 		#elseif sys
 		return Sys.stdin().readAll().toString();
 		#else
@@ -7302,7 +7303,7 @@ final class Cli {
 		sysPrint('or quotes the shell would mangle). Replace the source span of a single\n');
 		sysPrint('node with <newSource>. Provide exactly one of --select / --match / --at.\n');
 		sysPrint('The result is WRITER-FORMATTED — the whole file is re-emitted through the\n');
-		sysPrint("writer (which also re-parse-validates), so the replacement is laid out by\n");
+		sysPrint('writer (which also re-parse-validates), so the replacement is laid out by\n');
 		sysPrint("the grammar's rules. The file must already be canonical; otherwise it is\n");
 		sysPrint('refused unless --reformat is given. Quote <newSource> if it contains\n');
 		sysPrint('spaces. A target that resolves to no / multiple nodes, a non-canonical\n');
@@ -12748,10 +12749,6 @@ final class Cli {
 		return c >= '0'.code && c <= '9'.code;
 	}
 
-	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
-
-	private static inline final DEFAULT_REACH_PATHS: Int = 10;
-
 	/**
 	 * Shared scope→graph builder for the `callees` / `callers` / `reach`
 	 * subcommands: expands inputs, reads sources (kept for `line:col`
@@ -13189,7 +13186,6 @@ final class Cli {
 		return scopeFiles;
 	}
 
-
 	private static function runExtractInterface(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
@@ -13283,7 +13279,6 @@ final class Cli {
 		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
 	}
 
-
 	private static function runInheritanceMove(args: Array<String>, up: Bool): Int {
 		final cmd: String = up ? 'pull-up' : 'push-down';
 		var lang: String = 'haxe';
@@ -13366,7 +13361,6 @@ final class Cli {
 		sysPrint('  --write        Apply in place (default: print a per-file summary)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
-
 
 	private static function runExtractSuperclass(args: Array<String>): Int {
 		var lang: String = 'haxe';
@@ -13461,7 +13455,6 @@ final class Cli {
 		sysPrint('  --lang <name>      Grammar plugin (default haxe)\n');
 	}
 
-
 	private static function runSafeDelete(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var srcType: Null<String> = null;
@@ -13549,7 +13542,6 @@ final class Cli {
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
-
 	private static function runEncapsulateField(args: Array<String>): Int {
 		var lang: String = 'haxe';
 		var typeName: Null<String> = null;
@@ -13630,7 +13622,6 @@ final class Cli {
 		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
-
 
 	private static function runMakeFinal(args: Array<String>): Int {
 		var lang: String = 'haxe';
@@ -13721,7 +13712,6 @@ final class Cli {
 		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
-
 
 	private static function runIntroduceParameterObject(args: Array<String>): Int {
 		var lang: String = 'haxe';

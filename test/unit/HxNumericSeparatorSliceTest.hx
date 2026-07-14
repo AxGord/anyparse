@@ -1,9 +1,6 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleParser;
-import anyparse.grammar.haxe.HxExpr;
-import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * Slice 47 — Haxe 5 numeric literal extensions: digit-separator `_`

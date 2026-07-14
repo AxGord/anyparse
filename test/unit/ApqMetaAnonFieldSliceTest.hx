@@ -106,7 +106,7 @@ class ApqMetaAnonFieldSliceTest extends Test {
 	}
 
 	private static function describe(hits: Array<MetaHit>): String {
-		return '[' + hits.map(h -> '${h.annotation}@${h.declKind}:${h.declName ?? "?"}').join(', ') + ']';
+		return '[' + hits.map(h -> '${h.annotation}@${h.declKind}:${h.declName ?? '?'}').join(', ') + ']';
 	}
 
 }

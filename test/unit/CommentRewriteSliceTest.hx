@@ -75,6 +75,32 @@ class CommentRewriteSliceTest extends Test {
 		Assert.isTrue(isErr(cr(src, 'x marks', 'a */ b', false)));
 	}
 
+	/** A phrase split across two ` * ` doc lines is matched and replaced (cross-line literal). */
+	public function testLiteralCrossLineDocComment(): Void {
+		final src: String = 'class C {\n\t/**\n\t * the quick brown\n\t * fox jumps\n\t */\n\tpublic function f():Void {}\n}';
+		final text: String = okText(cr(src, 'quick brown fox', 'NIMBLE BEAST', false));
+		Assert.isTrue(text.contains('NIMBLE BEAST'));
+		Assert.isFalse(text.contains('quick brown'));
+		Assert.isFalse(text.contains('fox'));
+	}
+
+	/** A phrase contained WITHIN one line of a multi-line doc is replaced normally (no over-collapse). */
+	public function testLiteralWithinOneDocLine(): Void {
+		final src: String = 'class C {\n\t/**\n\t * the quick brown\n\t * fox jumps\n\t */\n\tpublic function f():Void {}\n}';
+		final text: String = okText(cr(src, 'quick brown', 'slow red', false));
+		Assert.isTrue(text.contains('slow red'));
+		Assert.isFalse(text.contains('quick brown'));
+		Assert.isTrue(text.contains('fox jumps'));
+	}
+
+	/** Cross-line literal match works with CRLF (`\r\n`) line endings, not only LF. */
+	public function testLiteralCrossLineCrlf(): Void {
+		final src: String = 'class C {\r\n\t/**\r\n\t * the quick brown\r\n\t * fox jumps\r\n\t */\r\n\tpublic function f():Void {}\r\n}';
+		final text: String = okText(cr(src, 'quick brown fox', 'BF', false));
+		Assert.isTrue(text.contains('BF'));
+		Assert.isFalse(text.contains('quick brown'));
+	}
+
 	private function cr(src: String, find: String, replace: String, regex: Bool): EditResult {
 		return CommentRewrite.rewrite(src, find, replace, regex, true, new HaxeQueryPlugin());
 	}
@@ -93,32 +119,6 @@ class CommentRewriteSliceTest extends Test {
 			case Ok(_): false;
 			case Err(_): true;
 		};
-	}
-
-	/** A phrase split across two ` * ` doc lines is matched and replaced (cross-line literal). */
-	public function testLiteralCrossLineDocComment(): Void {
-		final src: String = "class C {\n\t/**\n\t * the quick brown\n\t * fox jumps\n\t */\n\tpublic function f():Void {}\n}";
-		final text: String = okText(cr(src, "quick brown fox", "NIMBLE BEAST", false));
-		Assert.isTrue(text.contains("NIMBLE BEAST"));
-		Assert.isFalse(text.contains("quick brown"));
-		Assert.isFalse(text.contains("fox"));
-	}
-
-	/** A phrase contained WITHIN one line of a multi-line doc is replaced normally (no over-collapse). */
-	public function testLiteralWithinOneDocLine(): Void {
-		final src: String = "class C {\n\t/**\n\t * the quick brown\n\t * fox jumps\n\t */\n\tpublic function f():Void {}\n}";
-		final text: String = okText(cr(src, "quick brown", "slow red", false));
-		Assert.isTrue(text.contains("slow red"));
-		Assert.isFalse(text.contains("quick brown"));
-		Assert.isTrue(text.contains("fox jumps"));
-	}
-
-	/** Cross-line literal match works with CRLF (`\r\n`) line endings, not only LF. */
-	public function testLiteralCrossLineCrlf(): Void {
-		final src: String = "class C {\r\n\t/**\r\n\t * the quick brown\r\n\t * fox jumps\r\n\t */\r\n\tpublic function f():Void {}\r\n}";
-		final text: String = okText(cr(src, "quick brown fox", "BF", false));
-		Assert.isTrue(text.contains("BF"));
-		Assert.isFalse(text.contains("quick brown"));
 	}
 
 }

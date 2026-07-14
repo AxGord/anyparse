@@ -3,9 +3,6 @@ package unit;
 import utest.Test;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
-import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
-import anyparse.grammar.haxe.HaxeFormat;
-import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * Regression guard for the typedef-trivia cluster
@@ -27,7 +24,7 @@ class ProbeTypedefTrivia extends Test {
 	private static final _forceBuild: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 
 	public function testIssue216PreservesDocCommentAfterUnsemicolonedTypedef(): Void {
-		final src: String = 'typedef Foo = Int\n' + '\n' + '/** Docs for Bar **/\n' + 'typedef Bar = Float\n';
+		final src: String = 'typedef Foo = Int\n\n/** Docs for Bar **/\ntypedef Bar = Float\n';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
 		Assert.equals(2, m.decls.length);
 		final next = m.decls[1];
@@ -36,7 +33,7 @@ class ProbeTypedefTrivia extends Test {
 	}
 
 	public function testIssue321PreservesDocCommentAfterUnsemicolonedTypedefBeforeClass(): Void {
-		final src: String = 'typedef Bar = String\n' + '\n' + '/**\n' + '\tdocs\n' + '**/\n' + 'class Foo {}\n';
+		final src: String = 'typedef Bar = String\n\n/**\n\tdocs\n**/\nclass Foo {}\n';
 		final m: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
 		Assert.equals(2, m.decls.length);
 		final next = m.decls[1];

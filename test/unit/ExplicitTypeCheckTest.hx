@@ -78,10 +78,6 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	/**
 	 * A generic constraint (`<T:C>`) projects like a return type but sits before the
 	 * parameters; a constrained-generic method with no return type must still be
@@ -106,6 +102,10 @@ class ExplicitTypeCheckTest extends Test {
 		sys.FileSystem.deleteFile(path);
 		sys.FileSystem.deleteFile('$dir/checkstyle.json');
 		sys.FileSystem.deleteDirectory(dir);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

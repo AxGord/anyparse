@@ -124,20 +124,20 @@ class HxToplevelImportUsingSliceTest extends HxTestHelpers {
 	}
 
 	public function testImportRequiresSemi(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('import foo'));
+		Assert.raises(HaxeModuleParser.parse.bind('import foo'));
 	}
 
 	public function testUsingRequiresSemi(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('using foo'));
+		Assert.raises(HaxeModuleParser.parse.bind('using foo'));
 	}
 
 	public function testImportRequiresPath(): Void {
 		// No `ImportEmpty` ctor — bare `import;` is rejected.
-		Assert.raises(() -> HaxeModuleParser.parse('import;'));
+		Assert.raises(HaxeModuleParser.parse.bind('import;'));
 	}
 
 	public function testUsingRequiresPath(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('using;'));
+		Assert.raises(HaxeModuleParser.parse.bind('using;'));
 	}
 
 	public function testWriterEmitsImport(): Void {

@@ -34,8 +34,8 @@ final class HxChainFillBoundaryCallOperandTest extends Test {
 		final out: String = triviaWrite(flat);
 		Assert.equals(wrapped, out);
 		Assert.equals(wrapped, triviaWrite(wrapped));
-		Assert.isTrue(out.indexOf("toUnits(memoryValue)") >= 0);
-		Assert.isTrue(out.indexOf("toUnits(\n") < 0);
+		Assert.isTrue(out.indexOf('toUnits(memoryValue)') >= 0);
+		Assert.isTrue(out.indexOf('toUnits(\n') < 0);
 	}
 
 	private inline function triviaWrite(src: String): String {

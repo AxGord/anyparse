@@ -58,6 +58,12 @@ class FragmentedDocCommentCheckTest extends Test {
 		Assert.equals(0, violations('class C {}').length);
 	}
 
+	/** Plain (non-doc) block comments — a license header above a doc, or two notes — are NOT a fragmented doc. */
+	public function testPlainBlocksNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\t/* license */\n\t/** real doc. */\n\tpublic var x:Int = 0;\n}').length);
+		Assert.equals(0, violations('class C {\n\t/* note a */\n\t/* note b */\n\tpublic var x:Int = 0;\n}').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new FragmentedDocComment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -81,12 +87,6 @@ class FragmentedDocCommentCheckTest extends Test {
 			i = s.indexOf(sub, i + sub.length);
 		}
 		return n;
-	}
-
-	/** Plain (non-doc) block comments — a license header above a doc, or two notes — are NOT a fragmented doc. */
-	public function testPlainBlocksNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\t/* license */\n\t/** real doc. */\n\tpublic var x:Int = 0;\n}').length);
-		Assert.equals(0, violations('class C {\n\t/* note a */\n\t/* note b */\n\tpublic var x:Int = 0;\n}').length);
 	}
 
 }

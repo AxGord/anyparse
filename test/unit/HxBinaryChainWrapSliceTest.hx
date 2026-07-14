@@ -271,12 +271,6 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		Assert.equals(w1, w2, 'idempotency failed for long-chain assignment: <$w1>');
 	}
 
-	private inline function writeWithLineWidth(src: String, width: Int): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.lineWidth = width;
-		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-	}
-
 	public function testPlainAddChainFillsNoHeadBreak(): Void {
 		// ω-opadd-plain-fillline regression: a plain assignment `+` chain
 		// under an `opAddSubChain.fillLine` cascade FILLS its head line to
@@ -351,6 +345,12 @@ class HxBinaryChainWrapSliceTest extends HxTestHelpers {
 		Assert.isTrue(out.indexOf('betaCondVal && (\n') != -1, 'expected chain head glued to `(` in: <$out>');
 		// NOT broken before the last operator (a broken shape ends a line with betaCondVal).
 		Assert.isTrue(out.indexOf('betaCondVal\n') == -1, 'chain head should not break before `&& (` in: <$out>');
+	}
+
+	private inline function writeWithLineWidth(src: String, width: Int): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.lineWidth = width;
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
 	}
 
 }

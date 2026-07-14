@@ -493,12 +493,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			fieldDeclKinds: ['VarMember', 'FinalMember'],
 			functionBodyKinds: ['BlockBody', 'ExprBody', 'NoBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
+			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],
 			overrideModifierKind: 'Override',
 			defaultVisibilityModifierText: 'private',
 			mutableFieldDeclKinds: ['VarMember'],
 			voidReturnKind: 'VoidReturnStmt',
 			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
 			objectFieldKind: 'Field',
+			sizeFieldNames: ['length'],
 			staticModifierKind: 'Static',
 			constructorName: 'new',
 			accessorMethodPrefixes: ['get_', 'set_'],
@@ -607,17 +609,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			+ ' (a statement fragment is retried with a trailing ";" automatically; a MODIFIER-bearing declaration'
 			+ ' cannot be a pattern — modifiers project as separate nodes; for those and for non-standalone fragments'
 			+ ' such as object fields use `apq patch` or `replace-node --select`)';
-	}
-
-	/**
-	 * Whether the extracted pattern root's span covers (nearly) the whole
-	 * variant text — the guard against a partial Decl extraction (slack of one
-	 * byte tolerates a span that excludes the trailing `;`).
-	 */
-	private static function consumesVariant(extracted: QueryNode, variant: String): Bool {
-		final span: Null<Span> = extracted.span;
-		if (span == null) return true;
-		return span.to - span.from >= StringTools.trim(variant).length - 1;
 	}
 
 	/** The Haxe naming-convention capability — projects declarations and resolves a file's policy. */
@@ -1100,6 +1091,16 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				}
 			case _:
 		}
+	}
+
+	/**
+	 * Whether the extracted pattern root's span covers (nearly) the whole
+	 * variant text — the guard against a partial Decl extraction (slack of one
+	 * byte tolerates a span that excludes the trailing `;`).
+	 */
+	private static function consumesVariant(extracted: QueryNode, variant: String): Bool {
+		final span: Null<Span> = extracted.span;
+		return span == null || span.to - span.from >= StringTools.trim(variant).length - 1;
 	}
 
 	private static function wrapAsStmt(src: String): String {

@@ -62,19 +62,6 @@ class TypeResolverSliceTest extends Test {
 		Assert.equals('Ctx', declTypes[bindingFrom], 'declaredTypes should map the binding span to Ctx');
 	}
 
-	private function wrap(param: String, body: String): String {
-		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
-	}
-
-	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
-		final check: UnusedLocal = new UnusedLocal();
-		final violations: Array<Violation> = check.run(files, plugin);
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		return check.fix(src, violations, plugin, index);
-	}
-
 	public function testClassGetterFieldKept(): Void {
 		final src: String = 'class T { public var f(get, never):Int; } class C { static function m(t:T):Int { final dead = t.f; return 1; } }';
 		Assert.equals(0, fixEdits(src).length, 'a getter property read may run code — kept');
@@ -129,6 +116,19 @@ class TypeResolverSliceTest extends Test {
 			nonNull('class C { static function m(x:Foo):Void { if (x != null) {} } }'),
 			'a nominal operand without null-safety is not provably non-null'
 		);
+	}
+
+	private function wrap(param: String, body: String): String {
+		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
+	}
+
+	private function fixEdits(src: String): Array<{ span: Span, text: String }> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final check: UnusedLocal = new UnusedLocal();
+		final violations: Array<Violation> = check.run(files, plugin);
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		return check.fix(src, violations, plugin, index);
 	}
 
 	private function nonNull(src: String): Bool {

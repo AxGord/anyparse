@@ -860,6 +860,118 @@ class WrapList {
 	}
 
 	/**
+	 * True iff `d`'s first visible Text leaf starts with a COLLECTION open
+	 * delimiter — `[` (array literal) or `{` (object / map literal). The
+	 * narrower sibling of `startsWithOpenDelim`: that matches `(` too (paren-
+	 * expr / call), this restricts to the two literal-collection brackets.
+	 * Used by the multi-arg-trailing-collection glue intercept in `shape()` to
+	 * recognise a trailing array / object-literal arg (whose internal break the
+	 * call head can absorb at the open paren) while excluding a trailing paren-
+	 * expr or call arg. Same left-spine descent through transparent render
+	 * wrappers + the flat side of every render-decision. O(left-spine), no
+	 * re-measure.
+	 */
+	public static function startsWithCollectionDelim(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code);
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
+				_, _, flat
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				node = flat;
+			case Concat(items):
+				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
+				if (first == null) return false;
+				node = first;
+		}
+	}
+
+	/**
+	 * ω-cond-end-call-glue: true when `d`'s trailing visible text ends with
+	 * the conditional-compilation close marker `#end` — a call whose CALLEE
+	 * is a conditional group (`#if a X #elseif b Y #end (args)`) must keep a
+	 * space before its open paren instead of the tight `callee(` glue, both
+	 * for readability and byte-parity with sources that write `#end (`.
+	 * Same trailing-edge walk as `endsWithCloseDelim` (flat side of the
+	 * `If*` conditionals, transparent wrappers descended).
+	 */
+	public static function endsWithCondEnd(d: Doc): Bool {
+		var node: Doc = d;
+		while (true) switch node {
+			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
+				| OptHardlineSkipBeforeHardline:
+				return false;
+			case Text(s):
+				return StringTools.endsWith(s, '#end');
+			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
+				inner
+			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
+				inner
+			) | ConditionalMarkerDecrease(inner):
+				node = inner;
+			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
+				_, _, flat
+			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
+				_, _, _, _, flat
+			):
+				node = flat;
+			case Concat(items):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				final last: Null<Doc> = findLastNonTrailingTransparent(items);
+				if (last == null) return false;
+				node = last;
+		}
+	}
+
+	/**
+	 * The trimmed last-visible-Text of `d`, or `null`. Right-spine mirror of
+	 * `firstVisibleText` — used to confirm a comprehension body is a `{ … }`
+	 * BLOCK (last token `}`), distinguishing it from an expression body that
+	 * merely wrapped (whose last token is the expression's own close).
+	 */
+	public static function lastVisibleText(d: Doc): Null<String> {
+		return switch d {
+			case Text(s):
+				final t: String = StringTools.trim(s);
+				t == '' ? null : t;
+			case Concat(arr):
+				var r: Null<String> = null;
+				var i: Int = arr.length;
+				while (--i >= 0 && r == null) r = lastVisibleText(arr[i]);
+				r;
+			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
+				i
+			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
+				lastVisibleText(i);
+			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
+				_, brk, _
+			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+				lastVisibleText(brk);
+			case _:
+				null;
+		};
+	}
+
+	/**
 	 * Normal-path 0-extra-threshold tree: the cascade collapses to the
 	 * legacy 2-state shape. When flat (`exceeds=false`) and break
 	 * (`exceeds=true`) resolve to the SAME mode, `emitZeroThresholdAgree`
@@ -1305,49 +1417,6 @@ class WrapList {
 	}
 
 	/**
-	 * True iff `d`'s first visible Text leaf starts with a COLLECTION open
-	 * delimiter — `[` (array literal) or `{` (object / map literal). The
-	 * narrower sibling of `startsWithOpenDelim`: that matches `(` too (paren-
-	 * expr / call), this restricts to the two literal-collection brackets.
-	 * Used by the multi-arg-trailing-collection glue intercept in `shape()` to
-	 * recognise a trailing array / object-literal arg (whose internal break the
-	 * call head can absorb at the open paren) while excluding a trailing paren-
-	 * expr or call arg. Same left-spine descent through transparent render
-	 * wrappers + the flat side of every render-decision. O(left-spine), no
-	 * re-measure.
-	 */
-	public static function startsWithCollectionDelim(d: Doc): Bool {
-		var node: Doc = d;
-		while (true) switch node {
-			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-				| OptHardlineSkipBeforeHardline:
-				return false;
-			case Text(s):
-				return s.length > 0 && (StringTools.fastCodeAt(s, 0) == '['.code || StringTools.fastCodeAt(s, 0) == '{'.code);
-			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-				inner
-			) | ConditionalMarkerDecrease(inner):
-				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
-				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
-				_, _, _, _, flat
-			):
-				node = flat;
-			case Concat(items):
-				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
-				if (first == null) return false;
-				node = first;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
-				final first: Null<Doc> = items.find(it -> !isLeadingTransparent(it));
-				if (first == null) return false;
-				node = first;
-		}
-	}
-
-	/**
 	 * Returns the index of the SOLE multi-line arg in `items` when that arg's
 	 * multi-line-ness is owned by a breaking array literal — either the arg IS the
 	 * array (`startsWithCollectionDelim`) OR the array is nested and is the arg's
@@ -1602,9 +1671,9 @@ class WrapList {
 			// the object fits there (fork keeps the object flat); if it exceeds its
 			// own line it stays brace-hugged and its fields wrap (fork `({`-glued +
 			// explode). Arrays / nested calls keep the open-delim-glue path below.
-			if (firstVisibleTextStartsWith(items[0], '{'.code))
-				return IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken);
-			return IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
+			return firstVisibleTextStartsWith(items[0], '{'.code)
+				? IfArrowContinuationFits(cols, DocMeasure.flatTokenWidth(items[0]), lineWidth, glued, broken)
+				: IfNaturalFirstLineFitsOpenDelim(lineWidth, broken, glued);
 		}
 		return null;
 	}
@@ -2669,46 +2738,6 @@ class WrapList {
 	}
 
 	/**
-	 * ω-cond-end-call-glue: true when `d`'s trailing visible text ends with
-	 * the conditional-compilation close marker `#end` — a call whose CALLEE
-	 * is a conditional group (`#if a X #elseif b Y #end (args)`) must keep a
-	 * space before its open paren instead of the tight `callee(` glue, both
-	 * for readability and byte-parity with sources that write `#end (`.
-	 * Same trailing-edge walk as `endsWithCloseDelim` (flat side of the
-	 * `If*` conditionals, transparent wrappers descended).
-	 */
-	public static function endsWithCondEnd(d: Doc): Bool {
-		var node: Doc = d;
-		while (true) switch node {
-			case Empty | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline | OptHardline | OptHardlineSkipAtOpenDelim
-				| OptHardlineSkipBeforeHardline:
-				return false;
-			case Text(s):
-				return StringTools.endsWith(s, '#end');
-			case Nest(_, inner) | Group(inner) | BodyGroup(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(
-				inner
-			) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(
-				inner
-			) | ConditionalMarkerDecrease(inner):
-				node = inner;
-			case IfBreak(_, flat) | IfWidthExceeds(_, _, flat) | IfFirstLineExceeds(_, _, flat) | IfLineExceeds(_, _, flat) | IfResidualLineExceeds(
-				_, _, flat
-			) | IfFullLineExceeds(_, _, flat) | IfNaturalFirstLineExceeds(_, _, flat) | IfNaturalFirstLineFitsOpenDelim(_, _, flat) | IfArrowContinuationFits(
-				_, _, _, _, flat
-			):
-				node = flat;
-			case Concat(items):
-				final last: Null<Doc> = findLastNonTrailingTransparent(items);
-				if (last == null) return false;
-				node = last;
-			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
-				final last: Null<Doc> = findLastNonTrailingTransparent(items);
-				if (last == null) return false;
-				node = last;
-		}
-	}
-
-	/**
 	 * ω-callparam-function-block-lambda: true iff `item` is a `function`-
 	 * keyword anonymous-function expression argument with a BLOCK body — the
 	 * `function(){}` sibling of the arrow-body block lambda (`arrowBodyIsBlock`).
@@ -2885,38 +2914,9 @@ class WrapList {
 			case _:
 				true;
 		};
-		if (padded && items.length == 1 && isBlockBodyComprehensionItem(items[0]))
-			return Concat([Text(open), openInside, items[0], closeInside, Text(close)]);
-		return null;
-	}
-
-	/**
-	 * The trimmed last-visible-Text of `d`, or `null`. Right-spine mirror of
-	 * `firstVisibleText` — used to confirm a comprehension body is a `{ … }`
-	 * BLOCK (last token `}`), distinguishing it from an expression body that
-	 * merely wrapped (whose last token is the expression's own close).
-	 */
-	public static function lastVisibleText(d: Doc): Null<String> {
-		return switch d {
-			case Text(s):
-				final t: String = StringTools.trim(s);
-				t == '' ? null : t;
-			case Concat(arr):
-				var r: Null<String> = null;
-				var i: Int = arr.length;
-				while (--i >= 0 && r == null) r = lastVisibleText(arr[i]);
-				r;
-			case Group(i) | BodyGroup(i) | GroupWithRestProbe(i) | Nest(_, i) | Flatten(i) | HardFlatten(i) | CollapseProbe(i) | CollapseAddProbe(
-				i
-			) | WrapBoundary(i) | ConditionalMarkerZero(i) | ConditionalMarkerDecrease(i):
-				lastVisibleText(i);
-			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
-				_, brk, _
-			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
-				lastVisibleText(brk);
-			case _:
-				null;
-		};
+		return padded && items.length == 1 && isBlockBodyComprehensionItem(items[0])
+			? Concat([Text(open), openInside, items[0], closeInside, Text(close)])
+			: null;
 	}
 
 	/**
@@ -2984,8 +2984,7 @@ class WrapList {
 	private static function isArrowPlainIfBody(item: Doc): Bool {
 		if (!isArrowBodyMarker(item) || arrowBodyIsBlock(item)) return false;
 		final body: Null<Doc> = arrowBodyDoc(item);
-		if (body == null) return false;
-		return firstVisibleText(body) == 'if' && !hasTopLevelElse(body, 0);
+		return body != null && firstVisibleText(body) == 'if' && !hasTopLevelElse(body, 0);
 	}
 
 

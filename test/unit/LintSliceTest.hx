@@ -8,7 +8,6 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.query.format.Text;
 import anyparse.runtime.Span;
 import anyparse.runtime.Span.Position;
@@ -191,10 +190,6 @@ class LintSliceTest extends Test {
 			case Err(message):
 				Assert.fail('fix canonicalize Err: $message');
 		}
-	}
-
-	private static function plugin(): HaxeQueryPlugin {
-		return new HaxeQueryPlugin();
 	}
 
 	/**
@@ -505,6 +500,10 @@ class LintSliceTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(1, edits.length);
 		Assert.equals('', edits[0].text);
+	}
+
+	private static function plugin(): HaxeQueryPlugin {
+		return new HaxeQueryPlugin();
 	}
 
 }

@@ -132,10 +132,6 @@ class MagicNumberCheckTest extends Test {
 		Assert.isTrue(ids.contains('magic-number'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testNumberListOptionEdgeCases(): Void {
 		// Non-numeric elements dropped, non-array -> null, empty array -> empty list (not null).
 		Assert.same(
@@ -187,6 +183,28 @@ class MagicNumberCheckTest extends Test {
 		// declarative data, not logic — exempt. A computed field value still flags.
 		Assert.equals(0, violations('class C {\n\tfunction f() { return { value: 30, nested: { w: 140 } }; }\n}').length);
 		Assert.equals(1, violations('class C {\n\tfunction f(k:Int) { return { value: 30 * k }; }\n}').length);
+	}
+
+	public function testArrayIndexLiteralExempt(): Void {
+		// A literal in the index slot of a subscript (`args[3]`) is a position, not a
+		// hidden quantity — exempt. A computed index keeps the literal under the
+		// operator and still flags.
+		Assert.equals(0, violations('class C {\n\tfunction f(args:Array<String>):String { return args[3]; }\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(args:Array<String>, i:Int):String { return args[i + 3]; }\n}').length);
+	}
+
+
+	public function testSizeComparisonExempt(): Void {
+		// A literal compared against a `.length` field access is a structural arity
+		// check — exempt. A comparison against a plain value keeps the literal magic.
+		Assert.equals(0, violations('class C {\n\tfunction f(args:Array<String>):Bool { return args.length == 6; }\n}').length);
+		// A relational size bound is exempt too (structural element count, not a threshold-on-a-plain-value).
+		Assert.equals(0, violations('class C {\n\tfunction f(args:Array<String>):Bool { return args.length >= 6; }\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(score:Int):Bool { return score == 100; }\n}').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

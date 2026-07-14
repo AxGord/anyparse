@@ -163,12 +163,12 @@ class StarBlockEndedTest extends Test {
 		// `{a b}`: atom `a` doesn't end with `}`, block-ended
 		// exemption doesn't apply, and there's no `;` either —
 		// parser must reject.
-		Assert.raises(() -> MiniBlockParser.parse('{a b}'), Exception);
+		Assert.raises(MiniBlockParser.parse.bind('{a b}'), Exception);
 	}
 
 	public function testParseAtomTrailingNoSepThrows(): Void {
 		// `{a b c}`: same reason as above, with multiple atoms.
-		Assert.raises(() -> MiniBlockParser.parse('{a b c}'), Exception);
+		Assert.raises(MiniBlockParser.parse.bind('{a b c}'), Exception);
 	}
 
 	// ---- Writer: shape assertions ----

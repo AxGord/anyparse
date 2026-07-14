@@ -39,9 +39,9 @@ final class Parser {
 	 *
 	 * `-1` means no terminal was ever attempted (degenerate input).
 	 */
-	public var maxFailPos: Int = -1;
+	public var maxFailPos(default, null): Int = -1;
 
-	public var maxFailExpected: Null<String> = null;
+	public var maxFailExpected(default, null): Null<String> = null;
 
 	/**
 	 * Trivia carry-over slot (slice ω₆b). Generated Trivia-mode parsers

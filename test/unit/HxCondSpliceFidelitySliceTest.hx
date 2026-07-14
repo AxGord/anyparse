@@ -39,13 +39,6 @@ final class HxCondSpliceFidelitySliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
 	/**
 	 * A `#if … #end` token-splice wrapping switch `case` labels (with a
 	 * shared body after `#end`) parses as a `CondSpliceStmt` inside the
@@ -59,6 +52,7 @@ final class HxCondSpliceFidelitySliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+
 	/**
 	 * A dangling-else token-splice (fragment is a statement head, not
 	 * `case` clauses) keeps its `#if` at the enclosing statement indent —
@@ -67,6 +61,12 @@ final class HxCondSpliceFidelitySliceTest extends Test {
 	public function testDanglingElseSpliceIfMarkerStaysAtStatementLevel(): Void {
 		final src: String = 'class C {\n\tfunction f(file) {\n\t\t#if share\n\t\tif (file != null) upload(file); else\n\t\t#end\n\t\tsendForm();\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
+	}
+
+	private inline function triviaWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 }

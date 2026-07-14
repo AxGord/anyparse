@@ -1,10 +1,8 @@
 package unit;
 
 import utest.Assert;
-import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxFnDecl;
-import anyparse.grammar.haxe.HxStatement;
 
 /**
  * Spread / rest operator `...` parse + write tests.

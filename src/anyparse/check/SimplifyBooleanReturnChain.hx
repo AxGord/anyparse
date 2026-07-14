@@ -187,9 +187,9 @@ final class SimplifyBooleanReturnChain implements Check {
 	 * other statement carries an evaluation that flattening the chain would drop.
 	 */
 	private static function boolReturnOf(node: QueryNode, c: Ctx): Null<QueryNode> {
-		if (isBoolReturn(node, c)) return node;
-		if (c.blockKinds.contains(node.kind) && node.children.length == 1 && isBoolReturn(node.children[0], c)) return node.children[0];
-		return null;
+		return isBoolReturn(node, c)
+			? node
+			: c.blockKinds.contains(node.kind) && node.children.length == 1 && isBoolReturn(node.children[0], c) ? node.children[0] : null;
 	}
 
 }

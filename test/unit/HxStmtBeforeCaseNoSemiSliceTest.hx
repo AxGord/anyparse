@@ -3,7 +3,6 @@ package unit;
 import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxStatement;
 
 /**
@@ -47,9 +46,7 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 
 	public function testTryExprCatchBeforeCase(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class C {\n' + '\tfunction f() {\n' + '\t\tswitch x {\n' + '\t\t\tcase "--limit":\n'
-			+ '\t\t\t\ttry limit = parseLimit(args, ++i) catch (e:Exception) {\n' + '\t\t\t\t\tstderr("msg");\n' + '\t\t\t\t\treturn 1;\n'
-			+ '\t\t\t\t}\n' + '\t\t\tcase "-h":\n' + '\t\t\t\treturn 0;\n' + '\t\t}\n' + '\t}\n' + '}'
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "--limit":\n\t\t\t\ttry limit = parseLimit(args, ++i) catch (e:Exception) {\n\t\t\t\t\tstderr("msg");\n\t\t\t\t\treturn 1;\n\t\t\t\t}\n\t\t\tcase "-h":\n\t\t\t\treturn 0;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -58,8 +55,7 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 
 	public function testBareCallBeforeCase(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class C {\n' + '\tfunction f() {\n' + '\t\tswitch x {\n' + '\t\t\tcase "a":\n' + '\t\t\t\tfoo()\n' + '\t\t\tcase "b":\n'
-			+ '\t\t\t\treturn 2;\n' + '\t\t}\n' + '\t}\n' + '}'
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\tfoo()\n\t\t\tcase "b":\n\t\t\t\treturn 2;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -68,8 +64,7 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 
 	public function testBareIdentBeforeCase(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class C {\n' + '\tfunction f() {\n' + '\t\tswitch x {\n' + '\t\t\tcase "a":\n' + '\t\t\t\tident\n' + '\t\t\tcase "b":\n'
-			+ '\t\t\t\treturn 2;\n' + '\t\t}\n' + '\t}\n' + '}'
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\tident\n\t\t\tcase "b":\n\t\t\t\treturn 2;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -78,8 +73,7 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 
 	public function testBinopBeforeCase(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class C {\n' + '\tfunction f() {\n' + '\t\tswitch x {\n' + '\t\t\tcase "a":\n' + '\t\t\t\ta + b\n' + '\t\t\tcase "b":\n'
-			+ '\t\t\t\treturn 2;\n' + '\t\t}\n' + '\t}\n' + '}'
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\ta + b\n\t\t\tcase "b":\n\t\t\t\treturn 2;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -88,8 +82,7 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 
 	public function testBareCallBeforeDefault(): Void {
 		final cls: HxClassDecl = HaxeParser.parse(
-			'class C {\n' + '\tfunction f() {\n' + '\t\tswitch x {\n' + '\t\t\tcase "a":\n' + '\t\t\t\tfoo()\n' + '\t\t\tdefault:\n'
-			+ '\t\t\t\treturn 0;\n' + '\t\t}\n' + '\t}\n' + '}'
+			'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\tfoo()\n\t\t\tdefault:\n\t\t\t\treturn 0;\n\t\t}\n\t}\n}'
 		);
 		Assert.equals(1, cls.members.length);
 	}
@@ -99,9 +92,7 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 	// trigger the peek and must still throw on the missing `;`.
 
 	public function testBareCallFollowedByCasePrefixIdentRegression(): Void {
-		Assert.raises(
-			() -> HaxeParser.parse('class C {\n' + '\tfunction f() {\n' + '\t\tfoo()\n' + '\t\tcaseInsensitive\n' + '\t}\n' + '}')
-		);
+		Assert.raises(HaxeParser.parse.bind('class C {\n\tfunction f() {\n\t\tfoo()\n\t\tcaseInsensitive\n\t}\n}'));
 	}
 
 	// -- Regression: at fn-body level (no enclosing switch), peek-`case`
@@ -111,10 +102,9 @@ class HxStmtBeforeCaseNoSemiSliceTest extends HxTestHelpers {
 	// related boundary: two `;`-less calls in sequence still throw.
 
 	public function testBareCallFollowedByBareCallRegression(): Void {
-		Assert.raises(() ->
-			HaxeParser.parse(
-				'class C {\n' + '\tfunction f() {\n' + '\t\tswitch x {\n' + '\t\t\tcase "a":\n' + '\t\t\t\tfoo()\n' + '\t\t\t\tbar()\n'
-				+ '\t\t\tcase "b":\n' + '\t\t\t\treturn 2;\n' + '\t\t}\n' + '\t}\n' + '}'
+		Assert.raises(
+			HaxeParser.parse.bind(
+				'class C {\n\tfunction f() {\n\t\tswitch x {\n\t\t\tcase "a":\n\t\t\t\tfoo()\n\t\t\t\tbar()\n\t\t\tcase "b":\n\t\t\t\treturn 2;\n\t\t}\n\t}\n}'
 			)
 		);
 	}

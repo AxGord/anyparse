@@ -4,7 +4,6 @@ import utest.Assert;
 import anyparse.grammar.haxe.HaxeParser;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxClassDecl;
-import anyparse.grammar.haxe.HxExpr;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxVarDecl;
 import anyparse.runtime.ParseError;
@@ -279,7 +278,7 @@ class HxPrattSliceTest extends HxTestHelpers {
 		// `1 +` — the `+` literal matches, skipWs runs, and then the
 		// right-hand parseHxExpr tries every atom branch and fails
 		// on the `;` terminator.
-		Assert.raises(() -> HaxeParser.parse('class Foo { var x:Int = 1 +; }'), ParseError);
+		Assert.raises(HaxeParser.parse.bind('class Foo { var x:Int = 1 +; }'), ParseError);
 	}
 
 	public function testAddIdentAndInt(): Void {

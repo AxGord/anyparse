@@ -209,7 +209,7 @@ class HxFormatterCorpusTest extends Test {
 				skipParse++;
 				final reason: String = classifyParseFailure(exception, tc.input);
 				final prev: Null<Int> = parseReasons[reason];
-				parseReasons[reason] = (prev == null ? 0 : prev) + 1;
+				parseReasons[reason] = (prev ?? 0) + 1;
 				sweepFixtures.push({ path: relPath, status: 'SKIP_PARSE' });
 				continue;
 			};
@@ -339,8 +339,6 @@ class HxFormatterCorpusTest extends Test {
 	 * level Pratt fan always reports `expected HxDecl`), so we pair it
 	 * with a short snippet of the input at the failure offset. Cases
 	 * that choke on the same feature cluster under the same key.
-	 */
-	/**
 	 * Writer Slice 3 — detect meta-config flags `disableFormatting:true`
 	 * and `excludes:[…]` directly from the raw JSON. Neither maps to a
 	 * runtime `HxModuleWriteOptions` field; both gate the formatter
@@ -370,8 +368,7 @@ class HxFormatterCorpusTest extends Test {
 		if (!(exception is ParseError)) return message;
 		final parseErr: ParseError = cast exception;
 		final pos: Int = parseErr.span.from;
-		if (pos < 0 || pos >= input.length) return '$message  @<eof>';
-		return '$message  @"${escape(slice(input, pos, SNIPPET_LEN))}"';
+		return pos < 0 || pos >= input.length ? '$message  @<eof>' : '$message  @"${escape(slice(input, pos, SNIPPET_LEN))}"';
 	}
 
 	private static function truncate(s: Null<String>): String {

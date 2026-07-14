@@ -89,6 +89,11 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.isTrue(ids.contains('fold-adjacent-string-literals'));
 	}
 
+	public function testDollarEscapedSingleQuotedFolds(): Void {
+		// '$$' is an escaped literal $ (a `Dollar` fragment, not interpolation) — plain, so it folds.
+		Assert.equals("'a$$bc'", foldOf("class C { function f() { final a = 'a$$b' + 'c'; } }"));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -100,11 +105,6 @@ class FoldStringLiteralsCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length > 0 ? edits[0].text : '';
-	}
-
-	public function testDollarEscapedSingleQuotedFolds(): Void {
-		// '$$' is an escaped literal $ (a `Dollar` fragment, not interpolation) — plain, so it folds.
-		Assert.equals("'a$$bc'", foldOf("class C { function f() { final a = 'a$$b' + 'c'; } }"));
 	}
 
 }

@@ -94,6 +94,13 @@ class RemoveElementSliceTest extends Test {
 		assertRefused(source, 3, 1, true);
 	}
 
+	/** remove-element tolerates a cursor INSIDE an element's identifier, not only on its first character (was an exact-position trap). */
+	public function testRemoveTolerantWithinIdent(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [abc, def];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [def];\n\t}\n}\n';
+		assertRemove(source, 3, 13, true, expected);
+	}
+
 	private function assertRemove(source: String, line: Int, col: Int, reformat: Bool, expected: String): Void {
 		final result: EditResult = removeOf(source, line, col, reformat);
 		switch result {
@@ -127,13 +134,6 @@ class RemoveElementSliceTest extends Test {
 	private static function removeOf(source: String, line: Int, col: Int, reformat: Bool): EditResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return RemoveElement.removeElement(source, line, col, reformat, plugin);
-	}
-
-	/** remove-element tolerates a cursor INSIDE an element's identifier, not only on its first character (was an exact-position trap). */
-	public function testRemoveTolerantWithinIdent(): Void {
-		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [abc, def];\n\t}\n}\n';
-		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [def];\n\t}\n}\n';
-		assertRemove(source, 3, 13, true, expected);
 	}
 
 }

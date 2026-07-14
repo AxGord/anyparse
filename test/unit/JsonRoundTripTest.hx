@@ -24,19 +24,6 @@ class JsonRoundTripTest extends Test {
 		super();
 	}
 
-	private function roundTrip(ast: JValue, ?label: String): Void {
-		final written: String = JValueWriter.write(ast);
-		final tag: String = label ?? 'case';
-		var reparsed: JValue;
-		try {
-			reparsed = JValueParser.parse(written);
-		} catch (exception: Exception) {
-			Assert.fail('parse failed for $tag: written=<$written>, err=${exception.message}');
-			return;
-		}
-		Assert.isTrue(JValueTools.equals(ast, reparsed), 'round-trip failed for $tag: written=<$written>, reparsed=$reparsed');
-	}
-
 	public function testCuratedCases(): Void {
 		final cases: Array<JValue> = [
 			JNull,
@@ -95,6 +82,19 @@ class JsonRoundTripTest extends Test {
 			final ast: JValue = randomValue(rng, 4);
 			roundTrip(ast, 'random[$i]');
 		}
+	}
+
+	private function roundTrip(ast: JValue, ?label: String): Void {
+		final written: String = JValueWriter.write(ast);
+		final tag: String = label ?? 'case';
+		var reparsed: JValue;
+		try {
+			reparsed = JValueParser.parse(written);
+		} catch (exception: Exception) {
+			Assert.fail('parse failed for $tag: written=<$written>, err=${exception.message}');
+			return;
+		}
+		Assert.isTrue(JValueTools.equals(ast, reparsed), 'round-trip failed for $tag: written=<$written>, reparsed=$reparsed');
 	}
 
 	private static function randomValue(rng: SeededRng, depth: Int): JValue {

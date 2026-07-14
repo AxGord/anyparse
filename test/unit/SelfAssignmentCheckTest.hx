@@ -72,21 +72,6 @@ class SelfAssignmentCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new SelfAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function applyFix(src: String): String {
-		final check: SelfAssignment = new SelfAssignment();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
 	public function testInlineIfSelfAssignReportedNotAutofixed(): Void {
 		// Flagged (a local no-op), but `fix` leaves it: deleting a single-statement
 		// `if` body would leave a dangling `if`. Reported, not autofixed.
@@ -100,6 +85,21 @@ class SelfAssignmentCheckTest extends Test {
 		// property field (forcing `set_x`), not the later local — must NOT be flagged.
 		final src: String = 'class C {\n\tpublic var x(default, set):Int;\n\tfunction set_x(v:Int):Int return v;\n\tfunction f():Void {\n\t\tx = x;\n\t\tvar x = 1;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new SelfAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function applyFix(src: String): String {
+		final check: SelfAssignment = new SelfAssignment();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }

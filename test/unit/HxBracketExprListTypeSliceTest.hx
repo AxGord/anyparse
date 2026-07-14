@@ -22,14 +22,6 @@ import anyparse.grammar.haxe.HxTypedefDecl;
  */
 class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 
-	private function expectBracketExprList(t: Null<HxType>): Array<HxExpr> {
-		return switch t {
-			case null: throw 'expected HxType.BracketExprListType, got null';
-			case BracketExprListType(elems): elems;
-			case _: throw 'expected HxType.BracketExprListType, got non-BracketExprListType variant';
-		};
-	}
-
 	public function testBracketTypeParamSingle(): Void {
 		final module: HxModule = HaxeModuleParser.parse('private typedef Init = haxe.macro.MacroType<[cdb.Module.build("data.cdb")]>;');
 		Assert.equals(1, module.decls.length);
@@ -75,6 +67,14 @@ class HxBracketExprListTypeSliceTest extends HxTestHelpers {
 	public function testRoundTripIssue622(): Void {
 		// Exact issue_622_bracket fixture body — full corpus driver.
 		roundTrip('private typedef Init = haxe.macro.MacroType<[cdb.Module.build("data.cdb")]>;', 'issue_622-bracket-typeparam');
+	}
+
+	private function expectBracketExprList(t: Null<HxType>): Array<HxExpr> {
+		return switch t {
+			case null: throw 'expected HxType.BracketExprListType, got null';
+			case BracketExprListType(elems): elems;
+			case _: throw 'expected HxType.BracketExprListType, got non-BracketExprListType variant';
+		};
 	}
 
 }

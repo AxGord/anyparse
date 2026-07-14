@@ -70,10 +70,10 @@ class ApqSelectorTest extends Test {
 	}
 
 	public function testEmptySegmentRejected(): Void {
-		Assert.raises(() -> Selector.parse('A >'));
-		Assert.raises(() -> Selector.parse('> A'));
-		Assert.raises(() -> Selector.parse(':bar'));
-		Assert.raises(() -> Selector.parse('A:'));
+		Assert.raises(Selector.parse.bind('A >'));
+		Assert.raises(Selector.parse.bind('> A'));
+		Assert.raises(Selector.parse.bind(':bar'));
+		Assert.raises(Selector.parse.bind('A:'));
 	}
 
 	public function testMatchTopLevelByKind(): Void {
@@ -166,7 +166,7 @@ class ApqSelectorTest extends Test {
 		final tree: QueryNode = mkFinalTree();
 		final equiv: KindEquivalence = new KindEquivalence([['ClassDecl', 'ClassForm'], ['FnMember', 'FinalModifiedMember']]);
 		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('ClassDecl > FnMember'), equiv);
-		final names: Array<String> = [for (m in r) m.name == null ? '?' : m.name];
+		final names: Array<String> = [for (m in r) m.name ?? '?'];
 		Assert.equals(2, r.length);
 		Assert.isTrue(names.contains('compute'), 'final method under final class reachable via chain');
 		Assert.isTrue(names.contains('plain'), 'plain method also reachable');
@@ -181,34 +181,13 @@ class ApqSelectorTest extends Test {
 		final equiv: KindEquivalence = plugin.selectKindEquivalence();
 
 		final classes: Array<QueryNode> = Engine.select(tree, Selector.parse('ClassDecl'), equiv);
-		final classNames: Array<String> = [for (c in classes) c.name == null ? '?' : c.name];
+		final classNames: Array<String> = [for (c in classes) c.name ?? '?'];
 		Assert.isTrue(classNames.contains('Widget'), 'final class Widget must match --select ClassDecl');
 		Assert.isTrue(classNames.contains('Plain'), 'plain class Plain must still match');
 
 		final fns: Array<QueryNode> = Engine.select(tree, Selector.parse('FnMember'), equiv);
 		Assert.equals(1, fns.length);
 		Assert.equals('compute', fns[0].name);
-	}
-
-	private function mkFinalTree(): QueryNode {
-		// module > [ FinalDecl > ClassForm(Widget) > [FinalModifiedMember(compute), FnMember(plain)],
-		//           ClassDecl(Plain) ]
-		final finalMethod: QueryNode = new QueryNode('FinalModifiedMember', 'compute', []);
-		final plainMethod: QueryNode = new QueryNode('FnMember', 'plain', []);
-		final classForm: QueryNode = new QueryNode('ClassForm', 'Widget', [finalMethod, plainMethod]);
-		final finalDecl: QueryNode = new QueryNode('FinalDecl', null, [classForm]);
-		final plain: QueryNode = new QueryNode('ClassDecl', 'Plain', []);
-		return new QueryNode('module', null, [finalDecl, plain]);
-	}
-
-	private function mkTree(): QueryNode {
-		// module > ClassDecl(Foo) > [VarMember(x), FnMember(bar) > ReturnExpr > IntLit]
-		final intLit: QueryNode = new QueryNode('IntLit', null, []);
-		final ret: QueryNode = new QueryNode('ReturnExpr', null, [intLit]);
-		final fn: QueryNode = new QueryNode('FnMember', 'bar', [ret]);
-		final varM: QueryNode = new QueryNode('VarMember', 'x', []);
-		final cls: QueryNode = new QueryNode('ClassDecl', 'Foo', [varM, fn]);
-		return new QueryNode('module', null, [cls]);
 	}
 
 	public function testAtReturnsInnermostContainingNode(): Void {
@@ -241,14 +220,6 @@ class ApqSelectorTest extends Test {
 		// spanless module root never wins.
 		Assert.isNull(Engine.at(tree, 50));
 		Assert.isNull(Engine.at(tree, 60));
-	}
-
-	private function mkSpannedTree(): QueryNode {
-		// module(no span) > ClassDecl[0,50) > FnMember[10,40) > IdentExpr[20,25)
-		final id: QueryNode = new QueryNode('IdentExpr', 'v', [], new Span(20, 25));
-		final fn: QueryNode = new QueryNode('FnMember', 'bar', [id], new Span(10, 40));
-		final cls: QueryNode = new QueryNode('ClassDecl', 'Foo', [fn], new Span(0, 50));
-		return new QueryNode('module', null, [cls]);
 	}
 
 	public function testDescendantParse(): Void {
@@ -307,6 +278,35 @@ class ApqSelectorTest extends Test {
 		final r: Array<QueryNode> = Engine.select(tree, Selector.parse('A:outer >> A'));
 		Assert.equals(1, r.length);
 		Assert.equals('inner', r[0].name);
+	}
+
+	private function mkFinalTree(): QueryNode {
+		// module > [ FinalDecl > ClassForm(Widget) > [FinalModifiedMember(compute), FnMember(plain)],
+		//           ClassDecl(Plain) ]
+		final finalMethod: QueryNode = new QueryNode('FinalModifiedMember', 'compute', []);
+		final plainMethod: QueryNode = new QueryNode('FnMember', 'plain', []);
+		final classForm: QueryNode = new QueryNode('ClassForm', 'Widget', [finalMethod, plainMethod]);
+		final finalDecl: QueryNode = new QueryNode('FinalDecl', null, [classForm]);
+		final plain: QueryNode = new QueryNode('ClassDecl', 'Plain', []);
+		return new QueryNode('module', null, [finalDecl, plain]);
+	}
+
+	private function mkTree(): QueryNode {
+		// module > ClassDecl(Foo) > [VarMember(x), FnMember(bar) > ReturnExpr > IntLit]
+		final intLit: QueryNode = new QueryNode('IntLit', null, []);
+		final ret: QueryNode = new QueryNode('ReturnExpr', null, [intLit]);
+		final fn: QueryNode = new QueryNode('FnMember', 'bar', [ret]);
+		final varM: QueryNode = new QueryNode('VarMember', 'x', []);
+		final cls: QueryNode = new QueryNode('ClassDecl', 'Foo', [varM, fn]);
+		return new QueryNode('module', null, [cls]);
+	}
+
+	private function mkSpannedTree(): QueryNode {
+		// module(no span) > ClassDecl[0,50) > FnMember[10,40) > IdentExpr[20,25)
+		final id: QueryNode = new QueryNode('IdentExpr', 'v', [], new Span(20, 25));
+		final fn: QueryNode = new QueryNode('FnMember', 'bar', [id], new Span(10, 40));
+		final cls: QueryNode = new QueryNode('ClassDecl', 'Foo', [fn], new Span(0, 50));
+		return new QueryNode('module', null, [cls]);
 	}
 
 }

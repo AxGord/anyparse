@@ -25,20 +25,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxTypeAnonSliceTest extends HxTestHelpers {
 
-	private function expectRequired(field: HxAnonField): HxAnonFieldBody {
-		return switch field {
-			case Required(body): body;
-			case _: throw 'expected HxAnonField.Required, got $field';
-		};
-	}
-
-	private function expectOptional(field: HxAnonField): HxAnonFieldBody {
-		return switch field {
-			case Optional(body): body;
-			case _: throw 'expected HxAnonField.Optional, got $field';
-		};
-	}
-
 	public function testSingleField(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var s:{x:Int}; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
@@ -220,6 +206,20 @@ class HxTypeAnonSliceTest extends HxTestHelpers {
 	public function testIssue140RoundTrip(): Void {
 		final src = 'class Main {\n\tpublic static function main() {\n\t\tvar content:{?name:String} = Json.parse(File.getContent(haxelibFile));\n\t}\n}';
 		roundTrip(src, 'issue_140');
+	}
+
+	private function expectRequired(field: HxAnonField): HxAnonFieldBody {
+		return switch field {
+			case Required(body): body;
+			case _: throw 'expected HxAnonField.Required, got $field';
+		};
+	}
+
+	private function expectOptional(field: HxAnonField): HxAnonFieldBody {
+		return switch field {
+			case Optional(body): body;
+			case _: throw 'expected HxAnonField.Optional, got $field';
+		};
 	}
 
 }

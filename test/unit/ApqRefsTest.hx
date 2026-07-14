@@ -134,7 +134,7 @@ class ApqRefsTest extends Test {
 	}
 
 	public function testSiblingFunctionsDoNotCrossResolve(): Void {
-		final source: String = 'class X { static function a():Int { var n:Int = 0; return n; } ' + 'static function b():Int { return n; } }';
+		final source: String = 'class X { static function a():Int { var n:Int = 0; return n; } static function b():Int { return n; } }';
 		final hits: Array<RefHit> = findIn(source, 'n');
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
 		Assert.equals(2, reads.length, 'two reads expected — got ${describe(hits)}');
@@ -151,7 +151,7 @@ class ApqRefsTest extends Test {
 		// decl (self-scoped). The iterator binds INSIDE the loop only, so a
 		// `return i` AFTER the loop still resolves to the outer `var i` —
 		// two decls total (outer var + ForStmt), one read at the return.
-		final source: String = 'class X { static function f():Int { var i:Int = 0; ' + 'for (i in 0...10) {} return i; } }';
+		final source: String = 'class X { static function f():Int { var i:Int = 0; for (i in 0...10) {} return i; } }';
 		final hits: Array<RefHit> = findIn(source, 'i');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
@@ -183,7 +183,7 @@ class ApqRefsTest extends Test {
 		// An outer `var i` plus a same-named loop iterator: a read inside
 		// the loop body binds to the iterator (innermost frame wins),
 		// shadowing the outer decl.
-		final source: String = 'class X { static function f():Void { var i:Int = 0; ' + 'for (i in 0...10) { g(i); } } }';
+		final source: String = 'class X { static function f():Void { var i:Int = 0; for (i in 0...10) { g(i); } } }';
 		final hits: Array<RefHit> = findIn(source, 'i');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
@@ -235,7 +235,7 @@ class ApqRefsTest extends Test {
 		// An outer `var e` plus a same-named catch exception: a read inside
 		// the clause body binds to the exception (innermost frame wins),
 		// shadowing the outer decl.
-		final source: String = 'class X { static function f():Void { var e:Int = 0; ' + 'try {} catch (e:String) { g(e); } } }';
+		final source: String = 'class X { static function f():Void { var e:Int = 0; try {} catch (e:String) { g(e); } } }';
 		final hits: Array<RefHit> = findIn(source, 'e');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
@@ -254,7 +254,7 @@ class ApqRefsTest extends Test {
 	public function testCatchExceptionFallsThroughAfter(): Void {
 		// The exception binds INSIDE the clause only. A `return e` AFTER
 		// the try/catch resolves to the outer `var e`, not the exception.
-		final source: String = 'class X { static function f():Int { var e:Int = 0; ' + 'try {} catch (e:String) {} return e; } }';
+		final source: String = 'class X { static function f():Int { var e:Int = 0; try {} catch (e:String) {} return e; } }';
 		final hits: Array<RefHit> = findIn(source, 'e');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
@@ -269,7 +269,7 @@ class ApqRefsTest extends Test {
 	public function testTwoCatchClausesDistinctBindings(): Void {
 		// Two catch clauses with the same exception name: each read binds
 		// to its OWN clause (separate scope frames, distinct spans).
-		final source: String = 'class X { static function f():Void { ' + 'try {} catch (e:A) { g(e); } catch (e:B) { h(e); } } }';
+		final source: String = 'class X { static function f():Void { try {} catch (e:A) { g(e); } catch (e:B) { h(e); } } }';
 		final hits: Array<RefHit> = findIn(source, 'e');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
@@ -305,7 +305,7 @@ class ApqRefsTest extends Test {
 	public function testLambdaParamShadowsOuter(): Void {
 		// An outer `var x` plus a same-named lambda parameter: a read in
 		// the lambda body binds to the parameter (innermost frame wins).
-		final source: String = 'class X { static function f():Void { var x:Int = 0; ' + 'var fn = (x) -> g(x); } }';
+		final source: String = 'class X { static function f():Void { var x:Int = 0; var fn = (x) -> g(x); } }';
 		final hits: Array<RefHit> = findIn(source, 'x');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
@@ -424,26 +424,11 @@ class ApqRefsTest extends Test {
 		}
 	}
 
-	private static function findIn(source: String, name: String): Array<RefHit> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: QueryNode = plugin.parseFile(source);
-		final shape: RefShape = plugin.refShape();
-		return Refs.find(name, tree, shape);
-	}
-
-	private static function describe(hits: Array<RefHit>): String {
-		return '[' + hits.map(h -> {
-			final base: String = '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}';
-			final b: Null<Span> = h.bindingSpan;
-			return b == null ? base : '$base->bind@${b.from}-${b.to}';
-		}).join(', ') + ']';
-	}
-
 	public function testMacroEmittedIdentNotCountedAsRef(): Void {
 		// A bare identifier inside `macro {…}` is a runtime emit spliced into
 		// generated code, not a reference to the enclosing local — only the decl
 		// is collected.
-		final hits: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro ctx.pos; } }", 'ctx');
+		final hits: Array<RefHit> = findIn('class X { function f() { var ctx = 0; var e = macro ctx.pos; } }', 'ctx');
 		Assert.equals(1, hits.length, 'decl only, no macro-emit read — got ${describe(hits)}');
 		Assert.equals(RefKind.Decl, hits[0].kind);
 	}
@@ -463,6 +448,21 @@ class ApqRefsTest extends Test {
 		final hits: Array<RefHit> = findIn("class X { function f() { var ctx = 0; var e = macro { bar(ctx); baz(${ctx}); }; } }", 'ctx');
 		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
 		Assert.equals(1, reads.length, 'only the interpolated read, emit skipped — got ${describe(hits)}');
+	}
+
+	private static function findIn(source: String, name: String): Array<RefHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: RefShape = plugin.refShape();
+		return Refs.find(name, tree, shape);
+	}
+
+	private static function describe(hits: Array<RefHit>): String {
+		return '[' + hits.map(h -> {
+			final base: String = '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}';
+			final b: Null<Span> = h.bindingSpan;
+			return b == null ? base : '$base->bind@${b.from}-${b.to}';
+		}).join(', ') + ']';
 	}
 
 }

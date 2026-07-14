@@ -47,12 +47,12 @@ class PreferSingleQuotesCheckTest extends Test {
 	}
 
 	public function testEmptyStringFlagged(): Void {
-		Assert.equals("''", singleOf("class C { function f() { final a = \"\"; } }"));
+		Assert.equals("''", singleOf('class C { function f() { final a = \"\"; } }'));
 	}
 
 	public function testEscapedQuotePreserved(): Void {
 		// Source `"a\"b"` -> `'a\"b'`: the \" escape stays valid inside single quotes.
-		Assert.equals("'a\\\"b'", singleOf("class C { function f() { final a = \"a\\\"b\"; } }"));
+		Assert.equals("'a\\\"b'", singleOf('class C { function f() { final a = \"a\\\"b\"; } }'));
 	}
 
 	public function testMultipleFlagged(): Void {
@@ -84,19 +84,6 @@ class PreferSingleQuotesCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-single-quotes'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferSingleQuotes().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	/** The single-quoted text the fix emits for `src`'s first convertible literal (empty if none). */
-	private function singleOf(src: String): String {
-		final check: PreferSingleQuotes = new PreferSingleQuotes();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		return edits.length > 0 ? edits[0].text : '';
-	}
-
 	public function testCheckstyleDoublePolicyDisables(): Void {
 		// A checkstyle.json StringLiteral policy of double quotes disables "prefer single".
 		final tmp: Null<String> = Sys.getEnv('TMPDIR');
@@ -111,6 +98,19 @@ class PreferSingleQuotesCheckTest extends Test {
 		sys.FileSystem.deleteFile(path);
 		sys.FileSystem.deleteFile('$dir/checkstyle.json');
 		sys.FileSystem.deleteDirectory(dir);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferSingleQuotes().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** The single-quoted text the fix emits for `src`'s first convertible literal (empty if none). */
+	private function singleOf(src: String): String {
+		final check: PreferSingleQuotes = new PreferSingleQuotes();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		return edits.length > 0 ? edits[0].text : '';
 	}
 
 }

@@ -23,6 +23,8 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
+	private static final CONFIG_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"comprehensionFor": "fitLine"}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+
 	public function new(): Void {
 		super();
 	}
@@ -47,14 +49,6 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-	private inline function triviaWrite(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
-		opts.finalNewline = false;
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-
-	private static final CONFIG_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"comprehensionFor": "fitLine"}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
 
 	/**
 	 * ω-methodchain-reeval-after-callparam self-rescue tier: the last
@@ -65,6 +59,12 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 	public function testDotBreakKeptWhenLastSegSingleArgFitsOwnLine(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\treturn [ for (holder in holders) {\n\t\t\tfinal a:SomeLocalGroupsDataHolder = {\n\t\t\t\tmainGroups: holder.mainGroups != null\n\t\t\t\t\t? holder.mainGroups.first.filter(SomeUtils.notEmpty)\n\t\t\t\t\t\t.map(u -> { label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t.concat(\n\t\t\t\t\t\t\tholder.mainGroups.backups.filter(SomeUtils.notEmpty).map(u -> { label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t)\n\t\t\t\t\t: null\n\t\t\t};\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite2(src));
+	}
+
+	private inline function triviaWrite(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);
+		opts.finalNewline = false;
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
 	}
 
 	private inline function triviaWrite2(src: String): String {

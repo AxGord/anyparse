@@ -98,4 +98,42 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+
+	/** A module import used ONLY via a bare enum constructor (the type name never appears) is kept — the ctor is bare-referenceable via expected-type resolution. */
+	public function testBareEnumConstructorKeepsModuleImport(): Void {
+		final mod: String = 'package a.b;\n\nenum Mod {\n\tGo;\n\tStop;\n}';
+		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {\n\tvar x = Go;\n}';
+		final vs: Array<Violation> = new UnusedImport().run([
+			{ file: 'a/b/Mod.hx', source: mod },
+			{ file: 'pkg/C.hx', source: use },
+		], plugin());
+
+		Assert.equals(0, vs.length);
+	}
+
+	/** A sub-module `enum abstract` import used only via a bare value is kept (path keyed as module.Type). */
+	public function testBareEnumAbstractValueKeepsSubModuleImport(): Void {
+		final mod: String = 'package a.b;\n\nenum abstract Kind(Int) {\n\tfinal First = 0;\n\tfinal Second = 1;\n}\n\nclass Mod {}';
+		final use: String = 'package pkg;\n\nimport a.b.Mod.Kind;\n\nclass C {\n\tvar x = First;\n}';
+		final vs: Array<Violation> = new UnusedImport().run([
+			{ file: 'a/b/Mod.hx', source: mod },
+			{ file: 'pkg/C.hx', source: use },
+		], plugin());
+
+		Assert.equals(0, vs.length);
+	}
+
+	/** An enum import with NO constructor referenced is still flagged — the ctor carve-out does not over-keep. */
+	public function testWhollyUnusedEnumImportStillFlagged(): Void {
+		final mod: String = 'package a.b;\n\nenum Mod {\n\tGo;\n\tStop;\n}';
+		final use: String = 'package pkg;\n\nimport a.b.Mod;\n\nclass C {}';
+		final vs: Array<Violation> = new UnusedImport().run([
+			{ file: 'a/b/Mod.hx', source: mod },
+			{ file: 'pkg/C.hx', source: use },
+		], plugin());
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+	}
+
 }

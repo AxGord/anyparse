@@ -50,9 +50,7 @@ final class TypeResolver {
 		final bindingFrom: Null<Int> = resolveBindingFrom(recvName, recvSpan, tree, shape);
 		if (bindingFrom == null) return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
-		if (typeName == null) return false;
-		if (index.isAnonStructType(typeName)) return true;
-		return index.memberGetter(typeName, field) == false;
+		return typeName != null && (index.isAnonStructType(typeName) || index.memberGetter(typeName, field) == false);
 	}
 
 	/**

@@ -99,63 +99,28 @@ enum abstract EdgeKind(Int) {
 @:nullSafety(Strict)
 final class CallGraph {
 
+	/**
+	 * Type-decl kinds `RefactorSupport.typeDeclOf` does not cover: `abstract
+	 * class` and `enum abstract` project as their own kinds with the name
+	 * directly on the node. Without these the walks lose the enclosing type
+	 * inside such bodies (members mis-registered under the module pseudo-type).
+	 */
+	private static final EXTRA_TYPE_DECL_KINDS: Array<String> = ['AbstractClassDecl', 'EnumAbstractDecl'];
+
 	public final nodes: Map<String, FnNode> = [];
 	public final edges: Array<CallEdge> = [];
 	public final unresolved: Array<UnresolvedCall> = [];
-	public final skippedFiles: Array<String> = [];
 
+	public final skippedFiles: Array<String> = [];
 	private final _out: Map<String, Array<CallEdge>> = [];
 	private final _in: Map<String, Array<CallEdge>> = [];
 	private final _byMember: Map<String, Array<String>> = [];
 	private final _members: Map<String, Map<String, String>> = [];
 	private final _supers: Map<String, Array<String>> = [];
+
 	private final _subs: Map<String, Array<String>> = [];
 
 	private function new() {}
-
-	/**
-	 * Build the graph over `files`. The plugin is wrapped in a
-	 * `CachingGrammarPlugin` unless it already is one, so each file parses
-	 * once; a prebuilt `SymbolIndex` is reused when supplied. A grammar
-	 * without call/ident/field-access shape seams yields an empty graph.
-	 */
-	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex): CallGraph {
-		final graph: CallGraph = new CallGraph();
-		final cached: GrammarPlugin = (plugin is CachingGrammarPlugin) ? plugin : new CachingGrammarPlugin(plugin);
-		final shape: RefShape = cached.refShape();
-		if (shape.callKind == null || shape.fieldAccessKind == null) return graph;
-
-		final idx: SymbolIndex = index ?? SymbolIndex.build(files, cached);
-		for (fi in idx.allFiles()) for (t in fi.types) {
-			graph._supers[t.name] = t.supertypes;
-			for (s in t.supertypes) {
-				final subs: Array<String> = graph._subs[s] ?? [];
-				if (!subs.contains(t.name)) subs.push(t.name);
-				graph._subs[s] = subs;
-			}
-		}
-
-		final provider: Null<TypeInfoProvider> = (cached is TypeInfoProvider) ? cast cached : null;
-		final parsed: Array<ParsedEntry> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try cached.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree == null) {
-				graph.skippedFiles.push(entry.file);
-				continue;
-			}
-			final parsedTree: QueryNode = tree;
-			parsed.push({
-				file: entry.file,
-				source: entry.source,
-				tree: parsedTree,
-				fnBySpanFrom: []
-			});
-		}
-		for (p in parsed) graph.collectNodes(p, shape);
-		for (p in parsed) graph.collectEdges(p, shape, provider);
-		return graph;
-	}
 
 	public inline function node(id: String): Null<FnNode> {
 		return nodes[id];
@@ -428,9 +393,9 @@ final class CallGraph {
 			final bindingFrom: Null<Int> = bindFor(name)[span.from];
 			if (bindingFrom == null || bindingFrom < 0) return null;
 			final typeName: Null<String> = declaredTypes[bindingFrom];
-			if (typeName == null) return null;
-			if (typeName == 'Null') return unwrapNullable(typeSources[bindingFrom]);
-			return nullableWrappers.contains(typeName) ? null : typeName;
+			return typeName == null
+				? null
+				: typeName == 'Null' ? unwrapNullable(typeSources[bindingFrom]) : nullableWrappers.contains(typeName) ? null : typeName;
 		}
 
 		/**
@@ -488,8 +453,7 @@ final class CallGraph {
 		function resolveBareCallee(name: String, span: Null<Span>, currentType: Null<String>): Null<String> {
 			if (name == 'super') {
 				final supers: Array<String> = currentType == null ? [] : (_supers[currentType] ?? []);
-				if (supers.length == 0) return null;
-				return memberOnChain(supers[0], 'new') ?? externalNode(supers[0], 'new');
+				return supers.length == 0 ? null : memberOnChain(supers[0], 'new') ?? externalNode(supers[0], 'new');
 			}
 			final local: Null<String> = localFn(name);
 			if (local != null) return local;
@@ -672,6 +636,50 @@ final class CallGraph {
 		walk(tree, null);
 	}
 
+	/**
+	 * Build the graph over `files`. The plugin is wrapped in a
+	 * `CachingGrammarPlugin` unless it already is one, so each file parses
+	 * once; a prebuilt `SymbolIndex` is reused when supplied. A grammar
+	 * without call/ident/field-access shape seams yields an empty graph.
+	 */
+	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?index: SymbolIndex): CallGraph {
+		final graph: CallGraph = new CallGraph();
+		final cached: GrammarPlugin = (plugin is CachingGrammarPlugin) ? plugin : new CachingGrammarPlugin(plugin);
+		final shape: RefShape = cached.refShape();
+		if (shape.callKind == null || shape.fieldAccessKind == null) return graph;
+
+		final idx: SymbolIndex = index ?? SymbolIndex.build(files, cached);
+		for (fi in idx.allFiles()) for (t in fi.types) {
+			graph._supers[t.name] = t.supertypes;
+			for (s in t.supertypes) {
+				final subs: Array<String> = graph._subs[s] ?? [];
+				if (!subs.contains(t.name)) subs.push(t.name);
+				graph._subs[s] = subs;
+			}
+		}
+
+		final provider: Null<TypeInfoProvider> = (cached is TypeInfoProvider) ? cast cached : null;
+		final parsed: Array<ParsedEntry> = [];
+		for (entry in files) {
+			final tree: Null<QueryNode> =
+				try cached.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			if (tree == null) {
+				graph.skippedFiles.push(entry.file);
+				continue;
+			}
+			final parsedTree: QueryNode = tree;
+			parsed.push({
+				file: entry.file,
+				source: entry.source,
+				tree: parsedTree,
+				fnBySpanFrom: []
+			});
+		}
+		for (p in parsed) graph.collectNodes(p, shape);
+		for (p in parsed) graph.collectEdges(p, shape, provider);
+		return graph;
+	}
+
 	/** `a.b.C.m` → last `count` dot-segments joined (`C.m` for count 2). */
 	private static function lastSegments(path: String, count: Int): String {
 		final parts: Array<String> = path.split('.');
@@ -707,14 +715,6 @@ final class CallGraph {
 		final dot: Int = base.indexOf('.');
 		return dot == -1 ? base : base.substring(0, dot);
 	}
-
-	/**
-	 * Type-decl kinds `RefactorSupport.typeDeclOf` does not cover: `abstract
-	 * class` and `enum abstract` project as their own kinds with the name
-	 * directly on the node. Without these the walks lose the enclosing type
-	 * inside such bodies (members mis-registered under the module pseudo-type).
-	 */
-	private static final EXTRA_TYPE_DECL_KINDS: Array<String> = ['AbstractClassDecl', 'EnumAbstractDecl'];
 
 	/** Simple name of the type declaration `node` introduces, or null. */
 	private static function typeNameOf(node: QueryNode): Null<String> {

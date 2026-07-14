@@ -15,7 +15,6 @@ import anyparse.query.QueryNode;
 using StringTools;
 
 import anyparse.query.RefactorSupport;
-import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 
@@ -103,12 +102,6 @@ class NamingCheckTest extends Test {
 	public function testSkipParseNoCrash(): Void {
 		final files: Array<{ file: String, source: String }> = [{ file: 'Bad.hx', source: 'class Bad { function f() { ' }];
 		Assert.equals(0, new Naming().run(files, new HaxeQueryPlugin()).length);
-	}
-
-	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
-		final support: HaxeNamingSupport = new HaxeNamingSupport();
-		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
-		return Naming.violationsFor('C.hx', support.project(tree), policy ?? HaxeNamingSupport.defaults());
 	}
 
 	public function testEnumAbstractValuesNotFlaggedAsFields(): Void {
@@ -262,6 +255,12 @@ class NamingCheckTest extends Test {
 		final check: Naming = new Naming();
 		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
 		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
+		final support: HaxeNamingSupport = new HaxeNamingSupport();
+		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
+		return Naming.violationsFor('C.hx', support.project(tree), policy ?? HaxeNamingSupport.defaults());
 	}
 
 }

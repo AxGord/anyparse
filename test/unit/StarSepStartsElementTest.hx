@@ -138,7 +138,7 @@ class StarSepStartsElementTest extends Test {
 	public function testParseAtomsWithoutSepThrows(): Void {
 		// Same negative as the permissive pilot: between two non-
 		// block-ended Atoms, sep is mandatory.
-		Assert.raises(() -> MiniBlockStrictParser.parse('{a b}'), Exception);
+		Assert.raises(MiniBlockStrictParser.parse.bind('{a b}'), Exception);
 	}
 
 	// ---- Writer: shape assertions ----
