@@ -100,8 +100,8 @@ final class ExplicitType implements Check {
 		if (functions.length > 0 && valueReturns.length > 0 && blockBody != null) {
 			final stop: Array<String> = (shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
 			final throwKinds: Array<String> = shape.throwKinds ?? [];
-			final flagged: Map<String, Bool> = [];
-			for (v in violations) if (v.span != null) flagged['${v.span.from}:${v.span.to}'] = true;
+			final flagged: Map<String, Violation> = [];
+			for (v in violations) if (v.span != null) flagged['${v.span.from}:${v.span.to}'] = v;
 			collectVoidEdits(
 				tree, source, functions, memberKinds, valueReturns, throwKinds, stop, blockBody, shape.macroModifierKind, flagged, edits
 			);
@@ -273,7 +273,7 @@ final class ExplicitType implements Check {
 	 */
 	private static function collectVoidEdits(
 		node: QueryNode, source: String, functions: Array<String>, members: Array<String>, valueReturns: Array<String>,
-		throwKinds: Array<String>, stop: Array<String>, blockBody: String, macroKind: Null<String>, flaggedKeys: Map<String, Bool>,
+		throwKinds: Array<String>, stop: Array<String>, blockBody: String, macroKind: Null<String>, flaggedKeys: Map<String, Violation>,
 		edits: Array<{ span: Span, text: String }>
 	): Void {
 		var sawMacro: Bool = false;
@@ -298,10 +298,10 @@ final class ExplicitType implements Check {
 	 */
 	private static function voidEdit(
 		fn: QueryNode, source: String, valueReturns: Array<String>, throwKinds: Array<String>, stop: Array<String>, blockBody: String,
-		flaggedKeys: Map<String, Bool>, edits: Array<{ span: Span, text: String }>
+		flaggedKeys: Map<String, Violation>, edits: Array<{ span: Span, text: String }>
 	): Void {
 		final span: Null<Span> = fn.span;
-		if (span == null || flaggedKeys['${span.from}:${span.to}'] != true) return;
+		if (span == null || !flaggedKeys.exists('${span.from}:${span.to}')) return;
 		final body: Null<QueryNode> = fn.children.find(c -> c.kind == blockBody);
 		// A throw in the function's own scope makes its return type unify with any
 		// type (a caller may use the call as a value), so `: Void` would be unsound —
