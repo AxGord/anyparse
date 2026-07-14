@@ -301,7 +301,7 @@ class NamingCheckTest extends Test {
 		// A confined private static final wrongly given a `_` prefix (the macro-build
 		// anchor shape) → the underscore is stripped to a camelCase constant name.
 		final src: String = 'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
@@ -319,7 +319,7 @@ class NamingCheckTest extends Test {
 	public function testFixSkipsStaticFinalNameCollision(): Void {
 		// Stripping `_count` → `count` collides with an existing `count` field → report-only.
 		final src: String = 'package pkg;\nclass C {\n\tprivate static final _count:Int = 0;\n\tpublic var count:Int;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
@@ -330,12 +330,32 @@ class NamingCheckTest extends Test {
 	public function testFixSkipsNonDerivableStaticFinal(): Void {
 		// Stripping `_FORCE_build` yields `FORCE_build`, not a valid camelCase name → report-only.
 		final src: String = 'package pkg;\nclass C {\n\tprivate static final _FORCE_build:Int = 0;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixRenamesUpperSnakeStaticFinal(): Void {
+		// A confined private static final wrongly given a `_` prefix keeps its
+		// UPPER_SNAKE shape once the underscore is stripped (`_FORCE_BUILD` →
+		// `FORCE_BUILD`, valid per the Constant rule's UPPER_SNAKE branch).
+		final src: String = 'package pkg;\nclass C {\n\tprivate static final _FORCE_BUILD:Int = 0;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('final FORCE_BUILD') >= 0);
+				Assert.isTrue(text.indexOf('_FORCE_BUILD') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {

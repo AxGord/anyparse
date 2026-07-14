@@ -220,11 +220,14 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 	/**
-	 * The mechanical fix for a static final wrongly given a private-field `_`
-	 * prefix (`_forceBuild`): strip the leading underscore(s), keeping the result
-	 * only when it is a valid camelCase identifier (`_forceBuild` → `forceBuild`).
-	 * A stripped name that is not camelCase (`_FORCE_build`, `_foo_bar`) has no
-	 * mechanical correction → null (report-only). Not `inline` — passed as a
+	 * The mechanical fix for a static final wrongly given a private-field `_` prefix:
+	 * strip the leading underscore(s), keeping the result whenever it is a
+	 * syntactically valid identifier (`_forceBuild` → `forceBuild`, `_FORCE_BUILD` →
+	 * `FORCE_BUILD`). Whether the stripped name actually conforms to the Constant
+	 * rule's format is decided by the caller (`Naming.renameEditsFor` gates on
+	 * `rule.format.match`), so both camelCase and UPPER_SNAKE pass here while a name
+	 * matching neither (`_FORCE_build` → `FORCE_build`) is filtered there. A strip that
+	 * leaves an invalid identifier → null. Not `inline` — passed as a
 	 * `NamingRule.normalize` function value.
 	 */
 	private static function stripUnderscorePrefix(name: String): Null<String> {
@@ -232,7 +235,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
-		return new EReg("^[a-z][a-zA-Z0-9]*$", '').match(stripped) ? stripped : null;
+		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) ? stripped : null;
 	}
 
 	/**
