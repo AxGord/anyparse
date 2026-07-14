@@ -56,6 +56,7 @@ import anyparse.query.CallGraph.EdgeKind;
 import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.Clusters.ClusterReport;
+import anyparse.query.ExitCode.*;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -341,9 +342,6 @@ typedef StripResult = {
 @:nullSafety(Strict)
 final class Cli {
 
-	private static final EXIT_OK: Int = 0;
-	private static final EXIT_USAGE: Int = 2;
-	private static final EXIT_RUNTIME: Int = 1;
 	private static final SKIP_PATHS_SHOWN: Int = 5;
 	private static final FUZZY_MAX_DIST: Int = 3;
 
