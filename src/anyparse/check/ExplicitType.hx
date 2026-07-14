@@ -8,13 +8,16 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.RefactorSupport;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 
 /**
  * Flags a class / abstract / interface member that omits an explicit type — a
  * field with no `:Type`, a function parameter with no `:Type`, or a function with
  * no return type. Stating types everywhere is a documented project rule; the check
  * holds without a type-checker because the omission is purely syntactic.
- * Report-only: a missing type cannot be filled in without inference.
+ * A conservative autofix fills in a statically-certain initializer type; the rest stays report-only.
  *
  * ## Grammar-agnostic
  *
@@ -66,11 +69,50 @@ final class ExplicitType implements Check {
 		return violations;
 	}
 
-	/** Explicit-type has no autofix — a missing type needs inference to fill in. */
+	/**
+	 * Annotate a field / parameter whose initializer has a statically-certain type: a
+	 * literal (`String` / `Bool` / `Int` / `Float`, negatives included), a `new T<...>()`
+	 * with written type parameters, or a typed cast / check-type `(x : T)`. Everything
+	 * uncertain — a bare `new T()` (possibly generic), a call, a field read, an array /
+	 * map / ternary, a `[]`, or a missing return type — is left report-only: a wrong
+	 * annotation breaks the build, so when uncertain the fix skips.
+	 *
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final shape: RefShape = plugin.refShape();
+		final fields: Array<String> = shape.fieldDeclKinds ?? [];
+		final params: Array<String> = shape.paramKinds ?? [];
+		final fixable: Array<String> = fields.concat(params);
+		if (fixable.length == 0) return [];
+		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
+		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
+		final negKind: Null<String> = shape.negationKind;
+		final newKind: Null<String> = shape.newExprKind;
+		final castKinds: Array<String> = shape.typedCastKinds ?? [];
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		if (tree == null) return [];
+		final byKey: Map<String, QueryNode> = [];
+		RefactorSupport.indexNodesByKind(tree, fixable, byKey);
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final castTargets: Map<Int, String> = provider != null ? provider.castTargetSources(source) : [];
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			// A field / parameter violation's span keys the node; a return-type violation's
+			// span is the whole function, absent from the field/param index, so it is skipped.
+			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
+			if (node == null || node.children.length == 0) continue;
+			final typeSource: Null<String> = inferType(
+				node.children[0], source, literalTypes, numeric, negKind, newKind, castKinds, castTargets
+			);
+			if (typeSource == null) continue;
+			final at: Int = insertPoint(node, node.children[0], source);
+			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
+		}
+		return edits;
 	}
 
 	/**
@@ -151,6 +193,80 @@ final class ExplicitType implements Check {
 			severity: Severity.Warning,
 			message: message
 		});
+	}
+
+
+	/**
+	 * The type source to annotate for `init` when its type is statically certain,
+	 * else null. A literal maps through `literalTypes`; a `Neg` wrapping a numeric
+	 * literal takes that literal's type; a `new T<...>()` with WRITTEN type
+	 * parameters carries `T<...>` verbatim (a bare `new T()` — possibly generic —
+	 * yields null); a typed cast / check-type takes its target type. Anything else
+	 * (a call, a field read, an array / map / ternary) is null — report-only.
+	 */
+	private static function inferType(
+		init: QueryNode, source: String, literalTypes: Map<String, String>, numeric: Array<String>, negKind: Null<String>,
+		newKind: Null<String>, castKinds: Array<String>, castTargets: Map<Int, String>
+	): Null<String> {
+		final direct: Null<String> = literalTypes[init.kind];
+		if (direct != null) return direct;
+		if (negKind != null && init.kind == negKind && init.children.length == 1) {
+			final inner: QueryNode = init.children[0];
+			return numeric.contains(inner.kind) ? literalTypes[inner.kind] : null;
+		}
+		if (newKind != null && init.kind == newKind) return newTypeSource(init, source);
+		final span: Null<Span> = init.span;
+		return span != null && castKinds.contains(init.kind) ? TypeResolver.castTargetWithin(span, castTargets) : null;
+	}
+
+	/**
+	 * The `T<...>` type source of a `new T<...>(...)` when it carries WRITTEN type
+	 * parameters, else null (a bare `new T(...)` could be a generic used without
+	 * parameters, whose bare `:T` annotation would not type-check). Scans from after
+	 * `new` for the balanced `<...>`; a `>` preceded by `-` is the arrow `->` inside
+	 * a function-type parameter, not an angle close. A constructor `(` reached before
+	 * any `<` means no written type parameters.
+	 */
+	private static function newTypeSource(newNode: QueryNode, source: String): Null<String> {
+		final span: Null<Span> = newNode.span;
+		if (span == null) return null;
+		final full: String = source.substring(span.from, span.to);
+		var i: Int = 3;
+		while (i < full.length && StringTools.isSpace(full, i)) i++;
+		final typeStart: Int = i;
+		var depth: Int = 0;
+		while (i < full.length) {
+			switch StringTools.fastCodeAt(full, i) {
+				case '('.code if (depth == 0):
+					return null;
+				case '<'.code:
+					depth++;
+				case '>'.code if (StringTools.fastCodeAt(full, i - 1) != '-'.code):
+					depth--;
+					if (depth == 0) return full.substring(typeStart, i + 1);
+				case _:
+			}
+			i++;
+		}
+		return null;
+	}
+
+	/**
+	 * The offset right after the declaration's name — where a `:Type` annotation is
+	 * inserted — found by walking back over whitespace from the assignment `=` that
+	 * precedes the initializer. Returns -1 when no `=` is in the name-to-initializer
+	 * prefix (a declaration with no initializer cannot be annotated by this fix).
+	 */
+	private static function insertPoint(node: QueryNode, init: QueryNode, source: String): Int {
+		final span: Null<Span> = node.span;
+		final initSpan: Null<Span> = init.span;
+		if (span == null || initSpan == null) return -1;
+		final prefix: String = source.substring(span.from, initSpan.from);
+		final eq: Int = prefix.lastIndexOf('=');
+		if (eq < 0) return -1;
+		var pos: Int = span.from + eq;
+		while (pos > span.from && StringTools.isSpace(source, pos - 1)) pos--;
+		return pos;
 	}
 
 }

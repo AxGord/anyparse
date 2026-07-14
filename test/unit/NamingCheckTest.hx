@@ -257,6 +257,46 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
 	}
 
+	public function testFixSkipsPrivateFieldNameCollision(): Void {
+		// Renaming `shape` to `_shape` when `_shape` is already a field of the type
+		// would duplicate the binding — skip, report-only.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var _shape:Int;\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape + this._shape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixSkipsLocalWithSimpleInterpolation(): Void {
+		// A local read only through a bare `$name` interpolation is missed by the
+		// resolver (the braced `${name}` form is not) — the rename would leave the
+		// interpolation dangling, so bail to report-only.
+		final src: String = "class C {\n\tpublic function f():String {\n\t\tvar BadLocal = 3;\n\t\treturn 'value is $BadLocal';\n\t}\n}";
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixRenamesLocalWithBracedInterpolation(): Void {
+		// The braced `${name}` interpolation IS a resolved reference, so a local
+		// rename rewrites both the declaration and the interpolation.
+		final src: String = "class C {\n\tpublic function f():String {\n\t\tvar BadLocal = 3;\n\t\treturn 'value is ${BadLocal}';\n\t}\n}";
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf("${badLocal}") >= 0);
+				Assert.isTrue(text.indexOf('BadLocal') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
 	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);

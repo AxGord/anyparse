@@ -92,6 +92,35 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(-1, fixedSource('class C { override function f():Void {} }').indexOf('private'));
 	}
 
+	/** An extern class defaults its members to public; the autofix must NOT force `private`. */
+	public function testFixSkipsExternClass(): Void {
+		Assert.equals(1, violations('extern class C { function f():Void; }').length);
+		Assert.equals(-1, fixedSource('extern class C { function f():Void; }').indexOf('private'));
+	}
+
+	/** A `@:publicFields` class defaults its members to public; the autofix must NOT force `private`. */
+	public function testFixSkipsPublicFieldsClass(): Void {
+		Assert.equals(1, violations('@:publicFields class D { function g():Void {} }').length);
+		Assert.equals(-1, fixedSource('@:publicFields class D { function g():Void {} }').indexOf('private'));
+	}
+
+	/** `final class` wraps the class in a decl node; the extern / public-default skip must still reach the members. */
+	public function testFixSkipsExternFinalClass(): Void {
+		Assert.equals(1, violations('extern final class C { function f():Void; }').length);
+		Assert.equals(-1, fixedSource('extern final class C { function f():Void; }').indexOf('private'));
+	}
+
+	/** A `@:publicFields final class` (the project's house form) must also stay report-only, not get `private`. */
+	public function testFixSkipsPublicFieldsFinalClass(): Void {
+		Assert.equals(1, violations('@:publicFields final class D { function g():Void {} }').length);
+		Assert.equals(-1, fixedSource('@:publicFields final class D { function g():Void {} }').indexOf('private'));
+	}
+
+	/** A plain `final class` still defaults members to private, so the autofix DOES insert `private`. */
+	public function testFixInsertsPrivateInFinalClass(): Void {
+		Assert.isTrue(fixedSource('final class F { function g():Void {} }').indexOf('private function g') >= 0);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MissingVisibility().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

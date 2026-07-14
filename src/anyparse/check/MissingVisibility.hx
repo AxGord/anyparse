@@ -26,6 +26,15 @@ import haxe.Exception;
  * `overrideModifierKind`-bearing member report-only (it is still flagged — explicit
  * visibility is the rule — but the keyword is the author's to choose).
  *
+ * ## The autofix skips a public-default container
+ *
+ * An extern class and a `@:publicFields` class default their unmodified members to
+ * `public`, not `private` — so inserting `private` there is NOT behaviour-preserving,
+ * it lowers visibility. The autofix leaves every member of such a container
+ * report-only (still flagged — explicit visibility is the rule — but the keyword is
+ * the author's, being `public` rather than the class default). Detection is
+ * unchanged; only the fix skips.
+ *
  * ## Grammar-agnostic
  *
  * `RefShape.visibilityContainerKinds` lists the declaration kinds whose members
@@ -35,8 +44,9 @@ import haxe.Exception;
  * `RefShape.visibilityModifierKinds`. Any unset → no-op. The autofix additionally
  * needs `RefShape.defaultVisibilityModifierText` (the keyword to insert),
  * `RefShape.modifierOrderKinds` (to place it after `override` / `@:meta` and before
- * `static` / `inline`), and `RefShape.overrideModifierKind` (to exempt overrides);
- * a grammar leaving the keyword unset is report-only.
+ * `static` / `inline`), `RefShape.overrideModifierKind` (to exempt overrides), and
+ * `RefShape.externModifierKind` / `RefShape.publicDefaultMetaNames` (to exempt a
+ * public-default container); a grammar leaving the keyword unset is report-only.
  */
 @:nullSafety(Strict)
 final class MissingVisibility implements Check {
@@ -67,15 +77,18 @@ final class MissingVisibility implements Check {
 	}
 
 	/**
-	 * Insert the default visibility keyword on each flagged non-override member.
-	 * Re-parses `source`, re-walks the containers, and for a member whose host-span
-	 * `from` matches a violation (and which carries no `overrideModifierKind` in its
-	 * run) inserts `defaultVisibilityModifierText` at the canonical visibility slot:
-	 * after any `override` / `@:meta`, before the first `static` / `inline` (a run
-	 * sibling ranked above visibility in `modifierOrderKinds`), else immediately
-	 * before the member host. Inserting the language default is behaviour-preserving
-	 * for a non-override (Haxe already treats an unmodified member as `private`). No
-	 * default keyword set → report-only.
+	 * Insert the default visibility keyword on each flagged non-override member of a
+	 * private-default container. Re-parses `source`, re-walks the containers, and for a
+	 * member whose host-span `from` matches a violation (and which carries no
+	 * `overrideModifierKind` in its run) inserts `defaultVisibilityModifierText` at the
+	 * canonical visibility slot: after any `override` / `@:meta`, before the first
+	 * `static` / `inline` (a run sibling ranked above visibility in `modifierOrderKinds`),
+	 * else immediately before the member host. Inserting the language default is
+	 * behaviour-preserving for a non-override in a plain class / abstract (Haxe treats an
+	 * unmodified member there as `private`). A container whose members are implicitly
+	 * public — an extern class (`externModifierKind`) or one carrying a public-default meta
+	 * (`publicDefaultMetaNames`, e.g. `@:publicFields`) — is skipped: it stays report-only
+	 * rather than being lowered to `private`. No default keyword set → report-only.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -88,6 +101,8 @@ final class MissingVisibility implements Check {
 		final keyword: Null<String> = shape.defaultVisibilityModifierText;
 		if (containers.length == 0 || members.length == 0 || visibility.length == 0 || keyword == null) return [];
 		final overrideKind: Null<String> = shape.overrideModifierKind;
+		final externKind: Null<String> = shape.externModifierKind;
+		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 		if (tree == null) return [];
 		var visRank: Int = -1;
@@ -101,7 +116,7 @@ final class MissingVisibility implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		insertWalk(edits, tree, containers, members, order, visRank, keyword, overrideKind, flagged);
+		insertWalk(edits, tree, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames, false);
 		return edits;
 	}
 
@@ -140,13 +155,42 @@ final class MissingVisibility implements Check {
 		}
 	}
 
-	/** Walk `node`; insert the keyword on each flagged member of a container. */
+	/**
+	 * Walk `node`; insert the keyword on each flagged member of a container. A container
+	 * preceded by an extern modifier or a public-default meta (`@:publicFields`) is skipped
+	 * — its members are implicitly public, so inserting `private` would change visibility.
+	 * `incomingPublicDefault` carries that skip into a wrapper decl node (Haxe `final class`
+	 * projects the class as a `ClassForm` nested in a `FinalDecl`); the returned flag tells a
+	 * caller frame a child subtree opened a container, so its own run resets there.
+	 */
 	private static function insertWalk(
 		edits: Array<{ span: Span, text: String }>, node: QueryNode, containers: Array<String>, members: Array<String>,
-		order: Array<String>, visRank: Int, keyword: String, overrideKind: Null<String>, flagged: Array<Int>
-	): Void {
-		if (containers.contains(node.kind)) insertContainer(edits, node, members, order, visRank, keyword, overrideKind, flagged);
-		for (c in node.children) insertWalk(edits, c, containers, members, order, visRank, keyword, overrideKind, flagged);
+		order: Array<String>, visRank: Int, keyword: String, overrideKind: Null<String>, flagged: Array<Int>, externKind: Null<String>,
+		publicMetaNames: Array<String>, incomingPublicDefault: Bool
+	): Bool {
+		var publicDefault: Bool = incomingPublicDefault;
+		var sawDecl: Bool = false;
+		for (child in node.children) {
+			final metaName: Null<String> = child.name;
+			if (externKind != null && child.kind == externKind || metaName != null && publicMetaNames.contains(metaName))
+				publicDefault = true;
+			final childConsumes: Bool = if (containers.contains(child.kind)) {
+				if (!publicDefault) insertContainer(edits, child, members, order, visRank, keyword, overrideKind, flagged);
+				insertWalk(
+					edits, child, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames, false
+				);
+				true;
+			} else
+				insertWalk(
+					edits, child, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames,
+					publicDefault
+				);
+			if (childConsumes) {
+				publicDefault = false;
+				sawDecl = true;
+			}
+		}
+		return sawDecl;
 	}
 
 	/**

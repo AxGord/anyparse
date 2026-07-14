@@ -7,6 +7,7 @@ import anyparse.check.ExplicitType;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
  * The `explicit-type` check: a member field with no `:Type`, a function parameter
@@ -106,6 +107,117 @@ class ExplicitTypeCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+
+	public function testFixNewWithTypeParamsCarried(): Void {
+		final out: String = applyFix('class C { public var a = new Map<Int, String>(); }');
+		Assert.isTrue(out.indexOf('a:Map<Int, String> =') != -1, 'expected carried type params, got: $out');
+	}
+
+	public function testFixBareNewSkipped(): Void {
+		// A bare `new Foo()` could be a generic used without params — annotating `:Foo` risks a broken build.
+		Assert.equals(0, fixCount('class C { public var a = new Foo(); }'));
+	}
+
+	public function testFixNewWithArgsButNoParamsSkipped(): Void {
+		Assert.equals(0, fixCount('class C { public var a = new Foo(1, 2); }'));
+	}
+
+	public function testFixStringLiteral(): Void {
+		final out: String = applyFix('class C { var a = "hi"; }');
+		Assert.isTrue(out.indexOf('a:String =') != -1, 'got: $out');
+	}
+
+	public function testFixSingleQuoteString(): Void {
+		final out: String = applyFix("class C { var a = 'hi'; }");
+		Assert.isTrue(out.indexOf('a:String =') != -1, 'got: $out');
+	}
+
+	public function testFixBoolLiteral(): Void {
+		final out: String = applyFix('class C { var a = true; }');
+		Assert.isTrue(out.indexOf('a:Bool =') != -1, 'got: $out');
+	}
+
+	public function testFixIntLiteral(): Void {
+		final out: String = applyFix('class C { var a = 42; }');
+		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixHexLiteral(): Void {
+		final out: String = applyFix('class C { var a = 0xFF; }');
+		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixFloatLiteral(): Void {
+		final out: String = applyFix('class C { var a = 3.14; }');
+		Assert.isTrue(out.indexOf('a:Float =') != -1, 'got: $out');
+	}
+
+	public function testFixNegativeInt(): Void {
+		final out: String = applyFix('class C { var a = -5; }');
+		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixNegativeFloat(): Void {
+		final out: String = applyFix('class C { var a = -3.5; }');
+		Assert.isTrue(out.indexOf('a:Float =') != -1, 'got: $out');
+	}
+
+	public function testFixTypedCast(): Void {
+		final out: String = applyFix('class C { function f(x:Int) { } var a = cast(x, Foo); }');
+		Assert.isTrue(out.indexOf('a:Foo =') != -1, 'got: $out');
+	}
+
+	public function testFixCheckType(): Void {
+		final out: String = applyFix('class C { var a = (x : Bar); }');
+		Assert.isTrue(out.indexOf('a:Bar =') != -1, 'got: $out');
+	}
+
+	public function testFixParamDefault(): Void {
+		final out: String = applyFix('class C { public function f(p = 5):Void {} }');
+		Assert.isTrue(out.indexOf('p:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixSkipsCall(): Void {
+		Assert.equals(0, fixCount('class C { var a = foo(); }'));
+	}
+
+	public function testFixSkipsArrayLiteral(): Void {
+		Assert.equals(0, fixCount('class C { var a = [1, 2]; }'));
+	}
+
+	public function testFixSkipsTernary(): Void {
+		Assert.equals(0, fixCount('class C { var a = c ? 1 : 2; }'));
+	}
+
+	public function testFixSkipsMissingReturnType(): Void {
+		// A missing return type needs inference over the body — never annotated by this fix.
+		Assert.equals(0, fixCount('class C { public function f() {} }'));
+	}
+
+	public function testFixSkipsUntypedParamNoDefault(): Void {
+		Assert.equals(0, fixCount('class C { public function f(a):Void {} }'));
+	}
+
+	public function testFixSkipsFieldNoInit(): Void {
+		Assert.equals(0, fixCount('class C { public var b; }'));
+	}
+
+	private function applyFix(src: String): String {
+		final check: ExplicitType = new ExplicitType();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var result: String = src;
+		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
+		return result;
+	}
+
+	private function fixCount(src: String): Int {
+		final check: ExplicitType = new ExplicitType();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return check.fix(src, vs, new HaxeQueryPlugin()).length;
 	}
 
 }

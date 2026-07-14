@@ -69,8 +69,19 @@ final class Naming implements Check {
 	}
 
 	/**
-	 * Autofix: rename each flagged binding to a mechanically-corrected name when the rename is provably complete in this one file. Always safe for function-body-scoped bindings (Local / Param / CatchVar); for a private FIELD only when the cross-file `index` proves it confined (no subtype, no `@:access`, no `@:allow`, no skip-parse file that could hide one) AND every textual occurrence of the name is covered by the resolved rename spans — the scope resolver can miss a bare field reference, so an uncovered occurrence means an incomplete rename and the field is left report-only. The new name comes from the rule's `normalize`; the occurrences from `Rename.renameOccurrences`, emitted as edits the caller batches and re-parse-validates.
-	 *
+	 * Autofix: rename each flagged binding to a mechanically-corrected name when
+	 * the rename is provably complete in this one file. A function-body-scoped
+	 * binding (Local / Param / CatchVar) is a candidate; a private FIELD is one
+	 * only when the cross-file `index` proves it confined (no subtype, no
+	 * `@:access`, no `@:allow`, no skip-parse file that could hide one). Every
+	 * candidate is then held to two in-file guards: every textual occurrence of
+	 * the old name must be covered by the resolved rename spans (an uncovered one
+	 * — a bare `$name` interpolation the resolver misses, a reflection string —
+	 * means an incomplete rename, so bail), and the new name must not already be
+	 * bound in the file (a collision would duplicate or shadow it). The new name
+	 * comes from the applicable `normalize`; the occurrences from
+	 * `Rename.renameOccurrences`, emitted as edits the caller batches and
+	 * re-parse-validates.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -149,15 +160,13 @@ final class Naming implements Check {
 	}
 
 	/**
-	 * Does `node` contain a field access of `name` through a receiver other than
-	 * `this`? Such an `other.<name>` is the one in-file access the scope resolver
-	 * (hence `Rename.renameOccurrences`) misses, making a single-file rename incomplete.
 	 * The rename to apply to one projected declaration, or null when it must be
 	 * skipped: not among the flagged spans, not rename-safe, no applicable rule
-	 * with a normalizer, already conformant, or — for a field whose textual
-	 * occurrences the scope resolver does not fully cover — incompletely
-	 * renameable (bailed to avoid a dangling reference). When non-null, every
-	 * returned occurrence span is rewritten to `name`.
+	 * with a normalizer, already conformant, an incomplete rename whose old name
+	 * still occurs outside the resolved spans (a bare `$name` interpolation the
+	 * resolver misses, a reflection string), or a rename to a name already bound
+	 * in the file (a collision). When non-null, every returned occurrence span is
+	 * rewritten to `name`.
 	 */
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, flaggedFroms: Array<Int>,
@@ -172,12 +181,21 @@ final class Naming implements Check {
 		final newName: Null<String> = normalize(decl.name);
 		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
 		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
-		// Completeness: the scope resolver can miss a bare field reference (a
-		// field's decl-node span and its reference binding can disagree), so a
-		// rename not covering every textual occurrence of the name would leave a
-		// dangling reference — bail rather than emit a broken rename.
-		return occurrences.length == 0 || decl.category == NamingCategory.Field
-			&& RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
+		// Completeness: the scope resolver can miss a reference the rename must
+		// also rewrite — a bare field access whose binding span disagrees with the
+		// decl node, or a simple `$name` string interpolation (the braced
+		// `${name}` form IS resolved, the bare `$name` form is not). Any textual
+		// occurrence of the old name left outside the resolved spans means an
+		// incomplete rename that would dangle, so bail. This applies to EVERY
+		// category, not only fields: a local read solely through `$name`
+		// interpolation hits the same gap, and without the guard `--fix` would
+		// emit non-compiling source.
+		// Collision: a `newName` already occurring as an identifier in the file
+		// (another member of the same type, a sibling local) would be duplicated
+		// or shadowed by the rename — the re-parse gate accepts the result but it
+		// does not type-check, so skip that too.
+		return occurrences.length == 0 || RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
+			|| RefactorSupport.referencedInRange(source, newName, 0, source.length, [])
 			? null
 			: {
 				occurrences: occurrences,

@@ -663,6 +663,22 @@ typedef RefShape = {
 	@:optional var overrideModifierKind: String;
 
 	/**
+	 * The extern-modifier node kind (Haxe `Extern`) that, as a preceding sibling of a
+	 * visibility container, marks the members implicitly public. The
+	 * `missing-visibility` autofix must not insert `private` there — it would lower an
+	 * externally-public member to private. Optional; unset disables the exemption.
+	 */
+	@:optional var externModifierKind: String;
+
+	/**
+	 * Meta names on a visibility container that make its members public by default
+	 * (Haxe `@:publicFields`). Like an extern class, such a container's members are
+	 * implicitly public, so the `missing-visibility` autofix leaves them report-only
+	 * rather than forcing `private`. Optional; unset → empty (no such meta).
+	 */
+	@:optional var publicDefaultMetaNames: Array<String>;
+
+	/**
 	 * Operand kinds whose value may be null or whose non-nullness the analyzer
 	 * cannot prove without a typechecker — `comparison-to-boolean` skips a
 	 * comparison whose non-literal operand subtree reaches any of these, since
@@ -1073,6 +1089,16 @@ typedef RefShape = {
 	 * treats a negation-wrapped value as non-numeric.
 	 */
 	@:optional var negationKind: String;
+
+	/**
+	 * Maps a literal-expression node kind to the name of the type it denotes —
+	 * `IntLit` gives `Int`, a string-literal kind gives `String`. The `explicit-type`
+	 * autofix reads it to annotate a field / parameter whose initializer is a literal
+	 * of a statically-certain type. Optional; unset gives the autofix nothing to infer
+	 * from literals.
+	 */
+	@:optional var literalTypeNames: Map<String, String>;
+
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
