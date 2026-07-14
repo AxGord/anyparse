@@ -23,15 +23,6 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
-	private static inline final PREC_ATOM: Int = 100;
-	private static inline final PREC_NOT: Int = 90;
-	private static inline final PREC_CMP: Int = 50;
-	private static inline final PREC_AND: Int = 40;
-	private static inline final PREC_OR: Int = 30;
-	private static inline final PREC_COALESCE: Int = 20;
-	private static inline final PREC_TERNARY: Int = 10;
-	private static inline final PREC_ASSIGN: Int = 5;
-
 	private static final BOOL_OP_KINDS: Array<String> = ['Or', 'And', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Not'];
 
 	public function new() {}
@@ -72,7 +63,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 		// boolean value while it is still a literal — used to simplify and to refuse a
 		// fold that would absorb (drop) a condition's evaluation.
 		var accSrc: String = finalVal ? 'true' : 'false';
-		var accPrec: Int = PREC_ATOM;
+		var accPrec: Precedence = PREC_ATOM;
 		var accLit: Null<Bool> = finalVal;
 		var i: Int = conds.length - 1;
 		while (i >= 0) {
@@ -129,7 +120,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/** Parenthesise `o`'s source iff it binds strictly looser than `targetPrec`. */
-	private static function wrap(o: Operand, targetPrec: Int): String {
+	private static function wrap(o: Operand, targetPrec: Precedence): String {
 		return o.prec < targetPrec ? '(' + o.src + ')' : o.src;
 	}
 
@@ -189,7 +180,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	}
 
 	/** Operator-precedence rank of a node kind — higher binds tighter. */
-	private static function precedence(kind: String): Int {
+	private static function precedence(kind: String): Precedence {
 		return switch kind {
 			case 'Or': PREC_OR;
 			case 'And': PREC_AND;
@@ -226,5 +217,26 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 private typedef Operand = {
 	var src: String;
-	var prec: Int;
+	var prec: Precedence;
 };
+
+/**
+ * Operator-precedence rank — a higher value binds tighter. A distinct type rather
+ * than a bare `Int` so a precedence can never be confused with an unrelated count;
+ * the two `@:op` forwards give it the `<` / `>=` ordering that `wrap` / `wrapNot`
+ * need (Haxe otherwise forbids ordered comparison on an abstract).
+ */
+private enum abstract Precedence(Int) {
+	final PREC_ATOM = 100;
+	final PREC_NOT = 90;
+	final PREC_CMP = 50;
+	final PREC_AND = 40;
+	final PREC_OR = 30;
+	final PREC_COALESCE = 20;
+	final PREC_TERNARY = 10;
+	final PREC_ASSIGN = 5;
+
+	@:op(A < B) static function lt(a: Precedence, b: Precedence): Bool;
+
+	@:op(A >= B) static function gte(a: Precedence, b: Precedence): Bool;
+}
