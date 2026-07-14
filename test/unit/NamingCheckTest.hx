@@ -358,10 +358,97 @@ class NamingCheckTest extends Test {
 		}
 	}
 
+	public function testFixMemoizesConfinementAcrossFindingsOnOneOwner(): Void {
+		// Two flagged private static finals in ONE class: the per-owner confinement
+		// memo runs the project-wide scan once, and both findings are still fixed.
+		final src: String = 'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n\tprivate static final _cacheSize:Int = 0;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('forceBuild') >= 0);
+				Assert.isTrue(text.indexOf('cacheSize') >= 0);
+				Assert.isTrue(text.indexOf('_forceBuild') == -1);
+				Assert.isTrue(text.indexOf('_cacheSize') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixSkipsPrivateFieldReferencedByStringInAnotherFile(): Void {
+		#if (sys || nodejs)
+		// C's `shape` is confined (no subtype / @:access / @:allow), so WITHOUT the
+		// cross-file guard it would be renamed — but Other.hx reaches it by a
+		// reflection string `'shape'`, which a rename would break silently.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final otherSrc: String = "package pkg;\nclass Other {\n\tpublic function g() { return Reflect.field(this, 'shape'); }\n}";
+		final dir: String = CliFixture.writeDir('namingrefl', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/C.hx', source: cSrc },
+			{
+				file: '$dir/Other.hx',
+				source: otherSrc
+			}
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
+		Assert.equals(1, cVs.length);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+		cleanupNamingDir(dir, ['C.hx', 'Other.hx']);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testFixRenamesPrivateFieldWhenOtherFileHasOnlyIdentifierOrSubstring(): Void {
+		#if (sys || nodejs)
+		// Other.hx contains `shape` only as an identifier (a param) and as a
+		// substring of a longer string ("reshaped:"), neither of which is the exact
+		// quoted name — so the cross-file guard does not trip and the rename applies.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final otherSrc: String = 'package pkg;\nclass Other {\n\tpublic function g(shape:Int):String {\n\t\treturn "reshaped:" + shape;\n\t}\n}';
+		final dir: String = CliFixture.writeDir('namingid', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: '$dir/C.hx', source: cSrc },
+			{
+				file: '$dir/Other.hx',
+				source: otherSrc
+			}
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == '$dir/C.hx');
+		Assert.equals(1, cVs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(cSrc, cVs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(cSrc, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('_shape') >= 0);
+				Assert.isTrue(text.indexOf('var shape') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+		cleanupNamingDir(dir, ['C.hx', 'Other.hx']);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
 		return Naming.violationsFor('C.hx', support.project(tree), policy ?? HaxeNamingSupport.defaults());
+	}
+
+	private function cleanupNamingDir(dir: String, names: Array<String>): Void {
+		#if (sys || nodejs)
+		for (n in names) if (sys.FileSystem.exists('$dir/$n')) sys.FileSystem.deleteFile('$dir/$n');
+		if (sys.FileSystem.exists(dir)) sys.FileSystem.deleteDirectory(dir);
+		#end
 	}
 
 }

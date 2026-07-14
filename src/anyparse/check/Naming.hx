@@ -101,9 +101,18 @@ final class Naming implements Check {
 			if (s != null) flaggedFroms.push(s.from);
 		}
 
+		// Hoisted ONCE per fix() call (not per finding): every OTHER indexed file's
+		// source, for the cross-file reflection-string rename guard, plus a per-owner
+		// confinement memo so a type with many flagged private members runs the
+		// project-wide confinement scan a single time.
+		final otherSources: Array<String> = index == null ? [] : otherIndexedSources(index, violations[0].file);
+		final confinedMemo: Map<String, Bool> = [];
+
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
-			final rename: Null<RenameEdits> = renameEditsFor(decl, source, tree, policy, shape, flaggedFroms, index);
+			final rename: Null<RenameEdits> = renameEditsFor(
+				decl, source, tree, policy, shape, flaggedFroms, otherSources, confinedMemo, index
+			);
 			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
 		}
 		return edits;
@@ -150,12 +159,29 @@ final class Naming implements Check {
 	 * checks prove it cannot be referenced from outside its file. Every other
 	 * category (types, public members) is not.
 	 */
-	private static function isRenameSafe(decl: NamedDecl, source: String, index: Null<SymbolIndex>): Bool {
+	private static function isRenameSafe(
+		decl: NamedDecl, source: String, index: Null<SymbolIndex>, otherSources: Array<String>, confinedMemo: Map<String, Bool>
+	): Bool {
 		final category: NamingCategory = decl.category;
 		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
 		if ((category == NamingCategory.Field || category == NamingCategory.Constant) && !decl.mods.contains('public') && index != null) {
 			final owner: Null<String> = decl.enclosingType;
-			return owner != null && RefactorSupport.isPrivateMemberConfined(owner, source, index);
+			if (owner == null) return false;
+			// Cross-file reflection guard: a private member reached from ANOTHER file
+			// by a reflection string (`Reflect.field(x, 'name')`, a string-keyed field
+			// map, `Type.createInstance` field names) breaks silently after a rename —
+			// the identifier-level confinement proof cannot see it. Refuse when the old
+			// name occurs as a quoted string literal in any other indexed file (the
+			// declaring file is already covered by the in-file completeness check).
+			if (referencedAsStringLiteral(decl.name, otherSources)) return false;
+			// Memoize confinement per owner-type within this fix() call: a type with
+			// many flagged private constants would otherwise redo the identical
+			// project-wide subtype / access-grant / `@:allow` scan once per finding.
+			final cached: Null<Bool> = confinedMemo[owner];
+			if (cached != null) return cached;
+			final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index);
+			confinedMemo[owner] = confined;
+			return confined;
 		}
 		return false;
 	}
@@ -171,10 +197,11 @@ final class Naming implements Check {
 	 */
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, flaggedFroms: Array<Int>,
-		?index: SymbolIndex
+		otherSources: Array<String>, confinedMemo: Map<String, Bool>, ?index: SymbolIndex
 	): Null<RenameEdits> {
 		final span: Null<Span> = decl.span;
-		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index)) return null;
+		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
+			return null;
 		final rule: Null<NamingRule> = applicableRule(decl, policy);
 		if (rule == null) return null;
 		final normalize: Null<String -> Null<String>> = rule.normalize;
@@ -202,6 +229,41 @@ final class Naming implements Check {
 				occurrences: occurrences,
 				name: newName
 			};
+	}
+
+	/**
+	 * Every OTHER indexed file's source (the current file excluded — it is covered
+	 * by the in-file completeness check). Read from disk via the paths the index
+	 * holds, since `SymbolIndex` retains no sources; a file that cannot be read is
+	 * skipped. Used ONLY for the cross-file reflection-string guard. WANT: a
+	 * `SymbolIndex.sourceOf(file)` accessor would reuse the already-parsed sources
+	 * and drop this disk read entirely.
+	 */
+	private static function otherIndexedSources(index: SymbolIndex, currentFile: String): Array<String> {
+		final out: Array<String> = [];
+		for (fi in index.allFiles()) if (fi.file != currentFile) {
+			#if (sys || nodejs)
+			try
+				out.push(sys.io.File.getContent(fi.file))
+			catch (exception: Exception)
+				continue;
+			#end
+		}
+		return out;
+	}
+
+	/**
+	 * Whether `name` occurs as a quoted string literal (`'name'` or `"name"`, the
+	 * quotes hugging the exact name) in any of `sources`. A reflection reference
+	 * (`Reflect.field`, a string-keyed field map) writes the field name as its own
+	 * whole string, so this whole-content match catches it while a substring of a
+	 * longer string or a bare identifier does not falsely trip it. Refuse-on-doubt:
+	 * a comment mention counts too, which is acceptably conservative.
+	 */
+	private static function referencedAsStringLiteral(name: String, sources: Array<String>): Bool {
+		final single: String = "'" + name + "'";
+		final double: String = '"' + name + '"';
+		return sources.exists(src -> src.indexOf(single) >= 0 || src.indexOf(double) >= 0);
 	}
 
 }
