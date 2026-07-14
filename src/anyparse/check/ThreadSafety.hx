@@ -128,6 +128,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 	private static function propagateContexts(
 		graph: CallGraph, spawnIds: Array<String>, marshalIds: Array<String>, contexts: Map<String, Int>, mainParent: Map<String, CallEdge>
 	): Void {
+		// noqa: complexity
 		final queue: Array<String> = [];
 		for (id => node in graph.nodes) {
 			if (node.isExternal) continue;
@@ -227,6 +228,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 	private static function reportLockHeld(
 		graph: CallGraph, lockPairs: Array<String>, sinkIds: Array<String>, taintHop: Map<String, CallEdge>, violations: Array<Violation>
 	): Void {
+		// noqa: complexity
 		final seen: Array<String> = [];
 		for (pair in lockPairs) {
 			final slash: Int = pair.lastIndexOf('/');

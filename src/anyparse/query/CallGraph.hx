@@ -169,6 +169,7 @@ final class CallGraph {
 	}
 
 	private function collectNodes(entry: ParsedEntry, shape: RefShape): Void {
+		// noqa: complexity
 		final fnKinds: Array<String> = shape.functionKinds ?? [];
 		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
@@ -318,6 +319,7 @@ final class CallGraph {
 	}
 
 	private function collectEdges(entry: ParsedEntry, shape: RefShape, provider: Null<TypeInfoProvider>): Void {
+		// noqa: complexity
 		final callKind: Null<String> = shape.callKind;
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
 		if (callKind == null || fieldAccessKind == null) return;

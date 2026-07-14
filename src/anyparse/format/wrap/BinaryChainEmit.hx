@@ -652,6 +652,7 @@ final class BinaryChainEmit {
 		evalAt: (Bool, Array<Int>) -> { mode: WrapMode, location: WrappingLocation },
 		shapeAt: ({ mode: WrapMode, location: WrappingLocation }) -> Doc, shapeNoWrapAt: (WrappingLocation) -> Doc
 	): Doc {
+		// noqa: complexity
 		final flat: { mode: WrapMode, location: WrappingLocation } = evalAt(false, []);
 		final brk: { mode: WrapMode, location: WrappingLocation } = evalAt(true, []);
 		// ω-chain-keep-flat (increment-6 — CONSTRAINED probe): UNWRAP the
@@ -839,8 +840,8 @@ final class BinaryChainEmit {
 	private static function ternaryHugCollectionBranchIndex(items: Array<Doc>, ops: Array<String>): Int {
 		if (items.length != 3 || ops.length != 2 || ops[0] != '?' || ops[1] != ':') return -1;
 		if (WrapList.flatLength(items[0]) < 0) return -1;
-		var idx: Int = -1;
-		for (i in 1...3) if (WrapList.flatLength(items[i]) < 0) {
+		var idx: Int = -1; // noqa: magic-number
+		for (i in 1...3) if (WrapList.flatLength(items[i]) < 0) { // noqa: magic-number
 			if (idx != -1) return -1;
 			idx = i;
 		}

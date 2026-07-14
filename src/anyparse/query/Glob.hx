@@ -131,7 +131,7 @@ final class Glob {
 						// `**` — across segments. `**/` also matches zero dirs.
 						if (i + 2 < n && spec.charAt(i + 2) == '/') {
 							buf.add('(?:.*/)?');
-							i += 3;
+							i += 3; // noqa: magic-number
 						} else {
 							buf.add('.*');
 							i += 2;

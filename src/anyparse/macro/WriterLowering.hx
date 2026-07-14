@@ -375,6 +375,7 @@ class WriterLowering {
 	private function lowerPostfixStar(
 		branch: ShapeNode, typePath: String, writeFnName: String, hasPratt: Bool, argNames: Array<String>, operandCall: Expr
 	): Expr {
+		// noqa: complexity
 		final postfixOp: String = branch.annotations.get('postfix.op');
 		final postfixClose: String = branch.annotations.get('postfix.close') ?? '';
 		final starNode: ShapeNode = branch.children[1];
@@ -747,6 +748,7 @@ class WriterLowering {
 	}
 
 	private function lowerStruct(node: ShapeNode, typePath: String): Expr {
+		// noqa: complexity
 		if (shouldWriteByName(node)) return lowerStructByName(node, typePath);
 		final isRaw: Bool = node.hasMeta(':raw');
 		final parts: Array<Expr> = [];
@@ -1153,6 +1155,7 @@ class WriterLowering {
 	 * `parts`. Extracted so the orchestrator stays under the complexity gate.
 	 */
 	private function emitTriviaTryparseStar(c: TriviaStarCtx, parts: Array<Expr>): Void {
+		// noqa: complexity
 		final starNode: ShapeNode = c.starNode;
 		final fieldAccess: Expr = c.fieldAccess;
 		final elemFn: String = c.elemFn;
@@ -4957,10 +4960,12 @@ class WriterLowering {
 		// gates the same as 1-arg `@:sep(',')`. Sister to TriviaTypeSynth
 		// L1076 fix; positions stay deterministic between synth + writer.
 		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
+		// CHECKSTYLE:OFF
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
 			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
 			+ (TriviaTypeSynth.isInfixChainBranch(branch) ? 1 : 0) + (TriviaTypeSynth.isRhsTrailBranch(branch) ? 1 : 0);
+		// CHECKSTYLE:ON
 	}
 
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
@@ -6642,6 +6647,7 @@ class WriterLowering {
 	 * inline.
 	 */
 	private function lowerInfixBranch(c: LowerBranchCtx): Expr {
+		// noqa: complexity
 		final branch: ShapeNode = c.branch;
 		final typePath: String = c.typePath;
 		final writeFnName: String = c.writeFnName;
@@ -6894,6 +6900,7 @@ class WriterLowering {
 	 * type (`HxExpr` plain / `HxExprT` trivia).
 	 */
 	private function lowerInfixChain(c: LowerBranchCtx): Expr {
+		// noqa: complexity
 		final branch: ShapeNode = c.branch;
 		final typePath: String = c.typePath;
 		final writeFnName: String = c.writeFnName;
@@ -7103,6 +7110,7 @@ class WriterLowering {
 	 * current writer's value type.
 	 */
 	private function infixChainGatherSwitch(isChainBool: Bool, isChainNullCoal: Bool, threadBreaks: Bool, leafCall: Expr): Expr {
+		// noqa: complexity
 		// `??` is right-assoc (`NullCoal(a, NullCoal(b, c))`); the recurse-left /
 		// push-op / recurse-right gather still yields items in infix order with a
 		// per-gap `_afterComments` entry, so the flat chain-emit preserves the
@@ -7730,7 +7738,7 @@ class WriterLowering {
 		var ifExprIndentArgs: Null<Array<String>> = null;
 		final indentEntries: Array<Array<String>> = branch.fmtReadStringArgsAll('indentValueIfCtor');
 		for (entry in indentEntries) switch entry.length {
-			case 3:
+			case 3: // noqa: magic-number
 				if (indentArgs != null)
 					Context.fatalError(
 						'WriterLowering: at most one 3-arg @:fmt(indentValueIfCtor(ctorName, optField, leftCurlyField)) per ctor',
@@ -11055,6 +11063,7 @@ class WriterLowering {
 		// byte-identical.
 		reflowInExprPosition: Bool = false
 	): Expr {
+		// noqa: complexity
 		// ω-trivia-sep-anontype-braces (Phase B1): when the call site
 		// reads `@:fmt(anonTypeBracesOpen)` / `objectLiteralBracesOpen`
 		// via `delimInsidePolicySpace` and threads the resulting Doc
@@ -11544,6 +11553,7 @@ class WriterLowering {
 		// Blank-line extras (authored blanks) are still emitted. Default false.
 		elemSelfTrailsNewline: Bool = false
 	): Expr {
+		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
 		// Cascade trackers + cascade-fire blank count come from
 		// `buildCascadeEmit`; consumer splices `$cascadeInitPrev` once
@@ -11836,12 +11846,13 @@ class WriterLowering {
 	 * here instead of touching every consumer.
 	 */
 	private static function altSlotAccess(branch: ShapeNode, baseIdx: Int, argNames: Array<String>, slot: AltSlot): Null<Expr> {
+		// noqa: complexity
 		if (!altSlotHasSlot(branch, slot)) return null;
 		var idx: Int = baseIdx;
 		if (slot == CloseTrailing) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
 			idx++;
-			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3;
+			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) idx += 3; // noqa: magic-number
 		}
 		if (slot == TrailOpt) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isAltTrailOptBranch(branch)) idx++;
@@ -13001,7 +13012,7 @@ class WriterLowering {
 								$hkaIdent = 0;
 								$hkbIdent = 1;
 							};
-							case 3: transparentBody;
+							case 3: transparentBody; // noqa: magic-number
 							case _: macro {
 								$tkaIdent = 0;
 								$tkbIdent = 0;
@@ -13567,7 +13578,7 @@ class WriterLowering {
 				// separators between metas aren't a fork-supported shape
 				// for the After policy.
 				_docs.push(_dhl());
-			} else if (_si > 0 && _metaPolicy == 3) {
+			} else if (_si > 0 && _metaPolicy == 3) { // noqa: magic-number
 				// ω-metadata-line-end-function: ForceAfterLast collapses
 				// any source newline between consecutive metas to a
 				// single space, producing the canonical `@A @B @C`
@@ -14599,6 +14610,7 @@ class WriterLowering {
 	 * arm falls back to the space-joined flat layout.
 	 */
 	private static function triviaSepNoTriviaBranch(c: SepStarNoTriviaCtx): Expr {
+		// noqa: complexity
 		final triviaElemCall: Expr = c.triviaElemCall;
 		final openInsideDoc: Expr = c.openInsideDoc;
 		final closeInsideDoc: Expr = c.closeInsideDoc;
@@ -15057,6 +15069,7 @@ class WriterLowering {
 	 * the complexity gate; byte-identical.
 	 */
 	private static function triviaSepBlankBeforeExpr(beforeDocCommentEmptyLines: Bool, typedefBodyBlanks: Bool): Expr {
+		// noqa: complexity
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): mirror the
 		// `_currHasDocComment` / `addByCurrDocExpr` machinery from
 		// `triviaBlockStarExpr` so sep-Stars (e.g. `HxType.Anon.fields`
@@ -15383,7 +15396,7 @@ class WriterLowering {
 			final staticIdent: Expr = { expr: EConst(CIdent(staticVarSubdivInfo.staticCtorName)), pos: pos };
 			macro {
 				if (_currKind == 1 || _currKind == 2) for (_m in $modAccess) if (_m.node.match($staticIdent)) {
-					_currKind = _currKind == 1 ? 3 : 4;
+					_currKind = _currKind == 1 ? 3 : 4; // noqa: magic-number
 					break;
 				}
 			};
@@ -15537,8 +15550,8 @@ class WriterLowering {
 	 */
 	private static function triviaBlockSubdivVarArmsExpr(betweenVarsAccess: Expr, afterStaticVarsAccess: Expr): Expr {
 		return macro ((_prevKind == 1 && _currKind == 1 && $betweenVarsAccess > 0)
-			|| (_prevKind == 3 && _currKind == 3 && $betweenVarsAccess > 0)
-			|| (((_prevKind == 1 && _currKind == 3) || (_prevKind == 3 && _currKind == 1)) && $afterStaticVarsAccess > 0));
+			|| (_prevKind == 3 && _currKind == 3 && $betweenVarsAccess > 0) // noqa: magic-number
+			|| (((_prevKind == 1 && _currKind == 3) || (_prevKind == 3 && _currKind == 1)) && $afterStaticVarsAccess > 0)); // noqa
 	}
 
 	/**
@@ -15548,8 +15561,8 @@ class WriterLowering {
 	 * arms.
 	 */
 	private static function triviaBlockSubdivFnArmsExpr(betweenFnAccess: Expr, betweenStaticFnAccess: Expr): Expr {
-		return macro ((_prevKind == 4 && _currKind == 4 && $betweenStaticFnAccess > 0)
-			|| (((_prevKind == 2 && _currKind == 2) || (_prevKind == 2 && _currKind == 4) || (_prevKind == 4 && _currKind == 2))
+		return macro ((_prevKind == 4 && _currKind == 4 && $betweenStaticFnAccess > 0) // noqa: magic-number
+			|| (((_prevKind == 2 && _currKind == 2) || (_prevKind == 2 && _currKind == 4) || (_prevKind == 4 && _currKind == 2)) // noqa
 				&& $betweenFnAccess > 0));
 	}
 
@@ -15558,8 +15571,8 @@ class WriterLowering {
 	 * boundary fires `afterVars`. Returns the single transition arm.
 	 */
 	private static function triviaBlockSubdivVarFnArmExpr(afterVarsAccess: Expr): Expr {
-		return macro ((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4))
-				|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0);
+		return macro ((((_prevKind == 1 || _prevKind == 3) && (_currKind == 2 || _currKind == 4)) // noqa: magic-number
+				|| ((_prevKind == 2 || _prevKind == 4) && (_currKind == 1 || _currKind == 3))) && $afterVarsAccess > 0); // noqa
 	}
 
 	/**

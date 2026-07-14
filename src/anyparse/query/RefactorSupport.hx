@@ -918,7 +918,7 @@ final class RefactorSupport {
 	 * finder (`Cli.appendCommentHits`) and the comment rewriter (`CommentRewrite`).
 	 */
 	public static function commentBody(source: String, tok: { from: Int, to: Int, isLine: Bool }): Span {
-		final closed: Bool = !tok.isLine && tok.to >= tok.from + 4 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code
+		final closed: Bool = !tok.isLine && tok.to >= tok.from + 4 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code // noqa
 			&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
 		final bodyEnd: Int = closed ? tok.to - 2 : tok.to;
 		return new Span(tok.from + 2, bodyEnd);

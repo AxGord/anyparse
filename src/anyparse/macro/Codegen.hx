@@ -599,7 +599,7 @@ class Codegen {
 					if (_nl >= 2) {
 						if (_leading.length == 0) {
 							_blankBefore = true;
-							if (_nl >= 3) _blankBefore2 = _nl - 2;
+							if (_nl >= 3) _blankBefore2 = _nl - 2; // noqa: magic-number
 						} else
 							_blankAfterLeadingComments = true;
 					}

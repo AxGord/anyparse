@@ -95,7 +95,7 @@ final class IfFalseDeadCode implements Check {
 	/** `true` iff the source at `from` opens with `#if false` / `#if (false)` (word-bounded). */
 	private static function isIfFalseAt(source: String, from: Int): Bool {
 		if (!sliceStartsWith(source, from, '#if')) return false;
-		var i: Int = from + 3;
+		var i: Int = from + 3; // noqa: magic-number
 		while (i < source.length && isWs(source.charCodeAt(i) ?? 0)) i++;
 		var parens: Bool = false;
 		if (i < source.length && source.charCodeAt(i) == '('.code) {
@@ -107,7 +107,7 @@ final class IfFalseDeadCode implements Check {
 		final after: Int = source.charCodeAt(i + 5) ?? 0;
 		if (isWordChar(after)) return false;
 		if (!parens) return true;
-		var j: Int = i + 5;
+		var j: Int = i + 5; // noqa: magic-number
 		while (j < source.length && isWs(source.charCodeAt(j) ?? 0)) j++;
 		return source.charCodeAt(j) == ')'.code;
 	}

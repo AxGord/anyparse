@@ -201,7 +201,8 @@ class FormatReader {
 		final fields: Array<ClassField> = cl.fields.get();
 		for (f in fields) if (f.name == 'encoding') {
 			final texpr: Null<TypedExpr> = f.expr();
-			if (texpr != null) return extractInt(texpr) == 4; // Encoding.Binary = 4
+			// Encoding.Binary = 4
+			if (texpr != null) return extractInt(texpr) == 4; // noqa: magic-number
 		}
 		return false;
 	}

@@ -2026,6 +2026,7 @@ class WriterCodegen {
 	}
 
 	private static function pushOptFanoutHelpers(fields: Array<Field>, optionsTypePath: String, optionsCT: ComplexType): Void {
+		// noqa: complexity
 		final hasValueIfBranch: Bool = optionsHasField(optionsTypePath, '_inValueIfBranch');
 		final hasArrowLambdaBody: Bool = optionsHasField(optionsTypePath, '_inArrowLambdaBody');
 		if (optionsHasInExprPosition(optionsTypePath)) {

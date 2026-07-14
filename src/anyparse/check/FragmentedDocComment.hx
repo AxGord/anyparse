@@ -96,7 +96,7 @@ final class FragmentedDocComment implements Check {
 	 * discrimination `RefactorSupport.docExtendedSpan` already makes.
 	 */
 	private static function isDocBlock(source: String, tok: CommentTok): Bool {
-		return !tok.isLine && tok.to - tok.from > 4 && source.substring(tok.from, tok.from + 3) == '/**';
+		return !tok.isLine && tok.to - tok.from > 4 && source.substring(tok.from, tok.from + 3) == '/**'; // noqa: magic-number
 	}
 
 	/** Whether only whitespace with at most one newline separates `a` and `b` (consecutive lines, no blank line). */

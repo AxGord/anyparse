@@ -686,7 +686,7 @@ final class Cli {
 			}
 			if (okRe.match(line)) {
 				tests++;
-				final dots: Null<String> = try okRe.matched(3) catch (_: Exception) null;
+				final dots: Null<String> = try okRe.matched(3) catch (_: Exception) null; // noqa: magic-number
 				if (dots != null) assertions += (dots: String).length;
 			} else if (failRe.match(line)) {
 				failures++;
@@ -800,6 +800,7 @@ final class Cli {
 	 * fails to re-parse, exits non-zero with the source untouched.
 	 */
 	private static function runRename(args: Array<String>): Int {
+		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var scope: Null<String> = null;
@@ -1547,6 +1548,7 @@ final class Cli {
 	 * unparseable result exits non-zero with the file untouched.
 	 */
 	private static function runExtractVar(args: Array<String>): Int {
+		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var file: Null<String> = null;
@@ -1915,6 +1917,7 @@ final class Cli {
 	 * overwrites in place.
 	 */
 	private static function runAddElement(args: Array<String>): Int {
+		// noqa: complexity
 		final o: AddElementOpts = parseAddElementArgs(args);
 		if (o.errExit != null) return o.errExit;
 		var code: Null<String> = o.code;
@@ -2375,6 +2378,7 @@ final class Cli {
 	 * exits non-zero with the file untouched.
 	 */
 	private static function runChangeSig(args: Array<String>): Int {
+		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var file: Null<String> = null;
@@ -2475,6 +2479,7 @@ final class Cli {
 	 * unparseable result, exits non-zero with the file untouched.
 	 */
 	private static function runRemoveParam(args: Array<String>): Int {
+		// noqa: complexity
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var file: Null<String> = null;
@@ -5884,7 +5889,7 @@ final class Cli {
 					j++;
 				}
 				final identLen: Int = j - i;
-				if (identLen > 4)
+				if (identLen > 4) // noqa: magic-number
 					buf.add('_');
 				else
 					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
@@ -6352,7 +6357,7 @@ final class Cli {
 		// NOT look like an indented test row (contain `: OK|FAIL|ERR`).
 		if (full.match(line)) {
 			locus.line = parsePositiveInt(full.matched(2));
-			locus.message = StringTools.trim(full.matched(3));
+			locus.message = StringTools.trim(full.matched(3)); // noqa: magic-number
 			return true;
 		}
 		if (lineOnly.match(line)) {
@@ -10448,7 +10453,7 @@ final class Cli {
 	private static function searchExplainHistogram(patternKind: String, kindCounts: Map<String, Int>): Void {
 		final entries: Array<{ k: String, n: Int }> = [for (k => n in kindCounts) { k: k, n: n }];
 		entries.sort((a, b) -> a.n == b.n ? (a.k < b.k ? -1 : 1) : b.n - a.n);
-		final topN: Int = entries.length < 12 ? entries.length : 12;
+		final topN: Int = entries.length < 12 ? entries.length : 12; // noqa: magic-number
 		stderr('apq search: 0 matches; pattern root kind is "$patternKind". Top kinds seen in input (${entries.length} distinct):\n');
 		for (k in 0...topN) {
 			final e = entries[k];

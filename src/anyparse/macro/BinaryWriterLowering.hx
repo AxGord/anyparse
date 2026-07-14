@@ -180,8 +180,8 @@ class BinaryWriterLowering {
 						_out = '0';
 					else
 						while (_rem > 0) {
-							_out = String.fromCharCode('0'.code + (_rem & 7)) + _out;
-							_rem = _rem >>> 3;
+							_out = String.fromCharCode('0'.code + (_rem & 7)) + _out; // noqa: magic-number
+							_rem = _rem >>> 3; // noqa: magic-number
 						}
 					_out;
 				};

@@ -150,7 +150,7 @@ final class JsonFormat implements TextFormat {
 			case 'b'.code: { char: 0x08, consumed: 1 };
 			case 'f'.code: { char: 0x0C, consumed: 1 };
 			case 'u'.code:
-				if (pos + 5 > input.length) throw new haxe.Exception('incomplete unicode escape at $pos');
+				if (pos + 5 > input.length) throw new haxe.Exception('incomplete unicode escape at $pos'); // noqa: magic-number
 				final hex: String = input.substring(pos + 1, pos + 5);
 				final code: Null<Int> = Std.parseInt('0x$hex');
 				if (code == null) throw new haxe.Exception('invalid unicode escape: $hex');

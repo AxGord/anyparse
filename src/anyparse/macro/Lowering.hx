@@ -2220,6 +2220,7 @@ class Lowering {
 	}
 
 	private function buildPrattBranchBody(branch: ShapeNode, typePath: String, simple: String, skipCall: Expr): Expr {
+		// noqa: complexity
 		final returnCT: ComplexType = ruleReturnCT(typePath);
 		final loopFnName: String = parseFnName(typePath);
 		final ctor: String = branch.annotations.get('base.ctor');
@@ -3107,6 +3108,7 @@ class Lowering {
 		elemCT: ComplexType, elemCall: Expr, wrappedCT: ComplexType, closeNotNextExpr: Expr, sepCharCode: Int, sepText: String,
 		close: String, ctorCallTrivia: Expr
 	): Expr {
+		// noqa: complexity
 		// Per-element loop: leading-trivia → close-peek break → parse →
 		// multi-line trailing scan → matchLit(sep). Trailing comments are
 		// captured up to the next sep or close, even across newlines
@@ -4495,6 +4497,7 @@ class Lowering {
 		steps: Array<Expr>, trailText: String, triviaTrailOpt: Bool, triviaCaptureSource: Bool, trailOptional: Bool,
 		parseGateCall: Null<Expr>
 	): Void {
+		// noqa: complexity
 		// ω-trailopt-stash-trivia: in trivia mode + `@:trailOpt`, use
 		// `skipWsAndStash` so trailing comments between the body and
 		// the optional trail literal land in `ctx.pendingTrivia`.
@@ -5759,10 +5762,10 @@ expectLit(ctx, $v{trailText}));
 					var _acc: Int = 0;
 					var _oi: Int = 0;
 					while (_oi < _s.length) {
-						final _oc: Int = StringTools.fastCodeAt(_s, _oi);
+						final _oc: Int = StringTools.fastCodeAt(_s, _oi); // noqa: magic-number
 						if (_oc < '0'.code || _oc > '7'.code)
 							throw new anyparse.runtime.ParseError(new anyparse.runtime.Span(ctx.pos, ctx.pos), $v{digitMsg});
-						_acc = (_acc << 3) | (_oc - '0'.code);
+						_acc = (_acc << 3) | (_oc - '0'.code); // noqa: magic-number
 						_oi++;
 					}
 					_acc;

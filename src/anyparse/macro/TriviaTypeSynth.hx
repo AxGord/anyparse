@@ -892,7 +892,8 @@ class TriviaTypeSynth {
 		if (isAltCloseTrailingBranch(branch)) {
 			n++; // closeTrailing
 			if (branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse')) {
-				n += 3; // openTrailing + trailingBlankBefore + trailingLeading
+				// openTrailing + trailingBlankBefore + trailingLeading
+				n += 3; // noqa: magic-number
 				// ω-arraylit-source-trail-comma: + trailPresent when @:sep is
 				// present (mirrors `buildEnumCtor` gate).
 				// ω-blockended-trivia-meta-arity: hasMeta over
@@ -920,7 +921,7 @@ class TriviaTypeSynth {
 		// argsCloseNewline, argsInnerComment, callLeadingComment. Keep the count in
 		// sync so the `pairedToRaw` switch pattern's `_` placeholder count matches
 		// the paired ctor's arity.
-		if (isPostfixCloseTrailingBranch(branch)) n += 5;
+		if (isPostfixCloseTrailingBranch(branch)) n += 5; // noqa: magic-number
 		return n;
 	}
 

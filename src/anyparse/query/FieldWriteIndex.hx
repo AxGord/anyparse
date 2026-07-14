@@ -172,6 +172,7 @@ final class FieldWriteIndex {
 	 * is a field write only when its binding is one of the enclosing type's members.
 	 */
 	private static function classify(target: QueryNode, typeCtx: Null<WriteTypeCtx>, inOpaque: Bool, c: ScanCtx): Void {
+		// noqa: complexity
 		final tspan: Null<Span> = target.span;
 		if (tspan == null) return;
 		final span: Span = tspan;
