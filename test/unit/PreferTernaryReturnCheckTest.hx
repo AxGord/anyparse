@@ -127,14 +127,14 @@ class PreferTernaryReturnCheckTest extends Test {
 	public function testNullNarrowingGuardNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations("class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null && s.g() != null) return true;\n\t\treturn c;\n\t}\n}").length
+			violations('class C {\n\tfunction f(s:Null<S>):Bool {\n\t\tif (s != null && s.g() != null) return true;\n\t\treturn c;\n\t}\n}').length
 		);
 	}
 
 	/** A null-check WITHOUT accessing the same ident still flags (no narrowing to lose). Value returns keep this off the stuck-boolean gate. */
 	public function testNullCheckWithoutAccessFlagged(): Void {
 		Assert.equals(
-			1, violations("class C {\n\tfunction f(s:Null<S>):Int {\n\t\tif (s != null) return 1;\n\t\treturn 0;\n\t}\n}").length
+			1, violations('class C {\n\tfunction f(s:Null<S>):Int {\n\t\tif (s != null) return 1;\n\t\treturn 0;\n\t}\n}').length
 		);
 	}
 
@@ -143,7 +143,7 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				"class C {\n\tfunction f(x:Null<Array<Int>>):Bool {\n\t\tif (x != null && x[0] > 0) return true;\n\t\treturn c;\n\t}\n}"
+				'class C {\n\tfunction f(x:Null<Array<Int>>):Bool {\n\t\tif (x != null && x[0] > 0) return true;\n\t\treturn c;\n\t}\n}'
 			).length
 		);
 	}
@@ -152,7 +152,7 @@ class PreferTernaryReturnCheckTest extends Test {
 	public function testArgPositionGuardNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations("class C {\n\tfunction f(x:Null<S>):Bool {\n\t\tif (x != null && g(x)) return true;\n\t\treturn c;\n\t}\n}").length
+			violations('class C {\n\tfunction f(x:Null<S>):Bool {\n\t\tif (x != null && g(x)) return true;\n\t\treturn c;\n\t}\n}').length
 		);
 	}
 

@@ -474,7 +474,7 @@ class ApqRefsTest extends Test {
 	 * `scopeKinds` / `declHostKinds`.
 	 */
 	public function testSiblingLocalFnParamsDoNotCrossBind(): Void {
-		final source: String = 'class X { static function outer() {\n' + '\tfunction a(p:Int):Int { return p; }\n'
+		final source: String = 'class X { static function outer() {\n\tfunction a(p:Int):Int { return p; }\n'
 			+ '\tfunction b(p:String):String { return p; }\n' + '} }';
 		final hits: Array<RefHit> = findIn(source, 'p');
 		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
@@ -496,7 +496,7 @@ class ApqRefsTest extends Test {
 
 	/** A local fn's name is a Decl visible from the enclosing body (calls bind to it). */
 	public function testLocalFnNameIsDecl(): Void {
-		final source: String = 'class X { static function outer() {\n' + '\tfunction helper():Void {}\n' + '\thelper();\n' + '} }';
+		final source: String = 'class X { static function outer() {\n\tfunction helper():Void {}\n\thelper();\n} }';
 		final hits: Array<RefHit> = findIn(source, 'helper');
 		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Decl).length, 'local fn decl expected, got ${describe(hits)}');
 		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');

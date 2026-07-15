@@ -166,9 +166,9 @@ class ReplaceNodeSliceTest extends Test {
 	 * block, not the new one stacked above the surviving old one.
 	 */
 	public function testNewSourceDocFoldsLeadingDoc(): Void {
-		final source: String = "class C {\n\t/** old */\n\tpublic function f():Void {}\n}\n";
-		final expected: String = "class C {\n\t/** new */\n\tpublic function g():Void {}\n}\n";
-		assertReplace(source, ByKindPosition(3, 9, "FnMember"), "/** new */\npublic function g():Void {}", expected, true);
+		final source: String = 'class C {\n\t/** old */\n\tpublic function f():Void {}\n}\n';
+		final expected: String = 'class C {\n\t/** new */\n\tpublic function g():Void {}\n}\n';
+		assertReplace(source, ByKindPosition(3, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
 	}
 
 	/**
@@ -190,9 +190,9 @@ class ReplaceNodeSliceTest extends Test {
 	 * with a doc.
 	 */
 	public function testNewSourceDocPreservesBannerAboveDoc(): Void {
-		final source: String = "class C {\n\t/* banner */\n\t/** old */\n\tpublic function f():Void {}\n}\n";
-		final expected: String = "class C {\n\t/* banner */\n\t/** new */\n\tpublic function g():Void {}\n}\n";
-		assertReplace(source, ByKindPosition(4, 9, "FnMember"), "/** new */\npublic function g():Void {}", expected, true);
+		final source: String = 'class C {\n\t/* banner */\n\t/** old */\n\tpublic function f():Void {}\n}\n';
+		final expected: String = 'class C {\n\t/* banner */\n\t/** new */\n\tpublic function g():Void {}\n}\n';
+		assertReplace(source, ByKindPosition(4, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
 	}
 
 }
