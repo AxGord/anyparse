@@ -99,7 +99,8 @@ final class Linter {
 			new UnguardedNullableDeref(),
 			new OversizedType(),
 			new PreferIndexAccess(),
-			new CatchDynamic()
+			new CatchDynamic(),
+			new PreferCaseWildcard()
 		];
 	}
 

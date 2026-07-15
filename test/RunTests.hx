@@ -411,6 +411,7 @@ import unit.OversizedTypeCheckTest;
 import unit.LintListRulesCliTest;
 import unit.PreferIndexAccessCheckTest;
 import unit.CatchDynamicCheckTest;
+import unit.PreferCaseWildcardCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -751,6 +752,7 @@ class RunTests {
 		addCase(new UnusedParameterCheckTest());
 		addCase(new SwallowedExceptionCheckTest());
 		addCase(new CatchDynamicCheckTest());
+		addCase(new PreferCaseWildcardCheckTest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
