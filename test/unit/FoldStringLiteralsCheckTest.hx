@@ -107,4 +107,21 @@ class FoldStringLiteralsCheckTest extends Test {
 		return edits.length > 0 ? edits[0].text : '';
 	}
 
+
+	/**
+	 * A foldable chain formatted ACROSS source lines is deliberate width layout —
+	 * silent; its same-line inner prefix (left-assoc subtree) still folds.
+	 */
+	public function testCrossLineChainSkipped(): Void {
+		Assert.equals(0, violations('class C { function f() { final a = "long message "\n\t\t+ "split for width"; } }').length);
+	}
+
+	/** The same-line prefix of a cross-line chain is flagged and folds on its own. */
+	public function testSameLinePrefixOfCrossLineChainFolds(): Void {
+		final src: String = 'class C { function f() { final a = "a" + "b"\n\t\t+ "tail"; } }';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals('"ab"', foldOf(src));
+	}
+
 }

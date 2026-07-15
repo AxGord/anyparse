@@ -27,11 +27,13 @@ import haxe.Exception;
  * ## What folds
  *
  * Only a maximal concat sub-tree whose every leaf is a plain literal of the SAME
- * quote — `"a" + "b" + "c"` -> `"abc"` in one pass. A non-literal or interpolated
- * operand, or a mixed-quote pair, blocks the fold at that node; a foldable inner
- * pair inside a partially-foldable chain (`"a" + "b" + name`) still folds on its
- * own. Folding concatenates each literal's RAW inner source and re-wraps in the
- * shared quote, so escapes / `$$` are preserved verbatim.
+ * quote AND whose span sits on a single source line — `"a" + "b" + "c"` -> `"abc"`
+ * in one pass. A concatenation formatted ACROSS lines is deliberate width layout
+ * (a long message split for readability) and stays silent. A non-literal or
+ * interpolated operand, or a mixed-quote pair, blocks the fold at that node; a
+ * foldable inner pair inside a partially-foldable chain (`"a" + "b" + name`)
+ * still folds on its own. Folding concatenates each literal's RAW inner source
+ * and re-wraps in the shared quote, so escapes / `$$` are preserved verbatim.
  */
 @:nullSafety(Strict)
 final class FoldStringLiterals implements Check {
@@ -90,14 +92,25 @@ final class FoldStringLiterals implements Check {
 	}
 
 	/**
-	 * Walk `node`; at each maximal foldable concat emit an `Info` and stop (its
-	 * inner folds are subsumed). A non-foldable concat is still descended into,
-	 * so a foldable inner pair in a partially-foldable chain is found.
+	 * Walk `node`; at each maximal foldable concat that sits on a SINGLE source
+	 * line emit an `Info` and stop (its inner folds are subsumed). A concat
+	 * formatted ACROSS lines is deliberate width layout (a long message split
+	 * for readability, a fixture line-per-literal) — folding it would produce
+	 * one over-long line the writer cannot wrap, so it stays silent; its
+	 * same-line inner prefix (left-assoc subtree) is still found and flagged.
+	 * A non-foldable concat is descended into too, so a foldable inner pair in
+	 * a partially-foldable chain is found.
+	 *
 	 */
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, support: StringFoldSupport): Void {
 		if (node.kind == support.concatKind() && folded(node, source, support) != null) {
 			final span: Null<Span> = node.span;
-			if (span != null) {
+			// A binary node's span swallows trailing trivia up to the PARENT's
+			// operator, so the single-line test must run to the last literal's
+			// own end, not span.to.
+			final chainEnd: Int = rightmostLeafEnd(node);
+			final lineEnd: Int = span != null ? source.indexOf('\n', span.from) : -1;
+			if (span != null && (lineEnd == -1 || lineEnd >= chainEnd)) {
 				out.push({
 					file: file,
 					span: span,
@@ -143,6 +156,15 @@ final class FoldStringLiterals implements Check {
 	/** The composite map key for a span — `from` alone collides on a left-assoc chain. */
 	private static inline function spanKey(span: Span): String {
 		return '${span.from}:${span.to}';
+	}
+
+
+	/** The rightmost descendant's span end — the chain's last literal end, trivia-free. */
+	private static function rightmostLeafEnd(node: QueryNode): Int {
+		final last: Null<QueryNode> = node.children.length > 0 ? node.children[node.children.length - 1] : null;
+		if (last != null) return rightmostLeafEnd(last);
+		final span: Null<Span> = node.span;
+		return span != null ? span.to : 0;
 	}
 
 }
