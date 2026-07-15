@@ -591,7 +591,7 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 		// Missing `;` between two non-brace calls must NOT parse —
 		// mechanism B is stricter here than the reverted blanket
 		// `:trailOpt` approach (which leniently accepted `foo() bar()`).
-		Assert.raises(() -> parseBody('class C { function f():Void { foo() bar(); } }'));
+		Assert.raises(parseBody.bind('class C { function f():Void { foo() bar(); } }'));
 	}
 
 	public function testSwitchArmMultiStmtBoundaryPreserved(): Void {
@@ -698,14 +698,14 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 		// followed by `else`: `if (c) g() h();` keeps the Slice-V
 		// `;`-required boundary (next token `h`, not `else`), so the
 		// IfStmt then-body's missing `;` is still fatal.
-		Assert.raises(() -> parseBody('class C { function f():Void { if (c) g() h(); } }'));
+		Assert.raises(parseBody.bind('class C { function f():Void { if (c) g() h(); } }'));
 	}
 
 	public function testSliceVBoundaryStillIntactWithX2(): Void {
 		// The V −33 regression guard, re-pinned under Slice X2: a
 		// missing `;` between two non-brace calls (no `else` in sight)
 		// must still NOT parse — peekKw('else') is false here.
-		Assert.raises(() -> parseBody('class C { function f():Void { foo() bar(); } }'));
+		Assert.raises(parseBody.bind('class C { function f():Void { foo() bar(); } }'));
 	}
 
 	public function testBareThenNoElseNoSemiBeforeCloseBrace(): Void {

@@ -334,7 +334,7 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// name match and the parse is rejected. Exit criterion: add a
 		// brace production for the name slot when a real `var ${e} = …`
 		// site appears.
-		Assert.raises(() -> HaxeParser.parse("class C { var ${e} = 1; }"), ParseError);
+		Assert.raises(HaxeParser.parse.bind("class C { var ${e} = 1; }"), ParseError);
 	}
 
 }

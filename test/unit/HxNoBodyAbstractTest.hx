@@ -124,7 +124,7 @@ class HxNoBodyAbstractTest extends HxTestHelpers {
 	// ---- parse: rejects malformed ----
 
 	public function testRejectsFunctionWithoutBodyOrSemi(): Void {
-		Assert.raises(() -> HaxeModuleParser.parse('interface IFoo { function bar():Void }'), ParseError);
+		Assert.raises(HaxeModuleParser.parse.bind('interface IFoo { function bar():Void }'), ParseError);
 	}
 
 	// ---- writer: NoBody round-trip ----

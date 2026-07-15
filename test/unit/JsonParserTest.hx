@@ -136,23 +136,23 @@ class JsonParserTest extends Test {
 	}
 
 	public function testRejectsTrailingData(): Void {
-		Assert.raises(() -> JValueParser.parse('42 garbage'));
+		Assert.raises(JValueParser.parse.bind('42 garbage'));
 	}
 
 	public function testRejectsUnclosedString(): Void {
-		Assert.raises(() -> JValueParser.parse('"unclosed'));
+		Assert.raises(JValueParser.parse.bind('"unclosed'));
 	}
 
 	public function testRejectsUnclosedArray(): Void {
-		Assert.raises(() -> JValueParser.parse('[1, 2'));
+		Assert.raises(JValueParser.parse.bind('[1, 2'));
 	}
 
 	public function testRejectsUnclosedObject(): Void {
-		Assert.raises(() -> JValueParser.parse('{"x":1'));
+		Assert.raises(JValueParser.parse.bind('{"x":1'));
 	}
 
 	public function testRejectsInvalidNumber(): Void {
-		Assert.raises(() -> JValueParser.parse('12abc'));
+		Assert.raises(JValueParser.parse.bind('12abc'));
 	}
 
 	// ------------------------------------------------------------------
@@ -189,15 +189,15 @@ class JsonParserTest extends Test {
 	}
 
 	public function testRejectsArrayLeadingComma(): Void {
-		Assert.raises(() -> JValueParser.parse('[,1]'));
+		Assert.raises(JValueParser.parse.bind('[,1]'));
 	}
 
 	public function testRejectsArraySoloComma(): Void {
-		Assert.raises(() -> JValueParser.parse('[,]'));
+		Assert.raises(JValueParser.parse.bind('[,]'));
 	}
 
 	public function testRejectsObjectSoloComma(): Void {
-		Assert.raises(() -> JValueParser.parse('{,}'));
+		Assert.raises(JValueParser.parse.bind('{,}'));
 	}
 
 }
