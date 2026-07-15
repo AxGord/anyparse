@@ -408,6 +408,7 @@ import unit.IntroduceParameterObjectSliceTest;
 import unit.PreferEnumAbstractCheckTest;
 import unit.LintPerFileConfigCliTest;
 import unit.OversizedTypeCheckTest;
+import unit.LintListRulesCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -735,6 +736,7 @@ class RunTests {
 		addCase(new LintSliceTest());
 		addCase(new LintModuleSecondaryTypeSliceTest());
 		addCase(new LintFailOnCliTest());
+		addCase(new LintListRulesCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
 		addCase(new OversizedTypeCheckTest());

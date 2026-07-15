@@ -245,6 +245,10 @@ writer reflowed onto a continuation line still lands — and `// CHECKSTYLE:OFF`
 <error|warning|info>` exits non-zero when a finding at or above that severity survives
 (default: report-only, exit 0), and `--format <text|json|checkstyle>` switches the
 output — checkstyle XML the same CI tooling that reads `checkstyle.json` can ingest.
+`--list-rules` prints every registered check as `id  description`, one per line, in
+registration order and exits — the machine-consumable listing (review tooling
+subtracts linter-owned rules from manual checklists by it; the check table below is
+the prose counterpart).
 
 An `apqlint.json` is discovered by walking up from each linted file (per-file, directory-memoized — a `test/apqlint.json` governs only the files beside and below it, like a nested `hxformat.json`) and configures that file's checks: per
 rule it can disable the rule (`"enabled": false`, dropped from the default set — an

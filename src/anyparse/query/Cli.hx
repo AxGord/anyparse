@@ -6867,9 +6867,8 @@ final class Cli {
 		sysPrint('Run the analysis checks over the scope (one or more file/dir/glob specs) and\n');
 		sysPrint('report violations grouped by file as <line>:<col>: [severity] message (rule).\n');
 		sysPrint('Info advisories are hidden unless --all. The exit code is success unless\n');
-		sysPrint('--fail-on selects a severity present in the findings. Built-in checks:\n');
-		sysPrint('unused-import, unused-local, duplicate-import, naming, unused-private,\n');
-		sysPrint('complexity, fold-adjacent-string-literals.\n');
+		sysPrint('--fail-on selects a severity present in the findings. Run --list-rules for\n');
+		sysPrint('the full check list (id + description, one per line).\n');
 		sysPrint('\n');
 		sysPrint('Inline suppression: a trailing "// noqa" (or "// noqa: <rule>,<rule>") clears\n');
 		sysPrint('findings on its line; "// CHECKSTYLE:OFF" ... "// CHECKSTYLE:ON" clears a region.\n');
@@ -6881,6 +6880,7 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
+		sysPrint('  --list-rules      List every registered check and exit\n');
 		sysPrint('  --fix            Apply autofixes in place (e.g. delete unused imports)\n');
 		sysPrint('  --fail-on <sev>   Exit non-zero if a finding at-or-above <sev> exists\n');
 		sysPrint('                    (error|warning|info)\n');
@@ -10541,6 +10541,9 @@ final class Cli {
 				case '-h', '--help':
 					printLintUsage();
 					return lintParseExit(EXIT_OK);
+				case '--list-rules':
+					printLintRules();
+					return lintParseExit(EXIT_OK);
 				case _:
 					if (StringTools.startsWith(a, '--')) {
 						stderr('apq lint: unknown option "$a"\n');
@@ -13834,6 +13837,20 @@ final class Cli {
 		sysPrint('  --name <obj>   Object parameter name (default: lower-camel of the type)\n');
 		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+
+	/**
+	 * Print every registered check as `id  description`, one per line, in
+	 * registration order — the machine-consumable counterpart of the usage
+	 * text (review tooling subtracts linter-owned rules from manual checklists
+	 * by this list).
+	 */
+	private static function printLintRules(): Void {
+		final checks: Array<Check> = Linter.builtins();
+		var width: Int = 0;
+		for (c in checks) if (c.id().length > width) width = c.id().length;
+		for (c in checks) sysPrint(StringTools.rpad(c.id(), ' ', width) + '  ' + c.description() + '\n');
 	}
 
 }
