@@ -186,6 +186,8 @@ final class CheckstyleConfigLoader {
 				order.push('Static');
 			case 'INLINE':
 				order.push('Inline');
+			case 'FINAL':
+				order.push('Final');
 			case _:
 		}
 		return order;

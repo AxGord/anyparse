@@ -11,9 +11,11 @@ import anyparse.runtime.Span;
 
 /**
  * The `modifier-order` check: a member whose modifier keywords are not in the
- * canonical order `override -> public/private -> static -> inline` is flagged
- * `Info` and reordered by `--fix`. Modifiers with no documented order (dynamic, …)
- * are ignored and kept in place; the run resets per member.
+ * canonical order `override -> public/private -> static -> inline -> final` is
+ * flagged `Info` and reordered by `--fix`. A method's `final` (folded into the
+ * `FinalModifiedMember` wrapper) is ranked last; a field's `final` is the storage
+ * keyword, not a modifier, and is never ranked. Modifiers with no documented order
+ * (dynamic, …) are ignored and kept in place; the run resets per member.
  */
 class ModifierOrderCheckTest extends Test {
 
@@ -70,6 +72,51 @@ class ModifierOrderCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	public function testFinalMethodBeforeInlineFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { final inline function f():Void {} }');
+		Assert.equals(1, vs.length);
+		Assert.equals('modifier-order', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testVisibilityBeforeFinalNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public final function f():Void {} }').length);
+	}
+
+	public function testFinalBeforeVisibilityFlagged(): Void {
+		Assert.equals(1, violations('class C { final public function f():Void {} }').length);
+	}
+
+	public function testStaticFinalFieldNotFlagged(): Void {
+		// `final` on a field is the immutable-storage keyword, not a rankable modifier; `static final` is canonical.
+		Assert.equals(0, violations('class C { static final X = 1; }').length);
+	}
+
+	public function testPlainFinalFieldNotFlagged(): Void {
+		Assert.equals(0, violations('class C { final X = 1; }').length);
+	}
+
+	public function testFullFinalChainNotFlagged(): Void {
+		Assert.equals(0, violations('class C { override public static inline final function f():Void {} }').length);
+	}
+
+	public function testFinalMethodReorderedToLast(): Void {
+		final fixed: String = fixedSource('class C { final inline function f():Void {} }');
+		Assert.isTrue(fixed.indexOf('inline final function f') >= 0);
+		Assert.equals(-1, fixed.indexOf('final inline function f'));
+	}
+
+	public function testFinalBeforeVisibilityFixed(): Void {
+		final fixed: String = fixedSource('class C { final public function f():Void {} }');
+		Assert.isTrue(fixed.indexOf('public final function f') >= 0);
+		Assert.equals(-1, fixed.indexOf('final public function f'));
+	}
+
+	public function testScrambledFinalChainFixedToCanonical(): Void {
+		final fixed: String = fixedSource('class C { final override public static inline function f():Void {} }');
+		Assert.isTrue(fixed.indexOf('override public static inline final function f') >= 0);
 	}
 
 	private function violations(src: String): Array<Violation> {

@@ -44,18 +44,19 @@ class CheckstyleConfigLoaderTest extends Test {
 	}
 
 	public function testModifierOrderDefaultMapsToOurKinds(): Void {
+		// FINAL maps to Final; MACRO / DYNAMIC stay unranked and are dropped.
 		Assert.same(
-			['Override', 'Public', 'Private', 'Static', 'Inline'],
+			['Override', 'Public', 'Private', 'Static', 'Inline', 'Final'],
 			CheckstyleConfigLoader.loadOverrides('{"checks":[{"type":"ModifierOrder","props":{}}]}').modifierOrder
 		);
 	}
 
 	public function testModifierOrderCustomDropsUnranked(): Void {
-		// FINAL is dropped (our check does not rank it); PUBLIC_PRIVATE expands to two kinds.
+		// MACRO is dropped (our check does not rank it); FINAL maps to Final, PUBLIC_PRIVATE expands to two kinds.
 		Assert.same(
-			['Static', 'Public', 'Private', 'Override'],
+			['Static', 'Public', 'Private', 'Override', 'Final'],
 			CheckstyleConfigLoader.loadOverrides(
-				'{"checks":[{"type":"ModifierOrder","props":{"modifiers":["STATIC","PUBLIC_PRIVATE","OVERRIDE","FINAL"]}}]}'
+				'{"checks":[{"type":"ModifierOrder","props":{"modifiers":["STATIC","MACRO","PUBLIC_PRIVATE","OVERRIDE","FINAL"]}}]}'
 			)
 				.modifierOrder
 		);

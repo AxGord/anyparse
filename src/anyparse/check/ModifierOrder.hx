@@ -11,20 +11,27 @@ import haxe.Exception;
 
 /**
  * Flags a member whose modifier keywords are not in the canonical order
- * `override → public / private → static → inline`. Purely cosmetic — the order
- * carries no meaning to the compiler — so `Info`; `--fix` reorders the run into
- * canonical order.
+ * `override → public / private → static → inline → final`. Purely cosmetic — the
+ * order carries no meaning to the compiler — so `Info`; `--fix` reorders the run
+ * into canonical order.
  *
  * ## Grammar-agnostic
  *
  * `RefShape.modifierOrderKinds` is the canonical order: a modifier's rank is its
  * index there. The check collects each member's run of ranked modifier siblings
  * (resetting at a `RefShape.memberDeclKinds` boundary) and flags a run whose ranks
- * are not non-decreasing. Modifiers absent from the list (extern, dynamic, macro,
- * …) carry no documented order and are ignored. Either field unset → no-op.
+ * are not non-decreasing. A method's `final` is folded into the
+ * `RefShape.finalModifierMemberKind` wrapper rather than a sibling node, so the run
+ * injects it (ranked by `RefShape.finalModifierRankKind`) with the modifiers nested
+ * after it — enforcing `final` last. Modifiers absent from the list (extern,
+ * dynamic, macro, …) carry no documented order and are ignored. Either field unset
+ * → no-op.
  */
 @:nullSafety(Strict)
 final class ModifierOrder implements Check {
+
+	/** The `final` keyword the grammar folds into a `finalModifierMemberKind` wrapper — a fixed 5-char token at the wrapper's start. */
+	private static inline final FINAL_KEYWORD: String = 'final';
 
 	public function new() {}
 
@@ -33,7 +40,7 @@ final class ModifierOrder implements Check {
 	}
 
 	public function description(): String {
-		return 'member modifiers not in canonical order (override -> public/private -> static -> inline)';
+		return 'member modifiers not in canonical order (override -> public/private -> static -> inline -> final)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -48,19 +55,20 @@ final class ModifierOrder implements Check {
 			if (order.length == 0) continue;
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, order, members);
+			if (tree != null) walk(violations, entry.file, tree, ranking(shape, order, members));
 		}
 		return violations;
 	}
 
 	/**
 	 * Reorder each flagged member's ranked-modifier run into canonical order. The
-	 * run's ranked siblings (kind in `modifierOrderKinds`) are sorted by rank and
-	 * written back into their own source slots — each slot takes the keyword whose
-	 * rank now belongs there — so unranked modifiers (extern, dynamic, …) and
-	 * `@:meta` keep their physical positions and only the ranked keywords move.
-	 * Re-parses `source`, and emits edits only for a run whose start offset matches
-	 * a passed violation (so a config-filtered finding is not silently fixed).
+	 * run's ranked elements — the modifier siblings (kind in `modifierOrderKinds`)
+	 * plus, for a `final` method, its `final` keyword and the modifiers nested after
+	 * it — are sorted by rank and written back into their own source slots, each slot
+	 * taking the keyword whose rank now belongs there. Unranked modifiers (extern,
+	 * dynamic, …) and `@:meta` keep their physical positions; only ranked keywords
+	 * move. Re-parses `source`, and emits edits only for a run whose start offset
+	 * matches a passed violation (so a config-filtered finding is not silently fixed).
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -77,98 +85,128 @@ final class ModifierOrder implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		reorderWalk(edits, source, tree, order, members, flagged);
+		reorderWalk(edits, source, tree, ranking(shape, order, members), flagged);
 		return edits;
 	}
 
-	/** Walk `node`, checking each node's direct children for an out-of-order modifier run. */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, order: Array<String>, members: Array<String>): Void {
-		flagChildren(out, file, node, order, members);
-		for (c in node.children) walk(out, file, c, order, members);
+	/** Bundle the grammar's modifier-order config, resolving the `final`-keyword rank against the active `order`. */
+	private static function ranking(shape: RefShape, order: Array<String>, members: Array<String>): Ranking {
+		final rankKind: Null<String> = shape.finalModifierRankKind;
+		return {
+			order: order,
+			members: members,
+			finalMemberKind: shape.finalModifierMemberKind,
+			finalRank: rankKind != null ? order.indexOf(rankKind) : -1
+		};
+	}
+
+	/** Walk `node`, flagging each of its direct children's ranked-modifier runs that break canonical order. */
+	private static function walk(out: Array<Violation>, file: String, node: QueryNode, r: Ranking): Void {
+		for (run in collectRuns(node, r)) flagRun(out, file, run);
+		for (c in node.children) walk(out, file, c, r);
 	}
 
 	/**
-	 * Scan `node`'s direct children, tracking the run of ranked modifier siblings
-	 * leading up to each member. A modifier whose rank falls below an earlier one in
-	 * the same run is out of order; one violation per run, spanning the run. The run
-	 * resets at each member-host boundary; a non-modifier non-member child (meta, an
-	 * unranked modifier) keeps it open.
+	 * Flag `run` when its ranks (in source order) are not non-decreasing — one
+	 * violation spanning the run start to the first out-of-order modifier.
 	 */
-	private static function flagChildren(
-		out: Array<Violation>, file: String, node: QueryNode, order: Array<String>, members: Array<String>
-	): Void {
-		var runStart: Null<Span> = null;
+	private static function flagRun(out: Array<Violation>, file: String, run: Array<{ rank: Int, span: Span }>): Void {
 		var maxRank: Int = -1;
-		var flagged: Bool = false;
-		for (child in node.children) {
-			final rank: Int = order.indexOf(child.kind);
-			if (rank >= 0) {
-				final span: Null<Span> = child.span;
-				if (runStart == null) runStart = span;
-				if (rank < maxRank && !flagged && runStart != null && span != null) {
-					out.push({
-						file: file,
-						span: new Span(runStart.from, span.to),
-						rule: 'modifier-order',
-						severity: Severity.Info,
-						message: 'modifiers are not in canonical order (override -> public/private -> static -> inline)'
-					});
-					flagged = true;
-				}
-				if (rank > maxRank) maxRank = rank;
-			} else if (members.contains(child.kind)) {
-				runStart = null;
-				maxRank = -1;
-				flagged = false;
+		for (el in run) {
+			if (el.rank < maxRank) {
+				out.push({
+					file: file,
+					span: new Span(run[0].span.from, el.span.to),
+					rule: 'modifier-order',
+					severity: Severity.Info,
+					message: 'modifiers are not in canonical order (override -> public/private -> static -> inline -> final)'
+				});
+				return;
 			}
+			if (el.rank > maxRank) maxRank = el.rank;
 		}
 	}
 
 	/**
-	 * Walk `node`; for each container child's ranked-modifier run that ends at a
-	 * member boundary, reorder it (`emitReorder`). The run is the ranked-modifier
-	 * siblings (kind in `order`) leading up to a member host (`members`); an
-	 * unranked modifier or `@:meta` neither joins the run nor resets it, exactly as
-	 * `flagChildren` tracks it.
+	 * Collect the ranked-modifier runs among `node`'s direct children. A run is the
+	 * ranked-modifier siblings (kind in `r.order`) leading up to a member host (kind
+	 * in `r.members`), in source order; a `finalModifierMemberKind` host also gains
+	 * that method's `final` keyword and the modifiers nested after it (see
+	 * `appendFinalModifier`). An unranked modifier or `@:meta` neither joins nor
+	 * closes a run. Only runs a member host closes are returned.
 	 */
-	private static function reorderWalk(
-		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, order: Array<String>, members: Array<String>,
-		flagged: Array<Int>
-	): Void {
-		var run: Array<QueryNode> = [];
+	private static function collectRuns(node: QueryNode, r: Ranking): Array<Array<{ rank: Int, span: Span }>> {
+		final runs: Array<Array<{ rank: Int, span: Span }>> = [];
+		var run: Array<{ rank: Int, span: Span }> = [];
 		for (child in node.children) {
-			if (order.indexOf(child.kind) >= 0)
-				run.push(child);
-			else if (members.contains(child.kind)) {
-				emitReorder(edits, source, run, order, flagged);
+			final rank: Int = r.order.indexOf(child.kind);
+			if (rank >= 0) {
+				final span: Null<Span> = child.span;
+				if (span != null) run.push({ rank: rank, span: span });
+			} else if (r.members.contains(child.kind)) {
+				appendFinalModifier(run, child, r);
+				if (run.length > 0) runs.push(run);
 				run = [];
 			}
 		}
-		for (c in node.children) reorderWalk(edits, source, c, order, members, flagged);
+		return runs;
 	}
 
 	/**
-	 * Emit the reorder edits for one ranked-modifier `run` whose start offset is in
-	 * `flagged`: collect each node's `(rank, keyword text)`, sort the texts by rank,
-	 * and replace each slot (in source order) with the text now ranked for it. Bails
-	 * on a run already in order, shorter than two, unmatched, or missing a span.
+	 * When `member` is the `final`-modified method wrapper, extend the open `run`
+	 * with its leading `final` keyword (ranked `r.finalRank`, spanning the 5-char
+	 * `final` token at the wrapper's start) and one element per ranked modifier
+	 * nested after it — so `final`'s position relative to the other modifiers is
+	 * ranked. A non-`final` member, or a grammar that ranks no `final`, is a no-op.
 	 */
-	private static function emitReorder(
-		edits: Array<{ span: Span, text: String }>, source: String, run: Array<QueryNode>, order: Array<String>, flagged: Array<Int>
-	): Void {
-		if (run.length < 2) return;
-		final first: Null<Span> = run[0].span;
-		if (first == null || !flagged.contains(first.from)) return;
-		final slots: Array<Span> = [];
-		final ranked: Array<{ rank: Int, text: String }> = [];
-		for (n in run) {
-			final span: Null<Span> = n.span;
-			if (span == null) return;
-			slots.push(span);
-			ranked.push({ rank: order.indexOf(n.kind), text: source.substring(span.from, span.to) });
+	private static function appendFinalModifier(run: Array<{ rank: Int, span: Span }>, member: QueryNode, r: Ranking): Void {
+		if (r.finalMemberKind == null || member.kind != r.finalMemberKind || r.finalRank < 0) return;
+		final span: Null<Span> = member.span;
+		if (span == null) return;
+		run.push({ rank: r.finalRank, span: new Span(span.from, span.from + FINAL_KEYWORD.length) });
+		for (child in member.children) {
+			final rank: Int = r.order.indexOf(child.kind);
+			final childSpan: Null<Span> = child.span;
+			if (rank >= 0 && childSpan != null) run.push({ rank: rank, span: childSpan });
 		}
-		ranked.sort((a, b) -> a.rank - b.rank);
-		for (i in 0...slots.length) edits.push({ span: slots[i], text: ranked[i].text });
 	}
 
+	/** Walk `node`, reordering each flagged ranked-modifier run its direct children form. */
+	private static function reorderWalk(
+		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, r: Ranking, flagged: Array<Int>
+	): Void {
+		for (run in collectRuns(node, r)) emitReorder(edits, source, run, flagged);
+		for (c in node.children) reorderWalk(edits, source, c, r, flagged);
+	}
+
+	/**
+	 * Emit the reorder edits for one flagged `run`: read each slot's source text,
+	 * sort the texts by rank, and write each back into the source-order slot now
+	 * ranked for it. Bails on a run shorter than two or whose start offset is not a
+	 * flagged violation (so a config-filtered finding is not silently fixed).
+	 */
+	private static function emitReorder(
+		edits: Array<{ span: Span, text: String }>, source: String, run: Array<{ rank: Int, span: Span }>, flagged: Array<Int>
+	): Void {
+		if (run.length < 2 || !flagged.contains(run[0].span.from)) return;
+		final ranked: Array<{ rank: Int, text: String }> = [
+			for (el in run) { rank: el.rank, text: source.substring(el.span.from, el.span.to) }
+		];
+		ranked.sort((a, b) -> a.rank - b.rank);
+		for (i in 0...run.length) edits.push({ span: run[i].span, text: ranked[i].text });
+	}
+
+}
+
+/**
+ * The modifier-ranking config the `modifier-order` walk reads from a grammar's
+ * `RefShape`: the canonical `order`, the member-host `members` a run attaches to,
+ * the `final`-modified method wrapper kind (or null), and the rank a method's
+ * `final` keyword occupies in `order` (`-1` when the grammar ranks no `final`).
+ */
+private typedef Ranking = {
+	var order: Array<String>;
+	var members: Array<String>;
+	var finalMemberKind: Null<String>;
+	var finalRank: Int;
 }

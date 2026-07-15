@@ -600,9 +600,11 @@ typedef RefShape = {
 	/**
 	 * The canonical modifier order — a modifier's rank is its index here. The
 	 * `modifier-order` check flags a member's run of these whose ranks are not
-	 * non-decreasing (`override` → `public` / `private` → `static` → `inline`).
-	 * Modifiers absent from the list carry no documented order and are ignored.
-	 * Optional; unset makes the check a no-op.
+	 * non-decreasing (`override` → `public` / `private` → `static` → `inline` →
+	 * `final`). The trailing `Final` entry (`finalModifierRankKind`) ranks a method's
+	 * `final` keyword, which the grammar folds into `finalModifierMemberKind` rather
+	 * than emitting as a sibling modifier node. Modifiers absent from the list carry
+	 * no documented order and are ignored. Optional; unset makes the check a no-op.
 	 */
 	@:optional var modifierOrderKinds: Array<String>;
 
@@ -1170,6 +1172,26 @@ typedef RefShape = {
 	 * final class`; the `prefer-final-class` fix removes the meta only. Optional.
 	 */
 	@:optional var finalClassDeclKind: String;
+
+	/**
+	 * The member-host kind of a `final`-modified method (Haxe `FinalModifiedMember`).
+	 * The grammar folds a method's `final` modifier into this wrapper instead of
+	 * emitting it as a sibling modifier node, and nests any modifier written after
+	 * `final` as the wrapper's children. The `modifier-order` check ranks the
+	 * wrapper's leading `final` keyword by `finalModifierRankKind` and treats those
+	 * nested modifiers as the tail of the modifier run, so `final` is enforced last
+	 * (`override -> public/private -> static -> inline -> final`). Optional; unset
+	 * makes the check ignore method `final`.
+	 */
+	@:optional var finalModifierMemberKind: String;
+
+	/**
+	 * The sentinel entry in `modifierOrderKinds` that ranks a `final`-modified
+	 * method's `final` keyword. No real node carries this kind — the `final` modifier
+	 * is folded into `finalModifierMemberKind` — so it exists only to give `final` a
+	 * rank in the order table. Optional; paired with `finalModifierMemberKind`.
+	 */
+	@:optional var finalModifierRankKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
