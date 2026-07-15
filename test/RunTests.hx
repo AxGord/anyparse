@@ -407,6 +407,7 @@ import unit.MakeFinalSliceTest;
 import unit.IntroduceParameterObjectSliceTest;
 import unit.PreferEnumAbstractCheckTest;
 import unit.LintPerFileConfigCliTest;
+import unit.OversizedTypeCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -736,6 +737,7 @@ class RunTests {
 		addCase(new LintFailOnCliTest());
 		addCase(new UnusedPrivateCheckTest());
 		addCase(new ComplexityCheckTest());
+		addCase(new OversizedTypeCheckTest());
 		addCase(new MagicNumberCheckTest());
 		addCase(new PreferEnumAbstractCheckTest());
 		addCase(new CheckstyleConfigLoaderTest());

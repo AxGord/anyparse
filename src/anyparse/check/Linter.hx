@@ -96,7 +96,8 @@ final class Linter {
 			new ThreadSafety(),
 			new UncheckedNullable(),
 			new PossibleNullDereference(),
-			new UnguardedNullableDeref()
+			new UnguardedNullableDeref(),
+			new OversizedType()
 		];
 	}
 

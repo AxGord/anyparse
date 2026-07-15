@@ -1,5 +1,6 @@
 {
     "rules": {
-        "magic-number": { "enabled": false }
+        "magic-number": { "enabled": false },
+        "oversized-type": { "maxMembers": 100 }
     }
 }
