@@ -120,7 +120,14 @@ class LintPerFileConfigCliTest extends Test {
 
 	#if (sys || nodejs)
 	private function dirWith(name: String, source: String, config: Null<String>): String {
-		final files: Array<{ name: String, source: String }> = [{ name: name, source: source }];
+		// Declaring stub for the `a.b.Unused` the UNUSED fixture imports: an
+		// out-of-scope named import is an unverifiable Info, so each dir must
+		// carry the module for the import to stay a deletable Warning. Inert
+		// for the complexity fixtures (no imports, no findings of its own).
+		final files: Array<{ name: String, source: String }> = [
+			{ name: name, source: source },
+			{ name: 'Unused.hx', source: 'package a.b;\n\nclass Unused {}\n' }
+		];
 		if (config != null) files.push({ name: 'apqlint.json', source: config });
 		return CliFixture.writeDir('perfilecfg', files);
 	}

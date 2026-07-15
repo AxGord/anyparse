@@ -56,7 +56,11 @@ class LintConfigTest extends Test {
 
 	public function testLinterAppliesSeverityOverride(): Void {
 		final src: String = 'package p;\nimport a.b.Unused;\nclass C {}';
-		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		// Declaring stub keeps the out-of-scope import a verifiable Warning.
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: src },
+			{ file: 'a/b/Unused.hx', source: 'package a.b;\nclass Unused {}' }
+		];
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 
 		final base: Array<Violation> = Linter.run(files, plugin, [new UnusedImport()]);

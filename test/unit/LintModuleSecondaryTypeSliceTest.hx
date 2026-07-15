@@ -7,6 +7,8 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedImport;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 
+using StringTools;
+
 /**
  * `unused-import` and module SECONDARY types: `import pkg.Mod;` binds every
  * top-level type of module `Mod`, not only the main one. A consumer that
@@ -85,13 +87,16 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		Assert.equals(Severity.Warning, vs[0].severity);
 	}
 
-	/** An out-of-set (unresolvable) module keeps the plain bound-name verdict. */
+	/**
+	 * An out-of-set (unresolvable) module downgrades to an unverifiable Info advisory.
+	 */
 	public function testUnresolvableModuleKeepsBoundNameVerdict(): Void {
 		final use: String = 'package pkg;\n\nimport a.b.Gone;\n\nclass C {\n\tvar x: GoneExtra;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: use }], plugin());
 
 		Assert.equals(1, vs.length);
-		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('not in lint scope'));
 	}
 
 	private static function plugin(): HaxeQueryPlugin {

@@ -143,6 +143,13 @@ final class UnusedImport implements Check {
 				// identifier (`Assert.equals(Private, m)`, expected-type resolved)
 				// is in use even though `Enum` itself is never named.
 				if (imp.kind == ImportKind.Import && enumCtorReferenced(imp.raw, source, importSpans, enumCtorsByPath)) return;
+				if (imp.kind == ImportKind.Import && !membersByPath.exists(imp.raw)) {
+					out.push(make(
+						file, imp, Severity.Info,
+						'import \'${imp.raw}\': declaration not in lint scope, cannot verify unused (lint with its source module included)'
+					));
+					return;
+				}
 				out.push(make(file, imp, Severity.Warning, 'unused import \'${imp.raw}\''));
 		}
 	}

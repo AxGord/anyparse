@@ -39,7 +39,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testUsedVsUnused(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Unused;\nclass C {\n\tvar x:Used;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
+		final files = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
 		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
 
 		Assert.equals(1, vs.length);
@@ -60,7 +60,7 @@ class LintSliceTest extends Test {
 	/** A value reference (`Foo.bar()`) counts as usage; the sibling unused import is flagged. */
 	public function testValueReferenceCounts(): Void {
 		final src: String = 'package pkg;\nimport a.b.Foo;\nimport a.b.Bar;\nclass C {\n\tfunction f() { Foo.bar(); }\n}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }].concat(declaringStubs()), plugin());
 
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('a.b.Bar'));
@@ -154,7 +154,7 @@ class LintSliceTest extends Test {
 	/** The grouped reporter emits a file header and an indented `[severity] message (rule)` line. */
 	public function testRenderViolations(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }].concat(declaringStubs()), plugin());
 		final out: String = Text.renderViolations('pkg/C.hx', src, vs, false);
 
 		Assert.isTrue(out.contains('pkg/C.hx:'));
@@ -170,7 +170,7 @@ class LintSliceTest extends Test {
 	public function testFixYieldsDeleteEditsForWarningsOnly(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nimport a.b.*;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }].concat(declaringStubs()), plugin());
 		// One Warning (Unused) + one Info (wildcard); only the Warning is fixable.
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		Assert.equals(1, edits.length);
@@ -181,7 +181,7 @@ class LintSliceTest extends Test {
 	public function testFixRemovesUnusedImport(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Gone;\nclass C {\n\tvar x:Used;\n}';
 		final check: UnusedImport = new UnusedImport();
-		final vs: Array<Violation> = check.run([{ file: 'f.hx', source: src }], plugin());
+		final vs: Array<Violation> = check.run([{ file: 'f.hx', source: src }].concat(declaringStubs()), plugin());
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
 		switch RefactorSupport.canonicalize(src, edits, true, plugin()) {
 			case Ok(text):
@@ -376,7 +376,7 @@ class LintSliceTest extends Test {
 	public function testJsonFormat(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
 		final file: String = 'pkg/C.hx';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }], plugin());
+		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }].concat(declaringStubs()), plugin());
 		Assert.equals(1, vs.length);
 		final sourceOf: Map<String, String> = [file => src];
 		final parsed: Array<Dynamic> = haxe.Json.parse(LintFormat.json(vs, sourceOf));
@@ -395,7 +395,7 @@ class LintSliceTest extends Test {
 	public function testCheckstyleFormat(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
 		final file: String = 'pkg/C.hx';
-		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }], plugin());
+		final vs: Array<Violation> = new UnusedImport().run([{ file: file, source: src }].concat(declaringStubs()), plugin());
 		final xml: String = LintFormat.checkstyle(vs, [file => src]);
 		Assert.isTrue(xml.contains('<checkstyle'));
 		Assert.isTrue(xml.contains('source="apq.unused-import"'));
@@ -535,6 +535,77 @@ class LintSliceTest extends Test {
 		Assert.equals(Severity.Warning, vs[0].severity);
 		Assert.isTrue(vs[0].message.contains('wildcard'));
 		Assert.equals('pkg/User.hx', vs[0].file);
+	}
+
+
+	/**
+	 * Stub modules declaring the `a.b.*` types the fixtures import, so an import
+	 * of one resolves IN the lint set — a verifiable `Warning` rather than the
+	 * unverifiable `Info` an out-of-scope named import now downgrades to.
+	 * Concatenated onto a fixture's single-file set; a stub it does not import is
+	 * inert (no imports of its own → no findings).
+	 */
+	private static function declaringStubs(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'a/b/Used.hx', source: 'package a.b;\nclass Used {}' },
+			{ file: 'a/b/Unused.hx', source: 'package a.b;\nclass Unused {}' },
+			{ file: 'a/b/Foo.hx', source: 'package a.b;\nclass Foo {}' },
+			{ file: 'a/b/Bar.hx', source: 'package a.b;\nclass Bar {}' },
+			{ file: 'a/b/Gone.hx', source: 'package a.b;\nclass Gone {}' },
+		];
+	}
+
+
+	/**
+	 * A named `import pkg.Type;` whose Type declaration is NOT in the lint set
+	 * cannot be verified — its secondary types / bare enum constructors are
+	 * unknown, so an unreferenced leaf name is no proof it is unused. It downgrades
+	 * to an `Info` advisory the autofix never deletes (the narrow-scope
+	 * `IndentChar` / `HxModifier` incident: a load-bearing enum-value import looked
+	 * unused because its enum lived outside the linted file set).
+	 */
+	public function testOutOfScopeNamedImportIsInfoNotFixed(): Void {
+		final src: String = 'package pkg;\nimport ext.lib.Widget;\nclass C {}';
+		final check: UnusedImport = new UnusedImport();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('unused-import', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('ext.lib.Widget'));
+		Assert.isTrue(vs[0].message.contains('not in lint scope'));
+		Assert.equals(0, check.fix(src, vs, plugin()).length);
+	}
+
+
+	/**
+	 * A named import whose type IS in the lint set and genuinely unreferenced stays
+	 * a deletable `Warning` — the honesty gate spares only out-of-scope imports, so
+	 * `--fix` still removes a verified-unused one.
+	 */
+	public function testInIndexUnusedNamedImportIsWarningFixed(): Void {
+		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
+		final check: UnusedImport = new UnusedImport();
+		final files = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final vs: Array<Violation> = check.run(files, plugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.isTrue(vs[0].message.contains('a.b.Unused'));
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, plugin());
+		Assert.equals(1, edits.length);
+		Assert.equals('', edits[0].text);
+	}
+
+
+	/**
+	 * A named import whose in-set type IS referenced produces no finding at all —
+	 * the honesty gate never fires for a used import (the early reference check
+	 * short-circuits first).
+	 */
+	public function testInIndexUsedNamedImportIsSilent(): Void {
+		final src: String = 'package pkg;\nimport a.b.Used;\nclass C {\n\tvar x:Used;\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
+		Assert.equals(0, vs.length);
 	}
 
 }

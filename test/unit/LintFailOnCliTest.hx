@@ -19,9 +19,9 @@ class LintFailOnCliTest extends Test {
 
 	public function testNoFailOnExitsZero(): Void {
 		#if (sys || nodejs)
-		final fixture: String = CliFixture.write('lintfailon', 'package pkg;\nimport a.b.Unused;\nclass C {}');
+		final fixture: String = warningDir();
 		Assert.equals(0, Cli.run(['lint', fixture]), 'lint is report-only without --fail-on');
-		FileSystem.deleteFile(fixture);
+		CliFixture.removeDir(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -29,9 +29,9 @@ class LintFailOnCliTest extends Test {
 
 	public function testFailOnWarningExitsNonZero(): Void {
 		#if (sys || nodejs)
-		final fixture: String = CliFixture.write('lintfailon', 'package pkg;\nimport a.b.Unused;\nclass C {}');
+		final fixture: String = warningDir();
 		Assert.equals(1, Cli.run(['lint', '--fail-on', 'warning', fixture]), 'a warning + --fail-on warning exits non-zero');
-		FileSystem.deleteFile(fixture);
+		CliFixture.removeDir(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -39,9 +39,9 @@ class LintFailOnCliTest extends Test {
 
 	public function testFailOnErrorIgnoresWarnings(): Void {
 		#if (sys || nodejs)
-		final fixture: String = CliFixture.write('lintfailon', 'package pkg;\nimport a.b.Unused;\nclass C {}');
+		final fixture: String = warningDir();
 		Assert.equals(0, Cli.run(['lint', '--fail-on', 'error', fixture]), 'only warnings present so --fail-on error exits 0');
-		FileSystem.deleteFile(fixture);
+		CliFixture.removeDir(fixture);
 		#else
 		Assert.pass('non-sys target');
 		#end
@@ -56,5 +56,20 @@ class LintFailOnCliTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+
+	#if (sys || nodejs)
+	/**
+	 * Fixture dir producing exactly one unused-import Warning: the importing
+	 * file plus a stub declaring `a.b.Unused`, so the import is verifiable
+	 * in scope (an out-of-scope named import is only an Info advisory).
+	 */
+	private static function warningDir(): String {
+		return CliFixture.writeDir('lintfailon', [
+			{ name: 'C.hx', source: 'package pkg;\nimport a.b.Unused;\nclass C {}' },
+			{ name: 'Unused.hx', source: 'package a.b;\n\nclass Unused {}\n' }
+		]);
+	}
+	#end
 
 }
