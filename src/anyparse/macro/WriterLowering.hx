@@ -2564,7 +2564,7 @@ class WriterLowering {
 
 	private function emitWriterStarField(
 		starNode: ShapeNode, fieldAccess: Expr, parts: Array<Expr>, isLastField: Bool, typePath: String, isFirstField: Bool, isRaw: Bool,
-		prevBareRefBody: Null<PrevBodyInfo> = null, prevTrailFieldName: Null<String> = null
+		?prevBareRefBody: PrevBodyInfo, ?prevTrailFieldName: String
 	): Void {
 		final inner: ShapeNode = starNode.children[0];
 		if (inner.kind != Ref) Context.fatalError('WriterLowering: Star struct field must contain a Ref', Context.currentPos());
@@ -2802,9 +2802,7 @@ class WriterLowering {
 	 * handler (per-element separator, different semantic) and routes
 	 * `Keep` to `Same` since there is no per-element source-shape slot.
 	 */
-	private function sameLineSeparator(
-		child: ShapeNode, prevBody: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr> = null
-	): Expr {
+	private function sameLineSeparator(child: ShapeNode, prevBody: Null<PrevBodyInfo>, typePath: String, ?prevPadTrailing: Expr): Expr {
 		// ω-pad-trailing-ref: every return path wraps via the static
 		// `withPadTrailingDrop` helper — drops the sep at runtime when
 		// the immediately preceding field's `@:fmt(padTrailing)` fired.
@@ -4375,7 +4373,7 @@ class WriterLowering {
 	 * blank" rule (issue_298): `Conditional`-prev → respect source.
 	 */
 	private function buildBeforeCtorBlankInfoIfPrevNot(
-		elemRefName: String, args: Array<String>, triviaMultilineExpr: Null<Expr> = null
+		elemRefName: String, args: Array<String>, ?triviaMultilineExpr: Expr
 	): BeforeCtorBlankInfo {
 		final sepIdx: Int = args.indexOf('|');
 		if (args.length < 5 || sepIdx < 0)
@@ -4646,7 +4644,7 @@ class WriterLowering {
 	 */
 	private function resolveCtorBlankArgs(
 		elemRefName: String, args: Array<String>, metaName: String, predicateName: Null<String>, predicateInvert: Bool = false,
-		triviaMultilineExpr: Null<Expr> = null
+		?triviaMultilineExpr: Expr
 	): CtorBlankResolution {
 		if (args.length < 3)
 			Context.fatalError(
@@ -4729,7 +4727,7 @@ class WriterLowering {
 	 * untagged ctors emit `false`.
 	 */
 	private function buildPredicateGatedKind(
-		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false, triviaMultilineExpr: Null<Expr> = null
+		branch: ShapeNode, predicateName: String, metaName: String, invert: Bool = false, ?triviaMultilineExpr: Expr
 	): Expr {
 		if (predicateName != 'multiline')
 			Context.fatalError(
@@ -10794,18 +10792,18 @@ class WriterLowering {
 		fieldAccess: Expr, trailBBAccess: Null<Expr>, trailLCAccess: Null<Expr>, trailCloseAccess: Null<Expr>, trailOpenAccess: Null<Expr>,
 		elemFn: String, openText: String, closeText: String, appendHardlineAfterTrail: Bool = false,
 		afterFieldsWithDocComments: Bool = false, existingBetweenFields: Bool = false, beforeDocCommentEmptyLines: Bool = false,
-		interMemberInfo: Null<InterMemberClassifyInfo> = null, indentCaseLabelsGate: Bool = false, emptyCurlyBreak: Bool = false,
+		?interMemberInfo: InterMemberClassifyInfo, indentCaseLabelsGate: Bool = false, emptyCurlyBreak: Bool = false,
 		beginEndType: Bool = false, keepCurlyBlanks: Bool = false, lineCommentTrailBlank: Bool = false,
-		blankBeforeFinalDocInLeading: Bool = false, staticVarSubdivInfo: Null<StaticVarSubdivisionInfo> = null,
-		betweenMultilineCommentsBlanks: Bool = false, uniformBetweenOptField: Null<String> = null, clearAnonFnBodyOnElems: Bool = false,
-		emptyCurlyKnob: Null<String> = null, rightCurlyKnob: Null<String> = null, rightCurlyAnonFnKnob: Null<String> = null,
+		blankBeforeFinalDocInLeading: Bool = false, ?staticVarSubdivInfo: StaticVarSubdivisionInfo,
+		betweenMultilineCommentsBlanks: Bool = false, ?uniformBetweenOptField: String, clearAnonFnBodyOnElems: Bool = false,
+		?emptyCurlyKnob: String, ?rightCurlyKnob: String, ?rightCurlyAnonFnKnob: String,
 		// ω-blockended-trivia (Session 3): when the Star carries
 		// `@:sep('text', tailRelax, blockEnded)`, the block-mode emit
 		// gains between-element sep emission, gated on
 		// `!DocMeasure.endsWithCloseBrace(priorElemDoc)`. Null sepText →
 		// pre-slice byte-identical (no inter-stmt sep emit — per-stmt
 		// `;` lives inside each element's own Doc via @:trailOpt).
-		sepText: Null<String> = null,
+		?sepText: String,
 		blockEnded: Bool = false,
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate name
 		// (`lit.sepBlockEndedPredicate`, e.g. `stmtNoSemi`) consulted on the
@@ -10817,13 +10815,13 @@ class WriterLowering {
 		// `anyparse.grammar.haxe.HaxeFormat`) used to build the
 		// `<schema>.instance.<predicate>(elem)` call. Both null → byte-
 		// identical to the pre-fix path (no predicate consult).
-		blockEndedPredicate: Null<String> = null,
-		blockEndedSchemaPath: Null<String> = null,
+		?blockEndedPredicate: String,
+		?blockEndedSchemaPath: String,
 		// ω-cond-leading-doc-lookthrough: when set (only alongside
 		// `beforeDocCommentEmptyLines`), the `_currHasDocComment` scan looks
 		// through a `#if … #end` member to its first inner member's leading
 		// doc-comment. Null → byte-identical to the pre-fix path.
-		condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo> = null,
+		?condLeadingDocInfo: CondLeadingDocLookThroughInfo,
 		// ω-value-yielded-if-tail-barrier (SI-2): when the parent Star carries
 		// `@:fmt(clearExprPositionNonTail)` (BlockExpr / BlockStmt), every
 		// NON-tail block statement's element-opt is wrapped in
@@ -11017,9 +11015,8 @@ class WriterLowering {
 	 */
 	private static function triviaSepStarExpr(
 		fieldAccess: Expr, trailBBAccess: Null<Expr>, trailLCAccess: Null<Expr>, trailCloseAccess: Null<Expr>, trailOpenAccess: Null<Expr>,
-		elemFn: String, openText: String, closeText: String, sepText: String, wrapRulesField: Null<String> = null,
-		leftCurlyKnob: Null<String> = null, rightCurlyKnob: Null<String> = null, trailPresentAccess: Null<Expr> = null,
-		trailingCommaField: Null<String> = null, openInsideExpr: Null<Expr> = null, closeInsideExpr: Null<Expr> = null,
+		elemFn: String, openText: String, closeText: String, sepText: String, ?wrapRulesField: String, ?leftCurlyKnob: String,
+		?rightCurlyKnob: String, ?trailPresentAccess: Expr, ?trailingCommaField: String, ?openInsideExpr: Expr, ?closeInsideExpr: Expr,
 		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, bodyAwareCompactIndent: Bool = false,
 		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, reflowSourceMultiline: Bool = false,
 		bracketKindPad: Bool = false, matrixWrap: Bool = false,
@@ -11027,7 +11024,7 @@ class WriterLowering {
 		// (`value.<field>TrailingNewlineBefore`). Threaded only by callers that
 		// pass it; null for every other call site → the keep close placement
 		// degrades to the legacy own-line close (byte-inert).
-		trailNLAccess: Null<Expr> = null,
+		?trailNLAccess: Expr,
 		// ω-typedef-between-fields: opt-in for typedef-RHS anon-body blank
 		// inserts (currently `HxType.Anon` via `@:fmt(typedefBodyBlanks)`).
 		// When true, the force-multi branch reads `opt.typedefBeginType` /
@@ -11478,20 +11475,19 @@ class WriterLowering {
 
 	private static function triviaTryparseStarExpr(
 		fieldAccess: Expr, elemFn: String, sepExpr: Expr, sepBeforeFirst: Bool, nestBody: Bool, trailBBAccess: Null<Expr>,
-		trailLCAccess: Null<Expr>, trailBAAccess: Null<Expr>, firstSepOverride: Null<Expr> = null,
-		subsequentSepOverride: Null<Expr> = null, caseBodyFlagNames: Null<Array<String>> = null,
-		flatChildOptPairs: Null<Array<Array<String>>> = null, padLeading: Bool = false, padTrailing: Bool = false,
+		trailLCAccess: Null<Expr>, trailBAAccess: Null<Expr>, ?firstSepOverride: Expr, ?subsequentSepOverride: Expr,
+		?caseBodyFlagNames: Array<String>, ?flatChildOptPairs: Array<Array<String>>, padLeading: Bool = false, padTrailing: Bool = false,
 		propagateExprPosition: Bool = false, refuseFlatOnComplex: Bool = false, afterCtorInfos: Array<AfterCtorBlankInfo> = null,
 		beforeCtorInfos: Array<BeforeCtorBlankInfo> = null, betweenCtorInfos: Array<BetweenCtorBlankInfo> = null,
 		transitionAcrossInfos: Array<TransitionAcrossInfo> = null, headCtorInfos: Array<HeadCtorBlankInfo> = null,
-		metaLineEndOptField: Null<String> = null, betweenSameCtorIfNotInfos: Array<BetweenSameCtorIfNotInfo> = null,
-		lineLengthAwareSeps: Bool = false, priorAfterTrailExpr: Null<Expr> = null, forceInlineSep: Bool = false,
+		?metaLineEndOptField: String, betweenSameCtorIfNotInfos: Array<BetweenSameCtorIfNotInfo> = null, lineLengthAwareSeps: Bool = false,
+		?priorAfterTrailExpr: Expr, forceInlineSep: Bool = false,
 		// ω-blockended-trivia-tryparse (Session 3): when the tryparse
 		// Star carries `@:sep('text', tailRelax, blockEnded)`, the
 		// per-iteration emit inserts `;` (or other sepText) between two
 		// non-`}`-ending elements before the existing hardline / space
 		// dispatch. Null sepText → byte-identical to pre-slice.
-		sepText: Null<String> = null,
+		?sepText: String,
 		blockEnded: Bool = false,
 		// ω-sep-faithful: source-fidelity sep re-emission (see
 		// triviaTryparseBlockEndedSepEmit) — comma-lists inside
@@ -11531,7 +11527,7 @@ class WriterLowering {
 		// ω-sep-faithful: runtime access to the `<field>SepBefore`
 		// slot; when non-null and true at write time, the leading pad becomes
 		// `sep + ' '` (re-emitting the source's leading sep inside the group).
-		sepBeforeAccess: Null<Expr> = null,
+		?sepBeforeAccess: Expr,
 		// ω-cond-comp-elseif-double-newline: elements of this Star each
 		// self-terminate with their own @:fmt(padTrailing) hardline (the
 		// cond-comp `elseifs` Stars — every HxElseif* ends its body with a

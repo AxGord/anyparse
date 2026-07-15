@@ -5204,7 +5204,7 @@ final class Cli {
 	private static function runReconProbe(
 		plugin: GrammarPlugin, path: String, predictStrip: Bool, patterns: Array<String>, replacements: Array<String>,
 		compiledRegex: Null<Array<EReg>>, showSource: Bool, writerEqualsAfter: Bool = false, writerEqualsPlain: Bool = false,
-		expectedPathOpt: Null<String> = null, lang: String = 'haxe'
+		?expectedPathOpt: String, lang: String = 'haxe'
 	): Int {
 		if (!FileSystem.exists(path)) {
 			stderr('apq recon: --probe path "$path" does not exist\n');

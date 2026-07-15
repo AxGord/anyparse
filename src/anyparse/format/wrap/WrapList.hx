@@ -1509,7 +1509,7 @@ class WrapList {
 	private static function shape(
 		mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
 		appendTrailingComma: Bool, trailBreak: Doc, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int,
-		sourceBreakBefore: Null<Array<Bool>> = null, keepCloseGlued: Bool = false,
+		?sourceBreakBefore: Array<Bool>, keepCloseGlued: Bool = false,
 		// ω-nowrap-source-trail-comma: source-only trailing-comma signal for the
 		// FLAT (`NoWrap`) layout. Distinct from `appendTrailingComma` (= source
 		// `<field>TrailPresent` OR per-construct knob): the knob forces break-mode
@@ -2154,8 +2154,8 @@ class WrapList {
 	}
 
 	private static function shapeNoWrap(
-		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc,
-		sepBeforeFlags: Null<Array<Bool>> = null, flatTrailingComma: Bool = false
+		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, ?sepBeforeFlags: Array<Bool>,
+		flatTrailingComma: Bool = false
 	): Doc {
 		// ω-arrow-body-close-paren-own-line slice 2: when the sole item
 		// carries a slice-1 arrow-body-line-wrap marker, escalate the shape
@@ -2205,7 +2205,7 @@ class WrapList {
 
 	private static function shapeOnePerLine(
 		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, trailBreak: Doc,
-		sepBeforeFlags: Null<Array<Bool>> = null
+		?sepBeforeFlags: Array<Bool>
 	): Doc {
 		final inner: Array<Doc> = [];
 		for (i in 0...items.length) {
@@ -2228,8 +2228,7 @@ class WrapList {
 	}
 
 	private static function shapeOnePerLineAfterFirst(
-		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool,
-		sepBeforeFlags: Null<Array<Bool>> = null
+		open: String, close: String, sep: String, items: Array<Doc>, cols: Int, appendTrailingComma: Bool, ?sepBeforeFlags: Array<Bool>
 	): Doc {
 		if (items.length == 1) return Concat([Text(open), items[0], Text(close)]);
 		final tail: Array<Doc> = [];
@@ -2302,7 +2301,7 @@ class WrapList {
 
 	private static function shapeFillLine(
 		open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, closeInside: Doc, cols: Int,
-		appendTrailingComma: Bool, groupRestProbe: Bool, sepBeforeFlags: Null<Array<Bool>> = null, keepCloseGlued: Bool = false
+		appendTrailingComma: Bool, groupRestProbe: Bool, ?sepBeforeFlags: Array<Bool>, keepCloseGlued: Bool = false
 	): Doc {
 		// Per-gap sep awareness (slice ω-fillline-pergap-sep): items split
 		// into chunks at every leading-hardline boundary. Within each
