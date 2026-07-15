@@ -1674,9 +1674,6 @@ class WriterLowering {
 			// through the cascade no-trivia branch. Currently
 			// `HxFnDecl.params`.
 			final ignoreSourceNewlines: Bool = starNode.fmtHasFlag('ignoreSourceNewlinesForWrap');
-			// ω-bropen-keep-sep: read `@:fmt(keepCurlyBlanks)` on the
-			// struct-Star path. Sister to the enum-Alt path's read.
-			final keepCurlyBlanksStar: Bool = starNode.fmtHasFlag('keepCurlyBlanks');
 			// ω-array-reflow: struct-Star path reader for
 			// `@:fmt(reflowSourceMultiline)`. Sister to the enum-Alt
 			// read; threads into `triviaSepStarExpr`'s `_smlKeep`
@@ -1713,7 +1710,7 @@ class WriterLowering {
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-				keepCurlyBlanksStar, reflowSourceMultilineStar, false, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar
+				reflowSourceMultilineStar, false, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar
 			));
 			return;
 		}
@@ -5044,12 +5041,6 @@ class WriterLowering {
 		// reader present for symmetry with the struct-path
 		// dual-dispatch.
 		final ignoreSourceNewlines: Bool = branch.fmtHasFlag('ignoreSourceNewlinesForWrap');
-		// ω-bropen-keep-sep: forward `@:fmt(keepCurlyBlanks)` from
-		// the enum-Alt branch into `triviaSepStarExpr`'s opt-in.
-		// Sister to the trivia-block path's read at the else arm
-		// (line ~1542); enables `HxType.Anon` to honour
-		// `opt.afterLeftCurly` / `opt.beforeRightCurly` Keep.
-		final keepCurlyBlanksAlt: Bool = branch.fmtHasFlag('keepCurlyBlanks');
 		// ω-typedef-between-fields: enum-Alt branch reader for
 		// `@:fmt(typedefBodyBlanks)` (currently `HxType.Anon`).
 		// When set AND the descendant anon sees
@@ -5086,8 +5077,7 @@ class WriterLowering {
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-			keepCurlyBlanksAlt, reflowSourceMultilineAlt, bracketKindPadAlt, matrixWrapAlt, null, typedefBodyBlanksAlt,
-			propagateExprPositionAlt
+			reflowSourceMultilineAlt, bracketKindPadAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt
 		);
 	}
 
@@ -11032,8 +11022,8 @@ class WriterLowering {
 		leftCurlyKnob: Null<String> = null, rightCurlyKnob: Null<String> = null, trailPresentAccess: Null<Expr> = null,
 		trailingCommaField: Null<String> = null, openInsideExpr: Null<Expr> = null, closeInsideExpr: Null<Expr> = null,
 		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, bodyAwareCompactIndent: Bool = false,
-		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, keepCurlyBlanks: Bool = false,
-		reflowSourceMultiline: Bool = false, bracketKindPad: Bool = false, matrixWrap: Bool = false,
+		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, reflowSourceMultiline: Bool = false,
+		bracketKindPad: Bool = false, matrixWrap: Bool = false,
 		// ω-keep-fnsig-newline: accessor for the close-newline slot
 		// (`value.<field>TrailingNewlineBefore`). Threaded only by callers that
 		// pass it; null for every other call site → the keep close placement

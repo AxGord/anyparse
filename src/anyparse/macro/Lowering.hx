@@ -1314,7 +1314,7 @@ class Lowering {
 			elemCT, elemCall, isTriviaCollects, sepText, starNode.fmtHasFlag('padTrailing'), trailingBlankBeforeLocalName(localName),
 			trailingLeadingLocalName(localName)
 		);
-		final innerCommitAction: Expr = buildOptKwStarInnerCommit(hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, bodyOnSameLineLocal);
+		final innerCommitAction: Expr = buildOptKwStarInnerCommit(hasKwTriviaSlots, afterKwLocal, bodyOnSameLineLocal);
 		final preCommitCapture: Expr = if (hasKwTriviaSlots)
 			macro $i{beforeKwNlLocal} = hasNewlineIn(ctx.input, _prevEnd, _kwStartPos);
 		else
@@ -2590,7 +2590,7 @@ class Lowering {
 	}
 
 	private function buildOptKwStarInnerCommit(
-		hasKwTriviaSlots: Bool, afterKwLocal: String, kwLeadingLocal: String, bodyOnSameLineLocal: String
+		hasKwTriviaSlots: Bool, afterKwLocal: String, bodyOnSameLineLocal: String
 	): Expr {
 		// Post-commit kw-trivia capture — mirrors the optional-Ref path.
 		return hasKwTriviaSlots
