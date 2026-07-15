@@ -71,6 +71,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static final DECL_HOST_KINDS: Array<String> = [
 		'VarDecl',
 		'FnDecl',
+		'LocalFnStmt',
 		'ClassDecl',
 		'InterfaceDecl',
 		'EnumDecl',
@@ -350,6 +351,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'FnExpr',
 				'FnMember',
 				'FinalModifiedMember',
+				// A local `function f(...) {...}` statement opens its own frame —
+				// without it sibling local fns' same-named params collect into the
+				// ENCLOSING function's frame and reads mis-bind across siblings
+				// (the CallGraph `span` collision).
+				'LocalFnStmt',
 				'ThinParenLambdaExpr',
 				'ParenLambdaExpr',
 				'BlockBody',

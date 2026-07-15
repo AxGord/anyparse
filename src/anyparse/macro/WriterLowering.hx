@@ -5274,62 +5274,50 @@ class WriterLowering {
 					_docs.push(_dt($v{trailText}));
 					_dc(_docs);
 				};
-			} else {
-				final tcExpr: Expr = trailingCommaExpr(branch);
-				// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`,
-				// plain-mode `sepList` path) overrides the static anonTypeBraces
-				// inside-space with a runtime dispatch on the first element's
-				// bracket kind. Reads `_args[0]` (the plain `HxExpr` element,
-				// bound just below at the `final _args = $argsAccess` site).
-				// `opt.arrayBracketKind` null-guards an empty list, so `_args[0]`
-				// on `[]` resolves to the default `ArrayLiteral` → `_de()`,
-				// keeping empty brackets tight.
-				final bracketKindPad: Bool = branch.fmtHasFlag('bracketKindPad');
-				final openInsideExpr: Expr = bracketKindPad
-					? arrayBracketInsidePolicySpace(macro _args[0], false)
-					: (delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false) ?? macro _de());
-				final closeInsideExpr: Expr = bracketKindPad
-					? arrayBracketInsidePolicySpace(macro _args[0], true)
-					: (delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true) ?? macro _de());
-				// ω-anontype-wraprules: forward `@:fmt(wrapRules('<field>'))`
-				// to `WrapList.emit` for non-trivia-collecting Alt-Star
-				// nodes only. `@:trivia`-annotated branches (e.g.
-				// `HxExpr.ArrayExpr`) keep the renderer-driven `sepList`
-				// path here — their wrapRules dispatch already runs
-				// through `triviaSepStarExpr` in trivia mode, and
-				// switching the plain-mode path to `WrapList.emit` would
-				// lose renderer-driven flat/break for callers that rely
-				// on `lineWidth`-based natural breaking (verified by
-				// `HxTrailingCommaOptionsTest.testArrayTrailingCommaOnBreak`,
-				// which uses plain-mode `HxModuleWriter`). Type-position
-				// nodes (`HxType.Anon.fields`) don't carry trivia, so the
-				// plain-path dispatch is their only wrapRules surface —
-				// a `@:trivia` flip would synthesize unused machinery.
-				final isTriviaCollecting: Bool = starNode.annotations.get('trivia.starCollects') == true;
-				final wrapRulesField: Null<String> = isTriviaCollecting ? null : branch.fmtReadString('wrapRules');
-				final listCall: Expr = if (wrapRulesField != null) {
-					final rulesExpr: Expr = optFieldAccess(wrapRulesField);
-					macro anyparse.format.wrap.WrapList.emit(
-						$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr
-					);
-				} else {
-					macro sepList(
-						$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false,
-						$v{branch.fmtHasFlag('cuddle')}
-					);
-				};
-				return macro {
-					final _args = $argsAccess;
-					final _docs: Array<anyparse.core.Doc> = [];
-					var _i: Int = 0;
-					while (_i < _args.length) {
-						_docs.push($elemCall);
-						_i++;
-					}
-					$listCall;
-				};
 			}
-		} else {
+			final tcExpr: Expr = trailingCommaExpr(branch);
+			// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`,
+			// plain-mode `sepList` path) overrides the static anonTypeBraces
+			// inside-space with a runtime dispatch on the first element's
+			// bracket kind. Reads `_args[0]` (the plain `HxExpr` element,
+			// bound just below at the `final _args = $argsAccess` site).
+			// `opt.arrayBracketKind` null-guards an empty list, so `_args[0]`
+			// on `[]` resolves to the default `ArrayLiteral` → `_de()`,
+			// keeping empty brackets tight.
+			final bracketKindPad: Bool = branch.fmtHasFlag('bracketKindPad');
+			final openInsideExpr: Expr = bracketKindPad
+				? arrayBracketInsidePolicySpace(macro _args[0], false)
+				: (delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false) ?? macro _de());
+			final closeInsideExpr: Expr = bracketKindPad
+				? arrayBracketInsidePolicySpace(macro _args[0], true)
+				: (delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true) ?? macro _de());
+			// ω-anontype-wraprules: forward `@:fmt(wrapRules('<field>'))`
+			// to `WrapList.emit` for non-trivia-collecting Alt-Star
+			// nodes only. `@:trivia`-annotated branches (e.g.
+			// `HxExpr.ArrayExpr`) keep the renderer-driven `sepList`
+			// path here — their wrapRules dispatch already runs
+			// through `triviaSepStarExpr` in trivia mode, and
+			// switching the plain-mode path to `WrapList.emit` would
+			// lose renderer-driven flat/break for callers that rely
+			// on `lineWidth`-based natural breaking (verified by
+			// `HxTrailingCommaOptionsTest.testArrayTrailingCommaOnBreak`,
+			// which uses plain-mode `HxModuleWriter`). Type-position
+			// nodes (`HxType.Anon.fields`) don't carry trivia, so the
+			// plain-path dispatch is their only wrapRules surface —
+			// a `@:trivia` flip would synthesize unused machinery.
+			final isTriviaCollecting: Bool = starNode.annotations.get('trivia.starCollects') == true;
+			final wrapRulesField: Null<String> = isTriviaCollecting ? null : branch.fmtReadString('wrapRules');
+			final listCall: Expr = if (wrapRulesField != null) {
+				final rulesExpr: Expr = optFieldAccess(wrapRulesField);
+				macro anyparse.format.wrap.WrapList.emit(
+					$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $openInsideExpr, $closeInsideExpr, false, $rulesExpr, $tcExpr
+				);
+			} else {
+				macro sepList(
+					$v{leadText}, $v{trailText}, $v{sepText}, _docs, opt, $tcExpr, $openInsideExpr, $closeInsideExpr, false,
+					$v{branch.fmtHasFlag('cuddle')}
+				);
+			};
 			return macro {
 				final _args = $argsAccess;
 				final _docs: Array<anyparse.core.Doc> = [];
@@ -5338,9 +5326,19 @@ class WriterLowering {
 					_docs.push($elemCall);
 					_i++;
 				}
-				blockBody($v{leadText}, $v{trailText}, _docs, opt);
+				$listCall;
 			};
 		}
+		return macro {
+			final _args = $argsAccess;
+			final _docs: Array<anyparse.core.Doc> = [];
+			var _i: Int = 0;
+			while (_i < _args.length) {
+				_docs.push($elemCall);
+				_i++;
+			}
+			blockBody($v{leadText}, $v{trailText}, _docs, opt);
+		};
 	}
 
 	/**
@@ -7105,103 +7103,104 @@ class WriterLowering {
 		// push-op / recurse-right gather still yields items in infix order with a
 		// per-gap `_afterComments` entry, so the flat chain-emit preserves the
 		// post-`??` line comments the plain infix path used to drop.
-		if (isChainNullCoal) return threadBreaks
-			? macro switch _e {
-				case NullCoal(_l, _r, _nl, _lc, _ac):
-					_gather(_l);
-					if (_lc != null) {
-						_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-						_hasLeadComment = true;
+		return isChainNullCoal
+			? threadBreaks
+				? macro switch _e {
+					case NullCoal(_l, _r, _nl, _lc, _ac):
+						_gather(_l);
+						if (_lc != null) {
+							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+							_hasLeadComment = true;
+						}
+						_ops.push('??');
+						_breaks.push(_nl);
+						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+						if (_ac != null) _hasLeadComment = true;
+						_gather(_r);
+					case _: _items.push($leafCall);
+				}
+				: macro switch _e {
+					case NullCoal(_l, _r):
+						_gather(_l);
+						_ops.push('??');
+						_gather(_r);
+					case _: _items.push($leafCall);
+				}
+			: threadBreaks
+				? isChainBool
+					? macro switch _e {
+						case Or(_l, _r, _nl, _lc, _ac):
+							_gather(_l);
+							if (_lc != null) {
+								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+								_hasLeadComment = true;
+							}
+							_ops.push('||');
+							_breaks.push(_nl);
+							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+							if (_ac != null) _hasLeadComment = true;
+							_gather(_r);
+						case And(_l, _r, _nl, _lc, _ac):
+							_gather(_l);
+							if (_lc != null) {
+								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+								_hasLeadComment = true;
+							}
+							_ops.push('&&');
+							_breaks.push(_nl);
+							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+							if (_ac != null) _hasLeadComment = true;
+							_gather(_r);
+						case _: _items.push($leafCall);
 					}
-					_ops.push('??');
-					_breaks.push(_nl);
-					_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-					if (_ac != null) _hasLeadComment = true;
-					_gather(_r);
-				case _: _items.push($leafCall);
-			}
-			: macro switch _e {
-				case NullCoal(_l, _r):
-					_gather(_l);
-					_ops.push('??');
-					_gather(_r);
-				case _: _items.push($leafCall);
-			};
-		return threadBreaks
-			? isChainBool
-				? macro switch _e {
-					case Or(_l, _r, _nl, _lc, _ac):
-						_gather(_l);
-						if (_lc != null) {
-							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-							_hasLeadComment = true;
-						}
-						_ops.push('||');
-						_breaks.push(_nl);
-						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-						if (_ac != null) _hasLeadComment = true;
-						_gather(_r);
-					case And(_l, _r, _nl, _lc, _ac):
-						_gather(_l);
-						if (_lc != null) {
-							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-							_hasLeadComment = true;
-						}
-						_ops.push('&&');
-						_breaks.push(_nl);
-						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-						if (_ac != null) _hasLeadComment = true;
-						_gather(_r);
-					case _: _items.push($leafCall);
-				}
-				: macro switch _e {
-					case Add(_l, _r, _nl, _lc, _ac):
-						_gather(_l);
-						if (_lc != null) {
-							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-							_hasLeadComment = true;
-						}
-						_ops.push('+');
-						_breaks.push(_nl);
-						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-						if (_ac != null) _hasLeadComment = true;
-						_gather(_r);
-					case Sub(_l, _r, _nl, _lc, _ac):
-						_gather(_l);
-						if (_lc != null) {
-							_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
-							_hasLeadComment = true;
-						}
-						_ops.push('-');
-						_breaks.push(_nl);
-						_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
-						if (_ac != null) _hasLeadComment = true;
-						_gather(_r);
-					case _: _items.push($leafCall);
-				}
-			: isChainBool
-				? macro switch _e {
-					case Or(_l, _r):
-						_gather(_l);
-						_ops.push('||');
-						_gather(_r);
-					case And(_l, _r):
-						_gather(_l);
-						_ops.push('&&');
-						_gather(_r);
-					case _: _items.push($leafCall);
-				}
-				: macro switch _e {
-					case Add(_l, _r):
-						_gather(_l);
-						_ops.push('+');
-						_gather(_r);
-					case Sub(_l, _r):
-						_gather(_l);
-						_ops.push('-');
-						_gather(_r);
-					case _: _items.push($leafCall);
-				};
+					: macro switch _e {
+						case Add(_l, _r, _nl, _lc, _ac):
+							_gather(_l);
+							if (_lc != null) {
+								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+								_hasLeadComment = true;
+							}
+							_ops.push('+');
+							_breaks.push(_nl);
+							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+							if (_ac != null) _hasLeadComment = true;
+							_gather(_r);
+						case Sub(_l, _r, _nl, _lc, _ac):
+							_gather(_l);
+							if (_lc != null) {
+								_items[_items.length - 1] = _dc([_items[_items.length - 1], trailingCommentDocVerbatim(_lc, opt)]);
+								_hasLeadComment = true;
+							}
+							_ops.push('-');
+							_breaks.push(_nl);
+							_afterComments.push(_ac != null ? trailingCommentDocVerbatim(_ac, opt) : null);
+							if (_ac != null) _hasLeadComment = true;
+							_gather(_r);
+						case _: _items.push($leafCall);
+					}
+				: isChainBool
+					? macro switch _e {
+						case Or(_l, _r):
+							_gather(_l);
+							_ops.push('||');
+							_gather(_r);
+						case And(_l, _r):
+							_gather(_l);
+							_ops.push('&&');
+							_gather(_r);
+						case _: _items.push($leafCall);
+					}
+					: macro switch _e {
+						case Add(_l, _r):
+							_gather(_l);
+							_ops.push('+');
+							_gather(_r);
+						case Sub(_l, _r):
+							_gather(_l);
+							_ops.push('-');
+							_gather(_r);
+						case _: _items.push($leafCall);
+					};
 	}
 
 	/**
@@ -14010,24 +14009,25 @@ class WriterLowering {
 		// `}`/`;` shape heuristics. Used by comma-lists inside conditional
 		// element groups (`HxConditionalArgs.body`), where a `}`-ending
 		// object-literal element still needs its comma.
-		if (sepText != null && sepFaithful) return macro {
-			if (_si > 0 && _arr[_si - 1].sepAfter) {
-				_docs.push(_dt($v{sepText}));
-			}
-		};
-		return (sepText != null && blockEnded)
+		return sepText != null && sepFaithful
 			? macro {
-				if (
-					_si > 0 && _priorElemDoc != null && (
-						_arr[_si - 1].sepAfter
-						|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
-						&& !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node)))
-					)
-				) {
+				if (_si > 0 && _arr[_si - 1].sepAfter) {
 					_docs.push(_dt($v{sepText}));
 				}
 			}
-			: macro {};
+			: (sepText != null && blockEnded)
+				? macro {
+					if (
+						_si > 0 && _priorElemDoc != null && (
+							_arr[_si - 1].sepAfter
+							|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
+							&& !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node)))
+						)
+					) {
+						_docs.push(_dt($v{sepText}));
+					}
+				}
+				: macro {};
 	}
 
 	/**
@@ -14040,21 +14040,22 @@ class WriterLowering {
 		// ω-sep-faithful: trailing sep before the enclosing `#end`/`#else`
 		// re-emits iff the source had it (`sepAfter` on the LAST element) —
 		// the mandatory-comma case `[a, #if x b, #end c]`.
-		if (sepText != null && sepFaithful) return macro {
-			if (_arr.length > 0 && _arr[_arr.length - 1].sepAfter) {
-				_docs.push(_dt($v{sepText}));
-			}
-		};
-		return (sepText != null && blockEnded)
+		return sepText != null && sepFaithful
 			? macro {
-				if (
-					_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
-					&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
-				) {
+				if (_arr.length > 0 && _arr[_arr.length - 1].sepAfter) {
 					_docs.push(_dt($v{sepText}));
 				}
 			}
-			: macro {};
+			: (sepText != null && blockEnded)
+				? macro {
+					if (
+						_arr.length > 0 && _priorElemDoc != null && _arr[_arr.length - 1].sepAfter
+						&& !anyparse.core.DocMeasure.endsWithSemi(_priorElemDoc)
+					) {
+						_docs.push(_dt($v{sepText}));
+					}
+				}
+				: macro {};
 	}
 
 	/**

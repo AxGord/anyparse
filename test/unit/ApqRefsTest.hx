@@ -465,4 +465,48 @@ class ApqRefsTest extends Test {
 		}).join(', ') + ']';
 	}
 
+
+	/**
+	 * A local `function f(...) {...}` statement opens its OWN scope frame:
+	 * sibling local fns' same-named params must not cross-bind. Regression
+	 * for the CallGraph `span` collision — reads inside the second local fn
+	 * bound to the FIRST one's param before `LocalFnStmt` joined
+	 * `scopeKinds` / `declHostKinds`.
+	 */
+	public function testSiblingLocalFnParamsDoNotCrossBind(): Void {
+		final source: String = 'class X { static function outer() {\n' + '\tfunction a(p:Int):Int { return p; }\n'
+			+ '\tfunction b(p:String):String { return p; }\n' + '} }';
+		final hits: Array<RefHit> = findIn(source, 'p');
+		final decls: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Decl);
+		final reads: Array<RefHit> = hits.filter(h -> h.kind == RefKind.Read);
+		Assert.equals(2, decls.length, 'two param decls expected, got ${describe(hits)}');
+		Assert.equals(2, reads.length, 'two reads expected, got ${describe(hits)}');
+		for (r in reads) {
+			final binding: Null<Span> = r.bindingSpan;
+			Assert.notNull(binding, 'read must resolve to a binding');
+			// Each read binds to the decl of ITS OWN function: the read's span
+			// sits on the same fixture line as its binding (fixture is one
+			// local fn per line).
+			if (binding != null) {
+				final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
+				Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling local fns (binding ${binding.from})');
+			}
+		}
+	}
+
+	/** A local fn's name is a Decl visible from the enclosing body (calls bind to it). */
+	public function testLocalFnNameIsDecl(): Void {
+		final source: String = 'class X { static function outer() {\n' + '\tfunction helper():Void {}\n' + '\thelper();\n' + '} }';
+		final hits: Array<RefHit> = findIn(source, 'helper');
+		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Decl).length, 'local fn decl expected, got ${describe(hits)}');
+		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');
+	}
+
+	/** 0-based-agnostic line index of a byte offset in `s` — fixture-local helper. */
+	private static function lineOf(s: String, from: Int): Int {
+		var line: Int = 0;
+		for (i in 0...from) if (StringTools.fastCodeAt(s, i) == '\n'.code) line++;
+		return line;
+	}
+
 }

@@ -25,7 +25,9 @@ final class Parser {
 	public final captures: Map<String, String> = [];
 
 	public var pos: Int = 0;
-	public var cache: ParseCache = NoOpCache.instance;
+	// Deliberately mutable: the injection point for the planned cache
+	// layer (swap NoOpCache for a real ParseCache per parse session).
+	public var cache: ParseCache = NoOpCache.instance; // noqa: prefer-final-public-field
 	public var cancelled: () -> Bool = alwaysFalse;
 
 	/**

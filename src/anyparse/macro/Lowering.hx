@@ -1217,8 +1217,7 @@ class Lowering {
 	 * undecided).
 	 */
 	private function emitOptionalKwStarFieldSteps(
-		starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, kwLead: String, hasKwTriviaSlots: Bool, afterKwLocal: String,
-		kwLeadingLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
+		starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, kwLead: String, hasKwTriviaSlots: Bool, afterKwLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
 		beforeKwTrailingLocal: String
 	): Void {
 		final inner: ShapeNode = starNode.children[0];
@@ -5230,7 +5229,7 @@ expectLit(ctx, $v{trailText}));
 				});
 			case Star if (isOptional && kwLead != null):
 				emitOptionalKwStarFieldSteps(
-					child, localName, parseSteps, kwLead, hasKwTriviaSlots, afterKwLocal, kwLeadingLocal, beforeKwNlLocal,
+					child, localName, parseSteps, kwLead, hasKwTriviaSlots, afterKwLocal, beforeKwNlLocal,
 					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
 				);
 			case Star if (isOptional):
