@@ -1148,6 +1148,28 @@ typedef RefShape = {
 	 */
 	@:optional var blockBodyKind: String;
 
+
+	/**
+	 * The metadata tag requesting a final class (Haxe `@:final`) — the
+	 * `prefer-final-class` check flags it on a class declaration and its `--fix`
+	 * replaces the meta with the `final` class modifier. Optional; unset (or a
+	 * missing class-decl kind) makes the check a no-op.
+	 */
+	@:optional var finalClassMetaName: String;
+
+	/**
+	 * The plain class-declaration node kind (Haxe `ClassDecl`) — a `finalClassMetaName`
+	 * meta on one is a `@:final class` the modifier replaces; the `prefer-final-class`
+	 * fix removes the meta and inserts `final ` before the class keyword. Optional.
+	 */
+	@:optional var plainClassDeclKind: String;
+
+	/**
+	 * The already-`final` class-declaration node kind (Haxe `FinalDecl`, the `final
+	 * class` projection) — a `finalClassMetaName` meta on one is a REDUNDANT `@:final
+	 * final class`; the `prefer-final-class` fix removes the meta only. Optional.
+	 */
+	@:optional var finalClassDeclKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
