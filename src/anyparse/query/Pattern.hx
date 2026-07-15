@@ -85,12 +85,12 @@ final class KindEquivalence {
 		for (group in classes) {
 			if (group.length == 0) continue;
 			final rep: String = group[0];
-			for (k in group) _canonOf.set(k, rep);
+			for (k in group) _canonOf[k] = rep;
 		}
 	}
 
 	public inline function canon(kind: String): String {
-		final c: Null<String> = _canonOf.get(kind);
+		final c: Null<String> = _canonOf[kind];
 		return c ?? kind;
 	}
 

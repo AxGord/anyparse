@@ -6034,15 +6034,15 @@ final class Cli {
 			return EXIT_RUNTIME;
 		}
 		final allPaths: Map<String, Bool> = [];
-		for (k in cur.keys()) allPaths.set(k, true);
-		for (k in prev.keys()) allPaths.set(k, true);
+		for (k in cur.keys()) allPaths[k] = true;
+		for (k in prev.keys()) allPaths[k] = true;
 		final sorted: Array<String> = [for (k in allPaths.keys()) k];
 		sorted.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
 		final transitions: Map<String, Int> = [];
 		var changed: Int = 0;
 		for (path in sorted) {
-			final ps: Null<String> = prev.get(path);
-			final cs: Null<String> = cur.get(path);
+			final ps: Null<String> = prev[path];
+			final cs: Null<String> = cur[path];
 			if (ps == cs) continue;
 			changed++;
 			final key: String = if (ps == null)
@@ -6051,7 +6051,7 @@ final class Cli {
 				'REMOVED($ps)'
 			else
 				'$ps->$cs';
-			transitions.set(key, (transitions.get(key) ?? 0) + 1);
+			transitions[key] = (transitions[key] ?? 0) + 1;
 			if (ps == null)
 				sysPrint('ADDED $path (now $cs)\n');
 			else if (cs == null)
@@ -7603,8 +7603,8 @@ final class Cli {
 	 */
 	private static function tallyKinds(root: QueryNode, counts: Map<String, Int>): Void {
 		function walk(n: QueryNode): Void {
-			final prev: Null<Int> = counts.get(n.kind);
-			counts.set(n.kind, prev == null ? 1 : prev + 1);
+			final prev: Null<Int> = counts[n.kind];
+			counts[n.kind] = prev == null ? 1 : prev + 1;
 			for (c in n.children) walk(c);
 		}
 		walk(root);
@@ -7892,7 +7892,7 @@ final class Cli {
 	private static function collectNames(root: QueryNode, out: Map<String, Bool>): Void {
 		function walk(n: QueryNode): Void {
 			final nm: Null<String> = n.name;
-			if (nm != null && nm.length > 0) out.set(nm, true);
+			if (nm != null && nm.length > 0) out[nm] = true;
 			for (c in n.children) walk(c);
 		}
 		walk(root);

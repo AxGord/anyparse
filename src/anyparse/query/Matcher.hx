@@ -70,9 +70,9 @@ final class Matcher {
 			final n: Null<String> = pattern.name;
 			if (n == null) return false;
 			if (n == Metavar.WILDCARD_NAME) return true;
-			final prior: Null<QueryNode> = bindings.get(n);
+			final prior: Null<QueryNode> = bindings[n];
 			if (prior == null) {
-				bindings.set(n, input);
+				bindings[n] = input;
 				return true;
 			}
 			return structurallyEqual(prior, input);
@@ -93,9 +93,9 @@ final class Matcher {
 			final bare: String = pname.substring(1);
 			if (bare != Metavar.WILDCARD_NAME) {
 				if (iname == null) return false;
-				final prior: Null<QueryNode> = bindings.get(bare);
+				final prior: Null<QueryNode> = bindings[bare];
 				if (prior == null) {
-					bindings.set(bare, new QueryNode('NameOnly', iname, [], input.span));
+					bindings[bare] = new QueryNode('NameOnly', iname, [], input.span);
 				} else if (prior.kind == 'NameOnly') {
 					if (prior.name != iname) return false;
 				} else {

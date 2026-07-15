@@ -38,9 +38,9 @@ class StrategyRegistry {
 		final owners: Map<String, String> = [];
 		for (s in _strategies) for (tag in s.ownedMeta) {
 			if (owners.exists(tag)) {
-				Context.fatalError('metadata $tag is claimed by both ${owners.get(tag)} and ${s.name}', Context.currentPos());
+				Context.fatalError('metadata $tag is claimed by both ${owners[tag]} and ${s.name}', Context.currentPos());
 			}
-			owners.set(tag, s.name);
+			owners[tag] = s.name;
 		}
 		_ordered = topoSort(_strategies);
 	}
@@ -75,14 +75,14 @@ class StrategyRegistry {
 
 	private static function buildIncomingEdges(list: Array<Strategy>): Map<String, Array<String>> {
 		final byName: Map<String, Strategy> = [];
-		for (s in list) byName.set(s.name, s);
+		for (s in list) byName[s.name] = s;
 
 		final incoming: Map<String, Array<String>> = [];
-		for (s in list) incoming.set(s.name, []);
+		for (s in list) incoming[s.name] = [];
 
 		inline function addEdge(from: String, to: String): Void {
 			if (!byName.exists(from) || !byName.exists(to)) return;
-			final deps: Null<Array<String>> = incoming.get(to);
+			final deps: Null<Array<String>> = incoming[to];
 			if (deps != null && deps.indexOf(from) == -1) deps.push(from);
 		}
 
@@ -95,21 +95,21 @@ class StrategyRegistry {
 
 	private static function drainReady(list: Array<Strategy>, incoming: Map<String, Array<String>>): Array<Strategy> {
 		final byName: Map<String, Strategy> = [];
-		for (s in list) byName.set(s.name, s);
+		for (s in list) byName[s.name] = s;
 
 		final result: Array<Strategy> = [];
 		final ready: Array<String> = [];
 		for (s in list) {
-			final deps: Null<Array<String>> = incoming.get(s.name);
+			final deps: Null<Array<String>> = incoming[s.name];
 			if (deps == null || deps.length == 0) ready.push(s.name);
 		}
 
 		while (ready.length > 0) {
 			final pick: String = ready.shift();
-			final s: Null<Strategy> = byName.get(pick);
+			final s: Null<Strategy> = byName[pick];
 			if (s != null) result.push(s);
 			for (other in list) {
-				final deps: Null<Array<String>> = incoming.get(other.name);
+				final deps: Null<Array<String>> = incoming[other.name];
 				if (deps == null) continue;
 				final idx: Int = deps.indexOf(pick);
 				if (idx == -1) continue;

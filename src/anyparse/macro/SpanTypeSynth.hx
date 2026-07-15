@@ -76,7 +76,7 @@ class SpanTypeSynth {
 			if (node.kind == Terminal) continue;
 			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
-			defined.set(pairedFqn, true);
+			defined[pairedFqn] = true;
 			paired.push(buildTypeDefinition(origName, node, synthPack));
 		}
 		if (paired.length == 0) return;

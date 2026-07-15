@@ -85,7 +85,7 @@ class ShapeBuilder {
 			if (_shaped.exists(job.name)) continue;
 			_inFlight.push(job.name);
 			final node: ShapeNode = shapeTop(job.type);
-			_shaped.set(job.name, node);
+			_shaped[job.name] = node;
 			_inFlight.pop();
 		}
 		return { root: _rootName, rules: _shaped };

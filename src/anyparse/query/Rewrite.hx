@@ -133,7 +133,7 @@ final class Rewrite {
 	// Verbatim source for a bound metavar: the captured name for a
 	// name-position binding, else the node's source slice.
 	private static function metavarSource(name: String, source: String, bindings: Map<String, QueryNode>): Null<String> {
-		final node: Null<QueryNode> = bindings.get(name);
+		final node: Null<QueryNode> = bindings[name];
 		if (node == null) return null;
 		if (node.kind == 'NameOnly') return node.name;
 		final span: Null<Span> = node.span;

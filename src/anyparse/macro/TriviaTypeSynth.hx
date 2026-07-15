@@ -427,7 +427,7 @@ class TriviaTypeSynth {
 			if (node.annotations.get('trivia.bearing') != true) continue;
 			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
-			defined.set(pairedFqn, true);
+			defined[pairedFqn] = true;
 			paired.push(buildTypeDefinition(origName, node, synthPack));
 			convertedNames.push(origName);
 		}
