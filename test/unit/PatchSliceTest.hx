@@ -17,22 +17,22 @@ import anyparse.query.ReplaceNode.ReplaceTarget;
 class PatchSliceTest extends Test {
 
 	public function testPatchWithinLine(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 2;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 2;\n\t}\n}\n';
 		assertPatch(source, BySelector('FnMember:f'), 'return 1;', 'return 2;', expected);
 	}
 
 	public function testPatchDedentedMultiline(): Void {
 		// The old fragment is flush-left, as `apq source --select` prints it —
 		// the raw file lines carry two tabs; the line-wise match ignores that.
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar a:Int = 1;\n' + '\t\treturn a;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\tvar a:Int = 2;\n' + '\t\treturn a + 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\tvar a:Int = 1;\n\t\treturn a;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\t\tvar a:Int = 2;\n\t\treturn a + 1;\n\t}\n}\n';
 		assertPatch(source, BySelector('FnMember:f'), 'var a:Int = 1;\nreturn a;', 'var a:Int = 2;\nreturn a + 1;', expected);
 	}
 
 	public function testPatchByPosition(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 3;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 3;\n\t}\n}\n';
 		// Line 2 col 11 is the `f` method-name token.
 		final fnNameCol: Int = 11;
 		assertPatch(source, ByPosition(2, fnNameCol), 'return 1;', 'return 3;', expected);
@@ -41,57 +41,55 @@ class PatchSliceTest extends Test {
 	public function testDeleteFragment(): Void {
 		// An empty new fragment deletes the old one; the emptied line survives as
 		// blank trivia (removing a whole statement is `remove-element`'s job).
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\ttrace(1);\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\n\t\treturn 1;\n\t}\n}\n';
 		assertPatch(source, BySelector('FnMember:f'), 'trace(1);', '', expected);
 	}
 
 	public function testNotFoundRefused(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), 'return 9;', 'return 2;');
 	}
 
 	public function testAmbiguousRefused(): Void {
 		// `1;` occurs in both statements — the fragment must be widened.
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\ttrace(1);\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), '1', '2');
 	}
 
 	public function testAmbiguousDedentedRefused(): Void {
 		// Two identical trimmed lines — the line-wise fallback must also refuse.
-		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\ttrace(1);\n' + '\t\ttrace(1);\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\ttrace(1);\n\t\ttrace(1);\n\t}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), 'trace(1);', 'trace(2);');
 	}
 
 	public function testIdenticalRefused(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), 'return 1;', 'return 1;');
 	}
 
 	public function testEmptyOldRefused(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), '', 'return 2;');
 	}
 
 	public function testUnparseableResultRefused(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), 'return 1;', 'return ((;');
 	}
 
 	public function testFragmentOutsideNodeNotSeen(): Void {
 		// The same fragment exists in g(), but the search region is f() only —
 		// the patch is unambiguous and touches only f's occurrence.
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '\n' + '\tfunction g():Int {\n'
-			+ '\t\treturn 1;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 2;\n' + '\t}\n' + '\n' + '\tfunction g():Int {\n'
-			+ '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n\n\tfunction g():Int {\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\t\treturn 2;\n\t}\n\n\tfunction g():Int {\n\t\treturn 1;\n\t}\n}\n';
 		assertPatch(source, BySelector('FnMember:f'), 'return 1;', 'return 2;', expected);
 	}
 
 	public function testTwoPairsApplied(): Void {
 		// Both pairs land in one writer round-trip, matched against the ORIGINAL text.
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\ttrace(1);\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\ttrace(2);\n' + '\t\treturn 3;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(1);\n\t\treturn 1;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Int {\n\t\ttrace(2);\n\t\treturn 3;\n\t}\n}\n';
 		final pairs: Array<{ oldText: String, newText: String }> = [
 			{ oldText: 'trace(1);', newText: 'trace(2);' },
 			{ oldText: 'return 1;', newText: 'return 3;' }
@@ -106,7 +104,7 @@ class PatchSliceTest extends Test {
 
 	public function testOverlappingPairsRefused(): Void {
 		// The second pair's range sits inside the first one's — must refuse.
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1 + 2;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1 + 2;\n\t}\n}\n';
 		final pairs: Array<{ oldText: String, newText: String }> = [
 			{ oldText: 'return 1 + 2;', newText: 'return 9;' },
 			{ oldText: '1 + 2', newText: '3' }
@@ -116,7 +114,7 @@ class PatchSliceTest extends Test {
 
 	public function testDuplicateOldPairsRefused(): Void {
 		// Two pairs matching the SAME range overlap by definition.
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		final pairs: Array<{ oldText: String, newText: String }> = [
 			{ oldText: 'return 1;', newText: 'return 2;' },
 			{ oldText: 'return 1;', newText: 'return 3;' }
@@ -125,7 +123,7 @@ class PatchSliceTest extends Test {
 	}
 
 	public function testSecondPairNotFoundRefused(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Int {\n' + '\t\treturn 1;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Int {\n\t\treturn 1;\n\t}\n}\n';
 		final pairs: Array<{ oldText: String, newText: String }> = [
 			{ oldText: 'return 1;', newText: 'return 2;' },
 			{ oldText: 'missing();', newText: 'present();' }

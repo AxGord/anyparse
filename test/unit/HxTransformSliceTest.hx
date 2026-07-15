@@ -43,11 +43,11 @@ class HxTransformSliceTest extends Test {
 		// control-flow (if / for / while / switch / try) + literals +
 		// operators, so the identity walk touches the recursive
 		// HxExpr/HxStatement/HxType cycle end-to-end.
-		final src: String = 'class C {\n' + '\tvar n:Int = 21;\n' + '\tpublic function run(items:Array<Int>):Int {\n'
-			+ '\t\tvar total = 0;\n' + '\t\tfor (i in items) {\n' + '\t\t\tif (i > 0) total += i;\n' + '\t\t\telse total -= i;\n'
-			+ '\t\t}\n' + '\t\twhile (total > 100) total = total - 10;\n' + '\t\tvar label = switch (total) {\n'
-			+ '\t\t\tcase 0: "zero";\n' + '\t\t\tcase _: "many";\n' + '\t\t}\n' + '\t\ttry {\n' + '\t\t\treturn total;\n'
-			+ '\t\t} catch (e:Dynamic) {\n' + '\t\t\treturn -1;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final src: String = 'class C {\n\tvar n:Int = 21;\n\tpublic function run(items:Array<Int>):Int {\n\t\tvar total = 0;\n'
+			+ '\t\tfor (i in items) {\n' + '\t\t\tif (i > 0) total += i;\n' + '\t\t\telse total -= i;\n' + '\t\t}\n'
+			+ '\t\twhile (total > 100) total = total - 10;\n' + '\t\tvar label = switch (total) {\n' + '\t\t\tcase 0: "zero";\n'
+			+ '\t\t\tcase _: "many";\n' + '\t\t}\n' + '\t\ttry {\n' + '\t\t\treturn total;\n' + '\t\t} catch (e:Dynamic) {\n'
+			+ '\t\t\treturn -1;\n' + '\t\t}\n' + '\t}\n' + '}';
 		assertIdentity(src);
 	}
 

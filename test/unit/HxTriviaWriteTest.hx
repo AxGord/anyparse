@@ -99,9 +99,8 @@ class HxTriviaWriteTest extends Test {
 	 * { /* dropped *\/ }` block bodies.
 	 */
 	public function testOrphanCommentInsideBlockBodyRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\ttry {\n' + '\t\t\t// inside try\n'
-			+ '\t\t} catch (e:Err) {\n' + '\t\t\t// inside catch\n' + '\t\t}\n' + '\t\t{\n' + '\t\t\t// inside plain block\n' + '\t\t}\n'
-			+ '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\ttry {\n\t\t\t// inside try\n\t\t} catch (e:Err) {\n'
+			+ '\t\t\t// inside catch\n' + '\t\t}\n' + '\t\t{\n' + '\t\t\t// inside plain block\n' + '\t\t}\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -115,8 +114,7 @@ class HxTriviaWriteTest extends Test {
 	 * before the captured trail comments).
 	 */
 	public function testTrailingCommentAfterLastStmtInBlockRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\t{\n' + '\t\t\tx;\n' + '\t\t\t// after last\n' + '\t\t}\n'
-			+ '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\t{\n\t\t\tx;\n\t\t\t// after last\n\t\t}\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -135,8 +133,8 @@ class HxTriviaWriteTest extends Test {
 	 * inside the block.
 	 */
 	public function testSameLineCommentAfterElseRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t} else // after else\n'
-			+ '\t\t{\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else // after else\n\t\t{\n'
+			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -152,8 +150,8 @@ class HxTriviaWriteTest extends Test {
 	 * the source's `;-trailing-comment+else` shape.
 	 */
 	public function testSameLineCommentBeforeElseAfterStmtRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond)\n' + '\t\t\ta(); // first\n' + '\t\telse\n'
-			+ '\t\t\tb(); // second\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta(); // first\n\t\telse\n\t\t\tb(); // second\n'
+			+ '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -169,8 +167,7 @@ class HxTriviaWriteTest extends Test {
 	 * `thenBody` and the writer had no slot to re-emit it from.
 	 */
 	public function testSameLineCommentAfterIfCondRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) // afterCond\n' + '\t\t\tresize(1);\n' + '\t}\n'
-			+ '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) // afterCond\n\t\t\tresize(1);\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -187,8 +184,7 @@ class HxTriviaWriteTest extends Test {
 	 * body])` silently dropped the comment.
 	 */
 	public function testSameLineCommentAfterElseNonBlockRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond)\n' + '\t\t\ta();\n' + '\t\telse // afterElse\n'
-			+ '\t\t\tb();\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond)\n\t\t\ta();\n\t\telse // afterElse\n\t\t\tb();\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -200,7 +196,7 @@ class HxTriviaWriteTest extends Test {
 	 * the `{` drops back to the outer (body's exterior) indent.
 	 */
 	public function testOwnLineCommentBetweenElseAndBlockRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t} else\n'
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else\n'
 			+ '\t\t\t// between else and block\n' + '\t\t{\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
@@ -277,9 +273,9 @@ class HxTriviaWriteTest extends Test {
 	 * `test/testcases/indentation/issue_51_adjust_comment_indentation.hxtest`.
 	 */
 	public function testMultiLineBlockCommentDefaultVerbatim(): Void {
-		final source: String = 'class Main {\n' + '    /**\n' + '        Description\n' + '         - point A\n' + '         - point B\n'
-			+ '    **/\n' + '    static public function main() {}\n' + '}';
-		final expected: String = 'class Main {\n' + '\t/**\n' + '\t\tDescription\n' + '\t\t - point A\n' + '\t\t - point B\n' + '\t**/\n'
+		final source: String = 'class Main {\n    /**\n        Description\n         - point A\n         - point B\n    **/\n'
+			+ '    static public function main() {}\n' + '}';
+		final expected: String = 'class Main {\n\t/**\n\t\tDescription\n\t\t - point A\n\t\t - point B\n\t**/\n'
 			+ '\tstatic public function main() {}\n' + '}\n';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
@@ -291,7 +287,7 @@ class HxTriviaWriteTest extends Test {
 	 * markers round-trips byte-identical under default `Verbatim`.
 	 */
 	public function testMultiLineBlockCommentJavadocBodyVerbatim(): Void {
-		final source: String = 'class Main {\n' + '\t/**\n' + '\t * first\n' + '\t * second\n' + '\t */\n' + '\tvar x:Int;\n' + '}';
+		final source: String = 'class Main {\n\t/**\n\t * first\n\t * second\n\t */\n\tvar x:Int;\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -307,8 +303,8 @@ class HxTriviaWriteTest extends Test {
 	 * `whitespace/final_space_removed_from_javadoc_comments_2.hxtest`.
 	 */
 	public function testMultiLineBlockCommentJavadocColZeroIndentsToTarget(): Void {
-		final source: String = 'class Main{\n' + '/**\n' + ' * [Description]\n' + ' */\n' + 'static function main(){}\n' + '}';
-		final expected: String = 'class Main {\n' + '\t/**\n' + '\t * [Description]\n' + '\t */\n' + '\tstatic function main() {}\n' + '}\n';
+		final source: String = 'class Main{\n/**\n * [Description]\n */\nstatic function main(){}\n}';
+		final expected: String = 'class Main {\n\t/**\n\t * [Description]\n\t */\n\tstatic function main() {}\n}\n';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(expected, out);
@@ -322,8 +318,8 @@ class HxTriviaWriteTest extends Test {
 	 * `MarkTokenText.printComment` rule (issue_208 / issue_139).
 	 */
 	public function testMultiLineBlockCommentInlineFirstLine(): Void {
-		final source: String = 'class Main {\n' + '\t/** one, two,\n' + '\tthree. */\n' + '\tvar x:Int;\n' + '}';
-		final expected: String = 'class Main {\n' + '\t/** one, two,\n' + '\t\tthree. */\n' + '\tvar x:Int;\n' + '}\n';
+		final source: String = 'class Main {\n\t/** one, two,\n\tthree. */\n\tvar x:Int;\n}';
+		final expected: String = 'class Main {\n\t/** one, two,\n\t\tthree. */\n\tvar x:Int;\n}\n';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(expected, out);
@@ -336,8 +332,8 @@ class HxTriviaWriteTest extends Test {
 	 * non-default path.
 	 */
 	public function testMultiLineBlockCommentJavadocStarsExplicit(): Void {
-		final source: String = 'class Main {\n' + '\t/**\n' + '\t first\n' + '\t second\n' + '\t**/\n' + '\tvar x:Int;\n' + '}';
-		final expected: String = 'class Main {\n' + '\t/**\n' + '\t * first\n' + '\t * second\n' + '\t**/\n' + '\tvar x:Int;\n' + '}\n';
+		final source: String = 'class Main {\n\t/**\n\t first\n\t second\n\t**/\n\tvar x:Int;\n}';
+		final expected: String = 'class Main {\n\t/**\n\t * first\n\t * second\n\t**/\n\tvar x:Int;\n}\n';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = withCommentStyle(anyparse.format.CommentStyle.Javadoc);
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
@@ -351,8 +347,8 @@ class HxTriviaWriteTest extends Test {
 	 * path of the knob.
 	 */
 	public function testMultiLineBlockCommentPlainStyle(): Void {
-		final source: String = 'class Main {\n' + '\t/** first\n' + '\t    second */\n' + '\tvar x:Int;\n' + '}';
-		final expected: String = 'class Main {\n' + '\t/*\n' + '\t\tfirst\n' + '\t\tsecond\n' + '\t*/\n' + '\tvar x:Int;\n' + '}\n';
+		final source: String = 'class Main {\n\t/** first\n\t    second */\n\tvar x:Int;\n}';
+		final expected: String = 'class Main {\n\t/*\n\t\tfirst\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = withCommentStyle(anyparse.format.CommentStyle.Plain);
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
@@ -366,8 +362,8 @@ class HxTriviaWriteTest extends Test {
 	 * single space (`<indent> *\/`).
 	 */
 	public function testMultiLineBlockCommentAsymmetricVerbatim(): Void {
-		final source: String = 'class Main {\n' + '\t/**\n' + '\tfoo\n' + '\t*/\n' + '\tvar x:Int;\n' + '}';
-		final expected: String = 'class Main {\n' + '\t/**\n' + '\tfoo\n' + '\t */\n' + '\tvar x:Int;\n' + '}\n';
+		final source: String = 'class Main {\n\t/**\n\tfoo\n\t*/\n\tvar x:Int;\n}';
+		final expected: String = 'class Main {\n\t/**\n\tfoo\n\t */\n\tvar x:Int;\n}\n';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(expected, out);
@@ -385,8 +381,8 @@ class HxTriviaWriteTest extends Test {
 	 * comment is dropped and the writer emits `} else { b; }` only.
 	 */
 	public function testOwnLineCommentBetweenBraceAndElseRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t}\n'
-			+ '\t\t// before else\n' + '\t\telse {\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// before else\n\t\telse {\n'
+			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -397,8 +393,8 @@ class HxTriviaWriteTest extends Test {
 	 * and `else` each render on their own indented line.
 	 */
 	public function testMultipleOwnLineCommentsBetweenBraceAndElseRoundTrip(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t}\n' + '\t\t// first\n'
-			+ '\t\t// second\n' + '\t\telse {\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t}\n\t\t// first\n\t\t// second\n'
+			+ '\t\telse {\n' + '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -409,8 +405,7 @@ class HxTriviaWriteTest extends Test {
 	 * is byte-identical to pre-slice output (sameLine `} else`).
 	 */
 	public function testNoCommentBetweenBraceAndElseStaysSameLine(): Void {
-		final source: String = 'class Foo {\n' + '\tfunction bar() {\n' + '\t\tif (cond) {\n' + '\t\t\ta;\n' + '\t\t} else {\n'
-			+ '\t\t\tb;\n' + '\t\t}\n' + '\t}\n' + '}';
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tif (cond) {\n\t\t\ta;\n\t\t} else {\n\t\t\tb;\n\t\t}\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);
@@ -436,8 +431,7 @@ class HxTriviaWriteTest extends Test {
 	 * pass is gated by the haxe-formatter `^[/\*\-\s]+` regex.
 	 */
 	public function testLeadingLineCommentDecorationKeepsTight(): Void {
-		final source: String = 'class Main {\n' + '\t//*******\n' + '\t//---------\n' + '\t////////////\n' + '\t// already-spaced\n'
-			+ '\tvar x:Int;\n' + '}';
+		final source: String = 'class Main {\n\t//*******\n\t//---------\n\t////////////\n\t// already-spaced\n\tvar x:Int;\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals(source + '\n', out);

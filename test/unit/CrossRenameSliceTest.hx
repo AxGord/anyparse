@@ -37,11 +37,10 @@ class CrossRenameSliceTest extends Test {
 	 * name in A and every type position + `new` in B — and nothing else.
 	 */
 	public function testTwoFileRename(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic function new() {}\n' + '}';
-		final b: String = 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n' + '\t\treturn new Foo();\n' + '\t}\n' + '}';
-		final expectedA: String = 'class Bar {\n' + '\tpublic function new() {}\n' + '}';
-		final expectedB: String = 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n' + '\t\treturn new Bar();\n' + '\t}\n'
-			+ '}';
+		final a: String = 'class Foo {\n\tpublic function new() {}\n}';
+		final b: String = 'class Use {\n\tvar f:Foo;\n\tfunction g(a:Foo):Foo {\n\t\treturn new Foo();\n\t}\n}';
+		final expectedA: String = 'class Bar {\n\tpublic function new() {}\n}';
+		final expectedB: String = 'class Use {\n\tvar f:Bar;\n\tfunction g(a:Bar):Bar {\n\t\treturn new Bar();\n\t}\n}';
 		// `class Foo` — `Foo` starts at col 7.
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
@@ -63,12 +62,11 @@ class CrossRenameSliceTest extends Test {
 	 * (field, arg, return, `new`) all rename, and an import segment too.
 	 */
 	public function testFinalClassRename(): Void {
-		final a: String = 'final class Foo {\n' + '\tpublic function new() {}\n' + '}';
-		final b: String = 'import pkg.Foo;\n' + 'class Use {\n' + '\tvar f:Foo;\n' + '\tfunction g(a:Foo):Foo {\n'
-			+ '\t\treturn new Foo();\n' + '\t}\n' + '}';
-		final expectedA: String = 'final class Bar {\n' + '\tpublic function new() {}\n' + '}';
-		final expectedB: String = 'import pkg.Bar;\n' + 'class Use {\n' + '\tvar f:Bar;\n' + '\tfunction g(a:Bar):Bar {\n'
-			+ '\t\treturn new Bar();\n' + '\t}\n' + '}';
+		final a: String = 'final class Foo {\n\tpublic function new() {}\n}';
+		final b: String = 'import pkg.Foo;\nclass Use {\n\tvar f:Foo;\n\tfunction g(a:Foo):Foo {\n\t\treturn new Foo();\n\t}\n}';
+		final expectedA: String = 'final class Bar {\n\tpublic function new() {}\n}';
+		final expectedB: String = 'import pkg.Bar;\nclass Use {\n\tvar f:Bar;\n\tfunction g(a:Bar):Bar {\n\t\treturn new Bar();\n'
+			+ '\t}\n' + '}';
 		// `final class Foo` — `Foo` starts at col 13 (after
 		// `final class `).
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 13, 'Bar', [
@@ -93,8 +91,8 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testImportSegmentRename(): Void {
 		final a: String = 'class Foo {}';
-		final b: String = 'import pkg.Foo;\n' + 'class Use {\n' + '\tvar f:Foo;\n' + '}';
-		final expectedB: String = 'import pkg.Bar;\n' + 'class Use {\n' + '\tvar f:Bar;\n' + '}';
+		final b: String = 'import pkg.Foo;\nclass Use {\n\tvar f:Foo;\n}';
+		final expectedB: String = 'import pkg.Bar;\nclass Use {\n\tvar f:Bar;\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -110,7 +108,7 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testUsingSegmentRename(): Void {
 		final a: String = 'class Foo {}';
-		final b: String = 'using pkg.Foo;\n' + 'class Use {}';
+		final b: String = 'using pkg.Foo;\nclass Use {}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -125,8 +123,8 @@ class CrossRenameSliceTest extends Test {
 	 */
 	public function testExtendsImplementsAndTypeParam(): Void {
 		final a: String = 'class Foo {}';
-		final b: String = 'class Use extends Foo {\n' + '\tvar xs:Array<Foo>;\n' + '}';
-		final expectedB: String = 'class Use extends Bar {\n' + '\tvar xs:Array<Bar>;\n' + '}';
+		final b: String = 'class Use extends Foo {\n\tvar xs:Array<Foo>;\n}';
+		final expectedB: String = 'class Use extends Bar {\n\tvar xs:Array<Bar>;\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -154,7 +152,7 @@ class CrossRenameSliceTest extends Test {
 	 * field, a value position).
 	 */
 	public function testCursorNotOnTypeDeclRefused(): Void {
-		final a: String = 'class Foo {\n' + '\tvar field:Int;\n' + '}';
+		final a: String = 'class Foo {\n\tvar field:Int;\n}';
 		// Line 2: the field name `field` at col 6 — a value decl, not a type.
 		final result: CrossRenameResult = CrossRename.crossRenameType(
 			'a.hx', a, 2, 6, 'renamed', [{ file: 'a.hx', source: a },], plugin(), typeRefShape(), refShape()
@@ -197,7 +195,7 @@ class CrossRenameSliceTest extends Test {
 	/** An enum declaration renames just like a class. */
 	public function testEnumDeclKind(): Void {
 		final a: String = 'enum Color {\n\tRed;\n}';
-		final b: String = 'class Use {\n' + '\tvar c:Color;\n' + '}';
+		final b: String = 'class Use {\n\tvar c:Color;\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 6, 'Hue', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -251,13 +249,10 @@ class CrossRenameSliceTest extends Test {
 	 * alongside the import segment and the `:Foo` return-type position.
 	 */
 	public function testStaticReceiverRenamed(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic static function create():Foo return null;\n' + '\tpublic static var CONST = 1;\n' + '}';
-		final b: String = 'import pkg.Foo;\n' + 'class C {\n' + '\tfunction m() {\n' + '\t\tFoo.create();\n' + '\t\tvar v = Foo.CONST;\n'
-			+ '\t}\n' + '}';
-		final expectedA: String = 'class Bar {\n' + '\tpublic static function create():Bar return null;\n'
-			+ '\tpublic static var CONST = 1;\n' + '}';
-		final expectedB: String = 'import pkg.Bar;\n' + 'class C {\n' + '\tfunction m() {\n' + '\t\tBar.create();\n'
-			+ '\t\tvar v = Bar.CONST;\n' + '\t}\n' + '}';
+		final a: String = 'class Foo {\n\tpublic static function create():Foo return null;\n\tpublic static var CONST = 1;\n}';
+		final b: String = 'import pkg.Foo;\nclass C {\n\tfunction m() {\n\t\tFoo.create();\n\t\tvar v = Foo.CONST;\n\t}\n}';
+		final expectedA: String = 'class Bar {\n\tpublic static function create():Bar return null;\n\tpublic static var CONST = 1;\n}';
+		final expectedB: String = 'import pkg.Bar;\nclass C {\n\tfunction m() {\n\t\tBar.create();\n\t\tvar v = Bar.CONST;\n\t}\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Bar', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -280,8 +275,8 @@ class CrossRenameSliceTest extends Test {
 	 * changes; file B is left byte-for-byte untouched (no `FileChange`).
 	 */
 	public function testShadowingLocalValueNotRenamed(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
-		final b: String = 'class C {\n' + '\tfunction m() {\n' + '\t\tvar Foo = makeThing();\n' + '\t\tFoo.run();\n' + '\t}\n' + '}';
+		final a: String = 'class Foo {\n\tpublic static function create():Void {}\n}';
+		final b: String = 'class C {\n\tfunction m() {\n\t\tvar Foo = makeThing();\n\t\tFoo.run();\n\t}\n}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },
@@ -300,9 +295,9 @@ class CrossRenameSliceTest extends Test {
 	 * renamed; file B's `var c = Foo;` and `case Foo:` survive verbatim.
 	 */
 	public function testBareValuePositionNotRenamed(): Void {
-		final a: String = 'class Foo {\n' + '\tpublic static function create():Void {}\n' + '}';
-		final b: String = 'class C {\n' + '\tfunction m(e) {\n' + '\t\tvar c = Foo;\n' + '\t\tvar r = switch e {\n'
-			+ '\t\t\tcase Foo: 1;\n' + '\t\t\tcase _: 0;\n' + '\t\t};\n' + '\t}\n' + '}';
+		final a: String = 'class Foo {\n\tpublic static function create():Void {}\n}';
+		final b: String = 'class C {\n\tfunction m(e) {\n\t\tvar c = Foo;\n\t\tvar r = switch e {\n\t\t\tcase Foo: 1;\n'
+			+ '\t\t\tcase _: 0;\n' + '\t\t};\n' + '\t}\n' + '}';
 		final changes: Array<FileChange> = okChanges('a.hx', a, 1, 7, 'Widget', [
 			{ file: 'a.hx', source: a },
 			{ file: 'b.hx', source: b },

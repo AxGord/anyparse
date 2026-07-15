@@ -233,7 +233,7 @@ class HxSameLineOptionsTest extends Test {
 		// ω-block-shape-aware: bare body breaks (existing behaviour),
 		// block body stays inline (new behaviour) — same `expressionTry=Next`,
 		// runtime ctor switch picks the layout per try-catch instance.
-		final src: String = 'class F { function f():Void { ' + 'var a = try foo() catch (_:Any) null; '
+		final src: String = 'class F { function f():Void { var a = try foo() catch (_:Any) null; '
 			+ 'var b = try { foo(); } catch (_:Any) { null; }; } }';
 		final out: String = writeWithExpressionTry(src, SameLinePolicy.Next);
 		Assert.isTrue(out.indexOf('try foo()') == -1, 'bare body should still break in: <$out>');

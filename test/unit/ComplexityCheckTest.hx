@@ -50,7 +50,7 @@ class ComplexityCheckTest extends Test {
 	public function testMixedConstructsCounted(): Void {
 		// if/while/for/switch/catch/ternary/?? plus a long && chain — over the threshold
 		// (score 21: the switch counts once now, not once per case).
-		final src: String = 'class C {\n' + '\tfunction mixed(a:Int):Int {\n' + '\t\tif (a > 0) return 1;\n' + '\t\tif (a > 1) return 2;\n'
+		final src: String = 'class C {\n\tfunction mixed(a:Int):Int {\n\t\tif (a > 0) return 1;\n\t\tif (a > 1) return 2;\n'
 			+ '\t\twhile (a > 2) a--;\n' + '\t\tfor (i in 0...a) trace(i);\n'
 			+ '\t\tswitch a { case 1: trace(1); case 2: trace(2); case 3: trace(3); case _: trace(0); }\n'
 			+ '\t\ttry { throw "x"; } catch (e:String) {} catch (e:Int) {}\n' + '\t\tfinal t = a > 0 ? 1 : 2;\n'

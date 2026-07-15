@@ -26,8 +26,8 @@ import anyparse.query.Rename.RenameResult;
  */
 class RenameSliceTest extends Test {
 
-	private static final FIXTURE: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(count:Int):Int {\n'
-		+ '\t\tvar total = count;\n' + '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
+	private static final FIXTURE: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
+		+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
 
 	/**
 	 * Param `count` (decl `3:13`) → `n`: only the param decl and its sole
@@ -36,7 +36,7 @@ class RenameSliceTest extends Test {
 	 * `count` — they are separate bindings that shadow / are shadowed.
 	 */
 	public function testRenameParamTouchesOnlyParamBinding(): Void {
-		final expected: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(n:Int):Int {\n' + '\t\tvar total = n;\n'
+		final expected: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(n:Int):Int {\n\t\tvar total = n;\n'
 			+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
 		assertRename(FIXTURE, 3, 13, 'n', expected);
 	}
@@ -47,7 +47,7 @@ class RenameSliceTest extends Test {
 	 * keep `count`.
 	 */
 	public function testRenameLoopVarTouchesOnlyLoopBinding(): Void {
-		final expected: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(count:Int):Int {\n' + '\t\tvar total = count;\n'
+		final expected: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
 			+ '\t\tfor (j in 0...10) total += j;\n' + '\t\treturn total + this.count;\n' + '\t}\n' + '}';
 		assertRename(FIXTURE, 5, 3, 'j', expected);
 	}
@@ -58,7 +58,7 @@ class RenameSliceTest extends Test {
 	 * read (`return total + …`).
 	 */
 	public function testRenameSingleBindingTouchesAllOccurrences(): Void {
-		final expected: String = 'class C {\n' + '\tvar count:Int = 0;\n' + '\tfunction f(count:Int):Int {\n' + '\t\tvar sum = count;\n'
+		final expected: String = 'class C {\n\tvar count:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar sum = count;\n'
 			+ '\t\tfor (count in 0...10) sum += count;\n' + '\t\treturn sum + this.count;\n' + '\t}\n' + '}';
 		assertRename(FIXTURE, 4, 3, 'sum', expected);
 	}
@@ -70,7 +70,7 @@ class RenameSliceTest extends Test {
 	 * reads inside `f` resolve to those locals, not the field.
 	 */
 	public function testRenameFieldTouchesDeclAndThisAccess(): Void {
-		final expected: String = 'class C {\n' + '\tvar n:Int = 0;\n' + '\tfunction f(count:Int):Int {\n' + '\t\tvar total = count;\n'
+		final expected: String = 'class C {\n\tvar n:Int = 0;\n\tfunction f(count:Int):Int {\n\t\tvar total = count;\n'
 			+ '\t\tfor (count in 0...10) total += count;\n' + '\t\treturn total + this.n;\n' + '\t}\n' + '}';
 		assertRename(FIXTURE, 2, 2, 'n', expected);
 	}
@@ -126,9 +126,9 @@ class RenameSliceTest extends Test {
 	 * exactly like a plain `FnMember`.
 	 */
 	public function testRenameFinalMethod(): Void {
-		final source: String = 'class C {\n' + '\tfinal function d(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\td(1);\n'
-			+ '\t\tthis.d(2);\n' + '\t}\n' + '}';
-		final expected: String = 'class C {\n' + '\tfinal function ren(a:Int):Void {}\n' + '\tfunction caller():Void {\n' + '\t\tren(1);\n'
+		final source: String = 'class C {\n\tfinal function d(a:Int):Void {}\n\tfunction caller():Void {\n\t\td(1);\n\t\tthis.d(2);\n'
+			+ '\t}\n' + '}';
+		final expected: String = 'class C {\n\tfinal function ren(a:Int):Void {}\n\tfunction caller():Void {\n\t\tren(1);\n'
 			+ '\t\tthis.ren(2);\n' + '\t}\n' + '}';
 		// Line 2 col 2 — the `final` method decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, 'ren', expected);
@@ -158,9 +158,9 @@ class RenameSliceTest extends Test {
 	 * `KindEquivalence.canonOf` build break the field-rename autofix surfaced).
 	 */
 	public function testRenameFieldInFinalClassTouchesBareRefs(): Void {
-		final source: String = 'final class C {\n' + '\tfinal v:Int;\n' + '\tpublic function new() {\n' + '\t\tv = 1;\n' + '\t}\n'
+		final source: String = 'final class C {\n\tfinal v:Int;\n\tpublic function new() {\n\t\tv = 1;\n\t}\n'
 			+ '\tpublic function g():Int {\n' + '\t\treturn v;\n' + '\t}\n' + '}';
-		final expected: String = 'final class C {\n' + '\tfinal _v:Int;\n' + '\tpublic function new() {\n' + '\t\t_v = 1;\n' + '\t}\n'
+		final expected: String = 'final class C {\n\tfinal _v:Int;\n\tpublic function new() {\n\t\t_v = 1;\n\t}\n'
 			+ '\tpublic function g():Int {\n' + '\t\treturn _v;\n' + '\t}\n' + '}';
 		// Line 2 col 2 — the `final v` field decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, '_v', expected);

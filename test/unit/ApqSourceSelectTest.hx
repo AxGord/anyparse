@@ -18,8 +18,7 @@ import anyparse.query.Cli;
 @:nullSafety(Strict)
 class ApqSourceSelectTest extends Test {
 
-	private static final SRC: String = 'class C {\n' + '\tfunction a(): Void {}\n' + '\tfunction foo(x: Int): Int {\n'
-		+ '\t\treturn x + 1;\n' + '\t}\n' + '}';
+	private static final SRC: String = 'class C {\n\tfunction a(): Void {}\n\tfunction foo(x: Int): Int {\n\t\treturn x + 1;\n\t}\n}';
 
 	/** `--select FnMember:foo` spans the whole multi-line function (lines 3-5). */
 	public function testSelectByNameSpansFunction(): Void {

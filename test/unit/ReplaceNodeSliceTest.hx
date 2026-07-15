@@ -25,8 +25,8 @@ class ReplaceNodeSliceTest extends Test {
 	 * expression-body form.
 	 */
 	public function testReplaceBySelector(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction g():Int\n' + '\t\treturn 0;\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
+		final expected: String = 'class C {\n\tfunction g():Int\n\t\treturn 0;\n}\n';
 		assertReplace(source, BySelector('FnMember:f'), 'function g():Int return 0;', expected);
 	}
 
@@ -36,32 +36,32 @@ class ReplaceNodeSliceTest extends Test {
 	 * innermost spanned node there is the whole `FnMember`.
 	 */
 	public function testReplaceByPosition(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction h():Void {}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
+		final expected: String = 'class C {\n\tfunction h():Void {}\n}\n';
 		assertReplace(source, ByPosition(2, 11), 'function h():Void {}', expected);
 	}
 
 	/** Refuse a selector that matches no node. */
 	public function testRefuseSelectorNoMatch(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
 		assertRefused(source, BySelector('FnMember:nope'), 'x');
 	}
 
 	/** Refuse an ambiguous selector — `VarMember` matches both fields. */
 	public function testRefuseSelectorAmbiguous(): Void {
-		final source: String = 'class C {\n' + '\tvar a:Int;\n' + '\tvar b:Int;\n' + '}\n';
+		final source: String = 'class C {\n\tvar a:Int;\n\tvar b:Int;\n}\n';
 		assertRefused(source, BySelector('VarMember'), 'var c:Int;');
 	}
 
 	/** Refuse a malformed replacement — the whole-file re-emit fails. */
 	public function testRefuseMalformedReplacement(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), '@@@ not haxe');
 	}
 
 	/** Refuse a non-canonical file (4-space indent) without `--reformat`. */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
-		final source: String = 'class C {\n' + '    function f():Void {}\n' + '}\n';
+		final source: String = 'class C {\n    function f():Void {}\n}\n';
 		assertRefused(source, BySelector('FnMember:f'), 'function h():Void {}');
 	}
 
@@ -74,8 +74,8 @@ class ReplaceNodeSliceTest extends Test {
 	 * REPLACED, not duplicated ahead of a second `private static`.
 	 */
 	public function testReplaceFoldsModifierGroup(): Void {
-		final source: String = 'class C {\n' + '\tprivate static function f():Void {}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tprivate static function g():Int\n' + '\t\treturn 0;\n' + '}\n';
+		final source: String = 'class C {\n\tprivate static function f():Void {}\n}\n';
+		final expected: String = 'class C {\n\tprivate static function g():Int\n\t\treturn 0;\n}\n';
 		assertReplace(source, BySelector('FnMember:f'), 'private static function g():Int return 0;', expected);
 	}
 
@@ -86,21 +86,21 @@ class ReplaceNodeSliceTest extends Test {
 	 * be `IdentExpr b`).
 	 */
 	public function testReplaceByKindMul(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b * c;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + q;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a + b * c;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a + q;\n\t}\n}\n';
 		assertReplace(source, ByKindPosition(3, 15, 'Mul'), 'q', expected, true);
 	}
 
 	/** `--kind Add` at the left operand selects the whole `a + b * c` Add. */
 	public function testReplaceByKindAdd(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b * c;\n' + '\t}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = z;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a + b * c;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = z;\n\t}\n}\n';
 		assertReplace(source, ByKindPosition(3, 11, 'Add'), 'z', expected, true);
 	}
 
 	/** A cursor with no node of the requested kind is refused. */
 	public function testRefuseKindNoMatch(): Void {
-		final source: String = 'class C {\n' + '\tfunction f():Void {\n' + '\t\tvar x = a + b;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar x = a + b;\n\t}\n}\n';
 		assertRefused(source, ByKindPosition(3, 11, 'Mul'), 'q', true);
 	}
 
@@ -109,8 +109,8 @@ class ReplaceNodeSliceTest extends Test {
 	 * the new source rewrites the declaration AND its documentation block.
 	 */
 	public function testReplaceWithDoc(): Void {
-		final source: String = 'class C {\n' + '\t/** old */\n' + '\tpublic function f():Void {}\n' + '}\n';
-		final expected: String = 'class C {\n' + '\t/** new */\n' + '\tpublic function g():Void {}\n' + '}\n';
+		final source: String = 'class C {\n\t/** old */\n\tpublic function f():Void {}\n}\n';
+		final expected: String = 'class C {\n\t/** new */\n\tpublic function g():Void {}\n}\n';
 		final result: EditResult = ReplaceNode.replaceNode(
 			source, ByKindPosition(3, 9, 'FnMember'), '/** new */\npublic function g():Void {}', true, new HaxeQueryPlugin(), true
 		);
@@ -166,8 +166,8 @@ class ReplaceNodeSliceTest extends Test {
 	 * block, not the new one stacked above the surviving old one.
 	 */
 	public function testNewSourceDocFoldsLeadingDoc(): Void {
-		final source: String = "class C {\n" + "\t/** old */\n" + "\tpublic function f():Void {}\n" + "}\n";
-		final expected: String = "class C {\n" + "\t/** new */\n" + "\tpublic function g():Void {}\n" + "}\n";
+		final source: String = "class C {\n\t/** old */\n\tpublic function f():Void {}\n}\n";
+		final expected: String = "class C {\n\t/** new */\n\tpublic function g():Void {}\n}\n";
 		assertReplace(source, ByKindPosition(3, 9, "FnMember"), "/** new */\npublic function g():Void {}", expected, true);
 	}
 
@@ -178,8 +178,8 @@ class ReplaceNodeSliceTest extends Test {
 	 * `set-modifier` exists for).
 	 */
 	public function testBareModifierNewSourceRefused(): Void {
-		final source: String = 'class C {\n' + '\tprivate static function walk():Void {\n' + '\t\ttrace(1);\n' + '\t}\n' + '\n'
-			+ '\tfunction next():Void {}\n' + '}\n';
+		final source: String = 'class C {\n\tprivate static function walk():Void {\n\t\ttrace(1);\n\t}\n\n\tfunction next():Void {}\n'
+			+ '}\n';
 		assertRefused(source, BySelector('FnMember:walk'), 'public');
 		assertRefused(source, ByPosition(2, 2), ' final ');
 	}
@@ -190,8 +190,8 @@ class ReplaceNodeSliceTest extends Test {
 	 * with a doc.
 	 */
 	public function testNewSourceDocPreservesBannerAboveDoc(): Void {
-		final source: String = "class C {\n" + "\t/* banner */\n" + "\t/** old */\n" + "\tpublic function f():Void {}\n" + "}\n";
-		final expected: String = "class C {\n" + "\t/* banner */\n" + "\t/** new */\n" + "\tpublic function g():Void {}\n" + "}\n";
+		final source: String = "class C {\n\t/* banner */\n\t/** old */\n\tpublic function f():Void {}\n}\n";
+		final expected: String = "class C {\n\t/* banner */\n\t/** new */\n\tpublic function g():Void {}\n}\n";
 		assertReplace(source, ByKindPosition(4, 9, "FnMember"), "/** new */\npublic function g():Void {}", expected, true);
 	}
 

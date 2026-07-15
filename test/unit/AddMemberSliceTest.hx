@@ -22,8 +22,8 @@ class AddMemberSliceTest extends Test {
 
 	/** Append a method to a class that already has a member. */
 	public function testAppendToClassWithMembers(): Void {
-		final source: String = 'class C {\n' + '\tvar x:Int;\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g():Void {}\n' + '}\n';
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
+		final expected: String = 'class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n';
 		assertAdd(source, 'C', 'public function g():Void {}', expected);
 	}
 
@@ -32,16 +32,15 @@ class AddMemberSliceTest extends Test {
 	 * formatted (the writer normalises it), not spliced verbatim.
 	 */
 	public function testUglyMemberIsCanonicalised(): Void {
-		final source: String = 'class C {\n' + '\tvar x:Int;\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g(a:Int, b:Int):Int {\n'
-			+ '\t\treturn a + b;\n' + '\t}\n' + '}\n';
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
+		final expected: String = 'class C {\n\tvar x:Int;\n\n\tpublic function g(a:Int, b:Int):Int {\n\t\treturn a + b;\n\t}\n}\n';
 		assertAdd(source, 'C', 'public    function  g(a:Int,b:Int):Int{return a+b;}', expected);
 	}
 
 	/** Append to an empty class. */
 	public function testAppendToEmptyClass(): Void {
 		final source: String = 'class C {}\n';
-		final expected: String = 'class C {\n' + '\tvar y:Int;\n' + '}\n';
+		final expected: String = 'class C {\n\tvar y:Int;\n}\n';
 		assertAdd(source, 'C', 'var y:Int;', expected);
 	}
 
@@ -51,15 +50,15 @@ class AddMemberSliceTest extends Test {
 	 * trailing newline), so the member lands inside the body.
 	 */
 	public function testAppendToFinalClass(): Void {
-		final source: String = 'final class C {\n' + '\tvar x:Int;\n' + '}\n';
-		final expected: String = 'final class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g():Void {}\n' + '}\n';
+		final source: String = 'final class C {\n\tvar x:Int;\n}\n';
+		final expected: String = 'final class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n';
 		assertAdd(source, 'C', 'public function g():Void {}', expected);
 	}
 
 	/** Append a constructor to an `enum`. */
 	public function testAppendToEnum(): Void {
-		final source: String = 'enum E {\n' + '\tA;\n' + '}\n';
-		final expected: String = 'enum E {\n' + '\tA;\n' + '\n' + '\tB(x:Int);\n' + '}\n';
+		final source: String = 'enum E {\n\tA;\n}\n';
+		final expected: String = 'enum E {\n\tA;\n\n\tB(x:Int);\n}\n';
 		assertAdd(source, 'E', 'B(x:Int);', expected);
 	}
 
@@ -69,26 +68,26 @@ class AddMemberSliceTest extends Test {
 	 * swallows (same trivia-swallow as `final class`).
 	 */
 	public function testAppendToTypedefAnon(): Void {
-		final source: String = 'typedef T = {\n' + '\tvar x:Int;\n' + '}\n';
-		final expected: String = 'typedef T = {\n' + '\tvar x:Int;\n' + '\n' + '\tvar y:Int;\n' + '}\n';
+		final source: String = 'typedef T = {\n\tvar x:Int;\n}\n';
+		final expected: String = 'typedef T = {\n\tvar x:Int;\n\n\tvar y:Int;\n}\n';
 		assertAdd(source, 'T', 'var y:Int;', expected);
 	}
 
 	/** Refuse an unknown type name. */
 	public function testRefuseUnknownType(): Void {
-		final source: String = 'class C {\n' + '\tvar x:Int;\n' + '}\n';
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
 		assertRefused(source, 'Nope', 'var z:Int;');
 	}
 
 	/** Refuse an ambiguous type name (two decls share it). */
 	public function testRefuseAmbiguousType(): Void {
-		final source: String = 'class C {}\n' + '\n' + 'class C {}\n';
+		final source: String = 'class C {}\n\nclass C {}\n';
 		assertRefused(source, 'C', 'var z:Int;');
 	}
 
 	/** Refuse a malformed member — the whole-file re-emit fails to parse. */
 	public function testRefuseMalformedMember(): Void {
-		final source: String = 'class C {\n' + '\tvar x:Int;\n' + '}\n';
+		final source: String = 'class C {\n\tvar x:Int;\n}\n';
 		assertRefused(source, 'C', '@@@ not haxe');
 	}
 
@@ -97,14 +96,14 @@ class AddMemberSliceTest extends Test {
 	 * the whole-file rewrite would otherwise reflow unrelated formatting.
 	 */
 	public function testRefuseNonCanonicalWithoutReformat(): Void {
-		final source: String = 'class C {\n' + '    var x:Int;\n' + '}\n';
+		final source: String = 'class C {\n    var x:Int;\n}\n';
 		assertRefused(source, 'C', 'var y:Int;');
 	}
 
 	/** `reformat` proceeds on a non-canonical file, canonicalising it. */
 	public function testReformatProceedsOnNonCanonical(): Void {
-		final source: String = 'class C {\n' + '    var x:Int;\n' + '}\n';
-		final expected: String = 'class C {\n' + '\tvar x:Int;\n' + '\n' + '\tvar y:Int;\n' + '}\n';
+		final source: String = 'class C {\n    var x:Int;\n}\n';
+		final expected: String = 'class C {\n\tvar x:Int;\n\n\tvar y:Int;\n}\n';
 		assertAdd(source, 'C', 'var y:Int;', expected, true);
 	}
 
@@ -152,10 +151,9 @@ class AddMemberSliceTest extends Test {
 	 * final class is the last decl.
 	 */
 	public function testAppendToNonLastFinalClass(): Void {
-		final source: String = 'final class C {\n' + '\tvar x:Int;\n' + '}\n' + '\n' + '/**\n' + ' * Doc.\n' + ' */\n' + 'typedef T = {\n'
-			+ '\tvar y:Int;\n' + '}\n';
-		final expected: String = 'final class C {\n' + '\tvar x:Int;\n' + '\n' + '\tpublic function g():Void {}\n' + '}\n' + '\n' + '/**\n'
-			+ ' * Doc.\n' + ' */\n' + 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
+		final source: String = 'final class C {\n\tvar x:Int;\n}\n\n/**\n * Doc.\n */\ntypedef T = {\n\tvar y:Int;\n}\n';
+		final expected: String = 'final class C {\n\tvar x:Int;\n\n\tpublic function g():Void {}\n}\n\n/**\n * Doc.\n */\n'
+			+ 'typedef T = {\n' + '\tvar y:Int;\n' + '}\n';
 		assertAdd(source, 'C', 'public function g():Void {}', expected);
 	}
 

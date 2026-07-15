@@ -96,8 +96,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testTrailingCommasAllYesFlipsAll(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"trailingCommas": {' + '"arrayLiteralDefault": "yes",' + '"callArgumentDefault": "yes",'
-			+ '"functionParameterDefault": "yes"' + '}}'
+			'{"trailingCommas": {"arrayLiteralDefault": "yes","callArgumentDefault": "yes","functionParameterDefault": "yes"}}'
 		);
 		Assert.isTrue(opts.trailingCommaArrays);
 		Assert.isTrue(opts.trailingCommaArgs);
@@ -106,8 +105,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 
 	public function testTrailingCommasKeepAndIgnoreMapToFalse(): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"trailingCommas": {' + '"arrayLiteralDefault": "keep",' + '"callArgumentDefault": "ignore",'
-			+ '"functionParameterDefault": "no"' + '}}'
+			'{"trailingCommas": {"arrayLiteralDefault": "keep","callArgumentDefault": "ignore","functionParameterDefault": "no"}}'
 		);
 		Assert.isFalse(opts.trailingCommaArrays);
 		Assert.isFalse(opts.trailingCommaArgs);
