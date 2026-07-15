@@ -369,12 +369,6 @@ class HxTriviaWriteTest extends Test {
 		Assert.equals(expected, out);
 	}
 
-	private static function withCommentStyle(style: anyparse.format.CommentStyle): anyparse.grammar.haxe.HxModuleWriteOptions {
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.commentStyle = style;
-		return opts;
-	}
-
 	/**
 	 * ω-trivia-before-kw — own-line line comment between `}` and `else`
 	 * round-trips at the parent's indent level. Without the slice the
@@ -608,6 +602,12 @@ class HxTriviaWriteTest extends Test {
 		final source: String = 'class C {\n\tfunction f() {\n\t\tvar x = [\'A\',\n\t\t\t\'B\'];\n\t\treturn x;\n\t}\n}';
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source));
 		Assert.equals('class C {\n\tfunction f() {\n\t\tvar x = [\n\t\t\t\'A\',\n\t\t\t\'B\'\n\t\t];\n\t\treturn x;\n\t}\n}\n', out);
+	}
+
+	private static function withCommentStyle(style: anyparse.format.CommentStyle): anyparse.grammar.haxe.HxModuleWriteOptions {
+		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.commentStyle = style;
+		return opts;
 	}
 
 }

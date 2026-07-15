@@ -84,10 +84,6 @@ class PreferEnumAbstractCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-enum-abstract'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferEnumAbstract().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testNegativeLiteralConstantCounted(): Void {
 		// A `-1` sentinel parses as `Neg(IntLit)`; it must still count toward the group,
 		// else a negative sentinel (`RANK_UNKNOWN = -1`) drops the set below the threshold.
@@ -120,6 +116,10 @@ class PreferEnumAbstractCheckTest extends Test {
 				'class C { static final MODE_A = 0; static final MODE_B = 1; static final MODE_C = 2; static function pick(x:Int):Int { var m:Int = 0; if (x > 0) m = MODE_A; else m = MODE_B; return m; } }'
 			).length
 		);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferEnumAbstract().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

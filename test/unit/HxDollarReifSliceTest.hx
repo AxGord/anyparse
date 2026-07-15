@@ -28,29 +28,6 @@ import anyparse.runtime.ParseError;
  */
 class HxDollarReifSliceTest extends HxTestHelpers {
 
-	private function initOf(source: String): HxExpr {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.init {
-			case null: throw 'expected init expr, got null';
-			case e: e;
-		}
-	}
-
-	private function typeOf(source: String): HxType {
-		final decl: HxVarDecl = parseSingleVarDecl(source);
-		return switch decl.type {
-			case null: throw 'expected type annotation, got null';
-			case t: t;
-		}
-	}
-
-	private function identOf(e: HxExpr): String {
-		return switch e {
-			case IdentExpr(v): (v: String);
-			case null, _: throw 'expected IdentExpr, got $e';
-		}
-	}
-
 	public function testDollarIdent(): Void {
 		switch initOf("class C { var x = $foo; }") {
 			case DollarIdentExpr(name):
@@ -335,6 +312,29 @@ class HxDollarReifSliceTest extends HxTestHelpers {
 		// brace production for the name slot when a real `var ${e} = …`
 		// site appears.
 		Assert.raises(HaxeParser.parse.bind("class C { var ${e} = 1; }"), ParseError);
+	}
+
+	private function initOf(source: String): HxExpr {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.init {
+			case null: throw 'expected init expr, got null';
+			case e: e;
+		}
+	}
+
+	private function typeOf(source: String): HxType {
+		final decl: HxVarDecl = parseSingleVarDecl(source);
+		return switch decl.type {
+			case null: throw 'expected type annotation, got null';
+			case t: t;
+		}
+	}
+
+	private function identOf(e: HxExpr): String {
+		return switch e {
+			case IdentExpr(v): (v: String);
+			case null, _: throw 'expected IdentExpr, got $e';
+		}
 	}
 
 }

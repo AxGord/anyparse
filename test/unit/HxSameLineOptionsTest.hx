@@ -253,12 +253,6 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('} catch ') == -1, 'statement-form `} catch` must break in: <$out>');
 	}
 
-	private function writeWithExpressionTry(src: String, policy: SameLinePolicy): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		opts.expressionTry = policy;
-		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
-	}
-
 	public function testSameLineElseInlineWhenBothBodiesSame(): Void {
 		// ω-expression-case-flat-fanout: when both `ifBody` and `elseBody`
 		// are runtime-`Same`, the entire if-else collapses inline — the
@@ -286,6 +280,12 @@ class HxSameLineOptionsTest extends Test {
 		Assert.isTrue(out.indexOf('} else ') != -1, 'expected `} else ` inline (block then) in: <$out>');
 	}
 
+	private function writeWithExpressionTry(src: String, policy: SameLinePolicy): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		opts.expressionTry = policy;
+		return HxModuleWriter.write(HaxeModuleParser.parse(src), opts);
+	}
+
 	private function writeWithBodyPolicy(
 		src: String, ifBody: anyparse.format.BodyPolicy, elseBody: anyparse.format.BodyPolicy, sameLineElse: Bool
 	): String {
@@ -300,16 +300,16 @@ class HxSameLineOptionsTest extends Test {
 		return HxModuleWriter.write(HaxeModuleParser.parse(src), makeOpts(sameLineElse, sameLineCatch, sameLineDoWhile));
 	}
 
-	private static inline function boolToSameLine(v: Bool): SameLinePolicy {
-		return v ? SameLinePolicy.Same : SameLinePolicy.Next;
-	}
-
 	private function makeOpts(sameLineElse: Bool, sameLineCatch: Bool, sameLineDoWhile: Bool): HxModuleWriteOptions {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.sameLineElse = boolToSameLine(sameLineElse);
 		opts.sameLineCatch = boolToSameLine(sameLineCatch);
 		opts.sameLineDoWhile = boolToSameLine(sameLineDoWhile);
 		return opts;
+	}
+
+	private static inline function boolToSameLine(v: Bool): SameLinePolicy {
+		return v ? SameLinePolicy.Same : SameLinePolicy.Next;
 	}
 
 }

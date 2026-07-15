@@ -450,22 +450,6 @@ class ApqRefsTest extends Test {
 		Assert.equals(1, reads.length, 'only the interpolated read, emit skipped — got ${describe(hits)}');
 	}
 
-	private static function findIn(source: String, name: String): Array<RefHit> {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final tree: QueryNode = plugin.parseFile(source);
-		final shape: RefShape = plugin.refShape();
-		return Refs.find(name, tree, shape);
-	}
-
-	private static function describe(hits: Array<RefHit>): String {
-		return '[' + hits.map(h -> {
-			final base: String = '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}';
-			final b: Null<Span> = h.bindingSpan;
-			return b == null ? base : '$base->bind@${b.from}-${b.to}';
-		}).join(', ') + ']';
-	}
-
-
 	/**
 	 * A local `function f(...) {...}` statement opens its OWN scope frame:
 	 * sibling local fns' same-named params must not cross-bind. Regression
@@ -500,6 +484,22 @@ class ApqRefsTest extends Test {
 		final hits: Array<RefHit> = findIn(source, 'helper');
 		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Decl).length, 'local fn decl expected, got ${describe(hits)}');
 		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');
+	}
+
+
+	private static function findIn(source: String, name: String): Array<RefHit> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final tree: QueryNode = plugin.parseFile(source);
+		final shape: RefShape = plugin.refShape();
+		return Refs.find(name, tree, shape);
+	}
+
+	private static function describe(hits: Array<RefHit>): String {
+		return '[' + hits.map(h -> {
+			final base: String = '${h.kind.toString()}:${h.name}@${h.span.from}-${h.span.to}';
+			final b: Null<Span> = h.bindingSpan;
+			return b == null ? base : '$base->bind@${b.from}-${b.to}';
+		}).join(', ') + ']';
 	}
 
 	/** 0-based-agnostic line index of a byte offset in `s` — fixture-local helper. */

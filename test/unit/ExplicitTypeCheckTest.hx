@@ -103,15 +103,11 @@ class ExplicitTypeCheckTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-
 	public function testFixNewWithTypeParamsCarried(): Void {
 		final out: String = applyFix('class C { public var a = new Map<Int, String>(); }');
 		Assert.isTrue(out.indexOf('a:Map<Int, String> =') != -1, 'expected carried type params, got: $out');
 	}
+
 
 	public function testFixBareNewSkipped(): Void {
 		// A bare `new Foo()` could be a generic used without params — annotating `:Foo` risks a broken build.
@@ -290,6 +286,10 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
 		Assert.isTrue(out.indexOf('b:String =') != -1, 'got: $out');
 		Assert.isTrue(out.indexOf('c:Bool =') != -1, 'got: $out');
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	private function applyFix(src: String): String {

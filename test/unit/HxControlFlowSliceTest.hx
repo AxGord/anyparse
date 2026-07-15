@@ -22,12 +22,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxControlFlowSliceTest extends HxTestHelpers {
 
-	/** Parse function body statements from a single-function class. */
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
 	// --- ??= operator ---
 
 	public function testNullCoalAssignSmoke(): Void {
@@ -724,6 +718,12 @@ class HxControlFlowSliceTest extends HxTestHelpers {
 	public function testIfBareThenElseRoundTrip(): Void {
 		roundTrip('class C { function f():Void { if (c) g()\nelse { h(); } } }', 'if-bare-then-block-else');
 		roundTrip('class C { function f():Void { if (c) g(); else { h(); } } }', 'if-bare-then-semi-block-else');
+	}
+
+	/** Parse function body statements from a single-function class. */
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
 	}
 
 }

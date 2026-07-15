@@ -68,16 +68,6 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		Assert.equals(expected, triviaWriteDefault(input));
 	}
 
-	private inline function triviaWriteAround(src: String): String {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(AROUND);
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-	}
-
-	private inline function triviaWriteDefault(src: String): String {
-		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
-	}
-
-
 	// Regression (ω-switch-after-paren trailing-space): a switch-FIRST call arg
 	// that WRAPS with a leading break (a second arg forces one-per-line) must
 	// NOT leave the switch-after-paren space as trailing whitespace before the
@@ -90,6 +80,16 @@ final class HxSwitchAfterParenSpaceSliceTest extends Test {
 		final expected: String = 'class C {\n\tfunction m() {\n\t\tcaller(\n\t\t\tswitch mode {\n\t\t\t\tcase One: alpha;\n\t\t\t\tcase Two: beta;\n\t\t\t},\n\t\t\tother\n\t\t);\n\t}\n}\n';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);
 		Assert.equals(expected, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(input), opts));
+	}
+
+	private inline function triviaWriteAround(src: String): String {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(AROUND);
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+	}
+
+
+	private inline function triviaWriteDefault(src: String): String {
+		return HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), HaxeFormat.instance.defaultWriteOptions);
 	}
 
 }

@@ -28,26 +28,6 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxLocalFnStmtSliceTest extends HxTestHelpers {
 
-	/** Parse function body statements from a single-function class. */
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	private function expectLocalFn(stmt: HxStatement): HxFnDecl {
-		return switch stmt {
-			case LocalFnStmt(decl): decl;
-			case _: throw 'expected LocalFnStmt, got $stmt';
-		};
-	}
-
-	private function expectInlineLocalFn(stmt: HxStatement): HxFnDecl {
-		return switch stmt {
-			case LocalInlineFnStmt(decl): decl;
-			case _: throw 'expected LocalInlineFnStmt, got $stmt';
-		};
-	}
-
 	// --- plain local function ---
 
 	public function testLocalFnBasic(): Void {
@@ -157,6 +137,26 @@ class HxLocalFnStmtSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected IfStmt, got ${body[0]}');
 		}
+	}
+
+	/** Parse function body statements from a single-function class. */
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	private function expectLocalFn(stmt: HxStatement): HxFnDecl {
+		return switch stmt {
+			case LocalFnStmt(decl): decl;
+			case _: throw 'expected LocalFnStmt, got $stmt';
+		};
+	}
+
+	private function expectInlineLocalFn(stmt: HxStatement): HxFnDecl {
+		return switch stmt {
+			case LocalInlineFnStmt(decl): decl;
+			case _: throw 'expected LocalInlineFnStmt, got $stmt';
+		};
 	}
 
 }

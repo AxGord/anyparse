@@ -89,7 +89,7 @@ final class MemberOrder implements Check {
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
 			final members: Array<OrderedMember> = collectMembers(node, source, shape);
-			final bad: Null<OrderedMember> = firstOutOfOrder(members);
+			final bad: Null<OrderedMember> = firstOutOfOrder(members, source);
 			if (bad != null) out.push({
 				file: file,
 				span: bad.span,
@@ -120,7 +120,7 @@ final class MemberOrder implements Check {
 	): Void {
 		final members: Array<OrderedMember> = collectMembers(container, source, shape);
 		if (members.length < 2) return;
-		final bad: Null<OrderedMember> = firstOutOfOrder(members);
+		final bad: Null<OrderedMember> = firstOutOfOrder(members, source);
 		if (bad == null || !flagged.contains(bad.span.from)) return;
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> a.rank != b.rank ? a.rank - b.rank : a.index - b.index);
@@ -175,12 +175,23 @@ final class MemberOrder implements Check {
 		return false;
 	}
 
-	/** The first member whose rank is below a preceding member's — the order break — or null when sorted. */
-	private static function firstOutOfOrder(members: Array<OrderedMember>): Null<OrderedMember> {
+	/**
+	 * The first member whose rank drops below its predecessor's, or null when the
+	 * sequence is canonical. Crossing a `#else` / `#elseif` directive RESETS the
+	 * comparison: an alternative conditional-compilation branch is a sibling
+	 * sequence, not a successor of the branch before it — comparing across the
+	 * boundary false-flags a container whose every branch is itself canonical.
+	 * The directive is detected in the inter-member gap only (never inside a
+	 * member's own source, so fixture strings mentioning `#else` cannot trip it).
+	 */
+	private static function firstOutOfOrder(members: Array<OrderedMember>, source: String): Null<OrderedMember> {
 		var prev: Null<MemberRank> = null;
+		var prevTo: Int = -1;
 		for (m in members) {
+			if (prevTo >= 0 && prevTo <= m.span.from && hasBranchDirective(source, prevTo, m.span.from)) prev = null;
 			if (prev != null && m.rank < prev) return m;
 			prev = m.rank;
+			prevTo = m.span.to;
 		}
 		return null;
 	}
@@ -487,6 +498,16 @@ final class MemberOrder implements Check {
 			leadTrivia: '',
 			leadFrom: full.from
 		});
+	}
+
+
+	/** Whether a line in `source[from,to)` starts (after indentation) with `#else` or `#elseif`. */
+	private static function hasBranchDirective(source: String, from: Int, to: Int): Bool {
+		for (line in source.substring(from, to).split('\n')) {
+			final t: String = StringTools.ltrim(line);
+			if (StringTools.startsWith(t, '#else')) return true;
+		}
+		return false;
 	}
 
 }

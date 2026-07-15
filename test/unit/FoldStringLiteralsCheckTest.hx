@@ -94,20 +94,6 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals("'a$$bc'", foldOf("class C { function f() { final a = 'a$$b' + 'c'; } }"));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	/** The merged-literal text the fix emits for `src`'s foldable concat (empty if none). */
-	private function foldOf(src: String): String {
-		final check: FoldStringLiterals = new FoldStringLiterals();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		return edits.length > 0 ? edits[0].text : '';
-	}
-
-
 	/**
 	 * A foldable chain formatted ACROSS source lines is deliberate width layout —
 	 * silent; its same-line inner prefix (left-assoc subtree) still folds.
@@ -122,6 +108,20 @@ class FoldStringLiteralsCheckTest extends Test {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals('"ab"', foldOf(src));
+	}
+
+
+	private function violations(src: String): Array<Violation> {
+		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** The merged-literal text the fix emits for `src`'s foldable concat (empty if none). */
+	private function foldOf(src: String): String {
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		return edits.length > 0 ? edits[0].text : '';
 	}
 
 }

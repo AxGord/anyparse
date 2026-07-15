@@ -25,14 +25,6 @@ import anyparse.grammar.haxe.HxVarDecl;
  */
 class HxTypeArrowSliceTest extends HxTestHelpers {
 
-	private function expectArrow(t: Null<HxType>): { left: HxType, right: HxType } {
-		return switch t {
-			case null: throw 'expected HxType.Arrow, got null';
-			case Arrow(l, r): { left: l, right: r };
-			case _: throw 'expected HxType.Arrow, got non-Arrow variant';
-		};
-	}
-
 	public function testSimpleArrow(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Void->Void; }');
 		Assert.equals(1, ast.members.length);
@@ -121,28 +113,6 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		Assert.equals('Void', (expectNamedType(arr.right).name: String));
 	}
 
-	/**
-	 * Slice ω-curried-optional-arg (`whitespace/issue_173`): the `?`
-	 * optional-argument marker in a curried function type. Asserts the
-	 * `OptionalArg` branch is reached and the flattened leaf sequence is
-	 * preserved (grouping is intentionally not over-asserted — see the
-	 * `OptionalArg` AST-shape note in `HxType`).
-	 */
-	private function arrowLeaves(t: HxType, acc: Array<String>): Void {
-		switch t {
-			case Arrow(l, r):
-				arrowLeaves(l, acc);
-				arrowLeaves(r, acc);
-			case OptionalArg(inner):
-				acc.push('?');
-				arrowLeaves(inner, acc);
-			case Named(ref):
-				acc.push((ref.name: String));
-			case _:
-				acc.push('<other>');
-		}
-	}
-
 	public function testCurriedOptionalArg(): Void {
 		final ast: HxClassDecl = HaxeParser.parse('class Foo { var f:Int->?Int->Void; }');
 		final v: HxVarDecl = expectVarMember(ast.members[0].member);
@@ -189,6 +159,36 @@ class HxTypeArrowSliceTest extends HxTestHelpers {
 		roundTrip('class Foo { var f:Array<Int->Void>; }', 'arrow-inside-type-param');
 		roundTrip('class Foo { function bar():Int->Void {} }', 'arrow-return-type');
 		roundTrip('class Foo { function bar(cb:Int->Void):Void {} }', 'arrow-param-type');
+	}
+
+	private function expectArrow(t: Null<HxType>): { left: HxType, right: HxType } {
+		return switch t {
+			case null: throw 'expected HxType.Arrow, got null';
+			case Arrow(l, r): { left: l, right: r };
+			case _: throw 'expected HxType.Arrow, got non-Arrow variant';
+		};
+	}
+
+	/**
+	 * Slice ω-curried-optional-arg (`whitespace/issue_173`): the `?`
+	 * optional-argument marker in a curried function type. Asserts the
+	 * `OptionalArg` branch is reached and the flattened leaf sequence is
+	 * preserved (grouping is intentionally not over-asserted — see the
+	 * `OptionalArg` AST-shape note in `HxType`).
+	 */
+	private function arrowLeaves(t: HxType, acc: Array<String>): Void {
+		switch t {
+			case Arrow(l, r):
+				arrowLeaves(l, acc);
+				arrowLeaves(r, acc);
+			case OptionalArg(inner):
+				acc.push('?');
+				arrowLeaves(inner, acc);
+			case Named(ref):
+				acc.push((ref.name: String));
+			case _:
+				acc.push('<other>');
+		}
 	}
 
 }

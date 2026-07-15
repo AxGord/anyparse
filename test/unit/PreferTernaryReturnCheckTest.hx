@@ -110,15 +110,6 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-ternary-return'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function edits(src: String): Array<{ span: Span, text: String }> {
-		final check: PreferTernaryReturn = new PreferTernaryReturn();
-		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
 	/**
 	 * A null-narrowing guard in the condition (`s != null && s.g()`) is NOT flagged:
 	 * flattening it into a ternary return would lose the narrowing and fail to
@@ -172,6 +163,15 @@ class PreferTernaryReturnCheckTest extends Test {
 	/** Both branches boolean literals (`? true : false`) still collapses (simplify then reduces to `c`). */
 	public function testBothBooleanLiteralsFlagged(): Void {
 		Assert.equals(1, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn false;\n\t}\n}').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function edits(src: String): Array<{ span: Span, text: String }> {
+		final check: PreferTernaryReturn = new PreferTernaryReturn();
+		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
 }

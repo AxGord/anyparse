@@ -28,34 +28,6 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxNamedFnExprSliceTest extends HxTestHelpers {
 
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	private function expectNamedFnExpr(e: HxExpr): HxFnDecl {
-		return switch e {
-			case NamedFnExpr(decl): decl;
-			case _: throw 'expected NamedFnExpr, got $e';
-		};
-	}
-
-	private function expectFnExpr(e: HxExpr): Bool {
-		return switch e {
-			case FnExpr(_): true;
-			case _: false;
-		};
-	}
-
-	private function varStmtInit(stmt: HxStatement): HxExpr {
-		return switch stmt {
-			case VarStmt(decl):
-				if (decl.init == null) throw 'expected VarStmt with init, got null init';
-				decl.init;
-			case _: throw 'expected VarStmt, got $stmt';
-		};
-	}
-
 	// --- basic forms ---
 
 	public function testNamedFnExprBasic(): Void {
@@ -124,6 +96,34 @@ class HxNamedFnExprSliceTest extends HxTestHelpers {
 		// trivia pipeline (corpus harness path) keeps the named-fn
 		// expression byte-stable across reparse.
 		roundTrip('class C { static function main() { var example:{ function test():Void; } = { test: function test():Void {} }; } }');
+	}
+
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	private function expectNamedFnExpr(e: HxExpr): HxFnDecl {
+		return switch e {
+			case NamedFnExpr(decl): decl;
+			case _: throw 'expected NamedFnExpr, got $e';
+		};
+	}
+
+	private function expectFnExpr(e: HxExpr): Bool {
+		return switch e {
+			case FnExpr(_): true;
+			case _: false;
+		};
+	}
+
+	private function varStmtInit(stmt: HxStatement): HxExpr {
+		return switch stmt {
+			case VarStmt(decl):
+				if (decl.init == null) throw 'expected VarStmt with init, got null init';
+				decl.init;
+			case _: throw 'expected VarStmt, got $stmt';
+		};
 	}
 
 }

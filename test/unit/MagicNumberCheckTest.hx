@@ -202,10 +202,6 @@ class MagicNumberCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tfunction f(score:Int):Bool { return score == 100; }\n}').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testPositionMethodArgExempt(): Void {
 		// A literal reaching a string-position method's argument — directly or through
 		// `+` / `-` offset arithmetic (`charCodeAt(i + 5)`, `substr(0, 4)`) — is a position.
@@ -231,6 +227,10 @@ class MagicNumberCheckTest extends Test {
 	public function testNonPositionCallArgStillFlagged(): Void {
 		// Only the listed position methods are exempt; an ordinary method call's numeric arg flags.
 		Assert.equals(1, violations('class C {\n\tfunction f(s:String):Int { return s.myMethod(7); }\n}').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new MagicNumber().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }

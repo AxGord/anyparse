@@ -73,10 +73,6 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(').length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new UnusedParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testLocalFunctionParameterAutofixed(): Void {
 		final src: String = 'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\tinner(1);\n\t}\n}';
 		Assert.equals(
@@ -113,6 +109,10 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals(src, applyFix(src));
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new UnusedParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	private function applyFix(src: String): String {

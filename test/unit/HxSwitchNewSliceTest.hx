@@ -23,22 +23,6 @@ import anyparse.grammar.haxe.HxSwitchStmt;
  */
 class HxSwitchNewSliceTest extends HxTestHelpers {
 
-	/** Parse function body statements from a single-function class. */
-	private function parseBody(source: String): Array<HxStatement> {
-		final fn: HxFnDecl = parseSingleFnDecl(source);
-		return fnBodyStmts(fn);
-	}
-
-	/** Extract switch statement from the first body statement. */
-	private function parseSwitch(source: String): HxSwitchStmt {
-		final body: Array<HxStatement> = parseBody(source);
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case SwitchStmt(stmt): stmt;
-			case null, _: throw 'expected SwitchStmt';
-		};
-	}
-
 	// ---- Switch statement tests ----
 
 	public function testEmptySwitch(): Void {
@@ -622,27 +606,6 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 		roundTrip("class C { function f():Void { cases.push(macro {name: $v{tp.name}, exec: new $tp()}); } }");
 	}
 
-	// ---- Switch expression tests ----
-
-	/** Extract the SwitchExpr atom from a return/expr/var-init outer statement. */
-	private function expectSwitchExprRhs(source: String): HxSwitchStmt {
-		final body: Array<HxStatement> = parseBody(source);
-		Assert.equals(1, body.length);
-		return switch body[0] {
-			case ReturnStmt(expr) | ExprStmt(expr):
-				switch expr {
-					case SwitchExpr(stmt): stmt;
-					case null, _: throw 'expected SwitchExpr rhs';
-				}
-			case VarStmt(decl):
-				switch decl.init {
-					case SwitchExpr(stmt): stmt;
-					case null, _: throw 'expected SwitchExpr init';
-				}
-			case null, _: throw 'expected Return/Expr/Var stmt';
-		};
-	}
-
 	public function testSwitchExprInReturn(): Void {
 		final sw: HxSwitchStmt = expectSwitchExprRhs(
 			'class C { function f():String { return switch (x) { case 1: "a"; case _: "b"; }; } }'
@@ -694,6 +657,43 @@ class HxSwitchNewSliceTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected SwitchStmt at statement level');
 		}
+	}
+
+	/** Parse function body statements from a single-function class. */
+	private function parseBody(source: String): Array<HxStatement> {
+		final fn: HxFnDecl = parseSingleFnDecl(source);
+		return fnBodyStmts(fn);
+	}
+
+	/** Extract switch statement from the first body statement. */
+	private function parseSwitch(source: String): HxSwitchStmt {
+		final body: Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case SwitchStmt(stmt): stmt;
+			case null, _: throw 'expected SwitchStmt';
+		};
+	}
+
+	// ---- Switch expression tests ----
+
+	/** Extract the SwitchExpr atom from a return/expr/var-init outer statement. */
+	private function expectSwitchExprRhs(source: String): HxSwitchStmt {
+		final body: Array<HxStatement> = parseBody(source);
+		Assert.equals(1, body.length);
+		return switch body[0] {
+			case ReturnStmt(expr) | ExprStmt(expr):
+				switch expr {
+					case SwitchExpr(stmt): stmt;
+					case null, _: throw 'expected SwitchExpr rhs';
+				}
+			case VarStmt(decl):
+				switch decl.init {
+					case SwitchExpr(stmt): stmt;
+					case null, _: throw 'expected SwitchExpr init';
+				}
+			case null, _: throw 'expected Return/Expr/Var stmt';
+		};
 	}
 
 }

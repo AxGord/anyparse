@@ -175,4 +175,24 @@ class MemberOrderCheckTest extends Test {
 		} catch (exception: haxe.Exception) false;
 	}
 
+
+	/**
+	 * An `#else` branch is an ALTERNATIVE, not a successor: a private helper at
+	 * the end of the `#if` branch followed by a public method in the `#else`
+	 * branch must not read as public-after-private (the FmtSliceTest false flag).
+	 */
+	public function testElseBranchResetsOrder(): Void {
+		final src: String = 'class C {\n' + '\t#if (sys || nodejs)\n' + '\tpublic function real():Void {}\n'
+			+ '\tprivate static function fixture():Int { return 1; }\n' + '\t#else\n' + '\tpublic function stub():Void {}\n' + '\t#end\n'
+			+ '}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** Disorder WITHIN one conditional branch is still flagged. */
+	public function testDisorderInsideBranchStillFlagged(): Void {
+		final src: String = 'class C {\n' + '\t#if (sys || nodejs)\n' + '\tprivate static function fixture():Int { return 1; }\n'
+			+ '\tpublic function real():Void {}\n' + '\t#end\n' + '}';
+		Assert.equals(1, violations(src).length);
+	}
+
 }

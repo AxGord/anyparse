@@ -134,22 +134,6 @@ class RenameSliceTest extends Test {
 		assertRename(source, 2, 2, 'ren', expected);
 	}
 
-	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
-		final result: RenameResult = renameOf(source, line, col, newName);
-		switch result {
-			case Ok(text):
-				Assert.equals(expected, text);
-			case Err(message):
-				Assert.fail('expected Ok, got Err: $message');
-		}
-	}
-
-	private static function renameOf(source: String, line: Int, col: Int, newName: String): RenameResult {
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final shape: RefShape = plugin.refShape();
-		return Rename.rename(source, line, col, newName, plugin, shape);
-	}
-
 	/**
 	 * Field in a FINAL class, referenced BARE (no `this.`): renaming the field
 	 * must touch the decl AND every bare write/read. Regression for `final class`
@@ -164,6 +148,22 @@ class RenameSliceTest extends Test {
 			+ '\tpublic function g():Int {\n' + '\t\treturn _v;\n' + '\t}\n' + '}';
 		// Line 2 col 2 — the `final v` field decl, as `apq refs --decls` prints.
 		assertRename(source, 2, 2, '_v', expected);
+	}
+
+	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
+		final result: RenameResult = renameOf(source, line, col, newName);
+		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private static function renameOf(source: String, line: Int, col: Int, newName: String): RenameResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final shape: RefShape = plugin.refShape();
+		return Rename.rename(source, line, col, newName, plugin, shape);
 	}
 
 }

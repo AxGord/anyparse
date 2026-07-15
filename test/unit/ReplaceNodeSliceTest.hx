@@ -122,6 +122,41 @@ class ReplaceNodeSliceTest extends Test {
 		}
 	}
 
+	/**
+	 * When `newSource` itself opens with a doc comment, the existing leading doc is
+	 * absorbed automatically — WITHOUT `--with-doc` — so the result carries ONE doc
+	 * block, not the new one stacked above the surviving old one.
+	 */
+	public function testNewSourceDocFoldsLeadingDoc(): Void {
+		final source: String = 'class C {\n\t/** old */\n\tpublic function f():Void {}\n}\n';
+		final expected: String = 'class C {\n\t/** new */\n\tpublic function g():Void {}\n}\n';
+		assertReplace(source, ByKindPosition(3, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
+	}
+
+	/**
+	 * A bare modifier keyword as `newSource` is refused — it would replace the
+	 * WHOLE resolved declaration (body included) with the orphan keyword, which
+	 * attaches to the next decl and may still parse (the silent-corruption trap
+	 * `set-modifier` exists for).
+	 */
+	public function testBareModifierNewSourceRefused(): Void {
+		final source: String = 'class C {\n\tprivate static function walk():Void {\n\t\ttrace(1);\n\t}\n\n\tfunction next():Void {}\n'
+			+ '}\n';
+		assertRefused(source, BySelector('FnMember:walk'), 'public');
+		assertRefused(source, ByPosition(2, 2), ' final ');
+	}
+
+	/**
+	 * The auto-fold absorbs only the leading DOC run, not a distinct block comment
+	 * above it: a leading block-comment banner survives when the new source opens
+	 * with a doc.
+	 */
+	public function testNewSourceDocPreservesBannerAboveDoc(): Void {
+		final source: String = 'class C {\n\t/* banner */\n\t/** old */\n\tpublic function f():Void {}\n}\n';
+		final expected: String = 'class C {\n\t/* banner */\n\t/** new */\n\tpublic function g():Void {}\n}\n';
+		assertReplace(source, ByKindPosition(4, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
+	}
+
 	private function assertReplace(
 		source: String, target: ReplaceTarget, newSource: String, expected: String, reformat: Bool = false
 	): Void {
@@ -158,41 +193,6 @@ class ReplaceNodeSliceTest extends Test {
 	private static function replaceOf(source: String, target: ReplaceTarget, newSource: String, reformat: Bool): EditResult {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return ReplaceNode.replaceNode(source, target, newSource, reformat, plugin);
-	}
-
-	/**
-	 * When `newSource` itself opens with a doc comment, the existing leading doc is
-	 * absorbed automatically — WITHOUT `--with-doc` — so the result carries ONE doc
-	 * block, not the new one stacked above the surviving old one.
-	 */
-	public function testNewSourceDocFoldsLeadingDoc(): Void {
-		final source: String = 'class C {\n\t/** old */\n\tpublic function f():Void {}\n}\n';
-		final expected: String = 'class C {\n\t/** new */\n\tpublic function g():Void {}\n}\n';
-		assertReplace(source, ByKindPosition(3, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
-	}
-
-	/**
-	 * A bare modifier keyword as `newSource` is refused — it would replace the
-	 * WHOLE resolved declaration (body included) with the orphan keyword, which
-	 * attaches to the next decl and may still parse (the silent-corruption trap
-	 * `set-modifier` exists for).
-	 */
-	public function testBareModifierNewSourceRefused(): Void {
-		final source: String = 'class C {\n\tprivate static function walk():Void {\n\t\ttrace(1);\n\t}\n\n\tfunction next():Void {}\n'
-			+ '}\n';
-		assertRefused(source, BySelector('FnMember:walk'), 'public');
-		assertRefused(source, ByPosition(2, 2), ' final ');
-	}
-
-	/**
-	 * The auto-fold absorbs only the leading DOC run, not a distinct block comment
-	 * above it: a leading block-comment banner survives when the new source opens
-	 * with a doc.
-	 */
-	public function testNewSourceDocPreservesBannerAboveDoc(): Void {
-		final source: String = 'class C {\n\t/* banner */\n\t/** old */\n\tpublic function f():Void {}\n}\n';
-		final expected: String = 'class C {\n\t/* banner */\n\t/** new */\n\tpublic function g():Void {}\n}\n';
-		assertReplace(source, ByKindPosition(4, 9, 'FnMember'), '/** new */\npublic function g():Void {}', expected, true);
 	}
 
 }

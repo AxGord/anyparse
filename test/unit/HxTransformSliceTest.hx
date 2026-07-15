@@ -89,15 +89,6 @@ class HxTransformSliceTest extends Test {
 		Assert.equals(plain, renamed, 'non-matching rename hook changed output');
 	}
 
-	/** Rename the identifier `foo` to `bar`; pass everything else through. */
-	private static function renameFooToBar(id: HxIdentLit): HxIdentLit {
-		return (id: String) == 'foo' ? ('bar': HxIdentLit) : id;
-	}
-
-	private static function renameExprFooToBar(id: HxExprIdentLit): HxExprIdentLit {
-		return (id: String) == 'foo' ? ('bar': HxExprIdentLit) : id;
-	}
-
 	// ---------------- functional: double integer literals ----------------
 
 	public function testDoubleIntLiteralsRewritesEveryOccurrence(): Void {
@@ -114,12 +105,6 @@ class HxTransformSliceTest extends Test {
 		Assert.isTrue(out.indexOf('Int') != -1, 'type name `Int` was wrongly rewritten in: <$out>');
 	}
 
-	/** Double an integer literal's numeric value (verbatim string form). */
-	private static function doubleInt(lit: HxIntLit): HxIntLit {
-		final n: Null<Int> = Std.parseInt((lit: String));
-		return n == null ? lit : (('' + (n * 2)): HxIntLit);
-	}
-
 	// ---------------- helpers ----------------
 
 	/**
@@ -134,6 +119,21 @@ class HxTransformSliceTest extends Test {
 		final transformed: HxModule = HxModuleAst.transform(ast, {});
 		final actual: String = HxModuleWriter.write(transformed);
 		Assert.equals(expected, actual, 'identity transform changed the written form of: <$src>');
+	}
+
+	/** Rename the identifier `foo` to `bar`; pass everything else through. */
+	private static function renameFooToBar(id: HxIdentLit): HxIdentLit {
+		return (id: String) == 'foo' ? ('bar': HxIdentLit) : id;
+	}
+
+	private static function renameExprFooToBar(id: HxExprIdentLit): HxExprIdentLit {
+		return (id: String) == 'foo' ? ('bar': HxExprIdentLit) : id;
+	}
+
+	/** Double an integer literal's numeric value (verbatim string form). */
+	private static function doubleInt(lit: HxIntLit): HxIntLit {
+		final n: Null<Int> = Std.parseInt((lit: String));
+		return n == null ? lit : (('' + (n * 2)): HxIntLit);
 	}
 
 }

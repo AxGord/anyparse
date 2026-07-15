@@ -25,39 +25,6 @@ import anyparse.grammar.haxe.HxStatement;
  */
 class HxForKeyValueSliceTest extends HxTestHelpers {
 
-	private function parseBody(source: String): Array<HxStatement> {
-		return fnBodyStmts(parseSingleFnDecl(source));
-	}
-
-	private function expectForStmt(stmt: HxStatement): HxForStmt {
-		return switch stmt {
-			case ForStmt(s): s;
-			case _: throw 'expected ForStmt, got $stmt';
-		};
-	}
-
-	private function parseVarInit(source: String): HxExpr {
-		final stmt: HxStatement = parseBody(source)[0];
-		return switch stmt {
-			case VarStmt(decl): decl.init ?? throw 'var has no init';
-			case _: throw 'expected VarStmt, got $stmt';
-		};
-	}
-
-	private function expectForExpr(e: HxExpr): HxForExpr {
-		return switch e {
-			case ForExpr(s): s;
-			case _: throw 'expected ForExpr, got $e';
-		};
-	}
-
-	private function expectArrayExpr(e: HxExpr): Array<HxExpr> {
-		return switch e {
-			case ArrayExpr(elems): elems;
-			case _: throw 'expected ArrayExpr, got $e';
-		};
-	}
-
 	// --- statement scope ---
 
 	public function testForStmtKeyValue(): Void {
@@ -113,6 +80,39 @@ class HxForKeyValueSliceTest extends HxTestHelpers {
 		final fe: HxForExpr = expectForExpr(expectArrayExpr(init)[0]);
 		Assert.equals('i', (fe.varName: String));
 		Assert.isNull(fe.valueName);
+	}
+
+	private function parseBody(source: String): Array<HxStatement> {
+		return fnBodyStmts(parseSingleFnDecl(source));
+	}
+
+	private function expectForStmt(stmt: HxStatement): HxForStmt {
+		return switch stmt {
+			case ForStmt(s): s;
+			case _: throw 'expected ForStmt, got $stmt';
+		};
+	}
+
+	private function parseVarInit(source: String): HxExpr {
+		final stmt: HxStatement = parseBody(source)[0];
+		return switch stmt {
+			case VarStmt(decl): decl.init ?? throw 'var has no init';
+			case _: throw 'expected VarStmt, got $stmt';
+		};
+	}
+
+	private function expectForExpr(e: HxExpr): HxForExpr {
+		return switch e {
+			case ForExpr(s): s;
+			case _: throw 'expected ForExpr, got $e';
+		};
+	}
+
+	private function expectArrayExpr(e: HxExpr): Array<HxExpr> {
+		return switch e {
+			case ArrayExpr(elems): elems;
+			case _: throw 'expected ArrayExpr, got $e';
+		};
 	}
 
 }

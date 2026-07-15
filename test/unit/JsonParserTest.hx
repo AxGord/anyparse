@@ -25,11 +25,6 @@ class JsonParserTest extends Test {
 		super();
 	}
 
-	private function parseEq(input: String, expected: JValue): Void {
-		final actual: JValue = JValueParser.parse(input);
-		Assert.isTrue(JValueTools.equals(expected, actual), 'parse of <$input> gave $actual, expected $expected');
-	}
-
 	public function testNull(): Void {
 		parseEq('null', JNull);
 	}
@@ -198,6 +193,11 @@ class JsonParserTest extends Test {
 
 	public function testRejectsObjectSoloComma(): Void {
 		Assert.raises(JValueParser.parse.bind('{,}'));
+	}
+
+	private function parseEq(input: String, expected: JValue): Void {
+		final actual: JValue = JValueParser.parse(input);
+		Assert.isTrue(JValueTools.equals(expected, actual), 'parse of <$input> gave $actual, expected $expected');
 	}
 
 }

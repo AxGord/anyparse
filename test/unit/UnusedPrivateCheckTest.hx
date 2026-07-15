@@ -165,6 +165,15 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, one('class Base extends Test {}\nclass C extends Base {\n\tfunction testX() {}\n}').length);
 	}
 
+	public function testOpAnnotatedMemberNotFlagged(): Void {
+		// An `@:op(A < B)` operator overload is invoked via the operator, never by name,
+		// and projects as a `MetaCall` (argumented meta) sibling — the annotated-member skip
+		// must recognize `MetaCall`, not only a bare `Meta`, else the operator method is a
+		// false unused-private (surfaced by MemberRank's `@:op` in the member-order check).
+		final src: String = 'enum abstract R(Int) {\n\tfinal A = 0;\n\tfinal B = 1;\n\t@:op(A < B) static function lt(a:R, b:R):Bool;\n}';
+		Assert.equals(0, one(src).length);
+	}
+
 	private function one(source: String): Array<Violation> {
 		return violations([{ file: 'C.hx', source: source }]);
 	}
@@ -173,19 +182,10 @@ class UnusedPrivateCheckTest extends Test {
 		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
 	}
 
+
 	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
 		final check: UnusedPrivate = new UnusedPrivate();
 		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
-
-	public function testOpAnnotatedMemberNotFlagged(): Void {
-		// An `@:op(A < B)` operator overload is invoked via the operator, never by name,
-		// and projects as a `MetaCall` (argumented meta) sibling — the annotated-member skip
-		// must recognize `MetaCall`, not only a bare `Meta`, else the operator method is a
-		// false unused-private (surfaced by MemberRank's `@:op` in the member-order check).
-		final src: String = 'enum abstract R(Int) {\n\tfinal A = 0;\n\tfinal B = 1;\n\t@:op(A < B) static function lt(a:R, b:R):Bool;\n}';
-		Assert.equals(0, one(src).length);
 	}
 
 }

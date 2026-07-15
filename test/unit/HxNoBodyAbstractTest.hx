@@ -30,21 +30,6 @@ import anyparse.runtime.ParseError;
  */
 class HxNoBodyAbstractTest extends HxTestHelpers {
 
-	private function parseInterfaceMembers(source: String): Array<HxFnDecl> {
-		final m: HxModule = HaxeModuleParser.parse(source);
-		Assert.equals(1, m.decls.length);
-		final iface: HxInterfaceDecl = expectInterfaceDecl(m.decls[0]);
-		final out: Array<HxFnDecl> = [];
-		for (mb in iface.members) {
-			final member: HxClassMember = mb.member;
-			out.push( switch member {
-				case FnMember(d): d;
-				case _: throw 'expected FnMember';
-			});
-		}
-		return out;
-	}
-
 	// ---- parse: NoBody ----
 
 	public function testInterfaceMethodNoBody(): Void {
@@ -151,6 +136,21 @@ class HxNoBodyAbstractTest extends HxTestHelpers {
 		final source: String = 'class C {\n\tfunction f():Void {}\n}\n';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(source));
 		Assert.equals(source, out);
+	}
+
+	private function parseInterfaceMembers(source: String): Array<HxFnDecl> {
+		final m: HxModule = HaxeModuleParser.parse(source);
+		Assert.equals(1, m.decls.length);
+		final iface: HxInterfaceDecl = expectInterfaceDecl(m.decls[0]);
+		final out: Array<HxFnDecl> = [];
+		for (mb in iface.members) {
+			final member: HxClassMember = mb.member;
+			out.push( switch member {
+				case FnMember(d): d;
+				case _: throw 'expected FnMember';
+			});
+		}
+		return out;
 	}
 
 }

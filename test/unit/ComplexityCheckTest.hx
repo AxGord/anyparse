@@ -98,10 +98,6 @@ class ComplexityCheckTest extends Test {
 		Assert.isTrue(ids.contains('complexity'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new Complexity().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
 	public function testCheckstyleMaxFromThresholds(): Void {
 		// Lowest configured onset (20) minus one — checkstyle flags `>=`, this check `>`.
 		Assert.equals(
@@ -194,6 +190,10 @@ class ComplexityCheckTest extends Test {
 		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = ' + chain
 			+ ';\n\t\tswitch x {\n\t\t\t#if debug\n\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new Complexity().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 }
