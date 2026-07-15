@@ -39,7 +39,7 @@ class LintSliceTest extends Test {
 	 */
 	public function testUsedVsUnused(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nimport a.b.Unused;\nclass C {\n\tvar x:Used;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
 		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
 
 		Assert.equals(1, vs.length);
@@ -502,11 +502,6 @@ class LintSliceTest extends Test {
 		Assert.equals('', edits[0].text);
 	}
 
-	private static function plugin(): HaxeQueryPlugin {
-		return new HaxeQueryPlugin();
-	}
-
-
 	/**
 	 * A STATIC wildcard `import pkg.Codes.*;` on an IN-SET type is verified by its
 	 * members: a bare reference to one of the type's enum-abstract values (`EXIT_OK`)
@@ -515,11 +510,16 @@ class LintSliceTest extends Test {
 	public function testStaticWildcardMemberUsed(): Void {
 		final codes: String = 'package pkg;\nenum abstract Codes(Int) {\n\tfinal EXIT_OK = 0;\n\tfinal EXIT_FAIL = 1;\n}';
 		final user: String = 'package pkg;\nimport pkg.Codes.*;\nclass User {\n\tfunction f():Int return EXIT_OK;\n}';
-		final files = [{ file: 'pkg/Codes.hx', source: codes }, { file: 'pkg/User.hx', source: user }];
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Codes.hx', source: codes },
+			{
+				file: 'pkg/User.hx',
+				source: user
+			}
+		];
 		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
 		Assert.equals(0, vs.length);
 	}
-
 
 	/**
 	 * A STATIC wildcard on an in-set type NONE of whose members is referenced is
@@ -528,7 +528,13 @@ class LintSliceTest extends Test {
 	public function testStaticWildcardUnusedIsWarning(): Void {
 		final codes: String = 'package pkg;\nenum abstract Codes(Int) {\n\tfinal EXIT_OK = 0;\n\tfinal EXIT_FAIL = 1;\n}';
 		final user: String = 'package pkg;\nimport pkg.Codes.*;\nclass User {\n\tfunction f():Int return 5;\n}';
-		final files = [{ file: 'pkg/Codes.hx', source: codes }, { file: 'pkg/User.hx', source: user }];
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Codes.hx', source: codes },
+			{
+				file: 'pkg/User.hx',
+				source: user
+			}
+		];
 		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals('unused-import', vs[0].rule);
@@ -536,25 +542,6 @@ class LintSliceTest extends Test {
 		Assert.isTrue(vs[0].message.contains('wildcard'));
 		Assert.equals('pkg/User.hx', vs[0].file);
 	}
-
-
-	/**
-	 * Stub modules declaring the `a.b.*` types the fixtures import, so an import
-	 * of one resolves IN the lint set — a verifiable `Warning` rather than the
-	 * unverifiable `Info` an out-of-scope named import now downgrades to.
-	 * Concatenated onto a fixture's single-file set; a stub it does not import is
-	 * inert (no imports of its own → no findings).
-	 */
-	private static function declaringStubs(): Array<{ file: String, source: String }> {
-		return [
-			{ file: 'a/b/Used.hx', source: 'package a.b;\nclass Used {}' },
-			{ file: 'a/b/Unused.hx', source: 'package a.b;\nclass Unused {}' },
-			{ file: 'a/b/Foo.hx', source: 'package a.b;\nclass Foo {}' },
-			{ file: 'a/b/Bar.hx', source: 'package a.b;\nclass Bar {}' },
-			{ file: 'a/b/Gone.hx', source: 'package a.b;\nclass Gone {}' },
-		];
-	}
-
 
 	/**
 	 * A named `import pkg.Type;` whose Type declaration is NOT in the lint set
@@ -576,7 +563,6 @@ class LintSliceTest extends Test {
 		Assert.equals(0, check.fix(src, vs, plugin()).length);
 	}
 
-
 	/**
 	 * A named import whose type IS in the lint set and genuinely unreferenced stays
 	 * a deletable `Warning` — the honesty gate spares only out-of-scope imports, so
@@ -585,7 +571,7 @@ class LintSliceTest extends Test {
 	public function testInIndexUnusedNamedImportIsWarningFixed(): Void {
 		final src: String = 'package pkg;\nimport a.b.Unused;\nclass C {}';
 		final check: UnusedImport = new UnusedImport();
-		final files = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
 		final vs: Array<Violation> = check.run(files, plugin());
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -595,7 +581,6 @@ class LintSliceTest extends Test {
 		Assert.equals('', edits[0].text);
 	}
 
-
 	/**
 	 * A named import whose in-set type IS referenced produces no finding at all —
 	 * the honesty gate never fires for a used import (the early reference check
@@ -603,9 +588,30 @@ class LintSliceTest extends Test {
 	 */
 	public function testInIndexUsedNamedImportIsSilent(): Void {
 		final src: String = 'package pkg;\nimport a.b.Used;\nclass C {\n\tvar x:Used;\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }].concat(declaringStubs());
 		final vs: Array<Violation> = new UnusedImport().run(files, plugin());
 		Assert.equals(0, vs.length);
+	}
+
+	private static function plugin(): HaxeQueryPlugin {
+		return new HaxeQueryPlugin();
+	}
+
+	/**
+	 * Stub modules declaring the `a.b.*` types the fixtures import, so an import
+	 * of one resolves IN the lint set — a verifiable `Warning` rather than the
+	 * unverifiable `Info` an out-of-scope named import now downgrades to.
+	 * Concatenated onto a fixture's single-file set; a stub it does not import is
+	 * inert (no imports of its own → no findings).
+	 */
+	private static function declaringStubs(): Array<{ file: String, source: String }> {
+		return [
+			{ file: 'a/b/Used.hx', source: 'package a.b;\nclass Used {}' },
+			{ file: 'a/b/Unused.hx', source: 'package a.b;\nclass Unused {}' },
+			{ file: 'a/b/Foo.hx', source: 'package a.b;\nclass Foo {}' },
+			{ file: 'a/b/Bar.hx', source: 'package a.b;\nclass Bar {}' },
+			{ file: 'a/b/Gone.hx', source: 'package a.b;\nclass Gone {}' },
+		];
 	}
 
 }
