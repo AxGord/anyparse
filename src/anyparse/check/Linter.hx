@@ -97,7 +97,8 @@ final class Linter {
 			new UncheckedNullable(),
 			new PossibleNullDereference(),
 			new UnguardedNullableDeref(),
-			new OversizedType()
+			new OversizedType(),
+			new PreferIndexAccess()
 		];
 	}
 

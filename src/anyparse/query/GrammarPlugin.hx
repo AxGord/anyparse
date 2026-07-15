@@ -992,6 +992,19 @@ typedef RefShape = {
 	@:optional var nullableIndexTypeNames: Array<String>;
 
 	/**
+	 * Nominal type names whose `.get(key)` / `.set(key, value)` calls are INTERCHANGEABLE
+	 * with index access `x[key]` / `x[key] = value` — Haxe's `Map` ABSTRACT only. Its
+	 * `@:arrayAccess` operators back the index syntax; the concrete `haxe.ds.StringMap` /
+	 * `IntMap` / `ObjectMap` classes carry `.get` / `.set` but NO array access, so this seam
+	 * is narrower than `nullableIndexTypeNames` (which also lists the concrete maps). The
+	 * `prefer-index-access` check flags a `get` / `set` call whose receiver's declared
+	 * outer-nominal type (via `TypeResolver.identTypeName`, or a `Null<Map<…>>` wrapper
+	 * unwrapped from `TypeInfoProvider.declaredTypeSources`) is one of these. Optional; unset
+	 * makes the check a no-op.
+	 */
+	@:optional var mapAbstractTypeNames: Array<String>;
+
+	/**
 	 * Dotted `Type.method` signatures of INSTANCE calls whose result is nullable
 	 * (Haxe `Array.pop` / `Array.shift` / `List.pop`, each returning `Null<T>`) —
 	 * the call-result nullable sources the `possible-null-dereference` check

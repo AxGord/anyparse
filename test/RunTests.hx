@@ -409,6 +409,7 @@ import unit.PreferEnumAbstractCheckTest;
 import unit.LintPerFileConfigCliTest;
 import unit.OversizedTypeCheckTest;
 import unit.LintListRulesCliTest;
+import unit.PreferIndexAccessCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -790,6 +791,7 @@ class RunTests {
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new DoubleNegationCheckTest());
 		addCase(new PreferNullCoalescingCheckTest());
+		addCase(new PreferIndexAccessCheckTest());
 		addCase(new PreferArrayLiteralCheckTest());
 		addCase(new PreferMapLiteralCheckTest());
 		addCase(new PreferInterpolationCheckTest());

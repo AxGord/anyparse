@@ -545,6 +545,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nullableNumericReturnCalls: ['Std.parseInt', 'Std.parseFloat'],
 			stringLiteralKinds: ['SingleStringExpr', 'DoubleStringExpr'],
 			nullableIndexTypeNames: ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'WeakMap'],
+			mapAbstractTypeNames: ['Map'],
 			nullableInstanceReturnCalls: [
 				'Array.pop',
 				'Array.shift',
