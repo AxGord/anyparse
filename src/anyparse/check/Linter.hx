@@ -100,7 +100,8 @@ final class Linter {
 			new OversizedType(),
 			new PreferIndexAccess(),
 			new CatchDynamic(),
-			new PreferCaseWildcard()
+			new PreferCaseWildcard(),
+			new OptionalParamShorthand()
 		];
 	}
 
