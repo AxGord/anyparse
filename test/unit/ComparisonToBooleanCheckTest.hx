@@ -11,16 +11,19 @@ import anyparse.runtime.Span;
 
 /**
  * The `comparison-to-boolean` check: a comparison against a boolean literal
- * (`x == true`, `x != false`, `true == x`) is flagged `Info`;
- * `fix` rewrites only a boolean-operator operand (a bare identifier may be a nullable Bool). An operand
- * whose nullness the check cannot rule out — a `?.` access, a call / `Map.get` result, a
- * possibly-`@:optional` field — is SKIPPED, since `== true` is load-bearing on a `Null<Bool>`
- * under strict null-safety. Comparisons inside macro reification are skipped too.
+ * (`x == true`, `x != false`, `true == x`) is flagged `Info` when the operand is
+ * provably non-null Bool. A bare identifier goes through the declared-type gate:
+ * flagged only when its declared type proves non-null Bool; a `Null<Bool>` /
+ * optional-param / unannotated identifier stays silent (its `== true` may be
+ * load-bearing under strict null-safety). An operand whose nullness the check
+ * cannot rule out — a `?.` access, a call / `Map.get` result, a
+ * possibly-`@:optional` field — is SKIPPED too. `fix` rewrites only a
+ * boolean-operator operand. Comparisons inside macro reification are skipped.
  */
 class ComparisonToBooleanCheckTest extends Test {
 
 	public function testEqTrueFlagged(): Void {
-		final vs: Array<Violation> = violations('class C {\n\tfunction f():Void {\n\t\tvar b = x == true;\n\t}\n}');
+		final vs: Array<Violation> = violations('class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = x == true;\n\t}\n}');
 		Assert.equals(1, vs.length);
 		Assert.equals('comparison-to-boolean', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -28,11 +31,36 @@ class ComparisonToBooleanCheckTest extends Test {
 	}
 
 	public function testNeqFalseFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar b = x != false;\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = x != false;\n\t}\n}').length);
 	}
 
 	public function testLiteralOnLeftFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tvar b = true == x;\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = true == x;\n\t}\n}').length);
+	}
+
+	/**
+	 * A `Null<Bool>` local's `== true` is load-bearing under strict null-safety
+	 * (three-state check) — the declared-type gate keeps it silent.
+	 */
+	public function testNullableBoolIdentSkipped(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f():Void {\n\t\tfinal x:Null<Bool> = g();\n\t\tvar b = x == true;\n\t}\n}').length
+		);
+	}
+
+	/** An unannotated / unresolvable identifier cannot be verified non-null — silent. */
+	public function testUnannotatedIdentSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = x == true;\n\t}\n}').length);
+	}
+
+	/** An optional `?x:Bool` param is nullable despite the Bool annotation — silent. */
+	public function testOptionalBoolParamSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(?x:Bool):Void {\n\t\tvar b = x == true;\n\t}\n}').length);
+	}
+
+	/** A declared non-null `Bool` local is a genuine redundancy — flagged. */
+	public function testDeclaredBoolLocalFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tfinal x:Bool = a > c;\n\t\tvar b = x == true;\n\t}\n}').length);
 	}
 
 	public function testBooleanExprOperandFlagged(): Void {

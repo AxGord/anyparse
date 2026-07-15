@@ -9,40 +9,45 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.TypeResolver;
+import anyparse.query.TypeInfoProvider;
 
 /**
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
- * where the literal adds nothing (SonarLint S1125). Purely structural; `Severity.Info`.
- * `fix` rewrites the comparison to its operand — `x == true` / `x != false` → `x`,
- * `x == false` / `x != true` → `!x` — but ONLY when the operand is a boolean-operator
- * result (provably non-null Bool); see the null-safety caveat below.
+ * where the literal adds nothing (SonarLint S1125). Purely structural plus a declared-type
+ * gate; `Severity.Info`. `fix` rewrites the comparison to its operand — `x == true` /
+ * `x != false` → `x`, `x == false` / `x != true` → `!x` — but ONLY when the operand is a
+ * boolean-operator result (provably non-null Bool); see the null-safety caveat below.
  *
  * ## Null-safety caveat
  *
  * Under strict null-safety `expr == true` on a `Null<Bool>` is REQUIRED — `if (x)` on a
- * nullable Bool does not compile — so that `== true` is load-bearing, not redundant. With
- * no type information the check cannot prove non-nullability, so it conservatively SKIPS any
- * operand whose subtree reaches a kind whose nullness it cannot rule out
- * (`RefShape.nullableOperandKinds` — Haxe `Call` / `FieldAccess` / `SafeFieldAccess`: a
- * method or `Map.get` result, a possibly-`@:optional` field, a `?.` access). It also does
- * not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose comparisons
- * are generated code rather than authored style. What remains — a bare identifier or a
- * boolean-operator expression operand — is reported for a human to judge.
+ * nullable Bool does not compile — so that `== true` is load-bearing, not redundant. The
+ * check conservatively SKIPS any operand whose subtree reaches a kind whose nullness it
+ * cannot rule out (`RefShape.nullableOperandKinds` — Haxe `Call` / `FieldAccess` /
+ * `SafeFieldAccess`: a method or `Map.get` result, a possibly-`@:optional` field, a `?.`
+ * access). A BARE-IDENTIFIER operand is resolved through the grammar's `TypeInfoProvider`:
+ * it is reported only when its declared type proves non-null Bool
+ * (`TypeResolver.isProvablyNonNull`) — a `Null<Bool>` local (`final elseBool:Null<Bool>`)
+ * or an unannotated / unresolvable identifier stays silent (unverifiable). Grammars with
+ * no `TypeInfoProvider` fall back to reporting bare identifiers for a human to judge. It
+ * also does not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose
+ * comparisons are generated code rather than authored style.
  *
- * The same uncertainty bounds the autofix, but tighter: a bare identifier may resolve to a
- * `Null<Bool>` local (`final elseBool:Null<Bool>`) whose `== true` is load-bearing and
- * whose source the kind-based skip cannot classify, so `fix` rewrites ONLY a boolean-operator
- * operand (`RefShape.comparisonKinds` ∪ `RefShape.notKind`, parentheses unwrapped) — an
- * `&&` / `||` / `!` / comparison result is non-null `Bool` by construction. A bare-identifier
- * operand is reported but never auto-stripped.
+ * The same uncertainty bounds the autofix, but tighter: `fix` rewrites ONLY a
+ * boolean-operator operand (`RefShape.comparisonKinds` ∪ `RefShape.notKind`, parentheses
+ * unwrapped) — an `&&` / `||` / `!` / comparison result is non-null `Bool` by
+ * construction. A bare-identifier operand is reported but never auto-stripped.
  *
  * ## Grammar-agnostic
  *
  * Equality kinds come from `RefShape.equalityKinds`, the literal from `RefShape.boolLitKind`,
  * the nullable-operand skip from `RefShape.nullableOperandKinds` (falling back to the single
- * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`, and
- * the autofix's provably-Bool gate from `RefShape.comparisonKinds` + `RefShape.notKind`.
- * Unset equality kinds or literal kind makes the check a no-op.
+ * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`, the
+ * identifier gate from `TypeInfoProvider.declaredTypes` + the nullability seams
+ * (`nonNullableTypeNames` / `nullableWrapperTypeNames`), and the autofix's provably-Bool
+ * gate from `RefShape.comparisonKinds` + `RefShape.notKind`. Unset equality kinds or
+ * literal kind makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class ComparisonToBoolean implements Check {
@@ -65,11 +70,14 @@ final class ComparisonToBoolean implements Check {
 		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
 		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> =
 				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
+			if (tree == null) continue;
+			final declaredTypes: Null<Map<Int, String>> = provider != null ? provider.declaredTypes(entry.source) : null;
+			walk(violations, entry.file, tree, tree, shape, declaredTypes, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
 		}
 		return violations;
 	}
@@ -113,12 +121,17 @@ final class ComparisonToBoolean implements Check {
 
 	/**
 	 * Walk `node`, flagging an equality whose exactly one operand is a boolean literal and
-	 * whose other operand is provably non-null Bool (does not reach `nullableKinds`). Macro
-	 * reification subtrees (`opaqueKinds`) are not descended into.
+	 * whose other operand is provably non-null Bool. A non-identifier operand must not reach
+	 * `nullableKinds`; a BARE-IDENTIFIER operand is reported only when the grammar provides
+	 * type info AND its declared type proves non-null (`TypeResolver.isProvablyNonNull`) — a
+	 * `Null<Bool>` local's `== true` is load-bearing under strict null-safety, and an
+	 * unresolvable / unannotated identifier cannot be verified, so both stay silent. Without
+	 * a `TypeInfoProvider` the identifier falls back to being reported for a human to judge.
+	 * Macro reification subtrees (`opaqueKinds`) are not descended into.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, node: QueryNode, equalityKinds: Array<String>, boolLitKind: String,
-		nullableKinds: Array<String>, opaqueKinds: Array<String>
+		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
+		equalityKinds: Array<String>, boolLitKind: String, nullableKinds: Array<String>, opaqueKinds: Array<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
@@ -127,7 +140,9 @@ final class ComparisonToBoolean implements Check {
 			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
 			if (leftIsBool != rightIsBool) {
 				final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-				if (!operandIsNullable(other, nullableKinds)) out.push({
+				final identUnverified: Bool = other.kind == shape.identKind && declaredTypes != null
+					&& !TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes);
+				if (!identUnverified && !operandIsNullable(other, nullableKinds)) out.push({
 					file: file,
 					span: span,
 					rule: 'comparison-to-boolean',
@@ -136,7 +151,7 @@ final class ComparisonToBoolean implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, c, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
+		for (c in node.children) walk(out, file, c, root, shape, declaredTypes, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
