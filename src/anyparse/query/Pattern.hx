@@ -130,32 +130,24 @@ final class Metavar {
 		final buf: StringBuf = new StringBuf();
 		var i: Int = 0;
 		final len: Int = source.length;
+		inline function copyRun(from: Int, end: Int): Int {
+			buf.addSub(source, from, end - from);
+			return end;
+		}
 		while (i < len) {
 			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c == '\''.code) {
-				final end: Int = scanStringEnd(source, i, '\''.code);
-				buf.addSub(source, i, end - i);
-				i = end;
-				continue;
-			}
-			if (c == '"'.code) {
-				final end: Int = scanStringEnd(source, i, '"'.code);
-				buf.addSub(source, i, end - i);
-				i = end;
+			if (c == '\''.code || c == '"'.code) {
+				i = copyRun(i, scanStringEnd(source, i, c));
 				continue;
 			}
 			if (c == '/'.code && i + 1 < len) {
 				final c2: Int = StringTools.fastCodeAt(source, i + 1);
 				if (c2 == '/'.code) {
-					final end: Int = scanLineCommentEnd(source, i);
-					buf.addSub(source, i, end - i);
-					i = end;
+					i = copyRun(i, scanLineCommentEnd(source, i));
 					continue;
 				}
 				if (c2 == '*'.code) {
-					final end: Int = scanBlockCommentEnd(source, i);
-					buf.addSub(source, i, end - i);
-					i = end;
+					i = copyRun(i, scanBlockCommentEnd(source, i));
 					continue;
 				}
 			}

@@ -745,11 +745,7 @@ final class HxExprUtil {
 	 * (`params[0].expr`).
 	 */
 	private static function metaExprEndsWithBrace(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length == 0) return false;
-		final metaExpr: Null<Dynamic> = params[0];
-		if (metaExpr == null) return false;
-		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+		final inner: Null<Dynamic> = metaInnerExpr(e);
 		return inner != null && endsWithCloseBrace(inner);
 	}
 
@@ -823,11 +819,7 @@ final class HxExprUtil {
 	 * (same struct shape as `IfExpr`).
 	 */
 	private static function metaExprNoSemi(e: Dynamic): Bool {
-		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-		if (params == null || params.length == 0) return false;
-		final metaExpr: Null<Dynamic> = params[0];
-		if (metaExpr == null) return false;
-		final inner: Null<Dynamic> = Reflect.field(metaExpr, 'expr');
+		final inner: Null<Dynamic> = metaInnerExpr(e);
 		return inner != null && stmtExprNoSemi(inner);
 	}
 
@@ -996,6 +988,15 @@ final class HxExprUtil {
 		final next: Int = StringTools.fastCodeAt(s, at + kl);
 		return !((next >= 'a'.code && next <= 'z'.code) || (next >= 'A'.code && next <= 'Z'.code) || (next >= '0'.code && next <= '9'.code)
 			|| next == '_'.code);
+	}
+
+
+	/** The wrapped expression of an `@:meta <operand>` node (`params[0].expr`), or null. */
+	private static function metaInnerExpr(e: Dynamic): Null<Dynamic> {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return null;
+		final metaExpr: Null<Dynamic> = params[0];
+		return metaExpr == null ? null : Reflect.field(metaExpr, 'expr');
 	}
 
 }

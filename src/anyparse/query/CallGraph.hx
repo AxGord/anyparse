@@ -182,9 +182,7 @@ final class CallGraph {
 			// a macro-reification subtree is generated-code emission, not runtime
 			// calls — walking it would fabricate nodes and edges (mirrors Refs)
 			if (opaqueKinds.contains(node.kind)) return;
-			var typeName: Null<String> = currentType;
-			final declName: Null<String> = typeNameOf(node);
-			if (declName != null) typeName = declName;
+			final typeName: Null<String> = typeNameOf(node) ?? currentType;
 
 			var fnId: Null<String> = parentFn;
 			final span: Null<Span> = node.span;
@@ -586,9 +584,7 @@ final class CallGraph {
 		function walk(node: QueryNode, currentType: Null<String>): Void {
 			// symmetric with collectNodes: reified code is not runtime calls
 			if (opaqueKinds.contains(node.kind)) return;
-			var typeName: Null<String> = currentType;
-			final declName: Null<String> = typeNameOf(node);
-			if (declName != null) typeName = declName;
+			final typeName: Null<String> = typeNameOf(node) ?? currentType;
 
 			final span: Null<Span> = node.span;
 			var pushed: Bool = false;
