@@ -7570,12 +7570,12 @@ final class Cli {
 			? null
 			: try parse(source) catch (exception: ParseError) {
 				if (singleFile) stderr('apq $cmd: $path: ${exception.toString()}\n');
-				if (skipOut != null) skipOut.push({ path: path, locus: formatParseErrorLocus(exception, source) });
+				skipOut?.push({ path: path, locus: formatParseErrorLocus(exception, source) });
 				null;
 			}
 			catch (exception: Exception) {
 				if (singleFile) stderr('apq $cmd: $path: ${exception.message}\n');
-				if (skipOut != null) skipOut.push({ path: path, locus: exception.message });
+				skipOut?.push({ path: path, locus: exception.message });
 				null;
 			};
 	}

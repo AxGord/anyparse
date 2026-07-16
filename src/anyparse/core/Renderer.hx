@@ -1825,7 +1825,7 @@ class Renderer {
 					stack.push(new Frame(f.indent, f.mode, flatDoc, true, f.hardFlat));
 					// Measure-only capture: inside a force-flat region the
 					// flat branch is always taken (record `false` = no open).
-					if (decisions != null) decisions.push({ node: f.doc, crosses: false });
+					decisions?.push({ node: f.doc, crosses: false });
 				} else {
 					// `pendingSpace` restores an un-flushed OptSpace preceding this
 					// paren (`x = (chain) / 2` — the ` ` after `=` is pending, not
@@ -1881,7 +1881,7 @@ class Renderer {
 					// raw `fullLineCrosses`, so this is byte-identical to the
 					// pre-slice behaviour off the collapse path.
 					final commits: Bool = collapseParenCommitsOpen(breakDoc, fullLineCrosses, f.indent, n, stack);
-					if (decisions != null) decisions.push({ node: f.doc, crosses: commits });
+					decisions?.push({ node: f.doc, crosses: commits });
 					final pushMode: Mode = commits ? MBreak : f.mode;
 					stack.push(new Frame(f.indent, pushMode, commits ? breakDoc : flatDoc));
 				}
@@ -2140,7 +2140,7 @@ class Renderer {
 				// it fits at this captured indent (mirror the forward
 				// `collapseParenCommitsOpen` fit gate). Optional field — the
 				// forward `IfFullLineExceeds` push sites leave it null.
-				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: f.indent });
+				decisions?.push({ node: f.doc, crosses: f.mode == MBreak, indent: f.indent });
 				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case CollapseBoolProbe(inner):
 				// ω-opbool-reeval-after-callparam (CollapsePass increment 2): an
@@ -2159,7 +2159,7 @@ class Renderer {
 				// (`decisions == null`) the marker is always already rewritten away
 				// by `CollapsePass.run` before render — reaching it here is a
 				// defensive pass-through.
-				if (decisions != null) decisions.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
+				decisions?.push({ node: f.doc, crosses: f.mode == MBreak, indent: col });
 				stack.push(new Frame(f.indent, f.mode, inner, f.forceFlat, f.hardFlat));
 			case CollapseChainProbe(inner):
 				// ω-methodchain-reeval-after-callparam (CollapsePass increment 3,
