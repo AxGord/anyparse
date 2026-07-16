@@ -38,7 +38,9 @@ import haxe.Exception;
  * `m.set(k)` are a foreign method or a nonexistent overload — not rewritten). The `set`
  * rewrite produces an ASSIGNMENT (`m[k] = v`), valid only in STATEMENT position, so `fix`
  * emits it only when the call is a direct child of an `exprStatementKind` (`ExprStmt`); a
- * `set` used as an expression is still flagged but left for a human. A `get` rewrite is an
+ * `set` used as an expression is still flagged but left for a human. An unbraced control-flow branch body
+ * (`if (c) m.set(k, v);`) is still an `ExprStmt` — statement position — so the `set`
+ * fix DOES fire there, producing `if (c) m[k] = v;`. A `get` rewrite is an
  * expression and fixes anywhere (`m.get(k).foo`, `f(m.get(k))`). Nested matches
  * (`m.get(n.get(k))`) yield overlapping edits; `RefactorSupport.dropContainedEdits` keeps
  * the outer, the inner is caught on the next `--fix` pass.

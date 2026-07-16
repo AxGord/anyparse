@@ -57,14 +57,20 @@ import haxe.Exception;
  *   trailing `i++` (an empty range loop is pointless — skipped to avoid noise).
  * - **No shadowing.** Nothing in the body re-declares `i` (a nested `var i` would
  *   confuse the counter identity).
+ * - **No capturing closure.** A range `for` re-scopes `i` per iteration, whereas
+ *   the `while`'s `i` is one function-scoped binding a closure captures by
+ *   reference; if any lambda / local-function subtree in the enclosing scope
+ *   references `i`, the transform would change what the closure observes, so it
+ *   is skipped.
  *
  * ## Grammar-agnostic
  *
  * Driven by `whileStmtKind`, `ltKind`, `postIncrKind`, `blockStmtKind`,
  * `exprStatementKind`, `continueStatementKind` and `mutableLocalDeclKinds` (any
  * unset → the check is a no-op), plus `identKind` / `writeParentKinds` (the write
- * scan), `numericLiteralKinds` (a literal bound), `localDeclKinds` (the shadow gate)
- * and `opaqueKinds` to skip reification subtrees.
+ * scan), `numericLiteralKinds` (a literal bound), `localDeclKinds` (the shadow gate),
+ * `lambdaKinds` / `localFunctionKinds` (the closure-capture gate) and `opaqueKinds`
+ * to skip reification subtrees.
  */
 @:nullSafety(Strict)
 final class PreferRangeLoop implements Check {
@@ -130,6 +136,7 @@ final class PreferRangeLoop implements Check {
 		final continueKind: Null<String> = shape.continueStatementKind;
 		if (continueKind == null) return null;
 		final mutableKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
+		final closureKinds: Array<String> = (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
 		return mutableKinds.length == 0 ? null : {
 			whileStmtKind: whileStmtKind,
 			ltKind: ltKind,
@@ -142,6 +149,7 @@ final class PreferRangeLoop implements Check {
 			localDeclKinds: shape.localDeclKinds ?? [],
 			writeParentKinds: shape.writeParentKinds,
 			numericLiteralKinds: shape.numericLiteralKinds ?? [],
+			closureKinds: closureKinds,
 			opaqueKinds: shape.opaqueKinds ?? []
 		};
 	}
@@ -180,6 +188,7 @@ final class PreferRangeLoop implements Check {
 		final boundSpan: Null<Span> = bound.span;
 		if (declSpan == null || initSpan == null || whileSpan == null || scopeSpan == null || boundSpan == null) return null;
 		if (RefactorSupport.referencedInRange(source, loopVar, whileSpan.to, scopeSpan.to, [])) return null;
+		if (capturedByClosure(scope, source, loopVar, s)) return null;
 		final a: String = excerpt(source.substring(initSpan.from, initSpan.to));
 		final b: String = excerpt(source.substring(boundSpan.from, boundSpan.to));
 		return {
@@ -351,6 +360,23 @@ final class PreferRangeLoop implements Check {
 		return !boundWritten && !containsKind(body, s.continueKind, s) && !declaresName(body, loopVar, s);
 	}
 
+
+	/**
+	 * Whether any lambda / local-function subtree within `scope` references `loopVar`
+	 * (a word-boundary match inside the closure's span). Such a closure captures the
+	 * `while`'s one function-scoped counter by reference, so the range `for`'s
+	 * per-iteration re-scoping would change what it observes — a conservative bail.
+	 */
+	private static function capturedByClosure(scope: QueryNode, source: String, loopVar: String, s: Seams): Bool {
+		if (s.opaqueKinds.contains(scope.kind)) return false;
+		if (s.closureKinds.contains(scope.kind)) {
+			final span: Null<Span> = scope.span;
+			if (span != null && RefactorSupport.referencedInRange(source, loopVar, span.from, span.to, [])) return true;
+		}
+		for (c in scope.children) if (capturedByClosure(c, source, loopVar, s)) return true;
+		return false;
+	}
+
 }
 
 /** The `RefShape` kinds `PreferRangeLoop` reads, bundled once so the walkers take one argument. */
@@ -366,5 +392,6 @@ private typedef Seams = {
 	var localDeclKinds: Array<String>;
 	var writeParentKinds: Array<String>;
 	var numericLiteralKinds: Array<String>;
+	var closureKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 }

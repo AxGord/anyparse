@@ -176,6 +176,13 @@ class TrivialGetterCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { public var active(get, never):Bool; function get_active() return _active;').length);
 	}
 
+	public function testSubclassOverrideNotFlagged(): Void {
+		// A subclass overriding get_active would break if the base property became
+		// (default, null) with the getter dropped, so a class with any subtype is skipped.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\toverride function get_active():Bool return true;\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t' + members + '\n}';
 	}

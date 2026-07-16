@@ -169,7 +169,7 @@ final class CheckstyleConfigLoader {
 	/**
 	 * checkstyle `ModifierOrder.modifiers` (UPPER_SNAKE) mapped to our RefShape
 	 * modifier kinds; the modifiers our `modifier-order` check does not rank
-	 * (MACRO / DYNAMIC / FINAL / EXTERN / …) are dropped. Absent → checkstyle's
+	 * (MACRO / DYNAMIC / EXTERN / …) are dropped. Absent → checkstyle's
 	 * own default order.
 	 */
 	private static function readModifierOrder(props: Dynamic): Array<String> {

@@ -97,6 +97,16 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	public function testUnbracedBranchSetFixed(): Void {
+		// An unbraced control-flow branch body is still an ExprStmt (statement position), so the
+		// set fix DOES fire there — pinned to a valid `if (true) m[k] = v;` rewrite.
+		final source: String = src('var m:Map<String, String> = [];', 'if (true) m.set("a", "b");');
+		Assert.equals(1, violations(source).length);
+		final fixed: String = applyFix(source);
+		Assert.isTrue(fixed.indexOf('if (true) m["a"] = "b";') != -1);
+		Assert.equals(-1, fixed.indexOf('m.set'));
+	}
+
 	private function src(decl: String, body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t' + decl + '\n\t\t' + body + '\n\t}\n}';
 	}

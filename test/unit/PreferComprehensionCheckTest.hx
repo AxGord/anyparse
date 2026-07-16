@@ -130,6 +130,12 @@ class PreferComprehensionCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { final out = []; for (x in xs) out.push(').length);
 	}
 
+	public function testSelfReferenceInIterableNotFlagged(): Void {
+		// The self-reference gate scans the WHOLE iterable subtree, not just the pushed value —
+		// `out` in the loop's iterable disqualifies the comprehension.
+		Assert.equals(0, violations(fnRet('final out:Array<Int> = [];\n\t\tfor (x in [out.length]) out.push(x);')).length);
+	}
+
 	private function fnRet(stmts: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):Array<Int> {\n\t\t' + stmts + '\n\t\treturn out;\n\t}\n}';
 	}

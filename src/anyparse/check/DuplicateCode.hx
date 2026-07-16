@@ -37,7 +37,9 @@ import haxe.Exception;
  * - **Non-overlapping occurrences.** Within one clone family the earliest occurrence
  *   is the original; each later occurrence that does not overlap it is a finding
  *   (`a; a; a; a` with window `a; a; a` yields no report — the only second window
- *   overlaps the first).
+ *   overlaps the first). Occurrence selection is earliest-first greedy, so a later
+ *   disjoint clone pair whose bucket was already consumed by containment dedup
+ *   can go unreported — a sound under-report, never a false clone.
  * - **Content gate.** A run must hold at least `MIN_STATEMENTS` statements AND at
  *   least `MIN_NON_WS_CHARS` non-whitespace characters, so a triple of trivial
  *   one-liners (`i++; j++; k++;`) is not flagged.

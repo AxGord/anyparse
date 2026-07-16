@@ -77,6 +77,18 @@ class CatchDynamicCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { try {').length);
 	}
 
+	public function testSpacedDynamicFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e : Dynamic) {}\n\t}\n}').length);
+	}
+
+	public function testArrayOfDynamicNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e:Array<Dynamic>) {}\n\t}\n}').length);
+	}
+
+	public function testFunctionTypeCatchNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f():Void {\n\t\ttry g() catch (e:Int->Void) {}\n\t}\n}').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new CatchDynamic().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

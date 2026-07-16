@@ -52,8 +52,8 @@ using Lambda;
  *
  * Driven by `ifStatementKinds`, `notEqKind`, `nullLiteralKind`, `callKind`,
  * `fieldAccessKind`, `exprStatementKind`, `blockStmtKind` (any unset → no-op),
- * plus `localDeclKinds` / `paramKinds` / `scopeKinds` for the binding resolution
- * and `opaqueKinds` to skip reification subtrees.
+ * plus `localDeclKinds` / `paramKinds` / `scopeKinds` for the binding resolution, `parenKind` to unwrap a
+ * parenthesized condition, and `opaqueKinds` to skip reification subtrees.
  */
 @:nullSafety(Strict)
 final class PreferSafeNav implements Check {
@@ -145,6 +145,7 @@ final class PreferSafeNav implements Check {
 			fieldAccessKind: fieldAccessKind,
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
+			parenKind: shape.parenKind,
 			scopeKinds: shape.scopeKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			localDeclKinds: shape.localDeclKinds ?? [],
@@ -259,9 +260,12 @@ final class PreferSafeNav implements Check {
 
 	/** The plain-identifier operand of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
-		if (cond.kind != s.notEqKind || cond.children.length != COMPARISON_CHILD_COUNT) return null;
-		final a: QueryNode = cond.children[0];
-		final b: QueryNode = cond.children[1];
+		var c: QueryNode = cond;
+		final parenKind: Null<String> = s.parenKind;
+		if (parenKind != null) while (c.kind == parenKind && c.children.length == 1) c = c.children[0];
+		if (c.kind != s.notEqKind || c.children.length != COMPARISON_CHILD_COUNT) return null;
+		final a: QueryNode = c.children[0];
+		final b: QueryNode = c.children[1];
 		return if (a.kind == s.nullKind && b.kind == s.identKind)
 			b;
 		else if (b.kind == s.nullKind && a.kind == s.identKind)
@@ -313,6 +317,7 @@ private typedef Seams = {
 	var fieldAccessKind: String;
 	var exprStmtKind: String;
 	var blockStmtKind: String;
+	var parenKind: Null<String>;
 	var scopeKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var localDeclKinds: Array<String>;

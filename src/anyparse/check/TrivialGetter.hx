@@ -40,6 +40,12 @@ using Lambda;
  *    `(default, null)` and is skipped. Interfaces (no getter bodies) are
  *    skipped wholesale: only `ClassDecl` / `ClassForm` bodies are inspected.
  *
+ * 5. The declaring class has NO subtype in the index (`SymbolIndex.hasSubtype`)
+ *    — a subclass could `override get_x`, so the suggested `(default, null)` +
+ *    drop-getter refactor would break the override. A class with any subtype is
+ *    skipped wholesale; the subtype set is complete only over a whole-project
+ *    scope (like `prefer-final-public-field`).
+ *
  * Internal writes to the backing field from other methods are FINE — that is
  * exactly what `(default, null)` preserves — so no write gate is needed.
  */
@@ -57,10 +63,11 @@ final class TrivialGetter implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
-			if (tree != null) for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file);
+			if (tree != null) for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index);
 		}
 		return out;
 	}
@@ -88,9 +95,13 @@ final class TrivialGetter implements Check {
 	 * Flag each read-only property of `cls` whose `get_x` trivially returns a
 	 * private same-class backing field. One pass builds the member tables —
 	 * visibility and `dynamic` come from the modifier siblings that precede each
-	 * member — then each property is matched against its getter.
+	 * member — then each property is matched against its getter. A class with any
+	 * subtype in the index is skipped — a subclass could override `get_x`, so the
+	 * suggested rewrite would break that override.
 	 */
-	private static function considerClass(out: Array<Violation>, cls: QueryNode, source: String, file: String): Void {
+	private static function considerClass(out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex): Void {
+		final className: Null<String> = cls.name;
+		if (className == null || index.hasSubtype(className)) return;
 		final privateFields: Array<String> = [];
 		final getters: Map<String, { node: QueryNode, dyn: Bool }> = [];
 		final properties: Array<{ name: String, span: Span }> = [];

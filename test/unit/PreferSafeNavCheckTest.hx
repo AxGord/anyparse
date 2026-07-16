@@ -103,6 +103,11 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { if (x != null) x.').length);
 	}
 
+	public function testParenthesizedConditionFlaggedAndFixed(): Void {
+		Assert.equals(1, violations(local('if ((x != null)) x.command("p");')).length);
+		Assert.equals(local('x?.command("p");'), applyFix(local('if ((x != null)) x.command("p");')));
+	}
+
 	private function local(stmt: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t' + stmt + '\n\t}\n}';
 	}

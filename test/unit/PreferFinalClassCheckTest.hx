@@ -132,6 +132,15 @@ class PreferFinalClassCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(').length);
 	}
 
+	public function testFinalMetaWithArgRemovesFullMeta(): Void {
+		// The whole @:final(true) meta — arg list included — is removed, no dangling `(true)`.
+		final source: String = '@:final(true) class C {}';
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length);
+		Assert.equals('@:final(true)', source.substring(vs[0].span.from, vs[0].span.to));
+		Assert.equals('final class C {}', applyFix(source));
+	}
+
 	private function violations(source: String): Array<Violation> {
 		return new PreferFinalClass().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
 	}

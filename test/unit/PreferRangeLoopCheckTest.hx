@@ -126,6 +126,12 @@ class PreferRangeLoopCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(n:Int) { var i = 0; while (i < n) { work(i); i++; }').length);
 	}
 
+	public function testClosureCapturingCounterNotFlagged(): Void {
+		// A closure capturing the counter sees its post-loop value under the while's shared
+		// binding; a range for re-scopes i per iteration, so the transform is unsound — skip.
+		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\tqueue(() -> i);\n\t\t\ti++;\n\t\t}')).length);
+	}
+
 	private function wrapFn(body: String): String {
 		return 'class C {\n\tfunction f(n:Int):Void {\n\t\t' + body + '\n\t}\n}';
 	}
