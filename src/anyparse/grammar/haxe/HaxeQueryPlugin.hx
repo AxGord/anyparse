@@ -696,29 +696,21 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * payload struct, and a spanned struct's `_span` with its own `type`.
 	 */
 	public function declaredTypes(source: String): Map<Int, String> {
-		final out: Map<Int, String> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'type')) {
+		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
+			if (Reflect.hasField(node, 'type')) {
 				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
 				if (nm != null) out[span.from] = nm;
 			}
 		});
-		return out;
 	}
 
 	public function returnTypes(source: String): Map<Int, String> {
-		final out: Map<Int, String> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'returnType')) {
+		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
+			if (Reflect.hasField(node, 'returnType')) {
 				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'returnType'));
 				if (nm != null) out[span.from] = nm;
 			}
 		});
-		return out;
 	}
 
 	/**
@@ -730,16 +722,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * keyed on `HxVarDecl.access` (dropped from the QueryNode projection).
 	 */
 	public function propertyAccessors(source: String): Map<Int, Bool> {
-		final out: Map<Int, Bool> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'access')) {
+		return walkSpanMap(source, (node, span, out: Map<Int, Bool>) -> {
+			if (Reflect.hasField(node, 'access')) {
 				final access: Dynamic = Reflect.field(node, 'access');
 				if (access != null) out[span.from] = isGetterAccess(access);
 			}
 		});
-		return out;
 	}
 
 	/**
@@ -749,16 +737,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * the written form rather than the package-stripped simple name.
 	 */
 	public function declaredTypeSources(source: String): Map<Int, String> {
-		final out: Map<Int, String> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null && Reflect.hasField(node, 'type')) {
+		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
+			if (Reflect.hasField(node, 'type')) {
 				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
 				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
 			}
 		});
-		return out;
 	}
 
 	/**
@@ -768,19 +752,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * operand `target` / `expr`, no `name`), but the value is the written type source.
 	 */
 	public function castTargetSources(source: String): Map<Int, String> {
-		final out: Map<Int, String> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
 			if (
-				span != null && Reflect.hasField(node, 'type') && !Reflect.hasField(node, 'name')
+				Reflect.hasField(node, 'type') && !Reflect.hasField(node, 'name')
 				&& (Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr'))
 			) {
 				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
 				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
 			}
 		});
-		return out;
 	}
 
 	/**
@@ -828,9 +808,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	private function appendNodes(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool): Void {
-		if (value == null) return;
-		if (value is String) return;
-		if (Std.isOfType(value, Span)) return;
+		if (isLeafValue(value)) return;
 		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
@@ -933,9 +911,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * surfaced by the existing decl-host descent in `appendNodes`.
 	 */
 	private function appendTypeRefs(value: Dynamic, into: Array<QueryNode>, fallbackSpan: Null<Span>): Void {
-		if (value == null) return;
-		if (value is String) return;
-		if (Std.isOfType(value, Span)) return;
+		if (isLeafValue(value)) return;
 		final t: Type.ValueType = Type.typeof(value);
 		switch t {
 			case TEnum(_):
@@ -1124,6 +1100,28 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	/**
+	 * Parse `source` and fold every grammar-span-bearing node into a
+	 * `Map<Int, V>` keyed on the node's `span.from`. `visit` writes the
+	 * value(s) for a node into `out` (see `declaredTypes` et al.); it runs
+	 * only for nodes carrying a non-null span. An unparseable source yields
+	 * an empty map.
+	 */
+	private function walkSpanMap<V>(source: String, visit: (node:Dynamic, span:Span, out:Map<Int, V>) -> Void): Map<Int, V> {
+		final out: Map<Int, V> = [];
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return out;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span != null) visit(node, span, out);
+		});
+		return out;
+	}
+
+	/** A non-structural leaf the grammar walkers skip: null, a `String`, or a `Span`. */
+	private inline function isLeafValue(value: Dynamic): Bool {
+		return value == null || value is String || Std.isOfType(value, Span);
+	}
+
+	/**
 	 * Whether the extracted pattern root's span covers (nearly) the whole
 	 * variant text — the guard against a partial Decl extraction (slack of one
 	 * byte tolerates a span that excludes the trailing `;`).
@@ -1226,6 +1224,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		}
 		return null;
 	}
+
 
 	/**
 	 * True when `v` is an `HxType.Anon` enum value — the anon-struct

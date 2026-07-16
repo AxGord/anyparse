@@ -114,15 +114,9 @@ final class MakeFinal {
 	 * absent / ambiguous (a `final` field is already done and not matched).
 	 */
 	private static function resolveVarField(tree: QueryNode, typeName: String, fieldName: String): Null<QueryNode> {
-		final decls: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) decls.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		if (decls.length != 1) return null;
-		for (child in decls[0].nameNode.children) {
+		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
+		if (decl == null) return null;
+		for (child in decl.nameNode.children) {
 			final kind: String = child.kind;
 			if ((kind == 'VarMember' || kind == 'VarField') && child.name == fieldName) return child;
 		}
@@ -131,15 +125,9 @@ final class MakeFinal {
 
 	/** The span of the `new` constructor of the sole type `typeName`, or null. */
 	private static function constructorSpan(tree: QueryNode, typeName: String): Null<Span> {
-		final decls: Array<TypeDeclMatch> = [];
-		function walk(node: QueryNode): Void {
-			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
-			if (m != null && m.name == typeName) decls.push(m);
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		if (decls.length != 1) return null;
-		for (child in decls[0].nameNode.children) if (child.kind == 'FnMember' && child.name == 'new') return child.span;
+		final decl: Null<TypeDeclMatch> = findSoleTypeDecl(tree, typeName);
+		if (decl == null) return null;
+		for (child in decl.nameNode.children) if (child.kind == 'FnMember' && child.name == 'new') return child.span;
 		return null;
 	}
 
@@ -169,6 +157,19 @@ final class MakeFinal {
 	/** The `var`-keyword-length source slice at `from` (for the keyword check). */
 	private static function keywordAt(source: String, from: Int): String {
 		return from >= 0 && from + VAR.length <= source.length ? source.substr(from, VAR.length) : '';
+	}
+
+
+	/** The sole type declaration named `typeName` (final-aware), or null when absent / ambiguous. */
+	private static function findSoleTypeDecl(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
+		final decls: Array<TypeDeclMatch> = [];
+		function walk(node: QueryNode): Void {
+			final m: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+			if (m != null && m.name == typeName) decls.push(m);
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return decls.length == 1 ? decls[0] : null;
 	}
 
 }

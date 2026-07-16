@@ -69,10 +69,7 @@ class Build {
 		ctx.spans = readBoolOption(options, 'spans', false);
 		if (ctx.spans) ctx.mode = Mode.Tolerant;
 
-		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
-		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
-		TriviaAnalysis.run(shape);
-		if (ctx.trivia) TriviaTypeSynth.arm(shape);
+		final shape: ShapeBuilder.ShapeResult = buildShapeWithTrivia(formatInfo, rootType, ctx);
 		if (ctx.spans) SpanTypeSynth.arm(shape);
 
 		#if anyparse_trivia_dump
@@ -82,18 +79,7 @@ class Build {
 		}
 		#end
 
-		final registry: StrategyRegistry = new StrategyRegistry();
-		registry.register(new Bin());
-		registry.register(new Kw());
-		registry.register(new Lit());
-		registry.register(new Postfix());
-		registry.register(new Pratt());
-		registry.register(new Ternary());
-		registry.register(new Prefix());
-		registry.register(new Re());
-		registry.register(new Skip());
-		registry.prepare();
-		registry.runAnnotate(shape, ctx);
+		registerStrategies(shape, ctx);
 
 		final lowering: Lowering = new Lowering(shape, formatInfo, ctx);
 		final rules: Array<GeneratedRule> = lowering.generate();
@@ -231,23 +217,9 @@ class Build {
 		if (ctx.trivia && formatInfo.isBinary)
 			Context.fatalError('Build.buildWriter: {trivia: true} is not supported for binary writers', Context.currentPos());
 
-		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
-		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
-		TriviaAnalysis.run(shape);
-		if (ctx.trivia) TriviaTypeSynth.arm(shape);
+		final shape: ShapeBuilder.ShapeResult = buildShapeWithTrivia(formatInfo, rootType, ctx);
 
-		final registry: StrategyRegistry = new StrategyRegistry();
-		registry.register(new Bin());
-		registry.register(new Kw());
-		registry.register(new Lit());
-		registry.register(new Postfix());
-		registry.register(new Pratt());
-		registry.register(new Ternary());
-		registry.register(new Prefix());
-		registry.register(new Re());
-		registry.register(new Skip());
-		registry.prepare();
-		registry.runAnnotate(shape, ctx);
+		registerStrategies(shape, ctx);
 
 		final rules: Array<WriterLowering.WriterRule> = if (formatInfo.isBinary)
 			new BinaryWriterLowering(shape).generate()
@@ -335,6 +307,32 @@ class Build {
 	private static function packOf(typePath: String): Array<String> {
 		final idx: Int = typePath.lastIndexOf('.');
 		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
+	}
+
+
+	private static function buildShapeWithTrivia(
+		formatInfo: FormatReader.FormatInfo, rootType: Type, ctx: LoweringCtx
+	): ShapeBuilder.ShapeResult {
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		TriviaAnalysis.run(shape);
+		if (ctx.trivia) TriviaTypeSynth.arm(shape);
+		return shape;
+	}
+
+	private static function registerStrategies(shape: ShapeBuilder.ShapeResult, ctx: LoweringCtx): Void {
+		final registry: StrategyRegistry = new StrategyRegistry();
+		registry.register(new Bin());
+		registry.register(new Kw());
+		registry.register(new Lit());
+		registry.register(new Postfix());
+		registry.register(new Pratt());
+		registry.register(new Ternary());
+		registry.register(new Prefix());
+		registry.register(new Re());
+		registry.register(new Skip());
+		registry.prepare();
+		registry.runAnnotate(shape, ctx);
 	}
 
 }
