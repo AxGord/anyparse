@@ -7,9 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags an `if` / `else if` chain that tests one expression against literal
@@ -72,18 +70,16 @@ final class PreferSwitch implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final eqKind: Null<String> = shape.eqKind;
-		final litKinds: Array<String> = shape.caseLiteralKinds ?? [];
-		if (ifKinds.length == 0 || eqKind == null || litKinds.length == 0) return [];
-		final callKind: Null<String> = shape.callKind;
-		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree, false, ifKinds, eqKind, litKinds, callKind, stringFold);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null)
+				walk(
+					violations, entry.file, entry.source, tree, false, seams.ifKinds, seams.eqKind, seams.litKinds, seams.callKind,
+					seams.stringFold
+				);
 		}
 		return violations;
 	}
@@ -97,13 +93,9 @@ final class PreferSwitch implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final eqKind: Null<String> = shape.eqKind;
-		final litKinds: Array<String> = shape.caseLiteralKinds ?? [];
-		if (ifKinds.length == 0 || eqKind == null || litKinds.length == 0) return [];
-		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final flagged: Array<Int> = [];
 		for (v in violations) {
@@ -111,7 +103,7 @@ final class PreferSwitch implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		fixWalk(edits, source, tree, false, ifKinds, eqKind, litKinds, stringFold, flagged);
+		fixWalk(edits, source, tree, false, seams.ifKinds, seams.eqKind, seams.litKinds, seams.stringFold, flagged);
 		return edits;
 	}
 
@@ -217,12 +209,8 @@ final class PreferSwitch implements Check {
 	private static function eqDiscriminant(
 		cond: QueryNode, eqKind: String, litKinds: Array<String>, stringFold: Null<StringFoldSupport>, source: String
 	): Null<QueryNode> {
-		if (cond.kind != eqKind || cond.children.length != 2) return null;
-		final a: QueryNode = cond.children[0];
-		final b: QueryNode = cond.children[1];
-		final aLit: Bool = isConstLiteral(a, litKinds, stringFold, source);
-		final bLit: Bool = isConstLiteral(b, litKinds, stringFold, source);
-		return aLit == bLit ? null : aLit ? b : a;
+		final operands: Null<{ lit: QueryNode, disc: QueryNode }> = eqLitOperands(cond, eqKind, litKinds, stringFold, source);
+		return operands == null ? null : operands.disc;
 	}
 
 	/**
@@ -270,14 +258,10 @@ final class PreferSwitch implements Check {
 		var rungs: Int = 0;
 		while (ifKinds.contains(cur.kind) && cur.children.length >= 2) {
 			final cond: QueryNode = cur.children[0];
-			if (cond.kind != eqKind || cond.children.length != 2) return null;
-			final a: QueryNode = cond.children[0];
-			final b: QueryNode = cond.children[1];
-			final aLit: Bool = isConstLiteral(a, litKinds, stringFold, source);
-			final bLit: Bool = isConstLiteral(b, litKinds, stringFold, source);
-			if (aLit == bLit) return null;
-			final lit: QueryNode = aLit ? a : b;
-			final disc: QueryNode = aLit ? b : a;
+			final operands: Null<{ lit: QueryNode, disc: QueryNode }> = eqLitOperands(cond, eqKind, litKinds, stringFold, source);
+			if (operands == null) return null;
+			final lit: QueryNode = operands.lit;
+			final disc: QueryNode = operands.disc;
 			final litSpan: Null<Span> = lit.span;
 			final dSpan: Null<Span> = disc.span;
 			final thenSpan: Null<Span> = cur.children[1].span;
@@ -307,6 +291,45 @@ final class PreferSwitch implements Check {
 		};
 	}
 
+
+	/** Resolve the if / equality / literal seam kinds plus the call kind and string-fold support, or null when any required kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
+		final eqKind: Null<String> = shape.eqKind;
+		final litKinds: Array<String> = shape.caseLiteralKinds ?? [];
+		if (ifKinds.length == 0 || eqKind == null || litKinds.length == 0) return null;
+		final callKind: Null<String> = shape.callKind;
+		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		return {
+			ifKinds: ifKinds,
+			eqKind: eqKind,
+			litKinds: litKinds,
+			callKind: callKind,
+			stringFold: stringFold
+		};
+	}
+
+
+	/**
+	 * The literal and discriminant operands of an equality condition `D == lit`
+	 * (either order) — exactly one operand a constant literal, the other the
+	 * discriminant — or null when the shape does not match.
+	 */
+	private static function eqLitOperands(
+		cond: QueryNode, eqKind: String, litKinds: Array<String>, stringFold: Null<StringFoldSupport>, source: String
+	): Null<{ lit: QueryNode, disc: QueryNode }> {
+		if (cond.kind != eqKind || cond.children.length != 2) return null;
+		final a: QueryNode = cond.children[0];
+		final b: QueryNode = cond.children[1];
+		final aLit: Bool = isConstLiteral(a, litKinds, stringFold, source);
+		final bLit: Bool = isConstLiteral(b, litKinds, stringFold, source);
+		if (aLit == bLit) return null;
+		final lit: QueryNode = aLit ? a : b;
+		final disc: QueryNode = aLit ? b : a;
+		return { lit: lit, disc: disc };
+	}
+
 }
 
 /**
@@ -319,4 +342,12 @@ private typedef SwitchScan = {
 	final cases: Array<String>;
 	final elseBody: Null<String>;
 	final rungs: Int;
+};
+/** The resolved seams `PreferSwitch` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final ifKinds: Array<String>;
+	final eqKind: String;
+	final litKinds: Array<String>;
+	final callKind: Null<String>;
+	final stringFold: Null<StringFoldSupport>;
 };

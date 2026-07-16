@@ -53,9 +53,7 @@ final class LintConfig {
 
 	/** A rule-specific integer option (e.g. complexity `max`), or null when unset. */
 	public function intOption(id: String, key: String): Null<Int> {
-		final rc: Null<RuleConfig> = _rules[id];
-		if (rc == null) return null;
-		final v: Null<Dynamic> = rc.props.get(key);
+		final v: Null<Dynamic> = propOf(id, key);
 		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
 	}
 
@@ -64,12 +62,8 @@ final class LintConfig {
 	 * or null when unset; a non-array value or non-numeric elements are dropped.
 	 */
 	public function numberListOption(id: String, key: String): Null<Array<Float>> {
-		final rc: Null<RuleConfig> = _rules[id];
-		if (rc == null) return null;
-		final v: Null<Dynamic> = rc.props.get(key);
-		if (v == null || !(v is Array)) return null;
-		final raw: Array<Dynamic> = v;
-		return [for (e in raw) if (e is Int || e is Float) (e: Float)];
+		final raw: Null<Array<Dynamic>> = arrayOption(id, key);
+		return raw == null ? null : [for (e in raw) if (e is Int || e is Float) (e: Float)];
 	}
 
 	/**
@@ -77,12 +71,20 @@ final class LintConfig {
 	 * or null when unset; a non-array value or non-string elements are dropped.
 	 */
 	public function stringListOption(id: String, key: String): Null<Array<String>> {
+		final raw: Null<Array<Dynamic>> = arrayOption(id, key);
+		return raw == null ? null : [for (e in raw) if (e is String) (e: String)];
+	}
+
+	/** The raw prop `key` of rule `id`, or null when the rule is unconfigured or lacks the key — the base for the typed option accessors. */
+	private function propOf(id: String, key: String): Null<Dynamic> {
 		final rc: Null<RuleConfig> = _rules[id];
-		if (rc == null) return null;
-		final v: Null<Dynamic> = rc.props.get(key);
-		if (v == null || !(v is Array)) return null;
-		final raw: Array<Dynamic> = v;
-		return [for (e in raw) if (e is String) (e: String)];
+		return rc == null ? null : rc.props.get(key);
+	}
+
+	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
+	private function arrayOption(id: String, key: String): Null<Array<Dynamic>> {
+		final v: Null<Dynamic> = propOf(id, key);
+		return v == null || !(v is Array) ? null : (v: Array<Dynamic>);
 	}
 
 	/**
@@ -103,6 +105,7 @@ final class LintConfig {
 		return resolve != null ? resolve(path) : discover(path);
 	}
 
+
 	/**
 	 * Parse `apqlint.json` content. Tolerant: malformed JSON, a non-object root,
 	 * or a missing `rules` object all yield an empty config — never throws, so a
@@ -120,6 +123,7 @@ final class LintConfig {
 		}
 		return new LintConfig(rules);
 	}
+
 
 	private static function parseRule(raw: Dynamic): RuleConfig {
 		final props: DynamicAccess<Dynamic> = raw;

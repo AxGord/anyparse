@@ -86,19 +86,14 @@ final class NullableSource {
 	private static function instanceCallSource(
 		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg
 	): Null<String> {
-		if (
-			cfg.callKind == null || cfg.fieldAccessKind == null || cfg.instanceSigs.length == 0 || receiver.kind != cfg.callKind
-			|| receiver.children.length < 1
-		)
-			return null;
-		final callee: QueryNode = receiver.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != cfg.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final recvIdent: QueryNode = callee.children[0];
+		if (cfg.instanceSigs.length == 0) return null;
+		final parts: Null<{ recv: QueryNode, method: String }> = methodCallParts(receiver, cfg);
+		if (parts == null) return null;
+		final recvIdent: QueryNode = parts.recv;
 		if (recvIdent.kind != cfg.identKind) return null;
 		final typeName: Null<String> = TypeResolver.identTypeName(recvIdent, root, cfg.shape, declaredTypes);
 		if (typeName == null) return null;
-		for (sig in cfg.instanceSigs) if (sig.type == typeName && sig.method == method) return '${typeName}.${method}()';
+		for (sig in cfg.instanceSigs) if (sig.type == typeName && sig.method == parts.method) return '${typeName}.${parts.method}()';
 		return null;
 	}
 
@@ -128,15 +123,10 @@ final class NullableSource {
 	private static function crossFileReturnCallSource(
 		receiver: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: NullableSourceCfg, index: Null<SymbolIndex>
 	): Null<String> {
-		if (
-			index == null || cfg.callKind == null || cfg.fieldAccessKind == null || cfg.returnMarkers.length == 0
-			|| receiver.kind != cfg.callKind || receiver.children.length < 1
-		)
-			return null;
-		final callee: QueryNode = receiver.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != cfg.fieldAccessKind || method == null || callee.children.length != 1) return null;
-		final recv: QueryNode = callee.children[0];
+		if (index == null || cfg.returnMarkers.length == 0) return null;
+		final parts: Null<{ recv: QueryNode, method: String }> = methodCallParts(receiver, cfg);
+		if (parts == null) return null;
+		final recv: QueryNode = parts.recv;
 		final recvName: Null<String> = recv.name;
 		if (recv.kind != cfg.identKind || recvName == null) return null;
 		final idx: SymbolIndex = index;
@@ -146,8 +136,8 @@ final class NullableSource {
 		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
 		final lookupType: Null<String> = bindingFrom == null ? recvName : declaredTypes[bindingFrom];
 		if (lookupType == null) return null;
-		final retNominal: Null<String> = idx.returnNominalOf(lookupType, method);
-		return retNominal != null && cfg.returnMarkers.contains(retNominal) ? '${recvName}.${method}()' : null;
+		final retNominal: Null<String> = idx.returnNominalOf(lookupType, parts.method);
+		return retNominal != null && cfg.returnMarkers.contains(retNominal) ? '${recvName}.${parts.method}()' : null;
 	}
 
 	/** Split each dotted `Type.method` signature into its parts, dropping malformed entries. */
@@ -158,6 +148,22 @@ final class NullableSource {
 			if (dot > 0 && dot < s.length - 1) sigs.push({ type: s.substring(0, dot), method: s.substring(dot + 1) });
 		}
 		return sigs;
+	}
+
+
+	/**
+	 * Destructure a method-call receiver `recv.method(...)` into its receiver node and
+	 * method name — the shared guard behind `instanceCallSource` and
+	 * `crossFileReturnCallSource` — or null when `receiver` is not a field-access call.
+	 */
+	private static function methodCallParts(receiver: QueryNode, cfg: NullableSourceCfg): Null<{ recv: QueryNode, method: String }> {
+		if (cfg.callKind == null || cfg.fieldAccessKind == null || receiver.kind != cfg.callKind || receiver.children.length < 1)
+			return null;
+		final callee: QueryNode = receiver.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != cfg.fieldAccessKind || method == null || callee.children.length != 1) return null;
+		final recv: QueryNode = callee.children[0];
+		return { recv: recv, method: method };
 	}
 
 }

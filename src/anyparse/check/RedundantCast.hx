@@ -7,10 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
-import anyparse.query.RefactorSupport;
 
 /**
  * Flags a typed cast / type-check whose target type already equals its operand's
@@ -42,17 +39,17 @@ final class RedundantCast implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final typedCastKinds: Array<String> = shape.typedCastKinds ?? [];
-		if (typedCastKinds.length == 0) return [];
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final shape: RefShape = seams.shape;
+		final typedCastKinds: Array<String> = seams.typedCastKinds;
+		final opaqueKinds: Array<String> = seams.opaqueKinds;
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final root: QueryNode = tree;
 			final declaredTypeSources: Map<Int, String> = typed.declaredTypeSources(entry.source);
@@ -87,25 +84,15 @@ final class RedundantCast implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final typedCastKinds: Array<String> = shape.typedCastKinds ?? [];
-		if (typedCastKinds.length == 0) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, typedCastKinds, byKey);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length != 1) continue;
-			final operand: QueryNode = node.children[0];
-			final opSpan: Null<Span> = operand.span;
-			if (opSpan == null) continue;
-			edits.push({ span: span, text: source.substring(opSpan.from, opSpan.to) });
-		}
-		return edits;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, seams.typedCastKinds, (node, span) -> {
+				if (node.children.length != 1) return null;
+				final operand: QueryNode = node.children[0];
+				final opSpan: Null<Span> = operand.span;
+				return opSpan == null ? null : { span: span, text: source.substring(opSpan.from, opSpan.to) };
+			});
 	}
 
 	/** The verbatim source of the identifier `operand`'s declared `:Type` annotation, or null. */
@@ -116,4 +103,21 @@ final class RedundantCast implements Check {
 		return bindingFrom == null ? null : declaredTypeSources[bindingFrom];
 	}
 
+
+	/** Resolve the typed-cast + opaque seam kinds (with the shape for downstream type lookup), or null when no typed-cast kind exists. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final typedCastKinds: Array<String> = shape.typedCastKinds ?? [];
+		if (typedCastKinds.length == 0) return null;
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		return { shape: shape, typedCastKinds: typedCastKinds, opaqueKinds: opaqueKinds };
+	}
+
 }
+
+/** The resolved seams `RedundantCast` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final shape: RefShape;
+	final typedCastKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+};

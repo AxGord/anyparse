@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a null-guarding ternary that the null-coalescing operator `??` replaces —
@@ -52,21 +50,16 @@ final class PreferNullCoalescing implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		if (ternaryKind == null) return [];
-		final eqKind: Null<String> = shape.eqKind;
-		if (eqKind == null) return [];
-		final notEqKind: Null<String> = shape.notEqKind;
-		if (notEqKind == null) return [];
-		final nullKind: Null<String> = shape.nullLiteralKind;
-		if (nullKind == null) return [];
-		final unsafeKinds: Array<String> = mutationKinds(shape);
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree, ternaryKind, eqKind, notEqKind, nullKind, unsafeKinds);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null)
+				walk(
+					violations, entry.file, entry.source, tree, seams.ternaryKind, seams.eqKind, seams.notEqKind, seams.nullKind,
+					seams.unsafeKinds
+				);
 		}
 		return violations;
 	}
@@ -75,39 +68,22 @@ final class PreferNullCoalescing implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final ternaryKind: Null<String> = shape.ternaryKind;
-		if (ternaryKind == null) return [];
-		final eqKind: Null<String> = shape.eqKind;
-		if (eqKind == null) return [];
-		final notEqKind: Null<String> = shape.notEqKind;
-		if (notEqKind == null) return [];
-		final nullKind: Null<String> = shape.nullLiteralKind;
-		if (nullKind == null) return [];
-		final unsafeKinds: Array<String> = mutationKinds(shape);
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexTernaries(tree, ternaryKind, nodeByKey);
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(node, source, eqKind, notEqKind, nullKind, unsafeKinds);
-			if (m == null) continue;
-			final guardedSpan: Null<Span> = m.guarded.span;
-			final fallbackSpan: Null<Span> = m.fallback.span;
-			if (guardedSpan == null || fallbackSpan == null) continue;
-			final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
-			final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-			final fallbackText: String = m.fallback.kind == ternaryKind ? '(' + fallbackSrc + ')' : fallbackSrc;
-			edits.push({ span: span, text: guardedSrc + ' ?? ' + fallbackText });
-		}
-		return edits;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
+				final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(
+					node, source, seams.eqKind, seams.notEqKind, seams.nullKind, seams.unsafeKinds
+				);
+				if (m == null) return null;
+				final guardedSpan: Null<Span> = m.guarded.span;
+				final fallbackSpan: Null<Span> = m.fallback.span;
+				if (guardedSpan == null || fallbackSpan == null) return null;
+				final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
+				final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
+				final fallbackText: String = m.fallback.kind == seams.ternaryKind ? '(' + fallbackSrc + ')' : fallbackSrc;
+				return { span: span, text: guardedSrc + ' ?? ' + fallbackText };
+			});
 	}
 
 	/** The node kinds whose presence in a guarded value makes the once-vs-twice rewrite unsafe: every binding-write plus the call kind. */
@@ -179,13 +155,37 @@ final class PreferNullCoalescing implements Check {
 		return false;
 	}
 
-	/** Index every ternary node by its `from:to` span key (for `fix` to re-find a flagged node). */
-	private static function indexTernaries(node: QueryNode, ternaryKind: String, out: Map<String, QueryNode>): Void {
-		if (node.kind == ternaryKind) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexTernaries(c, ternaryKind, out);
+	/**
+	 * Resolve the ternary / equality / null seam kinds plus the mutation-unsafe kinds, or null when any required kind is unset.
+	 *
+	 */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final ternaryKind: Null<String> = shape.ternaryKind;
+		if (ternaryKind == null) return null;
+		final eqKind: Null<String> = shape.eqKind;
+		if (eqKind == null) return null;
+		final notEqKind: Null<String> = shape.notEqKind;
+		if (notEqKind == null) return null;
+		final nullKind: Null<String> = shape.nullLiteralKind;
+		if (nullKind == null) return null;
+		final unsafeKinds: Array<String> = mutationKinds(shape);
+		return {
+			ternaryKind: ternaryKind,
+			eqKind: eqKind,
+			notEqKind: notEqKind,
+			nullKind: nullKind,
+			unsafeKinds: unsafeKinds
+		};
 	}
 
 }
+
+/** The resolved seams `PreferNullCoalescing` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final ternaryKind: String;
+	final eqKind: String;
+	final notEqKind: String;
+	final nullKind: String;
+	final unsafeKinds: Array<String>;
+};
