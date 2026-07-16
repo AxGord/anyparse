@@ -111,7 +111,8 @@ final class Linter {
 			new MapKeysLookup(),
 			new PreferRangeLoop(),
 			new TrivialGetter(),
-			new NullableSwitchMissingNull()
+			new NullableSwitchMissingNull(),
+			new DuplicateCode()
 		];
 	}
 

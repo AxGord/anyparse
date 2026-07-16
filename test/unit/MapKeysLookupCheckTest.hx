@@ -95,7 +95,7 @@ class MapKeysLookupCheckTest extends Test {
 		Assert.notNull(Linter.byId('map-keys-lookup'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('map-keys-lookup'));
-		Assert.equals(83, Linter.builtins().length);
+		Assert.equals(84, Linter.builtins().length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
