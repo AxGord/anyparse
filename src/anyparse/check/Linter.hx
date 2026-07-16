@@ -110,7 +110,8 @@ final class Linter {
 			new LoopGuard(),
 			new MapKeysLookup(),
 			new PreferRangeLoop(),
-			new TrivialGetter()
+			new TrivialGetter(),
+			new NullableSwitchMissingNull()
 		];
 	}
 
