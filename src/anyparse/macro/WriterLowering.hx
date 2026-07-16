@@ -3774,11 +3774,8 @@ class WriterLowering {
 
 	private function subStructStartsWithBodyPolicy(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		if (first == null) return false;
-		return first.kind == Ref
-			&& (first.annotations.get('base.optional') != true
-				&& (first.readMetaString(':kw') == null
-					&& (first.readMetaString(':lead') == null && first.fmtReadStringArgs('bodyPolicy') != null)));
+		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
+			&& first.readMetaString(':lead') == null && first.fmtReadStringArgs('bodyPolicy') != null;
 	}
 
 	/**
@@ -3794,10 +3791,8 @@ class WriterLowering {
 	 */
 	private function subStructStartsWithBodyBreak(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		if (first == null) return false;
-		return first.kind == Ref && (first.annotations.get('base.optional') != true && (
-			first.readMetaString(':kw') == null && (first.readMetaString(':lead') == null && first.fmtReadString('bodyBreak') != null)
-		));
+		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
+			&& first.readMetaString(':lead') == null && first.fmtReadString('bodyBreak') != null;
 	}
 
 	/**
@@ -3814,10 +3809,8 @@ class WriterLowering {
 	 */
 	private function subStructStartsWithBareBodyBreaks(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		if (first == null) return false;
-		return first.kind == Ref
-			&& (first.annotations.get('base.optional') != true
-				&& (first.readMetaString(':kw') == null && (first.readMetaString(':lead') == null && first.fmtHasFlag('bareBodyBreaks'))));
+		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
+			&& first.readMetaString(':lead') == null && first.fmtHasFlag('bareBodyBreaks');
 	}
 
 	/**
@@ -10297,11 +10290,12 @@ class WriterLowering {
 
 	private static function openDelimPolicySpace(starNode: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(starNode, flagNames);
-		if (flagName == null) return null;
-		return buildPolicySwitch(
-			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
-			macro _de()
-		);
+		return flagName == null
+			? null
+			: buildPolicySwitch(
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+			);
 	}
 
 	/**
@@ -10335,11 +10329,12 @@ class WriterLowering {
 	 */
 	private static function kwTrailingSpacePolicy(branch: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(branch, flagNames);
-		if (flagName == null) return null;
-		return buildPolicySwitch(
-			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [{ values: ['After', 'Both'], expr: macro _dt(' ') }],
-			macro _de()
-		);
+		return flagName == null
+			? null
+			: buildPolicySwitch(
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['After', 'Both'], expr: macro _dt(' ') }], macro _de()
+			);
 	}
 
 	/**
@@ -10363,11 +10358,12 @@ class WriterLowering {
 	 */
 	private static function kwTrailingSpacePolicyParenSide(branch: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(branch, flagNames);
-		if (flagName == null) return null;
-		return buildPolicySwitch(
-			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
-			macro _de()
-		);
+		return flagName == null
+			? null
+			: buildPolicySwitch(
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt(' ') }], macro _de()
+			);
 	}
 
 	/**
@@ -10674,11 +10670,12 @@ class WriterLowering {
 	 */
 	private static function whitespacePolicyTrail(child: ShapeNode, trailText: String, flagNames: Array<String>): Expr {
 		final flagName: Null<String> = firstFmtFlag(child, flagNames);
-		if (flagName == null) return macro _dt($v{trailText});
-		return buildPolicySwitch(
-			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
-			[{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
-		);
+		return flagName == null
+			? macro _dt($v{trailText})
+			: buildPolicySwitch(
+				['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+				[{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
+			);
 	}
 
 	/**
