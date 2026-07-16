@@ -3038,14 +3038,10 @@ class WriterLowering {
 		final optFlag: Expr = optFieldAccess(flagName);
 		final sameLayoutExpr: Expr = macro _dc([_dt(' '), $writeCall]);
 		final nextLayoutExpr: Expr = macro _dn(_cols, _dc([_dhl(), $writeCall]));
-		final slpPath: Array<String> = ['anyparse', 'format', 'SameLinePolicy'];
-		final nextPat: Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Next']));
-		final keepPat: Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Keep']));
-		final flagCases: Array<Case> = [
-			{ values: [nextPat], expr: nextLayoutExpr, guard: null },
-			{ values: [keepPat], expr: sameLayoutExpr, guard: null },
-		];
-		final flagSwitch: Expr = { expr: ESwitch(optFlag, flagCases, sameLayoutExpr), pos: Context.currentPos() };
+		final flagSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
+			{ values: ['Next'], expr: nextLayoutExpr },
+			{ values: ['Keep'], expr: sameLayoutExpr },
+		], sameLayoutExpr);
 		final blockPatterns: Array<Expr> = shapeAware ? collectBlockCtorPatterns(bodyTypePath) : [];
 		// ω-block-allman-leftcurly: when the body's runtime ctor is a block,
 		// the inline `' ' + body` layout cuddles the brace (`try { … }`). That
@@ -3732,12 +3728,21 @@ class WriterLowering {
 	 * so leaving the space in would yield a double space in the `Same`
 	 * case and a dangling space before a hardline in `Next` / `FitLine`.
 	 */
-	private function subStructStartsWithBodyPolicy(refName: String): Bool {
+	/**
+	 * The first child field of the Seq (struct) rule named `refName`, or null
+	 * when `refName` is not a Seq rule or the Seq has no fields. Shared prologue
+	 * of the `subStructStartsWith*` predicates.
+	 */
+	private function firstFieldOfSubSeq(refName: String): Null<ShapeNode> {
 		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
-		if (subNode == null || subNode.kind != Seq) return false;
+		if (subNode == null || subNode.kind != Seq) return null;
 		final children: Array<ShapeNode> = subNode.children;
-		if (children.length == 0) return false;
-		final first: ShapeNode = children[0];
+		return children.length == 0 ? null : children[0];
+	}
+
+	private function subStructStartsWithBodyPolicy(refName: String): Bool {
+		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
+		if (first == null) return false;
 		return first.kind == Ref
 			&& (first.annotations.get('base.optional') != true
 				&& (first.readMetaString(':kw') == null
@@ -3756,11 +3761,8 @@ class WriterLowering {
 	 * hardline in `Next`.
 	 */
 	private function subStructStartsWithBodyBreak(refName: String): Bool {
-		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
-		if (subNode == null || subNode.kind != Seq) return false;
-		final children: Array<ShapeNode> = subNode.children;
-		if (children.length == 0) return false;
-		final first: ShapeNode = children[0];
+		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
+		if (first == null) return false;
 		return first.kind == Ref && (first.annotations.get('base.optional') != true && (
 			first.readMetaString(':kw') == null && (first.readMetaString(':lead') == null && first.fmtReadString('bodyBreak') != null)
 		));
@@ -3779,11 +3781,8 @@ class WriterLowering {
 	 * the hardline).
 	 */
 	private function subStructStartsWithBareBodyBreaks(refName: String): Bool {
-		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
-		if (subNode == null || subNode.kind != Seq) return false;
-		final children: Array<ShapeNode> = subNode.children;
-		if (children.length == 0) return false;
-		final first: ShapeNode = children[0];
+		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
+		if (first == null) return false;
 		return first.kind == Ref
 			&& (first.annotations.get('base.optional') != true
 				&& (first.readMetaString(':kw') == null && (first.readMetaString(':lead') == null && first.fmtHasFlag('bareBodyBreaks'))));
@@ -3798,11 +3797,8 @@ class WriterLowering {
 	 * that are NOT tight (`(`, `{`) keep the space (`if (`, `else {`).
 	 */
 	private function subStructStartsWithTightLead(refName: String): Bool {
-		final subNode: Null<ShapeNode> = _shape.rules.get(refName);
-		if (subNode == null || subNode.kind != Seq) return false;
-		final children: Array<ShapeNode> = subNode.children;
-		if (children.length == 0) return false;
-		final first: ShapeNode = children[0];
+		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
+		if (first == null) return false;
 		return isTightLead(first.readMetaString(':lead'));
 	}
 
@@ -10045,14 +10041,10 @@ class WriterLowering {
 	 * (same precedent as `bodyPolicyWrap` / `leftCurlySeparator`).
 	 */
 	private static function sameLinePolicySwitch(optFlag: Expr, keepExpr: Expr): Expr {
-		final slpPath: Array<String> = ['anyparse', 'format', 'SameLinePolicy'];
-		final nextPat: Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Next']));
-		final keepPat: Expr = MacroStringTools.toFieldExpr(slpPath.concat(['Keep']));
-		final cases: Array<Case> = [
-			{ values: [nextPat], expr: macro _dhl(), guard: null },
-			{ values: [keepPat], expr: keepExpr, guard: null },
-		];
-		return { expr: ESwitch(optFlag, cases, macro _dt(' ')), pos: Context.currentPos() };
+		return buildPolicySwitch(['anyparse', 'format', 'SameLinePolicy'], optFlag, [
+			{ values: ['Next'], expr: macro _dhl() },
+			{ values: ['Keep'], expr: keepExpr },
+		], macro _dt(' '));
 	}
 
 	/**
@@ -10283,15 +10275,37 @@ class WriterLowering {
 	 * inside `sepList`, which currently concatenates the open token
 	 * tight against the first element.
 	 */
+	/**
+	 * Build a runtime `ESwitch` over a `WhitespacePolicy` / `SameLinePolicy`
+	 * opt field. `policyModule` is the enum's module path (e.g.
+	 * `['anyparse', 'format', 'WhitespacePolicy']`); each spec names the policy
+	 * values it matches (resolved to raw `EField` patterns to avoid macro-time
+	 * enum resolution against the abstract) and the Doc `Expr` to emit for them.
+	 * Shared core of the whitespace-/same-line-policy switch builders.
+	 */
+	private static function buildPolicySwitch(
+		policyModule: Array<String>, scrutinee: Expr, caseSpecs: Array<{ values: Array<String>, expr: Expr }>, dflt: Expr
+	): Expr {
+		final cases: Array<Case> = [
+			for (spec in caseSpecs)
+				{
+					values: [
+						for (name in spec.values) MacroStringTools.toFieldExpr(policyModule.concat([name]))
+					],
+					expr: spec.expr,
+					guard: null,
+				}
+		];
+		return { expr: ESwitch(scrutinee, cases, dflt), pos: Context.currentPos() };
+	}
+
 	private static function openDelimPolicySpace(starNode: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(starNode, flagNames);
 		if (flagName == null) return null;
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [{ values: [beforePat, bothPat], expr: macro _dt(' '), guard: null },];
-		final optAccess: Expr = optFieldAccess(flagName);
-		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
+		return buildPolicySwitch(
+			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
+			macro _de()
+		);
 	}
 
 	/**
@@ -10326,12 +10340,10 @@ class WriterLowering {
 	private static function kwTrailingSpacePolicy(branch: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(branch, flagNames);
 		if (flagName == null) return null;
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [{ values: [afterPat, bothPat], expr: macro _dt(' '), guard: null },];
-		final optAccess: Expr = optFieldAccess(flagName);
-		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
+		return buildPolicySwitch(
+			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [{ values: ['After', 'Both'], expr: macro _dt(' ') }],
+			macro _de()
+		);
 	}
 
 	/**
@@ -10356,12 +10368,10 @@ class WriterLowering {
 	private static function kwTrailingSpacePolicyParenSide(branch: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(branch, flagNames);
 		if (flagName == null) return null;
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [{ values: [beforePat, bothPat], expr: macro _dt(' '), guard: null },];
-		final optAccess: Expr = optFieldAccess(flagName);
-		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
+		return buildPolicySwitch(
+			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [{ values: ['Before', 'Both'], expr: macro _dt(' ') }],
+			macro _de()
+		);
 	}
 
 	/**
@@ -10472,14 +10482,9 @@ class WriterLowering {
 	 * `@:fmt(accessBrackets)` flag name differs from the two opt fields).
 	 */
 	private static function policyInsideSpace(optFieldName: String, isClose: Bool): Expr {
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final matchValues: Array<Expr> = isClose ? [beforePat, bothPat] : [afterPat, bothPat];
-		final cases: Array<Case> = [{ values: matchValues, expr: macro _dt(' '), guard: null },];
-		final optAccess: Expr = optFieldAccess(optFieldName);
-		return { expr: ESwitch(optAccess, cases, macro _de()), pos: Context.currentPos() };
+		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(optFieldName), [
+			{ values: isClose ? ['Before', 'Both'] : ['After', 'Both'], expr: macro _dt(' ') }
+		], macro _de());
 	}
 
 	/**
@@ -10504,12 +10509,6 @@ class WriterLowering {
 	 * paths short-circuit `items.length == 0` before padding.
 	 */
 	private static function arrayBracketInsidePolicySpace(firstAccess: Expr, isClose: Bool): Expr {
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final matchValues: Array<Expr> = isClose ? [beforePat, bothPat] : [afterPat, bothPat];
-		final spaceCases: Array<Case> = [{ values: matchValues, expr: macro _dt(' '), guard: null },];
 		final suffix: String = isClose ? 'Close' : 'Open';
 		final mapField: Expr = optFieldAccess('mapLiteralBrackets' + suffix);
 		final comprField: Expr = optFieldAccess('comprehensionBrackets' + suffix);
@@ -10519,7 +10518,9 @@ class WriterLowering {
 			{ values: [macro 2], expr: comprField, guard: null },
 		];
 		final policyExpr: Expr = { expr: ESwitch(macro _abk, kindCases, arrayField), pos: Context.currentPos() };
-		final spaceSwitch: Expr = { expr: ESwitch(macro _abp, spaceCases, macro _de()), pos: Context.currentPos() };
+		final spaceSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], macro _abp, [
+			{ values: isClose ? ['Before', 'Both'] : ['After', 'Both'], expr: macro _dt(' ') }
+		], macro _de());
 		// `arrayBracketKind` is `Null<Dynamic -> Int>` (an opt-in adapter);
 		// capture into a local + null-check before calling, mirroring the
 		// `caseBodyRefusesFlat` pattern. Null (format didn't wire it) → kind
@@ -10603,23 +10604,17 @@ class WriterLowering {
 			// hardline.
 			return child.fmtHasFlag('spaceAfterLead') ? macro _dc([_dt($v{leadText}), _dop(' ')]) : macro _dt($v{leadText});
 		}
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		// Trailing whitespace after the lead is emitted as `_dop(' ')`
 		// (OptSpace) so the renderer can drop it when the value emits a
 		// leading hardline — e.g. `Address: {…}` with `leftCurly=Next`
 		// on the nested object literal renders as `Address:\n{…}`. The
 		// leading space (Before / Both case) stays a plain `_dt(' ')`
 		// because nothing emits a hardline before the lead.
-		final cases: Array<Case> = [
-			{ values: [beforePat], expr: macro _dc([_dt(' '), _dt($v{leadText})]), guard: null },
-			{ values: [afterPat], expr: macro _dc([_dt($v{leadText}), _dop(' ')]), guard: null },
-			{ values: [bothPat], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]), guard: null },
-		];
-		final optAccess: Expr = optFieldAccess(flagName);
-		return { expr: ESwitch(optAccess, cases, macro _dt($v{leadText})), pos: Context.currentPos() };
+		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
+			{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
+			{ values: ['After'], expr: macro _dc([_dt($v{leadText}), _dop(' ')]) },
+			{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) },
+		], macro _dt($v{leadText}));
 	}
 
 	/**
@@ -10635,17 +10630,11 @@ class WriterLowering {
 	 * `@:lead` site whose value may break.
 	 */
 	private static function whitespacePolicyInfix(opText: String, flagName: String): Expr {
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [
-			{ values: [beforePat], expr: macro _dt($v{' ' + opText}), guard: null },
-			{ values: [afterPat], expr: macro _dt($v{opText + ' '}), guard: null },
-			{ values: [bothPat], expr: macro _dt($v{' ' + opText + ' '}), guard: null },
-		];
-		final optAccess: Expr = optFieldAccess(flagName);
-		return { expr: ESwitch(optAccess, cases, macro _dt($v{opText})), pos: Context.currentPos() };
+		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
+			{ values: ['Before'], expr: macro _dt($v{' ' + opText}) },
+			{ values: ['After'], expr: macro _dt($v{opText + ' '}) },
+			{ values: ['Both'], expr: macro _dt($v{' ' + opText + ' '}) },
+		], macro _dt($v{opText}));
 	}
 
 	/**
@@ -10663,22 +10652,16 @@ class WriterLowering {
 	 * residual.
 	 */
 	private static function intervalPolicyOp(opText: String): Expr {
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final afterPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['After']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
 		final tightDoc: Expr = macro _dt($v{opText});
 		final fused: Expr = macro anyparse.format.wrap.WrapList.endsWithDecimalDigit(_leftIv);
 		final beforeExpr: Expr = macro $fused ? $tightDoc : _dt($v{' ' + opText});
 		final afterExpr: Expr = macro $fused ? $tightDoc : _dt($v{opText + ' '});
 		final bothExpr: Expr = macro $fused ? $tightDoc : _dt($v{' ' + opText + ' '});
-		final cases: Array<Case> = [
-			{ values: [beforePat], expr: beforeExpr, guard: null },
-			{ values: [afterPat], expr: afterExpr, guard: null },
-			{ values: [bothPat], expr: bothExpr, guard: null },
-		];
-		final optAccess: Expr = optFieldAccess('intervalPolicy');
-		return { expr: ESwitch(optAccess, cases, tightDoc), pos: Context.currentPos() };
+		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess('intervalPolicy'), [
+			{ values: ['Before'], expr: beforeExpr },
+			{ values: ['After'], expr: afterExpr },
+			{ values: ['Both'], expr: bothExpr },
+		], tightDoc);
 	}
 
 	/**
@@ -10696,14 +10679,10 @@ class WriterLowering {
 	private static function whitespacePolicyTrail(child: ShapeNode, trailText: String, flagNames: Array<String>): Expr {
 		final flagName: Null<String> = firstFmtFlag(child, flagNames);
 		if (flagName == null) return macro _dt($v{trailText});
-		final wpPath: Array<String> = ['anyparse', 'format', 'WhitespacePolicy'];
-		final beforePat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Before']));
-		final bothPat: Expr = MacroStringTools.toFieldExpr(wpPath.concat(['Both']));
-		final cases: Array<Case> = [
-			{ values: [beforePat, bothPat], expr: macro _dt($v{' ' + trailText}), guard: null },
-		];
-		final optAccess: Expr = optFieldAccess(flagName);
-		return { expr: ESwitch(optAccess, cases, macro _dt($v{trailText})), pos: Context.currentPos() };
+		return buildPolicySwitch(
+			['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName),
+			[{ values: ['Before', 'Both'], expr: macro _dt($v{' ' + trailText}) }], macro _dt($v{trailText})
+		);
 	}
 
 	/**
