@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags `Std.string(x)` and rewrites it to string interpolation — `'$x'` for a simple
@@ -43,16 +41,12 @@ final class PreferInterpolation implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final callKind: Null<String> = shape.callKind;
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		if (callKind == null || fieldAccessKind == null) return [];
-		final identKind: String = shape.identKind;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree, callKind, fieldAccessKind, identKind);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, seams.callKind, seams.fieldAccessKind, seams.identKind);
 		}
 		return violations;
 	}
@@ -61,28 +55,13 @@ final class PreferInterpolation implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final callKind: Null<String> = shape.callKind;
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		if (callKind == null || fieldAccessKind == null) return [];
-		final identKind: String = shape.identKind;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexCalls(tree, callKind, nodeByKey);
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final replacement: Null<String> = match(node, source, callKind, fieldAccessKind, identKind);
-			if (replacement == null) continue;
-			edits.push({ span: span, text: replacement });
-		}
-		return edits;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [seams.callKind], (node, span) -> {
+				final replacement: Null<String> = match(node, source, seams.callKind, seams.fieldAccessKind, seams.identKind);
+				return replacement == null ? null : { span: span, text: replacement };
+			});
 	}
 
 	/**
@@ -142,13 +121,23 @@ final class PreferInterpolation implements Check {
 		return true;
 	}
 
-	/** Index every call node by its `from:to` span key (for `fix` to re-find a flagged node). */
-	private static function indexCalls(node: QueryNode, callKind: String, out: Map<String, QueryNode>): Void {
-		if (node.kind == callKind) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexCalls(c, callKind, out);
+
+	/** Resolve the call / field-access / ident seam kinds, or null when a required kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final callKind: Null<String> = shape.callKind;
+		if (callKind == null) return null;
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		if (fieldAccessKind == null) return null;
+		final identKind: String = shape.identKind;
+		return { callKind: callKind, fieldAccessKind: fieldAccessKind, identKind: identKind };
 	}
 
 }
+
+/** The resolved seams `PreferInterpolation` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final callKind: String;
+	final fieldAccessKind: String;
+	final identKind: String;
+};

@@ -7,9 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags an `if (cond) return a;` whose immediately-following sibling is a
@@ -61,17 +59,12 @@ final class PreferTernaryReturn implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final returnKind: Null<String> = shape.returnStatementKind;
-		if (ifKinds.length == 0 || returnKind == null) return [];
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, support, shape, ifKinds, returnKind);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, tree, seams.support, seams.shape, seams.ifKinds, seams.returnKind);
 		}
 		return violations;
 	}
@@ -79,13 +72,9 @@ final class PreferTernaryReturn implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		final returnKind: Null<String> = shape.returnStatementKind;
-		if (ifKinds.length == 0 || returnKind == null) return [];
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final flagged: Array<String> = [];
@@ -94,7 +83,7 @@ final class PreferTernaryReturn implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectFixes(tree, source, support, shape, ifKinds, returnKind, flagged, edits);
+		collectFixes(tree, source, seams.support, seams.shape, seams.ifKinds, seams.returnKind, flagged, edits);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -256,7 +245,32 @@ final class PreferTernaryReturn implements Check {
 		return out.toString();
 	}
 
+
+	/** Resolve the if / return seam kinds plus control-flow support, or null when any required piece is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
+		if (ifKinds.length == 0) return null;
+		final returnKind: Null<String> = shape.returnStatementKind;
+		if (returnKind == null) return null;
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		return support == null ? null : {
+			ifKinds: ifKinds,
+			returnKind: returnKind,
+			support: support,
+			shape: shape
+		};
+	}
+
 }
+
+/** The resolved seams `PreferTernaryReturn` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final ifKinds: Array<String>;
+	final returnKind: String;
+	final support: ControlFlowSupport;
+	final shape: RefShape;
+};
 
 private typedef TernaryMatch = {
 	var ifNode: QueryNode;

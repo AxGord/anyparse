@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a bare `{ … }` statement block — one written directly inside another
@@ -57,50 +55,37 @@ final class UnnecessaryBlock implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return [];
-		final shape: RefShape = plugin.refShape();
-		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		if (blockStmtKind == null) return [];
 		final blockKinds: Array<String> = support.blockKinds();
-		final bindingKinds: Array<String> = (shape.localDeclKinds ?? []).concat(shape.functionKinds ?? []);
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, blockKinds, blockStmtKind, bindingKinds, opaqueKinds);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, tree, blockKinds, seams.blockStmtKind, seams.bindingKinds, seams.opaqueKinds);
 		}
 		return violations;
 	}
 
 	/**
 	 * Unwrap each flagged block. Re-parses `source`, indexes the statement blocks by
-	 * start offset, and for a flagged block declaring no binding (the same gate `run`
+	 * span, and for a flagged block declaring no binding (the same gate `run`
 	 * applied) replaces the block span with its trimmed inner source — the bytes
 	 * between the braces — for the caller to canonicalize.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		if (blockStmtKind == null) return [];
-		final bindingKinds: Array<String> = (shape.localDeclKinds ?? []).concat(shape.functionKinds ?? []);
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-		final byFrom: Map<Int, QueryNode> = [];
-		indexBlocks(tree, blockStmtKind, byFrom);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final vSpan: Null<Span> = v.span;
-			if (vSpan == null) continue;
-			final block: Null<QueryNode> = byFrom[vSpan.from];
-			if (block == null || declaresBinding(block, bindingKinds)) continue;
-			final span: Null<Span> = block.span;
-			if (span != null) edits.push({ span: span, text: StringTools.trim(source.substring(span.from + 1, span.to - 1)) });
-		}
-		return edits;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(
+				plugin, source, violations, [seams.blockStmtKind], (node, span) -> declaresBinding(node, seams.bindingKinds) ? null : {
+					span: span,
+					text: StringTools.trim(source.substring(span.from + 1, span.to - 1))
+				}
+			);
 	}
 
 	/**
@@ -127,14 +112,6 @@ final class UnnecessaryBlock implements Check {
 		for (c in node.children) walk(out, file, c, blockKinds, blockStmtKind, bindingKinds, opaqueKinds);
 	}
 
-	/** Index every statement-block node in `node` by its span's start offset. */
-	private static function indexBlocks(node: QueryNode, blockStmtKind: String, out: Map<Int, QueryNode>): Void {
-		if (node.kind == blockStmtKind) {
-			final span: Null<Span> = node.span;
-			if (span != null) out[span.from] = node;
-		}
-		for (c in node.children) indexBlocks(c, blockStmtKind, out);
-	}
 
 	/** Whether `block` declares a binding directly (a `var` / `final` or a local function — a real scope to preserve). */
 	private static function declaresBinding(block: QueryNode, bindingKinds: Array<String>): Bool {
@@ -142,4 +119,21 @@ final class UnnecessaryBlock implements Check {
 		return false;
 	}
 
+
+	/** Resolve the block-statement seam kind plus the binding / opaque kinds, or null when the block kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final blockStmtKind: Null<String> = shape.blockStmtKind;
+		if (blockStmtKind == null) return null;
+		final bindingKinds: Array<String> = (shape.localDeclKinds ?? []).concat(shape.functionKinds ?? []);
+		return { blockStmtKind: blockStmtKind, bindingKinds: bindingKinds, opaqueKinds: shape.opaqueKinds ?? [] };
+	}
+
 }
+
+/** The resolved seams `UnnecessaryBlock` reads in both `run` and `fix`; `ControlFlowSupport`/`blockKinds` are resolved separately since only `run` needs them. */
+private typedef Seams = {
+	final blockStmtKind: String;
+	final bindingKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+};

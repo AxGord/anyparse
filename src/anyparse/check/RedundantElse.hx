@@ -7,9 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags an `else` that follows an `if` branch which always exits — a
@@ -61,15 +59,12 @@ final class RedundantElse implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final ifKinds: Array<String> = plugin.refShape().ifStatementKinds ?? [];
-		if (ifKinds.length == 0) return [];
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, support, ifKinds);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, tree, seams.support, seams.ifKinds);
 		}
 		return violations;
 	}
@@ -83,13 +78,9 @@ final class RedundantElse implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
-		if (ifKinds.length == 0) return [];
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		if (support == null) return [];
-		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final flagged: Array<String> = [];
@@ -98,7 +89,7 @@ final class RedundantElse implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeNests(tree, source, support, ifKinds, localDeclKinds, flagged, edits);
+		collectDeNests(tree, source, seams.support, seams.ifKinds, seams.localDeclKinds, flagged, edits);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -194,4 +185,23 @@ final class RedundantElse implements Check {
 		return s == null ? null : source.substring(s.from, s.to);
 	}
 
+
+	/** Resolve the if seam kinds plus control-flow support and the local-decl kinds, or null when a required piece is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
+		if (ifKinds.length == 0) return null;
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		return support == null ? null : { ifKinds: ifKinds, support: support, localDeclKinds: shape.localDeclKinds ?? [] };
+	}
+
 }
+
+/**
+ * The resolved seams `RedundantElse` reads in `run` and `fix`; `localDeclKinds` is used only by `fix`'s de-nest scope check.
+ */
+private typedef Seams = {
+	final ifKinds: Array<String>;
+	final support: ControlFlowSupport;
+	final localDeclKinds: Array<String>;
+};

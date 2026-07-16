@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -77,15 +75,13 @@ final class PreferSafeNav implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final bindings: Array<{ name: String, scope: Span, declEnd: Int }> = [];
-			collectBindings(tree, null, s, bindings);
-			walk(tree, violations, entry.file, entry.source, bindings, s);
+			collectBindings(tree, null, seams, bindings);
+			walk(tree, violations, entry.file, entry.source, bindings, seams);
 		}
 		return violations;
 	}
@@ -96,28 +92,19 @@ final class PreferSafeNav implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexIfs(tree, s, nodeByKey);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final m: Null<Candidate> = match(node, source, s);
-			if (m == null) continue;
-			final stmtSpan: Null<Span> = m.stmt.span;
-			final rootSpan: Null<Span> = m.rootIdent.span;
-			if (stmtSpan == null || rootSpan == null) continue;
-			final dotPos: Int = source.indexOf('.', rootSpan.to);
-			if (dotPos < 0 || dotPos >= stmtSpan.to) continue;
-			final prefix: String = source.substring(stmtSpan.from, dotPos);
-			final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
-			edits.push({ span: span, text: prefix + '?.' + suffix });
-		}
+		final edits: Array<{ span: Span, text: String }> =
+			CheckScan.applyBySpan(plugin, source, violations, seams.ifKinds, (node, span) -> {
+				final m: Null<Candidate> = match(node, source, seams);
+				if (m == null) return null;
+				final stmtSpan: Null<Span> = m.stmt.span;
+				final rootSpan: Null<Span> = m.rootIdent.span;
+				if (stmtSpan == null || rootSpan == null) return null;
+				final dotPos: Int = source.indexOf('.', rootSpan.to);
+				if (dotPos < 0 || dotPos >= stmtSpan.to) return null;
+				final prefix: String = source.substring(stmtSpan.from, dotPos);
+				final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
+				return { span: span, text: prefix + '?.' + suffix };
+			});
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -248,15 +235,6 @@ final class PreferSafeNav implements Check {
 		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
 	}
 
-	/** Index every `if`-statement node by its `from:to` span key (for `fix` to re-find a flagged node). */
-	private static function indexIfs(node: QueryNode, s: Seams, out: Map<String, QueryNode>): Void {
-		if (s.opaqueKinds.contains(node.kind)) return;
-		if (s.ifKinds.contains(node.kind)) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexIfs(c, s, out);
-	}
 
 	/** The plain-identifier operand of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {

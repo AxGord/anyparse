@@ -154,20 +154,19 @@ final class PreferFind implements Check {
 	 * value-returning `return` fallback. Returns the violation when so, else null.
 	 */
 	private static function tryReturnForm(forNode: QueryNode, next: QueryNode, file: String, source: String, s: Seams): Null<Violation> {
-		if (forNode.kind != s.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
-		final loopVar: Null<String> = forNode.name;
-		if (loopVar == null) return null;
-		final iterable: QueryNode = forNode.children[0];
-		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
-		final body: QueryNode = unwrapSole(forNode.children[1], s);
-		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final cond: QueryNode = body.children[0];
-		final returned: Null<QueryNode> = returnValue(body.children[1], s);
-		if (returned == null || returned.kind != s.identKind || returned.name != loopVar) return null;
+		final head: Null<{
+			loopVar: String,
+			iterable: QueryNode,
+			cond: QueryNode,
+			then: QueryNode
+		}> = forIfHead(forNode, source, s);
+		if (head == null) return null;
+		final returned: Null<QueryNode> = returnValue(head.then, s);
+		if (returned == null || returned.kind != s.identKind || returned.name != head.loopVar) return null;
 		if (next.kind != s.returnKind || next.children.length < 1) return null;
 		final fallback: QueryNode = next.children[0];
 		final tail: String = fallback.kind == s.nullLitKind ? '' : coalesceTail(fallback, source);
-		return buildViolation(forNode, iterable, loopVar, cond, tail, file, source);
+		return buildViolation(forNode, head.iterable, head.loopVar, head.cond, tail, file, source);
 	}
 
 	/**
@@ -177,16 +176,15 @@ final class PreferFind implements Check {
 	private static function tryBreakForm(decl: QueryNode, forNode: QueryNode, file: String, source: String, s: Seams): Null<Violation> {
 		final declName: Null<String> = nullInitLocalName(decl, s);
 		if (declName == null) return null;
-		if (forNode.kind != s.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
-		final loopVar: Null<String> = forNode.name;
-		if (loopVar == null) return null;
-		final iterable: QueryNode = forNode.children[0];
-		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
-		final body: QueryNode = unwrapSole(forNode.children[1], s);
-		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final then: QueryNode = body.children[1];
-		final cond: QueryNode = body.children[0];
-		return isAssignBreakBody(then, declName, loopVar, s) ? buildViolation(forNode, iterable, loopVar, cond, '', file, source) : null;
+		final head: Null<{
+			loopVar: String,
+			iterable: QueryNode,
+			cond: QueryNode,
+			then: QueryNode
+		}> = forIfHead(forNode, source, s);
+		return head != null && isAssignBreakBody(head.then, declName, head.loopVar, s)
+			? buildViolation(forNode, head.iterable, head.loopVar, head.cond, '', file, source)
+			: null;
 	}
 
 	/** The name of a `var`/`final` local initialized to exactly `null` — Form B's captured-value holder — or null otherwise. */
@@ -295,6 +293,32 @@ final class PreferFind implements Check {
 	private static function excerpt(text: String): String {
 		final flat: String = normalize(text);
 		return flat.length > EXCERPT_MAX ? flat.substring(0, EXCERPT_MAX) + '…' : flat;
+	}
+
+
+	/**
+	 * The shared for-if-head destructure both forms start from: `for (v in xs) if (cond) <then>`
+	 * — the loop variable, iterable, condition and if-body — or null when `forNode` is not that
+	 * shape (wrong kind/arity, a key-value / range / call iterable, or a non-if / else-bearing body).
+	 */
+	private static function forIfHead(forNode: QueryNode, source: String, s: Seams): Null<{
+		loopVar: String,
+		iterable: QueryNode,
+		cond: QueryNode,
+		then: QueryNode
+	}> {
+		if (forNode.kind != s.forStmtKind || forNode.children.length != FOR_CHILD_COUNT) return null;
+		final loopVar: Null<String> = forNode.name;
+		if (loopVar == null) return null;
+		final iterable: QueryNode = forNode.children[0];
+		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
+		final body: QueryNode = unwrapSole(forNode.children[1], s);
+		return !s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT ? null : {
+			loopVar: loopVar,
+			iterable: iterable,
+			cond: body.children[0],
+			then: body.children[1]
+		};
 	}
 
 }

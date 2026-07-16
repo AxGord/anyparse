@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a redundant `this.` qualifier — a `this.field` access where no local,
@@ -45,12 +43,10 @@ final class RedundantThis implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final ctx: Null<Ctx> = context(plugin);
 		if (ctx == null) return [];
-		final c: Ctx = ctx;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walkMembers(violations, entry.file, tree, c);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walkMembers(violations, entry.file, tree, ctx);
 		}
 		return violations;
 	}
@@ -60,24 +56,13 @@ final class RedundantThis implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final ctx: Null<Ctx> = context(plugin);
-		if (ctx == null) return [];
-		final c: Ctx = ctx;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexThisAccess(tree, c, nodeByKey);
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final fieldName: Null<String> = node.name;
-			if (fieldName != null) edits.push({ span: span, text: fieldName });
-		}
-		return edits;
+		return ctx == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [ctx.fieldAccessKind], (node, span) -> {
+				if (!isThisAccess(node, ctx)) return null;
+				final fieldName: Null<String> = node.name;
+				return fieldName == null ? null : { span: span, text: fieldName };
+			});
 	}
 
 	/** Bundle the seams the check needs, or null when the grammar lacks any. */
@@ -146,14 +131,6 @@ final class RedundantThis implements Check {
 		for (child in node.children) flagThisAccess(out, file, child, c, names);
 	}
 
-	/** Index every `this.field` access by its `from:to` span key. */
-	private static function indexThisAccess(node: QueryNode, c: Ctx, out: Map<String, QueryNode>): Void {
-		if (isThisAccess(node, c)) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (child in node.children) indexThisAccess(child, c, out);
-	}
 
 	/** `this.field`: a field-access node whose sole child is the self-reference ident. */
 	private static function isThisAccess(node: QueryNode, c: Ctx): Bool {

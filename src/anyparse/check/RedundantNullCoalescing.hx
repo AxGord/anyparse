@@ -7,10 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
-import anyparse.query.RefactorSupport;
 
 /**
  * Flags a null-coalescing whose left operand is provably non-null —
@@ -42,18 +39,17 @@ final class RedundantNullCoalescing implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final nullCoalesceKind: Null<String> = shape.nullCoalesceKind;
-		if (nullCoalesceKind == null) return [];
-		final coalKind: String = nullCoalesceKind;
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
+		final coalKind: String = seams.coalKind;
+		final opaqueKinds: Array<String> = seams.opaqueKinds;
+		final shape: RefShape = seams.shape;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
@@ -79,26 +75,31 @@ final class RedundantNullCoalescing implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [seams.coalKind], (node, span) -> {
+				if (node.children.length != 2) return null;
+				final leftSpan: Null<Span> = node.children[0].span;
+				return leftSpan == null ? null : { span: span, text: source.substring(leftSpan.from, leftSpan.to) };
+			});
+	}
+
+
+	/** Resolve the null-coalescing seam kind plus opaque kinds and shape, or null when the coalesce kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final nullCoalesceKind: Null<String> = shape.nullCoalesceKind;
-		if (nullCoalesceKind == null) return [];
-		final coalKind: String = nullCoalesceKind;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, [coalKind], byKey);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length != 2) continue;
-			final left: QueryNode = node.children[0];
-			final leftSpan: Null<Span> = left.span;
-			if (leftSpan == null) continue;
-			edits.push({ span: span, text: source.substring(leftSpan.from, leftSpan.to) });
-		}
-		return edits;
+		return nullCoalesceKind == null ? null : { coalKind: nullCoalesceKind, opaqueKinds: shape.opaqueKinds ?? [], shape: shape };
 	}
 
 }
+
+/**
+ * The resolved seams `RedundantNullCoalescing` reads in `run` and `fix`; `opaqueKinds` / `shape` are read only by `run` (the type-aware walk).
+ */
+private typedef Seams = {
+	final coalKind: String;
+	final opaqueKinds: Array<String>;
+	final shape: RefShape;
+};

@@ -7,9 +7,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a boolean guard chain — two or more contiguous `if (cond) return true;` /
@@ -54,13 +52,11 @@ final class SimplifyBooleanReturnChain implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final ctx: Null<Ctx> = context(plugin);
 		if (ctx == null) return [];
-		final c: Ctx = ctx;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (chain in collectChains(tree, c)) if (reducible(chain, entry.source, c)) violations.push({
+			for (chain in collectChains(tree, ctx)) if (reducible(chain, entry.source, ctx)) violations.push({
 				file: entry.file,
 				span: chain.span,
 				rule: 'simplify-boolean-return-chain',
@@ -76,18 +72,17 @@ final class SimplifyBooleanReturnChain implements Check {
 	): Array<{ span: Span, text: String }> {
 		final ctx: Null<Ctx> = context(plugin);
 		if (ctx == null) return [];
-		final c: Ctx = ctx;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final bySpan: Map<String, Chain> = [];
-		for (chain in collectChains(tree, c)) bySpan['${chain.span.from}:${chain.span.to}'] = chain;
+		for (chain in collectChains(tree, ctx)) bySpan['${chain.span.from}:${chain.span.to}'] = chain;
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final chain: Null<Chain> = bySpan['${span.from}:${span.to}'];
 			if (chain == null) continue;
-			final expr: Null<String> = c.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source);
+			final expr: Null<String> = ctx.support.reduceBooleanGuardChain(chain.conds, chain.lits, chain.finalLit, source);
 			if (expr != null) edits.push({ span: span, text: 'return $expr;' });
 		}
 		return edits;
