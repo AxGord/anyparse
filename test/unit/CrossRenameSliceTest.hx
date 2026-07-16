@@ -9,6 +9,8 @@ import anyparse.query.CrossRename;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
 
+using Lambda;
+
 /**
  * `CrossRename.crossRenameType` — scope-correct, format-preserving
  * cross-file TYPE rename. Hardens the single-file ceiling of the
@@ -355,8 +357,7 @@ class CrossRenameSliceTest extends Test {
 	}
 
 	private function changeOrNull(changes: Array<FileChange>, file: String): Null<FileChange> {
-		for (c in changes) if (c.file == file) return c;
-		return null;
+		return changes.find(c -> c.file == file);
 	}
 
 	private static function plugin(): HaxeQueryPlugin {

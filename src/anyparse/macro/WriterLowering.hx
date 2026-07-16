@@ -1,5 +1,7 @@
 package anyparse.macro;
 
+using Lambda;
+
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -3999,11 +4001,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) requires element rule $elemRefName to be a Seq struct',
 				Context.currentPos()
 			);
-		var classifierNode: Null<ShapeNode> = null;
-		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
-			classifierNode = child;
-			break;
-		}
+		final classifierNode: Null<ShapeNode> = elemRule.children.find(child -> child.annotations.get('base.fieldName') == fieldName);
 		if (classifierNode == null || classifierNode.kind != Ref)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier field "$fieldName" must be a plain Ref to an enum rule on $elemRefName',
@@ -4016,11 +4014,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier target for "$fieldName" must be an Alt (enum)',
 				Context.currentPos()
 			);
-		var condBranch: Null<ShapeNode> = null;
-		for (branch in enumRule.children) if (branch.annotations.get('base.ctor') == condCtor) {
-			condBranch = branch;
-			break;
-		}
+		final condBranch: Null<ShapeNode> = enumRule.children.find(branch -> branch.annotations.get('base.ctor') == condCtor);
 		if (condBranch == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) condCtor "$condCtor" not found on enum $enumRuleName',
@@ -5375,11 +5369,7 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
 			);
-		var modifierNode: Null<ShapeNode> = null;
-		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == modifierField) {
-			modifierNode = child;
-			break;
-		}
+		final modifierNode: Null<ShapeNode> = elemRule.children.find(child -> child.annotations.get('base.fieldName') == modifierField);
 		if (modifierNode == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" not found on element rule $elemRefName',
@@ -5799,11 +5789,7 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
 			);
-		var classifierNode: Null<ShapeNode> = null;
-		for (child in elemRule.children) if (child.annotations.get('base.fieldName') == fieldName) {
-			classifierNode = child;
-			break;
-		}
+		final classifierNode: Null<ShapeNode> = elemRule.children.find(child -> child.annotations.get('base.fieldName') == fieldName);
 		if (classifierNode == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" not found on element rule $elemRefName',
@@ -10534,8 +10520,7 @@ class WriterLowering {
 	 * Shared lookup for ω-E-whitespace's writer helpers.
 	 */
 	private static function firstFmtFlag(node: ShapeNode, flagNames: Array<String>): Null<String> {
-		for (name in flagNames) if (node.fmtHasFlag(name)) return name;
-		return null;
+		return flagNames.find(name -> node.fmtHasFlag(name));
 	}
 
 	/**
@@ -10586,29 +10571,28 @@ class WriterLowering {
 	 */
 	private static function whitespacePolicyLead(child: ShapeNode, leadText: String, flagNames: Array<String>): Expr {
 		final flagName: Null<String> = firstFmtFlag(child, flagNames);
-		if (flagName == null) {
-			// Opt-in `@:fmt(spaceAfterLead)` on a struct-
-			// field mandatory `@:lead(LIT)` appends an OptSpace after the
-			// lead literal — mirror of the enum-ctor `spaceAfterLead`
-			// path (line ~1075) for the struct-field side. Used by
-			// `HxVarMore.decl` (`@:lead(',')`) and `HxTypedCast.type`
-			// (`@:lead(',')`) to emit `, b` and `cast(x, T)` respectively
-			// instead of tight `,b` / `cast(x,T)`. The space is `_dop` so
-			// the renderer can drop it when the value emits a leading
-			// hardline.
-			return child.fmtHasFlag('spaceAfterLead') ? macro _dc([_dt($v{leadText}), _dop(' ')]) : macro _dt($v{leadText});
-		}
+		// Opt-in `@:fmt(spaceAfterLead)` on a struct-
+		// field mandatory `@:lead(LIT)` appends an OptSpace after the
+		// lead literal — mirror of the enum-ctor `spaceAfterLead`
+		// path (line ~1075) for the struct-field side. Used by
+		// `HxVarMore.decl` (`@:lead(',')`) and `HxTypedCast.type`
+		// (`@:lead(',')`) to emit `, b` and `cast(x, T)` respectively
+		// instead of tight `,b` / `cast(x,T)`. The space is `_dop` so
+		// the renderer can drop it when the value emits a leading
+		// hardline.
 		// Trailing whitespace after the lead is emitted as `_dop(' ')`
 		// (OptSpace) so the renderer can drop it when the value emits a
 		// leading hardline — e.g. `Address: {…}` with `leftCurly=Next`
 		// on the nested object literal renders as `Address:\n{…}`. The
 		// leading space (Before / Both case) stays a plain `_dt(' ')`
 		// because nothing emits a hardline before the lead.
-		return buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
-			{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
-			{ values: ['After'], expr: macro _dc([_dt($v{leadText}), _dop(' ')]) },
-			{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) },
-		], macro _dt($v{leadText}));
+		return flagName == null
+			? child.fmtHasFlag('spaceAfterLead') ? macro _dc([_dt($v{leadText}), _dop(' ')]) : macro _dt($v{leadText})
+			: buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], optFieldAccess(flagName), [
+				{ values: ['Before'], expr: macro _dc([_dt(' '), _dt($v{leadText})]) },
+				{ values: ['After'], expr: macro _dc([_dt($v{leadText}), _dop(' ')]) },
+				{ values: ['Both'], expr: macro _dc([_dt(' '), _dt($v{leadText}), _dop(' ')]) },
+			], macro _dt($v{leadText}));
 	}
 
 	/**
@@ -11783,8 +11767,7 @@ class WriterLowering {
 	}
 
 	private static function findFieldByName(node: ShapeNode, name: String): Null<ShapeNode> {
-		for (child in node.children) if (child.annotations.get('base.fieldName') == name) return child;
-		return null;
+		return node.children.find(child -> child.annotations.get('base.fieldName') == name);
 	}
 
 	private static function ctorBranchHasFlag(branch: ShapeNode, flag: String): Bool {
@@ -12415,11 +12398,9 @@ class WriterLowering {
 	 *
 	 */
 	private static function locateChainCallBranch(node: ShapeNode): ShapeNode {
-		var callBranch: Null<ShapeNode> = null;
-		for (b in node.children) if (b.fmtReadString('methodChain') != null && b.children.length == 2 && b.children[1].kind == Star) {
-			callBranch = b;
-			break;
-		}
+		final callBranch: Null<ShapeNode> = node.children.find(b ->
+			b.fmtReadString('methodChain') != null && b.children.length == 2 && b.children[1].kind == Star
+		);
 		if (callBranch == null)
 			Context.error(
 				'WriterLowering.methodChain: expected a sibling postfix-Star ctor with @:fmt(methodChain(...))', Context.currentPos()

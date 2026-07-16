@@ -299,14 +299,12 @@ final class ThreadSafety implements Check implements ConfigAware {
 		final parts: Array<String> = [id];
 		final visited: Array<String> = [id];
 		var cursor: String = id;
-		var hops: Int = 0;
-		while (hops < CHAIN_CAP) {
+		for (hops in 0...CHAIN_CAP) {
 			final edge: Null<CallEdge> = mainParent[cursor];
 			if (edge == null || visited.contains(edge.from)) break;
 			parts.unshift(edge.from);
 			visited.push(edge.from);
 			cursor = edge.from;
-			hops++;
 		}
 		final next: Null<CallEdge> = mainParent[cursor];
 		if (next != null && !visited.contains(next.from)) parts.unshift('...');
@@ -317,13 +315,11 @@ final class ThreadSafety implements Check implements ConfigAware {
 	private static function taintChain(id: String, taintHop: Map<String, CallEdge>): String {
 		final parts: Array<String> = [id];
 		var cursor: String = id;
-		var hops: Int = 0;
-		while (hops < CHAIN_CAP) {
+		for (hops in 0...CHAIN_CAP) {
 			final edge: Null<CallEdge> = taintHop[cursor];
 			if (edge == null) break;
 			parts.push(edge.to);
 			cursor = edge.to;
-			hops++;
 		}
 		if (taintHop[cursor] != null) parts.push('...');
 		return parts.join(' -> ');

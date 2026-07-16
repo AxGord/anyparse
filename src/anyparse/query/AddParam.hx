@@ -198,11 +198,8 @@ final class AddParam {
 	 */
 	private static function emptyParenInsertOffset(source: String, declSpan: Span): Int {
 		final to: Int = declSpan.to <= source.length ? declSpan.to : source.length;
-		var i: Int = declSpan.from < 0 ? 0 : declSpan.from;
-		while (i < to) {
-			if (StringTools.fastCodeAt(source, i) == '('.code) return i + 1;
-			i++;
-		}
+		final from: Int = declSpan.from < 0 ? 0 : declSpan.from;
+		for (i in from ... to) if (StringTools.fastCodeAt(source, i) == '('.code) return i + 1;
 		return -1;
 	}
 

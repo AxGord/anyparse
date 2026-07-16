@@ -8,6 +8,8 @@ import anyparse.query.CrossRenameMember;
 import anyparse.query.CrossRename.CrossRenameResult;
 import anyparse.query.CrossRename.FileChange;
 
+using Lambda;
+
 /**
  * `CrossRenameMember.crossRenameMember` — scope-correct, format-preserving
  * cross-file rename of a METHOD or FIELD (the value/method counterpart of
@@ -277,8 +279,7 @@ class CrossRenameMemberSliceTest extends Test {
 	}
 
 	private function changeOrNull(changes: Array<FileChange>, file: String): Null<FileChange> {
-		for (c in changes) if (c.file == file) return c;
-		return null;
+		return changes.find(c -> c.file == file);
 	}
 
 	/** 1-based line / col of the first character of `needle` in `src`. */
