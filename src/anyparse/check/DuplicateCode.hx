@@ -132,7 +132,7 @@ final class DuplicateCode implements Check {
 		final findings: Array<DupFinding> = [];
 		for (bucket in grams) if (bucket.length >= 2) collectFindings(blocks, source, bucket, findings);
 
-		final kept: Array<DupFinding> = dropContained(findings);
+		final kept: Array<DupFinding> = dropOverlapping(findings);
 		kept.sort((a, b) -> a.span.from - b.span.from);
 		for (f in kept) out.push({
 			file: file,
@@ -206,7 +206,9 @@ final class DuplicateCode implements Check {
 			findings.push({
 				span: new Span(laterStmts[later.i].span.from, laterStmts[later.i + len - 1].span.to),
 				count: len,
-				origLine: blocks[anchor.b][anchor.i].span.lineCol(source).line
+				origLine: blocks[anchor.b][anchor.i].span.lineCol(source).line,
+				b: later.b,
+				startIdx: later.i
 			});
 		}
 	}
@@ -228,20 +230,27 @@ final class DuplicateCode implements Check {
 	}
 
 	/**
-	 * Keep only the maximal findings: drop any whose span is strictly contained in
-	 * another's, so a five-statement clone's three- and four-statement sub-windows
-	 * fall away and it reports once. Raw findings never share a start, so equal-span
-	 * ties cannot arise.
+	 * Keep the document-earliest finding of each overlapping group WITHIN a block: a later
+	 * finding whose statement-index range intersects one already kept in the same block is
+	 * dropped. So a maximal clone's shorter sub-windows fall away (it reports once) AND a
+	 * diverging-tail shape — one later block sharing a longer run while another shares only a
+	 * shorter prefix — reports once per later block, not as partially-overlapping windows.
+	 * Findings in different blocks never share a byte-span, so they never interfere.
 	 */
-	private static function dropContained(findings: Array<DupFinding>): Array<DupFinding> {
-		return [for (i in 0...findings.length) if (!isContained(findings, i)) findings[i]];
+	private static function dropOverlapping(findings: Array<DupFinding>): Array<DupFinding> {
+		final sorted: Array<DupFinding> = findings.copy();
+		sorted.sort((a, b) -> a.span.from - b.span.from);
+		final kept: Array<DupFinding> = [];
+		for (f in sorted) if (!overlapsKept(kept, f)) kept.push(f);
+		return kept;
 	}
 
-	private static function isContained(findings: Array<DupFinding>, i: Int): Bool {
-		final e: Span = findings[i].span;
-		for (j in 0...findings.length) if (j != i) {
-			final o: Span = findings[j].span;
-			if (o.from <= e.from && e.to <= o.to && (o.from < e.from || e.to < o.to)) return true;
+	/** Whether `f`'s statement-index range intersects an already-kept finding within the same block. */
+	private static function overlapsKept(kept: Array<DupFinding>, f: DupFinding): Bool {
+		final fEnd: Int = f.startIdx + f.count - 1;
+		for (k in kept) if (k.b == f.b) {
+			final kEnd: Int = k.startIdx + k.count - 1;
+			if (f.startIdx <= kEnd && k.startIdx <= fEnd) return true;
 		}
 		return false;
 	}
@@ -266,4 +275,6 @@ typedef DupFinding = {
 	var span: Span;
 	var count: Int;
 	var origLine: Int;
+	var b: Int;
+	var startIdx: Int;
 }

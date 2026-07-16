@@ -82,6 +82,18 @@ class PreferRangeLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\tn = 5;\n\t\t\ti++;\n\t\t}')).length);
 	}
 
+	public function testBoundCompoundAssignNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\tn += 1;\n\t\t\ti++;\n\t\t}')).length);
+	}
+
+	public function testIncrementInTrailingIfNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\tif (cond(i)) i++;\n\t\t}')).length);
+	}
+
+	public function testNestedWhileSharingCounterNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\twhile (i < n) i++;\n\t\t\ti++;\n\t\t}')).length);
+	}
+
 	public function testContinueNotFlagged(): Void {
 		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\tif (skip(i)) continue;\n\t\t\ti++;\n\t\t}')).length);
 	}

@@ -105,6 +105,24 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		);
 	}
 
+	public function testBareFieldSubjectNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(cls('var fld:Null<Int> = null;\n\tfunction f():Void { switch fld { case 1: trace(1); case _: trace(0); } }')).length
+		);
+	}
+
+	public function testGuardedBareFieldSubjectNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				cls(
+					'var fld:Null<Int> = null;\n\tfunction f():Void { if (fld == null) return; switch fld { case 1: trace(1); case _: trace(0); } }'
+				)
+			).length
+		);
+	}
+
 	public function testAssertedNonNullNotFlagged(): Void {
 		Assert.equals(
 			0,

@@ -48,7 +48,7 @@ import haxe.Exception;
  *   would find the LAST match, so the dedicated break kind is required); the
  *   declaration's initializer must be exactly `null`.
  * - **No key-value loop.** `for (k => v in m)` is skipped — `.find` iterates an
- *   iterable's values, not map key-value pairs.
+ *   iterable's values, not map key-value pairs. A call iterable (`xs.keys()` / `<expr>.m()`) or a range `a...b` is likewise skipped — a call may yield an `Iterator`, not an `Iterable`, so `Lambda.find` would not compile, and a call result's type is unknowable without types.
  * - **Adjacency.** The loop and its trailing `return` (Form A), or the declaration
  *   and its loop (Form B), must be real, immediately adjacent block siblings.
  *
@@ -131,7 +131,8 @@ final class PreferFind implements Check {
 			exprStmtKind: shape.exprStatementKind,
 			assignKind: shape.assignKind,
 			breakKind: shape.breakStatementKind,
-			intervalKind: shape.intervalKind
+			intervalKind: shape.intervalKind,
+			callKind: shape.callKind
 		};
 	}
 
@@ -157,7 +158,7 @@ final class PreferFind implements Check {
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null) return null;
 		final iterable: QueryNode = forNode.children[0];
-		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s)) return null;
+		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
 		final body: QueryNode = unwrapSole(forNode.children[1], s);
 		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final cond: QueryNode = body.children[0];
@@ -180,7 +181,7 @@ final class PreferFind implements Check {
 		final loopVar: Null<String> = forNode.name;
 		if (loopVar == null) return null;
 		final iterable: QueryNode = forNode.children[0];
-		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s)) return null;
+		if (isKeyValueLoop(source, forNode, iterable) || isRangeIterable(iterable, s) || isCallIterable(iterable, s)) return null;
 		final body: QueryNode = unwrapSole(forNode.children[1], s);
 		if (!s.ifKinds.contains(body.kind) || body.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final then: QueryNode = body.children[1];
@@ -260,6 +261,12 @@ final class PreferFind implements Check {
 		return intervalKind != null && iterable.kind == intervalKind;
 	}
 
+	/** Whether the iterable is a call — a `.keys()` / `.iterator()` result is an `Iterator`, not `Iterable`, so `Lambda.find` would not compile (a call result's iterability is unknowable without types — skip conservatively). */
+	private static function isCallIterable(iterable: QueryNode, s: Seams): Bool {
+		final callKind: Null<String> = s.callKind;
+		return callKind != null && iterable.kind == callKind;
+	}
+
 	/** The ` ?? <fallback>` suffix for a non-null Form-A fallback, or empty when its span is unavailable. */
 	private static function coalesceTail(fallback: QueryNode, source: String): String {
 		final span: Null<Span> = fallback.span;
@@ -306,4 +313,5 @@ private typedef Seams = {
 	var assignKind: Null<String>;
 	var breakKind: Null<String>;
 	var intervalKind: Null<String>;
+	var callKind: Null<String>;
 }

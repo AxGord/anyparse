@@ -174,6 +174,35 @@ class DuplicateCodeCheckTest extends Test {
 		Assert.equals('3 statements duplicated from line 3 — extract a helper (hxq extract-method)', vs[1].message);
 	}
 
+	public function testDivergingTailReportsOncePerBlock(): Void {
+		// Block a shares a 3-statement prefix with b and c; b and c additionally share a longer
+		// 5-statement run. Each later block must report once — not as partially-overlapping windows.
+		final vs: Array<Violation> = violations(src([
+			'class C {',
+			'\tfunction a():Void {',
+			'\t\ttrace(alpha, beta);',
+			'\t\ttrace(gamma, delta);',
+			'\t\ttrace(epsilon, zeta);',
+			'\t}',
+			'\tfunction b():Void {',
+			'\t\ttrace(alpha, beta);',
+			'\t\ttrace(gamma, delta);',
+			'\t\ttrace(epsilon, zeta);',
+			'\t\ttrace(eta, theta);',
+			'\t\ttrace(iota, kappa);',
+			'\t}',
+			'\tfunction c():Void {',
+			'\t\ttrace(alpha, beta);',
+			'\t\ttrace(gamma, delta);',
+			'\t\ttrace(epsilon, zeta);',
+			'\t\ttrace(eta, theta);',
+			'\t\ttrace(iota, kappa);',
+			'\t}',
+			'}'
+		]));
+		Assert.equals(2, vs.length);
+	}
+
 	public function testCloneAcrossBlockKindsFlagged(): Void {
 		final vs: Array<Violation> = violations(src([
 			'class C {',

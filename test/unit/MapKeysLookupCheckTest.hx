@@ -69,6 +69,20 @@ class MapKeysLookupCheckTest extends Test {
 		Assert.equals(0, violations(wrapMap('for (k in m.keys()) for (m in rows) trace(m[k]);')).length);
 	}
 
+	public function testCompoundAssignWriteNotFlagged(): Void {
+		Assert.equals(0, violations(wrapMap('for (k in m.keys()) {\n\t\t\ttrace(m[k]);\n\t\t\tm[k] += 1;\n\t\t}')).length);
+	}
+
+	public function testIncrementWriteNotFlagged(): Void {
+		Assert.equals(0, violations(wrapMap('for (k in m.keys()) {\n\t\t\ttrace(m[k]);\n\t\t\tm[k]++;\n\t\t}')).length);
+	}
+
+	public function testShadowedKeyByLambdaParamNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrapMap('for (k in m.keys()) {\n\t\t\tfinal f = (k:String) -> m[k];\n\t\t\ttrace(f("x"));\n\t\t}')).length
+		);
+	}
+
 	public function testChainedReceiverNotFlagged(): Void {
 		final src: String = 'class C {\n\tfunction f(o:{ m:Map<String,Int> }):Void {\n\t\tfor (k in o.m.keys()) trace(o.m[k]);\n\t}\n}';
 		Assert.equals(0, violations(src).length);

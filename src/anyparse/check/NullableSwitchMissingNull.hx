@@ -44,7 +44,7 @@ import haxe.Exception;
  * switch, flow does not prove it non-null AND either: flow proves it `MaybeNull`
  * (bound from a `Map` index / `Null<T>` call — source 2) or `Null`; its declared
  * type's outer nominal is a `Null<…>` wrapper (`nullableReturnMarkerTypes`, so
- * `Dynamic` / `Any` are excluded — source 1a); or it binds to an optional parameter
+ * `Dynamic` / `Any` are excluded) for a LOCAL or PARAMETER binding only — a bare field never narrows, so it stays out of scope (source 1a); or it binds to an optional parameter
  * (`?x:T`, `optionalParamKind` — source 1b). A non-identifier subject is nullable
  * when it is itself a nullable-source expression — a `Map` index, an `Array` /
  * `List` nullable call, a `Null<T>`-returning call (`NullableSource.describe`,
@@ -137,6 +137,8 @@ final class NullableSwitchMissingNull implements Check {
 			parenKind: shape.parenKind,
 			nullCoalesceKind: shape.nullCoalesceKind,
 			optionalParamKind: shape.optionalParamKind,
+			localDeclKinds: shape.localDeclKinds ?? [],
+			paramKinds: shape.paramKinds ?? [],
 			nullMarkers: shape.nullableReturnMarkerTypes ?? [],
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
@@ -222,7 +224,11 @@ final class NullableSwitchMissingNull implements Check {
 			final from: Int = bindingFrom;
 			if (assertedNonNullBefore(subject, from, ctx)) return false;
 			final declared: Null<String> = ctx.declaredTypes[from];
-			if (declared != null && s.nullMarkers.contains(declared)) return true;
+			if (
+				declared != null && s.nullMarkers.contains(declared)
+				&& TypeResolver.bindingIsLocalOrParam(ctx.root, from, s.localDeclKinds, s.paramKinds)
+			)
+				return true;
 			final optKind: Null<String> = s.optionalParamKind;
 			return optKind != null && TypeResolver.bindingIsOptionalParam(ctx.root, from, optKind);
 		}
@@ -293,6 +299,8 @@ private typedef Seams = {
 	var parenKind: Null<String>;
 	var nullCoalesceKind: Null<String>;
 	var optionalParamKind: Null<String>;
+	var localDeclKinds: Array<String>;
+	var paramKinds: Array<String>;
 	var nullMarkers: Array<String>;
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;

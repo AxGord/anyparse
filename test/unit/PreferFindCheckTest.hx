@@ -72,6 +72,12 @@ class PreferFindCheckTest extends Test {
 		Assert.equals(0, violations(fn('for (k => v in m) if (v > 2) return v;\n\t\treturn null;', 'Null<Int>')).length);
 	}
 
+	public function testCallIterableNotFlagged(): Void {
+		// A `.keys()` / any call iterable may yield an Iterator, not an Iterable — Lambda.find
+		// would not compile, so a call-expression iterable is skipped.
+		Assert.equals(0, violations(fn('for (k in m.keys()) if (m[k] > 2) return k;\n\t\treturn null;', 'Null<Int>')).length);
+	}
+
 	public function testRangeIndexLoopNotFlagged(): Void {
 		Assert.equals(0, violations(fn('for (i in 0...xs.length) if (xs[i] > 2) return i;\n\t\treturn -1;', 'Int')).length);
 	}

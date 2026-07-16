@@ -60,6 +60,19 @@ class EnglishCommentsCheckTest extends Test {
 		Assert.equals(1, vs.length);
 	}
 
+	public function testCjkExtensionAFlagged(): Void {
+		// U+3400 (CJK Extension A, BMP) sits in the gap between Katakana and CJK Unified Ideographs.
+		Assert.equals(1, violations('class C {\n\t// 㐀 extension A\n}').length);
+	}
+
+	public function testHebrewBlockFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t// shalom א\n}').length);
+	}
+
+	public function testHangulBlockFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t// annyeong 한\n}').length);
+	}
+
 	public function testPositionAtFirstOffendingChar(): Void {
 		final src: String = '// ok текст';
 		final vs: Array<Violation> = violations(src);

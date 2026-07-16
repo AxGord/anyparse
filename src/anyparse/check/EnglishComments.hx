@@ -45,6 +45,7 @@ final class EnglishComments implements Check {
 		{ lo: 0x0600, hi: 0x06FF }, // Arabic
 		{ lo: 0x1100, hi: 0x11FF }, // Hangul Jamo
 		{ lo: 0x3040, hi: 0x30FF }, // Hiragana + Katakana
+		{ lo: 0x3400, hi: 0x4DBF }, // CJK Extension A
 		{ lo: 0x4E00, hi: 0x9FFF }, // CJK Unified Ideographs
 		{ lo: 0xAC00, hi: 0xD7AF }
 	];

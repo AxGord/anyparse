@@ -133,6 +133,31 @@ final class TypeResolver {
 	}
 
 	/**
+	 * Whether the declaration binding at `bindingFrom` is a LOCAL (a `localDeclKinds`
+	 * node) or a PARAMETER (a `paramKinds` node) — as opposed to a field or other decl.
+	 * Lets a check restrict a declared-type nullable source to locals / params, since a
+	 * bare field never narrows and is out of the flow engine's scope.
+	 */
+	public static function bindingIsLocalOrParam(
+		tree: QueryNode, bindingFrom: Int, localDeclKinds: Array<String>, paramKinds: Array<String>
+	): Bool {
+		var found: Bool = false;
+		function walk(n: QueryNode): Void {
+			if (found) return;
+			if (localDeclKinds.contains(n.kind) || paramKinds.contains(n.kind)) {
+				final s: Null<Span> = n.span;
+				if (s != null && s.from <= bindingFrom && bindingFrom < s.to) {
+					found = true;
+					return;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+	/**
 	 * True when the innermost type declaration enclosing `span` is annotated with
 	 * the `metaName` meta (e.g. `@:nullSafety`), making any non-`Null<…>` nominal
 	 * member of it provably non-null. The meta binds to a declaration when no OTHER

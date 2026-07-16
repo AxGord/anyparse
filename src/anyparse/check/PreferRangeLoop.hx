@@ -196,7 +196,7 @@ final class PreferRangeLoop implements Check {
 			span: declSpan,
 			rule: 'prefer-range-loop',
 			severity: Severity.Info,
-			message: 'this var-counter while loop can be for (' + loopVar + ' in ' + a + '...' + b + ')'
+			message: 'this var-counter while loop can be for ($loopVar in $a...$b)'
 		};
 	}
 
