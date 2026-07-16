@@ -102,7 +102,8 @@ final class Linter {
 			new CatchDynamic(),
 			new PreferCaseWildcard(),
 			new OptionalParamShorthand(),
-			new PreferFinalClass()
+			new PreferFinalClass(),
+			new PreferSafeNav()
 		];
 	}
 

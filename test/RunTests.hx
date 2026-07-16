@@ -414,6 +414,7 @@ import unit.CatchDynamicCheckTest;
 import unit.PreferCaseWildcardCheckTest;
 import unit.OptionalParamShorthandCheckTest;
 import unit.PreferFinalClassCheckTest;
+import unit.PreferSafeNavCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -757,6 +758,7 @@ class RunTests {
 		addCase(new PreferCaseWildcardCheckTest());
 		addCase(new OptionalParamShorthandCheckTest());
 		addCase(new PreferFinalClassCheckTest());
+		addCase(new PreferSafeNavCheckTest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
