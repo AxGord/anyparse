@@ -110,7 +110,7 @@ class LintSliceTest extends Test {
 		Assert.notNull(Linter.byId('unused-import'));
 		Assert.notNull(Linter.byId('duplicate-import'));
 		Assert.isNull(Linter.byId('does-not-exist'));
-		Assert.equals(76, Linter.builtins().length);
+		Assert.equals(77, Linter.builtins().length);
 
 		final files = [{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\nclass C {}' }];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin());
@@ -440,8 +440,7 @@ class LintSliceTest extends Test {
 		// the splice; dropping the contained edit keeps only the outer dead-run delete.
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\tvar x = 0;\n\t\tx = x;\n\t}\n}';
 		final files = [{ file: 'C.hx', source: src }];
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (e in new DeadCode().fix(src, new DeadCode().run(files, plugin()), plugin())) edits.push(e);
+		final edits: Array<{ span: Span, text: String }> = new DeadCode().fix(src, new DeadCode().run(files, plugin()), plugin());
 		for (e in new SelfAssignment().fix(src, new SelfAssignment().run(files, plugin()), plugin())) edits.push(e);
 		switch RefactorSupport.canonicalize(src, RefactorSupport.dropContainedEdits(edits), true, plugin()) {
 			case Ok(text):

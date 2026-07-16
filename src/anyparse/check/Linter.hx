@@ -104,7 +104,8 @@ final class Linter {
 			new OptionalParamShorthand(),
 			new PreferFinalClass(),
 			new PreferSafeNav(),
-			new EnglishComments()
+			new EnglishComments(),
+			new PreferComprehension()
 		];
 	}
 
@@ -145,8 +146,7 @@ final class Linter {
 		// checks so they don't re-walk ancestor dirs + re-parse the JSON per file; a null
 		// resolver resets them to their own `LintConfig.discover` fallback.
 		for (check in active) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
-		final out: Array<Violation> = [];
-		for (check in active) for (violation in check.run(files, cached)) out.push(violation);
+		final out: Array<Violation> = [for (check in active) for (violation in check.run(files, cached)) violation];
 		if (resolveConfig == null) return Suppression.apply(out, files);
 		// Per-file config: resolve the apqlint.json for each finding's OWN file, drop
 		// it when its rule is disabled there (unless an explicit --rule selection
