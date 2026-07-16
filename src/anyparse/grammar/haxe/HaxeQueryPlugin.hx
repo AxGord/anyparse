@@ -444,6 +444,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			notKind: 'Not',
 			blockStmtKind: 'BlockStmt',
 			breakStatementKind: 'BreakStmt',
+			continueStatementKind: 'ContinueStmt',
+			loopStatementKinds: ['ForStmt', 'WhileStmt'],
 			intervalKind: 'Interval',
 			andLowerPrecedenceKinds: [
 				'Or',
@@ -863,8 +865,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	private function appendSpannedStruct(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool, kindStr: String, spanObj: Span): Void {
 		final children: Array<QueryNode> = [];
-		for (field in Reflect.fields(value)) {
-			if (field == 'name' || field == '_span' || field == '_kind') continue;
+		for (field in Reflect.fields(value)) if (!(field == 'name' || field == '_span' || field == '_kind')) {
 			// Mirror the generic branch: descend an anon-struct
 			// `type` (decl-host members), skip name-slot type-refs.
 			if (field == 'type' && !isAnonType(Reflect.field(value, 'type'))) {
@@ -881,8 +882,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * struct into `into`, applying the name-slot / type-ref skip rules.
 	 */
 	private function appendObjectFields(value: Dynamic, into: Array<QueryNode>, withTypeRefs: Bool): Void {
-		for (field in Reflect.fields(value)) {
-			if (field == 'name') continue;
+		for (field in Reflect.fields(value)) if (field != 'name') {
 			// `type` is normally a name-slot leaf (`new T(...)`,
 			// `var x:Foo`) and skipped — but an anon struct type
 			// (`typedef T = {…}`, `var x:{…}`) carries decl-host
@@ -945,8 +945,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				// `HxTypeRef` (name slot already emitted by the `Named`
 				// arm) — descend `params` for nested type refs; skip the
 				// `name` String leaf.
-				for (field in Reflect.fields(value)) {
-					if (field == 'name' || field == '_span' || field == '_kind') continue;
+				for (field in Reflect.fields(value)) if (!(field == 'name' || field == '_span' || field == '_kind')) {
 					appendTypeRefs(Reflect.field(value, field), into, fallbackSpan);
 				}
 			case TClass(_):
@@ -986,8 +985,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * recurses its type parameters. Reads the first non-`Span` operand.
 	 */
 	private function appendNamedTypeRef(params: Array<Dynamic>, into: Array<QueryNode>, span: Null<Span>): Void {
-		for (p in params) {
-			if (Std.isOfType(p, Span)) continue;
+		for (p in params) if (!Std.isOfType(p, Span)) {
 			final nm: Null<String> = extractName(p);
 			if (nm != null && span != null) into.push(new QueryNode('TypeRef', nm, [], span));
 			// recurse type parameters (`Array<HxVarMore>`)
@@ -1043,8 +1041,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				final ctor: String = Type.enumConstructor(value);
 				if (ctor == 'Optional' || ctor == 'Plain') {
 					final params: Array<Dynamic> = Type.enumParameters(value);
-					for (p in params) {
-						if (Std.isOfType(p, Span)) continue;
+					for (p in params) if (!Std.isOfType(p, Span)) {
 						final n: Null<String> = extractName(p);
 						if (n != null) return n;
 					}
@@ -1058,8 +1055,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private function nominalTypeName(typeVal: Dynamic): Null<String> {
 		if (typeVal == null || !Type.typeof(typeVal).match(TEnum(_))) return null;
 		if (Type.enumConstructor(typeVal) != 'Named') return null;
-		for (p in Type.enumParameters(typeVal)) {
-			if (Std.isOfType(p, Span)) continue;
+		for (p in Type.enumParameters(typeVal)) if (!Std.isOfType(p, Span)) {
 			final nm: Null<String> = extractName(p);
 			if (nm != null) {
 				final dot: Int = nm.lastIndexOf('.');

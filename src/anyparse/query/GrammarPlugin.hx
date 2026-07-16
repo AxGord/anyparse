@@ -1201,6 +1201,21 @@ typedef RefShape = {
 	@:optional var breakStatementKind: String;
 
 	/**
+	 * The `continue` statement node kind (Haxe `ContinueStmt`) — lets `loop-guard`
+	 * recognise a leading `if (c) continue;` loop-body guard. Optional; unset makes the
+	 * check a no-op.
+	 */
+	@:optional var continueStatementKind: String;
+
+	/**
+	 * Loop-statement kinds whose LAST child is the loop body (Haxe `ForStmt` /
+	 * `WhileStmt`) — `loop-guard` reads the body off the last child to flag a leading
+	 * `if`-continue guard liftable to the loop header. A `do … while` is excluded (its
+	 * body is not the last child). Optional; unset makes the check a no-op.
+	 */
+	@:optional var loopStatementKinds: Array<String>;
+
+	/**
 	 * The range / interval node kind (`a...b`) — lets `prefer-find` skip a loop over a
 	 * range: its `IntIterator` is not an `Iterable`, so a `Lambda.find` rewrite would
 	 * not compile. Optional; unset means range loops are not specially excluded.
