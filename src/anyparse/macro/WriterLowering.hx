@@ -3752,15 +3752,6 @@ class WriterLowering {
 	}
 
 	/**
-	 * True when `refName` names a Seq (struct) rule whose first field is
-	 * a bare Ref annotated with `@:fmt(bodyPolicy(...))` and no `@:kw` / `@:lead`
-	 * of its own. Used by Case 3 enum-branch lowering to decide whether
-	 * to strip the trailing space from a `@:kw` lead — the sub-struct's
-	 * writer will emit the header→body separator via `bodyPolicyWrap`,
-	 * so leaving the space in would yield a double space in the `Same`
-	 * case and a dangling space before a hardline in `Next` / `FitLine`.
-	 */
-	/**
 	 * The first child field of the Seq (struct) rule named `refName`, or null
 	 * when `refName` is not a Seq rule or the Seq has no fields. Shared prologue
 	 * of the `subStructStartsWith*` predicates.
@@ -3772,6 +3763,16 @@ class WriterLowering {
 		return children.length == 0 ? null : children[0];
 	}
 
+	/**
+	 * True when `refName` names a Seq (struct) rule whose first field is
+	 * a bare Ref annotated with `@:fmt(bodyPolicy(...))` and no `@:kw` / `@:lead`
+	 * of its own. Used by Case 3 enum-branch lowering to decide whether
+	 * to strip the trailing space from a `@:kw` lead — the sub-struct's
+	 * writer will emit the header→body separator via `bodyPolicyWrap`,
+	 * so leaving the space in would yield a double space in the `Same`
+	 * case and a dangling space before a hardline in `Next` / `FitLine`.
+	 *
+	 */
 	private function subStructStartsWithBodyPolicy(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
 		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
@@ -10241,30 +10242,6 @@ class WriterLowering {
 	}
 
 	/**
-	 * Return a Doc expression that optionally prefixes a Star struct
-	 * field's opening delimiter with a space driven by a
-	 * `WhitespacePolicy` option — the paren counterpart of
-	 * `whitespacePolicyLead`.
-	 *
-	 * Consumed today by `@:fmt(funcParamParens)` on `HxFnDecl.params` so
-	 * users can opt into `function main ()` via
-	 * `whitespace.parenConfig.funcParamParens.openingPolicy: "before"`
-	 * without affecting call sites, `new T(...)` args, or `(expr)`.
-	 *
-	 * Returns `null` when the node carries no flag from `flagNames`,
-	 * letting the call site fall through to its pre-slice emission
-	 * (`_dt(' ')` for spaced leads, nothing for tight leads). When a
-	 * flag matches, emits a runtime switch on `opt.<flagName>`:
-	 *  - `Before` / `Both` → `_dt(' ')`.
-	 *  - `None` / `After`  → `_de()` (no-op).
-	 *
-	 * `After` is accepted for surface parity with
-	 * `WhitespacePolicy` but produces no space here — emitting a space
-	 * after the opening delimiter would require injecting padding
-	 * inside `sepList`, which currently concatenates the open token
-	 * tight against the first element.
-	 */
-	/**
 	 * Build a runtime `ESwitch` over a `WhitespacePolicy` / `SameLinePolicy`
 	 * opt field. `policyModule` is the enum's module path (e.g.
 	 * `['anyparse', 'format', 'WhitespacePolicy']`); each spec names the policy
@@ -10288,6 +10265,31 @@ class WriterLowering {
 		return { expr: ESwitch(scrutinee, cases, dflt), pos: Context.currentPos() };
 	}
 
+	/**
+	 * Return a Doc expression that optionally prefixes a Star struct
+	 * field's opening delimiter with a space driven by a
+	 * `WhitespacePolicy` option — the paren counterpart of
+	 * `whitespacePolicyLead`.
+	 *
+	 * Consumed today by `@:fmt(funcParamParens)` on `HxFnDecl.params` so
+	 * users can opt into `function main ()` via
+	 * `whitespace.parenConfig.funcParamParens.openingPolicy: "before"`
+	 * without affecting call sites, `new T(...)` args, or `(expr)`.
+	 *
+	 * Returns `null` when the node carries no flag from `flagNames`,
+	 * letting the call site fall through to its pre-slice emission
+	 * (`_dt(' ')` for spaced leads, nothing for tight leads). When a
+	 * flag matches, emits a runtime switch on `opt.<flagName>`:
+	 *  - `Before` / `Both` → `_dt(' ')`.
+	 *  - `None` / `After`  → `_de()` (no-op).
+	 *
+	 * `After` is accepted for surface parity with
+	 * `WhitespacePolicy` but produces no space here — emitting a space
+	 * after the opening delimiter would require injecting padding
+	 * inside `sepList`, which currently concatenates the open token
+	 * tight against the first element.
+	 *
+	 */
 	private static function openDelimPolicySpace(starNode: ShapeNode, flagNames: Array<String>): Null<Expr> {
 		final flagName: Null<String> = firstFmtFlag(starNode, flagNames);
 		return flagName == null
