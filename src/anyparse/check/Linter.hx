@@ -103,7 +103,8 @@ final class Linter {
 			new PreferCaseWildcard(),
 			new OptionalParamShorthand(),
 			new PreferFinalClass(),
-			new PreferSafeNav()
+			new PreferSafeNav(),
+			new EnglishComments()
 		];
 	}
 
