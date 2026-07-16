@@ -182,8 +182,7 @@ final class PreferFinal implements Check {
 	 * within its scope (see `reassignedInScope`).
 	 */
 	private static function writeSpans(name: String, tree: QueryNode, shape: RefShape): Array<Span> {
-		final spans: Array<Span> = [];
-		for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) spans.push(h.span);
+		final spans: Array<Span> = [for (h in Refs.find(name, tree, shape)) if (h.kind == RefKind.Write) h.span];
 		return spans;
 	}
 

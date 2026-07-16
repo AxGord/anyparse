@@ -573,8 +573,7 @@ final class BinaryChainEmit {
 				for (i in 0...ops.length) acc.push(Concat([Text(ops[i] + ' '), items[i + 1]]));
 				acc;
 			case AfterLast:
-				final acc: Array<Doc> = [];
-				for (i in 0...ops.length) acc.push(Concat([items[i], Text(' ' + ops[i])]));
+				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(' ' + ops[i])])];
 				acc.push(items[items.length - 1]);
 				acc;
 		}

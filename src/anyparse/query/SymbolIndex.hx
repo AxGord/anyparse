@@ -336,8 +336,7 @@ final class SymbolIndex {
 
 	/** Every indexed type decl whose simple name is `name`, across all files. */
 	private function declsNamed(name: String): Array<TypeDeclInfo> {
-		final out: Array<TypeDeclInfo> = [];
-		for (fi in _files) for (t in fi.types) if (t.name == name) out.push(t);
+		final out: Array<TypeDeclInfo> = [for (fi in _files) for (t in fi.types) if (t.name == name) t];
 		return out;
 	}
 

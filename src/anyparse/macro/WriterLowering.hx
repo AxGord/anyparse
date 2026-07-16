@@ -35,8 +35,9 @@ class WriterLowering {
 	}
 
 	public function generate(): Array<WriterRule> {
-		final rules: Array<WriterRule> = [];
-		for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rules.push(rule);
+		final rules: Array<WriterRule> = [
+			for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rule
+		];
 		return rules;
 	}
 
@@ -3523,16 +3524,17 @@ class WriterLowering {
 	private function collectBlockCtorPatterns(bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
-		final patterns: Array<Expr> = [];
-		for (branch in rule.children) if (isBlockCtorBranch(branch)) patterns.push(branchCtorPattern(bodyTypePath, branch));
+		final patterns: Array<Expr> =
+			[for (branch in rule.children) if (isBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)];
 		return patterns;
 	}
 
 	private function collectBlockShapeEquivalentPatterns(bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
-		final patterns: Array<Expr> = [];
-		for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) patterns.push(branchCtorPattern(bodyTypePath, branch));
+		final patterns: Array<Expr> = [for (branch in rule.children) if (isBlockShapeEquivalentBranch(branch)) branchCtorPattern(
+			bodyTypePath, branch
+		)];
 		return patterns;
 	}
 
@@ -4692,8 +4694,7 @@ class WriterLowering {
 			// (non-predicated) and zero-arg ctors keep the original wildcard
 			// pattern.
 			final patternFinal: Expr = if (isMatch && predicateName != null && arity >= 1) {
-				final binders: Array<Expr> = [];
-				for (i in 0...arity) binders.push(i == 0 ? macro _v0 : macro _);
+				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v0 : macro _];
 				{ expr: ECall(ctorIdent, binders), pos: pos };
 			} else
 				pattern;
@@ -5704,8 +5705,7 @@ class WriterLowering {
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
 			final tagged: Bool = ctorBranchHasFlag(branch, 'multilineCtor');
 			final pattern: Expr = if (tagged && arity >= 1) {
-				final binders: Array<Expr> = [];
-				for (i in 0...arity) binders.push(i == 0 ? macro _v : macro _);
+				final binders: Array<Expr> = [for (i in 0...arity) i == 0 ? macro _v : macro _];
 				{ expr: ECall(ctorIdent, binders), pos: pos };
 			} else if (arity == 0) {
 				ctorIdent;
