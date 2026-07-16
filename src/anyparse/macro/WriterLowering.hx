@@ -940,7 +940,7 @@ class WriterLowering {
 			// D61: kw prefix + mandatory @:lead lead-in — see emitFieldLeadIn.
 			emitFieldLeadIn(
 				child, parts, kwLead, leadText, isOptional, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing, hasCondWrap,
-				hasCondWrapEnd
+				hasCondWrapEnd, prevAnyStarNonEmpty
 			);
 
 			// Field value.
@@ -3524,8 +3524,9 @@ class WriterLowering {
 	private function collectBlockCtorPatterns(bodyTypePath: String): Array<Expr> {
 		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return [];
-		final patterns: Array<Expr> =
-			[for (branch in rule.children) if (isBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)];
+		final patterns: Array<Expr> = [
+			for (branch in rule.children) if (isBlockCtorBranch(branch)) branchCtorPattern(bodyTypePath, branch)
+		];
 		return patterns;
 	}
 
@@ -8794,9 +8795,21 @@ class WriterLowering {
 	 */
 	private function emitKwPrefix(
 		child: ShapeNode, parts: Array<Expr>, kwLead: String, isFirstField: Bool, isRaw: Bool, prevBodyField: Null<PrevBodyInfo>,
-		typePath: String, prevPadTrailing: Null<Expr>
+		typePath: String, prevPadTrailing: Null<Expr>, prevAnyStarNonEmpty: Null<Expr>
 	): Void {
-		if (!isFirstField && !isRaw) parts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
+		if (!isFirstField && !isRaw) {
+			final sep: Expr = sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing);
+			// ω-final-modified-member-double-space: when every preceding field was
+			// an empty bare-tryparse Star, drop this kw's leading separator, else a
+			// stray space leaks (`final  function` when `HxFinalModifierMember.modifiers`
+			// is empty). Mirrors the bare-Ref path's `prevAnyStarNonEmpty` gate in
+			// `emitBareRefNonFirstBody`. Null tracker (no preceding Star) is byte-identical.
+			if (prevAnyStarNonEmpty != null) {
+				final prev: Expr = prevAnyStarNonEmpty;
+				parts.push(macro $prev ? $sep : _de());
+			} else
+				parts.push(sep);
+		}
 		if (child.fmtHasFlag('leftCurly')) {
 			// `leftCurlySeparator` (default `optSpaceUpstream=false`)
 			// handles both forms identically at this site: bare-flag
@@ -9984,13 +9997,13 @@ class WriterLowering {
 	private function emitFieldLeadIn(
 		child: ShapeNode, parts: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, isOptional: Bool, isFirstField: Bool,
 		isRaw: Bool, prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, hasCondWrap: Bool,
-		hasCondWrapEnd: Bool
+		hasCondWrapEnd: Bool, prevAnyStarNonEmpty: Null<Expr>
 	): Void {
 		// D61: kw prefix — space before kw (unless first), kw text with trailing
 		// space. @:fmt(sameLine(...)) switches the leading space to a hardline;
 		// @:fmt(leftCurly) splits the kw emission for a runtime BracePlacement.
 		if (kwLead != null && !isOptional)
-			emitKwPrefix(child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing);
+			emitKwPrefix(child, parts, kwLead, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing, prevAnyStarNonEmpty);
 		// D61: non-optional lead — no space before lead. The end-field of a
 		// condWrap span cannot push its own `@:lead` (the open paren is owned by
 		// the start field and emitted via the splice's emitCondition wrap).

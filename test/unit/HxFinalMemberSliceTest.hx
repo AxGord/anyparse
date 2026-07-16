@@ -223,6 +223,35 @@ class HxFinalMemberSliceTest extends HxTestHelpers {
 		roundTrip('class Main { final foo:Int = 1; final static function main():Void {} }');
 	}
 
+	// ======== FinalModifiedMember: single-space emit regression ========
+
+	public function testFinalFunctionEmitsSingleSpace(): Void {
+		// Regression (double space `final  function`): the `@:kw('final')` slot on
+		// FinalModifiedMember emits `final ` and the inner `@:kw('function')` field
+		// leaked its own leading separator even when the `modifiers` Star between
+		// them was empty. The kw-prefix separator now gates on `prevAnyStarNonEmpty`
+		// like the bare-Ref path (WriterLowering.emitKwPrefix).
+		writerEquals(
+			'class C {\n\tfinal function f():Void {}\n}', 'class C {\n\tfinal function f():Void {}\n}\n',
+			'final method modifier emits a single space before function'
+		);
+	}
+
+	public function testPublicFinalFunctionEmitsSingleSpace(): Void {
+		writerEquals(
+			'class C {\n\tpublic final function f():Void {}\n}', 'class C {\n\tpublic final function f():Void {}\n}\n',
+			'public final method emits single spaces'
+		);
+	}
+
+	public function testFullModifierRunFinalFunctionEmitsSingleSpace(): Void {
+		writerEquals(
+			'class C {\n\toverride public static inline final function f():Void {}\n}',
+			'class C {\n\toverride public static inline final function f():Void {}\n}\n',
+			'full modifier run before a final method emits single spaces'
+		);
+	}
+
 	// ======== helpers ========
 
 	private function expectFinalMember(member: HxClassMember): HxVarDecl {

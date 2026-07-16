@@ -8,6 +8,8 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.grammar.haxe.HaxeModuleParser;
+import anyparse.grammar.haxe.HxModuleWriter;
 
 /**
  * The `modifier-order` check: a member whose modifier keywords are not in the
@@ -117,6 +119,25 @@ class ModifierOrderCheckTest extends Test {
 	public function testScrambledFinalChainFixedToCanonical(): Void {
 		final fixed: String = fixedSource('class C { final override public static inline function f():Void {} }');
 		Assert.isTrue(fixed.indexOf('override public static inline final function f') >= 0);
+	}
+
+	/**
+	 * B3: `--fix` reorders the method `final` to LAST, which empties the
+	 * `FinalModifiedMember` inner modifier run — the exact shape that used to emit a
+	 * double space (`final  function`) once the fix output is canonicalized by the
+	 * writer round-trip. Assert the canonical form keeps a single space.
+	 */
+	public function testFixOutputCanonicalizesToSingleSpace(): Void {
+		for (src in [
+			'class C { final inline function f():Void {} }',
+			'class C { final public function f():Void {} }',
+			'class C { final override public static inline function f():Void {} }'
+		]) {
+			final fixed: String = fixedSource(src);
+			final canonical: String = HxModuleWriter.write(HaxeModuleParser.parse(fixed));
+			Assert.isTrue(canonical.indexOf('final function f') >= 0, 'single space expected in <$canonical>');
+			Assert.equals(-1, canonical.indexOf('final  function'));
+		}
 	}
 
 	private function violations(src: String): Array<Violation> {
