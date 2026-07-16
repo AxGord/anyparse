@@ -130,12 +130,9 @@ final class ThreadSafety implements Check implements ConfigAware {
 	): Void {
 		// noqa: complexity
 		final queue: Array<String> = [];
-		for (id => node in graph.nodes) {
-			if (node.isExternal) continue;
-			if (graph.inEdges(id).length == 0) {
-				contexts[id] = CTX_MAIN;
-				queue.push(id);
-			}
+		for (id => node in graph.nodes) if (!node.isExternal && graph.inEdges(id).length == 0) {
+			contexts[id] = CTX_MAIN;
+			queue.push(id);
 		}
 		var qi: Int = 0;
 		while (true) {
@@ -168,8 +165,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 			// seeded INTO the worklist so the assumption reaches its callees (a
 			// plain post-drain fill would silently miss their sink calls)
 			var seeded: Bool = false;
-			for (id => node in graph.nodes) {
-				if (node.isExternal || contexts.exists(id)) continue;
+			for (id => node in graph.nodes) if (!(node.isExternal || contexts.exists(id))) {
 				contexts[id] = CTX_MAIN;
 				queue.push(id);
 				seeded = true;
@@ -248,8 +244,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 				final dot: Int = lockId.lastIndexOf('.');
 				if (dot <= 0) continue;
 				final unlockId: String = lockId.substring(0, dot + 1) + unlockMember;
-				for (lockEdge in graph.inEdges(lockId)) {
-					if (lockEdge.kind != Call) continue;
+				for (lockEdge in graph.inEdges(lockId)) if (lockEdge.kind == Call) {
 					final lockSpan: Null<Span> = lockEdge.span;
 					if (lockSpan == null) continue;
 					final windowEnd: Null<Int> = closingUnlockFrom(graph, lockEdge, unlockId);

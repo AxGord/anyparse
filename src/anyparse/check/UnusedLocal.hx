@@ -112,8 +112,7 @@ final class UnusedLocal implements Check {
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 
-		for (v in violations) {
-			if (v.severity != Severity.Warning) continue;
+		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final decl: Null<QueryNode> = declByFrom[span.from];

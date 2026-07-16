@@ -54,8 +54,7 @@ final class SymbolQuery {
 		for (info in index.allFiles()) {
 			final maybeSrc: Null<String> = sourceOf[info.file];
 			final src: String = maybeSrc ?? '';
-			for (type in info.types) {
-				if (kindFilter != null && type.kind != kindFilter) continue;
+			for (type in info.types) if (!(kindFilter != null && type.kind != kindFilter)) {
 				final pos = type.span.lineCol(src);
 				rows.push({
 					qualified: type.isMain ? info.module : '${info.module}.${type.name}',

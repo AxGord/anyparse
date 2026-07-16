@@ -232,8 +232,7 @@ final class Clusters {
 	private static function aggregateIntraEdges(graph: CallGraph, memberIds: Array<String>, kinds: Array<EdgeKind>): Array<MemberEdge> {
 		final byPair: Map<String, MemberEdge> = [];
 		final order: Array<MemberEdge> = [];
-		for (e in graph.edges) {
-			if (!kinds.contains(e.kind)) continue;
+		for (e in graph.edges) if (kinds.contains(e.kind)) {
 			final from: String = memberRoot(e.from);
 			final to: String = memberRoot(e.to);
 			if (from == to) continue;

@@ -57,8 +57,7 @@ class TriviaAnalysis {
 		var changed: Bool = true;
 		while (changed) {
 			changed = false;
-			for (name => node in result.rules) {
-				if (bearing.exists(name)) continue;
+			for (name => node in result.rules) if (!bearing.exists(name)) {
 				for (ref in collectRefs(node)) if (bearing.exists(ref)) {
 					bearing[name] = true;
 					changed = true;

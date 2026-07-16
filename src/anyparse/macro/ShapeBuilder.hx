@@ -312,8 +312,7 @@ class ShapeBuilder {
 		if (a.impl == null) return null;
 		final impl: ClassType = a.impl.get();
 		final values: Array<{ name: String, value: String }> = [];
-		for (f in impl.statics.get()) {
-			if (f.kind.match(FMethod(_))) continue;
+		for (f in impl.statics.get()) if (!f.kind.match(FMethod(_))) {
 			final texpr: Null<TypedExpr> = f.expr();
 			if (texpr == null) continue;
 			final s: Null<String> = extractStringConst(texpr);

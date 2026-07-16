@@ -96,8 +96,7 @@ final class UnusedPrivate implements Check {
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode }> = [];
 		collectMembers(tree, memberByFrom);
 
-		for (v in violations) {
-			if (v.severity != Severity.Warning) continue;
+		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final hit: Null<{ node: QueryNode, parent: QueryNode }> = memberByFrom[span.from];

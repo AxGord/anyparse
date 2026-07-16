@@ -145,8 +145,7 @@ final class ExtractInterface {
 	private static function publicMethods(decl: TypeDeclMatch, source: String): Array<IfaceMethod> {
 		final out: Array<IfaceMethod> = [];
 		final siblings: Array<QueryNode> = decl.nameNode.children;
-		for (i => child in siblings) {
-			if (child.kind != 'FnMember') continue;
+		for (i => child in siblings) if (child.kind == 'FnMember') {
 			final name: Null<String> = child.name;
 			final span: Null<Span> = child.span;
 			if (name == null || span == null || name == 'new') continue;

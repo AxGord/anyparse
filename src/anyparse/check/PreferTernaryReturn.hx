@@ -243,8 +243,7 @@ final class PreferTernaryReturn implements Check {
 	 */
 	private static function preservedComments(source: String, ifSpan: Span, nextSpan: Span, kept: Array<Span>): String {
 		final out: StringBuf = new StringBuf();
-		for (tok in RefactorSupport.collectCommentTokens(source)) {
-			if (tok.from < ifSpan.from || tok.to > nextSpan.to) continue;
+		for (tok in RefactorSupport.collectCommentTokens(source)) if (!(tok.from < ifSpan.from || tok.to > nextSpan.to)) {
 			var insideKept: Bool = false;
 			for (k in kept) if (tok.from >= k.from && tok.to <= k.to) {
 				insideKept = true;

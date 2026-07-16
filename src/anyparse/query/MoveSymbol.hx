@@ -546,8 +546,7 @@ final class MoveSymbol {
 	): Void {
 		if (oldImportPath == null || oldImportPath == newImportPath) return;
 		final oldModule: String = SymbolIndex.moduleOf(oldImportPath);
-		for (importer in index.filesImportingModule(oldModule)) {
-			if (importer.file == destFile) continue; // dest handled separately.
+		for (importer in index.filesImportingModule(oldModule)) if (importer.file != destFile) { // dest handled separately.
 			final importerSource: Null<String> = sourceOf[importer.file];
 			if (importerSource == null) continue;
 			for (imp in importer.imports) if (imp.raw == oldImportPath)

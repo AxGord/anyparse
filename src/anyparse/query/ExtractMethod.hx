@@ -312,8 +312,7 @@ final class ExtractMethod {
 	private static function outerLocalMutatedAndUsedAfter(
 		sel: StmtRange, declNames: Array<String>, tree: QueryNode, shape: RefShape
 	): Null<String> {
-		for (nm in distinctIdentNames(sel.stmts)) {
-			if (declNames.contains(nm)) continue;
+		for (nm in distinctIdentNames(sel.stmts)) if (!declNames.contains(nm)) {
 			final hits: Array<RefHit> = Refs.find(nm, tree, shape);
 			final writeIn: Null<RefHit> = hits.find(h ->
 				h.kind == RefKind.Write && h.span.from >= sel.fromOffset && h.span.from < sel.toOffset

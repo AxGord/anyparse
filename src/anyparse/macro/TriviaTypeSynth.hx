@@ -423,8 +423,7 @@ class TriviaTypeSynth {
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];
 		final convertedNames: Array<String> = [];
-		for (origName => node in shape.rules) {
-			if (node.annotations.get('trivia.bearing') != true) continue;
+		for (origName => node in shape.rules) if (node.annotations.get('trivia.bearing') == true) {
 			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
 			defined[pairedFqn] = true;

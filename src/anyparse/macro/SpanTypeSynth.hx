@@ -72,8 +72,7 @@ class SpanTypeSynth {
 		final synthPack: Array<String> = rootPack.concat([SYNTH_SUBPACK]);
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];
-		for (origName => node in shape.rules) {
-			if (node.kind == Terminal) continue;
+		for (origName => node in shape.rules) if (node.kind != Terminal) {
 			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
 			defined[pairedFqn] = true;

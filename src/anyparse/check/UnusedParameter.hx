@@ -118,8 +118,7 @@ final class UnusedParameter implements Check {
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
 		if (tree == null) return [];
 		final flagged: Array<String> = [];
-		for (v in violations) {
-			if (v.severity != Severity.Warning) continue;
+		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}

@@ -28,8 +28,7 @@ final class Reach {
 			var qi: Int = 0;
 			while (qi < queue.length) {
 				final id: String = queue[qi++];
-				for (edge in graph.outEdges(id)) {
-					if (!kinds.contains(edge.kind)) continue;
+				for (edge in graph.outEdges(id)) if (kinds.contains(edge.kind)) {
 					final next: String = edge.to;
 					if (next == fromId || parent.exists(next)) continue;
 					parent[next] = edge;

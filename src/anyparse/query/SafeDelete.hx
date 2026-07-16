@@ -117,8 +117,7 @@ final class SafeDelete {
 				for (c in node.children) walk(c);
 			}
 			walk(entry.tree);
-			if (inSrc) for (h in Refs.find(memberName, entry.tree, refShape)) {
-				if (h.kind == RefKind.Decl) continue;
+			if (inSrc) for (h in Refs.find(memberName, entry.tree, refShape)) if (h.kind != RefKind.Decl) {
 				final b: Null<Span> = h.bindingSpan;
 				if (b == null || b.from != memberSpan.from) continue;
 				if (h.span.from >= memberSpan.from && h.span.from < memberSpan.to) continue;

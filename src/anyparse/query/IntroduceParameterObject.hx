@@ -242,8 +242,7 @@ final class IntroduceParameterObject {
 			final fSpan: Null<Span> = f.node.span;
 			if (fSpan == null) continue;
 			final binding: Int = fSpan.from;
-			for (hit in Refs.find(f.name, tree, shape)) {
-				if (hit.kind == RefKind.Decl) continue;
+			for (hit in Refs.find(f.name, tree, shape)) if (hit.kind != RefKind.Decl) {
 				final b: Null<Span> = hit.bindingSpan;
 				if (b == null || b.from != binding) continue;
 				final at: Int = RefactorSupport.identTokenOffset(source, hit.span, f.name);

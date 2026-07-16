@@ -543,8 +543,7 @@ final class MoveMember {
 	private static function collectBareCallerHits(prep: MovePrep, plugin: GrammarPlugin): Array<{ m: MovedMember, offset: Int }> {
 		final out: Array<{ m: MovedMember, offset: Int }> = [];
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti([for (m in prep.moved) m.name], prep.srcTree, plugin.refShape());
-		for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) {
-			if (hit.kind == RefKind.Decl) continue;
+		for (m in prep.moved) for (hit in hitsByName[m.name] ?? []) if (hit.kind != RefKind.Decl) {
 			final binding: Null<Span> = hit.bindingSpan;
 			if (binding == null || binding.from != m.span.from) continue;
 			if (insideAnyCut(prep, hit.span.from)) continue;
@@ -792,8 +791,7 @@ final class MoveMember {
 		final siblingName: String = sibling.member.name ?? '';
 		final siblingStatic: Bool = sibling.modifiers.exists(m -> m.kind == 'Static');
 		final siblingPublic: Bool = sibling.modifiers.exists(m -> m.kind == 'Public');
-		for (hit in hits) {
-			if (hit.kind == RefKind.Decl) continue;
+		for (hit in hits) if (hit.kind != RefKind.Decl) {
 			final binding: Null<Span> = hit.bindingSpan;
 			if (binding == null || binding.from != siblingSpan.from) continue;
 			final host: Null<MovedMember> = prep.moved.find(m -> hit.span.from >= m.cut.from && hit.span.from < m.cut.to);
@@ -1079,8 +1077,7 @@ final class MoveMember {
 	 * a moved body.
 	 */
 	private static function calledFromCuts(hits: Array<RefHit>, declSpan: Span, cuts: Array<Span>): Bool {
-		for (hit in hits) {
-			if (hit.kind == RefKind.Decl) continue;
+		for (hit in hits) if (hit.kind != RefKind.Decl) {
 			final binding: Null<Span> = hit.bindingSpan;
 			if (binding == null || binding.from != declSpan.from) continue;
 			if (cuts.exists(cut -> hit.span.from >= cut.from && hit.span.from < cut.to)) return true;

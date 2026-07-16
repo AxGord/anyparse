@@ -252,8 +252,7 @@ class BlockCommentNormalizer {
 		final includeLastInPrefix: Bool = !lastIsClosingBrace && !lastIsDecoOrEmpty;
 
 		var commonPrefix: Null<String> = null;
-		for (i in 1...lines.length) {
-			if (i == last && !includeLastInPrefix) continue;
+		for (i in 1...lines.length) if (!(i == last && !includeLastInPrefix)) {
 			final body: String = lines[i].body;
 			if (body.length == 0) continue;
 			final ws: String = lines[i].ws;

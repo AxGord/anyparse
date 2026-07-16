@@ -35,8 +35,7 @@ final class CallChains {
 		function walk(id: String, level: Int, ancestors: Array<String>): Void {
 			if (truncated || level > depth) return;
 			final edgeList: Array<CallEdge> = outward ? graph.outEdges(id) : graph.inEdges(id);
-			for (edge in edgeList) {
-				if (kindFilter.length > 0 && !kindFilter.contains(edge.kind)) continue;
+			for (edge in edgeList) if (!(kindFilter.length > 0 && !kindFilter.contains(edge.kind))) {
 				if (maxLines > 0 && lines >= maxLines) {
 					truncated = true;
 					return;

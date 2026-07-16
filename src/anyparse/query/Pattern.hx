@@ -82,8 +82,7 @@ final class KindEquivalence {
 
 	public function new(classes: Array<Array<String>>) {
 		_canonOf = [];
-		for (group in classes) {
-			if (group.length == 0) continue;
+		for (group in classes) if (group.length != 0) {
 			final rep: String = group[0];
 			for (k in group) _canonOf[k] = rep;
 		}

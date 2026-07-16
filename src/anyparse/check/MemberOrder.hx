@@ -428,8 +428,7 @@ final class MemberOrder implements Check {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
 		final regionFrom: Int = members[0].regionFrom;
 		final regionTo: Int = members[members.length - 1].regionTo;
-		for (c in comments) {
-			if (c.to <= regionFrom || c.from >= regionTo) continue;
+		for (c in comments) if (!(c.to <= regionFrom || c.from >= regionTo)) {
 			var covered: Bool = false;
 			for (m in members) {
 				final leadEnd: Int = m.leadFrom + m.leadTrivia.length;

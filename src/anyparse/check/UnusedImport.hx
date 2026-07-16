@@ -107,8 +107,7 @@ final class UnusedImport implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			if (v.severity != Severity.Warning) continue;
+		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span != null) edits.push({ span: span, text: '' });
 		}

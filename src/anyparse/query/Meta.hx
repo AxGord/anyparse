@@ -65,8 +65,7 @@ final class Meta {
 		final after: Int = metaSpan.from;
 		var best: Null<QueryNode> = null;
 		var bestFrom: Int = 0;
-		for (s in siblings) {
-			if (!shape.declHostKinds.contains(s.kind)) continue;
+		for (s in siblings) if (shape.declHostKinds.contains(s.kind)) {
 			final ss: Null<Span> = s.span;
 			if (ss == null || ss.from <= after) continue;
 			if (best == null || ss.from < bestFrom) {

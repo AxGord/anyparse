@@ -7866,8 +7866,7 @@ final class Cli {
 		if (!FileSystem.exists(macroDir) || !FileSystem.isDirectory(macroDir)) return '';
 		final marker: String = 'function ${name}Field(';
 		try {
-			for (entry in FileSystem.readDirectory(macroDir)) {
-				if (!StringTools.endsWith(entry, '.hx')) continue;
+			for (entry in FileSystem.readDirectory(macroDir)) if (StringTools.endsWith(entry, '.hx')) {
 				final src: String = sys.io.File.getContent('$macroDir/$entry');
 				if (src.indexOf(marker) < 0) continue;
 				return
@@ -7923,8 +7922,7 @@ final class Cli {
 		final scored: Array<{ name: String, tier: Int, score: Int }> = [];
 		final qLen: Int = query.length;
 		final substringEnabled: Bool = qLen >= FUZZY_SUBSTRING_MIN_QUERY;
-		for (cand in pool.keys()) {
-			if (cand == query) continue;
+		for (cand in pool.keys()) if (cand != query) {
 			if (substringEnabled && cand.length > qLen && cand.length - qLen <= FUZZY_SUBSTRING_MAX_EXTRA && cand.indexOf(query) >= 0) {
 				scored.push({ name: cand, tier: 0, score: cand.length - qLen });
 				continue;
