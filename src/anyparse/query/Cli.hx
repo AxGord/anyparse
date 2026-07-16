@@ -1035,13 +1035,13 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(lang, inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq symbols: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
 		final files: Array<{ file: String, source: String }> = [];
 		for (path in paths) {
@@ -1098,13 +1098,13 @@ final class Cli {
 		}
 
 		final modulePath: String = module;
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(lang, inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq importers: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
 		final files: Array<{ file: String, source: String }> = [];
 		for (path in paths) {
@@ -1163,13 +1163,13 @@ final class Cli {
 		}
 
 		final name: String = typeName;
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(lang, inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq declares: ${inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
 		final files: Array<{ file: String, source: String }> = [];
 		for (path in paths) {
@@ -1214,13 +1214,13 @@ final class Cli {
 		final checks: Null<Array<Check>> = resolveLintChecks(o.ruleFilters);
 		if (checks == null) return EXIT_USAGE;
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq lint: ${o.inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
 		final files: Array<{ file: String, source: String }> = [];
 		final sourceOf: Map<String, String> = [];
@@ -3282,19 +3282,19 @@ final class Cli {
 		// the raw bytes coincide, so the pre-filter is safe.
 		final litPrefilterKey: Null<String> = targetStr.indexOf('\\') < 0 ? targetStr : null;
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq lit: no input files matched ${o.inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
 		final skipEntries: Array<SkipEntry> = [];
 		final collected: Null<{
 			entries: Array<{ file: String, source: String, hits: Array<LitHit> }>,
 			autoWidened: Bool
-		}> = collectLitEntries(paths, plugin, expanded.singleFile, skipEntries, {
+		}> = collectLitEntries(paths, plugin, io.singleFile, skipEntries, {
 			target: targetStr,
 			exact: o.exact,
 			kinds: effectiveKindFilter,
@@ -3422,15 +3422,15 @@ final class Cli {
 		}
 		final targetStr: String = target;
 
-		final plugin: GrammarPlugin = pickPlugin(lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(lang, inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq cases: no input files matched ${inputSpecs.join(' ')}\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
-		final singleFile: Bool = expanded.singleFile;
+		final singleFile: Bool = io.singleFile;
 		final allEntries: Array<{ file: String, source: String, hits: Array<CasesHit> }> = [];
 		final skipEntries: Array<SkipEntry> = [];
 		var scanned: Int = 0;
@@ -6897,12 +6897,7 @@ final class Cli {
 		sysPrint('Extract the contiguous run of statements bounded by the two positions into\n');
 		sysPrint('a fresh local function <name> (a closure), replacing the run with a call.\n');
 		sysPrint('A local defined in the run and used after it becomes the return value.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		printOptionsEditTail();
 	}
 
 	private static function printAddElementUsage(): Void {
@@ -6946,21 +6941,14 @@ final class Cli {
 		sysPrint('its modifier / meta group). The structural inverse of add-element; one\n');
 		sysPrint('separating comma is removed for comma lists. The result is writer-formatted +\n');
 		sysPrint('re-parse-validated.\n');
-		sysPrint('\n');
-		sysPrint('Addressing:\n');
-		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
-		sysPrint('                      non-whitespace character\n');
-		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+		printAddressingHelp();
 		sysPrint('                      (descendant); must resolve to exactly one node\n');
 		sysPrint("  --match '<pattern>' apq-search structural pattern ($x metavars); exactly one\n");
 		sysPrint('  --nth <k>           Pick the k-th (1-based) of several --select/--match matches\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --with-doc      Also remove the element\'s leading doc comment\n');
-		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		printEditOptionsTail();
 	}
 
 	private static function printRemoveImportUsage(): Void {
@@ -6969,12 +6957,7 @@ final class Cli {
 		sysPrint('Remove the import / using statement whose exposed path equals <module.path>\n');
 		sysPrint('(the alias for an aliased import). The path must name exactly one statement.\n');
 		sysPrint('The by-name counterpart of remove-element; backend of lint --fix.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		printOptionsEditTail();
 	}
 
 	private static function printRemoveMemberUsage(): Void {
@@ -6987,10 +6970,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>      The enclosing type (required)\n');
 		sysPrint('  --with-doc      Also remove the member\'s leading doc comment\n');
-		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
-		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
-		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
-		sysPrint('  -h, --help      Show this help\n');
+		printEditOptionsTail();
 	}
 
 	private static function printInlineMethodUsage(): Void {
@@ -7113,12 +7093,7 @@ final class Cli {
 		sysPrint('  --decls             Filter to declarations\n');
 		sysPrint('  --reads             Filter to read references\n');
 		sysPrint('  --writes            Filter to write references (Phase 3.3)\n');
-		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
-		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printDocSourceFlatLimitLangHelp();
 		sysPrint('Phase 3.1: name-only matching, no lexical scope. Filters combine\n');
 		sysPrint('inclusively — passing `--decls --reads` keeps both kinds.\n');
 	}
@@ -7192,11 +7167,7 @@ final class Cli {
 
 	private static function printInlineUsage(): Void {
 		sysPrint("Usage: apq inline <file> (<line>:<col> | --select '<sel>' | --match '<pattern>') [--write]\n");
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printOptionsWriteLangHelp();
 		sysPrint('Scope-correct, format-preserving inline of the local var / final\n');
 		sysPrint('binding identified by the symbol at <line>:<col>. Every read of the\n');
 		sysPrint('binding is replaced with its initializer source (parenthesised when\n');
@@ -7212,11 +7183,7 @@ final class Cli {
 
 	private static function printExtractVarUsage(): Void {
 		sysPrint("Usage: apq extract-var <file> (<line>:<col> | --match '<expr-pattern>') <name> [--write]\n");
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printOptionsWriteLangHelp();
 		sysPrint('Scope-correct, format-preserving extract-variable — the inverse of\n');
 		sysPrint('inline. The expression starting at <line>:<col> is hoisted into a fresh\n');
 		sysPrint('local `final <name> = <expr>;` inserted on its own line immediately\n');
@@ -7233,11 +7200,7 @@ final class Cli {
 
 	private static function printAddParamUsage(): Void {
 		sysPrint("Usage: apq add-param <file> (<line>[:<col>] | --select 'FnMember:<name>' | --match '<pattern>') <paramText> [--write]\n");
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printOptionsWriteLangHelp();
 		sysPrint('Add a backward-compatible parameter to a function declaration. The\n');
 		sysPrint('function whose declaration is at <line>:<col> gains <paramText> as a new\n');
 		sysPrint('trailing parameter (e.g. `?flag:Bool`, `count:Int = 0`, `?cb:Void->Void`).\n');
@@ -7259,9 +7222,7 @@ final class Cli {
 		sysPrint('  --type <TypeName>   Type whose body gains the member (required)\n');
 		sysPrint('  --from-file <path>  Read <memberText> from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printWriteLangHelp();
 		sysPrint('The member text may be given inline, read from a file with --from-file, or\n');
 		sysPrint('read from stdin when it is the literal `-` (heredoc-friendly for code with\n');
 		sysPrint('`$` or quotes the shell would mangle). Append <memberText> as a new member\n');
@@ -7283,9 +7244,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --using             Add a `using` instead of an `import`\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printWriteLangHelp();
 		sysPrint('Add `import <module.path>;` (or `using` with --using) after the last\n');
 		sysPrint('existing import / using, else after the `package` declaration, else at the\n');
 		sysPrint('start of the file. The result is WRITER-FORMATTED (the whole file is\n');
@@ -7300,16 +7259,7 @@ final class Cli {
 		sysPrint(
 			"Usage: apq replace-node <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (<newSource> | --from-file <path> | -) [--reformat] [--write]\n"
 		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
-		sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
-		sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
-		sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
-		sysPrint('                      same exactly-one / --nth discipline\n');
-		sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
-		sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
-		sysPrint("                      = the line's first non-whitespace character\n");
+		printSelectorAddressingOptions();
 		sysPrint('  --kind <Kind>       With --at: the innermost node of <Kind> at the cursor.\n');
 		sysPrint('                      With --select / --match: LIFT the resolved node to its\n');
 		sysPrint('                      innermost enclosing <Kind> (a pattern matches the Call —\n');
@@ -7317,9 +7267,7 @@ final class Cli {
 		sysPrint('  --with-doc          Also replace the leading doc comment (rewrite its docs)\n');
 		sysPrint('  --from-file <path>  Read <newSource> from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printWriteLangHelp();
 		sysPrint('The new source may be inline, read from a file with --from-file, or read\n');
 		sysPrint('from stdin when it is the literal `-` (heredoc-friendly for code with `$`\n');
 		sysPrint('or quotes the shell would mangle). Replace the source span of a single\n');
@@ -7337,11 +7285,7 @@ final class Cli {
 		sysPrint(
 			"Usage: apq change-sig <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <perm>  (perm = comma-separated 0-based new order, e.g. 2,0,1)\n"
 		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printOptionsWriteLangHelp();
 		sysPrint('Scope-correct, format-preserving change-signature (parameter reorder).\n');
 		sysPrint('The function whose declaration / binding is at <line>:<col> has its\n');
 		sysPrint('parameters reordered per <perm> — a comma-separated 0-based list giving\n');
@@ -7364,11 +7308,7 @@ final class Cli {
 		sysPrint(
 			"Usage: apq remove-param <file> (<line>:<col> | --select 'FnMember:<name>' | --match '<pattern>') <index> [--write]  (index = 0-based parameter to remove)\n"
 		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printOptionsWriteLangHelp();
 		sysPrint('Scope-correct, format-preserving remove-parameter — the inverse of\n');
 		sysPrint('add-param. The function whose declaration / binding is at <line>:<col>\n');
 		sysPrint('loses the parameter at 0-based <index>, and the corresponding positional\n');
@@ -7394,12 +7334,7 @@ final class Cli {
 		sysPrint('Usage: apq uses [options] <type-name> <file-or-dir-or-glob>...\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
-		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
-		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printDocSourceFlatLimitLangHelp();
 		sysPrint('Finds type-position references — a field/var type annotation,\n');
 		sysPrint('an enum-constructor parameter type, a type parameter. Sister of\n');
 		sysPrint('`refs` (value bindings). `Array<T>` reports both `Array` and\n');
@@ -7412,10 +7347,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --arg-contains <s>  Keep hits whose argument list contains <s> (substring)\n');
 		sysPrint('  --on <decl-kind>    Keep hits attached to the given decl kind\n');
-		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
-		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printFlatLimitLangHelp();
 		sysPrint('<annotation> is the target language source syntax (e.g. `@:foo`),\n');
 		sysPrint('recognised by its leading `@`. Omit it with `--on` to list every\n');
 		sysPrint('annotation on a decl kind.\n');
@@ -8072,18 +8004,18 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq fmt: ${o.inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
 		// No --write and no -l on a single concrete file → emit the formatted
 		// source to stdout (gofmt's one-file default). Multiple files / a dir
 		// without --write → list mode (names of files that would change).
-		final listMode: Bool = o.list || (!o.write && !expanded.singleFile);
+		final listMode: Bool = o.list || (!o.write && !io.singleFile);
 
 		var changed: Int = 0;
 		var failed: Int = 0;
@@ -8273,21 +8205,10 @@ final class Cli {
 		sysPrint(
 			"Usage: apq set-doc <file> (<line>[:<col>] | --select '<sel>' | --match '<pattern>') (<text> | --from-file <path> | -) [--reformat] [--write]\n"
 		);
-		sysPrint('\n');
-		sysPrint('Addressing:\n');
-		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
-		sysPrint('                      non-whitespace character\n');
-		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
-		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
-		sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
-		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
+		printSelectorAddressingSection();
 		sysPrint('  --from-file <path>  Read the doc text from a file instead of the argument\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printWriteLangHelp();
 		sysPrint('Add or replace the doc-comment of the addressed declaration. The text is\n');
 		sysPrint('formatted into a doc-comment block and spliced before the declaration; an\n');
 		sysPrint('existing leading doc comment is replaced, the declaration itself is left\n');
@@ -8387,20 +8308,9 @@ final class Cli {
 		sysPrint('  public | private    Set the visibility\n');
 		sysPrint('  +<mod> | -<mod>     Add / remove a boolean modifier\n');
 		sysPrint('                      (static, inline, override, macro, extern, dynamic)\n');
-		sysPrint('\n');
-		sysPrint('Addressing:\n');
-		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
-		sysPrint('                      non-whitespace character\n');
-		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
-		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
-		sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
-		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
+		printSelectorAddressingSection();
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printWriteLangHelp();
 		sysPrint('Flip the visibility / add or remove modifiers of the addressed declaration\n');
 		sysPrint('without retyping it — the safe replacement for replace-node on a modifier.\n');
 		sysPrint('`final` is not handled (it wraps the declaration; use replace-node).\n');
@@ -8650,15 +8560,15 @@ final class Cli {
 
 		final findStr: String = find;
 		final replaceStr: String = replace;
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(o.inputSpecs, '.hx');
-		final paths: Array<String> = expanded.paths;
+		final io = resolveInputPaths(o.lang, o.inputSpecs);
+		final paths: Array<String> = io.paths;
 		if (paths.length == 0) {
 			stderr('apq comment-rewrite: ${o.inputSpecs.join(', ')} matched no .hx files\n');
 			return EXIT_RUNTIME;
 		}
+		final plugin: GrammarPlugin = io.plugin;
 
-		final listMode: Bool = o.list || (!o.write && !expanded.singleFile);
+		final listMode: Bool = o.list || (!o.write && !io.singleFile);
 
 		final tally: { changed: Int, failed: Int } = rewriteCommentFiles(
 			paths, findStr, replaceStr, plugin, o.write, listMode, o.regex, o.reformat
@@ -12213,23 +12123,12 @@ final class Cli {
 		sysPrint(
 			"Usage: apq patch <file> (--select '<sel>' | --match '<pattern>' | --at <line>[:<col>]) (- | --from-file <path>) [--sep <marker>] [--reformat] [--write]\n"
 		);
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
-		sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
-		sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
-		sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
-		sysPrint('                      same exactly-one / --nth discipline\n');
-		sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
-		sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
-		sysPrint("                      = the line's first non-whitespace character\n");
+		printSelectorAddressingOptions();
 		sysPrint('  --kind <Kind>       With --at: narrow; with --select / --match: LIFT\n');
 		sysPrint('  --sep <marker>      Separator line between the fragments (default: ====)\n');
 		sysPrint('  --from-file <path>  Read the payload from a file instead of stdin\n');
 		sysPrint('  --reformat          Canonicalise the whole file (allow a non-canonical input)\n');
-		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
-		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
-		sysPrint('\n');
+		printWriteLangHelp();
 		sysPrint('Replace ONE unique fragment inside the addressed node without resending\n');
 		sysPrint('the whole declaration. The payload is the OLD fragment, a separator line\n');
 		sysPrint('(a line that is exactly the marker, default `====`), and the NEW fragment:\n');
@@ -13560,9 +13459,7 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --type <Src>   Declaring type name (default: the file\'s main type)\n');
 		sysPrint('  --scope <dir>  Reference-check scope (dir/glob; srcFile auto-included)\n');
-		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
-		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		printShortReformatWriteLangHelp();
 	}
 
 	private static function runEncapsulateField(args: Array<String>): Int {
@@ -13641,9 +13538,7 @@ final class Cli {
 		sysPrint('an explicit type.\n\n');
 		sysPrint('Options:\n');
 		sysPrint('  --type <T>     Declaring type name (default: the file\'s main type)\n');
-		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
-		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
-		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+		printShortReformatWriteLangHelp();
 	}
 
 	private static function runMakeFinal(args: Array<String>): Int {
@@ -13849,6 +13744,91 @@ final class Cli {
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
 		for (c in checks) sysPrint(StringTools.rpad(c.id(), ' ', width) + '  ' + c.description() + '\n');
+	}
+
+
+	private static function printWriteLangHelp(): Void {
+		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+	}
+
+	private static function printOptionsWriteLangHelp(): Void {
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		printWriteLangHelp();
+	}
+
+	private static function printEditOptionsTail(): Void {
+		sysPrint('  --write         Overwrite the file in place (default: print to stdout)\n');
+		sysPrint('  --reformat      Canonicalise the whole file if it is not already canonical\n');
+		sysPrint('  --lang <name>   Grammar plugin (default: haxe)\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	private static function printOptionsEditTail(): Void {
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		printEditOptionsTail();
+	}
+
+	private static function printAddressingHelp(): Void {
+		sysPrint('\n');
+		sysPrint('Addressing:\n');
+		sysPrint("  <line>[:<col>]      1-based position; column omitted = the line's first\n");
+		sysPrint('                      non-whitespace character\n');
+		sysPrint("  --select '<sel>'    Selector: Kind / Kind:name / A > B (child) / A >> B\n");
+	}
+
+	private static function printSelectorAddressingOptions(): Void {
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --select <sel>      Address the node by selector: Kind / Kind:name / A > B\n');
+		sysPrint('                      (direct child) / A >> B (any-depth descendant); must\n');
+		sysPrint('                      resolve to exactly one node (or pick one with --nth)\n');
+		sysPrint("  --match '<pattern>' Address by apq-search structural pattern ($x metavars);\n");
+		sysPrint('                      same exactly-one / --nth discipline\n');
+		sysPrint('  --nth <k>           Pick the k-th (1-based, document order) match\n');
+		sysPrint('  --at <line>[:<col>] Address the innermost node at the cursor; column omitted\n');
+		sysPrint("                      = the line's first non-whitespace character\n");
+	}
+
+
+	private static function printSelectorAddressingSection(): Void {
+		printAddressingHelp();
+		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
+		sysPrint("  --match '<pattern>' apq-search structural pattern; exactly one\n");
+		sysPrint('  --nth <k>           Pick the k-th (1-based) of several matches\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+	}
+
+	private static function printFlatLimitLangHelp(): Void {
+		sysPrint('  --flat              Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
+		sysPrint('  --limit <n>         Stop after n hits total (default: no limit)\n');
+		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
+		sysPrint('\n');
+	}
+
+	private static function printDocSourceFlatLimitLangHelp(): Void {
+		sysPrint('  --doc               Also emit each hit\'s leading doc-comment\n');
+		sysPrint('  --source            Also emit each hit\'s verbatim source slice\n');
+		printFlatLimitLangHelp();
+	}
+
+	private static function printShortReformatWriteLangHelp(): Void {
+		sysPrint('  --reformat     Canonicalise the file if it has drifted\n');
+		sysPrint('  --write        Apply in place (default: print the rewritten file)\n');
+		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
+	}
+
+
+	private static function resolveInputPaths(
+		lang: String, specs: Array<String>
+	): { plugin: GrammarPlugin, paths: Array<String>, singleFile: Bool } {
+		final plugin: GrammarPlugin = pickPlugin(lang);
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(specs, '.hx');
+		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}
 
 }
