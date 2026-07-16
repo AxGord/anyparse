@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a loop (`for` / `while`) whose braced body OPENS with a bare
@@ -74,12 +72,10 @@ final class LoopGuard implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(tree, violations, entry.file, entry.source, s);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(tree, violations, entry.file, entry.source, seams);
 		}
 		return violations;
 	}
@@ -90,11 +86,10 @@ final class LoopGuard implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byGuard: Map<String, Candidate> = [];
-		indexCandidates(tree, source, s, byGuard);
+		indexCandidates(tree, source, seams, byGuard);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -105,7 +100,7 @@ final class LoopGuard implements Check {
 			final guardSpan: Null<Span> = m.guard.span;
 			if (bodySpan == null || guardSpan == null) continue;
 			final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
-			edits.push({ span: bodySpan, text: 'if (' + invert(m.cond, source, s) + ') {' + rest + '}' });
+			edits.push({ span: bodySpan, text: 'if (' + invert(m.cond, source, seams) + ') {' + rest + '}' });
 		}
 		return RefactorSupport.dropContainedEdits(edits);
 	}

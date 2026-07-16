@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a class / abstract member declared without an explicit `public` or
@@ -62,16 +60,12 @@ final class MissingVisibility implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		if (containers.length == 0 || members.length == 0 || visibility.length == 0) return [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, containers, members, visibility);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, tree, seams.containers, seams.members, seams.visibility);
 		}
 		return violations;
 	}
@@ -93,21 +87,15 @@ final class MissingVisibility implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
-		final order: Array<String> = shape.modifierOrderKinds ?? [];
-		final keyword: Null<String> = shape.defaultVisibilityModifierText;
-		if (containers.length == 0 || members.length == 0 || visibility.length == 0 || keyword == null) return [];
-		final overrideKind: Null<String> = shape.overrideModifierKind;
-		final externKind: Null<String> = shape.externModifierKind;
-		final publicMetaNames: Array<String> = shape.publicDefaultMetaNames ?? [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final keyword: Null<String> = seams.keyword;
+		if (keyword == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		var visRank: Int = -1;
-		for (v in visibility) {
-			final r: Int = order.indexOf(v);
+		for (v in seams.visibility) {
+			final r: Int = seams.order.indexOf(v);
 			if (r > visRank) visRank = r;
 		}
 		final flagged: Array<Int> = [];
@@ -116,7 +104,10 @@ final class MissingVisibility implements Check {
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		insertWalk(edits, tree, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames, false);
+		insertWalk(
+			edits, tree, seams.containers, seams.members, seams.order, visRank, keyword, seams.overrideKind, flagged, seams.externKind,
+			seams.publicMetaNames, false
+		);
 		return edits;
 	}
 
@@ -227,4 +218,39 @@ final class MissingVisibility implements Check {
 		}
 	}
 
+
+	/** Resolve the container / member / visibility seam kinds plus the fix-only autofix seams, or null when any required kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final containers: Array<String> = shape.visibilityContainerKinds ?? [];
+		if (containers.length == 0) return null;
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		if (members.length == 0) return null;
+		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
+		if (visibility.length == 0) return null;
+		final order: Array<String> = shape.modifierOrderKinds ?? [];
+		return {
+			containers: containers,
+			members: members,
+			visibility: visibility,
+			order: order,
+			keyword: shape.defaultVisibilityModifierText,
+			overrideKind: shape.overrideModifierKind,
+			externKind: shape.externModifierKind,
+			publicMetaNames: shape.publicDefaultMetaNames ?? []
+		};
+	}
+
 }
+
+/** The resolved seams `MissingVisibility` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final containers: Array<String>;
+	final members: Array<String>;
+	final visibility: Array<String>;
+	final order: Array<String>;
+	final keyword: Null<String>;
+	final overrideKind: Null<String>;
+	final externKind: Null<String>;
+	final publicMetaNames: Array<String>;
+};

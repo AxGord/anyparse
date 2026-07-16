@@ -7,9 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a boolean literal used as the condition of an `if` — `if (true) ...` /
@@ -45,15 +43,12 @@ final class ConstantCondition implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final boolLitKind: Null<String> = shape.boolLitKind;
-		final branchKinds: Null<Array<String>> = shape.branchConditionKinds;
-		if (boolLitKind == null || branchKinds == null) return [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, entry.source, tree, boolLitKind, branchKinds);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, seams.boolLitKind, seams.branchKinds);
 		}
 		return violations;
 	}
@@ -72,18 +67,10 @@ final class ConstantCondition implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final boolLitKind: Null<String> = shape.boolLitKind;
-		final branchKinds: Null<Array<String>> = shape.branchConditionKinds;
-		if (boolLitKind == null || branchKinds == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-
-		// Statement-list kinds: a no-else `if (false)` is safe to DELETE only when
-		// it is a direct child of one of these; elsewhere it is a branch body and
-		// must be replaced with `{}` instead. Absent seam → never delete.
-		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
 
 		// The reported span is the CONDITION (children[0]); match a
 		// suppression-filtered violation back to its branch by that span.
@@ -93,7 +80,7 @@ final class ConstantCondition implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectBranchEdits(tree, null, source, boolLitKind, branchKinds, blockKinds, flagged, edits);
+		collectBranchEdits(tree, null, source, seams.boolLitKind, seams.branchKinds, seams.blockKinds, flagged, edits);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -170,4 +157,31 @@ final class ConstantCondition implements Check {
 		return tspan == null ? null : { span: nspan, text: source.substring(tspan.from, tspan.to) };
 	}
 
+
+	/**
+	 * Resolve the boolean-literal / branch-condition seam kinds plus the statement-list
+	 * kinds a no-else `if (false)` may be safely deleted from, or null when either
+	 * required kind is unset.
+	 */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		if (boolLitKind == null) return null;
+		final branchKinds: Null<Array<String>> = shape.branchConditionKinds;
+		if (branchKinds == null) return null;
+		// Statement-list kinds: a no-else `if (false)` is safe to DELETE only when
+		// it is a direct child of one of these; elsewhere it is a branch body and
+		// must be replaced with `{}` instead. Absent seam → never delete.
+		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
+		return { boolLitKind: boolLitKind, branchKinds: branchKinds, blockKinds: blockKinds };
+	}
+
 }
+
+/** The resolved seams `ConstantCondition` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final boolLitKind: String;
+	final branchKinds: Array<String>;
+	final blockKinds: Array<String>;
+};

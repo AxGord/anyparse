@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a double logical negation `!!x` — a not-node directly wrapping another. In Haxe
@@ -38,15 +36,12 @@ final class DoubleNegation implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final notKind: Null<String> = shape.notKind;
-		if (notKind == null) return [];
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, notKind, opaqueKinds);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, tree, seams.notKind, seams.opaqueKinds);
 		}
 		return violations;
 	}
@@ -62,32 +57,13 @@ final class DoubleNegation implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final notKind: Null<String> = shape.notKind;
-		if (notKind == null) return [];
-		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
-		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexNots(tree, notKind, nodeByKey);
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null || node.children.length != 1 || node.children[0].kind != notKind) continue;
-			final inner: QueryNode = node.children[0];
-			if (inner.children.length != 1) continue;
-			final operand: QueryNode = inner.children[0];
-			if (operand.kind != notKind && operandIsNullable(operand, nullableKinds)) continue;
-			final operandSpan: Null<Span> = operand.span;
-			if (operandSpan == null) continue;
-			edits.push({ span: span, text: source.substring(operandSpan.from, operandSpan.to) });
-		}
-		return edits;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(
+				plugin, source, violations, [seams.notKind],
+				(node, span) -> negationEdit(node, span, seams.notKind, seams.nullableKinds, source)
+			);
 	}
 
 	/**
@@ -118,13 +94,41 @@ final class DoubleNegation implements Check {
 		return false;
 	}
 
-	/** Index every not-node by its `from:to` span key, for span-keyed violation lookup. */
-	private static function indexNots(node: QueryNode, notKind: String, out: Map<String, QueryNode>): Void {
-		if (node.kind == notKind) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexNots(c, notKind, out);
+
+	/** Resolve the not / opaque / nullable-operand seam kinds, or null when `notKind` is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final notKind: Null<String> = shape.notKind;
+		if (notKind == null) return null;
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
+		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
+		return { notKind: notKind, opaqueKinds: opaqueKinds, nullableKinds: nullableKinds };
+	}
+
+
+	/**
+	 * The strip edit for one flagged double-negation pair, or null when it cannot be
+	 * rewritten: the indexed node isn't a not-wrapping-not, or the fully-stripped
+	 * operand isn't provably non-null (see `fix`'s doc for the `!!null` caveat).
+	 */
+	private static function negationEdit(
+		node: QueryNode, span: Span, notKind: String, nullableKinds: Array<String>, source: String
+	): Null<{ span: Span, text: String }> {
+		if (node.children.length != 1 || node.children[0].kind != notKind) return null;
+		final inner: QueryNode = node.children[0];
+		if (inner.children.length != 1) return null;
+		final operand: QueryNode = inner.children[0];
+		if (operand.kind != notKind && operandIsNullable(operand, nullableKinds)) return null;
+		final operandSpan: Null<Span> = operand.span;
+		return operandSpan == null ? null : { span: span, text: source.substring(operandSpan.from, operandSpan.to) };
 	}
 
 }
+
+/** The resolved seams `DoubleNegation` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final notKind: String;
+	final opaqueKinds: Array<String>;
+	final nullableKinds: Array<String>;
+};

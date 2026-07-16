@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a zero-parameter arrow lambda whose whole body is a single call —
@@ -49,15 +47,12 @@ final class PreferBind implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final lambdaKind: Null<String> = shape.parenLambdaKind;
-		final callKind: Null<String> = shape.callKind;
-		if (lambdaKind == null || callKind == null) return [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
-			if (tree != null) walk(violations, entry.file, tree, lambdaKind, callKind);
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			if (tree != null) walk(violations, entry.file, tree, seams.lambdaKind, seams.callKind);
 		}
 		return violations;
 	}
@@ -66,27 +61,13 @@ final class PreferBind implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final lambdaKind: Null<String> = shape.parenLambdaKind;
-		final callKind: Null<String> = shape.callKind;
-		if (lambdaKind == null || callKind == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexLambdas(tree, lambdaKind, nodeByKey);
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final replacement: Null<String> = rewrite(node, source, lambdaKind, callKind);
-			if (replacement == null) continue;
-			edits.push({ span: span, text: replacement });
-		}
-		return edits;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		return seams == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [seams.lambdaKind], (node, span) -> {
+				final replacement: Null<String> = rewrite(node, source, seams.lambdaKind, seams.callKind);
+				return replacement == null ? null : { span: span, text: replacement };
+			});
 	}
 
 	private static function walk(out: Array<Violation>, file: String, node: QueryNode, lambdaKind: String, callKind: String): Void {
@@ -131,13 +112,20 @@ final class PreferBind implements Check {
 		return '$callee.bind(' + args.join(', ') + ')';
 	}
 
-	/** Index every lambda node by its `from:to` span key (for `fix` to re-find a flagged node). */
-	private static function indexLambdas(node: QueryNode, lambdaKind: String, out: Map<String, QueryNode>): Void {
-		if (node.kind == lambdaKind) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexLambdas(c, lambdaKind, out);
+
+	/** Resolve the lambda / call seam kinds, or null when either is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final lambdaKind: Null<String> = shape.parenLambdaKind;
+		if (lambdaKind == null) return null;
+		final callKind: Null<String> = shape.callKind;
+		return callKind == null ? null : { lambdaKind: lambdaKind, callKind: callKind };
 	}
 
 }
+
+/** The resolved seams `PreferBind` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final lambdaKind: String;
+	final callKind: String;
+};

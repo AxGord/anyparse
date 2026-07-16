@@ -8,9 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a `Map` read / write spelled as a method call where index access is idiomatic —
@@ -74,16 +72,14 @@ final class PreferIndexAccess implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final cfg: Null<Cfg> = config(plugin);
 		if (cfg == null) return [];
-		final cfgValue: Cfg = cfg;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final declaredTypes: Map<Int, String> = cfgValue.typed.declaredTypes(entry.source);
-			final declaredTypeSources: Map<Int, String> = cfgValue.typed.declaredTypeSources(entry.source);
+			final declaredTypes: Map<Int, String> = cfg.typed.declaredTypes(entry.source);
+			final declaredTypeSources: Map<Int, String> = cfg.typed.declaredTypeSources(entry.source);
 			collect(
-				tree, tree, null, declaredTypes, declaredTypeSources, cfgValue, m -> violations.push({
+				tree, tree, null, declaredTypes, declaredTypeSources, cfg, m -> violations.push({
 					file: entry.file,
 					span: m.callSpan,
 					rule: 'prefer-index-access',
@@ -101,13 +97,12 @@ final class PreferIndexAccess implements Check {
 	): Array<{ span: Span, text: String }> {
 		final cfg: Null<Cfg> = config(plugin);
 		if (cfg == null) return [];
-		final cfgValue: Cfg = cfg;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final declaredTypes: Map<Int, String> = cfgValue.typed.declaredTypes(source);
-		final declaredTypeSources: Map<Int, String> = cfgValue.typed.declaredTypeSources(source);
+		final declaredTypes: Map<Int, String> = cfg.typed.declaredTypes(source);
+		final declaredTypeSources: Map<Int, String> = cfg.typed.declaredTypeSources(source);
 		final byKey: Map<String, Match> = [];
-		collect(tree, tree, null, declaredTypes, declaredTypeSources, cfgValue, m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m);
+		collect(tree, tree, null, declaredTypes, declaredTypeSources, cfg, m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;

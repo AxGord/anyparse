@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
 
@@ -63,21 +61,18 @@ final class ComparisonToBoolean implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
-		final boolLitKind: Null<String> = shape.boolLitKind;
-		if (equalityKinds.length == 0 || boolLitKind == null) return [];
-		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
-		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final declaredTypes: Null<Map<Int, String>> = provider != null ? provider.declaredTypes(entry.source) : null;
-			walk(violations, entry.file, tree, tree, shape, declaredTypes, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
+			walk(
+				violations, entry.file, tree, tree, seams.shape, declaredTypes, seams.equalityKinds, seams.boolLitKind,
+				seams.nullableKinds, seams.opaqueKinds
+			);
 		}
 		return violations;
 	}
@@ -89,34 +84,22 @@ final class ComparisonToBoolean implements Check {
 	 * parenthesized, so the unary `!` binds correctly). Emitted ONLY for a boolean-operator
 	 * operand (`provablyBool`) — a non-null `Bool` by construction; a bare identifier may be
 	 * a `Null<Bool>` local whose `== true` is load-bearing, so it is left to the report.
-	 * `eqKind` tells `==` from `!=`; unset (or no `boolLitKind`) → no-op.
+	 * `eqKind` tells `==` from `!=` — it is required HERE only (unset → report-only), not
+	 * in `run`'s gate.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
-		final boolLitKind: Null<String> = shape.boolLitKind;
-		final eqKind: Null<String> = shape.eqKind;
-		if (equalityKinds.length == 0 || boolLitKind == null || eqKind == null) return [];
-		final identKind: String = shape.identKind;
-		final parenKind: Null<String> = shape.parenKind;
-		final notKind: Null<String> = shape.notKind;
-		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-
-		final nodeByKey: Map<String, QueryNode> = [];
-		indexEqualities(tree, equalityKinds, nodeByKey);
-
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final edit: Null<{ span: Span, text: String }> = comparisonEdit(
-				v, nodeByKey, source, boolLitKind, eqKind, boolOpKinds, identKind, parenKind
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final eqKind: Null<String> = seams.eqKind;
+		return eqKind == null
+			? []
+			: CheckScan.applyBySpan(
+				plugin, source, violations, seams.equalityKinds,
+				(node, span) ->
+					comparisonEdit(node, span, source, seams.boolLitKind, eqKind, seams.boolOpKinds, seams.identKind, seams.parenKind)
 			);
-			if (edit != null) edits.push(edit);
-		}
-		return edits;
 	}
 
 	/**
@@ -165,31 +148,19 @@ final class ComparisonToBoolean implements Check {
 		return operand.kind == identKind || operand.kind == parenKind ? '!' + src : '!(' + src + ')';
 	}
 
-	/** Index every equality node by its `from:to` span key, for span-keyed violation lookup. */
-	private static function indexEqualities(node: QueryNode, equalityKinds: Array<String>, out: Map<String, QueryNode>): Void {
-		if (equalityKinds.contains(node.kind)) {
-			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
-		}
-		for (c in node.children) indexEqualities(c, equalityKinds, out);
-	}
 
 	/**
 	 * The replacement edit for one flagged comparison, or null when it cannot be
-	 * rewritten: no indexed node for the violation span, not a two-operand
-	 * comparison, not exactly one boolean-literal operand, or the other operand
-	 * not provably boolean. When rewritable, an `x == true` / `x != false`
-	 * collapses to `x`, and an `x == false` / `x != true` to its negation
-	 * (`negate` parenthesises unless the operand is an ident / paren).
+	 * rewritten: not a two-operand comparison, not exactly one boolean-literal
+	 * operand, or the other operand not provably boolean. When rewritable, an
+	 * `x == true` / `x != false` collapses to `x`, and an `x == false` / `x != true`
+	 * to its negation (`negate` parenthesises unless the operand is an ident / paren).
 	 */
 	private static function comparisonEdit(
-		v: Violation, nodeByKey: Map<String, QueryNode>, source: String, boolLitKind: String, eqKind: String, boolOpKinds: Array<String>,
-		identKind: String, parenKind: Null<String>
+		node: QueryNode, span: Span, source: String, boolLitKind: String, eqKind: String, boolOpKinds: Array<String>, identKind: String,
+		parenKind: Null<String>
 	): Null<{ span: Span, text: String }> {
-		final span: Null<Span> = v.span;
-		if (span == null) return null;
-		final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
-		if (node == null || node.children.length != 2) return null;
+		if (node.children.length != 2) return null;
 		final leftIsBool: Bool = node.children[0].kind == boolLitKind;
 		final rightIsBool: Bool = node.children[1].kind == boolLitKind;
 		if (leftIsBool == rightIsBool) return null;
@@ -205,4 +176,43 @@ final class ComparisonToBoolean implements Check {
 		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, identKind, parenKind) };
 	}
 
+
+	/** Resolve the equality / bool-literal / paren seam kinds, or null when any required kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final equalityKinds: Array<String> = shape.equalityKinds ?? [];
+		if (equalityKinds.length == 0) return null;
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		if (boolLitKind == null) return null;
+		final nullSafeKind: Null<String> = shape.nullSafeAccessKind;
+		final nullableKinds: Array<String> = shape.nullableOperandKinds ?? (nullSafeKind != null ? [nullSafeKind] : []);
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final notKind: Null<String> = shape.notKind;
+		final boolOpKinds: Array<String> = (shape.comparisonKinds ?? []).concat(notKind != null ? [notKind] : []);
+		return {
+			shape: shape,
+			equalityKinds: equalityKinds,
+			boolLitKind: boolLitKind,
+			eqKind: shape.eqKind,
+			nullableKinds: nullableKinds,
+			opaqueKinds: opaqueKinds,
+			identKind: shape.identKind,
+			parenKind: shape.parenKind,
+			boolOpKinds: boolOpKinds
+		};
+	}
+
 }
+
+/** The resolved seams `ComparisonToBoolean` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final shape: RefShape;
+	final equalityKinds: Array<String>;
+	final boolLitKind: String;
+	final eqKind: Null<String>;
+	final nullableKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final identKind: String;
+	final parenKind: Null<String>;
+	final boolOpKinds: Array<String>;
+};

@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a class declaration carrying the `@:final` metadata tag — the user's rule: use
@@ -53,18 +51,13 @@ final class PreferFinalClass implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final shape: RefShape = plugin.refShape();
-		final metaName: Null<String> = shape.finalClassMetaName;
-		final plainKind: Null<String> = shape.plainClassDeclKind;
-		final finalKind: Null<String> = shape.finalClassDeclKind;
-		if (metaName == null || plainKind == null || finalKind == null) return [];
-		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (c in collect(tree, metaName, metaKinds, plainKind, finalKind)) violations.push({
+			for (c in collect(tree, seams.metaName, seams.metaKinds, seams.plainKind, seams.finalKind)) violations.push({
 				file: entry.file,
 				span: c.metaSpan,
 				rule: 'prefer-final-class',
@@ -87,16 +80,13 @@ final class PreferFinalClass implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final shape: RefShape = plugin.refShape();
-		final metaName: Null<String> = shape.finalClassMetaName;
-		final plainKind: Null<String> = shape.plainClassDeclKind;
-		final finalKind: Null<String> = shape.finalClassDeclKind;
-		if (metaName == null || plainKind == null || finalKind == null) return [];
-		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final seams: Null<Seams> = resolveSeams(plugin);
+		if (seams == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byKey: Map<String, Candidate> = [];
-		for (c in collect(tree, metaName, metaKinds, plainKind, finalKind)) byKey['${c.metaSpan.from}:${c.metaSpan.to}'] = c;
+		for (c in collect(tree, seams.metaName, seams.metaKinds, seams.plainKind, seams.finalKind))
+			byKey['${c.metaSpan.from}:${c.metaSpan.to}'] = c;
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -189,7 +179,34 @@ final class PreferFinalClass implements Check {
 		return i;
 	}
 
+
+	/** Resolve the meta / plain-class / final-class seam kinds, or null when any required kind is unset. */
+	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
+		final metaName: Null<String> = shape.finalClassMetaName;
+		if (metaName == null) return null;
+		final plainKind: Null<String> = shape.plainClassDeclKind;
+		if (plainKind == null) return null;
+		final finalKind: Null<String> = shape.finalClassDeclKind;
+		if (finalKind == null) return null;
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		return {
+			metaName: metaName,
+			plainKind: plainKind,
+			finalKind: finalKind,
+			metaKinds: metaKinds
+		};
+	}
+
 }
+
+/** The resolved seams `PreferFinalClass` reads in both `run` and `fix`. */
+private typedef Seams = {
+	final metaName: String;
+	final plainKind: String;
+	final finalKind: String;
+	final metaKinds: Array<String>;
+};
 
 private typedef Candidate = {
 	var metaSpan: Span;

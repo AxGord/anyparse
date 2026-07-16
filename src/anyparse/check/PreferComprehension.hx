@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags an empty-array local declaration immediately followed by a `for` loop
@@ -89,13 +87,11 @@ final class PreferComprehension implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			for (m in collectMatches(tree, entry.source, s)) violations.push({
+			for (m in collectMatches(tree, entry.source, seams)) violations.push({
 				file: entry.file,
 				span: m.span,
 				rule: 'prefer-comprehension',
@@ -112,11 +108,10 @@ final class PreferComprehension implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin.refShape());
 		if (seams == null) return [];
-		final s: Seams = seams;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final textBySpan: Map<String, String> = [];
-		for (m in collectMatches(tree, source, s)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
+		for (m in collectMatches(tree, source, seams)) textBySpan['${m.span.from}:${m.span.to}'] = m.text;
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
