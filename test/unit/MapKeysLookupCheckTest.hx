@@ -23,7 +23,7 @@ class MapKeysLookupCheckTest extends Test {
 		final vs: Array<Violation> = violations(wrapMap('for (k in m.keys()) trace(m[k]);'));
 		Assert.equals(1, vs.length);
 		Assert.equals('map-keys-lookup', vs[0].rule);
-		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals(Severity.Info, vs[0].severity);
 		Assert.equals('iterate key-value instead of keys()-then-lookup — for (k => value in m)', vs[0].message);
 	}
 

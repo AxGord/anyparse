@@ -15,7 +15,7 @@ import haxe.Exception;
  * Flags a `for (k in m.keys())` loop whose body reads the SAME map by the SAME key
  * (`m[k]` or `m.get(k)`) — the keys-then-lookup anti-pattern that re-looks-up every
  * value. Haxe's key-value iteration `for (k => v in m)` binds the value once, with no
- * second lookup and a guaranteed non-null `v`. `Warning`, REPORT-ONLY: the rewrite
+ * second lookup and a guaranteed non-null `v`. `Info`, REPORT-ONLY: the rewrite
  * (dropping `.keys()`, inventing a value name, replacing every `m[k]` / `m.get(k)` with
  * it, and reconciling in-body mutation) is a refactoring, not a token fix.
  *
@@ -166,7 +166,7 @@ final class MapKeysLookup implements Check {
 			file: file,
 			span: iterSpan,
 			rule: 'map-keys-lookup',
-			severity: Severity.Warning,
+			severity: Severity.Info,
 			message: 'iterate key-value instead of keys()-then-lookup — for ($keyName => value in $recvName)'
 		};
 	}
