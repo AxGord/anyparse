@@ -421,6 +421,7 @@ import unit.PreferFindCheckTest;
 import unit.LoopGuardCheckTest;
 import unit.MapKeysLookupCheckTest;
 import unit.PreferRangeLoopCheckTest;
+import unit.TrivialGetterCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -771,6 +772,7 @@ class RunTests {
 		addCase(new LoopGuardCheckTest());
 		addCase(new MapKeysLookupCheckTest());
 		addCase(new PreferRangeLoopCheckTest());
+		addCase(new TrivialGetterCheckTest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
