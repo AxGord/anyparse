@@ -7,6 +7,8 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
+using Lambda;
+
 /**
  * Flags a read-only property whose getter does nothing but return a private
  * backing field of the same class — `public var x(get, never):T` (or `(get,
@@ -148,8 +150,7 @@ final class TrivialGetter implements Check {
 
 	/** The getter's body node (`BlockBody` / `ExprBody`), or null. */
 	private static function bodyOf(getter: QueryNode): Null<QueryNode> {
-		for (child in getter.children) if (child.kind == 'BlockBody' || child.kind == 'ExprBody') return child;
-		return null;
+		return getter.children.find(child -> child.kind == 'BlockBody' || child.kind == 'ExprBody');
 	}
 
 	/**
@@ -189,8 +190,7 @@ final class TrivialGetter implements Check {
 		i = skipSpace(source, read.next, n);
 		if (i >= n || StringTools.fastCodeAt(source, i) != ','.code) return null;
 		final write: Null<{ id: String, next: Int }> = identAt(source, skipSpace(source, i + 1, n), n);
-		if (write == null) return null;
-		return { read: read.id, write: write.id };
+		return write == null ? null : { read: read.id, write: write.id };
 	}
 
 	/** The identifier at `i` (already past whitespace) and the offset after it, or null. */
