@@ -429,11 +429,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\n\tpublic function b') != -1, 'expected blank line between doc-commented a() and b() in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\n\tpublic function b', 'expected blank line between doc-commented a() and b()');
 	}
 
 	public function testEmptyLinesAfterFieldsWithDocCommentsIgnorePreservesSource(): Void {
@@ -444,11 +440,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected tight layout (no blank line) with `ignore` in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected tight layout (no blank line) with `ignore`');
 	}
 
 	public function testEmptyLinesAfterFieldsWithDocCommentsNoneStripsBlankLine(): Void {
@@ -458,9 +450,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"afterFieldsWithDocComments": "none", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected blank line stripped with `none` in: <$out>');
+		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected blank line stripped with `none`');
 	}
 
 	public function testEmptyLinesAfterFieldsWithDocCommentsDoesNotFireForNonDocComment(): Void {
@@ -471,11 +461,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected no blank line when leading is plain block comment in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected no blank line when leading is plain block comment');
 	}
 
 	public function testEmptyLinesExistingBetweenFieldsDefaultsToKeep(): Void {
@@ -506,11 +492,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\n\tpublic function b') != -1, 'expected source blank line preserved with `keep` in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\n\tpublic function b', 'expected source blank line preserved with `keep`');
 	}
 
 	public function testEmptyLinesExistingBetweenFieldsRemoveStripsSourceBlank(): Void {
@@ -521,11 +503,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected source blank line stripped with `remove` in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected source blank line stripped with `remove`');
 	}
 
 	public function testEmptyLinesExistingBetweenFieldsRemoveDoesNotBlockAddByDoc(): Void {
@@ -538,11 +516,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\n\tpublic function b') != -1, 'expected `One`-inserted blank to survive `Remove` strip in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\n\tpublic function b', 'expected `One`-inserted blank to survive `Remove` strip');
 	}
 
 	public function testEmptyLinesExistingBetweenFieldsRemoveWithIgnoreStripsAll(): Void {
@@ -554,11 +528,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\tpublic function b') != -1, 'expected all source blanks stripped with ignore+remove in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected all source blanks stripped with ignore+remove');
 	}
 
 	public function testEmptyLinesBeforeDocCommentEmptyLinesDefaultsToOne(): Void {
@@ -589,11 +559,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\n\t/** */\n\tpublic function b') != -1, 'expected blank line before doc-commented b() in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\n\t/** */\n\tpublic function b', 'expected blank line before doc-commented b()');
 	}
 
 	public function testEmptyLinesBeforeDocCommentEmptyLinesIgnorePreservesSource(): Void {
@@ -607,12 +573,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"beforeDocCommentEmptyLines": "ignore", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\t/** */\n\tpublic function b') != -1,
-			'expected tight layout (no blank line) with `ignore` in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\t/** */\n\tpublic function b', 'expected tight layout (no blank line) with `ignore`');
 	}
 
 	public function testEmptyLinesBeforeDocCommentEmptyLinesNoneStripsBlankLine(): Void {
@@ -623,11 +584,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"beforeDocCommentEmptyLines": "none", "classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\t/** */\n\tpublic function b') != -1, 'expected blank line stripped with `none` in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\t/** */\n\tpublic function b', 'expected blank line stripped with `none`');
 	}
 
 	public function testEmptyLinesBeforeDocCommentEmptyLinesDoesNotFireForNonDocComment(): Void {
@@ -638,11 +595,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\t/* not doc */\n\tpublic function b') != -1,
-			'expected no blank line when leading is plain block comment in: <$out>'
+		assertWriteContains(
+			src, opts, 'a():Void {}\n\t/* not doc */\n\tpublic function b', 'expected no blank line when leading is plain block comment'
 		);
 	}
 
@@ -687,9 +641,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 1}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(out.indexOf('a():Void {}\n\n\tpublic function b') != -1, 'expected blank line with betweenFunctions=1 in: <$out>');
+		assertWriteContains(src, opts, 'a():Void {}\n\n\tpublic function b', 'expected blank line with betweenFunctions=1');
 	}
 
 	public function testEmptyLinesBetweenFunctionsZeroKeepsTightBetweenFns(): Void {
@@ -700,12 +652,7 @@ class HaxeFormatConfigLoaderTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"classEmptyLines": {"betweenFunctions": 0}}}'
 		);
-		opts.finalNewline = false;
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
-		Assert.isTrue(
-			out.indexOf('a():Void {}\n\tpublic function b') != -1,
-			'expected tight layout (no blank line) with betweenFunctions=0 in: <$out>'
-		);
+		assertWriteContains(src, opts, 'a():Void {}\n\tpublic function b', 'expected tight layout (no blank line) with betweenFunctions=0');
 	}
 
 	public function testEmptyLinesBeforeDocCommentComposesWithRemove(): Void {
@@ -767,6 +714,13 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('switch (') != -1, 'expected single-space switch in: <$out>');
 		Assert.equals(-1, out.indexOf('while  ('));
 		Assert.isTrue(out.indexOf('while (') != -1, 'expected single-space do-while in: <$out>');
+	}
+
+
+	private function assertWriteContains(src: String, opts: HxModuleWriteOptions, needle: String, message: String): Void {
+		opts.finalNewline = false;
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);
+		Assert.isTrue(out.indexOf(needle) != -1, '$message in: <$out>');
 	}
 
 }

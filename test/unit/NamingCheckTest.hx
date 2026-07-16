@@ -125,32 +125,12 @@ class NamingCheckTest extends Test {
 
 	public function testFixRenamesLocal(): Void {
 		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf('myLocal') >= 0);
-				Assert.isTrue(text.indexOf('MyLocal') == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
+		assertFixCanonical(src, 'myLocal', 'MyLocal');
 	}
 
 	public function testFixRenamesParam(): Void {
 		final src: String = 'class C {\n\tpublic function f(BadParam:Int) {\n\t\treturn BadParam;\n\t}\n}';
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf('badParam') >= 0);
-				Assert.isTrue(text.indexOf('BadParam') == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
+		assertFixCanonical(src, 'badParam', 'BadParam');
 	}
 
 	public function testFixSkipsPrivateField(): Void {
@@ -174,19 +154,7 @@ class NamingCheckTest extends Test {
 	public function testFixRenamesConfinedPrivateField(): Void {
 		// A private field confined to its file (no subtype / @:access / @:allow), all references resolved → renamed.
 		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
-		final files = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf('_shape') >= 0);
-				Assert.isTrue(text.indexOf('var shape') == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
+		assertFixCanonicalWithIndex(src, '_shape', 'var shape');
 	}
 
 	public function testFixSkipsPrivateFieldWithSubclass(): Void {
@@ -284,36 +252,14 @@ class NamingCheckTest extends Test {
 		// The braced `${name}` interpolation IS a resolved reference, so a local
 		// rename rewrites both the declaration and the interpolation.
 		final src: String = "class C {\n\tpublic function f():String {\n\t\tvar BadLocal = 3;\n\t\treturn 'value is ${BadLocal}';\n\t}\n}";
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf("${badLocal}") >= 0);
-				Assert.isTrue(text.indexOf('BadLocal') == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
+		assertFixCanonical(src, "${badLocal}", 'BadLocal');
 	}
 
 	public function testFixRenamesConfinedStaticFinal(): Void {
 		// A confined private static final wrongly given a `_` prefix (the macro-build
 		// anchor shape) → the underscore is stripped to a camelCase constant name.
 		final src: String = 'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n}';
-		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf('final forceBuild') >= 0);
-				Assert.isTrue(text.indexOf('_forceBuild') == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
+		assertFixCanonicalWithIndex(src, 'final forceBuild', '_forceBuild');
 	}
 
 	public function testFixSkipsStaticFinalNameCollision(): Void {
@@ -343,19 +289,7 @@ class NamingCheckTest extends Test {
 		// UPPER_SNAKE shape once the underscore is stripped (`_FORCE_BUILD` →
 		// `FORCE_BUILD`, valid per the Constant rule's UPPER_SNAKE branch).
 		final src: String = 'package pkg;\nclass C {\n\tprivate static final _FORCE_BUILD:Int = 0;\n}';
-		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
-		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf('final FORCE_BUILD') >= 0);
-				Assert.isTrue(text.indexOf('_FORCE_BUILD') == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
+		assertFixCanonicalWithIndex(src, 'final FORCE_BUILD', '_FORCE_BUILD');
 	}
 
 	public function testFixMemoizesConfinementAcrossFindingsOnOneOwner(): Void {
@@ -449,6 +383,35 @@ class NamingCheckTest extends Test {
 		for (n in names) if (sys.FileSystem.exists('$dir/$n')) sys.FileSystem.deleteFile('$dir/$n');
 		if (sys.FileSystem.exists(dir)) sys.FileSystem.deleteDirectory(dir);
 		#end
+	}
+
+
+	private function assertCanonicalized(src: String, edits: Array<{ span: Span, text: String }>, present: String, absent: String): Void {
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+
+	private function assertFixCanonical(src: String, present: String, absent: String): Void {
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin()), present, absent);
+	}
+
+
+	private function assertFixCanonicalWithIndex(src: String, present: String, absent: String): Void {
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
 	}
 
 }
