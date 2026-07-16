@@ -443,6 +443,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nullableOperandKinds: ['Call', 'FieldAccess', 'SafeFieldAccess'],
 			notKind: 'Not',
 			blockStmtKind: 'BlockStmt',
+			breakStatementKind: 'BreakStmt',
+			intervalKind: 'Interval',
 			andLowerPrecedenceKinds: [
 				'Or',
 				'Ternary',

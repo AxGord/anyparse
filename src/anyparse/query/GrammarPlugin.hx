@@ -1192,6 +1192,20 @@ typedef RefShape = {
 	 * rank in the order table. Optional; paired with `finalModifierMemberKind`.
 	 */
 	@:optional var finalModifierRankKind: String;
+
+	/**
+	 * The `break` statement node kind — lets `prefer-find` confirm the second statement
+	 * of a `{ r = x; break; }` first-match loop body is a `break` (not a `continue`,
+	 * which finds the last match). Optional; unset disables `prefer-find`'s break form.
+	 */
+	@:optional var breakStatementKind: String;
+
+	/**
+	 * The range / interval node kind (`a...b`) — lets `prefer-find` skip a loop over a
+	 * range: its `IntIterator` is not an `Iterable`, so a `Lambda.find` rewrite would
+	 * not compile. Optional; unset means range loops are not specially excluded.
+	 */
+	@:optional var intervalKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

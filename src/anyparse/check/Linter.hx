@@ -105,7 +105,8 @@ final class Linter {
 			new PreferFinalClass(),
 			new PreferSafeNav(),
 			new EnglishComments(),
-			new PreferComprehension()
+			new PreferComprehension(),
+			new PreferFind()
 		];
 	}
 
