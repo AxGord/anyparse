@@ -58,7 +58,7 @@ class Lowering {
 		for (typePath => node in _shape.rules) {
 			for (rule in lowerRule(typePath, node)) {
 				rules.push(rule);
-				if (_ctx.spans && node.kind != Terminal) spanRuleNames.set(rule.fnName, true);
+				if (_ctx.spans && node.kind != Terminal) spanRuleNames[rule.fnName] = true;
 			}
 		}
 		if (_ctx.spans) for (rule in rules) if (spanRuleNames.exists(rule.fnName)) rule.body = instrumentSpans(rule.body);
@@ -257,7 +257,7 @@ class Lowering {
 
 	private function collectEregs(typePath: String): Array<GeneratedRule.EregSpec> {
 		final eregs: Array<GeneratedRule.EregSpec> = [];
-		if (_eregByRule.exists(typePath)) eregs.push(_eregByRule.get(typePath));
+		if (_eregByRule.exists(typePath)) eregs.push(_eregByRule[typePath]);
 		return eregs;
 	}
 
@@ -1217,8 +1217,8 @@ class Lowering {
 	 * undecided).
 	 */
 	private function emitOptionalKwStarFieldSteps(
-		starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, kwLead: String, hasKwTriviaSlots: Bool, afterKwLocal: String, beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String,
-		beforeKwTrailingLocal: String
+		starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, kwLead: String, hasKwTriviaSlots: Bool, afterKwLocal: String,
+		beforeKwNlLocal: String, bodyOnSameLineLocal: String, beforeKwLeadingLocal: String, beforeKwTrailingLocal: String
 	): Void {
 		final inner: ShapeNode = starNode.children[0];
 		if (inner.kind != Ref) Context.fatalError('Lowering: @:optional @:kw Star struct field must contain a Ref', Context.currentPos());
@@ -1742,7 +1742,7 @@ class Lowering {
 		}
 		final underlying: String = node.annotations.get('base.underlying');
 		final eregVar: String = '_re_$simple';
-		_eregByRule.set(typePath, { varName: eregVar, pattern: pattern });
+		_eregByRule[typePath] = { varName: eregVar, pattern: pattern };
 
 		// `@:rawString` on a String-underlying Terminal means "the regex
 		// match is already the raw value" — skip decoding entirely. Used
@@ -2588,9 +2588,7 @@ class Lowering {
 					};
 	}
 
-	private function buildOptKwStarInnerCommit(
-		hasKwTriviaSlots: Bool, afterKwLocal: String, bodyOnSameLineLocal: String
-	): Expr {
+	private function buildOptKwStarInnerCommit(hasKwTriviaSlots: Bool, afterKwLocal: String, bodyOnSameLineLocal: String): Expr {
 		// Post-commit kw-trivia capture — mirrors the optional-Ref path.
 		return hasKwTriviaSlots
 			? macro {
@@ -5229,8 +5227,8 @@ expectLit(ctx, $v{trailText}));
 				});
 			case Star if (isOptional && kwLead != null):
 				emitOptionalKwStarFieldSteps(
-					child, localName, parseSteps, kwLead, hasKwTriviaSlots, afterKwLocal, beforeKwNlLocal,
-					bodyOnSameLineLocal, beforeKwLeadingLocal, beforeKwTrailingLocal
+					child, localName, parseSteps, kwLead, hasKwTriviaSlots, afterKwLocal, beforeKwNlLocal, bodyOnSameLineLocal,
+					beforeKwLeadingLocal, beforeKwTrailingLocal
 				);
 			case Star if (isOptional):
 				emitOptionalStarFieldSteps(child, localName, parseSteps);
