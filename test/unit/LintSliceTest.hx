@@ -110,7 +110,7 @@ class LintSliceTest extends Test {
 		Assert.notNull(Linter.byId('unused-import'));
 		Assert.notNull(Linter.byId('duplicate-import'));
 		Assert.isNull(Linter.byId('does-not-exist'));
-		Assert.equals(79, Linter.builtins().length);
+		Assert.equals(80, Linter.builtins().length);
 
 		final files = [{ file: 'pkg/C.hx', source: 'package pkg;\nimport a.b.Unused;\nclass C {}' }];
 		final viaDefault: Array<Violation> = Linter.run(files, plugin());

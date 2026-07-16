@@ -107,7 +107,8 @@ final class Linter {
 			new EnglishComments(),
 			new PreferComprehension(),
 			new PreferFind(),
-			new LoopGuard()
+			new LoopGuard(),
+			new MapKeysLookup()
 		];
 	}
 
