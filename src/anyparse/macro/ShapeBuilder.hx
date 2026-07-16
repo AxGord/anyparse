@@ -397,7 +397,7 @@ class ShapeBuilder {
 	}
 
 	private static function typeToString(t: Type): String {
-		return try haxe.macro.TypeTools.toString(t) catch (_: Dynamic) 'unknown';
+		return try haxe.macro.TypeTools.toString(t) catch (_: haxe.Exception) 'unknown';
 	}
 
 }
