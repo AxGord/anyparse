@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags statements made unreachable by a preceding unconditional exit — a
@@ -57,8 +55,7 @@ final class DeadCode implements Check {
 		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, tree, support);
 		}
 		return violations;
@@ -75,7 +72,7 @@ final class DeadCode implements Check {
 	): Array<{ span: Span, text: String }> {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final flagged: Array<String> = [];

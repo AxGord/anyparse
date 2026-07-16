@@ -4,9 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags redundant parentheses — a parenthesized expression wrapped directly in
@@ -40,8 +38,7 @@ final class RedundantParens implements Check {
 		if (parenKind == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, tree, parenKind);
 		}
 		return violations;
@@ -53,7 +50,7 @@ final class RedundantParens implements Check {
 	): Array<{ span: Span, text: String }> {
 		final parenKind: Null<String> = plugin.refShape().parenKind;
 		if (parenKind == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeByKey: Map<String, QueryNode> = [];

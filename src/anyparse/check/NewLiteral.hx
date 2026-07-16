@@ -3,9 +3,7 @@ package anyparse.check;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Shared engine for the collection-literal checks (`prefer-array-literal`,
@@ -42,8 +40,7 @@ final class NewLiteral {
 		if (newExprKind == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, newExprKind, typeName, rule, message);
 		}
 		return violations;
@@ -55,7 +52,7 @@ final class NewLiteral {
 	): Array<{ span: Span, text: String }> {
 		final newExprKind: Null<String> = plugin.refShape().newExprKind;
 		if (newExprKind == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeByKey: Map<String, QueryNode> = [];

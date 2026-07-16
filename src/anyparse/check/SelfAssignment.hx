@@ -7,9 +7,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -69,8 +67,7 @@ final class SelfAssignment implements Check {
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final locals: Array<{ name: String, scope: Span, declEnd: Int }> = [];
 			final candidates: Array<{ span: Span, name: String }> = [];
@@ -107,7 +104,7 @@ final class SelfAssignment implements Check {
 		if (support == null) return [];
 		final assignKind: Null<String> = plugin.refShape().assignKind;
 		if (assignKind == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final flagged: Array<String> = [];

@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a statement-context `catch` clause that silently swallows the exception
@@ -74,8 +72,7 @@ final class SwallowedException implements Check {
 		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, catchKind, blockKind, exitKinds);
 		}
 		return violations;

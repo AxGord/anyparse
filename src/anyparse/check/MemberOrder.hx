@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * One type-member paired with its canonical-order rank and its full source slot
@@ -49,8 +47,7 @@ final class MemberOrder implements Check {
 		if (!applicable(shape)) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, shape);
 		}
 		return violations;
@@ -67,7 +64,7 @@ final class MemberOrder implements Check {
 	): Array<{ span: Span, text: String }> {
 		final shape: RefShape = plugin.refShape();
 		if (!applicable(shape)) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final flagged: Array<Int> = [];
 		for (v in violations) {

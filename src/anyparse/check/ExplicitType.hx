@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.query.RefactorSupport;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -59,8 +57,7 @@ final class ExplicitType implements Check {
 		if (fields.length == 0 || functions.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) {
 				// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
 				final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
@@ -87,7 +84,7 @@ final class ExplicitType implements Check {
 		final params: Array<String> = shape.paramKinds ?? [];
 		final fixable: Array<String> = fields.concat(params);
 		if (fixable.length == 0) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final edits: Array<{ span: Span, text: String }> = [];
 		collectInitializerEdits(tree, source, violations, shape, plugin, fixable, edits);

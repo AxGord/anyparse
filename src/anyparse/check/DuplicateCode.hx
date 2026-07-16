@@ -5,9 +5,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a run of three or more consecutive statements that appears, byte-for-byte
@@ -91,8 +89,7 @@ final class DuplicateCode implements Check {
 		final opaqueKinds: Array<String> = plugin.refShape().opaqueKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) scanFile(violations, entry.file, entry.source, tree, blockKinds, opaqueKinds);
 		}
 		return violations;

@@ -6,9 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.check.NullableSource.NullableSourceCfg;
 
 /**
@@ -77,8 +75,7 @@ final class PossibleNullDereference implements Check {
 		};
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);
 			final returnTypes: Map<Int, String> = typed.returnTypes(entry.source);

@@ -9,9 +9,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a `switch` over a **provably-nullable subject** whose branches include a
@@ -87,8 +85,7 @@ final class NullableSwitchMissingNull implements Check {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final root: QueryNode = tree;
 			final declaredTypes: Map<Int, String> = typed.declaredTypes(entry.source);

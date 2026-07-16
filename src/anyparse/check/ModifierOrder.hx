@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a member whose modifier keywords are not in the canonical order
@@ -53,8 +51,7 @@ final class ModifierOrder implements Check {
 			// A project checkstyle `ModifierOrder.modifiers` overrides the grammar's default ranking.
 			final order: Array<String> = plugin.checkOverrides(entry.file)?.modifierOrder ?? defaultOrder;
 			if (order.length == 0) continue;
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, tree, ranking(shape, order, members));
 		}
 		return violations;
@@ -77,7 +74,7 @@ final class ModifierOrder implements Check {
 		final order: Array<String> = shape.modifierOrderKinds ?? [];
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		if (order.length == 0 || members.length == 0) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final flagged: Array<Int> = [];
 		for (v in violations) {

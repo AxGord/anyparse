@@ -4,9 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a key-value `for` loop that discards its key with `_` — `for (_ => v in m)`
@@ -44,8 +42,7 @@ final class RedundantMapIterKey implements Check {
 		if (forStmtKind == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, forStmtKind);
 		}
 		return violations;
@@ -57,7 +54,7 @@ final class RedundantMapIterKey implements Check {
 	): Array<{ span: Span, text: String }> {
 		final forStmtKind: Null<String> = plugin.refShape().forStmtKind;
 		if (forStmtKind == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeByKey: Map<String, QueryNode> = [];

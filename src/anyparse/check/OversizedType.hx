@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.check.Check.ConfigAware;
 
 /**
@@ -74,8 +72,7 @@ final class OversizedType implements Check implements ConfigAware {
 		if (containerKinds.length == 0 || memberKinds.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) {
 				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
 				final cfg: OversizedCfg = {

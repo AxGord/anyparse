@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a null comparison (`x == null` / `x != null`) whose operand is provably
@@ -53,8 +51,7 @@ final class AlwaysNullComparison implements Check {
 		final eqKind: Null<String> = shape.eqKind;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			NullFlow.analyze(tree, shape, entry.source, (node, facts) -> {
 				if (!equalityKinds.contains(node.kind) || node.children.length != 2) return;

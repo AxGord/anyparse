@@ -7,7 +7,6 @@ import anyparse.query.NamingPolicy.NamingPolicy;
 import anyparse.query.NamingPolicy.NamingRule;
 import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
 
@@ -60,8 +59,7 @@ final class Naming implements Check {
 		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			for (v in violationsFor(entry.file, support.project(tree), support.policyFor(entry.file))) violations.push(v);
 		}
@@ -89,7 +87,7 @@ final class Naming implements Check {
 		if (violations.length == 0) return [];
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final policy: NamingPolicy = support.policyFor(violations[0].file);

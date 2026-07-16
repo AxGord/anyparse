@@ -5,9 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 import anyparse.check.Check.ConfigAware;
 
 /**
@@ -84,8 +82,7 @@ final class Complexity implements Check implements ConfigAware {
 		};
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) {
 				final max: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 					.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;

@@ -5,7 +5,6 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
 
@@ -66,7 +65,7 @@ final class TrivialGetter implements Check {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		final out: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index);
 		}
 		return out;

@@ -4,10 +4,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
-import anyparse.query.RefactorSupport;
 
 /**
  * Flags a function parameter written `name:Null<T> = null` — a nullable type with a
@@ -59,8 +56,7 @@ final class OptionalParamShorthand implements Check {
 		if (params.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, params);
 		}
 		return violations;
@@ -77,24 +73,13 @@ final class OptionalParamShorthand implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final params: Array<String> = plugin.refShape().paramKinds ?? [];
-		if (params.length == 0) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
-		if (tree == null) return [];
-		final byKey: Map<String, QueryNode> = [];
-		RefactorSupport.indexNodesByKind(tree, params, byKey);
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (v in violations) {
-			final span: Null<Span> = v.span;
-			if (span == null) continue;
-			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
-			if (node == null) continue;
-			final name: Null<String> = node.name;
-			final inner: Null<String> = nullableDefaultInner(node, source);
-			final ns: Null<Span> = node.span;
-			if (name == null || inner == null || ns == null) continue;
-			edits.push({ span: ns, text: '?$name:$inner' });
-		}
-		return edits;
+		return params.length == 0
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, params, (node, span) -> {
+				final name: Null<String> = node.name;
+				final inner: Null<String> = nullableDefaultInner(node, source);
+				return name == null || inner == null ? null : { span: span, text: '?$name:$inner' };
+			});
 	}
 
 	/**

@@ -6,9 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags an `Add`-chain of adjacent plain string literals that can be merged into
@@ -53,8 +51,7 @@ final class FoldStringLiterals implements Check {
 		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, support);
 		}
 		return violations;
@@ -72,7 +69,7 @@ final class FoldStringLiterals implements Check {
 	): Array<{ span: Span, text: String }> {
 		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (support == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeByKey: Map<String, QueryNode> = [];

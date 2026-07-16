@@ -7,9 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a `for (k in m.keys())` loop whose body reads the SAME map by the SAME key
@@ -85,8 +83,7 @@ final class MapKeysLookup implements Check {
 		final c: Cfg = cfg;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final declaredTypes: Null<Map<Int, String>> = c.typed == null ? null : c.typed.declaredTypes(entry.source);
 			walk(tree, tree, entry.file, declaredTypes, c, violations);

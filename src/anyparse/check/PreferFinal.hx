@@ -8,9 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.Refs;
 import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a local `var` declaration that is never reassigned — a mutable
@@ -86,8 +84,7 @@ final class PreferFinal implements Check {
 		final scopeKinds: Array<String> = shape.scopeKinds;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		for (entry in files) {
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) checkTree(violations, entry.file, entry.source, tree, shape, scopeKinds, opaqueKinds, mutableKinds);
 		}
 		return violations;

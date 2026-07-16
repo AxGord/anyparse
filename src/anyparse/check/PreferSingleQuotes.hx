@@ -6,9 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
-import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a double-quoted string literal carrying no interpolation `$` and no `'`,
@@ -59,8 +57,7 @@ final class PreferSingleQuotes implements Check {
 		for (entry in files) {
 			// A project checkstyle `StringLiteral.policy` that prefers double quotes disables this check.
 			if (plugin.checkOverrides(entry.file)?.preferSingleQuotesEnabled == false) continue;
-			final tree: Null<QueryNode> =
-				try plugin.parseFile(entry.source) catch (exception: ParseError) null catch (exception: Exception) null;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, support);
 		}
 		return violations;
@@ -72,7 +69,7 @@ final class PreferSingleQuotes implements Check {
 	): Array<{ span: Span, text: String }> {
 		final support: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		if (support == null) return [];
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (exception: ParseError) null catch (exception: Exception) null;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final nodeBySpan: Map<String, QueryNode> = [];
