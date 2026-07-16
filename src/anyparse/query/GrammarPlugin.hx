@@ -1221,6 +1221,27 @@ typedef RefShape = {
 	 * not compile. Optional; unset means range loops are not specially excluded.
 	 */
 	@:optional var intervalKind: String;
+
+	/**
+	 * The `while` statement node kind (Haxe `WhileStmt`) — lets `prefer-range-loop`
+	 * recognise a `while (i < B)` counter loop adjacent to its `var i = A;`
+	 * declaration. Optional; unset makes the check a no-op.
+	 */
+	@:optional var whileStmtKind: String;
+
+	/**
+	 * The strict less-than comparison node kind (Haxe `Lt`) — `prefer-range-loop`
+	 * flags only the `i < B` condition form (`<=` / reversed / `!=` are not an
+	 * `A...B` range). Optional; unset makes the check a no-op.
+	 */
+	@:optional var ltKind: String;
+
+	/**
+	 * The post-increment node kind (Haxe `PostIncr`, `i++`) — `prefer-range-loop`
+	 * requires the loop body's trailing statement to be exactly `i++`. Optional;
+	 * unset makes the check a no-op.
+	 */
+	@:optional var postIncrKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {
