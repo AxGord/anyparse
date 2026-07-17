@@ -103,4 +103,33 @@ class RedundantNullCoalescingCheckTest extends Test {
 		return result;
 	}
 
+
+	public function testSelfShadowNullableParamNotFlagged(): Void {
+		// The RHS `p` in a self-shadowing `final p:Foo = p ?? …` initializer refers to
+		// the ENCLOSING nullable param, not the local being declared — the fallback is live.
+		Assert.equals(0, violations('@:nullSafety class C { function f(p:Null<Foo>) { final p:Foo = p ?? other; } }').length);
+	}
+
+	public function testSelfShadowDefaultNullParamNotFlagged(): Void {
+		// Same self-shadow via a `p:Foo = null` param (nullable per Haxe null-safety).
+		Assert.equals(0, violations('@:nullSafety class C { function f(p:Foo = null) { final p:Foo = p ?? other; } }').length);
+	}
+
+	public function testSelfShadowNonNullOuterStillFlagged(): Void {
+		// Self-shadow whose ENCLOSING binding is a non-null param — the RHS resolves to it,
+		// so the coalesce is genuinely redundant and stays flagged (proves resolve-to-outer,
+		// not a blanket self-shadow bail).
+		Assert.equals(1, violations('@:nullSafety class C { function f(p:Foo) { final p:Foo = p ?? other; } }').length);
+	}
+
+	public function testGenuinelyRedundantNonShadowStillFlagged(): Void {
+		// Non-shadow control: a differently-named local off a non-null param still strips.
+		Assert.equals(1, violations('@:nullSafety class C { function f(q:Foo) { final x:Foo = q ?? other; } }').length);
+	}
+
+	public function testFixLeavesSelfShadowNullableUntouched(): Void {
+		final src: String = '@:nullSafety class C { function f(p:Null<Foo>) { final p:Foo = p ?? other; } }';
+		Assert.equals(src, applyFix(src));
+	}
+
 }

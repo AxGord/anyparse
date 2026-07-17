@@ -229,7 +229,7 @@ final class TypeResolver {
 	 * `redundant-null-coalescing`, …).
 	 */
 	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Bool {
-		final bindingFrom: Null<Int> = identBindingFrom(operand, root, shape);
+		final bindingFrom: Null<Int> = operandBindingFrom(operand, root, shape);
 		if (bindingFrom == null) return false;
 		final optionalParamKind: Null<String> = shape.optionalParamKind;
 		if (optionalParamKind != null && bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
@@ -416,6 +416,91 @@ final class TypeResolver {
 	/** Whether `kind` is a TYPE declaration (class / interface / enum / typedef / abstract) — the level a `@:nullSafety` may affirm at. */
 	private static inline function isTypeDeclScope(kind: String): Bool {
 		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
+	}
+
+
+	/**
+	 * The binding `operand` (an identifier) resolves to for nullability — the naive lexical
+	 * binding, CORRECTED for self-shadowing. When `operand` sits inside the initializer of a
+	 * same-named local `var` / `final`, the lexical resolver binds it to that just-declared
+	 * local (declared type, non-null); but a var/final is NOT in scope in its own
+	 * initializer, so its RHS must see the ENCLOSING binding (the shadowed param / outer
+	 * local / field). Re-resolves to that enclosing binding. Null when `operand` is not an
+	 * identifier, its binding is unresolved, or (self-shadow) no enclosing binding exists —
+	 * the caller then keeps its conservative default.
+	 */
+	private static function operandBindingFrom(operand: QueryNode, root: QueryNode, shape: RefShape): Null<Int> {
+		final naive: Null<Int> = identBindingFrom(operand, root, shape);
+		if (naive == null) return null;
+		final naiveFrom: Int = naive;
+		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final opSpan: Null<Span> = operand.span;
+		final name: Null<String> = operand.name;
+		if (localDeclKinds.length == 0 || opSpan == null || name == null) return naive;
+		final selfLocal: Null<Span> = selfShadowLocalSpan(root, localDeclKinds, name, opSpan, naiveFrom);
+		return selfLocal == null ? naive : enclosingBindingFrom(root, shape, name, selfLocal, opSpan);
+	}
+
+	/**
+	 * The span of the local `var` / `final` declaration `operand` naively binds to WHEN that
+	 * binding is the operand's own initializer — a `localDeclKinds` node named `name` that
+	 * starts at `naiveFrom` and whose span contains `opSpan`. Null when the naive binding is
+	 * not such a self-referential local initializer (a normal read positioned after the
+	 * declaration, a param, or a field).
+	 */
+	private static function selfShadowLocalSpan(
+		tree: QueryNode, localDeclKinds: Array<String>, name: String, opSpan: Span, naiveFrom: Int
+	): Null<Span> {
+		var found: Null<Span> = null;
+		function walk(n: QueryNode): Void {
+			if (found != null) return;
+			final s: Null<Span> = n.span;
+			if (
+				s != null && s.from == naiveFrom && n.name == name && localDeclKinds.contains(n.kind) && s.from <= opSpan.from
+				&& opSpan.to <= s.to
+			) {
+				found = s;
+				return;
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+	/**
+	 * The `from` of the binding of `name` visible in the scope ENCLOSING the self-shadowing
+	 * local declared at `selfSpan` — the decl-host of `name` (a `declHostKinds` node other
+	 * than the self-local, declared before it) in the INNERMOST enclosing scope that still
+	 * covers `opSpan`. This is the binding the self-referential initializer actually reads
+	 * (the shadowed param / outer local / field). Null when none exists.
+	 */
+	private static function enclosingBindingFrom(tree: QueryNode, shape: RefShape, name: String, selfSpan: Span, opSpan: Span): Null<Int> {
+		final declHostKinds: Array<String> = shape.declHostKinds;
+		final scopeKinds: Array<String> = shape.scopeKinds;
+		var bestFrom: Null<Int> = null;
+		var bestWidth: Int = 0;
+		final scopeStack: Array<Span> = [];
+		function walk(n: QueryNode): Void {
+			final s: Null<Span> = n.span;
+			if (s != null && n.name == name && s.from < selfSpan.from && declHostKinds.contains(n.kind) && scopeStack.length > 0) {
+				final enc: Span = scopeStack[scopeStack.length - 1];
+				if (enc.from <= opSpan.from && opSpan.to <= enc.to) {
+					final width: Int = enc.to - enc.from;
+					final prev: Null<Int> = bestFrom;
+					if (prev == null || width < bestWidth || (width == bestWidth && s.from > prev)) {
+						bestFrom = s.from;
+						bestWidth = width;
+					}
+				}
+			}
+			final scopeSpan: Null<Span> = (s != null && scopeKinds.contains(n.kind)) ? s : null;
+			if (scopeSpan != null) scopeStack.push(scopeSpan);
+			for (c in n.children) walk(c);
+			if (scopeSpan != null) scopeStack.pop();
+		}
+		walk(tree);
+		return bestFrom;
 	}
 
 }
