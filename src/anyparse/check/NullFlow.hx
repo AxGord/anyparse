@@ -28,7 +28,19 @@ private typedef FlowState = {
 	var nonNull: Array<String>;
 	var known: Array<String>;
 	var maybe: Array<String>;
+	var predicates: Array<PredicateFact>;
+	var aliases: Array<AliasPair>;
+	var present: Array<ExistsFact>;
 }
+
+/** A laundered-guard fact: `bool ⇒ (target != null)` when `notEq`, else `bool ⇒ (target == null)`. A Bool own-name local bound to a null-comparison of a plain own-name ident, so branching on `bool` narrows `target`. */
+private typedef PredicateFact = { bool: String, target: String, notEq: Bool };
+
+/** An unordered pair of plain own-name locals proven to hold the same reference (a direct `v = u` copy) — narrowing either narrows both, until one is written, captured, or re-aliased. */
+private typedef AliasPair = { a: String, b: String };
+
+/** A map/key pair proven present by an enclosing `if (m.exists(k))` guard — a following same-map/key `var u = m[k]` binding is not seeded `MaybeNull` (`maybe`-only). */
+private typedef ExistsFact = { map: String, key: String };
 
 /**
  * Per-function context for one `NullFlow` walk: the grammar-derived node-kind
@@ -66,7 +78,9 @@ private typedef FlowCtx = {
 	var nullCoalKind: Null<String>;
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;
+	var indexAccessKind: Null<String>;
 	var nullAssertionCalls: Array<String>;
+	var mapExistsMethods: Array<String>;
 	var captured: Array<String>;
 	var ownNames: Array<String>;
 	var source: String;
@@ -126,6 +140,20 @@ private typedef FlowCtx = {
  * - **Closures.** A name mutated inside any nested function value is excluded
  *   from both polarities for the whole function (a closure call could reassign it).
  * - **Opaque subtrees.** Macro-reification (`RefShape.opaqueKinds`) is not descended into, and metadata annotations (`META_KINDS`) are skipped entirely — their arguments are compile-time data, never runtime code.
+ * - **Auxiliary facts (laundered predicates, aliases, exists-guards).** A Bool
+ *   local bound EXACTLY to a null-comparison of a plain own-name ident records a
+ *   predicate (`ok => u != null`), so branching on it narrows the compared name
+ *   (De Morgan mirror in the else-arm); a direct plain ident-to-ident copy
+ *   (`var v = u`) records a bidirectional alias, so narrowing one side narrows
+ *   the other; an `if (m.exists(k))` guard marks the pair present so a then-arm
+ *   `var u = m[k]` is not seeded `MaybeNull` (seed-gated — inert for seed-less
+ *   consumers). Every fact dies on ANY write to a name it mentions (including
+ *   `??=`, whose target may be reassigned), on capture (never established for a
+ *   closure-mutated name), at shadow entry/exit, and at any join where it does
+ *   not hold on both arms. Anything short of the exact shapes above — a
+ *   composite Bool RHS, a field or call RHS — establishes nothing, and a
+ *   Bool-to-Bool copy (`var ok2 = ok`) merely aliases the two Bools without
+ *   re-laundering the predicate (a refusal is only a safe miss).
  *
  * Pure, stateless class (mirrors `TypeResolver`).
  */
@@ -350,14 +378,16 @@ final class NullFlow {
 			nullCoalKind: shape.nullCoalesceKind,
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
+			indexAccessKind: shape.indexAccessKind,
 			nullAssertionCalls: shape.nullAssertionCalls ?? [],
+			mapExistsMethods: shape.mapExistsMethods ?? [],
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
 			source: source,
 			nullableSourceRhs: seed,
 			visit: visit
 		};
-		final state: FlowState = { nonNull: [], known: [], maybe: [] };
+		final state: FlowState = emptyState();
 		walk(body, state, ctx);
 	}
 
@@ -411,6 +441,8 @@ final class NullFlow {
 		final name: Null<String> = target.name;
 		if (target.kind != ctx.identKind || name == null) return;
 		final rhs: Null<QueryNode> = node.children.length >= 2 ? node.children[1] : null;
+		// A write invalidates every aux fact naming the target — the mark paths never route through clearName.
+		killAuxFacts(state, name);
 		if (node.kind == ctx.assignKind && isNonNullRhs(rhs, ctx))
 			markNonNull(state, name);
 		else if (node.kind == ctx.assignKind && isNullLitRhs(rhs, ctx))
@@ -419,6 +451,7 @@ final class NullFlow {
 			markMaybe(state, name);
 		else
 			clearName(state, name);
+		if (node.kind == ctx.assignKind) establishAux(state, ctx, name, rhs);
 	}
 
 	/**
@@ -440,6 +473,9 @@ final class NullFlow {
 		}
 		final name: Null<String> = target.name;
 		if (target.kind != ctx.identKind || name == null) return;
+		// A `??=` may reassign the target — every aux fact naming it is stale (the
+		// markNonNull path below never routes through clearName's kill).
+		killAuxFacts(state, name);
 		if (isNonNullRhs(rhs, ctx))
 			markNonNull(state, name);
 		else
@@ -517,6 +553,8 @@ final class NullFlow {
 		for (c in node.children) walk(c, state, ctx);
 		final name: Null<String> = node.name;
 		if (name == null) return;
+		// A fresh binding shadows any same-named outer aux fact.
+		killAuxFacts(state, name);
 		if (isMultiBinding(node, ctx.source, ctx.declTypeChildKinds)) {
 			clearName(state, name);
 			return;
@@ -526,10 +564,11 @@ final class NullFlow {
 			markNonNull(state, name);
 		else if (isNullLitRhs(init, ctx))
 			markKnown(state, name);
-		else if (isNullableSourceRhs(init, ctx))
+		else if (isNullableSourceRhs(init, ctx) && !suppressedByExists(init, state, ctx))
 			markMaybe(state, name);
 		else
 			clearName(state, name);
+		establishAux(state, ctx, name, init);
 	}
 
 	/** `if` / ternary: narrow each arm by the condition's `!= null` / `== null` guards (both polarities); analyze each arm in isolation; join the arm-exit states. */
@@ -546,6 +585,12 @@ final class NullFlow {
 		// Then-arm: narrow by the condition's conjuncts — `!= null` proves non-null,
 		// `== null` proves null — walked to its exit state.
 		final thenState: FlowState = narrowedCopy(cond, state, ctx, ctx.notEqKind, ctx.eqKind, BOOL_AND_KIND);
+		// Exists-guard (feature 3): `if (m.exists(k))` marks (m, k) present in the then-arm, so a
+		// `var u = m[k]` there is not seeded MaybeNull. Seed-gated — inert (empty) for the six base checks.
+		if (ctx.nullableSourceRhs != null) {
+			final ex: Null<ExistsFact> = isExistsGuard(cond, ctx);
+			if (ex != null) thenState.present.push(ex);
+		}
 		walk(thenArm, thenState, ctx);
 		// An unbraced arm declaration (`if (c) var v = null;`) never passes through
 		// `handleBlock`'s exit clearing — drop its facts before the join.
@@ -564,7 +609,7 @@ final class NullFlow {
 		final thenExits: Bool = armExits(thenArm, ctx);
 		final elseExits: Bool = elseArm != null && armExits(elseArm, ctx);
 		final post: FlowState = if (thenExits && elseExits)
-			{ nonNull: [], known: [], maybe: [] };
+			emptyState();
 		else if (thenExits)
 			elseState;
 		else if (elseExits)
@@ -638,7 +683,7 @@ final class NullFlow {
 		}
 		var post: Null<FlowState> = hasDefault ? null : copyState(state);
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
-		setState(state, post ?? { nonNull: [], known: [], maybe: [] });
+		setState(state, post ?? emptyState());
 	}
 
 	/**
@@ -715,7 +760,7 @@ final class NullFlow {
 		}
 		var post: Null<FlowState> = null;
 		for (e in exitStates) post = post == null ? e : intersect(post, e);
-		setState(state, post ?? { nonNull: [], known: [], maybe: [] });
+		setState(state, post ?? emptyState());
 	}
 
 	/**
@@ -856,9 +901,14 @@ final class NullFlow {
 		collectWrites(cond, written, ctx);
 		final nonNull: Array<String> = [];
 		collectNarrow(cond, nonNull, ctx, cmpNonNull, combineKind);
-		for (n in nonNull) if (!written.contains(n)) markNonNull(out, n);
 		final known: Array<String> = [];
 		collectNarrow(cond, known, ctx, cmpKnown, combineKind);
+		// Feature 1: a bare Bool conjunct/disjunct carrying a laundered-guard fact narrows its target.
+		addLaunderedNarrowing(cond, base, ctx, combineKind, nonNull, known);
+		// Feature 2: a narrowed name narrows every local aliased to it, same polarity.
+		expandAliases(base, nonNull);
+		expandAliases(base, known);
+		for (n in nonNull) if (!written.contains(n)) markNonNull(out, n);
 		for (n in known) if (!written.contains(n)) markKnown(out, n);
 		return out;
 	}
@@ -936,11 +986,19 @@ final class NullFlow {
 		state.nonNull.remove(name);
 		state.known.remove(name);
 		state.maybe.remove(name);
+		killAuxFacts(state, name);
 	}
 
 	/** A deep copy of `state` — an isolated branch state the caller can mutate without affecting the original. */
 	private static inline function copyState(state: FlowState): FlowState {
-		return { nonNull: state.nonNull.copy(), known: state.known.copy(), maybe: state.maybe.copy() };
+		return {
+			nonNull: state.nonNull.copy(),
+			known: state.known.copy(),
+			maybe: state.maybe.copy(),
+			predicates: state.predicates.copy(),
+			aliases: state.aliases.copy(),
+			present: state.present.copy()
+		};
 	}
 
 	/**
@@ -973,7 +1031,12 @@ final class NullFlow {
 		return {
 			nonNull: [for (n in a.nonNull) if (b.nonNull.contains(n)) n],
 			known: [for (n in a.known) if (b.known.contains(n)) n],
-			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n]
+			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
+			predicates: [for (p in a.predicates) if (b.predicates.exists(q ->
+				q.bool == p.bool && q.target == p.target && q.notEq == p.notEq
+			)) p],
+			aliases: [for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x],
+			present: [for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e]
 		};
 	}
 
@@ -985,6 +1048,12 @@ final class NullFlow {
 		for (n in next.known) state.known.push(n);
 		state.maybe.resize(0);
 		for (n in next.maybe) state.maybe.push(n);
+		state.predicates.resize(0);
+		for (p in next.predicates) state.predicates.push(p);
+		state.aliases.resize(0);
+		for (a in next.aliases) state.aliases.push(a);
+		state.present.resize(0);
+		for (e in next.present) state.present.push(e);
 	}
 
 	/** Whether `source[from..to)` contains a comma outside every bracket pair and string literal. */
@@ -1012,6 +1081,168 @@ final class NullFlow {
 			i++;
 		}
 		return false;
+	}
+
+	/** A fresh all-`Unknown` flow state — every fact set empty. */
+	private static inline function emptyState(): FlowState {
+		return {
+			nonNull: [],
+			known: [],
+			maybe: [],
+			predicates: [],
+			aliases: [],
+			present: []
+		};
+	}
+
+	/**
+	 * Invalidate every auxiliary fact (laundered predicate, alias, exists-guard) naming
+	 * `name` on either side — its value just changed or its binding left scope, so a fact
+	 * captured against the old value must not survive. Called on every write and every
+	 * scope exit (via `clearName`); narrowing (`markNonNull` / `markKnown`) deliberately
+	 * does NOT invalidate — a guard preserves aliases and predicates.
+	 */
+	private static function killAuxFacts(state: FlowState, name: String): Void {
+		if (state.predicates.length > 0) state.predicates = [for (p in state.predicates) if (p.bool != name && p.target != name) p];
+		if (state.aliases.length > 0) state.aliases = [for (a in state.aliases) if (a.a != name && a.b != name) a];
+		if (state.present.length > 0) state.present = [for (e in state.present) if (e.map != name && e.key != name) e];
+	}
+
+	/**
+	 * Establish an auxiliary fact from a plain assignment / declaration `name = rhs`. A
+	 * right-hand side that is EXACTLY a null-comparison of a plain own-name ident records a
+	 * laundered-guard predicate (`name ⇒ target !=/== null`); a right-hand side that is a
+	 * plain own-name ident copy records a bidirectional alias. Anything else (a field, a
+	 * call, a composite expression) establishes nothing — refused. Both members must be own
+	 * names (locals/params, never call-mutable fields) and neither may be closure-captured.
+	 */
+	private static function establishAux(state: FlowState, ctx: FlowCtx, name: String, rhs: Null<QueryNode>): Void {
+		if (rhs == null || !ctx.ownNames.contains(name) || ctx.captured.contains(name)) return;
+		final r: QueryNode = unwrapParens(rhs, ctx);
+		final rk: String = r.kind;
+		if (rk == ctx.notEqKind || rk == ctx.eqKind) {
+			final operand: Null<QueryNode> = nullComparisonOperand(r, ctx.identKind, ctx.nullLitKind);
+			final t: Null<String> = operand?.name;
+			if (t != null && t != name && ctx.ownNames.contains(t) && !ctx.captured.contains(t)) {
+				final target: String = t;
+				state.predicates.push({ bool: name, target: target, notEq: rk == ctx.notEqKind });
+			}
+			return;
+		}
+		if (rk == ctx.identKind) {
+			final other: Null<String> = r.name;
+			if (other != null && other != name && ctx.ownNames.contains(other) && !ctx.captured.contains(other)) {
+				final copy: String = other;
+				state.aliases.push({ a: name, b: copy });
+			}
+		}
+	}
+
+	/**
+	 * Collect into `out` the plain idents appearing as bare conjuncts / disjuncts of
+	 * `cond` (descending the `combineKind` operator and parentheses) — each a candidate
+	 * laundered-guard Bool. Mirrors `collectNarrow`, but gathers bare identifiers rather
+	 * than null-comparison operands; a comparison subtree is NOT descended, so its operand
+	 * is never mistaken for a laundered Bool.
+	 */
+	private static function collectPredicateIdents(cond: QueryNode, out: Array<String>, ctx: FlowCtx, combineKind: String): Void {
+		final kind: String = cond.kind;
+		if (kind == ctx.identKind) {
+			final nm: Null<String> = cond.name;
+			if (nm != null && !out.contains(nm)) out.push(nm);
+		} else if (kind == combineKind) {
+			for (c in cond.children) collectPredicateIdents(c, out, ctx, combineKind);
+		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
+			collectPredicateIdents(cond.children[0], out, ctx, combineKind);
+		}
+	}
+
+	/**
+	 * Feature 1: for each bare Bool conjunct/disjunct of `cond` carrying a laundered-guard
+	 * predicate in `base`, add its target to the `nonNull` or `known` list. `combineKind ==
+	 * 'And'` marks the then-arm (the Bool is true — its fact applies directly), otherwise
+	 * the else-arm (the Bool is false — the De Morgan mirror applies).
+	 */
+	private static function addLaunderedNarrowing(
+		cond: QueryNode, base: FlowState, ctx: FlowCtx, combineKind: String, nonNull: Array<String>, known: Array<String>
+	): Void {
+		final idents: Array<String> = [];
+		collectPredicateIdents(cond, idents, ctx, combineKind);
+		final thenArm: Bool = combineKind == BOOL_AND_KIND;
+		for (id in idents) {
+			final fact: Null<PredicateFact> = base.predicates.find(p -> p.bool == id);
+			if (fact != null) {
+				if (thenArm == fact.notEq)
+					nonNull.push(fact.target);
+				else
+					known.push(fact.target);
+			}
+		}
+	}
+
+	/**
+	 * Feature 2: grow `names` with every local transitively aliased to one already in it
+	 * (a direct `v = u` copy makes the two share a reference, so they share a null
+	 * polarity). A write to any member of a pair severs it (`killAuxFacts`), so the
+	 * transitive walk stays sound.
+	 */
+	private static function expandAliases(base: FlowState, names: Array<String>): Void {
+		var i: Int = 0;
+		while (i < names.length) {
+			final n: String = names[i];
+			for (al in base.aliases) {
+				final other: Null<String> = al.a == n ? al.b : (al.b == n ? al.a : null);
+				if (other != null && !names.contains(other)) names.push(other);
+			}
+			i++;
+		}
+	}
+
+	/**
+	 * Feature 3: whether `cond` is exactly a `m.exists(k)` membership test on plain idents
+	 * — returns the (map, key) pair, else null. Neither ident may be closure-captured.
+	 * Marks the pair present in the guarded then-arm so a following `var u = m[k]` is not
+	 * seeded `MaybeNull`.
+	 */
+	private static function isExistsGuard(rawCond: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
+		if (ctx.callKind == null || ctx.fieldAccessKind == null || ctx.mapExistsMethods.length == 0) return null;
+		final cond: QueryNode = unwrapParens(rawCond, ctx);
+		if (cond.kind != ctx.callKind || cond.children.length != 2) return null;
+		final callee: QueryNode = cond.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != ctx.fieldAccessKind || method == null || !ctx.mapExistsMethods.contains(method) || callee.children.length != 1)
+			return null;
+		final recv: QueryNode = callee.children[0];
+		final key: QueryNode = cond.children[1];
+		final mapName: Null<String> = recv.name;
+		final keyName: Null<String> = key.name;
+		return recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null
+			? null
+			: ctx.captured.contains(mapName) || ctx.captured.contains(keyName) ? null : { map: mapName, key: keyName };
+	}
+
+	/**
+	 * Feature 3: whether `init` is a `m[k]` index access whose (map, key) is proven present
+	 * by an enclosing exists-guard in `state`, so the nullable-source seed is suppressed for
+	 * it (`maybe`-only — the six base checks never reach this).
+	 */
+	private static function suppressedByExists(rawInit: Null<QueryNode>, state: FlowState, ctx: FlowCtx): Bool {
+		if (rawInit == null || ctx.indexAccessKind == null) return false;
+		final init: QueryNode = unwrapParens(rawInit, ctx);
+		if (init.kind != ctx.indexAccessKind || init.children.length < 2) return false;
+		final recv: QueryNode = init.children[0];
+		final key: QueryNode = init.children[1];
+		final mapName: Null<String> = recv.name;
+		final keyName: Null<String> = key.name;
+		if (recv.kind != ctx.identKind || key.kind != ctx.identKind || mapName == null || keyName == null) return false;
+		return state.present.exists(e -> e.map == mapName && e.key == keyName);
+	}
+
+	/** `node` with any parenthesized wrappers peeled off — the shared normalization of the auxiliary-fact recognizers. */
+	private static function unwrapParens(node: QueryNode, ctx: FlowCtx): QueryNode {
+		var r: QueryNode = node;
+		while (ctx.parenKind != null && r.kind == ctx.parenKind && r.children.length == 1) r = r.children[0];
+		return r;
 	}
 
 }

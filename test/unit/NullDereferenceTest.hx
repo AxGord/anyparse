@@ -177,6 +177,11 @@ class NullDereferenceTest extends Test {
 		Assert.equals(0, violations('class C { function f(x:Dynamic) { if (x == null) { @:m(x.foo) trace(1); } } }').length);
 	}
 
+	public function testLaunderedKnownNullDerefFlagged(): Void {
+		// `var ok = u == null; if (ok) u.charAt(0)` — u is KNOWN-null in the then-arm, so the deref is a guaranteed NPE (feature 1).
+		Assert.equals(1, violations('class C { function f(?u:String) { var ok = u == null; if (ok) u.charAt(0); } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new NullDereference().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

@@ -573,6 +573,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nullableReturnMarkerTypes: ['Null'],
 			nullableFlowExcludedCalls: ['Array.pop', 'Array.shift', 'List.pop', 'List.first', 'List.last'],
 			nullAssertionCalls: ['Assert.notNull'],
+			mapExistsMethods: ['exists'],
 			finalClassMetaName: '@:final',
 			plainClassDeclKind: 'ClassDecl',
 			finalClassDeclKind: 'FinalDecl',

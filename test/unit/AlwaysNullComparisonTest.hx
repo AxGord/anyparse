@@ -211,6 +211,13 @@ class AlwaysNullComparisonTest extends Test {
 		Assert.equals(1, violations('class C { function f() { var x = null; @:m(x = "v") trace(1); if (x != null) trace(2); } }').length);
 	}
 
+	public function testLaunderedKnownNullComparisonFlagged(): Void {
+		// `var ok = u == null; if (ok)` narrows u KNOWN-null in the then-arm — the inner `u == null` is always true (feature 1).
+		Assert.equals(
+			1, violations('class C { function f(?u:String) { var ok = u == null; if (ok) { if (u == null) trace(1); } } }').length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new AlwaysNullComparison().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

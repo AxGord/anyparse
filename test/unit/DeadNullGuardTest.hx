@@ -362,6 +362,123 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(0, violations('class C { function f() { var x = null; @:m(x = "v") trace(1); if (x != null) trace(2); } }').length);
 	}
 
+	public function testLaunderedGuardFlagged(): Void {
+		// `var ok = u != null; if (ok)` narrows u non-null in the then-arm — the inner re-check is dead (feature 1).
+		Assert.equals(
+			1, violations('class C { function f(?u:String) { var ok = u != null; if (ok) { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testLaunderedGuardElseArmFlagged(): Void {
+		// `var ok = u == null; if (ok) {} else` narrows u non-null in the else-arm (De Morgan).
+		Assert.equals(
+			1, violations('class C { function f(?u:String) { var ok = u == null; if (ok) {} else { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testLaunderedGuardShortCircuitConjunct(): Void {
+		// The laundered fact also feeds the `&&` right side: the second conjunct is dead.
+		Assert.equals(1, violations('class C { function f(?u:String) { var ok = u != null; if (ok && u != null) trace(u); } }').length);
+	}
+
+	public function testLaunderedGuardWriteTargetKills(): Void {
+		// A reassignment of the compared value after the predicate is captured makes the fact stale.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; u = mk(); if (ok) { if (u != null) trace(u); } } function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testLaunderedGuardWriteBoolKills(): Void {
+		// Rewriting the Bool to another value drops the predicate.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; ok = cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testLaunderedGuardCaptureNotFlagged(): Void {
+		// The compared value is mutated in a closure — never narrowable, so no predicate is formed.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var g = () -> u = null; var ok = u != null; if (ok) { if (u != null) trace(u); } g(); } }'
+			).length
+		);
+	}
+
+	public function testLaunderedTransitiveNotFlagged(): Void {
+		// `var ok2 = ok` aliases the two Bools but does NOT re-launder the predicate —
+		// transitive predicate tracking is refused, so the inner guard stays live.
+		Assert.equals(
+			0,
+			violations('class C { function f(?u:String) { var ok = u != null; var ok2 = ok; if (ok2) { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testLaunderedCompositeRhsNotFlagged(): Void {
+		// A composite Bool (`u != null || c`) is not a pure null-comparison — no predicate.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null || cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testAliasGuardFlagged(): Void {
+		// `var v = u` aliases the two — a guard on v narrows u, so the inner check on u is dead (feature 2).
+		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (v != null) { if (u != null) trace(u); } } }').length);
+	}
+
+	public function testAliasReverseGuardFlagged(): Void {
+		// The alias is bidirectional — a guard on u narrows v.
+		Assert.equals(1, violations('class C { function f(?u:String) { var v = u; if (u != null) { if (v != null) trace(v); } } }').length);
+	}
+
+	public function testAliasWriteTargetKills(): Void {
+		// A reassignment of either aliased side severs the pair.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var v = u; u = mk(); if (v != null) { if (u != null) trace(u); } } function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testAliasReAliasKills(): Void {
+		// Reassigning v (a call result) severs the original (v, u) pair via the write kill.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var v = u; v = mk(); if (v != null) { if (u != null) trace(u); } } function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testAliasFieldRhsNotFlagged(): Void {
+		// `var v = u.length` is a field access, not a plain ident copy — no alias, so u is not narrowed.
+		Assert.equals(
+			0, violations('class C { function f(?u:String) { var v = u.length; if (v != null) { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testAliasNullCoalAssignKills(): Void {
+		// `u ??= "x"` may reassign u, so the (v, u) alias is stale — the v guard is LIVE
+		// (v keeps the old null while u becomes "x"). Reviewer-caught: the `??=` non-null
+		// path must sever aux facts like every other write.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String, cond:Bool) { var v = u; if (cond) { u ??= "x"; } if (u != null) { if (v != null) trace(v); } } }'
+			).length
+		);
+	}
+
 	/** A self-contained module: a non-null `Foo` local `x`, plus a `cond()` helper, wrapping `body`. */
 	private function wrapFoo(body: String): String {
 		return 'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n'

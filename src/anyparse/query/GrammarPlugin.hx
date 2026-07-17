@@ -1069,6 +1069,14 @@ typedef RefShape = {
 	@:optional var nullAssertionCalls: Array<String>;
 
 	/**
+	 * Map membership-test method names (`exists`) — inside the then-arm of
+	 * `if (m.exists(k))`, a following `var u = m[k]` binding of the SAME map and key
+	 * is not seeded `MaybeNull` (`maybe`-only, so the six base flow checks are
+	 * unaffected). Optional; unset disables the exists-guard suppression.
+	 */
+	@:optional var mapExistsMethods: Array<String>;
+
+	/**
 	 * Field names that denote a collection's element count (`length`) — the
 	 * `magic-number` check exempts a numeric literal compared against such a
 	 * field access (`args.length == 3`), a self-documenting structural arity

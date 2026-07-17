@@ -214,6 +214,51 @@ class UnguardedNullableDerefTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	public function testExistsGuardSuppressed(): Void {
+		// A `var u = m[k]` inside `if (m.exists(k))` is proven present — not seeded MaybeNull (feature 3).
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { var u = m[k]; u.foo; } } }').length
+		);
+	}
+
+	public function testExistsGuardKeyRewrittenFlagged(): Void {
+		// Rewriting the key between the guard and the binding invalidates the present fact.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { k = other(); var u = m[k]; u.foo; } } function other():String return ""; }'
+			).length
+		);
+	}
+
+	public function testExistsGuardMapRewrittenFlagged(): Void {
+		// Rewriting the map between the guard and the binding invalidates the present fact.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Foo>, k:String) { if (m.exists(k)) { m = other(); var u = m[k]; u.foo; } } function other():Map<String,Foo> return null; }'
+			).length
+		);
+	}
+
+	public function testExistsGuardWrongKeyFlagged(): Void {
+		// The guard proves `k` present, not `k2` — a different-key binding is still seeded.
+		Assert.equals(
+			1,
+			violations('class C { function f(m:Map<String,Foo>, k:String, k2:String) { if (m.exists(k)) { var u = m[k2]; u.foo; } } }').length
+		);
+	}
+
+	public function testExistsGuardWrongMapFlagged(): Void {
+		// The guard proves membership in `m`, not `m2` — a different-map binding is still seeded.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Foo>, m2:Map<String,Foo>, k:String) { if (m.exists(k)) { var u = m2[k]; u.foo; } } }'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
