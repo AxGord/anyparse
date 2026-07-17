@@ -289,7 +289,7 @@ final class TrivialGetter implements Check {
 		cls: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		return renameWalk(cls, source, field, getterSpan, fieldNode, propName, false, false, edits) ? edits : null;
+		return renameWalk(cls, source, field, getterSpan, fieldNode, propName, false, false, cls.name, false, edits) ? edits : null;
 	}
 
 	/**
@@ -299,12 +299,15 @@ final class TrivialGetter implements Check {
 	 * binding slot could hide a shadow (`hidesBindingNamed`). The backing field decl and the
 	 * getter subtree (both deleted) are skipped. `inPattern` marks a case-pattern subtree.
 	 * `shadowsProp` is set once an enclosing function binds a parameter / local named
-	 * `propName`: a bare `_field` reference there must rewrite to `this.propName`, since a
-	 * plain `propName` would resolve to that binding instead of the field (silent data loss).
+	 * `propName`: a bare `_field` reference there must rewrite to `this.propName` (or to
+	 * `<ClassName>.propName` inside a static method, where `this` is illegal, via
+	 * `shadowQualifier`), since a plain `propName` would resolve to that binding instead of the
+	 * field (silent data loss).
+	 *
 	 */
 	private static function renameWalk(
 		node: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String, inPattern: Bool,
-		shadowsProp: Bool, out: Array<{ span: Span, text: String }>
+		shadowsProp: Bool, className: Null<String>, staticCtx: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		if (node == fieldNode) return true;
 		final span: Null<Span> = node.span;
@@ -315,7 +318,8 @@ final class TrivialGetter implements Check {
 			if (nowPattern) return false;
 			switch node.kind {
 				case 'IdentExpr':
-					if (span != null) out.push({ span: span, text: shadowsProp ? 'this.' + propName : propName });
+					if (span != null)
+						out.push({ span: span, text: shadowsProp ? shadowQualifier(staticCtx, className) + propName : propName });
 				case 'FieldAccess':
 					if (
 						span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this'
@@ -329,8 +333,16 @@ final class TrivialGetter implements Check {
 			}
 		}
 		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
-		for (c in node.children) if (!renameWalk(c, source, field, getterSpan, fieldNode, propName, nowPattern, childShadows, out))
-			return false;
+		var mods: Array<String> = [];
+		for (c in node.children) {
+			final childStatic: Bool = staticCtx || (isFnScope(c) && mods.contains('Static'));
+			if (!renameWalk(c, source, field, getterSpan, fieldNode, propName, nowPattern, childShadows, className, childStatic, out))
+				return false;
+			mods = switch c.kind {
+				case 'VarMember' | 'FinalMember' | 'FnMember' | 'FinalModifiedMember': [];
+				case _: mods.concat([c.kind]);
+			};
+		}
 		return true;
 	}
 
@@ -511,6 +523,17 @@ final class TrivialGetter implements Check {
 			case _:
 				return false;
 		}
+	}
+
+
+	/**
+	 * The qualifier prefix for a shadowed backing-field write: the enclosing class name
+	 * (`C.`) inside a static method — where `this` is illegal — else `this.` for an instance
+	 * method. A `(default, null)` property is writable from within its own class, so
+	 * `C.prop = value` is legal in a static method of `C`.
+	 */
+	private static inline function shadowQualifier(staticCtx: Bool, className: Null<String>): String {
+		return staticCtx && className != null ? className + '.' : 'this.';
 	}
 
 }
