@@ -7,6 +7,7 @@ import anyparse.check.PreferRangeLoop;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `prefer-range-loop` check: a `var i = A;` immediately followed by
@@ -120,12 +121,37 @@ class PreferRangeLoopCheckTest extends Test {
 		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\ti++;\n\t\t\twork(i);\n\t\t}')).length);
 	}
 
-	public function testFixIsReportOnly(): Void {
-		final check: PreferRangeLoop = new PreferRangeLoop();
-		final src: String = wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}');
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	public function testFixRewritesToRangeLoop(): Void {
+		assertFixCanonical(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'), 'for (i in 0...n)', 'while (');
+	}
+
+	public function testFixParenthesisesTernaryBound(): Void {
+		final src: String = 'class C {\n\tfunction f(a:Int, to:Int):Void {\n\t\tvar i = a < 0 ? 0 : a;\n\t\twhile (i < to) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		assertFixCanonical(src, 'for (i in (a < 0 ? 0 : a)...to)', 'while (');
+	}
+
+	public function testFixRefusesLeadingComment(): Void {
+		// A comment between the declaration and the while would be dropped by the rewrite, so the fix refuses it.
+		assertFixRefused(wrapFn('var i = 0;\n\t\t// setup done\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}'));
+	}
+
+	public function testFloatCounterNotFlagged(): Void {
+		// Haxe's ... interval requires Int operands; a declared Float counter cannot become a range loop.
+		Assert.equals(0, violations(wrapFn('var i:Float = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')).length);
+	}
+
+	public function testFloatBoundNotFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f(n:Float):Void {\n\t\tvar i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testFloatLiteralBoundNotFlagged(): Void {
+		Assert.equals(0, violations(wrapFn('var i = 0;\n\t\twhile (i < 1.5) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}')).length);
+	}
+
+	public function testFixRefusesTrailingComment(): Void {
+		// A comment between i++ and the block's } would be dropped by the rewrite, so the fix refuses it.
+		assertFixRefused(wrapFn('var i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t\t// keep\n\t\t}'));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -150,6 +176,29 @@ class PreferRangeLoopCheckTest extends Test {
 
 	private function violations(source: String): Array<Violation> {
 		return new PreferRangeLoop().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	private function assertFixCanonical(src: String, present: String, absent: String): Void {
+		final r = runAndExpectOne(src);
+		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	private function assertFixRefused(src: String): Void {
+		final r = runAndExpectOne(src);
+		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+	}
+
+	private function runAndExpectOne(src: String): { check: PreferRangeLoop, vs: Array<Violation> } {
+		final check: PreferRangeLoop = new PreferRangeLoop();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		return { check: check, vs: vs };
 	}
 
 }

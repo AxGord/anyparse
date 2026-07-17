@@ -8,14 +8,15 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags a `for (k in m.keys())` loop whose body reads the SAME map by the SAME key
  * (`m[k]` or `m.get(k)`) — the keys-then-lookup anti-pattern that re-looks-up every
  * value. Haxe's key-value iteration `for (k => v in m)` binds the value once, with no
- * second lookup and a guaranteed non-null `v`. `Info`, REPORT-ONLY: the rewrite
+ * second lookup and a guaranteed non-null `v`. `Info`, with an autofix: the rewrite
  * (dropping `.keys()`, inventing a value name, replacing every `m[k]` / `m.get(k)` with
- * it, and reconciling in-body mutation) is a refactoring, not a token fix.
+ * it, over a mutation-free body) is what the autofix applies.
  *
  * ## The shape it accepts
  *
@@ -91,11 +92,27 @@ final class MapKeysLookup implements Check {
 		return violations;
 	}
 
-	/** Report-only: the rewrite (drop `.keys()`, invent a value name, replace lookups) is a refactoring, not a token fix. */
+	/**
+	 * Rewrite each flagged `for (k in m.keys())` into `for (k => value in m)` — dropping
+	 * `.keys()` from the iterable, binding a fresh value variable in the header, and
+	 * replacing every `m[k]` / `m.get(k)` lookup in the body with that variable. The value
+	 * name is `value`, or `value1`, `value2`… when `value` is already used in the body.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final cfg: Null<Cfg> = readCfg(plugin);
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (cfg == null || tree == null) return [];
+		final c: Cfg = cfg;
+		final wanted: Array<String> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span != null) wanted.push('${span.from}:${span.to}');
+		}
+		final edits: Array<{ span: Span, text: String }> = [];
+		fixWalk(tree, source, c, wanted, edits);
+		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 	/** Resolve the required + optional `RefShape` seams and the type provider, or null when a required kind is unset. */
@@ -145,6 +162,34 @@ final class MapKeysLookup implements Check {
 	private static function match(
 		loop: QueryNode, root: QueryNode, file: String, declaredTypes: Null<Map<Int, String>>, cfg: Cfg
 	): Null<Violation> {
+		final p = loopParts(loop, cfg);
+		if (p == null) return null;
+		if (rebinds(p.body, p.recvName, p.keyName, cfg)) return null;
+		if (writesMap(p.body, p.recvName, cfg)) return null;
+		if (!hasLookup(p.body, p.recvName, p.keyName, cfg)) return null;
+		if (!receiverTypeAllows(p.recv, root, declaredTypes, cfg)) return null;
+		final iterSpan: Null<Span> = p.iterable.span;
+		return iterSpan == null ? null : {
+			file: file,
+			span: iterSpan,
+			rule: 'map-keys-lookup',
+			severity: Severity.Info,
+			message: 'iterate key-value instead of keys()-then-lookup — for (${p.keyName} => value in ${p.recvName})'
+		};
+	}
+
+	/**
+	 * The reusable structural parts of a `for (k in <recv>.keys())` loop — the key name, the
+	 * iterable and body children, the receiver node and its name — or null when the loop is
+	 * not a `keys()` iteration over a bare identifier. Shared by `match` and `buildMapEdits`.
+	 */
+	private static function loopParts(loop: QueryNode, cfg: Cfg): Null<{
+		keyName: String,
+		iterable: QueryNode,
+		body: QueryNode,
+		recv: QueryNode,
+		recvName: String
+	}> {
 		if (loop.children.length < MIN_BINARY_CHILD_COUNT) return null;
 		final keyName: Null<String> = loop.name;
 		if (keyName == null) return null;
@@ -154,18 +199,14 @@ final class MapKeysLookup implements Check {
 		if (recv == null) return null;
 		final recvName: Null<String> = recv.name;
 		if (recvName == null) return null;
-		if (rebinds(body, recvName, keyName, cfg)) return null;
-		if (writesMap(body, recvName, cfg)) return null;
-		if (!hasLookup(body, recvName, keyName, cfg)) return null;
-		if (!receiverTypeAllows(recv, root, declaredTypes, cfg)) return null;
-		final iterSpan: Null<Span> = iterable.span;
-		return iterSpan == null ? null : {
-			file: file,
-			span: iterSpan,
-			rule: 'map-keys-lookup',
-			severity: Severity.Info,
-			message: 'iterate key-value instead of keys()-then-lookup — for ($keyName => value in $recvName)'
+		final parts = {
+			keyName: keyName,
+			iterable: iterable,
+			body: body,
+			recv: recv,
+			recvName: recvName
 		};
+		return parts;
 	}
 
 	/** The receiver identifier node of an `<ident>.keys()` no-argument call, else null. */
@@ -209,6 +250,13 @@ final class MapKeysLookup implements Check {
 	/** Whether `node`'s subtree contains a `recv[key]` index access or a `recv.get(key)` call by matching names. */
 	private static function hasLookup(node: QueryNode, recvName: String, keyName: String, cfg: Cfg): Bool {
 		if (cfg.opaqueKinds.contains(node.kind)) return false;
+		if (isLookup(node, recvName, keyName, cfg)) return true;
+		for (c in node.children) if (hasLookup(c, recvName, keyName, cfg)) return true;
+		return false;
+	}
+
+	/** Whether `node` is exactly a `recv[key]` index access or a `recv.get(key)` call — one lookup, no descent. */
+	private static function isLookup(node: QueryNode, recvName: String, keyName: String, cfg: Cfg): Bool {
 		if (
 			node.kind == cfg.indexKind && node.children.length >= MIN_BINARY_CHILD_COUNT && isIdentNamed(node.children[0], recvName, cfg)
 			&& isIdentNamed(node.children[1], keyName, cfg)
@@ -222,7 +270,6 @@ final class MapKeysLookup implements Check {
 			)
 				return true;
 		}
-		for (c in node.children) if (hasLookup(c, recvName, keyName, cfg)) return true;
 		return false;
 	}
 
@@ -248,6 +295,86 @@ final class MapKeysLookup implements Check {
 
 	private static function isWriteMethod(name: Null<String>): Bool {
 		return name == SET_METHOD || name == REMOVE_METHOD || name == CLEAR_METHOD;
+	}
+
+
+	/** Mirror of `walk` for the fix path: emit the key-value rewrite for each wanted loop. */
+	private static function fixWalk(
+		node: QueryNode, source: String, cfg: Cfg, wanted: Array<String>, out: Array<{ span: Span, text: String }>
+	): Void {
+		if (cfg.opaqueKinds.contains(node.kind)) return;
+		if (node.kind == cfg.forKind && node.children.length >= MIN_BINARY_CHILD_COUNT) {
+			final iterSpan: Null<Span> = node.children[0].span;
+			if (iterSpan != null && wanted.contains('${iterSpan.from}:${iterSpan.to}')) {
+				final e: Null<Array<{ span: Span, text: String }>> = buildMapEdits(node, source, cfg);
+				if (e != null) for (edit in e) out.push(edit);
+			}
+		}
+		for (c in node.children) fixWalk(c, source, cfg, wanted, out);
+	}
+
+	/**
+	 * The edits rewriting one `for (k in m.keys())` loop into `for (k => value in m)` with the
+	 * body's `m[k]` / `m.get(k)` lookups replaced by the value variable — or null when the header
+	 * cannot be located.
+	 */
+	private static function buildMapEdits(loop: QueryNode, source: String, cfg: Cfg): Null<Array<{ span: Span, text: String }>> {
+		final p = loopParts(loop, cfg);
+		if (p == null) return null;
+		final iterSpan: Null<Span> = p.iterable.span;
+		final forSpan: Null<Span> = loop.span;
+		final bodySpan: Null<Span> = p.body.span;
+		if (iterSpan == null || forSpan == null || bodySpan == null) return null;
+		final open: Int = source.indexOf('(', forSpan.from);
+		if (open < 0 || open >= iterSpan.from) return null;
+		final keyStart: Int = skipSpace(source, open + 1, iterSpan.from);
+		if (keyStart + p.keyName.length > source.length || source.substring(keyStart, keyStart + p.keyName.length) != p.keyName)
+			return null;
+		final valName: String = freshValueName(source, bodySpan, p.recvName, p.keyName);
+		final edits: Array<{ span: Span, text: String }> = [
+			{ span: new Span(keyStart, iterSpan.to), text: '${p.keyName} => $valName in ${p.recvName}' }
+		];
+		collectLookupEdits(p.body, p.recvName, p.keyName, cfg, valName, edits);
+		return edits;
+	}
+
+	/** Push a `{span → value}` edit for every `recv[key]` / `recv.get(key)` lookup in `node`'s subtree. */
+	private static function collectLookupEdits(
+		node: QueryNode, recvName: String, keyName: String, cfg: Cfg, valName: String, out: Array<{ span: Span, text: String }>
+	): Void {
+		if (cfg.opaqueKinds.contains(node.kind)) return;
+		final span: Null<Span> = node.span;
+		if (span != null && isLookup(node, recvName, keyName, cfg)) {
+			out.push({ span: span, text: valName });
+			return;
+		}
+		for (c in node.children) collectLookupEdits(c, recvName, keyName, cfg, valName, out);
+	}
+
+	/** A value-variable name not already used in the loop body and distinct from the map / key names — `value`, else `value1`, `value2`… */
+	private static function freshValueName(source: String, bodySpan: Span, recvName: String, keyName: String): String {
+		final base: String = 'value';
+		var candidate: String = base;
+		var n: Int = 1;
+		while (
+			candidate == recvName || candidate == keyName
+			|| RefactorSupport.referencedInRange(source, candidate, bodySpan.from, bodySpan.to, [])
+		) {
+			candidate = base + n;
+			n++;
+		}
+		return candidate;
+	}
+
+	/** First index at or after `from` (bounded by `stop`) that is not ASCII whitespace. */
+	private static function skipSpace(source: String, from: Int, stop: Int): Int {
+		var i: Int = from;
+		while (i < stop) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) break;
+			i++;
+		}
+		return i;
 	}
 
 }

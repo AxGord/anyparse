@@ -7,6 +7,7 @@ import anyparse.check.TrivialGetter;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `trivial-getter` check: a read-only property `var x(get, never)` /
@@ -156,14 +157,45 @@ class TrivialGetterCheckTest extends Test {
 		Assert.equals(0, violations(cls('public var active(get, never):Bool;\n\tprivate var _active:Bool = false;')).length);
 	}
 
-	public function testFixIsReportOnly(): Void {
-		final check: TrivialGetter = new TrivialGetter();
-		final src: String = cls(
-			'public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;'
+	public function testFixConvertsToDefaultNull(): Void {
+		assertFixCanonical(
+			cls('public var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;'),
+			'public var active(default, null):Bool = false;', '_active'
 		);
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixRenamesThisAndBareRefs(): Void {
+		final src: String = 'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tpublic function new() { _active = true; }\n\tfunction get_active():Bool return _active;\n\tfunction toggle():Void { this._active = !_active; }\n}';
+		assertFixCanonical(src, 'this.active = !active', '_active');
+	}
+
+	public function testFixRefusesOtherReceiverAccess(): Void {
+		final src: String = 'class C {\n\tpublic var name(get, null):String;\n\tprivate var _name:String;\n\tpublic function new(n:String) { _name = n; }\n\tfunction get_name():String return _name;\n\tfunction other(c:C):String { return c._name; }\n}';
+		assertFixRefused(src);
+	}
+
+	public function testFixRefusesLocalShadow(): Void {
+		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction loc():Void { var _tag = 9; trace(_tag); }\n}';
+		assertFixRefused(src);
+	}
+
+	public function testFixRefusesMultiVarShadow(): Void {
+		// The grammar keeps only the FIRST name of a multi-var declaration, so a shadowing
+		// second `_tag` is invisible as a node — the fix must refuse on the hidden slot.
+		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m():Void {\n\t\tvar a = 1, _tag = 2;\n\t\ttrace(_tag);\n\t}\n}';
+		assertFixRefused(src);
+	}
+
+	public function testFixRefusesKeyValueForShadow(): Void {
+		// The grammar keeps only the KEY name of a key-value for header, so a shadowing
+		// value variable `_tag` is invisible as a node — the fix must refuse on the header.
+		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m(mp:Map<Int, Int>):Void {\n\t\tfor (k => _tag in mp) trace(_tag);\n\t}\n}';
+		assertFixRefused(src);
+	}
+
+	public function testFixRefusesCasePatternCapture(): Void {
+		final src: String = 'class C {\n\tpublic var kind(get, never):Int;\n\tprivate var _kind:Int = 1;\n\tfunction get_kind():Int return _kind;\n\tfunction m(x:Any):Void { switch x { case _kind: trace(_kind); case _: trace(0); } }\n}';
+		assertFixRefused(src);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -189,6 +221,29 @@ class TrivialGetterCheckTest extends Test {
 
 	private function violations(source: String): Array<Violation> {
 		return new TrivialGetter().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	private function assertFixCanonical(src: String, present: String, absent: String): Void {
+		final r = runAndExpectOne(src);
+		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	private function assertFixRefused(src: String): Void {
+		final r = runAndExpectOne(src);
+		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+	}
+
+	private function runAndExpectOne(src: String): { check: TrivialGetter, vs: Array<Violation> } {
+		final check: TrivialGetter = new TrivialGetter();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		return { check: check, vs: vs };
 	}
 
 }

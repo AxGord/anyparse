@@ -1226,6 +1226,34 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Whether `text` contains a comma outside any `()`/`[]`/`{}` nesting and outside a
+	 * string literal — the multi-declaration separator of `var i, j = n`. `<>` is
+	 * deliberately not tracked (a generic type-parameter comma reads as top-level,
+	 * which consumers treat conservatively).
+	 */
+	public static function hasTopLevelComma(text: String): Bool {
+		var depth: Int = 0;
+		var i: Int = 0;
+		final n: Int = text.length;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(text, i);
+			switch c {
+				case '('.code | '['.code | '{'.code:
+					depth++;
+				case ')'.code | ']'.code | '}'.code:
+					if (depth > 0) depth--;
+				case '"'.code | "'".code:
+					i = skipStringLiteral(text, i, c);
+				case ','.code:
+					if (depth == 0) return true;
+				case _:
+			}
+			i++;
+		}
+		return false;
+	}
+
+	/**
 	 * Extend `span` to also remove ONE separating comma so a comma list stays
 	 * well-formed after the element is cut: the trailing comma (preferred) —
 	 * the next non-whitespace byte after `span.to` — else the leading comma
@@ -1416,6 +1444,26 @@ final class RefactorSupport {
 			result = ls;
 		}
 		return result;
+	}
+
+	/**
+	 * Index of the closing `quote` of the string opened at `open`, honouring
+	 * `\`-escapes; the source length minus one if unterminated (the caller's `i++`
+	 * then ends the scan).
+	 */
+	private static function skipStringLiteral(text: String, open: Int, quote: Int): Int {
+		final n: Int = text.length;
+		var i: Int = open + 1;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(text, i);
+			if (c == '\\'.code) {
+				i += 2;
+				continue;
+			}
+			if (c == quote) return i;
+			i++;
+		}
+		return n - 1;
 	}
 
 }

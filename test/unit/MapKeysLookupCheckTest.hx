@@ -7,11 +7,11 @@ import anyparse.check.MapKeysLookup;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `map-keys-lookup` check: a `for (k in m.keys())` loop whose body re-looks-up the
- * same map by the same key (`m[k]` / `m.get(k)`) is flagged `Warning`, report-only (the
- * key-value rewrite is a refactoring). Soundness misses: a body with no matching lookup,
+ * same map by the same key (`m[k]` / `m.get(k)`) is flagged `Info`, with an autofix applying the key-value rewrite. Soundness misses: a body with no matching lookup,
  * a different key or a different map, any mutation of the map (`m[k] =` / `m.set` /
  * `m.remove` / `m.clear`), a re-binding shadowing `k` or `m`, a chained (non-identifier)
  * receiver, and a receiver resolving to a concrete non-map type. An unresolvable receiver
@@ -98,11 +98,18 @@ class MapKeysLookupCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
-	public function testFixIsReportOnly(): Void {
-		final check: MapKeysLookup = new MapKeysLookup();
-		final src: String = wrapMap('for (k in m.keys()) trace(m[k]);');
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	public function testFixIndexLookup(): Void {
+		assertFixCanonical(wrapMap('for (k in m.keys()) trace(m[k]);'), 'for (k => value in m) trace(value);', '.keys()');
+	}
+
+	public function testFixGetLookup(): Void {
+		assertFixCanonical(wrapMap('for (k in m.keys()) trace(m.get(k));'), 'for (k => value in m) trace(value);', 'm.get(k)');
+	}
+
+	public function testFixFreshValueNameOnCollision(): Void {
+		assertFixCanonical(
+			wrapMap('for (k in m.keys()) {\n\t\t\tfinal value = 7;\n\t\t\ttrace(m[k] + value);\n\t\t}'), 'for (k => value1 in m)', 'm[k]'
+		);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -122,6 +129,20 @@ class MapKeysLookupCheckTest extends Test {
 
 	private function violations(source: String): Array<Violation> {
 		return new MapKeysLookup().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+
+	private function assertFixCanonical(src: String, present: String, absent: String): Void {
+		final check: MapKeysLookup = new MapKeysLookup();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 }
