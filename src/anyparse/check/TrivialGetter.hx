@@ -47,6 +47,14 @@ import anyparse.query.RefactorSupport;
  *    skipped wholesale; the subtype set is complete only over a whole-project
  *    scope (like `prefer-final-public-field`).
  *
+ * 6. When the class `implements` anything and the property is PUBLIC, an
+ *    implemented interface may declare it `x(get, …)` and so require a physical
+ *    `get_x` — the collapse to `(default, null)` would drop it ("Field get_x
+ *    needed by I is missing"). The property is skipped wholesale unless EVERY
+ *    implemented interface is resolvable in the index and provably lacks it
+ *    (`SymbolIndex.typeProvablyLacksMember`). A private property is not exposed
+ *    through an interface, so it is never gated here.
+ *
  * Internal writes to the backing field from other methods are FINE — that is
  * exactly what `(default, null)` preserves — so no write gate is needed.
  */
@@ -80,11 +88,14 @@ final class TrivialGetter implements Check {
 	 * name. Airtight only for the safe sub-shape where every backing-field reference is a
 	 * bare identifier or a `this.<field>` access: a `<other>.<field>` access (a different
 	 * instance / class the rename could not prove), a local / parameter / capture that
-	 * shadows the name (including the grammar-dropped multi-var and key-value-for binding
-	 * slots), or a case-pattern mention of it, all leave the finding report-only. NOTE:
-	 * a null `index` skips the subclass-override gate — the production `lint --fix` caller
+	 * shadows the FIELD name (including the grammar-dropped multi-var and key-value-for
+	 * binding slots), or a case-pattern mention of it, all leave the finding report-only.
+	 * A bare backing-field reference inside a function that binds a parameter / local of the
+	 * PROPERTY name is rewritten as `this.<prop>` (a plain `<prop>` would resolve to that
+	 * binding, not the field — silent data loss). NOTE: a null `index` skips the
+	 * subclass-override and interface-conformance gates — the production `lint --fix` caller
 	 * always passes one; a direct caller without an index must ensure no subtype overrides
-	 * the getter.
+	 * the getter and no implemented interface requires it.
 	 *
 	 */
 	public function fix(
@@ -127,6 +138,7 @@ final class TrivialGetter implements Check {
 		for (prop in t.properties) {
 			final r = resolvedGetterField(t.getters, prop.name);
 			if (r == null || !t.privateFieldNodes.exists(r.field)) continue;
+			if (interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) continue;
 			out.push({
 				file: file,
 				span: prop.span,
@@ -230,6 +242,7 @@ final class TrivialGetter implements Check {
 		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
 			final r = resolvedGetterField(t.getters, prop.name);
 			if (r == null) continue;
+			if (interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) continue;
 			final fieldNode: Null<QueryNode> = t.privateFieldNodes[r.field];
 			if (fieldNode == null) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildGetterFix(
@@ -276,7 +289,7 @@ final class TrivialGetter implements Check {
 		cls: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		return renameWalk(cls, source, field, getterSpan, fieldNode, propName, false, edits) ? edits : null;
+		return renameWalk(cls, source, field, getterSpan, fieldNode, propName, false, false, edits) ? edits : null;
 	}
 
 	/**
@@ -285,11 +298,13 @@ final class TrivialGetter implements Check {
 	 * binding that shadows the name, a case-pattern mention, or a construct whose dropped
 	 * binding slot could hide a shadow (`hidesBindingNamed`). The backing field decl and the
 	 * getter subtree (both deleted) are skipped. `inPattern` marks a case-pattern subtree.
-	 *
+	 * `shadowsProp` is set once an enclosing function binds a parameter / local named
+	 * `propName`: a bare `_field` reference there must rewrite to `this.propName`, since a
+	 * plain `propName` would resolve to that binding instead of the field (silent data loss).
 	 */
 	private static function renameWalk(
 		node: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String, inPattern: Bool,
-		out: Array<{ span: Span, text: String }>
+		shadowsProp: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		if (node == fieldNode) return true;
 		final span: Null<Span> = node.span;
@@ -300,7 +315,7 @@ final class TrivialGetter implements Check {
 			if (nowPattern) return false;
 			switch node.kind {
 				case 'IdentExpr':
-					if (span != null) out.push({ span: span, text: propName });
+					if (span != null) out.push({ span: span, text: shadowsProp ? 'this.' + propName : propName });
 				case 'FieldAccess':
 					if (
 						span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this'
@@ -313,8 +328,33 @@ final class TrivialGetter implements Check {
 					return false;
 			}
 		}
-		for (c in node.children) if (!renameWalk(c, source, field, getterSpan, fieldNode, propName, nowPattern, out)) return false;
+		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
+		for (c in node.children) if (!renameWalk(c, source, field, getterSpan, fieldNode, propName, nowPattern, childShadows, out))
+			return false;
 		return true;
+	}
+
+	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
+	private static inline function isFnScope(node: QueryNode): Bool {
+		return switch node.kind {
+			case 'FnMember' | 'FinalModifiedMember' | 'LocalFnStmt' | 'FnExpr' | 'ThinParenLambdaExpr' | 'ParenLambdaExpr' | 'ThinArrow': true;
+			case _: false;
+		}
+	}
+
+	/**
+	 * Whether the subtree `node` binds a parameter / local / catch var named `name`. Scanned
+	 * subtree-wide from a function scope, so a nested function's binding also trips it —
+	 * over-qualifying a backing-field write with `this.` is always semantically correct.
+	 */
+	private static function functionBindsName(node: QueryNode, name: String): Bool {
+		switch node.kind {
+			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam' | 'VarStmt' | 'FinalStmt' | 'LocalFnStmt' | 'CatchClause':
+				if (node.name == name) return true;
+			case _:
+		}
+		for (c in node.children) if (functionBindsName(c, name)) return true;
+		return false;
 	}
 
 	/** The `(read, write)` accessor-clause span `[open, close]` of a property (`span.from` at `var`), or null. */
@@ -350,6 +390,39 @@ final class TrivialGetter implements Check {
 
 
 	/**
+	 * Whether collapsing the property `propName` of `cls` to `(default, null)` could drop a
+	 * `get_propName` that an implemented interface requires (Haxe: "Field get_propName needed
+	 * by I is missing"). True when `cls` implements anything and the property is public, UNLESS
+	 * every implemented interface is resolvable in `index` and provably lacks the property
+	 * (`typeProvablyLacksMember`). A null `index` cannot prove absence, so any implemented
+	 * interface blocks. A private property is never exposed through an interface, so never blocks.
+	 */
+	private static function interfaceRequiresGetter(cls: QueryNode, propName: String, isPublic: Bool, index: Null<SymbolIndex>): Bool {
+		if (!isPublic) return false;
+		final ifaces: Array<String> = implementedInterfaces(cls);
+		if (ifaces.length == 0) return false;
+		if (index == null) return true;
+		for (iface in ifaces) if (!index.typeProvablyLacksMember(iface, propName)) return true;
+		return false;
+	}
+
+	/** The simple names of every interface in `cls`'s `implements` clauses. */
+	private static function implementedInterfaces(cls: QueryNode): Array<String> {
+		final out: Array<String> = [];
+		for (child in cls.children) if (child.kind == 'ImplementsClause') for (named in child.children) {
+			final nm: Null<String> = named.name;
+			if (nm != null) out.push(simpleName(nm));
+		}
+		return out;
+	}
+
+	/** The last `.`-separated segment of `path` (its simple name). */
+	private static inline function simpleName(path: String): String {
+		final segments: Array<String> = path.split('.');
+		return segments[segments.length - 1] ?? path;
+	}
+
+	/**
 	 * Build the member tables of `cls` shared by `considerClass` (report) and
 	 * `collectClassFixEdits` (fix): private field nodes by name, `get_` getters by name (with
 	 * their `dynamic` flag), and the `(get, never)` / `(get, null)` read-only properties.
@@ -357,11 +430,21 @@ final class TrivialGetter implements Check {
 	private static function memberTables(cls: QueryNode, source: String): {
 		privateFieldNodes: Map<String, QueryNode>,
 		getters: Map<String, { node: QueryNode, dyn: Bool }>,
-		properties: Array<{ name: String, node: QueryNode, span: Span }>
+		properties: Array<{
+			name: String,
+			node: QueryNode,
+			span: Span,
+			isPublic: Bool
+		}>
 	} {
 		final privateFieldNodes: Map<String, QueryNode> = [];
 		final getters: Map<String, { node: QueryNode, dyn: Bool }> = [];
-		final properties: Array<{ name: String, node: QueryNode, span: Span }> = [];
+		final properties: Array<{
+			name: String,
+			node: QueryNode,
+			span: Span,
+			isPublic: Bool
+		}> = [];
 		var mods: Array<String> = [];
 		for (child in cls.children) {
 			switch child.kind {
@@ -369,11 +452,18 @@ final class TrivialGetter implements Check {
 					final name: Null<String> = child.name;
 					final span: Null<Span> = child.span;
 					if (name != null && span != null) {
-						if (!mods.contains('Public')) privateFieldNodes[name] = child;
+						final isPublic: Bool = mods.contains('Public');
+						if (!isPublic) privateFieldNodes[name] = child;
 						if (child.kind == 'VarMember') {
 							final access: Null<{ read: String, write: String }> = accessorClause(source, span);
-							if (access != null && access.read == 'get' && (access.write == 'never' || access.write == 'null'))
-								properties.push({ name: name, node: child, span: span });
+							if (
+								access != null && access.read == 'get' && (access.write == 'never' || access.write == 'null')
+							) properties.push({
+								name: name,
+								node: child,
+								span: span,
+								isPublic: isPublic
+							});
 						}
 					}
 					mods = [];

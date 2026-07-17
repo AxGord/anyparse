@@ -278,6 +278,32 @@ final class SymbolIndex {
 		return closureContains(sub, sup, [sub]);
 	}
 
+	/**
+	 * Whether the type `typeName` — together with its ENTIRE supertype closure —
+	 * provably declares no member named `member`. True only when `typeName` resolves
+	 * to exactly one indexed decl, every transitive supertype likewise resolves, and
+	 * none of them declares `member`. Any unresolved / ambiguous type anywhere in the
+	 * closure yields false — the member could be declared out of the lint scope, so its
+	 * absence is not provable. The green-light companion of `supertypeDeclaresMember`,
+	 * used by `trivial-getter` to prove an implemented interface does not require the
+	 * property's `get_` accessor before collapsing it to `(default, null)`.
+	 */
+	public function typeProvablyLacksMember(typeName: String, member: String): Bool {
+		return lacksMemberClosure(typeName, member, []);
+	}
+
+	/** Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`. */
+	private function lacksMemberClosure(typeName: String, member: String, seen: Array<String>): Bool {
+		if (seen.contains(typeName)) return true;
+		seen.push(typeName);
+		final ds: Array<TypeDeclInfo> = declsNamed(typeName);
+		if (ds.length != 1) return false;
+		final t: TypeDeclInfo = ds[0];
+		if (t.members.exists(m -> m.name == member)) return false;
+		for (sup in t.supertypes) if (!lacksMemberClosure(sup, member, seen)) return false;
+		return true;
+	}
+
 	/** Recursive supertype walk for `supertypeDeclaresMember`, cycle-guarded by `seen`. */
 	private function supertypeDeclares(typeName: String, field: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return false;
