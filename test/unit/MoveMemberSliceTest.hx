@@ -624,6 +624,20 @@ class MoveMemberSliceTest extends Test {
 		Assert.isTrue(StringTools.contains(newB, '@:keep public static function util'), 'public should follow the meta');
 	}
 
+	/** A paren-bearing `@:name(args)` meta (MetaCall) above the moved member: the promotion `public` must land AFTER it, like the paren-less form. */
+	public function testMetaCallMemberPromotionLandsAfterMeta(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function run():Int return util(3);\n\t@:nowarn("x") static function util(x:Int):Int return x;\n}';
+		final b: String = 'package pkg;\n\nclass B {}';
+		final changes: Array<MoveChange> = okChanges('pkg/A.hx', 'A', 'util', 'B', [
+			{ file: 'pkg/A.hx', source: a },
+			{ file: 'pkg/B.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'pkg/B.hx').newSource;
+		Assert.isTrue(
+			StringTools.contains(newB, '@:nowarn("x") public static function util'), 'public should follow the MetaCall meta: $newB'
+		);
+	}
+
 	public function testFullyQualifiedCallerRewritten(): Void {
 		final a: String = 'package pkg;\n\nclass A {\n\tpublic static function util(x:Int):Int return x;\n}';
 		final b: String = 'package pkg;\n\nclass B {}';

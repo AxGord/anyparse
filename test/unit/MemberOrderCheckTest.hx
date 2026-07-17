@@ -168,6 +168,50 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
+	/** (a) A member-level `abstract` modifier must travel WITH its bodyless decl during reorder - never migrate onto a neighbour or strand as an orphan line. */
+	public function testAbstractModifierTravelsWithMember(): Void {
+		final src: String = 'abstract class C {\n\tpublic function m():Void {}\n\tabstract public function area():Float;\n\tpublic var x:Int;\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
+		final areaLine: Null<String> = memberLine(fixed, 'area');
+		final mLine: Null<String> = memberLine(fixed, 'function m');
+		Assert.isTrue(areaLine != null && areaLine.indexOf('abstract') >= 0, 'abstract stays attached to area: $fixed');
+		Assert.isTrue(mLine != null && mLine.indexOf('abstract') < 0, 'm never gains a stray abstract: $fixed');
+		Assert.isFalse(
+			Lambda.exists(fixed.split('\n'), line -> StringTools.trim(line) == 'abstract'), 'no orphaned bare abstract line: $fixed'
+		);
+	}
+
+	/** (b) A `@:access` / `@:meta` on its own line above a member must MOVE WITH that member during reorder, staying immediately before it. */
+	public function testMetaCallTravelsWithMember(): Void {
+		final src: String = 'class C {\n\t@:access(Bar.secret)\n\tpublic function useSecret():Void {}\n\tpublic var x:Int;\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
+		final varx: Int = fixed.indexOf('var x');
+		final meta: Int = fixed.indexOf('@:access');
+		final use: Int = fixed.indexOf('useSecret');
+		Assert.isTrue(varx < meta, 'field reordered before the annotated method: $fixed');
+		Assert.isTrue(meta < use && fixed.substring(meta, use).indexOf('var ') < 0, '@:access stays immediately before useSecret: $fixed');
+	}
+
+	/** (c) Fixer output must be checker-canonical: a class with abstract accessors + a public abstract method must be flag-free after ONE fix pass. */
+	public function testAbstractAccessorFixConverges(): Void {
+		final src: String = 'abstract class C {\n\tpublic var x:Int;\n\tpublic function new() {}\n'
+			+ '\tabstract function get_x():Int;\n\tabstract function set_x(v:Int):Int;\n'
+			+ '\tfunction handler():Void {}\n\tabstract public function process():Void;\n}';
+		Assert.isTrue(violations(src).length > 0, 'initial disorder flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
+		// The public abstract method keeps its `abstract`; the private handler never gains one.
+		final procLine: Null<String> = memberLine(fixed, 'process');
+		Assert.isTrue(procLine != null && procLine.indexOf('abstract') >= 0, 'process keeps its abstract modifier: $fixed');
+		final handlerLine: Null<String> = memberLine(fixed, 'handler');
+		Assert.isTrue(handlerLine != null && handlerLine.indexOf('abstract') < 0, 'handler never gains a stray abstract: $fixed');
+		// Fixer output is checker-canonical: no violation and no further edits on a second pass.
+		Assert.equals(0, violations(fixed).length, 'no violation after one fix pass (converges): $fixed');
+		Assert.equals(0, edits(fixed).length, 'second pass emits zero edits: $fixed');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -194,5 +238,14 @@ class MemberOrderCheckTest extends Test {
 			true;
 		} catch (exception: haxe.Exception) false;
 	}
+
+
+	/**
+	 * The single member line containing `needle`, or null - lets an assertion
+	 * inspect one member's own modifiers without the class header's `abstract`
+	 * keyword or a sibling member polluting a naive whole-source substring scan.
+	 */
+	private function memberLine(src: String, needle: String): Null<String>
+		return Lambda.find(src.split('\n'), line -> line.indexOf(needle) >= 0);
 
 }

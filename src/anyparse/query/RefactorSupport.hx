@@ -137,17 +137,27 @@ final class RefactorSupport {
 	public static final COMMA_CONTAINER_KINDS: Array<String> = ['ArrayExpr', 'ObjectLit', 'Call', 'NewExpr'];
 
 	/**
+	 * The sibling node kinds `@:meta` annotations project to: `Meta` for the
+	 * paren-less `@:name`, `MetaCall` for `@:name(args)`, `PlainMeta` for the
+	 * verbatim raw catch-all (mirrors the grammar's `metaShape().metaKinds`).
+	 * Shared by `MODIFIER_META_KINDS` and the ops that must skip a leading meta
+	 * run (e.g. MoveMember's visibility promotion).
+	 */
+	public static final META_KINDS: Array<String> = ['Meta', 'MetaCall', 'PlainMeta'];
+
+	/**
 	 * Sibling node kinds a declaration's modifiers and metadata project to —
 	 * emitted BEFORE the decl they modify (`public static function` is
-	 * `(Public)(Static)(FnMember)`; `@:meta` is `(Meta)`). `declGroupSpan`
-	 * folds a run of these plus the decl into one logical element so a
-	 * structural edit treats the whole `[@:meta modifiers… decl]` as a unit,
-	 * not the decl keyword alone. `final` is NOT here — it WRAPS its decl
-	 * (`FinalDecl` / `FinalModifiedMember` / `FinalMember`) instead of
-	 * projecting to a separate sibling.
+	 * `(Public)(Static)(FnMember)`; annotations are the `META_KINDS` forms).
+	 * `declGroupSpan` folds a run of these plus the decl into one logical
+	 * element so a structural edit treats the whole `[@:meta modifiers… decl]`
+	 * as a unit, not the decl keyword alone. The member-level `abstract`
+	 * modifier (Haxe 4.2 abstract classes) projects as its own `(Abstract)`
+	 * sibling and IS here. `final` is NOT — it WRAPS its decl (`FinalDecl` /
+	 * `FinalModifiedMember` / `FinalMember`) instead of projecting to a
+	 * separate sibling.
 	 */
-	private static final MODIFIER_META_KINDS: Array<String> = [
-		'Meta',
+	private static final MODIFIER_META_KINDS: Array<String> = META_KINDS.concat([
 		'Public',
 		'Private',
 		'Static',
@@ -155,8 +165,9 @@ final class RefactorSupport {
 		'Override',
 		'Macro',
 		'Extern',
-		'Dynamic'
-	];
+		'Dynamic',
+		'Abstract'
+	]);
 
 	/**
 	 * Node kinds an expression subtree may contain and still be

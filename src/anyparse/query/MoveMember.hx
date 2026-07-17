@@ -643,7 +643,7 @@ final class MoveMember {
 		} else {
 			// Insert after any leading @:meta run — `public` before a meta
 			// line would not parse.
-			final at: Int = m.group.modifiers.find(mod -> mod.kind != 'Meta')?.span?.from ?? m.span.from;
+			final at: Int = m.group.modifiers.find(mod -> !RefactorSupport.META_KINDS.contains(mod.kind))?.span?.from ?? m.span.from;
 			movedTextEdits.push({ span: new Span(at, at), text: 'public ' });
 		}
 		advisoryExtras.push(
