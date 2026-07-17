@@ -31,8 +31,8 @@ import anyparse.runtime.Span;
  * `Severity.Info`; `fix` conservatively drops the dead guard where a safe span rewrite
  * exists — unwrap / delete a sole-condition `if`, or drop a conjunct / disjunct from a
  * homogeneous `&&` / `||` chain — and refuses (leaves a finding) everywhere else. Its
- * proof is FLOW-based (`NullFlow`), never declared-type trust, so it has no
- * default-null-parameter blind spot — unlike the report-only `unnecessary-null-check`.
+ * proof is FLOW-based (`NullFlow`), never declared-type trust, so a default-null parameter
+ * — which the declared prover now exempts too — reaches this check only when flow narrows it.
  */
 @:nullSafety(Strict)
 final class DeadNullGuard implements Check {

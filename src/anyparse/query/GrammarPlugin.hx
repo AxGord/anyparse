@@ -859,9 +859,11 @@ typedef RefShape = {
 	/**
 	 * The node kind of an OPTIONAL parameter (Haxe `?x: T`, projected as
 	 * `Optional`), whose value is nullable despite a nominal `:Type` annotation
-	 * (which `declaredTypes` records). A parameter with a default value (`x: T = d`)
-	 * projects as the required kind and is non-null. `unnecessary-null-check` skips
-	 * an operand bound to an optional parameter. Optional; unset disables the skip.
+	 * (which `declaredTypes` records). A parameter with a NON-null default (`x: T = d`)
+	 * projects as the required kind and is non-null; a NULL default (`x: T = null`) is
+	 * nullable per Haxe null-safety and is exempted separately via `paramKinds` +
+	 * `nullLiteralKind`. `unnecessary-null-check` skips an operand bound to an optional
+	 * parameter. Optional; unset disables the skip.
 	 */
 	@:optional var optionalParamKind: String;
 

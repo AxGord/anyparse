@@ -12,7 +12,7 @@ import anyparse.runtime.Span;
 /**
  * Flags an `is` type-check `x is T` that is provably ALWAYS TRUE — `x` is a plain
  * identifier whose declared type already equals the checked type `T` AND is provably
- * non-null, so the runtime test can never fail. `Severity.Info`; report-only.
+ * non-null, so the runtime test can never fail. `Severity.Info`.
  *
  * ## Type-aware, conservative — always-true only
  *
@@ -30,9 +30,9 @@ import anyparse.runtime.Span;
  * hierarchy anyparse does not have, so it could not be done without false positives.
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
- * Report-only — `fix` is a no-op, for the same reason as `unnecessary-null-check`:
- * `TypeResolver.isProvablyNonNull` treats a default-null parameter as non-null, so
- * unwrapping a flagged `is`-check could introduce an NPE (`null is T` is false).
+ * `fix` unwraps the always-true `is`-check where a safe span rewrite exists — a sole-condition
+ * `if (x is T)` or a `&&`-conjunct (via `CheckScan.simplifyConditionFixes`) — refusing elsewhere.
+ * A default-null `s:T = null` is exempted (`null is T` is false), so `s is T` is never flagged.
  */
 @:nullSafety(Strict)
 final class RedundantIsCheck implements Check {
@@ -93,7 +93,8 @@ final class RedundantIsCheck implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final isExprKind: Null<String> = plugin.refShape().isExprKind;
+		return isExprKind == null ? [] : CheckScan.simplifyConditionFixes(plugin, source, violations, [isExprKind], _ -> true);
 	}
 
 }

@@ -7,7 +7,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnnecessaryNullCheck;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `unnecessary-null-check` check: a comparison against `null` whose operand
@@ -84,27 +84,37 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	public function testFixIsNoop(): Void {
-		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
-		final src: String = 'class C { function f(x:Int) { if (x != null) trace(x); } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		Assert.equals(0, edits.length);
+	public function testFixUnwrapBody(): Void {
+		assertFixContains(wrap('if (x != null) trace(x);'), 'trace(x)', 'if (x != null)');
 	}
 
-	public function testDefaultNullParamFlaggedButNotFixed(): Void {
-		// KNOWN run FALSE POSITIVE: a `p:T = null` default-null parameter is nullable per
-		// Haxe null-safety ("an argument with a default value of null is nullable"), but the
-		// declared-type proof treats every defaulted param as non-null and flags it. Because
-		// that proof is unsound here, `fix` stays a no-op — auto-deleting the guard would
-		// introduce an NPE. Only the flow-proven `dead-null-guard` autofixes. When the run
-		// proof is tightened to exempt default-null params, wire the rewrite via
-		// `CheckScan.simplifyNullComparisonFixes` (already built + tested by `dead-null-guard`).
-		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
-		final src: String = '@:nullSafety(Strict) class C { function f(p:String = null) { if (p != null) trace(p); } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	public function testFixDeleteAlwaysFalse(): Void {
+		assertFixContains(wrap('if (x == null) trace(0);\n\t\ttrace("keep");'), 'trace("keep")', 'trace(0)');
+	}
+
+	public function testFixDropConjunct(): Void {
+		assertFixContains(wrap('if (x != null && cond()) trace(x);'), 'if (cond())', 'x != null');
+	}
+
+	public function testFixRefusesElse(): Void {
+		assertFixRefused(wrap('if (x != null) trace(x); else cond();'));
+	}
+
+	public function testFixRefusesTernary(): Void {
+		assertFixRefused(wrap('final b:Int = x != null ? 1 : 2;\n\t\ttrace(b);'));
+	}
+
+	public function testFixRefusesCommentInDeletedBody(): Void {
+		assertFixRefused(wrap('if (x == null) {\n\t\t\t// note\n\t\t\ttrace(0);\n\t\t}'));
+	}
+
+	public function testDefaultNullParamNotFlagged(): Void {
+		// A `p: T = null` default-null parameter is nullable per Haxe null-safety ("an
+		// argument with a default value of null is nullable") — the null check is
+		// load-bearing and must NOT be flagged, even under strict null-safety and even
+		// for a value-typed default (`x:Int = null` compiles with `x == null` reachable).
+		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(p:String = null) { if (p != null) trace(p); } }').length);
+		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(x:Int = null) { if (x != null) trace(x); } }').length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -119,6 +129,39 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		Assert.notNull(Linter.byId('unnecessary-null-check'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('unnecessary-null-check'));
+	}
+
+	/** A module whose `f` takes a provably-non-null `x:Int`, wrapping `body`. */
+	private function wrap(body: String): String {
+		return '@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n\tfunction f(x:Int):Void {\n\t\t' + body
+			+ '\n\t}\n}\n';
+	}
+
+	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */
+	private function fixText(src: String): String {
+		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text): text;
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+				src;
+		};
+	}
+
+	/** The fixed text of `src` contains `present` and no longer contains `absent`. */
+	private function assertFixContains(src: String, present: String, absent: String): Void {
+		final out: String = fixText(src);
+		Assert.isTrue(out.indexOf(present) >= 0, 'expected "$present" in: $out');
+		Assert.isTrue(out.indexOf(absent) == -1, 'expected NOT "$absent" in: $out');
+	}
+
+	/** `src` is flagged by `run` but produces no fix edit — a conservative refusal. */
+	private function assertFixRefused(src: String): Void {
+		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.isTrue(vs.length > 0, 'expected a finding to exist');
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 	private function violations(src: String): Array<Violation> {

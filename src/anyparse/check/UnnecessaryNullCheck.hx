@@ -25,12 +25,12 @@ import anyparse.runtime.Span;
  * check never reports a load-bearing null guard. Macro-reification subtrees
  * (`RefShape.opaqueKinds`) are not descended into.
  *
- * `Severity.Info`; report-only — `fix` is a no-op. The declared-type proof
- * (`TypeResolver.isProvablyNonNull`) treats a default-null parameter (`p:T = null`,
- * nullable per Haxe null-safety) as non-null and trusts a `@:nullSafety` annotation
- * without confirming the file passes strict null-safety, so a flagged guard can be
- * runtime-load-bearing; auto-deleting it would introduce an NPE. Only the flow-proven
- * `dead-null-guard` is autofixed (the shared rewrite lives in `CheckScan.simplifyNullComparisonFixes`).
+ * `Severity.Info`; `fix` conservatively drops the redundant comparison where a safe span
+ * rewrite exists — unwrap the always-true `if (x != null)`, delete the always-false
+ * `if (x == null)`, or drop a conjunct / disjunct from a homogeneous `&&` / `||` chain (shared
+ * with `dead-null-guard` via `CheckScan.simplifyNullComparisonFixes`) — and refuses elsewhere.
+ * A default-null parameter (`p:T = null`) is exempted at the proof, so it is never flagged;
+ * the residual soundness caveat is the proof trusts `@:nullSafety` without a strict-null check.
  */
 @:nullSafety(Strict)
 final class UnnecessaryNullCheck implements Check {
@@ -86,7 +86,7 @@ final class UnnecessaryNullCheck implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		return CheckScan.simplifyNullComparisonFixes(plugin, source, violations);
 	}
 
 }

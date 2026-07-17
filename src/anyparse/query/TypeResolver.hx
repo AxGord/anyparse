@@ -133,6 +133,33 @@ final class TypeResolver {
 	}
 
 	/**
+	 * Whether the declaration binding at `bindingFrom` is a parameter with a
+	 * null-literal default value (`p: T = null`) — nullable per Haxe null-safety
+	 * ("an argument with a default value of null is nullable"), so its value may be
+	 * null even without the `?` sigil, despite `declaredTypes` recording a nominal
+	 * type. A param node (kind in `paramKinds`) whose span covers `bindingFrom` and
+	 * whose default-value child is a `nullLiteralKind` node.
+	 */
+	public static function bindingIsDefaultNullParam(
+		tree: QueryNode, bindingFrom: Int, paramKinds: Array<String>, nullLiteralKind: String
+	): Bool {
+		var found: Bool = false;
+		function walk(n: QueryNode): Void {
+			if (found) return;
+			if (paramKinds.contains(n.kind)) {
+				final s: Null<Span> = n.span;
+				if (s != null && s.from <= bindingFrom && bindingFrom < s.to) for (c in n.children) if (c.kind == nullLiteralKind) {
+					found = true;
+					return;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return found;
+	}
+
+	/**
 	 * Whether the declaration binding at `bindingFrom` is a LOCAL (a `localDeclKinds`
 	 * node) or a PARAMETER (a `paramKinds` node) — as opposed to a field or other decl.
 	 * Lets a check restrict a declared-type nullable source to locals / params, since a
@@ -180,6 +207,8 @@ final class TypeResolver {
 	 * type — a `RefShape.nonNullableTypeNames` value type (null-safety-independent),
 	 * or any recovered nominal type while the enclosing declaration is null-checked
 	 * (`RefShape.nullSafetyMetaName`). An operand bound to an optional parameter, to a
+	 * default-null parameter (`p: T = null` — nullable per Haxe null-safety even for a
+	 * value type, so the null default is checked BEFORE the nominal type), to a
 	 * `RefShape.nullableWrapperTypeNames` type (`Null<…>` / `Dynamic` / `Any`), or with
 	 * no recovered nominal type keeps the conservative default and is NOT proven
 	 * non-null. Shared by every null-aware check (`unnecessary-null-check`,
@@ -190,6 +219,10 @@ final class TypeResolver {
 		if (bindingFrom == null) return false;
 		final optionalParamKind: Null<String> = shape.optionalParamKind;
 		if (optionalParamKind != null && bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
+		final paramKinds: Null<Array<String>> = shape.paramKinds;
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (paramKinds != null && nullLiteralKind != null && bindingIsDefaultNullParam(root, bindingFrom, paramKinds, nullLiteralKind))
+			return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
 		if (typeName == null) return false;
 		final nonNullableTypeNames: Array<String> = shape.nonNullableTypeNames ?? [];
