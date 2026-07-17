@@ -2,9 +2,11 @@ package anyparse.check;
 
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 
 /**
@@ -69,9 +71,13 @@ final class PreferFinalField implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final abstractKinds: Array<String> = plugin.refShape().underlyingThisTypeKinds ?? [];
+		final declaredTypesByFile: Map<String, Map<Int, String>> = [];
+		if (provider != null) for (entry in files) declaredTypesByFile[entry.file] = provider.declaredTypes(entry.source);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (!exported) considerField(violations, file, source, field, owner, index);
+			if (!exported) considerField(violations, file, source, field, owner, index, declaredTypesByFile[file], abstractKinds);
 		});
 		return violations;
 	}
@@ -89,11 +95,13 @@ final class PreferFinalField implements Check {
 	}
 
 	/**
-	 * Flag `field` when it has an initializer, is not a property, its type is
-	 * confined, and no other write to its name appears in the file.
+	 * Flag `field` when it has an initializer, is not a property, its type is confined,
+	 * no other write to its name appears in the file, and a method call on it cannot
+	 * mutate an abstract's underlying value (see `abstractMethodMayMutate`).
 	 */
 	private static function considerField(
-		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex
+		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
+		declaredTypes: Null<Map<Int, String>>, abstractKinds: Array<String>
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -101,6 +109,8 @@ final class PreferFinalField implements Check {
 		if (!RefactorSupport.isInitializedNonPropertyField(source, field)) return;
 		if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
 		if (writtenInFile(source, name, span)) return;
+		final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
+		if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, index, abstractKinds)) return;
 		out.push({
 			file: file,
 			span: span,
@@ -170,45 +180,13 @@ final class PreferFinalField implements Check {
 	 */
 	private static function followedByAssign(source: String, pos: Int): Bool {
 		final n: Int = source.length;
-		var i: Int = skipTrivia(source, pos);
+		var i: Int = RefactorSupport.skipForwardTrivia(source, pos);
 		final start: Int = i;
 		while (i < n && isOperatorChar(StringTools.fastCodeAt(source, i))) i++;
 		final token: String = source.substring(start, i);
 		return token == '++' || token == '--'
 			|| (token.length != 0 && StringTools.fastCodeAt(token, token.length - 1) == '='.code && token != '==' && token != '<='
 				&& token != '>=' && token != '!=' && token != '=>');
-	}
-
-	/** Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block comment. */
-	private static function skipTrivia(source: String, pos: Int): Int {
-		final n: Int = source.length;
-		var i: Int = pos;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (isSpace(c)) {
-				i++;
-				continue;
-			}
-			if (c == '/'.code && i + 1 < n) {
-				final c1: Int = StringTools.fastCodeAt(source, i + 1);
-				if (c1 == '/'.code) {
-					i += 2;
-					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
-					continue;
-				}
-				if (c1 == '*'.code) {
-					i += 2;
-					while (
-						i + 1 < n && !(StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code)
-					)
-						i++;
-					i += 2;
-					continue;
-				}
-			}
-			break;
-		}
-		return i;
 	}
 
 	/** Whether `c` is an identifier character (a word boundary is anything else). */

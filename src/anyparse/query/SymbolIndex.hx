@@ -200,6 +200,25 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether the type named `typeName` resolves in the index to an `abstract` — a
+	 * decl whose grammar kind is in `abstractKinds` (Haxe `AbstractDecl` /
+	 * `EnumAbstractDecl`). `true` when ANY matching decl is one (conservative under a
+	 * simple-name collision: an abstract match wins), `false` when it resolves only to
+	 * non-abstract decls, `null` when NO indexed type declares the name (external /
+	 * unknown). Lets the `final`-conversion checks tell an abstract-typed binding —
+	 * whose method call may reassign the underlying `this` — from a class-typed or
+	 * unresolved one. Resolution is by SIMPLE name (the index models no packages).
+	 */
+	public function isAbstractType(typeName: String, abstractKinds: Array<String>): Null<Bool> {
+		var found: Bool = false;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
+			if (abstractKinds.contains(t.kind)) return true;
+			found = true;
+		}
+		return found ? false : null;
+	}
+
+	/**
 	 * Whether type `typeName`'s member `field` is a getter-property (true → reading
 	 * it runs code), a plain member (false → side-effect-free read), or not a known
 	 * direct member (null). Conservative under ambiguity: any matching type whose

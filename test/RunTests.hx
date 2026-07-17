@@ -425,6 +425,7 @@ import unit.TrivialGetterCheckTest;
 import unit.NullableSwitchMissingNullCheckTest;
 import unit.DuplicateCodeCheckTest;
 import unit.RedundantThisUsingExtensionTest;
+import unit.PreferFinalAbstractMethodCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -787,6 +788,7 @@ class RunTests {
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());
 		addCase(new PreferFinalFieldCheckTest());
+		addCase(new PreferFinalAbstractMethodCheckTest());
 		addCase(new PreferFinalPublicFieldCheckTest());
 		addCase(new PreferReadOnlyFieldCheckTest());
 		addCase(new IdenticalOperandsCheckTest());
