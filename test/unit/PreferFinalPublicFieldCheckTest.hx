@@ -105,6 +105,12 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		Assert.equals(-1, fixed.indexOf('var x'));
 	}
 
+	/** The `var → final` swap is an in-place keyword rewrite, so it preserves canonical modifier order: `public static var` → `public static final`. */
+	public function testFixPreservesModifierOrder(): Void {
+		final fixed: String = fixedSource('class C { public static var x:Int = 0; }');
+		Assert.isTrue(fixed.indexOf('public static final x:Int = 0') >= 0);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-final-public-field'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];

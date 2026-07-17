@@ -40,12 +40,36 @@ class PreferArrayLiteralCheckTest extends Test {
 		Assert.equals(0, violations(wrap('new Array(x)')).length);
 	}
 
+	/** A typed local declaration pins the element type — the `new Array()` is rewritten to `[]`. */
 	public function testFixTypedArray(): Void {
-		Assert.equals('[]', fixText(wrap('new Array<Int>()')));
+		Assert.equals('[]', fixText('class C { function f():Void { var xs:Array<Int> = new Array(); } }'));
 	}
 
-	public function testFixBareArray(): Void {
-		Assert.equals('[]', fixText(wrap('new Array()')));
+	/** A typed field default pins the element type — rewritten to `[]`. */
+	public function testFixTypedField(): Void {
+		Assert.equals('[]', fixText('class C { public var xs:Array<Int> = new Array(); }'));
+	}
+
+	/** An unannotated local is NOT pinned — reported but left a finding, no edit (the gate is conservative). */
+	public function testGateRefusesUntypedLocal(): Void {
+		assertGateRefuses('class C { function f():Void { var xs = new Array(); } }');
+	}
+
+	/** An unannotated local whose only type source is the constructor `<Int>` is NOT pinned — `[]` would drop `<Int>`. */
+	public function testGateRefusesUntypedTypeParam(): Void {
+		assertGateRefuses('class C { function f():Void { var xs = new Array<Int>(); } }');
+	}
+
+	/** An argument-position `new Array()` is pinned by the callee, not the typed local — no edit. */
+	public function testGateRefusesArgPosition(): Void {
+		assertGateRefuses(
+			'class C { function f():Void { var xs:Array<Int> = take(new Array()); } function take(a:Array<Int>):Array<Int> { return a; } }'
+		);
+	}
+
+	/** A return-position `new Array()` is not a declaration initializer — no edit. */
+	public function testGateRefusesReturnPosition(): Void {
+		assertGateRefuses('class C { function f():Array<Int> { return new Array(); } }');
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -72,6 +96,12 @@ class PreferArrayLiteralCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length == 1 ? edits[0].text : '<' + edits.length + ' edits>';
+	}
+
+	/** Assert `src` is reported (one finding) yet gate-refused (no fix edit). */
+	private function assertGateRefuses(src: String): Void {
+		Assert.equals(1, violations(src).length);
+		Assert.equals('<0 edits>', fixText(src));
 	}
 
 }

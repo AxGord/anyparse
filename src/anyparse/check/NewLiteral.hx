@@ -46,7 +46,7 @@ final class NewLiteral {
 		return violations;
 	}
 
-	/** Rewrite each flagged `new <typeName>()` to the `[]` literal. */
+	/** Rewrite each flagged `new <typeName>()` to the `[]` literal — but only where the target type is pinned by an annotation. */
 	public static function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, typeName: String
 	): Array<{ span: Span, text: String }> {
@@ -56,14 +56,20 @@ final class NewLiteral {
 		if (tree == null) return [];
 
 		final nodeByKey: Map<String, QueryNode> = [];
-		index(tree, newExprKind, nodeByKey);
+		final parentByKey: Map<String, QueryNode> = [];
+		index(tree, null, newExprKind, nodeByKey, parentByKey);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final node: Null<QueryNode> = nodeByKey['${span.from}:${span.to}'];
+			final key: String = '${span.from}:${span.to}';
+			final node: Null<QueryNode> = nodeByKey[key];
 			if (node == null || !matches(node, source, newExprKind, typeName)) continue;
+			final parent: Null<QueryNode> = parentByKey[key];
+			if (parent == null) continue;
+			final parentSpan: Null<Span> = parent.span;
+			if (parentSpan == null || !pinnedByTypeHint(source, parentSpan.from, span.from)) continue;
 			edits.push({ span: span, text: '[]' });
 		}
 		return edits;
@@ -96,13 +102,63 @@ final class NewLiteral {
 		return span != null && StringTools.endsWith(StringTools.rtrim(source.substring(span.from, span.to)), '()');
 	}
 
-	/** Index every `new` node by its `from:to` span key (for `fix` to re-find a flagged node). */
-	private static function index(node: QueryNode, newExprKind: String, out: Map<String, QueryNode>): Void {
+	/** Index every `new` node by its `from:to` span key and record its parent (for `fix` to re-find a flagged node and gate on its enclosing declaration). */
+	private static function index(
+		node: QueryNode, parent: Null<QueryNode>, newExprKind: String, nodeByKey: Map<String, QueryNode>,
+		parentByKey: Map<String, QueryNode>
+	): Void {
 		if (node.kind == newExprKind) {
 			final span: Null<Span> = node.span;
-			if (span != null) out['${span.from}:${span.to}'] = node;
+			if (span != null) {
+				final key: String = '${span.from}:${span.to}';
+				nodeByKey[key] = node;
+				if (parent != null) parentByKey[key] = parent;
+			}
 		}
-		for (c in node.children) index(c, newExprKind, out);
+		for (c in node.children) index(c, node, newExprKind, nodeByKey, parentByKey);
+	}
+
+
+	/**
+	 * Whether the `new` node starting at `newStart` is the direct initializer of a
+	 * declaration whose target type is PINNED by an explicit annotation — the only context
+	 * where `[]` safely preserves the intended type. `[]` infers `Array`, so an unannotated
+	 * `var m = new Map()` rewritten to `var m = []` silently becomes an `Array` (and no
+	 * longer compiles once used as a map), and an unannotated `var xs = new Array<Int>()`
+	 * loses its `<Int>`. `declStart` is the enclosing declaration node's span start.
+	 *
+	 * The head — `source[declStart...newStart]` — is the declaration up to and including the
+	 * `=`. It qualifies when it ends in a lone `=` (a plain initializer) and its left side
+	 * carries a top-level type-hint `:` with no top-level `,`. A metadata colon (`@:meta`) is
+	 * excluded (the `:` follows `@`); a colon or comma inside `<>` / `()` / `[]` / `{}` is a
+	 * type parameter or access clause, not the hint, so bracket depth is tracked. An
+	 * unannotated declaration, an argument / return / element position, an assignment to an
+	 * lvalue typed elsewhere, and a later declarator in a multi-variable declaration all fail
+	 * and stay a finding — conservative by construction: a context the annotation cannot prove
+	 * safe is never rewritten.
+	 *
+	 */
+	private static function pinnedByTypeHint(source: String, declStart: Int, newStart: Int): Bool {
+		final head: String = StringTools.rtrim(source.substring(declStart, newStart));
+		final len: Int = head.length;
+		if (len == 0 || StringTools.fastCodeAt(head, len - 1) != '='.code) return false;
+		var depth: Int = 0;
+		var sawColon: Bool = false;
+		for (i in 0...len - 1) {
+			final c: Int = StringTools.fastCodeAt(head, i);
+			switch c {
+				case '<'.code | '('.code | '['.code | '{'.code:
+					depth++;
+				case '>'.code | ')'.code | ']'.code | '}'.code:
+					if (depth > 0) depth--;
+				case ':'.code:
+					if (depth == 0 && (i == 0 || StringTools.fastCodeAt(head, i - 1) != '@'.code)) sawColon = true;
+				case ','.code:
+					if (depth == 0) return false;
+				case _:
+			}
+		}
+		return sawColon;
 	}
 
 }

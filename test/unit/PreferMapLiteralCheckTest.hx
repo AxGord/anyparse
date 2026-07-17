@@ -36,12 +36,24 @@ class PreferMapLiteralCheckTest extends Test {
 		Assert.equals(0, violations(wrap('new Foo()')).length);
 	}
 
+	/** A typed local declaration pins the key/value types — the `new Map()` is rewritten to `[]`. */
 	public function testFixTypedMap(): Void {
-		Assert.equals('[]', fixText(wrap('new Map<Int, Int>()')));
+		Assert.equals('[]', fixText('class C { function f():Void { var m:Map<Int, Int> = new Map(); } }'));
 	}
 
-	public function testFixBareMap(): Void {
-		Assert.equals('[]', fixText(wrap('new Map()')));
+	/** A typed field default pins the key/value types — rewritten to `[]`. */
+	public function testFixTypedField(): Void {
+		Assert.equals('[]', fixText('class C { public var m:Map<String, Int> = new Map(); }'));
+	}
+
+	/** The critical case: an unannotated `var m = new Map()` is NOT pinned — `[]` infers `Array`, not `Map`, so rewriting it would miscompile. Reported, not fixed. */
+	public function testGateRefusesUntypedLocal(): Void {
+		assertGateRefuses('class C { function f():Void { var m = new Map(); } }');
+	}
+
+	/** An unannotated local whose only type source is the constructor `<Int, Int>` is NOT pinned — `[]` drops the key/value types and infers Array. */
+	public function testGateRefusesUntypedTypeParam(): Void {
+		assertGateRefuses('class C { function f():Void { var m = new Map<Int, Int>(); } }');
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -68,6 +80,12 @@ class PreferMapLiteralCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length == 1 ? edits[0].text : '<' + edits.length + ' edits>';
+	}
+
+	/** Assert `src` is reported (one finding) yet gate-refused (no fix edit). */
+	private function assertGateRefuses(src: String): Void {
+		Assert.equals(1, violations(src).length);
+		Assert.equals('<0 edits>', fixText(src));
 	}
 
 }
