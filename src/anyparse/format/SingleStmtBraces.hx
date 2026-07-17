@@ -6,9 +6,7 @@ package anyparse.format;
  * `whitespace.bracesConfig.singleStatementBraces: "remove"`).
  *
  * `unwrapStmt` is spliced by `WriterLowering` around the body value of
- * `HxIfStmt.thenBody` / `HxIfStmt.elseBody` / `HxForStmt.body` /
- * `HxWhileStmt.body` (fields carrying `@:fmt(dropSingleStmtBraces)`,
- * trivia mode only). When every safety gate passes it returns the
+ * `HxIfStmt.thenBody` / `HxIfStmt.elseBody` / `HxForStmt.body` / `HxWhileStmt.body` / `HxDoWhileStmt.body` (fields carrying `@:fmt(dropSingleStmtBraces)`, trivia mode only). When every safety gate passes it returns the
  * block's single inner statement so the writer emits
  * `if (cond) return x;` instead of `if (cond) { return x; }`; in every
  * other case it returns the original body unchanged (byte-inert).
@@ -57,6 +55,7 @@ class SingleStmtBraces {
 		if (!drop || suppress || body == null) return body;
 		if (!Reflect.isEnumValue(body)) return body;
 		final block: EnumValue = cast body;
+		if (Type.enumConstructor(block) == 'BlockBody') return unwrapDoBody(block);
 		if (Type.enumConstructor(block) != 'BlockStmt') return body;
 		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
 		if (inner == null) return body;
@@ -122,6 +121,30 @@ class SingleStmtBraces {
 		final inner: Dynamic = elem.node;
 		if (inner == null || !Reflect.isEnumValue(inner)) return null;
 		return inner;
+	}
+
+
+	/**
+	 * Do-while body unwrap — `HxDoWhileBody.BlockBody` → `ExprBody`
+	 * ctor mapping (`do { x(); } while (c);` → `do x() while (c);`).
+	 * Only an `ExprStmt` inner maps (the other statement kinds have no
+	 * `HxDoWhileBody` counterpart — braces kept). The mapped `ExprBody`
+	 * carries `trailPresent=false`: modern Haxe REJECTS a `;` between a
+	 * bare do-body and `while` (`do x(); while (c);` fails with
+	 * "Expected while"), so the braceless canonical form drops it — the
+	 * `while` keyword itself seals the statement boundary. The trivia
+	 * `BlockBody` slot layout is identical to `BlockStmt`, so
+	 * `singleCleanInner` is shared; dangling-else cannot arise (the body
+	 * is always followed by `while`).
+	 */
+	private static function unwrapDoBody(block: EnumValue): Dynamic {
+		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
+		if (inner == null) return block;
+		final innerE: EnumValue = cast inner;
+		if (Type.enumConstructor(innerE) != 'ExprStmt') return block;
+		final en: Null<Enum<Dynamic>> = Type.getEnum(cast block);
+		if (en == null) return block;
+		return Type.createEnum(en, 'ExprBody', [Type.enumParameters(innerE)[0], false]);
 	}
 
 }

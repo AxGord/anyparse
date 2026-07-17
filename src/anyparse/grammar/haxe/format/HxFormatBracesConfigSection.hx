@@ -10,7 +10,7 @@ package anyparse.grammar.haxe.format;
  * Added in slice ω-anontype-braces. `anonTypeBraces` and
  * `objectLiteralBraces` are modelled. `unknownBraces` and any future
  * per-kind sections (`codeBlocks`, `enumBraces`, …) land with their
- * own slices once a writer knob picks up the corresponding grammar site. `singleStatementBraces` (ω-single-stmt-braces) is a two-value `"keep"` / `"remove"` policy: `"remove"` drops the braces around a single-statement `if` / `else` / `for` / `while` body (maps onto the runtime `dropSingleStmtBraces` boolean). Default `"keep"` — braces preserved, byte-inert.
+ * own slices once a writer knob picks up the corresponding grammar site. `singleStatementBraces` (ω-single-stmt-braces) is a two-value `"keep"` / `"remove"` policy: `"remove"` drops the braces around a single-statement `if` / `else` / `for` / `while` / `do-while` body (maps onto the runtime `dropSingleStmtBraces` boolean). Default `"keep"` — braces preserved, byte-inert.
  */
 @:peg typedef HxFormatBracesConfigSection = {
 

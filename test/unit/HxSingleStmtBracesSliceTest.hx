@@ -35,7 +35,7 @@ class HxSingleStmtBracesSliceTest extends Test {
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	private static final removeConfig: String = '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "remove" } },'
-		+ ' "sameLine": { "ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine" } }';
+		+ ' "sameLine": { "ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine", "doWhileBody": "same" } }';
 
 	public function testDefaultOptionsKeepBraces(): Void {
 		Assert.isFalse(HaxeFormat.instance.defaultWriteOptions.dropSingleStmtBraces);
@@ -168,6 +168,29 @@ class HxSingleStmtBracesSliceTest extends Test {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		Assert.equals(source + '\n', out);
+	}
+
+
+	public function testDoWhileBodyUnbraced(): Void {
+		// The mapped ExprBody drops the `;` — modern Haxe rejects
+		// `do i++; while (…)` ("Expected while"); `do i++ while (…);` is
+		// the valid braceless form.
+		assertFmt(
+			'class F {\n\tfunction f():Void {\n\t\tvar i = 0;\n\t\tdo {\n\t\t\ti++;\n\t\t} while (i < 3);\n\t}\n}',
+			'class F {\n\tfunction f():Void {\n\t\tvar i = 0;\n\t\tdo i++ while (i < 3);\n\t}\n}'
+		);
+	}
+
+
+	public function testDoWhileMultiStmtKeepsBraces(): Void {
+		roundTrip('class F {\n\tfunction f():Void {\n\t\tdo {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} while (cond());\n\t}\n}');
+	}
+
+
+	public function testDoWhileNonExprStmtKeepsBraces(): Void {
+		// Only an ExprStmt has an `HxDoWhileBody.ExprBody` counterpart —
+		// any other statement kind keeps its braces.
+		roundTrip('class F {\n\tfunction f():Void {\n\t\tdo {\n\t\t\treturn;\n\t\t} while (cond());\n\t}\n}');
 	}
 
 }
