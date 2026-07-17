@@ -5,13 +5,15 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 /**
  * Flags `Std.string(x)` and rewrites it to string interpolation — `'$x'` for a simple
- * identifier, `'${expr}'` for any other interpolation-safe expression (`Std.string(o.f)`
- * → `'${o.f}'`). `Severity.Info` (a modernization cleanup matching the Haxe idiom: direct
- * conversion, no reflection overhead), with an autofix.
+ * identifier, `'${expr}'` for any other interpolation-safe expression — `Severity.Info`
+ * (a modernization cleanup matching the Haxe idiom: direct conversion, no reflection
+ * overhead), with an autofix.
  *
  * Minimal safe subset: only a single-argument `Std.string(...)` call is touched. An
  * argument whose source contains a quote, a `$`, or a newline is left alone — wrapping it
@@ -20,12 +22,30 @@ import anyparse.runtime.Span;
  * interpolated string here — only the `Std.string(x)` node itself is rewritten in place,
  * which stays correct (`"a" + '$x'`); the harder merge is a separate concern.
  *
+ * ## Not equivalence-preserving for every argument
+ *
+ * `Std.string` accepts `Null<Dynamic>` and never rejects a nullable argument; the
+ * interpolation form compiles to a `+`-concatenation that DOES, under
+ * `@:nullSafety(Strict)`, reject a nullable operand — and field access never narrows
+ * (a preceding `obj.field != null` guard does not make `obj.field` provably non-null to
+ * the checker), so rewriting `Std.string(obj.field)` to `'${obj.field}'` can turn
+ * working code into a null-safety compile error. A bare field access (`Std.string(o.f)`)
+ * is therefore left alone unconditionally. A simple-identifier argument (a local /
+ * parameter) is rewritten only when its resolved declaration is provably not itself
+ * nullable — a known nominal type (unannotated / inferred locals are conservatively
+ * skipped, their type being unknown) that is not `Null<…>` / `Dynamic` / `Any`, not an
+ * optional parameter (`?p`), and not a default-null parameter (`p: T = null`). Any other
+ * argument shape (a call, a binary expression, …) keeps the pre-existing
+ * `interpolationSafe`-gated braced rewrite.
+ *
  * ## Grammar-agnostic
  *
  * Driven by `RefShape.callKind`, `fieldAccessKind`, and `identKind` (a missing optional
  * kind → no-op); the receiver `Std` and member `string` are matched on node names, not
  * kinds. The outermost matching call is flagged and not descended into, so a nested
- * `Std.string(Std.string(x))` yields one non-overlapping fix.
+ * `Std.string(Std.string(x))` yields one non-overlapping fix. The identifier-safety gate
+ * degrades gracefully when `plugin` is not a `TypeInfoProvider` (no declared-type map,
+ * treated as empty) — a simple identifier is then never proven safe and is left alone.
  */
 @:nullSafety(Strict)
 final class PreferInterpolation implements Check {
@@ -43,10 +63,14 @@ final class PreferInterpolation implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
+		final shape: RefShape = plugin.refShape();
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams.callKind, seams.fieldAccessKind, seams.identKind);
+			if (tree == null) continue;
+			final declaredTypes: Map<Int, String> = provider == null ? [] : provider.declaredTypes(entry.source);
+			walk(violations, entry.file, entry.source, tree, tree, seams, shape, declaredTypes);
 		}
 		return violations;
 	}
@@ -59,7 +83,8 @@ final class PreferInterpolation implements Check {
 		return seams == null
 			? []
 			: CheckScan.applyBySpan(plugin, source, violations, [seams.callKind], (node, span) -> {
-				final replacement: Null<String> = match(node, source, seams.callKind, seams.fieldAccessKind, seams.identKind);
+				final arg: Null<QueryNode> = matchArg(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
+				final replacement: Null<String> = arg == null ? null : render(arg, source, seams.identKind);
 				return replacement == null ? null : { span: span, text: replacement };
 			});
 	}
@@ -70,9 +95,12 @@ final class PreferInterpolation implements Check {
 	 * `--fix` iteration.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, callKind: String, fieldAccessKind: String, identKind: String
+		out: Array<Violation>, file: String, source: String, root: QueryNode, node: QueryNode, seams: Seams, shape: RefShape,
+		declaredTypes: Map<Int, String>
 	): Void {
-		if (node.kind == callKind && match(node, source, callKind, fieldAccessKind, identKind) != null) {
+		final arg: Null<QueryNode> = matchArg(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
+		if (arg != null && isSafeArg(arg, root, seams.fieldAccessKind, seams.identKind, shape, declaredTypes)
+			&& render(arg, source, seams.identKind) != null) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
@@ -85,23 +113,63 @@ final class PreferInterpolation implements Check {
 				return;
 			}
 		}
-		for (c in node.children) walk(out, file, source, c, callKind, fieldAccessKind, identKind);
+		for (c in node.children) walk(out, file, source, root, c, seams, shape, declaredTypes);
 	}
 
 	/**
-	 * If `call` is a single-argument `Std.string(arg)`, return the interpolation that
-	 * replaces it (`'$x'` for a simple identifier, `'${expr}'` for an interpolation-safe
-	 * expression); else null.
+	 * If `call` is a single-argument `Std.string(arg)`, its argument node; else null.
+	 * Purely structural — the caller separately gates safety (`isSafeArg`, `run`-side
+	 * only) and renders the replacement (`render`).
 	 */
-	private static function match(
-		call: QueryNode, source: String, callKind: String, fieldAccessKind: String, identKind: String
-	): Null<String> {
+	private static function matchArg(call: QueryNode, callKind: String, fieldAccessKind: String, identKind: String): Null<QueryNode> {
 		if (call.kind != callKind || call.children.length != 2) return null;
 		final callee: QueryNode = call.children[0];
 		if (callee.kind != fieldAccessKind || callee.name != 'string' || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
 		if (receiver.kind != identKind || receiver.name != 'Std') return null;
-		final arg: QueryNode = call.children[1];
+		return call.children[1];
+	}
+
+	/**
+	 * Whether `arg` is safe to rewrite into an interpolation under
+	 * `@:nullSafety(Strict)` — `Std.string` accepts a nullable value; the
+	 * interpolation's underlying `+`-concatenation does not, so an argument that
+	 * is not provably non-null must be left alone.
+	 *
+	 * A bare field access (`fieldAccessKind`) never narrows and is always refused,
+	 * guard or not. A simple identifier (`identKind`) is safe only when it resolves
+	 * (via the scope resolver) to a local / parameter declaration with a KNOWN
+	 * nominal type — an unresolved binding or an unannotated/inferred declaration
+	 * (absent from `declaredTypes`) keeps the conservative default — that is not an
+	 * optional parameter (`?p`), not a default-null parameter (`p: T = null`), and
+	 * not one of `RefShape.nullableWrapperTypeNames` (`Null<…>` / `Dynamic` / `Any`).
+	 * Any other argument shape (a call, a binary expression, …) is left to the
+	 * pre-existing `interpolationSafe`-gated braced rewrite, unaffected by this gate.
+	 */
+	private static function isSafeArg(
+		arg: QueryNode, root: QueryNode, fieldAccessKind: String, identKind: String, shape: RefShape, declaredTypes: Map<Int, String>
+	): Bool {
+		if (arg.kind == fieldAccessKind) return false;
+		if (arg.kind != identKind) return true;
+		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(arg, root, shape);
+		if (bindingFrom == null) return false;
+		final optionalParamKind: Null<String> = shape.optionalParamKind;
+		if (optionalParamKind != null && TypeResolver.bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
+		final paramKinds: Null<Array<String>> = shape.paramKinds;
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (paramKinds != null && nullLiteralKind != null
+			&& TypeResolver.bindingIsDefaultNullParam(root, bindingFrom, paramKinds, nullLiteralKind)) return false;
+		final typeName: Null<String> = declaredTypes[bindingFrom];
+		if (typeName == null) return false;
+		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];
+		return !nullableWrapperTypeNames.contains(typeName);
+	}
+
+	/**
+	 * The interpolation text for an already-approved `arg` (`'$x'` for a simple
+	 * identifier, `'${expr}'` for an interpolation-safe expression); else null.
+	 */
+	private static function render(arg: QueryNode, source: String, identKind: String): Null<String> {
 		final argName: Null<String> = arg.name;
 		if (arg.kind == identKind && argName != null) return "'$" + argName + "'";
 		final span: Null<Span> = arg.span;
