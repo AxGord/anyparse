@@ -236,4 +236,37 @@ class UnusedPrivateCheckTest extends Test {
 		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
+
+	/**
+	 * A private method of a subclass whose base is not in the linted file set may
+	 * implement one of the base's abstract methods (Haxe impls carry no `override`
+	 * and the base's polymorphic call is invisible to a single-file scan); `--fix`
+	 * must report it but never delete it (`mayImplementAbstractMethod`).
+	 */
+	public function testFixKeepsExtendsClassPrivateMethod(): Void {
+		final src: String = 'class Sub extends UnresolvableBase {\n\tprivate function needToGetSharedInternal():Bool {\n\t\treturn true;\n\t}\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'Sub.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		Assert.equals(0, edits.length);
+	}
+
+
+	/**
+	 * The real regression: a private method inside a member-level `#if … #end`
+	 * region of a subclass. Conditional-compilation projects the method as a child
+	 * of a `Conditional` node, so the enclosing class's `ExtendsClause` is a sibling
+	 * of that wrapper, not of the method — the extends carve-out must still spare it.
+	 * Reported as unused, but `--fix` emits no edit.
+	 */
+	public function testFixKeepsExtendsClassMethodInConditional(): Void {
+		final src: String = 'class Sub extends UnresolvableBase {\n\t#if cpp\n\tprivate function abstractImpl():Bool {\n\t\treturn true;\n\t}\n\t#end\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'Sub.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		Assert.equals(0, edits.length);
+	}
+
 }

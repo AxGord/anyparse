@@ -104,16 +104,16 @@ final class UnusedPrivate implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return edits;
 
-		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode }> = [];
-		collectMembers(tree, memberByFrom);
+		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
+		collectMembers(tree, false, memberByFrom);
 
 		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final hit: Null<{ node: QueryNode, parent: QueryNode }> = memberByFrom[span.from];
+			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = memberByFrom[span.from];
 			if (hit == null) continue;
 			if (!deletableMember(hit.node)) continue;
-			if (mayImplementAbstractMethod(hit.node, hit.parent)) continue;
+			if (mayImplementAbstractMethod(hit.node, hit.inExtends)) continue;
 			final group: Span = RefactorSupport.declGroupSpan(hit.node, hit.parent, span);
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, group), text: '' });
 		}
@@ -172,33 +172,59 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Whether `member` might implement an abstract method of a base class — a
-	 * method (`FnMember` / `FinalModifiedMember`) whose enclosing type carries an
-	 * `extends` clause. A Haxe abstract-method impl carries no `override` keyword
-	 * (so `violationFor`'s override carve-out does not catch it) and the base's
-	 * call is invisible to a single-file scan, so `--fix` must NOT auto-delete it:
-	 * the finding is still reported, but the declaration is kept. Conservative —
-	 * every method of a subclass is spared, since a single file cannot see which
-	 * one the base declares abstract.
+	 * Whether `member` might implement an abstract method of a base class — a method
+	 * (`FnMember` / `FinalModifiedMember`) that is lexically inside a class carrying
+	 * an `extends` clause (`inExtendsClass`, threaded through `#if` wrappers by
+	 * `collectMembers`). A Haxe abstract-method impl carries no `override` keyword
+	 * (so `violationFor`'s override carve-out does not catch it) and the base's call
+	 * is invisible to a single-file scan, so `--fix` must NOT auto-delete it: the
+	 * finding is still reported, but the declaration is kept. Conservative — every
+	 * method of a subclass is spared, since a single file cannot see which one the
+	 * base declares abstract, whether or not the base is in the linted file set.
 	 */
-	private static function mayImplementAbstractMethod(member: QueryNode, parent: QueryNode): Bool {
+	private static function mayImplementAbstractMethod(member: QueryNode, inExtendsClass: Bool): Bool {
 		if (member.kind != 'FnMember' && member.kind != 'FinalModifiedMember') return false;
-		for (sibling in parent.children) if (sibling.kind == 'ExtendsClause') return true;
+		return inExtendsClass;
+	}
+
+	/**
+	 * Whether `node` is a class body whose direct children carry the members and any
+	 * `extends` clause — `ClassDecl` (a plain class) or `ClassForm` (the inner form
+	 * of a `final` / modified class under a `FinalDecl` wrapper).
+	 */
+	private static inline function isClassScopeNode(kind: String): Bool {
+		return kind == 'ClassDecl' || kind == 'ClassForm';
+	}
+
+	/**
+	 * Whether a class-scope `node` carries an `extends` clause among its direct
+	 * children (`(ClassForm C (ExtendsClause …) …)`).
+	 */
+	private static function classDeclaresExtends(node: QueryNode): Bool {
+		for (child in node.children) if (child.kind == 'ExtendsClause') return true;
 		return false;
 	}
 
 	/**
-	 * Index every field / method member node by its span's `from` offset, each
-	 * with its direct parent (the context `declGroupSpan` needs to fold the
-	 * member's modifier / meta siblings).
+	 * Index every field / method member node by its span's `from` offset, each with
+	 * its direct parent (the context `declGroupSpan` needs to fold the member's
+	 * modifier / meta siblings) and whether it is lexically inside a class carrying
+	 * an `extends` clause. The extends flag is threaded top-down through transparent
+	 * wrappers: a member-level `#if … #end` region projects its members as children
+	 * of a `Conditional` node, so the enclosing class's `ExtendsClause` is a sibling
+	 * of that wrapper, NOT of the member — only a class-scope node (`ClassDecl` /
+	 * `ClassForm`) recomputes the flag from its own `extends` clause.
 	 */
-	private static function collectMembers(node: QueryNode, out: Map<Int, { node: QueryNode, parent: QueryNode }>): Void {
+	private static function collectMembers(
+		node: QueryNode, inExtends: Bool, out: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }>
+	): Void {
+		final childExtends: Bool = isClassScopeNode(node.kind) ? classDeclaresExtends(node) : inExtends;
 		for (child in node.children) {
 			if (RefactorSupport.isFieldMemberKind(child.kind)) {
 				final span: Null<Span> = child.span;
-				if (span != null) out[span.from] = { node: child, parent: node };
+				if (span != null) out[span.from] = { node: child, parent: node, inExtends: childExtends };
 			}
-			collectMembers(child, out);
+			collectMembers(child, childExtends, out);
 		}
 	}
 
