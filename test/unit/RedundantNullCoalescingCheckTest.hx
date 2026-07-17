@@ -33,6 +33,21 @@ class RedundantNullCoalescingCheckTest extends Test {
 		Assert.equals(0, violations('@:nullSafety class C { function f(?x:Foo) { var a = x ?? other; } }').length);
 	}
 
+	public function testDefaultNullParamNotFlagged(): Void {
+		// `x:Foo = null` is implicitly Null<Foo> — the fallback is live.
+		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(x:Foo = null) { var a = x ?? other; } }').length);
+	}
+
+	public function testDefaultNullValueParamNotFlagged(): Void {
+		// Even a value type with a null default is nullable — checked before the value-type proof.
+		Assert.equals(0, violations('class C { function f(x:Int = null) { var a = x ?? 0; } }').length);
+	}
+
+	public function testFixLeavesDefaultNullParamUntouched(): Void {
+		final src: String = '@:nullSafety(Strict) class C { function f(x:Foo = null) { var a = x ?? other; } }';
+		Assert.equals(src, applyFix(src));
+	}
+
 	public function testNominalWithoutNullSafetyNotFlagged(): Void {
 		Assert.equals(0, violations('class C { function f(x:Foo) { var a = x ?? other; } }').length);
 	}

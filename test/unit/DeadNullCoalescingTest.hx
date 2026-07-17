@@ -35,6 +35,20 @@ class DeadNullCoalescingTest extends Test {
 		Assert.equals(0, violations('class C { function f(?x:String) { var n = x ?? "d"; } }').length);
 	}
 
+	public function testDefaultNullParamNoGuardNotFlagged(): Void {
+		// `x:Foo = null` is implicitly Null<Foo>; with no narrowing, the fallback is live.
+		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(x:Foo = null) { var n = x ?? mk(); } }').length);
+	}
+
+	public function testDefaultNullValueParamNoGuardNotFlagged(): Void {
+		Assert.equals(0, violations('class C { function f(x:Int = null) { var n = x ?? 0; } }').length);
+	}
+
+	public function testDefaultNullParamGuardedStillFlagged(): Void {
+		// A flow-narrowed default-null param IS dead — the rule stays useful.
+		Assert.equals(1, violations('class C { function f(x:Foo = null) { if (x != null) { var n = x ?? mk(); } } }').length);
+	}
+
 	public function testDeclaredNonNullNotFlagged(): Void {
 		Assert.equals(0, violations('@:nullSafety(Strict) class C { function f(s:String) { var n = s ?? "d"; } }').length);
 	}
