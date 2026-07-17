@@ -7,12 +7,13 @@ import anyparse.check.DuplicateCase;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
  * The `duplicate-case` check: a switch branch whose pattern repeats an earlier
  * branch in the same switch is flagged `Warning`. Distinct patterns, and guarded
  * branches with the same pattern but different guards, are not flagged.
- * Report-only — `fix` yields no edits.
+ * `fix` deletes the later (dead) duplicate arm.
  */
 class DuplicateCaseCheckTest extends Test {
 
@@ -44,10 +45,30 @@ class DuplicateCaseCheckTest extends Test {
 		);
 	}
 
-	public function testFixReturnsEmpty(): Void {
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}';
-		final check: DuplicateCase = new DuplicateCase();
-		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
+	public function testFixDeletesDeadArm(): Void {
+		final out: String = applyFix(
+			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}'
+		);
+		Assert.isTrue(out.indexOf('case 1: b()') == -1, 'dead arm should be gone, got: $out');
+		Assert.isTrue(out.indexOf('case 1: a()') != -1, 'live arm should remain, got: $out');
+	}
+
+	public function testFixDeletesMidArmNoBlankLine(): Void {
+		// The dead arm is NOT last; deleting it must not leave a blank line behind.
+		final out: String = applyFix(
+			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase 2: c();\n\t\t}\n\t}\n}'
+		);
+		Assert.isTrue(out.indexOf('case 1: b()') == -1, 'dead arm gone, got: $out');
+		Assert.isTrue(out.indexOf('case 2: c()') != -1, 'trailing arm remains, got: $out');
+		Assert.isTrue(out.indexOf('\n\n') == -1, 'no blank line left behind, got: $out');
+	}
+
+	public function testFixDeletesAllDuplicates(): Void {
+		final out: String = applyFix(
+			'class C {\n\tfunction f():Void {\n\t\tswitch k {\n\t\t\tcase 1: a();\n\t\t\tcase 1: b();\n\t\t\tcase 1: d();\n\t\t\tcase 2: c();\n\t\t}\n\t}\n}'
+		);
+		Assert.isTrue(out.indexOf('b()') == -1 && out.indexOf('d()') == -1, 'both duplicates gone, got: $out');
+		Assert.isTrue(out.indexOf('a()') != -1 && out.indexOf('c()') != -1, 'distinct arms remain, got: $out');
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -58,6 +79,17 @@ class DuplicateCaseCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	private function applyFix(src: String): String {
+		final check: DuplicateCase = new DuplicateCase();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 	private function violations(src: String): Array<Violation> {

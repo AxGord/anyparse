@@ -18,10 +18,10 @@ import anyparse.runtime.Span;
  * check for them), so switching a null subject falls through every arm: on hxcpp a
  * null enum subject SEGFAULTS, on the other targets the null silently matches no
  * branch. The author believes the wildcard covers everything; null is the one value
- * it does not. `Severity.Warning`, REPORT-ONLY — the fix is `case null, _:` or an
- * explicit `case null:` arm, but the right BODY for the null case is the author's
- * call (the wildcard body might be right for null, might not), so v1 does not
- * auto-insert.
+ * it does not. `Severity.Warning`, `fix` routes null through the existing catch-all
+ * by rewriting the lone wildcard head — `case _:` / `default:` -> `case null, _:` — a
+ * behaviour-preserving change for the non-null cases that sends null to the wildcard
+ * body (the safest default; split the arm later for a distinct null body).
  *
  * ## Trigger — all three
  *
@@ -104,11 +104,27 @@ final class NullableSwitchMissingNull implements Check {
 		return violations;
 	}
 
-	/** No safe single edit — report-only (the null arm's body is the author's call). */
+	/** Route null through the switch's lone wildcard/default arm — rewrite its head to `case null, _:`. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final seams: Null<Seams> = readSeams(plugin.refShape());
+		if (seams == null) return [];
+		final s: Seams = seams;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final bySubject: Map<String, QueryNode> = [];
+		indexSwitchesBySubject(tree, s, bySubject);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final sw: Null<QueryNode> = bySubject['${span.from}:${span.to}'];
+			if (sw == null) continue;
+			final edit: Null<{ span: Span, text: String }> = wildcardNullEdit(sw, s, source);
+			if (edit != null) edits.push(edit);
+		}
+		return edits;
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -279,6 +295,69 @@ final class NullableSwitchMissingNull implements Check {
 		if (recv.kind != s.identKind || recvName == null || !s.nullAssertionCalls.contains('${recvName}.${method}')) return null;
 		final arg: QueryNode = node.children[1];
 		return arg.kind == s.identKind ? arg : null;
+	}
+
+
+	/** Index every switch by its subject's `from:to` span key — the finding's span — so a subject-spanned violation re-finds its switch. */
+	private static function indexSwitchesBySubject(node: QueryNode, s: Seams, out: Map<String, QueryNode>): Void {
+		if (s.switchKinds.contains(node.kind) && node.children.length >= 1) {
+			final subj: Null<Span> = node.children[0].span;
+			if (subj != null) out['${subj.from}:${subj.to}'] = node;
+		}
+		for (c in node.children) indexSwitchesBySubject(c, s, out);
+	}
+
+	/**
+	 * The single edit routing `null` through a switch's lone catch-all arm —
+	 * `case _:` / `default:` -> `case null, _:` — or null when the switch has no
+	 * unique unguarded catch-all (the fix fires only on exactly one, matching the
+	 * finding's trigger).
+	 */
+	private static function wildcardNullEdit(sw: QueryNode, s: Seams, source: String): Null<{ span: Span, text: String }> {
+		var edit: Null<{ span: Span, text: String }> = null;
+		var count: Int = 0;
+		for (i in 1...sw.children.length) {
+			final branch: QueryNode = sw.children[i];
+			if (s.defaultBranchKind != null && branch.kind == s.defaultBranchKind) {
+				count++;
+				edit = defaultToNullEdit(branch, source);
+			} else if (branch.kind == s.caseBranchKind && !branchGuarded(branch, s)) {
+				final wild: Null<QueryNode> = wildcardPattern(branch, s);
+				if (wild != null) {
+					count++;
+					final ws: Null<Span> = wild.span;
+					edit = ws == null ? null : { span: ws, text: 'null, _' };
+				}
+			}
+		}
+		return count == 1 ? edit : null;
+	}
+
+	/** The unguarded wildcard `_` pattern node of `branch` (a plain `case _`), or null. */
+	private static function wildcardPattern(branch: QueryNode, s: Seams): Null<QueryNode> {
+		for (p in branch.children) if (p.kind == s.plainKind && p.children.length >= 1) {
+			final pat: QueryNode = p.children[0];
+			if (pat.kind == s.identKind && pat.name == s.wildcardName) return pat;
+		}
+		return null;
+	}
+
+	/**
+	 * Rewrite a `default:` head to `case null, _:` — replace the leading `default` keyword
+	 * (read from source, so a colon inside a comment cannot fool a colon search) with
+	 * `case null, _`, keeping the `:` and everything after. Needs no body child, so an empty
+	 * `default:` is handled too.
+	 */
+	private static function defaultToNullEdit(branch: QueryNode, source: String): Null<{ span: Span, text: String }> {
+		final bs: Null<Span> = branch.span;
+		if (bs == null) return null;
+		var end: Int = bs.from;
+		while (end < source.length) {
+			final c: Int = StringTools.fastCodeAt(source, end);
+			if (c < 'a'.code || c > 'z'.code) break;
+			end++;
+		}
+		return { span: new Span(bs.from, end), text: 'case null, _' };
 	}
 
 }

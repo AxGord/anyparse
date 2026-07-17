@@ -7,11 +7,12 @@ import anyparse.check.NullableSwitchMissingNull;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
 
 /**
  * The `nullable-switch-missing-null` check: a `switch` over a provably-nullable
  * subject whose branches carry an unguarded wildcard (`case _:` / `default:`) but
- * no `case null` is flagged `Warning`, report-only — `case _` does not match null,
+ * no `case null` is flagged `Warning` — `case _` does not match null,
  * so a null subject falls through every arm (a segfault on hxcpp for a null enum).
  * Nullable sources covered: a declared `Null<T>` local / param (source 1a), an
  * optional `?param` (source 1b), a local bound from a nullable source via `NullFlow`
@@ -141,12 +142,24 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		);
 	}
 
-	public function testFixIsReportOnly(): Void {
+	public function testFixAddsNullToWildcard(): Void {
+		final out: String = applyFix(cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case _: trace(0); } }'));
+		Assert.isTrue(out.indexOf('case null, _:') != -1, 'wildcard should gain null, got: $out');
+		// Idempotent: the fixed source now handles null, so it is no longer flagged.
+		Assert.equals(0, new NullableSwitchMissingNull().run([{ file: 'C.hx', source: out }], new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixAddsNullToDefault(): Void {
+		final out: String = applyFix(cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); default: trace(0); } }'));
+		Assert.isTrue(out.indexOf('case null, _:') != -1, 'default should become case null, _, got: $out');
+		Assert.isTrue(out.indexOf('default:') == -1, 'default keyword should be gone, got: $out');
+	}
+
+	public function testFixNonNullableIsNoop(): Void {
+		// A non-nullable subject is never flagged, so fix yields no edits.
+		final src: String = cls('function f(x:Int):Void { switch x { case 1: trace(1); case _: trace(0); } }');
 		final check: NullableSwitchMissingNull = new NullableSwitchMissingNull();
-		final src: String = cls('function f(x:Null<Int>):Void { switch x { case 1: trace(1); case _: trace(0); } }');
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -157,6 +170,17 @@ class NullableSwitchMissingNullCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f(x:Null<Int>):Void { switch x { case _: trace(0);').length);
+	}
+
+	private function applyFix(source: String): String {
+		final check: NullableSwitchMissingNull = new NullableSwitchMissingNull();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = source;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 	private function cls(body: String): String {

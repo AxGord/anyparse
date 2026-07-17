@@ -33,8 +33,8 @@ import anyparse.runtime.Span;
  * unrelated cases belong to `redundant-cast` / `impossible-cast`). Macro-reification
  * subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
- * Report-only: an explicit upcast is occasionally load-bearing (overload disambiguation),
- * so removing it is left to the author.
+ * `fix` unwraps the cast to its operand (`cast(x, T)` -> `x`) — the flagged operand is always a plain
+ * identifier, so no reparenthesisation is needed; the finding stays `Info` and the unwrap runs under `--fix`.
  */
 @:nullSafety(Strict)
 final class RedundantUpcast implements Check {
@@ -94,7 +94,14 @@ final class RedundantUpcast implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final checkedCastKind: Null<String> = plugin.refShape().checkedCastKind;
+		return checkedCastKind == null
+			? []
+			: CheckScan.applyBySpan(plugin, source, violations, [checkedCastKind], (node, span) -> {
+				if (node.children.length != 1) return null;
+				final opSpan: Null<Span> = node.children[0].span;
+				return opSpan == null ? null : { span: span, text: source.substring(opSpan.from, opSpan.to) };
+			});
 	}
 
 }

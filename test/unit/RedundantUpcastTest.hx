@@ -76,12 +76,17 @@ class RedundantUpcastTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	public function testFixIsNoop(): Void {
+	public function testFixUnwrapsUpcast(): Void {
+		final out: String = applyFix('class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = cast(s, Base); } }');
+		Assert.isTrue(out.indexOf('= s;') != -1, 'expected `= s;`, got: $out');
+		Assert.isTrue(out.indexOf('cast(') == -1, 'cast should be gone, got: $out');
+	}
+
+	public function testFixLeavesUnrelatedCastAlone(): Void {
+		// A non-flagged cast (unrelated types) yields no edits — fix only unwraps proven upcasts.
+		final src: String = 'class A {} class B {} class C { function f(a:A) { var b = cast(a, B); } }';
 		final check: RedundantUpcast = new RedundantUpcast();
-		final src: String = 'class Base {} class Sub extends Base {} class C { function f(s:Sub) { var b = cast(s, Base); } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		Assert.equals(0, edits.length);
+		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -96,6 +101,17 @@ class RedundantUpcastTest extends Test {
 		Assert.notNull(Linter.byId('redundant-upcast'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('redundant-upcast'));
+	}
+
+	private function applyFix(src: String): String {
+		final check: RedundantUpcast = new RedundantUpcast();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 	private function violations(src: String): Array<Violation> {

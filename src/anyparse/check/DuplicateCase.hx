@@ -8,8 +8,8 @@ import anyparse.runtime.Span;
 
 /**
  * Flags a duplicated switch case — a second branch whose pattern repeats an
- * earlier branch's in the same switch, making it dead. Purely structural;
- * report-only. Guarded branches (`case x if (cond):`) are skipped: two branches
+ * earlier branch's in the same switch, making it dead. Purely structural.
+ * `fix` deletes the later (dead) arm. Guarded branches (`case x if (cond):`) are skipped: two branches
  * with the same pattern but different guards are legitimately distinct, and
  * isolating the guard reliably needs more than the pattern node.
  *
@@ -45,11 +45,16 @@ final class DuplicateCase implements Check {
 		return violations;
 	}
 
-	/** Duplicate-case has no autofix — report-only. */
+	/** `fix` deletes the later (dead) duplicate arm; the writer round-trip re-canonicalises the switch. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final caseBranchKind: Null<String> = plugin.refShape().caseBranchKind;
+		return caseBranchKind == null
+			? []
+			: CheckScan.applyBySpan(
+				plugin, source, violations, [caseBranchKind], (_, span) -> ({ span: deletionSpan(source, span), text: '' })
+			);
 	}
 
 	/**
@@ -93,6 +98,27 @@ final class DuplicateCase implements Check {
 			if (nextSpan != null && GUARD.match(source.substring(patternSpan.to, nextSpan.from))) return null;
 		}
 		return StringTools.trim(source.substring(patternSpan.from, patternSpan.to));
+	}
+
+
+	/**
+	 * The dead arm's span extended backward over its own line's leading indentation and
+	 * the newline before it, so deleting it removes the whole line rather than leaving a
+	 * blank one. Stops at the first non-whitespace (a comment on the line above is kept);
+	 * the writer round-trip re-canonicalises what remains.
+	 */
+	private static function deletionSpan(source: String, span: Span): Span {
+		var from: Int = span.from;
+		while (from > 0) {
+			final ch: String = source.charAt(from - 1);
+			if (ch != ' ' && ch != '\t') break;
+			from--;
+		}
+		if (from > 0 && source.charAt(from - 1) == '\n') {
+			from--;
+			if (from > 0 && source.charAt(from - 1) == '\r') from--;
+		}
+		return new Span(from, span.to);
 	}
 
 }
