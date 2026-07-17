@@ -185,34 +185,48 @@ final class TypeResolver {
 	}
 
 	/**
-	 * True when the innermost type declaration enclosing `span` is annotated with
-	 * the `metaName` meta (e.g. `@:nullSafety`), making any non-`Null<…>` nominal
-	 * member of it provably non-null. The meta binds to a declaration when no OTHER
-	 * type declaration sits between the meta and that declaration — tolerant of
-	 * intervening modifier keywords (`final` / `public` / …) which are not type
-	 * decls. A meta carrying `disableArg` (`@:nullSafety(Off)`) does not count.
-	 *
-	 * Only the enclosing TYPE declaration's meta is consulted; a member-level
-	 * `@:nullSafety(Off)` inside a null-safe type is not modeled — a rare,
-	 * documented limitation.
+	 * Whether null-safety is ACTIVE over `span`. A `@:nullSafety(disableArg)`
+	 * (`@:nullSafety(Off)`) whose declaration scope — member (field / method), type
+	 * (class), or module — covers `span` REFUSES (`false`): Haxe does not re-enable a
+	 * disabled outer scope from an inner `Strict` (confirmed on 4.3.7), so a covering
+	 * disable anywhere in the chain wins. Affirmation requires a covering non-`Off`
+	 * `@:nullSafety` at TYPE / MODULE level (a class / module annotation); a
+	 * member-level non-`Off` is NOT counted — that keeps the result strictly
+	 * no-more-affirming than the class/module-only predicate this replaced, while a
+	 * member-level `Off` can still refuse. A bare `@:nullSafety` (Haxe-default Loose)
+	 * and every explicit mode (`Strict` / `StrictThreaded` / `Loose`) count as active —
+	 * each rejects a null flowing into a nominally non-nullable binding, the sole
+	 * guarantee `isProvablyNonNull` relies on.
 	 */
 	public static function enclosingIsNullSafe(tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>): Bool {
-		final decl: Null<TypeDeclMatch> = innermostTypeDecl(tree, span);
-		if (decl == null) return false;
-		return enclosingMetaPresent(tree, decl.fullSpan, metaName, disableArg);
+		var active: Bool = false;
+		for (s in collectNullSafetyScopes(tree, metaName, disableArg)) if (s.from <= span.from && span.to <= s.to) {
+			if (s.disabled) return false;
+			if (s.typeLevel) active = true;
+		}
+		return active;
 	}
 
 	/**
 	 * Whether `operand` is a plain identifier resolvable to a provably non-null
 	 * type — a `RefShape.nonNullableTypeNames` value type (null-safety-independent),
-	 * or any recovered nominal type while the enclosing declaration is null-checked
-	 * (`RefShape.nullSafetyMetaName`). An operand bound to an optional parameter, to a
-	 * default-null parameter (`p: T = null` — nullable per Haxe null-safety even for a
-	 * value type, so the null default is checked BEFORE the nominal type), to a
-	 * `RefShape.nullableWrapperTypeNames` type (`Null<…>` / `Dynamic` / `Any`), or with
-	 * no recovered nominal type keeps the conservative default and is NOT proven
-	 * non-null. Shared by every null-aware check (`unnecessary-null-check`,
-	 * `redundant-null-coalescing`).
+	 * or any recovered nominal type while null-safety is active. An operand bound to
+	 * an optional parameter, to a default-null parameter (`p: T = null` — nullable per
+	 * Haxe null-safety even for a value type, so the null default is checked BEFORE
+	 * the nominal type), to a `RefShape.nullableWrapperTypeNames` type (`Null<…>` /
+	 * `Dynamic` / `Any`), or with no recovered nominal type keeps the conservative
+	 * default and is NOT proven non-null.
+	 *
+	 * The nominal-under-null-safety proof requires the enclosing `@:nullSafety` to be
+	 * active at BOTH the operand's binding declaration and the read — the nearest
+	 * annotation wins at each (member > type > module), so a member-level
+	 * `@:nullSafety(Off)` on the field/local (Pony's `TouchableBase` timer fields) or
+	 * on the reading method refuses, even inside a null-safe class. Bare `@:nullSafety`
+	 * is Haxe-default Loose and is trusted here: Loose rejects a null flowing into a
+	 * nominally non-nullable binding exactly as Strict does (its only relaxations are
+	 * read-side narrowing of already-`Null<…>` values, which never reach this proof).
+	 * Shared by every null-aware check (`unnecessary-null-check`,
+	 * `redundant-null-coalescing`, …).
 	 */
 	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Bool {
 		final bindingFrom: Null<Int> = identBindingFrom(operand, root, shape);
@@ -231,8 +245,10 @@ final class TypeResolver {
 		if (nullableWrapperTypeNames.contains(typeName)) return false;
 		final nullSafetyMetaName: Null<String> = shape.nullSafetyMetaName;
 		final opSpan: Null<Span> = operand.span;
-		return nullSafetyMetaName != null && opSpan != null
-			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, shape.nullSafetyDisableArg);
+		if (nullSafetyMetaName == null || opSpan == null) return false;
+		final disableArg: Null<String> = shape.nullSafetyDisableArg;
+		return enclosingIsNullSafe(root, new Span(bindingFrom, bindingFrom), nullSafetyMetaName, disableArg)
+			&& enclosingIsNullSafe(root, opSpan, nullSafetyMetaName, disableArg);
 	}
 
 	/**
@@ -321,35 +337,6 @@ final class TypeResolver {
 		return td == null ? null : td.name;
 	}
 
-	/**
-	 * Whether a meta node named `metaName` binds to the type declaration at
-	 * `declSpan` — its span ends at or before `declSpan.from` with no other type
-	 * declaration starting in between.
-	 */
-	private static function enclosingMetaPresent(tree: QueryNode, declSpan: Span, metaName: String, disableArg: Null<String>): Bool {
-		final typeFroms: Array<Int> = [];
-		final metaNodes: Array<QueryNode> = [];
-		function walk(n: QueryNode): Void {
-			final td: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(n);
-			if (td != null) typeFroms.push(td.fullSpan.from);
-			if (n.name == metaName && n.span != null) metaNodes.push(n);
-			for (c in n.children) walk(c);
-		}
-		walk(tree);
-		for (m in metaNodes) {
-			final ms: Null<Span> = m.span;
-			if (ms == null || ms.to > declSpan.from) continue;
-			if (disableArg != null && subtreeHasName(m, disableArg)) continue;
-			var blocked: Bool = false;
-			for (tf in typeFroms) if (tf >= ms.to && tf < declSpan.from) {
-				blocked = true;
-				break;
-			}
-			if (!blocked) return true;
-		}
-		return false;
-	}
-
 	/** Whether `node` or any descendant carries the name `name`. */
 	private static function subtreeHasName(node: QueryNode, name: String): Bool {
 		if (node.name == name) return true;
@@ -371,6 +358,64 @@ final class TypeResolver {
 	private static inline function isNominalChar(c: Int): Bool {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code
 			|| c == '.'.code;
+	}
+
+	/**
+	 * Every `@:nullSafety` annotation in `tree` as a scope span — from the meta's
+	 * start to the end of the member / type declaration it precedes (modifier and
+	 * unrelated-meta siblings in between are skipped). `disabled` records whether the
+	 * meta carries `disableArg` (`Off`). A meta not followed by a member / type
+	 * declaration at its own level (a statement- or expression-level annotation) is
+	 * dropped: it falls outside the member > type > module hierarchy this models.
+	 */
+	private static function collectNullSafetyScopes(tree: QueryNode, metaName: String, disableArg: Null<String>): Array<{
+		from: Int,
+		to: Int,
+		disabled: Bool,
+		typeLevel: Bool
+	}> {
+		final scopes: Array<{
+			from: Int,
+			to: Int,
+			disabled: Bool,
+			typeLevel: Bool
+		}> = [];
+		function walk(node: QueryNode): Void {
+			var pending: Array<{ from: Int, disabled: Bool }> = [];
+			for (c in node.children) {
+				final cs: Null<Span> = c.span;
+				if (cs != null && c.name == metaName)
+					pending.push({ from: cs.from, disabled: metaDisabled(c, disableArg) });
+				else if (cs != null && isDeclScope(c.kind)) {
+					final typeLevel: Bool = isTypeDeclScope(c.kind);
+					for (p in pending) scopes.push({
+						from: p.from,
+						to: cs.to,
+						disabled: p.disabled,
+						typeLevel: typeLevel
+					});
+					pending = [];
+				}
+				walk(c);
+			}
+		}
+		walk(tree);
+		return scopes;
+	}
+
+	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
+	private static inline function isDeclScope(kind: String): Bool {
+		return RefactorSupport.isFieldMemberKind(kind) || isTypeDeclScope(kind);
+	}
+
+	/** Whether a `@:nullSafety` meta node carries the disable argument (`Off`). */
+	private static function metaDisabled(meta: QueryNode, disableArg: Null<String>): Bool {
+		return disableArg != null && subtreeHasName(meta, disableArg);
+	}
+
+	/** Whether `kind` is a TYPE declaration (class / interface / enum / typedef / abstract) — the level a `@:nullSafety` may affirm at. */
+	private static inline function isTypeDeclScope(kind: String): Bool {
+		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
 	}
 
 }

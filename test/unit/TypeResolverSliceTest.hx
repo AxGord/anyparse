@@ -118,6 +118,48 @@ class TypeResolverSliceTest extends Test {
 		);
 	}
 
+	public function testNonNullMemberOffFieldRejected(): Void {
+		Assert.isFalse(
+			nonNull('@:nullSafety(Strict) class C { @:nullSafety(Off) var f:Foo; function m():Void { if (f != null) {} } }'),
+			'a member-level @:nullSafety(Off) field escapes null-safety even inside a Strict class'
+		);
+	}
+
+	public function testNonNullMemberOffMethodRejected(): Void {
+		Assert.isFalse(
+			nonNull('@:nullSafety(Strict) class C { var f:Foo; @:nullSafety(Off) function m():Void { if (f != null) {} } }'),
+			'a read inside a @:nullSafety(Off) method is not provably non-null'
+		);
+	}
+
+	public function testNonNullMemberStrictWithoutClassNotAffirmed(): Void {
+		Assert.isFalse(
+			nonNull('class C { @:nullSafety(Strict) static function m(x:Foo):Void { if (x != null) {} } }'),
+			'a member-level @:nullSafety without a class/module annotation does not affirm — kept strictly no-more-affirming than the class-level predicate'
+		);
+	}
+
+	public function testNonNullClassOffMemberStrictRejected(): Void {
+		Assert.isFalse(
+			nonNull('@:nullSafety(Off) class C { @:nullSafety(Strict) static function m(x:Foo):Void { if (x != null) {} } }'),
+			'an inner @:nullSafety(Strict) does not re-enable a disabled outer class (Haxe 4.3.7 semantics)'
+		);
+	}
+
+	public function testNonNullExplicitStrictAffirmed(): Void {
+		Assert.isTrue(
+			nonNull('@:nullSafety(Strict) class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			'a nominal operand under explicit @:nullSafety(Strict) is provably non-null'
+		);
+	}
+
+	public function testNonNullExplicitLooseAffirmed(): Void {
+		Assert.isTrue(
+			nonNull('@:nullSafety(Loose) class C { static function m(x:Foo):Void { if (x != null) {} } }'),
+			'Loose rejects null into a non-nullable binding just as Strict does — trusted for this proof'
+		);
+	}
+
 	private function wrap(param: String, body: String): String {
 		return 'typedef Ctx = { var f:Int; }; class C { static function m($param):Void { $body } }';
 	}
