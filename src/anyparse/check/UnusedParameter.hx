@@ -53,6 +53,11 @@ import anyparse.query.RemoveParam;
  *  - A subtree inside metaprogramming reification (`RefShape.opaqueKinds`,
  *    Haxe `macro { … }`) — a parameter's uses there may be splice-injected and
  *    invisible to a source scan.
+ *  - A function carrying the `dynamic` modifier (`RefShape.dynamicModifierKind`)
+ *    — a reassignable callback slot whose signature external assigners rely on.
+ *    An unreferenced parameter there is by design (the default body may
+ *    legitimately ignore it while a reassigned closure elsewhere uses it), so
+ *    the whole function is skipped — not merely downgraded to `Info`.
  *
  * The residual false positive a structural check cannot rule out is a function
  * passed as a fixed-signature callback (an event handler) that ignores a
@@ -82,6 +87,7 @@ final class UnusedParameter implements Check {
 		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
 		final modifierKinds: Array<String> = shape.modifierOrderKinds ?? [];
 		final noBodyKind: Null<String> = shape.noBodyKind;
+		final dynamicKind: Null<String> = shape.dynamicModifierKind;
 		// The autofixable subset (a confined private method) is proven against the
 		// cross-file SymbolIndex, exactly as `unused-private`; both are registered in
 		// the `--fix` loop's `fullScopeIds` so this index sees every file each pass.
@@ -93,7 +99,10 @@ final class UnusedParameter implements Check {
 				final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
 				walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
 				for (c in candidates)
-					checkFunction(violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, shape, index);
+					checkFunction(
+						violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape,
+						index
+					);
 			}
 		}
 		return violations;
@@ -173,10 +182,11 @@ final class UnusedParameter implements Check {
 	 */
 	private static function checkFunction(
 		out: Array<Violation>, file: String, source: String, fn: QueryNode, parent: QueryNode, tree: QueryNode,
-		visibilityKinds: Array<String>, modifierKinds: Array<String>, shape: RefShape, index: SymbolIndex
+		visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>, shape: RefShape, index: SymbolIndex
 	): Void {
 		final fnSpan: Null<Span> = fn.span;
 		if (fnSpan == null) return;
+		if (isDynamicFn(fn, parent, visibilityKinds, modifierKinds, dynamicKind)) return;
 		final fnName: Null<String> = fn.name;
 		final isLocal: Bool = fn.kind == 'LocalFnStmt';
 		final ownerName: Null<String> = parent.name;
@@ -223,6 +233,31 @@ final class UnusedParameter implements Check {
 			final sspan: Null<Span> = sib.span;
 			if (visibilityKinds.contains(sib.kind) && sspan != null && StringTools.trim(source.substring(sspan.from, sspan.to)) == 'public')
 				return true;
+			i--;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether `fn` carries the `dynamic` modifier among its preceding sibling
+	 * modifiers — a reassignable callback slot whose signature external
+	 * assigners rely on (see the class docstring). Mirrors `isPublicDecl`'s
+	 * backward sibling scan, additionally treating the dynamic modifier itself
+	 * as part of the modifier run so the scan does not stop short of it.
+	 */
+	private static function isDynamicFn(
+		fn: QueryNode, parent: QueryNode, visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>
+	): Bool {
+		if (dynamicKind == null) return false;
+		final sibs: Array<QueryNode> = parent.children;
+		final fnIdx: Int = sibs.indexOf(fn);
+		if (fnIdx < 0) return false;
+		var i: Int = fnIdx - 1;
+		while (i >= 0) {
+			final sib: QueryNode = sibs[i];
+			final isModifier: Bool = visibilityKinds.contains(sib.kind) || modifierKinds.contains(sib.kind) || sib.kind == dynamicKind;
+			if (!isModifier) break;
+			if (sib.kind == dynamicKind) return true;
 			i--;
 		}
 		return false;

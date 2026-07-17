@@ -126,4 +126,14 @@ class UnusedParameterCheckTest extends Test {
 		return out;
 	}
 
+
+	public function testDynamicFunctionParameterNotFlagged(): Void {
+		// `dynamic` marks a reassignable callback slot — an assigner elsewhere relies
+		// on the signature, so an unreferenced param in the default body is by
+		// design, not dead code. The whole function is skipped, never autofixed.
+		final src: String = 'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
 }

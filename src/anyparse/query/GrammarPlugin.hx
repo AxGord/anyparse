@@ -681,6 +681,16 @@ typedef RefShape = {
 	@:optional var overrideModifierKind: String;
 
 	/**
+	 * The `dynamic` modifier kind (Haxe `Dynamic`) — a function carrying it is a
+	 * reassignable callback slot whose signature external assigners rely on. The
+	 * `unused-parameter` check skips such a function wholesale: an unreferenced
+	 * parameter in its (often trivial / no-op) body is by design, not dead code,
+	 * and removing it would break every external assignment. Optional; unset does
+	 * not exempt dynamic functions.
+	 */
+	@:optional var dynamicModifierKind: String;
+
+	/**
 	 * The extern-modifier node kind (Haxe `Extern`) that, as a preceding sibling of a
 	 * visibility container, marks the members implicitly public. The
 	 * `missing-visibility` autofix must not insert `private` there — it would lower an
