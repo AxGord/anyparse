@@ -25,8 +25,12 @@ import anyparse.runtime.Span;
  * check never reports a load-bearing null guard. Macro-reification subtrees
  * (`RefShape.opaqueKinds`) are not descended into.
  *
- * `Severity.Info`; report-only — the correct rewrite (drop the guard and keep the
- * body, or collapse an `&&` operand) is context-dependent, so `fix` is a no-op.
+ * `Severity.Info`; report-only — `fix` is a no-op. The declared-type proof
+ * (`TypeResolver.isProvablyNonNull`) treats a default-null parameter (`p:T = null`,
+ * nullable per Haxe null-safety) as non-null and trusts a `@:nullSafety` annotation
+ * without confirming the file passes strict null-safety, so a flagged guard can be
+ * runtime-load-bearing; auto-deleting it would introduce an NPE. Only the flow-proven
+ * `dead-null-guard` is autofixed (the shared rewrite lives in `CheckScan.simplifyNullComparisonFixes`).
  */
 @:nullSafety(Strict)
 final class UnnecessaryNullCheck implements Check {

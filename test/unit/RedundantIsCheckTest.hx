@@ -81,6 +81,18 @@ class RedundantIsCheckTest extends Test {
 		Assert.equals(0, edits.length);
 	}
 
+	public function testDefaultNullParamFlaggedButNotFixed(): Void {
+		// KNOWN run FALSE POSITIVE, same root cause as `unnecessary-null-check`: a
+		// `s:T = null` default-null parameter is nullable per Haxe null-safety, but the
+		// declared-type proof treats it as non-null and flags `s is T`. Unwrapping that
+		// `is`-check would introduce an NPE (`null is T` is false), so `fix` stays a no-op.
+		final check: RedundantIsCheck = new RedundantIsCheck();
+		final src: String = '@:nullSafety(Strict) class C { function f(s:String = null) { if (s is String) trace(s.length); } }';
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,

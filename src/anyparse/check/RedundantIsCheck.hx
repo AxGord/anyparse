@@ -30,8 +30,9 @@ import anyparse.runtime.Span;
  * hierarchy anyparse does not have, so it could not be done without false positives.
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
- * Report-only: the right rewrite (drop the `if`, keep the body, …) is
- * context-dependent, exactly as for `unnecessary-null-check`.
+ * Report-only — `fix` is a no-op, for the same reason as `unnecessary-null-check`:
+ * `TypeResolver.isProvablyNonNull` treats a default-null parameter as non-null, so
+ * unwrapping a flagged `is`-check could introduce an NPE (`null is T` is false).
  */
 @:nullSafety(Strict)
 final class RedundantIsCheck implements Check {

@@ -476,6 +476,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			nullCoalesceKind: 'NullCoal',
 			eqKind: 'Eq',
 			notEqKind: 'NotEq',
+			logicalAndKind: 'And',
+			logicalOrKind: 'Or',
 			newExprKind: 'NewExpr',
 			fieldAccessKind: 'FieldAccess',
 			returnStatementKind: 'ReturnStmt',

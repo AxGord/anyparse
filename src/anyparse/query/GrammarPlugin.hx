@@ -451,6 +451,22 @@ typedef RefShape = {
 	@:optional var notEqKind: String;
 
 	/**
+	 * The logical-AND (`&&`) node kind — its two operands are `children[0]` /
+	 * `children[1]`. The condition-simplification autofixes (`dead-null-guard`,
+	 * `unnecessary-null-check`, `redundant-is-check`) drop an always-TRUE conjunct
+	 * from one of these (`Y && true` ≡ `Y`). Optional; unset disables the `&&`-drop
+	 * shape of those fixes.
+	 */
+	@:optional var logicalAndKind: String;
+
+	/**
+	 * The logical-OR (`||`) node kind — the `||`-counterpart of `logicalAndKind`.
+	 * The same autofixes drop an always-FALSE disjunct from one of these
+	 * (`Y || false` ≡ `Y`). Optional; unset disables the `||`-drop shape.
+	 */
+	@:optional var logicalOrKind: String;
+
+	/**
 	 * The `new T(...)` node kind — `prefer-array-literal` / `prefer-map-literal`
 	 * recognise a `new Array()` / `new Map()` replaceable by the `[]` literal. The
 	 * node's `name` is the constructed type; its children are type parameters, not

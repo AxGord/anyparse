@@ -92,6 +92,21 @@ class UnnecessaryNullCheckCheckTest extends Test {
 		Assert.equals(0, edits.length);
 	}
 
+	public function testDefaultNullParamFlaggedButNotFixed(): Void {
+		// KNOWN run FALSE POSITIVE: a `p:T = null` default-null parameter is nullable per
+		// Haxe null-safety ("an argument with a default value of null is nullable"), but the
+		// declared-type proof treats every defaulted param as non-null and flags it. Because
+		// that proof is unsound here, `fix` stays a no-op — auto-deleting the guard would
+		// introduce an NPE. Only the flow-proven `dead-null-guard` autofixes. When the run
+		// proof is tightened to exempt default-null params, wire the rewrite via
+		// `CheckScan.simplifyNullComparisonFixes` (already built + tested by `dead-null-guard`).
+		final check: UnnecessaryNullCheck = new UnnecessaryNullCheck();
+		final src: String = '@:nullSafety(Strict) class C { function f(p:String = null) { if (p != null) trace(p); } }';
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(
 			0,

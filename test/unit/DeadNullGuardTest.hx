@@ -7,7 +7,7 @@ import anyparse.check.DeadNullGuard;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `dead-null-guard` check: a null comparison whose operand is already
@@ -81,12 +81,82 @@ class DeadNullGuardTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
-	public function testFixIsNoop(): Void {
-		final check: DeadNullGuard = new DeadNullGuard();
-		final src: String = 'class C { function f(?x:String) { if (x != null) { if (x != null) trace(x); } } }';
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		Assert.equals(0, edits.length);
+	public function testFixUnwrapBody(): Void {
+		assertFixContains(wrapFoo('if (x != null) x.g();'), 'x.g();', 'if (x != null)');
+	}
+
+	public function testFixDeleteAlwaysFalse(): Void {
+		assertFixContains(wrapFoo('if (x == null) x.g();\n\t\ttrace("keep");'), 'trace("keep")', 'x.g()');
+	}
+
+	public function testFixDropConjunct(): Void {
+		assertFixContains(wrapFoo('if (x != null && cond()) x.g();'), 'if (cond())', 'x != null');
+	}
+
+	public function testFixDropDisjunct(): Void {
+		assertFixContains(wrapFoo('if (x == null || cond()) x.g();'), 'if (cond())', 'x == null');
+	}
+
+	public function testFixChainConjunct(): Void {
+		assertFixContains(wrapFoo('if (cond() && x != null && cond()) x.g();'), 'if (cond() && cond())', 'x != null');
+	}
+
+	public function testFixBlockBodyKeepsBraces(): Void {
+		assertFixContains(wrapFoo('if (x != null) {\n\t\t\tx.g();\n\t\t\tx.g();\n\t\t}'), 'x.g();', 'if (x != null)');
+	}
+
+	public function testFixNestedNarrowKeepsOuterGuard(): Void {
+		// The dead INNER guard is unwrapped; the load-bearing OUTER guard on the nullable
+		// param survives — exactly one `if (x != null)` remains, control flow intact.
+		final out: String = fixText(
+			'class C {\n\tfunction f(?x:String):Void {\n\t\tif (x != null) {\n\t\t\tif (x != null) trace(x);\n\t\t}\n\t}\n}'
+		);
+		Assert.equals(1, countStr(out, 'if (x != null)'));
+		Assert.isTrue(out.indexOf('trace(x)') >= 0);
+	}
+
+	public function testFixDeleteAsBranchBodyToEmptyBlock(): Void {
+		// A no-else `if (x == null)` that is the single-statement body of an enclosing `if`
+		// becomes `{}` (a bare delete would orphan the branch and swallow the next statement).
+		assertFixContains(wrapFoo('if (cond()) if (x == null) x.g();\n\t\ttrace("keep");'), 'if (cond()) {}', 'x.g()');
+	}
+
+	public function testFixRefusesElse(): Void {
+		assertFixRefused(wrapFoo('if (x != null) x.g(); else cond();'));
+	}
+
+	public function testFixRefusesTernary(): Void {
+		assertFixRefused(wrapFoo('final b:Int = x != null ? 1 : 2;\n\t\ttrace(b);'));
+	}
+
+	public function testFixRefusesExprPosition(): Void {
+		assertFixRefused(wrapFoo('final b:Bool = x != null;\n\t\ttrace(b);'));
+	}
+
+	public function testFixRefusesAbsorbingTrueInOr(): Void {
+		// `true || cond()` is constantly true — dropping the disjunct would change the value.
+		assertFixRefused(wrapFoo('if (x != null || cond()) x.g();'));
+	}
+
+	public function testFixRefusesAbsorbingFalseInAnd(): Void {
+		// `false && cond()` is constantly false — dropping the conjunct would change the value.
+		assertFixRefused(wrapFoo('if (x == null && cond()) x.g();'));
+	}
+
+	public function testFixRefusesMixedNesting(): Void {
+		assertFixRefused(wrapFoo('if (cond() || (x != null && cond())) x.g();'));
+	}
+
+	public function testFixRefusesParenWrapped(): Void {
+		assertFixRefused(wrapFoo('if ((x != null) && cond()) x.g();'));
+	}
+
+	public function testFixRefusesCommentBetweenIfAndBody(): Void {
+		assertFixRefused(wrapFoo('if (x != null) /* keep */ x.g();'));
+	}
+
+	public function testFixRefusesCommentInDeletedBody(): Void {
+		assertFixRefused(wrapFoo('if (x == null) {\n\t\t\t// note\n\t\t\tx.g();\n\t\t}'));
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -290,6 +360,53 @@ class DeadNullGuardTest extends Test {
 	public function testMetaArgWriteNotExecuted(): Void {
 		// A metadata argument never runs — `@:m(x = "v")` must not mark x non-null.
 		Assert.equals(0, violations('class C { function f() { var x = null; @:m(x = "v") trace(1); if (x != null) trace(2); } }').length);
+	}
+
+	/** A self-contained module: a non-null `Foo` local `x`, plus a `cond()` helper, wrapping `body`. */
+	private function wrapFoo(body: String): String {
+		return 'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n'
+			+ '@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n'
+			+ '\tfunction f():Void {\n\t\tvar x = new Foo();\n\t\t' + body + '\n\t}\n}\n';
+	}
+
+	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */
+	private function fixText(src: String): String {
+		final check: DeadNullGuard = new DeadNullGuard();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text): text;
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+				src;
+		};
+	}
+
+	/** The fixed text of `src` contains `present` and no longer contains `absent`. */
+	private function assertFixContains(src: String, present: String, absent: String): Void {
+		final out: String = fixText(src);
+		Assert.isTrue(out.indexOf(present) >= 0, 'expected "$present" in: $out');
+		Assert.isTrue(out.indexOf(absent) == -1, 'expected NOT "$absent" in: $out');
+	}
+
+	/** `src` is flagged by `run` but produces no fix edit — a conservative refusal. */
+	private function assertFixRefused(src: String): Void {
+		final check: DeadNullGuard = new DeadNullGuard();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.isTrue(vs.length > 0, 'expected a finding to exist');
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/** Count non-overlapping occurrences of `needle` in `hay`. */
+	private function countStr(hay: String, needle: String): Int {
+		var n: Int = 0;
+		var i: Int = 0;
+		while (true) {
+			final at: Int = hay.indexOf(needle, i);
+			if (at < 0) break;
+			n++;
+			i = at + needle.length;
+		}
+		return n;
 	}
 
 	private function violations(src: String): Array<Violation> {

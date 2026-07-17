@@ -28,9 +28,11 @@ import anyparse.runtime.Span;
  * back-edge, a closure-captured name, a macro subtree — collapses to `Unknown`,
  * so the check reports only a genuinely dead guard, never a load-bearing one.
  *
- * `Severity.Info`; report-only — the correct rewrite (drop the guard and keep
- * the body, or collapse an `&&` conjunct) is context-dependent, so `fix` is a
- * no-op, mirroring `unnecessary-null-check`.
+ * `Severity.Info`; `fix` conservatively drops the dead guard where a safe span rewrite
+ * exists — unwrap / delete a sole-condition `if`, or drop a conjunct / disjunct from a
+ * homogeneous `&&` / `||` chain — and refuses (leaves a finding) everywhere else. Its
+ * proof is FLOW-based (`NullFlow`), never declared-type trust, so it has no
+ * default-null-parameter blind spot — unlike the report-only `unnecessary-null-check`.
  */
 @:nullSafety(Strict)
 final class DeadNullGuard implements Check {
@@ -84,7 +86,7 @@ final class DeadNullGuard implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		return CheckScan.simplifyNullComparisonFixes(plugin, source, violations);
 	}
 
 }
