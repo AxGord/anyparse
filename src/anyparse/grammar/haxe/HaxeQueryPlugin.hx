@@ -603,10 +603,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// post-parse. The grammar parser stays unmodified.
 		final substituted: String = Metavar.substituteMetavarsHaxe(source);
 		final attempts: Array<{ wrap: String -> String, extract: QueryNode -> Null<QueryNode>, category: PatternCategory }> = [
-			{ wrap: src -> src, extract: extractFirstDecl, category: PatternCategory.Decl },
-			{ wrap: wrapAsStmt, extract: extractFirstStmt, category: PatternCategory.Stmt },
-			{ wrap: wrapAsExpr, extract: extractFirstExpr, category: PatternCategory.Expr },
-			{ wrap: wrapAsMetaArgs, extract: extractFirstMeta, category: PatternCategory.MetaArgs },
+			{ wrap: src -> src, extract: HaxePatternFragment.extractFirstDecl, category: PatternCategory.Decl },
+			{ wrap: HaxePatternFragment.wrapAsStmt, extract: HaxePatternFragment.extractFirstStmt, category: PatternCategory.Stmt },
+			{ wrap: HaxePatternFragment.wrapAsExpr, extract: HaxePatternFragment.extractFirstExpr, category: PatternCategory.Expr },
+			{ wrap: HaxePatternFragment.wrapAsMetaArgs, extract: HaxePatternFragment.extractFirstMeta, category: PatternCategory.MetaArgs },
 		];
 		// A declaration / statement fragment whose only defect is the missing
 		// terminator (`final x:T = []`) parses with a `;` appended — retried as a
@@ -623,7 +623,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// project as separate sibling nodes, so `static final x = []`
 			// extracts a bare `(Static)` leaf — a degenerate pattern that would
 			// silently match every static modifier. Reject partial extractions.
-			if (attempt.category == PatternCategory.Decl && !consumesVariant(extracted, variant)) continue;
+			if (attempt.category == PatternCategory.Decl && !HaxePatternFragment.consumesVariant(extracted, variant)) continue;
 			// A bare-meta pattern (`@:foo($_)`) with the auto-appended `;`
 			// parses as `MetaStmt(meta, EmptyStmt)` since the MetaStmt slice —
 			// a degenerate statement that would shadow the MetaArgs attempt
@@ -1119,110 +1119,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	/** A non-structural leaf the grammar walkers skip: null, a `String`, or a `Span`. */
 	private inline function isLeafValue(value: Dynamic): Bool {
 		return value == null || value is String || Std.isOfType(value, Span);
-	}
-
-	/**
-	 * Whether the extracted pattern root's span covers (nearly) the whole
-	 * variant text — the guard against a partial Decl extraction (slack of one
-	 * byte tolerates a span that excludes the trailing `;`).
-	 */
-	private static function consumesVariant(extracted: QueryNode, variant: String): Bool {
-		final span: Null<Span> = extracted.span;
-		return span == null || span.to - span.from >= StringTools.trim(variant).length - 1;
-	}
-
-	private static function wrapAsStmt(src: String): String {
-		return 'class _ApqPattern { static function _apq() { ${trimTrailingSemicolons(src)}; } }';
-	}
-
-	private static function wrapAsExpr(src: String): String {
-		return 'class _ApqPattern { static function _apq() { var _v = ${trimTrailingSemicolons(src)}; } }';
-	}
-
-	/**
-	 * Drop the trailing run of `;` and whitespace from a pattern fragment.
-	 * A statement or expression pattern is naturally written with a
-	 * closing `;` (`return $_;`), but `wrapAsStmt` / `wrapAsExpr` append
-	 * their own `;`; without trimming, the wrapped source becomes `…;;`
-	 * and the Haxe grammar — which has no empty-statement production —
-	 * rejects it, failing the whole cascade on a valid statement pattern.
-	 * The unwrapped decl attempt keeps the original source (a
-	 * `typedef X = Y;` decl pattern needs its `;`), so the trim is scoped
-	 * to the wrappers only.
-	 */
-	private static function trimTrailingSemicolons(src: String): String {
-		var end: Int = src.length;
-		while (end > 0) {
-			final c: Int = StringTools.fastCodeAt(src, end - 1);
-			if (c == ';'.code || c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code)
-				end--;
-			else
-				break;
-		}
-		return src.substring(0, end);
-	}
-
-	private static function wrapAsMetaArgs(src: String): String {
-		return 'class _ApqPattern { $src var _v:Int = 0; }';
-	}
-
-	private static function extractFirstDecl(module: QueryNode): Null<QueryNode> {
-		return module.children.length == 0 ? null : module.children[0];
-	}
-
-	private static function extractFirstStmt(module: QueryNode): Null<QueryNode> {
-		// module → ClassDecl wrapper → FunctionField → FnDecl struct →
-		// HxFnBody.BlockBody (enum) → HxFnBlock struct (flattened) →
-		// stmts[0]. We navigate by enum kind names; struct envelopes are
-		// transparent in the QueryNode tree.
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		if (cls == null) return null;
-		final block: Null<QueryNode> = findFirstByKind(cls, 'BlockBody');
-		if (block == null) return null;
-		if (block.children.length == 0) return null;
-		final first: QueryNode = block.children[0];
-		// A bare expression-statement pattern (`$a + $b`, `$f($_)`,
-		// `trace($_);`) wraps its expression in a synthetic `ExprStmt`
-		// node. Returning that wrapper as the pattern root constrains
-		// matches to statement position only — the expression stays
-		// invisible in var-init / argument / sub-expression position (the
-		// common case). Reject it so the cascade proceeds to the Expr
-		// attempt, which yields the bare expression as the root; the
-		// matcher then walks every subtree and finds it anywhere.
-		// Non-expression statements (if/for/while/return/var/switch/try/
-		// throw) are not `ExprStmt` and pass through unchanged. Node-level
-		// analog of the `trimTrailingSemicolons` wrapper-artifact fix (#3).
-		return first.kind == 'ExprStmt' ? null : first;
-	}
-
-	private static function extractFirstExpr(module: QueryNode): Null<QueryNode> {
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		if (cls == null) return null;
-		final varStmt: Null<QueryNode> = findFirstByKind(cls, 'VarStmt');
-		return varStmt == null ? null : varStmt.children.length == 0 ? null : varStmt.children[varStmt.children.length - 1];
-	}
-
-	private static function extractFirstMeta(module: QueryNode): Null<QueryNode> {
-		final cls: Null<QueryNode> = findFirstByKind(module, 'ClassDecl');
-		return cls == null ? null : findFirstByKind(cls, 'HxMeta') ?? findFirstByKind(cls, 'Meta') ?? findFirstByKindPrefix(cls, 'Meta');
-	}
-
-	private static function findFirstByKind(node: QueryNode, kind: String): Null<QueryNode> {
-		if (node.kind == kind) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = findFirstByKind(c, kind);
-			if (found != null) return found;
-		}
-		return null;
-	}
-
-	private static function findFirstByKindPrefix(node: QueryNode, prefix: String): Null<QueryNode> {
-		if (StringTools.startsWith(node.kind, prefix)) return node;
-		for (c in node.children) {
-			final found: Null<QueryNode> = findFirstByKindPrefix(c, prefix);
-			if (found != null) return found;
-		}
-		return null;
 	}
 
 
