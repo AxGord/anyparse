@@ -87,6 +87,18 @@ typedef NamedDecl = {
 	 * grammar's projection, as the reachability rules are language-specific.
 	 */
 	@:optional var implicitlyReachable: Bool;
+
+	/**
+	 * True when the autofix must not mechanically rename this declaration even
+	 * though the check still reports it - its identifier is a contract a
+	 * single-file rename cannot honour. Two grammar-set cases: a structural /
+	 * serialization field (a typedef or inline anon-structure member - a JSON /
+	 * wire key whose cross-file consumers a rename never updates), and a property
+	 * backed by physical `get_` / `set_` accessors a single-decl rename would
+	 * leave dangling. The warning still fires; only `fix` skips it. Absent
+	 * (false) for ordinary declarations.
+	 */
+	@:optional var renameUnsafe: Bool;
 }
 @:nullSafety(Strict)
 interface NamingSupport {

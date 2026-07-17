@@ -372,6 +372,62 @@ class NamingCheckTest extends Test {
 		#end
 	}
 
+	public function testFixSkipsTypedefAnonFields(): Void {
+		// A typedef / anon-structure field name is a wire / serialization contract
+		// (a server JSON key, a structural-typed payload) whose cross-file consumers
+		// a single-file rename cannot see and does not update. The check still reports
+		// the convention violation, but the autofix must NOT rename it.
+		final src: String = 'typedef T = {\n\tId: Int,\n\tName: String,\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'T.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsInlineAnonFieldInSignature(): Void {
+		// The same wire-contract skip applies to an inline anon type in a signature -
+		// the field is a `Required` node inside `Anon`, not a real parameter.
+		final src: String = 'class C {\n\tpublic function f(o:{ Id:Int }):Void {}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'Id'"));
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsStructureExtensionField(): Void {
+		// A structure-extension body's own field is equally a wire contract - report-only.
+		final src: String = 'typedef T = {\n\t> Base,\n\tExtra: Int,\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'T.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'Extra'"));
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsPrivatePropertyWithAccessors(): Void {
+		// A confined private property backed by physical `get_`/`set_` accessors:
+		// renaming the property to `_value` alone leaves the accessors named
+		// `get_Value` / `set_Value`, but Haxe then requires `get__value` /
+		// `set__value` - the single-decl autofix would emit non-compiling source, so
+		// it must skip the property (report-only).
+		final src: String = 'package pkg;\nclass C {\n\tprivate var Value(get, set):Int;\n\tfunction get_Value():Int return this.Value;\n\tfunction set_Value(v:Int):Int return this.Value = v;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'Value'"));
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixStillRenamesConfinedPropertylessPrivateField(): Void {
+		// Guard against over-skipping: a plain confined private field with no
+		// accessor siblings is still renamed - the property skip must not swallow it.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		assertFixCanonicalWithIndex(src, '_shape', 'var shape');
+	}
+
 	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);

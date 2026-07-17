@@ -151,8 +151,10 @@ final class Naming implements Check {
 	}
 
 	/**
-	 * Is the rename of `decl`'s binding provably complete within `source`?
-	 * Function-body-scoped bindings always are; a private field or private
+	 * Is the rename of `decl`'s binding provably complete within `source`? A
+	 * declaration the grammar marked `renameUnsafe` (a structural / anon-struct
+	 * field, a property backed by physical accessors) never is. Otherwise a
+	 * function-body-scoped binding always is; a private field or private
 	 * static-final constant is only when the cross-file `index` plus in-file
 	 * checks prove it cannot be referenced from outside its file. Every other
 	 * category (types, public members) is not.
@@ -160,6 +162,11 @@ final class Naming implements Check {
 	private static function isRenameSafe(
 		decl: NamedDecl, source: String, index: Null<SymbolIndex>, otherSources: Array<String>, confinedMemo: Map<String, Bool>
 	): Bool {
+		// A declaration the grammar marked rename-unsafe (a typedef / anon-structure
+		// field whose name is a wire contract, or a property backed by physical
+		// get_/set_ accessors a single-decl rename would orphan) is report-only -
+		// the check still warns, but the autofix must not rewrite it.
+		if (decl.renameUnsafe == true) return false;
 		final category: NamingCategory = decl.category;
 		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
 		if ((category == NamingCategory.Field || category == NamingCategory.Constant) && !decl.mods.contains('public') && index != null) {

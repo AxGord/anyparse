@@ -8,6 +8,8 @@ import anyparse.query.QueryNode;
 import haxe.Exception;
 import anyparse.query.SymbolIndex;
 
+using Lambda;
+
 /**
  * The Haxe grammar's `NamingSupport`: projects the named declarations the
  * `naming` check inspects, and resolves a file's policy — a project's
@@ -156,7 +158,8 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: categoryValue,
 				mods: declMods,
 				enclosingType: enclosingType,
-				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods)
+				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods),
+				renameUnsafe: isStructuralField(parent) || hasPhysicalAccessors(node, parent, declName)
 			});
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
@@ -250,6 +253,33 @@ final class HaxeNamingSupport implements NamingSupport {
 		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
 			&& (name == 'new' || StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent)
 				|| node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
+	}
+
+	/**
+	 * Whether a projected declaration is a structural / serialization field - a
+	 * typedef or inline anon-structure member (a `Required` / `Optional` node
+	 * whose parent is `Anon`). Its name is a wire contract (a server JSON key, a
+	 * structural-typed payload), so the autofix must not rename it: cross-file
+	 * consumers are invisible to a single-file rename. Covers named typedefs,
+	 * inline anon types in signatures / type params, and structure-extension
+	 * bodies alike - all descend through an `Anon` node.
+	 */
+	private static function isStructuralField(parent: Null<QueryNode>): Bool {
+		return parent != null && parent.kind == 'Anon';
+	}
+
+	/**
+	 * Whether a var / final member named `name` is a property backed by physical
+	 * `get_<name>` / `set_<name>` accessor methods declared as siblings. Renaming
+	 * the property alone (e.g. to a `_`-prefixed form) would orphan those
+	 * accessors - Haxe then requires `get_<newName>` / `set_<newName>` - so the
+	 * single-decl autofix must skip it. Only `VarMember` / `FinalMember` hosts qualify.
+	 */
+	private static function hasPhysicalAccessors(node: QueryNode, parent: Null<QueryNode>, name: String): Bool {
+		if (parent == null || (node.kind != 'VarMember' && node.kind != 'FinalMember')) return false;
+		final getName: String = 'get_' + name;
+		final setName: String = 'set_' + name;
+		return parent.children.exists(sib -> sib.kind == 'FnMember' && (sib.name == getName || sib.name == setName));
 	}
 
 	/**
