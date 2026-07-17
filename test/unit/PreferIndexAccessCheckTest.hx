@@ -126,4 +126,38 @@ class PreferIndexAccessCheckTest extends Test {
 		return out;
 	}
 
+
+	public function testFragileNullGuardKeyNotFlagged(): Void {
+		// The key is a null-guard ternary whose fallback is a field access on a for-loop
+		// iterator (an unbound monomorph); under active @:nullSafety, `m[k]` types the key in
+		// VALUE mode and would flip the fallback's inferred constraint to Null<…> — skipped.
+		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
+			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+
+	public function testFragileCoalesceKeyNotFlagged(): Void {
+		// Same fragility with the null guard already spelled `??` in the key.
+		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
+			+ '\t\t\tvar v = m.get(row.a ?? row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+
+	public function testNullGuardKeyWithoutNullSafetyStillFlagged(): Void {
+		// No @:nullSafety anywhere — the flipped binding still compiles, so convert.
+		final source: String = 'class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
+			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
+
+	public function testClosedNullGuardKeyUnderNullSafetyStillFlagged(): Void {
+		// Bare-identifier ternary operands are not inference-fragile — still converts.
+		final source: String = '@:nullSafety class C {\n\tfunction f(a:Null<String>, b:String):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
+			+ '\t\tvar v = m.get(a != null ? a : b);\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
 }

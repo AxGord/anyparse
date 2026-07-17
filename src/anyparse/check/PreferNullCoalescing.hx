@@ -7,6 +7,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 
 /**
  * Flags a null-guarding ternary that the null-coalescing operator `??` replaces —
@@ -52,14 +54,14 @@ final class PreferNullCoalescing implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
+		final shape: RefShape = plugin.refShape();
+		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null)
-				walk(
-					violations, entry.file, entry.source, tree, seams.ternaryKind, seams.eqKind, seams.notEqKind, seams.nullKind,
-					seams.unsafeKinds
-				);
+			if (tree == null) continue;
+			final declaredTypes: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypes(entry.source);
+			walk(violations, entry.file, entry.source, tree, tree, shape, declaredTypes, seams);
 		}
 		return violations;
 	}
@@ -69,21 +71,24 @@ final class PreferNullCoalescing implements Check {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
-		return seams == null
-			? []
-			: CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
-				final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(
-					node, source, seams.eqKind, seams.notEqKind, seams.nullKind, seams.unsafeKinds
-				);
-				if (m == null) return null;
-				final guardedSpan: Null<Span> = m.guarded.span;
-				final fallbackSpan: Null<Span> = m.fallback.span;
-				if (guardedSpan == null || fallbackSpan == null) return null;
-				final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
-				final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-				final fallbackText: String = m.fallback.kind == seams.ternaryKind ? '(' + fallbackSrc + ')' : fallbackSrc;
-				return { span: span, text: guardedSrc + ' ?? ' + fallbackText };
-			});
+		if (seams == null) return [];
+		final shape: RefShape = plugin.refShape();
+		final typed: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final root: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (root == null) return [];
+		final rootNode: QueryNode = root;
+		final declaredTypes: Null<Map<Int, String>> = typed == null ? null : typed.declaredTypes(source);
+		return CheckScan.applyBySpan(plugin, source, violations, [seams.ternaryKind], (node, span) -> {
+			final m: Null<{ guarded: QueryNode, fallback: QueryNode }> = match(node, source, rootNode, shape, declaredTypes, seams);
+			if (m == null) return null;
+			final guardedSpan: Null<Span> = m.guarded.span;
+			final fallbackSpan: Null<Span> = m.fallback.span;
+			if (guardedSpan == null || fallbackSpan == null) return null;
+			final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
+			final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
+			final fallbackText: String = m.fallback.kind == seams.ternaryKind ? '(' + fallbackSrc + ')' : fallbackSrc;
+			return { span: span, text: guardedSrc + ' ?? ' + fallbackText };
+		});
 	}
 
 	/** The node kinds whose presence in a guarded value makes the once-vs-twice rewrite unsafe: every binding-write plus the call kind. */
@@ -100,12 +105,12 @@ final class PreferNullCoalescing implements Check {
 	 * outer rewrite has re-parsed.
 	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, ternaryKind: String, eqKind: String, notEqKind: String,
-		nullKind: String, unsafeKinds: Array<String>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, root: QueryNode, shape: RefShape,
+		declaredTypes: Null<Map<Int, String>>, seams: Seams
 	): Void {
-		if (node.kind == ternaryKind) {
+		if (node.kind == seams.ternaryKind) {
 			final span: Null<Span> = node.span;
-			if (span != null && match(node, source, eqKind, notEqKind, nullKind, unsafeKinds) != null) {
+			if (span != null && match(node, source, root, shape, declaredTypes, seams) != null) {
 				out.push({
 					file: file,
 					span: span,
@@ -116,16 +121,20 @@ final class PreferNullCoalescing implements Check {
 				return;
 			}
 		}
-		for (c in node.children) walk(out, file, source, c, ternaryKind, eqKind, notEqKind, nullKind, unsafeKinds);
+		for (c in node.children) walk(out, file, source, c, root, shape, declaredTypes, seams);
 	}
 
 	/**
 	 * If `ternary` is a null guard that `??` replaces, return its guarded value and fallback
 	 * branch; else null. Matches all four shapes (`x != null ? x : y`, `null != x ? x : y`,
-	 * `x == null ? y : x`, `null == x ? y : x`); rejects a guarded value that mutates a binding.
+	 * `x == null ? y : x`, `null == x ? y : x`); rejects a guarded value that mutates a binding,
+	 * and (when the grammar exposes declared types) an INFERENCE-FRAGILE guard — one whose
+	 * fallback is a field access on an inference-open receiver inside an active `@:nullSafety`
+	 * scope, where the `??` rewrite would flip the fallback's inferred constraint to `Null<…>`
+	 * and break null-safety downstream (`TypeResolver.isInferenceFragileNullGuard`).
 	 */
 	private static function match(
-		ternary: QueryNode, source: String, eqKind: String, notEqKind: String, nullKind: String, unsafeKinds: Array<String>
+		ternary: QueryNode, source: String, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, seams: Seams
 	): Null<{ guarded: QueryNode, fallback: QueryNode }> {
 		if (ternary.children.length != TERNARY_CHILD_COUNT) return null;
 		final cond: QueryNode = ternary.children[0];
@@ -134,19 +143,30 @@ final class PreferNullCoalescing implements Check {
 		if (cond.children.length != 2) return null;
 		final left: QueryNode = cond.children[0];
 		final right: QueryNode = cond.children[1];
-		final guarded: Null<QueryNode> = if (left.kind == nullKind && right.kind != nullKind)
+		final guarded: Null<QueryNode> = if (left.kind == seams.nullKind && right.kind != seams.nullKind)
 			right;
-		else if (right.kind == nullKind && left.kind != nullKind)
+		else if (right.kind == seams.nullKind && left.kind != seams.nullKind)
 			left;
 		else
 			null;
 		if (guarded == null) return null;
-		if (subtreeMutates(guarded, unsafeKinds)) return null;
-		if (cond.kind == notEqKind) {
-			if (RefactorSupport.sameSource(guarded, thenBranch, source)) return { guarded: guarded, fallback: elseBranch };
-		} else if (cond.kind == eqKind && RefactorSupport.sameSource(guarded, elseBranch, source))
-			return { guarded: guarded, fallback: thenBranch };
-		return null;
+		if (subtreeMutates(guarded, seams.unsafeKinds)) return null;
+		final res: Null<{ guarded: QueryNode, fallback: QueryNode }> = if (
+			cond.kind == seams.notEqKind && RefactorSupport.sameSource(guarded, thenBranch, source)
+		)
+			{ guarded: guarded, fallback: elseBranch };
+		else if (cond.kind == seams.eqKind && RefactorSupport.sameSource(guarded, elseBranch, source))
+			{ guarded: guarded, fallback: thenBranch };
+		else
+			null;
+		if (res == null) return null;
+		final span: Null<Span> = ternary.span;
+		if (
+			declaredTypes != null && span != null
+			&& TypeResolver.isInferenceFragileNullGuard(res.fallback, span, root, shape, declaredTypes)
+		)
+			return null;
+		return res;
 	}
 
 	/** Whether `node`'s subtree contains any of `unsafeKinds` (a binding-write or a call). */

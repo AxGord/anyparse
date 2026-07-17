@@ -136,7 +136,12 @@ final class PreferIndexAccess implements Check {
 			exprStmtKind: exprStmtKind,
 			mapTypes: mapTypes,
 			nullableWrappers: shape.nullableWrapperTypeNames ?? [],
-			opaqueKinds: shape.opaqueKinds ?? []
+			opaqueKinds: shape.opaqueKinds ?? [],
+			ternaryKind: shape.ternaryKind,
+			nullCoalKind: shape.nullCoalesceKind,
+			eqKind: shape.eqKind,
+			notEqKind: shape.notEqKind,
+			nullLitKind: shape.nullLiteralKind
 		};
 	}
 
@@ -155,7 +160,12 @@ final class PreferIndexAccess implements Check {
 
 	/**
 	 * If `call` is a `Map`-abstract `get(k)` / `set(k, v)` on a plain-identifier receiver,
-	 * return the resolved match; else null. Enforces the exact arity and the receiver-type gate.
+	 * return the resolved match; else null. Enforces the exact arity, the receiver-type gate,
+	 * and the INFERENCE-FRAGILITY gate: a key (or set value) whose subtree contains a null
+	 * guard — a null-comparison ternary or `??` — with an inference-open fallback is a
+	 * conservative miss, because dropping the method-argument context (`m[k]` types the key in
+	 * VALUE mode) would flip that fallback's inferred constraint to `Null<…>` and break an
+	 * active `@:nullSafety` scope downstream (`TypeResolver.isInferenceFragileNullGuard`).
 	 */
 	private static function match(
 		call: QueryNode, parentKind: Null<String>, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
@@ -175,7 +185,11 @@ final class PreferIndexAccess implements Check {
 			return null;
 		if (!receiverIsMap(recv, root, declaredTypes, declaredTypeSources, cfg)) return null;
 		final callSpan: Null<Span> = call.span;
-		return callSpan == null ? null : {
+		if (callSpan == null) return null;
+		for (i in 1...call.children.length) {
+			if (containsFragileNullGuard(call.children[i], callSpan, root, declaredTypes, cfg)) return null;
+		}
+		return {
 			callSpan: callSpan,
 			recv: recv,
 			key: call.children[1],
@@ -230,6 +244,38 @@ final class PreferIndexAccess implements Check {
 		return simple != null && mapTypes.contains(simple);
 	}
 
+
+	/**
+	 * Whether `node`'s subtree contains a null guard — a ternary whose condition compares
+	 * against the null literal, or a `??` — whose FALLBACK operand (the branch taken when the
+	 * guarded value IS null: the else-branch of `!=`, the then-branch of `==`, the right
+	 * operand of `??`) is inference-fragile at `site`. For the ternary the identity shape is
+	 * NOT required: any null-comparison ternary re-typed in value mode lets the comparison's
+	 * `Null<…>` reach branch unification, so only the fallback's openness matters.
+	 */
+	private static function containsFragileNullGuard(
+		node: QueryNode, site: Span, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg
+	): Bool {
+		if (node.kind == cfg.ternaryKind && node.children.length == 3) {
+			final cond: QueryNode = node.children[0];
+			final eq: Bool = cond.kind == cfg.eqKind;
+			if (
+				(eq || cond.kind == cfg.notEqKind) && cond.children.length == 2 && cfg.nullLitKind != null
+				&& (cond.children[0].kind == cfg.nullLitKind || cond.children[1].kind == cfg.nullLitKind)
+			) {
+				final fallback: QueryNode = eq ? node.children[1] : node.children[2];
+				if (TypeResolver.isInferenceFragileNullGuard(fallback, site, root, cfg.shape, declaredTypes)) return true;
+			}
+		}
+		if (
+			node.kind == cfg.nullCoalKind && node.children.length == 2
+			&& TypeResolver.isInferenceFragileNullGuard(node.children[1], site, root, cfg.shape, declaredTypes)
+		)
+			return true;
+		for (c in node.children) if (containsFragileNullGuard(c, site, root, declaredTypes, cfg)) return true;
+		return false;
+	}
+
 }
 
 /** A resolved `Map`-abstract `get` / `set` call site. */
@@ -253,4 +299,9 @@ private typedef Cfg = {
 	var mapTypes: Array<String>;
 	var nullableWrappers: Array<String>;
 	var opaqueKinds: Array<String>;
+	var ternaryKind: Null<String>;
+	var nullCoalKind: Null<String>;
+	var eqKind: Null<String>;
+	var notEqKind: Null<String>;
+	var nullLitKind: Null<String>;
 };

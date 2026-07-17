@@ -96,4 +96,36 @@ class PreferNullCoalescingCheckTest extends Test {
 		return edits.length == 1 ? edits[0].text : '<' + edits.length + ' edits>';
 	}
 
+
+	public function testInferenceFragileFallbackNotFlagged(): Void {
+		// A for-loop iterator over a custom hasNext/next iterator is an unbound monomorph
+		// (inference-open); under an active @:nullSafety the ?? rewrite would flip the
+		// fallback field's inferred constraint to Null<…> and break later uses — skipped.
+		final src: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
+			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+
+	public function testInferenceOpenFallbackWithoutNullSafetyStillFlagged(): Void {
+		// Same shape but NO @:nullSafety anywhere — the flipped binding still compiles, so convert.
+		final src: String = 'class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
+			+ '\t\t\tvar v = m.get(row.a != null ? row.a : row.b);\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+
+	public function testDeclaredReceiverFallbackUnderNullSafetyStillFlagged(): Void {
+		// Fallback field access on an ANNOTATED receiver is closed (never a monomorph) — still converts.
+		final src: String = '@:nullSafety class C {\n\tfunction f(o:Opts):Void {\n\t\tvar v = o.a != null ? o.a : o.b;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
+
+	public function testIdentFallbackUnderNullSafetyStillFlagged(): Void {
+		// Bare-identifier operands (no field access) are not inference-fragile — still converts.
+		final src: String = '@:nullSafety class C {\n\tfunction f(a:Null<String>, b:Null<String>):Void {\n\t\tvar v = a != null ? a : b;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+	}
+
 }
