@@ -2098,6 +2098,10 @@ class WriterCodegen {
 			fields.push(setFieldLevelVarField(optionsCT));
 			fields.push(clearFieldLevelVarField(optionsCT));
 		}
+		// ω-single-stmt-braces: opt-fanout helper for the dangling-else
+		// suppress frame consumed by `SingleStmtBraces.unwrapStmt`. Gated
+		// on `_ssbSuppress:Bool` field presence on the opt typedef.
+		if (optionsHasField(optionsTypePath, '_ssbSuppress')) fields.push(setSsbSuppressField(optionsCT));
 		// ω-chain-fillline-in-condwrap: opt-fanout helper for
 		// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
 		// cascade to a single mode by swapping `opBoolChainWrap` /
@@ -2214,6 +2218,37 @@ class WriterCodegen {
 					if (o._inEnumAbstract) return o;
 					final _c: $optionsCT = _copyOpt(o);
 					_c._inEnumAbstract = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+
+	/**
+	 * ω-single-stmt-braces — opt-fanout shim for the dangling-else
+	 * suppress frame. Set-only (never cleared on descent — over-
+	 * suppression inside nested braced regions is safe, merely
+	 * conservative). Idempotent: returns `o` unchanged when
+	 * `_ssbSuppress` is already `true`. Applied by
+	 * `WriterLowering.buildMandatoryRefWriteCall` to the then-body
+	 * writeCall of an `if` statement whose `else` sibling is present,
+	 * so every `dropSingleStmtBraces` unwrap nested inside that
+	 * then-body no-ops (`SingleStmtBraces.unwrapStmt` reads the flag).
+	 * Gated on `_ssbSuppress:Bool` field presence on the opt typedef.
+	 */
+	private static function setSsbSuppressField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setSsbSuppress',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._ssbSuppress) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._ssbSuppress = true;
 					return _c;
 				},
 			}),

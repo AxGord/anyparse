@@ -9394,7 +9394,7 @@ class WriterLowering {
 	 */
 	private function buildMandatoryRefWriteCall(
 		child: ShapeNode, fieldAccess: Expr, typePath: String, writeFn: String, bodyPolicyFlag: Null<String>,
-		indentObjArgs: Null<Array<String>>
+		indentObjArgs: Null<Array<String>>, ?ssbSuppressCond: Expr
 	): Expr {
 		// ω-issue-423-mech-a / ω-arrow-lambda-body-context /
 		// ω-typedef-anon-force-multi: opt-fanout flags wrapping the descendant
@@ -9454,6 +9454,13 @@ class WriterLowering {
 		} else {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
+			// ω-single-stmt-braces: dangling-else suppress frame — when the
+			// enclosing `if` has an `else` at runtime, the whole then-body write
+			// runs with `_ssbSuppress` so nested `dropSingleStmtBraces` unwraps
+			// no-op (they could otherwise expose a trailing braceless `if` that
+			// captures the outer `else`). Null cond (no meta / no else sibling /
+			// plain mode) is byte-inert.
+			if (ssbSuppressCond != null) e = macro ($ssbSuppressCond ? _setSsbSuppress($e) : $e);
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
 			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true);
@@ -9776,8 +9783,24 @@ class WriterLowering {
 			optParts[0]
 		else
 			dcCall(optParts);
+		// ω-single-stmt-braces: an optional body field carrying
+		// `@:fmt(dropSingleStmtBraces)` (trivia mode only — `HxIfStmt.elseBody`)
+		// substitutes `_optVal` at its single binding site, so every downstream
+		// consumer (writeCall, elseIf ctor pattern, propagateElseIfBranch switch)
+		// sees the unwrapped statement. An else-body is never followed by a
+		// further `else` at its own level, so `elseFollows` is `false`; ancestor
+		// dangling-else frames still apply via `opt._ssbSuppress`. Unwrapping
+		// `else { if (c) x; }` yields the `else if` form by construction.
+		final optValInit: Expr = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')
+			? macro {
+				var _sv = $fieldAccess;
+				if (_sv != null)
+					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, false);
+				_sv;
+			}
+			: fieldAccess;
 		parts.push(macro {
-			final _optVal = $fieldAccess;
+			final _optVal = $optValInit;
 			if (_optVal != null)
 				$optBody
 			else
@@ -9931,7 +9954,41 @@ class WriterLowering {
 		final writeFn: String = writeFnFor(refName);
 		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-		final writeCall: Expr = buildMandatoryRefWriteCall(child, fieldAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs);
+		// ω-single-stmt-braces: a body field carrying `@:fmt(dropSingleStmtBraces)`
+		// (trivia mode only) substitutes its runtime value with
+		// `SingleStmtBraces.unwrapStmt(value.<field>, …)` BEFORE any writeCall /
+		// layout / shape dispatch, so a `{ single; }` block body is seen (and laid
+		// out) as the bare inner statement everywhere downstream — incl. the next
+		// sibling's shape-aware `else` separator and the `semicolonNextLineElse`
+		// re-render (both consume the substituted access via `prevBareRefBody`).
+		// `elseFollows` (an `else` sibling is present at runtime) arms the
+		// dangling-else gate inside the helper; the same condition wraps the
+		// writeCall's opt in `_setSsbSuppress` so unwraps nested deeper in the
+		// then-body (e.g. `if (a) while (c) { if (b) x; } else y`) no-op too.
+		// `elseFieldName` is non-null only for `HxIfStmt.thenBody` (via
+		// `fitLineIfWithElse`'s optionalBodyFieldName channel); for / while bodies
+		// pass `false`. Off-path (`dropSingleStmtBraces` absent or plain mode) the
+		// access is byte-identical to pre-slice.
+		final dropBraces: Bool = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
+		final elseAccess: Null<Expr> = dropBraces && elseFieldName != null ? {
+			expr: EField(macro value, elseFieldName),
+			pos: Context.currentPos()
+		} : null;
+		final elseFollowsExpr: Expr = elseAccess == null ? macro false : macro $elseAccess != null;
+		final effAccess: Expr = dropBraces
+			? macro {
+				var _sv = $fieldAccess;
+				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr);
+				_sv;
+			}
+			: fieldAccess;
+		// The runtime gate includes `opt.dropSingleStmtBraces` so the default-off
+		// path never allocates a suppress-frame opt copy (byte-inert AND
+		// allocation-inert).
+		final ssbSuppressCond: Null<Expr> = elseAccess == null ? null : macro ($elseAccess != null && opt.dropSingleStmtBraces);
+		final writeCall: Expr = buildMandatoryRefWriteCall(
+			child, effAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs, ssbSuppressCond
+		);
 		// bodyPolicy on a first field: the parent enum-branch Case 3 strips its
 		// kwLead trailing space so the separator here is the sole transition
 		// token. Non-first-field case (HxIfStmt.thenBody after cond's `)` trail):
@@ -9940,7 +9997,7 @@ class WriterLowering {
 		final justWrappedBody: Null<PrevBodyInfo> = if (bodyPolicyFlag != null && kwLead == null && leadText == null && !isRaw)
 			// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
 			emitBodyPolicyBareRef(
-				child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, fieldAccess,
+				child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, effAccess,
 				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag, condFitGroup
 			);
 		else {
@@ -9948,7 +10005,7 @@ class WriterLowering {
 			// bareBodyBreaks / non-first-body / condWrap / arrowBodyLineWrap
 			// dispatch lives in emitBareRefNonBodyPolicy.
 			emitBareRefNonBodyPolicy(
-				child, parts, refName, fieldName, typePath, fieldAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
+				child, parts, refName, fieldName, typePath, effAccess, writeCall, isFirstField, isRaw, kwLead, leadText, hasCondWrap,
 				condWrapArgs, spanInfoPresent, trailText, prevAnyStarNonEmpty, prevPadTrailing
 			);
 			null;
@@ -9956,7 +10013,7 @@ class WriterLowering {
 		// ω-close-trailing-alt / ω-block-shape-aware: track ANY bare-Ref body so
 		// the next field can react to its runtime closeTrailing slot; block-shape
 		// consumers degrade to a no-op when the target has no block ctors.
-		return { justWrappedBody: justWrappedBody, prevBareRefBody: { access: fieldAccess, typePath: refName } };
+		return { justWrappedBody: justWrappedBody, prevBareRefBody: { access: effAccess, typePath: refName } };
 	}
 
 	/**

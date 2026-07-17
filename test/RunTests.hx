@@ -427,6 +427,7 @@ import unit.DuplicateCodeCheckTest;
 import unit.RedundantThisUsingExtensionTest;
 import unit.PreferFinalAbstractMethodCheckTest;
 import unit.TrivialGetterStaticShadowTest;
+import unit.HxSingleStmtBracesSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -541,6 +542,7 @@ class RunTests {
 		addCase(new HxAccessorSliceTest());
 		addCase(new HxAfterLeftCurlySliceTest());
 		addCase(new HxCaseBodySameLineSliceTest());
+		addCase(new HxSingleStmtBracesSliceTest());
 		addCase(new HxStringSliceTest());
 		addCase(new HxParamBodyUntypedSliceTest());
 		addCase(new HxIfExprTrailSemiSliceTest());

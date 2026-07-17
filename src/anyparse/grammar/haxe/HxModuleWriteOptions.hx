@@ -890,6 +890,16 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// shape (fork parity). Fed by `whitespace.bracesConfig.
 	// objectLiteralBraces.arrowBodyReflow`.
 	objectLiteralArrowBodyReflow: Bool,
+	// ω-single-stmt-braces: when `true`, the writer drops the curly braces
+	// around an `if` / `else` / `for` / `while` body whose block holds
+	// exactly one safe single statement (`if (c) { return x; }` →
+	// `if (c) return x;`). Safety gates (dangling-else, comments,
+	// terminator, declaration scoping) live in
+	// `anyparse.format.SingleStmtBraces.unwrapStmt` — every gate fails
+	// closed (keeps braces). Trivia-mode writer only; the plain writer
+	// ignores the knob. Default `false` (keep braces — byte-inert). Fed by
+	// `whitespace.bracesConfig.singleStatementBraces` (`"remove"` → true).
+	dropSingleStmtBraces: Bool,
 	accessBracketsOpen: WhitespacePolicy,
 	accessBracketsClose: WhitespacePolicy,
 	arrayLiteralBracketsOpen: WhitespacePolicy,
@@ -1054,6 +1064,15 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	_suppressCallRestProbe: Bool,
 	_varKwNewline: Bool,
 	_inFieldLevelVar: Bool,
+	// ω-single-stmt-braces: dangling-else suppress frame. Set (via
+	// `_setSsbSuppress`) on the opt of an `if`-statement's then-body write
+	// when the `if` carries an `else`, so every `dropSingleStmtBraces`
+	// unwrap nested anywhere inside that then-body no-ops:
+	// `if (a) while (c) { if (b) x; } else y` must keep the loop-body
+	// braces — unwrapping would rebind the outer `else` to `if (b)`.
+	// Never cleared on descent (over-suppression inside nested braced
+	// regions is safe, merely conservative). Default `false`.
+	_ssbSuppress: Bool,
 	// ω-keep-chain — set on the leaf-operand opt
 	// when an opAddSub / opBool chain resolves to `WrapMode.Keep`. Read by the
 	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) emit to take the GLUED

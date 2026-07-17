@@ -53,6 +53,7 @@ import anyparse.grammar.haxe.format.HxFormatWrapCondition;
 import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
+import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -556,6 +557,7 @@ final class HaxeFormatConfigLoader {
 			expressionElseBody: base.expressionElseBody,
 			expressionForBody: base.expressionForBody,
 			expressionIfWithBlocks: base.expressionIfWithBlocks,
+			dropSingleStmtBraces: base.dropSingleStmtBraces,
 			leftCurly: base.leftCurly,
 			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
@@ -705,6 +707,7 @@ final class HaxeFormatConfigLoader {
 			_suppressCallRestProbe: base._suppressCallRestProbe,
 			_varKwNewline: base._varKwNewline,
 			_inFieldLevelVar: base._inFieldLevelVar,
+			_ssbSuppress: base._ssbSuppress,
 			_keepFlatInner: base._keepFlatInner,
 			_keepChainInParen: base._keepChainInParen,
 			_intersectionOperandBreak: base._intersectionOperandBreak,
@@ -1752,6 +1755,12 @@ final class HaxeFormatConfigLoader {
 				// to `arrowBodyOpenPad`; the fork keeps such literals multi-line).
 				if (objectLit.arrowBodyReflow != null) opt.objectLiteralArrowBodyReflow = objectLit.arrowBodyReflow;
 			}
+			// ω-single-stmt-braces: `singleStatementBraces: "remove"` drops the
+			// braces around single-statement if / else / for / while bodies.
+			// Any other value (incl. the default "keep") leaves the knob at its
+			// `false` default — byte-inert.
+			final singleStmt: Null<HxFormatSingleStatementBracesPolicy> = braces.singleStatementBraces;
+			if (singleStmt != null) opt.dropSingleStmtBraces = singleStmt == HxFormatSingleStatementBracesPolicy.Remove;
 		}
 	}
 
