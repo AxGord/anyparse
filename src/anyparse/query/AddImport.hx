@@ -49,6 +49,9 @@ final class AddImport {
 				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
 			case 'PackageDecl':
 				packageDecl = c;
+			case 'Conditional':
+				if (guardedDuplicate(c.children, targetKind, trimmed))
+					return Err('already imported inside a conditional-compilation (#if) block: $trimmed');
 			case _:
 		}
 
@@ -76,6 +79,25 @@ final class AddImport {
 		if (node == null) return -1;
 		final s: Null<Span> = node.span;
 		return s == null ? -1 : s.to;
+	}
+
+	/**
+	 * Whether `nodes` (a `#if … #end` `Conditional`'s children — its
+	 * `body` / `elseifs` / `elseBody` decls, flattened by the query
+	 * plugin) already contain an `import` / `using` of `path` matching
+	 * `targetKind`. The top-level scan in `addImport` sees only the
+	 * single `Conditional` wrapper, not the guarded declarations inside
+	 * it, so a duplicate that exists ONLY behind an `#if` would
+	 * otherwise go undetected and a second, unguarded copy would be
+	 * spliced in. Recurses through nested `Conditional`s so a chained
+	 * or nested `#if` is covered too.
+	 */
+	private static function guardedDuplicate(nodes: Array<QueryNode>, targetKind: String, path: String): Bool {
+		for (n in nodes) {
+			if (n.kind == targetKind && n.name == path) return true;
+			if (n.kind == 'Conditional' && guardedDuplicate(n.children, targetKind, path)) return true;
+		}
+		return false;
 	}
 
 }

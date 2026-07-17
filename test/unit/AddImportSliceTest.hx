@@ -53,6 +53,18 @@ class AddImportSliceTest extends Test {
 		assertRefused(source, 'a.B', false);
 	}
 
+	/**
+	 * An import already present, but ONLY inside a `#if … #end`
+	 * conditional-compilation region, must not be silently re-added as
+	 * an unguarded top-level duplicate — the top-level structural scan
+	 * does not descend into `Conditional` children, so a naive
+	 * duplicate check misses it entirely.
+	 */
+	public function testRefuseDuplicateInsideConditional(): Void {
+		final source: String = '#if sys\nimport a.B;\n#end\n\nclass C {}\n';
+		assertRefused(source, 'a.B', false);
+	}
+
 	/** `import a.B` does NOT block `using a.B` — dedup is per-kind. */
 	public function testUsingNotBlockedByImportOfSamePath(): Void {
 		final source: String = 'import a.B;\n\nclass C {}\n';
