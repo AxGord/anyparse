@@ -165,6 +165,54 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, one('class Base extends Test {}\nclass C extends Base {\n\tfunction testX() {}\n}').length);
 	}
 
+	/**
+	 * (a) A private member referenced ONLY inside a `#if…#end` region's text is
+	 * live — the raw-text usage scan sees inside Conditional interiors, which an
+	 * AST-span scan would not. Regression guard for the raw-text veto.
+	 */
+	public function testMemberUsedOnlyInConditionalNotFlagged(): Void {
+		Assert.equals(0, one('class C {\n\tprivate function dead() {}\n\t#if debug\n\tpublic function f() { dead(); }\n\t#end\n}').length);
+	}
+
+	/**
+	 * (b) An `extern class` member carries no visibility keyword yet is PUBLIC by
+	 * the extern rule — it is reached from outside the file and must never be
+	 * flagged or deleted (deleting native bindings breaks the link).
+	 */
+	public function testExternClassMemberNotFlagged(): Void {
+		Assert.equals(0, one('extern class C {\n\tfunction lock():Void;\n\tfunction unlock():Void;\n}').length);
+	}
+
+	/**
+	 * (c) An `override` member — even one with NO visibility modifier — inherits
+	 * the base's visibility and is not private; it is invoked polymorphically
+	 * from code a single-file scan cannot see. Never flagged.
+	 */
+	public function testOverrideMemberNotFlagged(): Void {
+		Assert.equals(0, one('class C extends B {\n\toverride function commit() {}\n}').length);
+	}
+
+	/**
+	 * (d) A `get_`/`set_` accessor linked to a `var X(get, …)` / `(…, set)`
+	 * property is referenced implicitly through the property — never flagged.
+	 */
+	public function testPropertyAccessorNotFlagged(): Void {
+		Assert.equals(0, one('class C {\n\tpublic var count(get, null):Int;\n\tprivate function get_count() return 1;\n}').length);
+	}
+
+	/**
+	 * (e) An unreferenced private method in a class that `extends` a base may
+	 * implement one of the base's abstract methods (Haxe abstract-method impls
+	 * carry no `override`, and the base's call is invisible to a single-file
+	 * scan). It is still REPORTED, but `--fix` must not auto-delete it.
+	 */
+	public function testAbstractImplInSubclassReportedNotDeleted(): Void {
+		final src: String = 'class C extends Base {\n\tprivate function render() {}\n}';
+		final vs: Array<Violation> = one(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(0, new UnusedPrivate().fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
 	public function testOpAnnotatedMemberNotFlagged(): Void {
 		// An `@:op(A < B)` operator overload is invoked via the operator, never by name,
 		// and projects as a `MetaCall` (argumented meta) sibling — the annotated-member skip

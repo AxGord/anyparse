@@ -38,13 +38,25 @@ import anyparse.runtime.Span;
  * grammar marks these via `NamedDecl.implicitlyReachable`; the check never flags
  * them — a missed dead member, never a deleted live one. Members reachable only through a framework or macro across files are skipped too: a `static final` macro-force field (`= SomeType`, via `implicitlyReachable`), and a utest `test*` method whose class transitively extends `Test` (via `NamingSupport.frameworkReachable`, resolved through the cross-file index).
  *
+ * ## Members that are public despite no `public` keyword
+ *
+ * Two shapes carry no visibility keyword yet are not private, so they are exempt
+ * from the reference scan (`violationFor`): an `override` member inherits the
+ * base's visibility and is invoked polymorphically from unseen code; an
+ * `extern class` member is PUBLIC by the extern rule and reached from outside
+ * the file (`collectExternTypes` names its enclosing type).
+ *
  * ## Autofix
  *
- * A flagged member is wholly unreferenced, so deleting a method is always safe
- * and deleting a field is safe when its initializer carries no side effect
+ * A flagged member is wholly unreferenced, so deleting a method is safe and
+ * deleting a field is safe when its initializer carries no side effect
  * (`RefactorSupport.isSideEffectFree`); a side-effecting field initializer is
- * reported but left for the author. The member is removed with its modifier /
- * meta group and whole line, batched per file by the caller.
+ * reported but left for the author. One method shape is reported but NOT
+ * auto-deleted: a method of a class with an `extends` clause may implement one of
+ * the base's abstract methods (Haxe abstract-method impls carry no `override`,
+ * and the base's call is invisible to a single-file scan) — see
+ * `mayImplementAbstractMethod`. The member is removed with its modifier / meta
+ * group and whole line, batched per file by the caller.
  */
 @:nullSafety(Strict)
 final class UnusedPrivate implements Check {
@@ -67,8 +79,10 @@ final class UnusedPrivate implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
+			final externTypes: Array<String> = [];
+			collectExternTypes(tree, externTypes);
 			for (decl in support.project(tree)) {
-				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, support);
+				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, support, externTypes);
 				if (v != null) violations.push(v);
 			}
 		}
@@ -99,6 +113,7 @@ final class UnusedPrivate implements Check {
 			final hit: Null<{ node: QueryNode, parent: QueryNode }> = memberByFrom[span.from];
 			if (hit == null) continue;
 			if (!deletableMember(hit.node)) continue;
+			if (mayImplementAbstractMethod(hit.node, hit.parent)) continue;
 			final group: Span = RefactorSupport.declGroupSpan(hit.node, hit.parent, span);
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, group), text: '' });
 		}
@@ -110,16 +125,26 @@ final class UnusedPrivate implements Check {
 	 * reachable private member, else null. Skips public members, non-members
 	 * (types / locals / params), implicitly-reachable members, and any member
 	 * whose enclosing type the index cannot prove confined.
+	 *
+	 * Two visibility carve-outs never reach the reference scan: an `override`
+	 * member inherits the base's visibility (not private) and is invoked
+	 * polymorphically from code a single-file scan cannot see; an `extern class`
+	 * member carries no visibility keyword yet is PUBLIC by the extern rule, and
+	 * is reached from outside the file (`externTypes` names its enclosing type).
 	 */
 	private static function violationFor(
-		file: String, source: String, decl: NamedDecl, index: SymbolIndex, support: NamingSupport
+		file: String, source: String, decl: NamedDecl, index: SymbolIndex, support: NamingSupport, externTypes: Array<String>
 	): Null<Violation> {
 		final category: NamingCategory = decl.category;
 		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
-		if (decl.mods.contains('public') || decl.implicitlyReachable == true || support.frameworkReachable(decl, index)) return null;
+		if (
+			decl.mods.contains('public') || decl.mods.contains('override') || decl.implicitlyReachable == true
+			|| support.frameworkReachable(decl, index)
+		)
+			return null;
 		final owner: Null<String> = decl.enclosingType;
 		final span: Null<Span> = decl.span;
-		return owner == null || span == null
+		return owner == null || span == null || externTypes.contains(owner)
 			? null
 			: !RefactorSupport.isPrivateMemberConfined(owner, source, index)
 				? null
@@ -147,6 +172,22 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
+	 * Whether `member` might implement an abstract method of a base class — a
+	 * method (`FnMember` / `FinalModifiedMember`) whose enclosing type carries an
+	 * `extends` clause. A Haxe abstract-method impl carries no `override` keyword
+	 * (so `violationFor`'s override carve-out does not catch it) and the base's
+	 * call is invisible to a single-file scan, so `--fix` must NOT auto-delete it:
+	 * the finding is still reported, but the declaration is kept. Conservative —
+	 * every method of a subclass is spared, since a single file cannot see which
+	 * one the base declares abstract.
+	 */
+	private static function mayImplementAbstractMethod(member: QueryNode, parent: QueryNode): Bool {
+		if (member.kind != 'FnMember' && member.kind != 'FinalModifiedMember') return false;
+		for (sibling in parent.children) if (sibling.kind == 'ExtendsClause') return true;
+		return false;
+	}
+
+	/**
 	 * Index every field / method member node by its span's `from` offset, each
 	 * with its direct parent (the context `declGroupSpan` needs to fold the
 	 * member's modifier / meta siblings).
@@ -159,6 +200,40 @@ final class UnusedPrivate implements Check {
 			}
 			collectMembers(child, out);
 		}
+	}
+
+	/**
+	 * Collect the simple names of every `extern class` in `node`'s subtree. The
+	 * `extern` keyword projects as a modifier sibling (`Extern`) preceding the
+	 * class decl (`(Extern) (ClassDecl C …)`), possibly after `Private` / `@:meta`
+	 * siblings, so the run of preceding modifier / meta siblings is scanned for it.
+	 * An extern member has no visibility keyword yet is PUBLIC, so its enclosing
+	 * type must be exempt from the private-member reference scan.
+	 */
+	private static function collectExternTypes(node: QueryNode, out: Array<String>): Void {
+		final siblings: Array<QueryNode> = node.children;
+		for (i in 0...siblings.length) {
+			final child: QueryNode = siblings[i];
+			final name: Null<String> = child.name;
+			if (name != null && (child.kind == 'ClassDecl' || child.kind == 'ClassForm') && precededByExtern(siblings, i)) out.push(name);
+			collectExternTypes(child, out);
+		}
+	}
+
+	/**
+	 * Whether an `Extern` modifier sibling precedes the child at `index` — scanning
+	 * back over the contiguous run of modifier / meta siblings (`Private` / `Extern`
+	 * / `@:meta`) that a class decl may carry, stopping at the first non-modifier.
+	 */
+	private static function precededByExtern(siblings: Array<QueryNode>, index: Int): Bool {
+		var i: Int = index - 1;
+		while (i >= 0) {
+			final kind: String = siblings[i].kind;
+			if (kind == 'Extern') return true;
+			if (kind != 'Private' && kind != 'Meta' && kind != 'MetaCall') return false;
+			i--;
+		}
+		return false;
 	}
 
 }
