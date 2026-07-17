@@ -8,14 +8,15 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
 import haxe.Exception;
+import anyparse.query.RefactorSupport;
+
+using Lambda;
 
 /**
  * Flags a manual first-match `for` loop — one that iterates a collection to return
  * (or capture-and-break) the first element satisfying a condition — which the
  * user's rule replaces with `Lambda.find`: use `.find()` instead of manually
- * iterating to find the first matching element. `Severity.Info`; REPORT-ONLY (the
- * `xs.find(x -> cond)` rewrite needs `using Lambda` in scope, so the import surgery
- * and shadow analysis are out of v1). Purely structural, so it holds without a
+ * iterating to find the first matching element. `Severity.Info`, with an autofix that rewrites the loop to `xs.find(x -> cond)` and inserts a `using Lambda;` when the file lacks one. Purely structural, so it holds without a
  * type-checker. Grammar-agnostic over `RefShape`.
  *
  * ## The two shapes it accepts
@@ -101,11 +102,46 @@ final class PreferFind implements Check {
 		return violations;
 	}
 
-	/** Report-only: the `Lambda.find` rewrite needs `using Lambda` at file scope (import + shadow analysis out of v1). */
+	/**
+	 * Rewrite each provable first-match loop to `xs.find(v -> cond)`. Form A
+	 * (`for … if (cond) return v; return f;`) collapses the loop and its trailing
+	 * fallback into one `return xs.find(v -> cond) [?? f];`; Form B
+	 * (`var r = null; for … if (cond) { r = v; break; }`) rewrites the declaration's
+	 * `null` initializer to the `find` and deletes the loop. When ANY loop is rewritten
+	 * and the file lacks a `using Lambda;`, one is inserted after the last import so
+	 * `.find` resolves. Beyond the detector's shape gates this fix is stricter — a loop
+	 * stays a report-only finding (no edit) unless its condition is provably
+	 * side-effect-free (no assignment / `++` / `--` / `new` / free-function call; only
+	 * field reads and accessor-style method calls pass) and, for Form B, the declared
+	 * type tolerates a `Null<T>` result (no type, or `Null<…>`). An edit that would
+	 * overlap an already-accepted one is skipped (the loser stays a finding).
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final s: Null<Seams> = readSeams(plugin.refShape());
+		if (s == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final byKey: Map<String, FixCandidate> = [];
+		collectFixCandidates(tree, source, s, byKey);
+		final edits: Array<{ span: Span, text: String }> = [];
+		var rewrote: Bool = false;
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final cand: Null<FixCandidate> = byKey['${span.from}:${span.to}'];
+			if (cand == null) continue;
+			final candEdits: Null<Array<{ span: Span, text: String }>> = buildEdits(cand, source, s);
+			if (candEdits == null || RefactorSupport.editsOverlapAny(candEdits, edits)) continue;
+			for (e in candEdits) edits.push(e);
+			rewrote = true;
+		}
+		if (rewrote && !hasUsingLambda(tree)) {
+			final usingEdit: Null<{ span: Span, text: String }> = usingLambdaInsert(tree);
+			if (usingEdit != null && !RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
+		}
+		return edits;
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
@@ -132,7 +168,14 @@ final class PreferFind implements Check {
 			assignKind: shape.assignKind,
 			breakKind: shape.breakStatementKind,
 			intervalKind: shape.intervalKind,
-			callKind: shape.callKind
+			callKind: shape.callKind,
+			newExprKind: shape.newExprKind,
+			fieldAccessKind: shape.fieldAccessKind,
+			nullSafeAccessKind: shape.nullSafeAccessKind,
+			forceFieldAccessKind: shape.forceFieldAccessKind,
+			indexAccessKind: shape.indexAccessKind,
+			parenKind: shape.parenKind,
+			ternaryKind: shape.ternaryKind
 		};
 	}
 
@@ -321,6 +364,185 @@ final class PreferFind implements Check {
 		};
 	}
 
+
+	/** Re-run the two-form shape analysis, keying a fix candidate by its loop's `from:to` span — the same key `run` anchors a violation on. */
+	private static function collectFixCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, FixCandidate>): Void {
+		if (s.opaqueKinds.contains(node.kind)) return;
+		final kids: Array<QueryNode> = node.children;
+		for (i in 0...kids.length - 1) {
+			final a: QueryNode = kids[i];
+			final b: QueryNode = kids[i + 1];
+			final headA: Null<{
+				loopVar: String,
+				iterable: QueryNode,
+				cond: QueryNode,
+				then: QueryNode
+			}> = forIfHead(a, source, s);
+			if (headA != null) {
+				final returned: Null<QueryNode> = returnValue(headA.then, s);
+				if (
+					returned != null && returned.kind == s.identKind && returned.name == headA.loopVar && b.kind == s.returnKind
+					&& b.children.length >= 1
+				) {
+					final span: Null<Span> = a.span;
+					if (span != null) out['${span.from}:${span.to}'] = {
+						isBreak: false,
+						forNode: a,
+						sibling: b,
+						loopVar: headA.loopVar,
+						iterable: headA.iterable,
+						cond: headA.cond
+					};
+				}
+			}
+			final declName: Null<String> = nullInitLocalName(a, s);
+			if (declName != null) {
+				final headB: Null<{
+					loopVar: String,
+					iterable: QueryNode,
+					cond: QueryNode,
+					then: QueryNode
+				}> = forIfHead(b, source, s);
+				if (headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s)) {
+					final span: Null<Span> = b.span;
+					if (span != null) out['${span.from}:${span.to}'] = {
+						isBreak: true,
+						forNode: b,
+						sibling: a,
+						loopVar: headB.loopVar,
+						iterable: headB.iterable,
+						cond: headB.cond
+					};
+				}
+			}
+		}
+		for (c in kids) collectFixCandidates(c, source, s, out);
+	}
+
+	/** The span edits rewriting `cand`'s loop to `xs.find(v -> cond)`, or null when a fix gate refuses it (then it stays a finding). */
+	private static function buildEdits(cand: FixCandidate, source: String, s: Seams): Null<Array<{ span: Span, text: String }>> {
+		if (!condIsPure(cand.cond, s)) return null;
+		final iterSpan: Null<Span> = cand.iterable.span;
+		final condSpan: Null<Span> = cand.cond.span;
+		final forSpan: Null<Span> = cand.forNode.span;
+		if (iterSpan == null || condSpan == null || forSpan == null) return null;
+		final iterSrc: String = parenthesizeUnless(source.substring(iterSpan.from, iterSpan.to), postfixSafe(cand.iterable.kind, s));
+		final findExpr: String = iterSrc + '.find(' + cand.loopVar + ' -> ' + source.substring(condSpan.from, condSpan.to) + ')';
+		if (cand.isBreak) {
+			final decl: QueryNode = cand.sibling;
+			if (!declTypeTolerable(decl, source) || decl.children.length < 1) return null;
+			final nullSpan: Null<Span> = decl.children[0].span;
+			return nullSpan == null ? null : [{ span: nullSpan, text: findExpr }, { span: forSpan, text: '' }];
+		}
+		final ret: QueryNode = cand.sibling;
+		final retSpan: Null<Span> = ret.span;
+		if (retSpan == null || ret.children.length < 1 || droppedRegionHasComment(source, forSpan, iterSpan, condSpan, retSpan))
+			return null;
+		final fallback: QueryNode = ret.children[0];
+		var tail: String = '';
+		if (fallback.kind != s.nullLitKind) {
+			final fbSpan: Null<Span> = fallback.span;
+			if (fbSpan == null) return null;
+			// `??` binds TIGHTER than the ternary `?:` (and assignment), so a looser fallback needs parens.
+			final looser: Bool = fallback.kind == s.ternaryKind || StringTools.endsWith(fallback.kind, 'Assign');
+			tail = ' ?? ' + parenthesizeUnless(source.substring(fbSpan.from, fbSpan.to), !looser);
+		}
+		return [
+			{ span: new Span(forSpan.from, retSpan.to), text: 'return ' + findExpr + tail + ';' }
+		];
+	}
+
+	/**
+	 * Whether `node`'s subtree is free of the effect shapes this fix refuses when moving a predicate into a `find` lambda: no assignment / compound-assignment (`*Assign`), no `++` / `--`
+	 * (`*Incr` / `*Decr`), no `new`, and no free-function call — only field reads and
+	 * accessor-style method calls (a call whose callee is an `a.b` / `a?.b` / `a!.b` chain) is ASSUMED effect-free, not proven — a mutating method such as `sink.push(x)` would pass, yet the rewrite stays safe because `Lambda.find` runs the predicate exactly as the loop did. Conservative on refusal: any unrecognised call shape refuses.
+	 */
+	private static function condIsPure(node: QueryNode, s: Seams): Bool {
+		final k: String = node.kind;
+		if (StringTools.endsWith(k, 'Assign') || k.indexOf('Incr') != -1 || k.indexOf('Decr') != -1) return false;
+		if (k == s.newExprKind) return false;
+		if (k == s.callKind && !calleeIsAccessor(node, s)) return false;
+		for (c in node.children) if (!condIsPure(c, s)) return false;
+		return true;
+	}
+
+	/** Whether a call's callee (`children[0]`) is a field-access chain (`a.b` / `a?.b` / `a!.b`) — a method call, not a free-function call. */
+	private static function calleeIsAccessor(call: QueryNode, s: Seams): Bool {
+		if (call.children.length == 0) return false;
+		final callee: String = call.children[0].kind;
+		return callee == s.fieldAccessKind || callee == s.nullSafeAccessKind || callee == s.forceFieldAccessKind;
+	}
+
+	/**
+	 * Whether Form B's declaration tolerates a `Null<T>` `find` result — a bare
+	 * `var r = null;` (no type) or a `var r:Null<…> = null;` (nullable) is fine; a
+	 * `var r:T = null;` on a non-nullable type is refused. Reads the type from the
+	 * declaration prefix — the text between the keyword and the `null` initializer.
+	 */
+	private static function declTypeTolerable(decl: QueryNode, source: String): Bool {
+		final declSpan: Null<Span> = decl.span;
+		if (declSpan == null || decl.children.length < 1) return false;
+		final initSpan: Null<Span> = decl.children[0].span;
+		if (initSpan == null) return false;
+		final prefix: String = source.substring(declSpan.from, initSpan.from);
+		final colon: Int = prefix.indexOf(':');
+		if (colon == -1) return true;
+		final eq: Int = prefix.lastIndexOf('=');
+		return StringTools.startsWith(StringTools.trim(prefix.substring(colon + 1, eq == -1 ? prefix.length : eq)), 'Null');
+	}
+
+	/** Whether a top-level `using Lambda;` (or `using pkg.Lambda;`) is already present — then `.find` resolves without inserting one. */
+	private static function hasUsingLambda(tree: QueryNode): Bool {
+		return tree.children.exists(c -> {
+			final nm: Null<String> = c.name;
+			return c.kind == 'UsingDecl' && nm != null && (nm == 'Lambda' || StringTools.endsWith(nm, '.Lambda'));
+		});
+	}
+
+	/** A zero-width edit inserting `using Lambda;` after the last package / import / using line (or at the file head when there is none). */
+	private static function usingLambdaInsert(tree: QueryNode): Null<{ span: Span, text: String }> {
+		final anchorKinds: Array<String> = ['PackageDecl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl'];
+		var anchor: Null<Span> = null;
+		for (c in tree.children) if (anchorKinds.contains(c.kind)) {
+			final sp: Null<Span> = c.span;
+			if (sp != null) anchor = sp;
+		}
+		return anchor == null ? { span: new Span(0, 0), text: 'using Lambda;\n\n' } : {
+			span: new Span(anchor.to, anchor.to),
+			text: '\nusing Lambda;'
+		};
+	}
+
+
+	/** `src` verbatim when `safe`, else wrapped in parentheses — keeps a spliced sub-expression's precedence intact. */
+	private static function parenthesizeUnless(src: String, safe: Bool): String {
+		return safe ? src : '(' + src + ')';
+	}
+
+	/** Whether `kind` is a postfix / primary expression that `.find(...)` binds directly onto (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped. */
+	private static function postfixSafe(kind: String, s: Seams): Bool {
+		return kind == s.identKind || kind == s.fieldAccessKind || kind == s.nullSafeAccessKind || kind == s.forceFieldAccessKind
+			|| kind == s.indexAccessKind || kind == s.parenKind || kind == s.callKind || kind == s.newExprKind;
+	}
+
+	/**
+	 * Whether a comment sits in a Form-A region the rewrite DROPS — the for-header
+	 * (`for (v in `, `) if (`, `) return v;`) or the gap before the fallback return —
+	 * where it would be silently lost. The iterable and condition are re-spliced, so
+	 * their spans are excluded; refusing here keeps such a loop a report-only finding.
+	 */
+	private static function droppedRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span): Bool {
+		return hasCommentMarker(source, forSpan.from, iterSpan.from) || hasCommentMarker(source, iterSpan.to, condSpan.from)
+			|| hasCommentMarker(source, condSpan.to, forSpan.to) || hasCommentMarker(source, forSpan.to, retSpan.from);
+	}
+
+	/** Whether `[from, to)` of `source` holds a `//` or `/*` comment opener. */
+	private static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+		if (from >= to) return false;
+		final region: String = source.substring(from, to);
+		return region.indexOf('//') != -1 || region.indexOf('/*') != -1;
+	}
+
 }
 
 /** The `RefShape` kinds `PreferFind` reads, bundled once so the walkers take one argument. */
@@ -338,4 +560,21 @@ private typedef Seams = {
 	var breakKind: Null<String>;
 	var intervalKind: Null<String>;
 	var callKind: Null<String>;
+	var newExprKind: Null<String>;
+	var fieldAccessKind: Null<String>;
+	var nullSafeAccessKind: Null<String>;
+	var forceFieldAccessKind: Null<String>;
+	var indexAccessKind: Null<String>;
+	var parenKind: Null<String>;
+	var ternaryKind: Null<String>;
+}
+
+/** A recovered first-match loop ready to rewrite: the form flag, the loop node, its partner (Form A trailing return / Form B declaration) and the destructured head. */
+private typedef FixCandidate = {
+	var isBreak: Bool;
+	var forNode: QueryNode;
+	var sibling: QueryNode;
+	var loopVar: String;
+	var iterable: QueryNode;
+	var cond: QueryNode;
 }
