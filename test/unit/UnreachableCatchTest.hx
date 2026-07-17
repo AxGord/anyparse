@@ -7,7 +7,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.check.UnreachableCatch;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
-import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `unreachable-catch` check: a `catch` clause that can never run because an earlier
@@ -79,12 +79,40 @@ class UnreachableCatchTest extends Test {
 		Assert.equals(Severity.Warning, vs[0].severity);
 	}
 
-	public function testFixIsNoop(): Void {
+	public function testFixDeletesDuplicateClause(): Void {
+		// The later duplicate clause (its `dead()` body) is removed; the earlier one is kept.
+		assertFix('class E {} class C { function f() { try { g(); } catch (e:E) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead');
+	}
+
+	public function testFixCatchAllDeletesLater(): Void {
+		// A catch-all first makes the later typed clause dead — it is deleted.
+		assertFix(
+			'class E {} class C { function f() { try { g(); } catch (e:Dynamic) { keep(); } catch (e:E) { dead(); } } }', 'keep', 'dead'
+		);
+	}
+
+	public function testFixNestedOverlapKeepsOuterOnly(): Void {
+		// The outer dead clause nests an inner dead clause; deleting the outer removes both — the
+		// contained inner edit is dropped, so `inner`/`b` vanish with the outer and only `ok` stays.
+		assertFix(
+			'class C { function f() { try { risky(); } catch (e:Dynamic) { ok(); } catch (e:Dynamic) { try { inner(); } catch (a:Dynamic) { fine(); } catch (b:Dynamic) { dead(); } } } }',
+			'ok', 'dead'
+		);
+	}
+
+	public function testFixNoDeadClauseNoEdit(): Void {
+		// Unrelated clauses — nothing to fix.
 		final check: UnreachableCatch = new UnreachableCatch();
-		final src: String = 'class E {} class C { function f() { try { g(); } catch (e:E) {} catch (e:E) {} } }';
+		final src: String = 'class A2 {} class B2 {} class C { function f() { try { g(); } catch (e:A2) {} catch (e:B2) {} } }';
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		Assert.equals(0, edits.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipParseNoEdit(): Void {
+		// An unparseable source yields no edits (no crash).
+		final check: UnreachableCatch = new UnreachableCatch();
+		final src: String = 'class Bad { function f() { try { g(); } catch (e: ';
+		Assert.equals(0, check.fix(src, [], new HaxeQueryPlugin()).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -114,6 +142,18 @@ class UnreachableCatchTest extends Test {
 			1,
 			violations('interface I {} class A implements I {} class C { function f() { try { g(); } catch (e:I) {} catch (e:A) {} } }').length
 		);
+	}
+
+	private function assertFix(src: String, present: String, absent: String): Void {
+		final check: UnreachableCatch = new UnreachableCatch();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 	private function violations(src: String): Array<Violation> {

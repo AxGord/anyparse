@@ -8,6 +8,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags a `catch` clause that can never run because an EARLIER clause in the same `try`
@@ -32,7 +33,7 @@ import anyparse.runtime.Span;
  * same-named unrelated type is the residual soundness boundary (as in `impossible-is-check`).
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are not descended into.
  *
- * Report-only: removing a dead clause vs. fixing its type / ordering is context-dependent.
+ * `fix` deletes the dead clause (unreachable => dead code); an alternative repair (fixing its type or reordering) is left to the human when the deletion is not what they meant.
  */
 @:nullSafety(Strict)
 final class UnreachableCatch implements Check {
@@ -74,10 +75,23 @@ final class UnreachableCatch implements Check {
 		return violations;
 	}
 
+	/**
+	 * Delete the dead clause: an unreachable `catch` covered by an earlier one is dead code, so
+	 * removing it is behaviour-preserving. A clause deleted whole (via `lineExtendedSpan`) takes any
+	 * comment inside its own body with it; a comment on the line above is kept. When a dead clause
+	 * nests another dead clause (a `try` in its handler), only the outer (earliest) edit survives —
+	 * deleting it already removes the inner.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final catchClauseKind: Null<String> = plugin.refShape().catchClauseKind;
+		if (catchClauseKind == null) return [];
+		final edits: Array<{ span: Span, text: String }> = CheckScan.applyBySpan(
+			plugin, source, violations, [catchClauseKind],
+			(_, span) -> ({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' })
+		);
+		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 	/**

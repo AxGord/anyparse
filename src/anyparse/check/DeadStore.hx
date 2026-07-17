@@ -6,6 +6,8 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -38,6 +40,22 @@ private typedef LiveCtx = {
 	var out: Array<Violation>;
 }
 
+/**
+ * Per-`fix` context: the grammar seams plus the type index and declared types the purity check
+ * needs, and the flagged spans `run` produced. Built once, threaded through the edit walk.
+ */
+private typedef FixCtx = {
+	var source: String;
+	var root: QueryNode;
+	var shape: RefShape;
+	var assignKind: Null<String>;
+	var mutableDeclKinds: Array<String>;
+	var declTypeChildKinds: Array<String>;
+	var fieldAccessKind: Null<String>;
+	var declaredTypes: Map<Int, String>;
+	var index: Null<SymbolIndex>;
+	var flagged: Array<String>;
+}
 /**
  * Flags a **dead store**: an assignment to a local variable / parameter whose
  * value is provably never read — every path from the store reaches another
@@ -104,15 +122,25 @@ private typedef LiveCtx = {
  * no reassignment possible, a dead final init means zero reads, which is
  * `unused-local`'s case by construction.
  *
- * `Severity.Info`, report-only: deleting a store is behavior-preserving only
- * when its right-hand side is side-effect-free — an autofix promotion can
- * follow once the engine has earned trust (the null-flow consumers' path).
+ * `Severity.Info`: `fix` deletes a store whose right-hand side is provably
+ * side-effect-free (a literal / identifier / operator tree, or a type-proven
+ * plain field read) — a dead initializer stripped to `var x:T;`, a standalone
+ * assignment removed; an impure store is left as a report-only finding.
  */
 @:nullSafety(Strict)
 final class DeadStore implements Check {
 
 	/** Short-circuit binary kinds — the right operand evaluates conditionally, so its kills must not leak left. */
 	private static final SHORT_CIRCUIT_KINDS: Array<String> = ['And', 'Or', 'NullCoal'];
+
+	/**
+	 * Block-statement container kinds a standalone dead assignment may be deleted FROM. Excludes the
+	 * expression-valued block (`BlockExpr`), whose LAST statement is the block's own value — deleting
+	 * that would drop the value the block yields. A function body (`BlockBody`) or bare statement
+	 * block (`BlockStmt`) never yields its last statement as a value, so removing a lone statement is
+	 * safe there.
+	 */
+	private static final DELETABLE_BLOCK_KINDS: Array<String> = ['BlockBody', 'BlockStmt'];
 
 	public function new() {}
 
@@ -140,10 +168,78 @@ final class DeadStore implements Check {
 		return violations;
 	}
 
+	/**
+	 * Delete a dead store only when removing it cannot drop a side effect: the right-hand side must
+	 * be provably pure — a literal / bare identifier / operator tree (`RefactorSupport.isSideEffectFree`)
+	 * or a single field read the type index proves is a plain field, never a getter. Two forms mirror
+	 * `run`'s two reports: a standalone `x = e;` statement is deleted whole, but only when it is a
+	 * direct child of a block (a bare unbraced branch body is left — deleting it would corrupt control
+	 * flow); a dead `var x:T = e;` initializer is stripped to `var x:T;`, keeping the name and type
+	 * verbatim. An impure right-hand side (a call, `new`, an assignment / `++` / `--`) is left as a
+	 * finding. `fix` never re-derives liveness — it acts on `run`'s spans, filtered by deletion-safety.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final shape: RefShape = plugin.refShape();
+		final assignKind: Null<String> = shape.assignKind;
+		final mutableDeclKinds: Array<String> = shape.mutableLocalDeclKinds ?? [];
+		if (assignKind == null && mutableDeclKinds.length == 0) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final root: QueryNode = tree;
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final ctx: FixCtx = {
+			source: source,
+			root: root,
+			shape: shape,
+			assignKind: assignKind,
+			mutableDeclKinds: mutableDeclKinds,
+			declTypeChildKinds: shape.declTypeChildKinds ?? [],
+			fieldAccessKind: shape.fieldAccessKind,
+			declaredTypes: provider != null ? provider.declaredTypes(source) : [],
+			index: index,
+			flagged: [for (v in violations) if (v.span != null) '${v.span.from}:${v.span.to}']
+		};
+		final edits: Array<{ span: Span, text: String }> = [];
+		walkFix(tree, ctx, edits);
+		return edits;
+	}
+
+	/**
+	 * Walk `node`, appending a deletion edit for each dead store `run` flagged whose right-hand side is
+	 * safe to drop. A dead `var` initializer is stripped in place; a standalone assignment statement (a
+	 * single-expression direct child of a block) is deleted whole — anything else is left untouched.
+	 */
+	private static function walkFix(node: QueryNode, ctx: FixCtx, edits: Array<{ span: Span, text: String }>): Void {
+		final kind: String = node.kind;
+		if (ctx.mutableDeclKinds.contains(kind) && isFlagged(ctx, node)) {
+			final init: Null<QueryNode> = NullFlow.declInit(node, ctx.declTypeChildKinds);
+			final initSpan: Null<Span> = init != null ? init.span : null;
+			if (
+				init != null && initSpan != null
+				&& rhsSafeToDelete(init, ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
+			) {
+				final strip: Null<Span> = initializerStripSpan(ctx.source, initSpan);
+				if (strip != null) edits.push({ span: strip, text: '' });
+			}
+		}
+		if (ctx.assignKind != null && DELETABLE_BLOCK_KINDS.contains(kind)) for (stmt in node.children) if (stmt.children.length == 1) {
+			final expr: QueryNode = stmt.children[0];
+			final stmtSpan: Null<Span> = stmt.span;
+			if (
+				expr.kind == ctx.assignKind && isFlagged(ctx, expr) && expr.children.length >= 2 && stmtSpan != null
+				&& rhsSafeToDelete(expr.children[1], ctx.root, ctx.shape, ctx.declaredTypes, ctx.index, ctx.fieldAccessKind)
+			)
+				edits.push({ span: RefactorSupport.lineExtendedSpan(ctx.source, stmtSpan), text: '' });
+		}
+		for (c in node.children) walkFix(c, ctx, edits);
+	}
+
+	/** Whether `node`'s span is one `run` flagged. */
+	private static inline function isFlagged(ctx: FixCtx, node: QueryNode): Bool {
+		final span: Null<Span> = node.span;
+		return span != null && ctx.flagged.contains('${span.from}:${span.to}');
 	}
 
 	/**
@@ -461,6 +557,41 @@ final class DeadStore implements Check {
 		}
 		walkB(body);
 		return out;
+	}
+
+
+	/**
+	 * The span from the initializer's `=` (with the whitespace around it) through the initializer's
+	 * end — deleting it turns `var x:T = e;` into `var x:T;`, keeping the name and type verbatim.
+	 * Null when the `=` cannot be located immediately before the initializer (a malformed decl).
+	 */
+	private static function initializerStripSpan(source: String, initSpan: Span): Null<Span> {
+		var cut: Int = initSpan.from;
+		while (cut > 0 && isHSpace(StringTools.fastCodeAt(source, cut - 1))) cut--;
+		if (cut == 0 || StringTools.fastCodeAt(source, cut - 1) != '='.code) return null;
+		cut--;
+		while (cut > 0 && isHSpace(StringTools.fastCodeAt(source, cut - 1))) cut--;
+		return new Span(cut, initSpan.to);
+	}
+
+	/** Whether `c` is a horizontal-space code (space or tab) — the whitespace an initializer strip walks over. */
+	private static inline function isHSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code;
+	}
+
+
+	/**
+	 * Whether deleting an assignment / initializer whose right-hand side is `rhs` cannot drop a side
+	 * effect: `rhs` is side-effect-free, or — with a type index — a single field read the index proves
+	 * reads a plain field rather than a property getter (the allowance `unused-local` uses).
+	 */
+	private static function rhsSafeToDelete(
+		rhs: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>,
+		fieldAccessKind: Null<String>
+	): Bool {
+		if (RefactorSupport.isSideEffectFree(rhs)) return true;
+		if (index == null || fieldAccessKind == null || rhs.kind != fieldAccessKind) return false;
+		return TypeResolver.isPlainFieldRead(rhs, root, shape, declaredTypes, index);
 	}
 
 }

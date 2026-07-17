@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.check.DeadStore;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.check.Linter;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `dead-store` check: an assignment to a local / parameter whose value is
@@ -215,8 +216,90 @@ class DeadStoreTest extends Test {
 		Assert.notNull(Linter.byId('dead-store'));
 	}
 
+	public function testFixStripsDeadInitializer(): Void {
+		// `var x = 1` is reassigned before any read — the initializer is stripped to `var x;`.
+		assertFix('class C { function f():Int { var x = 1; x = 2; return x; } }', 'var x;', 'x = 1');
+	}
+
+
+	public function testFixDeletesDeadStoreBetweenReads(): Void {
+		// `x = 99` dies between two live reads — deleting it must keep `trace(x)` and the return.
+		assertFix('class C { function f(a:Int):Int { var x = a; trace(x); x = 99; x = a + 1; return x; } }', 'trace(x)', '99');
+	}
+
+	public function testFixDeletesTrailingStore(): Void {
+		// A store followed only by the exit is deleted; the earlier live read stays.
+		assertFix('class C { function f(a:Int):Void { var x = a; trace(x); x = a + 1; } }', 'trace(x)', 'a + 1');
+	}
+
+	public function testFixKeepsTypeOnStrippedInit(): Void {
+		// The name and type are kept verbatim — only ` = e` is removed.
+		assertFix('class C { function f():Int { var x:Int = 1; x = 2; return x; } }', 'var x:Int;', '= 1');
+	}
+
+	public function testFixRefusesCallRhs(): Void {
+		// A call right-hand side may have side effects — the dead store stays a finding.
+		assertNoFix('class C { function f(a:Int):Void { var x = a; trace(x); x = compute(); } }');
+	}
+
+	public function testFixRefusesNewRhs(): Void {
+		// `new` runs a constructor — never deleted.
+		assertNoFix('class C { function f(a:Int):Void { var y = a; trace(y); y = new Foo(); } }');
+	}
+
+	public function testFixRefusesBareBranchBody(): Void {
+		// A dead store that is a bare (unbraced) branch body is left — deleting it would corrupt
+		// the `if`; only a direct block statement is removed.
+		assertNoFix('class C { function f(a:Int):Void { var z = a; trace(z); if (a > 0) z = 5; } }');
+	}
+
+	public function testFixRefusesCallInitializer(): Void {
+		// An impure initializer is not stripped even when reassigned before a read.
+		assertNoFix('class C { function f(a:Int):Int { var w = compute(); w = a; return w; } }');
+	}
+
+	public function testFixSkipParseNoEdit(): Void {
+		// An unparseable source yields no edits (no crash).
+		Assert.equals(0, new DeadStore().fix('class Bad { function f() { var x = ', [], new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixKeepsBlockExprTailStore(): Void {
+		// The dead store is the value-producing tail of a `{ … }` expression block — deleting it would
+		// drop the block's value, so it is left in place even though it is a dead store (the init is
+		// still stripped).
+		final check: DeadStore = new DeadStore();
+		final src: String = 'class C { static function f():Int { var x = 0; return { x = 2; }; } }';
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('x = 2') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadStore().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function assertFix(src: String, present: String, absent: String): Void {
+		final check: DeadStore = new DeadStore();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+
+	private function assertNoFix(src: String): Void {
+		final check: DeadStore = new DeadStore();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.isTrue(vs.length > 0);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
 }
