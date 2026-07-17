@@ -424,6 +424,7 @@ import unit.PreferRangeLoopCheckTest;
 import unit.TrivialGetterCheckTest;
 import unit.NullableSwitchMissingNullCheckTest;
 import unit.DuplicateCodeCheckTest;
+import unit.RedundantThisUsingExtensionTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -796,6 +797,7 @@ class RunTests {
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantThisCheckTest());
+		addCase(new RedundantThisUsingExtensionTest());
 		addCase(new UnnecessaryNullCheckCheckTest());
 		addCase(new UnnecessarySafeNavCheckTest());
 		addCase(new RedundantCastCheckTest());

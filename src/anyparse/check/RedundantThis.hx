@@ -17,15 +17,27 @@ import anyparse.runtime.Span;
  * the canonical `this.x = x` constructor pattern, where the parameter `x`
  * shadows the field and `this.` is load-bearing.
  *
+ * A `this.name` is also kept unless `name` is a member (field / method /
+ * property) DECLARED by the enclosing type in this file. A name that is not a
+ * local member may be a `using` static-extension call (`this.getClass()` under
+ * `using Type` resolves via static extension — the bare name is not a member,
+ * and dropping `this.` yields an `Unknown identifier`) or a member inherited
+ * from an `extends` base (invisible single-file). Either way `this.` may be
+ * required, so the check stays silent — the membership check is the primary gate
+ * against stripping a load-bearing qualifier.
+ *
  * ## Grammar-agnostic
  *
  * The self-qualifier text comes from `RefShape.selfReferenceText` (`this` /
  * `self`; unset → no-op), the access node from `fieldAccessKind`, the receiver
  * ident from `identKind`. Shadowing names are collected from `paramKinds`,
  * `localDeclKinds`, `selfScopeDeclKinds` (loop iterator / catch var) and
- * `localFunctionKinds`, scoped to each enclosing member function. A compile-time
- * abstract's `this.field` (where `this` is the underlying value and `this.` is
- * mandatory) carries no `identKind` receiver child, so it is never matched.
+ * `localFunctionKinds`, scoped to each enclosing member function. Member names
+ * come from `memberDeclKinds` hosts inside a `visibilityContainerKinds` type; a
+ * grammar supplying neither leaves the membership gate inert (shadow-only test).
+ * A compile-time abstract's `this.field` (where `this` is the underlying value
+ * and `this.` is mandatory) carries no `identKind` receiver child, so it is
+ * never matched.
  */
 @:nullSafety(Strict)
 final class RedundantThis implements Check {
@@ -46,7 +58,7 @@ final class RedundantThis implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walkMembers(violations, entry.file, tree, ctx);
+			if (tree != null) walkMembers(violations, entry.file, tree, ctx, []);
 		}
 		return violations;
 	}
@@ -82,7 +94,13 @@ final class RedundantThis implements Check {
 			identKind: identKind,
 			functionKinds: functionKinds,
 			bindingKinds: bindingKinds,
-			underlyingThisKinds: shape.underlyingThisTypeKinds ?? []
+			underlyingThisKinds: shape.underlyingThisTypeKinds ?? [],
+			containerKinds: shape.visibilityContainerKinds ?? [],
+			memberDeclKinds: shape.memberDeclKinds ?? [],
+			// Membership gate active only when the grammar names both the type
+			// containers and their member hosts — else the check falls back to
+			// the legacy shadow-only test (no member set to enforce against).
+			membershipGate: (shape.visibilityContainerKinds ?? []).length > 0 && (shape.memberDeclKinds ?? []).length > 0
 		};
 	}
 
@@ -94,16 +112,48 @@ final class RedundantThis implements Check {
 	 * subtree is handled here, so nested functions are not visited again. A
 	 * compile-time abstract (where `this` is the underlying value and `this.` is
 	 * mandatory) is skipped entirely.
+	 *
+	 * `members` is the set of field / method / property names declared by the
+	 * enclosing type. Entering a type-declaration container collects a fresh set
+	 * from THAT container and threads it down — a `this.name` is flagged only when
+	 * `name` is one of those members. A name absent from the enclosing type is
+	 * either a `using` static-extension call (`this.getClass()` via `using Type`,
+	 * where `this.` is load-bearing and stripping it breaks compile) or an
+	 * inherited base-class member (not visible single-file); the check stays
+	 * silent in that ambiguity rather than remove a possibly-required `this.`.
 	 */
-	private static function walkMembers(out: Array<Violation>, file: String, node: QueryNode, c: Ctx): Void {
+	private static function walkMembers(out: Array<Violation>, file: String, node: QueryNode, c: Ctx, members: Array<String>): Void {
 		if (c.underlyingThisKinds.contains(node.kind)) return;
+		if (c.containerKinds.contains(node.kind)) {
+			final ownMembers: Array<String> = [];
+			collectMemberNames(node, c, ownMembers);
+			for (child in node.children) walkMembers(out, file, child, c, ownMembers);
+			return;
+		}
 		if (c.functionKinds.contains(node.kind)) {
 			final names: Array<String> = [];
 			collectBindingNames(node, c, names);
-			flagThisAccess(out, file, node, c, names);
+			flagThisAccess(out, file, node, c, names, members);
 			return;
 		}
-		for (child in node.children) walkMembers(out, file, child, c);
+		for (child in node.children) walkMembers(out, file, child, c, members);
+	}
+
+	/**
+	 * Collect the enclosing type's own member names — direct member-host children
+	 * plus those wrapped in `#if … #end` conditional or modifier nodes. A member
+	 * host is a leaf for this walk (its subtree is the member's body, holding
+	 * locals, not more members); a nested type container is not descended into, so
+	 * its members do not leak into the outer type's set.
+	 */
+	private static function collectMemberNames(node: QueryNode, c: Ctx, out: Array<String>): Void {
+		for (child in node.children) if (!c.containerKinds.contains(child.kind)) {
+			if (c.memberDeclKinds.contains(child.kind)) {
+				final name: Null<String> = child.name;
+				if (name != null) out.push(name);
+			} else
+				collectMemberNames(child, c, out);
+		}
 	}
 
 	/** Collect every shadowing binding name in `node`'s subtree. */
@@ -115,12 +165,22 @@ final class RedundantThis implements Check {
 		for (child in node.children) collectBindingNames(child, c, names);
 	}
 
-	/** Flag each `this.field` in `node`'s subtree whose field name is not shadowed. */
-	private static function flagThisAccess(out: Array<Violation>, file: String, node: QueryNode, c: Ctx, names: Array<String>): Void {
+	/**
+	 * Flag each `this.field` in `node`'s subtree whose field name is not shadowed
+	 * by a local AND is a declared member of the enclosing type. When the grammar
+	 * supplies no type-container / member seams the membership gate is inert
+	 * (`members` is empty and unenforceable), so the check falls back to the
+	 * shadow-only test.
+	 */
+	private static function flagThisAccess(
+		out: Array<Violation>, file: String, node: QueryNode, c: Ctx, names: Array<String>, members: Array<String>
+	): Void {
 		if (isThisAccess(node, c)) {
 			final fieldName: Null<String> = node.name;
 			final span: Null<Span> = node.span;
-			if (fieldName != null && span != null && !names.contains(fieldName)) out.push({
+			if (
+				fieldName != null && span != null && !names.contains(fieldName) && (!c.membershipGate || members.contains(fieldName))
+			) out.push({
 				file: file,
 				span: span,
 				rule: 'redundant-this',
@@ -128,7 +188,7 @@ final class RedundantThis implements Check {
 				message: 'redundant this. qualifier — reduces to $fieldName'
 			});
 		}
-		for (child in node.children) flagThisAccess(out, file, child, c, names);
+		for (child in node.children) flagThisAccess(out, file, child, c, names, members);
 	}
 
 
@@ -147,5 +207,8 @@ private typedef Ctx = {
 	identKind: String,
 	functionKinds: Array<String>,
 	bindingKinds: Array<String>,
-	underlyingThisKinds: Array<String>
+	underlyingThisKinds: Array<String>,
+	containerKinds: Array<String>,
+	memberDeclKinds: Array<String>,
+	membershipGate: Bool
 };
