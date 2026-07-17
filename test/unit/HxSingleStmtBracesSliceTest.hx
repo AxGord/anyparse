@@ -158,19 +158,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 		Assert.equals(source + '\n', out);
 	}
 
-	private static function assertFmt(source: String, expected: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals(expected + '\n', out);
-	}
-
-	private static function roundTrip(source: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals(source + '\n', out);
-	}
-
-
 	public function testDoWhileBodyUnbraced(): Void {
 		// The mapped ExprBody drops the `;` — modern Haxe rejects
 		// `do i++; while (…)` ("Expected while"); `do i++ while (…);` is
@@ -181,7 +168,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
-
 	public function testDoWhileMultiStmtKeepsBraces(): Void {
 		roundTrip('class F {\n\tfunction f():Void {\n\t\tdo {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} while (cond());\n\t}\n}');
 	}
@@ -191,6 +177,20 @@ class HxSingleStmtBracesSliceTest extends Test {
 		// Only an ExprStmt has an `HxDoWhileBody.ExprBody` counterpart —
 		// any other statement kind keeps its braces.
 		roundTrip('class F {\n\tfunction f():Void {\n\t\tdo {\n\t\t\treturn;\n\t\t} while (cond());\n\t}\n}');
+	}
+
+
+	private static function assertFmt(source: String, expected: String): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
+		Assert.equals(expected + '\n', out);
+	}
+
+
+	private static function roundTrip(source: String): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
+		Assert.equals(source + '\n', out);
 	}
 
 }

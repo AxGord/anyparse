@@ -99,8 +99,10 @@ final class PreferInterpolation implements Check {
 		declaredTypes: Map<Int, String>
 	): Void {
 		final arg: Null<QueryNode> = matchArg(node, seams.callKind, seams.fieldAccessKind, seams.identKind);
-		if (arg != null && isSafeArg(arg, root, seams.fieldAccessKind, seams.identKind, shape, declaredTypes)
-			&& render(arg, source, seams.identKind) != null) {
+		if (
+			arg != null && isSafeArg(arg, root, seams.fieldAccessKind, seams.identKind, shape, declaredTypes)
+			&& render(arg, source, seams.identKind) != null
+		) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
@@ -126,8 +128,7 @@ final class PreferInterpolation implements Check {
 		final callee: QueryNode = call.children[0];
 		if (callee.kind != fieldAccessKind || callee.name != 'string' || callee.children.length != 1) return null;
 		final receiver: QueryNode = callee.children[0];
-		if (receiver.kind != identKind || receiver.name != 'Std') return null;
-		return call.children[1];
+		return receiver.kind != identKind || receiver.name != 'Std' ? null : call.children[1];
 	}
 
 	/**
@@ -157,8 +158,11 @@ final class PreferInterpolation implements Check {
 		if (optionalParamKind != null && TypeResolver.bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
 		final paramKinds: Null<Array<String>> = shape.paramKinds;
 		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (paramKinds != null && nullLiteralKind != null
-			&& TypeResolver.bindingIsDefaultNullParam(root, bindingFrom, paramKinds, nullLiteralKind)) return false;
+		if (
+			paramKinds != null && nullLiteralKind != null
+			&& TypeResolver.bindingIsDefaultNullParam(root, bindingFrom, paramKinds, nullLiteralKind)
+		)
+			return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
 		if (typeName == null) return false;
 		final nullableWrapperTypeNames: Array<String> = shape.nullableWrapperTypeNames ?? [];

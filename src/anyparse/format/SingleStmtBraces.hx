@@ -58,10 +58,7 @@ class SingleStmtBraces {
 		if (Type.enumConstructor(block) == 'BlockBody') return unwrapDoBody(block);
 		if (Type.enumConstructor(block) != 'BlockStmt') return body;
 		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
-		if (inner == null) return body;
-		if (!innerSelfTerminates(cast inner)) return body;
-		if (elseFollows && containsIf(inner)) return body;
-		return inner;
+		return inner == null ? body : !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
 	}
 
 	private static function innerSelfTerminates(inner: EnumValue): Bool {
@@ -143,8 +140,7 @@ class SingleStmtBraces {
 		final innerE: EnumValue = cast inner;
 		if (Type.enumConstructor(innerE) != 'ExprStmt') return block;
 		final en: Null<Enum<Dynamic>> = Type.getEnum(cast block);
-		if (en == null) return block;
-		return Type.createEnum(en, 'ExprBody', [Type.enumParameters(innerE)[0], false]);
+		return en == null ? block : Type.createEnum(en, 'ExprBody', [Type.enumParameters(innerE)[0], false]);
 	}
 
 }

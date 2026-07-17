@@ -221,6 +221,31 @@ final class RefactorSupport {
 	];
 
 	/**
+	 * Simple names of stdlib value / container types whose methods never reassign an
+	 * abstract `this`, so a method call on a binding of one is not a write that blocks
+	 * `final`: `String` is immutable; `Array` / `Map` and the others mutate their
+	 * contents, not the binding. The `final`-conversion checks keep suggesting `final`
+	 * for such bindings even when their type is not resolvable in the lint scope.
+	 */
+	private static final finalSafeStdlibTypes: Array<String> = [
+		'String',
+		'Array',
+		'Map',
+		'List',
+		'Vector',
+		'StringBuf',
+		'StringMap',
+		'IntMap',
+		'ObjectMap',
+		'EnumValueMap',
+		'Bytes',
+		'BytesBuffer',
+		'EReg',
+		'Date',
+		'Xml'
+	];
+
+	/**
 	 * Resolve the cursor to the named occurrence node it sits on, in two
 	 * tiers (innermost-wins within each):
 	 *
@@ -1176,18 +1201,6 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Simple names of stdlib value / container types whose methods never reassign an
-	 * abstract `this`, so a method call on a binding of one is not a write that blocks
-	 * `final`: `String` is immutable; `Array` / `Map` and the others mutate their
-	 * contents, not the binding. The `final`-conversion checks keep suggesting `final`
-	 * for such bindings even when their type is not resolvable in the lint scope.
-	 */
-	static final finalSafeStdlibTypes: Array<String> = [
-		'String', 'Array', 'Map', 'List', 'Vector', 'StringBuf', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'Bytes',
-		'BytesBuffer', 'EReg', 'Date', 'Xml'
-	];
-
-	/**
 	 * Whether a never-reassigned `var` (field or local) named `name` with declared
 	 * simple type `declType` must STAY mutable because a method call on it may reassign
 	 * an `abstract`'s underlying `this` — a mutation the assignment-operator write scans
@@ -1208,43 +1221,7 @@ final class RefactorSupport {
 	): Bool {
 		if (declType == null || !methodCalledOn(source, name, exclude)) return false;
 		final resolvedAbstract: Null<Bool> = index.isAbstractType(declType, abstractKinds);
-		if (resolvedAbstract != null) return resolvedAbstract;
-		return !finalSafeStdlibTypes.contains(declType);
-	}
-
-	/**
-	 * Whether a word-bounded occurrence of `name` outside `exclude` is the receiver of a
-	 * method call — followed, past whitespace and comments, by `.`, then an identifier,
-	 * then `(`. Matches `name.m(...)` and `this.name.m(...)` alike (the `name` token in
-	 * `this.name` is bounded by the preceding `.`). A plain field read (`name.x`) or a
-	 * method reference without a call (`name.m`) is not a match — only a `this`-mutating
-	 * abstract method call is a write the assignment scans miss.
-	 */
-	static function methodCalledOn(source: String, name: String, exclude: Span): Bool {
-		final n: Int = source.length;
-		final len: Int = name.length;
-		if (len == 0) return false;
-		var from: Int = 0;
-		while (true) {
-			final idx: Int = source.indexOf(name, from);
-			if (idx < 0) return false;
-			from = idx + len;
-			final boundedBefore: Bool = idx == 0 || !isIdentChar(StringTools.fastCodeAt(source, idx - 1));
-			final boundedAfter: Bool = from >= n || !isIdentChar(StringTools.fastCodeAt(source, from));
-			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from)) return true;
-		}
-	}
-
-	/** Whether the tokens starting at `pos` are `.` <identifier> ... `(` — a method call, ignoring interposed whitespace and comments. */
-	static function callFollows(source: String, pos: Int): Bool {
-		final n: Int = source.length;
-		var i: Int = skipForwardTrivia(source, pos);
-		if (i >= n || StringTools.fastCodeAt(source, i) != '.'.code) return false;
-		i = skipForwardTrivia(source, i + 1);
-		if (i >= n || !isIdentStartChar(StringTools.fastCodeAt(source, i))) return false;
-		while (i < n && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
-		i = skipForwardTrivia(source, i);
-		return i < n && StringTools.fastCodeAt(source, i) == '('.code;
+		return resolvedAbstract ?? !finalSafeStdlibTypes.contains(declType);
 	}
 
 	/** Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block comment. */
@@ -1266,7 +1243,10 @@ final class RefactorSupport {
 				}
 				if (c1 == '*'.code) {
 					i += 2;
-					while (i + 1 < n && !(StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code)) i++;
+					while (
+						i + 1 < n && !(StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code)
+					)
+						i++;
 					i += 2;
 					continue;
 				}
@@ -1363,6 +1343,41 @@ final class RefactorSupport {
 			i++;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether a word-bounded occurrence of `name` outside `exclude` is the receiver of a
+	 * method call — followed, past whitespace and comments, by `.`, then an identifier,
+	 * then `(`. Matches `name.m(...)` and `this.name.m(...)` alike (the `name` token in
+	 * `this.name` is bounded by the preceding `.`). A plain field read (`name.x`) or a
+	 * method reference without a call (`name.m`) is not a match — only a `this`-mutating
+	 * abstract method call is a write the assignment scans miss.
+	 */
+	private static function methodCalledOn(source: String, name: String, exclude: Span): Bool {
+		final n: Int = source.length;
+		final len: Int = name.length;
+		if (len == 0) return false;
+		var from: Int = 0;
+		while (true) {
+			final idx: Int = source.indexOf(name, from);
+			if (idx < 0) return false;
+			from = idx + len;
+			final boundedBefore: Bool = idx == 0 || !isIdentChar(StringTools.fastCodeAt(source, idx - 1));
+			final boundedAfter: Bool = from >= n || !isIdentChar(StringTools.fastCodeAt(source, from));
+			if (boundedBefore && boundedAfter && (idx < exclude.from || idx >= exclude.to) && callFollows(source, from)) return true;
+		}
+	}
+
+	/** Whether the tokens starting at `pos` are `.` <identifier> ... `(` — a method call, ignoring interposed whitespace and comments. */
+	private static function callFollows(source: String, pos: Int): Bool {
+		final n: Int = source.length;
+		var i: Int = skipForwardTrivia(source, pos);
+		if (i >= n || StringTools.fastCodeAt(source, i) != '.'.code) return false;
+		i = skipForwardTrivia(source, i + 1);
+		if (i >= n || !isIdentStartChar(StringTools.fastCodeAt(source, i))) return false;
+		while (i < n && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		i = skipForwardTrivia(source, i);
+		return i < n && StringTools.fastCodeAt(source, i) == '('.code;
 	}
 
 	/**

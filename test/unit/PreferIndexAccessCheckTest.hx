@@ -107,26 +107,6 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(-1, fixed.indexOf('m.set'));
 	}
 
-	private function src(decl: String, body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\t' + decl + '\n\t\t' + body + '\n\t}\n}';
-	}
-
-	private function violations(source: String): Array<Violation> {
-		return new PreferIndexAccess().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
-	}
-
-	private function applyFix(source: String): String {
-		final check: PreferIndexAccess = new PreferIndexAccess();
-		final edits: Array<{ span: Span, text: String }> = check.fix(
-			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
-		);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = source;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
-
 	public function testFragileNullGuardKeyNotFlagged(): Void {
 		// The key is a null-guard ternary whose fallback is a field access on a for-loop
 		// iterator (an unbound monomorph); under active @:nullSafety, `m[k]` types the key in
@@ -136,14 +116,12 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(0, violations(source).length);
 	}
 
-
 	public function testFragileCoalesceKeyNotFlagged(): Void {
 		// Same fragility with the null guard already spelled `??` in the key.
 		final source: String = '@:nullSafety class C {\n\tfunction f(it:Iter):Void {\n\t\tfinal m:Map<String, Int> = [];\n\t\tfor (row in it) {\n'
 			+ '\t\t\tvar v = m.get(row.a ?? row.b);\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
-
 
 	public function testNullGuardKeyWithoutNullSafetyStillFlagged(): Void {
 		// No @:nullSafety anywhere — the flipped binding still compiles, so convert.
@@ -158,6 +136,28 @@ class PreferIndexAccessCheckTest extends Test {
 		final source: String = '@:nullSafety class C {\n\tfunction f(a:Null<String>, b:String):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
 			+ '\t\tvar v = m.get(a != null ? a : b);\n\t}\n}';
 		Assert.equals(1, violations(source).length);
+	}
+
+
+	private function src(decl: String, body: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\t' + decl + '\n\t\t' + body + '\n\t}\n}';
+	}
+
+
+	private function violations(source: String): Array<Violation> {
+		return new PreferIndexAccess().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+
+	private function applyFix(source: String): String {
+		final check: PreferIndexAccess = new PreferIndexAccess();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = source;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }

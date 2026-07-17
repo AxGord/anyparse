@@ -315,6 +315,82 @@ final class TypeResolver {
 		return best;
 	}
 
+	/**
+	 * Whether ANY `@:nullSafety` scope is active over `span` — the member-affirming
+	 * variant of `enclosingIsNullSafe`. A covering `@:nullSafety(Off)` anywhere in
+	 * the chain refuses; otherwise ANY covering non-`Off` annotation — member,
+	 * type, or module level — affirms. Used by the inference-fragility gate, where
+	 * a member-level `@:nullSafety` on the enclosing method makes the rewrite
+	 * hazard just as real as a class-level one (the affirmation asymmetry
+	 * `enclosingIsNullSafe` keeps for `isProvablyNonNull` protects a PROOF of
+	 * non-nullness; here the affirmative answer only makes a skip MORE
+	 * conservative, so the member level is safe to count).
+	 */
+	public static function nullSafetyActiveAt(tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>): Bool {
+		var active: Bool = false;
+		for (s in collectNullSafetyScopes(tree, metaName, disableArg)) if (s.from <= span.from && span.to <= s.to) {
+			if (s.disabled) return false;
+			active = true;
+		}
+		return active;
+	}
+
+	/**
+	 * Whether `expr` is a field-access chain whose BASE identifier binds to a
+	 * declaration with NO recoverable declared type — an INFERENCE-OPEN receiver.
+	 * The paradigm case is a `for`-loop iterator over a custom `hasNext`/`next`
+	 * iterator whose `next()` returns `Dynamic`: Haxe types the loop variable as
+	 * an UNBOUND MONOMORPH (`Unknown<0>`), and each `base.field` access adds a
+	 * structural constraint whose field TYPE is fixed by whatever context first
+	 * unifies it. A rewrite that re-positions such an access between an
+	 * expected-type context and a value-mode context can flip that constraint
+	 * binding (`String` -> `Null<String>`) and retroactively change the type of
+	 * EVERY use of the same field in the function. A base that is unresolved (a
+	 * type name, `this`) or carries any declared-type entry (including a
+	 * `Null<…>` / `Dynamic` wrapper — an annotated type is never a monomorph) is
+	 * NOT open. Conservative over-approximation: an unannotated initialized local
+	 * also reports open, though its type is fixed by its initializer.
+	 */
+	public static function isInferenceOpenFieldAccess(
+		expr: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
+	): Bool {
+		final faKind: Null<String> = shape.fieldAccessKind;
+		if (faKind == null || expr.kind != faKind) return false;
+		var base: QueryNode = expr;
+		while (base.kind == faKind && base.children.length == 1) base = base.children[0];
+		final bindingFrom: Null<Int> = identBindingFrom(base, root, shape);
+		return bindingFrom != null && declaredTypes[bindingFrom] == null;
+	}
+
+	/**
+	 * Whether rewriting a null guard whose FALLBACK operand is `fallback` between
+	 * an expected-type context and a value-mode context is INFERENCE-FRAGILE at
+	 * `site` — i.e. the rewrite may flip the fallback's inferred type from
+	 * non-null to `Null<…>` and break compilation under active null-safety.
+	 *
+	 * The isolated mechanism (Haxe, verified 4.3.7): in an argument position
+	 * (`m.get(x != null ? x : row.f)`) the ternary's branches are typed against
+	 * the parameter's EXPECTED type, binding an inference-open `row.f`'s
+	 * structural constraint NON-null (`row.f : String`). After the rewrite —
+	 * `x ?? row.f` (operands typed against `Null<expected>`) or `m[…]` (the key
+	 * typed in VALUE mode, where the null comparison creates a `Null<…>` and
+	 * branch unification propagates it) — the same constraint binds NULLABLE
+	 * (`row.f : Null<String>`), which retroactively poisons every later use of
+	 * `row.f` in the function. Only that combination is fragile, so BOTH are
+	 * required: an active `@:nullSafety` scope over `site` (member, type, or
+	 * module level — without null-safety the flipped binding still compiles) AND
+	 * an inference-open fallback (`isInferenceOpenFieldAccess`). The GUARDED
+	 * operand needs no check: the null comparison itself binds it `Null<…>` in
+	 * both the original and the rewritten form.
+	 */
+	public static function isInferenceFragileNullGuard(
+		fallback: QueryNode, site: Span, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
+	): Bool {
+		final metaName: Null<String> = shape.nullSafetyMetaName;
+		if (metaName == null || !nullSafetyActiveAt(root, site, metaName, shape.nullSafetyDisableArg)) return false;
+		return isInferenceOpenFieldAccess(fallback, root, shape, declaredTypes);
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
@@ -403,6 +479,7 @@ final class TypeResolver {
 		return scopes;
 	}
 
+
 	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
 	private static inline function isDeclScope(kind: String): Bool {
 		return RefactorSupport.isFieldMemberKind(kind) || isTypeDeclScope(kind);
@@ -441,6 +518,7 @@ final class TypeResolver {
 		return selfLocal == null ? naive : enclosingBindingFrom(root, shape, name, selfLocal, opSpan);
 	}
 
+
 	/**
 	 * The span of the local `var` / `final` declaration `operand` naively binds to WHEN that
 	 * binding is the operand's own initializer — a `localDeclKinds` node named `name` that
@@ -467,6 +545,7 @@ final class TypeResolver {
 		walk(tree);
 		return found;
 	}
+
 
 	/**
 	 * The `from` of the binding of `name` visible in the scope ENCLOSING the self-shadowing
@@ -501,85 +580,6 @@ final class TypeResolver {
 		}
 		walk(tree);
 		return bestFrom;
-	}
-
-
-	/**
-	 * Whether ANY `@:nullSafety` scope is active over `span` — the member-affirming
-	 * variant of `enclosingIsNullSafe`. A covering `@:nullSafety(Off)` anywhere in
-	 * the chain refuses; otherwise ANY covering non-`Off` annotation — member,
-	 * type, or module level — affirms. Used by the inference-fragility gate, where
-	 * a member-level `@:nullSafety` on the enclosing method makes the rewrite
-	 * hazard just as real as a class-level one (the affirmation asymmetry
-	 * `enclosingIsNullSafe` keeps for `isProvablyNonNull` protects a PROOF of
-	 * non-nullness; here the affirmative answer only makes a skip MORE
-	 * conservative, so the member level is safe to count).
-	 */
-	public static function nullSafetyActiveAt(tree: QueryNode, span: Span, metaName: String, disableArg: Null<String>): Bool {
-		var active: Bool = false;
-		for (s in collectNullSafetyScopes(tree, metaName, disableArg)) if (s.from <= span.from && span.to <= s.to) {
-			if (s.disabled) return false;
-			active = true;
-		}
-		return active;
-	}
-
-
-	/**
-	 * Whether `expr` is a field-access chain whose BASE identifier binds to a
-	 * declaration with NO recoverable declared type — an INFERENCE-OPEN receiver.
-	 * The paradigm case is a `for`-loop iterator over a custom `hasNext`/`next`
-	 * iterator whose `next()` returns `Dynamic`: Haxe types the loop variable as
-	 * an UNBOUND MONOMORPH (`Unknown<0>`), and each `base.field` access adds a
-	 * structural constraint whose field TYPE is fixed by whatever context first
-	 * unifies it. A rewrite that re-positions such an access between an
-	 * expected-type context and a value-mode context can flip that constraint
-	 * binding (`String` -> `Null<String>`) and retroactively change the type of
-	 * EVERY use of the same field in the function. A base that is unresolved (a
-	 * type name, `this`) or carries any declared-type entry (including a
-	 * `Null<…>` / `Dynamic` wrapper — an annotated type is never a monomorph) is
-	 * NOT open. Conservative over-approximation: an unannotated initialized local
-	 * also reports open, though its type is fixed by its initializer.
-	 */
-	public static function isInferenceOpenFieldAccess(
-		expr: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
-	): Bool {
-		final faKind: Null<String> = shape.fieldAccessKind;
-		if (faKind == null || expr.kind != faKind) return false;
-		var base: QueryNode = expr;
-		while (base.kind == faKind && base.children.length == 1) base = base.children[0];
-		final bindingFrom: Null<Int> = identBindingFrom(base, root, shape);
-		return bindingFrom != null && declaredTypes[bindingFrom] == null;
-	}
-
-
-	/**
-	 * Whether rewriting a null guard whose FALLBACK operand is `fallback` between
-	 * an expected-type context and a value-mode context is INFERENCE-FRAGILE at
-	 * `site` — i.e. the rewrite may flip the fallback's inferred type from
-	 * non-null to `Null<…>` and break compilation under active null-safety.
-	 *
-	 * The isolated mechanism (Haxe, verified 4.3.7): in an argument position
-	 * (`m.get(x != null ? x : row.f)`) the ternary's branches are typed against
-	 * the parameter's EXPECTED type, binding an inference-open `row.f`'s
-	 * structural constraint NON-null (`row.f : String`). After the rewrite —
-	 * `x ?? row.f` (operands typed against `Null<expected>`) or `m[…]` (the key
-	 * typed in VALUE mode, where the null comparison creates a `Null<…>` and
-	 * branch unification propagates it) — the same constraint binds NULLABLE
-	 * (`row.f : Null<String>`), which retroactively poisons every later use of
-	 * `row.f` in the function. Only that combination is fragile, so BOTH are
-	 * required: an active `@:nullSafety` scope over `site` (member, type, or
-	 * module level — without null-safety the flipped binding still compiles) AND
-	 * an inference-open fallback (`isInferenceOpenFieldAccess`). The GUARDED
-	 * operand needs no check: the null comparison itself binds it `Null<…>` in
-	 * both the original and the rewritten form.
-	 */
-	public static function isInferenceFragileNullGuard(
-		fallback: QueryNode, site: Span, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>
-	): Bool {
-		final metaName: Null<String> = shape.nullSafetyMetaName;
-		if (metaName == null || !nullSafetyActiveAt(root, site, metaName, shape.nullSafetyDisableArg)) return false;
-		return isInferenceOpenFieldAccess(fallback, root, shape, declaredTypes);
 	}
 
 }

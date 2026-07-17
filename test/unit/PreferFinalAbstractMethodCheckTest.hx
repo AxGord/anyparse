@@ -22,13 +22,15 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
  */
 class PreferFinalAbstractMethodCheckTest extends Test {
 
-	static inline final ABSTRACT: String = 'abstract Step(Int) { public function nw(v:Int) this = v; public function next():Void this = this + 1; } ';
+	private static inline final ABSTRACT: String = 'abstract Step(Int) { public function nw(v:Int) this = v; public function next():Void this = this + 1; } ';
 
 	// --- Field case (prefer-final-field) ---
 
 	/** Abstract-typed field used only via a mutating method call — must NOT be flagged. */
 	public function testAbstractFieldMethodCallNotFlagged(): Void {
-		final vs: Array<Violation> = fieldViolations(ABSTRACT + 'class C { private var _s:Step = new Step(0); function r():Void _s.next(); }');
+		final vs: Array<Violation> = fieldViolations(
+			ABSTRACT + 'class C { private var _s:Step = new Step(0); function r():Void _s.next(); }'
+		);
 		Assert.equals(0, vs.length);
 	}
 
@@ -39,7 +41,9 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 
 	/** Control: a field of a resolved CLASS type keeps the suggestion — a class method does not reassign the field. */
 	public function testClassTypedFieldMethodCallStillFlagged(): Void {
-		final vs: Array<Violation> = fieldViolations('class D { public function nw() {} public function go():Void {} } class C { private var _d:D = new D(); function r():Void _d.go(); }');
+		final vs: Array<Violation> = fieldViolations(
+			'class D { public function nw() {} public function go():Void {} } class C { private var _d:D = new D(); function r():Void _d.go(); }'
+		);
 		Assert.equals(1, vs.length);
 	}
 
@@ -60,14 +64,18 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 
 	/** A method REFERENCE (no call) on an abstract-typed field does not mutate — still flagged. */
 	public function testAbstractFieldNoCallStillFlagged(): Void {
-		Assert.equals(1, fieldViolations(ABSTRACT + 'class C { private var _s:Step = new Step(0); function r():Step->Void return null; }').length);
+		Assert.equals(
+			1, fieldViolations(ABSTRACT + 'class C { private var _s:Step = new Step(0); function r():Step->Void return null; }').length
+		);
 	}
 
 	// --- Local case (prefer-final) ---
 
 	/** Abstract-typed local used only via a mutating method call — must NOT be flagged. */
 	public function testAbstractLocalMethodCallNotFlagged(): Void {
-		final vs: Array<Violation> = localViolations(ABSTRACT + 'class C { function r():Void { var s:Step = new Step(0); s.next(); trace(s); } }');
+		final vs: Array<Violation> = localViolations(
+			ABSTRACT + 'class C { function r():Void { var s:Step = new Step(0); s.next(); trace(s); } }'
+		);
 		Assert.equals(0, vs.length);
 	}
 

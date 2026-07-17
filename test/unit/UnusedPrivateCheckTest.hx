@@ -222,21 +222,6 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, one(src).length);
 	}
 
-	private function one(source: String): Array<Violation> {
-		return violations([{ file: 'C.hx', source: source }]);
-	}
-
-	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
-	}
-
-
-	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
-		final check: UnusedPrivate = new UnusedPrivate();
-		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
-	}
-
-
 	/**
 	 * A private method of a subclass whose base is not in the linted file set may
 	 * implement one of the base's abstract methods (Haxe impls carry no `override`
@@ -252,7 +237,6 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, edits.length);
 	}
 
-
 	/**
 	 * The real regression: a private method inside a member-level `#if … #end`
 	 * region of a subclass. Conditional-compilation projects the method as a child
@@ -267,6 +251,22 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
+	}
+
+
+	private function one(source: String): Array<Violation> {
+		return violations([{ file: 'C.hx', source: source }]);
+	}
+
+
+	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
+	}
+
+
+	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
+		final check: UnusedPrivate = new UnusedPrivate();
+		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
 }

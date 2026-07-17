@@ -89,21 +89,6 @@ class RedundantNullCoalescingCheckTest extends Test {
 		Assert.isTrue(ids.contains('redundant-null-coalescing'));
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new RedundantNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function applyFix(src: String): String {
-		final check: RedundantNullCoalescing = new RedundantNullCoalescing();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var result: String = src;
-		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
-		return result;
-	}
-
-
 	public function testSelfShadowNullableParamNotFlagged(): Void {
 		// The RHS `p` in a self-shadowing `final p:Foo = p ?? …` initializer refers to
 		// the ENCLOSING nullable param, not the local being declared — the fallback is live.
@@ -114,6 +99,7 @@ class RedundantNullCoalescingCheckTest extends Test {
 		// Same self-shadow via a `p:Foo = null` param (nullable per Haxe null-safety).
 		Assert.equals(0, violations('@:nullSafety class C { function f(p:Foo = null) { final p:Foo = p ?? other; } }').length);
 	}
+
 
 	public function testSelfShadowNonNullOuterStillFlagged(): Void {
 		// Self-shadow whose ENCLOSING binding is a non-null param — the RHS resolves to it,
@@ -130,6 +116,20 @@ class RedundantNullCoalescingCheckTest extends Test {
 	public function testFixLeavesSelfShadowNullableUntouched(): Void {
 		final src: String = '@:nullSafety class C { function f(p:Null<Foo>) { final p:Foo = p ?? other; } }';
 		Assert.equals(src, applyFix(src));
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new RedundantNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function applyFix(src: String): String {
+		final check: RedundantNullCoalescing = new RedundantNullCoalescing();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var result: String = src;
+		for (e in edits) result = result.substring(0, e.span.from) + e.text + result.substring(e.span.to);
+		return result;
 	}
 
 }

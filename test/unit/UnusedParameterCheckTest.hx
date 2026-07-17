@@ -111,9 +111,19 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals(src, applyFix(src));
 	}
 
+	public function testDynamicFunctionParameterNotFlagged(): Void {
+		// `dynamic` marks a reassignable callback slot — an assigner elsewhere relies
+		// on the signature, so an unreferenced param in the default body is by
+		// design, not dead code. The whole function is skipped, never autofixed.
+		final src: String = 'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new UnusedParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
+
 
 	private function applyFix(src: String): String {
 		final check: UnusedParameter = new UnusedParameter();
@@ -124,16 +134,6 @@ class UnusedParameterCheckTest extends Test {
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	public function testDynamicFunctionParameterNotFlagged(): Void {
-		// `dynamic` marks a reassignable callback slot — an assigner elsewhere relies
-		// on the signature, so an unreferenced param in the default body is by
-		// design, not dead code. The whole function is skipped, never autofixed.
-		final src: String = 'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
-		Assert.equals(0, violations(src).length);
-		Assert.equals(src, applyFix(src));
 	}
 
 }

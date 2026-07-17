@@ -90,8 +90,10 @@ final class PreferFinal implements Check {
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null)
-				checkTree(violations, entry.file, entry.source, tree, shape, scopeKinds, opaqueKinds, mutableKinds, index,
-					provider == null ? null : provider.declaredTypes(entry.source), abstractKinds);
+				checkTree(
+					violations, entry.file, entry.source, tree, shape, scopeKinds, opaqueKinds, mutableKinds, index,
+					provider == null ? null : provider.declaredTypes(entry.source), abstractKinds
+				);
 		}
 		return violations;
 	}
