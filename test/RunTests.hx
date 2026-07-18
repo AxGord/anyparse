@@ -437,6 +437,7 @@ import unit.DocCoverageCheckTest;
 import unit.GuardContinueCheckTest;
 import unit.AvoidDynamicNarrowFixTest;
 import unit.AvoidDynamicRiskyFixE2ETest;
+import unit.DuplicateCodeCrossFileCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -795,6 +796,7 @@ class RunTests {
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new NullableSwitchMissingNullCheckTest());
 		addCase(new DuplicateCodeCheckTest());
+		addCase(new DuplicateCodeCrossFileCheckTest());
 		addCase(new AvoidDynamicCheckTest());
 		addCase(new AvoidDynamicNarrowFixTest());
 		addCase(new AvoidDynamicRiskyFixE2ETest());

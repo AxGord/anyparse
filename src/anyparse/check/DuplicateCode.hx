@@ -9,23 +9,29 @@ import anyparse.runtime.Span;
 
 /**
  * Flags a run of three or more consecutive statements that appears, byte-for-byte
- * identical up to whitespace, in two or more places within the SAME file — a
- * copy-paste clone the user's rule says to always extract into a helper
- * ("duplication is a bug, not a design choice"). Purely structural (no type
+ * identical up to whitespace, in two or more places — a copy-paste clone the user's
+ * rule says to always extract into a helper ("duplication is a bug, not a design
+ * choice"). Two passes over the same normalized statement stream: a SAME-FILE pass
+ * (`scanBlocks`) and a project-wide CROSS-FILE pass (`scanCrossFile`); a same-file
+ * pair is reported by the first pass only, never by both. Purely structural (no type
  * information needed). `Info`, REPORT-ONLY — extraction is a refactoring (`hxq
- * extract-method`), not a mechanical span edit, so `fix` produces no edits.
+ * extract-method`), and across a file boundary whether to introduce a shared helper is
+ * a design decision the tool must not force, so `fix` produces no edits.
  *
- * ## What is a clone (v1 scope)
+ * ## What is a clone
  *
- * - **In-file only.** Cross-file clone detection is a future axis — it needs a
- *   project-wide index and noise control; a per-file scan has zero coordination
- *   cost and no false positives from unrelated files.
+ * - **Same-file and cross-file.** The same-file pass hashes each file's own block
+ *   three-grams; the cross-file pass concatenates every scoped file's blocks into ONE
+ *   global three-gram index built in a single pass (no O(N²) file-pair comparison) and
+ *   reports a clone only when its two occurrences sit in DIFFERENT files, pointing the
+ *   later at the globally-earliest occurrence. Same-file pairs are skipped by the
+ *   cross-file pass, so the two passes partition the clone space with no double-report.
  * - **Whitespace-only normalization.** Two statements are equal when their source
  *   text matches after every run of spaces / tabs / newlines is collapsed to a
  *   single space (and the ends trimmed). There is NO identifier normalization
  *   (alpha-renaming): only exact-logic clones match, so the check has zero false
  *   positives by construction. A comment inside a statement's span makes it
- *   textually different — not a clone (acceptable for v1); a comment BETWEEN
+ *   textually different — not a clone; a comment BETWEEN
  *   statements is trivia outside every statement span and does not affect equality.
  * - **Consecutive statements, one block.** A run is a maximal sequence of direct-child
  *   statements of a `ControlFlowSupport.blockKinds()` node (function body / nested
@@ -53,9 +59,11 @@ import anyparse.runtime.Span;
  * ## Reporting
  *
  * The finding is spanned from the first to the last statement of the duplicated
- * run at the LATER occurrence (the duplicated region itself), and its message
- * points at the first occurrence's line. One violation per duplicate occurrence,
- * not one per statement — so three occurrences of a clone produce two findings.
+ * run at the LATER occurrence (the duplicated region itself); a same-file message
+ * points at the first occurrence's line, a cross-file message names the other file
+ * and line (`file A line X ↔ this file line Y`). One violation per duplicate
+ * occurrence, not one per statement — so three occurrences of a clone produce two
+ * findings.
  */
 @:nullSafety(Strict)
 final class DuplicateCode implements Check {
@@ -72,14 +80,16 @@ final class DuplicateCode implements Check {
 	/** Separator between statement norms in a three-gram key — a byte no source text contains. */
 	private static inline final GRAM_SEP: String = '\x1e';
 
+	private static inline final RULE_ID: String = 'duplicate-code';
+
 	public function new() {}
 
 	public function id(): String {
-		return 'duplicate-code';
+		return RULE_ID;
 	}
 
 	public function description(): String {
-		return 'three or more consecutive statements duplicated (whitespace-insensitive) elsewhere in the same file';
+		return 'three or more consecutive statements duplicated (whitespace-insensitive) within the same file or across files';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -88,10 +98,16 @@ final class DuplicateCode implements Check {
 		final blockKinds: Array<String> = support.blockKinds();
 		final opaqueKinds: Array<String> = plugin.refShape().opaqueKinds ?? [];
 		final violations: Array<Violation> = [];
+		final perFile: Array<DupFile> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) scanFile(violations, entry.file, entry.source, tree, blockKinds, opaqueKinds);
+			if (tree == null) continue;
+			final blocks: Array<Array<DupStmt>> = [];
+			collectBlocks(tree, entry.source, blockKinds, opaqueKinds, blocks);
+			perFile.push({ file: entry.file, source: entry.source, blocks: blocks });
 		}
+		for (pf in perFile) scanBlocks(violations, pf.file, pf.source, pf.blocks);
+		scanCrossFile(violations, perFile);
 		return violations;
 	}
 
@@ -103,29 +119,13 @@ final class DuplicateCode implements Check {
 	}
 
 	/**
-	 * Collect every block's statement sequence, hash three-grams to find clone
-	 * starts, extend each to its maximal run, drop overlapping and sub-window
-	 * runs, and emit one `Info` per surviving later occurrence.
+	 * The same-file pass: hash this file's own block statement three-grams to find clone
+	 * starts, extend each to its maximal run, drop overlapping and sub-window runs, and emit
+	 * one `Info` per surviving later occurrence WITHIN the file. `blocks` was collected once by
+	 * `run` (`collectBlocks`) and is shared with the cross-file pass, so the tree is walked once.
 	 */
-	private static function scanFile(
-		out: Array<Violation>, file: String, source: String, tree: QueryNode, blockKinds: Array<String>, opaqueKinds: Array<String>
-	): Void {
-		final blocks: Array<Array<DupStmt>> = [];
-		collectBlocks(tree, source, blockKinds, opaqueKinds, blocks);
-
-		final grams: Map<String, Array<DupPos>> = [];
-		for (b in 0...blocks.length) {
-			final stmts: Array<DupStmt> = blocks[b];
-			for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
-				final key: String = stmts[i].norm + GRAM_SEP + stmts[i + 1].norm + GRAM_SEP + stmts[i + 2].norm;
-				final bucket: Null<Array<DupPos>> = grams[key];
-				if (bucket == null)
-					grams[key] = [{ b: b, i: i }];
-				else
-					bucket.push({ b: b, i: i });
-			}
-		}
-
+	private static function scanBlocks(out: Array<Violation>, file: String, source: String, blocks: Array<Array<DupStmt>>): Void {
+		final grams: Map<String, Array<DupPos>> = buildGrams(blocks);
 		final findings: Array<DupFinding> = [];
 		for (bucket in grams) if (bucket.length >= 2) collectFindings(blocks, source, bucket, findings);
 
@@ -134,7 +134,7 @@ final class DuplicateCode implements Check {
 		for (f in kept) out.push({
 			file: file,
 			span: f.span,
-			rule: 'duplicate-code',
+			rule: RULE_ID,
 			severity: Severity.Info,
 			message: '${f.count} statements duplicated from line ${f.origLine} — extract a helper (hxq extract-method)'
 		});
@@ -205,7 +205,9 @@ final class DuplicateCode implements Check {
 				count: len,
 				origLine: blocks[anchor.b][anchor.i].span.lineCol(source).line,
 				b: later.b,
-				startIdx: later.i
+				startIdx: later.i,
+				origFile: '',
+				laterFile: -1
 			});
 		}
 	}
@@ -252,6 +254,101 @@ final class DuplicateCode implements Check {
 		return false;
 	}
 
+
+	/**
+	 * The cross-file pass (report-only). Concatenate every scoped file's blocks into ONE global
+	 * index and hash three-grams project-wide in a single pass — there is no O(N²) file-pair
+	 * comparison; two occurrences meet only by landing in the same three-gram bucket. For each
+	 * three-gram shared across TWO DIFFERENT files, extend the shared run to its maximal length,
+	 * apply the same content gate, and emit one `Info` per later-file occurrence pointing at the
+	 * globally-earliest occurrence (file A line X ↔ this file line Y). Same-file pairs are skipped
+	 * here — `scanBlocks` owns those — so no clone is reported by both passes.
+	 *
+	 * Cross-file extraction crosses a module / package boundary; whether to introduce a shared
+	 * helper there is a design decision the tool must not force, so this pass is REPORT-ONLY
+	 * (`fix` emits nothing) — the finding names both sites and leaves the call.
+	 */
+	private static function scanCrossFile(out: Array<Violation>, perFile: Array<DupFile>): Void {
+		final blocks: Array<Array<DupStmt>> = [];
+		final blockFile: Array<Int> = [];
+		for (fi in 0...perFile.length) for (blk in perFile[fi].blocks) {
+			blocks.push(blk);
+			blockFile.push(fi);
+		}
+
+		final grams: Map<String, Array<DupPos>> = buildGrams(blocks);
+		final findings: Array<DupFinding> = [];
+		for (bucket in grams) if (bucket.length >= 2) collectCrossFindings(blocks, blockFile, perFile, bucket, findings);
+
+		final kept: Array<DupFinding> = dropOverlapping(findings);
+		kept.sort((a, b) -> a.laterFile != b.laterFile ? a.laterFile - b.laterFile : a.span.from - b.span.from);
+		for (f in kept) out.push({
+			file: perFile[f.laterFile].file,
+			span: f.span,
+			rule: RULE_ID,
+			severity: Severity.Info,
+			message: '${f.count} statements duplicated from ${f.origFile}:${f.origLine} — extract a shared helper (report-only, cross-file)'
+		});
+	}
+
+
+	/**
+	 * From a global three-gram bucket (≥2 starts), take the globally-earliest position (by file
+	 * order, then span) as the anchor and, for every later start in a DIFFERENT file, extend the
+	 * shared run to its maximal length, skip it under the content gate, and record a cross-file
+	 * finding at the later occurrence pointing at the anchor's file and line. Same-file starts are
+	 * skipped — the same-file pass reports those — so a pure within-file repeat yields nothing here.
+	 */
+	private static function collectCrossFindings(
+		blocks: Array<Array<DupStmt>>, blockFile: Array<Int>, perFile: Array<DupFile>, bucket: Array<DupPos>, findings: Array<DupFinding>
+	): Void {
+		bucket.sort((a, b) ->
+			blockFile[a.b] != blockFile[b.b] ? blockFile[a.b] - blockFile[b.b] : blocks[a.b][a.i].span.from - blocks[b.b][b.i].span.from
+		);
+		final anchor: DupPos = bucket[0];
+		final anchorFile: Int = blockFile[anchor.b];
+		for (k in 1...bucket.length) {
+			final later: DupPos = bucket[k];
+			final laterFile: Int = blockFile[later.b];
+			if (laterFile == anchorFile) continue;
+			final len: Int = commonRun(blocks, anchor, later);
+			if (len < MIN_STATEMENTS) continue;
+			if (runNonWs(blocks[anchor.b], anchor.i, len) < MIN_NON_WS_CHARS) continue;
+			final laterStmts: Array<DupStmt> = blocks[later.b];
+			findings.push({
+				span: new Span(laterStmts[later.i].span.from, laterStmts[later.i + len - 1].span.to),
+				count: len,
+				origLine: blocks[anchor.b][anchor.i].span.lineCol(perFile[anchorFile].source).line,
+				b: later.b,
+				startIdx: later.i,
+				origFile: perFile[anchorFile].file,
+				laterFile: laterFile
+			});
+		}
+	}
+
+
+	/**
+	 * Hash every three-gram of consecutive normalized statements across `blocks` into
+	 * start-position buckets — the shared index both the same-file pass (one file's blocks)
+	 * and the cross-file pass (every scoped file's blocks concatenated) probe for clones.
+	 */
+	private static function buildGrams(blocks: Array<Array<DupStmt>>): Map<String, Array<DupPos>> {
+		final grams: Map<String, Array<DupPos>> = [];
+		for (b in 0...blocks.length) {
+			final stmts: Array<DupStmt> = blocks[b];
+			for (i in 0...stmts.length - (MIN_STATEMENTS - 1)) {
+				final key: String = stmts[i].norm + GRAM_SEP + stmts[i + 1].norm + GRAM_SEP + stmts[i + 2].norm;
+				final bucket: Null<Array<DupPos>> = grams[key];
+				if (bucket == null)
+					grams[key] = [{ b: b, i: i }];
+				else
+					bucket.push({ b: b, i: i });
+			}
+		}
+		return grams;
+	}
+
 }
 
 /** A block statement: its whitespace-normalized text, source span, and non-whitespace-character count. */
@@ -260,18 +357,33 @@ typedef DupStmt = {
 	var span: Span;
 	var nonWs: Int;
 }
-
-/** A three-gram start position: block index `b` and statement index `i` within it. */
+/** A (block-index, statement-index) coordinate into the per-file collected block list. */
 typedef DupPos = {
 	var b: Int;
 	var i: Int;
 }
 
-/** A recorded clone occurrence: its span, statement count, and the original's line. */
+/**
+ * A recorded clone occurrence: its span, statement count, and the original's line. For a
+ * cross-file finding `origFile` names the anchor's file and `laterFile` the later occurrence's
+ * `perFile` index; a same-file finding leaves `origFile` empty and `laterFile` `-1`.
+ */
 typedef DupFinding = {
 	var span: Span;
 	var count: Int;
 	var origLine: Int;
 	var b: Int;
 	var startIdx: Int;
+	var origFile: String;
+	var laterFile: Int;
+}
+
+/**
+ * One scoped file: its path, source, and the block statement sequences `run` collected once
+ * (`collectBlocks`) for BOTH the same-file and the cross-file pass, so the tree is walked once.
+ */
+typedef DupFile = {
+	var file: String;
+	var source: String;
+	var blocks: Array<Array<DupStmt>>;
 }
