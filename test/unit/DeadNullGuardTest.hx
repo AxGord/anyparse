@@ -411,11 +411,11 @@ class DeadNullGuardTest extends Test {
 		);
 	}
 
-	public function testLaunderedTransitiveNotFlagged(): Void {
-		// `var ok2 = ok` aliases the two Bools but does NOT re-launder the predicate —
-		// transitive predicate tracking is refused, so the inner guard stays live.
+	public function testLaunderedTransitiveFlagged(): Void {
+		// Feature 1: `var ok2 = ok` aliases the two Bools; the laundered predicate flows
+		// transitively through the alias, so a guard on `ok2` narrows `u` — the inner check is dead.
 		Assert.equals(
-			0,
+			1,
 			violations('class C { function f(?u:String) { var ok = u != null; var ok2 = ok; if (ok2) { if (u != null) trace(u); } } }').length
 		);
 	}
@@ -475,6 +475,203 @@ class DeadNullGuardTest extends Test {
 			0,
 			violations(
 				'class C { function f(?u:String, cond:Bool) { var v = u; if (cond) { u ??= "x"; } if (u != null) { if (v != null) trace(v); } } }'
+			).length
+		);
+	}
+
+	public function testLaunderedTransitiveChainFlagged(): Void {
+		// Feature 1: a 3-deep Bool alias chain (`ok3 = ok2 = ok`) still reaches the predicate.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; var ok3 = ok2; if (ok3) { if (u != null) trace(u); } } }'
+			).length
+		);
+	}
+
+	public function testLaunderedTransitiveReassignAliasKills(): Void {
+		// Reassigning the alias Bool (`ok2 = cond()`) severs the (ok2, ok) pair — no transitive reach.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; ok2 = cond(); if (ok2) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testLaunderedTransitiveWritePredicateBoolKills(): Void {
+		// Rewriting the source Bool (`ok = cond()`) drops its predicate AND the (ok2, ok) alias.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; ok = cond(); if (ok2) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testLaunderedTransitiveWriteTargetKills(): Void {
+		// Writing the compared value `u` between seed and guard kills the predicate; the alias alone narrows nothing.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; var ok2 = ok; u = mk(); if (ok2) { if (u != null) trace(u); } } function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testLaunderedTransitiveShadowKills(): Void {
+		// An inner `var ok = cond()` shadows the outer laundered Bool and clears its predicate — no leak into the shadow.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null; if (cond()) { var ok = cond(); if (ok) { if (u != null) trace(u); } } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateFlagged(): Void {
+		// Feature 2: `ok = u != null && cond()` ⇒ ok true implies u != null, so the then-arm narrows u.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateMultipleConjunctsFlagged(): Void {
+		// Feature 2: each null-check conjunct of the compound Bool narrows its own target.
+		Assert.equals(
+			2,
+			violations(
+				'class C { function f(?u:String, ?v:String) { var ok = u != null && v != null; if (ok) { if (u != null) trace(u); if (v != null) trace(v); } } }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateElseNotFlagged(): Void {
+		// Feature 2 KEY negative: ok false ⇒ some conjunct false, but WHICH is unknown, so the
+		// else-arm narrows nothing — the De Morgan mirror is unsound for a compound predicate.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && cond(); if (ok) trace(0) else { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateNestedOrRefused(): Void {
+		// Any `||` anywhere in the RHS refuses the whole compound predicate (conservative).
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && (cond() || cond()); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateWriteTargetKills(): Void {
+		// Writing a conjunct target after the seed severs its predicate.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && cond(); u = mk(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateReassignBoolKills(): Void {
+		// Reassigning the compound Bool drops all its predicates.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && cond(); ok = cond(); if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateCaptureNotFlagged(): Void {
+		// A conjunct target mutated in a closure is never narrowable, so no compound predicate forms for it.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var g = () -> u = null; var ok = u != null && cond(); if (ok) { if (u != null) trace(u); } g(); } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateLoopBackEdgeKills(): Void {
+		// The loop reassigns u, so the compound predicate cannot survive the back-edge.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && cond(); while (cond()) { if (ok) { if (u != null) trace(u); } u = mk(); } } function cond():Bool return true; function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateMultiBindingNotFlagged(): Void {
+		// A multi-binding declaration cannot attribute its init to the name — no compound predicate.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && cond(), junk = 1; if (ok) { if (u != null) trace(u); } } function cond():Bool return true; }'
+			).length
+		);
+	}
+
+	public function testCompoundPredicateConjunctSideEffect(): Void {
+		// A side-effecting conjunct (`(v = mk()) != null`) is not a plain ident-null compare, so
+		// only the plain `u != null` conjunct seeds the predicate — short-circuit order is sound.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(?u:String, ?v:String) { var ok = (v = mk()) != null && u != null; if (ok) { if (u != null) trace(u); } } function mk():String return null; }'
+			).length
+		);
+	}
+
+	public function testNotWrappedEqNullThenFlagged(): Void {
+		// Feature 3: `if (!(u == null))` — the then-arm proves u non-null (double-negated == null).
+		Assert.equals(1, violations('class C { function f(?u:String) { if (!(u == null)) { if (u != null) trace(u); } } }').length);
+	}
+
+	public function testNotWrappedNeqNullElseFlagged(): Void {
+		// Feature 3: `if (!(u != null))` — the ELSE-arm proves u non-null (negated != null).
+		Assert.equals(
+			1, violations('class C { function f(?u:String) { if (!(u != null)) trace(0) else { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testDoubleNotFlagged(): Void {
+		// Feature 3: `!(!(u != null))` collapses to `u != null` — the then-arm narrows u.
+		Assert.equals(1, violations('class C { function f(?u:String) { if (!(!(u != null))) { if (u != null) trace(u); } } }').length);
+	}
+
+	public function testNotWrappedEqNullElseNotFlagged(): Void {
+		// Feature 3 negative: the else-arm of `if (!(u == null))` proves u NULL, not non-null — not a dead != guard.
+		Assert.equals(
+			0, violations('class C { function f(?u:String) { if (!(u == null)) trace(0) else { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testNotWrappedConjunctionNoNarrow(): Void {
+		// Feature 3 soundness: `!(u == null && v == null)` = `u != null || v != null` — a disjunction
+		// proves NEITHER operand non-null on the then-arm, so no narrowing.
+		Assert.equals(
+			0,
+			violations('class C { function f(?u:String, ?v:String) { if (!(u == null && v == null)) { if (u != null) trace(u); } } }').length
+		);
+	}
+
+	public function testCompoundPredicateSelfWriteTargetNotFlagged(): Void {
+		// Adversarial-review hole (fixed): a conjunct target ALSO written elsewhere in the same
+		// RHS (`u != null && (u = mk()) == null`) must NOT seed the compound predicate — `ok`
+		// reflects the pre-write `u`. establishCompoundPredicates excludes RHS-written targets.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u != null && (u = mk()) == null; if (ok) { if (u != null) trace(u); } } function mk():String return null; }'
 			).length
 		);
 	}

@@ -33,8 +33,13 @@ private typedef FlowState = {
 	var present: Array<ExistsFact>;
 }
 
-/** A laundered-guard fact: `bool ⇒ (target != null)` when `notEq`, else `bool ⇒ (target == null)`. A Bool own-name local bound to a null-comparison of a plain own-name ident, so branching on `bool` narrows `target`. */
-private typedef PredicateFact = { bool: String, target: String, notEq: Bool };
+/** A laundered-guard fact: `bool ⇒ (target != null)` when `notEq`, else `bool ⇒ (target == null)`. A Bool own-name local bound to a null-comparison of a plain own-name ident, so branching on `bool` narrows `target`. `compound` marks a one-way fact seeded from a conjunctive RHS (`bool = a != null && …`): only its truth (the then-arm) narrows each conjunct, its falsity implying no single one — so the else-arm mirror is suppressed. */
+private typedef PredicateFact = {
+	bool: String,
+	target: String,
+	notEq: Bool,
+	compound: Bool
+};
 
 /** An unordered pair of plain own-name locals proven to hold the same reference (a direct `v = u` copy) — narrowing either narrows both, until one is written, captured, or re-aliased. */
 private typedef AliasPair = { a: String, b: String };
@@ -55,6 +60,7 @@ private typedef FlowCtx = {
 	var eqKind: Null<String>;
 	var nullLitKind: Null<String>;
 	var parenKind: Null<String>;
+	var notKind: Null<String>;
 	var writeKinds: Array<String>;
 	var localDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
@@ -150,10 +156,7 @@ private typedef FlowCtx = {
  *   consumers). Every fact dies on ANY write to a name it mentions (including
  *   `??=`, whose target may be reassigned), on capture (never established for a
  *   closure-mutated name), at shadow entry/exit, and at any join where it does
- *   not hold on both arms. Anything short of the exact shapes above — a
- *   composite Bool RHS, a field or call RHS — establishes nothing, and a
- *   Bool-to-Bool copy (`var ok2 = ok`) merely aliases the two Bools without
- *   re-laundering the predicate (a refusal is only a safe miss).
+ *   not hold on both arms. A conjunctive Bool RHS (`ok = a != null && …`, with no `||` anywhere) seeds a one-way `compound` predicate per null-comparison conjunct — narrowing only in the then-arm; a Bool-to-Bool copy (`var ok2 = ok`) aliases the two, so a predicate launders transitively through the alias closure; and a `!(…)` guard flips both the comparison polarity and the combine operator (De Morgan), unwinding nested negations. Anything else — a field or call RHS, or any `||` inside an otherwise-conjunctive RHS — establishes nothing (a refusal is only a safe miss).
  *
  * Pure, stateless class (mirrors `TypeResolver`).
  */
@@ -355,6 +358,7 @@ final class NullFlow {
 			notEqKind: shape.notEqKind,
 			nullLitKind: shape.nullLiteralKind,
 			parenKind: shape.parenKind,
+			notKind: shape.notKind,
 			writeKinds: shape.writeParentKinds ?? [],
 			localDeclKinds: localDeclKinds,
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
@@ -957,6 +961,13 @@ final class NullFlow {
 			for (c in cond.children) collectNarrow(c, out, ctx, cmpKind, combineKind);
 		} else if (ctx.parenKind != null && kind == ctx.parenKind && cond.children.length == 1) {
 			collectNarrow(cond.children[0], out, ctx, cmpKind, combineKind);
+		} else if (ctx.notKind != null && kind == ctx.notKind && cond.children.length == 1) {
+			// Feature 3: `!(…)` flips the comparison polarity AND the combine operator (De Morgan) — a
+			// negand proving x null then proves x non-null, and its `&&`/`||` swap; nested `!` unwinds
+			// by recursion (double-not restores the original polarity).
+			final flipCmp: Null<String> = cmpKind == ctx.notEqKind ? ctx.eqKind : (cmpKind == ctx.eqKind ? ctx.notEqKind : cmpKind);
+			final flipCombine: String = combineKind == BOOL_AND_KIND ? BOOL_OR_KIND : BOOL_AND_KIND;
+			collectNarrow(cond.children[0], out, ctx, flipCmp, flipCombine);
 		}
 	}
 
@@ -1033,7 +1044,7 @@ final class NullFlow {
 			known: [for (n in a.known) if (b.known.contains(n)) n],
 			maybe: [for (n in a.maybe) if (b.maybe.contains(n)) n],
 			predicates: [for (p in a.predicates) if (b.predicates.exists(q ->
-				q.bool == p.bool && q.target == p.target && q.notEq == p.notEq
+				q.bool == p.bool && q.target == p.target && q.notEq == p.notEq && q.compound == p.compound
 			)) p],
 			aliases: [for (x in a.aliases) if (b.aliases.exists(q -> (q.a == x.a && q.b == x.b) || (q.a == x.b && q.b == x.a))) x],
 			present: [for (e in a.present) if (b.present.exists(q -> q.map == e.map && q.key == e.key)) e]
@@ -1125,8 +1136,17 @@ final class NullFlow {
 			final t: Null<String> = operand?.name;
 			if (t != null && t != name && ctx.ownNames.contains(t) && !ctx.captured.contains(t)) {
 				final target: String = t;
-				state.predicates.push({ bool: name, target: target, notEq: rk == ctx.notEqKind });
+				state.predicates.push({
+					bool: name,
+					target: target,
+					notEq: rk == ctx.notEqKind,
+					compound: false
+				});
 			}
+			return;
+		}
+		if (rk == BOOL_AND_KIND) {
+			establishCompoundPredicates(state, ctx, name, r);
 			return;
 		}
 		if (rk == ctx.identKind) {
@@ -1168,15 +1188,19 @@ final class NullFlow {
 	): Void {
 		final idents: Array<String> = [];
 		collectPredicateIdents(cond, idents, ctx, combineKind);
+		// Feature 1: a Bool aliased to a laundered guard (`var ok2 = ok`) inherits its predicate —
+		// grow the ident set by transitive alias closure before the predicate lookup.
+		expandAliases(base, idents);
 		final thenArm: Bool = combineKind == BOOL_AND_KIND;
-		for (id in idents) {
-			final fact: Null<PredicateFact> = base.predicates.find(p -> p.bool == id);
-			if (fact != null) {
-				if (thenArm == fact.notEq)
-					nonNull.push(fact.target);
-				else
-					known.push(fact.target);
-			}
+		for (id in idents) for (fact in base.predicates) if (fact.bool == id) {
+			// Feature 2: a compound predicate (`ok = a != null && b`) is one-way — its truth implies
+			// each conjunct, but its falsity (the else-arm) implies nothing, so the De Morgan mirror
+			// is unsound and skipped.
+			if (!thenArm && fact.compound) continue;
+			if (thenArm == fact.notEq)
+				nonNull.push(fact.target);
+			else
+				known.push(fact.target);
 		}
 	}
 
@@ -1243,6 +1267,50 @@ final class NullFlow {
 		var r: QueryNode = node;
 		while (ctx.parenKind != null && r.kind == ctx.parenKind && r.children.length == 1) r = r.children[0];
 		return r;
+	}
+
+	/**
+	 * Feature 2: seed one-way (`compound`) predicates from a conjunctive Bool RHS
+	 * (`ok = a != null && b == null && …`). Refused outright if ANY `||` appears anywhere
+	 * in the RHS — its truth would then no longer imply each null-comparison conjunct. Each
+	 * `!= null` conjunct of a plain own-name ident yields `ok ⇒ target != null`, each `==
+	 * null` conjunct `ok ⇒ target == null`; only the then-arm (ok true) consumes these — the
+	 * else-arm (ok false) implies nothing, so `addLaunderedNarrowing` suppresses its mirror.
+	 */
+	private static function establishCompoundPredicates(state: FlowState, ctx: FlowCtx, name: String, andRhs: QueryNode): Void {
+		if (containsOr(andRhs)) return;
+		// A conjunct target that is ALSO written elsewhere in the RHS (`u != null && (u = mk()) ==
+		// null`) cannot be trusted — `ok` reflects the pre-write value, so exclude it, mirroring
+		// narrowedCopy's cond-self-write guard.
+		final written: Array<String> = [];
+		collectWrites(andRhs, written, ctx);
+		final nn: Array<String> = [];
+		collectNarrow(andRhs, nn, ctx, ctx.notEqKind, BOOL_AND_KIND);
+		final kn: Array<String> = [];
+		collectNarrow(andRhs, kn, ctx, ctx.eqKind, BOOL_AND_KIND);
+		for (t in nn) if (
+			t != name && !written.contains(t) && ctx.ownNames.contains(t) && !ctx.captured.contains(t)
+		) state.predicates.push({
+			bool: name,
+			target: t,
+			notEq: true,
+			compound: true
+		});
+		for (t in kn) if (
+			t != name && !written.contains(t) && ctx.ownNames.contains(t) && !ctx.captured.contains(t)
+		) state.predicates.push({
+			bool: name,
+			target: t,
+			notEq: false,
+			compound: true
+		});
+	}
+
+	/** Whether `node`'s subtree contains any logical-`||` operator — the compound-predicate refusal trigger. */
+	private static function containsOr(node: QueryNode): Bool {
+		if (node.kind == BOOL_OR_KIND) return true;
+		for (c in node.children) if (containsOr(c)) return true;
+		return false;
 	}
 
 }

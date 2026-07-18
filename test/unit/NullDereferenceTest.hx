@@ -182,6 +182,18 @@ class NullDereferenceTest extends Test {
 		Assert.equals(1, violations('class C { function f(?u:String) { var ok = u == null; if (ok) u.charAt(0); } }').length);
 	}
 
+	public function testCompoundKnownNullSelfWriteNotFlagged(): Void {
+		// Adversarial-review mirror hole (fixed): `var ok = u == null && (u = mk()) != null` writes
+		// u in the RHS, so the compound `== null` conjunct must NOT narrow u to known-null — `ok`
+		// can be true with u reassigned non-null. establishCompoundPredicates excludes it.
+		Assert.equals(
+			0,
+			violations(
+				'class C { function f(?u:String) { var ok = u == null && (u = mk()) != null; if (ok) u.charAt(0); } function mk():String return "x"; }'
+			).length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new NullDereference().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
