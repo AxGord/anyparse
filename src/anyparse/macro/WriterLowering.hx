@@ -3370,15 +3370,13 @@ class WriterLowering {
 				result.push(ctor);
 				continue;
 			}
-			if (branch.children.length == 1 && branch.children[0].kind == Ref) {
-				final innerName: Null<String> = branch.children[0].annotations.get('base.ref');
-				final innerNode: Null<ShapeNode> = innerName == null ? null : _shape.rules.get(innerName);
-				if (innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0) {
-					final firstField: ShapeNode = innerNode.children[0];
-					final firstLead: Null<String> = firstField.annotations.get('lit.leadText') ?? firstField.readMetaString(':lead');
-					if (firstLead != null && firstLead.charAt(0) == '{') result.push(ctor);
-				}
-			}
+			if (!(branch.children.length == 1 && branch.children[0].kind == Ref)) continue;
+			final innerName: Null<String> = branch.children[0].annotations.get('base.ref');
+			final innerNode: Null<ShapeNode> = innerName == null ? null : _shape.rules.get(innerName);
+			if (!(innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0)) continue;
+			final firstField: ShapeNode = innerNode.children[0];
+			final firstLead: Null<String> = firstField.annotations.get('lit.leadText') ?? firstField.readMetaString(':lead');
+			if (firstLead != null && firstLead.charAt(0) == '{') result.push(ctor);
 		}
 		return result;
 	}
@@ -12775,16 +12773,15 @@ class WriterLowering {
 			// `_prevKindPrevExcl != 1` guard so the override is suppressed when
 			// the previous sibling was excluded (falls through to source).
 			final prevExcludeCases: Null<Array<Case>> = info.prevExcludeCases;
-			if (prevExcludeCases != null) {
-				acc.prevVars.push({ name: '_prevKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
-				acc.currVars.push({ name: '_currKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
-				final exclSwitch: Expr = { expr: ESwitch(classifierAccess, prevExcludeCases, null), pos: pos };
-				final exclLhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
-				acc.currCompute.push(macro $exclLhs = $exclSwitch);
-				final exclTlhs: Expr = { expr: EConst(CIdent('_prevKindPrevExcl' + i)), pos: pos };
-				final exclTrhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
-				acc.trackPrev.push(macro $exclTlhs = $exclTrhs);
-			}
+			if (prevExcludeCases == null) continue;
+			acc.prevVars.push({ name: '_prevKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
+			acc.currVars.push({ name: '_currKindPrevExcl' + i, type: macro :Int, expr: macro 0 });
+			final exclSwitch: Expr = { expr: ESwitch(classifierAccess, prevExcludeCases, null), pos: pos };
+			final exclLhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
+			acc.currCompute.push(macro $exclLhs = $exclSwitch);
+			final exclTlhs: Expr = { expr: EConst(CIdent('_prevKindPrevExcl' + i)), pos: pos };
+			final exclTrhs: Expr = { expr: EConst(CIdent('_currKindPrevExcl' + i)), pos: pos };
+			acc.trackPrev.push(macro $exclTlhs = $exclTrhs);
 		}
 	}
 

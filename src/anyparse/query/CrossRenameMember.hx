@@ -167,10 +167,9 @@ final class CrossRenameMember {
 					var isOverride: Bool = false;
 					for (j in 0...i) {
 						final s: Null<Span> = siblings[j].span;
-						if (s != null && s.from >= groupSpan.from && s.to <= spanNN.from) {
-							if (siblings[j].kind == 'Static') isStatic = true;
-							if (siblings[j].kind == 'Override') isOverride = true;
-						}
+						if (!(s != null && s.from >= groupSpan.from && s.to <= spanNN.from)) continue;
+						if (siblings[j].kind == 'Static') isStatic = true;
+						if (siblings[j].kind == 'Override') isOverride = true;
 					}
 					best = {
 						typeName: decl.name,

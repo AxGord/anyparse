@@ -2443,45 +2443,44 @@ class WrapList {
 			// body's own leading sep but neither element starts with a
 			// hardline at the Doc level.
 			final hardLed: Bool = !atEnd && (hasLeadingHardline(items[i]) || skipSepBefore(sepBeforeFlags, i));
-			if (atEnd || hardLed) {
-				if (chunkStart > 0) {
-					// The inter-chunk sep belongs immediately
-					// BEFORE `items[chunkStart]` (the first element of the
-					// current chunk we are about to push) — its flag is
-					// `sepBeforeFlags[chunkStart]`. When `true`, suppress
-					// the `Text(sep)` and keep only the forced `Line('\n')`.
-					// Closes whitespace/issue_582 where a `#if … #end`
-					// conditional-param body leads with its own sep and
-					// the outer comma was therefore elided.
-					if (!skipSepBefore(sepBeforeFlags, chunkStart)) bodyParts.push(Text(sep));
-					bodyParts.push(Line('\n'));
-				}
-				if (i - chunkStart == 1) {
-					bodyParts.push(items[chunkStart]);
-				} else {
-					final chunk: Array<Doc> = items.slice(chunkStart, i);
-					// Only the LAST chunk reserves cols for the tail —
-					// earlier chunks are followed by a forced `,\n` chunk
-					// boundary so their last-item-fit decision can't push
-					// the tail off the line. Reserving on them would
-					// tighten the in-chunk wrap budget without benefit.
-					final tailReserve: Int = atEnd ? lastChunkTailReserve : 0;
-					// ω-fill-rest-probe: opt-in to `FillWithRestProbe` on the
-					// LAST chunk when the caller's Star opted in via
-					// `@:fmt(groupRestProbe)`. Mirrors `GroupWithRestProbe`
-					// at outer Group layer — together they close fixtures
-					// like `wrapping/issue_494_type_parameter` where the LHS
-					// typeParams must wrap because significant content
-					// (`= RequestMethod<...>;`) trails on the same source
-					// line. Earlier chunks are followed by a forced `,\n`
-					// boundary so rest-probe is irrelevant there — bare Fill
-					// preserves byte-equivalent legacy behavior.
-					bodyParts.push(
-						groupRestProbe && atEnd ? FillWithRestProbe(chunk, softSep, tailReserve) : Fill(chunk, softSep, tailReserve)
-					);
-				}
-				chunkStart = i;
+			if (!(atEnd || hardLed)) continue;
+			if (chunkStart > 0) {
+				// The inter-chunk sep belongs immediately
+				// BEFORE `items[chunkStart]` (the first element of the
+				// current chunk we are about to push) — its flag is
+				// `sepBeforeFlags[chunkStart]`. When `true`, suppress
+				// the `Text(sep)` and keep only the forced `Line('\n')`.
+				// Closes whitespace/issue_582 where a `#if … #end`
+				// conditional-param body leads with its own sep and
+				// the outer comma was therefore elided.
+				if (!skipSepBefore(sepBeforeFlags, chunkStart)) bodyParts.push(Text(sep));
+				bodyParts.push(Line('\n'));
 			}
+			if (i - chunkStart == 1) {
+				bodyParts.push(items[chunkStart]);
+			} else {
+				final chunk: Array<Doc> = items.slice(chunkStart, i);
+				// Only the LAST chunk reserves cols for the tail —
+				// earlier chunks are followed by a forced `,\n` chunk
+				// boundary so their last-item-fit decision can't push
+				// the tail off the line. Reserving on them would
+				// tighten the in-chunk wrap budget without benefit.
+				final tailReserve: Int = atEnd ? lastChunkTailReserve : 0;
+				// ω-fill-rest-probe: opt-in to `FillWithRestProbe` on the
+				// LAST chunk when the caller's Star opted in via
+				// `@:fmt(groupRestProbe)`. Mirrors `GroupWithRestProbe`
+				// at outer Group layer — together they close fixtures
+				// like `wrapping/issue_494_type_parameter` where the LHS
+				// typeParams must wrap because significant content
+				// (`= RequestMethod<...>;`) trails on the same source
+				// line. Earlier chunks are followed by a forced `,\n`
+				// boundary so rest-probe is irrelevant there — bare Fill
+				// preserves byte-equivalent legacy behavior.
+				bodyParts.push(
+					groupRestProbe && atEnd ? FillWithRestProbe(chunk, softSep, tailReserve) : Fill(chunk, softSep, tailReserve)
+				);
+			}
+			chunkStart = i;
 		}
 		final tail: Doc = appendTrailingComma ? Text(sep) : Empty;
 		final inner: Doc = Concat([Concat(bodyParts), tail]);

@@ -102,15 +102,14 @@ final class DocCoverage implements Check implements ConfigAware {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) {
-				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-				final cfg: DocCfg = {
-					requireTypeDoc: config.boolOption(RULE_ID, 'requireTypeDoc') ?? DEFAULT_REQUIRE_TYPE_DOC,
-					requireMemberDoc: config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC,
-					includeConstructor: config.boolOption(RULE_ID, 'includeConstructor') ?? DEFAULT_INCLUDE_CONSTRUCTOR
-				};
-				scanModule(violations, entry.file, entry.source, tree, seams, cfg, docBlockEnds(entry.source));
-			}
+			if (tree == null) continue;
+			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			final cfg: DocCfg = {
+				requireTypeDoc: config.boolOption(RULE_ID, 'requireTypeDoc') ?? DEFAULT_REQUIRE_TYPE_DOC,
+				requireMemberDoc: config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC,
+				includeConstructor: config.boolOption(RULE_ID, 'includeConstructor') ?? DEFAULT_INCLUDE_CONSTRUCTOR
+			};
+			scanModule(violations, entry.file, entry.source, tree, seams, cfg, docBlockEnds(entry.source));
 		}
 		return violations;
 	}

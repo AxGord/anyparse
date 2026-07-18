@@ -96,16 +96,15 @@ final class PreferTernaryReturn implements Check {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				final match: Null<TernaryMatch> = pairAt(kids, i, support, shape, ifKinds, returnKind);
-				if (match != null) {
-					final span: Null<Span> = match.ifNode.span;
-					if (span != null) out.push({
-						file: file,
-						span: span,
-						rule: 'prefer-ternary-return',
-						severity: Severity.Info,
-						message: 'this if/return pair can be a single ternary return'
-					});
-				}
+				if (match == null) continue;
+				final span: Null<Span> = match.ifNode.span;
+				if (span != null) out.push({
+					file: file,
+					span: span,
+					rule: 'prefer-ternary-return',
+					severity: Severity.Info,
+					message: 'this if/return pair can be a single ternary return'
+				});
 			}
 		}
 		for (c in node.children) walk(out, file, c, support, shape, ifKinds, returnKind);
@@ -120,13 +119,11 @@ final class PreferTernaryReturn implements Check {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length) {
 				final match: Null<TernaryMatch> = pairAt(kids, i, support, shape, ifKinds, returnKind);
-				if (match != null) {
-					final ifSpan: Null<Span> = match.ifNode.span;
-					if (ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}')) {
-						final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, shape);
-						if (edit != null) edits.push(edit);
-					}
-				}
+				if (match == null) continue;
+				final ifSpan: Null<Span> = match.ifNode.span;
+				if (!(ifSpan != null && flagged.contains('${ifSpan.from}:${ifSpan.to}'))) continue;
+				final edit: Null<{ span: Span, text: String }> = buildEdit(match, source, shape);
+				if (edit != null) edits.push(edit);
 			}
 		}
 		for (c in node.children) collectFixes(c, source, support, shape, ifKinds, returnKind, flagged, edits);

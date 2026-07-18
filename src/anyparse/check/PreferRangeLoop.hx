@@ -420,10 +420,9 @@ final class PreferRangeLoop implements Check {
 		final kids: Array<QueryNode> = node.children;
 		for (i in 0...kids.length - 1) {
 			final m = analyze(kids[i], kids[i + 1], node, root, source, dt, s);
-			if (m != null && wanted.contains('${m.declSpan.from}:${m.declSpan.to}')) {
-				final e: Null<{ span: Span, text: String }> = buildRangeEdit(m, source, s);
-				if (e != null) out.push(e);
-			}
+			if (!(m != null && wanted.contains('${m.declSpan.from}:${m.declSpan.to}'))) continue;
+			final e: Null<{ span: Span, text: String }> = buildRangeEdit(m, source, s);
+			if (e != null) out.push(e);
 		}
 		for (c in kids) fixWalk(c, root, source, dt, s, wanted, out);
 	}

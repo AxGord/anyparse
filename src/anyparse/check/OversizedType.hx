@@ -73,17 +73,16 @@ final class OversizedType implements Check implements ConfigAware {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) {
-				final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-				final cfg: OversizedCfg = {
-					containerKinds: containerKinds,
-					memberKinds: memberKinds,
-					conditionalKind: shape.conditionalMemberKind,
-					maxMembers: config.intOption('oversized-type', 'maxMembers') ?? DEFAULT_MAX_MEMBERS,
-					maxLines: config.intOption('oversized-type', 'maxLines') ?? DEFAULT_MAX_LINES
-				};
-				walk(violations, entry.file, entry.source, tree, cfg);
-			}
+			if (tree == null) continue;
+			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
+			final cfg: OversizedCfg = {
+				containerKinds: containerKinds,
+				memberKinds: memberKinds,
+				conditionalKind: shape.conditionalMemberKind,
+				maxMembers: config.intOption('oversized-type', 'maxMembers') ?? DEFAULT_MAX_MEMBERS,
+				maxLines: config.intOption('oversized-type', 'maxLines') ?? DEFAULT_MAX_LINES
+			};
+			walk(violations, entry.file, entry.source, tree, cfg);
 		}
 		return violations;
 	}

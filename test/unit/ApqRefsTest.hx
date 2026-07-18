@@ -471,10 +471,9 @@ class ApqRefsTest extends Test {
 			// Each read binds to the decl of ITS OWN function: the read's span
 			// sits on the same fixture line as its binding (fixture is one
 			// local fn per line).
-			if (binding != null) {
-				final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
-				Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling local fns (binding ${binding.from})');
-			}
+			if (binding == null) continue;
+			final sameLine: Bool = lineOf(source, r.span.from) == lineOf(source, binding.from);
+			Assert.isTrue(sameLine, 'read at ${r.span.from} bound across sibling local fns (binding ${binding.from})');
 		}
 	}
 

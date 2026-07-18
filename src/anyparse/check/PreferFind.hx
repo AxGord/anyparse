@@ -396,25 +396,23 @@ final class PreferFind implements Check {
 				}
 			}
 			final declName: Null<String> = nullInitLocalName(a, s);
-			if (declName != null) {
-				final headB: Null<{
-					loopVar: String,
-					iterable: QueryNode,
-					cond: QueryNode,
-					then: QueryNode
-				}> = forIfHead(b, source, s);
-				if (headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s)) {
-					final span: Null<Span> = b.span;
-					if (span != null) out['${span.from}:${span.to}'] = {
-						isBreak: true,
-						forNode: b,
-						sibling: a,
-						loopVar: headB.loopVar,
-						iterable: headB.iterable,
-						cond: headB.cond
-					};
-				}
-			}
+			if (declName == null) continue;
+			final headB: Null<{
+				loopVar: String,
+				iterable: QueryNode,
+				cond: QueryNode,
+				then: QueryNode
+			}> = forIfHead(b, source, s);
+			if (!(headB != null && isAssignBreakBody(headB.then, declName, headB.loopVar, s))) continue;
+			final span: Null<Span> = b.span;
+			if (span != null) out['${span.from}:${span.to}'] = {
+				isBreak: true,
+				forNode: b,
+				sibling: a,
+				loopVar: headB.loopVar,
+				iterable: headB.iterable,
+				cond: headB.cond
+			};
 		}
 		for (c in kids) collectFixCandidates(c, source, s, out);
 	}

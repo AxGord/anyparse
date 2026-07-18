@@ -50,10 +50,9 @@ class ApqSpanFlowTest extends Test {
 		for (decl in tree.children) {
 			final span = decl.span;
 			Assert.notNull(span, 'every top-level decl needs a span');
-			if (span != null) {
-				Assert.isTrue(span.from > prevFrom, 'span order must be strict — got from=${span.from}, prev=$prevFrom');
-				prevFrom = span.from;
-			}
+			if (span == null) continue;
+			Assert.isTrue(span.from > prevFrom, 'span order must be strict — got from=${span.from}, prev=$prevFrom');
+			prevFrom = span.from;
 		}
 	}
 

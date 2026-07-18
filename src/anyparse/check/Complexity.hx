@@ -83,11 +83,10 @@ final class Complexity implements Check implements ConfigAware {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) {
-				final max: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
-					.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
-				walk(violations, entry.file, tree, cfg, max);
-			}
+			if (tree == null) continue;
+			final max: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
+				.intOption('complexity', 'max') ?? plugin.maxComplexity(entry.file) ?? DEFAULT_MAX_COMPLEXITY;
+			walk(violations, entry.file, tree, cfg, max);
 		}
 		return violations;
 	}

@@ -4873,10 +4873,9 @@ final class Cli {
 		var totalHits: Int = 0;
 		for (r in walk.records) {
 			final n: Int = countRegexHits(re, r.source);
-			if (n > 0) {
-				hits.push({ path: r.path, count: n });
-				totalHits += n;
-			}
+			if (!(n > 0)) continue;
+			hits.push({ path: r.path, count: n });
+			totalHits += n;
 		}
 		hits.sort((a, b) -> b.count - a.count);
 		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
@@ -5214,20 +5213,20 @@ final class Cli {
 			for (entry in arr) {
 				final entryPath: Null<Dynamic> = Reflect.field(entry, 'path');
 				final entryStatus: Null<Dynamic> = Reflect.field(entry, 'status');
-				if (entryPath != null && entryStatus != null && Std.isOfType(entryPath, String) && Std.isOfType(entryStatus, String)) {
-					// Normalise snapshot path to match what
-					// `stripRootPrefix` emits for the recon walker. The
-					// corpus harness records paths as
-					// `test/testcases/<subdir>/<name>` (rooted at the fork);
-					// recon walks from `<fork>/test/testcases` so its
-					// stripped paths are `<subdir>/<name>`. Trim the leading
-					// `test/testcases/` here so the diff lookup is keyed
-					// the same way on both sides.
-					final raw: String = (entryPath: String);
-					final corpusPrefix: String = 'test/testcases/';
-					final normalised: String = StringTools.startsWith(raw, corpusPrefix) ? raw.substr(corpusPrefix.length) : raw;
-					out[normalised] = (entryStatus: String);
-				}
+				if (!(entryPath != null && entryStatus != null && Std.isOfType(entryPath, String) && Std.isOfType(entryStatus, String)))
+					continue;
+				// Normalise snapshot path to match what
+				// `stripRootPrefix` emits for the recon walker. The
+				// corpus harness records paths as
+				// `test/testcases/<subdir>/<name>` (rooted at the fork);
+				// recon walks from `<fork>/test/testcases` so its
+				// stripped paths are `<subdir>/<name>`. Trim the leading
+				// `test/testcases/` here so the diff lookup is keyed
+				// the same way on both sides.
+				final raw: String = (entryPath: String);
+				final corpusPrefix: String = 'test/testcases/';
+				final normalised: String = StringTools.startsWith(raw, corpusPrefix) ? raw.substr(corpusPrefix.length) : raw;
+				out[normalised] = (entryStatus: String);
 			}
 		} catch (_: Exception) {
 			// best-effort: a scan failure leaves the partial status map

@@ -145,12 +145,11 @@ final class Patch {
 			}
 			if (!ok) continue;
 			count++;
-			if (count == 1) {
-				final firstLine: String = lines[start];
-				final lastLine: String = lines[start + wanted.length - 1];
-				from = offsets[start] + (firstLine.length - StringTools.ltrim(firstLine).length);
-				to = offsets[start + wanted.length - 1] + StringTools.rtrim(lastLine).length;
-			}
+			if (count != 1) continue;
+			final firstLine: String = lines[start];
+			final lastLine: String = lines[start + wanted.length - 1];
+			from = offsets[start] + (firstLine.length - StringTools.ltrim(firstLine).length);
+			to = offsets[start + wanted.length - 1] + StringTools.rtrim(lastLine).length;
 		}
 		return { from: from, to: to, count: count };
 	}

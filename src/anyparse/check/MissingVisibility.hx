@@ -176,10 +176,9 @@ final class MissingVisibility implements Check {
 					edits, child, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames,
 					publicDefault
 				);
-			if (childConsumes) {
-				publicDefault = false;
-				sawDecl = true;
-			}
+			if (!childConsumes) continue;
+			publicDefault = false;
+			sawDecl = true;
 		}
 		return sawDecl;
 	}

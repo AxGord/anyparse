@@ -95,15 +95,13 @@ final class UnusedParameter implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) {
-				final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
-				walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
-				for (c in candidates)
-					checkFunction(
-						violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape,
-						index
-					);
-			}
+			if (tree == null) continue;
+			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
+			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
+			for (c in candidates)
+				checkFunction(
+					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index
+				);
 		}
 		return violations;
 	}

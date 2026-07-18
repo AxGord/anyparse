@@ -125,12 +125,11 @@ final class PreferEnumAbstract implements Check {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			final prefix: Null<String> = name != null ? prefixOf(name) : null;
-			if (prefix != null && span != null && name != null) {
-				final prefixValue: String = prefix;
-				final spanValue: Span = span;
-				final nameValue: String = name;
-				out.push({ prefix: prefixValue, span: spanValue, name: nameValue });
-			}
+			if (!(prefix != null && span != null && name != null)) continue;
+			final prefixValue: String = prefix;
+			final spanValue: Span = span;
+			final nameValue: String = name;
+			out.push({ prefix: prefixValue, span: spanValue, name: nameValue });
 		}
 		return out;
 	}

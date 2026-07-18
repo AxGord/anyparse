@@ -58,12 +58,11 @@ final class ExplicitType implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) {
-				// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
-				final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
-				final ea: Null<String> = ignoreEA ? enumAbstract : null;
-				walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea);
-			}
+			if (tree == null) continue;
+			// checkstyle `Type.ignoreEnumAbstractValues` (default true) toggles the enum-abstract-value exemption.
+			final ignoreEA: Bool = plugin.checkOverrides(entry.file)?.explicitTypeIgnoreEnumAbstract ?? true;
+			final ea: Null<String> = ignoreEA ? enumAbstract : null;
+			walk(violations, entry.file, entry.source, tree, null, fields, functions, params, bodies, ea);
 		}
 		return violations;
 	}

@@ -74,15 +74,14 @@ final class MagicNumber implements Check implements ConfigAware {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) {
-				// Exempt base: a project checkstyle `MagicNumber.ignoreNumbers`, else the built-in default;
-				// the apqlint `ignore` list adds to it.
-				final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
-				final ignore: Array<Float> = LintConfig.resolveWith(_resolveConfig, entry.file)
-					.numberListOption('magic-number', 'ignore') ?? [];
-				final exempt: Array<Float> = base.concat(ignore);
-				walk(violations, entry.file, tree, null, false, false, cfg, exempt);
-			}
+			if (tree == null) continue;
+			// Exempt base: a project checkstyle `MagicNumber.ignoreNumbers`, else the built-in default;
+			// the apqlint `ignore` list adds to it.
+			final base: Array<Float> = plugin.checkOverrides(entry.file)?.magicNumberIgnore ?? EXEMPT;
+			final ignore: Array<Float> = LintConfig.resolveWith(_resolveConfig, entry.file)
+				.numberListOption('magic-number', 'ignore') ?? [];
+			final exempt: Array<Float> = base.concat(ignore);
+			walk(violations, entry.file, tree, null, false, false, cfg, exempt);
 		}
 		return violations;
 	}

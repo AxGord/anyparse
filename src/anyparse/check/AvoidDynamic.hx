@@ -342,10 +342,9 @@ final class AvoidDynamic implements Check implements ConfigAware {
 		for (v in found) {
 			final span: Null<Span> = v.span;
 			final key: String = span == null ? '' : '${span.from}:${span.to}';
-			if (span == null || !seen.exists(key)) {
-				seen[key] = true;
-				into.push(v);
-			}
+			if (!(span == null || !seen.exists(key))) continue;
+			seen[key] = true;
+			into.push(v);
 		}
 	}
 
