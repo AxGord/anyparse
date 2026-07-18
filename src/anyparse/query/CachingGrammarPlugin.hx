@@ -43,6 +43,12 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	private final _importMapCache: Map<String, Map<String, String>> = [];
 
+	// Run-scoped, same lifecycle as the other caches on this class — a fresh
+	// RefsCache per wrapper instance, shared with every RefShape this plugin hands
+	// out so `Refs.find` resolves against ONE memoized index per tree instead of
+	// re-walking per query.
+	private final _refsCache: RefsCache = new RefsCache();
+
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
 	}
@@ -67,7 +73,18 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 
 	public function parsePattern(source: String): Pattern return _inner.parsePattern(source);
 
-	public function refShape(): RefShape return _inner.refShape();
+	/**
+	 * `GrammarPlugin`: attaches this wrapper's run-scoped `RefsCache` to a fresh
+	 * copy of the inner shape, so `Refs.find` resolves through the memoized
+	 * index instead of walking the tree per query. Safe: `_inner.refShape()`
+	 * returns a fresh struct literal per call, so mutating the copy leaks
+	 * nowhere.
+	 */
+	public function refShape(): RefShape {
+		final shape: RefShape = _inner.refShape();
+		shape.refsCache = _refsCache;
+		return shape;
+	}
 
 	public function metaShape(): MetaShape return _inner.metaShape();
 

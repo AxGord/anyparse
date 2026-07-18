@@ -56,11 +56,18 @@ import anyparse.runtime.Span;
 final class Refs {
 
 	/**
-	 * Walk `tree` and return every reference / declaration of `name`
-	 * per `shape`. Hits are returned in pre-order traversal.
+	 * Walk `tree` and return every reference / declaration of `name` per
+	 * `shape`. Hits are returned in pre-order traversal.
+	 *
+	 * When `shape.refsCache` is set (a run-scoped `RefsCache` attached by
+	 * `CachingGrammarPlugin.refShape`), resolution goes through the cache's
+	 * memoized full-tree index instead of a fresh walk — see `RefsCache` for
+	 * the equivalence argument. A bare shape with no cache walks directly via
+	 * `findMulti`, byte-identical to the pre-cache behavior.
 	 */
 	public static function find(name: String, tree: QueryNode, shape: RefShape): Array<RefHit> {
-		return findMulti([name], tree, shape)[name] ?? [];
+		final cache: Null<RefsCache> = shape.refsCache;
+		return cache != null ? cache.find(name, tree, shape) : findMulti([name], tree, shape)[name] ?? [];
 	}
 
 	/**

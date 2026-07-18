@@ -283,6 +283,14 @@ typedef RefShape = {
 	var selfScopeDeclKinds: Array<String>;
 
 	/**
+	 * Run-scoped reference-resolution cache. A caching plugin wrapper attaches its
+	 * per-run `RefsCache` here so `Refs.find` resolves against a memoized full-file
+	 * index instead of walking the tree per query. Optional — a bare grammar shape
+	 * leaves it unset and `Refs.find` walks directly, byte-identical behavior.
+	 */
+	@:optional var refsCache: RefsCache;
+
+	/**
 	 * Node kinds whose SUBTREE is opaque to textual reference analysis —
 	 * metaprogramming reification where an identifier's uses are injected by
 	 * splicing rather than written literally (Haxe's `macro { … }`, surfaced as
