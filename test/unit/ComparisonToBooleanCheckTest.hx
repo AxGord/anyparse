@@ -142,6 +142,16 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar e = macro x == true;\n\t}\n}').length);
 	}
 
+	/**
+	 * An array element (`ps[i]`) is neither a boolean-operator result nor a bare identifier with a
+	 * declared non-null Bool type, so it is not provably non-null Bool — its `== true` may be
+	 * load-bearing (a `Null<Bool>` / `Dynamic` element under strict null-safety). It stays silent,
+	 * matching `fix`, which refuses to strip a non-boolean-operator operand.
+	 */
+	public function testArrayAccessOperandSkipped(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(ps:Array<Dynamic>):Void {\n\t\tvar b = ps[5] == true;\n\t}\n}').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ComparisonToBoolean().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

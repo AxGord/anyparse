@@ -71,7 +71,7 @@ final class ComparisonToBoolean implements Check {
 			final declaredTypes: Null<Map<Int, String>> = provider != null ? provider.declaredTypes(entry.source) : null;
 			walk(
 				violations, entry.file, tree, tree, seams.shape, declaredTypes, seams.equalityKinds, seams.boolLitKind,
-				seams.nullableKinds, seams.opaqueKinds
+				seams.nullableKinds, seams.opaqueKinds, seams.boolOpKinds
 			);
 		}
 		return violations;
@@ -114,7 +114,8 @@ final class ComparisonToBoolean implements Check {
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
-		equalityKinds: Array<String>, boolLitKind: String, nullableKinds: Array<String>, opaqueKinds: Array<String>
+		equalityKinds: Array<String>, boolLitKind: String, nullableKinds: Array<String>, opaqueKinds: Array<String>,
+		boolOpKinds: Array<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
 		final span: Null<Span> = node.span;
@@ -123,9 +124,9 @@ final class ComparisonToBoolean implements Check {
 			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
 			if (leftIsBool != rightIsBool) {
 				final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-				final identUnverified: Bool = other.kind == shape.identKind && declaredTypes != null
-					&& !TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes);
-				if (!identUnverified && !operandIsNullable(other, nullableKinds)) out.push({
+				if (
+					operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds) && !operandIsNullable(other, nullableKinds)
+				) out.push({
 					file: file,
 					span: span,
 					rule: 'comparison-to-boolean',
@@ -134,7 +135,28 @@ final class ComparisonToBoolean implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, c, root, shape, declaredTypes, equalityKinds, boolLitKind, nullableKinds, opaqueKinds);
+		for (c in node.children)
+			walk(out, file, c, root, shape, declaredTypes, equalityKinds, boolLitKind, nullableKinds, opaqueKinds, boolOpKinds);
+	}
+
+	/**
+	 * Whether `other` is a PROVABLY non-null Bool operand — the same gate `fix` applies, so `run`
+	 * flags nothing `fix` would refuse to strip on nullability grounds (closing the array-element /
+	 * `ps[i] == true`-style false positive). Two proofs: a boolean-operator result (comparison /
+	 * `&&` / `||` / `!`, parentheses unwrapped — `RefactorSupport.provablyBoolOperand`, non-null
+	 * Bool by construction), or a bare identifier whose declared type proves non-null Bool
+	 * (`TypeResolver.isProvablyNonNull`; a grammar with no `TypeInfoProvider` reports the bare
+	 * identifier for a human to judge). Any other operand — an array element, a `Map.get` / method
+	 * result, a possibly-`@:optional` field, a `?.` access, a `Null<Bool>` / unannotated identifier
+	 * — is NOT provably non-null Bool, so its `== true` may be load-bearing under strict
+	 * null-safety and is left unflagged.
+	 */
+	private static function operandProvablyBool(
+		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>
+	): Bool {
+		return RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || (
+			other.kind == shape.identKind && (declaredTypes == null || TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes))
+		);
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
