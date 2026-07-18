@@ -534,6 +534,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'DoubleStringExpr' => 'String'
 			],
 			numericLiteralKinds: ['IntLit', 'FloatLit', 'HexLit'],
+			arrayLiteralKind: 'ArrayExpr',
 			negationKind: 'Neg',
 			objectFieldKind: 'Field',
 			sizeFieldNames: ['length'],

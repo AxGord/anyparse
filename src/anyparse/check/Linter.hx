@@ -8,6 +8,7 @@ using Lambda;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.check.SimplifyBooleanTernary;
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.DefaultOff;
 
 /**
  * Runs a set of `Check`s over a file set and concatenates their
@@ -118,7 +119,8 @@ final class Linter {
 			new StringLiteralDup(),
 			new AvoidDynamic(),
 			new UnusedReturnValue(),
-			new DocCoverage()
+			new DocCoverage(),
+			new ExplicitLocalType()
 		];
 	}
 
@@ -152,6 +154,10 @@ final class Linter {
 		?resolveConfig: (String) -> LintConfig, applyEnablement: Bool = false
 	): Array<Violation> {
 		final active: Array<Check> = checks ?? builtins();
+		// A DefaultOff rule is excluded from the default set: its finding survives only
+		// when the file explicitly opts in (`enabled:true`) — the inverse default the
+		// per-file enablement gate below applies via `enabledFor`'s `defaultOn`.
+		final defaultOffIds: Array<String> = [for (c in active) if (c is DefaultOff) c.id()];
 		// Parse each file once and share the trees across all checks — each check
 		// parses independently otherwise, so N checks over M files is N*M parses.
 		final cached: GrammarPlugin = plugin is CachingGrammarPlugin ? plugin : new CachingGrammarPlugin(plugin);
@@ -167,7 +173,7 @@ final class Linter {
 		final kept: Array<Violation> = [];
 		for (violation in out) {
 			final config: LintConfig = resolveConfig(violation.file);
-			if (!(!applyEnablement || config.enabledFor(violation.rule))) continue;
+			if (!(!applyEnablement || config.enabledFor(violation.rule, !defaultOffIds.contains(violation.rule)))) continue;
 			final sev: Null<Severity> = config.severityFor(violation.rule);
 			if (sev != null) violation.severity = sev;
 			kept.push(violation);

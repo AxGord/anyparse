@@ -1182,6 +1182,15 @@ typedef RefShape = {
 	@:optional var literalTypeNames: Map<String, String>;
 
 	/**
+	 * The array-literal node kind (Haxe `ArrayExpr`, whose children are the element
+	 * expressions) — the `explicit-local-type` autofix annotates a local whose
+	 * initializer is a NON-EMPTY array literal of one KNOWN literal element type as
+	 * `Array<T>` (a non-empty literal pins the element type, so the annotation
+	 * re-states the compiler's inference). Optional; unset disables array inference.
+	 */
+	@:optional var arrayLiteralKind: String;
+
+	/**
 	 * Node kinds that constitute a value-returning `return <expr>` — both the statement
 	 * form (`ReturnStmt`) and the expression form (`ReturnExpr`, e.g. a `return` inside
 	 * a ternary or an expression-bodied function). The `explicit-type` autofix infers a

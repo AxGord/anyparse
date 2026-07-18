@@ -439,6 +439,7 @@ import unit.AvoidDynamicNarrowFixTest;
 import unit.AvoidDynamicRiskyFixE2ETest;
 import unit.DuplicateCodeCrossFileCheckTest;
 import unit.SpanTypeInfoPinTest;
+import unit.ExplicitLocalTypeCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -773,6 +774,7 @@ class RunTests {
 		addCase(new ComplexityCheckTest());
 		addCase(new OversizedTypeCheckTest());
 		addCase(new ListenerSymmetryCheckTest());
+		addCase(new ExplicitLocalTypeCheckTest());
 		addCase(new MagicNumberCheckTest());
 		addCase(new StringLiteralDupCheckTest());
 		addCase(new PreferEnumAbstractCheckTest());

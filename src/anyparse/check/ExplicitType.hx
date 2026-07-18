@@ -8,7 +8,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeResolver;
 
 using Lambda;
 
@@ -104,7 +103,7 @@ final class ExplicitType implements Check {
 		functions: Array<String>, params: Array<String>, bodies: Array<String>, enumAbstract: Null<String>
 	): Void {
 		if (fields.contains(node.kind)) {
-			if (parentKind != enumAbstract && !hasTypeBeforeInit(node, source))
+			if (parentKind != enumAbstract && !LiteralInfer.hasTypeBeforeInit(node, source))
 				push(out, file, node.span, 'field declared without an explicit type');
 		} else if (functions.contains(node.kind))
 			checkFunction(out, file, source, node, params, bodies);
@@ -122,7 +121,7 @@ final class ExplicitType implements Check {
 	private static function checkFunction(
 		out: Array<Violation>, file: String, source: String, fn: QueryNode, params: Array<String>, bodies: Array<String>
 	): Void {
-		for (child in fn.children) if (params.contains(child.kind) && !hasTypeBeforeInit(child, source))
+		for (child in fn.children) if (params.contains(child.kind) && !LiteralInfer.hasTypeBeforeInit(child, source))
 			push(out, file, child.span, 'parameter declared without an explicit type');
 		if (fn.name != 'new' && !hasReturnType(fn, params, bodies))
 			push(out, file, fn.span, 'function declared without an explicit return type');
@@ -145,23 +144,6 @@ final class ExplicitType implements Check {
 		return !params.contains(before.kind) && !bodies.contains(before.kind);
 	}
 
-	/**
-	 * Whether a `:` type annotation precedes the declaration's initializer / default.
-	 * The type sits between the name and the first child (the initializer / default
-	 * value, when present) or the declaration's end; neither the keyword, the name,
-	 * nor property accessors `(get, set)` contain a `:`, so a `:` in that prefix is
-	 * the type. A node with no span cannot be judged and is treated as typed.
-	 */
-	private static function hasTypeBeforeInit(node: QueryNode, source: String): Bool {
-		final span: Null<Span> = node.span;
-		if (span == null) return true;
-		var cutoff: Int = span.to;
-		if (node.children.length > 0) {
-			final firstSpan: Null<Span> = node.children[0].span;
-			if (firstSpan != null) cutoff = firstSpan.from;
-		}
-		return source.substring(span.from, cutoff).indexOf(':') >= 0;
-	}
 
 	private static function push(out: Array<Violation>, file: String, span: Null<Span>, message: String): Void {
 		if (span != null) out.push({
@@ -171,80 +153,6 @@ final class ExplicitType implements Check {
 			severity: Severity.Warning,
 			message: message
 		});
-	}
-
-
-	/**
-	 * The type source to annotate for `init` when its type is statically certain,
-	 * else null. A literal maps through `literalTypes`; a `Neg` wrapping a numeric
-	 * literal takes that literal's type; a `new T<...>()` with WRITTEN type
-	 * parameters carries `T<...>` verbatim (a bare `new T()` — possibly generic —
-	 * yields null); a typed cast / check-type takes its target type. Anything else
-	 * (a call, a field read, an array / map / ternary) is null — report-only.
-	 */
-	private static function inferType(
-		init: QueryNode, source: String, literalTypes: Map<String, String>, numeric: Array<String>, negKind: Null<String>,
-		newKind: Null<String>, castKinds: Array<String>, castTargets: () -> Map<Int, String>
-	): Null<String> {
-		final direct: Null<String> = literalTypes[init.kind];
-		if (direct != null) return direct;
-		if (negKind != null && init.kind == negKind && init.children.length == 1) {
-			final inner: QueryNode = init.children[0];
-			return numeric.contains(inner.kind) ? literalTypes[inner.kind] : null;
-		}
-		if (newKind != null && init.kind == newKind) return newTypeSource(init, source);
-		final span: Null<Span> = init.span;
-		return span != null && castKinds.contains(init.kind) ? TypeResolver.castTargetWithin(span, castTargets()) : null;
-	}
-
-	/**
-	 * The `T<...>` type source of a `new T<...>(...)` when it carries WRITTEN type
-	 * parameters, else null (a bare `new T(...)` could be a generic used without
-	 * parameters, whose bare `:T` annotation would not type-check). Scans from after
-	 * `new` for the balanced `<...>`; a `>` preceded by `-` is the arrow `->` inside
-	 * a function-type parameter, not an angle close. A constructor `(` reached before
-	 * any `<` means no written type parameters.
-	 */
-	private static function newTypeSource(newNode: QueryNode, source: String): Null<String> {
-		final span: Null<Span> = newNode.span;
-		if (span == null) return null;
-		final full: String = source.substring(span.from, span.to);
-		var i: Int = 3;
-		while (i < full.length && StringTools.isSpace(full, i)) i++;
-		final typeStart: Int = i;
-		var depth: Int = 0;
-		while (i < full.length) {
-			switch StringTools.fastCodeAt(full, i) {
-				case '('.code if (depth == 0):
-					return null;
-				case '<'.code:
-					depth++;
-				case '>'.code if (StringTools.fastCodeAt(full, i - 1) != '-'.code):
-					depth--;
-					if (depth == 0) return full.substring(typeStart, i + 1);
-				case _:
-			}
-			i++;
-		}
-		return null;
-	}
-
-	/**
-	 * The offset right after the declaration's name — where a `:Type` annotation is
-	 * inserted — found by walking back over whitespace from the assignment `=` that
-	 * precedes the initializer. Returns -1 when no `=` is in the name-to-initializer
-	 * prefix (a declaration with no initializer cannot be annotated by this fix).
-	 */
-	private static function insertPoint(node: QueryNode, init: QueryNode, source: String): Int {
-		final span: Null<Span> = node.span;
-		final initSpan: Null<Span> = init.span;
-		if (span == null || initSpan == null) return -1;
-		final prefix: String = source.substring(span.from, initSpan.from);
-		final eq: Int = prefix.lastIndexOf('=');
-		if (eq < 0) return -1;
-		var pos: Int = span.from + eq;
-		while (pos > span.from && StringTools.isSpace(source, pos - 1)) pos--;
-		return pos;
 	}
 
 
@@ -337,11 +245,6 @@ final class ExplicitType implements Check {
 		tree: QueryNode, source: String, violations: Array<Violation>, shape: RefShape, plugin: GrammarPlugin, fixable: Array<String>,
 		edits: Array<{ span: Span, text: String }>
 	): Void {
-		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
-		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
-		final negKind: Null<String> = shape.negationKind;
-		final newKind: Null<String> = shape.newExprKind;
-		final castKinds: Array<String> = shape.typedCastKinds ?? [];
 		final byKey: Map<String, QueryNode> = [];
 		RefactorSupport.indexNodesByKind(tree, fixable, byKey);
 		// A cast target lookup costs a SECOND full parse of the file (`castTargetSources`),
@@ -362,11 +265,9 @@ final class ExplicitType implements Check {
 			if (span == null) continue;
 			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
 			if (node == null || node.children.length == 0) continue;
-			final typeSource: Null<String> = inferType(
-				node.children[0], source, literalTypes, numeric, negKind, newKind, castKinds, castTargets
-			);
+			final typeSource: Null<String> = LiteralInfer.inferType(node.children[0], source, shape, castTargets);
 			if (typeSource == null) continue;
-			final at: Int = insertPoint(node, node.children[0], source);
+			final at: Int = LiteralInfer.insertPoint(node, node.children[0], source);
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
 		}
 	}

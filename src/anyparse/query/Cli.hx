@@ -62,6 +62,7 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
 import anyparse.check.FixVerifier.FixVerifyResult;
+import anyparse.check.Check.DefaultOff;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1257,7 +1258,7 @@ final class Cli {
 		// `Linter.run` drops its findings on the files that disable it.
 		final applyEnablement: Bool = o.ruleFilters.length == 0;
 		final activeChecks: Array<Check> = applyEnablement ? [
-			for (c in checks) if (Lambda.exists(files, f -> resolveConfig(f.file).enabledFor(c.id()))) c
+			for (c in checks) if (Lambda.exists(files, f -> resolveConfig(f.file).enabledFor(c.id(), !(c is DefaultOff)))) c
 		] : checks;
 		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, resolveConfig, applyEnablement);
 

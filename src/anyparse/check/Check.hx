@@ -100,5 +100,18 @@ interface ConfigAware {
  * first consumers are a future avoid-dynamic fix and any rewrite lacking a
  * provable shape gate; the machinery lives in `FixVerifier` / `CompilerOracle`.
  */
-@:nullSafety(Strict)
 interface RiskyFix {}
+
+/**
+ * Opt-in marker for a `Check` that is OFF by default — dropped from the default
+ * check set and from a bare `lint … --all` report unless a project explicitly
+ * opts in via `apqlint.json` (`"rules": { "<id>": { "enabled": true } }`), or an
+ * explicit `--rule <id>` selects it (which bypasses enablement, as for every rule).
+ * The framework reads the marker where it applies enablement (`Cli.runLint` builds
+ * the active set; `Linter.run` drops a disabled finding), inverting the
+ * default-enabled assumption for these rules only. A check that does NOT implement
+ * this marker is ON by default — the state of every other builtin. The first
+ * consumer is `explicit-local-type`, a per-project style preference.
+ */
+@:nullSafety(Strict)
+interface DefaultOff {}

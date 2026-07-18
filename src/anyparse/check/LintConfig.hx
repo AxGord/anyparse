@@ -62,10 +62,14 @@ final class LintConfig {
 		return _compilerOracleDir;
 	}
 
-	/** Whether `id` runs in the default set (absent, or no `enabled` key → true). */
-	public function enabledFor(id: String): Bool {
+	/**
+	 * Whether `id` runs in the default set. `defaultOn` is the rule's default when its
+	 * `enabled` key is absent — true for an ordinary rule, false for a `DefaultOff` rule
+	 * the caller opts into. A present `enabled` value always wins.
+	 */
+	public function enabledFor(id: String, defaultOn: Bool = true): Bool {
 		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null || (rc.enabled ?? true);
+		return rc == null ? defaultOn : (rc.enabled ?? defaultOn);
 	}
 
 	/** The configured severity override for `id`, or null when unset. */
