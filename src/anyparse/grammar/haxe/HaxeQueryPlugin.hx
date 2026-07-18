@@ -511,6 +511,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			fieldDeclKinds: ['VarMember', 'FinalMember'],
 			functionBodyKinds: ['BlockBody', 'ExprBody', 'NoBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
+			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],
 			overrideModifierKind: 'Override',
 			dynamicModifierKind: 'Dynamic',

@@ -114,7 +114,8 @@ final class Linter {
 			new NullableSwitchMissingNull(),
 			new DuplicateCode(),
 			new ListenerSymmetry(),
-			new StringLiteralDup()
+			new StringLiteralDup(),
+			new AvoidDynamic()
 		];
 	}
 

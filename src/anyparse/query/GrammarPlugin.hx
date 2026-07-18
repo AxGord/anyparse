@@ -648,6 +648,16 @@ typedef RefShape = {
 	@:optional var enumAbstractDeclKind: String;
 
 	/**
+	 * The grammar's raw dynamic-type name (Haxe `Dynamic`) — the `avoid-dynamic`
+	 * check flags a whole-word occurrence of it in a declared type position (field,
+	 * parameter, return, type argument, or annotated local). A typed abstraction whose
+	 * name merely starts with it (`DynamicAccess`) is excluded by the whole-word match;
+	 * the sanctioned top type (`Any`) is a different name and never flagged. Optional;
+	 * unset makes the `avoid-dynamic` check a no-op.
+	 */
+	@:optional var rawDynamicTypeName: String;
+
+	/**
 	 * The value-less `return` statement kind (Haxe `VoidReturnStmt`) — the
 	 * `redundant-void-return` check flags one that is the last statement of a
 	 * function body, where falling off the end is equivalent. Distinct from the

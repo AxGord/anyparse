@@ -430,6 +430,7 @@ import unit.TrivialGetterStaticShadowTest;
 import unit.HxSingleStmtBracesSliceTest;
 import unit.ListenerSymmetryCheckTest;
 import unit.StringLiteralDupCheckTest;
+import unit.AvoidDynamicCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -787,6 +788,7 @@ class RunTests {
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new NullableSwitchMissingNullCheckTest());
 		addCase(new DuplicateCodeCheckTest());
+		addCase(new AvoidDynamicCheckTest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
