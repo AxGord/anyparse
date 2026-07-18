@@ -115,7 +115,8 @@ final class Linter {
 			new DuplicateCode(),
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
-			new AvoidDynamic()
+			new AvoidDynamic(),
+			new UnusedReturnValue()
 		];
 	}
 
