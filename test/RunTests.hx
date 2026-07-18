@@ -429,6 +429,7 @@ import unit.PreferFinalAbstractMethodCheckTest;
 import unit.TrivialGetterStaticShadowTest;
 import unit.HxSingleStmtBracesSliceTest;
 import unit.ListenerSymmetryCheckTest;
+import unit.StringLiteralDupCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -763,6 +764,7 @@ class RunTests {
 		addCase(new OversizedTypeCheckTest());
 		addCase(new ListenerSymmetryCheckTest());
 		addCase(new MagicNumberCheckTest());
+		addCase(new StringLiteralDupCheckTest());
 		addCase(new PreferEnumAbstractCheckTest());
 		addCase(new CheckstyleConfigLoaderTest());
 		addCase(new DeadCodeCheckTest());

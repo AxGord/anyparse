@@ -113,7 +113,8 @@ final class Linter {
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
 			new DuplicateCode(),
-			new ListenerSymmetry()
+			new ListenerSymmetry(),
+			new StringLiteralDup()
 		];
 	}
 

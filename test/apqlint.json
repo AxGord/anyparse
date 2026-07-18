@@ -1,6 +1,7 @@
 {
     "rules": {
         "magic-number": { "enabled": false },
+        "string-literal-dup": { "enabled": false },
         "oversized-type": { "maxMembers": 100 }
     }
 }
