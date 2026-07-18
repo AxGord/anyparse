@@ -75,6 +75,95 @@ class SetDocSliceTest extends Test {
 		Assert.isFalse(text.contains('old doc'));
 	}
 
+	/**
+	 * A trailing newline in the doc text (the artifact every heredoc / stdin
+	 * payload carries) must not become a blank ` *` line before the comment
+	 * close — the output equals the trimmed payload's output.
+	 */
+	public function testTrailingNewlineEqualsTrimmed(): Void {
+		final src: String = 'package p;\nclass C {\n\tpublic function f(): Int return 1;\n}';
+		final plain: String = okText(SetDoc.setDoc(src, 3, 2, 'Returns one.', true, new HaxeQueryPlugin()));
+		final trailing: String = okText(SetDoc.setDoc(src, 3, 2, 'Returns one.\n', true, new HaxeQueryPlugin()));
+		Assert.equals(plain, trailing);
+	}
+
+	/**
+	 * A leading newline in the doc text must not become a blank ` *` line
+	 * after the comment open — the output equals the trimmed payload's output.
+	 */
+	public function testLeadingNewlineEqualsTrimmed(): Void {
+		final src: String = 'package p;\nclass C {\n\tpublic function f(): Int return 1;\n}';
+		final plain: String = okText(SetDoc.setDoc(src, 3, 2, 'Returns one.', true, new HaxeQueryPlugin()));
+		final leading: String = okText(SetDoc.setDoc(src, 3, 2, '\nReturns one.', true, new HaxeQueryPlugin()));
+		Assert.equals(plain, leading);
+	}
+
+	/**
+	 * Trimming is edge-only: an INTERNAL blank line (a paragraph break) is kept
+	 * while the trailing heredoc newline is still dropped.
+	 */
+	public function testTrailingNewlineAfterParagraphsEqualsTrimmed(): Void {
+		final src: String = 'package p;\nclass C {\n\tpublic function f(): Int return 1;\n}';
+		final plain: String = okText(SetDoc.setDoc(src, 3, 2, 'First.\n\nSecond.', true, new HaxeQueryPlugin()));
+		final trailing: String = okText(SetDoc.setDoc(src, 3, 2, 'First.\n\nSecond.\n', true, new HaxeQueryPlugin()));
+		Assert.equals(plain, trailing);
+		Assert.isTrue(plain.contains('First.'));
+		Assert.isTrue(plain.contains('Second.'));
+	}
+
+	/**
+	 * A `final class` doc set from a cursor on the `class` keyword (where a
+	 * `--select ClassDecl:C` / `ClassForm:C` resolves) must land before `final`
+	 * — today the splice falls INSIDE the `FinalDecl` (between `final` and
+	 * `class`) and the writer silently drops it, yielding a byte-identical
+	 * "success".
+	 */
+	public function testFinalClassDocFromClassFormCursor(): Void {
+		final src: String = 'package p;\nfinal class C {\n\tpublic function new() {}\n}';
+		final text: String = okText(SetDoc.setDoc(src, 2, 7, 'Doc for C.', true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('Doc for C.'));
+	}
+
+	/**
+	 * Re-setting the byte-identical doc is a no-change edit and reports `Err`
+	 * (the silent-drop guard) — a caller learns the truth instead of a
+	 * successful-looking write.
+	 */
+	public function testIdenticalDocIsNoChangeErr(): Void {
+		final src: String = 'package p;\nclass C {\n\tpublic function f(): Int return 1;\n}';
+		final once: String = okText(SetDoc.setDoc(src, 3, 2, 'Returns one.', true, new HaxeQueryPlugin()));
+		// Locate the declaration structurally — `reformat` reflows lines both
+		// before AND after the target, so a line-delta formula lands elsewhere.
+		final lines: Array<String> = once.split('\n');
+		final fnLine: Int = [for (i in 0...lines.length) if (lines[i].contains('function f')) i + 1][0];
+		final res: EditResult = SetDoc.setDoc(once, fnLine, 2, 'Returns one.', true, new HaxeQueryPlugin());
+		Assert.isTrue(errMessage(res).contains('no change'));
+	}
+
+	/**
+	 * The doc of a modifier-less sole member of a class stays ON THE MEMBER —
+	 * the decl-wrapper lift must not climb from a member to its enclosing
+	 * class just because the class has a single child (regression guard for
+	 * the identity-scoped lift).
+	 */
+	public function testSingleMemberClassMemberDocStaysOnMember(): Void {
+		final src: String = 'package p;\nclass C {\n\tfunction f(): Int return 1;\n}';
+		final text: String = okText(SetDoc.setDoc(src, 3, 2, 'Member doc.', true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('Member doc.'));
+		Assert.isTrue(text.indexOf('class C') < text.indexOf('Member doc.'));
+	}
+
+	/**
+	 * A cursor on a plain expression (no doc slot anywhere above it) must NOT
+	 * report a successful write while the writer drops the comment — under
+	 * `reformat` the no-op guard compares against the reformatted baseline, so
+	 * reflow noise cannot mask the drop.
+	 */
+	public function testUnattachableExpressionPositionIsErr(): Void {
+		final src: String = 'package p;\nclass C {\n\tfunction f(): Void {\n\t\tvar x = !y;\n\t}\n}';
+		Assert.isTrue(isErr(SetDoc.setDoc(src, 4, 12, 'Doc for y.', true, new HaxeQueryPlugin())));
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;
@@ -88,6 +177,18 @@ class SetDocSliceTest extends Test {
 		return switch res {
 			case Ok(_): false;
 			case Err(_): true;
+		};
+	}
+
+	/**
+	 * The `Err` payload of `res` — fails the test when `res` is `Ok`.
+	 */
+	private function errMessage(res: EditResult): String {
+		return switch res {
+			case Ok(_):
+				Assert.fail('expected Err, got Ok');
+				'';
+			case Err(message): message;
 		};
 	}
 

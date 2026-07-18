@@ -848,16 +848,17 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Format `text` as a Haxe doc-comment block: the open delimiter, then one
-	 * ` * <line>` per line (blank lines as ` *`), then the close delimiter. No
-	 * trailing newline. Shared by `NewFile` (a created module's class doc) and
-	 * `SetDoc` (a member's doc), so both produce the identical shape the writer
-	 * then canonicalises.
+	 * Format `text` into a doc-comment block, one ` * ` line per line. Leading /
+	 * trailing blank lines of the payload are trimmed (a stdin / heredoc payload
+	 * always carries a trailing newline — an edge blank is a delivery artifact,
+	 * never an intended empty doc line); INTERNAL blank lines are kept as
+	 * paragraph breaks.
 	 */
 	public static function docComment(text: String): String {
+		final lines: Array<String> = trimBlankEdges(text.split('\n'));
 		final buf: StringBuf = new StringBuf();
 		buf.add('/**\n');
-		for (line in text.split('\n')) buf.add(line == '' ? ' *\n' : ' * $line\n');
+		for (line in lines) buf.add(line == '' ? ' *\n' : ' * $line\n');
 		buf.add(' */');
 		return buf.toString();
 	}
@@ -1346,6 +1347,18 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * `lines` without its leading / trailing whitespace-only entries — the shared
+	 * edge-trim behind `docComment`, `NewFile`'s `@@`-section bodies and the
+	 * `fragmented-doc-comment` fix (internal blanks are kept).
+	 */
+	public static function trimBlankEdges(lines: Array<String>): Array<String> {
+		final out: Array<String> = lines.copy();
+		while (out.length > 0 && StringTools.trim(out[0]) == '') out.shift();
+		while (out.length > 0 && StringTools.trim(out[out.length - 1]) == '') out.pop();
+		return out;
+	}
+
+	/**
 	 * Whether a word-bounded occurrence of `name` outside `exclude` is the receiver of a
 	 * method call — followed, past whitespace and comments, by `.`, then an identifier,
 	 * then `(`. Matches `name.m(...)` and `this.name.m(...)` alike (the `name` token in
@@ -1572,6 +1585,7 @@ final class RefactorSupport {
 		}
 		return result;
 	}
+
 
 	/**
 	 * Index of the closing `quote` of the string opened at `open`, honouring

@@ -302,7 +302,7 @@ final class NewFile {
 			if (section == 'imports') {
 				for (line in buf) if (line.trim() != '') imports.push('import ${line.trim()};');
 			} else
-				bodies[section] = trimBlankEdges(buf);
+				bodies[section] = RefactorSupport.trimBlankEdges(buf).join('\n');
 		}
 		for (line in lines) {
 			if (line.startsWith('@@ ')) {
@@ -315,14 +315,6 @@ final class NewFile {
 		flush();
 	}
 
-	/** Join `lines` with `\n`, dropping leading and trailing all-blank lines. */
-	private static function trimBlankEdges(lines: Array<String>): String {
-		var from: Int = 0;
-		var to: Int = lines.length;
-		while (from < to && lines[from].trim() == '') from++;
-		while (to > from && lines[to - 1].trim() == '') to--;
-		return lines.slice(from, to).join('\n');
-	}
 
 	/** Order-preserving de-duplication of import lines. */
 	private static function dedup(lines: Array<String>): Array<String> {

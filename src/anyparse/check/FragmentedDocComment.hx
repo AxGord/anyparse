@@ -113,10 +113,7 @@ final class FragmentedDocComment implements Check {
 	/** The text of a block comment's body — the delimiters and each line's leading marker stripped, blank edge lines trimmed. */
 	private static function cleanBlockBody(source: String, tok: CommentTok): String {
 		final body: Span = RefactorSupport.commentBody(source, tok);
-		final lines: Array<String> = source.substring(body.from, body.to).split('\n').map(stripMarker);
-		while (lines.length > 0 && StringTools.trim(lines[0]) == '') lines.shift();
-		while (lines.length > 0 && StringTools.trim(lines[lines.length - 1]) == '') lines.pop();
-		return lines.join('\n');
+		return RefactorSupport.trimBlankEdges(source.substring(body.from, body.to).split('\n').map(stripMarker)).join('\n');
 	}
 
 	/** Strip a line's leading whitespace and a single leading doc marker, plus trailing whitespace. */
