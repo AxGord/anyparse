@@ -56,8 +56,6 @@ final class LoopGuard implements Check {
 	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
-	/** A binary comparison node has exactly [left, right] children. */
-	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
 
 	public function new() {}
 
@@ -210,24 +208,13 @@ final class LoopGuard implements Check {
 
 	/** The inverted source of guard condition `cond` — the negation the lifted `if` header tests. */
 	private static function invert(cond: QueryNode, source: String, s: Seams): String {
-		final cs: Null<Span> = cond.span;
-		if (cs == null) return '';
-		if (cond.kind == s.notKind && cond.children.length >= 1) {
-			var inner: QueryNode = cond.children[0];
-			if (inner.kind == s.parenKind && inner.children.length == 1) inner = inner.children[0];
-			final innerSpan: Null<Span> = inner.span;
-			return innerSpan != null ? source.substring(innerSpan.from, innerSpan.to) : source.substring(cs.from, cs.to);
-		}
-		if ((cond.kind == s.eqKind || cond.kind == s.notEqKind) && cond.children.length == COMPARISON_CHILD_COUNT) {
-			final l: Null<Span> = cond.children[0].span;
-			final r: Null<Span> = cond.children[1].span;
-			if (l != null && r != null) {
-				final op: String = cond.kind == s.eqKind ? ' != ' : ' == ';
-				return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
-			}
-		}
-		final src: String = source.substring(cs.from, cs.to);
-		return s.atomicKinds.contains(cond.kind) ? '!' + src : '!(' + src + ')';
+		return CheckScan.negateConditionText(cond, source, {
+			notKind: s.notKind,
+			parenKind: s.parenKind,
+			eqKind: s.eqKind,
+			notEqKind: s.notEqKind,
+			atomicKinds: s.atomicKinds
+		});
 	}
 
 	/** Whether the `[from, to)` gap holds a `//` or `/*` comment opener (a region the rewrite would drop). */

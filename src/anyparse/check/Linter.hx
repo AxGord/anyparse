@@ -108,6 +108,7 @@ final class Linter {
 			new PreferComprehension(),
 			new PreferFind(),
 			new LoopGuard(),
+			new GuardContinue(),
 			new MapKeysLookup(),
 			new PreferRangeLoop(),
 			new TrivialGetter(),
@@ -166,11 +167,10 @@ final class Linter {
 		final kept: Array<Violation> = [];
 		for (violation in out) {
 			final config: LintConfig = resolveConfig(violation.file);
-			if (!applyEnablement || config.enabledFor(violation.rule)) {
-				final sev: Null<Severity> = config.severityFor(violation.rule);
-				if (sev != null) violation.severity = sev;
-				kept.push(violation);
-			}
+			if (!(!applyEnablement || config.enabledFor(violation.rule))) continue;
+			final sev: Null<Severity> = config.severityFor(violation.rule);
+			if (sev != null) violation.severity = sev;
+			kept.push(violation);
 		}
 		return Suppression.apply(kept, files);
 	}

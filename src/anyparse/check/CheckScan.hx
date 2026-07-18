@@ -114,6 +114,54 @@ final class CheckScan {
 	}
 
 	/**
+	 * The source text of a negation of `cond`, comment-preserving — the shared
+	 * condition-inverting engine of `loop-guard` and `guard-continue`. Three shapes, in
+	 * order:
+	 *
+	 *  - a leading logical-not is STRIPPED (`!e` → `e`), unwrapping one redundant paren
+	 *    (`!(a && b)` → `a && b`, `!!x` → `!x`) — the inner source verbatim;
+	 *  - an `==` / `!=` is FLIPPED (`a == b` → `a != b` and back), NaN-safe (IEEE
+	 *    `NaN == x` is false and `NaN != x` true) — UNLESS a comment sits in the operator
+	 *    gap, which the flip would drop, so it falls through to the verbatim wrap;
+	 *  - everything else (ordered comparisons `< <= > >=`, `&& || ?? ?:`, a call, …) is
+	 *    wrapped `!(<cond>)` VERBATIM — the only sound negation for `<` / `>=` (they DIFFER
+	 *    from their flips under NaN) and comment-preserving for every shape. A bare atomic
+	 *    (`atomicKinds`) drops the parens (`!cond`); the wrap is always fully parenthesised,
+	 *    so a low-precedence body (`a ?? b`, `c ? t : e`) negates correctly.
+	 *
+	 * For every standard type and normal abstract this is exactly `!(cond)`. The flip and
+	 * strip assume standard boolean algebra, so they are UNSOUND only for the pathological
+	 * case of a Haxe abstract that overloads `==` / `!=` non-complementarily or `!`
+	 * non-involutively (`@:op`) — where `a != b` need not be `!(a == b)`; the
+	 * always-parenthesised wrap is the sound form there. This edge is shared with `loop-guard`.
+	 *
+	 */
+	public static function negateConditionText(cond: QueryNode, source: String, seams: NegationSeams): String {
+		final cs: Null<Span> = cond.span;
+		if (cs == null) return '';
+		final notKind: Null<String> = seams.notKind;
+		if (notKind != null && cond.kind == notKind && cond.children.length >= 1) {
+			var inner: QueryNode = cond.children[0];
+			final parenKind: Null<String> = seams.parenKind;
+			if (parenKind != null && inner.kind == parenKind && inner.children.length == 1) inner = inner.children[0];
+			final innerSpan: Null<Span> = inner.span;
+			if (innerSpan != null) return source.substring(innerSpan.from, innerSpan.to);
+		}
+		final eqKind: Null<String> = seams.eqKind;
+		final notEqKind: Null<String> = seams.notEqKind;
+		if (eqKind != null && notEqKind != null && (cond.kind == eqKind || cond.kind == notEqKind) && cond.children.length == 2) {
+			final l: Null<Span> = cond.children[0].span;
+			final r: Null<Span> = cond.children[1].span;
+			if (l != null && r != null && !hasCommentMarker(source, l.to, r.from)) {
+				final op: String = cond.kind == eqKind ? ' != ' : ' == ';
+				return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
+			}
+		}
+		final src: String = source.substring(cs.from, cs.to);
+		return seams.atomicKinds.contains(cond.kind) ? '!' + src : '!(' + src + ')';
+	}
+
+	/**
 	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
 	 * shared by `applyBySpan` and `simplifyConditionFixes`.
@@ -266,4 +314,18 @@ private typedef CondSimplifySeams = {
 	final orKind: String;
 	final parenKind: String;
 	final blockKinds: Array<String>;
+};
+
+/**
+ * The condition-kind seams `CheckScan.negateConditionText` reads to invert a condition:
+ * the logical-not (`notKind`) it strips, the paren (`parenKind`) it unwraps, the
+ * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, and the atomic-expression kinds
+ * (`atomicKinds`) that take a bare `!` rather than `!(…)`.
+ */
+typedef NegationSeams = {
+	final notKind: Null<String>;
+	final parenKind: Null<String>;
+	final eqKind: Null<String>;
+	final notEqKind: Null<String>;
+	final atomicKinds: Array<String>;
 };

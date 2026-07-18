@@ -446,6 +446,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			breakStatementKind: 'BreakStmt',
 			continueStatementKind: 'ContinueStmt',
 			loopStatementKinds: ['ForStmt', 'WhileStmt'],
+			doWhileLoopKinds: ['DoWhileStmt'],
 			intervalKind: 'Interval',
 			whileStmtKind: 'WhileStmt',
 			ltKind: 'Lt',

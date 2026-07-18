@@ -1262,6 +1262,15 @@ typedef RefShape = {
 	@:optional var loopStatementKinds: Array<String>;
 
 	/**
+	 * Loop-statement kinds whose FIRST child is the loop body and whose condition is
+	 * the LAST child (Haxe `DoWhileStmt`, the `do … while` form) — the body-first
+	 * counterpart of `loopStatementKinds`. The `guard-continue` check reads the body
+	 * off `children[0]` to de-nest a trailing `if (c) { … }` into an `if (!c) continue;`
+	 * guard. Optional; unset makes `guard-continue` skip do-while loops.
+	 */
+	@:optional var doWhileLoopKinds: Array<String>;
+
+	/**
 	 * The range / interval node kind (`a...b`) — lets `prefer-find` skip a loop over a
 	 * range: its `IntIterator` is not an `Iterable`, so a `Lambda.find` rewrite would
 	 * not compile. Optional; unset means range loops are not specially excluded.
