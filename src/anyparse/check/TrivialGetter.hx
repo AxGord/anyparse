@@ -314,25 +314,50 @@ final class TrivialGetter implements Check {
 		if (span != null && span.from >= getterSpan.from && span.to <= getterSpan.to) return true;
 		if (hidesBindingNamed(node, span, source, field)) return false;
 		final nowPattern: Bool = inPattern || node.kind == 'Plain';
-		if (node.name == field) {
-			if (nowPattern) return false;
-			switch node.kind {
-				case 'IdentExpr':
-					if (span != null)
-						out.push({ span: span, text: shadowsProp ? shadowQualifier(staticCtx, className) + propName : propName });
-				case 'FieldAccess':
-					if (
-						span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this'
-					)
-						return false;
-					final off: Int = RefactorSupport.identTokenOffset(source, span, field);
-					if (off < 0) return false;
-					out.push({ span: new Span(off, off + field.length), text: propName });
-				case _:
-					return false;
-			}
-		}
+		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, staticCtx, className, nowPattern, out)) return false;
 		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
+		return renameChildren(node, source, field, getterSpan, fieldNode, propName, nowPattern, childShadows, className, staticCtx, out);
+	}
+
+	/**
+	 * Emit the rename edit for `node` when it is a bare-or-`this.` reference to the backing
+	 * field — an `IdentExpr <field>` (rewritten to `propName`, qualified `this.`/`C.` when a
+	 * binding of `propName` shadows it) or a `this.<field>` `FieldAccess` (its name token
+	 * rewritten). Returns false (refuse the whole fix) on a reference the rename cannot prove
+	 * safe: a pattern-position mention, an `<other>.<field>` access, or any other node kind
+	 * carrying the field name. A node that does not name the field is left untouched (true).
+	 */
+	private static function renameFieldRef(
+		node: QueryNode, span: Null<Span>, source: String, field: String, propName: String, shadowsProp: Bool, staticCtx: Bool,
+		className: Null<String>, nowPattern: Bool, out: Array<{ span: Span, text: String }>
+	): Bool {
+		if (node.name != field) return true;
+		if (nowPattern) return false;
+		switch node.kind {
+			case 'IdentExpr':
+				if (span != null) out.push({ span: span, text: shadowsProp ? shadowQualifier(staticCtx, className) + propName : propName });
+			case 'FieldAccess':
+				if (span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this')
+					return false;
+				final off: Int = RefactorSupport.identTokenOffset(source, span, field);
+				if (off < 0) return false;
+				out.push({ span: new Span(off, off + field.length), text: propName });
+			case _:
+				return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Recurse `renameWalk` over `node`'s children, threading the pattern / shadow / static
+	 * context. `mods` accumulates the modifier-sibling kinds preceding a member so a `static`
+	 * child function is recursed with `staticCtx` set (reset at each member boundary). Returns
+	 * false as soon as any descendant refuses the fix.
+	 */
+	private static function renameChildren(
+		node: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String, nowPattern: Bool,
+		childShadows: Bool, className: Null<String>, staticCtx: Bool, out: Array<{ span: Span, text: String }>
+	): Bool {
 		var mods: Array<String> = [];
 		for (c in node.children) {
 			final childStatic: Bool = staticCtx || (isFnScope(c) && mods.contains('Static'));
