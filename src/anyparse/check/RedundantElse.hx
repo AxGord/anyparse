@@ -35,9 +35,12 @@ import anyparse.runtime.Span;
  *
  * `fix` de-nests the `else` body: it replaces the whole `if` statement with the
  * else-less `if` followed by the else body's statements as siblings. The de-nest
- * is skipped (the finding stays report-only) when the else body declares a local
- * (`RefShape.localDeclKinds`): de-nesting would widen that binding into the
- * enclosing scope. An `else if` chain surfaces the inner `else` only after the
+ * is skipped (the finding stays report-only) only when an else-body top-level
+ * local (`RefShape.localDeclKinds`) collides with a binding already in the
+ * enclosing scope — a sibling local (any position in the enclosing block) or, when
+ * that block is a function body, one of the function's parameters. De-nesting a
+ * colliding name would redeclare it in the same scope; a non-colliding local is
+ * de-nested safely. An `else if` chain surfaces the inner `else` only after the
  * outer one is de-nested (a later pass), and a nested flagged `if` inside the
  * de-nested run is dropped (`RefactorSupport.dropContainedEdits`) so edits never
  * overlap. Needs `ControlFlowSupport`; unset makes the check report-only. A comment attached to the relocated else body (leading, trailing, or between-branch) is dropped — the de-nested text is rebuilt from statement spans only.
@@ -89,7 +92,7 @@ final class RedundantElse implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectDeNests(tree, source, seams.support, seams.ifKinds, seams.localDeclKinds, flagged, edits);
+		collectDeNests(tree, source, seams.support, seams.ifKinds, seams.localDeclKinds, seams.functionKinds, [], flagged, edits);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -132,24 +135,59 @@ final class RedundantElse implements Check {
 		return false;
 	}
 
-	/** Mirror `walk`: collect a de-nest edit for each direct-child flagged `if`. */
+	/**
+	 * Mirror `walk`: collect a de-nest edit for each direct-child flagged `if`, threading
+	 * the enclosing scope. `funcParams` are the parameters of the function whose body this
+	 * block is (empty for any other block); combined with the block's sibling locals they
+	 * form the collision scope a de-nested else-body local must not clash with. `childParams`
+	 * carries a function's params to its direct function-body child only — every non-function
+	 * node resets it to empty, so nested blocks start from no params.
+	 */
 	private static function collectDeNests(
 		node: QueryNode, source: String, support: ControlFlowSupport, ifKinds: Array<String>, localDeclKinds: Array<String>,
-		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		functionKinds: Array<String>, funcParams: Array<String>, flagged: Array<String>, edits: Array<{ span: Span, text: String }>
 	): Void {
-		if (support.blockKinds()
-			.contains(node.kind)) for (stmt in node.children) if (ifKinds.contains(stmt.kind))
-			deNest(stmt, source, support, localDeclKinds, flagged, edits);
-		for (c in node.children) collectDeNests(c, source, support, ifKinds, localDeclKinds, flagged, edits);
+		if (support.blockKinds().contains(node.kind)) {
+			final scopeNames: Array<String> = funcParams.concat(siblingLocalNames(node, localDeclKinds));
+			for (stmt in node.children) if (ifKinds.contains(stmt.kind))
+				deNest(stmt, source, support, localDeclKinds, scopeNames, flagged, edits);
+		}
+		final childParams: Array<String> = functionKinds.contains(node.kind) ? paramNamesOf(node, support) : [];
+		for (c in node.children) collectDeNests(c, source, support, ifKinds, localDeclKinds, functionKinds, childParams, flagged, edits);
+	}
+
+	/**
+	 * The parameter names of a function node: its direct children that carry a name and are
+	 * not blocks (that excludes the body block; the return-type node's name is harmless — a
+	 * local can never share a type's name, so it never causes a false collision).
+	 */
+	private static function paramNamesOf(fn: QueryNode, support: ControlFlowSupport): Array<String> {
+		final names: Array<String> = [];
+		for (c in fn.children) {
+			final nm: Null<String> = c.name;
+			if (nm != null && !support.blockKinds().contains(c.kind)) names.push(nm);
+		}
+		return names;
+	}
+
+	/** The names of a block's direct-child local declarations (kinds in `localDeclKinds`). */
+	private static function siblingLocalNames(block: QueryNode, localDeclKinds: Array<String>): Array<String> {
+		final names: Array<String> = [];
+		for (c in block.children) {
+			final nm: Null<String> = c.name;
+			if (nm != null && localDeclKinds.contains(c.kind)) names.push(nm);
+		}
+		return names;
 	}
 
 	/**
 	 * Replace the flagged `if`'s whole span with the else-less `if` plus the
 	 * de-nested else body. Skips a scope-unsafe body (`deNestText` returns null).
+	 * `scopeNames` are the enclosing-scope bindings the de-nested locals must not collide with.
 	 */
 	private static function deNest(
-		ifNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>, flagged: Array<String>,
-		edits: Array<{ span: Span, text: String }>
+		ifNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>, scopeNames: Array<String>,
+		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
 	): Void {
 		if (ifNode.children.length < IF_WITH_ELSE_CHILD_COUNT) return;
 		final elseNode: QueryNode = ifNode.children[2];
@@ -158,7 +196,7 @@ final class RedundantElse implements Check {
 		final ifSpan: Null<Span> = ifNode.span;
 		final thenSpan: Null<Span> = ifNode.children[1].span;
 		if (ifSpan == null || thenSpan == null) return;
-		final deNested: Null<String> = deNestText(elseNode, source, support, localDeclKinds);
+		final deNested: Null<String> = deNestText(elseNode, source, support, localDeclKinds, scopeNames);
 		if (deNested == null) return;
 		final ifKept: String = source.substring(ifSpan.from, thenSpan.to);
 		edits.push({ span: new Span(ifSpan.from, ifSpan.to), text: deNested == '' ? ifKept : ifKept + '\n' + deNested });
@@ -167,41 +205,63 @@ final class RedundantElse implements Check {
 	/**
 	 * The else body's source de-nested to top-level statements: a block's inner
 	 * statements (empty block → ''), or a single statement verbatim. Returns null
-	 * when the body declares a local (`localDeclKinds`) that would escape its scope.
+	 * when an else-body top-level local (`localDeclKinds`) has a name in `scopeNames`
+	 * (the enclosing scope) — de-nesting would redeclare it in the same scope.
 	 */
 	private static function deNestText(
-		elseNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>
+		elseNode: QueryNode, source: String, support: ControlFlowSupport, localDeclKinds: Array<String>, scopeNames: Array<String>
 	): Null<String> {
 		if (support.blockKinds().contains(elseNode.kind)) {
 			final kids: Array<QueryNode> = elseNode.children;
 			if (kids.length == 0) return '';
-			for (k in kids) if (localDeclKinds.contains(k.kind)) return null;
+			if (collidesWithScope(kids, localDeclKinds, scopeNames)) return null;
 			final first: Null<Span> = kids[0].span;
 			final last: Null<Span> = kids[kids.length - 1].span;
 			return first == null || last == null ? null : source.substring(first.from, last.to);
 		}
-		if (localDeclKinds.contains(elseNode.kind)) return null;
+		if (collidesWithScope([elseNode], localDeclKinds, scopeNames)) return null;
 		final s: Null<Span> = elseNode.span;
 		return s == null ? null : source.substring(s.from, s.to);
 	}
 
+	/**
+	 * Whether any top-level local declaration among `stmts` (kinds in `localDeclKinds`)
+	 * has a name already bound in the enclosing scope (`scopeNames`) — de-nesting it would
+	 * be a same-scope redeclaration (an error under `-D no-shadowing`), so such a body is
+	 * left nested.
+	 */
+	private static function collidesWithScope(stmts: Array<QueryNode>, localDeclKinds: Array<String>, scopeNames: Array<String>): Bool {
+		for (s in stmts) {
+			final nm: Null<String> = s.name;
+			if (nm != null && localDeclKinds.contains(s.kind) && scopeNames.contains(nm)) return true;
+		}
+		return false;
+	}
 
-	/** Resolve the if seam kinds plus control-flow support and the local-decl kinds, or null when a required piece is unset. */
+
+	/** Resolve the if seam kinds plus control-flow support and the local-decl / function kinds, or null when a required piece is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		if (ifKinds.length == 0) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
-		return support == null ? null : { ifKinds: ifKinds, support: support, localDeclKinds: shape.localDeclKinds ?? [] };
+		return support == null ? null : {
+			ifKinds: ifKinds,
+			support: support,
+			localDeclKinds: shape.localDeclKinds ?? [],
+			functionKinds: shape.functionKinds ?? []
+		};
 	}
 
 }
 
 /**
- * The resolved seams `RedundantElse` reads in `run` and `fix`; `localDeclKinds` is used only by `fix`'s de-nest scope check.
+ * The resolved seams `RedundantElse` reads in `run` and `fix`; `localDeclKinds` and
+ * `functionKinds` are used only by `fix`'s de-nest scope-collision check.
  */
 private typedef Seams = {
 	final ifKinds: Array<String>;
 	final support: ControlFlowSupport;
 	final localDeclKinds: Array<String>;
+	final functionKinds: Array<String>;
 };
