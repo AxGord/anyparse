@@ -35,8 +35,31 @@ final class LintConfig {
 
 	private final _rules: Map<String, RuleConfig>;
 
-	public function new(rules: Map<String, RuleConfig>) {
+	/** The `compilerOracle` hxml path verbatim from the config root, or null when unset. */
+	private final _compilerOracle: Null<String>;
+
+	/** The directory of the `apqlint.json` that declared the oracle — the compile CWD — or null when parsed without a base. */
+	private final _compilerOracleDir: Null<String>;
+
+	public function new(rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String) {
 		_rules = rules;
+		_compilerOracle = compilerOracle;
+		_compilerOracleDir = compilerOracleDir;
+	}
+
+	/**
+	 * The project's compiler-oracle hxml (the root `compilerOracle` key), or null
+	 * when the config does not opt in. The path is verbatim from the JSON — the
+	 * caller runs `haxe <path> --no-output` from `compilerOracleDir()` so a path
+	 * relative to the `apqlint.json` resolves like `cd <project> && haxe <path>`.
+	 */
+	public function compilerOracle(): Null<String> {
+		return _compilerOracle;
+	}
+
+	/** The working directory for the compiler-oracle run (the config file's directory), or null. */
+	public function compilerOracleDir(): Null<String> {
+		return _compilerOracleDir;
 	}
 
 	/** Whether `id` runs in the default set (absent, or no `enabled` key → true). */
@@ -92,8 +115,8 @@ final class LintConfig {
 	 * it; an empty config (every rule enabled, no overrides) when none is found.
 	 */
 	public static function discover(path: String): LintConfig {
-		final content: Null<String> = ConfigFinder.findUp(path, 'apqlint.json');
-		return parse(content ?? '{}');
+		final found: Null<{ content: String, path: String }> = ConfigFinder.findUpFile(path, 'apqlint.json');
+		return found == null ? parse('{}') : parse(found.content, haxe.io.Path.directory(found.path));
 	}
 
 	/**
@@ -111,8 +134,9 @@ final class LintConfig {
 	 * or a missing `rules` object all yield an empty config — never throws, so a
 	 * broken config degrades to default behaviour rather than failing the lint.
 	 */
-	public static function parse(content: String): LintConfig {
+	public static function parse(content: String, ?baseDir: String): LintConfig {
 		final rules: Map<String, RuleConfig> = [];
+		var oracle: Null<String> = null;
 		final root: Null<Dynamic> = try haxe.Json.parse(content) catch (exception: Exception) null;
 		if (root != null && Reflect.isObject(root)) {
 			final rulesField: Null<Dynamic> = Reflect.field(root, 'rules');
@@ -120,8 +144,10 @@ final class LintConfig {
 				final access: DynamicAccess<Dynamic> = rulesField;
 				for (id => raw in access) if (raw != null && Reflect.isObject(raw)) rules[id] = parseRule(raw);
 			}
+			final oracleField: Null<Dynamic> = Reflect.field(root, 'compilerOracle');
+			if (oracleField != null && oracleField is String) oracle = (oracleField: String);
 		}
-		return new LintConfig(rules);
+		return new LintConfig(rules, oracle, oracle == null ? null : baseDir);
 	}
 
 

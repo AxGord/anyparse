@@ -16,12 +16,25 @@ final class ConfigFinder {
 	 * target has no file IO.
 	 */
 	public static function findUp(path: String, filename: String): Null<String> {
+		final found: Null<{ content: String, path: String }> = findUpFile(path, filename);
+		return found == null ? null : found.content;
+	}
+
+	/**
+	 * As `findUp`, but also returns the ABSOLUTE path of the config that matched, so
+	 * a caller can resolve a config-relative setting (the `apqlint.json`
+	 * `compilerOracle` hxml) against the config's own directory. Null when none is
+	 * found, unreadable, or the target has no file IO.
+	 */
+	public static function findUpFile(path: String, filename: String): Null<{ content: String, path: String }> {
 		#if (sys || nodejs)
 		var dir: String = haxe.io.Path.directory(sys.FileSystem.absolutePath(path));
 		while (dir != '') {
 			final candidate: String = dir + '/' + filename;
-			if (sys.FileSystem.exists(candidate) && !sys.FileSystem.isDirectory(candidate))
-				return try sys.io.File.getContent(candidate) catch (exception: haxe.Exception) null;
+			if (sys.FileSystem.exists(candidate) && !sys.FileSystem.isDirectory(candidate)) {
+				final content: Null<String> = try sys.io.File.getContent(candidate) catch (exception: haxe.Exception) null;
+				return content == null ? null : { content: content, path: candidate };
+			}
 			final parent: String = haxe.io.Path.directory(dir);
 			if (parent == dir) break;
 			dir = parent;

@@ -82,3 +82,23 @@ interface ConfigAware {
 	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void;
 
 }
+
+/**
+ * Opt-in marker for a `Check` whose `fix()` edits are STRUCTURALLY RISKY — a
+ * rewrite or deletion NOT gated by a structurally-provable shape invariant, so
+ * it can emit parseable-but-miscompiling output (the class of bug the 2026-07
+ * autofix campaign found report-canaries missed and only a real `--fix` +
+ * typecheck caught). A check that does NOT implement this marker is trusted and
+ * applied unverified — the default, and the state of EVERY builtin today.
+ *
+ * When the project configures a compiler oracle (`apqlint.json` `compilerOracle`),
+ * `apq lint --fix` applies a `RiskyFix` check's edits speculatively, typechecks
+ * the project, and REVERTS any file whose risky edit breaks the build — that
+ * file's finding degrades to report-only. Without an oracle configured, a risky
+ * check is left report-only wholesale (its `fix()` never runs), so the no-oracle
+ * path is byte-identical to a run with no risky checks at all. The intended
+ * first consumers are a future avoid-dynamic fix and any rewrite lacking a
+ * provable shape gate; the machinery lives in `FixVerifier` / `CompilerOracle`.
+ */
+@:nullSafety(Strict)
+interface RiskyFix {}

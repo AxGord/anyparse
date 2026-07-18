@@ -57,6 +57,11 @@ import anyparse.query.CallGraph.FnNode;
 import anyparse.query.CallGraph.CallEdge;
 import anyparse.query.Clusters.ClusterReport;
 import anyparse.query.ExitCode.*;
+import anyparse.check.Check.RiskyFix;
+import anyparse.check.CompilerOracle;
+import anyparse.check.CompilerOracle.OracleOutcome;
+import anyparse.check.FixVerifier;
+import anyparse.check.FixVerifier.FixVerifyResult;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1256,11 +1261,21 @@ final class Cli {
 		] : checks;
 		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, resolveConfig, applyEnablement);
 
-		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement);
+		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
+		// setting, so the config resolved for the first linted file carries it for the
+		// whole run — its hxml is typechecked as ground truth below.
+		final oracleConfig: Null<LintConfig> = paths.length > 0 ? resolveConfig(paths[0]) : null;
+		final oracleHxml: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracle();
+		final oracleDir: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracleDir();
+
+		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, oracleHxml, oracleDir);
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat);
 		lintSummary(all, paths, o.includeInfo);
+
+		final oracleExit: Null<Int> = reportModeOracle(oracleHxml, oracleDir);
+		if (oracleExit != null) return oracleExit;
 
 		final failOn: Null<Severity> = o.failOn;
 		if (failOn != null) {
@@ -1293,8 +1308,14 @@ final class Cli {
 	 */
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool
+		applyEnablement: Bool, ?oracleHxml: String, ?oracleDir: String
 	): Int {
+		// A RiskyFix check's edits are verified against the compiler oracle (below);
+		// every other check is trusted and runs the normal fixed-point loop. No
+		// builtin implements RiskyFix, so a real run partitions to safeChecks ==
+		// checks and the oracle path is inert — byte-identical to before this key.
+		final riskyChecks: Array<Check> = [for (c in checks) if (c is RiskyFix) c];
+		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix)) c];
 		final maxPasses: Int = 10;
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
 		// check, and every fix — keyed by source content, so an unchanged file is
@@ -1323,8 +1344,8 @@ final class Cli {
 			'prefer-final-public-field',
 			'prefer-read-only-field'
 		];
-		final activeScopeChecks: Array<Check> = [for (c in checks) if (!fullScopeIds.contains(c.id())) c];
-		final fullScopeChecks: Array<Check> = [for (c in checks) if (fullScopeIds.contains(c.id())) c];
+		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
+		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];
 
 		while (active.length > 0) {
 			if (passes >= maxPasses) {
@@ -1333,7 +1354,7 @@ final class Cli {
 			}
 			passes++;
 			final pass: LintPassResult = applyLintPass(
-				active, files, cached, activeScopeChecks, fullScopeChecks, checks, resolveConfig, applyEnablement, optsByFile, passes,
+				active, files, cached, activeScopeChecks, fullScopeChecks, safeChecks, resolveConfig, applyEnablement, optsByFile, passes,
 				noted, changedFiles
 			);
 			fixedCount += pass.fixedDelta;
@@ -1342,9 +1363,21 @@ final class Cli {
 
 		for (entry in files) if (changedFiles.contains(entry.file)) writeFile(entry.file, entry.source);
 
+		// RiskyFix checks: applied ONLY when a compiler oracle is configured — each
+		// candidate is typechecked and reverted if it breaks the build (FixVerifier);
+		// otherwise left report-only. With no risky check present this block is a
+		// no-op, so a real run (no risky builtin) is byte-identical to before the key.
+		final risky: { tail: String, appliedCount: Int } = verifyRiskyFixes(
+			files, riskyChecks, cached, oracleHxml, oracleDir, optsByFile, changedFiles
+		);
+		fixedCount += risky.appliedCount;
+		final riskyTail: String = risky.tail;
+
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
 		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
-		stderr('apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail\n');
+		stderr(
+			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail$riskyTail\n'
+		);
 		return EXIT_OK;
 	}
 
@@ -6877,6 +6910,11 @@ final class Cli {
 		sysPrint('enables/disables rules and overrides their severity or options, e.g.\n');
 		sysPrint('{ "rules": { "naming": { "severity": "error" }, "complexity": { "max": 15 },\n');
 		sysPrint('"fold-adjacent-string-literals": { "enabled": false } } }.\n');
+		sysPrint('\n');
+		sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
+		sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
+		sysPrint('fails the run, and a RiskyFix rule fix is reverted under --fix if it breaks\n');
+		sysPrint('the build. Without the key no compiler is ever spawned.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
@@ -13829,6 +13867,60 @@ final class Cli {
 		final plugin: GrammarPlugin = pickPlugin(lang);
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(specs, '.hx');
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
+	}
+
+
+	/**
+	 * Verify and apply the RiskyFix checks' fixes: a no-op with no risky check,
+	 * report-only (no compile) with no oracle, else `FixVerifier`-gated — files
+	 * whose risky fix survives fold into `changedFiles`. Returns the summary tail
+	 * and the count of applied files for the caller's fixed-count. Split out of
+	 * `applyLintFixes` to keep that function under the complexity budget.
+	 */
+	private static function verifyRiskyFixes(
+		files: Array<{ file: String, source: String }>, riskyChecks: Array<Check>, cached: GrammarPlugin, oracleHxml: Null<String>,
+		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>
+	): { tail: String, appliedCount: Int } {
+		if (riskyChecks.length == 0) return { tail: '', appliedCount: 0 };
+		if (oracleHxml == null)
+			return { tail: ', ${riskyChecks.length} risky-fix rule(s) left report-only (no compilerOracle configured)', appliedCount: 0 };
+		final verified: FixVerifyResult = FixVerifier.verify(files, riskyChecks, cached, oracleHxml, oracleDir, writeFile, optsByFile);
+		switch verified.baseline {
+			case Confirmed:
+				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
+				return {
+					tail: ', risky-fix verified: ${verified.applied.length} applied, ${verified.reverted.length} reverted to report-only',
+					appliedCount: verified.applied.length
+				};
+			case Unavailable(reason):
+				return { tail: ', risky-fix skipped (oracle unavailable: $reason)', appliedCount: 0 };
+			case Rejected(_):
+				return { tail: ', risky-fix skipped (oracle baseline does not typecheck)', appliedCount: 0 };
+		}
+	}
+
+
+	/**
+	 * Report-mode compiler oracle: with a `compilerOracle` configured, typecheck the
+	 * project and (a) return a non-null EXIT_RUNTIME with the compiler's errors when
+	 * the build is rejected — failing the run; (b) print a `compiler-confirmed` note
+	 * on a clean build (the prover's @:nullSafety trust, verdicts unchanged); (c)
+	 * degrade to a skip note when the oracle can't run. Null = no fail. Split out of
+	 * `runLint` to keep it under the complexity budget.
+	 */
+	private static function reportModeOracle(oracleHxml: Null<String>, oracleDir: Null<String>): Null<Int> {
+		if (oracleHxml == null) return null;
+		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+			case Confirmed:
+				stderr('apq lint: compiler oracle confirmed — build typechecks (nullSafety trust: compiler-confirmed)\n');
+			case Unavailable(reason):
+				stderr('apq lint: compiler oracle unavailable — $reason (skipped)\n');
+			case Rejected(errors):
+				stderr('apq lint: compiler oracle REJECTED — build does not typecheck:\n');
+				stderr('$errors\n');
+				return EXIT_RUNTIME;
+		}
+		return null;
 	}
 
 }
