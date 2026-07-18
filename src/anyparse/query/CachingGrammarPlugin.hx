@@ -9,6 +9,7 @@ import anyparse.query.Pattern.KindEquivalence;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin.CheckOverrides;
+import anyparse.query.SpanTypeInfoProvider;
 
 /**
  * A run-scoped `GrammarPlugin` decorator that memoizes `parseFile` /
@@ -29,19 +30,18 @@ import anyparse.query.GrammarPlugin.CheckOverrides;
  * skip-parse file re-parses per check, a negligible minority).
  */
 @:nullSafety(Strict)
-final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider {
+final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider {
 
 	private final _inner: GrammarPlugin;
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
 
-	private final _declaredTypeCache: Map<String, Map<Int, String>> = [];
-	private final _returnTypeCache: Map<String, Map<Int, String>> = [];
+	// One combined span-parse cache replacing five per-map caches: the five
+	// TypeInfoProvider accessors below are exact slices of this bundle, so a file's
+	// type-info costs a single span-parse instead of one per accessor.
+	private final _spanInfoCache: Map<String, SpanTypeInfo> = [];
 
-	private final _accessorCache: Map<String, Map<Int, Bool>> = [];
-	private final _castTargetCache: Map<String, Map<Int, String>> = [];
 	private final _importMapCache: Map<String, Map<String, String>> = [];
-	private final _declaredTypeSourceCache: Map<String, Map<Int, String>> = [];
 
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
@@ -97,58 +97,33 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function checkOverrides(path: String): Null<CheckOverrides> return _inner.checkOverrides(path);
 
 	/**
-	 * `TypeInfoProvider` (optional capability): forward to the wrapped plugin when it
-	 * supplies declared types, memoized by source like the parse caches. A wrapped
-	 * plugin without the capability yields an empty map — the type-aware checks then
-	 * fall back to their conservative default.
+	 * `SpanTypeInfoProvider`: the five span-indexed maps, memoized by source. When the
+	 * wrapped plugin batches (`SpanTypeInfoProvider`) the bundle is one span-parse;
+	 * otherwise it falls back to the wrapped plugin's five individual accessors, so a
+	 * non-batching inner is byte-identical to the old per-map caches. The five
+	 * `TypeInfoProvider` accessors below read their slice from here.
 	 */
-	public function declaredTypes(source: String): Map<Int, String> {
-		final cached: Null<Map<Int, String>> = _declaredTypeCache[source];
+	public function spanTypeInfo(source: String): SpanTypeInfo {
+		final cached: Null<SpanTypeInfo> = _spanInfoCache[source];
 		if (cached != null) return cached;
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
-		final result: Map<Int, String> = inner != null ? inner.declaredTypes(source) : [];
-		_declaredTypeCache[source] = result;
+		final batched: Null<SpanTypeInfoProvider> = (_inner is SpanTypeInfoProvider) ? cast _inner : null;
+		final result: SpanTypeInfo = batched != null ? batched.spanTypeInfo(source) : fallbackSpanInfo(source);
+		_spanInfoCache[source] = result;
 		return result;
 	}
 
-	public function returnTypes(source: String): Map<Int, String> {
-		final cached: Null<Map<Int, String>> = _returnTypeCache[source];
-		if (cached != null) return cached;
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
-		final result: Map<Int, String> = inner != null ? inner.returnTypes(source) : [];
-		_returnTypeCache[source] = result;
-		return result;
-	}
+	public function declaredTypes(source: String): Map<Int, String> return spanTypeInfo(source).declaredTypes;
+
+	public function returnTypes(source: String): Map<Int, String> return spanTypeInfo(source).returnTypes;
 
 	/** `TypeInfoProvider`: forward + memoize the property-accessor map. */
-	public function propertyAccessors(source: String): Map<Int, Bool> {
-		final cached: Null<Map<Int, Bool>> = _accessorCache[source];
-		if (cached != null) return cached;
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
-		final result: Map<Int, Bool> = inner != null ? inner.propertyAccessors(source) : [];
-		_accessorCache[source] = result;
-		return result;
-	}
+	public function propertyAccessors(source: String): Map<Int, Bool> return spanTypeInfo(source).propertyAccessors;
 
 	/** `TypeInfoProvider`: forward + memoize the declaration type-source map per source. */
-	public function declaredTypeSources(source: String): Map<Int, String> {
-		final cached: Null<Map<Int, String>> = _declaredTypeSourceCache[source];
-		if (cached != null) return cached;
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
-		final result: Map<Int, String> = inner != null ? inner.declaredTypeSources(source) : [];
-		_declaredTypeSourceCache[source] = result;
-		return result;
-	}
+	public function declaredTypeSources(source: String): Map<Int, String> return spanTypeInfo(source).declaredTypeSources;
 
 	/** `TypeInfoProvider`: forward + memoize the typed-cast target-type-source map per source. */
-	public function castTargetSources(source: String): Map<Int, String> {
-		final cached: Null<Map<Int, String>> = _castTargetCache[source];
-		if (cached != null) return cached;
-		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
-		final result: Map<Int, String> = inner != null ? inner.castTargetSources(source) : [];
-		_castTargetCache[source] = result;
-		return result;
-	}
+	public function castTargetSources(source: String): Map<Int, String> return spanTypeInfo(source).castTargetSources;
 
 	/** `TypeInfoProvider`: forward + memoize the import simple-name → FQN map per source. */
 	public function importMap(source: String): Map<String, String> {
@@ -158,6 +133,23 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final result: Map<String, String> = inner != null ? inner.importMap(source) : [];
 		_importMapCache[source] = result;
 		return result;
+	}
+
+	/**
+	 * The span-info bundle assembled from the wrapped plugin's five individual
+	 * `TypeInfoProvider` accessors — the path for an inner that supplies per-map type
+	 * info but not the batched `SpanTypeInfoProvider` capability. Exactly reproduces
+	 * the pre-batching behaviour (each map is `inner.X(source)` or empty).
+	 */
+	private function fallbackSpanInfo(source: String): SpanTypeInfo {
+		final inner: Null<TypeInfoProvider> = (_inner is TypeInfoProvider) ? cast _inner : null;
+		return {
+			declaredTypes: inner != null ? inner.declaredTypes(source) : [],
+			returnTypes: inner != null ? inner.returnTypes(source) : [],
+			propertyAccessors: inner != null ? inner.propertyAccessors(source) : [],
+			declaredTypeSources: inner != null ? inner.declaredTypeSources(source) : [],
+			castTargetSources: inner != null ? inner.castTargetSources(source) : []
+		};
 	}
 
 }

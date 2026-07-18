@@ -13,6 +13,7 @@ import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.SpanTypeInfoProvider;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -47,7 +48,7 @@ import anyparse.query.TypeInfoProvider;
  * applies. Its children (top-level decls) carry their own spans.
  */
 @:nullSafety(Strict)
-final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider {
+final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider {
 
 	/**
 	 * Binding-declaration kinds shared by `refShape` and `metaShape`
@@ -780,6 +781,55 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
 			}
 		});
+	}
+
+	/**
+	 * `SpanTypeInfoProvider`: the five span-indexed maps from ONE `HaxeModuleSpanParser`
+	 * parse + ONE `walkGrammarSpans` traversal — the batched form of `declaredTypes`
+	 * / `returnTypes` / `propertyAccessors` / `declaredTypeSources` / `castTargetSources`,
+	 * whose five separate `walkSpanMap` calls each re-parse the source. Each map is
+	 * produced by the SAME visitor logic as its individual accessor over the SAME
+	 * traversal, so the bundle is byte-for-byte the five separate walks (pinned by
+	 * `HaxeSpanTypeInfoTest`).
+	 */
+	public function spanTypeInfo(source: String): SpanTypeInfo {
+		final declaredTypes: Map<Int, String> = [];
+		final returnTypes: Map<Int, String> = [];
+		final propertyAccessors: Map<Int, Bool> = [];
+		final declaredTypeSources: Map<Int, String> = [];
+		final castTargetSources: Map<Int, String> = [];
+		final bundle: SpanTypeInfo = {
+			declaredTypes: declaredTypes,
+			returnTypes: returnTypes,
+			propertyAccessors: propertyAccessors,
+			declaredTypeSources: declaredTypeSources,
+			castTargetSources: castTargetSources
+		};
+		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		if (root == null) return bundle;
+		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
+			if (span == null) return;
+			if (Reflect.hasField(node, 'type')) {
+				final typeVal: Dynamic = Reflect.field(node, 'type');
+				final nm: Null<String> = nominalTypeName(typeVal);
+				if (nm != null) declaredTypes[span.from] = nm;
+				final ts: Null<Span> = typeFieldSpan(typeVal);
+				if (ts != null) {
+					declaredTypeSources[span.from] = source.substring(ts.from, ts.to);
+					if (!Reflect.hasField(node, 'name') && (Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr')))
+						castTargetSources[span.from] = source.substring(ts.from, ts.to);
+				}
+			}
+			if (Reflect.hasField(node, 'returnType')) {
+				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'returnType'));
+				if (nm != null) returnTypes[span.from] = nm;
+			}
+			if (Reflect.hasField(node, 'access')) {
+				final access: Dynamic = Reflect.field(node, 'access');
+				if (access != null) propertyAccessors[span.from] = isGetterAccess(access);
+			}
+		});
+		return bundle;
 	}
 
 	/**
