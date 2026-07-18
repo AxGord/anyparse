@@ -9,6 +9,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 /**
  * Flags a loop (`for` / `while` / `do … while`) whose braced body's LAST statement is
@@ -20,14 +21,16 @@ import anyparse.runtime.Span;
  * fixpoint, so a two-level `if (a) { … if (b) { … } }` chain flattens over two `--fix`
  * passes. `Severity.Info`.
  *
- * ## The `if (!cond)` inversion is `!(cond)`, exactly
+ * ## The `if (!cond)` inversion — De Morgan when possible, NaN-safe
  *
- * `cond` is negated by `CheckScan.negateConditionText` — the SAME proven-sound engine as
- * `loop-guard`: a leading `!` is stripped, `==` / `!=` flipped (NaN-safe), and every other
- * shape (ordered comparisons `< <= > >=`, `&& || ?? ?:`, calls) wrapped `!(cond)` VERBATIM.
- * Ordered comparisons are deliberately NOT flipped (`!(a < b)` and `a >= b` differ under
- * NaN) and no De Morgan rewrite is attempted; the output is always `== !(cond)` and
- * compiles. Comments inside the condition are preserved (the verbatim wrap keeps them).
+ * `cond` is negated by `CheckScan.negateConditionText`, two-tier. When the grammar exposes
+ * a `BooleanLogicSupport` and the condition span is comment-free, the negation is pushed
+ * inward by De Morgan (`a && b` → `!a || !b`, `!(a || b)` → `a && b`, `==` / `!=` flipped),
+ * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` (never
+ * flipped — `!(a < b)` and `a >= b` differ under NaN). Falling back — a seam-less grammar, or
+ * a comment in the condition the De Morgan rewrite would drop — the old text engine wraps
+ * `!(cond)` VERBATIM (`!` strip, NaN-safe `==` / `!=` flip, everything else
+ * parenthesised-wrapped), preserving the comment. Either tier is sound and compiles.
  *
  * ## Gates — every one is a correctness gate; a violated gate is a semantic bug
  *
@@ -145,7 +148,8 @@ final class GuardContinue implements Check {
 				eqKind: shape.eqKind,
 				notEqKind: shape.notEqKind,
 				atomicKinds: atomicKinds
-			}
+			},
+			support: plugin.booleanLogicSupport()
 		};
 	}
 
@@ -294,7 +298,7 @@ final class GuardContinue implements Check {
 		final ifSpan: Null<Span> = m.ifNode.span;
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		if (ifSpan == null || thenSpan == null) return null;
-		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation);
+		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.support);
 		final inner: String = StringTools.rtrim(source.substring(thenSpan.from + 1, thenSpan.to - 1));
 		return { span: ifSpan, text: 'if (' + neg + ') continue;' + inner };
 	}
@@ -312,6 +316,7 @@ private typedef Seams = {
 	var nestedScopeKinds: Array<String>;
 	var opaqueKinds: Array<String>;
 	var negation: NegationSeams;
+	var support: Null<BooleanLogicSupport>;
 }
 
 /** A matched loop guard: the trailing `if` statement, its braced then-branch, and its condition. */

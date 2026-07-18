@@ -13,10 +13,12 @@ import anyparse.runtime.Span;
  * The `loop-guard` check: a `for` / `while` whose braced body opens with a bare
  * `if (c) continue;` guard is flagged `Info` and the guard is lifted into the loop
  * header with an inverted condition (`for (x in xs) if (INV) { REST }`). The inversion
- * strips a `!`, flips `==` / `!=` (NaN-safe), wraps everything else in `!(...)`, and
- * leaves ordered comparisons unflipped. A cascade of guards, a guard-only body, an
- * unbraced body, an `else` branch and a comment inside the guard are safe misses; a
- * later `continue` deeper in the body is preserved.
+ * pushes De Morgan inward (`a && b` → `!a || !b`), flips `==` / `!=` (NaN-safe), and keeps
+ * an ordered comparison (`< <= > >=`) wrapped `!(…)` (unflipped, since `!(a < b)` and
+ * `a >= b` differ under NaN); a comment inside the condition falls back to the verbatim
+ * `!(cond)` wrap. A cascade of guards, a guard-only body, an unbraced body, an `else`
+ * branch and a comment inside the guard are safe misses; a later `continue` deeper in the
+ * body is preserved.
  */
 class LoopGuardCheckTest extends Test {
 
@@ -63,9 +65,9 @@ class LoopGuardCheckTest extends Test {
 		);
 	}
 
-	public function testComplexCondWrapped(): Void {
+	public function testComplexCondDeMorgan(): Void {
 		Assert.equals(
-			wrap('for (x in xs) if (!(a && b)) {\n\t\t\ttrace(x);\n\t\t}'),
+			wrap('for (x in xs) if (!a || !b) {\n\t\t\ttrace(x);\n\t\t}'),
 			applyFix(wrap('for (x in xs) {\n\t\t\tif (a && b) continue;\n\t\t\ttrace(x);\n\t\t}'))
 		);
 	}

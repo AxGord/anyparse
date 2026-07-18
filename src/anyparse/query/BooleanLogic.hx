@@ -42,4 +42,15 @@ interface BooleanLogicSupport {
 		conds: Array<QueryNode>, lits: Array<QueryNode>, finalLit: QueryNode, source: String
 	): Null<String>;
 
+	/**
+	 * The NaN-safe logical negation of condition `cond`, pushed inward by De
+	 * Morgan: `!` stripped, `&&` / `||` distributed, `==` / `!=` flipped; an
+	 * ordered comparison (`<` `<=` `>` `>=`) is wrapped `!(…)` verbatim, never
+	 * flipped — `!(a < b)` and `a >= b` differ under NaN. Operands carry
+	 * precedence-safe parentheses. Comments in the operator glue between
+	 * operands are dropped, so the caller must gate: `CheckScan.negateConditionText`
+	 * falls back to a verbatim wrap when the condition span holds a comment marker.
+	 */
+	public function negateCondition(cond: QueryNode, source: String): String;
+
 }

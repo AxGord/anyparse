@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 /**
  * Flags a loop (`for` / `while`) whose braced body OPENS with a bare
@@ -16,19 +17,22 @@ import anyparse.runtime.Span;
  * lifts the guard into the loop header:
  * `for (x in xs) { if (c) continue; REST }` → `for (x in xs) if (INV) { REST }`.
  *
- * ## The inversion — sound over IEEE floats
+ * ## The inversion — De Morgan when possible, sound over IEEE floats
  *
  * `INV` negates the guard condition `c` so the surviving iterations are the ones the
- * `continue` skipped:
+ * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `c` is
+ * comment-free, `CheckScan.negateConditionText` pushes De Morgan inward; otherwise (a
+ * seam-less grammar, or a comment inside `c`) it falls back to the verbatim text engine.
+ * Both agree on the leaf rules:
  *
  * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
  * - `a == b` → `a != b`, `a != b` → `a == b` (NaN-safe: IEEE `NaN == x` is false and
  *   `NaN != x` true, so `!(a == b)` is `a != b` even with a NaN operand);
- * - anything else (`<` / `<=` / `>` / `>=`, `&&`, `||`, a call, …) → `!(c)`. The
- *   ordered comparisons are deliberately NOT flipped: `!(a < b)` and `a >= b` DIFFER
- *   when an operand is NaN, so wrapping is the only sound negation. Parentheses are
- *   added unless `c` already binds tighter than unary `!` (a bare identifier / call /
- *   field access → `!c`).
+ * - an ordered comparison `<` / `<=` / `>` / `>=` is deliberately NOT flipped — `!(a < b)`
+ *   and `a >= b` DIFFER when an operand is NaN — so it is kept wrapped `!(a < b)`;
+ * - `&&` / `||` distribute by De Morgan (`a && b` → `!a || !b`) on the seam path, or the
+ *   whole `c` wraps `!(c)` on the fallback path; a bare identifier / call / field access
+ *   → `!c`.
  *
  * ## Gates
  *
@@ -68,7 +72,7 @@ final class LoopGuard implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
@@ -82,7 +86,7 @@ final class LoopGuard implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final seams: Null<Seams> = readSeams(plugin.refShape());
+		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -104,7 +108,8 @@ final class LoopGuard implements Check {
 	}
 
 	/** Bundle the required + optional `RefShape` kinds, or null when a required one is unset (the check is then a no-op). */
-	private static function readSeams(shape: RefShape): Null<Seams> {
+	private static function readSeams(plugin: GrammarPlugin): Null<Seams> {
+		final shape: RefShape = plugin.refShape();
 		final loopKinds: Null<Array<String>> = shape.loopStatementKinds;
 		if (loopKinds == null || loopKinds.length == 0) return null;
 		final continueKind: Null<String> = shape.continueStatementKind;
@@ -136,7 +141,8 @@ final class LoopGuard implements Check {
 			notEqKind: shape.notEqKind,
 			parenKind: shape.parenKind,
 			atomicKinds: atomicKinds,
-			opaqueKinds: shape.opaqueKinds ?? []
+			opaqueKinds: shape.opaqueKinds ?? [],
+			support: plugin.booleanLogicSupport()
 		};
 	}
 
@@ -214,7 +220,7 @@ final class LoopGuard implements Check {
 			eqKind: s.eqKind,
 			notEqKind: s.notEqKind,
 			atomicKinds: s.atomicKinds
-		});
+		}, s.support);
 	}
 
 	/** Whether the `[from, to)` gap holds a `//` or `/*` comment opener (a region the rewrite would drop). */
@@ -238,6 +244,7 @@ private typedef Seams = {
 	var parenKind: Null<String>;
 	var atomicKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+	var support: Null<BooleanLogicSupport>;
 }
 
 /** A matched loop guard: the `if`-continue statement, the loop body block, and the guard condition. */

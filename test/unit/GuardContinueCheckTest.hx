@@ -15,12 +15,15 @@ import anyparse.runtime.Span;
  * The `guard-continue` check: a loop (`for` / `while` / `do … while`) whose braced
  * body's LAST statement is a bare `if (cond) { … }` (no `else`) preceded by ≥1 other
  * statement is flagged `Info` and de-nested to an `if (!cond) continue;` guard. The
- * inversion is exactly `!(cond)` (NaN-safe `==`/`!=` flip, `!`-strip, `!(…)`-wrap for
- * everything else) via the shared `CheckScan.negateConditionText`. Guarded by a flow
- * gate (no `break`/`continue`/`return` in the body), a name-collision gate (a de-nested
- * local must not clash with a preceding sibling / the iterator), a glue-comment gate, and
- * the sole-`if` / else / empty / unbraced / non-tail exclusions. Runs to a fixpoint, so a
- * two-level chain flattens over successive passes.
+ * inversion pushes De Morgan inward through the shared `CheckScan.negateConditionText`
+ * (backed by the grammar's `BooleanLogicSupport`): `a && b` → `!a || !b`, `==` / `!=`
+ * flipped, but an ordered comparison (`< <= > >=`) kept wrapped `!(…)` (NaN-safe — `!(a <
+ * b)` and `a >= b` differ under NaN), and a comment inside the condition falls back to the
+ * verbatim `!(cond)` wrap. Guarded by a flow gate (no `break`/`continue`/`return` in the
+ * body), a name-collision gate (a de-nested local must not clash with a preceding sibling /
+ * the iterator), a glue-comment gate, and the sole-`if` / else / empty / unbraced /
+ * non-tail exclusions. Runs to a fixpoint, so a two-level chain flattens over successive
+ * passes.
  */
 class GuardContinueCheckTest extends Test {
 
@@ -121,16 +124,40 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('x == 10')).indexOf('if (x != 10) continue;') != -1);
 	}
 
-	public function testAndWrapped(): Void {
-		Assert.isTrue(fx(cond('a && b')).indexOf('if (!(a && b)) continue;') != -1);
+	public function testAndDeMorgan(): Void {
+		Assert.isTrue(fx(cond('a && b')).indexOf('if (!a || !b) continue;') != -1);
 	}
 
-	public function testOrWrapped(): Void {
-		Assert.isTrue(fx(cond('a || b')).indexOf('if (!(a || b)) continue;') != -1);
+	public function testOrDeMorgan(): Void {
+		Assert.isTrue(fx(cond('a || b')).indexOf('if (!a && !b) continue;') != -1);
 	}
 
-	public function testMixedWrapped(): Void {
-		Assert.isTrue(fx(cond('a && (b || c)')).indexOf('if (!(a && (b || c))) continue;') != -1);
+	public function testMixedDeMorgan(): Void {
+		Assert.isTrue(fx(cond('a && (b || c)')).indexOf('if (!a || !b && !c) continue;') != -1);
+	}
+
+	public function testDeMorganFlipsEqOperands(): Void {
+		Assert.isTrue(fx(cond('s != null && s.ok')).indexOf('if (s == null || !s.ok) continue;') != -1);
+	}
+
+	public function testDeMorganKeepsOrderedWrapped(): Void {
+		Assert.isTrue(fx(cond('x < 10 && ok')).indexOf('if (!(x < 10) || !ok) continue;') != -1);
+	}
+
+	public function testDeMorganDoubleNegationOperands(): Void {
+		Assert.isTrue(fx(cond('!a && !b')).indexOf('if (a || b) continue;') != -1);
+	}
+
+	public function testDeMorganParenOrOperand(): Void {
+		Assert.isTrue(fx(cond('(a || b) && c')).indexOf('if (!a && !b || !c) continue;') != -1);
+	}
+
+	public function testDeMorganNullCoalOperandKeepsParens(): Void {
+		Assert.isTrue(fx(cond('(a ?? b) && c')).indexOf('if (!(a ?? b) || !c) continue;') != -1);
+	}
+
+	public function testDeMorganStringNullGuard(): Void {
+		Assert.isTrue(fx(cond('s != "" && s != null')).indexOf('if (s == "" || s == null) continue;') != -1);
 	}
 
 	public function testNullCoalesceWrappedWithParens(): Void {
@@ -144,6 +171,15 @@ class GuardContinueCheckTest extends Test {
 
 	public function testAtomicFieldNoParens(): Void {
 		Assert.isTrue(fx(cond('obj.flag')).indexOf('if (!obj.flag) continue;') != -1);
+	}
+
+	public function testDeMorganIsOperatorWrapped(): Void {
+		// `is` binds looser than unary `!`, so a bare `!x is T` parses as `(!x) is T` — must wrap.
+		Assert.isTrue(fx(cond('x is String')).indexOf('if (!(x is String)) continue;') != -1);
+	}
+
+	public function testDeMorganIsOperatorAsCompoundOperand(): Void {
+		Assert.isTrue(fx(cond('ok && x is String')).indexOf('if (!ok || !(x is String)) continue;') != -1);
 	}
 
 	// --- negatives: never flagged --------------------------------------------------

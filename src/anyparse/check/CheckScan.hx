@@ -10,6 +10,7 @@ import haxe.Exception;
 import haxe.ds.ObjectMap;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.BooleanLogic.BooleanLogicSupport;
 
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
@@ -115,8 +116,15 @@ final class CheckScan {
 
 	/**
 	 * The source text of a negation of `cond`, comment-preserving — the shared
-	 * condition-inverting engine of `loop-guard` and `guard-continue`. Three shapes, in
-	 * order:
+	 * condition-inverting engine of `loop-guard` and `guard-continue`.
+	 *
+	 * When a grammar `support` is passed AND the condition span holds no comment marker, the
+	 * negation is delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
+	 * (`a && b` → `!a || !b`) NaN-safely — ordered comparisons stay wrapped `!(a < b)`, never
+	 * flipped. The comment scan is STRING-LITERAL-BLIND: a `//` or `/*` inside a string operand
+	 * conservatively forces the fallback (a verbatim `!(cond)` wrap — correct output, just not
+	 * De-Morganed). With no `support`, or a comment in the condition span, the text engine below
+	 * is used, in three shapes, in order:
 	 *
 	 *  - a leading logical-not is STRIPPED (`!e` → `e`), unwrapping one redundant paren
 	 *    (`!(a && b)` → `a && b`, `!!x` → `!x`) — the inner source verbatim;
@@ -134,11 +142,13 @@ final class CheckScan {
 	 * case of a Haxe abstract that overloads `==` / `!=` non-complementarily or `!`
 	 * non-involutively (`@:op`) — where `a != b` need not be `!(a == b)`; the
 	 * always-parenthesised wrap is the sound form there. This edge is shared with `loop-guard`.
-	 *
 	 */
-	public static function negateConditionText(cond: QueryNode, source: String, seams: NegationSeams): String {
+	public static function negateConditionText(
+		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport
+	): String {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
+		if (support != null && !hasCommentMarker(source, cs.from, cs.to)) return support.negateCondition(cond, source);
 		final notKind: Null<String> = seams.notKind;
 		if (notKind != null && cond.kind == notKind && cond.children.length >= 1) {
 			var inner: QueryNode = cond.children[0];
