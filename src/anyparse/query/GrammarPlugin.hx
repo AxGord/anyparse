@@ -1199,6 +1199,21 @@ typedef RefShape = {
 	@:optional var arrayLiteralKind: String;
 
 	/**
+	 * Maps a String method name to the FIXED type its call returns on a String
+	 * receiver (`split` → `Array<String>`; `substr` / `substring` / `charAt` /
+	 * `toUpperCase` / `toLowerCase` / `toString` → `String`; `indexOf` /
+	 * `lastIndexOf` → `Int`). The `explicit-local-type` autofix annotates a local
+	 * whose initializer is `recv.method(...)` where `recv` is provably a String — a
+	 * string literal, or a variable whose declared type resolves to `String` (a
+	 * `Null<String>` narrowed in a guard included) — with the tabled return type. A
+	 * method whose return depends on generics / inference (`map` / `filter`) or that
+	 * returns a nullable (`charCodeAt` → `Null<Int>`) is deliberately ABSENT, so it
+	 * stays report-only — coverage never trumps soundness. Optional; unset disables
+	 * the string-receiver method-return inference.
+	 */
+	@:optional var stringLiteralMethodReturns: Map<String, String>;
+
+	/**
 	 * Node kinds that constitute a value-returning `return <expr>` — both the statement
 	 * form (`ReturnStmt`) and the expression form (`ReturnExpr`, e.g. a `return` inside
 	 * a ternary or an expression-bodied function). The `explicit-type` autofix infers a

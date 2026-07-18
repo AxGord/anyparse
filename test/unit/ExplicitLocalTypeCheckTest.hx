@@ -17,9 +17,12 @@ import anyparse.query.RefactorSupport;
  * the default set unless `apqlint.json` opts in (`enabled:true`) or an explicit rule
  * selection bypasses enablement. The autofix annotates ONLY a structurally-pinned
  * initializer type (literal / neg-numeric / written-generic `new` / homogeneous
- * array literal / string-literal-receiver method return), re-stating the compiler's
- * own inference; every inference-resolved shape (empty / heterogeneous array, bare
- * `new`, `new Map()`, `null`, `.map()`, a field read) stays report-only.
+ * array literal / a fixed-return method call on a provable-String receiver — a string
+ * literal OR a variable whose declared type resolves to `String`, `Null<String>`
+ * included), re-stating the compiler's own inference; every inference-resolved shape
+ * (empty / heterogeneous array, bare `new`, `new Map()`, `null`, a generic `.map()`,
+ * an unresolved / non-String receiver, an untabled method, a field read) stays
+ * report-only.
  */
 class ExplicitLocalTypeCheckTest extends Test {
 
@@ -93,6 +96,26 @@ class ExplicitLocalTypeCheckTest extends Test {
 		assertFixContains('final m = new Map<String, Int>();', ':Map<String, Int>');
 	}
 
+	// --- fix: method call on a provable-String receiver (literal or typed variable) ---
+
+	public function testFixStringLiteralMethodCall(): Void {
+		// string-literal receiver is provably String → tabled `split` return.
+		assertFixContains("final parts = 'a,b'.split(',');", ':Array<String>');
+	}
+
+	public function testFixTypedStringReceiverSplit(): Void {
+		assertFixContains("var s:String = 'x';\n\t\tfinal p = s.split('/');", ':Array<String>');
+	}
+
+	public function testFixNullableStringReceiverSplit(): Void {
+		// the real case: a `Null<String>` receiver, a String at the call — split types Array<String>.
+		assertFixContains("var entityStr:Null<String> = 'x';\n\t\tfinal parts = entityStr.split('/');", ':Array<String>');
+	}
+
+	public function testFixStringReceiverIndexOf(): Void {
+		assertFixContains("var s:String = 'x';\n\t\tfinal i = s.indexOf('/');", ':Int');
+	}
+
 
 	// --- fix: inference-resolved shapes stay report-only ---
 
@@ -116,9 +139,26 @@ class ExplicitLocalTypeCheckTest extends Test {
 		assertNoFix("final mapped = ['a'].map(z -> z);");
 	}
 
-	public function testSkipStringMethodCall(): Void {
-		// a method call is inference / receiver-type dependent — report-only, no fix.
-		assertNoFix("final parts = 'a,b'.split(',');");
+	public function testSkipUnknownReceiverMethodCall(): Void {
+		// receiver's type does not resolve → report-only, no fix.
+		assertNoFix("final parts = unknownVar.split(',');");
+	}
+
+	public function testSkipNonStringReceiverTabledMethod(): Void {
+		// `indexOf` is tabled for String, but the receiver is an Array — not provably String → report-only.
+		assertNoFix("var xs:Array<Int> = [1];\n\t\tfinal i = xs.indexOf(1);");
+	}
+
+	public function testSkipUntabledStringMethod(): Void {
+		// `charCodeAt` returns Null<Int>, deliberately absent from the table → report-only.
+		assertNoFix("var s:String = 'x';\n\t\tfinal c = s.charCodeAt(0);");
+	}
+
+	public function testSkipReshadowedReceiver(): Void {
+		// CF-1: `s` re-shadowed in the same scope. The first-wins resolver would pick the
+		// String declaration, but Haxe binds to the nearer `Foo` (Foo.split -> Int), so a
+		// written Array<String> would be a compile error. Stay report-only.
+		assertNoFix("var s:String = 'x';\n\t\tvar s:Foo = new Foo();\n\t\tfinal p = s.split('/');");
 	}
 
 	public function testIdempotentOnTyped(): Void {

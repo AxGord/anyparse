@@ -421,7 +421,7 @@ final class TypeResolver {
 	}
 
 	/** `s` with every space / tab / newline removed (whitespace is insignificant in a type). */
-	private static function stripWs(s: String): String {
+	public static function stripWs(s: String): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...s.length) {
 			final c: Int = StringTools.fastCodeAt(s, i);
