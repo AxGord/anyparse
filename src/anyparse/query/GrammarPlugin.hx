@@ -1288,6 +1288,34 @@ typedef RefShape = {
 	 * unset makes the check a no-op.
 	 */
 	@:optional var postIncrKind: String;
+
+	/**
+	 * Top-level type-declaration kinds that constitute a documentable public API
+	 * surface (Haxe `ClassDecl` / `FinalDecl` / `AbstractClassDecl` / `AbstractDecl`
+	 * / `InterfaceDecl` / `EnumDecl` / `TypedefDecl`). The `doc-coverage` check flags
+	 * one declared at module scope without a leading doc comment (unless a preceding
+	 * `private` modifier makes it module-private). Optional; unset makes the check's
+	 * type-level requirement a no-op.
+	 */
+	@:optional var typeDeclKinds: Array<String>;
+
+	/**
+	 * Member-host container kinds whose members are IMPLICITLY public (Haxe
+	 * `InterfaceDecl`) — as opposed to `visibilityContainerKinds`, where a member is
+	 * public only with an explicit `public` modifier. The `doc-coverage` check treats
+	 * every member of one of these as public API. Optional; unset means no such
+	 * container exists.
+	 */
+	@:optional var interfaceDeclKinds: Array<String>;
+
+	/**
+	 * The public-visibility modifier kind (Haxe `Public`) — the entry of
+	 * `visibilityModifierKinds` that grants public access. The `doc-coverage` check
+	 * treats a `visibilityContainerKinds` member whose modifier run carries one as
+	 * public API. Optional; unset makes the check treat class/abstract members as
+	 * never explicitly public.
+	 */
+	@:optional var publicModifierKind: String;
 }
 @:nullSafety(Strict)
 typedef MetaShape = {

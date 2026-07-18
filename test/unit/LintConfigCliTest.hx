@@ -16,7 +16,7 @@ class LintConfigCliTest extends Test {
 
 	public function testDisabledRuleNotReported(): Void {
 		#if (sys || nodejs)
-		final foo: String = "package p;\nclass C {\n\tpublic function f():String return 'a' + 'b';\n}";
+		final foo: String = "package p;\n/** C. */\nclass C {\n\tpublic function f():String return 'a' + 'b';\n}";
 		final off: String = dirWith('{"rules":{"fold-adjacent-string-literals":{"enabled":false}}}', foo);
 		Assert.equals(0, Cli.run(['lint', '--all', '--fail-on', 'info', '$off/Foo.hx']), 'disabled fold cannot trip --fail-on info');
 		CliFixture.removeDir(off);

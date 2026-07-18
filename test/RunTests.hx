@@ -433,6 +433,7 @@ import unit.StringLiteralDupCheckTest;
 import unit.AvoidDynamicCheckTest;
 import unit.UnusedReturnValueTest;
 import unit.CompilerOracleE2ETest;
+import unit.DocCoverageCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -808,6 +809,7 @@ class RunTests {
 		addCase(new PossibleNullDereferenceTest());
 		addCase(new UnusedReturnValueTest());
 		addCase(new CompilerOracleE2ETest());
+		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());
 		addCase(new SelfAssignmentCheckTest());
 		addCase(new DuplicateCaseCheckTest());

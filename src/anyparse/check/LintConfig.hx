@@ -80,6 +80,12 @@ final class LintConfig {
 		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
 	}
 
+	/** A rule-specific boolean option (e.g. `doc-coverage` `requireTypeDoc`), or null when unset or non-boolean. */
+	public function boolOption(id: String, key: String): Null<Bool> {
+		final v: Null<Dynamic> = propOf(id, key);
+		return v == null || !(v is Bool) ? null : (v: Bool);
+	}
+
 	/**
 	 * A rule-specific list-of-numbers option (e.g. `magic-number` `ignore`),
 	 * or null when unset; a non-array value or non-numeric elements are dropped.

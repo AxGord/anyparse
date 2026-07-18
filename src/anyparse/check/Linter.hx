@@ -116,7 +116,8 @@ final class Linter {
 			new ListenerSymmetry(),
 			new StringLiteralDup(),
 			new AvoidDynamic(),
-			new UnusedReturnValue()
+			new UnusedReturnValue(),
+			new DocCoverage()
 		];
 	}
 

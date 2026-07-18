@@ -579,6 +579,17 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			finalClassMetaName: '@:final',
 			plainClassDeclKind: 'ClassDecl',
 			finalClassDeclKind: 'FinalDecl',
+			typeDeclKinds: [
+				'ClassDecl',
+				'FinalDecl',
+				'AbstractClassDecl',
+				'AbstractDecl',
+				'InterfaceDecl',
+				'EnumDecl',
+				'TypedefDecl'
+			],
+			interfaceDeclKinds: ['InterfaceDecl'],
+			publicModifierKind: 'Public',
 		};
 	}
 

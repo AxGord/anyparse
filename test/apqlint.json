@@ -2,6 +2,7 @@
     "rules": {
         "magic-number": { "enabled": false },
         "string-literal-dup": { "enabled": false },
+        "doc-coverage": { "enabled": false },
         "oversized-type": { "maxMembers": 100 }
     }
 }
