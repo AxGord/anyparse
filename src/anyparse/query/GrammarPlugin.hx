@@ -1089,6 +1089,27 @@ typedef RefShape = {
 	@:optional var nullAssertionCalls: Array<String>;
 
 	/**
+	 * Dotted `Type.method` calls asserting their first argument (a boolean
+	 * expression) is TRUE — e.g. the test framework's `Assert.isTrue`. When that
+	 * argument narrows a plain own-name ident non-null on its truth path
+	 * (`u != null`, or a conjunction of such — parens / De-Morgan `!` honoured),
+	 * the flow engine clears the ident's `MaybeNull` fact after the call
+	 * (`maybe`-only — the six base flow checks are byte-identical, and it never
+	 * adds a `NonNull` fact, so it cannot delete a guard), honouring an
+	 * `Assert.isTrue(u != null); u.field` precondition. Optional; unset models none.
+	 */
+	@:optional var assertTrueCalls: Array<String>;
+
+	/**
+	 * Dotted `Type.method` calls asserting their first argument (a boolean
+	 * expression) is FALSE — e.g. `Assert.isFalse`. The mirror of `assertTrueCalls`:
+	 * a plain own-name ident the argument proves non-null when FALSE (`u == null`,
+	 * or a disjunction of such) has its `MaybeNull` fact cleared after the call
+	 * (`maybe`-only). Optional; unset models none.
+	 */
+	@:optional var assertFalseCalls: Array<String>;
+
+	/**
 	 * Map membership-test method names (`exists`) — inside the then-arm of
 	 * `if (m.exists(k))`, a following `var u = m[k]` binding of the SAME map and key
 	 * is not seeded `MaybeNull` (`maybe`-only, so the six base flow checks are

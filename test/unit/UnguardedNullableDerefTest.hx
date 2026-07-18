@@ -259,6 +259,97 @@ class UnguardedNullableDerefTest extends Test {
 		);
 	}
 
+
+	// --- Relational assert narrowing (feature 1): Assert.isTrue(u != null) / Assert.isFalse(u == null) ---
+
+	public function testAssertIsTrueBareNarrowsNotFlagged(): Void {
+		// The truth-asserted `u != null` clears u's MaybeNull fact (maybe-only) — sibling of Assert.notNull.
+		Assert.equals(0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u != null); u.foo; } }').length);
+	}
+
+	public function testAssertIsFalseBareNarrowsNotFlagged(): Void {
+		// `Assert.isFalse(u == null)` proves u non-null on the false outcome (the else-arm polarity).
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isFalse(u == null); u.foo; } }').length
+		);
+	}
+
+	public function testAssertIsTrueParenNarrowsNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue((u != null)); u.foo; } }').length
+		);
+	}
+
+	public function testAssertIsTrueNotWrapNarrowsNotFlagged(): Void {
+		// `!(u == null)` = `u != null` via the De-Morgan `!` unwind in collectNarrow.
+		Assert.equals(
+			0, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(!(u == null)); u.foo; } }').length
+		);
+	}
+
+	public function testAssertUnknownMethodStillFlagged(): Void {
+		// A method NOT in assertTrueCalls/assertFalseCalls narrows nothing (method-name gate).
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.thing(u != null); u.foo; } }').length);
+	}
+
+	public function testAssertIsTrueWrongPolarityStillFlagged(): Void {
+		// `Assert.isTrue(u == null)` proves u IS null, not non-null — narrows nothing on the truth path.
+		Assert.equals(1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u == null); u.foo; } }').length);
+	}
+
+	public function testAssertIsFalseWrongPolarityStillFlagged(): Void {
+		// `Assert.isFalse(u != null)` proves u IS null — narrows nothing.
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isFalse(u != null); u.foo; } }').length
+		);
+	}
+
+	public function testAssertIsTrueOrDisjunctStillFlagged(): Void {
+		// A disjunction (`x || u != null`) in a truth assert proves no single operand — narrows nothing.
+		Assert.equals(
+			1,
+			violations('class C { function f(m:Map<String,Foo>, x:Bool) { var u = m[k]; Assert.isTrue(x || u != null); u.foo; } }').length
+		);
+	}
+
+	public function testAssertIsTrueReassignedStillFlagged(): Void {
+		// A write after the assert re-seeds the nullable-source fact.
+		Assert.equals(
+			1, violations('class C { function f(m:Map<String,Foo>) { var u = m[k]; Assert.isTrue(u != null); u = m[k2]; u.foo; } }').length
+		);
+	}
+
+	public function testAssertIsTrueInClosureNotLeaked(): Void {
+		// An assert inside a nested function value never narrows the outer local.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Foo>) { var u = m[k]; var g = function() { Assert.isTrue(u != null); return 0; }; u.foo; } }'
+			).length
+		);
+	}
+
+	public function testAssertIsTrueInTryNotLeakedToCatch(): Void {
+		// The throw may fire before the assert, so its narrowing must not reach the catch clause.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Foo>) { var u = m[k]; try { Assert.isTrue(u != null); } catch (e:Dynamic) { u.foo; } } }'
+			).length
+		);
+	}
+
+	public function testAssertIsTrueShadowConfined(): Void {
+		// A shadow local's assert (`w`) narrows only w — the outer u, never asserted, stays flagged.
+		Assert.equals(
+			1,
+			violations(
+				'class C { function f(m:Map<String,Foo>) { var u = m[k]; { var w = m[k2]; Assert.isTrue(w != null); w.foo; } u.foo; } }'
+			).length
+		);
+	}
+
+
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

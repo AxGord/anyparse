@@ -156,6 +156,8 @@ final class NullableSwitchMissingNull implements Check {
 			callKind: shape.callKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			nullAssertionCalls: shape.nullAssertionCalls ?? [],
+			assertTrueCalls: shape.assertTrueCalls ?? [],
+			assertFalseCalls: shape.assertFalseCalls ?? [],
 			cfg: NullableSource.build(shape, shape.nullableFlowExcludedCalls ?? [])
 		};
 	}
@@ -282,7 +284,9 @@ final class NullableSwitchMissingNull implements Check {
 		return found;
 	}
 
-	/** The plain-identifier argument of a `nullAssertionCalls` call (`Assert.notNull(x)`), or null when `node` is not one. */
+	/**
+	 * The identifier a precondition call proves non-null before `node` runs — the plain-ident argument of a `nullAssertionCalls` call (`Assert.notNull(x)`), or the operand a `assertTrueCalls`/`assertFalseCalls` relational assert narrows non-null (`Assert.isTrue(x != null)` / `Assert.isFalse(x == null)`); null when `node` is neither.
+	 */
 	private static function assertionArg(node: QueryNode, s: Seams): Null<QueryNode> {
 		final callKind: Null<String> = s.callKind;
 		final fieldAccessKind: Null<String> = s.fieldAccessKind;
@@ -292,9 +296,16 @@ final class NullableSwitchMissingNull implements Check {
 		if (callee.kind != fieldAccessKind || method == null || callee.children.length != 1) return null;
 		final recv: QueryNode = callee.children[0];
 		final recvName: Null<String> = recv.name;
-		if (recv.kind != s.identKind || recvName == null || !s.nullAssertionCalls.contains('${recvName}.${method}')) return null;
+		if (recv.kind != s.identKind || recvName == null) return null;
+		final dotted: String = '${recvName}.${method}';
 		final arg: QueryNode = node.children[1];
-		return arg.kind == s.identKind ? arg : null;
+		// A direct non-null precondition (`Assert.notNull(x)`) — the plain-ident argument.
+		if (s.nullAssertionCalls.contains(dotted)) return arg.kind == s.identKind ? arg : null;
+		// A relational precondition (`Assert.isTrue(x != null)` / `Assert.isFalse(x == null)`) — the
+		// operand a bare or parenthesized null comparison proves non-null on the asserted outcome.
+		final asTrue: Bool = s.assertTrueCalls.contains(dotted);
+		final asFalse: Bool = s.assertFalseCalls.contains(dotted);
+		return asTrue == asFalse ? null : relationalAssertOperand(arg, s, asTrue);
 	}
 
 
@@ -360,6 +371,23 @@ final class NullableSwitchMissingNull implements Check {
 		return { span: new Span(bs.from, end), text: 'case null, _' };
 	}
 
+
+	/**
+	 * The plain own-name operand a bare (or parenthesized) null comparison proves non-null on
+	 * the asserted outcome: for a truth assert (`asTrue`) an `x != null`, for a falsity assert an
+	 * `x == null` (whose false outcome is `x != null`). Any other shape — a compound `&&`/`||`, a
+	 * wrong-polarity comparison, a non-comparison — returns null (the switch stays flagged; a
+	 * refusal only ever KEEPS a finding). Compound and De-Morgan `!` forms are intentionally the
+	 * flow-based `NullFlow` path's job, not this positional scanner's.
+	 */
+	private static function relationalAssertOperand(arg: QueryNode, s: Seams, asTrue: Bool): Null<QueryNode> {
+		var e: QueryNode = arg;
+		while (s.parenKind != null && e.kind == s.parenKind && e.children.length == 1) e = e.children[0];
+		final wantKind: Null<String> = asTrue ? s.shape.notEqKind : s.shape.eqKind;
+		if (wantKind == null || e.kind != wantKind) return null;
+		return NullFlow.nullComparisonOperand(e, s.identKind, s.nullLitKind);
+	}
+
 }
 
 /** The `RefShape` kinds `NullableSwitchMissingNull` reads, bundled once so the walkers take one argument. */
@@ -381,6 +409,8 @@ private typedef Seams = {
 	var callKind: Null<String>;
 	var fieldAccessKind: Null<String>;
 	var nullAssertionCalls: Array<String>;
+	var assertTrueCalls: Array<String>;
+	var assertFalseCalls: Array<String>;
 	var cfg: Null<NullableSourceCfg>;
 }
 

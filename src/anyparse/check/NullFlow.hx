@@ -86,6 +86,8 @@ private typedef FlowCtx = {
 	var fieldAccessKind: Null<String>;
 	var indexAccessKind: Null<String>;
 	var nullAssertionCalls: Array<String>;
+	var assertTrueCalls: Array<String>;
+	var assertFalseCalls: Array<String>;
 	var mapExistsMethods: Array<String>;
 	var captured: Array<String>;
 	var ownNames: Array<String>;
@@ -384,6 +386,8 @@ final class NullFlow {
 			fieldAccessKind: shape.fieldAccessKind,
 			indexAccessKind: shape.indexAccessKind,
 			nullAssertionCalls: shape.nullAssertionCalls ?? [],
+			assertTrueCalls: shape.assertTrueCalls ?? [],
+			assertFalseCalls: shape.assertFalseCalls ?? [],
 			mapExistsMethods: shape.mapExistsMethods ?? [],
 			captured: collectCaptured(body, identKind, shape.writeParentKinds ?? []),
 			ownNames: paramNames.concat(collectDeclared(body, localDeclKinds)),
@@ -427,6 +431,7 @@ final class NullFlow {
 		else if (ctx.callKind != null && kind == ctx.callKind) {
 			for (c in node.children) walk(c, state, ctx);
 			handleNullAssertionCall(node, state, ctx);
+			handleRelationalAssertCall(node, state, ctx);
 		} else if (ctx.blockKinds.contains(kind))
 			handleBlock(node, state, ctx);
 		else
@@ -533,13 +538,9 @@ final class NullFlow {
 	 * its dereference.
 	 */
 	private static function handleNullAssertionCall(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
-		if (ctx.fieldAccessKind == null || ctx.nullAssertionCalls.length == 0 || node.children.length < 2) return;
-		final callee: QueryNode = node.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != ctx.fieldAccessKind || method == null || callee.children.length != 1) return;
-		final recv: QueryNode = callee.children[0];
-		final recvName: Null<String> = recv.name;
-		if (recv.kind != ctx.identKind || recvName == null || !ctx.nullAssertionCalls.contains('${recvName}.${method}')) return;
+		if (ctx.nullAssertionCalls.length == 0) return;
+		final dotted: Null<String> = dottedAssertCallee(node, ctx);
+		if (dotted == null || !ctx.nullAssertionCalls.contains(dotted)) return;
 		final arg: QueryNode = node.children[1];
 		final argName: Null<String> = arg.name;
 		if (arg.kind == ctx.identKind && argName != null) state.maybe.remove(argName);
@@ -1311,6 +1312,56 @@ final class NullFlow {
 		if (node.kind == BOOL_OR_KIND) return true;
 		for (c in node.children) if (containsOr(c)) return true;
 		return false;
+	}
+
+
+	/**
+	 * A relational assertion call (`Assert.isTrue(u != null)` / `Assert.isFalse(u == null)`):
+	 * its boolean-expression first argument is asserted TRUE (`assertTrueCalls`) or FALSE
+	 * (`assertFalseCalls`), so every plain own-name ident that argument narrows non-null on
+	 * that outcome is cleared from `state.maybe` after the call. Reuses `collectNarrow` — the
+	 * then-arm polarity (`!= null`, `&&`) for a truth assert, the else-arm polarity (`== null`,
+	 * `||`, De-Morgan `!`) for a falsity one — so a conjunction narrows each provable conjunct
+	 * while a non-narrowable one is silently skipped, and an `||` in a truth assert (or `&&` in
+	 * a falsity one) proves no single operand and narrows nothing. `maybe`-only, exactly like
+	 * `handleNullAssertionCall`: it adds NO `NonNull` fact, so the six base flow checks stay
+	 * byte-identical AND no guard-deleting autofix can ever fire off it — the worst it can do is
+	 * suppress a MaybeNull deref finding, never introduce one. Sound even though utest asserts
+	 * record-and-continue rather than throw: the assert documents the programmer's non-null
+	 * intent, so quieting a following deref is a false-positive suppression (see the class note).
+	 */
+	private static function handleRelationalAssertCall(node: QueryNode, state: FlowState, ctx: FlowCtx): Void {
+		if (ctx.assertTrueCalls.length == 0 && ctx.assertFalseCalls.length == 0) return;
+		final dotted: Null<String> = dottedAssertCallee(node, ctx);
+		if (dotted == null) return;
+		final asTrue: Bool = ctx.assertTrueCalls.contains(dotted);
+		final asFalse: Bool = ctx.assertFalseCalls.contains(dotted);
+		// In neither list, or (a misconfiguration) in both — narrow nothing.
+		if (asTrue == asFalse) return;
+		final arg: QueryNode = node.children[1];
+		final names: Array<String> = [];
+		if (asTrue)
+			collectNarrow(arg, names, ctx, ctx.notEqKind, BOOL_AND_KIND);
+		else
+			collectNarrow(arg, names, ctx, ctx.eqKind, BOOL_OR_KIND);
+		for (n in names) state.maybe.remove(n);
+	}
+
+
+	/**
+	 * For a `Recv.method(arg, …)` call whose receiver is a plain identifier and which carries at
+	 * least one argument, the dotted `Recv.method` string; null otherwise. The shared callee
+	 * recogniser of the two assertion-call handlers (`handleNullAssertionCall` /
+	 * `handleRelationalAssertCall`).
+	 */
+	private static function dottedAssertCallee(node: QueryNode, ctx: FlowCtx): Null<String> {
+		if (ctx.fieldAccessKind == null || node.children.length < 2) return null;
+		final callee: QueryNode = node.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != ctx.fieldAccessKind || method == null || callee.children.length != 1) return null;
+		final recv: QueryNode = callee.children[0];
+		final recvName: Null<String> = recv.name;
+		return recv.kind != ctx.identKind || recvName == null ? null : '${recvName}.${method}';
 	}
 
 }

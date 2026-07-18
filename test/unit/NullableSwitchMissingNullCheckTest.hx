@@ -172,6 +172,52 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(x:Null<Int>):Void { switch x { case _: trace(0);').length);
 	}
 
+
+	public function testAssertIsTrueNonNullNotFlagged(): Void {
+		// `Assert.isTrue(x != null)` narrows the switch subject non-null before the switch (feature 1).
+		Assert.equals(
+			0,
+			violations(cls('function f(x:Null<Int>):Void { Assert.isTrue(x != null); switch x { case 1: trace(1); case _: trace(0); } }')).length
+		);
+	}
+
+	public function testAssertIsFalseNonNullNotFlagged(): Void {
+		// `Assert.isFalse(x == null)` proves the subject non-null on the false outcome.
+		Assert.equals(
+			0,
+			violations(cls('function f(x:Null<Int>):Void { Assert.isFalse(x == null); switch x { case 1: trace(1); case _: trace(0); } }')).length
+		);
+	}
+
+	public function testAssertIsTrueWrongPolarityStillFlagged(): Void {
+		// `Assert.isTrue(x == null)` proves the subject IS null — not non-null — so it stays flagged.
+		Assert.equals(
+			1,
+			violations(cls('function f(x:Null<Int>):Void { Assert.isTrue(x == null); switch x { case 1: trace(1); case _: trace(0); } }')).length
+		);
+	}
+
+	public function testAssertIsTrueDisjunctStillFlagged(): Void {
+		// A compound `||` argument proves no single operand — the positional scanner refuses it.
+		Assert.equals(
+			1,
+			violations(
+				cls(
+					'function f(x:Null<Int>, y:Bool):Void { Assert.isTrue(y || x != null); switch x { case 1: trace(1); case _: trace(0); } }'
+				)
+			).length
+		);
+	}
+
+
+	private function violations(source: String): Array<Violation> {
+		return new NullableSwitchMissingNull().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	private function cls(body: String): String {
+		return 'class C {\n\t' + body + '\n}';
+	}
+
 	private function applyFix(source: String): String {
 		final check: NullableSwitchMissingNull = new NullableSwitchMissingNull();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
@@ -181,14 +227,6 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		var out: String = source;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	private function cls(body: String): String {
-		return 'class C {\n\t' + body + '\n}';
-	}
-
-	private function violations(source: String): Array<Violation> {
-		return new NullableSwitchMissingNull().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
 	}
 
 }
