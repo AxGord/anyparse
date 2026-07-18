@@ -112,7 +112,8 @@ final class Linter {
 			new PreferRangeLoop(),
 			new TrivialGetter(),
 			new NullableSwitchMissingNull(),
-			new DuplicateCode()
+			new DuplicateCode(),
+			new ListenerSymmetry()
 		];
 	}
 
