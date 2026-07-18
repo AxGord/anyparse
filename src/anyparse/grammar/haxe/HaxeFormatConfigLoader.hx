@@ -708,6 +708,7 @@ final class HaxeFormatConfigLoader {
 			_varKwNewline: base._varKwNewline,
 			_inFieldLevelVar: base._inFieldLevelVar,
 			_ssbSuppress: base._ssbSuppress,
+			_ssbChainSuppress: base._ssbChainSuppress,
 			_keepFlatInner: base._keepFlatInner,
 			_keepChainInParen: base._keepChainInParen,
 			_intersectionOperandBreak: base._intersectionOperandBreak,

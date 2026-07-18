@@ -1073,6 +1073,16 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// Never cleared on descent (over-suppression inside nested braced
 	// regions is safe, merely conservative). Default `false`.
 	_ssbSuppress: Bool,
+	// ω-single-stmt-braces CHAIN symmetry: set (via `_setSsbChainSuppress`)
+	// on the opt of an else-if continuation write when the CHAIN ROOT found
+	// that some branch keeps its braces (`SingleStmtBraces.chainForcesBraces`).
+	// It forces every downstream else-if branch to keep braces too, so
+	// `if (a) { one; two; } else if (b) { three; }` stays fully braced
+	// instead of de-bracing the `else if` half. Unlike `_ssbSuppress` this is
+	// CLEARED when descending into a branch's own content (then-body /
+	// terminal-else writeCall), so an independent if-chain nested inside a
+	// branch still de-braces on its own merits. Default `false`.
+	_ssbChainSuppress: Bool,
 	// ω-keep-chain — set on the leaf-operand opt
 	// when an opAddSub / opBool chain resolves to `WrapMode.Keep`. Read by the
 	// `ParenExpr` (`@:fmt(expressionParenHardFlatten)`) emit to take the GLUED

@@ -2102,6 +2102,10 @@ class WriterCodegen {
 		// suppress frame consumed by `SingleStmtBraces.unwrapStmt`. Gated
 		// on `_ssbSuppress:Bool` field presence on the opt typedef.
 		if (optionsHasField(optionsTypePath, '_ssbSuppress')) fields.push(setSsbSuppressField(optionsCT));
+		// ω-single-stmt-braces CHAIN symmetry: two-way setter for the else-if
+		// chain-suppress flag consumed by `SingleStmtBraces.chainForcesBraces`
+		// propagation. Gated on `_ssbChainSuppress:Bool` field presence.
+		if (optionsHasField(optionsTypePath, '_ssbChainSuppress')) fields.push(setSsbChainSuppressField(optionsCT));
 		// ω-chain-fillline-in-condwrap: opt-fanout helper for
 		// `@:fmt(condWrap)` site. Forces `BinaryChainEmit.emit`'s
 		// cascade to a single mode by swapping `opBoolChainWrap` /
@@ -2249,6 +2253,35 @@ class WriterCodegen {
 					if (o._ssbSuppress) return o;
 					final _c: $optionsCT = _copyOpt(o);
 					_c._ssbSuppress = true;
+					return _c;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+
+	/**
+	 * ω-single-stmt-braces CHAIN symmetry — two-way opt-fanout shim for the
+	 * else-if chain-suppress flag. `WriterLowering` SETS it on an else-if
+	 * continuation writeCall (propagating the chain root's
+	 * `chainForcesBraces` verdict down the spine) and CLEARS it on a branch's
+	 * own content writeCall (then-body / terminal-else), so an independent
+	 * if-chain nested inside a branch still de-braces on its own merits.
+	 * Idempotent: returns `o` unchanged when `_ssbChainSuppress` already
+	 * equals `v`. Gated on `_ssbChainSuppress:Bool` field presence.
+	 */
+	private static function setSsbChainSuppressField(optionsCT: ComplexType): Field {
+		return {
+			name: '_setSsbChainSuppress',
+			access: [APrivate, AStatic, AInline],
+			kind: FFun({
+				args: [{ name: 'o', type: optionsCT }, { name: 'v', type: macro :Bool }],
+				ret: optionsCT,
+				expr: macro {
+					if (o._ssbChainSuppress == v) return o;
+					final _c: $optionsCT = _copyOpt(o);
+					_c._ssbChainSuppress = v;
 					return _c;
 				},
 			}),

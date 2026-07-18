@@ -819,6 +819,7 @@ final class HaxeFormat implements TextFormat {
 		_varKwNewline: false,
 		_inFieldLevelVar: false,
 		_ssbSuppress: false,
+		_ssbChainSuppress: false,
 		_keepFlatInner: false,
 		_keepChainInParen: false,
 		_intersectionOperandBreak: false,

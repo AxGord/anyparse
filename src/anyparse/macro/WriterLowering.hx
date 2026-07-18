@@ -9459,6 +9459,12 @@ class WriterLowering {
 			// captures the outer `else`). Null cond (no meta / no else sibling /
 			// plain mode) is byte-inert.
 			if (ssbSuppressCond != null) e = macro ($ssbSuppressCond ? _setSsbSuppress($e) : $e);
+			// ω-single-stmt-braces CHAIN symmetry: a body's OWN content must NOT
+			// inherit the else-if chain-suppress flag — an independent if-chain
+			// nested inside this branch still de-braces on its own merits. Clear it
+			// on the descendant opt (trivia mode only; the flag exists on the
+			// HxModuleWriteOptions typedef the dropSingleStmtBraces bodies use).
+			if (_ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')) e = macro _setSsbChainSuppress($e, false);
 			// Set AFTER `_setExprPosition` so its descent-clear does not wipe the
 			// just-set flag (mirrors the `propagateArrowLambdaBody` ordering).
 			if (suppressCallRestProbe) e = macro _setSuppressCallRestProbe($e, true);
@@ -9713,6 +9719,12 @@ class WriterLowering {
 		// else-branch leaves the flag untouched, so a fitting `if` nested inside an
 		// else-block body still keeps its own body inline.
 		final propagateElseIfBranch: Bool = child.fmtHasFlag('propagateElseIfBranch');
+		// ω-single-stmt-braces CHAIN symmetry: runtime force-keep for this else's
+		// chain. Mid-chain it is already true via `opt._ssbChainSuppress`; at the
+		// chain root it is the spine scan over then + else-if bodies. Reused by the
+		// unwrap gate (terminal else block) AND the else-if writeCall propagation.
+		// `macro false` off-path (plain mode / non-dropSingleStmtBraces field).
+		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(node, child, fieldAccess);
 		final optArgExpr: Expr = {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
@@ -9732,6 +9744,7 @@ class WriterLowering {
 					};
 				}
 			}
+			e = wrapElseChainSuppress(e, child, refName, elseChainSuppressExpr);
 			e;
 		};
 		final rawWriteCall: Expr = {
@@ -9789,11 +9802,20 @@ class WriterLowering {
 		// further `else` at its own level, so `elseFollows` is `false`; ancestor
 		// dangling-else frames still apply via `opt._ssbSuppress`. Unwrapping
 		// `else { if (c) x; }` yields the `else if` form by construction.
-		final optValInit: Expr = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces')
+		// `hasTrailingSemi` is `false`: an else-body's own writer path already drops a
+		// redundant trailing `;` (`else { x; };` → `else x;`, no `;;`), so — unlike the
+		// for / while / then-body splice — de-bracing is always safe and never gated.
+		// ω-single-stmt-braces symmetry (gate 7): an else-body must keep its braces whenever
+		// the sibling then-body keeps its own (see buildThenSiblingKeepsProbe).
+		final dropElseBraces: Bool = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
+		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(node, typePath) : macro false;
+		final optValInit: Expr = dropElseBraces
 			? macro {
 				var _sv = $fieldAccess;
 				if (_sv != null)
-					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, false);
+					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
+						_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, ($thenSiblingKeepsExpr || $elseChainSuppressExpr)
+					);
 				_sv;
 			}
 			: fieldAccess;
@@ -9805,6 +9827,87 @@ class WriterLowering {
 				_de();
 		});
 		return thisPadTrailing;
+	}
+
+	/**
+	 * Locate the mandatory bodyPolicy sibling carrying `dropSingleStmtBraces`
+	 * (the then-body) and build its `value.<then>` field-access expr. Shared by
+	 * both if/else-body brace-symmetry probes; `null` when there is no such
+	 * sibling (a for / while / do body has none).
+	 */
+	private function findThenSiblingAccess(node: ShapeNode): Null<{ sibling: ShapeNode, name: String, access: Expr }> {
+		final thenSibling: Null<ShapeNode> = node.children.find(c ->
+			c.annotations.get('base.optional') != true && c.fmtHasFlag('dropSingleStmtBraces')
+		);
+		final thenName: Null<String> = thenSibling?.annotations.get('base.fieldName');
+		if (thenSibling == null || thenName == null) return null;
+		return {
+			sibling: thenSibling,
+			name: thenName,
+			access: { expr: EField(macro value, thenName), pos: Context.currentPos() }
+		};
+	}
+
+	/**
+	 * ω-single-stmt-braces gate-7 symmetry probe for an else-body splice. Reaches the
+	 * sibling then-body (the mandatory bodyPolicy field carrying `dropSingleStmtBraces`)
+	 * and builds a runtime `keepsBraces(value.<then>, ...)` expr so the else keeps its
+	 * braces whenever the then keeps its own. Mirrors the then splice's own unwrap args
+	 * exactly: `elseFollows=true` (an `else` is present in this branch) plus the then's
+	 * real `@:trailOpt(';')` slot. `macro false` (no constraint) when there is no such
+	 * sibling.
+	 */
+	private function buildThenSiblingKeepsProbe(node: ShapeNode, typePath: String): Expr {
+		final found: Null<{ sibling: ShapeNode, name: String, access: Expr }> = findThenSiblingAccess(node);
+		if (found == null) return macro false;
+		final thenAccess: Expr = found.access;
+		final trailSlot: String = found.name + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX;
+		final thenTrailAccess: Expr = { expr: EField(macro value, trailSlot), pos: Context.currentPos() };
+		final thenTrail: Expr = found.sibling.annotations.get('lit.trailOptional') == true && isTriviaBearing(typePath)
+			? macro ($thenTrailAccess == true)
+			: macro false;
+		return
+			macro anyparse.format.SingleStmtBraces.keepsBraces($thenAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, true, $thenTrail);
+	}
+
+	/**
+	 * ω-single-stmt-braces CHAIN-symmetry runtime force-keep for an else-body
+	 * splice. `opt._ssbChainSuppress || chainForcesBraces(value.<then>,
+	 * value.<else>, …)` — true mid-chain (propagated from the root) or when THIS
+	 * `if` is the chain root and the spine scan finds a brace-keeping branch.
+	 * Reaches the sibling then-body via `findThenSiblingAccess`;
+	 * `macro opt._ssbChainSuppress` alone when there is no such sibling. Returns
+	 * `macro false` off-path (plain mode, or a field without
+	 * `@:fmt(dropSingleStmtBraces)`) so the flag is never referenced where the opt
+	 * typedef may lack it.
+	 */
+	private function buildElseChainSuppressExpr(node: ShapeNode, child: ShapeNode, fieldAccess: Expr): Expr {
+		if (!_ctx.trivia || !child.fmtHasFlag('dropSingleStmtBraces')) return macro false;
+		final found: Null<{ sibling: ShapeNode, name: String, access: Expr }> = findThenSiblingAccess(node);
+		if (found == null) return macro opt._ssbChainSuppress;
+		final thenAccess: Expr = found.access;
+		return macro (opt._ssbChainSuppress
+			|| anyparse.format.SingleStmtBraces.chainForcesBraces($thenAccess, $fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress));
+	}
+
+	/**
+	 * ω-single-stmt-braces CHAIN symmetry: wrap an else-body writeCall's opt to
+	 * propagate `_ssbChainSuppress` DOWN an else-if spine. SET on an else-if
+	 * continuation (its own then-body keeps braces and the signal reaches the next
+	 * link), CLEAR on a non-if terminal else so an if-chain nested inside that
+	 * block de-braces on its own merits. `e` unchanged off-path (plain mode /
+	 * non-dropSingleStmtBraces field / target with no `IfStmt` ctor).
+	 */
+	private function wrapElseChainSuppress(e: Expr, child: ShapeNode, refName: String, chainSuppressExpr: Expr): Expr {
+		if (!_ctx.trivia || !child.fmtHasFlag('dropSingleStmtBraces')) return e;
+		final ifPat: Null<Expr> = findCtorPattern(refName, 'IfStmt');
+		if (ifPat == null) return e;
+		final setExpr: Expr = macro _setSsbChainSuppress($e, $chainSuppressExpr);
+		final clearExpr: Expr = macro _setSsbChainSuppress($e, false);
+		return {
+			expr: ESwitch(macro _optVal, [{ values: [ifPat], expr: setExpr, guard: null }], clearExpr),
+			pos: Context.currentPos()
+		};
 	}
 
 	/**
@@ -9973,10 +10076,36 @@ class WriterLowering {
 			pos: Context.currentPos()
 		} : null;
 		final elseFollowsExpr: Expr = elseAccess == null ? macro false : macro $elseAccess != null;
+		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`): a redundant
+		// trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once de-braced — invalid
+		// to the Haxe compiler — so it fails the unwrap closed (braces kept).
+		final trailSemiExpr: Expr = dropBraces && child.annotations.get('lit.trailOptional') == true && isTriviaBearing(typePath)
+			? macro (${{ expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos() }} == true)
+			: macro false;
+		// ω-single-stmt-braces symmetry (gate 7): probe whether the `else` sibling would
+		// KEEP its braces. If it does, this then-body keeps its own too - an if/else must
+		// de-brace both branches or neither. The else-body's own splice unwraps with
+		// `elseFollows=false, hasTrailingSemi=false`, so the probe mirrors those exactly.
+		final elseSiblingKeepsExpr: Expr = elseAccess == null
+			? macro false
+			: macro ($elseAccess != null
+				&& anyparse.format.SingleStmtBraces.keepsBraces($elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false));
+		// ω-single-stmt-braces CHAIN symmetry: force this then-body to keep its
+		// braces when we are mid-chain (`opt._ssbChainSuppress`, propagated from
+		// the root) OR when THIS `if` is the chain root and the spine scan finds a
+		// keeper. Folded into `siblingKeepsBraces` alongside the immediate-pair
+		// probe. For / while / do bodies (no `else` sibling) never force.
+		final thenChainSuppressExpr: Expr = elseAccess == null
+			? macro false
+			: macro (opt._ssbChainSuppress
+				|| anyparse.format.SingleStmtBraces.chainForcesBraces($fieldAccess, $elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress));
 		final effAccess: Expr = dropBraces
 			? macro {
 				var _sv = $fieldAccess;
-				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr);
+				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
+					_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
+					($elseSiblingKeepsExpr || $thenChainSuppressExpr)
+				);
 				_sv;
 			}
 			: fieldAccess;

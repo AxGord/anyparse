@@ -92,6 +92,86 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	public function testIfElseAsymmetryKeepsBothBraced(): Void {
+		// A single-statement then-branch must NOT de-brace while its else-branch keeps braces —
+		// `if (b) return true; else { … }` is an asymmetric-brace violation. Keep both braced.
+		roundTrip(
+			'class F {\n\tfunction f(b:Bool):Bool {\n\t\tif (b) {\n\t\t\treturn true;\n\t\t} else {\n\t\t\tg();\n\t\t\treturn false;\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testIfElseIfChainKeepsBracesWhenAnyBranchMulti(): Void {
+		// if/else-if CHAIN symmetry: `if (a) { multi } else if (b) { single }` — the else-if
+		// body must NOT de-brace while a sibling chain branch keeps braces (asymmetry violation).
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} else if (b) {\n\t\t\tthree();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testAllSingleElseIfChainDeBracesEveryBranch(): Void {
+		// An else-if chain whose EVERY branch is a single-statement block de-braces
+		// them all — symmetric-unbraced is allowed; only MIXED chains force braces.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tone();\n\t\t} else if (b) {\n\t\t\ttwo();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\tone();\n\t\telse if (b)\n\t\t\ttwo();\n\t}\n}'
+		);
+	}
+
+	public function testElseIfChainLaterBranchForcesEarlierBraces(): Void {
+		// The chain-root scan (not the immediate-pair gate 7): a LATER multi branch
+		// forces an EARLIER single-block branch to keep its braces. The outer `if`'s
+		// then-body probes only its immediate else sibling (the nested `else if`,
+		// which is not a brace-bearing block), so only a full-spine OR keeps it braced.
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tx();\n\t\t} else if (b) {\n\t\t\tm1();\n\t\t\tm2();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testDeepMixedElseIfChainKeepsAllBraced(): Void {
+		// Deep (4-branch) chain with the multi branch in the MIDDLE: the keeper
+		// propagates BOTH backward (root scan) and forward (`_ssbChainSuppress` down
+		// the else-if spine), so every branch keeps its braces.
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t} else if (a) {\n\t\t\tm1();\n\t\t\tm2();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testElseIfBranchNestedIndependentChainStillDeBraces(): Void {
+		// The chain-suppress signal is CLEARED when descending into a branch's own
+		// content: an independent single-statement `if` nested inside an else-if
+		// branch de-braces on its own merits even though the OUTER chain keeps braces.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} else if (b) {\n\t\t\tif (a) {\n\t\t\t\tp();\n\t\t\t}\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} else if (b) {\n\t\t\tif (a) p();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testTrailingSemiTerminalElseIfKeepsChainBraced(): Void {
+		// The TERMINAL else-if then-body carries the enclosing statement's redundant
+		// trailing `;`, so gate 6 keeps its braces at the real splice. The chain scan
+		// must read that then-body's own trail slot (not assume false) or the earlier
+		// branch de-braces asymmetrically. Fully braced round-trips (the `;` stays).
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tA();\n\t\t} else if (b) {\n\t\t\tB();\n\t\t};\n\t}\n}'
+		);
+	}
+
+	public function testIfMultiElseSingleKeepsBothBraced(): Void {
+		// Reverse direction: a multi-statement then keeps its braces, so the single-statement
+		// else must keep its own too (gate 7 reaches the then value from the else splice).
+		roundTrip(
+			'class F {\n\tfunction f(b:Bool):Void {\n\t\tif (b) {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} else {\n\t\t\tg();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testIfSingleElseSingleDeBracesBoth(): Void {
+		// Symmetric-unbraced is allowed: when BOTH branches are single-statement, de-brace both.
+		assertFmt(
+			'class F {\n\tfunction f(b:Bool):Void {\n\t\tif (b) {\n\t\t\tone();\n\t\t} else {\n\t\t\ttwo();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(b:Bool):Void {\n\t\tif (b)\n\t\t\tone();\n\t\telse\n\t\t\ttwo();\n\t}\n}'
+		);
+	}
+
 	public function testElseBlockSingleIfCollapsesToElseIf(): Void {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a) y(); else {\n\t\t\tif (c) x();\n\t\t}\n\t}\n}',
@@ -115,6 +195,28 @@ class HxSingleStmtBracesSliceTest extends Test {
 		// `{ return true }` — the braceless form would not re-parse
 		// before a `}` (Slice-V statement boundary), so braces stay.
 		roundTrip('class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true\n\t\t}\n\t\treturn false;\n\t}\n}');
+	}
+
+	public function testTrailingEmptyStmtAfterForKeepsBraces(): Void {
+		// `for (...) { stmt; };` — a block FOLLOWED by a redundant empty statement.
+		// De-bracing yields `for (...) stmt;;`, which anyparse parses but the Haxe
+		// compiler rejects ("Expected }"). The gate must fail closed and keep braces.
+		roundTrip('class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) {\n\t\t\ttrace(v);\n\t\t};\n\t}\n}');
+	}
+
+	public function testTrailingEmptyStmtAfterIfKeepsBraces(): Void {
+		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t};\n\t}\n}');
+	}
+
+	public function testTrailingEmptyStmtAfterElseDropsSemiKeepsBraces(): Void {
+		// The else-body's writer path drops the redundant trailing `;` (`else { h(); };` ->
+		// no `;;`), so that stray `;` is gone. But the sibling then-body is multi-statement
+		// and keeps its braces, so the if/else symmetry gate (gate 7) keeps the else braced
+		// too - a single-vs-multi if/else de-braces NEITHER branch.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg2();\n\t\t} else {\n\t\t\th();\n\t\t};\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t\tg2();\n\t\t} else {\n\t\t\th();\n\t\t}\n\t}\n}'
+		);
 	}
 
 	public function testVarDeclKeepsBraces(): Void {

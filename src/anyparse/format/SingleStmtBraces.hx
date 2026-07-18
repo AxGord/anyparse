@@ -48,17 +48,93 @@ package anyparse.format;
  *     unwrap: `if (a) while (c) { if (b) x; } else y` must keep the
  *     loop-body braces even though the loop itself carries no
  *     `elseFollows` signal.
+ *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing
+ *     statement (the `@:trailOpt(';')` slot, e.g. `for (c) { x; };`).
+ *     De-bracing would emit `for (c) x;;`, which anyparse parses but
+ *     the Haxe compiler rejects ("Expected }"), so the braces stay.
+ *  7. `siblingKeepsBraces` - if/else brace symmetry: an if/else must
+ *     de-brace BOTH branches or NEITHER. Each splice probes the OTHER
+ *     branch (via `keepsBraces`) and passes `true` here when that
+ *     sibling keeps its braces, so `if (b) { one; } else { a; b; }`
+ *     stays fully braced instead of the asymmetric
+ *     `if (b) one; else { a; b; }`. Loop bodies (for / while / do) have
+ *     no sibling - they always pass `false`.
  */
 class SingleStmtBraces {
 
-	public static function unwrapStmt(body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool): Dynamic {
+	public static function unwrapStmt(
+		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool
+	): Dynamic {
 		if (!drop || suppress || body == null) return body;
 		if (!Reflect.isEnumValue(body)) return body;
 		final block: EnumValue = cast body;
 		if (Type.enumConstructor(block) == 'BlockBody') return unwrapDoBody(block);
 		if (Type.enumConstructor(block) != 'BlockStmt') return body;
+		// Gate 7 - if/else brace symmetry: when the SIBLING branch keeps its braces, this
+		// branch keeps its own too. De-bracing one half of an if/else while the other stays
+		// braced (`if (b) return true; else { ... }`) is an asymmetry violation, so fail closed.
+		if (siblingKeepsBraces) return body;
+		// Gate 6 — a redundant trailing `;` on the enclosing statement (`for (…) { x; };`,
+		// the `@:trailOpt(';')` slot): de-bracing would emit `for (…) x;;`, which anyparse
+		// parses but the Haxe compiler rejects ("Expected }"). Keep the braces (fail closed).
+		if (hasTrailingSemi) return body;
 		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
 		return inner == null ? body : !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
+	}
+
+	/**
+	 * Would this branch RENDER with braces? True only when `body` is a
+	 * brace-bearing `BlockStmt` that `unwrapStmt` would NOT de-brace. A branch
+	 * that carries no braces to begin with - a bare statement, or an
+	 * `else if` (`IfStmt`) - returns false: there is nothing to stay
+	 * asymmetric against. The if/else splices call this to probe the OTHER
+	 * branch, feeding gate 7 so `if (b) { one; } else { a; b; }` keeps both
+	 * braced while `if (a) x(); else if (b) y(); else z();` still de-braces.
+	 */
+	public static function keepsBraces(body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool): Bool {
+		if (body == null || !Reflect.isEnumValue(body)) return false;
+		if (Type.enumConstructor(cast body) != 'BlockStmt') return false;
+		// `unwrapStmt` (symmetry forced off) returns the body UNCHANGED only when it would NOT
+		// de-brace it on its own merits (gates 1-6) - i.e. the block renders WITH its braces.
+		return unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false) == body;
+	}
+
+	/**
+	 * ω-single-stmt-braces CHAIN symmetry: does ANY branch of an if / else-if /
+	 * else chain keep its braces? OR of `keepsBraces` over the outer then, every
+	 * else-if then, and the terminal else block, walking the nested `elseBody`
+	 * spine. `IfStmt(stmt)` wraps a single `HxIfStmt` struct, reached via
+	 * `Type.enumParameters(v)[0]`; its `thenBody` / `elseBody` are portable field
+	 * accesses. When true the caller forces braces on EVERY branch (symmetric-
+	 * braced); only a chain whose every branch is de-braceable de-braces them all.
+	 * A null `elseBody` (a lone `if`) or a non-`if` terminal are handled by the
+	 * walk. Each branch's `elseFollows` is derived from the spine so gate 4
+	 * (dangling-else) matches its real splice exactly, and `hasTrailingSemi` is
+	 * read from each else-if then-body's own `TrailPresent` slot: only the
+	 * TERMINAL branch (no further `else`) can carry a redundant trailing `;`
+	 * (gate 6) — missing it would leave that branch braced while earlier branches
+	 * de-brace. Byte-inert when `drop` is off; `suppress` short-circuits (all
+	 * branches keep braces anyway).
+	 */
+	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, suppress: Bool): Bool {
+		if (!drop || suppress) return false;
+		if (keepsBraces(thenBody, drop, false, elseBody != null, false)) return true;
+		var cur: Dynamic = elseBody;
+		while (cur != null && Reflect.isEnumValue(cur) && Type.enumConstructor(cast cur) == 'IfStmt') {
+			final ps: Array<Dynamic> = Type.enumParameters(cast cur);
+			final stmt: Null<Dynamic> = ps.length == 0 ? null : ps[0];
+			if (stmt == null) break;
+			final innerThen: Dynamic = stmt.thenBody;
+			final innerElse: Dynamic = stmt.elseBody;
+			// The terminal else-if then-body (no further `else`) can carry the
+			// enclosing statement's trailing `;`; gate 6 keeps its braces at the real
+			// splice, so the scan must see it too. Non-terminal then-bodies are always
+			// false — a `;` never sits between a then-block and `else`.
+			final innerTrail: Bool = stmt.thenBodyTrailPresent == true;
+			if (keepsBraces(innerThen, drop, false, innerElse != null, innerTrail)) return true;
+			cur = innerElse;
+		}
+		return cur != null && keepsBraces(cur, drop, false, false, false);
 	}
 
 	private static function innerSelfTerminates(inner: EnumValue): Bool {
