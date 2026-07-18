@@ -435,6 +435,8 @@ import unit.UnusedReturnValueTest;
 import unit.CompilerOracleE2ETest;
 import unit.DocCoverageCheckTest;
 import unit.GuardContinueCheckTest;
+import unit.AvoidDynamicNarrowFixTest;
+import unit.AvoidDynamicRiskyFixE2ETest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -794,6 +796,8 @@ class RunTests {
 		addCase(new NullableSwitchMissingNullCheckTest());
 		addCase(new DuplicateCodeCheckTest());
 		addCase(new AvoidDynamicCheckTest());
+		addCase(new AvoidDynamicNarrowFixTest());
+		addCase(new AvoidDynamicRiskyFixE2ETest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());

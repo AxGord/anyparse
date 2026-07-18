@@ -1,14 +1,20 @@
 package anyparse.check;
 
 import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.Refs;
+import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
 using StringTools;
+using Lambda;
 
 /**
  * Flags a raw `Dynamic` in a DECLARED type position — a field type, a function
@@ -17,13 +23,56 @@ using StringTools;
  * checking at that seam; the intent is to surface each one for a narrower type
  * or the sanctioned `Any` top type.
  *
- * ## Report-only — a detector, not a rewriter
+ * ## Usage-inference autofix — LOCALS only, compiler-verified (`RiskyFix`)
  *
- * `fix` yields no edits: the replacement is a semantic decision (which concrete
- * type, or `Any`) that a mechanical rewrite cannot make. A usage-inference fix
- * is a separate future pass; to keep it possible, every violation's span points
- * at the EXACT `Dynamic` token (not the enclosing declaration), so that pass can
- * anchor a replacement precisely. `Severity.Info` by default.
+ * `fix` narrows a WHOLE-type `Dynamic` on a local `var` / `final` to the single
+ * concrete named type the value PROVABLY ALWAYS HOLDS — every write source, the
+ * initializer INCLUDED, being a typed identifier or `new T(…)` of one type. An
+ * assignment INTO a typed target (`var y: Foo = x`, `sink = x`) or a param pass is
+ * a WEAK obligation (a raw `Dynamic` assigns to ANY type), so it NEVER drives the
+ * narrowing — it is only a consistency veto (a differing sink type leaves the local
+ * alone). This is the "decide strictly" the weak-obligation rule demands, and it is
+ * what makes the rewrite sound: because the writes pin the value's type, replacing
+ * `Dynamic` re-states a type the value already has, never inventing one from a sink
+ * a `Dynamic` would satisfy regardless.
+ *
+ * `T` must additionally resolve (via the `SymbolIndex`) to a provably PLAIN nominal —
+ * a class / interface / enum, NOT an abstract or typedef: an abstract's implicit
+ * `@:from` / `@:to` conversions fire on the STATIC type, so re-typing a binding from
+ * `Dynamic` to an abstract compiles yet changes runtime dispatch (the adversarial
+ * review's confirmed hole); a typedef may alias one. An unresolvable (stdlib /
+ * out-of-scope) name is not provable and skips.
+ *
+ * EVERY other use DISQUALIFIES the whole declaration (a conservative skip): a member
+ * access `x.f` / `x.m()` (a real instance member, a `using`-extension and a getter
+ * property are indistinguishable here and each would change runtime dispatch), an `is`
+ * test, a reflection call, a `cast`, an operator, `?.` / `!.` / index access, a null
+ * comparison, an untyped or non-`T` sink — and ALSO every value-flow into a typed seam
+ * of unknown expected type: a call argument, a `return`, a ternary branch. Those seams
+ * may expect an abstract with an implicit `@:from` — under `Dynamic` the raw value
+ * passes, under a narrowed `T` the conversion fires, both compile, runtime differs.
+ * The only neutral use is a bare `x;` statement.
+ *
+ * The genuine JSON / `Reflect` boundary locals (`var v: Dynamic = Json.parse(…)`,
+ * heterogeneous `.checks` / `.props`, `if (Std.isOfType(raw, Array))` guards) therefore
+ * skip: their initializer is an untyped `Reflect` / `Json` result (the value is NOT
+ * provably one type) and their uses carry member / `is` / reflection signals. This is
+ * the correct behaviour — those values are `Dynamic` because they hold genuinely dynamic
+ * runtime values, and use-inference cannot soundly narrow them.
+ *
+ * FIELDS, parameters, returns and type arguments are NOT rewritten: a field's
+ * uses are cross-file (an external `is` / heterogeneous read compiles both ways
+ * yet changes runtime dispatch — unsound even under an oracle), and a type
+ * argument / parameter / return needs element-flow / call-site inference. Those
+ * stay report-only. Every violation's span still points at the EXACT `Dynamic`
+ * token so the local rewrite (and any future one) anchors precisely.
+ *
+ * The check is a `RiskyFix`: even the sound local narrowings apply ONLY under a
+ * configured compiler oracle (`apqlint.json` `compilerOracle`), which typechecks
+ * each candidate and reverts any that breaks the build — a stricter-than-required
+ * belt over the by-construction soundness, and the first real `RiskyFix`
+ * consumer. Without an oracle the `--fix` run is byte-identical to report-only.
+ * `Severity.Info` by default.
  *
  * ## What is and is not flagged
  *
@@ -51,7 +100,7 @@ using StringTools;
  * `excludeMeta` / `boundaryCalls` are read from `apqlint.json`.
  */
 @:nullSafety(Strict)
-final class AvoidDynamic implements Check implements ConfigAware {
+final class AvoidDynamic implements Check implements ConfigAware implements RiskyFix {
 
 	/** Call-path roots that mark a local as a Reflect/Json boundary transit — reported distinctly. */
 	private static final DEFAULT_BOUNDARY_CALLS: Array<String> = ['Reflect', 'Json'];
@@ -96,11 +145,334 @@ final class AvoidDynamic implements Check implements ConfigAware {
 		return violations;
 	}
 
-	/** Report-only — a raw `Dynamic` has no mechanical replacement, so no edits. */
+	/**
+	 * Narrow each WHOLE-type `Dynamic` LOCAL among `violations` to a use-inferred
+	 * named type, skipping every unsound shape. Field / parameter / return / type-
+	 * argument violations yield no edit. `RiskyFix`: the caller applies these only
+	 * under a compiler oracle (`FixVerifier`), so a bad inference is reverted, not shipped.
+	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return [];
+		final shape: RefShape = plugin.refShape();
+		final dynName: Null<String> = shape.rawDynamicTypeName;
+		final tree: Null<QueryNode> = dynName == null ? null : CheckScan.parseOrNull(plugin, source);
+		if (dynName == null || tree == null) return [];
+		final declaredTypes: Map<Int, String> = (plugin is TypeInfoProvider) ? (cast plugin: TypeInfoProvider).declaredTypes(source) : [];
+		// The inferred type must resolve to a provably plain nominal — resolved against the
+		// caller's cross-file index (FixVerifier), or this file alone when invoked directly.
+		final symbols: SymbolIndex = index ?? SymbolIndex.build([{ file: '', source: source }], plugin);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) if (v.rule == RULE_ID) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final decl: Null<QueryNode> = wholeDynamicLocal(tree, source, span, shape, dynName);
+			if (decl == null) continue;
+			final narrowed: Null<String> = inferLocalNarrowType(decl, tree, shape, dynName, declaredTypes, symbols);
+			if (narrowed != null) edits.push({ span: span, text: narrowed });
+		}
+		return edits;
+	}
+
+	/**
+	 * The innermost local-decl node whose OWN type annotation is EXACTLY the `Dynamic`
+	 * token at `span` — the char before the token (skipping whitespace) is a `:` and
+	 * the char after is `=` / `;` / decl-end, so `Array<Dynamic>` / `Map<K, Dynamic>`
+	 * / `Dynamic->Void` / `(e : Dynamic)` are all rejected. A span INSIDE any child of
+	 * the decl is rejected too: a class-notation struct FIELD (`var o: {var x: Dynamic;
+	 * …} = …`) passes the char test (`:` before, `;` after) yet lives in the projected
+	 * anon-type child — a Field-position violation the local's inference must never
+	 * rewrite (the adversarial review's confirmed mis-attribution). The local's own
+	 * whole-type annotation region projects no child nodes, so child-containment
+	 * exactly separates the two. Null when `span` is not a whole-type local `Dynamic`.
+	 */
+	private static function wholeDynamicLocal(
+		tree: QueryNode, source: String, span: Span, shape: RefShape, dynName: String
+	): Null<QueryNode> {
+		final localKinds: Array<String> = shape.localDeclKinds ?? [];
+		if (localKinds.length == 0) return null;
+		if (span.to > source.length || source.substring(span.from, span.to) != dynName) return null;
+		var i: Int = span.from - 1;
+		while (i >= 0 && isSpaceCode(source.fastCodeAt(i))) i--;
+		if (i < 0 || source.fastCodeAt(i) != ':'.code) return null;
+		var j: Int = span.to;
+		while (j < source.length && isSpaceCode(source.fastCodeAt(j))) j++;
+		final after: Int = j < source.length ? source.fastCodeAt(j) : -1;
+		if (after != '='.code && after != ';'.code && after != -1) return null;
+		final decl: Null<QueryNode> = innermostContaining(tree, span, localKinds);
+		if (decl == null) return null;
+		for (c in decl.children) {
+			final cs: Null<Span> = c.span;
+			if (cs != null && cs.from <= span.from && span.to <= cs.to) return null;
+		}
+		return decl;
+	}
+
+	/** The smallest node whose kind is in `kinds` and whose span contains `span`, or null. */
+	private static function innermostContaining(tree: QueryNode, span: Span, kinds: Array<String>): Null<QueryNode> {
+		var best: Null<QueryNode> = null;
+		var bestWidth: Int = 0;
+		function walk(n: QueryNode): Void {
+			final s: Null<Span> = n.span;
+			if (s != null && kinds.contains(n.kind) && s.from <= span.from && span.to <= s.to) {
+				final width: Int = s.to - s.from;
+				if (best == null || width < bestWidth) {
+					best = n;
+					bestWidth = width;
+				}
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(tree);
+		return best;
+	}
+
+	/**
+	 * The sound narrowing type for the `Dynamic` local `decl`, or null to leave it
+	 * report-only. Sound criteria (all required): a present, non-null, TYPED
+	 * initializer; every reassignment source typed the SAME single type `T`; `T`
+	 * resolves in the symbol index to a provably PLAIN nominal (class / interface /
+	 * enum — not an abstract, whose implicit conversions change dispatch, and not a
+	 * typedef, which may alias one); a USE corroborates `T`; every weak sink agrees;
+	 * and no disqualifying use anywhere. See the class doc for the rationale.
+	 */
+	private static function inferLocalNarrowType(
+		decl: QueryNode, tree: QueryNode, shape: RefShape, dynName: String, declaredTypes: Map<Int, String>, symbols: SymbolIndex
+	): Null<String> {
+		final name: Null<String> = decl.name;
+		final declSpan: Null<Span> = decl.span;
+		if (name == null || declSpan == null) return null;
+		final acc: NarrowAcc = gatherUses(name, declSpan.from, tree, shape, dynName, declaredTypes);
+		if (acc.disqualified || acc.nullUse) return null;
+
+		// STRONG obligation only: the value must provably ALWAYS hold a `T` — every write
+		// source, the initializer INCLUDED, is a typed identifier / `new T(…)` of the one type.
+		// An assignment INTO a typed target (`var y: Foo = x`) is a WEAK obligation (a raw
+		// Dynamic assigns to ANY type), so it never DRIVES the narrowing — it serves only as a
+		// consistency veto below. This is the task's "decide strictly".
+		final init: InitInfo = initSourceInfo(decl, shape, tree, declaredTypes, dynName);
+		if (!init.present || init.isNull) return null;
+		final initType: Null<String> = init.type;
+		if (initType == null || acc.reassignHasUntyped) return null;
+		final initTyped: String = initType;
+		final writeTypes: Array<String> = distinct([initTyped].concat(acc.reassignTypes));
+		if (writeTypes.length != 1) return null;
+		final t: String = writeTypes[0];
+		if (t == dynName || t == 'Any' || !isNominalName(t)) return null;
+		if (acc.useCount == 0) return null;
+		// `T` must be a provably plain nominal: an abstract's implicit `@:from` / `@:to`
+		// conversions fire on the STATIC type, so re-typing the local from `Dynamic` to an
+		// abstract `T` compiles yet changes runtime dispatch at every seam (the adversarial
+		// review's confirmed hole); a typedef may alias an abstract or `Dynamic`. Unresolvable
+		// (stdlib / out-of-scope) names are not provable and skip.
+		if (!symbols.resolvesToPlainNominal(t)) return null;
+		// Consistency veto: a weak sink whose type differs from `T` signals a heterogeneous use —
+		// leave it alone (an exact-name match is the only accepted sink shape).
+		for (s in acc.sinkTypes) if (s != t) return null;
+		// A USE must corroborate `T` — a typed sink (`var y: T = x`) or a typed reassignment
+		// (`x = t`). A local justified by its initializer alone is not narrowed: the rewrite
+		// must be driven by a use (the task's "from uses, not from the initializer").
+		return acc.sinkTypes.length == 0 && acc.reassignTypes.length == 0 ? null : t;
+	}
+
+	/**
+	 * Resolve every read/write occurrence of the local `name` (binding-`from` `bindFrom`)
+	 * via `Refs.find`, then walk the tree classifying each into a fresh accumulator.
+	 */
+	private static function gatherUses(
+		name: String, bindFrom: Int, tree: QueryNode, shape: RefShape, dynName: String, declaredTypes: Map<Int, String>
+	): NarrowAcc {
+		final targetKeys: Map<String, Bool> = [];
+		for (h in Refs.find(name, tree, shape)) {
+			final b: Null<Span> = h.bindingSpan;
+			if (h.kind != RefKind.Decl && b != null && b.from == bindFrom) targetKeys['${h.span.from}:${h.span.to}'] = true;
+		}
+		final acc: NarrowAcc = {
+			disqualified: false,
+			nullUse: false,
+			useCount: 0,
+			reassignTypes: [],
+			reassignHasUntyped: false,
+			sinkTypes: []
+		};
+		classifyOccurrences(tree, tree, null, -1, name, shape, dynName, declaredTypes, targetKeys, acc);
+		return acc;
+	}
+
+	/**
+	 * Walk `tree` classifying every read/write occurrence of the local `name` (matched
+	 * by resolved binding via `targetKeys`) into `acc`: member accesses, typed sinks,
+	 * typed reassignment sources, and the disqualifying / null-using / neutral shapes.
+	 */
+	private static function classifyOccurrences(
+		node: QueryNode, root: QueryNode, parent: Null<QueryNode>, childIndex: Int, name: String, shape: RefShape, dynName: String,
+		declaredTypes: Map<Int, String>, targetKeys: Map<String, Bool>, acc: NarrowAcc
+	): Void {
+		final s: Null<Span> = node.span;
+		if (node.kind == shape.identKind && node.name == name && s != null && targetKeys.exists('${s.from}:${s.to}'))
+			classifyOne(node, parent, childIndex, shape, dynName, root, declaredTypes, acc);
+		final kids: Array<QueryNode> = node.children;
+		for (k in 0...kids.length) classifyOccurrences(kids[k], root, node, k, name, shape, dynName, declaredTypes, targetKeys, acc);
+	}
+
+	/**
+	 * Classify one occurrence of the local (parent `p`, position `ci`): a write (`x = e`,
+	 * simple assign at position 0) routes to `classifyWrite`, every other position to
+	 * `classifyRead`. A null parent (a top-level orphan) disqualifies.
+	 */
+	private static function classifyOne(
+		occ: QueryNode, p: Null<QueryNode>, ci: Int, shape: RefShape, dynName: String, root: QueryNode, declaredTypes: Map<Int, String>,
+		acc: NarrowAcc
+	): Void {
+		if (p == null) {
+			acc.disqualified = true;
+			return;
+		}
+		if (shape.assignKind != null && p.kind == shape.assignKind && ci == 0)
+			classifyWrite(p, shape, dynName, root, declaredTypes, acc);
+		else
+			classifyRead(p, ci, shape, dynName, root, declaredTypes, acc);
+	}
+
+	/**
+	 * A write `x = e`: record the source's named type (a STRONG obligation — the value is
+	 * that type after the write), flag an untyped source, or flag a null write (`x = null`,
+	 * which would defeat a non-null narrowing).
+	 */
+	private static function classifyWrite(
+		p: QueryNode, shape: RefShape, dynName: String, root: QueryNode, declaredTypes: Map<Int, String>, acc: NarrowAcc
+	): Void {
+		acc.useCount++;
+		final rhs: Null<QueryNode> = p.children.length > 1 ? p.children[1] : null;
+		if (rhs == null) {
+			acc.disqualified = true;
+			return;
+		}
+		if (shape.nullLiteralKind != null && rhs.kind == shape.nullLiteralKind) {
+			acc.nullUse = true;
+			return;
+		}
+		final st: Null<String> = sourceType(rhs, root, shape, dynName, declaredTypes);
+		if (st == null)
+			acc.reassignHasUntyped = true;
+		else
+			acc.reassignTypes.push(st);
+	}
+
+	/**
+	 * Classify a READ occurrence (parent `p`, position `ci`): a typed sink of the SAME
+	 * shape (`sink = x` / `var y: T = x`) is recorded as a WEAK consistency veto; a bare
+	 * statement (`x;`) is the only neutral pass-through; EVERYTHING ELSE disqualifies.
+	 * A member access is undecidable (instance member vs `using`-extension vs getter —
+	 * each changes dispatch); a call argument, `return`, or ternary branch hands the
+	 * value to a typed seam whose expected type may be an abstract with an implicit
+	 * `@:from` — under `Dynamic` the raw value passes, under a narrowed `T` the
+	 * conversion fires, both compile, runtime differs (the adversarial review's
+	 * confirmed hole) — so value-flow into ANY typed seam other than an exact-`T`
+	 * sink is out.
+	 */
+	private static function classifyRead(
+		p: QueryNode, ci: Int, shape: RefShape, dynName: String, root: QueryNode, declaredTypes: Map<Int, String>, acc: NarrowAcc
+	): Void {
+		acc.useCount++;
+		if (recordWeakSink(p, ci, p.kind, shape, dynName, root, declaredTypes, acc)) return;
+		if (p.kind == shape.exprStatementKind) return; // a bare `x;` statement — a no-op
+		acc.disqualified = true;
+	}
+
+	/**
+	 * Record a WEAK typed sink the value flows into — `sink = x` (a simple assign, `x` at
+	 * position 1) or `var y: T = x` (a local-decl parent) — as a consistency veto, and
+	 * return true when `p` is a sink position (handled), false otherwise. A sink whose
+	 * type cannot be resolved (an untyped `var y = x`, a `Null<…>`-wrapped or non-nominal
+	 * annotation, a field / unresolved target) DISQUALIFIES: the target is a typed seam
+	 * of unknown type, exactly the shape the abstract-`@:from` hole lives in.
+	 */
+	private static function recordWeakSink(
+		p: QueryNode, ci: Int, pk: String, shape: RefShape, dynName: String, root: QueryNode, declaredTypes: Map<Int, String>,
+		acc: NarrowAcc
+	): Bool {
+		var ty: Null<String>;
+		if (shape.assignKind != null && pk == shape.assignKind && ci == 1) {
+			final lhs: Null<QueryNode> = p.children.length > 0 ? p.children[0] : null;
+			ty = lhs != null && lhs.kind == shape.identKind ? TypeResolver.identTypeName(lhs, root, shape, declaredTypes) : null;
+		} else if ((shape.localDeclKinds ?? []).contains(pk)) {
+			final ps: Null<Span> = p.span;
+			ty = ps == null ? null : declaredTypes[ps.from];
+		} else
+			return false;
+		if (ty != null && acceptableType(ty, dynName))
+			acc.sinkTypes.push(ty);
+		else
+			acc.disqualified = true;
+		return true;
+	}
+
+	/** Whether `ty` is a usable narrowing / sink type — a plain nominal name that is not the raw dynamic name or `Any`. */
+	private static function acceptableType(ty: String, dynName: String): Bool {
+		return ty != dynName && ty != 'Any' && isNominalName(ty);
+	}
+
+	/** The named type of a write / init source expression: a typed identifier or a `new T(…)`, else null (untyped). */
+	private static function sourceType(
+		expr: QueryNode, root: QueryNode, shape: RefShape, dynName: String, declaredTypes: Map<Int, String>
+	): Null<String> {
+		if (expr.kind == shape.identKind) {
+			final ty: Null<String> = TypeResolver.identTypeName(expr, root, shape, declaredTypes);
+			return ty != null && acceptableType(ty, dynName) ? ty : null;
+		}
+		if (shape.newExprKind != null && expr.kind == shape.newExprKind) {
+			final nm: Null<String> = TypeResolver.simpleNominalName(expr.name);
+			return nm != null && acceptableType(nm, dynName) ? nm : null;
+		}
+		return null;
+	}
+
+	/**
+	 * The initializer info of `decl`: its first non-type child is the initializer.
+	 * `present` false when there is none; `isNull` when it is a null literal; `type`
+	 * the source's named type when typed, else null.
+	 */
+	private static function initSourceInfo(
+		decl: QueryNode, shape: RefShape, root: QueryNode, declaredTypes: Map<Int, String>, dynName: String
+	): InitInfo {
+		final typeKinds: Array<String> = shape.declTypeChildKinds ?? [];
+		final init: Null<QueryNode> = decl.children.find(c -> !typeKinds.contains(c.kind));
+
+		if (init == null) return { present: false, isNull: false, type: null };
+		final i: QueryNode = init;
+		return shape.nullLiteralKind != null && i.kind == shape.nullLiteralKind
+			? {
+				present: true,
+				isNull: true,
+				type: null
+			}
+			: {
+				present: true,
+				isNull: false,
+				type: sourceType(i, root, shape, dynName, declaredTypes)
+			};
+	}
+
+	/** The distinct values of `xs`, order-preserving. */
+	private static function distinct(xs: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		for (x in xs) if (!out.contains(x)) out.push(x);
+		return out;
+	}
+
+	/** Whether `name` is a plain nominal simple/qualified name — no generics, arrows or other type syntax. */
+	private static function isNominalName(name: String): Bool {
+		if (name.length == 0) return false;
+		for (k in 0...name.length) {
+			final c: Int = name.fastCodeAt(k);
+			if (!isWordChar(c) && c != '.'.code) return false;
+		}
+		return true;
+	}
+
+	private static inline function isSpaceCode(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
 
 	/** The resolved kind sets threaded through the walk, built once per run. */
@@ -380,6 +752,34 @@ private enum DynPos {
 	Local;
 	TypeArg;
 }
+
+/** Mutable accumulator threaded through the local-narrowing use classifier. */
+private typedef NarrowAcc = {
+	/** A use where raw Dynamic is load-bearing was seen — skip the declaration. */
+	var disqualified: Bool;
+
+	/** The local is compared with / assigned null — narrowing to a non-null type would be unsound. */
+	var nullUse: Bool;
+
+	/** Count of real uses (reads + reassignments) — a declaration with none is not narrowed. */
+	var useCount: Int;
+
+	/** Named types of the typed reassignment sources (`x = foo`). */
+	var reassignTypes: Array<String>;
+
+	/** A reassignment whose source type is unresolved — the value is not provably always one type. */
+	var reassignHasUntyped: Bool;
+
+	/** Named types of the weak typed sinks the value flows into (`y = x` / `var y: T = x`) — a consistency veto only. */
+	var sinkTypes: Array<String>;
+};
+
+/** The initializer shape of a `Dynamic` local: presence, null-literal, and resolved source type. */
+private typedef InitInfo = {
+	var present: Bool;
+	var isNull: Bool;
+	var type: Null<String>;
+};
 
 /** Resolved kind sets + config-independent names threaded through the walk, built once per run. */
 private typedef DynCtx = {

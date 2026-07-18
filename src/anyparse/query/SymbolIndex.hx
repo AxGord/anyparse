@@ -97,7 +97,11 @@ typedef FileInfo = {
 @:nullSafety(Strict)
 final class SymbolIndex {
 
+	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
+	private static final PLAIN_NOMINAL_KINDS: Array<String> = ['ClassDecl', 'InterfaceDecl', 'EnumDecl'];
+
 	private final _files: Array<FileInfo>;
+
 	private final _skipped: Array<String>;
 
 	private function new(files: Array<FileInfo>, skipped: Array<String>) {
@@ -309,6 +313,21 @@ final class SymbolIndex {
 	 */
 	public function typeProvablyLacksMember(typeName: String, member: String): Bool {
 		return lacksMemberClosure(typeName, member, []);
+	}
+
+	/**
+	 * Whether `typeName` resolves in the index to EXACTLY ONE declaration and that
+	 * declaration is a PLAIN nominal type — a class, interface or enum. Excludes
+	 * abstracts (their implicit `@:from` / `@:to` conversions and operator overloads
+	 * make a value's RUNTIME behaviour depend on its STATIC type, so changing a
+	 * binding's declared type can change semantics even though it compiles) and
+	 * typedefs (which may alias an abstract or `Dynamic`). An unresolved name — a
+	 * stdlib or out-of-scope type — yields false: not provable, so not eligible.
+	 * The green-light gate of the `avoid-dynamic` local narrowing.
+	 */
+	public function resolvesToPlainNominal(typeName: String): Bool {
+		final ds: Array<TypeDeclInfo> = declsNamed(typeName);
+		return ds.length == 1 && PLAIN_NOMINAL_KINDS.contains(ds[0].kind);
 	}
 
 	/** Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`. */
