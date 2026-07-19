@@ -172,6 +172,17 @@ final class CheckScan {
 	}
 
 	/**
+	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — a
+	 * conservative "don't delete a comment" guard (a marker inside a string only ever
+	 * refuses a fix, never deletes code, the safe direction for an autofix).
+	 */
+	public static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
+		if (from >= to) return false;
+		final s: String = source.substring(from, to);
+		return s.indexOf('//') != -1 || s.indexOf('/*') != -1;
+	}
+
+	/**
 	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
 	 * shared by `applyBySpan` and `simplifyConditionFixes`.
@@ -284,17 +295,6 @@ final class CheckScan {
 			out.set(c, node);
 			fillParents(c, out);
 		}
-	}
-
-	/**
-	 * Whether `[from, to)` of `source` holds a `//` or `/*` comment marker — a
-	 * conservative "don't delete a comment" guard (a marker inside a string only ever
-	 * refuses a fix, never deletes code, the safe direction for an autofix).
-	 */
-	private static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final s: String = source.substring(from, to);
-		return s.indexOf('//') != -1 || s.indexOf('/*') != -1;
 	}
 
 	/**

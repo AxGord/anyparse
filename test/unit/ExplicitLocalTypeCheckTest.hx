@@ -344,7 +344,7 @@ class ExplicitLocalTypeCheckTest extends Test {
 		Assert.notNull(Linter.byId('explicit-local-type'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('explicit-local-type'));
-		Assert.equals(91, Linter.builtins().length);
+		Assert.equals(92, Linter.builtins().length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
