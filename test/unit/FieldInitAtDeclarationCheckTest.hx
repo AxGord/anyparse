@@ -162,4 +162,17 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(0, violations(block).length);
 	}
 
+
+	public function testInheritedMemberRefNotMoved(): Void {
+		// `_w` is an INHERITED field - invisible to the single-file resolver, so an
+		// unresolved lowercase ident in a subclass is indistinguishable from an
+		// inherited member and must fail closed ("Cannot access this or other
+		// member field in variable initialization" once moved). Uppercase roots
+		// (type refs like `Colors.WHITE`) stay movable.
+		final sub: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(_w / 2); } }';
+		Assert.equals(0, violations(sub).length);
+		final upper: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(Colors.WHITE); } }';
+		Assert.equals(1, violations(upper).length);
+	}
+
 }

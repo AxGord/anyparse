@@ -188,9 +188,16 @@ final class FieldInitAtDeclaration implements Check {
 			// A bare `$name` interp ident does not register as a binding read, so an
 			// unresolved one is NOT provably global - in practice it is almost always
 			// a local/param; fail closed. A regular unresolved IdentExpr stays the
-			// provably-global case (imports/statics).
+			// provably-global case (imports/statics) - UNLESS the container has a
+			// supertype clause: an INHERITED member is invisible to the single-file
+			// resolver and indistinguishable from a global, so under `extends` /
+			// `implements` an unresolved lowercase ident fails closed too (type
+			// refs like `Colors.WHITE` keep their uppercase root and stay movable).
 			if (isInterpIdent) return bf != null && statics.contains(bf);
-			return bf == null || statics.contains(bf);
+			if (bf != null) return statics.contains(bf);
+			if (!hasSupertype(container, shape)) return true;
+			final c0: Int = StringTools.fastCodeAt(name, 0);
+			return c0 >= 'A'.code && c0 <= 'Z'.code;
 		}
 		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape)) return false;
 		return true;
@@ -225,6 +232,19 @@ final class FieldInitAtDeclaration implements Check {
 			}
 		}
 		for (child in node.children) if (readBeforeInit(child, fieldFrom, fieldName, boundary, container, shape)) return true;
+		return false;
+	}
+
+
+	/**
+	 * Whether the container carries any supertype clause (`extends` /
+	 * `implements`) - the condition under which an unresolved bare ident may
+	 * actually be an inherited member rather than a global.
+	 */
+	private static function hasSupertype(container: QueryNode, shape: RefShape): Bool {
+		final clauses: Array<String> = shape.supertypeClauseKinds ?? [];
+		if (clauses.length == 0) return false;
+		for (c in container.children) if (clauses.contains(c.kind)) return true;
 		return false;
 	}
 
