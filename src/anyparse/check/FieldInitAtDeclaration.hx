@@ -162,8 +162,6 @@ final class FieldInitAtDeclaration implements Check {
 	/**
 	 * The binding-span starts of `container`'s members preceded by a `Static`
 	 * modifier sibling — the static members a right-hand side may safely reference.
-	 */
-	/**
 	 * Whether every identifier read in `node` is context-independent: a global / type /
 	 * imported name (unresolved within the class) or a static member of the class — a
 	 * value available at declaration-init time — and the subtree contains no `this`. A
