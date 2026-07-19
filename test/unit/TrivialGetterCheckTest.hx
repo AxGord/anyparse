@@ -411,4 +411,57 @@ class TrivialGetterCheckTest extends Test {
 		}
 	}
 
+
+	public function testShapeCTrivialSetterRealGetterFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			cls(
+				'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;'
+			)
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'count\' has a trivial setter over backing field \'_count\'; use \'var count(get, default)\' and remove set_count',
+			vs[0].message
+		);
+	}
+
+	public function testShapeCFixToGetDefault(): Void {
+		final fixed: String = fixedText(
+			cls(
+				'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;'
+			)
+		);
+		Assert.isTrue(fixed.indexOf('count(get, default):Int = 0') >= 0);
+		Assert.isTrue(fixed.indexOf('return count + 1') >= 0);
+		Assert.isTrue(fixed.indexOf('set_count') == -1);
+		Assert.isTrue(fixed.indexOf('private var _count') == -1);
+	}
+
+	public function testShapeCExternalReadNotFlagged(): Void {
+		// A read of _count outside get_count would newly route through the non-trivial getter
+		// after conversion to (get, default), so the property is skipped.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;\n\tfunction peek():Int { return _count; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeCCompoundAssignNotFlagged(): Void {
+		// _count += 1 outside get_count READS _count (x += 1 compiles to x = get_count() + 1), so
+		// it would newly route through the non-trivial getter — the property is skipped.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;\n\tfunction bump():Void { _count += 1; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeCExternalPureWriteStillFlagged(): Void {
+		// A pure write _count = 5 outside the accessors is a direct (default) write, not a read,
+		// so it does not block the (get, default) collapse.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;\n\tfunction reset():Void { _count = 5; }'
+		);
+		Assert.equals(1, violations(src).length);
+	}
+
 }

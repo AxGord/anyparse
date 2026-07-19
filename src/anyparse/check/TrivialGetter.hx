@@ -26,12 +26,12 @@ import anyparse.query.RefactorSupport;
  *   `(default, set)`, `get_x` deleted, `set_x` kept. Write-gated (below).
  * - `public var x(get, set):T` with BOTH accessors trivial (getter `return _x;`, setter `return
  *   _x = value;`) -> a plain field `public var x:T`, both accessors deleted.
+ * - `public var x(get, set):T` with a NON-TRIVIAL getter and a TRIVIAL setter -> `(get,
+ *   default)`, `set_x` deleted, `get_x` kept. Read-gated (below).
  *
  * A trivial getter is exactly `return _x;` / `return this._x;`; a trivial setter is exactly
  * `return _x = value;` / `return this._x = value;` over the setter's single parameter. A `(get,
- * set)` with a NON-trivial getter + trivial setter is left alone: the sound target `(get,
- * default)` would make the kept getter, once it reads the property name, route through itself
- * (infinite recursion) without `@:isVar`.
+ * set)` with BOTH accessors non-trivial is left alone.
  *
  * ## Soundness gates (a miss over a wrong flag)
  *
@@ -55,15 +55,26 @@ import anyparse.query.RefactorSupport;
  * reads. The gate exists because writes to a `(default, set)` property route through `set_x`
  * EVERYWHERE except inside `set_x` itself: an external backing-field write, once renamed to the
  * property name, would start routing through the setter — a behavior change. So the property is
- * skipped if there is ANY write to the backing field outside `set_x`, with ONE exception.
+ * skipped if there is ANY write to the backing field outside `set_x`, with ONE exception (below).
  *
- * ## Constructor-init exception
+ * ## The `(get, default)` read-gate
+ *
+ * After the `(get, set)` -> `(get, default)` collapse the property still has physical storage
+ * (the `default` write forces it), so inside the kept `get_x` the renamed property read is a
+ * DIRECT physical read (no recursion). The gate exists because READS of a `(get, default)`
+ * property route through `get_x` EVERYWHERE except inside `get_x` itself: a backing-field read
+ * outside the getter, once renamed, would start routing through the non-trivial getter — a
+ * behavior change. So the property is skipped if there is ANY read of the backing field outside
+ * `get_x`. A compound-assignment / incr / decr target reads the field (`x += 1` compiles to
+ * `x = get_x() + 1`) and so also disqualifies. Writes are direct (`default` write) and never gate.
+ *
+ * ## Constructor-init exception (shape `(default, set)` only)
  *
  * A single top-level `_x = <literal>;` in the constructor (a compile-time literal, the FIRST
  * reference to `_x` in the constructor, and no field decl-initializer) is a deliberate
  * setter-bypass init. It is relocated onto the property declaration as `= <literal>` — a
  * physical `(default, set)` initializer, identical to the original direct write — and the
- * constructor statement is deleted. This is the one write the gate allows.
+ * constructor statement is deleted. This is the one write the write-gate allows.
  *
  * Internal writes to a `(get, never)` / `(get, null)` backing field from other methods are FINE
  * — that is what `(default, null)` preserves — so no write gate applies to those shapes.
@@ -606,13 +617,17 @@ final class TrivialGetter implements Check {
 	 *
 	 * - `(get, never)` / `(get, null)` with a trivial getter -> `(default, null)`.
 	 * - `(get, set)`, trivial getter + NON-trivial setter -> `(default, set)` (delete get, keep
-	 *   set). The write-gate applies (see `hasExternalWrite`) plus the constructor-init exception.
+	 *   set). Write-gated (see `hasExternalWrite`) plus the constructor-init exception.
 	 * - `(get, set)`, both trivial -> a plain field (delete both). No gate.
+	 * - `(get, set)`, NON-trivial getter + trivial setter -> `(get, default)` (delete set, keep
+	 *   get). Read-gated (see `hasExternalRead`): `(get, default)` has physical storage because the
+	 *   `default` write forces it, so inside the kept getter the renamed property read is a DIRECT
+	 *   physical read, but a backing-field read OUTSIDE the getter, once renamed, would newly route
+	 *   through the non-trivial getter -- so the property is skipped if any read of the backing
+	 *   field occurs outside `get_x`. Writes are direct (`default` write) and never gate.
 	 *
-	 * A `(get, set)` with a NON-trivial getter + trivial setter is NOT collapsed: the sound
-	 * target would be `(get, default)`, but the kept getter, renamed to read the property, would
-	 * route through itself (infinite recursion) without `@:isVar`. Both non-trivial is skipped.
-	 * The subclass gate is applied at the call site; the interface gate applies here to every shape.
+	 * A `(get, set)` with both accessors non-trivial is skipped. The subclass gate is applied at the
+	 * call site; the interface gate applies here to every shape.
 	 */
 	private static function classifyProperty(
 		cls: QueryNode, source: String, index: Null<SymbolIndex>, prop: {
@@ -677,6 +692,7 @@ final class TrivialGetter implements Check {
 		return switch shape {
 			case 'setA': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName(default, set)\' and remove get_$propName';
 			case 'setB': 'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var $propName\' and remove get_$propName/set_$propName';
+			case 'setC': 'property \'$propName\' has a trivial setter over backing field \'$field\'; use \'var $propName(get, default)\' and remove set_$propName';
 			case _: 'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName(default, null)\' and remove get_$propName';
 		}
 	}
@@ -817,9 +833,12 @@ final class TrivialGetter implements Check {
 
 	/**
 	 * The `(get, set)` shape decision for `classifyProperty`, given the already-resolved getter
-	 * node and its trivial-field name (`trivGet`, null when the getter is non-trivial): shape A
-	 * (`(default, set)`, write-gated + constructor-init) when only the getter is trivial, shape B
-	 * (plain field) when both accessors are trivial over the same backing field, else null.
+	 * node and its trivial-field name (`trivGet`, null when the getter is non-trivial):
+	 *
+	 * - only the getter trivial -> shape A `(default, set)` (write-gated + constructor-init),
+	 * - both accessors trivial over the same backing field -> shape B (plain field),
+	 * - only the setter trivial -> shape C `(get, default)` (read-gated),
+	 * - else null (both non-trivial).
 	 */
 	private static function classifySetProperty(
 		cls: QueryNode, prop: {
@@ -868,7 +887,48 @@ final class TrivialGetter implements Check {
 				message: messageFor('setB', prop.name, trivGet)
 			};
 		}
+		if (trivGet == null && trivSet != null) {
+			if (!privateFieldNodes.exists(trivSet)) return null;
+			final getterSpan: Null<Span> = getterNode.span;
+			if (getterSpan == null) return null;
+			if (hasExternalRead(cls, trivSet, getterSpan)) return null;
+			return {
+				field: trivSet,
+				clauseText: '(get, default)',
+				deleted: [setter.node],
+				ctorInit: null,
+				message: messageFor('setC', prop.name, trivSet)
+			};
+		}
 		return null;
+	}
+
+
+	/**
+	 * Whether `node`'s subtree contains a READ of `field` outside `exclude` (the kept getter).
+	 * After the `(get, set)` -> `(get, default)` collapse, reading the property routes through the
+	 * non-trivial `get_field` EVERYWHERE except inside `get_field` itself (there the property is a
+	 * direct physical read, since the `default` write forces physical storage), so a backing-field
+	 * read outside the getter, once renamed to the property name, would newly route through the
+	 * real getter -- a behavior change. Writes are direct (`default` write) and never gate.
+	 *
+	 * A bare `field` / `this.field` that is the TARGET of a plain `=` is a pure write, not a read,
+	 * so its RHS is scanned but the target itself is not. A compound-assignment / incr / decr
+	 * target IS a read (`x += 1` compiles to `x = get_x() + 1`), so it disqualifies. Every other
+	 * `field` occurrence (RHS, call arg, `arr[field]` index, plain read) is a read.
+	 */
+	private static function hasExternalRead(node: QueryNode, field: String, exclude: Span): Bool {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return false;
+		if (node.kind == 'Plain') return false;
+		if (writeTargetField(node) == field) {
+			if (node.kind != 'Assign') return true;
+			for (i in 1...node.children.length) if (hasExternalRead(node.children[i], field, exclude)) return true;
+			return false;
+		}
+		if (fieldRefName(node) == field) return true;
+		for (child in node.children) if (hasExternalRead(child, field, exclude)) return true;
+		return false;
 	}
 
 }
