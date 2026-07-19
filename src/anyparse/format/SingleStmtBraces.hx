@@ -63,11 +63,18 @@ package anyparse.format;
 class SingleStmtBraces {
 
 	public static function unwrapStmt(
-		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool
+		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
 	): Dynamic {
-		if (!drop || suppress || body == null) return body;
+		if (!drop || body == null) return body;
 		if (!Reflect.isEnumValue(body)) return body;
 		final block: EnumValue = cast body;
+		// Gate 8 repair direction (omega-ssb-wrap): a BARE `if` in then-position gains a
+		// synthesized brace block - `if (a) if (b) ... else ...` reads as a dangling-else
+		// puzzle, so braces are REQUIRED there and fmt self-heals previously unwrapped
+		// sources. Runs even under `suppress` (adding braces is always semantics-safe:
+		// the parse tree already fixed the else binding).
+		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block);
+		if (suppress) return body;
 		if (Type.enumConstructor(block) == 'BlockBody') return unwrapDoBody(block);
 		if (Type.enumConstructor(block) != 'BlockStmt') return body;
 		// Gate 7 - if/else brace symmetry: when the SIBLING branch keeps its braces, this
@@ -79,7 +86,13 @@ class SingleStmtBraces {
 		// parses but the Haxe compiler rejects ("Expected }"). Keep the braces (fail closed).
 		if (hasTrailingSemi) return body;
 		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
-		return inner == null ? body : !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
+		if (inner == null) return body;
+		// Gate 8 - then-branch readability: when the sole inner statement is itself an
+		// `if`, the braces stay even though every removal gate passes. Loop bodies and
+		// else-bodies are exempt (`for (...) if (...)` guard headers and `else if`
+		// chains are the preferred style).
+		if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt') return body;
+		return !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
 	}
 
 	/**
@@ -91,12 +104,18 @@ class SingleStmtBraces {
 	 * branch, feeding gate 7 so `if (b) { one; } else { a; b; }` keeps both
 	 * braced while `if (a) x(); else if (b) y(); else z();` still de-braces.
 	 */
-	public static function keepsBraces(body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool): Bool {
+	public static function keepsBraces(
+		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, isIfThenBody: Bool
+	): Bool {
 		if (body == null || !Reflect.isEnumValue(body)) return false;
+		// omega-ssb-wrap: a bare `if` in then-position RENDERS braced (the wrap
+		// direction synthesizes its block), so sibling-symmetry probes must see it
+		// as brace-keeping.
+		if (isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt') return drop;
 		if (Type.enumConstructor(cast body) != 'BlockStmt') return false;
 		// `unwrapStmt` (symmetry forced off) returns the body UNCHANGED only when it would NOT
-		// de-brace it on its own merits (gates 1-6) - i.e. the block renders WITH its braces.
-		return unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false) == body;
+		// de-brace it on its own merits (gates 1-6, 8) - i.e. the block renders WITH its braces.
+		return unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
 	}
 
 	/**
@@ -118,7 +137,7 @@ class SingleStmtBraces {
 	 */
 	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, suppress: Bool): Bool {
 		if (!drop || suppress) return false;
-		if (keepsBraces(thenBody, drop, false, elseBody != null, false)) return true;
+		if (keepsBraces(thenBody, drop, false, elseBody != null, false, true)) return true;
 		var cur: Dynamic = elseBody;
 		while (cur != null && Reflect.isEnumValue(cur) && Type.enumConstructor(cast cur) == 'IfStmt') {
 			final ps: Array<Dynamic> = Type.enumParameters(cast cur);
@@ -131,10 +150,10 @@ class SingleStmtBraces {
 			// splice, so the scan must see it too. Non-terminal then-bodies are always
 			// false — a `;` never sits between a then-block and `else`.
 			final innerTrail: Bool = stmt.thenBodyTrailPresent == true;
-			if (keepsBraces(innerThen, drop, false, innerElse != null, innerTrail)) return true;
+			if (keepsBraces(innerThen, drop, false, innerElse != null, innerTrail, true)) return true;
 			cur = innerElse;
 		}
-		return cur != null && keepsBraces(cur, drop, false, false, false);
+		return cur != null && keepsBraces(cur, drop, false, false, false, false);
 	}
 
 	private static function innerSelfTerminates(inner: EnumValue): Bool {
@@ -217,6 +236,34 @@ class SingleStmtBraces {
 		if (Type.enumConstructor(innerE) != 'ExprStmt') return block;
 		final en: Null<Enum<Dynamic>> = Type.getEnum(cast block);
 		return en == null ? block : Type.createEnum(en, 'ExprBody', [Type.enumParameters(innerE)[0], false]);
+	}
+
+
+	/**
+	 * omega-ssb-wrap - the repair direction of gate 8: a bare `if` in
+	 * then-position is wrapped in a synthesized brace block so
+	 * `if (a) if (b) ... else ...` self-heals to `if (a) { if (b) ... }` on
+	 * the next write. The synthesized `BlockStmt` slots mirror
+	 * `singleCleanInner`'s locked layout (stmts, closeTrailing, openTrailing,
+	 * trailingBlankBefore, trailingLeading, trailPresent); the sole element
+	 * carries empty trivia with `newlineBefore=true` so the wrapped statement
+	 * lands on its own line inside the braces.
+	 */
+	private static function wrapInBlock(stmt: EnumValue): Dynamic {
+		final en: Null<Enum<Dynamic>> = Type.getEnum(cast stmt);
+		if (en == null) return stmt;
+		final elem: Dynamic = {
+			blankBefore: false,
+			blankAfterLeadingComments: false,
+			newlineBefore: true,
+			leadingComments: [],
+			trailingComment: null,
+			trailingBeforeSep: false,
+			sepAfter: true,
+			node: stmt
+		};
+		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
+		return Type.createEnum(en, 'BlockStmt', args);
 	}
 
 }

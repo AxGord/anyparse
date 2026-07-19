@@ -31,9 +31,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 class HxSingleStmtBracesSliceTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
-
 	private static final removeConfig: String = '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "remove" } },'
 		+ ' "sameLine": { "ifBody": "fitLine", "forBody": "fitLine", "whileBody": "fitLine", "doWhileBody": "same" } }';
 
@@ -238,13 +236,6 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
-	public function testNestedIfNoElseUnbraced(): Void {
-		assertFmt(
-			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t}\n\t}\n}',
-			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) if (b) x();\n\t}\n}'
-		);
-	}
-
 	public function testIdempotentAndReparses(): Void {
 		final source: String = 'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n\t\tif (a) {\n\t\t\treturn;\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
@@ -274,20 +265,51 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f():Void {\n\t\tdo {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} while (cond());\n\t}\n}');
 	}
 
-
 	public function testDoWhileNonExprStmtKeepsBraces(): Void {
 		// Only an ExprStmt has an `HxDoWhileBody.ExprBody` counterpart —
 		// any other statement kind keeps its braces.
 		roundTrip('class F {\n\tfunction f():Void {\n\t\tdo {\n\t\t\treturn;\n\t\t} while (cond());\n\t}\n}');
 	}
 
+	public function testThenBranchInnerIfElseKeepsBraces(): Void {
+		// Gate 8 (readability): a then-branch whose sole statement is an if/else
+		// keeps its braces even though every removal gate would pass —
+		// `if (r) if (b) {…} else {…}` reads as a dangling-else puzzle.
+		roundTrip(
+			'class F {\n\tfunction f(r:Bool, b:Bool):Void {\n\t\tif (r) {\n\t\t\tif (b) {\n\t\t\t\tone();\n\t\t\t\ttwo();\n\t\t\t} else {\n\t\t\t\tthree();\n\t\t\t\tfour();\n\t\t\t}\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testThenBranchLoneInnerIfKeepsBraces(): Void {
+		// Gate 8 applies to ANY if in then-position, else-less included: the
+		// no-else case belongs to collapsible-if (`if (a && b)`), not to a
+		// chained `if (a) if (b)` header.
+		roundTrip('class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t}\n\t}\n}');
+	}
+
+	public function testBareThenIfGetsBracesAdded(): Void {
+		// Repair direction (ω-ssb-wrap): a BARE if in then-position gains
+		// braces — fmt self-heals sources unwrapped by the pre-gate-8 writer.
+		assertFmt(
+			'class F {\n\tfunction f(r:Bool, b:Bool):Void {\n\t\tif (r) if (b) {\n\t\t\tone();\n\t\t\ttwo();\n\t\t} else {\n\t\t\tthree();\n\t\t\tfour();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(r:Bool, b:Bool):Void {\n\t\tif (r) {\n\t\t\tif (b) {\n\t\t\t\tone();\n\t\t\t\ttwo();\n\t\t\t} else {\n\t\t\t\tthree();\n\t\t\t\tfour();\n\t\t\t}\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testLoopBodyLoneIfStillUnbraces(): Void {
+		// Loop bodies are exempt from gate 8 — `for (…) if (…)` guard headers
+		// are the preferred style and keep de-bracing.
+		assertFmt(
+			'class F {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\tif (x > 0) y();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) if (x > 0) y();\n\t}\n}'
+		);
+	}
 
 	private static function assertFmt(source: String, expected: String): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		Assert.equals(expected + '\n', out);
 	}
-
 
 	private static function roundTrip(source: String): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);

@@ -9814,7 +9814,8 @@ class WriterLowering {
 				var _sv = $fieldAccess;
 				if (_sv != null)
 					_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
-						_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, ($thenSiblingKeepsExpr || $elseChainSuppressExpr)
+						_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, ($thenSiblingKeepsExpr || $elseChainSuppressExpr),
+						false
 					);
 				_sv;
 			}
@@ -9866,8 +9867,11 @@ class WriterLowering {
 		final thenTrail: Expr = found.sibling.annotations.get('lit.trailOptional') == true && isTriviaBearing(typePath)
 			? macro ($thenTrailAccess == true)
 			: macro false;
-		return
-			macro anyparse.format.SingleStmtBraces.keepsBraces($thenAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, true, $thenTrail);
+		// The probed sibling IS an if-then-body, so the omega-ssb-wrap arm applies
+		// (a bare `if` there renders braced) - pass `isIfThenBody=true`.
+		return macro anyparse.format.SingleStmtBraces.keepsBraces(
+			$thenAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, true, $thenTrail, true
+		);
 	}
 
 	/**
@@ -10089,7 +10093,9 @@ class WriterLowering {
 		final elseSiblingKeepsExpr: Expr = elseAccess == null
 			? macro false
 			: macro ($elseAccess != null
-				&& anyparse.format.SingleStmtBraces.keepsBraces($elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false));
+				&& anyparse.format.SingleStmtBraces.keepsBraces(
+					$elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, false
+				));
 		// ω-single-stmt-braces CHAIN symmetry: force this then-body to keep its
 		// braces when we are mid-chain (`opt._ssbChainSuppress`, propagated from
 		// the root) OR when THIS `if` is the chain root and the spine scan finds a
@@ -10099,12 +10105,17 @@ class WriterLowering {
 			? macro false
 			: macro (opt._ssbChainSuppress
 				|| anyparse.format.SingleStmtBraces.chainForcesBraces($fieldAccess, $elseAccess, opt.dropSingleStmtBraces, opt._ssbSuppress));
+		// omega-ssb-wrap: `isIfThenBody` is a MACRO-time discriminator - `elseFieldName`
+		// is non-null only for `HxIfStmt.thenBody` (the fitLineIfWithElse
+		// optionalBodyFieldName channel), so for / while / do bodies pass `false` and
+		// stay exempt from gate 8 and the wrap direction.
+		final isThenBodyExpr: Expr = elseFieldName != null ? macro true : macro false;
 		final effAccess: Expr = dropBraces
 			? macro {
 				var _sv = $fieldAccess;
 				_sv = cast anyparse.format.SingleStmtBraces.unwrapStmt(
 					_sv, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
-					($elseSiblingKeepsExpr || $thenChainSuppressExpr)
+					($elseSiblingKeepsExpr || $thenChainSuppressExpr), $isThenBodyExpr
 				);
 				_sv;
 			}
