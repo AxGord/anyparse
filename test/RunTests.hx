@@ -441,6 +441,7 @@ import unit.AvoidDynamicRiskyFixE2ETest;
 import unit.DuplicateCodeCrossFileCheckTest;
 import unit.SpanTypeInfoPinTest;
 import unit.ExplicitLocalTypeCheckTest;
+import unit.PreferTernaryAssignmentCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -858,6 +859,7 @@ class RunTests {
 		addCase(new PreferInterpolationCheckTest());
 		addCase(new PreferFinalCheckTest());
 		addCase(new PreferTernaryReturnCheckTest());
+		addCase(new PreferTernaryAssignmentCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());
