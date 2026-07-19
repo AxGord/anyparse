@@ -10791,15 +10791,15 @@ final class Cli {
 		if (combinedOk && !baselineOk) {
 			var anyIsolatedOk: Bool = false;
 			for (r in isolatedResults) if (r.ok) anyIsolatedOk = true;
-			if (!anyIsolatedOk) {
-				sysPrint(
-					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs $patternCount separate code mechanisms.\n'
-				);
-			} else {
+			if (anyIsolatedOk) {
 				var soleCount: Int = 0;
 				for (r in isolatedResults) if (r.ok) soleCount++;
 				sysPrint(
 					'VERDICT $soleCount of $patternCount pattern${plural(patternCount)} unblock alone — the rest are redundant (or compose into a tighter slice).\n'
+				);
+			} else {
+				sysPrint(
+					'VERDICT interlocking blockers — every pattern alone still fails; the combination is required. Slice scope likely needs $patternCount separate code mechanisms.\n'
 				);
 			}
 		} else if (!combinedOk && baselineOk) {

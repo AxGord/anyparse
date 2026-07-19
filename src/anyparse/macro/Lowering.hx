@@ -1896,7 +1896,9 @@ class Lowering {
 				values: [{ expr: EConst(CString(fieldName)), pos: Context.currentPos() }],
 				expr: macro $i{localName} = $parseCall,
 			});
-			if (!isOptional) {
+			if (isOptional) {
+				structFields.push({ field: fieldName, expr: macro $i{localName} });
+			} else {
 				final errMsg: String = 'missing required field "$fieldName"';
 				final checkedName: String = '_r_$fieldName';
 				// Two-step unwrap: the `if (... == null) throw` narrows the
@@ -1920,8 +1922,6 @@ class Lowering {
 					pos: Context.currentPos(),
 				});
 				structFields.push({ field: fieldName, expr: macro $i{checkedName} });
-			} else {
-				structFields.push({ field: fieldName, expr: macro $i{localName} });
 			}
 		}
 		final defaultExpr: Expr = switch _formatInfo.onUnknown {

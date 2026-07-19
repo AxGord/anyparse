@@ -803,14 +803,14 @@ final class MoveMember {
 				// Sibling-fields contract: a moved body may keep reading a
 				// FINAL field IF the destination declares a same-named final
 				// field wired with the same value at construction.
-				if (!FINAL_FIELD_KINDS.contains(sibling.member.kind)) {
-					pushUnique(state.mutableDeps, siblingName);
-				} else {
+				if (FINAL_FIELD_KINDS.contains(sibling.member.kind)) {
 					final destField: Null<MemberGroup> = memberGroupOf(prep.destDecl, siblingName);
 					if (destField == null || !FINAL_FIELD_KINDS.contains(destField.member.kind))
 						pushUnique(state.missingDestFields, siblingName);
 					else
 						pushUnique(state.fieldDeps, siblingName);
+				} else {
+					pushUnique(state.mutableDeps, siblingName);
 				}
 			} else {
 				pushUnique(state.staysBehind, siblingName);

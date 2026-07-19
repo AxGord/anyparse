@@ -107,14 +107,14 @@ class BlockCommentNormalizer {
 			// not interior content. Its ws represents the wrap's structural
 			// indent, not the comment body's indent depth.
 			if (i == last) continue;
-			if (!havePrefix) {
-				commonPrefix = ws;
-				havePrefix = true;
-			} else {
+			if (havePrefix) {
 				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
 				var j: Int = 0;
 				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
 				commonPrefix = commonPrefix.substr(0, j);
+			} else {
+				commonPrefix = ws;
+				havePrefix = true;
 			}
 		}
 		final commonLen: Int = commonPrefix.length;
@@ -415,14 +415,14 @@ class BlockCommentNormalizer {
 			if (i == 0 && excludeFirstInline) continue;
 			if (lines[i].content.length == 0) continue;
 			final ws: String = lines[i].ws;
-			if (!havePrefix) {
-				commonPrefix = ws;
-				havePrefix = true;
-			} else {
+			if (havePrefix) {
 				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
 				var j: Int = 0;
 				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
 				commonPrefix = commonPrefix.substr(0, j);
+			} else {
+				commonPrefix = ws;
+				havePrefix = true;
 			}
 		}
 		return commonPrefix.length;
