@@ -121,6 +121,67 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
+	public function testConcatHtmlViewRepro(): Void {
+		Assert.equals(1, violations(wrap("'<xml>' + xhtml + '</xml>'")).length);
+		Assert.equals("'<xml>$xhtml</xml>'", fixText(wrap("'<xml>' + xhtml + '</xml>'")));
+	}
+
+	public function testConcatEvalOrderPreserved(): Void {
+		Assert.equals("'${a + b}x'", fixText(wrap("a + b + 'x'")));
+	}
+
+	public function testConcatIdentBeforeIdentCharBraced(): Void {
+		Assert.equals("'a${xhtml}more'", fixText(wrap("'a' + xhtml + 'more'")));
+	}
+
+	public function testConcatNumericOperands(): Void {
+		Assert.equals("'s${3}${4}'", fixText(wrap("'s' + 3 + 4")));
+	}
+
+	public function testConcatSingleIdentPrefixBeforeIdentChar(): Void {
+		Assert.equals("'${a}x'", fixText(wrap("a + 'x'")));
+	}
+
+	public function testConcatSingleIdentPrefixBeforeNonIdent(): Void {
+		Assert.equals("'$a.b'", fixText(wrap("a + '.b'")));
+	}
+
+	public function testConcatDollarInSingleLiteral(): Void {
+		Assert.equals("'$$$v'", fixText(wrap("'$' + v")));
+	}
+
+	public function testConcatDoubleQuotedDollar(): Void {
+		Assert.equals("'a$$b$x'", fixText(wrap("\"a$b\" + x")));
+	}
+
+	public function testConcatDoubleQuotedEscapedQuote(): Void {
+		Assert.equals("'a\"b$x'", fixText(wrap("\"a\\\"b\" + x")));
+	}
+
+	public function testConcatParenSubChain(): Void {
+		Assert.equals("'a${(b + 'c')}'", fixText(wrap("'a' + (b + 'c')")));
+	}
+
+	public function testConcatStdStringOperand(): Void {
+		Assert.equals("'a${x}b'", fixText(wrap("'a' + Std.string(x) + 'b'")));
+	}
+
+	public function testConcatPureLiteralNotFlagged(): Void {
+		Assert.equals(0, violations(wrap("'a' + 'b'")).length);
+	}
+
+	public function testConcatNumericOnlyNotFlagged(): Void {
+		Assert.equals(0, violations(wrap("a + b")).length);
+	}
+
+	public function testConcatInterpolatedOperandSkipped(): Void {
+		Assert.equals(0, violations(wrap("'x${y}' + z")).length);
+	}
+
+	public function testConcatCommentBetweenOperandsSkipped(): Void {
+		Assert.equals(0, violations(wrap("'a' + /* c */ b")).length);
+	}
+
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = ' + expr + ';\n\t}\n}';
 	}

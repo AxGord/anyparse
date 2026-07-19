@@ -7,6 +7,8 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+import anyparse.query.StringFold.ConcatOperand;
+
 /**
  * Haxe `StringFoldSupport`: a `+` (`Add`) concatenation of two plain string
  * literals of the same quote folds into one. A double-quoted literal is always
@@ -34,6 +36,20 @@ final class HaxeStringFoldSupport implements StringFoldSupport {
 				content: inner(source, span)
 			} : null;
 			case _: null;
+		}
+	}
+
+	/** Classify `node` as a `+`-concatenation operand (see `ConcatOperand`). */
+	public function stringConcatOperand(node: QueryNode, source: String): ConcatOperand {
+		final span: Null<Span> = node.span;
+		if (span == null || span.to - span.from < 2) return NonStringOperand;
+		return switch node.kind {
+			case 'DoubleStringExpr': StringLit('"', inner(source, span));
+			case 'SingleStringExpr':
+				node.children.foreach(c -> c.kind == 'Literal' || c.kind == 'Dollar' || c.kind == 'LoneDollar')
+					? StringLit("'", inner(source, span))
+					: InterpolatedStringLit;
+			case _: NonStringOperand;
 		}
 	}
 
