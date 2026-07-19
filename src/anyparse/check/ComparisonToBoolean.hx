@@ -14,8 +14,9 @@ import anyparse.query.TypeInfoProvider;
  * Flags a comparison against a boolean literal — `x == true`, `x != false` and the like —
  * where the literal adds nothing (SonarLint S1125). Purely structural plus a declared-type
  * gate; `Severity.Info`. `fix` rewrites the comparison to its operand — `x == true` /
- * `x != false` → `x`, `x == false` / `x != true` → `!x` — but ONLY when the operand is a
- * boolean-operator result (provably non-null Bool); see the null-safety caveat below.
+ * `x != false` → `x`, `x == false` / `x != true` → `!x` — but ONLY when the operand is
+ * provably non-null Bool: a boolean-operator result, or a bare identifier whose declared
+ * type proves it. See the null-safety caveat below.
  *
  * ## Null-safety caveat
  *
@@ -32,10 +33,13 @@ import anyparse.query.TypeInfoProvider;
  * also does not descend into macro-reification subtrees (`RefShape.opaqueKinds`), whose
  * comparisons are generated code rather than authored style.
  *
- * The same uncertainty bounds the autofix, but tighter: `fix` rewrites ONLY a
+ * The autofix applies that SAME provably-Bool gate (`operandProvablyBool`): it strips a
  * boolean-operator operand (`RefShape.comparisonKinds` ∪ `RefShape.notKind`, parentheses
- * unwrapped) — an `&&` / `||` / `!` / comparison result is non-null `Bool` by
- * construction. A bare-identifier operand is reported but never auto-stripped.
+ * unwrapped — non-null `Bool` by construction) AND a bare-identifier operand whose declared
+ * type proves non-null Bool (`TypeResolver.isProvablyNonNull` over
+ * `TypeInfoProvider.declaredTypes`). The one asymmetry vs the report: without a
+ * `TypeInfoProvider` it keeps the unresolved bare identifier for a human, while `fix` leaves
+ * it untouched — no proof, so its `== true` may be load-bearing.
  *
  * ## Grammar-agnostic
  *
@@ -43,9 +47,9 @@ import anyparse.query.TypeInfoProvider;
  * the nullable-operand skip from `RefShape.nullableOperandKinds` (falling back to the single
  * `RefShape.nullSafeAccessKind` when unset), the macro skip from `RefShape.opaqueKinds`, the
  * identifier gate from `TypeInfoProvider.declaredTypes` + the nullability seams
- * (`nonNullableTypeNames` / `nullableWrapperTypeNames`), and the autofix's provably-Bool
- * gate from `RefShape.comparisonKinds` + `RefShape.notKind`. Unset equality kinds or
- * literal kind makes the check a no-op.
+ * (`nonNullableTypeNames` / `nullableWrapperTypeNames`), and the boolean-operator half of the
+ * provably-Bool gate from `RefShape.comparisonKinds` + `RefShape.notKind`. Unset equality
+ * kinds or literal kind makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class ComparisonToBoolean implements Check {
@@ -81,25 +85,32 @@ final class ComparisonToBoolean implements Check {
 	 * Rewrite each flagged comparison to its operand. `x == true` / `x != false` collapse
 	 * to the operand verbatim; `x == false` / `x != true` collapse to its negation
 	 * (`!operand`, parenthesized unless the operand is a bare identifier or already
-	 * parenthesized, so the unary `!` binds correctly). Emitted ONLY for a boolean-operator
-	 * operand (`provablyBool`) — a non-null `Bool` by construction; a bare identifier may be
-	 * a `Null<Bool>` local whose `== true` is load-bearing, so it is left to the report.
-	 * `eqKind` tells `==` from `!=` — it is required HERE only (unset → report-only), not
-	 * in `run`'s gate.
+	 * parenthesized, so the unary `!` binds correctly). Emitted for any operand
+	 * `operandProvablyBool` accepts — a boolean-operator result, or a bare identifier whose
+	 * declared type proves non-null Bool (`TypeResolver.isProvablyNonNull` over the plugin's
+	 * `TypeInfoProvider.declaredTypes`, resolved from `root`). An unprovable identifier — a
+	 * `Null<Bool>` / unannotated local, or any identifier when the grammar exposes no declared
+	 * types — is left to the report, since its `== true` may be load-bearing under strict
+	 * null-safety. `eqKind` tells `==` from `!=` — it is required HERE only (unset →
+	 * report-only), not in `run`'s gate.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final eqKind: Null<String> = seams.eqKind;
-		return eqKind == null
-			? []
-			: CheckScan.applyBySpan(
-				plugin, source, violations, seams.equalityKinds,
-				(node, span) ->
-					comparisonEdit(node, span, source, seams.boolLitKind, eqKind, seams.boolOpKinds, seams.identKind, seams.parenKind)
-			);
+		final maybeEqKind: Null<String> = seams.eqKind;
+		final maybeRoot: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (maybeEqKind == null || maybeRoot == null) return [];
+		final eqKind: String = maybeEqKind;
+		final root: QueryNode = maybeRoot;
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final declaredTypes: Null<Map<Int, String>> = provider != null ? provider.declaredTypes(source) : null;
+		return CheckScan.applyBySpan(
+			plugin, source, violations, seams.equalityKinds,
+			(node, span) ->
+				comparisonEdit(node, span, source, root, seams.shape, declaredTypes, seams.boolLitKind, eqKind, seams.boolOpKinds)
+		);
 	}
 
 	/**
@@ -125,7 +136,7 @@ final class ComparisonToBoolean implements Check {
 			if (leftIsBool != rightIsBool) {
 				final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
 				if (
-					operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds) && !operandIsNullable(other, nullableKinds)
+					operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds, true) && !operandIsNullable(other, nullableKinds)
 				) out.push({
 					file: file,
 					span: span,
@@ -140,23 +151,28 @@ final class ComparisonToBoolean implements Check {
 	}
 
 	/**
-	 * Whether `other` is a PROVABLY non-null Bool operand — the same gate `fix` applies, so `run`
-	 * flags nothing `fix` would refuse to strip on nullability grounds (closing the array-element /
-	 * `ps[i] == true`-style false positive). Two proofs: a boolean-operator result (comparison /
-	 * `&&` / `||` / `!`, parentheses unwrapped — `RefactorSupport.provablyBoolOperand`, non-null
-	 * Bool by construction), or a bare identifier whose declared type proves non-null Bool
-	 * (`TypeResolver.isProvablyNonNull`; a grammar with no `TypeInfoProvider` reports the bare
-	 * identifier for a human to judge). Any other operand — an array element, a `Map.get` / method
-	 * result, a possibly-`@:optional` field, a `?.` access, a `Null<Bool>` / unannotated identifier
-	 * — is NOT provably non-null Bool, so its `== true` may be load-bearing under strict
-	 * null-safety and is left unflagged.
+	 * Whether `other` is a PROVABLY non-null Bool operand — the shared gate for BOTH the
+	 * report (`walk`) and the autofix (`comparisonEdit`), closing the array-element /
+	 * `ps[i] == true`-style false positive. Two proofs: a boolean-operator result (comparison
+	 * / `&&` / `||` / `!`, parentheses unwrapped — `RefactorSupport.provablyBoolOperand`,
+	 * non-null Bool by construction), or a bare identifier whose declared type proves non-null
+	 * Bool (`TypeResolver.isProvablyNonNull` over `declaredTypes`). Any other operand — an
+	 * array element, a `Map.get` / method result, a possibly-`@:optional` field, a `?.` access,
+	 * a `Null<Bool>` / unannotated identifier — is NOT provably non-null Bool, so its
+	 * `== true` may be load-bearing under strict null-safety.
+	 *
+	 * `fallbackReport` settles the no-type-info case: when the grammar exposes no
+	 * `TypeInfoProvider` (`declaredTypes == null`) a bare identifier cannot be proven either
+	 * way. The report passes `true` (surface it for a human to judge); the autofix passes
+	 * `false` (never strip without proof — an unproven `== true` may be load-bearing).
 	 */
 	private static function operandProvablyBool(
-		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>
+		other: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>, boolOpKinds: Array<String>,
+		fallbackReport: Bool
 	): Bool {
-		return RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind) || (
-			other.kind == shape.identKind && (declaredTypes == null || TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes))
-		);
+		if (RefactorSupport.provablyBoolOperand(other, boolOpKinds, shape.parenKind)) return true;
+		if (other.kind != shape.identKind) return false;
+		return declaredTypes == null ? fallbackReport : TypeResolver.isProvablyNonNull(other, root, shape, declaredTypes);
 	}
 
 	/** Whether `operand`'s subtree reaches any kind whose nullness the check cannot rule out. */
@@ -174,13 +190,15 @@ final class ComparisonToBoolean implements Check {
 	/**
 	 * The replacement edit for one flagged comparison, or null when it cannot be
 	 * rewritten: not a two-operand comparison, not exactly one boolean-literal
-	 * operand, or the other operand not provably boolean. When rewritable, an
-	 * `x == true` / `x != false` collapses to `x`, and an `x == false` / `x != true`
-	 * to its negation (`negate` parenthesises unless the operand is an ident / paren).
+	 * operand, or the other operand not provably non-null Bool (`operandProvablyBool`
+	 * with the no-proof fallback OFF — an unprovable bare identifier is left alone).
+	 * When rewritable, an `x == true` / `x != false` collapses to `x`, and an
+	 * `x == false` / `x != true` to its negation (`negate` parenthesises unless the
+	 * operand is an ident / paren).
 	 */
 	private static function comparisonEdit(
-		node: QueryNode, span: Span, source: String, boolLitKind: String, eqKind: String, boolOpKinds: Array<String>, identKind: String,
-		parenKind: Null<String>
+		node: QueryNode, span: Span, source: String, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
+		boolLitKind: String, eqKind: String, boolOpKinds: Array<String>
 	): Null<{ span: Span, text: String }> {
 		if (node.children.length != 2) return null;
 		final leftIsBool: Bool = node.children[0].kind == boolLitKind;
@@ -188,14 +206,14 @@ final class ComparisonToBoolean implements Check {
 		if (leftIsBool == rightIsBool) return null;
 		final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
 		final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
-		if (!RefactorSupport.provablyBoolOperand(other, boolOpKinds, parenKind)) return null;
+		if (!operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds, false)) return null;
 		final litSpan: Null<Span> = lit.span;
 		final otherSpan: Null<Span> = other.span;
 		if (litSpan == null || otherSpan == null) return null;
 		final litIsTrue: Bool = StringTools.trim(source.substring(litSpan.from, litSpan.to)) == 'true';
 		final isEq: Bool = node.kind == eqKind;
 		final otherSrc: String = StringTools.trim(source.substring(otherSpan.from, otherSpan.to));
-		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, identKind, parenKind) };
+		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, shape.identKind, shape.parenKind) };
 	}
 
 

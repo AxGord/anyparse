@@ -100,8 +100,8 @@ class ComparisonToBooleanCheckTest extends Test {
 	}
 
 	public function testFixLeavesBareIdentifier(): Void {
-		// A bare identifier may be a Null<Bool> local whose `== true` is load-bearing under
-		// strict null-safety, so it is reported but never auto-stripped.
+		// An unannotated / unresolvable identifier cannot be proven non-null Bool, so it is
+		// neither reported nor stripped — unlike a declared-Bool ident, which fix now rewrites.
 		final src: String = wrap('var b = x == true;');
 		Assert.equals(src, applyFix(src));
 	}
@@ -150,6 +150,29 @@ class ComparisonToBooleanCheckTest extends Test {
 	 */
 	public function testArrayAccessOperandSkipped(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f(ps:Array<Dynamic>):Void {\n\t\tvar b = ps[5] == true;\n\t}\n}').length);
+	}
+
+	/** A declared non-null Bool local is provably Bool — `== true` collapses to the operand. */
+	public function testFixStripsDeclaredBoolLocal(): Void {
+		Assert.equals(wrap('final x:Bool = a > c;\n\t\tvar b = x;'), applyFix(wrap('final x:Bool = a > c;\n\t\tvar b = x == true;')));
+	}
+
+	/**
+	 * A non-null Bool parameter: `!= true` collapses to its negation.
+	 */
+	public function testFixNegatesDeclaredBoolParam(): Void {
+		Assert.equals(
+			'class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = !x;\n\t}\n}',
+			applyFix('class C {\n\tfunction f(x:Bool):Void {\n\t\tvar b = x != true;\n\t}\n}')
+		);
+	}
+
+	/** A `(get, set):Bool` property resolves to a non-null Bool field — `== false` collapses to `!flag`. */
+	public function testFixStripsBoolProperty(): Void {
+		Assert.equals(
+			'class C {\n\tpublic var flag(get, set):Bool;\n\tfunction f():Void {\n\t\tvar b = !flag;\n\t}\n}',
+			applyFix('class C {\n\tpublic var flag(get, set):Bool;\n\tfunction f():Void {\n\t\tvar b = flag == false;\n\t}\n}')
+		);
 	}
 
 	private function violations(src: String): Array<Violation> {
