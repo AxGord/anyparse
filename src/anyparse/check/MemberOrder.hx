@@ -50,7 +50,7 @@ final class MemberOrder implements Check {
 
 	public function description(): String {
 		return
-			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private) or rank groups not separated by blank lines';
+			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block per condition at the end of their section) or rank groups and conditional blocks not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -142,8 +142,9 @@ final class MemberOrder implements Check {
 		if (members.length < 2) return;
 		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source);
 		if (bad == null || !flagged.contains(bad.member.span.from)) return;
+		final groupFirst: Map<String, Int> = computeGroupFirst(members);
 		final sorted: Array<OrderedMember> = members.copy();
-		sorted.sort((a, b) -> a.rank != b.rank ? a.rank - b.rank : a.index - b.index);
+		sorted.sort((a, b) -> compareOrder(a, b, groupFirst));
 		if (!reorderSafe(members, sorted, source, shape)) return;
 		if (!hasConditionalMember(members)) {
 			if (hasNonWhitespaceGap(members, source)) {
@@ -207,21 +208,24 @@ final class MemberOrder implements Check {
 	}
 
 	/**
-	 * The first member whose rank drops below its predecessor's, or null when the
-	 * sequence is canonical. Crossing a `#else` / `#elseif` directive RESETS the
-	 * comparison: an alternative conditional-compilation branch is a sibling
-	 * sequence, not a successor of the branch before it — comparing across the
-	 * boundary false-flags a container whose every branch is itself canonical.
-	 * The directive is detected in the inter-member gap only (never inside a
-	 * member's own source, so fixture strings mentioning `#else` cannot trip it).
+	 * The first member that sorts before its predecessor under `compareOrder` (a lower
+	 * section, an unconditional member after a conditional one, a lower rank), or null when
+	 * the sequence is canonical. Crossing a `#else` / `#elseif` directive RESETS the
+	 * comparison: an alternative conditional-compilation branch is a sibling sequence, not a
+	 * successor of the branch before it - comparing across the boundary false-flags a
+	 * container whose every branch is itself canonical. The directive is detected in the
+	 * inter-member gap only (never inside a member's own source, so fixture strings
+	 * mentioning `#else` cannot trip it).
 	 */
 	private static function firstOutOfOrder(members: Array<OrderedMember>, source: String): Null<OrderedMember> {
-		var prev: Null<MemberRank> = null;
+		final groupFirst: Map<String, Int> = computeGroupFirst(members);
+		final elseExempt: Bool = hasElseBranch(members, source);
+		var prev: Null<OrderedMember> = null;
 		var prevTo: Int = -1;
 		for (m in members) {
 			if (prevTo >= 0 && prevTo <= m.span.from && hasBranchDirective(source, prevTo, m.span.from)) prev = null;
-			if (prev != null && m.rank < prev) return m;
-			prev = m.rank;
+			if (prev != null && (elseExempt ? m.rank < prev.rank : compareOrder(m, prev, groupFirst) < 0)) return m;
+			prev = m;
 			prevTo = m.span.to;
 		}
 		return null;
@@ -372,33 +376,45 @@ final class MemberOrder implements Check {
 	}
 
 	/**
-	 * Rebuild a container's whole member region from `sorted` (rank order): each maximal
-	 * run of members sharing one `#if` condition is wrapped in a single `#if <cond> …
-	 * #end`; unconditional runs stay bare. A member's absorbed lead-doc is emitted just
-	 * before it, inside the regenerated `#if`. The writer round-trip re-indents the rough
-	 * newline joins. Returns null if the self-check finds any member no longer under its
-	 * recorded condition.
+	 * Rebuild a container's whole member region from `sorted` (canonical order): each maximal
+	 * run of members sharing one `#if` condition is wrapped in a single `#if <cond> ... #end`,
+	 * set off by a blank line before the `#if` and after the `#end`; unconditional runs stay
+	 * bare. A member's absorbed lead-doc is emitted just before it, inside the regenerated
+	 * `#if`. The writer round-trip re-indents the rough newline joins. Returns null if the
+	 * self-check finds any member no longer under its recorded condition.
 	 */
 	private static function buildConditionalRegion(sorted: Array<OrderedMember>, source: String, shape: RefShape): Null<String> {
 		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
 		final parts: Array<String> = [];
 		var prevCond: Null<String> = null;
 		var prevMember: Null<OrderedMember> = null;
-		var started: Bool = false;
+		var blockJustClosed: Bool = false;
+		inline function emit(text: String, blankBefore: Bool): Void parts.push(parts.length == 0 ? text : (blankBefore ? '\n' : '') + text);
 		for (m in sorted) {
 			if (!sameCondition(m.condition, prevCond)) {
-				if (started && prevCond != null) parts.push('#end');
+				if (prevCond != null) {
+					emit('#end', false);
+					blockJustClosed = true;
+				}
 				final cond: Null<String> = m.condition;
-				if (cond != null) parts.push('$ifKw $cond');
+				if (cond != null) {
+					emit('$ifKw $cond', true);
+					blockJustClosed = false;
+				}
 				prevCond = m.condition;
 				prevMember = null;
 			}
-			final blank: Bool = prevMember != null && separatorBetween(prevMember, m, source) == '\n\n';
-			parts.push((blank ? '\n' : '') + m.leadTrivia + source.substring(m.span.from, m.span.to));
+			final blankBefore: Bool = if (prevMember != null)
+				separatorBetween(prevMember, m, source) == '\n\n';
+			else if (m.condition != null)
+				false;
+			else
+				blockJustClosed;
+			emit(m.leadTrivia + source.substring(m.span.from, m.span.to), blankBefore);
+			blockJustClosed = false;
 			prevMember = m;
-			started = true;
 		}
-		if (prevCond != null) parts.push('#end');
+		if (prevCond != null) emit('#end', false);
 		return verifyRegion(parts, sorted, ifKw) ? parts.join('\n') : null;
 	}
 
@@ -550,7 +566,7 @@ final class MemberOrder implements Check {
 	 * and the fix so both agree on which member is flagged, and with which message.
 	 */
 	private static function firstLayoutIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		return firstOrderIssue(members, source) ?? firstSpacingIssue(members, source);
+		return firstOrderIssue(members, source) ?? firstSpacingIssue(members, source) ?? firstDirectiveSpacingIssue(members, source);
 	}
 
 	/**
@@ -597,16 +613,14 @@ final class MemberOrder implements Check {
 	}
 
 	/**
-	 * The separator between two consecutive reordered members: a blank line between
-	 * rank groups, before a method, or around a comment-led slot (mirroring the
-	 * writer's blank-after-doc-comment policy, so the raw edit already matches what
-	 * the round-trip would produce); a single newline only between two same-rank
-	 * plain fields.
+	 * The separator between two consecutive reordered members: a blank line between rank
+	 * groups, before a method, or before a comment-led slot (a member whose leading doc the
+	 * writer keeps blank-separated); a single newline between two same-rank plain fields. Note
+	 * this drives the raw joins INSIDE a rebuilt `#if` region, where the writer preserves them
+	 * verbatim; outside `#if`, the writer re-inserts blank-after-doc during canonicalization.
 	 */
 	private static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String): String {
-		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) || slotStartsWithComment(prev, source)
-			? '\n\n'
-			: '\n';
+		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) ? '\n\n' : '\n';
 	}
 
 	/** Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps. */
@@ -637,6 +651,105 @@ final class MemberOrder implements Check {
 	private static function hasConditionalMember(members: Array<OrderedMember>): Bool {
 		for (m in members) if (m.condition != null) return true;
 		return false;
+	}
+
+
+	/** The section a rank belongs to: 0 = fields, 1 = constructor, 2 = methods. A conditional member sorts to the END of its own section, never across one. */
+	private static inline function sectionOf(rank: MemberRank): Int {
+		return rank < Constructor ? 0 : rank == Constructor ? 1 : 2;
+	}
+
+	/**
+	 * First-occurrence source index of each conditional `#if` block, keyed by section and
+	 * condition. Within a section the merged condition blocks are ordered by this index, so
+	 * a block keeps the position of its earliest member.
+	 */
+	private static function computeGroupFirst(members: Array<OrderedMember>): Map<String, Int> {
+		final firstOf: Map<String, Int> = [];
+		for (m in members) {
+			final cond: Null<String> = m.condition;
+			if (cond == null) continue;
+			final key: String = groupKey(sectionOf(m.rank), cond);
+			if (!firstOf.exists(key)) firstOf[key] = m.index;
+		}
+		return firstOf;
+	}
+
+	/**
+	 * Compare two members by the canonical order: section (fields, constructor, methods)
+	 * first; within a section unconditional members precede conditional ones; conditional
+	 * members group by `#if` block (ordered by first occurrence) then by rank; ties break on
+	 * source index. `groupFirst` is `computeGroupFirst`'s block-order map.
+	 */
+	private static function compareOrder(a: OrderedMember, b: OrderedMember, groupFirst: Map<String, Int>): Int {
+		final sa: Int = sectionOf(a.rank);
+		final sb: Int = sectionOf(b.rank);
+		if (sa != sb) return sa - sb;
+		final condA: Null<String> = a.condition;
+		final condB: Null<String> = b.condition;
+		final ca: Int = condA == null ? 0 : 1;
+		final cb: Int = condB == null ? 0 : 1;
+		if (ca != cb) return ca - cb;
+		if (condA != null && condB != null) {
+			final ga: Int = groupFirst[groupKey(sa, condA)] ?? a.index;
+			final gb: Int = groupFirst[groupKey(sb, condB)] ?? b.index;
+			if (ga != gb) return ga - gb;
+		}
+		return a.rank != b.rank ? a.rank - b.rank : a.index - b.index;
+	}
+
+	/**
+	 * The first member preceded (across an `#if`) by a missing blank line: a member-level
+	 * `#if` must have a blank line before it and its `#end` a blank line after, so a
+	 * conditional block stands apart from its neighbours. Scans only inter-member gaps that
+	 * cross a condition boundary; the container's leading `#if` / trailing `#end` (no member
+	 * pair spans them) are exempt, as is an `#else` gap (same condition on both sides).
+	 */
+	private static function firstDirectiveSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
+		if (hasElseBranch(members, source)) return null;
+		for (i in 0...members.length - 1) {
+			final a: OrderedMember = members[i];
+			final b: OrderedMember = members[i + 1];
+			if (a.condition == b.condition) continue;
+			final gapFrom: Int = a.span.to;
+			final gapTo: Int = b.span.from;
+			var firstIfStart: Int = -1;
+			var lastEndTo: Int = -1;
+			var cursor: Int = gapFrom;
+			for (seg in source.substring(gapFrom, gapTo).split('\n')) {
+				final t: String = StringTools.trim(seg);
+				if (firstIfStart < 0 && StringTools.startsWith(t, '#if')) firstIfStart = cursor;
+				if (t == '#end') lastEndTo = cursor + seg.length;
+				cursor += seg.length + 1;
+			}
+			if (firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1)
+				return { member: b, message: 'a member-level #if is not preceded by a blank line' };
+			if (lastEndTo >= 0 && blankLineCount(source.substring(lastEndTo, gapTo)) < 1)
+				return { member: b, message: 'a member-level #end is not followed by a blank line' };
+		}
+		return null;
+	}
+
+
+	/**
+	 * Whether an `#else` / `#elseif` sits in any inter-member gap. Such a container is exempt
+	 * from the new conditional-grouping and directive-spacing policy - the projection flattens
+	 * then-body and else-body members so they cannot be regrouped, and `reorderSafe` bails the
+	 * whole container, so the check falls back to the plain rank order (as before this policy).
+	 */
+	private static function hasElseBranch(members: Array<OrderedMember>, source: String): Bool {
+		for (i in 0...members.length - 1) {
+			final from: Int = members[i].span.to;
+			final to: Int = members[i + 1].span.from;
+			if (from <= to && hasBranchDirective(source, from, to)) return true;
+		}
+		return false;
+	}
+
+
+	/** The `computeGroupFirst` / `compareOrder` map key for a member's conditional block, keyed by section so a condition shared across two sections keeps a distinct block per section. */
+	private static inline function groupKey(section: Int, cond: String): String {
+		return section + ' ' + cond;
 	}
 
 }
