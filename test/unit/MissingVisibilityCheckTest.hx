@@ -7,6 +7,7 @@ import anyparse.check.MissingVisibility;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
@@ -92,6 +93,64 @@ class MissingVisibilityCheckTest extends Test {
 		Assert.equals(-1, fixedSource('class C { override function f():Void {} }').indexOf('private'));
 	}
 
+	/** An override of an indexed PUBLIC supertype member gets `public` — the base member's own keyword. */
+	public function testFixOverridePublicFromIndexedSupertype(): Void {
+		final sub: String = 'class C extends B { override function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, [{ file: 'B.hx', source: 'class B { public function f():Void {} }' }]);
+		Assert.isTrue(fixed.indexOf('override public function f') >= 0);
+	}
+
+	/** An override of an indexed PRIVATE supertype member gets `private`. */
+	public function testFixOverridePrivateFromIndexedSupertype(): Void {
+		final sub: String = 'class C extends B { override function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, [{ file: 'B.hx', source: 'class B { private function f():Void {} }' }]);
+		Assert.isTrue(fixed.indexOf('override private function f') >= 0);
+	}
+
+	/** The resolved keyword lands at the canonical slot: after `override`, before `inline`. */
+	public function testFixOverrideInlineKeywordPosition(): Void {
+		final sub: String = 'class C extends B { override inline function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, [{ file: 'B.hx', source: 'class B { public function f():Void {} }' }]);
+		Assert.isTrue(fixed.indexOf('override public inline function f') >= 0);
+	}
+
+	/** A mid-chain unmarked override defers to ITS supertype: C → B (unmarked override) → A (public). */
+	public function testFixOverrideResolvesThroughUnmarkedOverrideChain(): Void {
+		final sub: String = 'class C extends B { override function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, [
+			{ file: 'A.hx', source: 'class A { public function f():Void {} }' },
+			{ file: 'B.hx', source: 'class B extends A { override function f():Void {} }' }
+		]);
+		Assert.isTrue(fixed.indexOf('override public function f') >= 0);
+	}
+
+	/** A simple-name collision whose bases DISAGREE on visibility stays report-only. */
+	public function testFixOverrideCollisionDisagreementStaysReportOnly(): Void {
+		final sub: String = 'class C extends B { override function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, [
+			{ file: 'a/B.hx', source: 'class B { public function f():Void {} }' },
+			{ file: 'b/B.hx', source: 'class B { private function f():Void {} }' }
+		]);
+		Assert.equals(-1, fixed.indexOf('override public'));
+		Assert.equals(-1, fixed.indexOf('override private'));
+	}
+
+	/** An UNMARKED non-override base member is not provably private (public-default containers exist) — report-only. */
+	public function testFixOverrideUnmarkedBaseStaysReportOnly(): Void {
+		final sub: String = 'class C extends B { override function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, [{ file: 'B.hx', source: 'class B { function f():Void {} }' }]);
+		Assert.equals(-1, fixed.indexOf('override public'));
+		Assert.equals(-1, fixed.indexOf('override private'));
+	}
+
+	/** An override whose supertype is NOT in the index stays report-only. */
+	public function testFixOverrideUnindexedSupertypeStaysReportOnly(): Void {
+		final sub: String = 'class C extends B { override function f():Void {} }';
+		final fixed: String = fixedSourceIndexed(sub, []);
+		Assert.equals(-1, fixed.indexOf('override public'));
+		Assert.equals(-1, fixed.indexOf('override private'));
+	}
+
 	/** An extern class defaults its members to public; the autofix must NOT force `private`. */
 	public function testFixSkipsExternClass(): Void {
 		Assert.equals(1, violations('extern class C { function f():Void; }').length);
@@ -129,6 +188,21 @@ class MissingVisibilityCheckTest extends Test {
 		final check: MissingVisibility = new MissingVisibility();
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		return applyEdits(src, edits);
+	}
+
+	/** `fixedSource` with a `SymbolIndex` built over `others` + the fixed file itself — the production `--fix` shape. */
+	private function fixedSourceIndexed(src: String, others: Array<{ file: String, source: String }>): String {
+		final check: MissingVisibility = new MissingVisibility();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final files: Array<{ file: String, source: String }> = others.concat([{ file: 'C.hx', source: src }]);
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final edits: Array<{ span: Span, text: String }> =
+			check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin, index);
+		return applyEdits(src, edits);
+	}
+
+	private static function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
 		final sorted: Array<{ span: Span, text: String }> = edits.copy();
 		sorted.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = src;

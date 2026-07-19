@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -64,6 +65,12 @@ typedef MemberInfo = {
 
 	/** The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>` preserved), or null for an unannotated / inference-typed / function member (whose annotation is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution. */
 	var typeSource: Null<String>;
+
+	/** The member's EXPLICIT visibility keyword as WRITTEN (`public` / `private`), or null when its modifier run carries none. Drives cross-file override-visibility resolution. */
+	var visibility: Null<String>;
+
+	/** True when the member's modifier run carries the grammar's override modifier — an unmarked override's effective visibility comes from the supertype, not the container default. */
+	var isOverride: Bool;
 };
 
 typedef TypeDeclInfo = {
@@ -286,6 +293,22 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * The effective DECLARED visibility keyword of type `typeName`'s member
+	 * `memberName`, resolved through the supertype closure: a direct member's own
+	 * explicit keyword wins; an UNMARKED override defers to the supertypes (its
+	 * visibility is inherited); an unmarked non-override yields null — the language
+	 * default depends on the container (an extern / `@:publicFields` class defaults
+	 * to public), which the index does not model, so it is not provable. Unanimous
+	 * everywhere: a simple-name collision or a multi-supertype resolution whose
+	 * answers disagree — or mix an explicit keyword with a deferring override —
+	 * yields null. Drives the `missing-visibility` autofix on `override` members;
+	 * calling it with the OVERRIDING type itself resolves through the defer rule.
+	 */
+	public function memberVisibilityOf(typeName: String, memberName: String): Null<String> {
+		return memberVisibilityWalk(typeName, memberName, []);
+	}
+
+	/**
 	 * The single declaring file + decl span of the type named `typeName`, or null when
 	 * zero or more than one file declares it (ambiguous — a write-confinement query
 	 * cannot pin a unique decl range and must bail). The decl span is the type's full
@@ -426,6 +449,44 @@ final class SymbolIndex {
 		return inherited;
 	}
 
+	/**
+	 * `memberVisibilityOf`'s recursion: a direct member's explicit keyword
+	 * (unanimous across same-named types, else null), an unmarked-override direct
+	 * member defers to the (unanimous) supertype closure, an unmarked non-override
+	 * bails. Mixing an explicit keyword with a deferring override across a
+	 * simple-name collision is a disagreement → null. `seen` cycle-guards the walk.
+	 */
+	private function memberVisibilityWalk(typeName: String, memberName: String, seen: Array<String>): Null<String> {
+		if (seen.contains(typeName)) return null;
+		seen.push(typeName);
+		var direct: Null<String> = null;
+		var directCount: Int = 0;
+		var deferring: Bool = false;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+			final v: Null<String> = m.visibility;
+			if (v == null) {
+				if (!m.isOverride) return null;
+				deferring = true;
+			} else {
+				if (directCount > 0 && v != direct) return null;
+				direct = v;
+				directCount++;
+			}
+		}
+		if (directCount > 0) return deferring ? null : direct;
+		var inherited: Null<String> = null;
+		var supers: Int = 0;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) {
+			final v: Null<String> = memberVisibilityWalk(sup, memberName, seen);
+			if (v != null) {
+				if (supers > 0 && v != inherited) return null;
+				inherited = v;
+				supers++;
+			}
+		}
+		return inherited;
+	}
+
 	/** Exactly one indexed decl is named `name`, and it is a class. */
 	private function isUniqueClass(name: String): Bool {
 		final ds: Array<TypeDeclInfo> = declsNamed(name);
@@ -481,6 +542,9 @@ final class SymbolIndex {
 		final infos: Array<FileInfo> = [];
 		final skipped: Array<String> = [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final shape: RefShape = plugin.refShape();
+		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
+		final overrideKind: Null<String> = shape.overrideModifierKind;
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (tree == null) {
@@ -491,7 +555,9 @@ final class SymbolIndex {
 			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
 			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
-			infos.push(extractFileInfo(entry.file, tree, accessors, writeAccessors, returnTypes, typeSources));
+			infos.push(extractFileInfo(
+				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
+			));
 		}
 		return new SymbolIndex(infos, skipped);
 	}
@@ -524,8 +590,8 @@ final class SymbolIndex {
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
 	private static function extractFileInfo(
-		file: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
-		typeSources: Map<Int, String>
+		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
+		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>
 	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
@@ -544,7 +610,9 @@ final class SymbolIndex {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
-					members: collectMembers(node, accessors, writeAccessors, returnTypes, typeSources)
+					members: collectMembers(
+						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
+					)
 				});
 				continue;
 			}
@@ -648,32 +716,46 @@ final class SymbolIndex {
 	 * The directly-declared members of the type rooted at `node` — every
 	 * field-member-kind descendant (a type body's own `var`/`final`/`fn` members;
 	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
-	 * with its getter-property flag from the `accessors` span map (absent = plain).
+	 * with its getter-property flag from the `accessors` span map (absent = plain)
+	 * and its modifier-run visibility / override info. Modifier siblings precede
+	 * the member they attach to inside the same parent, so each visited node scans
+	 * its CHILDREN with a running modifier state, reset at every member.
 	 */
 	private static function collectMembers(
-		node: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
-		typeSources: Map<Int, String>
+		node: QueryNode, source: String, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
+		typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>
 	): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
 		collectInto(node, n -> {
-			// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
-			// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
-			// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
-			if (RefactorSupport.FIELD_MEMBER_KINDS.contains(n.kind) || n.kind == 'SimpleCtor' || n.kind == 'ParamCtor') {
-				final nm: Null<String> = n.name;
-				final sp: Null<Span> = n.span;
-				if (nm != null && sp != null) {
-					// Re-bind to a non-null local — Strict null-safety takes a struct
-					// literal's field type from the declared type, not the narrowed one.
-					final memberName: String = nm;
-					out.push({
-						name: memberName,
-						hasGetter: accessors[sp.from] ?? false,
-						hasSetter: writeAccessors[sp.from] ?? false,
-						returnNominal: returnTypes[sp.from],
-						typeSource: typeSources[sp.from]
-					});
-				}
+			var runVisibility: Null<String> = null;
+			var runOverride: Bool = false;
+			for (child in n.children) {
+				final sp: Null<Span> = child.span;
+				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
+				// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
+				// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
+				if (RefactorSupport.FIELD_MEMBER_KINDS.contains(child.kind) || child.kind == 'SimpleCtor' || child.kind == 'ParamCtor') {
+					final nm: Null<String> = child.name;
+					if (nm != null && sp != null) {
+						// Re-bind to a non-null local — Strict null-safety takes a struct
+						// literal's field type from the declared type, not the narrowed one.
+						final memberName: String = nm;
+						out.push({
+							name: memberName,
+							hasGetter: accessors[sp.from] ?? false,
+							hasSetter: writeAccessors[sp.from] ?? false,
+							returnNominal: returnTypes[sp.from],
+							typeSource: typeSources[sp.from],
+							visibility: runVisibility,
+							isOverride: runOverride
+						});
+					}
+					runVisibility = null;
+					runOverride = false;
+				} else if (sp != null && visibilityKinds.contains(child.kind))
+					runVisibility = source.substring(sp.from, sp.to);
+				else if (overrideKind != null && child.kind == overrideKind)
+					runOverride = true;
 			}
 		});
 		return out;

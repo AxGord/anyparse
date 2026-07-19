@@ -15,14 +15,19 @@ import anyparse.runtime.Span;
  * visibility keyword (`private` — the Haxe default, so a behaviour-preserving
  * change) at the canonical position.
  *
- * ## The autofix skips an `override`
+ * ## The autofix resolves an `override` through the SymbolIndex
  *
  * An unmodified `override` inherits its visibility from the supertype, NOT the
  * class default — forcing `private` on an override of a public method lowers
- * visibility below the superclass, a compile error. Without type information the
- * check cannot know the supertype's visibility, so the autofix leaves an
- * `overrideModifierKind`-bearing member report-only (it is still flagged — explicit
- * visibility is the rule — but the keyword is the author's to choose).
+ * visibility below the superclass, a compile error. The autofix instead asks the
+ * `SymbolIndex` for the overridden member's declared keyword
+ * (`memberVisibilityOf`, which walks the supertype closure and defers through
+ * unmarked mid-chain overrides) and inserts THAT keyword. When the index cannot
+ * prove one — no index, an unindexed supertype, a simple-name collision that
+ * disagrees, or an unmarked non-override base (whose default depends on a
+ * public-default container the index does not model) — the member stays
+ * report-only (it is still flagged — explicit visibility is the rule — but the
+ * keyword is the author's to choose).
  *
  * ## The autofix skips a public-default container
  *
@@ -42,9 +47,10 @@ import anyparse.runtime.Span;
  * `RefShape.visibilityModifierKinds`. Any unset → no-op. The autofix additionally
  * needs `RefShape.defaultVisibilityModifierText` (the keyword to insert),
  * `RefShape.modifierOrderKinds` (to place it after `override` / `@:meta` and before
- * `static` / `inline`), `RefShape.overrideModifierKind` (to exempt overrides), and
- * `RefShape.externModifierKind` / `RefShape.publicDefaultMetaNames` (to exempt a
- * public-default container); a grammar leaving the keyword unset is report-only.
+ * `static` / `inline`), `RefShape.overrideModifierKind` (to route overrides through
+ * the index resolution above), and `RefShape.externModifierKind` /
+ * `RefShape.publicDefaultMetaNames` (to exempt a public-default container); a
+ * grammar leaving the keyword unset is report-only.
  */
 @:nullSafety(Strict)
 final class MissingVisibility implements Check {
@@ -71,18 +77,21 @@ final class MissingVisibility implements Check {
 	}
 
 	/**
-	 * Insert the default visibility keyword on each flagged non-override member of a
-	 * private-default container. Re-parses `source`, re-walks the containers, and for a
-	 * member whose host-span `from` matches a violation (and which carries no
-	 * `overrideModifierKind` in its run) inserts `defaultVisibilityModifierText` at the
-	 * canonical visibility slot: after any `override` / `@:meta`, before the first
-	 * `static` / `inline` (a run sibling ranked above visibility in `modifierOrderKinds`),
-	 * else immediately before the member host. Inserting the language default is
-	 * behaviour-preserving for a non-override in a plain class / abstract (Haxe treats an
-	 * unmodified member there as `private`). A container whose members are implicitly
-	 * public — an extern class (`externModifierKind`) or one carrying a public-default meta
-	 * (`publicDefaultMetaNames`, e.g. `@:publicFields`) — is skipped: it stays report-only
-	 * rather than being lowered to `private`. No default keyword set → report-only.
+	 * Insert the visibility keyword on each flagged member of a private-default
+	 * container. Re-parses `source`, re-walks the containers, and for a member whose
+	 * host-span `from` matches a violation inserts the keyword at the canonical
+	 * visibility slot: after any `override` / `@:meta`, before the first `static` /
+	 * `inline` (a run sibling ranked above visibility in `modifierOrderKinds`), else
+	 * immediately before the member host. A non-override gets
+	 * `defaultVisibilityModifierText` — behaviour-preserving in a plain class /
+	 * abstract (Haxe treats an unmodified member there as `private`). An
+	 * `overrideModifierKind`-bearing member gets the SUPERTYPE's keyword resolved
+	 * through `index.memberVisibilityOf`, or stays report-only when unprovable. A
+	 * container whose members are implicitly public — an extern class
+	 * (`externModifierKind`) or one carrying a public-default meta
+	 * (`publicDefaultMetaNames`, e.g. `@:publicFields`) — is skipped: it stays
+	 * report-only rather than being lowered to `private`. No default keyword set →
+	 * report-only.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -106,7 +115,7 @@ final class MissingVisibility implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		insertWalk(
 			edits, tree, seams.containers, seams.members, seams.order, visRank, keyword, seams.overrideKind, flagged, seams.externKind,
-			seams.publicMetaNames, false
+			seams.publicMetaNames, false, index
 		);
 		return edits;
 	}
@@ -157,7 +166,7 @@ final class MissingVisibility implements Check {
 	private static function insertWalk(
 		edits: Array<{ span: Span, text: String }>, node: QueryNode, containers: Array<String>, members: Array<String>,
 		order: Array<String>, visRank: Int, keyword: String, overrideKind: Null<String>, flagged: Array<Int>, externKind: Null<String>,
-		publicMetaNames: Array<String>, incomingPublicDefault: Bool
+		publicMetaNames: Array<String>, incomingPublicDefault: Bool, index: Null<SymbolIndex>
 	): Bool {
 		var publicDefault: Bool = incomingPublicDefault;
 		var sawDecl: Bool = false;
@@ -166,15 +175,16 @@ final class MissingVisibility implements Check {
 			if (externKind != null && child.kind == externKind || metaName != null && publicMetaNames.contains(metaName))
 				publicDefault = true;
 			final childConsumes: Bool = if (containers.contains(child.kind)) {
-				if (!publicDefault) insertContainer(edits, child, members, order, visRank, keyword, overrideKind, flagged);
+				if (!publicDefault) insertContainer(edits, child, members, order, visRank, keyword, overrideKind, flagged, index);
 				insertWalk(
-					edits, child, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames, false
+					edits, child, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames, false,
+					index
 				);
 				true;
 			} else
 				insertWalk(
 					edits, child, containers, members, order, visRank, keyword, overrideKind, flagged, externKind, publicMetaNames,
-					publicDefault
+					publicDefault, index
 				);
 			if (!childConsumes) continue;
 			publicDefault = false;
@@ -184,8 +194,9 @@ final class MissingVisibility implements Check {
 	}
 
 	/**
-	 * Scan `container`'s children; for each flagged member that is not an override,
-	 * emit a zero-width insert of `keyword` at its canonical visibility slot.
+	 * Scan `container`'s children; for each flagged member, emit a zero-width insert
+	 * at its canonical visibility slot — `keyword` for a plain member, the
+	 * index-resolved supertype keyword for an override (none provable → no edit).
 	 * `insertAt` tracks the start of the first preceding-run sibling ranked above
 	 * visibility (`static` / `inline`), and `sawOverride` whether the run carries an
 	 * override; both reset at each member. The keyword lands at `insertAt`, else
@@ -194,16 +205,26 @@ final class MissingVisibility implements Check {
 	 */
 	private static function insertContainer(
 		edits: Array<{ span: Span, text: String }>, container: QueryNode, members: Array<String>, order: Array<String>, visRank: Int,
-		keyword: String, overrideKind: Null<String>, flagged: Array<Int>
+		keyword: String, overrideKind: Null<String>, flagged: Array<Int>, index: Null<SymbolIndex>
 	): Void {
+		final typeName: Null<String> = container.name;
 		var insertAt: Int = -1;
 		var sawOverride: Bool = false;
 		for (child in container.children) {
 			if (members.contains(child.kind)) {
 				final span: Null<Span> = child.span;
-				if (span != null && !sawOverride && flagged.contains(span.from)) {
-					final pos: Int = insertAt >= 0 ? insertAt : span.from;
-					edits.push({ span: new Span(pos, pos), text: keyword + ' ' });
+				if (span != null && flagged.contains(span.from)) {
+					final memberName: Null<String> = child.name;
+					final insert: Null<String> = if (!sawOverride)
+						keyword;
+					else if (index != null && typeName != null && memberName != null)
+						index.memberVisibilityOf(typeName, memberName);
+					else
+						null;
+					if (insert != null) {
+						final pos: Int = insertAt >= 0 ? insertAt : span.from;
+						edits.push({ span: new Span(pos, pos), text: insert + ' ' });
+					}
 				}
 				insertAt = -1;
 				sawOverride = false;
