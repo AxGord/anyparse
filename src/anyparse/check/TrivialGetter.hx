@@ -232,8 +232,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 	 * or a `this.<name>` `FieldAccess` — else null.
 	 */
 	private static function returnedField(ret: QueryNode, returnKind: String): Null<String> {
-		if (ret.kind != returnKind || ret.children.length != 1) return null;
-		return fieldRefName(ret.children[0]);
+		return ret.kind != returnKind || ret.children.length != 1 ? null : fieldRefName(ret.children[0]);
 	}
 
 	/**
@@ -782,8 +781,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
 			? clauseRemovalSpan(source, prop.span)
 			: accessorParenSpan(source, prop.span);
-		if (clauseSpan == null) return null;
-		return {
+		return clauseSpan == null ? null : {
 			field: raw.field,
 			fieldNode: fieldNode,
 			message: raw.message,
@@ -833,8 +831,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 		final assign: QueryNode = ret.children[0];
 		if (assign.kind != 'Assign' || assign.children.length != 2) return null;
 		final value: QueryNode = assign.children[1];
-		if (value.kind != 'IdentExpr' || value.name != paramName) return null;
-		return fieldRefName(assign.children[0]);
+		return value.kind != 'IdentExpr' || value.name != paramName ? null : fieldRefName(assign.children[0]);
 	}
 
 	/** The name of a setter's single value parameter (its first `Required` / `Optional` child), or null. */
@@ -1003,8 +1000,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
 			// property and just inline the getter. Skip when the getter is already inline or overrides
 			// — inline + override do not mix, and an overriding accessor must stay overridable.
-			if (getterInline || getterOverride) return null;
-			return {
+			return getterInline || getterOverride ? null : {
 				field: trivGet,
 				clauseText: '',
 				deleted: [],
@@ -1015,8 +1011,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			};
 		}
 		if (trivGet != null && trivSet != null) {
-			if (trivGet != trivSet) return null;
-			return {
+			return trivGet != trivSet ? null : {
 				field: trivGet,
 				clauseText: '',
 				deleted: [getterNode, setter.node],
@@ -1029,17 +1024,17 @@ final class TrivialGetter implements Check implements ConfigAware {
 		if (trivGet == null && trivSet != null) {
 			if (!privateFieldNodes.exists(trivSet)) return null;
 			final getterSpan: Null<Span> = getterNode.span;
-			if (getterSpan == null) return null;
-			if (hasExternalRead(cls, trivSet, getterSpan)) return null;
-			return {
-				field: trivSet,
-				clauseText: '(get, default)',
-				deleted: [setter.node],
-				ctorInit: null,
-				message: messageFor('setC', prop.name, trivSet),
-				bypassStmts: [],
-				inlineGetter: null
-			};
+			return getterSpan == null
+				? null
+				: hasExternalRead(cls, trivSet, getterSpan) ? null : {
+					field: trivSet,
+					clauseText: '(get, default)',
+					deleted: [setter.node],
+					ctorInit: null,
+					message: messageFor('setC', prop.name, trivSet),
+					bypassStmts: [],
+					inlineGetter: null
+				};
 		}
 		return null;
 	}

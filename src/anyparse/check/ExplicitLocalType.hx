@@ -312,8 +312,7 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		final method: Null<String> = callee.name;
 		if (method == null) return null;
 		final ret: Null<String> = table[method];
-		if (ret == null) return null;
-		return receiverIsString(callee.children[0], shape, tree, declaredTypeSources) ? ret : null;
+		return ret == null ? null : receiverIsString(callee.children[0], shape, tree, declaredTypeSources) ? ret : null;
 	}
 
 	/**

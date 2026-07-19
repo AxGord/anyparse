@@ -9841,8 +9841,7 @@ class WriterLowering {
 			c.annotations.get('base.optional') != true && c.fmtHasFlag('dropSingleStmtBraces')
 		);
 		final thenName: Null<String> = thenSibling?.annotations.get('base.fieldName');
-		if (thenSibling == null || thenName == null) return null;
-		return {
+		return thenSibling == null || thenName == null ? null : {
 			sibling: thenSibling,
 			name: thenName,
 			access: { expr: EField(macro value, thenName), pos: Context.currentPos() }

@@ -86,13 +86,15 @@ class SingleStmtBraces {
 		// parses but the Haxe compiler rejects ("Expected }"). Keep the braces (fail closed).
 		if (hasTrailingSemi) return body;
 		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
-		if (inner == null) return body;
 		// Gate 8 - then-branch readability: when the sole inner statement is itself an
 		// `if`, the braces stay even though every removal gate passes. Loop bodies and
 		// else-bodies are exempt (`for (...) if (...)` guard headers and `else if`
 		// chains are the preferred style).
-		if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt') return body;
-		return !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
+		return inner == null
+			? body
+			: isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt'
+				? body
+				: !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
 	}
 
 	/**
@@ -111,11 +113,13 @@ class SingleStmtBraces {
 		// omega-ssb-wrap: a bare `if` in then-position RENDERS braced (the wrap
 		// direction synthesizes its block), so sibling-symmetry probes must see it
 		// as brace-keeping.
-		if (isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt') return drop;
-		if (Type.enumConstructor(cast body) != 'BlockStmt') return false;
 		// `unwrapStmt` (symmetry forced off) returns the body UNCHANGED only when it would NOT
 		// de-brace it on its own merits (gates 1-6, 8) - i.e. the block renders WITH its braces.
-		return unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
+		return isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt'
+			? drop
+			: Type.enumConstructor(cast body) != 'BlockStmt'
+				? false
+				: unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
 	}
 
 	/**
