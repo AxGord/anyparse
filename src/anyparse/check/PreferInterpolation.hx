@@ -107,6 +107,12 @@ final class PreferInterpolation implements Check {
 	): Void {
 		final opaque: Null<Array<String>> = shape.opaqueKinds;
 		if (opaque != null && opaque.contains(node.kind)) return;
+		// A `+` chain nested INSIDE a string literal's `${...}` interpolation block
+		// must not fold - the rewrite would nest an interpolated string inside an
+		// interpolation block, fragile in the real compiler's interp scanner. The
+		// walk stops at string literals entirely: their children are interp
+		// segments, and neither rewrite arm is sound in there.
+		if ((shape.stringLiteralKinds ?? []).contains(node.kind)) return;
 		final sf: Null<StringFoldSupport> = seams.stringFold;
 		if (sf != null && node.kind == sf.concatKind()) {
 			final chainText: Null<String> = renderChain(node, source, seams);
@@ -265,6 +271,12 @@ final class PreferInterpolation implements Check {
 			case StringLit(_, _):
 				if (firstLitIdx == -1) firstLitIdx = i;
 			case NonStringOperand:
+				// An expression operand whose source carries a backslash is a safe
+				// miss: placed into `${...}`, a nested string escape (`'\\'`)
+				// mis-lexes in the real Haxe compiler ("Unterminated string") even
+				// though anyparse's own interp scanner accepts it.
+				final opSpan: Null<Span> = operands[i].span;
+				if (opSpan == null || source.substring(opSpan.from, opSpan.to).indexOf('\\') >= 0) return null;
 				hasNonLiteral = true;
 		}
 		if (firstLitIdx == -1 || !hasNonLiteral) return null;
