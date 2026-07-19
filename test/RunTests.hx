@@ -443,6 +443,7 @@ import unit.SpanTypeInfoPinTest;
 import unit.ExplicitLocalTypeCheckTest;
 import unit.RedundantBypassAccessorCheckTest;
 import unit.PreferTernaryAssignmentCheckTest;
+import unit.InvertNegatedIfElseCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -854,6 +855,7 @@ class RunTests {
 		addCase(new ComparisonToBooleanCheckTest());
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new DoubleNegationCheckTest());
+		addCase(new InvertNegatedIfElseCheckTest());
 		addCase(new PreferNullCoalescingCheckTest());
 		addCase(new PreferIndexAccessCheckTest());
 		addCase(new PreferArrayLiteralCheckTest());
