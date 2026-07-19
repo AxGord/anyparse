@@ -764,6 +764,23 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	/**
+	 * `TypeInfoProvider`: maps each property-bearing member's binding-span `from` to
+	 * whether its WRITE accessor is a setter (`set` / `dynamic` -> side-effecting,
+	 * true) vs a plain stored write (`default` / `null` / `never` -> false). The
+	 * write-side counterpart of `propertyAccessors`, keyed on `HxVarDecl.access`
+	 * `ids[1]`. A member with NO accessor clause (a plain field) is ABSENT - the
+	 * consumer treats absence as no set-accessor.
+	 */
+	public function propertyWriteAccessors(source: String): Map<Int, Bool> {
+		return walkSpanMap(source, (node, span, out: Map<Int, Bool>) -> {
+			if (Reflect.hasField(node, 'access')) {
+				final access: Dynamic = Reflect.field(node, 'access');
+				if (access != null) out[span.from] = isSetterAccess(access);
+			}
+		});
+	}
+
+	/**
 	 * `TypeInfoProvider`: maps each declaration's binding-span `from` to the VERBATIM
 	 * source of its `:Type` annotation (`var x: Array<Int>` → `Array<Int>`), recovered
 	 * by slicing the type node's span. Same walk + key as `declaredTypes`; the value is
@@ -797,24 +814,26 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	/**
-	 * `SpanTypeInfoProvider`: the five span-indexed maps from ONE `HaxeModuleSpanParser`
-	 * parse + ONE `walkGrammarSpans` traversal — the batched form of `declaredTypes`
-	 * / `returnTypes` / `propertyAccessors` / `declaredTypeSources` / `castTargetSources`,
-	 * whose five separate `walkSpanMap` calls each re-parse the source. Each map is
-	 * produced by the SAME visitor logic as its individual accessor over the SAME
-	 * traversal, so the bundle is byte-for-byte the five separate walks (pinned by
-	 * `HaxeSpanTypeInfoTest`).
+	 * `SpanTypeInfoProvider`: the six span-indexed maps from ONE `HaxeModuleSpanParser`
+	 * parse + ONE `walkGrammarSpans` traversal - the batched form of `declaredTypes`
+	 * / `returnTypes` / `propertyAccessors` / `propertyWriteAccessors` / `declaredTypeSources`
+	 * / `castTargetSources`, whose six separate `walkSpanMap` calls each re-parse the
+	 * source. Each map is produced by the SAME visitor logic as its individual accessor
+	 * over the SAME traversal, so the bundle is byte-for-byte the six separate walks
+	 * (pinned by `SpanTypeInfoPinTest`).
 	 */
 	public function spanTypeInfo(source: String): SpanTypeInfo {
 		final declaredTypes: Map<Int, String> = [];
 		final returnTypes: Map<Int, String> = [];
 		final propertyAccessors: Map<Int, Bool> = [];
+		final propertyWriteAccessors: Map<Int, Bool> = [];
 		final declaredTypeSources: Map<Int, String> = [];
 		final castTargetSources: Map<Int, String> = [];
 		final bundle: SpanTypeInfo = {
 			declaredTypes: declaredTypes,
 			returnTypes: returnTypes,
 			propertyAccessors: propertyAccessors,
+			propertyWriteAccessors: propertyWriteAccessors,
 			declaredTypeSources: declaredTypeSources,
 			castTargetSources: castTargetSources
 		};
@@ -839,7 +858,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			}
 			if (Reflect.hasField(node, 'access')) {
 				final access: Dynamic = Reflect.field(node, 'access');
-				if (access != null) propertyAccessors[span.from] = isGetterAccess(access);
+				if (access != null) {
+					propertyAccessors[span.from] = isGetterAccess(access);
+					propertyWriteAccessors[span.from] = isSetterAccess(access);
+				}
 			}
 		});
 		return bundle;
@@ -1134,21 +1156,28 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	}
 
 	/**
-	 * Whether an `HxAccessClause`'s READ accessor (`ids[0]`) runs code on read — a
-	 * getter. Only the three stored-field reads `default` / `null` / `never` are
-	 * side-effect-free; everything else (`get`, `dynamic`, or a custom method-name
-	 * accessor) is treated as a getter, so the classification is sound by default.
+	 * Whether an `HxAccessClause` accessor at `slot` (0 = READ, 1 = WRITE) runs code -
+	 * a getter / setter. Only the three stored-field accessors `default` / `null` /
+	 * `never` are side-effect-free; everything else (`get` / `set`, `dynamic`, or a
+	 * custom method-name accessor) runs code. A missing slot or non-string id defaults
+	 * to true, so a member is never wrongly classed as having a plain stored accessor.
 	 */
-	private function isGetterAccess(access: Dynamic): Bool {
+	private function isSideEffectingAccess(access: Dynamic, slot: Int): Bool {
 		final ids: Dynamic = Reflect.field(access, 'ids');
 		if (!Std.isOfType(ids, Array)) return true;
 		final arr: Array<Dynamic> = cast ids;
-		if (arr.length == 0) return true;
-		final first: Dynamic = arr[0];
-		if (!(first is String)) return true;
-		final s: String = first;
+		if (arr.length <= slot) return true;
+		final id: Dynamic = arr[slot];
+		if (!(id is String)) return true;
+		final s: String = id;
 		return !(s == 'default' || s == 'null' || s == 'never');
 	}
+
+	/** Whether the property's READ accessor (`ids[0]`) runs code - a getter. */
+	private inline function isGetterAccess(access: Dynamic): Bool return isSideEffectingAccess(access, 0);
+
+	/** Whether the property's WRITE accessor (`ids[1]`) runs code - a setter. */
+	private inline function isSetterAccess(access: Dynamic): Bool return isSideEffectingAccess(access, 1);
 
 	/**
 	 * Walk the raw grammar AST (which the QueryNode projection drops type/accessor

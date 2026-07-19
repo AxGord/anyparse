@@ -43,6 +43,15 @@ interface TypeInfoProvider {
 	public function propertyAccessors(source: String): Map<Int, Bool>;
 
 	/**
+	 * Maps a property-bearing member's binding-span `from` to whether its WRITE
+	 * accessor is a setter (`set` / `dynamic` -> true) vs a plain stored write
+	 * (`default` / `null` / `never`). A plain field (no accessor clause) is ABSENT.
+	 * The write-side counterpart of `propertyAccessors`: lets a consumer decide
+	 * whether a located member has a real set-accessor.
+	 */
+	public function propertyWriteAccessors(source: String): Map<Int, Bool>;
+
+	/**
 	 * Maps each declaration's binding-span `from` (the `declaredTypes` key) to the
 	 * VERBATIM source text of its `:Type` annotation — `var x: Array<Int>` → the
 	 * substring `Array<Int>`. Lets a consumer compare two annotations by their

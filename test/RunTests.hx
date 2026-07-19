@@ -441,6 +441,7 @@ import unit.AvoidDynamicRiskyFixE2ETest;
 import unit.DuplicateCodeCrossFileCheckTest;
 import unit.SpanTypeInfoPinTest;
 import unit.ExplicitLocalTypeCheckTest;
+import unit.RedundantBypassAccessorCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -825,6 +826,7 @@ class RunTests {
 		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());
 		addCase(new SelfAssignmentCheckTest());
+		addCase(new RedundantBypassAccessorCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
 		addCase(new RedundantThisCheckTest());
