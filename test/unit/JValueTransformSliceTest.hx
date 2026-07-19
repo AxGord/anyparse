@@ -236,7 +236,7 @@ class JValueTransformSliceTest extends Test {
 
 	/** Append `!` to a JSON string terminal (transparent over String). */
 	private static function bang(s: JStringLit): JStringLit {
-		return (s: String) + '!';
+		return '${(s: String)}!';
 	}
 
 }

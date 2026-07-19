@@ -162,7 +162,7 @@ class PatternParseProbe extends Test {
 	private static function countMetavarByName(node: QueryNode, target: String): Int {
 		var count: Int = 0;
 		if (node.kind == Metavar.KIND && node.name == target) count++;
-		if (node.kind != Metavar.KIND && node.name == '$' + target) count++;
+		if (node.kind != Metavar.KIND && node.name == '$$$target') count++;
 		for (c in node.children) count += countMetavarByName(c, target);
 		return count;
 	}

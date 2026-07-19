@@ -50,7 +50,7 @@ final class Json {
 
 	public static function renderTree(file: String, source: String, tree: QueryNode): String {
 		final dump: AstDumpJson = { file: file, tree: toAst(tree, source) };
-		return AstDumpJsonWriter.write(dump, JsonFormat.instance.defaultWriteOptions) + '\n';
+		return '${AstDumpJsonWriter.write(dump, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
 	public static function renderMatches(file: String, source: String, matches: Array<QueryNode>, doc: Bool, src: Bool): String {
@@ -71,7 +71,7 @@ final class Json {
 				}
 			]
 		};
-		return AstMatchesJsonWriter.write(out, JsonFormat.instance.defaultWriteOptions) + '\n';
+		return '${AstMatchesJsonWriter.write(out, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
 	public static function renderMeta(entries: Array<{ file: String, source: String, hits: Array<MetaHit> }>): String {
@@ -92,7 +92,7 @@ final class Json {
 			});
 		}
 		final envelope: AstMetaHits = { hits: out };
-		return AstMetaHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
+		return '${AstMetaHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
 	public static function renderRefs(entries: Array<{ file: String, source: String, hits: Array<RefHit> }>, doc: Bool, src: Bool): String {
@@ -117,7 +117,7 @@ final class Json {
 			out.push(hit);
 		}
 		final envelope: AstRefHits = { hits: out };
-		return AstRefHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
+		return '${AstRefHitsWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
 	public static function renderSearchMatches(file: String, source: String, matches: Array<Match>): String {
@@ -130,7 +130,7 @@ final class Json {
 				}
 		];
 		final envelope: AstSearchMatches = { matches: entries };
-		return AstSearchMatchesWriter.write(envelope, JsonFormat.instance.defaultWriteOptions) + '\n';
+		return '${AstSearchMatchesWriter.write(envelope, JsonFormat.instance.defaultWriteOptions)}\n';
 	}
 
 	private static function toAst(node: QueryNode, source: String): AstNodeJson {

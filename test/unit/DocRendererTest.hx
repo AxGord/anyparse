@@ -451,7 +451,7 @@ class DocRendererTest extends Test {
 		// headers pack on the same line, body breaks aside.
 		function lambda(name: String): Doc {
 			return D.concat([
-				D.text(name + ' -> '),
+				D.text('$name -> '),
 				BodyGroup(D.concat([
 					D.text('{'),
 					D.nest(1, D.concat([D.hardline(), D.text('body;')])),

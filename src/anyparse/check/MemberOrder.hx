@@ -350,7 +350,7 @@ final class MemberOrder implements Check {
 	 * a bare top-level `&&`, so `((A) && (B))`, never `(A) && (B)`.
 	 */
 	private static function joinConds(stack: Array<String>): String {
-		return stack.length == 1 ? stack[0] : '(' + stack.map(parenthesiseConjunct).join(' && ') + ')';
+		return stack.length == 1 ? stack[0] : '(${stack.map(parenthesiseConjunct).join(' && ')})';
 	}
 
 	/** Wrap `cond` in parentheses unless it is already a single balanced parenthesised group. */
@@ -749,7 +749,7 @@ final class MemberOrder implements Check {
 
 	/** The `computeGroupFirst` / `compareOrder` map key for a member's conditional block, keyed by section so a condition shared across two sections keeps a distinct block per section. */
 	private static inline function groupKey(section: Int, cond: String): String {
-		return section + ' ' + cond;
+		return '$section $cond';
 	}
 
 }

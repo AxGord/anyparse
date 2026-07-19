@@ -153,7 +153,7 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	private function local(stmt: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t' + stmt + '\n\t}\n}';
+		return 'class C {\n\tfunction f():Void {\n\t\tvar x:Sys = mk();\n\t\t$stmt\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

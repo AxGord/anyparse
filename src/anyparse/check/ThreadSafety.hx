@@ -330,7 +330,7 @@ final class ThreadSafety implements Check implements ConfigAware {
 			var trimmed: String = p;
 			while (StringTools.startsWith(trimmed, '/')) trimmed = trimmed.substring(1);
 			while (StringTools.endsWith(trimmed, '/')) trimmed = trimmed.substring(0, trimmed.length - 1);
-			if (trimmed.length > 0 && wrapped.indexOf('/' + trimmed + '/') != -1) return true;
+			if (trimmed.length > 0 && wrapped.indexOf('/$trimmed/') != -1) return true;
 		}
 		return false;
 	}

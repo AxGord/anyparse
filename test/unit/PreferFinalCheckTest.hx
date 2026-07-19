@@ -114,7 +114,7 @@ class PreferFinalCheckTest extends Test {
 	}
 
 	private function wrap(body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\t' + body + '\n\t}\n}';
+		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(src: String): Array<Violation> {

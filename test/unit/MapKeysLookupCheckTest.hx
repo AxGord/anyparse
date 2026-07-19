@@ -124,7 +124,7 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	private function wrapMap(loopCode: String): String {
-		return 'class C {\n\tfunction f(m:Map<String,Int>):Void {\n\t\t' + loopCode + '\n\t}\n}';
+		return 'class C {\n\tfunction f(m:Map<String,Int>):Void {\n\t\t$loopCode\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

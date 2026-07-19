@@ -62,7 +62,7 @@ class HxCondCompStmtTrailOptSliceTest extends Test {
 	private static function roundTrip(source: String): Void {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out);
+		Assert.equals('$source\n', out);
 	}
 
 }

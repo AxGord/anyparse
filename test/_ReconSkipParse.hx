@@ -108,7 +108,7 @@ final class _ReconSkipParse { // noqa: naming
 					Sys.println('SKIP $bucket/$name :: ${pos.line}:${pos.col} expected="$exp" :: src="$src"');
 				} catch (exception: Exception) {
 					total++;
-					final key: String = '<non-ParseError> ' + normalize(exception.message);
+					final key: String = '<non-ParseError> ${normalize(exception.message)}';
 					addCluster(clusters, key, '$bucket/$name', '<exception>');
 					Sys.println('SKIP $bucket/$name :: $key :: head="${head(tc.input)}"');
 				}

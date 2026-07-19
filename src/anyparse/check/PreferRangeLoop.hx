@@ -297,7 +297,7 @@ final class PreferRangeLoop implements Check {
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
 	private static function excerpt(text: String): String {
 		final flat: String = normalize(text);
-		return flat.length > EXCERPT_MAX ? flat.substring(0, EXCERPT_MAX) + '…' : flat;
+		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 
 	/** The bound's identifier name when `B` is a bare identifier, else null (a literal bound has no name to track). */

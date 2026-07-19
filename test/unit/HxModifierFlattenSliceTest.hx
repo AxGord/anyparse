@@ -87,7 +87,7 @@ class HxModifierFlattenSliceTest extends Test {
 	private static function roundTripTrivia(source: String): Void {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(source + '\n', out, 'trivia byte-identity failed for <$source>');
+		Assert.equals('$source\n', out, 'trivia byte-identity failed for <$source>');
 	}
 
 }

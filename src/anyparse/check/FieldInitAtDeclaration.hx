@@ -103,7 +103,7 @@ final class FieldInitAtDeclaration implements Check {
 			final stmtSpan: Null<Span> = loc.stmt.span;
 			if (rhsSpan == null || fieldSpan == null || stmtSpan == null) continue;
 			final insertPos: Int = RefactorSupport.fieldDeclInitInsertPos(source, fieldSpan);
-			edits.push({ span: new Span(insertPos, insertPos), text: ' = ' + source.substring(rhsSpan.from, rhsSpan.to) });
+			edits.push({ span: new Span(insertPos, insertPos), text: ' = ${source.substring(rhsSpan.from, rhsSpan.to)}' });
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, stmtSpan), text: '' });
 		}
 		return edits;

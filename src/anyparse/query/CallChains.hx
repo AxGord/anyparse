@@ -26,7 +26,7 @@ final class CallChains {
 		maxLines: Int
 	): String {
 		final buf: StringBuf = new StringBuf();
-		buf.add(nodeLabel(graph, rootId, sourceOf) + '\n');
+		buf.add('${nodeLabel(graph, rootId, sourceOf)}\n');
 		var lines: Int = 1;
 		var truncated: Bool = false;
 		final arrow: String = outward ? '->' : '<-';

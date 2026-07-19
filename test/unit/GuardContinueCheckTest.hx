@@ -334,11 +334,11 @@ class GuardContinueCheckTest extends Test {
 	// --- helpers -------------------------------------------------------------------
 
 	private function wrap(loopCode: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t' + loopCode + '\n\t}\n}\n';
+		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t$loopCode\n\t}\n}\n';
 	}
 
 	private function cond(c: String): String {
-		return 'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (' + c + ') {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}';
+		return 'for (x in xs) {\n\t\t\tpre();\n\t\t\tif ($c) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}';
 	}
 
 	private function v(loopCode: String): Array<Violation> {

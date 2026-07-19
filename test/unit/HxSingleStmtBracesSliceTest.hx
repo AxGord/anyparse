@@ -248,7 +248,7 @@ class HxSingleStmtBracesSliceTest extends Test {
 		final source: String = 'class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals(source + '\n', out);
+		Assert.equals('$source\n', out);
 	}
 
 	public function testDoWhileBodyUnbraced(): Void {
@@ -308,13 +308,13 @@ class HxSingleStmtBracesSliceTest extends Test {
 	private static function assertFmt(source: String, expected: String): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals(expected + '\n', out);
+		Assert.equals('$expected\n', out);
 	}
 
 	private static function roundTrip(source: String): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals(source + '\n', out);
+		Assert.equals('$source\n', out);
 	}
 
 }

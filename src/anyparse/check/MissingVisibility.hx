@@ -223,7 +223,7 @@ final class MissingVisibility implements Check {
 						null;
 					if (insert != null) {
 						final pos: Int = insertAt >= 0 ? insertAt : span.from;
-						edits.push({ span: new Span(pos, pos), text: insert + ' ' });
+						edits.push({ span: new Span(pos, pos), text: '$insert ' });
 					}
 				}
 				insertAt = -1;

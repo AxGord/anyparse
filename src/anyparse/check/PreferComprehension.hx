@@ -193,8 +193,8 @@ final class PreferComprehension implements Check {
 		if (!RefactorSupport.referencedInRange(source, declName, forSpan.to, scopeSpan.to, [])) return null;
 		final prefix: String = source.substring(declSpan.from, initSpan.from);
 		final keyword: String = source.substring(declSpan.from, declSpan.from + VAR_KEYWORD.length);
-		final normalized: String = keyword == VAR_KEYWORD ? 'final' + prefix.substring(VAR_KEYWORD.length) : prefix;
-		return { span: new Span(declSpan.from, forSpan.to), text: normalized + '[' + inner + '];' };
+		final normalized: String = keyword == VAR_KEYWORD ? 'final${prefix.substring(VAR_KEYWORD.length)}' : prefix;
+		return { span: new Span(declSpan.from, forSpan.to), text: '$normalized[$inner];' };
 	}
 
 	/**
@@ -217,7 +217,7 @@ final class PreferComprehension implements Check {
 			if (nodeSpan == null || bodySpan == null) return null;
 			checkNodes.push(iterable);
 			final rest: Null<String> = buildInner(body, name, source, s, checkNodes);
-			return rest == null ? null : StringTools.rtrim(source.substring(nodeSpan.from, bodySpan.from)) + ' ' + rest;
+			return rest == null ? null : '${StringTools.rtrim(source.substring(nodeSpan.from, bodySpan.from))} $rest';
 		}
 		if (node.kind == s.blockStmtKind)
 			return node.children.length == 1 ? buildInner(node.children[0], name, source, s, checkNodes) : null;
@@ -230,7 +230,7 @@ final class PreferComprehension implements Check {
 			if (nodeSpan == null || thenSpan == null) return null;
 			checkNodes.push(cond);
 			final rest: Null<String> = buildInner(then, name, source, s, checkNodes);
-			return rest == null ? null : StringTools.rtrim(source.substring(nodeSpan.from, thenSpan.from)) + ' ' + rest;
+			return rest == null ? null : '${StringTools.rtrim(source.substring(nodeSpan.from, thenSpan.from))} $rest';
 		}
 		return node.kind == s.exprStmtKind ? pushArgument(node, name, source, s, checkNodes) : null;
 	}

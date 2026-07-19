@@ -20,7 +20,7 @@ class HxCondElseifChainBlankTest extends Test {
 
 	public function testStmtChainNoSpuriousBlank(): Void {
 		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#elseif d\n\t\treturn 4;\n\t\t#end\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testStmtChainIdempotent(): Void {
@@ -31,12 +31,12 @@ class HxCondElseifChainBlankTest extends Test {
 
 	public function testMemberChainNoSpuriousBlank(): Void {
 		final source: String = 'class M {\n\t#if a\n\tvar x = 1;\n\t#elseif b\n\tvar y = 2;\n\t#elseif c\n\tvar z = 3;\n\t#end\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testAuthoredBlankBeforeElseifPreserved(): Void {
 		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\n\t\t#elseif c\n\t\treturn 3;\n\t\t#end\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	private function roundTrip(source: String): String {

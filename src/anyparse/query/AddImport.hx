@@ -55,7 +55,7 @@ final class AddImport {
 			case _:
 		}
 
-		final stmt: String = (isUsing ? 'using ' : 'import ') + trimmed + ';';
+		final stmt: String = '${(isUsing ? 'using ' : 'import ') + trimmed};';
 
 		// Insertion site, in priority order: after the last existing
 		// import / using (extend the block), else after the package
@@ -65,11 +65,11 @@ final class AddImport {
 		final lastImportTo: Int = spanTo(lastImport);
 		final packageTo: Int = spanTo(packageDecl);
 		final edit: { span: Span, text: String } = if (lastImportTo >= 0)
-			{ span: new Span(lastImportTo, lastImportTo), text: '\n' + stmt };
+			{ span: new Span(lastImportTo, lastImportTo), text: '\n$stmt' };
 		else if (packageTo >= 0)
-			{ span: new Span(packageTo, packageTo), text: '\n' + stmt };
+			{ span: new Span(packageTo, packageTo), text: '\n$stmt' };
 		else
-			{ span: new Span(0, 0), text: stmt + '\n' };
+			{ span: new Span(0, 0), text: '$stmt\n' };
 
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}

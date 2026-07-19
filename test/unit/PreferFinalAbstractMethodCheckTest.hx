@@ -28,9 +28,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 
 	/** Abstract-typed field used only via a mutating method call — must NOT be flagged. */
 	public function testAbstractFieldMethodCallNotFlagged(): Void {
-		final vs: Array<Violation> = fieldViolations(
-			ABSTRACT + 'class C { private var _s:Step = new Step(0); function r():Void _s.next(); }'
-		);
+		final vs: Array<Violation> =
+			fieldViolations('${ABSTRACT}class C { private var _s:Step = new Step(0); function r():Void _s.next(); }');
 		Assert.equals(0, vs.length);
 	}
 
@@ -65,7 +64,7 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 	/** A method REFERENCE (no call) on an abstract-typed field does not mutate — still flagged. */
 	public function testAbstractFieldNoCallStillFlagged(): Void {
 		Assert.equals(
-			1, fieldViolations(ABSTRACT + 'class C { private var _s:Step = new Step(0); function r():Step->Void return null; }').length
+			1, fieldViolations('${ABSTRACT}class C { private var _s:Step = new Step(0); function r():Step->Void return null; }').length
 		);
 	}
 
@@ -73,9 +72,8 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 
 	/** Abstract-typed local used only via a mutating method call — must NOT be flagged. */
 	public function testAbstractLocalMethodCallNotFlagged(): Void {
-		final vs: Array<Violation> = localViolations(
-			ABSTRACT + 'class C { function r():Void { var s:Step = new Step(0); s.next(); trace(s); } }'
-		);
+		final vs: Array<Violation> =
+			localViolations('${ABSTRACT}class C { function r():Void { var s:Step = new Step(0); s.next(); trace(s); } }');
 		Assert.equals(0, vs.length);
 	}
 

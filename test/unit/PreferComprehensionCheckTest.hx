@@ -137,7 +137,7 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	private function fnRet(stmts: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):Array<Int> {\n\t\t' + stmts + '\n\t\treturn out;\n\t}\n}';
+		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):Array<Int> {\n\t\t$stmts\n\t\treturn out;\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

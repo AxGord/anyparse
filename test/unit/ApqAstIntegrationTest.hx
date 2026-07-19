@@ -84,7 +84,7 @@ class ApqAstIntegrationTest extends Test {
 	#if sys
 	private static function collectHxFiles(dir: String, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(dir)) {
-			final path: String = dir + '/' + name;
+			final path: String = '$dir/$name';
 			if (FileSystem.isDirectory(path)) {
 				collectHxFiles(path, into);
 			} else if (StringTools.endsWith(name, '.hx')) {

@@ -171,7 +171,7 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	private function wrapFn(body: String): String {
-		return 'class C {\n\tfunction f(n:Int):Void {\n\t\t' + body + '\n\t}\n}';
+		return 'class C {\n\tfunction f(n:Int):Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

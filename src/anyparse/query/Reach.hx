@@ -58,7 +58,7 @@ final class Reach {
 		final buf: StringBuf = new StringBuf();
 		final chain: Array<String> = [path[0].from];
 		for (edge in path) chain.push(edge.to);
-		buf.add(chain.join(' -> ') + '\n');
+		buf.add('${chain.join(' -> ')}\n');
 		buf.add('  ${CallChains.nodeLabel(graph, path[0].from, sourceOf)}\n');
 		for (edge in path) {
 			final viaText: String = edge.via != null ? ' via ${edge.via}' : '';

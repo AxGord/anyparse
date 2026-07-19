@@ -163,8 +163,7 @@ class ComplexityCheckTest extends Test {
 		// arm is taken), not 30. Under the old per-case count it scored 31 and flagged;
 		// the cognitive-switch count scores it 2, so a command dispatcher is not a false hotspot.
 		final arms: String = [for (i in 0...30) '\t\t\tcase $i: run$i();'].join('\n');
-		final src: String = 'class C {\n\tfunction dispatch(x:Int):Void {\n\t\tswitch x {\n' + arms
-			+ '\n\t\t\tcase _: none();\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction dispatch(x:Int):Void {\n\t\tswitch x {\n$arms\n\t\t\tcase _: none();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -173,8 +172,7 @@ class ComplexityCheckTest extends Test {
 		// switch whose arm carries a 20-`&&` chain scores 22 and stays flagged, so the
 		// exemption removes only case-count inflation, never real branching.
 		final chain: String = [for (_ in 0...21) 'a'].join(' && ');
-		final src: String = 'class C {\n\tfunction f(a:Bool):Bool {\n\t\tswitch a {\n\t\t\tcase true: return ' + chain
-			+ ';\n\t\t\tcase _: return false;\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(a:Bool):Bool {\n\t\tswitch a {\n\t\t\tcase true: return $chain;\n\t\t\tcase _: return false;\n\t\t}\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains("'f'"));
@@ -187,8 +185,7 @@ class ComplexityCheckTest extends Test {
 		// switch. 18 `&&` + this switch scores exactly 20 (not flagged); the old wrapper
 		// double-count would have tipped it to 21 (flagged).
 		final chain: String = [for (_ in 0...19) 'a'].join(' && ');
-		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = ' + chain
-			+ ';\n\t\tswitch x {\n\t\t\t#if debug\n\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
+		final src: String = 'class C {\n\tfunction f(a:Bool, x:Int):Void {\n\t\tfinal b = $chain;\n\t\tswitch x {\n\t\t\t#if debug\n\t\t\tcase 1: p();\n\t\t\tcase 4: r();\n\t\t\t#end\n\t\t\tcase 2: q();\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

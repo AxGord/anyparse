@@ -645,7 +645,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		// terminator (`final x:T = []`) parses with a `;` appended — retried as a
 		// SECOND variant through the SAME category ladder, so it lands in its
 		// proper category with correct spans (a single-category retry mis-spans).
-		for (variant in [substituted, substituted + ';']) for (attempt in attempts) {
+		for (variant in [substituted, '$substituted;']) for (attempt in attempts) {
 			final wrapped: String = attempt.wrap(variant);
 			final tree: Null<QueryNode> = try parseFile(wrapped) catch (e: ParseError) null
 			catch (e: Exception) null;

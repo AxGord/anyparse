@@ -132,7 +132,7 @@ class HxThrowBodySliceTest extends Test {
 	private static inline function makeLongStringLit(len: Int): String {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...len) buf.add('-');
-		return '"' + buf.toString() + '"';
+		return '"${buf.toString()}"';
 	}
 
 }

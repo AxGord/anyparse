@@ -221,7 +221,7 @@ final class IntroduceParameterObject {
 		for (f in fields) {
 			var from: Int = 0;
 			while (true) {
-				final at: Int = body.indexOf('$' + f.name, from);
+				final at: Int = body.indexOf('$$${f.name}', from);
 				if (at < 0) break;
 				final after: Int = at + 1 + f.name.length;
 				final nextOk: Bool = after >= body.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(body, after));

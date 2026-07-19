@@ -256,8 +256,8 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		// Source has actual newlines between the quotes — no `\n` escape.
 		final src: String = 'class F { var x:String = "a\n\nb"; }';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
-		Assert.isTrue(out.indexOf('"a\n\nb"') != -1, 'expected literal multiline string preserved in: <' + out + '>');
-		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <' + out + '>');
+		Assert.isTrue(out.indexOf('"a\n\nb"') != -1, 'expected literal multiline string preserved in: <$out>');
+		Assert.isTrue(out.indexOf('\\n') == -1, 'did not expect re-escaped \\n in: <$out>');
 	}
 
 	private function testSingleString(): Void {
@@ -283,7 +283,7 @@ class HaxeWriterRoundTripTest extends HxTestHelpers {
 		// `escapeSingleQuoteChar`'s `'$' → '\\$'` emission.
 		final src: String = "class F { var x:String = 'val=\\$name'; }";
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
-		Assert.isTrue(out.indexOf("'val=\\$name'") != -1, 'expected backslash-dollar-name preserved in: ' + out);
+		Assert.isTrue(out.indexOf("'val=\\$name'") != -1, 'expected backslash-dollar-name preserved in: $out');
 	}
 
 	private function testSingleStringWithDoubleQuotePreservedBare(): Void {

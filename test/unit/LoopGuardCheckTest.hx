@@ -156,7 +156,7 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	private function wrap(loopCode: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t' + loopCode + '\n\t}\n}';
+		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t$loopCode\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

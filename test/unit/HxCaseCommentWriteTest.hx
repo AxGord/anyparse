@@ -17,22 +17,22 @@ class HxCaseCommentWriteTest extends Test {
 
 	public function testCaseLabelLineCommentStaysOnColonLine(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: // note\n\t\t\t\trun();\n\t\t}\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testCaseLabelBlockCommentStaysOnColonLine(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: /* blk */\n\t\t\t\trun();\n\t\t}\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testEmptyCaseLabelLineCommentStaysOnColonLine(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: // note\n\t\t\tcase B:\n\t\t\t\trun();\n\t\t}\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testCaseLabelNoCommentUnaffected(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: run();\n\t\t}\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	private function roundTrip(source: String): String {

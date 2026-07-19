@@ -543,7 +543,7 @@ fitems.length > 1
 			flattenIfFittingCall(rewrite(chain.operands[0], decisions, insideBroken, width), col, width),
 		];
 		for (i in 0...chain.ops.length) beforeItems.push(Concat([
-			Text(chain.ops[i] + ' '),
+			Text('${chain.ops[i]} '),
 			flattenIfFittingCall(rewrite(chain.operands[i + 1], decisions, insideBroken, width), col, width)
 		]));
 		return Group(Nest(parts.cols, Fill(beforeItems, parts.sep)));

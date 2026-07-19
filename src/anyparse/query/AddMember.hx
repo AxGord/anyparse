@@ -72,7 +72,7 @@ final class AddMember {
 		if (bodyClose < bodySpan.from || StringTools.fastCodeAt(source, bodyClose) != '}'.code)
 			return Err('"$typeName" has no brace body to add a member to');
 
-		final edit: { span: Span, text: String } = { span: new Span(bodyClose, bodyClose), text: '\n' + trimmed + '\n' };
+		final edit: { span: Span, text: String } = { span: new Span(bodyClose, bodyClose), text: '\n$trimmed\n' };
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
 	}
 

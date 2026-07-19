@@ -121,12 +121,12 @@ final class PreferSafeNav implements Check {
 				if (dotPos < 0 || dotPos >= stmtSpan.to) return null;
 				final prefix: String = source.substring(stmtSpan.from, dotPos);
 				final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
-				final body: String = prefix + '?.' + suffix;
+				final body: String = '$prefix?.$suffix';
 				final rest: Null<QueryNode> = m.restCond;
 				final restSpan: Null<Span> = rest != null ? rest.span : null;
 				if (rest != null && restSpan == null) return null;
 				final text: String = restSpan != null
-					? 'if (' + StringTools.trim(source.substring(restSpan.from, restSpan.to)) + ') ' + body
+					? 'if (${StringTools.trim(source.substring(restSpan.from, restSpan.to))}) $body'
 					: body;
 				return { span: span, text: text };
 			});

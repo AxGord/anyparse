@@ -264,13 +264,13 @@ final class PreferFind implements Check {
 		if (forSpan == null || iterSpan == null || condSpan == null) return null;
 		final iterSrc: String = normalize(source.substring(iterSpan.from, iterSpan.to));
 		final condSrc: String = excerpt(source.substring(condSpan.from, condSpan.to));
-		final suggestion: String = iterSrc + '.find(' + loopVar + ' -> ' + condSrc + ')' + tail;
+		final suggestion: String = '$iterSrc.find($loopVar -> $condSrc)$tail';
 		return {
 			file: file,
 			span: forSpan,
 			rule: 'prefer-find',
 			severity: Severity.Info,
-			message: 'this manual first-match loop can be ' + suggestion
+			message: 'this manual first-match loop can be $suggestion'
 		};
 	}
 
@@ -311,7 +311,7 @@ final class PreferFind implements Check {
 	/** The ` ?? <fallback>` suffix for a non-null Form-A fallback, or empty when its span is unavailable. */
 	private static function coalesceTail(fallback: QueryNode, source: String): String {
 		final span: Null<Span> = fallback.span;
-		return span == null ? '' : ' ?? ' + excerpt(source.substring(span.from, span.to));
+		return span == null ? '' : ' ?? ${excerpt(source.substring(span.from, span.to))}';
 	}
 
 	/** Collapse whitespace runs to single spaces and trim, so a multi-line expression fits one message line. */
@@ -335,7 +335,7 @@ final class PreferFind implements Check {
 	/** The normalized source, truncated with an ellipsis beyond the excerpt cap. */
 	private static function excerpt(text: String): String {
 		final flat: String = normalize(text);
-		return flat.length > EXCERPT_MAX ? flat.substring(0, EXCERPT_MAX) + '…' : flat;
+		return flat.length > EXCERPT_MAX ? '${flat.substring(0, EXCERPT_MAX)}…' : flat;
 	}
 
 
@@ -425,7 +425,7 @@ final class PreferFind implements Check {
 		final forSpan: Null<Span> = cand.forNode.span;
 		if (iterSpan == null || condSpan == null || forSpan == null) return null;
 		final iterSrc: String = parenthesizeUnless(source.substring(iterSpan.from, iterSpan.to), postfixSafe(cand.iterable.kind, s));
-		final findExpr: String = iterSrc + '.find(' + cand.loopVar + ' -> ' + source.substring(condSpan.from, condSpan.to) + ')';
+		final findExpr: String = '$iterSrc.find(${cand.loopVar} -> ${source.substring(condSpan.from, condSpan.to)})';
 		if (cand.isBreak) {
 			final decl: QueryNode = cand.sibling;
 			if (!declTypeTolerable(decl, source) || decl.children.length < 1) return null;
@@ -443,11 +443,9 @@ final class PreferFind implements Check {
 			if (fbSpan == null) return null;
 			// `??` binds TIGHTER than the ternary `?:` (and assignment), so a looser fallback needs parens.
 			final looser: Bool = fallback.kind == s.ternaryKind || StringTools.endsWith(fallback.kind, 'Assign');
-			tail = ' ?? ' + parenthesizeUnless(source.substring(fbSpan.from, fbSpan.to), !looser);
+			tail = ' ?? ${parenthesizeUnless(source.substring(fbSpan.from, fbSpan.to), !looser)}';
 		}
-		return [
-			{ span: new Span(forSpan.from, retSpan.to), text: 'return ' + findExpr + tail + ';' }
-		];
+		return [{ span: new Span(forSpan.from, retSpan.to), text: 'return $findExpr$tail;' }];
 	}
 
 	/**
@@ -514,7 +512,7 @@ final class PreferFind implements Check {
 
 	/** `src` verbatim when `safe`, else wrapped in parentheses — keeps a spliced sub-expression's precedence intact. */
 	private static function parenthesizeUnless(src: String, safe: Bool): String {
-		return safe ? src : '(' + src + ')';
+		return safe ? src : '($src)';
 	}
 
 	/** Whether `kind` is a postfix / primary expression that `.find(...)` binds directly onto (no wrapping parens needed); a looser operator (ternary / binary) iterable is wrapped. */

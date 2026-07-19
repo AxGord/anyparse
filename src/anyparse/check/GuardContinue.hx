@@ -300,7 +300,7 @@ final class GuardContinue implements Check {
 		if (ifSpan == null || thenSpan == null) return null;
 		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.support);
 		final inner: String = StringTools.rtrim(source.substring(thenSpan.from + 1, thenSpan.to - 1));
-		return { span: ifSpan, text: 'if (' + neg + ') continue;' + inner };
+		return { span: ifSpan, text: 'if ($neg) continue;$inner' };
 	}
 
 }

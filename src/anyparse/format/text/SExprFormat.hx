@@ -91,7 +91,7 @@ final class SExprFormat implements TextFormat {
 			case '\t'.code: '\\t';
 			case _:
 				if (c < ' '.code)
-					'\\u' + StringTools.hex(c, 4);
+					'\\u${StringTools.hex(c, 4)}';
 				else
 					String.fromCharCode(c);
 		};

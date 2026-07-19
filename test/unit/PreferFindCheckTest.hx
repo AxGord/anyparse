@@ -204,7 +204,7 @@ class PreferFindCheckTest extends Test {
 	}
 
 	private function fn(body: String, ret: String): String {
-		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):' + ret + ' {\n\t\t' + body + '\n\t}\n}';
+		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):$ret {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {
@@ -213,7 +213,7 @@ class PreferFindCheckTest extends Test {
 
 	private function file(body: String, ret: String, withUsing: Bool): String {
 		final head: String = 'package p;\n\n' + (withUsing ? 'using Lambda;\n\n' : '');
-		return head + 'class C {\n\tfunction f(xs:Array<Int>, node:Node, a:Int, b:Int):' + ret + ' {\n\t\t' + body + '\n\t}\n}';
+		return '${head}class C {\n\tfunction f(xs:Array<Int>, node:Node, a:Int, b:Int):$ret {\n\t\t$body\n\t}\n}';
 	}
 
 	private function fixResult(src: String): String {

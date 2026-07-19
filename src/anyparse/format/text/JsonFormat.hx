@@ -126,7 +126,7 @@ final class JsonFormat implements TextFormat {
 			case FORM_FEED: '\\f';
 			case _:
 				if (c < ' '.code)
-					'\\u' + StringTools.hex(c, 4);
+					'\\u${StringTools.hex(c, 4)}';
 				else
 					String.fromCharCode(c);
 		};

@@ -80,7 +80,7 @@ class DoubleNegationCheckTest extends Test {
 
 	/** Wrap a single statement body in a minimal class+function so it parses. */
 	private function wrap(body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\t' + body + '\n\t}\n}';
+		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function applyFix(src: String): String {

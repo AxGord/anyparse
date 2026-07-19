@@ -242,7 +242,7 @@ final class InlineMethod {
 		hits.sort((a, b) -> b.from - a.from);
 		for (h in hits) text = text.substring(0, h.from - eFrom) + h.text + text.substring(h.to - eFrom);
 
-		return ATOMIC_ROOT_KINDS.contains(expr.kind) ? text : '(' + text + ')';
+		return ATOMIC_ROOT_KINDS.contains(expr.kind) ? text : '($text)';
 	}
 
 	/** An argument's source, parenthesised when its root is an operator; null when it has no span. */
@@ -250,7 +250,7 @@ final class InlineMethod {
 		final sp: Null<Span> = arg.span;
 		if (sp == null) return null;
 		final raw: String = source.substring(sp.from, sp.to);
-		return ATOMIC_ROOT_KINDS.contains(arg.kind) ? raw : '(' + raw + ')';
+		return ATOMIC_ROOT_KINDS.contains(arg.kind) ? raw : '($raw)';
 	}
 
 	/** Count `IdentExpr` nodes named `name` in `node`'s subtree. */

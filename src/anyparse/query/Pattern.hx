@@ -208,7 +208,7 @@ final class Metavar {
 			if (bare != null) {
 				return newChildren.length == 0
 					? new QueryNode(KIND, bare, [], tree.span)
-					: new QueryNode(tree.kind, '$$' + bare, newChildren, tree.span);
+					: new QueryNode(tree.kind, '$$$bare', newChildren, tree.span);
 			}
 		}
 		return new QueryNode(tree.kind, n, newChildren, tree.span);

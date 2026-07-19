@@ -678,9 +678,8 @@ class DeadNullGuardTest extends Test {
 
 	/** A self-contained module: a non-null `Foo` local `x`, plus a `cond()` helper, wrapping `body`. */
 	private function wrapFoo(body: String): String {
-		return 'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n'
-			+ '@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n'
-			+ '\tfunction f():Void {\n\t\tvar x = new Foo();\n\t\t' + body + '\n\t}\n}\n';
+		return
+			'class Foo {\n\tpublic function new() {}\n\tpublic function g():Void {}\n}\n\n@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n\tfunction f():Void {\n\t\tvar x = new Foo();\n\t\t$body\n\t}\n}\n';
 	}
 
 	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */

@@ -685,7 +685,7 @@ final class Cli {
 		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
+			stderr('${emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
@@ -2559,7 +2559,7 @@ final class Cli {
 		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames) + '\n');
+			stderr('${emptyWalkerNudge('uses', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
@@ -2631,7 +2631,7 @@ final class Cli {
 		if (allEntries == null) return EXIT_RUNTIME;
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
+			stderr('${emptyWalkerNudge('meta', null, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
@@ -3118,7 +3118,7 @@ final class Cli {
 			return EXIT_USAGE;
 		}
 		if (emitted == expected) return EXIT_OK;
-		sysPrint(describeByteDiff(emitted, expected) + '\n');
+		sysPrint('${describeByteDiff(emitted, expected)}\n');
 		return EXIT_RUNTIME;
 	}
 
@@ -3262,7 +3262,7 @@ final class Cli {
 					'apq lit: NOTE "$targetStr" looks like a regex (contains $regexLabel) — lit is substring-only. Run separate lit calls per alternative, or use apq refs / apq uses / apq search for shape-aware lookup.\n'
 				);
 			else
-				stderr(emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
+				stderr('${emptyWalkerNudge('lit', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 		} else if (collected.autoWidened) {
 			final tried: String = effectiveKindFilter.join(',');
 			stderr(
@@ -3394,7 +3394,7 @@ final class Cli {
 		}
 
 		if (allEntries.length == 0)
-			stderr(emptyWalkerNudge('cases', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null) + '\n');
+			stderr('${emptyWalkerNudge('cases', targetStr, paths.length, paths.length - skipEntries.length, skipEntries, null)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
@@ -4005,7 +4005,7 @@ final class Cli {
 		//                        the right tool (refs/uses don't apply).
 		//  - IdentExpr / other — bare identifier; refs/uses/lit all
 		//                        plausible depending on intent.
-		if (parsed.isDegenerate()) stderr(degenerateNudge(patternStr, parsed.root.kind) + '\n');
+		if (parsed.isDegenerate()) stderr('${degenerateNudge(patternStr, parsed.root.kind)}\n');
 
 		// `--explain`: emit the parsed pattern's S-expr to stderr at
 		// scan start. When 0 matches across all scanned files the
@@ -4722,7 +4722,7 @@ final class Cli {
 		#if (sys || nodejs)
 		var dir: String = haxe.io.Path.directory(FileSystem.absolutePath(filePath));
 		while (dir != '') {
-			final candidate: String = dir + '/hxformat.json';
+			final candidate: String = '$dir/hxformat.json';
 			if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate)) return File.getContent(candidate);
 			final parent: String = haxe.io.Path.directory(dir);
 			if (parent == dir) break;
@@ -5743,8 +5743,8 @@ final class Cli {
 	private static function detectMacroReification(s: String): Null<String> {
 		final tags: Array<String> = ['v', 'i', 'a', 'b', 'p', 'e', 'es'];
 		for (tag in tags) {
-			final probe: String = "$" + tag + '{';
-			if (s.indexOf(probe) >= 0) return "`$" + tag + '{...}`';
+			final probe: String = '$$$tag{';
+			if (s.indexOf(probe) >= 0) return '`$$$tag{...}`';
 		}
 		return null;
 	}
@@ -5794,14 +5794,13 @@ final class Cli {
 		final prefix: String = 'apq search: pattern "$patternStr" ';
 		return switch rootKind {
 			case 'Metavar':
-				prefix + 'is a lone metavar — matches every node. Narrow with structural '
-					+ "context (e.g. \"$x.field\", \"func($x)\"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.";
+				'${prefix}is a lone metavar — matches every node. Narrow with structural context (e.g. "$$x.field", "func($$x)"), or look up by name: apq refs <name> --decls / apq uses <Type>. Searching anyway.';
 			case 'Literal' | 'StringLit' | 'BoolLit' | 'IntLit' | 'FloatLit' | 'SingleStringExpr' | 'DoubleStringExpr' | 'RawString':
 				prefix + 'is a bare literal — for literal-content lookup use: apq lit \'$patternStr\' <files>. Searching anyway.';
 			case _:
 				// Bare identifier (IdentExpr) and anything else that
 				// parses to a single leaf.
-				prefix + 'has no code structure — search matches shape, not bare names. '
+				'${prefix}has no code structure — search matches shape, not bare names. '
 					+ 'Try one of: apq refs $patternStr --decls (value binding), ' + 'apq uses $patternStr (type position), '
 					+ 'apq lit \'$patternStr\' (string-literal content), ' + 'apq ast --select. Searching anyway.';
 		}
@@ -6137,7 +6136,7 @@ final class Cli {
 	 * a root, or outside any root, is package-less (`''`).
 	 */
 	private static function derivePackage(path: String): String {
-		final dir: String = haxe.io.Path.directory(FileSystem.absolutePath(path)) + '/';
+		final dir: String = '${haxe.io.Path.directory(FileSystem.absolutePath(path))}/';
 		for (root in ['/src/', '/test/']) {
 			final at: Int = dir.lastIndexOf(root);
 			if (at >= 0) {
@@ -6170,7 +6169,7 @@ final class Cli {
 		final dot: Int = iface.lastIndexOf('.');
 		if (dot >= 0) {
 			final simple: String = iface.substr(dot + 1);
-			final dir: String = haxe.io.Path.directory(FileSystem.absolutePath(newPath)) + '/';
+			final dir: String = '${haxe.io.Path.directory(FileSystem.absolutePath(newPath))}/';
 			var srcRoot: Null<String> = null;
 			for (root in ['/src/', '/test/']) {
 				final at: Int = dir.lastIndexOf(root);
@@ -6180,10 +6179,10 @@ final class Cli {
 				}
 			}
 			if (srcRoot == null) return null;
-			final file: String = srcRoot + iface.split('.').join('/') + '.hx';
+			final file: String = '${srcRoot + iface.split('.').join('/')}.hx';
 			return !FileSystem.exists(file) ? null : { source: readFile(file), ifaceModule: iface, simple: simple };
 		}
-		final file: String = haxe.io.Path.directory(FileSystem.absolutePath(newPath)) + '/' + iface + '.hx';
+		final file: String = '${haxe.io.Path.directory(FileSystem.absolutePath(newPath))}/$iface.hx';
 		if (!FileSystem.exists(file)) return null;
 		final newPkg: String = derivePackage(newPath);
 		return { source: readFile(file), ifaceModule: newPkg == '' ? iface : '$newPkg.$iface', simple: iface };
@@ -8975,7 +8974,7 @@ final class Cli {
 					skipParse++;
 					final pos: Position = exception.span.lineCol(source);
 					final exp: String = reconNormalize(exception.expected);
-					final src: String = showSource ? ' :: src="' + reconNormalize(reconSnippet(source, exception.span.from)) + '"' : '';
+					final src: String = showSource ? ' :: src="${reconNormalize(reconSnippet(source, exception.span.from))}"' : '';
 					skipLines.push('SKIP $path :: ${pos.line}:${pos.col} expected="$exp"$src');
 				} catch (exception: Exception) {
 					skipParse++;
@@ -10955,7 +10954,7 @@ final class Cli {
 		}
 		final effectiveKinds: Array<EdgeKind> = kinds ?? [Call, Ref, New, Virtual];
 		final found: Array<Array<CallEdge>> = Reach.paths(graph, fromIds, toIds, maxPaths, effectiveKinds);
-		for (path in found) sysPrint(Reach.render(graph, path, f -> sources[f]) + '\n');
+		for (path in found) sysPrint('${Reach.render(graph, path, f -> sources[f])}\n');
 		if (found.length == 0) stderr('apq reach: no path found (${fromIds.length} from-node(s), ${toIds.length} to-node(s))\n');
 		if (graph.unresolved.length > 0)
 			stderr('apq reach: note — ${graph.unresolved.length} call site(s) unresolved; the graph is approximate\n');
@@ -11807,7 +11806,7 @@ final class Cli {
 		final checks: Array<Check> = Linter.builtins();
 		var width: Int = 0;
 		for (c in checks) if (c.id().length > width) width = c.id().length;
-		for (c in checks) sysPrint(StringTools.rpad(c.id(), ' ', width) + '  ' + c.description() + '\n');
+		for (c in checks) sysPrint('${StringTools.rpad(c.id(), ' ', width)}  ${c.description()}\n');
 	}
 
 	private static function printWriteLangHelp(): Void {
@@ -13011,7 +13010,7 @@ final class Cli {
 					});
 				} catch (exception: Exception) {
 					final relPath: String = stripRootPrefix(path, root);
-					final key: String = '<non-ParseError> ' + reconNormalize(exception.message);
+					final key: String = '<non-ParseError> ${reconNormalize(exception.message)}';
 					addReconCluster(clusters, key, relPath, '<exception>');
 					records.push({
 						path: relPath,
@@ -13130,7 +13129,7 @@ final class Cli {
 
 	private static inline function padLeft(s: String, width: Int): String {
 		var out: String = s;
-		while (out.length < width) out = ' ' + out;
+		while (out.length < width) out = ' $out';
 		return out;
 	}
 
@@ -13396,7 +13395,7 @@ final class Cli {
 	}
 
 	private static function stripRootPrefix(path: String, root: String): String {
-		return StringTools.startsWith(path, root + '/') ? path.substr(root.length + 1) : path == root ? '.' : path;
+		return StringTools.startsWith(path, '$root/') ? path.substr(root.length + 1) : path == root ? '.' : path;
 	}
 
 	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {

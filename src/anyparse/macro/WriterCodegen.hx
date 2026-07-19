@@ -37,7 +37,7 @@ class WriterCodegen {
 			if (optionsTypePath == null)
 				Context.fatalError('WriterCodegen.emit: text writer requires optionsTypePath', Context.currentPos());
 			final optionsCT: ComplexType = optionsComplexType(optionsTypePath);
-			final resolvedRootFn: String = rootFnName ?? ('write' + simpleName(rootTypePath));
+			final resolvedRootFn: String = rootFnName ?? ('write${simpleName(rootTypePath)}');
 			fields.push(publicEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
 			fields.push(publicDocEntry(resolvedRootFn, rootReturnCT, formatInfo, optionsCT));
 			for (rule in rules) fields.push(ruleField(rule, optionsCT));

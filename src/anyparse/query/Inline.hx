@@ -278,7 +278,7 @@ final class Inline {
 		// Build the substitution text: the initializer's exact source,
 		// parenthesised when the root is an operator.
 		final initText: String = source.substring(initRange.from, initRange.to);
-		final substitution: String = ATOMIC_ROOT_KINDS.contains(initializer.kind) ? initText : '(' + initText + ')';
+		final substitution: String = ATOMIC_ROOT_KINDS.contains(initializer.kind) ? initText : '($initText)';
 
 		final edits: Array<{ span: Span, text: String }> = [];
 

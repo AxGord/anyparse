@@ -219,7 +219,7 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `inline` — passed as a `NamingRule.normalize` function value.
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
-		return name.length == 0 ? null : '_' + name.charAt(0).toLowerCase() + name.substr(1);
+		return name.length == 0 ? null : '_${name.charAt(0).toLowerCase()}${name.substr(1)}';
 	}
 
 	/**
@@ -277,8 +277,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 */
 	private static function hasPhysicalAccessors(node: QueryNode, parent: Null<QueryNode>, name: String): Bool {
 		if (parent == null || (node.kind != 'VarMember' && node.kind != 'FinalMember')) return false;
-		final getName: String = 'get_' + name;
-		final setName: String = 'set_' + name;
+		final getName: String = 'get_$name';
+		final setName: String = 'set_$name';
 		return parent.children.exists(sib -> sib.kind == 'FnMember' && (sib.name == getName || sib.name == setName));
 	}
 

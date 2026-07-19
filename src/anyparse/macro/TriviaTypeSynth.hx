@@ -782,7 +782,7 @@ class TriviaTypeSynth {
 				throw 'unreachable';
 		};
 		return {
-			name: 'pairedToRaw_' + rawSimple,
+			name: 'pairedToRaw_$rawSimple',
 			access: [APublic, AStatic],
 			pos: pos,
 			kind: FFun({ args: [{ name: 'value', type: pairedCT }], ret: rawCT, expr: body }),
@@ -850,7 +850,7 @@ class TriviaTypeSynth {
 				final refName: String = node.annotations.get('base.ref');
 				final optional: Bool = node.annotations.get('base.optional') == true;
 				if (!refIsBearing(refName)) return access; // raw type already
-				final fnName: String = 'pairedToRaw_' + leafOf(refName);
+				final fnName: String = 'pairedToRaw_${leafOf(refName)}';
 				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:
@@ -949,7 +949,7 @@ class TriviaTypeSynth {
 				throw 'unreachable';
 		};
 		return {
-			name: 'rawToPaired_' + rawSimple,
+			name: 'rawToPaired_$rawSimple',
 			access: [APublic, AStatic],
 			pos: pos,
 			kind: FFun({ args: [{ name: 'value', type: rawCT }], ret: pairedCT, expr: body }),
@@ -1139,7 +1139,7 @@ class TriviaTypeSynth {
 				final refName: String = node.annotations.get('base.ref');
 				final optional: Bool = node.annotations.get('base.optional') == true;
 				if (!refIsBearing(refName)) return access;
-				final fnName: String = 'rawToPaired_' + leafOf(refName);
+				final fnName: String = 'rawToPaired_${leafOf(refName)}';
 				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:

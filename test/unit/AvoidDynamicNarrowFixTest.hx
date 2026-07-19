@@ -29,28 +29,28 @@ class AvoidDynamicNarrowFixTest extends Test {
 	// ---- FIRES: sound narrowings ----
 
 	public function testTypedSinkPassThrough(): Void {
-		Assert.equals('Foo', narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO));
+		Assert.equals('Foo', narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'));
 	}
 
 	public function testAssignSinkPassThrough(): Void {
 		// `b = x` where b is a Foo parameter: the assignment sink corroborates the type.
-		Assert.equals('Foo', narrow('class C {\n\tfunction f(a:Foo, b:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tb = x;\n\t}\n}' + FOO));
+		Assert.equals('Foo', narrow('class C {\n\tfunction f(a:Foo, b:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tb = x;\n\t}\n}$FOO'));
 	}
 
 	public function testTypedReassignNarrows(): Void {
 		// Init AND reassignment both typed Foo: the value provably always holds a Foo.
 		Assert.equals(
 			'Foo',
-			narrow('class C {\n\tfunction f(a:Foo, b:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(a:Foo, b:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tx = b;\n\t\tvar y:Foo = x;\n\t}\n}$FOO')
 		);
 	}
 
 	public function testFinalLocalNarrows(): Void {
-		Assert.equals('Foo', narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tfinal x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO));
+		Assert.equals('Foo', narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tfinal x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'));
 	}
 
 	public function testNewInitNarrows(): Void {
-		Assert.equals('Foo', narrow('class C {\n\tfunction f():Void {\n\t\tvar x:Dynamic = new Foo();\n\t\tvar y:Foo = x;\n\t}\n}' + FOO));
+		Assert.equals('Foo', narrow('class C {\n\tfunction f():Void {\n\t\tvar x:Dynamic = new Foo();\n\t\tvar y:Foo = x;\n\t}\n}$FOO'));
 	}
 
 	// ---- SKIPS: dynamic-signal uses ----
@@ -58,7 +58,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testMemberAccessSkipped(): Void {
 		// `x.bar()` — instance member vs using-extension vs getter is undecidable here → skip.
 		Assert.isNull(
-			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tx.bar();\n\t\tvar y:Foo = x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tx.bar();\n\t\tvar y:Foo = x;\n\t}\n}$FOO')
 		);
 	}
 
@@ -74,7 +74,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testIsCheckSkipped(): Void {
 		Assert.isNull(
 			narrow(
-				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x is Foo) return;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO
+				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x is Foo) return;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'
 			)
 		);
 	}
@@ -86,28 +86,27 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testNullComparisonSkipped(): Void {
 		Assert.isNull(
 			narrow(
-				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x == null) return;\n\t\tvar y:Foo = x;\n\t}\n}'
-				+ FOO
+				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tif (x == null) return;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'
 			)
 		);
 	}
 
 	public function testNullAssignmentSkipped(): Void {
 		Assert.isNull(
-			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tx = null;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tx = null;\n\t\tvar y:Foo = x;\n\t}\n}$FOO')
 		);
 	}
 
 	public function testCastSkipped(): Void {
-		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = cast(x, Foo);\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = cast(x, Foo);\n\t}\n}$FOO'));
 	}
 
 	public function testSafeNavSkipped(): Void {
-		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = x?.bar;\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = x?.bar;\n\t}\n}$FOO'));
 	}
 
 	public function testIndexAccessSkipped(): Void {
-		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = x[0];\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = x[0];\n\t}\n}$FOO'));
 	}
 
 	// ---- SKIPS: typed seams of unknown expected type (the abstract-@:from hole) ----
@@ -115,26 +114,25 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testCallArgSkipped(): Void {
 		// A call argument hands the value to a parameter whose type may be an abstract with
 		// an implicit @:from — Dynamic passes raw, a narrowed type converts. Skip.
-		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tg(x);\n\t\tvar y:Foo = x;\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tg(x);\n\t\tvar y:Foo = x;\n\t}\n}$FOO'));
 	}
 
 	public function testStdStringArgSkipped(): Void {
 		Assert.isNull(
-			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tStd.string(x);\n\t\tvar y:Foo = x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tStd.string(x);\n\t\tvar y:Foo = x;\n\t}\n}$FOO')
 		);
 	}
 
 	public function testReturnUseSkipped(): Void {
 		Assert.isNull(
-			narrow('class C {\n\tfunction f(a:Foo):Dynamic {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\treturn x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(a:Foo):Dynamic {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\treturn x;\n\t}\n}$FOO')
 		);
 	}
 
 	public function testTernaryBranchSkipped(): Void {
 		Assert.isNull(
 			narrow(
-				'class C {\n\tfunction f(a:Foo, c:Bool):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\tvar r = c ? x : a;\n\t}\n}'
-				+ FOO
+				'class C {\n\tfunction f(a:Foo, c:Bool):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\tvar r = c ? x : a;\n\t}\n}$FOO'
 			)
 		);
 	}
@@ -142,7 +140,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 	public function testUntypedSinkSkipped(): Void {
 		// `var y = x` — the target's inferred type would silently change from Dynamic to T. Skip.
 		Assert.isNull(
-			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = x;\n\t\tvar z:Foo = x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y = x;\n\t\tvar z:Foo = x;\n\t}\n}$FOO')
 		);
 	}
 
@@ -150,13 +148,13 @@ class AvoidDynamicNarrowFixTest extends Test {
 
 	public function testUntypedInitSkipped(): Void {
 		// The initializer is an untyped call — the value is NOT provably one type, even with a typed sink.
-		Assert.isNull(narrow('class C {\n\tfunction f():Void {\n\t\tvar x:Dynamic = g();\n\t\tvar y:Foo = x;\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f():Void {\n\t\tvar x:Dynamic = g();\n\t\tvar y:Foo = x;\n\t}\n}$FOO'));
 	}
 
 	public function testBoundaryLocalSkipped(): Void {
 		// A Reflect boundary local: init untyped → not provably one type → skip (genuine dynamic value).
 		Assert.isNull(
-			narrow('class C {\n\tfunction f(o:Foo):Void {\n\t\tvar x:Dynamic = Reflect.field(o, \'k\');\n\t\tvar y:Foo = x;\n\t}\n}' + FOO)
+			narrow('class C {\n\tfunction f(o:Foo):Void {\n\t\tvar x:Dynamic = Reflect.field(o, \'k\');\n\t\tvar y:Foo = x;\n\t}\n}$FOO')
 		);
 	}
 
@@ -164,26 +162,23 @@ class AvoidDynamicNarrowFixTest extends Test {
 		// The dogfood FP: `Std.isOfType(raw, Array)` guards a genuinely heterogeneous value. Skip.
 		Assert.isNull(
 			narrow(
-				'class C {\n\tfunction f(o:Foo):Void {\n\t\tvar raw:Dynamic = Reflect.field(o, \'k\');\n\t\tif (Std.isOfType(raw, Array)) {\n\t\t\tvar arr:Array<Dynamic> = raw;\n\t\t}\n\t}\n}'
-				+ FOO
+				'class C {\n\tfunction f(o:Foo):Void {\n\t\tvar raw:Dynamic = Reflect.field(o, \'k\');\n\t\tif (Std.isOfType(raw, Array)) {\n\t\t\tvar arr:Array<Dynamic> = raw;\n\t\t}\n\t}\n}$FOO'
 			)
 		);
 	}
 
 	public function testHeterogeneousSinksSkipped(): Void {
 		Assert.isNull(
-			narrow(
-				'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\tvar z:Bar = x;\n\t}\n}' + FOO_BAR
-			)
+			narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t\tvar z:Bar = x;\n\t}\n}$FOO_BAR')
 		);
 	}
 
 	public function testInitializerOnlyNoUseSkipped(): Void {
-		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t}\n}$FOO'));
 	}
 
 	public function testNoInitializerSkipped(): Void {
-		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic;\n\t\tx = a;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO));
+		Assert.isNull(narrow('class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic;\n\t\tx = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO'));
 	}
 
 	public function testUnresolvedTypeSkipped(): Void {
@@ -234,21 +229,21 @@ class AvoidDynamicNarrowFixTest extends Test {
 		// Reviewer repro: a class-notation struct FIELD inside a local's anon-type annotation
 		// passes the char test (`:` before, `;` after) but is a Field-position violation the
 		// local's inference must never rewrite — the child-containment gate rejects it.
-		final src: String = 'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar o:{ var x:Dynamic; var k:Int; } = a;\n\t\to = a;\n\t}\n}' + FOO;
+		final src: String = 'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar o:{ var x:Dynamic; var k:Int; } = a;\n\t\to = a;\n\t}\n}$FOO';
 		Assert.equals(0, edits(src).length);
 	}
 
 	// ---- Applied-edit integrity ----
 
 	public function testAppliedEditReplacesTokenOnly(): Void {
-		final src: String = 'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO;
+		final src: String = 'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO';
 		final out: String = apply(src, edits(src));
 		Assert.isTrue(out.indexOf('var x:Foo = a;') != -1, 'the Dynamic token is replaced by the inferred type');
 		Assert.isTrue(out.indexOf('Dynamic') == -1, 'no Dynamic remains');
 	}
 
 	public function testIdempotent(): Void {
-		final src: String = 'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}' + FOO;
+		final src: String = 'class C {\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO';
 		final out: String = apply(src, edits(src));
 		// Re-running produces no further local-Dynamic edit (nothing left to narrow).
 		Assert.equals(0, edits(out).length);
@@ -256,8 +251,7 @@ class AvoidDynamicNarrowFixTest extends Test {
 
 	public function testMixedViolationsEditsOnlyLocal(): Void {
 		// A file with a field Dynamic AND a narrowable local: only the local is edited.
-		final src: String = 'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}'
-			+ FOO;
+		final src: String = 'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO';
 		final e: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, e.length);
 		final out: String = apply(src, e);

@@ -92,14 +92,14 @@ class Build {
 			TPath({
 				pack: packOf(shape.root).concat(['spans']),
 				name: 'Pairs',
-				sub: rootSimple + 'S',
+				sub: '${rootSimple}S',
 				params: []
 			});
 		else if (rootTriviaBearing)
 			TPath({
 				pack: packOf(shape.root).concat(['trivia']),
 				name: 'Pairs',
-				sub: rootSimple + 'T',
+				sub: '${rootSimple}T',
 				params: []
 			});
 		else
@@ -233,7 +233,7 @@ class Build {
 			? TPath({
 				pack: packOf(shape.root).concat(['trivia']),
 				name: 'Pairs',
-				sub: rootSimple + 'T',
+				sub: '${rootSimple}T',
 				params: []
 			})
 			: TPath({ pack: packOf(shape.root), name: rootSimple, params: [] });

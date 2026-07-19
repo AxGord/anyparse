@@ -52,14 +52,14 @@ class HxToplevelMetaSliceTest extends HxTestHelpers {
 				Assert.equals('@:allow', (call.name: String));
 				Assert.equals(1, call.args.length);
 			case _:
-				Assert.fail('expected MetaCall for @:allow, got ' + ast.decls[0].meta[0]);
+				Assert.fail('expected MetaCall for @:allow, got ${ast.decls[0].meta[0]}');
 		}
 		switch ast.decls[0].meta[1] {
 			case MetaCall(call):
 				Assert.equals('@test', (call.name: String));
 				Assert.equals(1, call.args.length);
 			case _:
-				Assert.fail('expected MetaCall for @test, got ' + ast.decls[0].meta[1]);
+				Assert.fail('expected MetaCall for @test, got ${ast.decls[0].meta[1]}');
 		}
 	}
 

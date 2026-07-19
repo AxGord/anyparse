@@ -234,7 +234,7 @@ final class PreferEnumAbstract implements Check {
 		if (kind == cfg.returnKind && node.children.length > 0)
 			collectResults(node.children[0], 'ret@$fnId', source, names, cfg, out);
 		else if (cfg.assignKinds.contains(kind) && node.children.length >= 2)
-			collectResults(node.children[1], 'asg@' + spanText(node.children[0], source), source, names, cfg, out);
+			collectResults(node.children[1], 'asg@${spanText(node.children[0], source)}', source, names, cfg, out);
 		for (child in node.children) computeSinks(child, source, names, cfg, out, childFnId);
 	}
 

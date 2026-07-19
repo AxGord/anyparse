@@ -266,8 +266,8 @@ final class Naming implements Check {
 	 * a comment mention counts too, which is acceptably conservative.
 	 */
 	private static function referencedAsStringLiteral(name: String, sources: Array<String>): Bool {
-		final single: String = "'" + name + "'";
-		final double: String = '"' + name + '"';
+		final single: String = '\'$name\'';
+		final double: String = '"$name"';
 		return sources.exists(src -> src.indexOf(single) >= 0 || src.indexOf(double) >= 0);
 	}
 

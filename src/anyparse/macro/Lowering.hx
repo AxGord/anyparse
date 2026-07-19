@@ -2124,14 +2124,14 @@ class Lowering {
 			? TPath({
 				pack: packOf(refName).concat(['spans']),
 				name: 'Pairs',
-				sub: simple + 'S',
+				sub: '${simple}S',
 				params: []
 			})
 			: isTriviaBearing(refName)
 				? TPath({
 					pack: packOf(refName).concat(['trivia']),
 					name: 'Pairs',
-					sub: simple + 'T',
+					sub: '${simple}T',
 					params: []
 				})
 				: TPath({ pack: packOf(refName), name: simple, params: [] });
@@ -2141,9 +2141,9 @@ class Lowering {
 	private function ruleCtorPath(typePath: String, ctor: String): Array<String> {
 		final simple: String = simpleName(typePath);
 		return isSpanBearing(typePath)
-			? packOf(typePath).concat(['spans', 'Pairs', simple + 'S', ctor])
+			? packOf(typePath).concat(['spans', 'Pairs', '${simple}S', ctor])
 			: isTriviaBearing(typePath)
-				? packOf(typePath).concat(['trivia', 'Pairs', simple + 'T', ctor])
+				? packOf(typePath).concat(['trivia', 'Pairs', '${simple}T', ctor])
 				: packOf(typePath).concat([simple, ctor]);
 	}
 
@@ -3693,7 +3693,7 @@ class Lowering {
 		// (between enclosing kw and first element). Captures true/false into
 		// `<localName>SepBefore` for the writer's padLeading runtime gate to
 		// re-emit the leading sep.
-		final sepBeforeLocal: String = localName + 'SepBefore';
+		final sepBeforeLocal: String = '${localName}SepBefore';
 		parseSteps.push({
 			expr: EVars([
 				{
@@ -5099,7 +5099,7 @@ expectLit(ctx, $v{trailText}));
 		// pre-slice (the captured local is still declared above and
 		// discarded — no field-shape mismatch).
 		if (_ctx.trivia && child.kind == Star && child.fmtHasFlag('sepBeforeOpt')) {
-			final sepBeforeLocal: String = localName + 'SepBefore';
+			final sepBeforeLocal: String = '${localName}SepBefore';
 			structFields.push({ field: fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX, expr: macro $i{sepBeforeLocal} });
 		}
 	}

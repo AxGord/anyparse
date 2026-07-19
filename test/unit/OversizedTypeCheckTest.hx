@@ -40,7 +40,7 @@ class OversizedTypeCheckTest extends Test {
 	public function testOverLineLimitFlagged(): Void {
 		// One member, but the type body spans > 2000 lines.
 		final blanks: String = [for (_ in 0...2001) '\n'].join('');
-		final vs: Array<Violation> = violations('class C {\n' + blanks + '\tvar x:Int;\n}');
+		final vs: Array<Violation> = violations('class C {\n$blanks\tvar x:Int;\n}');
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('2004 lines (max 2000)'));
 	}
@@ -48,7 +48,7 @@ class OversizedTypeCheckTest extends Test {
 	public function testLineBoundaryNotFlagged(): Void {
 		// Exactly 2000 lines == max -> quiet.
 		final blanks: String = [for (_ in 0...1997) '\n'].join('');
-		Assert.equals(0, violations('class C {\n' + blanks + '\tvar x:Int;\n}').length);
+		Assert.equals(0, violations('class C {\n$blanks\tvar x:Int;\n}').length);
 	}
 
 	public function testConditionalMembersCounted(): Void {

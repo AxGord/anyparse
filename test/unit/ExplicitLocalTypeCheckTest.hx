@@ -361,7 +361,7 @@ class ExplicitLocalTypeCheckTest extends Test {
 	// --- helpers ---
 
 	private function wrap(body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\t' + body + '\n\t}\n}';
+		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

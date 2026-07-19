@@ -101,7 +101,7 @@ final class LoopGuard implements Check {
 			final guardSpan: Null<Span> = m.guard.span;
 			if (bodySpan == null || guardSpan == null) continue;
 			final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
-			edits.push({ span: bodySpan, text: 'if (' + invert(m.cond, source, seams) + ') {' + rest + '}' });
+			edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams)}) {$rest}' });
 		}
 		return RefactorSupport.dropContainedEdits(edits);
 	}

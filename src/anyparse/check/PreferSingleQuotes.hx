@@ -110,7 +110,7 @@ final class PreferSingleQuotes implements Check {
 	 */
 	private static function single(node: QueryNode, source: String, support: StringFoldSupport): Null<String> {
 		final literal: Null<StringLiteral> = support.literalOf(node, source);
-		return literal == null || literal.quote != '"' ? null : !convertible(literal.content) ? null : "'" + literal.content + "'";
+		return literal == null || literal.quote != '"' ? null : !convertible(literal.content) ? null : '\'${literal.content}\'';
 	}
 
 	/** Whether `content` (raw inner source) can be re-wrapped in single quotes unchanged. */

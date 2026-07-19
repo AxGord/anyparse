@@ -86,8 +86,8 @@ final class PreferNullCoalescing implements Check {
 			if (guardedSpan == null || fallbackSpan == null) return null;
 			final guardedSrc: String = source.substring(guardedSpan.from, guardedSpan.to);
 			final fallbackSrc: String = source.substring(fallbackSpan.from, fallbackSpan.to);
-			final fallbackText: String = m.fallback.kind == seams.ternaryKind ? '(' + fallbackSrc + ')' : fallbackSrc;
-			return { span: span, text: guardedSrc + ' ?? ' + fallbackText };
+			final fallbackText: String = m.fallback.kind == seams.ternaryKind ? '($fallbackSrc)' : fallbackSrc;
+			return { span: span, text: '$guardedSrc ?? $fallbackText' };
 		});
 	}
 

@@ -168,7 +168,7 @@ final class CheckScan {
 			}
 		}
 		final src: String = source.substring(cs.from, cs.to);
-		return seams.atomicKinds.contains(cond.kind) ? '!' + src : '!(' + src + ')';
+		return seams.atomicKinds.contains(cond.kind) ? '!$src' : '!($src)';
 	}
 
 	/**

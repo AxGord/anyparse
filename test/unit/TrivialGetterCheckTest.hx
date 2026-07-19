@@ -565,7 +565,7 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	private function cls(members: String): String {
-		return 'class C {\n\t' + members + '\n}';
+		return 'class C {\n\t$members\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

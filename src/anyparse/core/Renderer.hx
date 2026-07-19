@@ -2463,7 +2463,7 @@ class Renderer {
 				// drop-on-state semantic is moot inside force-flat.
 				ctx.pendingOptSpace = !f.forceFlat && ctx.lastEmit == Hardline
 					? null
-					: ctx.pendingOptSpace == null ? ' ' : ctx.pendingOptSpace + ' ';
+					: ctx.pendingOptSpace == null ? ' ' : '${ctx.pendingOptSpace} ';
 			case OptHardlineSkipBeforeHardline:
 				// Forward-looking opt-hardline (ω-opthardlineskipbeforehardline):
 				// defer the `\n+indent` emit to the first content-bearing

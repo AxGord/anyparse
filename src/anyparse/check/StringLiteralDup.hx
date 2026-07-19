@@ -186,8 +186,8 @@ final class StringLiteralDup implements Check implements ConfigAware {
 
 	/** `content` quoted for a message, elided to `MESSAGE_PREVIEW` characters so a long literal does not bloat the report. */
 	private static function preview(content: String): String {
-		final shown: String = content.length > MESSAGE_PREVIEW ? content.substr(0, MESSAGE_PREVIEW) + '…' : content;
-		return "'" + shown + "'";
+		final shown: String = content.length > MESSAGE_PREVIEW ? '${content.substr(0, MESSAGE_PREVIEW)}…' : content;
+		return '\'$shown\'';
 	}
 
 	/** The document-earliest span of a group — the first occurrence the single finding anchors to. */

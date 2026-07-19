@@ -72,7 +72,7 @@ class PreferCaseWildcardCheckTest extends Test {
 	}
 
 	private function stmtSwitch(lastBranch: String): String {
-		return 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 1: a();\n\t\t\t' + lastBranch + '\n\t\t}\n\t}\n}';
+		return 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 1: a();\n\t\t\t$lastBranch\n\t\t}\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

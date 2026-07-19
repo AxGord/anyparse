@@ -124,8 +124,8 @@ class RedundantIsCheckTest extends Test {
 
 	/** A module whose `f` takes a provably-non-null `x:Int`, wrapping `body`. */
 	private function wrap(body: String): String {
-		return '@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n\tfunction f(x:Int):Void {\n\t\t' + body
-			+ '\n\t}\n}\n';
+		return
+			'@:nullSafety(Strict)\nclass C {\n\tfunction cond():Bool\n\t\treturn true;\n\n\tfunction f(x:Int):Void {\n\t\t$body\n\t}\n}\n';
 	}
 
 	/** Run + fix + canonicalise (whole-file reformat) `src`, returning the emitted text. */

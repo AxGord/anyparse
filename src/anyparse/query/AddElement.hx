@@ -139,9 +139,9 @@ final class AddElement {
 
 		final edit: { span: Span, text: String } = switch side {
 			case After:
-				{ span: new Span(span.to, span.to), text: isComma ? ', ' + trimmed : '\n' + trimmed };
+				{ span: new Span(span.to, span.to), text: isComma ? ', $trimmed' : '\n$trimmed' };
 			case Before:
-				{ span: new Span(span.from, span.from), text: isComma ? trimmed + ', ' : trimmed + '\n' };
+				{ span: new Span(span.from, span.from), text: isComma ? '$trimmed, ' : '$trimmed\n' };
 		};
 
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
@@ -272,7 +272,7 @@ final class AddElement {
 				+ 'to append a STATEMENT to the enclosing block, point --append at the block, not the call'
 			);
 		final at: Int = lastContent + 1;
-		final text: String = empty ? trimmed : (isComma ? ', ' + trimmed : '\n' + trimmed);
+		final text: String = empty ? trimmed : (isComma ? ', $trimmed' : '\n$trimmed');
 
 		final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);

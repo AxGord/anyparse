@@ -152,7 +152,7 @@ class TransformLowering {
 	 */
 	private function lowerBranch(branch: ShapeNode, typePath: String): Case {
 		final ctor: String = branch.annotations.get('base.ctor');
-		final ctorPath: String = typePath + '.' + ctor;
+		final ctorPath: String = '$typePath.$ctor';
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath.split('.'));
 
 		if (branch.children.length == 0) {
@@ -295,7 +295,7 @@ class TransformLowering {
 	 * `anyparse.grammar.haxe.HxExpr` to `_transformHxExpr`).
 	 */
 	public static function transformFnName(typePath: String): String {
-		return '_transform' + simpleName(typePath);
+		return '_transform${simpleName(typePath)}';
 	}
 
 	/**

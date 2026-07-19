@@ -66,7 +66,7 @@ final class Glob {
 	#if (sys || nodejs)
 	private static function collect(dir: String, extension: String, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(dir)) {
-			final path: String = dir + '/' + name;
+			final path: String = '$dir/$name';
 			if (FileSystem.isDirectory(path))
 				collect(path, extension, into);
 			else if (StringTools.endsWith(name, extension))
@@ -81,8 +81,8 @@ final class Glob {
 	 */
 	private static function collectMatching(fsDir: String, prefix: String, re: EReg, into: Array<String>): Void {
 		for (name in FileSystem.readDirectory(fsDir)) {
-			final fsPath: String = fsDir + '/' + name;
-			final rel: String = prefix == '' ? name : prefix + '/' + name;
+			final fsPath: String = '$fsDir/$name';
+			final rel: String = prefix == '' ? name : '$prefix/$name';
 			if (FileSystem.isDirectory(fsPath))
 				collectMatching(fsPath, rel, re, into);
 			else if (re.match(rel))
@@ -152,7 +152,7 @@ final class Glob {
 					} else {
 						buf.add('[');
 						final body: String = spec.substr(i + 1, end - i - 1);
-						buf.add(StringTools.startsWith(body, '!') ? '^' + body.substr(1) : body);
+						buf.add(StringTools.startsWith(body, '!') ? '^${body.substr(1)}' : body);
 						buf.add(']');
 						i = end + 1;
 					}

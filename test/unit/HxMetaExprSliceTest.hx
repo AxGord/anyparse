@@ -58,7 +58,7 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 				Assert.equals('@:foo', (call.name: String));
 				Assert.equals(2, call.args.length);
 			case _:
-				Assert.fail('expected MetaCall, got ' + wrapper.meta);
+				Assert.fail('expected MetaCall, got ${wrapper.meta}');
 		}
 		assertIdentExpr(wrapper.expr, 'X');
 	}
@@ -78,7 +78,7 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 		final src: String = 'class Main {\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
 		final mod: HxModule = HaxeModuleParser.parse(src);
 		final out: String = HxModuleWriter.write(mod);
-		Assert.equals(src + '\n', out);
+		Assert.equals('$src\n', out);
 	}
 
 	public function testTriviaRoundTripByteExact(): Void {

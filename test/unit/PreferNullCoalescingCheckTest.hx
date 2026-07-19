@@ -109,7 +109,7 @@ class PreferNullCoalescingCheckTest extends Test {
 	}
 
 	private function wrap(expr: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\tvar x = ' + expr + ';\n\t}\n}';
+		return 'class C {\n\tfunction f():Void {\n\t\tvar x = $expr;\n\t}\n}';
 	}
 
 	private function violations(src: String): Array<Violation> {
@@ -121,7 +121,7 @@ class PreferNullCoalescingCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
-		return edits.length == 1 ? edits[0].text : '<' + edits.length + ' edits>';
+		return edits.length == 1 ? edits[0].text : '<${edits.length} edits>';
 	}
 
 }

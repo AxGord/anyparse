@@ -80,7 +80,7 @@ final class MakeFinal {
 
 		if (keywordAt(src.source, fieldSpanNN.from) != VAR)
 			return Err('field "$fieldName" does not start with the `var` keyword — cannot make it final');
-		final rewritten: String = src.source.substring(0, fieldSpanNN.from) + 'final' + src.source.substring(fieldSpanNN.from + VAR.length);
+		final rewritten: String = '${src.source.substring(0, fieldSpanNN.from)}final${src.source.substring(fieldSpanNN.from + VAR.length)}';
 
 		try
 			plugin.parseFile(rewritten)

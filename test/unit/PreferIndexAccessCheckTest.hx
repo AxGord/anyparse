@@ -138,7 +138,7 @@ class PreferIndexAccessCheckTest extends Test {
 	}
 
 	private function src(decl: String, body: String): String {
-		return 'class C {\n\tfunction f():Void {\n\t\t' + decl + '\n\t\t' + body + '\n\t}\n}';
+		return 'class C {\n\tfunction f():Void {\n\t\t$decl\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

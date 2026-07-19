@@ -144,7 +144,7 @@ final class Address {
 		while (i >= 0) {
 			final ancestor: QueryNode = path[i];
 			if (ancestor.name != null) {
-				selector = segmentOf(ancestor) + ' >> ' + selector;
+				selector = '${segmentOf(ancestor)} >> $selector';
 				if (uniquelyResolves(tree, selector, node, equiv)) return selector;
 			}
 			i--;

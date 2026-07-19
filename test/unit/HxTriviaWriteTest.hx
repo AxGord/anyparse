@@ -529,7 +529,7 @@ class HxTriviaWriteTest extends Test {
 	private function assertRoundtrip(source: String, ?expected: String): Void {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
-		Assert.equals(expected ?? (source + '\n'), out);
+		Assert.equals(expected ?? ('$source\n'), out);
 	}
 
 	private static function withCommentStyle(style: anyparse.format.CommentStyle): anyparse.grammar.haxe.HxModuleWriteOptions {

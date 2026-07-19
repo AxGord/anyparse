@@ -263,7 +263,7 @@ class BlockCommentNormalizer {
 
 		final indentUnit: String = indentUnitOf(opt);
 
-		final docs: Array<Doc> = [Text('/*' + lines[0].ws + lines[0].body)];
+		final docs: Array<Doc> = [Text('/*${lines[0].ws}${lines[0].body}')];
 
 		for (i in 1...lines.length) {
 			final ws: String = lines[i].ws;
@@ -373,7 +373,7 @@ class BlockCommentNormalizer {
 			if ((i == 0 || i == last) && p.content.length == 0) continue;
 			final relWs: String = p.ws.length > commonLen ? p.ws.substr(commonLen) : '';
 			if (wantStars) {
-				interior.push(p.content.length > 0 ? ' * ' + relWs + p.content : ' *');
+				interior.push(p.content.length > 0 ? ' * $relWs${p.content}' : ' *');
 			} else {
 				interior.push(indentUnit + relWs + p.content);
 			}

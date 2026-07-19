@@ -169,7 +169,7 @@ final class ExtractVar {
 
 		final insertEdit: { span: Span, text: String } = {
 			span: new Span(lineStart, lineStart),
-			text: indent + 'final ' + name + ' = ' + exprText + ';\n',
+			text: '${indent}final $name = $exprText;\n',
 		};
 		final replaceEdit: { span: Span, text: String } = {
 			span: new Span(targetSpan.from, effTo),

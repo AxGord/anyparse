@@ -133,7 +133,7 @@ class HxTransformSliceTest extends Test {
 	/** Double an integer literal's numeric value (verbatim string form). */
 	private static function doubleInt(lit: HxIntLit): HxIntLit {
 		final n: Null<Int> = Std.parseInt((lit: String));
-		return n == null ? lit : (('' + (n * 2)): HxIntLit);
+		return n == null ? lit : (('${(n * 2)}'): HxIntLit);
 	}
 
 }

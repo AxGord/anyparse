@@ -94,7 +94,7 @@ final class EncapsulateField {
 
 		final groupText: String = source.substring(f.group.from, f.group.to);
 		final relNameEnd: Int = nameEnd - f.group.from;
-		final newField: String = '@:isVar ' + groupText.substr(0, relNameEnd) + '(get, set)' + groupText.substr(relNameEnd);
+		final newField: String = '@:isVar ${groupText.substr(0, relNameEnd)}(get, set)${groupText.substr(relNameEnd)}';
 		// The setter parameter must not shadow the field itself (with @:isVar
 		// the bare field name is the physical storage), else the assignment is
 		// a self-assign.

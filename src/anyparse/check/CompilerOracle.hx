@@ -63,7 +63,7 @@ final class CompilerOracle {
 			final code: Null<Dynamic> = Reflect.field(launchError, 'code');
 			if (code != null && Std.string(code) == 'ENOBUFS')
 				return Rejected(StringTools.trim(oracleText(res.stderr) + oracleText(res.stdout)));
-			return Unavailable('could not launch haxe (' + Std.string(Reflect.field(launchError, 'message')) + ')');
+			return Unavailable('could not launch haxe (${Reflect.field(launchError, 'message')})');
 		}
 		final status: Null<Int> = (res.status: Null<Int>);
 		if (status == null) return Unavailable('haxe exited without a status code');
@@ -77,7 +77,7 @@ final class CompilerOracle {
 			process.close();
 			return code == 0 ? Confirmed : Rejected(errText);
 		} catch (exception: haxe.Exception) {
-			return Unavailable('could not launch haxe (' + exception.message + ')');
+			return Unavailable('could not launch haxe (${exception.message})');
 		}
 		#else
 		return Unavailable('compiler oracle requires a sys or nodejs target');

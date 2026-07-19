@@ -206,12 +206,12 @@ final class PreferIndexAccess implements Check {
 		if (recvSpan == null || keySpan == null) return null;
 		final recvSrc: String = source.substring(recvSpan.from, recvSpan.to);
 		final keySrc: String = source.substring(keySpan.from, keySpan.to);
-		if (!m.isSet) return recvSrc + '[' + keySrc + ']';
+		if (!m.isSet) return '$recvSrc[$keySrc]';
 		if (!m.isStatement) return null;
 		final value: Null<QueryNode> = m.value;
 		if (value == null) return null;
 		final valSpan: Null<Span> = value.span;
-		return valSpan == null ? null : recvSrc + '[' + keySrc + '] = ' + source.substring(valSpan.from, valSpan.to);
+		return valSpan == null ? null : '$recvSrc[$keySrc] = ${source.substring(valSpan.from, valSpan.to)}';
 	}
 
 	/**
@@ -235,7 +235,7 @@ final class PreferIndexAccess implements Check {
 	/** Whether the verbatim type `source` is `wrapper<Nominal…>` whose inner nominal is a `mapTypes` name. */
 	private static function nullWrapsMap(source: String, wrapper: String, mapTypes: Array<String>): Bool {
 		final s: String = StringTools.trim(source);
-		final prefix: String = wrapper + '<';
+		final prefix: String = '$wrapper<';
 		if (!StringTools.startsWith(s, prefix) || !StringTools.endsWith(s, '>')) return false;
 		final inner: String = s.substring(prefix.length, s.length - 1);
 		final lt: Int = inner.indexOf('<');

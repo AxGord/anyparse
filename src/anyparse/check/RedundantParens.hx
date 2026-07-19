@@ -64,7 +64,7 @@ final class RedundantParens implements Check {
 			if (node == null) continue;
 			final inner: Null<Span> = innermost(node, parenKind).span;
 			if (inner == null) continue;
-			edits.push({ span: span, text: '(' + source.substring(inner.from, inner.to) + ')' });
+			edits.push({ span: span, text: '(${source.substring(inner.from, inner.to)})' });
 		}
 		return edits;
 	}

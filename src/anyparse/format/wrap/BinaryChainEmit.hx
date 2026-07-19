@@ -384,7 +384,7 @@ final class BinaryChainEmit {
 	private static function shapeNoWrap(items: Array<Doc>, ops: Array<String>): Doc {
 		final inner: Array<Doc> = [items[0]];
 		for (i in 0...ops.length) {
-			inner.push(Text(' ' + ops[i] + ' '));
+			inner.push(Text(' ${ops[i]} '));
 			inner.push(items[i + 1]);
 		}
 		return Concat(inner);
@@ -433,14 +433,14 @@ final class BinaryChainEmit {
 				for (i in 0...ops.length) {
 					final _ac: Null<Doc> = _afterOf(i);
 					if (_ac != null) {
-						tail.push(Text(' ' + ops[i]));
+						tail.push(Text(' ${ops[i]}'));
 						tail.push(_ac);
 						tail.push(Line('\n'));
 					} else if (i < breaks.length && breaks[i]) {
 						tail.push(Line('\n'));
-						tail.push(Text(ops[i] + ' '));
+						tail.push(Text('${ops[i]} '));
 					} else {
-						tail.push(Text(' ' + ops[i] + ' '));
+						tail.push(Text(' ${ops[i]} '));
 					}
 					tail.push(items[i + 1]);
 				}
@@ -448,14 +448,14 @@ final class BinaryChainEmit {
 				for (i in 0...ops.length) {
 					final _ac: Null<Doc> = _afterOf(i);
 					if (_ac != null) {
-						tail.push(Text(' ' + ops[i]));
+						tail.push(Text(' ${ops[i]}'));
 						tail.push(_ac);
 						tail.push(Line('\n'));
 					} else if (i < breaks.length && breaks[i]) {
-						tail.push(Text(' ' + ops[i]));
+						tail.push(Text(' ${ops[i]}'));
 						tail.push(Line('\n'));
 					} else {
-						tail.push(Text(' ' + ops[i] + ' '));
+						tail.push(Text(' ${ops[i]} '));
 					}
 					tail.push(items[i + 1]);
 				}
@@ -480,7 +480,7 @@ final class BinaryChainEmit {
 			case BeforeLast:
 				for (i in 0...ops.length) {
 					tail.push(Line('\n'));
-					tail.push(Text(ops[i] + ' '));
+					tail.push(Text('${ops[i]} '));
 					tail.push(items[i + 1]);
 				}
 				return Concat([items[0], Nest(cols, Concat(tail))]);
@@ -489,11 +489,11 @@ final class BinaryChainEmit {
 				// continuation line carries items[i] and, when there is
 				// a next op, a trailing ` op_i`.
 				final head: Array<Doc> = [items[0]];
-				if (ops.length > 0) head.push(Text(' ' + ops[0]));
+				if (ops.length > 0) head.push(Text(' ${ops[0]}'));
 				for (i in 1...items.length) {
 					tail.push(Line('\n'));
 					tail.push(items[i]);
-					if (i < ops.length) tail.push(Text(' ' + ops[i]));
+					if (i < ops.length) tail.push(Text(' ${ops[i]}'));
 				}
 				return Concat([Concat(head), Nest(cols, Concat(tail))]);
 		}
@@ -521,14 +521,14 @@ final class BinaryChainEmit {
 		switch location {
 			case AfterLast:
 				for (i in 0...ops.length) {
-					inner.push(Text(' ' + ops[i]));
+					inner.push(Text(' ${ops[i]}'));
 					inner.push(Line('\n'));
 					inner.push(items[i + 1]);
 				}
 			case BeforeLast:
 				for (i in 0...ops.length) {
 					inner.push(Line('\n'));
-					inner.push(Text(ops[i] + ' '));
+					inner.push(Text('${ops[i]} '));
 					inner.push(items[i + 1]);
 				}
 		}
@@ -570,10 +570,10 @@ final class BinaryChainEmit {
 		final enriched: Array<Doc> = switch location {
 			case BeforeLast:
 				final acc: Array<Doc> = [items[0]];
-				for (i in 0...ops.length) acc.push(Concat([Text(ops[i] + ' '), items[i + 1]]));
+				for (i in 0...ops.length) acc.push(Concat([Text('${ops[i]} '), items[i + 1]]));
 				acc;
 			case AfterLast:
-				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(' ' + ops[i])])];
+				final acc: Array<Doc> = [for (i in 0...ops.length) Concat([items[i], Text(' ${ops[i]}')])];
 				acc.push(items[items.length - 1]);
 				acc;
 		}

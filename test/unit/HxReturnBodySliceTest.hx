@@ -66,7 +66,7 @@ class HxReturnBodySliceTest extends Test {
 	public function testFitLineBreaksLongValue(): Void {
 		final buf: StringBuf = new StringBuf();
 		for (i in 0...200) buf.add('-');
-		final longLit: String = '"' + buf.toString() + '"';
+		final longLit: String = '"${buf.toString()}"';
 		final src: String = 'class M { function f():String { return $longLit; } }';
 		final out: String = writeWith(src, BodyPolicy.FitLine);
 		Assert.isTrue(out.indexOf('return\n') != -1, 'expected break before long value (>lineWidth) in: <$out>');

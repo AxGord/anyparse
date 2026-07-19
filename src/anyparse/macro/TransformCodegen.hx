@@ -121,7 +121,7 @@ class TransformCodegen {
 	 * `anyparse.grammar.haxe.HxModuleTransform`).
 	 */
 	private static function visitTypePathOf(rootTypePath: String): String {
-		return rootTypePath + 'Transform';
+		return '${rootTypePath}Transform';
 	}
 
 	private static function pathToComplexType(typePath: String): ComplexType {

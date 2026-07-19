@@ -199,7 +199,7 @@ final class RedundantElse implements Check {
 		final deNested: Null<String> = deNestText(elseNode, source, support, localDeclKinds, scopeNames);
 		if (deNested == null) return;
 		final ifKept: String = source.substring(ifSpan.from, thenSpan.to);
-		edits.push({ span: new Span(ifSpan.from, ifSpan.to), text: deNested == '' ? ifKept : ifKept + '\n' + deNested });
+		edits.push({ span: new Span(ifSpan.from, ifSpan.to), text: deNested == '' ? ifKept : '$ifKept\n$deNested' });
 	}
 
 	/**

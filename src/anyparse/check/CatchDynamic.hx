@@ -168,7 +168,7 @@ final class CatchDynamic implements Check {
 		final p = catchParamRegion(catchNode, source);
 		if (p == null || !catchAll.contains(p.typeName)) return null;
 		final unfixable: Bool = !flagged.exists('${p.from}:${p.to}') || p.varName.length == 0 || mentionsName(p.body, p.varName);
-		return unfixable ? null : { span: new Span(p.from, p.to), text: '(' + p.varName + ':' + exText + ')' };
+		return unfixable ? null : { span: new Span(p.from, p.to), text: '(${p.varName}:$exText)' };
 	}
 
 	/** Whether any node in `node`'s subtree carries `name` — catches plain identifiers, field-access names, and string-interpolation idents alike (a conservative reference test). */
@@ -230,7 +230,7 @@ final class CatchDynamic implements Check {
 		final stmt: String = 'import haxe.Exception;';
 		final anchor: Null<QueryNode> = lastImport ?? packageDecl;
 		final aspan: Null<Span> = anchor?.span;
-		return aspan == null ? { span: new Span(0, 0), text: stmt + '\n' } : { span: new Span(aspan.to, aspan.to), text: '\n' + stmt };
+		return aspan == null ? { span: new Span(0, 0), text: '$stmt\n' } : { span: new Span(aspan.to, aspan.to), text: '\n$stmt' };
 	}
 
 

@@ -205,11 +205,11 @@ final class PreferInterpolation implements Check {
 	 */
 	private static function render(arg: QueryNode, source: String, identKind: String): Null<String> {
 		final argName: Null<String> = arg.name;
-		if (arg.kind == identKind && argName != null) return "'$" + argName + "'";
+		if (arg.kind == identKind && argName != null) return '\'$$$argName\'';
 		final span: Null<Span> = arg.span;
 		if (span == null) return null;
 		final src: String = source.substring(span.from, span.to);
-		return !interpolationSafe(src) ? null : "'${" + src + "}'";
+		return !interpolationSafe(src) ? null : '\'$${$src}\'';
 	}
 
 	/** Whether `src` can sit inside a single-quoted `'${ … }'` without breaking the string. */
@@ -285,7 +285,7 @@ final class PreferInterpolation implements Check {
 		if (firstSpan == null || lastSpan == null) return null;
 		if (chainHasComment(source, firstSpan.from, lastSpan.to)) return null;
 		final parts: Null<Array<Part>> = buildParts(operands, classes, firstLitIdx, source, seams);
-		return parts == null ? null : "'" + joinParts(parts) + "'";
+		return parts == null ? null : '\'${joinParts(parts)}\'';
 	}
 
 	/**
@@ -378,10 +378,10 @@ final class PreferInterpolation implements Check {
 			case PLit(t):
 				buf.add(t);
 			case PExpr(e):
-				buf.add("${" + e + '}');
+				buf.add('$${$e}');
 			case PIdent(name):
 				final nc: Int = nextOutputChar(parts, i + 1);
-				buf.add(nc != -1 && isIdentContinue(nc) ? "${" + name + '}' : "$" + name);
+				buf.add(nc != -1 && isIdentContinue(nc) ? '$${$name}' : '$$$name');
 		}
 		return buf.toString();
 	}

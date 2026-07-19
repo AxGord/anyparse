@@ -133,7 +133,7 @@ final class ListenerSymmetry implements Check {
 	 * plurality is preserved.
 	 */
 	private static function twinOf(name: String, cfg: ListenerCfg): Null<String> {
-		return cfg.addRe.match(name) ? 'remove' + cfg.addRe.matched(1) : cfg.removeRe.match(name) ? 'add' + cfg.removeRe.matched(1) : null;
+		return cfg.addRe.match(name) ? 'remove${cfg.addRe.matched(1)}' : cfg.removeRe.match(name) ? 'add${cfg.removeRe.matched(1)}' : null;
 	}
 
 	/**

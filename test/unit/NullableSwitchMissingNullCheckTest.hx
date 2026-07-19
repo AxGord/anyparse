@@ -213,7 +213,7 @@ class NullableSwitchMissingNullCheckTest extends Test {
 	}
 
 	private function cls(body: String): String {
-		return 'class C {\n\t' + body + '\n}';
+		return 'class C {\n\t$body\n}';
 	}
 
 	private function applyFix(source: String): String {

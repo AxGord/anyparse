@@ -117,7 +117,7 @@ final class AddParam {
 			emptyParenInsertOffset(source, declSpan);
 		if (insertOffset < 0) return Err('could not locate the parameter list of the function at $line:$col');
 
-		final insertText: String = params.length > 0 ? ', ' + trimmed : trimmed;
+		final insertText: String = params.length > 0 ? ', $trimmed' : trimmed;
 		final edit: { span: Span, text: String } = {
 			span: new Span(insertOffset, insertOffset),
 			text: insertText,

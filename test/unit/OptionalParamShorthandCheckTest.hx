@@ -98,7 +98,7 @@ class OptionalParamShorthandCheckTest extends Test {
 	}
 
 	private function fn(params: String): String {
-		return 'class C {\n\tfunction f(' + params + '):Void {}\n}';
+		return 'class C {\n\tfunction f($params):Void {}\n}';
 	}
 
 	private function violations(source: String): Array<Violation> {

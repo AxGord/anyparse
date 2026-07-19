@@ -184,7 +184,7 @@ final class PreferTernaryReturn implements Check {
 		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
 		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
 		final preserved: String = preservedComments(source, ifSpan, nextSpan, [condSpan, thenSpan, elseSpan]);
-		final text: String = preserved + 'return ' + condition + ' ? ' + thenSource + ' : ' + elseSource + ';';
+		final text: String = '${preserved}return $condition ? $thenSource : $elseSource;';
 		return { span: new Span(ifSpan.from, nextSpan.to), text: text };
 	}
 
@@ -196,7 +196,7 @@ final class PreferTernaryReturn implements Check {
 	private static function wrapCondition(source: String, kind: String, shape: RefShape): String {
 		final ternaryKind: Null<String> = shape.ternaryKind;
 		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
-		return needsParens ? '(' + source + ')' : source;
+		return needsParens ? '($source)' : source;
 	}
 
 	/**

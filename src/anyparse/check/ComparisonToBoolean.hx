@@ -183,7 +183,7 @@ final class ComparisonToBoolean implements Check {
 
 	/** `!operand`, parenthesizing a non-atomic operand so the unary `!` binds correctly. */
 	private static function negate(operand: QueryNode, src: String, identKind: String, parenKind: Null<String>): String {
-		return operand.kind == identKind || operand.kind == parenKind ? '!' + src : '!(' + src + ')';
+		return operand.kind == identKind || operand.kind == parenKind ? '!$src' : '!($src)';
 	}
 
 

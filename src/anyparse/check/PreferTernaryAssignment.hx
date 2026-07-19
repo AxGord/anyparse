@@ -203,14 +203,14 @@ final class PreferTernaryAssignment implements Check {
 		final condition: String = wrapCondition(source.substring(condSpan.from, condSpan.to), m.condition.kind, s.shape);
 		final thenRhs: String = source.substring(thenRhsSpan.from, thenRhsSpan.to);
 		final elseRhs: String = source.substring(elseRhsSpan.from, elseRhsSpan.to);
-		return { span: span, text: prefix + condition + ' ? ' + thenRhs + ' : ' + elseRhs + ';' };
+		return { span: span, text: '${prefix + condition} ? $thenRhs : $elseRhs;' };
 	}
 
 	/** Parenthesise the condition iff it binds no tighter than `?:` (a ternary or an assignment); else emit it bare. */
 	private static function wrapCondition(source: String, kind: String, shape: RefShape): String {
 		final ternaryKind: Null<String> = shape.ternaryKind;
 		final needsParens: Bool = (ternaryKind != null && kind == ternaryKind) || shape.writeParentKinds.contains(kind);
-		return needsParens ? '(' + source + ')' : source;
+		return needsParens ? '($source)' : source;
 	}
 
 	/**

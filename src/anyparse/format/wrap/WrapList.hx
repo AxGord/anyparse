@@ -2073,7 +2073,7 @@ class WrapList {
 	): Doc {
 		final inner: Array<Doc> = [];
 		for (i in 0...items.length) {
-			if (i > 0) inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text(sep + ' '));
+			if (i > 0) inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text('$sep '));
 			inner.push(items[i]);
 		}
 		return Concat([Text(open), openInside, Concat(inner), closeInside, Text(close)]);
@@ -2181,7 +2181,7 @@ class WrapList {
 				// `Conditional` cond-comp ctor whose body leads with sep).
 				// Emit a bare space so tokens don't glue; everything else
 				// stays byte-identical (`Text(sep + ' ')`).
-				inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text(sep + ' '));
+				inner.push(skipSepBefore(sepBeforeFlags, i) ? Text(' ') : Text('$sep '));
 			inner.push(items[i]);
 		}
 		// ω-nowrap-source-trail-comma: preserve a source trailing comma in the

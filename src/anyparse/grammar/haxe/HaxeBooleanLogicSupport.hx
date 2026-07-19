@@ -128,12 +128,12 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/** `a && b`, each operand parenthesised iff it binds strictly looser than `&&`. */
 	private static function joinAnd(a: Operand, b: Operand): String {
-		return wrap(a, PREC_AND) + ' && ' + wrap(b, PREC_AND);
+		return '${wrap(a, PREC_AND)} && ${wrap(b, PREC_AND)}';
 	}
 
 	/** `a || b`, each operand parenthesised iff it binds strictly looser than `||`. */
 	private static function joinOr(a: Operand, b: Operand): String {
-		return wrap(a, PREC_OR) + ' || ' + wrap(b, PREC_OR);
+		return '${wrap(a, PREC_OR)} || ${wrap(b, PREC_OR)}';
 	}
 
 	/** A node carried verbatim: its source plus its precedence. */
@@ -143,7 +143,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/** Parenthesise `o`'s source iff it binds strictly looser than `targetPrec`. */
 	private static function wrap(o: Operand, targetPrec: Precedence): String {
-		return o.prec < targetPrec ? '(' + o.src + ')' : o.src;
+		return o.prec < targetPrec ? '(${o.src})' : o.src;
 	}
 
 	/**
@@ -162,11 +162,11 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 			case 'Or':
 				final l: Operand = negate(node.children[0], source, flipOrdered);
 				final r: Operand = negate(node.children[1], source, flipOrdered);
-				return { src: wrap(l, PREC_AND) + ' && ' + wrap(r, PREC_AND), prec: PREC_AND };
+				return { src: '${wrap(l, PREC_AND)} && ${wrap(r, PREC_AND)}', prec: PREC_AND };
 			case 'And':
 				final l: Operand = negate(node.children[0], source, flipOrdered);
 				final r: Operand = negate(node.children[1], source, flipOrdered);
-				return { src: wrap(l, PREC_OR) + ' || ' + wrap(r, PREC_OR), prec: PREC_OR };
+				return { src: '${wrap(l, PREC_OR)} || ${wrap(r, PREC_OR)}', prec: PREC_OR };
 			case 'Eq':
 				return flip(node, source, '!=');
 			case 'NotEq':
@@ -198,13 +198,13 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	/** Negate an opaque operand: `!x` for an atom, `!(x)` otherwise. */
 	private static function wrapNot(node: QueryNode, source: String): Operand {
 		final s: String = src(node, source);
-		return { src: precedence(node.kind) >= PREC_ATOM ? '!' + s : '!(' + s + ')', prec: PREC_NOT };
+		return { src: precedence(node.kind) >= PREC_ATOM ? '!$s' : '!($s)', prec: PREC_NOT };
 	}
 
 	/** A comparison `a <op> b` rewritten with `newOp`, its boolean negation. */
 	private static function flip(node: QueryNode, source: String, newOp: String): Operand {
 		return node.children.length == 2 ? {
-			src: src(node.children[0], source) + ' ' + newOp + ' ' + src(node.children[1], source),
+			src: '${src(node.children[0], source)} $newOp ${src(node.children[1], source)}',
 			prec: PREC_CMP
 		} : wrapNot(node, source);
 	}

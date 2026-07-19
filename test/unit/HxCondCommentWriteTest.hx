@@ -18,22 +18,22 @@ class HxCondCommentWriteTest extends Test {
 
 	public function testElseBranchLeadingComment(): Void {
 		final source: String = 'class Foo {\n\tfunction bar() {\n\t\t#if a\n\t\treturn 0;\n\t\t#else\n\t\t// note\n\t\treturn 1;\n\t\t#end\n\t}\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testElseBranchTrailingCommentBeforeEnd(): Void {
 		final source: String = 'class Foo {\n\t#if a\n\tstatic var x = 1;\n\t#else\n\tstatic var y = 2;\n\t// note\n\t#end\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testIfBranchTrailingCommentBeforeEnd(): Void {
 		final source: String = 'class Foo {\n\t#if a\n\tstatic var y = 2;\n\t// note\n\t#end\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testCondBranchNoCommentUnaffected(): Void {
 		final source: String = 'class Foo {\n\t#if a\n\tstatic var x = 1;\n\t#else\n\tstatic var y = 2;\n\t#end\n}';
-		Assert.equals(source + '\n', roundTrip(source));
+		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	private function roundTrip(source: String): String {

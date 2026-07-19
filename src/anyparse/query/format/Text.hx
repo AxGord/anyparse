@@ -38,7 +38,7 @@ import anyparse.runtime.Span.Position;
 final class Text {
 
 	public static function render(node: QueryNode, spans: Bool = false): String {
-		return SValueWriter.write(toSValue(node, spans), SExprFormat.instance.defaultWriteOptions) + '\n';
+		return '${SValueWriter.write(toSValue(node, spans), SExprFormat.instance.defaultWriteOptions)}\n';
 	}
 
 	public static function renderMatches(matches: Array<QueryNode>, source: String, doc: Bool, src: Bool, spans: Bool = false): String {

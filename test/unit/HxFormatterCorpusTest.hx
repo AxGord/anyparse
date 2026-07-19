@@ -144,7 +144,7 @@ class HxFormatterCorpusTest extends Test {
 			return;
 		}
 		#if (sys || nodejs)
-		final dir: String = root + '/' + subdir;
+		final dir: String = '$root/$subdir';
 		if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) {
 			Assert.fail('$label: expected corpus dir missing: $dir');
 			return;
@@ -163,7 +163,7 @@ class HxFormatterCorpusTest extends Test {
 		names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
 
 		for (name in names) if (StringTools.endsWith(name, HXTEST_EXT)) {
-			final path: String = dir + '/' + name;
+			final path: String = '$dir/$name';
 			// Subdir-relative path for the sweep snapshot; matches what
 			// `apq recon` reports per-fixture, so `--regression-probe`
 			// can look up the previous status by this exact key.
@@ -371,7 +371,7 @@ class HxFormatterCorpusTest extends Test {
 
 	private static function truncate(s: Null<String>): String {
 		if (s == null || s == '') return '<no message>';
-		return s.length > MAX_REASON_LEN ? s.substr(0, MAX_REASON_LEN) + '...' : s;
+		return s.length > MAX_REASON_LEN ? '${s.substr(0, MAX_REASON_LEN)}...' : s;
 	}
 
 	private static function slice(s: String, from: Int, maxLen: Int): String {

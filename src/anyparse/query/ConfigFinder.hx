@@ -30,7 +30,7 @@ final class ConfigFinder {
 		#if (sys || nodejs)
 		var dir: String = haxe.io.Path.directory(sys.FileSystem.absolutePath(path));
 		while (dir != '') {
-			final candidate: String = dir + '/' + filename;
+			final candidate: String = '$dir/$filename';
 			if (sys.FileSystem.exists(candidate) && !sys.FileSystem.isDirectory(candidate)) {
 				final content: Null<String> = try sys.io.File.getContent(candidate) catch (exception: haxe.Exception) null;
 				return content == null ? null : { content: content, path: candidate };

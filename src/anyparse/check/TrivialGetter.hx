@@ -335,7 +335,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 		if (initSpan != null) {
 			final semi: Int = propSpan.to - 1;
 			if (semi < 0 || semi >= source.length || StringTools.fastCodeAt(source, semi) != ';'.code) return null;
-			edits.push({ span: new Span(semi, semi), text: ' = ' + source.substring(initSpan.from, initSpan.to) });
+			edits.push({ span: new Span(semi, semi), text: ' = ${source.substring(initSpan.from, initSpan.to)}' });
 		}
 		final deleted: Array<{ node: QueryNode, span: Span }> = [];
 		for (acc in c.deletedAccessors) {
@@ -681,7 +681,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 	 * `C.prop = value` is legal in a static method of `C`.
 	 */
 	private static inline function shadowQualifier(staticCtx: Bool, className: Null<String>): String {
-		return staticCtx && className != null ? className + '.' : 'this.';
+		return staticCtx && className != null ? '$className.' : 'this.';
 	}
 
 
@@ -746,7 +746,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			dyn: Bool,
 			isOverride: Bool,
 			isInline: Bool
-		}> = getters['get_' + prop.name];
+		}> = getters['get_${prop.name}'];
 		if (getter == null || getter.dyn) return null;
 		final trivGet: Null<String> = trivialReturnField(getter.node);
 		final raw: Null<{
@@ -973,7 +973,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			dyn: Bool,
 			isOverride: Bool,
 			isInline: Bool
-		}> = setters['set_' + prop.name];
+		}> = setters['set_${prop.name}'];
 		if (setter == null || setter.dyn) return null;
 		final trivSet: Null<String> = trivialSetterField(setter.node);
 		if (trivGet != null && trivSet == null) {
@@ -1085,7 +1085,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			final at: Int = span.from;
 			final folded: Null<{ span: Span, text: String }> = edits.find(e -> e.span.from == at && e.span.to > at);
 			if (folded != null)
-				folded.text = '@:bypassAccessor ' + folded.text;
+				folded.text = '@:bypassAccessor ${folded.text}';
 			else
 				edits.push({ span: new Span(at, at), text: '@:bypassAccessor ' });
 		}
