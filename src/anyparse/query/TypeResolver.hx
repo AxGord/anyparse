@@ -401,6 +401,69 @@ final class TypeResolver {
 		return buf.toString();
 	}
 
+	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
+	public static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
+		final td: Null<TypeDeclMatch> = innermostTypeDecl(tree, faSpan);
+		return td == null ? null : td.name;
+	}
+
+	/**
+	 * The verbatim (whitespace-stripped) declared type SOURCE of an identifier `recv`'s
+	 * binding — a local, a parameter or an own-class field — via the scope resolver
+	 * (`resolveBindingFrom`) plus `TypeInfoProvider.declaredTypeSources`. Null when `recv`
+	 * is not an identifier, its binding does not resolve, the binding carries no WRITTEN
+	 * type (an inference-typed source stays report-only), or the name is RE-SHADOWED in a
+	 * visible scope (`var s:String; var s:Foo; … s`) where the first-wins resolver diverges
+	 * from Haxe's nearest-preceding binding. A `Null<…>` wrapper is PRESERVED — a caller
+	 * wanting the narrowed inner type unwraps it itself.
+	 *
+	 * `skipNullableOptionalParam` additionally treats a PARAMETER whose body type differs
+	 * from its written source as unresolved (see `paramTypeSourceUnsafe`: an optional param
+	 * with no default / any `= null` default → `Null<T>`, a rest param → `haxe.Rest<T>`, each
+	 * ≠ the bare written `T`), so a caller that copies the source as the read's type (the
+	 * plain-read arm) must skip it, while a caller that only needs the declared type for a
+	 * method-return lookup passes false.
+	 */
+	public static function identDeclaredTypeSource(
+		recv: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>, skipNullableOptionalParam: Bool
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final name: Null<String> = recv.name;
+		final span: Null<Span> = recv.span;
+		if (identKind == null || recv.kind != identKind || name == null || span == null) return null;
+		// The scope resolver is first-wins per scope, but Haxe binds to the nearest-preceding
+		// declaration; the two diverge only when a name is re-shadowed in a scope visible at the
+		// use (`var s:String; var s:Foo; … s`). More than one visible declaration -> the
+		// resolved type is untrustworthy, so bail to report-only.
+		if (visibleDeclCount(tree, shape, name, span) > 1) return null;
+		final bindingFrom: Null<Int> = resolveBindingFrom(name, span, tree, shape);
+		if (bindingFrom == null) return null;
+		if (skipNullableOptionalParam && paramTypeSourceUnsafe(tree, shape, bindingFrom)) return null;
+		final typeSrc: Null<String> = declaredTypeSources()[bindingFrom];
+		return typeSrc == null ? null : stripWs(typeSrc);
+	}
+
+	/**
+	 * A lazily-memoized accessor for `plugin`'s `TypeInfoProvider.declaredTypeSources(source)`
+	 * map — the span→written-type-source table the ident-type resolvers consume. Returns a
+	 * thunk that computes the map on first call and caches it, so a caller that never reaches
+	 * the resolution path never pays for the parse, and a `plugin` that is not a
+	 * `TypeInfoProvider` yields the empty map. Shared by every check that threads
+	 * `declaredTypeSources` into `identDeclaredTypeSource`.
+	 */
+	public static function memoizedDeclaredTypeSources(plugin: GrammarPlugin, source: String): () -> Map<Int, String> {
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		var cache: Null<Map<Int, String>> = null;
+		return function(): Map<Int, String> {
+			final existing: Null<Map<Int, String>> = cache;
+			if (existing != null) return existing;
+			final p: Null<TypeInfoProvider> = provider;
+			final computed: Map<Int, String> = p != null ? p.declaredTypeSources(source) : [];
+			cache = computed;
+			return computed;
+		};
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
@@ -415,12 +478,6 @@ final class TypeResolver {
 		}
 		walk(tree);
 		return best;
-	}
-
-	/** The simple name of the innermost type declaration whose span contains `faSpan`, or null. */
-	private static function enclosingTypeName(tree: QueryNode, faSpan: Span): Null<String> {
-		final td: Null<TypeDeclMatch> = innermostTypeDecl(tree, faSpan);
-		return td == null ? null : td.name;
 	}
 
 	/** Whether `node` or any descendant carries the name `name`. */
@@ -576,6 +633,69 @@ final class TypeResolver {
 		}
 		walk(tree);
 		return bestFrom;
+	}
+
+	/**
+	 * The number of declarations of `name` VISIBLE at `useSpan` — a `declHostKinds`
+	 * node named `name` whose innermost enclosing `scopeKinds` scope also contains
+	 * `useSpan`. More than one means the name is re-shadowed in a visible scope, where
+	 * the first-wins scope resolver cannot be trusted to match Haxe's binding.
+	 */
+	private static function visibleDeclCount(tree: QueryNode, shape: RefShape, name: String, useSpan: Span): Int {
+		final declHostKinds: Array<String> = shape.declHostKinds;
+		final scopeKinds: Array<String> = shape.scopeKinds;
+		var count: Int = 0;
+		final scopeStack: Array<Span> = [];
+		function walk(node: QueryNode): Void {
+			final s: Null<Span> = node.span;
+			if (s != null && node.name == name && declHostKinds.contains(node.kind) && scopeStack.length > 0) {
+				final enc: Span = scopeStack[scopeStack.length - 1];
+				if (enc.from <= useSpan.from && useSpan.to <= enc.to) count++;
+			}
+			final scopeSpan: Null<Span> = (s != null && scopeKinds.contains(node.kind)) ? s : null;
+			if (scopeSpan != null) scopeStack.push(scopeSpan);
+			for (c in node.children) walk(c);
+			if (scopeSpan != null) scopeStack.pop();
+		}
+		walk(tree);
+		return count;
+	}
+
+	/**
+	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
+	 * written type source `T`, so copying the source verbatim as a read's type would be
+	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
+	 * `optionalParamKind` node with no child) and any `= null`-default parameter
+	 * (`bindingIsDefaultNullParam`) are `Null<T>`; a REST parameter (`...p:T`, a
+	 * `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
+	 * param with a NON-null default, keep `T` and are safe to copy.
+	 */
+	private static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
+		final optKind: Null<String> = shape.optionalParamKind;
+		final optNode: Null<QueryNode> = optKind == null ? null : paramNodeCovering(tree, optKind, bindingFrom);
+		if (optNode != null && optNode.children.length == 0) return true;
+		final paramKinds: Null<Array<String>> = shape.paramKinds;
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (paramKinds != null && nullLiteralKind != null && bindingIsDefaultNullParam(tree, bindingFrom, paramKinds, nullLiteralKind))
+			return true;
+		final restKind: Null<String> = shape.restParamKind;
+		return restKind != null && paramNodeCovering(tree, restKind, bindingFrom) != null;
+	}
+
+	/** The `kind` node whose span covers `bindingFrom` (a parameter decl located by its binding offset), or null. */
+	private static function paramNodeCovering(tree: QueryNode, kind: String, bindingFrom: Int): Null<QueryNode> {
+		var found: Null<QueryNode> = null;
+		function walk(node: QueryNode): Void {
+			if (found != null) return;
+			final s: Null<Span> = node.span;
+			if (s != null && node.kind == kind && s.from <= bindingFrom && bindingFrom < s.to) {
+				found = node;
+				return;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return found;
 	}
 
 }
