@@ -7,6 +7,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.TypeInfoProvider;
 
 /**
  * One type-member paired with its canonical-order rank and its full source slot
@@ -29,6 +30,15 @@ typedef OrderedMember = {
 	var leadTrivia: String;
 	var leadFrom: Int;
 }
+
+/**
+ * One container's first layout finding: the member the check flags plus the
+ * violation message describing what is wrong (member order vs group spacing).
+ */
+typedef LayoutIssue = {
+	var member: OrderedMember;
+	var message: String;
+}
 @:nullSafety(Strict)
 final class MemberOrder implements Check {
 
@@ -39,25 +49,29 @@ final class MemberOrder implements Check {
 	}
 
 	public function description(): String {
-		return 'type members not in canonical order (constants, fields, constructor, methods; public before private)';
+		return
+			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private) or rank groups not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
 		if (!applicable(shape)) return [];
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, shape);
+			if (tree == null) continue;
+			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
+			walk(violations, entry.file, entry.source, tree, shape, accessors);
 		}
 		return violations;
 	}
 
 	/**
-	 * Reorder each flagged container's members into canonical order. Re-parses
-	 * `source`, emits edits only for a container whose first out-of-order member's
-	 * slot matches a passed violation, and bails a container whose field initializers
-	 * make reordering unsafe (see the class doc).
+	 * Reorder each flagged container's members into canonical order and normalise the
+	 * blank lines between rank groups. Re-parses `source`, emits edits only for a
+	 * container whose first flagged member's slot matches a passed violation, and bails
+	 * a container whose field initializers make reordering unsafe (see the class doc).
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -66,13 +80,15 @@ final class MemberOrder implements Check {
 		if (!applicable(shape)) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
 		final flagged: Array<Int> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		fixWalk(edits, source, tree, shape, flagged);
+		fixWalk(edits, source, tree, shape, flagged, accessors);
 		return edits;
 	}
 
@@ -82,54 +98,61 @@ final class MemberOrder implements Check {
 			&& (shape.visibilityModifierKinds ?? []).length > 0 && shape.defaultVisibilityModifierText != null;
 	}
 
-	/** Walk `node`; flag each container whose members are out of canonical order. */
-	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape): Void {
+	/** Walk `node`; flag each container whose members are out of canonical order or whose rank groups are not blank-line separated. */
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, shape: RefShape, accessors: Map<Int, Bool>
+	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
-			final members: Array<OrderedMember> = collectMembers(node, source, shape);
-			final bad: Null<OrderedMember> = firstOutOfOrder(members, source);
-			if (bad != null) out.push({
+			final members: Array<OrderedMember> = collectMembers(node, source, shape, accessors);
+			final issue: Null<LayoutIssue> = firstLayoutIssue(members, source);
+			if (issue != null) out.push({
 				file: file,
-				span: bad.span,
+				span: issue.member.span,
 				rule: 'member-order',
 				severity: Severity.Info,
-				message: 'type members are not in canonical order (constants, fields, constructor, methods; public before private)'
+				message: issue.message
 			});
 		}
-		for (c in node.children) walk(out, file, source, c, shape);
+		for (c in node.children) walk(out, file, source, c, shape, accessors);
 	}
 
 	/** Walk `node`; reorder each flagged, reorder-safe container. */
 	private static function fixWalk(
-		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>
+		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>,
+		accessors: Map<Int, Bool>
 	): Void {
-		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) emitReorder(edits, source, node, shape, flagged);
-		for (c in node.children) fixWalk(edits, source, c, shape, flagged);
+		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) emitReorder(edits, source, node, shape, flagged, accessors);
+		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors);
 	}
 
 	/**
-	 * Emit the reorder edits for `container` when its first out-of-order member is
-	 * flagged and its fields are reorder-safe: stable-sort the members by rank, then
-	 * either swap each source slot in place (no conditionals) or rebuild the whole
-	 * member region with regrouped `#if`/`#end` directives (conditional members).
+	 * Emit the reorder edits for `container` when its first layout issue (order or
+	 * spacing) is one of the passed violations and its fields are reorder-safe:
+	 * stable-sort the members by rank, then rebuild the member region as a single
+	 * edit - blank-line separating rank groups and comment-led slots - or, for
+	 * `#if`-guarded members, a rebuilt region with regenerated `#if`/`#end`
+	 * directives. Falls back to in-place slot swaps when an inter-member gap holds
+	 * non-whitespace a rebuild would silently drop.
 	 */
 	private static function emitReorder(
-		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>
+		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
+		accessors: Map<Int, Bool>
 	): Void {
-		final members: Array<OrderedMember> = collectMembers(container, source, shape);
+		final members: Array<OrderedMember> = collectMembers(container, source, shape, accessors);
 		if (members.length < 2) return;
-		final bad: Null<OrderedMember> = firstOutOfOrder(members, source);
-		if (bad == null || !flagged.contains(bad.span.from)) return;
+		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source);
+		if (bad == null || !flagged.contains(bad.member.span.from)) return;
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> a.rank != b.rank ? a.rank - b.rank : a.index - b.index);
 		if (!reorderSafe(members, sorted, source, shape)) return;
-		var hasConditional: Bool = false;
-		for (m in members) if (m.condition != null) {
-			hasConditional = true;
-			break;
-		}
-		if (!hasConditional) {
-			for (i in 0...members.length) if (members[i].node != sorted[i].node)
-				edits.push({ span: members[i].span, text: source.substring(sorted[i].span.from, sorted[i].span.to) });
+		if (!hasConditionalMember(members)) {
+			if (hasNonWhitespaceGap(members, source)) {
+				for (i in 0...members.length) if (members[i].node != sorted[i].node)
+					edits.push({ span: members[i].span, text: source.substring(sorted[i].span.from, sorted[i].span.to) });
+				return;
+			}
+			final region: Span = new Span(members[0].span.from, members[members.length - 1].span.to);
+			edits.push({ span: region, text: joinMembers(sorted, source) });
 			return;
 		}
 		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape);
@@ -142,17 +165,28 @@ final class MemberOrder implements Check {
 	 * rank and full slot span, descending into `#if` conditional regions so a guarded
 	 * member is recorded with the condition it is declared under (see `collectInto`).
 	 */
-	private static function collectMembers(container: QueryNode, source: String, shape: RefShape): Array<OrderedMember> {
+	private static function collectMembers(
+		container: QueryNode, source: String, shape: RefShape, accessors: Map<Int, Bool>
+	): Array<OrderedMember> {
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
 		final out: Array<OrderedMember> = [];
-		collectInto(out, container, source, shape, comments, [], null);
+		collectInto(out, container, source, shape, comments, [], null, accessors);
 		return out;
 	}
 
 	/** The canonical-order rank of a member given its static / public flags and whether it is a field. */
-	private static function rankOf(node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, shape: RefShape): MemberRank {
+	private static function rankOf(
+		node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, accessors: Map<Int, Bool>, shape: RefShape
+	): MemberRank {
 		if (isField) {
 			if (isStatic) return isPublic ? StaticPublicField : StaticPrivateField;
+			final span: Null<Span> = node.span;
+			if (span != null && accessors.exists(span.from)) {
+				final getter: Bool = accessors[span.from] == true;
+				return isPublic
+					? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
+					: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
+			}
 			final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
 			return !mutable
 				? (isPublic ? PublicImmutableField : PrivateImmutableField)
@@ -243,7 +277,7 @@ final class MemberOrder implements Check {
 	 */
 	private static function collectInto(
 		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape,
-		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, accessors: Map<Int, Bool>
 	): Void {
 		final members: Array<String> = shape.memberDeclKinds ?? [];
 		final visibility: Array<String> = shape.visibilityModifierKinds ?? [];
@@ -258,12 +292,12 @@ final class MemberOrder implements Check {
 				final cond: Null<String> = extractConditionText(child, source, shape);
 				final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
 				final firstIdx: Int = out.length;
-				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span);
+				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
 				if (span != null && out.length > firstIdx) absorbLeadDoc(out, firstIdx, source, comments, span.from);
 				isStatic = false;
 				isPublic = false;
 			} else if (members.contains(child.kind)) {
-				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic);
+				pushMember(out, child, parent, source, shape, comments, condStack, outerCond, isStatic, isPublic, accessors);
 				isStatic = false;
 				isPublic = false;
 			} else {
@@ -349,6 +383,7 @@ final class MemberOrder implements Check {
 		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
 		final parts: Array<String> = [];
 		var prevCond: Null<String> = null;
+		var prevMember: Null<OrderedMember> = null;
 		var started: Bool = false;
 		for (m in sorted) {
 			if (!sameCondition(m.condition, prevCond)) {
@@ -356,8 +391,11 @@ final class MemberOrder implements Check {
 				final cond: Null<String> = m.condition;
 				if (cond != null) parts.push('$ifKw $cond');
 				prevCond = m.condition;
+				prevMember = null;
 			}
-			parts.push(m.leadTrivia + source.substring(m.span.from, m.span.to));
+			final blank: Bool = prevMember != null && separatorBetween(prevMember, m, source) == '\n\n';
+			parts.push((blank ? '\n' : '') + m.leadTrivia + source.substring(m.span.from, m.span.to));
+			prevMember = m;
 			started = true;
 		}
 		if (prevCond != null) parts.push('#end');
@@ -472,7 +510,7 @@ final class MemberOrder implements Check {
 	private static function pushMember(
 		out: Array<OrderedMember>, child: QueryNode, parent: QueryNode, source: String, shape: RefShape,
 		comments: Array<{ from: Int, to: Int, isLine: Bool }>, condStack: Array<String>, outerCond: Null<Span>, isStatic: Bool,
-		isPublic: Bool
+		isPublic: Bool, accessors: Map<Int, Bool>
 	): Void {
 		final span: Null<Span> = child.span;
 		if (span == null) return;
@@ -482,7 +520,7 @@ final class MemberOrder implements Check {
 		final region: Span = outerCond ?? full;
 		out.push({
 			node: child,
-			rank: rankOf(child, isStatic, isPublic, isField, shape),
+			rank: rankOf(child, isStatic, isPublic, isField, accessors, shape),
 			index: out.length,
 			span: full,
 			isField: isField,
@@ -506,30 +544,131 @@ final class MemberOrder implements Check {
 		return false;
 	}
 
+	/**
+	 * The first layout issue the check reports: the first out-of-order member, or -
+	 * when the order is canonical - the first spacing offender. Shared by the check
+	 * and the fix so both agree on which member is flagged, and with which message.
+	 */
+	private static function firstLayoutIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
+		return firstOrderIssue(members, source) ?? firstSpacingIssue(members, source);
+	}
+
+	/**
+	 * The first member separated from its predecessor by the wrong number of blank
+	 * lines, or null. Different-rank neighbours want exactly one blank line; same-rank
+	 * FIELD neighbours want none (a tight group), unless either slot leads with a
+	 * comment - the writer itself keeps a blank line after a doc-commented member, and
+	 * a blank before a doc comment is never stripped or demanded. Same-rank methods
+	 * are left alone - they are conventionally blank-separated. Disabled outright for
+	 * a non-conditional container with a non-whitespace inter-slot gap (a stray `;`,
+	 * a trailing comment): the fixer falls back to order-only slot swaps there, so a
+	 * spacing finding could never converge. Skips pairs sharing a line, crossing an
+	 * `#if` boundary, or whose gap holds directive / stray text.
+	 */
+	private static function firstSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
+		if (!hasConditionalMember(members) && hasNonWhitespaceGap(members, source)) return null;
+		for (i in 0...members.length - 1) {
+			final a: OrderedMember = members[i];
+			final b: OrderedMember = members[i + 1];
+			if (a.condition != b.condition) continue;
+			final gap: String = source.substring(a.span.to, b.span.from);
+			if (gap.indexOf('\n') < 0 || StringTools.trim(gap) != '') continue;
+			final blanks: Int = blankLineCount(gap);
+			if (a.rank != b.rank) {
+				if (blanks != 1) return { member: b, message: 'rank groups are not separated by a blank line' };
+			} else if (b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source))
+				return { member: b, message: 'members of one rank group are separated by a blank line' };
+		}
+		return null;
+	}
+
+	/** The number of whitespace-only lines wholly inside `gap` (the inter-slot text) - a tab-only line counts. */
+	private static function blankLineCount(gap: String): Int {
+		final lines: Array<String> = gap.split('\n');
+		var count: Int = 0;
+		for (i in 1...lines.length - 1) if (StringTools.trim(lines[i]) == '') count++;
+		return count;
+	}
+
+	/** Whether `m`'s slot text begins (after trimming) with a comment - a doc/line comment the spacing rule never strips or demands a blank against. */
+	private static function slotStartsWithComment(m: OrderedMember, source: String): Bool {
+		final t: String = StringTools.trim(source.substring(m.span.from, m.span.to));
+		return StringTools.startsWith(t, '/*') || StringTools.startsWith(t, '//');
+	}
+
+	/**
+	 * The separator between two consecutive reordered members: a blank line between
+	 * rank groups, before a method, or around a comment-led slot (mirroring the
+	 * writer's blank-after-doc-comment policy, so the raw edit already matches what
+	 * the round-trip would produce); a single newline only between two same-rank
+	 * plain fields.
+	 */
+	private static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String): String {
+		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) || slotStartsWithComment(prev, source)
+			? '\n\n'
+			: '\n';
+	}
+
+	/** Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps. */
+	private static function hasNonWhitespaceGap(members: Array<OrderedMember>, source: String): Bool {
+		for (i in 0...members.length - 1) if (StringTools.trim(source.substring(members[i].span.to, members[i + 1].span.from)) != '')
+			return true;
+		return false;
+	}
+
+	/** Join `sorted` member slots for the reordered region, blank-separating rank groups and members that lead with a comment. */
+	private static function joinMembers(sorted: Array<OrderedMember>, source: String): String {
+		final parts: Array<String> = [source.substring(sorted[0].span.from, sorted[0].span.to)];
+		for (i in 1...sorted.length)
+			parts.push(separatorBetween(sorted[i - 1], sorted[i], source) + source.substring(sorted[i].span.from, sorted[i].span.to));
+		return parts.join('');
+	}
+
+	/** The first out-of-order member wrapped as a `LayoutIssue`, or null when the sequence is canonical. */
+	private static function firstOrderIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
+		final bad: Null<OrderedMember> = firstOutOfOrder(members, source);
+		return bad == null ? null : {
+			member: bad,
+			message: 'type members are not in canonical order (constants, fields, constructor, methods; public before private)'
+		};
+	}
+
+	/** Whether any member is `#if`-guarded - such a container rebuilds through `buildConditionalRegion`, never the slot-swap path. */
+	private static function hasConditionalMember(members: Array<OrderedMember>): Bool {
+		for (m in members) if (m.condition != null) return true;
+		return false;
+	}
+
 }
 
 /**
- * The canonical member-order ranks — a smaller rank sorts earlier. Fields precede
+ * The canonical member-order ranks - a smaller rank sorts earlier. Fields precede
  * the constructor precede accessors precede methods; within each group public
- * precedes private; static fields lead, static methods trail. A distinct type
- * rather than a bare `Int` so a rank can never be confused with an unrelated count;
- * the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
- * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison
- * on an abstract).
+ * precedes private; static fields lead, static methods trail. Non-static property
+ * fields (those with a `(get, set)`-style accessor clause) sub-split ahead of the
+ * plain fields: a read-only property (stored read) before a getter property, both
+ * before the `final` field, before the plain `var`. A distinct type rather than a
+ * bare `Int` so a rank can never be confused with an unrelated count; the two `@:op`
+ * forwards give it the `<` ordering and `-` difference that the sort comparator and
+ * `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an abstract).
  */
 private enum abstract MemberRank(Int) {
 	final StaticPublicField = 0;
 	final StaticPrivateField = 1;
-	final PublicImmutableField = 2;
-	final PublicMutableField = 3;
-	final PrivateImmutableField = 4;
-	final PrivateMutableField = 5;
-	final Constructor = 6;
-	final Accessor = 7;
-	final PublicMethod = 8;
-	final PrivateMethod = 9;
-	final StaticPublicMethod = 10;
-	final StaticPrivateMethod = 11;
+	final PublicReadOnlyProperty = 2;
+	final PublicGetterProperty = 3;
+	final PublicImmutableField = 4;
+	final PublicMutableField = 5;
+	final PrivateReadOnlyProperty = 6;
+	final PrivateGetterProperty = 7;
+	final PrivateImmutableField = 8;
+	final PrivateMutableField = 9;
+	final Constructor = 10;
+	final Accessor = 11;
+	final PublicMethod = 12;
+	final PrivateMethod = 13;
+	final StaticPublicMethod = 14;
+	final StaticPrivateMethod = 15;
 
 	@:op(A < B) static function lt(a: MemberRank, b: MemberRank): Bool;
 

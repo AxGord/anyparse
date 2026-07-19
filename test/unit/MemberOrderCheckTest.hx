@@ -8,6 +8,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * The `member-order` check: a type whose members are not in canonical order
@@ -155,7 +156,7 @@ class MemberOrderCheckTest extends Test {
 	 * branch must not read as public-after-private (the FmtSliceTest false flag).
 	 */
 	public function testElseBranchResetsOrder(): Void {
-		final src: String = 'class C {\n\t#if (sys || nodejs)\n\tpublic function real():Void {}\n'
+		final src: String = 'class C {\n\t#if (sys || nodejs)\n\tpublic function real():Void {}\n\n'
 			+ '\tprivate static function fixture():Int { return 1; }\n' + '\t#else\n' + '\tpublic function stub():Void {}\n' + '\t#end\n'
 			+ '}';
 		Assert.equals(0, violations(src).length);
@@ -212,6 +213,100 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(fixed).length, 'second pass emits zero edits: $fixed');
 	}
 
+	/** Property fields sub-split: read-only prop, then getter prop, then plain var - each rank group blank-separated after the fix. */
+	public function testPropertyRankOrder(): Void {
+		final src: String = 'class C {\n\tpublic var s:Bool;\n\tpublic var r(default, null):Int;\n\tpublic var i(get, never):Int;\n}';
+		Assert.equals(1, violations(src).length, 'property fields out of order flagged');
+		final fixed: String = fixedSource(src);
+		Assert.equals('class C {\n\tpublic var r(default, null):Int;\n\npublic var i(get, never):Int;\n\npublic var s:Bool;\n}', fixed);
+		Assert.equals(0, violations(fixed).length, 'fix converges: $fixed');
+	}
+
+	/** Property fields sort before `final`, which sorts before plain `var`. */
+	public function testPropertiesBeforeFinalBeforeVar(): Void {
+		final src: String = 'class C {\n\tpublic var v:Int;\n\tpublic final f:Int = 0;\n\tpublic var g(get, never):Int;\n\tpublic var ro(default, null):Int;\n}';
+		Assert.equals(
+			'class C {\n\tpublic var ro(default, null):Int;\n\npublic var g(get, never):Int;\n\npublic final f:Int = 0;\n\npublic var v:Int;\n}',
+			fixedSource(src)
+		);
+	}
+
+	/** Canonical order but no blank between a property group and the var group is flagged; the fix inserts exactly one blank. */
+	public function testMissingGroupBlankFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var ro(default, null):Int;\n\tpublic var v:Int;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length, 'missing group blank flagged');
+		Assert.equals('rank groups are not separated by a blank line', vs[0].message);
+		final fixed: String = fixedSource(src);
+		Assert.equals('class C {\n\tpublic var ro(default, null):Int;\n\npublic var v:Int;\n}', fixed);
+		Assert.equals(0, violations(fixed).length, 'fix converges: $fixed');
+	}
+
+	/** A stray blank line within one rank group is flagged; the fix removes it. */
+	public function testStrayBlankWithinGroupFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\n\tpublic var b:Int;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length, 'stray blank within group flagged');
+		Assert.equals('members of one rank group are separated by a blank line', vs[0].message);
+		final fixed: String = fixedSource(src);
+		Assert.equals('class C {\n\tpublic var a:Int;\npublic var b:Int;\n}', fixed);
+		Assert.equals(0, violations(fixed).length, 'fix converges: $fixed');
+	}
+
+	/** A blank line before a same-rank member's doc comment is allowed - not flagged as a stray blank. */
+	public function testBlankBeforeDocCommentAllowed(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\n\t/** doc */\n\tpublic var b:Int;\n}';
+		Assert.equals(0, violations(src).length, 'blank before doc comment not flagged');
+	}
+
+	/** An unrelated reorder keeps a same-rank field's leading doc and its blank line. */
+	public function testReorderKeepsDocBlank(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\tpublic var a:Int;\n\n\t/** doc */\n\tpublic var b:Int;\n}';
+		Assert.equals(
+			'class C {\n\tpublic var a:Int;\n\n\t/** doc */\n\tpublic var b:Int;\n\npublic function m():Void {}\n}', fixedSource(src)
+		);
+	}
+
+	/** A stray `;` between out-of-order members forces the fallback slot-swap: members reorder, the `;` is not deleted. */
+	public function testStraySemicolonGuard(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\t;\n\tpublic var x:Int = 0;\n}';
+		Assert.equals('class C {\n\tpublic var x:Int = 0;\n\t;\n\tpublic function m():Void {}\n}', fixedSource(src));
+	}
+
+	/** Private symmetry: a private getter-property sorts before a private final field. */
+	public function testPrivateGetterBeforePrivateFinal(): Void {
+		final src: String = 'class C {\n\tprivate final pf:Int = 0;\n\tprivate var pg(get, never):Int;\n}';
+		Assert.equals('class C {\n\tprivate var pg(get, never):Int;\n\nprivate final pf:Int = 0;\n}', fixedSource(src));
+	}
+
+	/** Regression: a plain-field-only class (no properties) in canonical order and spacing still passes. */
+	public function testPlainFieldsCanonicalStillPasses(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int = 0;\n\n\tprivate var b:Int = 0;\n\n\tpublic function m():Void {}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A blank line after a doc-commented same-rank PREDECESSOR is allowed - the writer itself inserts it, so flagging it could never converge. */
+	public function testBlankAfterDocPredecessorAllowed(): Void {
+		final src: String = 'class C {\n\t/** doc */\n\tpublic static final A:Int = 0;\n\n\tpublic static final B:Int = 0;\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A reorder involving a doc-commented member converges through the PRODUCTION canonicalization: the writer re-inserts the blank after the doc-commented slot, and the check must accept it. */
+	public function testDocPredecessorFixConvergesCanonical(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t/** doc */\n\tpublic static final A:Int = 0;\n\n\tpublic static final B:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'order violation flagged');
+		final fixed: String = canonicalizedFix(src);
+		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip: $fixed');
+	}
+
+	/** The stray-`;` slot-swap fallback converges through the PRODUCTION canonicalization: the check skips spacing on such a container instead of flagging what the fixer will never normalize. */
+	public function testStraySemicolonFixConvergesCanonical(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\t;\n\tpublic var x:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'order violation flagged');
+		final fixed: String = canonicalizedFix(src);
+		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip: $fixed');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -247,5 +342,23 @@ class MemberOrderCheckTest extends Test {
 	 */
 	private function memberLine(src: String, needle: String): Null<String>
 		return Lambda.find(src.split('\n'), line -> line.indexOf(needle) >= 0);
+
+	/**
+	 * Apply the check's fix edits and run the result through the production
+	 * canonicalization (splice + `writeRoundTrip`) - the seam `fixedSource`'s raw
+	 * splice skips, which is exactly where a writer-reinserted blank line can undo
+	 * a naive spacing fix.
+	 */
+	private function canonicalizedFix(src: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: MemberOrder = new MemberOrder();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
+		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
+			case Ok(text): text;
+			case Err(message):
+				Assert.fail(message);
+				src;
+		};
+	}
 
 }
