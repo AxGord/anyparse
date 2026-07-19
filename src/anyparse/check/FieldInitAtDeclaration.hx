@@ -146,6 +146,9 @@ final class FieldInitAtDeclaration implements Check {
 			if (writeIndex.hasUnresolvedWrite(name)) continue;
 			if (writeIndex.writeCount(owner, name) != 1) continue;
 			if (!contextFreeRhs(init.rhs, container, statics, shape)) continue;
+			final stmtSpan: Null<Span> = init.stmt.span;
+			if (stmtSpan == null) continue;
+			if (readBeforeInit(ctor, span.from, name, stmtSpan.from, container, shape)) continue;
 			out.push({
 				file: file,
 				span: span,
@@ -195,13 +198,45 @@ final class FieldInitAtDeclaration implements Check {
 		if (node.kind == identKind) {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
-			if (name == null || span == null) return true;
+			if (name == null || span == null) return false;
 			if (selfText != null && name == selfText) return false;
 			final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
 			return bf == null || statics.contains(bf);
 		}
 		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape)) return false;
 		return true;
+	}
+
+	/**
+	 * Whether the field is referenced anywhere in the constructor BEFORE its
+	 * initializing statement. The field's sole write is that statement
+	 * (`writeCount == 1`), so any earlier reference is a READ; moving the init
+	 * ahead of the constructor body would then change the observed value, and the
+	 * candidate is rejected. Detects a direct reference — a bare identifier
+	 * resolving to the field, or `this.field`; a read reached only through a
+	 * preceding method call (including a `super()` virtual dispatch) is not
+	 * detected (see the class doc).
+	 */
+	private static function readBeforeInit(
+		node: QueryNode, fieldFrom: Int, fieldName: String, boundary: Int, container: QueryNode, shape: RefShape
+	): Bool {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from < boundary) {
+			final identKind: String = shape.identKind;
+			final faKind: Null<String> = shape.fieldAccessKind;
+			final selfText: Null<String> = shape.selfReferenceText;
+			if (
+				node.kind == identKind && node.name == fieldName
+				&& TypeResolver.resolveBindingFrom(fieldName, span, container, shape) == fieldFrom
+			)
+				return true;
+			if (faKind != null && node.kind == faKind && node.name == fieldName && selfText != null) {
+				final recv: Null<QueryNode> = node.children.length > 0 ? node.children[0] : null;
+				if (recv != null && recv.kind == identKind && recv.name == selfText) return true;
+			}
+		}
+		for (child in node.children) if (readBeforeInit(child, fieldFrom, fieldName, boundary, container, shape)) return true;
+		return false;
 	}
 
 }

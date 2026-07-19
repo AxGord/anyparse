@@ -109,6 +109,33 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { var _x = ').length);
 	}
 
+	/** A field READ in the constructor before its assignment would change value if moved — left alone. */
+	public function testReadBeforeWriteNotMoved(): Void {
+		Assert.equals(0, violations('class C { private var _x:Int; public function new() { trace(_x); _x = 5; } }').length);
+	}
+
+	/** A field read only AFTER its constructor assignment is safe to move — flagged. */
+	public function testReadAfterWriteMoved(): Void {
+		Assert.equals(1, violations('class C { private var _x:Int; public function new() { _x = 5; trace(_x); } }').length);
+	}
+
+	/** A `this.field = expr` target is recognised — flagged. */
+	public function testThisTargetMoved(): Void {
+		Assert.equals(1, violations('class C { private var _y:Int; public function new() { this._y = 7; } }').length);
+	}
+
+	/** A right-hand side calling an instance method is order-dependent — left alone. */
+	public function testInstanceMethodCallRhsNotMoved(): Void {
+		Assert.equals(
+			0, violations('class C { private var _x:Int; function h():Int return 1; public function new() { _x = h(); } }').length
+		);
+	}
+
+	/** A `new T(param)` whose argument references a constructor parameter is order-dependent — left alone. */
+	public function testNewWithParamArgNotMoved(): Void {
+		Assert.equals(0, violations('class C { private var _o:Foo; public function new(p:Int) { _o = new Foo(p); } }').length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new FieldInitAtDeclaration().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
