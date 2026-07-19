@@ -13,10 +13,11 @@ using Lambda;
 /**
  * Flags a single-statement null guard that safe navigation (`?.`) replaces —
  * `if (x != null) x.m(...)` (and the braced `if (x != null) { x.m(...); }`, plus
- * the reversed `if (null != x) …`) collapses to `x?.m(...);`. `Severity.Info`
- * (a modernization cleanup), with an autofix.
+ * the reversed `if (null != x) …`) collapses to `x?.m(...);`. A CONJUNCTION guard
+ * `if (C && ... && x != null) x.m(...)` drops the null-check, keeping the rest:
+ * `if (C && ...) x?.m(...);`. `Severity.Info` (a modernization cleanup), with an autofix.
  *
- * ## Soundness — a LOCAL / PARAM receiver, a CALL body, no else
+ * ## Soundness — a LOCAL / PARAM receiver, a CALL body, no else, `x` only as the root
  *
  * `if (field != null) field.m()` reads `field` twice, `field?.m()` once — so a
  * receiver backed by a property getter would change semantics. The guard is
@@ -24,7 +25,9 @@ using Lambda;
  * (`localDeclKinds`) or a parameter (`paramKinds`) whose scope encloses it: a
  * local can carry no accessor, so its double read is a provable no-op. A bare
  * field reference (implicit `this.`), a `this.x` / qualified receiver (whose
- * guard operand is not a plain identifier) and every field are left alone.
+ * guard operand is not a plain identifier) and every field are left alone. The
+ * surviving-condition operands (the kept conjuncts) are read the same number of
+ * times before and after, so THEY may be fields.
  *
  * The then-branch must be exactly ONE expression statement whose expression is a
  * CALL rooted at the guarded identifier (`x.m(...)` / `x.a.b(...)`), so:
@@ -36,21 +39,33 @@ using Lambda;
  * - a body already using `?.` on the root (`x?.m()`) is NOT flagged — its first
  *   access projects as `nullSafeAccessKind`, not `fieldAccessKind` (the dead- /
  *   unnecessary-safe-nav checks' territory);
- * - an `else` branch makes the guard a real two-way choice — NOT flagged.
+ * - an `else` branch makes the guard a real two-way choice — NOT flagged;
+ * - the guarded identifier appearing in the body anywhere but the chain root
+ *   (`x.m(x)`, `x.a(x).b()`, `x.arr[x]`) is NOT flagged — after `x?.` it stays
+ *   typed `Null<T>`, breaking `@:nullSafety(Strict)`.
+ *
+ * ## Conjunction — the null-check must be the LAST conjunct
+ *
+ * Conjuncts evaluate left-to-right, so a conjunct AFTER `x != null` may rely on
+ * `x` being non-null (`if (x != null && x.len > 0) …`). Only a null-check that is
+ * the LAST conjunct is dropped, leaving the preceding conjuncts as the surviving
+ * `if` condition (kept verbatim, so a comment inside them is preserved).
  *
  * ## Autofix
  *
- * The whole `if` statement is replaced by the body statement with the FIRST dot
- * off the guarded identifier turned into `?.` (`if (x != null) x.a.b();` →
- * `x?.a.b();`): only the guard being removed is encoded, inner nullables stay the
- * author's concern. A comment inside the removed `if` header / braces would be
+ * The whole `if` statement is replaced by the body statement (sole guard) or by
+ * `if (<surviving condition>) <body>` (conjunction), with the FIRST dot off the
+ * guarded identifier turned into `?.` (`if (x != null) x.a.b();` → `x?.a.b();`):
+ * only the guard being removed is encoded, inner nullables stay the author's
+ * concern. A comment inside a DROPPED part of the removed `if` region would be
  * lost, so such a guard is left unflagged.
  *
  * ## Grammar-agnostic
  *
  * Driven by `ifStatementKinds`, `notEqKind`, `nullLiteralKind`, `callKind`,
  * `fieldAccessKind`, `exprStatementKind`, `blockStmtKind` (any unset → no-op),
- * plus `localDeclKinds` / `paramKinds` / `scopeKinds` for the binding resolution, `parenKind` to unwrap a
+ * plus `logicalAndKind` for the conjunction form, `localDeclKinds` / `paramKinds`
+ * / `scopeKinds` for the binding resolution, `parenKind` to unwrap a
  * parenthesized condition, and `opaqueKinds` to skip reification subtrees.
  */
 @:nullSafety(Strict)
@@ -61,6 +76,9 @@ final class PreferSafeNav implements Check {
 
 	/** A binary comparison node has exactly [left, right] children. */
 	private static inline final COMPARISON_CHILD_COUNT: Int = 2;
+
+	/** A logical-AND node has exactly [preceding-conjuncts, last-conjunct] children. */
+	private static inline final AND_CHILD_COUNT: Int = 2;
 
 	public function new() {}
 
@@ -103,7 +121,14 @@ final class PreferSafeNav implements Check {
 				if (dotPos < 0 || dotPos >= stmtSpan.to) return null;
 				final prefix: String = source.substring(stmtSpan.from, dotPos);
 				final suffix: String = source.substring(dotPos + 1, stmtSpan.to);
-				return { span: span, text: prefix + '?.' + suffix };
+				final body: String = prefix + '?.' + suffix;
+				final rest: Null<QueryNode> = m.restCond;
+				final restSpan: Null<Span> = rest != null ? rest.span : null;
+				if (rest != null && restSpan == null) return null;
+				final text: String = restSpan != null
+					? 'if (' + StringTools.trim(source.substring(restSpan.from, restSpan.to)) + ') ' + body
+					: body;
+				return { span: span, text: text };
 			});
 		return RefactorSupport.dropContainedEdits(edits);
 	}
@@ -136,7 +161,8 @@ final class PreferSafeNav implements Check {
 			scopeKinds: shape.scopeKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			localDeclKinds: shape.localDeclKinds ?? [],
-			paramKinds: shape.paramKinds ?? []
+			paramKinds: shape.paramKinds ?? [],
+			andKind: shape.logicalAndKind
 		};
 	}
 
@@ -155,7 +181,7 @@ final class PreferSafeNav implements Check {
 					span: span,
 					rule: 'prefer-safe-nav',
 					severity: Severity.Info,
-					message: 'this single null guard can be safe navigation (?.)'
+					message: 'this null guard can be safe navigation (?.)'
 				});
 			}
 		}
@@ -163,26 +189,46 @@ final class PreferSafeNav implements Check {
 	}
 
 	/**
-	 * If `ifNode` is `if (x != null) x.chain(...)` / `if (null != x) { x.chain(...); }`
-	 * (no else, single call statement rooted at a plain identifier `x` reached by a
-	 * plain `.`), return the guard operand, the body statement and the chain-root
-	 * identifier; else null. Bails when a comment sits in the removed `if` region.
+	 * If `ifNode` is a no-`else` guard whose then-branch is a single call statement
+	 * rooted at a plain identifier `x` reached by a plain `.`, return the guard
+	 * operand, the body statement, the chain-root identifier and the surviving
+	 * condition (`restCond`, null for a sole guard); else null. Two condition shapes:
+	 * `if (x != null) x.chain(...)` (sole) and `if (C && ... && x != null) x.chain(...)`
+	 * (the null-check is the LAST conjunct — see `guardCondition`). Bails when `x`
+	 * appears in the call ARGUMENTS (`x.m(x)` — `x?.m(x)` would leave it `Null<T>`),
+	 * and when a comment sits in a DROPPED part of the removed `if` region.
 	 */
 	private static function match(ifNode: QueryNode, source: String, s: Seams): Null<Candidate> {
 		if (ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
-		final condIdent: Null<QueryNode> = guardOperand(ifNode.children[0], s);
-		if (condIdent == null) return null;
+		final guard: Null<{ operand: QueryNode, rest: Null<QueryNode> }> = guardCondition(ifNode.children[0], s);
+		if (guard == null) return null;
+		final condIdent: QueryNode = guard.operand;
+		final rest: Null<QueryNode> = guard.rest;
 		final stmt: Null<QueryNode> = singleCallStatement(ifNode.children[1], s);
 		if (stmt == null) return null;
 		final access: Null<QueryNode> = firstAccess(stmt, s);
 		if (access == null) return null;
 		final root: QueryNode = access.children[0];
 		if (!sameName(condIdent, root)) return null;
+		final guardName: Null<String> = condIdent.name;
+		if (guardName == null) return null;
+		if (mentionsOutsideRoot(stmt.children[0], root, guardName, s)) return null;
 		final ifSpan: Null<Span> = ifNode.span;
 		final stmtSpan: Null<Span> = stmt.span;
 		if (ifSpan == null || stmtSpan == null) return null;
-		final hasGap: Bool = gapHasComment(source, ifSpan.from, stmtSpan.from) || gapHasComment(source, stmtSpan.to, ifSpan.to);
-		return hasGap ? null : { condIdent: condIdent, stmt: stmt, rootIdent: root };
+		final restSpan: Null<Span> = rest != null ? rest.span : null;
+		if (rest != null && restSpan == null) return null;
+		final headHasComment: Bool = if (restSpan != null)
+			gapHasComment(source, ifSpan.from, restSpan.from) || gapHasComment(source, restSpan.to, stmtSpan.from);
+		else
+			gapHasComment(source, ifSpan.from, stmtSpan.from);
+		final hasComment: Bool = headHasComment || gapHasComment(source, stmtSpan.to, ifSpan.to);
+		return hasComment ? null : {
+			condIdent: condIdent,
+			stmt: stmt,
+			rootIdent: root,
+			restCond: rest
+		};
 	}
 
 	/**
@@ -238,9 +284,7 @@ final class PreferSafeNav implements Check {
 
 	/** The plain-identifier operand of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
-		var c: QueryNode = cond;
-		final parenKind: Null<String> = s.parenKind;
-		if (parenKind != null) while (c.kind == parenKind && c.children.length == 1) c = c.children[0];
+		final c: QueryNode = unwrapParens(cond, s);
 		if (c.kind != s.notEqKind || c.children.length != COMPARISON_CHILD_COUNT) return null;
 		final a: QueryNode = c.children[0];
 		final b: QueryNode = c.children[1];
@@ -283,6 +327,55 @@ final class PreferSafeNav implements Check {
 		return an != null && bn != null && an == bn;
 	}
 
+
+	/**
+	 * Analyse an `if` condition for a null guard on a plain identifier, returning the
+	 * guarded operand and the surviving REMAINING condition (null for a sole guard):
+	 *
+	 * - `x != null` / `null != x` — the sole condition, `rest` is null;
+	 * - `C && ... && x != null` — the guard is the LAST conjunct, so it is evaluated
+	 *   last and no later conjunct can depend on `x` being non-null (`if (x != null &&
+	 *   x.len > 0) …` is thus NOT matched); `rest` is the preceding `C && ...`, kept
+	 *   verbatim by the fix as the surviving `if` condition.
+	 *
+	 * Any other shape (a guard that is not the last conjunct, a top-level `||`, …)
+	 * returns null.
+	 */
+	private static function guardCondition(cond: QueryNode, s: Seams): Null<{ operand: QueryNode, rest: Null<QueryNode> }> {
+		final sole: Null<QueryNode> = guardOperand(cond, s);
+		if (sole != null) return { operand: sole, rest: null };
+		final andKind: Null<String> = s.andKind;
+		if (andKind == null) return null;
+		final c: QueryNode = unwrapParens(cond, s);
+		if (c.kind != andKind || c.children.length != AND_CHILD_COUNT) return null;
+		final operand: Null<QueryNode> = guardOperand(c.children[1], s);
+		return operand == null ? null : { operand: operand, rest: c.children[0] };
+	}
+
+
+	/** Peel redundant single-child parenthesis wrappers off `node` (`(((e)))` → `e`). */
+	private static inline function unwrapParens(node: QueryNode, s: Seams): QueryNode {
+		var c: QueryNode = node;
+		final parenKind: Null<String> = s.parenKind;
+		if (parenKind != null) while (c.kind == parenKind && c.children.length == 1) c = c.children[0];
+		return c;
+	}
+
+
+	/**
+	 * Whether the guarded identifier `name` appears in `node`'s subtree anywhere OTHER
+	 * than at the chain root `root`. The rewrite narrows nothing after the `?.`, so any
+	 * other `x` — a call argument (`x.m(x)`), an intermediate-chain argument
+	 * (`x.a(x).b()`), an index (`x.arr[x]`) — stays typed `Null<T>` and breaks
+	 * `@:nullSafety(Strict)`; such a guard is left unflagged. An opaque reification
+	 * subtree counts as a possible mention (conservative).
+	 */
+	private static function mentionsOutsideRoot(node: QueryNode, root: QueryNode, name: String, s: Seams): Bool {
+		if (s.opaqueKinds.contains(node.kind)) return true;
+		if (node != root && node.kind == s.identKind && node.name == name) return true;
+		return node.children.exists(c -> mentionsOutsideRoot(c, root, name, s));
+	}
+
 }
 
 /** The `RefShape` kinds `PreferSafeNav` reads, bundled once so the walkers take one argument. */
@@ -300,6 +393,7 @@ private typedef Seams = {
 	var opaqueKinds: Array<String>;
 	var localDeclKinds: Array<String>;
 	var paramKinds: Array<String>;
+	var andKind: Null<String>;
 }
 
 /** A matched guard: the null-checked identifier, its body statement, and the chain-root identifier in the body. */
@@ -307,4 +401,5 @@ private typedef Candidate = {
 	var condIdent: QueryNode;
 	var stmt: QueryNode;
 	var rootIdent: QueryNode;
+	var restCond: Null<QueryNode>;
 }

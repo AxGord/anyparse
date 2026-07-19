@@ -24,7 +24,7 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-safe-nav', vs[0].rule);
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals('this single null guard can be safe navigation (?.)', vs[0].message);
+		Assert.equals('this null guard can be safe navigation (?.)', vs[0].message);
 	}
 
 	public function testLocalFixedBare(): Void {
@@ -75,7 +75,7 @@ class PreferSafeNavCheckTest extends Test {
 		Assert.equals(0, violations(local('if (x != null) x.f = 1;')).length);
 	}
 
-	public function testCompoundConditionNotFlagged(): Void {
+	public function testGuardFirstConjunctNotFlagged(): Void {
 		Assert.equals(0, violations(local('if (x != null && ok) x.command("q");')).length);
 	}
 
@@ -106,6 +106,50 @@ class PreferSafeNavCheckTest extends Test {
 	public function testParenthesizedConditionFlaggedAndFixed(): Void {
 		Assert.equals(1, violations(local('if ((x != null)) x.command("p");')).length);
 		Assert.equals(local('x?.command("p");'), applyFix(local('if ((x != null)) x.command("p");')));
+	}
+
+	public function testConjunctionGuardLastFlaggedAndFixed(): Void {
+		Assert.equals(1, violations(local('if (ok && x != null) x.command("q");')).length);
+		Assert.equals(local('if (ok) x?.command("q");'), applyFix(local('if (ok && x != null) x.command("q");')));
+	}
+
+	public function testThreeConjunctsGuardLastFixed(): Void {
+		Assert.equals(1, violations(local('if (a && b && x != null) x.command("t");')).length);
+		Assert.equals(local('if (a && b) x?.command("t");'), applyFix(local('if (a && b && x != null) x.command("t");')));
+	}
+
+	public function testConjunctionBracedFixed(): Void {
+		Assert.equals(1, violations(local('if (ok && x != null) { x.command("b"); }')).length);
+		Assert.equals(local('if (ok) x?.command("b");'), applyFix(local('if (ok && x != null) { x.command("b"); }')));
+	}
+
+	public function testOrderSensitiveGuardNotLastNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null && x.n > 0) x.command("o");')).length);
+	}
+
+	public function testSoleGuardArgumentNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null) x.command(x);')).length);
+		Assert.equals(local('if (x != null) x.command(x);'), applyFix(local('if (x != null) x.command(x);')));
+	}
+
+	public function testConjunctionGuardArgumentNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (ok && x != null) x.command(x);')).length);
+	}
+
+	public function testGuardInReceiverChainArgNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (x != null) x.a(x).b();')).length);
+		Assert.equals(local('if (x != null) x.a(x).b();'), applyFix(local('if (x != null) x.a(x).b();')));
+	}
+
+	public function testConjunctionArgumentStaysGuarded(): Void {
+		final source: String = 'class C {\n\tfunction f(c:Sys, axis:Sys):Void {\n\t\tif (c != null && axis != null) axis.setScrollPos(c, value, h());\n\t}\n}';
+		final expected: String = 'class C {\n\tfunction f(c:Sys, axis:Sys):Void {\n\t\tif (c != null) axis?.setScrollPos(c, value, h());\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		Assert.equals(expected, applyFix(source));
+	}
+
+	public function testCommentInDroppedConjunctNotFlagged(): Void {
+		Assert.equals(0, violations(local('if (ok && /* c */ x != null) x.command("q");')).length);
 	}
 
 	private function local(stmt: String): String {
