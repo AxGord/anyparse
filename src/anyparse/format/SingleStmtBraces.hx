@@ -117,9 +117,8 @@ class SingleStmtBraces {
 		// de-brace it on its own merits (gates 1-6, 8) - i.e. the block renders WITH its braces.
 		return isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt'
 			? drop
-			: Type.enumConstructor(cast body) != 'BlockStmt'
-				? false
-				: unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
+			: Type.enumConstructor(cast body) == 'BlockStmt'
+				&& unwrapStmt(body, drop, suppress, elseFollows, hasTrailingSemi, false, isIfThenBody) == body;
 	}
 
 	/**
