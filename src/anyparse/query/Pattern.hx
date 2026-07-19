@@ -78,10 +78,9 @@ final class Pattern {
 @:nullSafety(Strict)
 final class KindEquivalence {
 
-	private final _canonOf: Map<String, String>;
+	private final _canonOf: Map<String, String> = [];
 
 	public function new(classes: Array<Array<String>>) {
-		_canonOf = [];
 		for (group in classes) if (group.length != 0) {
 			final rep: String = group[0];
 			for (k in group) _canonOf[k] = rep;
