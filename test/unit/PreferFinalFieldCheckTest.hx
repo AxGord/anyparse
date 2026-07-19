@@ -149,6 +149,14 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('_x = 1') >= 0);
 	}
 
+	public function testNoInitStaticCtorWriteNotFlagged(): Void {
+		// A STATIC field cannot become final off a ctor assignment - `static final`
+		// requires a declaration initializer ("Static final variable must be
+		// initialized"), so the no-init case must skip statics.
+		final vs: Array<Violation> = violations('class C { private static var _i:C; public function new() { _i = this; } }');
+		Assert.equals(0, vs.length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -162,15 +170,6 @@ class PreferFinalFieldCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	public function testNoInitStaticCtorWriteNotFlagged(): Void {
-		// A STATIC field cannot become final off a ctor assignment - `static final`
-		// requires a declaration initializer ("Static final variable must be
-		// initialized"), so the no-init case must skip statics.
-		final vs: Array<Violation> = violations('class C { private static var _i:C; public function new() { _i = this; } }');
-		Assert.equals(0, vs.length);
 	}
 
 }

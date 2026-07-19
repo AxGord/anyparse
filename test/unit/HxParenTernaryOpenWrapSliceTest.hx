@@ -22,9 +22,7 @@ using StringTools;
 final class HxParenTernaryOpenWrapSliceTest extends Test {
 
 	private static final CFG: String = '{"indentation":{"character":"tab","tabWidth":4,"trailingWhitespace":false,"alignInlineSwitchCaseBody":true},"emptyLines":{"maxAnywhereInFile":2,"afterBlocks":"remove","afterLeftCurly":"keep","beforeRightCurly":"keep","classEmptyLines":{"beginType":1,"endType":1},"interfaceEmptyLines":{"beginType":1,"endType":1},"abstractEmptyLines":{"beginType":1,"endType":1}},"wrapping":{"functionSignature":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"totalItemLength <= n","value":100},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1}],"type":"noWrap"}]},"maxLineLength":140,"callParameter":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"itemCount <= n","value":1},{"cond":"totalItemLength <= n","value":100}],"type":"noWrap"}]},"opBoolChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"itemCount <= n","value":3},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"totalItemLength <= n","value":120},{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]},"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]},"conditionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]}},"whitespace":{"addLineCommentSpace":false,"commaPolicy":"after","ifPolicy":"around","forPolicy":"around","whilePolicy":"around","switchPolicy":"around","catchPolicy":"around","arrowFunctionsPolicy":"around","functionTypeHaxe3Policy":"none","functionTypeHaxe4Policy":"none","binopPolicy":"around","intervalPolicy":"around","openingBracketPolicy":"none","closingBracketPolicy":"none","bracesConfig":{"objectLiteralBraces":{"openingPolicy":"after","closingPolicy":"before"},"anonTypeBraces":{"openingPolicy":"after","closingPolicy":"before"},"typedefBraces":{"openingPolicy":"after","closingPolicy":"before"},"blockBraces":{"openingPolicy":"around","closingPolicy":"before"},"unknownBraces":{"openingPolicy":"after","closingPolicy":"before"}},"parenConfig":{"callParens":{"openingPolicy":"none","closingPolicy":"none"},"funcParamParens":{"openingPolicy":"none","closingPolicy":"none"},"conditionParens":{"openingPolicy":"before","closingPolicy":"after"},"anonFuncParamParens":{"openingPolicy":"none","closingPolicy":"none"},"forLoopParens":{"openingPolicy":"before","closingPolicy":"after"},"expressionParens":{"openingPolicy":"none","closingPolicy":"none"}}},"lineEnds":{"emptyCurly":"noBreak"},"sameLine":{"ifBody":"fitLine","forBody":"fitLine","whileBody":"fitLine","functionBody":"fitLine","expressionIf":"next","comprehensionFor":"fitLine"}}';
-
 	private static final EXPR_WRAP_SECTION: String = '"expressionWrapping":{"defaultWrap":"fillLineWithLeadingBreak","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"}]},';
-
 	private static final SRC: String = 'class Sample {\n\tfunction run() {\n\t\tspriteMarkItem.x = offsetX + (node.bucket ? MeasureMap.PANEL_ROW_GRID_INDENT_MARK_ICON : !_fixedMarkSearch ? MeasureMap.PANEL_ROW_GRID_INDENT_MARK_ICON : MeasureMap.PANEL_ROW_GRID_INDENT_MARK_ICON_FIXED_MARK_SEARCH);\n\t}\n}';
 	private static final SRC_OPADDSUB: String = "class Sample {\n\tfunction run() {\n\t\tsummaryLine = headMarkNode != null ? ((headMarkNode.parentRef != null ? ', parent mark id: ' + headMarkNode.parentRef.markIdValue : '') + ', mark id: ' + headMarkNode.markIdValue + ', stamp: ' + headMarkNode.stampValue) : '';\n\t}\n}";
 
@@ -65,7 +63,6 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		);
 	}
 
-
 	/**
 	 * omega-ternary-paren-open BOUNDARY (opAddSub sibling): an expression paren
 	 * wrapping a pure opAddSub chain whose flat line is EXACTLY maxLineLength (140)
@@ -78,7 +75,6 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 			triviaWrite(src, CFG)
 		);
 	}
-
 
 	/**
 	 * omega-ternary-paren-open BOUNDARY (opBool sibling): an expression paren
@@ -107,7 +103,6 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 		);
 	}
 
-
 	/**
 	 * Without expressionWrapping the opAddSub paren stays glued (`? ((`) — the config
 	 * gate keeps fork default-config parity (corpus byte-inert).
@@ -118,7 +113,6 @@ final class HxParenTernaryOpenWrapSliceTest extends Test {
 			triviaWrite(SRC_OPADDSUB, CFG.replace(EXPR_WRAP_SECTION, ''))
 		);
 	}
-
 
 	private inline function triviaWrite(src: String, cfg: String): String {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(cfg);

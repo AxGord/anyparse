@@ -716,7 +716,6 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('while (') != -1, 'expected single-space do-while in: <$out>');
 	}
 
-
 	private function assertWriteContains(src: String, opts: HxModuleWriteOptions, needle: String, message: String): Void {
 		opts.finalNewline = false;
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(src), opts);

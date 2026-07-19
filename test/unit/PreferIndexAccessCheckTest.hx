@@ -130,7 +130,6 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(1, violations(source).length);
 	}
 
-
 	public function testClosedNullGuardKeyUnderNullSafetyStillFlagged(): Void {
 		// Bare-identifier ternary operands are not inference-fragile — still converts.
 		final source: String = '@:nullSafety class C {\n\tfunction f(a:Null<String>, b:String):Void {\n\t\tfinal m:Map<String, Int> = [];\n'
@@ -138,16 +137,13 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(1, violations(source).length);
 	}
 
-
 	private function src(decl: String, body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t' + decl + '\n\t\t' + body + '\n\t}\n}';
 	}
 
-
 	private function violations(source: String): Array<Violation> {
 		return new PreferIndexAccess().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
 	}
-
 
 	private function applyFix(source: String): String {
 		final check: PreferIndexAccess = new PreferIndexAccess();

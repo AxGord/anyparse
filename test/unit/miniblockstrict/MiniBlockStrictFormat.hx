@@ -32,21 +32,17 @@ final class MiniBlockStrictFormat {
 	public var name(default, null): String = 'MiniBlockStrict';
 	public var version(default, null): String = '1.0';
 	public var encoding(default, null): Encoding = Encoding.UTF8;
-
 	public var whitespace(default, null): String = ' \t\n\r';
-
 	public var mappingOpen(default, null): String = '{';
 	public var mappingClose(default, null): String = '}';
 	public var sequenceOpen(default, null): Null<String> = '[';
 	public var sequenceClose(default, null): Null<String> = ']';
 	public var keyValueSep(default, null): String = ':';
 	public var entrySep(default, null): String = ';';
-
 	public var keySyntax(default, null): KeySyntax = KeySyntax.Quoted;
 	public var fieldLookup(default, null): FieldLookup = FieldLookup.ByName;
 	public var onMissing(default, null): MissingPolicy = MissingPolicy.Error;
 	public var onUnknown(default, null): UnknownPolicy = UnknownPolicy.Skip;
-
 	public var defaultWriteOptions(default, null): WriteOptions = {
 		indentChar: Tab,
 		indentSize: 1,

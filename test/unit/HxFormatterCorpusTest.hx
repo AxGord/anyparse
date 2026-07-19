@@ -48,7 +48,6 @@ class HxFormatterCorpusTest extends Test {
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
 	private static final forceBuildWriter: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
-
 	private static inline final SAMELINE_SUBDIR: String = 'test/testcases/sameline';
 	private static inline final WHITESPACE_SUBDIR: String = 'test/testcases/whitespace';
 	private static inline final INDENTATION_SUBDIR: String = 'test/testcases/indentation';
@@ -83,6 +82,7 @@ class HxFormatterCorpusTest extends Test {
 	private static var sweepSkipWrite: Int = 0;
 	private static var sweepSkipConfig: Int = 0;
 	private static var sweepSkipMalformed: Int = 0;
+
 	// ω-sweep-fixture-status: per-fixture status map for `apq recon
 	// --regression-probe`. Each runCategory iteration appends one entry
 	// per `.hxtest` it inspects. Path format is `<subdir>/<name>` (e.g.

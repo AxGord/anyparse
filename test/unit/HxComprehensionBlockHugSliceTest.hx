@@ -19,7 +19,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxComprehensionBlockHugSliceTest extends Test {
 
 	private static final FIT: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
-
 	private static final SAME: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "same"}}';
 
 	public function new(): Void {

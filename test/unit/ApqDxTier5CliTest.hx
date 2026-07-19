@@ -92,9 +92,22 @@ class ApqDxTier5CliTest extends Test {
 		]), 'ast --select on a lowercase token exits clean with kinds-present fallback');
 	}
 
-	// --- 3. probe staging ---
+	// --- 5. self-status --source ---
+
+	public function testSelfStatusSourceFlagAccepted(): Void {
+		// `--source` parses as a known flag. The walk against the project's
+		// own src/ either finds 0 skip-parse (clean tree → exit 0) or some
+		// — we don't pin a count, just that the flag is wired up.
+		Assert.equals(0, Cli.run(['self-status', '--source']), 'self-status --source is a known flag');
+	}
+
+	public function testSelfStatusUnknownFlagStillRejected(): Void {
+		Assert.equals(2, Cli.run(['self-status', '--bogus']), 'self-status rejects unknown flags as usage error');
+	}
 
 	#if (sys || nodejs)
+	// --- 3. probe staging ---
+
 	public function testProbeStagesSourceToTmp(): Void {
 		final stagedPath: String = '/tmp/anyparse-last-probe.hx';
 		// Pre-clean — guarantee we observe a fresh write, not a stale
@@ -118,11 +131,9 @@ class ApqDxTier5CliTest extends Test {
 			'class Second { var b:Bool; }', File.getContent(stagedPath), 'second probe overwrites the scratch file (single-slot by design)'
 		);
 	}
-	#end
 
 	// --- 4. ANYPARSE_HXFORMAT_FORK cache (write-on-resolve, read-on-fallback) ---
 
-	#if (sys || nodejs)
 	public function testReconCacheFileWritesOnEnvResolution(): Void {
 		final home: Null<String> = Sys.getEnv('HOME');
 		if (home == null || home.length == 0) {
@@ -166,24 +177,9 @@ class ApqDxTier5CliTest extends Test {
 			FileSystem.deleteFile(cachePath);
 		if (raised != null) throw raised;
 	}
-	#end
-
-	// --- 5. self-status --source ---
-
-	public function testSelfStatusSourceFlagAccepted(): Void {
-		// `--source` parses as a known flag. The walk against the project's
-		// own src/ either finds 0 skip-parse (clean tree → exit 0) or some
-		// — we don't pin a count, just that the flag is wired up.
-		Assert.equals(0, Cli.run(['self-status', '--source']), 'self-status --source is a known flag');
-	}
-
-	public function testSelfStatusUnknownFlagStillRejected(): Void {
-		Assert.equals(2, Cli.run(['self-status', '--bogus']), 'self-status rejects unknown flags as usage error');
-	}
 
 	// --- 6. stale test.js mtime warning ---
 
-	#if (sys || nodejs)
 	public function testSweepReadsCleanlyWithCurrentSnapshot(): Void {
 		// `apq sweep` reads bin/.last-sweep.json — when test.js is up to
 		// date relative to src/ + test/, the WARNING is silent. We can't

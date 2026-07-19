@@ -136,6 +136,28 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		Assert.equals(0, violations('class C { private var _o:Foo; public function new(p:Int) { _o = new Foo(p); } }').length);
 	}
 
+	public function testInterpolatedCtorParamRefNotMoved(): Void {
+		// `$p` inside a single-quoted string projects as the interp `Ident` kind,
+		// not `IdentExpr` - the context-free walk must still see it as a ctor-param
+		// reference (the `${p}` block form was already caught via its inner IdentExpr).
+		final bare: String = "class C { private final _f:String; public function new(p:String) { _f = 'x/$p.log'; } }";
+		Assert.equals(0, violations(bare).length);
+		final block: String = "class C { private final _f:String; public function new(p:String) { _f = 'x/${p}.log'; } }";
+		Assert.equals(0, violations(block).length);
+	}
+
+	public function testInheritedMemberRefNotMoved(): Void {
+		// `_w` is an INHERITED field - invisible to the single-file resolver, so an
+		// unresolved lowercase ident in a subclass is indistinguishable from an
+		// inherited member and must fail closed ("Cannot access this or other
+		// member field in variable initialization" once moved). Uppercase roots
+		// (type refs like `Colors.WHITE`) stay movable.
+		final sub: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(_w / 2); } }';
+		Assert.equals(0, violations(sub).length);
+		final upper: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(Colors.WHITE); } }';
+		Assert.equals(1, violations(upper).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new FieldInitAtDeclaration().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -149,30 +171,6 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-
-	public function testInterpolatedCtorParamRefNotMoved(): Void {
-		// `$p` inside a single-quoted string projects as the interp `Ident` kind,
-		// not `IdentExpr` - the context-free walk must still see it as a ctor-param
-		// reference (the `${p}` block form was already caught via its inner IdentExpr).
-		final bare: String = "class C { private final _f:String; public function new(p:String) { _f = 'x/$p.log'; } }";
-		Assert.equals(0, violations(bare).length);
-		final block: String = "class C { private final _f:String; public function new(p:String) { _f = 'x/${p}.log'; } }";
-		Assert.equals(0, violations(block).length);
-	}
-
-
-	public function testInheritedMemberRefNotMoved(): Void {
-		// `_w` is an INHERITED field - invisible to the single-file resolver, so an
-		// unresolved lowercase ident in a subclass is indistinguishable from an
-		// inherited member and must fail closed ("Cannot access this or other
-		// member field in variable initialization" once moved). Uppercase roots
-		// (type refs like `Colors.WHITE`) stay movable.
-		final sub: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(_w / 2); } }';
-		Assert.equals(0, violations(sub).length);
-		final upper: String = 'class C extends B { private var _a:X; public function new() { super(); _a = new X(Colors.WHITE); } }';
-		Assert.equals(1, violations(upper).length);
 	}
 
 }

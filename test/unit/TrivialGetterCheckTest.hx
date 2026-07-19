@@ -113,7 +113,6 @@ class TrivialGetterCheckTest extends Test {
 		);
 	}
 
-
 	public function testDefaultNullNotFlagged(): Void {
 		Assert.equals(0, violations(cls('public var active(default, null):Bool = false;')).length);
 	}
@@ -286,48 +285,6 @@ class TrivialGetterCheckTest extends Test {
 		assertFixContains(src, 'this.count = count');
 	}
 
-	private function cls(members: String): String {
-		return 'class C {\n\t' + members + '\n}';
-	}
-
-	private function violations(source: String): Array<Violation> {
-		return new TrivialGetter().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
-	}
-
-	private function assertFixCanonical(src: String, present: String, absent: String): Void {
-		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf(present) >= 0);
-				Assert.isTrue(text.indexOf(absent) == -1);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
-	}
-
-	private function assertFixContains(src: String, present: String): Void {
-		final r = runAndExpectOne(src);
-		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
-			case Ok(text):
-				Assert.isTrue(text.indexOf(present) >= 0);
-			case Err(message):
-				Assert.fail('fix canonicalize Err: $message');
-		}
-	}
-
-	private function assertFixRefused(src: String): Void {
-		final r = runAndExpectOne(src);
-		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
-	}
-
-	private function runAndExpectOne(src: String): { check: TrivialGetter, vs: Array<Violation> } {
-		final check: TrivialGetter = new TrivialGetter();
-		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-		Assert.equals(1, vs.length);
-		return { check: check, vs: vs };
-	}
-
-
 	public function testShapeATrivialGetterRealSetterFlagged(): Void {
 		final vs: Array<Violation> = violations(
 			cls(
@@ -417,19 +374,6 @@ class TrivialGetterCheckTest extends Test {
 		);
 	}
 
-
-	private function fixedText(src: String): String {
-		final r = runAndExpectOne(src);
-		return switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
-			case Ok(text): text;
-			case Err(message): {
-				Assert.fail('fix canonicalize Err: $message');
-				'';
-			}
-		}
-	}
-
-
 	public function testShapeCTrivialSetterRealGetterFlagged(): Void {
 		final vs: Array<Violation> = violations(
 			cls(
@@ -481,7 +425,6 @@ class TrivialGetterCheckTest extends Test {
 		);
 		Assert.equals(1, violations(src).length);
 	}
-
 
 	public function testShapeABypassFix(): Void {
 		final fixed: String = fixedText(
@@ -585,7 +528,6 @@ class TrivialGetterCheckTest extends Test {
 		Assert.isTrue(fixedText(src).indexOf('@:bypassAccessor') == -1);
 	}
 
-
 	public function testShapeAExactlyCapBypass(): Void {
 		// Exactly maxBypassWrites (default 3) statement-level writes sit ON the cap boundary
 		// and still take the bypass arm — only cap + 1 falls back to the inline arm.
@@ -620,6 +562,58 @@ class TrivialGetterCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('@:bypassAccessor count += 1') >= 0);
 		Assert.isTrue(fixed.indexOf('count(default, set)') >= 0);
 		Assert.isTrue(fixed.indexOf('get_count') == -1);
+	}
+
+	private function cls(members: String): String {
+		return 'class C {\n\t' + members + '\n}';
+	}
+
+	private function violations(source: String): Array<Violation> {
+		return new TrivialGetter().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());
+	}
+
+	private function assertFixCanonical(src: String, present: String, absent: String): Void {
+		final r = runAndExpectOne(src);
+		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+				Assert.isTrue(text.indexOf(absent) == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	private function assertFixContains(src: String, present: String): Void {
+		final r = runAndExpectOne(src);
+		switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf(present) >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	private function assertFixRefused(src: String): Void {
+		final r = runAndExpectOne(src);
+		Assert.equals(0, r.check.fix(src, r.vs, new HaxeQueryPlugin()).length);
+	}
+
+	private function runAndExpectOne(src: String): { check: TrivialGetter, vs: Array<Violation> } {
+		final check: TrivialGetter = new TrivialGetter();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		return { check: check, vs: vs };
+	}
+
+	private function fixedText(src: String): String {
+		final r = runAndExpectOne(src);
+		return switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text): text;
+			case Err(message): {
+				Assert.fail('fix canonicalize Err: $message');
+				'';
+			}
+		}
 	}
 
 }

@@ -182,6 +182,27 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(0, violations(wrap("'a' + /* c */ b")).length);
 	}
 
+	public function testConcatOperandWithBackslashStringNotFolded(): Void {
+		// `'\\'` nested inside a `${}` block mis-lexes in the REAL Haxe compiler
+		// ("Unterminated string" - escapes in nested same-quote strings are not
+		// processed by the interp-block scanner), even though anyparse's own
+		// parser accepts it. Any operand whose source carries a backslash is a
+		// safe miss.
+		final src: String = "class C { function f(a:String, b:String):String { return a + '/' + b.replace('\\\\', '/'); } }";
+		// The backslash-carrying operand must never enter a `${}` - the surviving
+		// legal rewrite folds only the clean leading sub-chain (`a + '/'`), leaving
+		// `+ b.replace('\\', '/')` outside the string.
+		Assert.equals("'$a/'", fixText(src));
+	}
+
+	public function testConcatInsideInterpolationBlockNotFolded(): Void {
+		// A `+` chain that itself sits INSIDE a `${...}` interpolation block must
+		// not fold - the result would nest an interpolated string inside an
+		// interpolation block (fragile in the real compiler's interp scanner).
+		final src: String = "class C { function f(t:String):String { return 'x${t.split('a').join(q() + \"n\")}y'; } }";
+		Assert.equals(0, violations(src).length);
+	}
+
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = ' + expr + ';\n\t}\n}';
 	}
@@ -201,29 +222,6 @@ class PreferInterpolationCheckTest extends Test {
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length == 1 ? edits[0].text : '<' + edits.length + ' edits>';
-	}
-
-
-	public function testConcatOperandWithBackslashStringNotFolded(): Void {
-		// `'\\'` nested inside a `${}` block mis-lexes in the REAL Haxe compiler
-		// ("Unterminated string" - escapes in nested same-quote strings are not
-		// processed by the interp-block scanner), even though anyparse's own
-		// parser accepts it. Any operand whose source carries a backslash is a
-		// safe miss.
-		final src: String = "class C { function f(a:String, b:String):String { return a + '/' + b.replace('\\\\', '/'); } }";
-		// The backslash-carrying operand must never enter a `${}` - the surviving
-		// legal rewrite folds only the clean leading sub-chain (`a + '/'`), leaving
-		// `+ b.replace('\\', '/')` outside the string.
-		Assert.equals("'$a/'", fixText(src));
-	}
-
-
-	public function testConcatInsideInterpolationBlockNotFolded(): Void {
-		// A `+` chain that itself sits INSIDE a `${...}` interpolation block must
-		// not fold - the result would nest an interpolated string inside an
-		// interpolation block (fragile in the real compiler's interp scanner).
-		final src: String = "class C { function f(t:String):String { return 'x${t.split('a').join(q() + \"n\")}y'; } }";
-		Assert.equals(0, violations(src).length);
 	}
 
 }

@@ -426,14 +426,6 @@ final class Cli {
 		'--spans',
 	];
 
-	#if (sys || nodejs)
-	/**
-	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
-	 * stderr and the sweep footer breakdown surface at most this many
-	 * keys before truncating.
-	 */
-	private static inline final NO_TARGET_TOP_N: Int = 10;
-	#end
 	private static inline final AUTO_LIMIT_THRESHOLD: Int = 500;
 
 	/**
@@ -456,6 +448,15 @@ final class Cli {
 
 	private static inline final DEFAULT_CHAIN_LINES: Int = 200;
 	private static inline final DEFAULT_REACH_PATHS: Int = 10;
+
+	#if (sys || nodejs)
+	/**
+	 * NO-TARGET diagnostic list cap — both `--no-target-cluster` 0-match
+	 * stderr and the sweep footer breakdown surface at most this many
+	 * keys before truncating.
+	 */
+	private static inline final NO_TARGET_TOP_N: Int = 10;
+	#end
 
 	public static function main(): Void {
 		#if nodejs
@@ -641,96 +642,6 @@ final class Cli {
 				return EXIT_USAGE;
 		}
 	}
-
-	#if (sys || nodejs)
-	/**
-	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
-	 * the structured result (counts + first-failure locus) can be asserted
-	 * directly without the stdout-capture round-trip Cli.run would impose.
-	 *
-	 * Line shape recognition (utest 1.13.x):
-	 *  - `  testName: OK <dots>` — pass; dot-count adds to assertions.
-	 *  - `  testName: FAIL[URE] <…>` — failure counter.
-	 *  - `  testName: ERR[OR] <…>` — error counter.
-	 *  - `ClassName` (unindented CamelCase token, no colon) — class header;
-	 *    tracked so first-failure carries its qualifier.
-	 *  - `    <detail>` (4-space indent) following a fail/err — the
-	 *    failure's detail line. `line: N, <msg>` and
-	 *    `fileName: X, line: N, <msg>` shapes are decoded into structured
-	 *    fields; bare detail falls into `message`.
-	 *
-	 * The detail capture only fires for the FIRST fail/err — once
-	 * `firstFailure` is set, subsequent failures only bump counters.
-	 */
-	public static function parseTestSummary(raw: String): TestSummaryResult {
-		final okRe: EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
-		final failRe: EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
-		final errRe: EReg = ~/^\s+(\w[\w.]*):\s+ERR/;
-		final classRe: EReg = ~/^([A-Z]\w*)$/;
-		final detailFullRe: EReg = ~/^\s*fileName:\s*([^,]+),\s*line:\s*(\d+),\s*(.*)$/;
-		final detailLineRe: EReg = ~/^\s*line:\s*(\d+),\s*(.*)$/;
-		// Bare-message detail: any non-zero indent + non-empty content.
-		// Widened from `\s{4,}` because utest's indent isn't guaranteed
-		// 4-space (tabs / 2-space variants exist in older transcripts).
-		final detailBareRe: EReg = ~/^\s+(\S.*)$/;
-		var tests: Int = 0;
-		var assertions: Int = 0;
-		var failures: Int = 0;
-		var errors: Int = 0;
-		var currentClass: String = '';
-		var firstFailure: Null<TestSummaryFailureLocus> = null;
-		var awaitingDetail: Bool = false;
-		for (line in raw.split('\n')) {
-			if (awaitingDetail) {
-				awaitingDetail = false;
-				final locus: Null<TestSummaryFailureLocus> = firstFailure;
-				if (locus != null && tryCaptureDetail(locus, line, detailFullRe, detailLineRe, detailBareRe)) continue;
-				// Fall through: the line was NOT a detail row (utest emitted
-				// no detail for this failure, or the next test row arrived
-				// immediately). Re-process via the normal regex chain so we
-				// don't silently swallow it.
-			}
-			if (okRe.match(line)) {
-				tests++;
-				final dots: Null<String> = try okRe.matched(3) catch (_: Exception) null; // noqa: magic-number
-				if (dots != null) assertions += (dots: String).length;
-			} else if (failRe.match(line)) {
-				failures++;
-				if (firstFailure == null) {
-					firstFailure = {
-						className: currentClass,
-						testName: failRe.matched(1),
-						line: -1,
-						message: '',
-						kind: TestSummaryFailureKind.Fail
-					};
-					awaitingDetail = true;
-				}
-			} else if (errRe.match(line)) {
-				errors++;
-				if (firstFailure == null) {
-					firstFailure = {
-						className: currentClass,
-						testName: errRe.matched(1),
-						line: -1,
-						message: '',
-						kind: TestSummaryFailureKind.Error
-					};
-					awaitingDetail = true;
-				}
-			} else if (classRe.match(line)) {
-				currentClass = classRe.matched(1);
-			}
-		}
-		return {
-			tests: tests,
-			assertions: assertions,
-			failures: failures,
-			errors: errors,
-			firstFailure: firstFailure
-		};
-	}
-	#end
 
 	private static function runRefs(args: Array<String>): Int {
 		final o: RefsOpts = parseRefsArgs(args);
@@ -4542,1889 +4453,6 @@ final class Cli {
 			case _: throw 'apq: no grammar plugin for --lang "$lang"';
 		};
 	}
-
-	#if (sys || nodejs)
-	/**
-	 * `apq recon` — corpus skip-parse drill harness. Walks a directory
-	 * looking for source files (`.hxtest` fixtures auto-extract section
-	 * 2), tries each via the plugin's trivia parser, and clusters the
-	 * failures by a normalised forward-locus key so the histogram shows
-	 * the actual stuck CONSTRUCT, not the parser's terminator carousel
-	 * (`expected="//"` is 90%+ of the raw signal and is dropped).
-	 *
-	 * Replaces the standalone `test/_ReconSkipParse.hx` + `/tmp/recon.js`
-	 * dance — same clustering logic, but in-process with the rest of
-	 * `hxq` so a single `haxe bin/apq-js.hxml` rebuild after a grammar
-	 * edit picks up the new parser surface. No separate hxml.
-	 *
-	 * Modes:
-	 *  - `apq recon <dir>` — sweep mode. Walks every `.hxtest` under
-	 *    `<dir>` recursively, prints `SKIP path :: line:col <locus>` per
-	 *    failure, then a histogram of the top clusters (--top default 30,
-	 *    --all overrides).
-	 *  - `apq recon --probe <file>` — single-file probe. Useful for
-	 *    confirming a hypothesis about ONE fixture after a grammar edit.
-	 */
-	private static function runRecon(args: Array<String>): Int {
-		final o: ReconOpts = parseReconArgs(args);
-		if (o.errExit != null) return o.errExit;
-		final plugin: GrammarPlugin = pickPlugin(o.lang);
-		final probePath: Null<String> = o.probePath;
-		if (o.predictRelax && probePath != null) return runReconProbeRelax(plugin, probePath, o.showSource);
-		if (probePath != null)
-			return runReconProbe(
-				plugin, probePath, o.predictStrip, o.patterns, o.replacements, o.compiledRegex, o.showSource, o.writerEqualsAfter,
-				o.writerEqualsPlain, o.expectedPath, o.lang
-			);
-		final rootFinal: String = o.rootDir ?? defaultReconRoot();
-		if (rootFinal == '') {
-			stderr(
-				"apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset (no cached path at ~/.config/anyparse/fork_path either).\n"
-			);
-			stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
-			stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
-			stderr('  (first env-supplied run caches the path under ~/.config/anyparse/; subsequent runs work without re-exporting)\n');
-			return EXIT_USAGE;
-		}
-		if (!FileSystem.exists(rootFinal) || !FileSystem.isDirectory(rootFinal)) {
-			stderr('apq recon: "$rootFinal" is not a directory.\n');
-			return EXIT_RUNTIME;
-		}
-		final candidatesRegex: Null<String> = o.candidatesRegex;
-		return o.regressionProbe
-			? runReconRegressionProbe(plugin, rootFinal)
-			: candidatesRegex != null
-				? runReconCandidates(plugin, rootFinal, candidatesRegex)
-				: o.permissiveConstruct
-					? runReconPermissive(plugin, rootFinal, o.lang)
-					: o.predictRelax
-						? runReconSweepRelax(plugin, rootFinal, o.clusterFilter, o.noTargetClusterFilter, o.showSource)
-						: runReconSweep(
-							plugin, rootFinal, o.topN, o.clusterFilter, o.predictStrip, o.patterns, o.replacements, o.compiledRegex,
-							o.showSource
-						);
-	}
-	/**
-	 * `apq recon --probe <file> --predict-relax` — single-file
-	 * terminator-insertion predictor. Parses `<file>`, captures the
-	 * `ParseError.expected` hint, INSERTS that token at the fail-locus,
-	 * and retries. Three outcomes:
-	 *  - `PREDICT RELAX UNBLOCK` — patched source parses; the slice
-	 *    candidate is gate-relaxation on the ctor at the fail-locus
-	 *    (make the terminator optional via `@:trailOpt` /
-	 *    `@:fmt(trailOptParseGate(...))`).
-	 *  - `PREDICT RELAX STILL FAIL` — patched source still fails; the
-	 *    gap is deeper than just the missing terminator. NEW locus
-	 *    printed (moved-locus hint same shape as predict-strip).
-	 *  - `PREDICT RELAX NO TARGET` — original error has no `expected`
-	 *    hint to inject. Rare; usually means the parser ran out of
-	 *    grammar branches entirely rather than failing at a specific
-	 *    terminator expectation.
-	 *
-	 * Doesn't take --replace/--with — the injected token comes from
-	 * the parser's own error hint.
-	 */
-	private static function runReconProbeRelax(plugin: GrammarPlugin, path: String, showSource: Bool): Int {
-		final original: String = readSourceForParse(path);
-		final res: PredictRelaxResult = tryPredictRelax(plugin, original);
-		return reportPredictRelax(path, original, res, showSource);
-	}
-	/**
-	 * Sweep-mode predict-relax. Walks every skip-parse fixture under
-	 * `root`, runs `tryPredictRelax`, prints per-file outcome plus a
-	 * summary `--- relax: K unblock, M still fail, P no target ---`.
-	 *
-	 * Drill modes (mutually exclusive):
-	 *  - `--cluster <key>` — filter to records whose normalised
-	 *    forward-locus matches `key` exactly (same shape as predict-strip
-	 *    cluster drill); ALL outcomes (Unblock / StillFail / NoTarget)
-	 *    print per-file.
-	 *  - `--no-target-cluster <expected-msg>` — filter to records whose
-	 *    `tryPredictRelax` returns `NoTarget` with `res.message` equal to
-	 *    `expected-msg`. THE bridge from the footer NO TARGET histogram
-	 *    (the `70× expected hint is empty after quote-strip` aggregate) to
-	 *    the file list — the only way to see every fixture in one bucket.
-	 *    Unblock / StillFail records are filtered out by construction
-	 *    (they don't belong to the NO TARGET footer).
-	 *  - Neither set — full sweep with per-file Unblock / StillFail lines
-	 *    plus a footer NO TARGET histogram by `res.message`.
-	 */
-	private static function runReconSweepRelax(
-		plugin: GrammarPlugin, root: String, clusterFilter: Null<String>, noTargetClusterFilter: Null<String>, showSource: Bool
-	): Int {
-		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
-		if (!walk.wired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-			return EXIT_RUNTIME;
-		}
-		var records: Array<ReconRecord> = walk.records;
-		if (clusterFilter != null) {
-			final filter: String = clusterFilter;
-			records = records.filter(r -> r.clusterKey == filter);
-			if (records.length == 0) {
-				stderr('apq recon: --cluster "$filter" matched no skip-parse records (predict-relax mode)\n');
-				return EXIT_RUNTIME;
-			}
-		}
-		return noTargetClusterFilter != null
-			? runReconRelaxNoTargetCluster(plugin, records, noTargetClusterFilter, showSource)
-			: runReconRelaxFullSweep(plugin, records, clusterFilter != null, showSource);
-	}
-	/**
-	 * Run a single predict-relax probe on `source`. Returns one of the
-	 * three result kinds with the patched source / new locus / injected
-	 * token packed inside for the reporter to render.
-	 */
-	private static function tryPredictRelax(plugin: GrammarPlugin, source: String): PredictRelaxResult {
-		var origLine: Int = 0;
-		var origCol: Int = 0;
-		var injected: Null<String> = null;
-		var insertAt: Int = -1;
-		try {
-			plugin.reconParse(source);
-			// Already-parseable file given to predict-relax. Not an
-			// error — could be a `--probe` call on a fixture that
-			// landed after a recent grammar change. Surface as NoTarget with a
-			// distinct message so the user knows.
-			return {
-				kind: NoTarget,
-				original: source,
-				patched: source,
-				injected: '',
-				origLine: 0,
-				origCol: 0,
-				newLine: 0,
-				newCol: 0,
-				message: 'source already parses (no relaxation needed)'
-			};
-		} catch (pe: ParseError) {
-			final pos: Position = pe.span.lineCol(source);
-			origLine = pos.line;
-			origCol = pos.col;
-			final expected: Null<String> = pe.expected;
-			if (expected == null) {
-				return {
-					kind: NoTarget,
-					original: source,
-					patched: source,
-					injected: '',
-					origLine: origLine,
-					origCol: origCol,
-					newLine: 0,
-					newCol: 0,
-					message: pe.message
-				};
-			}
-			injected = stripExpectedHint((expected: String));
-			insertAt = pe.span.from;
-		} catch (e: Exception) {
-			return {
-				kind: NoTarget,
-				original: source,
-				patched: source,
-				injected: '',
-				origLine: 0,
-				origCol: 0,
-				newLine: 0,
-				newCol: 0,
-				message: e.message
-			};
-		}
-		if (injected == null || injected.length == 0 || insertAt < 0) {
-			return {
-				kind: NoTarget,
-				original: source,
-				patched: source,
-				injected: '',
-				origLine: origLine,
-				origCol: origCol,
-				newLine: 0,
-				newCol: 0,
-				message: 'expected hint is empty after quote-strip'
-			};
-		}
-		final injectedFinal: String = injected;
-		final patched: String = source.substr(0, insertAt) + injectedFinal + source.substr(insertAt);
-		try {
-			plugin.reconParse(patched);
-			return {
-				kind: Unblock,
-				original: source,
-				patched: patched,
-				injected: injectedFinal,
-				origLine: origLine,
-				origCol: origCol,
-				newLine: 0,
-				newCol: 0,
-				message: ''
-			};
-		} catch (pe2: ParseError) {
-			final pos2: Position = pe2.span.lineCol(patched);
-			return {
-				kind: StillFail,
-				original: source,
-				patched: patched,
-				injected: injectedFinal,
-				origLine: origLine,
-				origCol: origCol,
-				newLine: pos2.line,
-				newCol: pos2.col,
-				message: pe2.message
-			};
-		} catch (e: Exception) {
-			return {
-				kind: StillFail,
-				original: source,
-				patched: patched,
-				injected: injectedFinal,
-				origLine: origLine,
-				origCol: origCol,
-				newLine: 0,
-				newCol: 0,
-				message: e.message
-			};
-		}
-	}
-	/**
-	 * Find-or-insert a `{key, count}` entry in `reasons` by exact key
-	 * match. Shared by the predict-relax sweep footer (`runReconSweepRelax`
-	 * NoTarget arm) and the `--no-target-cluster` drill 0-match
-	 * diagnostic — both build the same expected-message histogram.
-	 */
-	private static function bumpReasonCount(reasons: Array<{ key: String, count: Int }>, key: String): Void {
-		for (e in reasons) if (e.key == key) {
-			e.count++;
-			return;
-		}
-		reasons.push({ key: key, count: 1 });
-	}
-	private static function reportPredictRelax(path: String, original: String, res: PredictRelaxResult, showSource: Bool): Int {
-		switch res.kind {
-			case Unblock:
-				sysPrint('PREDICT RELAX UNBLOCK   $path :: inserting "${res.injected}" at ${res.origLine}:${res.origCol} unblocks parse\n');
-				return EXIT_OK;
-			case StillFail:
-				final movedHint: String = movedLocusHint(res.origLine, res.origCol, res.newLine, res.newCol);
-				sysPrint(
-					'PREDICT RELAX STILL FAIL $path :: ${res.newLine}:${res.newCol}${movedHint} after inserting "${res.injected}" — ${res.message}\n'
-				);
-				if (showSource && res.newLine > 0) printReconSourceWindow(res.patched, res.newLine);
-				return EXIT_RUNTIME;
-			case NoTarget:
-				sysPrint('PREDICT RELAX NO TARGET $path :: at ${res.origLine}:${res.origCol} — ${res.message}\n');
-				// NoTarget has no patched source (the parser found no
-				// `expected` hint to inject), so the window is anchored on
-				// the ORIGINAL fail-locus. `origLine == 0` is the
-				// "already-parseable" / pre-error path (no usable locus);
-				// skip the window for those.
-				if (showSource && res.origLine > 0) printReconSourceWindow(res.original, res.origLine);
-				return EXIT_RUNTIME;
-		}
-	}
-	/**
-	 * Strip the `expected="<X>"` hint down to a literal token. Hints
-	 * arrive as raw strings from `ParseError.expected` — they may be
-	 * `";"`, `;`, `'}'`, `// (comment-or-end marker)`, etc. Recognise
-	 * the three common terminator shapes and return the bare char.
-	 * Returns the trimmed input unchanged for anything else; the
-	 * caller's parse retry will surface bogus-injection as STILL FAIL.
-	 */
-	private static function stripExpectedHint(hint: String): String {
-		final t: String = StringTools.trim(hint);
-		if (t.length == 0) return t;
-		// `"<x>"` or `'<x>'` form.
-		if (t.length >= 2) {
-			final first: String = t.charAt(0);
-			final last: String = t.charAt(t.length - 1);
-			if ((first == '"' && last == '"') || (first == "'" && last == "'")) return t.substring(1, t.length - 1);
-		}
-		// `//` is the canonical "comment or end" marker the parser
-		// emits when it ran out of brace-/Star-terminating options. No
-		// token to inject — return empty so the caller routes to
-		// NO TARGET.
-		return t == '//' || t == '<no message>' ? '' : t;
-	}
-	/**
-	 * `apq recon --candidates <regex>` — walk skip-parse fixtures and
-	 * count regex matches in each fixture's source. Reports one line per
-	 * file with ≥1 hit (`<path> :: N matches`) sorted by count desc, plus
-	 * a summary `--- candidates: K files matched (M total hits across N
-	 * skip-parse files) ---`.
-	 *
-	 * Use when the histogram's normalized forward-locus clusters can't
-	 * surface every fixture containing a construct of interest — the
-	 * regex sees the raw bytes, so multi-blocker fixtures whose locus
-	 * lives at a different shape are still found. Reuses the recon
-	 * walker (`collectReconSkipRecords`) so the file list matches every
-	 * other recon mode's view of the corpus exactly.
-	 *
-	 * Exit non-zero when 0 files matched (typo guard, mirrors
-	 * `strip --dry-run` / `recon --predict-strip` semantics).
-	 */
-	private static function runReconCandidates(plugin: GrammarPlugin, root: String, pattern: String): Int {
-		final re: EReg = try new EReg(pattern, 'g') catch (e: Exception) {
-			stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
-			return EXIT_USAGE;
-		}
-		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
-		if (!walk.wired) {
-			stderr('apq recon: --candidates: no recon parser wired up for this grammar plugin\n');
-			return EXIT_RUNTIME;
-		}
-		final hits: Array<{ path: String, count: Int }> = [];
-		var totalHits: Int = 0;
-		for (r in walk.records) {
-			final n: Int = countRegexHits(re, r.source);
-			if (!(n > 0)) continue;
-			hits.push({ path: r.path, count: n });
-			totalHits += n;
-		}
-		hits.sort((a, b) -> b.count - a.count);
-		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
-		sysPrint(
-			'--- candidates: ${hits.length} file${plural(hits.length)} matched ($totalHits total hit${plural(totalHits)} across ${walk.records.length} skip-parse file${plural(walk.records.length)}) ---\n'
-		);
-		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
-	}
-	/**
-	 * `apq recon --permissive-construct` — field-optionalization
-	 * predictor for the `@:optional + @:lead + @:trail` relaxation mechanism.
-	 * Walks every `mandatory-ref-lead-trail` candidate surfaced by
-	 * `gates --mechanism mandatory-ref-lead-trail`, simulates the
-	 * relaxation by stripping the `<lead>...<trail>` bracket-pair from
-	 * each skip-parse fixture, and re-parses. Aggregates UNBLOCK /
-	 * STILL FAIL / NO MATCH counts per candidate field — gives the user
-	 * a static upper-bound view of which field-optionalization would
-	 * unblock which fixtures BEFORE editing the grammar.
-	 *
-	 * Strip semantics depend on the lead/trail shape:
-	 *  - Symmetric pair (`(`, `{`, `[` as lead with matching closer):
-	 *    delete the WHOLE `<lead>...<trail>` block, paren-depth balanced
-	 *    (nested same-pair allowed, strings/comments skipped).
-	 *  - Asymmetric (lead is `:` / `,` / `=` etc., trail is `)` / `}`):
-	 *    delete from `<lead>` UP TO (exclusive of) `<trail>`. The trail
-	 *    belongs to an enclosing construct and stays — models e.g.
-	 *    `catch (e:Type)` -> `catch (e)`.
-	 *
-	 * Multi-char macro/string leads (`${`, `"`, `'`) are filtered out at
-	 * candidate-collection time — they describe interpolation/string
-	 * delimiters that don't relax via the bracket-pair optionalization mechanism.
-	 *
-	 * Output: one block per candidate that has ≥1 UNBLOCK or STILL FAIL
-	 * (NO-MATCH-only candidates are summarized in the footer to keep the
-	 * useful signal visible).
-	 */
-	private static function runReconPermissive(plugin: GrammarPlugin, root: String, lang: String): Int {
-		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
-		if (!walk.wired) {
-			stderr('apq recon: --permissive-construct: no recon parser wired up for this grammar plugin\n');
-			return EXIT_RUNTIME;
-		}
-		final records: Array<ReconRecord> = walk.records;
-		final candidates: Array<PermissiveCandidate> = collectPermissiveCandidates(plugin, lang);
-		if (candidates.length == 0) {
-			stderr(
-				'apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang/ (cross-check with `apq gates --mechanism mandatory-ref-lead-trail`)\n'
-			);
-			return EXIT_RUNTIME;
-		}
-		sysPrint(
-			'=== permissive-construct: ${candidates.length} candidate${plural(candidates.length)} from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${plural(records.length)} ===\n'
-		);
-		var totalUnblocks: Int = 0;
-		var candidatesWithSignal: Int = 0;
-		final noSignalLabels: Array<String> = [];
-		for (cand in candidates) {
-			final unblocks: Array<String> = [];
-			final stillFails: Array<String> = [];
-			var noMatchCount: Int = 0;
-			for (r in records) {
-				final stripped: StripResult = stripBalancedPairs(r.source, cand.lead, cand.trail);
-				if (stripped.count == 0) {
-					noMatchCount++;
-					continue;
-				}
-				final ok: Bool = try plugin.reconParse(stripped.out) catch (exception: Exception) false;
-				if (ok)
-					unblocks.push(r.path);
-				else
-					stillFails.push(r.path);
-			}
-			final nameSuffix: String = cand.declName != null ? ' ${cand.declName}' : '';
-			final label: String = '${cand.file}:${cand.line}: ${cand.declKind}$nameSuffix @:lead(\'${cand.lead}\') @:trail(\'${cand.trail}\')';
-			if (unblocks.length == 0 && stillFails.length == 0) {
-				noSignalLabels.push('$label ($noMatchCount NO MATCH)');
-				continue;
-			}
-			candidatesWithSignal++;
-			totalUnblocks += unblocks.length;
-			sysPrint('\nCANDIDATE $label\n');
-			sysPrint('  ${unblocks.length} UNBLOCK / ${stillFails.length} STILL FAIL / $noMatchCount NO MATCH\n');
-			for (p in unblocks) sysPrint('    UNBLOCK: $p\n');
-			for (p in stillFails) sysPrint('    STILL FAIL: $p\n');
-		}
-		sysPrint(
-			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${plural(candidates.length)} have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${plural(totalUnblocks)} total) across ${records.length} skip-parse files ---\n'
-		);
-		if (noSignalLabels.length > 0) {
-			sysPrint('--- NO MATCH only (${noSignalLabels.length} candidate${plural(noSignalLabels.length)} with no fixture match) ---\n');
-			for (l in noSignalLabels) sysPrint('  $l\n');
-		}
-		return totalUnblocks == 0 ? EXIT_RUNTIME : EXIT_OK;
-	}
-	/**
-	 * Enumerate `mandatory-ref-lead-trail` candidates by walking the
-	 * grammar tree (`src/anyparse/grammar/<lang>/`) the same way `apq
-	 * gates --mechanism mandatory-ref-lead-trail` does. Returns the lead
-	 * and trail tokens (not just the rendered metas string) so the
-	 * predictor's strip function can target the bracket-pair directly.
-	 *
-	 * Filters out macro/string-lead candidates (`${`, `$`, `'`, `"`) —
-	 * they describe interpolation/string delimiters whose `@:optional`
-	 * relaxation isn't the bracket-pair mechanism. Single-char leads only —
-	 * the strip function depth-tracker assumes one byte per lead/trail.
-	 */
-	private static function collectPermissiveCandidates(plugin: GrammarPlugin, lang: String): Array<PermissiveCandidate> {
-		final out: Array<PermissiveCandidate> = [];
-		final grammarDir: String = 'src/anyparse/grammar/$lang/';
-		if (!FileSystem.exists(grammarDir) || !FileSystem.isDirectory(grammarDir)) return out;
-		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([grammarDir], '.hx');
-		final shape: MetaShape = plugin.metaShape();
-		final skipEntries: Array<SkipEntry> = [];
-		for (path in expanded.paths) {
-			final source: String = readSourceForParse(path);
-			final tree: Null<QueryNode> = parseWalked('recon', plugin.parseFile, path, source, false, skipEntries);
-			if (tree == null) continue;
-			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
-			final grouped: { order: Array<Int>, groups: Map<Int, Array<MetaHit>> } = groupMetaHitsByDeclSpan(raw);
-			for (key in grouped.order) {
-				final metas: Null<Array<MetaHit>> = grouped.groups[key];
-				if (metas == null) continue;
-				final candidate: Null<PermissiveCandidate> = extractPermissiveCandidate(metas, source, path);
-				if (candidate != null) out.push(candidate);
-			}
-		}
-		return out;
-	}
-	/**
-	 * Single-pass `<lead>...<trail>` strip on `source`. Symmetric leads
-	 * (`(`, `{`, `[`) consume the whole balanced pair; asymmetric leads
-	 * (`:`, `,`, `=` etc.) consume from lead UP TO the trail (the trail
-	 * char itself remains in output — it belongs to the enclosing
-	 * construct). String literals (single- or double-quoted) and
-	 * comments (line- or block-style) are skipped verbatim so a `:`
-	 * inside a string doesn't trigger a spurious strip.
-	 *
-	 * Returns the patched source plus a `count` of strip occurrences —
-	 * `count == 0` lets the caller distinguish NO MATCH (fixture lacks
-	 * the construct) from STILL FAIL (fixture has it but post-strip
-	 * parse still errors).
-	 */
-	private static function stripBalancedPairs(source: String, lead: String, trail: String): StripResult {
-		if (lead.length != 1 || trail.length != 1) return { out: source, count: 0 };
-		final leadCode: Int = StringTools.fastCodeAt(lead, 0);
-		final trailCode: Int = StringTools.fastCodeAt(trail, 0);
-		final isSymmetric: Bool = isBracketOpener(leadCode);
-		final buf: StringBuf = new StringBuf();
-		var i: Int = 0;
-		var count: Int = 0;
-		while (i < source.length) {
-			final triviaEnd: Int = skipStringOrComment(source, i);
-			if (triviaEnd > i) {
-				buf.addSub(source, i, triviaEnd - i);
-				i = triviaEnd;
-				continue;
-			}
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c == leadCode) {
-				final endIdx: Int = findPairEnd(source, i + 1, leadCode, trailCode, isSymmetric);
-				if (endIdx >= 0) {
-					count++;
-					i = endIdx;
-					continue;
-				}
-			}
-			buf.addChar(c);
-			i++;
-		}
-		return { out: buf.toString(), count: count };
-	}
-	/**
-	 * Scan from `startIdx` looking for the matching trail. Returns the
-	 * index PAST the strip region (caller does `i = endIdx` to skip it):
-	 *  - Symmetric: returns index past the closing trail char (`<lead>...<trail>` consumed whole)
-	 *  - Asymmetric: returns index AT the trail char (trail stays in output)
-	 *
-	 * `-1` when no match found (mismatched / unterminated). The caller
-	 * keeps the lead char as-is in that case.
-	 */
-	private static function findPairEnd(source: String, startIdx: Int, leadCode: Int, trailCode: Int, isSymmetric: Bool): Int {
-		var i: Int = startIdx;
-		var depth: Int = isSymmetric ? 1 : 0;
-		while (i < source.length) {
-			final triviaEnd: Int = skipStringOrComment(source, i);
-			if (triviaEnd > i) {
-				i = triviaEnd;
-				continue;
-			}
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (isSymmetric) {
-				if (c == leadCode) {
-					depth++;
-					i++;
-					continue;
-				}
-				if (c == trailCode) {
-					depth--;
-					i++;
-					if (depth == 0) return i;
-					continue;
-				}
-			} else {
-				if (depth == 0 && c == trailCode) return i;
-				if (isBracketOpener(c)) {
-					depth++;
-					i++;
-					continue;
-				}
-				if (isBracketCloser(c)) {
-					if (depth == 0) return -1;
-					depth--;
-					i++;
-					continue;
-				}
-			}
-			i++;
-		}
-		return -1;
-	}
-	private static inline function isBracketOpener(c: Int): Bool {
-		return c == '('.code || c == '{'.code || c == '['.code;
-	}
-	private static inline function isBracketCloser(c: Int): Bool {
-		return c == ')'.code || c == '}'.code || c == ']'.code;
-	}
-	/**
-	 * If `source[i]` starts a string literal (single- or double-quoted)
-	 * or comment (line-style or block-style), return the index PAST it;
-	 * otherwise return `i`. Handles backslash escapes inside strings,
-	 * multi-line block comments. Used by the permissive-construct strip
-	 * to skip trivia bytes so a `:` inside `"foo:bar"` doesn't trigger a
-	 * spurious asymmetric pair-match.
-	 */
-	private static function skipStringOrComment(source: String, i: Int): Int {
-		if (i >= source.length) return i;
-		final c: Int = StringTools.fastCodeAt(source, i);
-		if (c == '/'.code && i + 1 < source.length) {
-			final c2: Int = StringTools.fastCodeAt(source, i + 1);
-			if (c2 == '/'.code) {
-				var j: Int = i + 2;
-				while (j < source.length && StringTools.fastCodeAt(source, j) != '\n'.code) j++;
-				return j;
-			}
-			if (c2 == '*'.code) {
-				var j: Int = i + 2;
-				while (j + 1 < source.length) {
-					if (StringTools.fastCodeAt(source, j) == '*'.code && StringTools.fastCodeAt(source, j + 1) == '/'.code) return j + 2;
-					j++;
-				}
-				return source.length;
-			}
-		}
-		if (c == '"'.code || c == "'".code) {
-			var j: Int = i + 1;
-			while (j < source.length) {
-				final cj: Int = StringTools.fastCodeAt(source, j);
-				if (cj == '\\'.code) {
-					j += 2;
-					continue;
-				}
-				if (cj == c) return j + 1;
-				j++;
-			}
-			return source.length;
-		}
-		return i;
-	}
-	/**
-	 * `apq recon --regression-probe` — load the prior sweep snapshot's
-	 * per-fixture status map (`bin/.last-sweep.json`'s `fixtures` array,
-	 * written by `HxFormatterCorpusTest.printSweepDelta`) and diff
-	 * against the current corpus's parse OK / SKIP_PARSE state.
-	 *
-	 * Surfaces every fixture whose parse status FLIPPED since the
-	 * snapshot:
-	 *   REGRESSED <path>: was PASS, now SKIP_PARSE :: line:col <locus>
-	 *   UNBLOCKED <path>: was SKIP_PARSE, now parses OK
-	 *
-	 * The probe only runs the trivia parser, NOT the writer — skip-write
-	 * / skip-config / malformed statuses are pre- or post-parse concerns
-	 * and stay orthogonal to grammar edits. PASS / FAIL / SKIP_WRITE in
-	 * the snapshot collapse to "parsed OK" for diff purposes (the writer
-	 * failed but the parser accepted the input).
-	 *
-	 * Exits 0 when no regressions found (unblocks alone are still
-	 * non-zero-friendly); non-zero exit when any REGRESSED line printed
-	 * — so a CI hook can fail the build before the user runs the full
-	 * sweep.
-	 */
-	private static function runReconRegressionProbe(plugin: GrammarPlugin, root: String): Int {
-		// Load the prior snapshot. Missing / unreadable / malformed JSON
-		// is a non-fatal "no baseline" — print a single info line and
-		// exit OK so a fresh checkout doesn't fail the probe.
-		final snapshotPath: String = 'bin/.last-sweep.json';
-		if (!FileSystem.exists(snapshotPath)) {
-			sysPrint(
-				'apq recon: no prior sweep snapshot at $snapshotPath — run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK first to seed the baseline\n'
-			);
-			return EXIT_OK;
-		}
-		final prior: Map<String, String> = loadSweepFixtureStatus(snapshotPath);
-		if (prior.iterator().hasNext() == false) {
-			sysPrint(
-				'apq recon: snapshot at $snapshotPath has no `fixtures` array — older format, re-run `node bin/test.js` to refresh the baseline\n'
-			);
-			return EXIT_OK;
-		}
-		final walk: ReconRegressionResult = walkReconRegression(plugin, root, prior);
-		if (walk.unwired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-			return EXIT_RUNTIME;
-		}
-		sysPrint(
-			'--- regression-probe: ${walk.regressed} regressed, ${walk.unblocked} unblocked, ${walk.scanned} scanned vs snapshot ---\n'
-		);
-		return walk.regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
-	}
-	/**
-	 * Read `bin/.last-sweep.json`'s `fixtures` array (written by
-	 * `HxFormatterCorpusTest.printSweepDelta`) into a `path → status`
-	 * map. Returns an empty map on any parse / shape failure so the
-	 * caller can fail-soft with a "no baseline" diagnostic instead of
-	 * crashing on a malformed snapshot.
-	 */
-	private static function loadSweepFixtureStatus(path: String): Map<String, String> {
-		final out: Map<String, String> = [];
-		try {
-			final raw: String = sys.io.File.getContent(path);
-			final obj: Dynamic = haxe.Json.parse(raw);
-			if (!Reflect.hasField(obj, 'fixtures')) return out;
-			final fixtures: Dynamic = Reflect.field(obj, 'fixtures');
-			if (!Std.isOfType(fixtures, Array)) return out;
-			final arr: Array<Dynamic> = (fixtures: Array<Dynamic>);
-			for (entry in arr) {
-				final entryPath: Null<Dynamic> = Reflect.field(entry, 'path');
-				final entryStatus: Null<Dynamic> = Reflect.field(entry, 'status');
-				if (!(entryPath != null && entryStatus != null && Std.isOfType(entryPath, String) && Std.isOfType(entryStatus, String)))
-					continue;
-				// Normalise snapshot path to match what
-				// `stripRootPrefix` emits for the recon walker. The
-				// corpus harness records paths as
-				// `test/testcases/<subdir>/<name>` (rooted at the fork);
-				// recon walks from `<fork>/test/testcases` so its
-				// stripped paths are `<subdir>/<name>`. Trim the leading
-				// `test/testcases/` here so the diff lookup is keyed
-				// the same way on both sides.
-				final raw: String = (entryPath: String);
-				final corpusPrefix: String = 'test/testcases/';
-				final normalised: String = StringTools.startsWith(raw, corpusPrefix) ? raw.substr(corpusPrefix.length) : raw;
-				out[normalised] = (entryStatus: String);
-			}
-		} catch (_: Exception) {
-			// best-effort: a scan failure leaves the partial status map
-		}
-		return out;
-	}
-	private static function runReconProbe(
-		plugin: GrammarPlugin, path: String, predictStrip: Bool, patterns: Array<String>, replacements: Array<String>,
-		compiledRegex: Null<Array<EReg>>, showSource: Bool, writerEqualsAfter: Bool = false, writerEqualsPlain: Bool = false,
-		?expectedPathOpt: String, lang: String = 'haxe'
-	): Int {
-		if (!FileSystem.exists(path)) {
-			stderr('apq recon: --probe path "$path" does not exist\n');
-			return EXIT_RUNTIME;
-		}
-		final original: String = readSourceForParse(path);
-		// `--predict-strip --probe <file>` — apply substitutions to the
-		// single probed file's source, then re-run the strict trivia parse
-		// against the result. Mirrors the sweep-mode predict tag set
-		// (`PREDICT UNBLOCK` / `PREDICT STILL FAIL` / `PREDICT NO MATCH`)
-		// so a single-file dry-run stays semantically aligned with the
-		// corpus walk. Per-pattern match totals are printed for the typo
-		// guard (a `--replace` pattern matching 0 occurrences is the
-		// canonical pre-edit signal of a typo or whitespace mismatch).
-		// Without `--predict-strip`, the legacy PARSE OK / PARSE FAIL
-		// output is byte-identical to before.
-		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements, compiledRegex, showSource);
-		try {
-			if (!plugin.reconParse(original)) {
-				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-				return EXIT_RUNTIME;
-			}
-			sysPrint('PARSE OK\n');
-			return writerEqualsAfter ? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang) : EXIT_OK;
-		} catch (exception: ParseError) {
-			final pos: Position = exception.span.lineCol(original);
-			final exp: String = reconNormalize(exception.expected);
-			final snip: String = reconNormalize(reconSnippet(original, exception.span.from));
-			sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
-			return EXIT_RUNTIME;
-		} catch (exception: Exception) {
-			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
-			return EXIT_RUNTIME;
-		}
-	}
-	/**
-	 * ω-probe-writer-check: chain a writer round-trip + byte-equality check
-	 * onto a probe-mode PARSE OK. Reuses `runWriterEquals`'s machinery so
-	 * the byte-diff format stays identical to the corpus harness's fail
-	 * line. Closes the "predicted +1 via predict-strip, got skip→fail
-	 * because writer round-trip diverges" gap.
-	 *
-	 * Expected bytes resolution:
-	 *  - explicit `--expected <path>` always wins.
-	 *  - `.hxtest` input → section 3 (the fork's reference formatted output).
-	 *  - plain `.hx` → byte-identity round-trip (compare against source).
-	 *
-	 * Last case turns the call into a writer-idempotency check: parse the
-	 * source, write back, expect the same bytes. Useful for sanity-probing
-	 * a grammar edit's writer round-trip on hand-rolled scratch inputs
-	 * (`/tmp/probe.hx`) without typing the expected bytes twice.
-	 */
-	private static function runProbeWriterCheck(
-		plugin: GrammarPlugin, inputPath: String, source: String, plain: Bool, expectedPathOpt: Null<String>, lang: String
-	): Int {
-		// `.hxtest` expected sections drop one trailing `\n` via
-		// `stripPadNewlines` (the corpus harness adds `finalNewline=true`
-		// and trims back one `\n` from `actualRaw` to keep the compare
-		// symmetric). Mirror that here so a corpus-PASS fixture round-trips
-		// to `WRITER PASS` via the probe, not a spurious off-by-newline
-		// mismatch. Raw `.hx` inputs skip the strip — the user supplied
-		// expected bytes verbatim.
-		final hxtestMode: Bool = expectedPathOpt == null && StringTools.endsWith(inputPath, '.hxtest');
-		final expectedSource: String = if (expectedPathOpt != null) {
-			readExpectedForCompare((expectedPathOpt: String));
-		} else if (hxtestMode) {
-			readExpectedForCompare(inputPath);
-		} else {
-			source;
-		};
-		final optsJson: Null<String> = readWriteOptionsJsonOrNull(inputPath);
-		final emittedRaw: Null<String> = try (
-			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
-		) catch (e: ParseError) {
-			sysPrint('WRITER FAIL :: ${e.toString()}\n');
-			return EXIT_RUNTIME;
-		} catch (e: Exception) {
-			sysPrint('WRITER FAIL :: ${e.message}\n');
-			return EXIT_RUNTIME;
-		}
-		if (emittedRaw == null) {
-			final flagName: String = plain ? '--writer-equals-plain' : '--writer-equals';
-			stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
-			return EXIT_USAGE;
-		}
-		final emitted: String = (emittedRaw: String);
-		final emittedNormalised: String = hxtestMode && emitted.length > 0
-			&& StringTools.fastCodeAt(emitted, emitted.length - 1) == '\n'.code
-			? emitted.substr(0, emitted.length - 1)
-			: emitted;
-		if (emittedNormalised == expectedSource) {
-			sysPrint('WRITER PASS\n');
-			return EXIT_OK;
-		}
-		sysPrint('WRITER FAIL :: ${describeByteDiff(emittedNormalised, expectedSource)}\n');
-		return EXIT_RUNTIME;
-	}
-	private static function runReconProbePredict(
-		plugin: GrammarPlugin, path: String, original: String, patterns: Array<String>, replacements: Array<String>,
-		compiledRegex: Null<Array<EReg>>, showSource: Bool
-	): Int {
-		// Capture the original fail-locus first so STILL FAIL can report
-		// the moved-locus hint (same signal as sweep-mode predict-strip).
-		var origLine: Int = 0;
-		var origCol: Int = 0;
-		try {
-			plugin.reconParse(original);
-		} catch (pe: ParseError) {
-			final pos: Position = pe.span.lineCol(original);
-			origLine = pos.line;
-			origCol = pos.col;
-		} catch (_: Exception) {
-			// best-effort: keep default origLine/origCol if the span lookup fails
-		}
-		final regexMode: Bool = compiledRegex != null;
-		final regexes: Array<EReg> = compiledRegex ?? [];
-		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
-		var stripped: String = original;
-		var fileHits: Int = 0;
-		for (idx in 0...patterns.length) {
-			final hits: Int = regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, patterns[idx]);
-			patternHits[idx] = hits;
-			fileHits += hits;
-			stripped = regexMode
-				? regexes[idx].replace(stripped, replacements[idx])
-				: StringTools.replace(stripped, patterns[idx], replacements[idx]);
-		}
-		var exitCode: Int = EXIT_OK;
-		if (fileHits == 0) {
-			sysPrint('PREDICT NO MATCH  $path\n');
-		} else {
-			try {
-				if (!plugin.reconParse(stripped)) {
-					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-					return EXIT_RUNTIME;
-				}
-				sysPrint('PREDICT UNBLOCK   $path\n');
-			} catch (pe: ParseError) {
-				final pos: Position = pe.span.lineCol(stripped);
-				final movedHint: String = movedLocusHint(origLine, origCol, pos.line, pos.col);
-				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
-				if (showSource) printReconSourceWindow(stripped, pos.line);
-				exitCode = EXIT_RUNTIME;
-			} catch (e: Exception) {
-				sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
-				exitCode = EXIT_RUNTIME;
-			}
-		}
-		// Per-pattern totals — same typo guard contract as sweep mode.
-		for (idx in 0...patterns.length) {
-			final pat: String = patterns[idx];
-			final total: Int = patternHits[idx];
-			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
-		}
-		var anyZero: Bool = false;
-		for (h in patternHits) if (h == 0) anyZero = true;
-		if (anyZero) {
-			stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
-			return EXIT_RUNTIME;
-		}
-		return exitCode;
-	}
-	private static function runReconSweep(
-		plugin: GrammarPlugin, root: String, topN: Int, clusterFilter: Null<String>, predictStrip: Bool, patterns: Array<String>,
-		replacements: Array<String>, compiledRegex: Null<Array<EReg>>, showSource: Bool
-	): Int {
-		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
-		if (!walk.wired) {
-			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-			return EXIT_RUNTIME;
-		}
-		final clusters: Map<String, ReconCluster> = walk.clusters;
-		final records: Array<ReconRecord> = walk.records;
-		// `--cluster <key>` filter: exact match against the normalised
-		// cluster key (the histogram label, with `\n`/`\t` escaped).
-		// Exact rather than substring because `}\n}` (canonical) would
-		// substring-match every Haxe file's `…}\n}` tail. 0-match exits
-		// non-zero; downstream output (SKIP / PREDICT / cluster drill)
-		// walks the filtered records and the single-cluster map.
-		var filteredRecords: Array<ReconRecord> = records;
-		var filteredClusters: Map<String, ReconCluster> = clusters;
-		if (clusterFilter != null) {
-			final wanted: String = (clusterFilter: String);
-			final hit: Null<ReconCluster> = clusters[wanted];
-			if (hit == null) {
-				stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
-				final keyEntries: Array<{ key: String, count: Int }> = [
-					for (k => v in clusters) { key: k, count: v.count }
-				];
-				keyEntries.sort((a, b) -> b.count - a.count);
-				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
-				if (preview == 0) {
-					stderr('  (no skip-parse failures in this sweep)\n');
-				} else {
-					stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
-					for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
-					if (keyEntries.length > preview)
-						stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
-				}
-				return EXIT_RUNTIME;
-			}
-			filteredClusters = [wanted => hit];
-			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
-		}
-		if (predictStrip)
-			return runReconPredictStrip(filteredRecords, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource);
-		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
-		return clusterFilter != null
-			? printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource)
-			: printReconHistogram(clusters, records.length, topN);
-	}
-	/**
-	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
-	 * record list drives both the recon sweep (histogram / cluster drill
-	 * / predict-strip) and `strip --from-cluster` (apply substitutions
-	 * to every file in a named cluster). Recurses into subdirs, parses
-	 * each `.hxtest` via the plugin's trivia parser, and clusters
-	 * failures by normalised forward-locus. `wired == false` when the
-	 * plugin returns `false` from `reconParse` — surfaces the same
-	 * "no recon parser for lang X" error in both callers.
-	 */
-	private static function collectReconSkipRecords(plugin: GrammarPlugin, root: String): ReconWalkResult {
-		final clusters: Map<String, ReconCluster> = [];
-		final records: Array<ReconRecord> = [];
-		var wired: Bool = true;
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			final names: Array<String> = FileSystem.readDirectory(dir);
-			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-			for (name in names) {
-				final path: String = '$dir/$name';
-				if (FileSystem.isDirectory(path)) {
-					stack.push(path);
-					continue;
-				}
-				if (!StringTools.endsWith(name, '.hxtest')) continue;
-				final source: String = readSourceForParse(path);
-				try {
-					if (!plugin.reconParse(source)) {
-						wired = false;
-						break;
-					}
-				} catch (exception: ParseError) {
-					final pos: Position = exception.span.lineCol(source);
-					final relPath: String = stripRootPrefix(path, root);
-					final exp: String = reconNormalize(exception.expected);
-					final snip: String = reconNormalize(reconSnippet(source, exception.span.from));
-					final rawLocus: String = reconRawLocus(source, exception.span.from);
-					final key: String = reconNormalizeLocus(rawLocus);
-					addReconCluster(clusters, key, relPath, rawLocus);
-					records.push({
-						path: relPath,
-						clusterKey: key,
-						source: source,
-						skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
-						line: pos.line,
-						col: pos.col,
-					});
-				} catch (exception: Exception) {
-					final relPath: String = stripRootPrefix(path, root);
-					final key: String = '<non-ParseError> ' + reconNormalize(exception.message);
-					addReconCluster(clusters, key, relPath, '<exception>');
-					records.push({
-						path: relPath,
-						clusterKey: key,
-						source: source,
-						skipLine: 'SKIP $relPath :: $key',
-						line: 0,
-						col: 0,
-					});
-				}
-			}
-			if (!wired) break;
-		}
-		return { wired: wired, records: records, clusters: clusters };
-	}
-	private static function printReconHistogram(clusters: Map<String, ReconCluster>, total: Int, topN: Int): Int {
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [
-			for (k => v in clusters) { key: k, cluster: v }
-		];
-		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
-		final shown: Int = entries.length > topN ? topN : entries.length;
-		sysPrint('\n');
-		sysPrint('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---\n');
-		for (idx in 0...shown) {
-			final entry = entries[idx];
-			final c: ReconCluster = entry.cluster;
-			final examplesStr: String = c.examples.length == 1 ? c.examples[0] : c.examples.join(', ');
-			final raw: String = reconNormalize(c.rawSample);
-			sysPrint('  ${c.count}× "${entry.key}"  e.g. "$raw"  in: $examplesStr\n');
-		}
-		if (entries.length > shown) sysPrint('  … (${entries.length - shown} more, use --top N or --all to see)\n');
-		return EXIT_OK;
-	}
-	/**
-	 * `--cluster <substr>` drill output: one block per matching
-	 * cluster with the FULL path list (not the histogram's capped
-	 * `examples` array). Sorted descending by cluster size; paths
-	 * sorted ascending so output is stable. Replaces the global
-	 * histogram in this mode.
-	 *
-	 * When `showSource` is true, each printed path is followed by a
-	 * fenced window of source bytes around the fail-locus
-	 * (`RECON_SOURCE_WINDOW_RADIUS` lines either side). Replaces the
-	 * manual Read-per-path step after `--cluster` drill.
-	 */
-	private static function printReconClusterDrill(
-		matches: Map<String, ReconCluster>, totalAcrossSweep: Int, needle: String, records: Array<ReconRecord>, showSource: Bool
-	): Int {
-		final entries: Array<{ key: String, cluster: ReconCluster }> = [
-			for (k => v in matches) { key: k, cluster: v }
-		];
-		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
-		var matched: Int = 0;
-		for (e in entries) matched += e.cluster.count;
-		// Map path → record so the windowed source / locus lookup stays
-		// O(1) per path even in clusters with hundreds of fixtures.
-		// Built once for the drill block regardless of `showSource`
-		// (cost is negligible vs the walk itself).
-		final byPath: Map<String, ReconRecord> = [for (r in records) r.path => r];
-		sysPrint('\n');
-		sysPrint(
-			'--- cluster drill for "$needle" (${entries.length} cluster${plural(entries.length)}, $matched of $totalAcrossSweep skip-parse paths) ---\n'
-		);
-		for (entry in entries) {
-			final c: ReconCluster = entry.cluster;
-			sysPrint('  cluster "${entry.key}" — ${c.count} path${plural(c.count)}:\n');
-			final sorted: Array<String> = c.paths.copy();
-			sorted.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
-			for (p in sorted) {
-				if (!showSource) {
-					sysPrint('    $p\n');
-					continue;
-				}
-				final rec: Null<ReconRecord> = byPath[p];
-				if (rec == null) {
-					sysPrint('    $p   <no record>\n');
-					continue;
-				}
-				if (rec.line <= 0) {
-					sysPrint('    $p   <no locus>\n');
-					continue;
-				}
-				sysPrint('    $p at ${rec.line}:${rec.col}\n');
-				printReconSourceWindow(rec.source, rec.line);
-			}
-		}
-		return EXIT_OK;
-	}
-	/**
-	 * Emit a windowed source slice centred on `failLine` (1-indexed) to
-	 * stdout, with a `>>` marker on the fail row and right-aligned line
-	 * numbers. Window radius is `RECON_SOURCE_WINDOW_RADIUS` either
-	 * side; lines past EOF are silently clipped so a fail near the top
-	 * or bottom prints as much context as is available.
-	 */
-	private static function printReconSourceWindow(source: String, failLine: Int): Void {
-		final lines: Array<String> = source.split('\n');
-		final radius: Int = RECON_SOURCE_WINDOW_RADIUS;
-		final start: Int = failLine - radius < 1 ? 1 : failLine - radius;
-		final end: Int = failLine + radius > lines.length ? lines.length : failLine + radius;
-		sysPrint('      --- src window (L±$radius) ---\n');
-		// Compute the gutter width from `end` so all rows line up; e.g.
-		// a 3-digit end-line gives a 3-char gutter.
-		final gutter: Int = ('$end').length;
-		for (ln in start ... end + 1) {
-			final marker: String = ln == failLine ? '>>' : '  ';
-			final num: String = padLeft('$ln', gutter);
-			final body: String = lines[ln - 1];
-			sysPrint('      $marker$num | $body\n');
-		}
-		sysPrint('      --- end ---\n');
-	}
-	private static inline function padLeft(s: String, width: Int): String {
-		var out: String = s;
-		while (out.length < width) out = ' ' + out;
-		return out;
-	}
-	/**
-	 * Render the predict-strip "moved locus" suffix. Three regimes:
-	 *  - Same locus → empty (no hint needed).
-	 *  - NEW > ORIG (line strictly greater, or same line + col strictly
-	 *    greater) → ` (was L:C, advanced)` — strip uncovered a downstream
-	 *    blocker; the substitution's effect was forward, so the residual
-	 *    fail is a real second blocker.
-	 *  - NEW < ORIG (line less, or same line + col less) → ` (was L:C,
-	 *    moved BACKWARD — strip may have damaged earlier syntax, or your
-	 *    substitution model doesn't match the actual blocker mechanism;
-	 *    verify with `apq probe` on the unstripped fragment)` — the
-	 *    common failure mode where token substitution
-	 *    can't model gate-relaxation.
-	 *  - Same line, col differs → ` (was L:C)` — neutral; the strip
-	 *    shifted things within one line, usually inconsequential.
-	 *
-	 * `origLine == 0` means the original error had no locus (rare —
-	 * `<no locus>` already printed instead); guard returns empty.
-	 */
-	private static inline function movedLocusHint(origLine: Int, origCol: Int, newLine: Int, newCol: Int): String {
-		if (origLine <= 0) return '';
-		if (newLine == origLine && newCol == origCol) return '';
-		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
-		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
-		return forward && newLine != origLine
-			? ' (was $origLine:$origCol, advanced)'
-			: backward
-				? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
-				: ' (was $origLine:$origCol)';
-	}
-	/**
-	 * `--predict-strip` output: for each skip-parse record, apply the
-	 * supplied --replace / --with / --delete substitutions to the
-	 * extracted source and re-run the plugin's trivia parser.
-	 *
-	 * Per-file tag:
-	 *  - `PREDICT UNBLOCK` — substitution changed the source AND the
-	 *    re-parse now succeeds; the grammar/strip-test change being
-	 *    modelled would unblock this fixture.
-	 *  - `PREDICT STILL FAIL` — substitution changed the source but
-	 *    re-parse still fails (different blocker survives downstream).
-	 *  - `PREDICT NO MATCH` — substitution patterns matched 0 times;
-	 *    the fixture is unaffected by the proposed change. Typo
-	 *    signal when this fires across the WHOLE sweep.
-	 *
-	 * Summary line at the end: total / unblock / still-fail / no-match
-	 * counts. Exits non-zero only if ALL patterns matched 0 occurrences
-	 * across the whole filtered set (mirror of `strip --dry-run`'s
-	 * pattern-typo guard).
-	 */
-	private static function runReconPredictStrip(
-		records: Array<ReconRecord>, plugin: GrammarPlugin, patterns: Array<String>, replacements: Array<String>,
-		compiledRegex: Null<Array<EReg>>, clusterFilter: Null<String>, showSource: Bool
-	): Int {
-		final regexMode: Bool = compiledRegex != null;
-		final regexes: Array<EReg> = compiledRegex ?? [];
-		var unblockCount: Int = 0;
-		var stillFailCount: Int = 0;
-		var noMatchCount: Int = 0;
-		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
-		for (r in records) {
-			var stripped: String = r.source;
-			var fileHits: Int = 0;
-			for (idx in 0...patterns.length) {
-				final hits: Int = regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, patterns[idx]);
-				patternHits[idx] += hits;
-				fileHits += hits;
-				stripped = regexMode
-					? regexes[idx].replace(stripped, replacements[idx])
-					: StringTools.replace(stripped, patterns[idx], replacements[idx]);
-			}
-			if (fileHits == 0) {
-				sysPrint('PREDICT NO MATCH  ${r.path}\n');
-				noMatchCount++;
-				continue;
-			}
-			try {
-				if (!plugin.reconParse(stripped)) {
-					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
-					return EXIT_RUNTIME;
-				}
-				sysPrint('PREDICT UNBLOCK   ${r.path}\n');
-				unblockCount++;
-			} catch (pe: ParseError) {
-				// New locus after substitution. When it differs from the
-				// pre-strip locus the strip likely moved the problem (e.g.
-				// pattern matched a decl AND a use position), which is the
-				// common false-negative trap on slice candidates. Surface
-				// the new line:col + message so the reader sees the move at
-				// a glance instead of opening the stripped source to diff
-				// the locus by hand. With `--source`, also emit a windowed
-				// src slice around the new locus — replaces the manual
-				// Read of the stripped source when the moved-locus hint
-				// alone is ambiguous.
-				final pos: Position = pe.span.lineCol(stripped);
-				final movedHint: String = movedLocusHint(r.line, r.col, pos.line, pos.col);
-				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
-				if (showSource) printReconSourceWindow(stripped, pos.line);
-				stillFailCount++;
-			} catch (e: Exception) {
-				sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
-				stillFailCount++;
-			}
-		}
-		sysPrint('\n');
-		final scope: String = clusterFilter == null ? 'whole sweep' : 'cluster "$clusterFilter"';
-		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${plural(records.length)}; ');
-		sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
-		for (idx in 0...patterns.length) {
-			final pat: String = patterns[idx];
-			final total: Int = patternHits[idx];
-			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
-		}
-		// Mirror `strip --dry-run`: every supplied pattern matching 0
-		// across the whole filtered set is a typo signal worth surfacing
-		// non-zero. A pattern matching SOMEWHERE but not everywhere is
-		// expected behaviour for a targeted predicate; only the global
-		// 0 case is the guard.
-		var anyZero: Bool = false;
-		for (h in patternHits) if (h == 0) anyZero = true;
-		if (anyZero) {
-			stderr(
-				'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see per-pattern totals\n'
-			);
-			return EXIT_RUNTIME;
-		}
-		return EXIT_OK;
-	}
-	private static function defaultReconRoot(): String {
-		final fork: Null<String> = resolveForkPath();
-		if (fork == null || fork.length == 0) return '';
-		final candidate: String = '$fork/test/testcases';
-		final resolved: String = FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
-		// Write-cache: persist the env-supplied path to
-		// `~/.config/anyparse/fork_path` so the next `apq recon` works
-		// WITHOUT re-exporting the env var. Env always wins; the cache
-		// is consulted only by `resolveForkPath` when env is unset.
-		// `tryWriteForkPathCache` short-circuits when the on-disk value
-		// already matches, so steady-state writes are no-ops.
-		#if (sys || nodejs)
-		final envFork: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
-		if (envFork != null && envFork.length > 0) tryWriteForkPathCache(envFork);
-		#end
-		return resolved;
-	}
-	/**
-	 * Resolve the haxe-formatter fork path with env > config-cache
-	 * precedence. The env var IS the canonical source — the cache
-	 * exists only to spare the user from re-exporting it on every
-	 * session. A cached path that no longer points at a directory is
-	 * dropped silently (a stale config should never block a `recon` run
-	 * — the user gets the same `env var is unset` usage error as before).
-	 */
-	private static function resolveForkPath(): Null<String> {
-		final env: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
-		if (env != null && env.length > 0) return env;
-		#if (sys || nodejs)
-		final cached: Null<String> = readForkPathCache();
-		if (cached != null && cached.length > 0 && FileSystem.exists(cached) && FileSystem.isDirectory(cached)) return cached;
-		#end
-		return null;
-	}
-	/**
-	 * Emit a stderr nudge when any `.hx` file under `src/` or `test/` is
-	 * newer than `bin/test.js` — the next `node bin/test.js` will run
-	 * STALE bytes and a 0-delta sweep / clean test-summary can lie. Drives
-	 * the documented `[[feedback-rebuild-test-js-after-macro-edit]]`
-	 * trap: `bin/apq.js` auto-rebuilds (the hxq shim handles it) but
-	 * `bin/test.js` is a separate build artefact whose staleness has no
-	 * gate elsewhere in the workflow.
-	 *
-	 * Silent on `#if !sys`, on missing `bin/test.js` (caller will hit a
-	 * clean error from the missing binary), or when nothing under src/
-	 * or test/ is newer. Best-effort: a FileSystem failure short-circuits
-	 * without raising — the user always gets the requested totals.
-	 */
-	private static function warnIfTestJsStale(cmd: String): Void {
-		#if (sys || nodejs)
-		final binPath: String = 'bin/test.js';
-		if (!FileSystem.exists(binPath)) return;
-		try {
-			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
-			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
-				stderr(
-					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
-				);
-			}
-		} catch (_: Exception) {
-			// best-effort: skip the staleness advisory on any FS error
-		}
-		#end
-	}
-	private static function anyHxNewerThan(root: String, threshold: Float): Bool {
-		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return false;
-		final stack: Array<String> = [root];
-		while (stack.length > 0) {
-			final dir: Null<String> = stack.pop();
-			if (dir == null) break;
-			try {
-				for (name in FileSystem.readDirectory(dir)) {
-					final path: String = '$dir/$name';
-					if (FileSystem.isDirectory(path)) {
-						stack.push(path);
-						continue;
-					}
-					if (!StringTools.endsWith(name, '.hx')) continue;
-					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
-				}
-			} catch (_: Exception) {
-				// best-effort: a stat failure falls through to return false
-			}
-		}
-		return false;
-	}
-	private static function forkPathCacheFile(): Null<String> {
-		final home: Null<String> = Sys.getEnv('HOME');
-		return home == null || home.length == 0 ? null : '$home/.config/anyparse/fork_path';
-	}
-	private static function readForkPathCache(): Null<String> {
-		final path: Null<String> = forkPathCacheFile();
-		if (path == null || !FileSystem.exists(path)) return null;
-		try {
-			final raw: String = sys.io.File.getContent(path);
-			final trimmed: String = StringTools.trim(raw);
-			return trimmed.length > 0 ? trimmed : null;
-		} catch (_: Exception) {
-			return null;
-		}
-	}
-	private static function tryWriteForkPathCache(value: String): Void {
-		final path: Null<String> = forkPathCacheFile();
-		if (path == null) return;
-		// Skip write when the cache already matches — avoids a useless
-		// disk hit on every recon invocation under the same env.
-		try {
-			if (FileSystem.exists(path)) {
-				final existing: String = StringTools.trim(sys.io.File.getContent(path));
-				if (existing == value) return;
-			}
-		} catch (_: Exception) {
-			// best-effort: an unreadable existing file just proceeds to (over)write
-		}
-		try {
-			final dir: String = haxe.io.Path.directory(path);
-			if (dir.length > 0 && !FileSystem.exists(dir)) FileSystem.createDirectory(dir);
-			sys.io.File.saveContent(path, value);
-		} catch (_: Exception) {
-			// Best-effort cache write — never block recon on a write
-			// failure (read-only HOME, disk full, permission). The env
-			// path stays valid for the current run.
-		}
-	}
-	private static function stripRootPrefix(path: String, root: String): String {
-		return StringTools.startsWith(path, root + '/') ? path.substr(root.length + 1) : path == root ? '.' : path;
-	}
-	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
-		final prev: Null<ReconCluster> = map[key];
-		if (prev == null) {
-			map[key] = {
-				count: 1,
-				examples: [file],
-				paths: [file],
-				rawSample: rawLocus
-			};
-		} else {
-			prev.count++;
-			prev.paths.push(file);
-			if (prev.examples.length < RECON_EXAMPLES_PER_CLUSTER) prev.examples.push(file);
-		}
-	}
-	/**
-	 * Raw forward locus — `RECON_LOCUS_LEN` chars starting AT the fail
-	 * position. Used both as the cluster's raw sample (display) and as
-	 * input to the normaliser (cluster key).
-	 */
-	private static function reconRawLocus(input: String, offset: Int): String {
-		final start: Int = offset > input.length ? input.length : offset;
-		final end: Int = start + RECON_LOCUS_LEN > input.length ? input.length : start + RECON_LOCUS_LEN;
-		return input.substring(start, end);
-	}
-	/**
-	 * Normalise the forward locus into a cluster key — identifier runs
-	 * of length > 4 collapse to `_`, shorter runs (Haxe short keywords
-	 * `var`, `is`, `as`, `in`, `for`, `try`, `new`, `if`, `else`,
-	 * `case`, etc.) are kept verbatim so they remain visible in the
-	 * histogram. Punctuation, operators and whitespace pass through.
-	 * `reconNormalize` then escapes whitespace for one-line display.
-	 */
-	private static function reconNormalizeLocus(raw: String): String {
-		final buf: StringBuf = new StringBuf();
-		var i: Int = 0;
-		while (i < raw.length) {
-			final c: Int = StringTools.fastCodeAt(raw, i);
-			final isIdStart: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
-			if (isIdStart) {
-				var j: Int = i + 1;
-				while (j < raw.length) {
-					final cj: Int = StringTools.fastCodeAt(raw, j);
-					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code) || (cj >= 'A'.code && cj <= 'Z'.code)
-						|| (cj >= '0'.code && cj <= '9'.code) || cj == '_'.code;
-					if (!isIdCont) break;
-					j++;
-				}
-				final identLen: Int = j - i;
-				if (identLen > 4) // noqa: magic-number
-					buf.add('_');
-				else
-					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
-				i = j;
-			} else {
-				buf.addChar(c);
-				i++;
-			}
-		}
-		return reconNormalize(buf.toString());
-	}
-	/**
-	 * Source window of `RECON_HEAD_LEN` characters centred on `offset`
-	 * — the text around the farthest-failure locus, for the human-
-	 * readable SKIP line. Whitespace is escaped by `reconNormalize`.
-	 */
-	private static function reconSnippet(input: String, offset: Int): String {
-		final half: Int = Std.int(RECON_HEAD_LEN / 2);
-		final centre: Int = offset > input.length ? input.length : offset;
-		final start: Int = centre - half < 0 ? 0 : centre - half;
-		final end: Int = centre + half > input.length ? input.length : centre + half;
-		return input.substring(start, end);
-	}
-	private static function reconNormalize(message: Null<String>): String {
-		return message == null || message == ''
-			? '<no message>'
-			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
-	}
-	/**
-	 * `apq sweep` — read-only view on the corpus harness's
-	 * `bin/.last-sweep.json` snapshot. Prints totals (+ Δ vs a prior
-	 * snapshot if `--prev <path>` is given) without re-running the
-	 * corpus. THE no-corpus-rerun lookup for "what does the last sweep
-	 * say" — closes the manual `cat bin/.last-sweep.json | grep` +
-	 * `tail /tmp/sweep.log | grep ===== sweep totals` dance.
-	 *
-	 * Default path is `bin/.last-sweep.json` (matches the corpus
-	 * harness's `SWEEP_JSON_PATH` constant). `--file <path>` overrides
-	 * — useful for sanity-checking an alternate snapshot. Exit 0 when
-	 * the file is read; exit 1 when it doesn't exist or is unparseable.
-	 */
-	private static function runSweep(args: Array<String>): Int {
-		var filePath: String = 'bin/.last-sweep.json';
-		var prevPath: Null<String> = null;
-		var diffPath: Null<String> = null;
-		// `--save <path>`: discoverable shorthand for "copy the current
-		// snapshot to <path> so I can `--prev` / `--diff` against it
-		// after the next sweep". Replaces the manual
-		// `cp bin/.last-sweep.json /tmp/prev.json` step that's easy to
-		// forget before a grammar slice. Performs the copy AFTER the
-		// totals print so the user still sees the snapshot's contents.
-		var savePath: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '--file':
-					filePath = expectValue(args, ++i, '--file');
-				case '--prev':
-					prevPath = expectValue(args, ++i, '--prev');
-				case '--diff':
-					// Allow bare `--diff` (no arg) → default to
-					// `bin/.prev-sweep.json` (auto-rotated by the corpus
-					// harness before every sweep write). The next-token
-					// check follows expectValue's contract: a `--`-prefixed
-					// token is a flag, not a value.
-					diffPath = i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')
-						? expectValue(args, ++i, '--diff')
-						: 'bin/.prev-sweep.json';
-				case '--save':
-					savePath = expectValue(args, ++i, '--save');
-				case '--lang':
-					// hxq shim auto-injects --lang haxe; harmless here (sweep
-					// reads a JSON snapshot, no grammar plugin needed). Accept
-					// + consume the value to keep shim invariance.
-					expectValue(args, ++i, '--lang');
-				case '-h', '--help':
-					printSweepUsage();
-					return EXIT_OK;
-				case _:
-					stderr('apq sweep: unknown option "$a"\n');
-					printSweepUsage();
-					return EXIT_USAGE;
-			}
-			i++;
-		}
-		final cur: Null<SweepTotals> = loadSweepJson(filePath);
-		if (cur == null) {
-			stderr('apq sweep: cannot read $filePath (missing or unparseable)\n');
-			return EXIT_RUNTIME;
-		}
-		warnIfTestJsStale('sweep');
-		final total: Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
-		sysPrint(
-			'${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig} skip-config / ${cur.skipMalformed} malformed (total $total)\n'
-		);
-		if (prevPath != null) {
-			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
-			if (prev == null) {
-				stderr('apq sweep: cannot read --prev $prevPath\n');
-				return EXIT_RUNTIME;
-			}
-			sysPrint(
-				'  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse ${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n'
-			);
-		}
-		if (savePath != null) {
-			try {
-				final raw: String = sys.io.File.getContent(filePath);
-				sys.io.File.saveContent((savePath: String), raw);
-				sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
-			} catch (e: Exception) {
-				stderr('apq sweep: --save failed: ${e.message}\n');
-				return EXIT_RUNTIME;
-			}
-		}
-		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
-	}
-	/**
-	 * Per-fixture status diff between two sweep snapshots. THE answer to
-	 * "which fixtures flipped between these two runs" — replaces the
-	 * ad-hoc python3 reads against `bin/.last-sweep.json`'s `fixtures`
-	 * array. Composes with `--prev` (totals delta is printed first, then
-	 * the per-fixture rows; the two are orthogonal).
-	 *
-	 * Output shape: one line per changed path, plus a transition-count
-	 * breakdown summary. Sorted by path for deterministic output.
-	 */
-	private static function runSweepDiff(curPath: String, prevPath: String): Int {
-		final cur: Map<String, String> = loadSweepFixtureStatus(curPath);
-		final prev: Map<String, String> = loadSweepFixtureStatus(prevPath);
-		if (!cur.iterator().hasNext()) {
-			stderr(
-				'apq sweep: --diff: $curPath has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
-			);
-			return EXIT_RUNTIME;
-		}
-		if (!prev.iterator().hasNext()) {
-			stderr('apq sweep: --diff: $prevPath has no `fixtures` array\n');
-			return EXIT_RUNTIME;
-		}
-		final allPaths: Map<String, Bool> = [];
-		for (k in cur.keys()) allPaths[k] = true;
-		for (k in prev.keys()) allPaths[k] = true;
-		final sorted: Array<String> = [for (k in allPaths.keys()) k];
-		sorted.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-		final transitions: Map<String, Int> = [];
-		var changed: Int = 0;
-		for (path in sorted) {
-			final ps: Null<String> = prev[path];
-			final cs: Null<String> = cur[path];
-			if (ps == cs) continue;
-			changed++;
-			final key: String = if (ps == null)
-				'ADDED($cs)'
-			else if (cs == null)
-				'REMOVED($ps)'
-			else
-				'$ps->$cs';
-			transitions[key] = (transitions[key] ?? 0) + 1;
-			if (ps == null)
-				sysPrint('ADDED $path (now $cs)\n');
-			else if (cs == null)
-				sysPrint('REMOVED $path (was $ps)\n');
-			else
-				sysPrint('$ps -> $cs: $path\n');
-		}
-		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
-		breakdown.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-		if (changed == 0)
-			sysPrint('--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n');
-		else
-			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n');
-		return EXIT_OK;
-	}
-	private static function loadSweepJson(path: String): Null<SweepTotals> {
-		return !sys.FileSystem.exists(path)
-			? null
-			: try {
-				final raw: String = sys.io.File.getContent(path);
-				final obj: Dynamic = haxe.Json.parse(raw);
-				final pass: Null<Int> = Reflect.hasField(obj, 'pass') ? Reflect.field(obj, 'pass') : null;
-				final fail: Null<Int> = Reflect.hasField(obj, 'fail') ? Reflect.field(obj, 'fail') : null;
-				final skipParse: Null<Int> = Reflect.hasField(obj, 'skipParse') ? Reflect.field(obj, 'skipParse') : null;
-				final skipWrite: Null<Int> = Reflect.hasField(obj, 'skipWrite') ? Reflect.field(obj, 'skipWrite') : null;
-				final skipConfig: Null<Int> = Reflect.hasField(obj, 'skipConfig') ? Reflect.field(obj, 'skipConfig') : null;
-				final skipMalformed: Null<Int> = Reflect.hasField(obj, 'skipMalformed') ? Reflect.field(obj, 'skipMalformed') : null;
-				if (pass == null || fail == null || skipParse == null) return null;
-				{
-					pass: pass,
-					fail: fail,
-					skipParse: skipParse,
-					skipWrite: skipWrite ?? 0,
-					skipConfig: skipConfig ?? 0,
-					skipMalformed: skipMalformed ?? 0,
-				};
-			} catch (_: Exception) null;
-	}
-	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';
-	private static function printSweepUsage(): Void {
-		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
-		sysPrint('\n');
-		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
-		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
-		sysPrint('No corpus rerun — only reads JSON.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
-		sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
-		sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
-		sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
-		sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
-		sysPrint('                  auto-rotates this before each sweep write), no path needed.\n');
-		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
-		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
-		sysPrint('  -h, --help      Show this help\n');
-	}
-	/**
-	 * `apq test-summary [<file>]` — parse a utest stdout transcript and
-	 * print `N tests / M assertions / F failures / E errors`. Replaces
-	 * the manual `grep -cE ': OK' /tmp/test.out` + assertion-count
-	 * one-liner I keep rebuilding after every test run.
-	 *
-	 * Source resolution: positional path (file), `-` (stdin), or default
-	 * `/tmp/test.out` when run with no positional and the file exists.
-	 * Always exits 0 on a successful parse, 1 on read failure — the test
-	 * outcome is informational (the test runner's exit code is the
-	 * authoritative pass/fail signal).
-	 *
-	 * Parse rules (utest 1.13.x format, what `node bin/test.js` emits):
-	 *  - `  testName: OK <dots>` — one line per test; trailing dots are
-	 *    one per assertion.
-	 *  - `  testName: FAIL` / `  testName: ERROR` — failure / error
-	 *    counters; case-insensitive substring match on the suffix.
-	 */
-	private static function runTestSummary(args: Array<String>): Int {
-		var sourcePath: Null<String> = null;
-		var i: Int = 0;
-		while (i < args.length) {
-			final a: String = args[i];
-			switch a {
-				case '-h', '--help':
-					printTestSummaryUsage();
-					return EXIT_OK;
-				case '--lang':
-					// Shim invariance — apq test-summary doesn't use a plugin.
-					expectValue(args, ++i, '--lang');
-				case _:
-					if (sourcePath != null) {
-						stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
-						return EXIT_USAGE;
-					}
-					sourcePath = a;
-			}
-			i++;
-		}
-		final raw: String = try {
-			switch (sourcePath) {
-				case null: {
-					if (sys.FileSystem.exists('/tmp/test.out'))
-						sys.io.File.getContent('/tmp/test.out');
-					else {
-						stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
-						return EXIT_USAGE;
-					}
-				}
-				case '-': {
-					readStdin();
-				}
-				case _: {
-					sys.io.File.getContent((sourcePath: String));
-				}
-			}
-		} catch (e: Exception) {
-			stderr('apq test-summary: read failed: ${e.message}\n');
-			return EXIT_RUNTIME;
-		}
-		final result: TestSummaryResult = parseTestSummary(raw);
-		final src: String = sourcePath ?? '/tmp/test.out';
-		warnIfTestJsStale('test-summary');
-		sysPrint(
-			'${result.tests} tests / ${result.assertions} assertions / ${result.failures} failures / ${result.errors} errors  ($src)\n'
-		);
-		final ff: Null<TestSummaryFailureLocus> = result.firstFailure;
-		if (ff != null) {
-			final classQual: String = ff.className.length > 0 ? '${ff.className}.' : '';
-			final lineFrag: String = ff.line >= 0 ? '  line:${ff.line}' : '';
-			final msgFrag: String = ff.message.length > 0 ? '  ${ff.message}' : '';
-			final label: String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
-			sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
-		}
-		return EXIT_OK;
-	}
-	/**
-	 * `apq self-status [<dir>]` — walk `<dir>` recursively (default `src/`),
-	 * try every `.hx` file via the grammar plugin's trivia parser, print
-	 * one `SKIP <path> :: LINE:COL <message>` line per failure plus a
-	 * footer `--- self-status: M parseable, N skip-parse (total T) ---`.
-	 *
-	 * Solves the dogfooding gap where `hxq` walkers silently skip
-	 * unparseable files: the user finds out a file is unparseable only by
-	 * grepping warnings emitted by `lit` / `refs` / `uses` etc., one at a
-	 * time. `self-status` surfaces the full skip-parse set in one call.
-	 *
-	 * Exit code is 0 even when files skip-parse — this is a status report,
-	 * not a check. `--strict` flips to non-zero on any skip-parse so CI
-	 * wiring can guard against regressions.
-	 */
-	private static function runSelfStatus(args: Array<String>): Int {
-		final opts: SelfStatusOpts = parseSelfStatusArgs(args);
-		if (opts.errExit != null) return opts.errExit;
-		final root: String = opts.rootDir ?? 'src';
-		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
-			stderr('apq self-status: "$root" is not a directory.\n');
-			return EXIT_RUNTIME;
-		}
-		final plugin: GrammarPlugin = pickPlugin(opts.lang);
-		final walk: SelfStatusWalk = walkSelfStatus(plugin, root, opts.showSource);
-		walk.skipLines.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
-		for (line in walk.skipLines) sysPrint('$line\n');
-		final total: Int = walk.parseable + walk.skipParse;
-		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
-		return (opts.strict && walk.skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
-	}
-	private static function printSelfStatusUsage(): Void {
-		sysPrint('apq self-status [<dir>] [--strict] [--source]\n');
-		sysPrint('\n');
-		sysPrint('Walks <dir> recursively (default `src/`) and prints which `.hx` files\n');
-		sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
-		sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
-		sysPrint('\n');
-		sysPrint('With --source the SKIP line gains a `:: src="<window>"` tail showing\n');
-		sysPrint('the bytes around the fail-locus (same format as `recon --probe`).\n');
-		sysPrint('\n');
-		sysPrint('Closes the dogfood gap: hxq walkers silently skip unparseable files;\n');
-		sysPrint('self-status surfaces the full set in one call.\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
-		sysPrint('  --source       Append windowed source around each fail-locus.\n');
-		sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
-		sysPrint('  -h, --help     Show this help.\n');
-	}
-	/**
-	 * `apq source <file> [--range SPEC] [--number]` — emit a file's RAW
-	 * verbatim lines with NO AST parse, so it works on ANY file (parseable
-	 * or skip-parse). Default output is unprefixed lines — directly usable
-	 * for anchoring an Edit — replacing the `git show … > /tmp/.txt` /
-	 * `node readFileSync` dance (the Read tool fabricates `.hx` past the
-	 * first lines; cat/sed/grep are gated; this hxq subcommand is allowed).
-	 *
-	 * `--range SPEC` is 1-based inclusive: `L` (single line), `L:L2`
-	 * (range), `L:` (L to EOF), `:L2` (start to L2). Out-of-range bounds
-	 * clamp to the file (friendly, no crash). `--number` / `-n` switches to
-	 * `cat -n`-style `<lineno>\t<line>` output for navigation.
-	 */
-	private static function runSource(args: Array<String>): Int {
-		final opts: SourceOpts = parseSourceArgs(args);
-		if (opts.errExit != null) return opts.errExit;
-
-		final file: Null<String> = opts.file;
-		if (file == null) {
-			stderr('apq source: missing <file> argument\n');
-			printSourceUsage();
-			return EXIT_USAGE;
-		}
-		final modes: Int = (opts.range != null ? 1 : 0) + (opts.selectExpr != null ? 1 : 0) + (opts.atSpec != null ? 1 : 0);
-		if (modes > 1) {
-			stderr('apq source: --range, --select and --at are mutually exclusive — pick one\n');
-			return EXIT_USAGE;
-		}
-		final path: String = file;
-		if (!FileSystem.exists(path)) {
-			stderr('apq source: no such file "$path"\n');
-			return EXIT_RUNTIME;
-		}
-		if (FileSystem.isDirectory(path)) {
-			stderr('apq source: "$path" is a directory (source views one file)\n');
-			return EXIT_RUNTIME;
-		}
-
-		final content: String = readFile(path);
-		// Split on `\n` so a trailing newline does not synthesise a spurious
-		// empty final line — the standard "lines = N+1 splits, last empty"
-		// is dropped to keep line numbers aligned with an editor's view.
-		final lines: Array<String> = content.split('\n');
-		if (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
-
-		// `--select` / `--at` resolve a NODE's span to its line range (these
-		// parse the file — unlike the raw, parse-free `--range` / whole-file
-		// path, which still works on a skip-parse file).
-		final bounds: Null<{ from: Int, to: Int }> = if (opts.selectExpr != null || opts.atSpec != null)
-			resolveNodeLineBounds(path, content, opts.lang, opts.selectExpr, opts.atSpec);
-		else
-			parseRangeSpec(opts.range, lines.length);
-		if (bounds == null) {
-			if (opts.selectExpr != null || opts.atSpec != null) return EXIT_RUNTIME;
-			stderr('apq source: bad --range "${opts.range}" (use L, L:L2, L:, or :L2 — 1-based)\n');
-			return EXIT_USAGE;
-		}
-
-		emitSourceLines(lines, bounds.from, bounds.to, opts.number, opts.raw);
-		return EXIT_OK;
-	}
-	/**
-	 * Parse a `source --range` spec into a 1-based inclusive `{from, to}`
-	 * line pair, clamped to `[1, lineCount]`. Forms: `null`/`""` → whole
-	 * file; `L` → single line; `L:L2` → range; `L:` → L to EOF; `:L2` →
-	 * start to L2. Returns `null` on a malformed spec (non-int part, or an
-	 * inverted range after clamping). An empty file (`lineCount == 0`)
-	 * yields an empty `{1, 0}` range so the caller prints nothing.
-	 */
-	private static function parseRangeSpec(spec: Null<String>, lineCount: Int): Null<{ from: Int, to: Int }> {
-		if (lineCount == 0) return { from: 1, to: 0 };
-		if (spec == null || spec.length == 0) return { from: 1, to: lineCount };
-		final colon: Int = spec.indexOf(':');
-		if (colon < 0) {
-			final single: Null<Int> = Std.parseInt(spec);
-			if (single == null) return null;
-			final clamped: Int = clampLine(single, lineCount);
-			return { from: clamped, to: clamped };
-		}
-		final loStr: String = spec.substring(0, colon);
-		final hiStr: String = spec.substring(colon + 1);
-		final lo: Null<Int> = loStr.length == 0 ? 1 : Std.parseInt(loStr);
-		final hi: Null<Int> = hiStr.length == 0 ? lineCount : Std.parseInt(hiStr);
-		if (lo == null || hi == null) return null;
-		final from: Int = clampLine(lo, lineCount);
-		final to: Int = clampLine(hi, lineCount);
-		return from > to ? null : { from: from, to: to };
-	}
-	/** Clamp a 1-based line number into `[1, lineCount]`. */
-	private static inline function clampLine(n: Int, lineCount: Int): Int {
-		return n < 1 ? 1 : (n > lineCount ? lineCount : n);
-	}
-	private static function printSourceUsage(): Void {
-		sysPrint('Usage: apq source [options] <file>\n');
-		sysPrint('\n');
-		sysPrint('Options:\n');
-		sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
-		sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
-		sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one\n");
-		sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
-		sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
-		sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
-		sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
-		sysPrint('  -h, --help         Show this help\n');
-		sysPrint('\n');
-		sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
-		sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
-		sysPrint('file and print the full lines spanning the matched node — the clean way to\n');
-		sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
-		sysPrint('\n');
-		sysPrint('By default the common leading indentation shared by the shown lines is\n');
-		sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
-		sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
-		sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
-	}
-	private static function tryCaptureDetail(locus: TestSummaryFailureLocus, line: String, full: EReg, lineOnly: EReg, bare: EReg): Bool {
-		// Disambiguate bare detail from regular test rows: a fail/err line
-		// fits `bare` too (`^\s+\S.*`). The fail/err regexes already
-		// consumed those, so we additionally require the bare branch to
-		// NOT look like an indented test row (contain `: OK|FAIL|ERR`).
-		if (full.match(line)) {
-			locus.line = parsePositiveInt(full.matched(2));
-			locus.message = StringTools.trim(full.matched(3)); // noqa: magic-number
-			return true;
-		}
-		if (lineOnly.match(line)) {
-			locus.line = parsePositiveInt(lineOnly.matched(1));
-			locus.message = StringTools.trim(lineOnly.matched(2));
-			return true;
-		}
-		if (bare.match(line) && !~/:\s+(OK|FAIL|ERR)/.match(line)) {
-			locus.message = StringTools.trim(bare.matched(1));
-			return true;
-		}
-		return false;
-	}
-	private static inline function parsePositiveInt(s: String): Int {
-		final v: Null<Int> = Std.parseInt(s);
-		return v ?? -1;
-	}
-	private static function printTestSummaryUsage(): Void {
-		sysPrint('Usage: apq test-summary [<file> | -]\n');
-		sysPrint('\n');
-		sysPrint('Parse a utest stdout transcript and report tests / assertions / failures /\n');
-		sysPrint('errors. Source resolution:\n');
-		sysPrint('  <file>     — read from the given path\n');
-		sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
-		sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
-		sysPrint('\n');
-		sysPrint('Parses lines of shape `  testName: OK <dots>` / `: FAIL` / `: ERROR`.\n');
-		sysPrint('Dot count after `OK` is the assertion count (one dot per assert).\n');
-		sysPrint('When any FAIL / ERROR is present, appends a second line with the first\n');
-		sysPrint('failure\'s locus: `first failure: ClassName.testName  line:N  <message>`\n');
-		sysPrint('(class header / line / message included when utest emitted them).\n');
-		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
-		sysPrint('the authoritative pass/fail signal.\n');
-	}
-	#end
 
 	private static function printReconUsage(): Void {
 		sysPrint('Usage: apq recon [<dir>] [--top N | --all] [--cluster <substr> [--source]]\n');
@@ -13769,7 +11797,6 @@ final class Cli {
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
-
 	/**
 	 * Print every registered check as `id  description`, one per line, in
 	 * registration order — the machine-consumable counterpart of the usage
@@ -13782,7 +11809,6 @@ final class Cli {
 		for (c in checks) if (c.id().length > width) width = c.id().length;
 		for (c in checks) sysPrint(StringTools.rpad(c.id(), ' ', width) + '  ' + c.description() + '\n');
 	}
-
 
 	private static function printWriteLangHelp(): Void {
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
@@ -13830,7 +11856,6 @@ final class Cli {
 		sysPrint("                      = the line's first non-whitespace character\n");
 	}
 
-
 	private static function printSelectorAddressingSection(): Void {
 		printAddressingHelp();
 		sysPrint("                      (descendant), e.g. --select 'FnMember:walk'; exactly one\n");
@@ -13859,7 +11884,6 @@ final class Cli {
 		sysPrint('  --lang <name>  Grammar plugin (default haxe)\n');
 	}
 
-
 	private static function resolveInputPaths(
 		lang: String, specs: Array<String>
 	): { plugin: GrammarPlugin, paths: Array<String>, singleFile: Bool } {
@@ -13867,7 +11891,6 @@ final class Cli {
 		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs(specs, '.hx');
 		return { plugin: plugin, paths: expanded.paths, singleFile: expanded.singleFile };
 	}
-
 
 	/**
 	 * Verify and apply the RiskyFix checks' fixes: a no-op with no risky check,
@@ -13898,7 +11921,6 @@ final class Cli {
 		}
 	}
 
-
 	/**
 	 * Report-mode compiler oracle: with a `compilerOracle` configured, typecheck the
 	 * project and (a) return a non-null EXIT_RUNTIME with the compiler's errors when
@@ -13921,6 +11943,2032 @@ final class Cli {
 		}
 		return null;
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * Pure parser over a utest stdout transcript. Exposed for unit tests so
+	 * the structured result (counts + first-failure locus) can be asserted
+	 * directly without the stdout-capture round-trip Cli.run would impose.
+	 *
+	 * Line shape recognition (utest 1.13.x):
+	 *  - `  testName: OK <dots>` — pass; dot-count adds to assertions.
+	 *  - `  testName: FAIL[URE] <…>` — failure counter.
+	 *  - `  testName: ERR[OR] <…>` — error counter.
+	 *  - `ClassName` (unindented CamelCase token, no colon) — class header;
+	 *    tracked so first-failure carries its qualifier.
+	 *  - `    <detail>` (4-space indent) following a fail/err — the
+	 *    failure's detail line. `line: N, <msg>` and
+	 *    `fileName: X, line: N, <msg>` shapes are decoded into structured
+	 *    fields; bare detail falls into `message`.
+	 *
+	 * The detail capture only fires for the FIRST fail/err — once
+	 * `firstFailure` is set, subsequent failures only bump counters.
+	 */
+	public static function parseTestSummary(raw: String): TestSummaryResult {
+		final okRe: EReg = ~/^\s+(\w[\w.]*):\s+OK(\s+(\.+))?/;
+		final failRe: EReg = ~/^\s+(\w[\w.]*):\s+FAIL/;
+		final errRe: EReg = ~/^\s+(\w[\w.]*):\s+ERR/;
+		final classRe: EReg = ~/^([A-Z]\w*)$/;
+		final detailFullRe: EReg = ~/^\s*fileName:\s*([^,]+),\s*line:\s*(\d+),\s*(.*)$/;
+		final detailLineRe: EReg = ~/^\s*line:\s*(\d+),\s*(.*)$/;
+		// Bare-message detail: any non-zero indent + non-empty content.
+		// Widened from `\s{4,}` because utest's indent isn't guaranteed
+		// 4-space (tabs / 2-space variants exist in older transcripts).
+		final detailBareRe: EReg = ~/^\s+(\S.*)$/;
+		var tests: Int = 0;
+		var assertions: Int = 0;
+		var failures: Int = 0;
+		var errors: Int = 0;
+		var currentClass: String = '';
+		var firstFailure: Null<TestSummaryFailureLocus> = null;
+		var awaitingDetail: Bool = false;
+		for (line in raw.split('\n')) {
+			if (awaitingDetail) {
+				awaitingDetail = false;
+				final locus: Null<TestSummaryFailureLocus> = firstFailure;
+				if (locus != null && tryCaptureDetail(locus, line, detailFullRe, detailLineRe, detailBareRe)) continue;
+				// Fall through: the line was NOT a detail row (utest emitted
+				// no detail for this failure, or the next test row arrived
+				// immediately). Re-process via the normal regex chain so we
+				// don't silently swallow it.
+			}
+			if (okRe.match(line)) {
+				tests++;
+				final dots: Null<String> = try okRe.matched(3) catch (_: Exception) null; // noqa: magic-number
+				if (dots != null) assertions += (dots: String).length;
+			} else if (failRe.match(line)) {
+				failures++;
+				if (firstFailure == null) {
+					firstFailure = {
+						className: currentClass,
+						testName: failRe.matched(1),
+						line: -1,
+						message: '',
+						kind: TestSummaryFailureKind.Fail
+					};
+					awaitingDetail = true;
+				}
+			} else if (errRe.match(line)) {
+				errors++;
+				if (firstFailure == null) {
+					firstFailure = {
+						className: currentClass,
+						testName: errRe.matched(1),
+						line: -1,
+						message: '',
+						kind: TestSummaryFailureKind.Error
+					};
+					awaitingDetail = true;
+				}
+			} else if (classRe.match(line)) {
+				currentClass = classRe.matched(1);
+			}
+		}
+		return {
+			tests: tests,
+			assertions: assertions,
+			failures: failures,
+			errors: errors,
+			firstFailure: firstFailure
+		};
+	}
+
+	/**
+	 * `apq recon` — corpus skip-parse drill harness. Walks a directory
+	 * looking for source files (`.hxtest` fixtures auto-extract section
+	 * 2), tries each via the plugin's trivia parser, and clusters the
+	 * failures by a normalised forward-locus key so the histogram shows
+	 * the actual stuck CONSTRUCT, not the parser's terminator carousel
+	 * (`expected="//"` is 90%+ of the raw signal and is dropped).
+	 *
+	 * Replaces the standalone `test/_ReconSkipParse.hx` + `/tmp/recon.js`
+	 * dance — same clustering logic, but in-process with the rest of
+	 * `hxq` so a single `haxe bin/apq-js.hxml` rebuild after a grammar
+	 * edit picks up the new parser surface. No separate hxml.
+	 *
+	 * Modes:
+	 *  - `apq recon <dir>` — sweep mode. Walks every `.hxtest` under
+	 *    `<dir>` recursively, prints `SKIP path :: line:col <locus>` per
+	 *    failure, then a histogram of the top clusters (--top default 30,
+	 *    --all overrides).
+	 *  - `apq recon --probe <file>` — single-file probe. Useful for
+	 *    confirming a hypothesis about ONE fixture after a grammar edit.
+	 */
+	private static function runRecon(args: Array<String>): Int {
+		final o: ReconOpts = parseReconArgs(args);
+		if (o.errExit != null) return o.errExit;
+		final plugin: GrammarPlugin = pickPlugin(o.lang);
+		final probePath: Null<String> = o.probePath;
+		if (o.predictRelax && probePath != null) return runReconProbeRelax(plugin, probePath, o.showSource);
+		if (probePath != null)
+			return runReconProbe(
+				plugin, probePath, o.predictStrip, o.patterns, o.replacements, o.compiledRegex, o.showSource, o.writerEqualsAfter,
+				o.writerEqualsPlain, o.expectedPath, o.lang
+			);
+		final rootFinal: String = o.rootDir ?? defaultReconRoot();
+		if (rootFinal == '') {
+			stderr(
+				"apq recon: no <dir> given and $ANYPARSE_HXFORMAT_FORK env var is unset (no cached path at ~/.config/anyparse/fork_path either).\n"
+			);
+			stderr('  Either pass a directory:  apq recon /path/to/corpus\n');
+			stderr('  or export the fork root:  ANYPARSE_HXFORMAT_FORK=/path/to/haxe-formatter\n');
+			stderr('  (first env-supplied run caches the path under ~/.config/anyparse/; subsequent runs work without re-exporting)\n');
+			return EXIT_USAGE;
+		}
+		if (!FileSystem.exists(rootFinal) || !FileSystem.isDirectory(rootFinal)) {
+			stderr('apq recon: "$rootFinal" is not a directory.\n');
+			return EXIT_RUNTIME;
+		}
+		final candidatesRegex: Null<String> = o.candidatesRegex;
+		return o.regressionProbe
+			? runReconRegressionProbe(plugin, rootFinal)
+			: candidatesRegex != null
+				? runReconCandidates(plugin, rootFinal, candidatesRegex)
+				: o.permissiveConstruct
+					? runReconPermissive(plugin, rootFinal, o.lang)
+					: o.predictRelax
+						? runReconSweepRelax(plugin, rootFinal, o.clusterFilter, o.noTargetClusterFilter, o.showSource)
+						: runReconSweep(
+							plugin, rootFinal, o.topN, o.clusterFilter, o.predictStrip, o.patterns, o.replacements, o.compiledRegex,
+							o.showSource
+						);
+	}
+
+	/**
+	 * `apq recon --probe <file> --predict-relax` — single-file
+	 * terminator-insertion predictor. Parses `<file>`, captures the
+	 * `ParseError.expected` hint, INSERTS that token at the fail-locus,
+	 * and retries. Three outcomes:
+	 *  - `PREDICT RELAX UNBLOCK` — patched source parses; the slice
+	 *    candidate is gate-relaxation on the ctor at the fail-locus
+	 *    (make the terminator optional via `@:trailOpt` /
+	 *    `@:fmt(trailOptParseGate(...))`).
+	 *  - `PREDICT RELAX STILL FAIL` — patched source still fails; the
+	 *    gap is deeper than just the missing terminator. NEW locus
+	 *    printed (moved-locus hint same shape as predict-strip).
+	 *  - `PREDICT RELAX NO TARGET` — original error has no `expected`
+	 *    hint to inject. Rare; usually means the parser ran out of
+	 *    grammar branches entirely rather than failing at a specific
+	 *    terminator expectation.
+	 *
+	 * Doesn't take --replace/--with — the injected token comes from
+	 * the parser's own error hint.
+	 */
+	private static function runReconProbeRelax(plugin: GrammarPlugin, path: String, showSource: Bool): Int {
+		final original: String = readSourceForParse(path);
+		final res: PredictRelaxResult = tryPredictRelax(plugin, original);
+		return reportPredictRelax(path, original, res, showSource);
+	}
+
+	/**
+	 * Sweep-mode predict-relax. Walks every skip-parse fixture under
+	 * `root`, runs `tryPredictRelax`, prints per-file outcome plus a
+	 * summary `--- relax: K unblock, M still fail, P no target ---`.
+	 *
+	 * Drill modes (mutually exclusive):
+	 *  - `--cluster <key>` — filter to records whose normalised
+	 *    forward-locus matches `key` exactly (same shape as predict-strip
+	 *    cluster drill); ALL outcomes (Unblock / StillFail / NoTarget)
+	 *    print per-file.
+	 *  - `--no-target-cluster <expected-msg>` — filter to records whose
+	 *    `tryPredictRelax` returns `NoTarget` with `res.message` equal to
+	 *    `expected-msg`. THE bridge from the footer NO TARGET histogram
+	 *    (the `70× expected hint is empty after quote-strip` aggregate) to
+	 *    the file list — the only way to see every fixture in one bucket.
+	 *    Unblock / StillFail records are filtered out by construction
+	 *    (they don't belong to the NO TARGET footer).
+	 *  - Neither set — full sweep with per-file Unblock / StillFail lines
+	 *    plus a footer NO TARGET histogram by `res.message`.
+	 */
+	private static function runReconSweepRelax(
+		plugin: GrammarPlugin, root: String, clusterFilter: Null<String>, noTargetClusterFilter: Null<String>, showSource: Bool
+	): Int {
+		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		var records: Array<ReconRecord> = walk.records;
+		if (clusterFilter != null) {
+			final filter: String = clusterFilter;
+			records = records.filter(r -> r.clusterKey == filter);
+			if (records.length == 0) {
+				stderr('apq recon: --cluster "$filter" matched no skip-parse records (predict-relax mode)\n');
+				return EXIT_RUNTIME;
+			}
+		}
+		return noTargetClusterFilter != null
+			? runReconRelaxNoTargetCluster(plugin, records, noTargetClusterFilter, showSource)
+			: runReconRelaxFullSweep(plugin, records, clusterFilter != null, showSource);
+	}
+
+	/**
+	 * Run a single predict-relax probe on `source`. Returns one of the
+	 * three result kinds with the patched source / new locus / injected
+	 * token packed inside for the reporter to render.
+	 */
+	private static function tryPredictRelax(plugin: GrammarPlugin, source: String): PredictRelaxResult {
+		var origLine: Int = 0;
+		var origCol: Int = 0;
+		var injected: Null<String> = null;
+		var insertAt: Int = -1;
+		try {
+			plugin.reconParse(source);
+			// Already-parseable file given to predict-relax. Not an
+			// error — could be a `--probe` call on a fixture that
+			// landed after a recent grammar change. Surface as NoTarget with a
+			// distinct message so the user knows.
+			return {
+				kind: NoTarget,
+				original: source,
+				patched: source,
+				injected: '',
+				origLine: 0,
+				origCol: 0,
+				newLine: 0,
+				newCol: 0,
+				message: 'source already parses (no relaxation needed)'
+			};
+		} catch (pe: ParseError) {
+			final pos: Position = pe.span.lineCol(source);
+			origLine = pos.line;
+			origCol = pos.col;
+			final expected: Null<String> = pe.expected;
+			if (expected == null) {
+				return {
+					kind: NoTarget,
+					original: source,
+					patched: source,
+					injected: '',
+					origLine: origLine,
+					origCol: origCol,
+					newLine: 0,
+					newCol: 0,
+					message: pe.message
+				};
+			}
+			injected = stripExpectedHint((expected: String));
+			insertAt = pe.span.from;
+		} catch (e: Exception) {
+			return {
+				kind: NoTarget,
+				original: source,
+				patched: source,
+				injected: '',
+				origLine: 0,
+				origCol: 0,
+				newLine: 0,
+				newCol: 0,
+				message: e.message
+			};
+		}
+		if (injected == null || injected.length == 0 || insertAt < 0) {
+			return {
+				kind: NoTarget,
+				original: source,
+				patched: source,
+				injected: '',
+				origLine: origLine,
+				origCol: origCol,
+				newLine: 0,
+				newCol: 0,
+				message: 'expected hint is empty after quote-strip'
+			};
+		}
+		final injectedFinal: String = injected;
+		final patched: String = source.substr(0, insertAt) + injectedFinal + source.substr(insertAt);
+		try {
+			plugin.reconParse(patched);
+			return {
+				kind: Unblock,
+				original: source,
+				patched: patched,
+				injected: injectedFinal,
+				origLine: origLine,
+				origCol: origCol,
+				newLine: 0,
+				newCol: 0,
+				message: ''
+			};
+		} catch (pe2: ParseError) {
+			final pos2: Position = pe2.span.lineCol(patched);
+			return {
+				kind: StillFail,
+				original: source,
+				patched: patched,
+				injected: injectedFinal,
+				origLine: origLine,
+				origCol: origCol,
+				newLine: pos2.line,
+				newCol: pos2.col,
+				message: pe2.message
+			};
+		} catch (e: Exception) {
+			return {
+				kind: StillFail,
+				original: source,
+				patched: patched,
+				injected: injectedFinal,
+				origLine: origLine,
+				origCol: origCol,
+				newLine: 0,
+				newCol: 0,
+				message: e.message
+			};
+		}
+	}
+
+	/**
+	 * Find-or-insert a `{key, count}` entry in `reasons` by exact key
+	 * match. Shared by the predict-relax sweep footer (`runReconSweepRelax`
+	 * NoTarget arm) and the `--no-target-cluster` drill 0-match
+	 * diagnostic — both build the same expected-message histogram.
+	 */
+	private static function bumpReasonCount(reasons: Array<{ key: String, count: Int }>, key: String): Void {
+		for (e in reasons) if (e.key == key) {
+			e.count++;
+			return;
+		}
+		reasons.push({ key: key, count: 1 });
+	}
+
+	private static function reportPredictRelax(path: String, original: String, res: PredictRelaxResult, showSource: Bool): Int {
+		switch res.kind {
+			case Unblock:
+				sysPrint('PREDICT RELAX UNBLOCK   $path :: inserting "${res.injected}" at ${res.origLine}:${res.origCol} unblocks parse\n');
+				return EXIT_OK;
+			case StillFail:
+				final movedHint: String = movedLocusHint(res.origLine, res.origCol, res.newLine, res.newCol);
+				sysPrint(
+					'PREDICT RELAX STILL FAIL $path :: ${res.newLine}:${res.newCol}${movedHint} after inserting "${res.injected}" — ${res.message}\n'
+				);
+				if (showSource && res.newLine > 0) printReconSourceWindow(res.patched, res.newLine);
+				return EXIT_RUNTIME;
+			case NoTarget:
+				sysPrint('PREDICT RELAX NO TARGET $path :: at ${res.origLine}:${res.origCol} — ${res.message}\n');
+				// NoTarget has no patched source (the parser found no
+				// `expected` hint to inject), so the window is anchored on
+				// the ORIGINAL fail-locus. `origLine == 0` is the
+				// "already-parseable" / pre-error path (no usable locus);
+				// skip the window for those.
+				if (showSource && res.origLine > 0) printReconSourceWindow(res.original, res.origLine);
+				return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * Strip the `expected="<X>"` hint down to a literal token. Hints
+	 * arrive as raw strings from `ParseError.expected` — they may be
+	 * `";"`, `;`, `'}'`, `// (comment-or-end marker)`, etc. Recognise
+	 * the three common terminator shapes and return the bare char.
+	 * Returns the trimmed input unchanged for anything else; the
+	 * caller's parse retry will surface bogus-injection as STILL FAIL.
+	 */
+	private static function stripExpectedHint(hint: String): String {
+		final t: String = StringTools.trim(hint);
+		if (t.length == 0) return t;
+		// `"<x>"` or `'<x>'` form.
+		if (t.length >= 2) {
+			final first: String = t.charAt(0);
+			final last: String = t.charAt(t.length - 1);
+			if ((first == '"' && last == '"') || (first == "'" && last == "'")) return t.substring(1, t.length - 1);
+		}
+		// `//` is the canonical "comment or end" marker the parser
+		// emits when it ran out of brace-/Star-terminating options. No
+		// token to inject — return empty so the caller routes to
+		// NO TARGET.
+		return t == '//' || t == '<no message>' ? '' : t;
+	}
+
+	/**
+	 * `apq recon --candidates <regex>` — walk skip-parse fixtures and
+	 * count regex matches in each fixture's source. Reports one line per
+	 * file with ≥1 hit (`<path> :: N matches`) sorted by count desc, plus
+	 * a summary `--- candidates: K files matched (M total hits across N
+	 * skip-parse files) ---`.
+	 *
+	 * Use when the histogram's normalized forward-locus clusters can't
+	 * surface every fixture containing a construct of interest — the
+	 * regex sees the raw bytes, so multi-blocker fixtures whose locus
+	 * lives at a different shape are still found. Reuses the recon
+	 * walker (`collectReconSkipRecords`) so the file list matches every
+	 * other recon mode's view of the corpus exactly.
+	 *
+	 * Exit non-zero when 0 files matched (typo guard, mirrors
+	 * `strip --dry-run` / `recon --predict-strip` semantics).
+	 */
+	private static function runReconCandidates(plugin: GrammarPlugin, root: String, pattern: String): Int {
+		final re: EReg = try new EReg(pattern, 'g') catch (e: Exception) {
+			stderr('apq recon: --candidates: pattern "$pattern" is not a valid EReg: ${e.message}\n');
+			return EXIT_USAGE;
+		}
+		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: --candidates: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final hits: Array<{ path: String, count: Int }> = [];
+		var totalHits: Int = 0;
+		for (r in walk.records) {
+			final n: Int = countRegexHits(re, r.source);
+			if (!(n > 0)) continue;
+			hits.push({ path: r.path, count: n });
+			totalHits += n;
+		}
+		hits.sort((a, b) -> b.count - a.count);
+		for (h in hits) sysPrint('${h.path} :: ${h.count} match${h.count == 1 ? '' : 'es'}\n');
+		sysPrint(
+			'--- candidates: ${hits.length} file${plural(hits.length)} matched ($totalHits total hit${plural(totalHits)} across ${walk.records.length} skip-parse file${plural(walk.records.length)}) ---\n'
+		);
+		return hits.length == 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * `apq recon --permissive-construct` — field-optionalization
+	 * predictor for the `@:optional + @:lead + @:trail` relaxation mechanism.
+	 * Walks every `mandatory-ref-lead-trail` candidate surfaced by
+	 * `gates --mechanism mandatory-ref-lead-trail`, simulates the
+	 * relaxation by stripping the `<lead>...<trail>` bracket-pair from
+	 * each skip-parse fixture, and re-parses. Aggregates UNBLOCK /
+	 * STILL FAIL / NO MATCH counts per candidate field — gives the user
+	 * a static upper-bound view of which field-optionalization would
+	 * unblock which fixtures BEFORE editing the grammar.
+	 *
+	 * Strip semantics depend on the lead/trail shape:
+	 *  - Symmetric pair (`(`, `{`, `[` as lead with matching closer):
+	 *    delete the WHOLE `<lead>...<trail>` block, paren-depth balanced
+	 *    (nested same-pair allowed, strings/comments skipped).
+	 *  - Asymmetric (lead is `:` / `,` / `=` etc., trail is `)` / `}`):
+	 *    delete from `<lead>` UP TO (exclusive of) `<trail>`. The trail
+	 *    belongs to an enclosing construct and stays — models e.g.
+	 *    `catch (e:Type)` -> `catch (e)`.
+	 *
+	 * Multi-char macro/string leads (`${`, `"`, `'`) are filtered out at
+	 * candidate-collection time — they describe interpolation/string
+	 * delimiters that don't relax via the bracket-pair optionalization mechanism.
+	 *
+	 * Output: one block per candidate that has ≥1 UNBLOCK or STILL FAIL
+	 * (NO-MATCH-only candidates are summarized in the footer to keep the
+	 * useful signal visible).
+	 */
+	private static function runReconPermissive(plugin: GrammarPlugin, root: String, lang: String): Int {
+		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: --permissive-construct: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final records: Array<ReconRecord> = walk.records;
+		final candidates: Array<PermissiveCandidate> = collectPermissiveCandidates(plugin, lang);
+		if (candidates.length == 0) {
+			stderr(
+				'apq recon: --permissive-construct: no mandatory-ref-lead-trail candidates found in src/anyparse/grammar/$lang/ (cross-check with `apq gates --mechanism mandatory-ref-lead-trail`)\n'
+			);
+			return EXIT_RUNTIME;
+		}
+		sysPrint(
+			'=== permissive-construct: ${candidates.length} candidate${plural(candidates.length)} from gates --mechanism mandatory-ref-lead-trail, ${records.length} skip-parse fixture${plural(records.length)} ===\n'
+		);
+		var totalUnblocks: Int = 0;
+		var candidatesWithSignal: Int = 0;
+		final noSignalLabels: Array<String> = [];
+		for (cand in candidates) {
+			final unblocks: Array<String> = [];
+			final stillFails: Array<String> = [];
+			var noMatchCount: Int = 0;
+			for (r in records) {
+				final stripped: StripResult = stripBalancedPairs(r.source, cand.lead, cand.trail);
+				if (stripped.count == 0) {
+					noMatchCount++;
+					continue;
+				}
+				final ok: Bool = try plugin.reconParse(stripped.out) catch (exception: Exception) false;
+				if (ok)
+					unblocks.push(r.path);
+				else
+					stillFails.push(r.path);
+			}
+			final nameSuffix: String = cand.declName != null ? ' ${cand.declName}' : '';
+			final label: String = '${cand.file}:${cand.line}: ${cand.declKind}$nameSuffix @:lead(\'${cand.lead}\') @:trail(\'${cand.trail}\')';
+			if (unblocks.length == 0 && stillFails.length == 0) {
+				noSignalLabels.push('$label ($noMatchCount NO MATCH)');
+				continue;
+			}
+			candidatesWithSignal++;
+			totalUnblocks += unblocks.length;
+			sysPrint('\nCANDIDATE $label\n');
+			sysPrint('  ${unblocks.length} UNBLOCK / ${stillFails.length} STILL FAIL / $noMatchCount NO MATCH\n');
+			for (p in unblocks) sysPrint('    UNBLOCK: $p\n');
+			for (p in stillFails) sysPrint('    STILL FAIL: $p\n');
+		}
+		sysPrint(
+			'\n--- permissive-construct summary: $candidatesWithSignal of ${candidates.length} candidate${plural(candidates.length)} have ≥1 UNBLOCK or STILL FAIL ($totalUnblocks UNBLOCK${plural(totalUnblocks)} total) across ${records.length} skip-parse files ---\n'
+		);
+		if (noSignalLabels.length > 0) {
+			sysPrint('--- NO MATCH only (${noSignalLabels.length} candidate${plural(noSignalLabels.length)} with no fixture match) ---\n');
+			for (l in noSignalLabels) sysPrint('  $l\n');
+		}
+		return totalUnblocks == 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Enumerate `mandatory-ref-lead-trail` candidates by walking the
+	 * grammar tree (`src/anyparse/grammar/<lang>/`) the same way `apq
+	 * gates --mechanism mandatory-ref-lead-trail` does. Returns the lead
+	 * and trail tokens (not just the rendered metas string) so the
+	 * predictor's strip function can target the bracket-pair directly.
+	 *
+	 * Filters out macro/string-lead candidates (`${`, `$`, `'`, `"`) —
+	 * they describe interpolation/string delimiters whose `@:optional`
+	 * relaxation isn't the bracket-pair mechanism. Single-char leads only —
+	 * the strip function depth-tracker assumes one byte per lead/trail.
+	 */
+	private static function collectPermissiveCandidates(plugin: GrammarPlugin, lang: String): Array<PermissiveCandidate> {
+		final out: Array<PermissiveCandidate> = [];
+		final grammarDir: String = 'src/anyparse/grammar/$lang/';
+		if (!FileSystem.exists(grammarDir) || !FileSystem.isDirectory(grammarDir)) return out;
+		final expanded: { paths: Array<String>, singleFile: Bool } = expandInputs([grammarDir], '.hx');
+		final shape: MetaShape = plugin.metaShape();
+		final skipEntries: Array<SkipEntry> = [];
+		for (path in expanded.paths) {
+			final source: String = readSourceForParse(path);
+			final tree: Null<QueryNode> = parseWalked('recon', plugin.parseFile, path, source, false, skipEntries);
+			if (tree == null) continue;
+			final raw: Array<MetaHit> = Meta.find(tree, shape, source);
+			final grouped: { order: Array<Int>, groups: Map<Int, Array<MetaHit>> } = groupMetaHitsByDeclSpan(raw);
+			for (key in grouped.order) {
+				final metas: Null<Array<MetaHit>> = grouped.groups[key];
+				if (metas == null) continue;
+				final candidate: Null<PermissiveCandidate> = extractPermissiveCandidate(metas, source, path);
+				if (candidate != null) out.push(candidate);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Single-pass `<lead>...<trail>` strip on `source`. Symmetric leads
+	 * (`(`, `{`, `[`) consume the whole balanced pair; asymmetric leads
+	 * (`:`, `,`, `=` etc.) consume from lead UP TO the trail (the trail
+	 * char itself remains in output — it belongs to the enclosing
+	 * construct). String literals (single- or double-quoted) and
+	 * comments (line- or block-style) are skipped verbatim so a `:`
+	 * inside a string doesn't trigger a spurious strip.
+	 *
+	 * Returns the patched source plus a `count` of strip occurrences —
+	 * `count == 0` lets the caller distinguish NO MATCH (fixture lacks
+	 * the construct) from STILL FAIL (fixture has it but post-strip
+	 * parse still errors).
+	 */
+	private static function stripBalancedPairs(source: String, lead: String, trail: String): StripResult {
+		if (lead.length != 1 || trail.length != 1) return { out: source, count: 0 };
+		final leadCode: Int = StringTools.fastCodeAt(lead, 0);
+		final trailCode: Int = StringTools.fastCodeAt(trail, 0);
+		final isSymmetric: Bool = isBracketOpener(leadCode);
+		final buf: StringBuf = new StringBuf();
+		var i: Int = 0;
+		var count: Int = 0;
+		while (i < source.length) {
+			final triviaEnd: Int = skipStringOrComment(source, i);
+			if (triviaEnd > i) {
+				buf.addSub(source, i, triviaEnd - i);
+				i = triviaEnd;
+				continue;
+			}
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == leadCode) {
+				final endIdx: Int = findPairEnd(source, i + 1, leadCode, trailCode, isSymmetric);
+				if (endIdx >= 0) {
+					count++;
+					i = endIdx;
+					continue;
+				}
+			}
+			buf.addChar(c);
+			i++;
+		}
+		return { out: buf.toString(), count: count };
+	}
+
+	/**
+	 * Scan from `startIdx` looking for the matching trail. Returns the
+	 * index PAST the strip region (caller does `i = endIdx` to skip it):
+	 *  - Symmetric: returns index past the closing trail char (`<lead>...<trail>` consumed whole)
+	 *  - Asymmetric: returns index AT the trail char (trail stays in output)
+	 *
+	 * `-1` when no match found (mismatched / unterminated). The caller
+	 * keeps the lead char as-is in that case.
+	 */
+	private static function findPairEnd(source: String, startIdx: Int, leadCode: Int, trailCode: Int, isSymmetric: Bool): Int {
+		var i: Int = startIdx;
+		var depth: Int = isSymmetric ? 1 : 0;
+		while (i < source.length) {
+			final triviaEnd: Int = skipStringOrComment(source, i);
+			if (triviaEnd > i) {
+				i = triviaEnd;
+				continue;
+			}
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (isSymmetric) {
+				if (c == leadCode) {
+					depth++;
+					i++;
+					continue;
+				}
+				if (c == trailCode) {
+					depth--;
+					i++;
+					if (depth == 0) return i;
+					continue;
+				}
+			} else {
+				if (depth == 0 && c == trailCode) return i;
+				if (isBracketOpener(c)) {
+					depth++;
+					i++;
+					continue;
+				}
+				if (isBracketCloser(c)) {
+					if (depth == 0) return -1;
+					depth--;
+					i++;
+					continue;
+				}
+			}
+			i++;
+		}
+		return -1;
+	}
+
+	private static inline function isBracketOpener(c: Int): Bool {
+		return c == '('.code || c == '{'.code || c == '['.code;
+	}
+
+	private static inline function isBracketCloser(c: Int): Bool {
+		return c == ')'.code || c == '}'.code || c == ']'.code;
+	}
+
+	/**
+	 * If `source[i]` starts a string literal (single- or double-quoted)
+	 * or comment (line-style or block-style), return the index PAST it;
+	 * otherwise return `i`. Handles backslash escapes inside strings,
+	 * multi-line block comments. Used by the permissive-construct strip
+	 * to skip trivia bytes so a `:` inside `"foo:bar"` doesn't trigger a
+	 * spurious asymmetric pair-match.
+	 */
+	private static function skipStringOrComment(source: String, i: Int): Int {
+		if (i >= source.length) return i;
+		final c: Int = StringTools.fastCodeAt(source, i);
+		if (c == '/'.code && i + 1 < source.length) {
+			final c2: Int = StringTools.fastCodeAt(source, i + 1);
+			if (c2 == '/'.code) {
+				var j: Int = i + 2;
+				while (j < source.length && StringTools.fastCodeAt(source, j) != '\n'.code) j++;
+				return j;
+			}
+			if (c2 == '*'.code) {
+				var j: Int = i + 2;
+				while (j + 1 < source.length) {
+					if (StringTools.fastCodeAt(source, j) == '*'.code && StringTools.fastCodeAt(source, j + 1) == '/'.code) return j + 2;
+					j++;
+				}
+				return source.length;
+			}
+		}
+		if (c == '"'.code || c == "'".code) {
+			var j: Int = i + 1;
+			while (j < source.length) {
+				final cj: Int = StringTools.fastCodeAt(source, j);
+				if (cj == '\\'.code) {
+					j += 2;
+					continue;
+				}
+				if (cj == c) return j + 1;
+				j++;
+			}
+			return source.length;
+		}
+		return i;
+	}
+
+	/**
+	 * `apq recon --regression-probe` — load the prior sweep snapshot's
+	 * per-fixture status map (`bin/.last-sweep.json`'s `fixtures` array,
+	 * written by `HxFormatterCorpusTest.printSweepDelta`) and diff
+	 * against the current corpus's parse OK / SKIP_PARSE state.
+	 *
+	 * Surfaces every fixture whose parse status FLIPPED since the
+	 * snapshot:
+	 *   REGRESSED <path>: was PASS, now SKIP_PARSE :: line:col <locus>
+	 *   UNBLOCKED <path>: was SKIP_PARSE, now parses OK
+	 *
+	 * The probe only runs the trivia parser, NOT the writer — skip-write
+	 * / skip-config / malformed statuses are pre- or post-parse concerns
+	 * and stay orthogonal to grammar edits. PASS / FAIL / SKIP_WRITE in
+	 * the snapshot collapse to "parsed OK" for diff purposes (the writer
+	 * failed but the parser accepted the input).
+	 *
+	 * Exits 0 when no regressions found (unblocks alone are still
+	 * non-zero-friendly); non-zero exit when any REGRESSED line printed
+	 * — so a CI hook can fail the build before the user runs the full
+	 * sweep.
+	 */
+	private static function runReconRegressionProbe(plugin: GrammarPlugin, root: String): Int {
+		// Load the prior snapshot. Missing / unreadable / malformed JSON
+		// is a non-fatal "no baseline" — print a single info line and
+		// exit OK so a fresh checkout doesn't fail the probe.
+		final snapshotPath: String = 'bin/.last-sweep.json';
+		if (!FileSystem.exists(snapshotPath)) {
+			sysPrint(
+				'apq recon: no prior sweep snapshot at $snapshotPath — run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK first to seed the baseline\n'
+			);
+			return EXIT_OK;
+		}
+		final prior: Map<String, String> = loadSweepFixtureStatus(snapshotPath);
+		if (prior.iterator().hasNext() == false) {
+			sysPrint(
+				'apq recon: snapshot at $snapshotPath has no `fixtures` array — older format, re-run `node bin/test.js` to refresh the baseline\n'
+			);
+			return EXIT_OK;
+		}
+		final walk: ReconRegressionResult = walkReconRegression(plugin, root, prior);
+		if (walk.unwired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		sysPrint(
+			'--- regression-probe: ${walk.regressed} regressed, ${walk.unblocked} unblocked, ${walk.scanned} scanned vs snapshot ---\n'
+		);
+		return walk.regressed > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Read `bin/.last-sweep.json`'s `fixtures` array (written by
+	 * `HxFormatterCorpusTest.printSweepDelta`) into a `path → status`
+	 * map. Returns an empty map on any parse / shape failure so the
+	 * caller can fail-soft with a "no baseline" diagnostic instead of
+	 * crashing on a malformed snapshot.
+	 */
+	private static function loadSweepFixtureStatus(path: String): Map<String, String> {
+		final out: Map<String, String> = [];
+		try {
+			final raw: String = sys.io.File.getContent(path);
+			final obj: Dynamic = haxe.Json.parse(raw);
+			if (!Reflect.hasField(obj, 'fixtures')) return out;
+			final fixtures: Dynamic = Reflect.field(obj, 'fixtures');
+			if (!Std.isOfType(fixtures, Array)) return out;
+			final arr: Array<Dynamic> = (fixtures: Array<Dynamic>);
+			for (entry in arr) {
+				final entryPath: Null<Dynamic> = Reflect.field(entry, 'path');
+				final entryStatus: Null<Dynamic> = Reflect.field(entry, 'status');
+				if (!(entryPath != null && entryStatus != null && Std.isOfType(entryPath, String) && Std.isOfType(entryStatus, String)))
+					continue;
+				// Normalise snapshot path to match what
+				// `stripRootPrefix` emits for the recon walker. The
+				// corpus harness records paths as
+				// `test/testcases/<subdir>/<name>` (rooted at the fork);
+				// recon walks from `<fork>/test/testcases` so its
+				// stripped paths are `<subdir>/<name>`. Trim the leading
+				// `test/testcases/` here so the diff lookup is keyed
+				// the same way on both sides.
+				final raw: String = (entryPath: String);
+				final corpusPrefix: String = 'test/testcases/';
+				final normalised: String = StringTools.startsWith(raw, corpusPrefix) ? raw.substr(corpusPrefix.length) : raw;
+				out[normalised] = (entryStatus: String);
+			}
+		} catch (_: Exception) {
+			// best-effort: a scan failure leaves the partial status map
+		}
+		return out;
+	}
+
+	private static function runReconProbe(
+		plugin: GrammarPlugin, path: String, predictStrip: Bool, patterns: Array<String>, replacements: Array<String>,
+		compiledRegex: Null<Array<EReg>>, showSource: Bool, writerEqualsAfter: Bool = false, writerEqualsPlain: Bool = false,
+		?expectedPathOpt: String, lang: String = 'haxe'
+	): Int {
+		if (!FileSystem.exists(path)) {
+			stderr('apq recon: --probe path "$path" does not exist\n');
+			return EXIT_RUNTIME;
+		}
+		final original: String = readSourceForParse(path);
+		// `--predict-strip --probe <file>` — apply substitutions to the
+		// single probed file's source, then re-run the strict trivia parse
+		// against the result. Mirrors the sweep-mode predict tag set
+		// (`PREDICT UNBLOCK` / `PREDICT STILL FAIL` / `PREDICT NO MATCH`)
+		// so a single-file dry-run stays semantically aligned with the
+		// corpus walk. Per-pattern match totals are printed for the typo
+		// guard (a `--replace` pattern matching 0 occurrences is the
+		// canonical pre-edit signal of a typo or whitespace mismatch).
+		// Without `--predict-strip`, the legacy PARSE OK / PARSE FAIL
+		// output is byte-identical to before.
+		if (predictStrip) return runReconProbePredict(plugin, path, original, patterns, replacements, compiledRegex, showSource);
+		try {
+			if (!plugin.reconParse(original)) {
+				stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+				return EXIT_RUNTIME;
+			}
+			sysPrint('PARSE OK\n');
+			return writerEqualsAfter ? runProbeWriterCheck(plugin, path, original, writerEqualsPlain, expectedPathOpt, lang) : EXIT_OK;
+		} catch (exception: ParseError) {
+			final pos: Position = exception.span.lineCol(original);
+			final exp: String = reconNormalize(exception.expected);
+			final snip: String = reconNormalize(reconSnippet(original, exception.span.from));
+			sysPrint('PARSE FAIL :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"\n');
+			return EXIT_RUNTIME;
+		} catch (exception: Exception) {
+			sysPrint('PARSE FAIL :: <non-ParseError> ${reconNormalize(exception.message)}\n');
+			return EXIT_RUNTIME;
+		}
+	}
+
+	/**
+	 * ω-probe-writer-check: chain a writer round-trip + byte-equality check
+	 * onto a probe-mode PARSE OK. Reuses `runWriterEquals`'s machinery so
+	 * the byte-diff format stays identical to the corpus harness's fail
+	 * line. Closes the "predicted +1 via predict-strip, got skip→fail
+	 * because writer round-trip diverges" gap.
+	 *
+	 * Expected bytes resolution:
+	 *  - explicit `--expected <path>` always wins.
+	 *  - `.hxtest` input → section 3 (the fork's reference formatted output).
+	 *  - plain `.hx` → byte-identity round-trip (compare against source).
+	 *
+	 * Last case turns the call into a writer-idempotency check: parse the
+	 * source, write back, expect the same bytes. Useful for sanity-probing
+	 * a grammar edit's writer round-trip on hand-rolled scratch inputs
+	 * (`/tmp/probe.hx`) without typing the expected bytes twice.
+	 */
+	private static function runProbeWriterCheck(
+		plugin: GrammarPlugin, inputPath: String, source: String, plain: Bool, expectedPathOpt: Null<String>, lang: String
+	): Int {
+		// `.hxtest` expected sections drop one trailing `\n` via
+		// `stripPadNewlines` (the corpus harness adds `finalNewline=true`
+		// and trims back one `\n` from `actualRaw` to keep the compare
+		// symmetric). Mirror that here so a corpus-PASS fixture round-trips
+		// to `WRITER PASS` via the probe, not a spurious off-by-newline
+		// mismatch. Raw `.hx` inputs skip the strip — the user supplied
+		// expected bytes verbatim.
+		final hxtestMode: Bool = expectedPathOpt == null && StringTools.endsWith(inputPath, '.hxtest');
+		final expectedSource: String = if (expectedPathOpt != null) {
+			readExpectedForCompare((expectedPathOpt: String));
+		} else if (hxtestMode) {
+			readExpectedForCompare(inputPath);
+		} else {
+			source;
+		};
+		final optsJson: Null<String> = readWriteOptionsJsonOrNull(inputPath);
+		final emittedRaw: Null<String> = try (
+			plain ? plugin.writeRoundTripPlain(source, optsJson) : plugin.writeRoundTrip(source, optsJson)
+		) catch (e: ParseError) {
+			sysPrint('WRITER FAIL :: ${e.toString()}\n');
+			return EXIT_RUNTIME;
+		} catch (e: Exception) {
+			sysPrint('WRITER FAIL :: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		if (emittedRaw == null) {
+			final flagName: String = plain ? '--writer-equals-plain' : '--writer-equals';
+			stderr('apq recon: no writer wired up for lang "$lang" ($flagName)\n');
+			return EXIT_USAGE;
+		}
+		final emitted: String = (emittedRaw: String);
+		final emittedNormalised: String = hxtestMode && emitted.length > 0
+			&& StringTools.fastCodeAt(emitted, emitted.length - 1) == '\n'.code
+			? emitted.substr(0, emitted.length - 1)
+			: emitted;
+		if (emittedNormalised == expectedSource) {
+			sysPrint('WRITER PASS\n');
+			return EXIT_OK;
+		}
+		sysPrint('WRITER FAIL :: ${describeByteDiff(emittedNormalised, expectedSource)}\n');
+		return EXIT_RUNTIME;
+	}
+
+	private static function runReconProbePredict(
+		plugin: GrammarPlugin, path: String, original: String, patterns: Array<String>, replacements: Array<String>,
+		compiledRegex: Null<Array<EReg>>, showSource: Bool
+	): Int {
+		// Capture the original fail-locus first so STILL FAIL can report
+		// the moved-locus hint (same signal as sweep-mode predict-strip).
+		var origLine: Int = 0;
+		var origCol: Int = 0;
+		try {
+			plugin.reconParse(original);
+		} catch (pe: ParseError) {
+			final pos: Position = pe.span.lineCol(original);
+			origLine = pos.line;
+			origCol = pos.col;
+		} catch (_: Exception) {
+			// best-effort: keep default origLine/origCol if the span lookup fails
+		}
+		final regexMode: Bool = compiledRegex != null;
+		final regexes: Array<EReg> = compiledRegex ?? [];
+		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
+		var stripped: String = original;
+		var fileHits: Int = 0;
+		for (idx in 0...patterns.length) {
+			final hits: Int = regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, patterns[idx]);
+			patternHits[idx] = hits;
+			fileHits += hits;
+			stripped = regexMode
+				? regexes[idx].replace(stripped, replacements[idx])
+				: StringTools.replace(stripped, patterns[idx], replacements[idx]);
+		}
+		var exitCode: Int = EXIT_OK;
+		if (fileHits == 0) {
+			sysPrint('PREDICT NO MATCH  $path\n');
+		} else {
+			try {
+				if (!plugin.reconParse(stripped)) {
+					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+					return EXIT_RUNTIME;
+				}
+				sysPrint('PREDICT UNBLOCK   $path\n');
+			} catch (pe: ParseError) {
+				final pos: Position = pe.span.lineCol(stripped);
+				final movedHint: String = movedLocusHint(origLine, origCol, pos.line, pos.col);
+				sysPrint('PREDICT STILL FAIL $path :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				if (showSource) printReconSourceWindow(stripped, pos.line);
+				exitCode = EXIT_RUNTIME;
+			} catch (e: Exception) {
+				sysPrint('PREDICT STILL FAIL $path :: <no locus> ${e.message}\n');
+				exitCode = EXIT_RUNTIME;
+			}
+		}
+		// Per-pattern totals — same typo guard contract as sweep mode.
+		for (idx in 0...patterns.length) {
+			final pat: String = patterns[idx];
+			final total: Int = patternHits[idx];
+			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+		}
+		var anyZero: Bool = false;
+		for (h in patternHits) if (h == 0) anyZero = true;
+		if (anyZero) {
+			stderr('apq recon: --predict-strip --probe: WARNING: one or more patterns matched 0 occurrences — see per-pattern totals\n');
+			return EXIT_RUNTIME;
+		}
+		return exitCode;
+	}
+
+	private static function runReconSweep(
+		plugin: GrammarPlugin, root: String, topN: Int, clusterFilter: Null<String>, predictStrip: Bool, patterns: Array<String>,
+		replacements: Array<String>, compiledRegex: Null<Array<EReg>>, showSource: Bool
+	): Int {
+		final walk: ReconWalkResult = collectReconSkipRecords(plugin, root);
+		if (!walk.wired) {
+			stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+			return EXIT_RUNTIME;
+		}
+		final clusters: Map<String, ReconCluster> = walk.clusters;
+		final records: Array<ReconRecord> = walk.records;
+		// `--cluster <key>` filter: exact match against the normalised
+		// cluster key (the histogram label, with `\n`/`\t` escaped).
+		// Exact rather than substring because `}\n}` (canonical) would
+		// substring-match every Haxe file's `…}\n}` tail. 0-match exits
+		// non-zero; downstream output (SKIP / PREDICT / cluster drill)
+		// walks the filtered records and the single-cluster map.
+		var filteredRecords: Array<ReconRecord> = records;
+		var filteredClusters: Map<String, ReconCluster> = clusters;
+		if (clusterFilter != null) {
+			final wanted: String = (clusterFilter: String);
+			final hit: Null<ReconCluster> = clusters[wanted];
+			if (hit == null) {
+				stderr('apq recon: --cluster "$wanted" matched no cluster key (exact match).\n');
+				final keyEntries: Array<{ key: String, count: Int }> = [
+					for (k => v in clusters) { key: k, count: v.count }
+				];
+				keyEntries.sort((a, b) -> b.count - a.count);
+				final preview: Int = keyEntries.length > CLUSTER_PREVIEW_LIMIT ? CLUSTER_PREVIEW_LIMIT : keyEntries.length;
+				if (preview == 0) {
+					stderr('  (no skip-parse failures in this sweep)\n');
+				} else {
+					stderr('  available keys (${keyEntries.length} total, showing top $preview by frequency):\n');
+					for (idx in 0...preview) stderr('    "${keyEntries[idx].key}"  (${keyEntries[idx].count}×)\n');
+					if (keyEntries.length > preview)
+						stderr('    … (${keyEntries.length - preview} more — run without --cluster to see the full histogram)\n');
+				}
+				return EXIT_RUNTIME;
+			}
+			filteredClusters = [wanted => hit];
+			filteredRecords = [for (r in records) if (r.clusterKey == wanted) r];
+		}
+		if (predictStrip)
+			return runReconPredictStrip(filteredRecords, plugin, patterns, replacements, compiledRegex, clusterFilter, showSource);
+		for (r in filteredRecords) sysPrint('${r.skipLine}\n');
+		return clusterFilter != null
+			? printReconClusterDrill(filteredClusters, records.length, (clusterFilter: String), filteredRecords, showSource)
+			: printReconHistogram(clusters, records.length, topN);
+	}
+
+	/**
+	 * Corpus-walk extracted from `runReconSweep` so the same skip-parse
+	 * record list drives both the recon sweep (histogram / cluster drill
+	 * / predict-strip) and `strip --from-cluster` (apply substitutions
+	 * to every file in a named cluster). Recurses into subdirs, parses
+	 * each `.hxtest` via the plugin's trivia parser, and clusters
+	 * failures by normalised forward-locus. `wired == false` when the
+	 * plugin returns `false` from `reconParse` — surfaces the same
+	 * "no recon parser for lang X" error in both callers.
+	 */
+	private static function collectReconSkipRecords(plugin: GrammarPlugin, root: String): ReconWalkResult {
+		final clusters: Map<String, ReconCluster> = [];
+		final records: Array<ReconRecord> = [];
+		var wired: Bool = true;
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			final names: Array<String> = FileSystem.readDirectory(dir);
+			names.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (name in names) {
+				final path: String = '$dir/$name';
+				if (FileSystem.isDirectory(path)) {
+					stack.push(path);
+					continue;
+				}
+				if (!StringTools.endsWith(name, '.hxtest')) continue;
+				final source: String = readSourceForParse(path);
+				try {
+					if (!plugin.reconParse(source)) {
+						wired = false;
+						break;
+					}
+				} catch (exception: ParseError) {
+					final pos: Position = exception.span.lineCol(source);
+					final relPath: String = stripRootPrefix(path, root);
+					final exp: String = reconNormalize(exception.expected);
+					final snip: String = reconNormalize(reconSnippet(source, exception.span.from));
+					final rawLocus: String = reconRawLocus(source, exception.span.from);
+					final key: String = reconNormalizeLocus(rawLocus);
+					addReconCluster(clusters, key, relPath, rawLocus);
+					records.push({
+						path: relPath,
+						clusterKey: key,
+						source: source,
+						skipLine: 'SKIP $relPath :: ${pos.line}:${pos.col} expected="$exp" :: src="$snip"',
+						line: pos.line,
+						col: pos.col,
+					});
+				} catch (exception: Exception) {
+					final relPath: String = stripRootPrefix(path, root);
+					final key: String = '<non-ParseError> ' + reconNormalize(exception.message);
+					addReconCluster(clusters, key, relPath, '<exception>');
+					records.push({
+						path: relPath,
+						clusterKey: key,
+						source: source,
+						skipLine: 'SKIP $relPath :: $key',
+						line: 0,
+						col: 0,
+					});
+				}
+			}
+			if (!wired) break;
+		}
+		return { wired: wired, records: records, clusters: clusters };
+	}
+
+	private static function printReconHistogram(clusters: Map<String, ReconCluster>, total: Int, topN: Int): Int {
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [
+			for (k => v in clusters) { key: k, cluster: v }
+		];
+		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
+		final shown: Int = entries.length > topN ? topN : entries.length;
+		sysPrint('\n');
+		sysPrint('--- skip-parse construct-locus histogram (total $total, showing top $shown of ${entries.length}; --all overrides) ---\n');
+		for (idx in 0...shown) {
+			final entry = entries[idx];
+			final c: ReconCluster = entry.cluster;
+			final examplesStr: String = c.examples.length == 1 ? c.examples[0] : c.examples.join(', ');
+			final raw: String = reconNormalize(c.rawSample);
+			sysPrint('  ${c.count}× "${entry.key}"  e.g. "$raw"  in: $examplesStr\n');
+		}
+		if (entries.length > shown) sysPrint('  … (${entries.length - shown} more, use --top N or --all to see)\n');
+		return EXIT_OK;
+	}
+
+	/**
+	 * `--cluster <substr>` drill output: one block per matching
+	 * cluster with the FULL path list (not the histogram's capped
+	 * `examples` array). Sorted descending by cluster size; paths
+	 * sorted ascending so output is stable. Replaces the global
+	 * histogram in this mode.
+	 *
+	 * When `showSource` is true, each printed path is followed by a
+	 * fenced window of source bytes around the fail-locus
+	 * (`RECON_SOURCE_WINDOW_RADIUS` lines either side). Replaces the
+	 * manual Read-per-path step after `--cluster` drill.
+	 */
+	private static function printReconClusterDrill(
+		matches: Map<String, ReconCluster>, totalAcrossSweep: Int, needle: String, records: Array<ReconRecord>, showSource: Bool
+	): Int {
+		final entries: Array<{ key: String, cluster: ReconCluster }> = [
+			for (k => v in matches) { key: k, cluster: v }
+		];
+		entries.sort((a, b) -> b.cluster.count - a.cluster.count);
+		var matched: Int = 0;
+		for (e in entries) matched += e.cluster.count;
+		// Map path → record so the windowed source / locus lookup stays
+		// O(1) per path even in clusters with hundreds of fixtures.
+		// Built once for the drill block regardless of `showSource`
+		// (cost is negligible vs the walk itself).
+		final byPath: Map<String, ReconRecord> = [for (r in records) r.path => r];
+		sysPrint('\n');
+		sysPrint(
+			'--- cluster drill for "$needle" (${entries.length} cluster${plural(entries.length)}, $matched of $totalAcrossSweep skip-parse paths) ---\n'
+		);
+		for (entry in entries) {
+			final c: ReconCluster = entry.cluster;
+			sysPrint('  cluster "${entry.key}" — ${c.count} path${plural(c.count)}:\n');
+			final sorted: Array<String> = c.paths.copy();
+			sorted.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+			for (p in sorted) {
+				if (!showSource) {
+					sysPrint('    $p\n');
+					continue;
+				}
+				final rec: Null<ReconRecord> = byPath[p];
+				if (rec == null) {
+					sysPrint('    $p   <no record>\n');
+					continue;
+				}
+				if (rec.line <= 0) {
+					sysPrint('    $p   <no locus>\n');
+					continue;
+				}
+				sysPrint('    $p at ${rec.line}:${rec.col}\n');
+				printReconSourceWindow(rec.source, rec.line);
+			}
+		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * Emit a windowed source slice centred on `failLine` (1-indexed) to
+	 * stdout, with a `>>` marker on the fail row and right-aligned line
+	 * numbers. Window radius is `RECON_SOURCE_WINDOW_RADIUS` either
+	 * side; lines past EOF are silently clipped so a fail near the top
+	 * or bottom prints as much context as is available.
+	 */
+	private static function printReconSourceWindow(source: String, failLine: Int): Void {
+		final lines: Array<String> = source.split('\n');
+		final radius: Int = RECON_SOURCE_WINDOW_RADIUS;
+		final start: Int = failLine - radius < 1 ? 1 : failLine - radius;
+		final end: Int = failLine + radius > lines.length ? lines.length : failLine + radius;
+		sysPrint('      --- src window (L±$radius) ---\n');
+		// Compute the gutter width from `end` so all rows line up; e.g.
+		// a 3-digit end-line gives a 3-char gutter.
+		final gutter: Int = ('$end').length;
+		for (ln in start ... end + 1) {
+			final marker: String = ln == failLine ? '>>' : '  ';
+			final num: String = padLeft('$ln', gutter);
+			final body: String = lines[ln - 1];
+			sysPrint('      $marker$num | $body\n');
+		}
+		sysPrint('      --- end ---\n');
+	}
+
+	private static inline function padLeft(s: String, width: Int): String {
+		var out: String = s;
+		while (out.length < width) out = ' ' + out;
+		return out;
+	}
+
+	/**
+	 * Render the predict-strip "moved locus" suffix. Three regimes:
+	 *  - Same locus → empty (no hint needed).
+	 *  - NEW > ORIG (line strictly greater, or same line + col strictly
+	 *    greater) → ` (was L:C, advanced)` — strip uncovered a downstream
+	 *    blocker; the substitution's effect was forward, so the residual
+	 *    fail is a real second blocker.
+	 *  - NEW < ORIG (line less, or same line + col less) → ` (was L:C,
+	 *    moved BACKWARD — strip may have damaged earlier syntax, or your
+	 *    substitution model doesn't match the actual blocker mechanism;
+	 *    verify with `apq probe` on the unstripped fragment)` — the
+	 *    common failure mode where token substitution
+	 *    can't model gate-relaxation.
+	 *  - Same line, col differs → ` (was L:C)` — neutral; the strip
+	 *    shifted things within one line, usually inconsequential.
+	 *
+	 * `origLine == 0` means the original error had no locus (rare —
+	 * `<no locus>` already printed instead); guard returns empty.
+	 */
+	private static inline function movedLocusHint(origLine: Int, origCol: Int, newLine: Int, newCol: Int): String {
+		if (origLine <= 0) return '';
+		if (newLine == origLine && newCol == origCol) return '';
+		final forward: Bool = newLine > origLine || (newLine == origLine && newCol > origCol);
+		final backward: Bool = newLine < origLine || (newLine == origLine && newCol < origCol);
+		return forward && newLine != origLine
+			? ' (was $origLine:$origCol, advanced)'
+			: backward
+				? ' (was $origLine:$origCol, moved BACKWARD — strip may have damaged earlier syntax or modelled the wrong mechanism; verify with `apq probe`)'
+				: ' (was $origLine:$origCol)';
+	}
+
+	/**
+	 * `--predict-strip` output: for each skip-parse record, apply the
+	 * supplied --replace / --with / --delete substitutions to the
+	 * extracted source and re-run the plugin's trivia parser.
+	 *
+	 * Per-file tag:
+	 *  - `PREDICT UNBLOCK` — substitution changed the source AND the
+	 *    re-parse now succeeds; the grammar/strip-test change being
+	 *    modelled would unblock this fixture.
+	 *  - `PREDICT STILL FAIL` — substitution changed the source but
+	 *    re-parse still fails (different blocker survives downstream).
+	 *  - `PREDICT NO MATCH` — substitution patterns matched 0 times;
+	 *    the fixture is unaffected by the proposed change. Typo
+	 *    signal when this fires across the WHOLE sweep.
+	 *
+	 * Summary line at the end: total / unblock / still-fail / no-match
+	 * counts. Exits non-zero only if ALL patterns matched 0 occurrences
+	 * across the whole filtered set (mirror of `strip --dry-run`'s
+	 * pattern-typo guard).
+	 */
+	private static function runReconPredictStrip(
+		records: Array<ReconRecord>, plugin: GrammarPlugin, patterns: Array<String>, replacements: Array<String>,
+		compiledRegex: Null<Array<EReg>>, clusterFilter: Null<String>, showSource: Bool
+	): Int {
+		final regexMode: Bool = compiledRegex != null;
+		final regexes: Array<EReg> = compiledRegex ?? [];
+		var unblockCount: Int = 0;
+		var stillFailCount: Int = 0;
+		var noMatchCount: Int = 0;
+		final patternHits: Array<Int> = [for (_ in 0...patterns.length) 0];
+		for (r in records) {
+			var stripped: String = r.source;
+			var fileHits: Int = 0;
+			for (idx in 0...patterns.length) {
+				final hits: Int = regexMode ? countRegexHits(regexes[idx], stripped) : countOccurrences(stripped, patterns[idx]);
+				patternHits[idx] += hits;
+				fileHits += hits;
+				stripped = regexMode
+					? regexes[idx].replace(stripped, replacements[idx])
+					: StringTools.replace(stripped, patterns[idx], replacements[idx]);
+			}
+			if (fileHits == 0) {
+				sysPrint('PREDICT NO MATCH  ${r.path}\n');
+				noMatchCount++;
+				continue;
+			}
+			try {
+				if (!plugin.reconParse(stripped)) {
+					stderr('apq recon: no recon parser wired up for this grammar plugin\n');
+					return EXIT_RUNTIME;
+				}
+				sysPrint('PREDICT UNBLOCK   ${r.path}\n');
+				unblockCount++;
+			} catch (pe: ParseError) {
+				// New locus after substitution. When it differs from the
+				// pre-strip locus the strip likely moved the problem (e.g.
+				// pattern matched a decl AND a use position), which is the
+				// common false-negative trap on slice candidates. Surface
+				// the new line:col + message so the reader sees the move at
+				// a glance instead of opening the stripped source to diff
+				// the locus by hand. With `--source`, also emit a windowed
+				// src slice around the new locus — replaces the manual
+				// Read of the stripped source when the moved-locus hint
+				// alone is ambiguous.
+				final pos: Position = pe.span.lineCol(stripped);
+				final movedHint: String = movedLocusHint(r.line, r.col, pos.line, pos.col);
+				sysPrint('PREDICT STILL FAIL ${r.path} :: ${pos.line}:${pos.col}${movedHint} ${pe.message}\n');
+				if (showSource) printReconSourceWindow(stripped, pos.line);
+				stillFailCount++;
+			} catch (e: Exception) {
+				sysPrint('PREDICT STILL FAIL ${r.path} :: <no locus> ${e.message}\n');
+				stillFailCount++;
+			}
+		}
+		sysPrint('\n');
+		final scope: String = clusterFilter == null ? 'whole sweep' : 'cluster "$clusterFilter"';
+		sysPrint('--- predict-strip ($scope): ${records.length} skip-parse file${plural(records.length)}; ');
+		sysPrint('$unblockCount would unblock, $stillFailCount still fail, $noMatchCount unchanged ---\n');
+		for (idx in 0...patterns.length) {
+			final pat: String = patterns[idx];
+			final total: Int = patternHits[idx];
+			sysPrint('  pattern[$idx] "$pat" — $total match${total == 1 ? '' : 'es'}\n');
+		}
+		// Mirror `strip --dry-run`: every supplied pattern matching 0
+		// across the whole filtered set is a typo signal worth surfacing
+		// non-zero. A pattern matching SOMEWHERE but not everywhere is
+		// expected behaviour for a targeted predicate; only the global
+		// 0 case is the guard.
+		var anyZero: Bool = false;
+		for (h in patternHits) if (h == 0) anyZero = true;
+		if (anyZero) {
+			stderr(
+				'apq recon: --predict-strip: WARNING: one or more patterns matched 0 occurrences anywhere in the filtered set — see per-pattern totals\n'
+			);
+			return EXIT_RUNTIME;
+		}
+		return EXIT_OK;
+	}
+
+	private static function defaultReconRoot(): String {
+		final fork: Null<String> = resolveForkPath();
+		if (fork == null || fork.length == 0) return '';
+		final candidate: String = '$fork/test/testcases';
+		final resolved: String = FileSystem.exists(candidate) && FileSystem.isDirectory(candidate) ? candidate : fork;
+		// Write-cache: persist the env-supplied path to
+		// `~/.config/anyparse/fork_path` so the next `apq recon` works
+		// WITHOUT re-exporting the env var. Env always wins; the cache
+		// is consulted only by `resolveForkPath` when env is unset.
+		// `tryWriteForkPathCache` short-circuits when the on-disk value
+		// already matches, so steady-state writes are no-ops.
+		#if (sys || nodejs)
+		final envFork: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		if (envFork != null && envFork.length > 0) tryWriteForkPathCache(envFork);
+		#end
+		return resolved;
+	}
+
+	/**
+	 * Resolve the haxe-formatter fork path with env > config-cache
+	 * precedence. The env var IS the canonical source — the cache
+	 * exists only to spare the user from re-exporting it on every
+	 * session. A cached path that no longer points at a directory is
+	 * dropped silently (a stale config should never block a `recon` run
+	 * — the user gets the same `env var is unset` usage error as before).
+	 */
+	private static function resolveForkPath(): Null<String> {
+		final env: Null<String> = Sys.getEnv('ANYPARSE_HXFORMAT_FORK');
+		if (env != null && env.length > 0) return env;
+		#if (sys || nodejs)
+		final cached: Null<String> = readForkPathCache();
+		if (cached != null && cached.length > 0 && FileSystem.exists(cached) && FileSystem.isDirectory(cached)) return cached;
+		#end
+		return null;
+	}
+
+	/**
+	 * Emit a stderr nudge when any `.hx` file under `src/` or `test/` is
+	 * newer than `bin/test.js` — the next `node bin/test.js` will run
+	 * STALE bytes and a 0-delta sweep / clean test-summary can lie. Drives
+	 * the documented `[[feedback-rebuild-test-js-after-macro-edit]]`
+	 * trap: `bin/apq.js` auto-rebuilds (the hxq shim handles it) but
+	 * `bin/test.js` is a separate build artefact whose staleness has no
+	 * gate elsewhere in the workflow.
+	 *
+	 * Silent on `#if !sys`, on missing `bin/test.js` (caller will hit a
+	 * clean error from the missing binary), or when nothing under src/
+	 * or test/ is newer. Best-effort: a FileSystem failure short-circuits
+	 * without raising — the user always gets the requested totals.
+	 */
+	private static function warnIfTestJsStale(cmd: String): Void {
+		#if (sys || nodejs)
+		final binPath: String = 'bin/test.js';
+		if (!FileSystem.exists(binPath)) return;
+		try {
+			final binTime: Float = FileSystem.stat(binPath).mtime.getTime();
+			if (anyHxNewerThan('src', binTime) || anyHxNewerThan('test', binTime)) {
+				stderr(
+					'apq $cmd: WARNING: src/ or test/ is newer than bin/test.js — re-run `haxe test-js.hxml && node bin/test.js` before trusting these totals\n'
+				);
+			}
+		} catch (_: Exception) {
+			// best-effort: skip the staleness advisory on any FS error
+		}
+		#end
+	}
+
+	private static function anyHxNewerThan(root: String, threshold: Float): Bool {
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) return false;
+		final stack: Array<String> = [root];
+		while (stack.length > 0) {
+			final dir: Null<String> = stack.pop();
+			if (dir == null) break;
+			try {
+				for (name in FileSystem.readDirectory(dir)) {
+					final path: String = '$dir/$name';
+					if (FileSystem.isDirectory(path)) {
+						stack.push(path);
+						continue;
+					}
+					if (!StringTools.endsWith(name, '.hx')) continue;
+					if (FileSystem.stat(path).mtime.getTime() > threshold) return true;
+				}
+			} catch (_: Exception) {
+				// best-effort: a stat failure falls through to return false
+			}
+		}
+		return false;
+	}
+
+	private static function forkPathCacheFile(): Null<String> {
+		final home: Null<String> = Sys.getEnv('HOME');
+		return home == null || home.length == 0 ? null : '$home/.config/anyparse/fork_path';
+	}
+
+	private static function readForkPathCache(): Null<String> {
+		final path: Null<String> = forkPathCacheFile();
+		if (path == null || !FileSystem.exists(path)) return null;
+		try {
+			final raw: String = sys.io.File.getContent(path);
+			final trimmed: String = StringTools.trim(raw);
+			return trimmed.length > 0 ? trimmed : null;
+		} catch (_: Exception) {
+			return null;
+		}
+	}
+
+	private static function tryWriteForkPathCache(value: String): Void {
+		final path: Null<String> = forkPathCacheFile();
+		if (path == null) return;
+		// Skip write when the cache already matches — avoids a useless
+		// disk hit on every recon invocation under the same env.
+		try {
+			if (FileSystem.exists(path)) {
+				final existing: String = StringTools.trim(sys.io.File.getContent(path));
+				if (existing == value) return;
+			}
+		} catch (_: Exception) {
+			// best-effort: an unreadable existing file just proceeds to (over)write
+		}
+		try {
+			final dir: String = haxe.io.Path.directory(path);
+			if (dir.length > 0 && !FileSystem.exists(dir)) FileSystem.createDirectory(dir);
+			sys.io.File.saveContent(path, value);
+		} catch (_: Exception) {
+			// Best-effort cache write — never block recon on a write
+			// failure (read-only HOME, disk full, permission). The env
+			// path stays valid for the current run.
+		}
+	}
+
+	private static function stripRootPrefix(path: String, root: String): String {
+		return StringTools.startsWith(path, root + '/') ? path.substr(root.length + 1) : path == root ? '.' : path;
+	}
+
+	private static function addReconCluster(map: Map<String, ReconCluster>, key: String, file: String, rawLocus: String): Void {
+		final prev: Null<ReconCluster> = map[key];
+		if (prev == null) {
+			map[key] = {
+				count: 1,
+				examples: [file],
+				paths: [file],
+				rawSample: rawLocus
+			};
+		} else {
+			prev.count++;
+			prev.paths.push(file);
+			if (prev.examples.length < RECON_EXAMPLES_PER_CLUSTER) prev.examples.push(file);
+		}
+	}
+
+	/**
+	 * Raw forward locus — `RECON_LOCUS_LEN` chars starting AT the fail
+	 * position. Used both as the cluster's raw sample (display) and as
+	 * input to the normaliser (cluster key).
+	 */
+	private static function reconRawLocus(input: String, offset: Int): String {
+		final start: Int = offset > input.length ? input.length : offset;
+		final end: Int = start + RECON_LOCUS_LEN > input.length ? input.length : start + RECON_LOCUS_LEN;
+		return input.substring(start, end);
+	}
+
+	/**
+	 * Normalise the forward locus into a cluster key — identifier runs
+	 * of length > 4 collapse to `_`, shorter runs (Haxe short keywords
+	 * `var`, `is`, `as`, `in`, `for`, `try`, `new`, `if`, `else`,
+	 * `case`, etc.) are kept verbatim so they remain visible in the
+	 * histogram. Punctuation, operators and whitespace pass through.
+	 * `reconNormalize` then escapes whitespace for one-line display.
+	 */
+	private static function reconNormalizeLocus(raw: String): String {
+		final buf: StringBuf = new StringBuf();
+		var i: Int = 0;
+		while (i < raw.length) {
+			final c: Int = StringTools.fastCodeAt(raw, i);
+			final isIdStart: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
+			if (isIdStart) {
+				var j: Int = i + 1;
+				while (j < raw.length) {
+					final cj: Int = StringTools.fastCodeAt(raw, j);
+					final isIdCont: Bool = (cj >= 'a'.code && cj <= 'z'.code) || (cj >= 'A'.code && cj <= 'Z'.code)
+						|| (cj >= '0'.code && cj <= '9'.code) || cj == '_'.code;
+					if (!isIdCont) break;
+					j++;
+				}
+				final identLen: Int = j - i;
+				if (identLen > 4) // noqa: magic-number
+					buf.add('_');
+				else
+					for (k in i ... j) buf.addChar(StringTools.fastCodeAt(raw, k));
+				i = j;
+			} else {
+				buf.addChar(c);
+				i++;
+			}
+		}
+		return reconNormalize(buf.toString());
+	}
+
+	/**
+	 * Source window of `RECON_HEAD_LEN` characters centred on `offset`
+	 * — the text around the farthest-failure locus, for the human-
+	 * readable SKIP line. Whitespace is escaped by `reconNormalize`.
+	 */
+	private static function reconSnippet(input: String, offset: Int): String {
+		final half: Int = Std.int(RECON_HEAD_LEN / 2);
+		final centre: Int = offset > input.length ? input.length : offset;
+		final start: Int = centre - half < 0 ? 0 : centre - half;
+		final end: Int = centre + half > input.length ? input.length : centre + half;
+		return input.substring(start, end);
+	}
+
+	private static function reconNormalize(message: Null<String>): String {
+		return message == null || message == ''
+			? '<no message>'
+			: StringTools.replace(StringTools.replace(message, '\n', '\\n'), '\t', '\\t');
+	}
+
+	/**
+	 * `apq sweep` — read-only view on the corpus harness's
+	 * `bin/.last-sweep.json` snapshot. Prints totals (+ Δ vs a prior
+	 * snapshot if `--prev <path>` is given) without re-running the
+	 * corpus. THE no-corpus-rerun lookup for "what does the last sweep
+	 * say" — closes the manual `cat bin/.last-sweep.json | grep` +
+	 * `tail /tmp/sweep.log | grep ===== sweep totals` dance.
+	 *
+	 * Default path is `bin/.last-sweep.json` (matches the corpus
+	 * harness's `SWEEP_JSON_PATH` constant). `--file <path>` overrides
+	 * — useful for sanity-checking an alternate snapshot. Exit 0 when
+	 * the file is read; exit 1 when it doesn't exist or is unparseable.
+	 */
+	private static function runSweep(args: Array<String>): Int {
+		var filePath: String = 'bin/.last-sweep.json';
+		var prevPath: Null<String> = null;
+		var diffPath: Null<String> = null;
+		// `--save <path>`: discoverable shorthand for "copy the current
+		// snapshot to <path> so I can `--prev` / `--diff` against it
+		// after the next sweep". Replaces the manual
+		// `cp bin/.last-sweep.json /tmp/prev.json` step that's easy to
+		// forget before a grammar slice. Performs the copy AFTER the
+		// totals print so the user still sees the snapshot's contents.
+		var savePath: Null<String> = null;
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--file':
+					filePath = expectValue(args, ++i, '--file');
+				case '--prev':
+					prevPath = expectValue(args, ++i, '--prev');
+				case '--diff':
+					// Allow bare `--diff` (no arg) → default to
+					// `bin/.prev-sweep.json` (auto-rotated by the corpus
+					// harness before every sweep write). The next-token
+					// check follows expectValue's contract: a `--`-prefixed
+					// token is a flag, not a value.
+					diffPath = i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')
+						? expectValue(args, ++i, '--diff')
+						: 'bin/.prev-sweep.json';
+				case '--save':
+					savePath = expectValue(args, ++i, '--save');
+				case '--lang':
+					// hxq shim auto-injects --lang haxe; harmless here (sweep
+					// reads a JSON snapshot, no grammar plugin needed). Accept
+					// + consume the value to keep shim invariance.
+					expectValue(args, ++i, '--lang');
+				case '-h', '--help':
+					printSweepUsage();
+					return EXIT_OK;
+				case _:
+					stderr('apq sweep: unknown option "$a"\n');
+					printSweepUsage();
+					return EXIT_USAGE;
+			}
+			i++;
+		}
+		final cur: Null<SweepTotals> = loadSweepJson(filePath);
+		if (cur == null) {
+			stderr('apq sweep: cannot read $filePath (missing or unparseable)\n');
+			return EXIT_RUNTIME;
+		}
+		warnIfTestJsStale('sweep');
+		final total: Int = cur.pass + cur.fail + cur.skipParse + cur.skipWrite + cur.skipConfig + cur.skipMalformed;
+		sysPrint(
+			'${cur.pass} pass / ${cur.fail} fail / ${cur.skipParse} skip-parse / ${cur.skipWrite} skip-write / ${cur.skipConfig} skip-config / ${cur.skipMalformed} malformed (total $total)\n'
+		);
+		if (prevPath != null) {
+			final prev: Null<SweepTotals> = loadSweepJson(prevPath);
+			if (prev == null) {
+				stderr('apq sweep: cannot read --prev $prevPath\n');
+				return EXIT_RUNTIME;
+			}
+			sysPrint(
+				'  Δpass ${sweepSigned(cur.pass - prev.pass)} / Δfail ${sweepSigned(cur.fail - prev.fail)} / Δskip-parse ${sweepSigned(cur.skipParse - prev.skipParse)}  vs $prevPath (${prev.pass} / ${prev.fail} / ${prev.skipParse})\n'
+			);
+		}
+		if (savePath != null) {
+			try {
+				final raw: String = sys.io.File.getContent(filePath);
+				sys.io.File.saveContent((savePath: String), raw);
+				sysPrint('apq sweep: saved snapshot $filePath -> $savePath\n');
+			} catch (e: Exception) {
+				stderr('apq sweep: --save failed: ${e.message}\n');
+				return EXIT_RUNTIME;
+			}
+		}
+		return diffPath != null ? runSweepDiff(filePath, diffPath) : EXIT_OK;
+	}
+
+	/**
+	 * Per-fixture status diff between two sweep snapshots. THE answer to
+	 * "which fixtures flipped between these two runs" — replaces the
+	 * ad-hoc python3 reads against `bin/.last-sweep.json`'s `fixtures`
+	 * array. Composes with `--prev` (totals delta is printed first, then
+	 * the per-fixture rows; the two are orthogonal).
+	 *
+	 * Output shape: one line per changed path, plus a transition-count
+	 * breakdown summary. Sorted by path for deterministic output.
+	 */
+	private static function runSweepDiff(curPath: String, prevPath: String): Int {
+		final cur: Map<String, String> = loadSweepFixtureStatus(curPath);
+		final prev: Map<String, String> = loadSweepFixtureStatus(prevPath);
+		if (!cur.iterator().hasNext()) {
+			stderr(
+				'apq sweep: --diff: $curPath has no `fixtures` array — re-run `node bin/test.js` under $$ANYPARSE_HXFORMAT_FORK to seed it\n'
+			);
+			return EXIT_RUNTIME;
+		}
+		if (!prev.iterator().hasNext()) {
+			stderr('apq sweep: --diff: $prevPath has no `fixtures` array\n');
+			return EXIT_RUNTIME;
+		}
+		final allPaths: Map<String, Bool> = [];
+		for (k in cur.keys()) allPaths[k] = true;
+		for (k in prev.keys()) allPaths[k] = true;
+		final sorted: Array<String> = [for (k in allPaths.keys()) k];
+		sorted.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		final transitions: Map<String, Int> = [];
+		var changed: Int = 0;
+		for (path in sorted) {
+			final ps: Null<String> = prev[path];
+			final cs: Null<String> = cur[path];
+			if (ps == cs) continue;
+			changed++;
+			final key: String = if (ps == null)
+				'ADDED($cs)'
+			else if (cs == null)
+				'REMOVED($ps)'
+			else
+				'$ps->$cs';
+			transitions[key] = (transitions[key] ?? 0) + 1;
+			if (ps == null)
+				sysPrint('ADDED $path (now $cs)\n');
+			else if (cs == null)
+				sysPrint('REMOVED $path (was $ps)\n');
+			else
+				sysPrint('$ps -> $cs: $path\n');
+		}
+		final breakdown: Array<String> = [for (k => v in transitions) '$k: $v'];
+		breakdown.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
+		if (changed == 0)
+			sysPrint('--- sweep --diff: 0 fixtures changed (snapshots identical) ---\n');
+		else
+			sysPrint('--- sweep --diff: $changed fixtures changed (${breakdown.join(', ')}) ---\n');
+		return EXIT_OK;
+	}
+
+	private static function loadSweepJson(path: String): Null<SweepTotals> {
+		return !sys.FileSystem.exists(path)
+			? null
+			: try {
+				final raw: String = sys.io.File.getContent(path);
+				final obj: Dynamic = haxe.Json.parse(raw);
+				final pass: Null<Int> = Reflect.hasField(obj, 'pass') ? Reflect.field(obj, 'pass') : null;
+				final fail: Null<Int> = Reflect.hasField(obj, 'fail') ? Reflect.field(obj, 'fail') : null;
+				final skipParse: Null<Int> = Reflect.hasField(obj, 'skipParse') ? Reflect.field(obj, 'skipParse') : null;
+				final skipWrite: Null<Int> = Reflect.hasField(obj, 'skipWrite') ? Reflect.field(obj, 'skipWrite') : null;
+				final skipConfig: Null<Int> = Reflect.hasField(obj, 'skipConfig') ? Reflect.field(obj, 'skipConfig') : null;
+				final skipMalformed: Null<Int> = Reflect.hasField(obj, 'skipMalformed') ? Reflect.field(obj, 'skipMalformed') : null;
+				if (pass == null || fail == null || skipParse == null) return null;
+				{
+					pass: pass,
+					fail: fail,
+					skipParse: skipParse,
+					skipWrite: skipWrite ?? 0,
+					skipConfig: skipConfig ?? 0,
+					skipMalformed: skipMalformed ?? 0,
+				};
+			} catch (_: Exception) null;
+	}
+
+	private static inline function sweepSigned(n: Int): String return n > 0 ? '+$n' : '$n';
+
+	private static function printSweepUsage(): Void {
+		sysPrint('Usage: apq sweep [--file <path>] [--prev <path>] [--diff <path>] [--save <path>]\n');
+		sysPrint('\n');
+		sysPrint('Read the corpus harness sweep snapshot (`bin/.last-sweep.json` by\n');
+		sysPrint('default) and print totals + optional delta vs a prior snapshot.\n');
+		sysPrint('No corpus rerun — only reads JSON.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --file <path>   Snapshot file (default: bin/.last-sweep.json)\n');
+		sysPrint('  --prev <path>   Compare against another snapshot, print Δ triple\n');
+		sysPrint('  --diff <path>   Per-fixture status diff vs another snapshot (PASS->FAIL,\n');
+		sysPrint('                  FAIL->PASS, ADDED/REMOVED entries). Composes with --prev.\n');
+		sysPrint('                  Auto-default: `bin/.prev-sweep.json` (the corpus harness\n');
+		sysPrint('                  auto-rotates this before each sweep write), no path needed.\n');
+		sysPrint('  --save <path>   Copy the current snapshot to <path>. Use before a grammar\n');
+		sysPrint('                  slice to capture a baseline for `--prev` / `--diff` later.\n');
+		sysPrint('  -h, --help      Show this help\n');
+	}
+
+	/**
+	 * `apq test-summary [<file>]` — parse a utest stdout transcript and
+	 * print `N tests / M assertions / F failures / E errors`. Replaces
+	 * the manual `grep -cE ': OK' /tmp/test.out` + assertion-count
+	 * one-liner I keep rebuilding after every test run.
+	 *
+	 * Source resolution: positional path (file), `-` (stdin), or default
+	 * `/tmp/test.out` when run with no positional and the file exists.
+	 * Always exits 0 on a successful parse, 1 on read failure — the test
+	 * outcome is informational (the test runner's exit code is the
+	 * authoritative pass/fail signal).
+	 *
+	 * Parse rules (utest 1.13.x format, what `node bin/test.js` emits):
+	 *  - `  testName: OK <dots>` — one line per test; trailing dots are
+	 *    one per assertion.
+	 *  - `  testName: FAIL` / `  testName: ERROR` — failure / error
+	 *    counters; case-insensitive substring match on the suffix.
+	 */
+	private static function runTestSummary(args: Array<String>): Int {
+		var sourcePath: Null<String> = null;
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '-h', '--help':
+					printTestSummaryUsage();
+					return EXIT_OK;
+				case '--lang':
+					// Shim invariance — apq test-summary doesn't use a plugin.
+					expectValue(args, ++i, '--lang');
+				case _:
+					if (sourcePath != null) {
+						stderr('apq test-summary: only one positional source supported (got "$sourcePath" and "$a")\n');
+						return EXIT_USAGE;
+					}
+					sourcePath = a;
+			}
+			i++;
+		}
+		final raw: String = try {
+			switch (sourcePath) {
+				case null: {
+					if (sys.FileSystem.exists('/tmp/test.out'))
+						sys.io.File.getContent('/tmp/test.out');
+					else {
+						stderr('apq test-summary: no source given and /tmp/test.out missing — pass <path> or `-` for stdin\n');
+						return EXIT_USAGE;
+					}
+				}
+				case '-': {
+					readStdin();
+				}
+				case _: {
+					sys.io.File.getContent((sourcePath: String));
+				}
+			}
+		} catch (e: Exception) {
+			stderr('apq test-summary: read failed: ${e.message}\n');
+			return EXIT_RUNTIME;
+		}
+		final result: TestSummaryResult = parseTestSummary(raw);
+		final src: String = sourcePath ?? '/tmp/test.out';
+		warnIfTestJsStale('test-summary');
+		sysPrint(
+			'${result.tests} tests / ${result.assertions} assertions / ${result.failures} failures / ${result.errors} errors  ($src)\n'
+		);
+		final ff: Null<TestSummaryFailureLocus> = result.firstFailure;
+		if (ff != null) {
+			final classQual: String = ff.className.length > 0 ? '${ff.className}.' : '';
+			final lineFrag: String = ff.line >= 0 ? '  line:${ff.line}' : '';
+			final msgFrag: String = ff.message.length > 0 ? '  ${ff.message}' : '';
+			final label: String = ff.kind == TestSummaryFailureKind.Error ? 'error' : 'failure';
+			sysPrint('first $label: $classQual${ff.testName}$lineFrag$msgFrag\n');
+		}
+		return EXIT_OK;
+	}
+
+	/**
+	 * `apq self-status [<dir>]` — walk `<dir>` recursively (default `src/`),
+	 * try every `.hx` file via the grammar plugin's trivia parser, print
+	 * one `SKIP <path> :: LINE:COL <message>` line per failure plus a
+	 * footer `--- self-status: M parseable, N skip-parse (total T) ---`.
+	 *
+	 * Solves the dogfooding gap where `hxq` walkers silently skip
+	 * unparseable files: the user finds out a file is unparseable only by
+	 * grepping warnings emitted by `lit` / `refs` / `uses` etc., one at a
+	 * time. `self-status` surfaces the full skip-parse set in one call.
+	 *
+	 * Exit code is 0 even when files skip-parse — this is a status report,
+	 * not a check. `--strict` flips to non-zero on any skip-parse so CI
+	 * wiring can guard against regressions.
+	 */
+	private static function runSelfStatus(args: Array<String>): Int {
+		final opts: SelfStatusOpts = parseSelfStatusArgs(args);
+		if (opts.errExit != null) return opts.errExit;
+		final root: String = opts.rootDir ?? 'src';
+		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
+			stderr('apq self-status: "$root" is not a directory.\n');
+			return EXIT_RUNTIME;
+		}
+		final plugin: GrammarPlugin = pickPlugin(opts.lang);
+		final walk: SelfStatusWalk = walkSelfStatus(plugin, root, opts.showSource);
+		walk.skipLines.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
+		for (line in walk.skipLines) sysPrint('$line\n');
+		final total: Int = walk.parseable + walk.skipParse;
+		sysPrint('--- self-status: ${walk.parseable} parseable, ${walk.skipParse} skip-parse (total $total) ---\n');
+		return (opts.strict && walk.skipParse > 0) ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	private static function printSelfStatusUsage(): Void {
+		sysPrint('apq self-status [<dir>] [--strict] [--source]\n');
+		sysPrint('\n');
+		sysPrint('Walks <dir> recursively (default `src/`) and prints which `.hx` files\n');
+		sysPrint('the grammar plugin cannot parse. Each failure shows as:\n');
+		sysPrint('  SKIP <path> :: LINE:COL expected="<X>"\n');
+		sysPrint('\n');
+		sysPrint('With --source the SKIP line gains a `:: src="<window>"` tail showing\n');
+		sysPrint('the bytes around the fail-locus (same format as `recon --probe`).\n');
+		sysPrint('\n');
+		sysPrint('Closes the dogfood gap: hxq walkers silently skip unparseable files;\n');
+		sysPrint('self-status surfaces the full set in one call.\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --strict       Exit non-zero when any file skip-parses (CI guard).\n');
+		sysPrint('  --source       Append windowed source around each fail-locus.\n');
+		sysPrint('  --lang <name>  Grammar plugin (default `haxe`).\n');
+		sysPrint('  -h, --help     Show this help.\n');
+	}
+
+	/**
+	 * `apq source <file> [--range SPEC] [--number]` — emit a file's RAW
+	 * verbatim lines with NO AST parse, so it works on ANY file (parseable
+	 * or skip-parse). Default output is unprefixed lines — directly usable
+	 * for anchoring an Edit — replacing the `git show … > /tmp/.txt` /
+	 * `node readFileSync` dance (the Read tool fabricates `.hx` past the
+	 * first lines; cat/sed/grep are gated; this hxq subcommand is allowed).
+	 *
+	 * `--range SPEC` is 1-based inclusive: `L` (single line), `L:L2`
+	 * (range), `L:` (L to EOF), `:L2` (start to L2). Out-of-range bounds
+	 * clamp to the file (friendly, no crash). `--number` / `-n` switches to
+	 * `cat -n`-style `<lineno>\t<line>` output for navigation.
+	 */
+	private static function runSource(args: Array<String>): Int {
+		final opts: SourceOpts = parseSourceArgs(args);
+		if (opts.errExit != null) return opts.errExit;
+
+		final file: Null<String> = opts.file;
+		if (file == null) {
+			stderr('apq source: missing <file> argument\n');
+			printSourceUsage();
+			return EXIT_USAGE;
+		}
+		final modes: Int = (opts.range != null ? 1 : 0) + (opts.selectExpr != null ? 1 : 0) + (opts.atSpec != null ? 1 : 0);
+		if (modes > 1) {
+			stderr('apq source: --range, --select and --at are mutually exclusive — pick one\n');
+			return EXIT_USAGE;
+		}
+		final path: String = file;
+		if (!FileSystem.exists(path)) {
+			stderr('apq source: no such file "$path"\n');
+			return EXIT_RUNTIME;
+		}
+		if (FileSystem.isDirectory(path)) {
+			stderr('apq source: "$path" is a directory (source views one file)\n');
+			return EXIT_RUNTIME;
+		}
+
+		final content: String = readFile(path);
+		// Split on `\n` so a trailing newline does not synthesise a spurious
+		// empty final line — the standard "lines = N+1 splits, last empty"
+		// is dropped to keep line numbers aligned with an editor's view.
+		final lines: Array<String> = content.split('\n');
+		if (lines.length > 0 && lines[lines.length - 1] == '') lines.pop();
+
+		// `--select` / `--at` resolve a NODE's span to its line range (these
+		// parse the file — unlike the raw, parse-free `--range` / whole-file
+		// path, which still works on a skip-parse file).
+		final bounds: Null<{ from: Int, to: Int }> = if (opts.selectExpr != null || opts.atSpec != null)
+			resolveNodeLineBounds(path, content, opts.lang, opts.selectExpr, opts.atSpec);
+		else
+			parseRangeSpec(opts.range, lines.length);
+		if (bounds == null) {
+			if (opts.selectExpr != null || opts.atSpec != null) return EXIT_RUNTIME;
+			stderr('apq source: bad --range "${opts.range}" (use L, L:L2, L:, or :L2 — 1-based)\n');
+			return EXIT_USAGE;
+		}
+
+		emitSourceLines(lines, bounds.from, bounds.to, opts.number, opts.raw);
+		return EXIT_OK;
+	}
+
+	/**
+	 * Parse a `source --range` spec into a 1-based inclusive `{from, to}`
+	 * line pair, clamped to `[1, lineCount]`. Forms: `null`/`""` → whole
+	 * file; `L` → single line; `L:L2` → range; `L:` → L to EOF; `:L2` →
+	 * start to L2. Returns `null` on a malformed spec (non-int part, or an
+	 * inverted range after clamping). An empty file (`lineCount == 0`)
+	 * yields an empty `{1, 0}` range so the caller prints nothing.
+	 */
+	private static function parseRangeSpec(spec: Null<String>, lineCount: Int): Null<{ from: Int, to: Int }> {
+		if (lineCount == 0) return { from: 1, to: 0 };
+		if (spec == null || spec.length == 0) return { from: 1, to: lineCount };
+		final colon: Int = spec.indexOf(':');
+		if (colon < 0) {
+			final single: Null<Int> = Std.parseInt(spec);
+			if (single == null) return null;
+			final clamped: Int = clampLine(single, lineCount);
+			return { from: clamped, to: clamped };
+		}
+		final loStr: String = spec.substring(0, colon);
+		final hiStr: String = spec.substring(colon + 1);
+		final lo: Null<Int> = loStr.length == 0 ? 1 : Std.parseInt(loStr);
+		final hi: Null<Int> = hiStr.length == 0 ? lineCount : Std.parseInt(hiStr);
+		if (lo == null || hi == null) return null;
+		final from: Int = clampLine(lo, lineCount);
+		final to: Int = clampLine(hi, lineCount);
+		return from > to ? null : { from: from, to: to };
+	}
+
+	/** Clamp a 1-based line number into `[1, lineCount]`. */
+	private static inline function clampLine(n: Int, lineCount: Int): Int {
+		return n < 1 ? 1 : (n > lineCount ? lineCount : n);
+	}
+
+	private static function printSourceUsage(): Void {
+		sysPrint('Usage: apq source [options] <file>\n');
+		sysPrint('\n');
+		sysPrint('Options:\n');
+		sysPrint('  --range <spec>     1-based inclusive lines: L | L:L2 | L: | :L2 (default: whole file)\n');
+		sysPrint('  --select <sel>     Source of the node matching <sel> (apq ast selector,\n');
+		sysPrint("                     e.g. 'FnMember:foo' / 'ClassDecl:Bar') — must match exactly one\n");
+		sysPrint('  --at <line>:<col>  Source of the innermost node at the 1-based position\n');
+		sysPrint('  --number, -n       Prefix each line with `<lineno>\\t` (cat -n style)\n');
+		sysPrint('  --raw              Keep bytes verbatim — no dedent (for Edit-anchoring / real columns)\n');
+		sysPrint('  --lang <name>      Grammar plugin for --select / --at (default: haxe)\n');
+		sysPrint('  -h, --help         Show this help\n');
+		sysPrint('\n');
+		sysPrint('Emits RAW lines of <file>. The default / `--range` path does NO parse and\n');
+		sysPrint('works on any file (parseable or skip-parse). `--select` / `--at` parse the\n');
+		sysPrint('file and print the full lines spanning the matched node — the clean way to\n');
+		sysPrint("read ONE function by name (no line numbers, no S-expr): apq source f.hx --select 'FnMember:foo'.\n");
+		sysPrint('\n');
+		sysPrint('By default the common leading indentation shared by the shown lines is\n');
+		sysPrint('stripped (dedent) so nested slices read cleanly; pass `--raw` to keep exact\n');
+		sysPrint('bytes — needed when the output anchors an Edit or you need true column\n');
+		sysPrint('positions. The gate-blessed replacement for `git show` / `readFileSync`.\n');
+	}
+
+	private static function tryCaptureDetail(locus: TestSummaryFailureLocus, line: String, full: EReg, lineOnly: EReg, bare: EReg): Bool {
+		// Disambiguate bare detail from regular test rows: a fail/err line
+		// fits `bare` too (`^\s+\S.*`). The fail/err regexes already
+		// consumed those, so we additionally require the bare branch to
+		// NOT look like an indented test row (contain `: OK|FAIL|ERR`).
+		if (full.match(line)) {
+			locus.line = parsePositiveInt(full.matched(2));
+			locus.message = StringTools.trim(full.matched(3)); // noqa: magic-number
+			return true;
+		}
+		if (lineOnly.match(line)) {
+			locus.line = parsePositiveInt(lineOnly.matched(1));
+			locus.message = StringTools.trim(lineOnly.matched(2));
+			return true;
+		}
+		if (bare.match(line) && !~/:\s+(OK|FAIL|ERR)/.match(line)) {
+			locus.message = StringTools.trim(bare.matched(1));
+			return true;
+		}
+		return false;
+	}
+
+	private static inline function parsePositiveInt(s: String): Int {
+		final v: Null<Int> = Std.parseInt(s);
+		return v ?? -1;
+	}
+
+	private static function printTestSummaryUsage(): Void {
+		sysPrint('Usage: apq test-summary [<file> | -]\n');
+		sysPrint('\n');
+		sysPrint('Parse a utest stdout transcript and report tests / assertions / failures /\n');
+		sysPrint('errors. Source resolution:\n');
+		sysPrint('  <file>     — read from the given path\n');
+		sysPrint('  -          — read from stdin (heredoc / pipe / process subst.)\n');
+		sysPrint('  (default)  — `/tmp/test.out` if it exists, else usage error\n');
+		sysPrint('\n');
+		sysPrint('Parses lines of shape `  testName: OK <dots>` / `: FAIL` / `: ERROR`.\n');
+		sysPrint('Dot count after `OK` is the assertion count (one dot per assert).\n');
+		sysPrint('When any FAIL / ERROR is present, appends a second line with the first\n');
+		sysPrint('failure\'s locus: `first failure: ClassName.testName  line:N  <message>`\n');
+		sysPrint('(class header / line / message included when utest emitted them).\n');
+		sysPrint('Always exits 0 on a successful parse — the test runner\'s exit code is\n');
+		sysPrint('the authoritative pass/fail signal.\n');
+	}
+	#end
 
 }
 

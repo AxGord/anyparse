@@ -37,6 +37,7 @@ class ApqDxTier4CliTest extends Test {
 	#if sys
 	private static var counter: Int = 0;
 	#end
+
 	// --- 1. ast --count ---
 
 	public function testAstCountOnModuleRoot(): Void {
@@ -204,6 +205,7 @@ class ApqDxTier4CliTest extends Test {
 		FileSystem.createDirectory(dir);
 		return dir;
 	}
+
 	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
 	}

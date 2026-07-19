@@ -23,12 +23,6 @@ class GlobExpandTest extends Test {
 	private static var counter: Int = 0;
 
 	private var _root: Null<String> = null;
-
-	public function teardown(): Void {
-		final root: Null<String> = _root;
-		if (root != null && FileSystem.exists(root)) CliFixture.removeDir(root);
-		_root = null;
-	}
 	#end
 
 	public function testSingleStarWithinSegment(): Void {
@@ -114,6 +108,12 @@ class GlobExpandTest extends Test {
 	}
 
 	#if sys
+	public function teardown(): Void {
+		final root: Null<String> = _root;
+		if (root != null && FileSystem.exists(root)) CliFixture.removeDir(root);
+		_root = null;
+	}
+
 	private function makeTree(): String {
 		counter++;
 		final root: String = '${haxe.io.Path.normalize(Sys.getCwd())}/tmp_glob_${Sys.time()}_$counter';

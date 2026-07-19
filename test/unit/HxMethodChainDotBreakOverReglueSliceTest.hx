@@ -22,7 +22,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
-
 	private static final CONFIG_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"comprehensionFor": "fitLine"}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
 
 	public function new(): Void {
@@ -48,7 +47,6 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tservice.request({\n\t\t\talpha: alphaValue,\n\t\t\tbeta: betaValue\n\t\t}).success(response -> {\n\t\t\thideMask();\n\t\t\tapply(response);\n\t\t}).error(response -> {\n\t\t\thideMask();\n\t\t\treport(response);\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
-
 
 	/**
 	 * ω-methodchain-reeval-after-callparam self-rescue tier: the last

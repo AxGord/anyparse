@@ -485,7 +485,6 @@ class ApqRefsTest extends Test {
 		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');
 	}
 
-
 	private static function findIn(source: String, name: String): Array<RefHit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(source);

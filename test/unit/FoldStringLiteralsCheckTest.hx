@@ -110,7 +110,6 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals('"ab"', foldOf(src));
 	}
 
-
 	private function violations(src: String): Array<Violation> {
 		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

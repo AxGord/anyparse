@@ -141,7 +141,6 @@ class ClustersTest extends Test {
 		Assert.isTrue(text.indexOf('-> hubs: log ×2') != -1);
 	}
 
-
 	/**
 	 * Members linked only by a method-value reference stay together under
 	 * the default kinds and separate when narrowed to plain calls.
@@ -159,7 +158,6 @@ class ClustersTest extends Test {
 		Assert.equals('A.b', ids(callOnly.components[1]));
 	}
 
-
 	/**
 	 * A hub that also calls back into a component shows up as `fromHub` —
 	 * the dispatcher-mis-bucketed-as-utility smell.
@@ -176,7 +174,6 @@ class ClustersTest extends Test {
 		Assert.equals(1, second.fromHub);
 	}
 
-
 	/**
 	 * An explicit --hubs larger than the qualifying pool: fan-in-0 members
 	 * never become hubs; ordering is fan-in desc with id tie-break.
@@ -189,11 +186,9 @@ class ClustersTest extends Test {
 		Assert.equals(2, r.components.length);
 	}
 
-
 	private function analyzeOf(sources: Array<String>, typeName: String, ?hubCount: Int, ?kinds: Array<EdgeKind>): Null<ClusterReport> {
 		return Clusters.analyze(QueryTestHelpers.graphOf(sources), typeName, hubCount, kinds);
 	}
-
 
 	private function ids(component: Array<FnNode>): String {
 		return [for (n in component) n.id].join(',');

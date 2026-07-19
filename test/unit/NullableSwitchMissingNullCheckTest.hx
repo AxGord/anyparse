@@ -172,7 +172,6 @@ class NullableSwitchMissingNullCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(x:Null<Int>):Void { switch x { case _: trace(0);').length);
 	}
 
-
 	public function testAssertIsTrueNonNullNotFlagged(): Void {
 		// `Assert.isTrue(x != null)` narrows the switch subject non-null before the switch (feature 1).
 		Assert.equals(
@@ -208,7 +207,6 @@ class NullableSwitchMissingNullCheckTest extends Test {
 			).length
 		);
 	}
-
 
 	private function violations(source: String): Array<Violation> {
 		return new NullableSwitchMissingNull().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin());

@@ -22,9 +22,7 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxObjectLitArrowBodyPadSliceTest extends Test {
 
 	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
-
 	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
-
 	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
 
 	public function new(): Void {
@@ -72,7 +70,6 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		Assert.equals(src, triviaWrite(src));
 	}
 
-
 	public function testInfixLeftOperandLeafDropsOpenPad(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal flags = users.filter(u -> {alpha: u.a }.alpha > 0);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
@@ -110,7 +107,6 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> { alpha: u.a, beta: u.b });\n\t}\n}';
 		Assert.equals(expected, triviaWriteReflow(src));
 	}
-
 
 	public function testArrowBodyMultilineSourceKeptWithoutReflowKnob(): Void {
 		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';

@@ -22,7 +22,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxIfExprCondWrapSliceTest extends Test {
 
 	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine", "expressionIf": "next"}}';
-
 	private static final EXPLODED: String = 'class C {\n\tfunction f() {\n\t\trunWith((alphaArg:AlphaType, betaArg:BetaType) -> if (\n\t\t\tfoundId == -1 && (excludeId == -1 || betaArg.id != excludeId)\n\t\t\t&& (betaArg.title == nameNoExt || alphaArg.file + alphaArg.ext == fileName)\n\t\t) {\n\t\t\tfoundId = betaArg.id;\n\t\t});\n\t}\n}';
 
 	public function new(): Void {

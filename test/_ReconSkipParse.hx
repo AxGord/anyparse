@@ -35,7 +35,6 @@ typedef ReconCluster = {
 final class _ReconSkipParse { // noqa: naming
 
 	private static final forceBuildParser: Class<HaxeModuleTriviaParser> = HaxeModuleTriviaParser;
-
 	private static final SUBDIRS: Array<String> = [
 		'sameline', 'whitespace', 'indentation',        'wrapping', 'emptylines',
 		'lineends',      'other', 'formatrange', 'expressionlevel',    'missing',

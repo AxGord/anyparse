@@ -253,16 +253,13 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, edits.length);
 	}
 
-
 	private function one(source: String): Array<Violation> {
 		return violations([{ file: 'C.hx', source: source }]);
 	}
 
-
 	private function violations(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return new UnusedPrivate().run(files, new HaxeQueryPlugin());
 	}
-
 
 	private function fixEdits(source: String): Array<{ span: Span, text: String }> {
 		final check: UnusedPrivate = new UnusedPrivate();

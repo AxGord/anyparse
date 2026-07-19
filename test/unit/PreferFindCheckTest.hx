@@ -118,7 +118,6 @@ class PreferFindCheckTest extends Test {
 		Assert.isTrue(out.indexOf('return xs.find(x -> node.fmtHasFlag(x));') != -1);
 	}
 
-
 	public function testFixNonNullFallbackCoalesces(): Void {
 		final out: String = fixResult(file('for (x in xs) if (x > 2) return x;\n\t\treturn 0;', 'Int', true));
 		Assert.isTrue(out.indexOf('return xs.find(x -> x > 2) ?? 0;') != -1);
@@ -203,7 +202,6 @@ class PreferFindCheckTest extends Test {
 		Assert.isTrue(out.indexOf('for (') != -1);
 		Assert.isTrue(out.indexOf('// keep me') != -1);
 	}
-
 
 	private function fn(body: String, ret: String): String {
 		return 'class C {\n\tfunction f(xs:Array<Int>, m:Map<String, Int>):' + ret + ' {\n\t\t' + body + '\n\t}\n}';

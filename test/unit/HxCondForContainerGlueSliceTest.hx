@@ -24,7 +24,6 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 final class HxCondForContainerGlueSliceTest extends Test {
 
 	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"forBody": "fitLine"}}';
-
 	private static final GLUED: String = 'class C {\n\tfunction f() {\n\t\tfor (item in [\n\t\t\tfirstLongItemNameValue,\n\t\t\tsecondLongItemNameValue,\n\t\t\tthirdLongItemNameValue,\n\t\t\tfourthLongItemNameV\n\t\t]) {\n\t\t\tdoWork(item);\n\t\t}\n\t}\n}';
 
 	public function new(): Void {
@@ -56,7 +55,6 @@ final class HxCondForContainerGlueSliceTest extends Test {
 		opts.finalNewline = false;
 		Assert.equals(opened, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(flat), opts));
 	}
-
 
 	private inline function triviaWrite(src: String): String {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(CONFIG);

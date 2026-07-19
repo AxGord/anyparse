@@ -31,6 +31,7 @@ class ApqReconCliTest extends Test {
 	#if sys
 	private static var counter: Int = 0;
 	#end
+
 	public function testReconHelpExitsClean(): Void {
 		Assert.equals(0, Cli.run(['recon', '--help']), 'apq recon --help is a clean exit');
 	}
@@ -787,12 +788,15 @@ class ApqReconCliTest extends Test {
 		FileSystem.createDirectory(dir);
 		return dir;
 	}
+
 	private static inline function stripTrailingSlash(p: String): String {
 		return StringTools.endsWith(p, '/') ? p.substring(0, p.length - 1) : p;
 	}
+
 	private static inline function goodHxtest(): String {
 		return '{}\n---\n\nclass C { var x:Int = 0; }\n\n---\n\nclass C {\n\tvar x:Int = 0;\n}\n';
 	}
+
 	private static inline function brokenHxtest(): String {
 		// Trailing colon with no type — trivia parser must reject.
 		return '{}\n---\n\nclass C { var x:\n\n---\n\nclass C {\n\tvar x:Int;\n}\n';

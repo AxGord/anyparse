@@ -102,23 +102,19 @@ class PreferNullCoalescingCheckTest extends Test {
 		Assert.equals(1, violations(src).length);
 	}
 
-
 	public function testIdentFallbackUnderNullSafetyStillFlagged(): Void {
 		// Bare-identifier operands (no field access) are not inference-fragile — still converts.
 		final src: String = '@:nullSafety class C {\n\tfunction f(a:Null<String>, b:Null<String>):Void {\n\t\tvar v = a != null ? a : b;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
-
 	private function wrap(expr: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\tvar x = ' + expr + ';\n\t}\n}';
 	}
 
-
 	private function violations(src: String): Array<Violation> {
 		return new PreferNullCoalescing().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
-
 
 	private function fixText(src: String): String {
 		final check: PreferNullCoalescing = new PreferNullCoalescing();

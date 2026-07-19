@@ -259,7 +259,6 @@ class UnguardedNullableDerefTest extends Test {
 		);
 	}
 
-
 	// --- Relational assert narrowing (feature 1): Assert.isTrue(u != null) / Assert.isFalse(u == null) ---
 
 	public function testAssertIsTrueBareNarrowsNotFlagged(): Void {
@@ -348,7 +347,6 @@ class UnguardedNullableDerefTest extends Test {
 			).length
 		);
 	}
-
 
 	private function violations(src: String): Array<Violation> {
 		return new UnguardedNullableDeref().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());

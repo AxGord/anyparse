@@ -32,6 +32,7 @@ using StringTools;
 class NewFileSliceTest extends Test {
 
 	private static inline final IFACE: String = 'package p;\nimport a.B;\ntypedef T = { var v: Int; }\ninterface I {\n\tpublic function f(x: T): B;\n\tpublic function g(): Void;\n}\n';
+
 	#if (sys || nodejs)
 	private static var counter: Int = 0;
 	#end
@@ -141,48 +142,6 @@ class NewFileSliceTest extends Test {
 		final text: String = okText(create({ className: 'Root', pkg: '', fields: ['public final n: Int = 1;'] }));
 		Assert.isFalse(text.contains('package'));
 	}
-
-	#if (sys || nodejs)
-	/** Create-only: an existing path is refused (`EXIT_RUNTIME`) and left untouched. */
-	public function testCreateOnlyRefusesExisting(): Void {
-		final dir: String = tmpDir();
-		final p: String = '$dir/Existing.hx';
-		File.saveContent(p, 'package;\nclass Existing {}\n');
-		Assert.equals(1, Cli.run(['new', p, '--class']));
-		Assert.equals('package;\nclass Existing {}\n', File.getContent(p));
-		CliFixture.removeDir(dir);
-	}
-	/** `--write` with a disk-resolved sibling interface produces the file. */
-	public function testWriteResolvesSiblingInterface(): Void {
-		final dir: String = tmpDir();
-		File.saveContent('$dir/Iface.hx', 'package;\ninterface Iface {\n\tpublic function go(): Int;\n}\n');
-		final p: String = '$dir/Impl.hx';
-		Assert.equals(0, Cli.run(['new', p, '--implements', 'Iface', '--bodies', '@@ go\nreturn 1;', '--write']));
-		Assert.isTrue(FileSystem.exists(p));
-		final text: String = File.getContent(p);
-		Assert.isTrue(text.contains('implements Iface'));
-		Assert.isTrue(text.contains('public function go():Int'));
-		Assert.isTrue(text.contains('return 1;'));
-		CliFixture.removeDir(dir);
-	}
-	/** An interface that cannot be located on disk is an error. */
-	public function testMissingInterfaceIsError(): Void {
-		final dir: String = tmpDir();
-		final p: String = '$dir/Impl.hx';
-		Assert.equals(1, Cli.run(['new', p, '--implements', 'Nope']));
-		Assert.isFalse(FileSystem.exists(p));
-		CliFixture.removeDir(dir);
-	}
-	/** `--kind class` with no other shape flag creates an empty class (regression: it was rejected as "no intent" — only `--class` worked). */
-	public function testCliKindClassEmpty(): Void {
-		final dir: String = tmpDir();
-		final p: String = '$dir/Empty.hx';
-		Assert.equals(0, Cli.run(['new', p, '--kind', 'class', '--write']));
-		Assert.isTrue(FileSystem.exists(p));
-		Assert.isTrue(File.getContent(p).contains('class Empty'));
-		CliFixture.removeDir(dir);
-	}
-	#end
 
 	/** A created class is instantiable — a no-arg constructor is auto-emitted. */
 	public function testEmitsConstructor(): Void {
@@ -414,6 +373,49 @@ class NewFileSliceTest extends Test {
 	}
 
 	#if (sys || nodejs)
+	/** Create-only: an existing path is refused (`EXIT_RUNTIME`) and left untouched. */
+	public function testCreateOnlyRefusesExisting(): Void {
+		final dir: String = tmpDir();
+		final p: String = '$dir/Existing.hx';
+		File.saveContent(p, 'package;\nclass Existing {}\n');
+		Assert.equals(1, Cli.run(['new', p, '--class']));
+		Assert.equals('package;\nclass Existing {}\n', File.getContent(p));
+		CliFixture.removeDir(dir);
+	}
+
+	/** `--write` with a disk-resolved sibling interface produces the file. */
+	public function testWriteResolvesSiblingInterface(): Void {
+		final dir: String = tmpDir();
+		File.saveContent('$dir/Iface.hx', 'package;\ninterface Iface {\n\tpublic function go(): Int;\n}\n');
+		final p: String = '$dir/Impl.hx';
+		Assert.equals(0, Cli.run(['new', p, '--implements', 'Iface', '--bodies', '@@ go\nreturn 1;', '--write']));
+		Assert.isTrue(FileSystem.exists(p));
+		final text: String = File.getContent(p);
+		Assert.isTrue(text.contains('implements Iface'));
+		Assert.isTrue(text.contains('public function go():Int'));
+		Assert.isTrue(text.contains('return 1;'));
+		CliFixture.removeDir(dir);
+	}
+
+	/** An interface that cannot be located on disk is an error. */
+	public function testMissingInterfaceIsError(): Void {
+		final dir: String = tmpDir();
+		final p: String = '$dir/Impl.hx';
+		Assert.equals(1, Cli.run(['new', p, '--implements', 'Nope']));
+		Assert.isFalse(FileSystem.exists(p));
+		CliFixture.removeDir(dir);
+	}
+
+	/** `--kind class` with no other shape flag creates an empty class (regression: it was rejected as "no intent" — only `--class` worked). */
+	public function testCliKindClassEmpty(): Void {
+		final dir: String = tmpDir();
+		final p: String = '$dir/Empty.hx';
+		Assert.equals(0, Cli.run(['new', p, '--kind', 'class', '--write']));
+		Assert.isTrue(FileSystem.exists(p));
+		Assert.isTrue(File.getContent(p).contains('class Empty'));
+		CliFixture.removeDir(dir);
+	}
+
 	private static function tmpDir(): String {
 		counter++;
 		final env: Null<String> = Sys.getEnv('TMPDIR');
