@@ -104,16 +104,6 @@ class TrivialGetterCheckTest extends Test {
 		);
 	}
 
-	public function testCustomSetterNotFlagged(): Void {
-		Assert.equals(
-			0,
-			violations(
-				cls(
-					'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool return _active = v;'
-				)
-			).length
-		);
-	}
 
 	public function testDefaultNullNotFlagged(): Void {
 		Assert.equals(0, violations(cls('public var active(default, null):Bool = false;')).length);
@@ -326,6 +316,99 @@ class TrivialGetterCheckTest extends Test {
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		return { check: check, vs: vs };
+	}
+
+
+	public function testShapeATrivialGetterRealSetterFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+			)
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove get_active',
+			vs[0].message
+		);
+	}
+
+	public function testShapeAFixToDefaultSet(): Void {
+		final fixed: String = fixedText(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+			)
+		);
+		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('= false') >= 0);
+		Assert.isTrue(fixed.indexOf('return active = v') >= 0);
+		Assert.isTrue(fixed.indexOf('get_active') == -1);
+		Assert.isTrue(fixed.indexOf('private var _active') == -1);
+	}
+
+	public function testShapeAExternalWriteNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				cls(
+					'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+				)
+			).length
+		);
+	}
+
+	public function testShapeACtorInitMoveFlagged(): Void {
+		final src: String = 'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
+		Assert.equals(1, new TrivialGetter().run([{ file: 'LicenseButton.hx', source: src }], new HaxeQueryPlugin()).length);
+	}
+
+	public function testShapeACtorInitMoveFix(): Void {
+		final src: String = 'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('disabled(default, set):Bool = false') >= 0);
+		Assert.isTrue(fixed.indexOf('return disabled;') >= 0);
+		Assert.isTrue(fixed.indexOf('disabled = v') >= 0);
+		Assert.isTrue(fixed.indexOf('get_disabled') == -1);
+		Assert.isTrue(fixed.indexOf('private var _disabled') == -1);
+		Assert.isTrue(fixed.indexOf('_disabled = false') == -1);
+	}
+
+	public function testShapeACtorInitNotMovableNotFlagged(): Void {
+		final src: String = 'class C {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\ttrace(_disabled);\n\t\t_disabled = false;\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool { redraw(); return _disabled = v; }\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testBothTrivialCollapsesToPlainVar(): Void {
+		final vs: Array<Violation> = violations(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool return _active = v;'
+			)
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter and setter over backing field \'_active\'; use a plain field \'var active\' and remove get_active/set_active',
+			vs[0].message
+		);
+	}
+
+	public function testBothTrivialFixToPlainVar(): Void {
+		assertFixCanonical(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool return _active = v;'
+			),
+			'public var active:Bool = false', '_active'
+		);
+	}
+
+
+	private function fixedText(src: String): String {
+		final r = runAndExpectOne(src);
+		return switch RefactorSupport.canonicalize(src, r.check.fix(src, r.vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text): text;
+			case Err(message): {
+				Assert.fail('fix canonicalize Err: $message');
+				'';
+			}
+		}
 	}
 
 }

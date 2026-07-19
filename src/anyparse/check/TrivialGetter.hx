@@ -11,52 +11,62 @@ using Lambda;
 import anyparse.query.RefactorSupport;
 
 /**
- * Flags a read-only property whose getter does nothing but return a private
- * backing field of the same class — `public var x(get, never):T` (or `(get,
- * null)`) paired with `private var _x:T` and `function get_x() return _x;`.
- * The user's rule: don't write a trivial getter that only returns a backing
- * field, use property access instead (`public var x(default, null):T = …`).
- * `Severity.Info`, with an autofix that renames the backing field into the
- * property within the class and deletes the getter —
- * airtight only when every backing-field reference is a bare or this. access (other shapes stay report-only).
+ * Flags a property that only bridges a private same-class backing field through trivial
+ * accessors, and collapses it to a plainer form. The user's rule: don't hand-write a trivial
+ * getter/setter over a backing field, use property access instead.
+ * `Severity.Info`, with an autofix that renames the backing field into the property within the
+ * class and deletes the collapsed accessors — airtight only when every backing-field reference
+ * is a bare or `this.` access (other shapes stay report-only).
  *
- * ## What counts as trivial
+ * ## Shapes
  *
- * The `get_x` body must be EXACTLY a single `return <field>;` — either `return
- * _x;` (`IdentExpr`) or `return this._x;` (`FieldAccess` on `this`) — where
- * `<field>` is a PRIVATE field declared in the same class body. A block body
- * with any other statement, or a return of a call / literal / different
- * receiver, is real logic and left alone.
+ * - `public var x(get, never):T` / `(get, null):T` with `get_x` body exactly `return _x;` ->
+ *   `(default, null)`, `get_x` deleted.
+ * - `public var x(get, set):T` with a TRIVIAL getter (`return _x;`) and a NON-TRIVIAL setter ->
+ *   `(default, set)`, `get_x` deleted, `set_x` kept. Write-gated (below).
+ * - `public var x(get, set):T` with BOTH accessors trivial (getter `return _x;`, setter `return
+ *   _x = value;`) -> a plain field `public var x:T`, both accessors deleted.
+ *
+ * A trivial getter is exactly `return _x;` / `return this._x;`; a trivial setter is exactly
+ * `return _x = value;` / `return this._x = value;` over the setter's single parameter. A `(get,
+ * set)` with a NON-trivial getter + trivial setter is left alone: the sound target `(get,
+ * default)` would make the kept getter, once it reads the property name, route through itself
+ * (infinite recursion) without `@:isVar`.
  *
  * ## Soundness gates (a miss over a wrong flag)
  *
- * 1. The read accessor is exactly `get` — a custom-named `(myGet, never)` or a
- *    plain stored read is skipped, since only the standard `get_` getter
- *    resolves.
- * 2. The write accessor is `never` or `null` — a custom `set` (or `default`)
- *    means the write slot carries real behaviour, so it is skipped.
- * 3. The getter is not `dynamic` (re-bindable at runtime — real behaviour).
- * 4. The backing field is private and declared in the SAME class — an
- *    inherited / public / cross-class field cannot be collapsed into
- *    `(default, null)` and is skipped. Interfaces (no getter bodies) are
- *    skipped wholesale: only `ClassDecl` / `ClassForm` bodies are inspected.
- *
- * 5. The declaring class has NO subtype in the index (`SymbolIndex.hasSubtype`)
- *    — a subclass could `override get_x`, so the suggested `(default, null)` +
- *    drop-getter refactor would break the override. A class with any subtype is
- *    skipped wholesale; the subtype set is complete only over a whole-project
- *    scope (like `prefer-final-public-field`).
- *
- * 6. When the class `implements` anything and the property is PUBLIC, an
- *    implemented interface may declare it `x(get, …)` and so require a physical
- *    `get_x` — the collapse to `(default, null)` would drop it ("Field get_x
- *    needed by I is missing"). The property is skipped wholesale unless EVERY
+ * 1. The read accessor is exactly `get`; the write is `never` / `null` / `set`. A custom-named
+ *    accessor or a plain stored slot is skipped — only the standard `get_` / `set_` resolve.
+ * 2. Neither accessor is `dynamic` (re-bindable at runtime — real behaviour).
+ * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor
+ *    bodies) are skipped wholesale: only `ClassDecl` / `ClassForm` bodies are inspected.
+ * 4. The declaring class has NO subtype in the index (`SymbolIndex.hasSubtype`) — a subclass
+ *    could override an accessor, so the collapse would break the override.
+ * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
+ *    may declare it and so require a physical accessor; the property is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
- *    (`SymbolIndex.typeProvablyLacksMember`). A private property is not exposed
- *    through an interface, so it is never gated here.
+ *    (`SymbolIndex.typeProvablyLacksMember`).
  *
- * Internal writes to the backing field from other methods are FINE — that is
- * exactly what `(default, null)` preserves — so no write gate is needed.
+ * ## The `(default, set)` write-gate (the accessor-body rule)
+ *
+ * After the `(get, set)` -> `(default, set)` collapse the property gains physical storage, so
+ * inside `set_x` the renamed `x = value` is a DIRECT physical write (no recursion), and property
+ * reads that previously went through the trivial (now-deleted) getter become identical direct
+ * reads. The gate exists because writes to a `(default, set)` property route through `set_x`
+ * EVERYWHERE except inside `set_x` itself: an external backing-field write, once renamed to the
+ * property name, would start routing through the setter — a behavior change. So the property is
+ * skipped if there is ANY write to the backing field outside `set_x`, with ONE exception.
+ *
+ * ## Constructor-init exception
+ *
+ * A single top-level `_x = <literal>;` in the constructor (a compile-time literal, the FIRST
+ * reference to `_x` in the constructor, and no field decl-initializer) is a deliberate
+ * setter-bypass init. It is relocated onto the property declaration as `= <literal>` — a
+ * physical `(default, set)` initializer, identical to the original direct write — and the
+ * constructor statement is deleted. This is the one write the gate allows.
+ *
+ * Internal writes to a `(get, never)` / `(get, null)` backing field from other methods are FINE
+ * — that is what `(default, null)` preserves — so no write gate applies to those shapes.
  */
 @:nullSafety(Strict)
 final class TrivialGetter implements Check {
@@ -68,7 +78,8 @@ final class TrivialGetter implements Check {
 	}
 
 	public function description(): String {
-		return 'a (get, never)/(get, null) property whose getter only returns a private backing field — use (default, null)';
+		return
+			'a property bridging a private backing field through trivial accessors — (get, never)/(get, null) collapses to (default, null); (get, set) collapses to (default, set) when only the getter is trivial, or to a plain field when both are';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -126,25 +137,24 @@ final class TrivialGetter implements Check {
 	}
 
 	/**
-	 * Flag each read-only property of `cls` whose `get_x` trivially returns a private
-	 * same-class backing field, using the shared `memberTables`. A class with any subtype in
-	 * the index is skipped — a subclass could override `get_x`, so the suggested rewrite
-	 * would break that override.
+	 * Flag each collapsible property of `cls` (`classifyProperty` decides the shape and applies
+	 * the soundness gates), using the shared `memberTables`. A class with any subtype in the
+	 * index is skipped — a subclass could override an accessor, so the suggested rewrite would
+	 * break that override.
 	 */
 	private static function considerClass(out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex): Void {
 		final className: Null<String> = cls.name;
 		if (className == null || index.hasSubtype(className)) return;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) {
-			final r = resolvedGetterField(t.getters, prop.name);
-			if (r == null || !t.privateFieldNodes.exists(r.field)) continue;
-			if (interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) continue;
+			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes);
+			if (c == null) continue;
 			out.push({
 				file: file,
 				span: prop.span,
 				rule: 'trivial-getter',
 				severity: Severity.Info,
-				message: 'property \'${prop.name}\' has a trivial getter returning backing field \'${r.field}\'; use \'var ${prop.name}(default, null)\' and remove get_${prop.name}'
+				message: c.message
 			});
 		}
 	}
@@ -176,13 +186,7 @@ final class TrivialGetter implements Check {
 	 */
 	private static function returnedField(ret: QueryNode, returnKind: String): Null<String> {
 		if (ret.kind != returnKind || ret.children.length != 1) return null;
-		final value: QueryNode = ret.children[0];
-		return switch value.kind {
-			case 'IdentExpr': value.name;
-			case 'FieldAccess':
-				value.children.length == 1 && value.children[0].kind == 'IdentExpr' && value.children[0].name == 'this' ? value.name : null;
-			case _: null;
-		}
+		return fieldRefName(ret.children[0]);
 	}
 
 	/**
@@ -229,9 +233,9 @@ final class TrivialGetter implements Check {
 
 
 	/**
-	 * Collect the rewrite edits for every wanted trivial-getter property of `cls`, using the
-	 * shared `memberTables` for the property / backing-field / getter nodes, and skipping a
-	 * class with any subtype (a subclass override).
+	 * Collect the rewrite edits for every wanted collapsible property of `cls`, using the shared
+	 * `memberTables` + `classifyProperty` for the shape / backing-field / accessor nodes and
+	 * gates, and skipping a class with any subtype (a subclass override).
 	 */
 	private static function collectClassFixEdits(
 		cls: QueryNode, source: String, wanted: Array<String>, index: Null<SymbolIndex>, out: Array<{ span: Span, text: String }>
@@ -240,83 +244,108 @@ final class TrivialGetter implements Check {
 		if (className == null || (index != null && index.hasSubtype(className))) return;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
-			final r = resolvedGetterField(t.getters, prop.name);
-			if (r == null) continue;
-			if (interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) continue;
-			final fieldNode: Null<QueryNode> = t.privateFieldNodes[r.field];
-			if (fieldNode == null) continue;
-			final e: Null<Array<{ span: Span, text: String }>> = buildGetterFix(
-				cls, source, prop.span, fieldNode, r.getterNode, r.field, prop.name
-			);
+			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes);
+			if (c == null) continue;
+			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, c);
 			if (e != null) for (edit in e) out.push(edit);
 		}
 	}
 
 	/**
-	 * The edits converting one trivial getter: accessor → `(default, null)`, backing init
-	 * moved onto the property, getter + backing field deleted, references renamed. Null when
-	 * the accessor / semicolon cannot be located or the reference rename is not provably safe.
+	 * The edits realising a classified collapse: rewrite the accessor clause (to `(default,
+	 * null)` / `(default, set)`, or remove it for a plain field), move the backing initializer
+	 * onto the property (the field's decl-initializer, or the movable constructor-init literal
+	 * for a `(default, set)` collapse), delete each collapsed accessor and the backing field (and
+	 * the relocated ctor statement), and rename every in-class backing-field reference to the
+	 * property name. The KEPT accessor (the setter of a `(default, set)` collapse) is walked and
+	 * its references renamed; the deleted accessors and the relocated ctor statement are skipped.
+	 * Null when a semicolon / span cannot be located or the reference rename is not provably safe.
 	 */
-	private static function buildGetterFix(
-		cls: QueryNode, source: String, propSpan: Span, fieldNode: QueryNode, getterNode: QueryNode, field: String, propName: String
-	): Null<Array<{ span: Span, text: String }>> {
-		final paren: Null<Span> = accessorParenSpan(source, propSpan);
-		if (paren == null) return null;
-		final edits: Array<{ span: Span, text: String }> = [{ span: paren, text: '(default, null)' }];
-		if (fieldNode.children.length >= 1) {
-			final initSpan: Null<Span> = fieldNode.children[0].span;
-			if (initSpan != null) {
-				final semi: Int = propSpan.to - 1;
-				if (semi < 0 || semi >= source.length || StringTools.fastCodeAt(source, semi) != ';'.code) return null;
-				edits.push({ span: new Span(semi, semi), text: ' = ' + source.substring(initSpan.from, initSpan.to) });
-			}
+	private static function buildFix(
+		cls: QueryNode, source: String, propSpan: Span, propName: String, c: {
+			field: String,
+			fieldNode: QueryNode,
+			message: String,
+			clauseSpan: Span,
+			clauseText: String,
+			deletedAccessors: Array<QueryNode>,
+			ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>
 		}
-		final getterSpan: Null<Span> = getterNode.span;
-		final fieldSpan: Null<Span> = fieldNode.span;
-		if (getterSpan == null || fieldSpan == null) return null;
-		final renames: Null<Array<{ span: Span, text: String }>> = collectRenameEdits(cls, source, field, getterSpan, fieldNode, propName);
+	): Null<Array<{ span: Span, text: String }>> {
+		final edits: Array<{ span: Span, text: String }> = [{ span: c.clauseSpan, text: c.clauseText }];
+		final initSpan: Null<Span> = c.ctorInit != null
+			? c.ctorInit.rhsSpan
+			: (c.fieldNode.children.length >= 1 ? c.fieldNode.children[0].span : null);
+		if (initSpan != null) {
+			final semi: Int = propSpan.to - 1;
+			if (semi < 0 || semi >= source.length || StringTools.fastCodeAt(source, semi) != ';'.code) return null;
+			edits.push({ span: new Span(semi, semi), text: ' = ' + source.substring(initSpan.from, initSpan.to) });
+		}
+		final deleted: Array<{ node: QueryNode, span: Span }> = [];
+		for (acc in c.deletedAccessors) {
+			final s: Null<Span> = acc.span;
+			if (s == null) return null;
+			deleted.push({ node: acc, span: s });
+		}
+		final skipSpans: Array<Span> = [for (d in deleted) d.span];
+		if (c.ctorInit != null) {
+			final cs: Null<Span> = c.ctorInit.stmt.span;
+			if (cs == null) return null;
+			skipSpans.push(cs);
+		}
+		final renames: Null<Array<{ span: Span, text: String }>> = collectRenameEdits(
+			cls, source, c.field, skipSpans, c.fieldNode, propName
+		);
 		if (renames == null) return null;
 		for (e in renames) edits.push(e);
+		for (d in deleted)
+			edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(d.node, cls, d.span)), text: '' });
+		final fieldSpan: Null<Span> = c.fieldNode.span;
+		if (fieldSpan == null) return null;
 		edits.push(
-			{ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(getterNode, cls, getterSpan)), text: '' }
+			{ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(c.fieldNode, cls, fieldSpan)), text: '' }
 		);
-		edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(fieldNode, cls, fieldSpan)), text: '' });
+		if (c.ctorInit != null) {
+			final cs: Null<Span> = c.ctorInit.stmt.span;
+			if (cs == null) return null;
+			edits.push({ span: RefactorSupport.lineExtendedSpan(source, cs), text: '' });
+		}
 		return edits;
 	}
 
 	/** The rename edits for every backing-field reference in `cls`, or null when any reference is not provably the field. */
 	private static function collectRenameEdits(
-		cls: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String
+		cls: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		return renameWalk(cls, source, field, getterSpan, fieldNode, propName, false, false, cls.name, false, edits) ? edits : null;
+		return renameWalk(cls, source, field, skipSpans, fieldNode, propName, false, false, cls.name, false, edits) ? edits : null;
 	}
 
 	/**
-	 * Walk `node`, collecting `_field → propName` rename edits; returns false (refuse the whole
+	 * Walk `node`, collecting `field -> propName` rename edits; returns false (refuse the whole
 	 * fix) on any reference that is not provably the field — a `<other>.<field>` access, a
 	 * binding that shadows the name, a case-pattern mention, or a construct whose dropped
-	 * binding slot could hide a shadow (`hidesBindingNamed`). The backing field decl and the
-	 * getter subtree (both deleted) are skipped. `inPattern` marks a case-pattern subtree.
-	 * `shadowsProp` is set once an enclosing function binds a parameter / local named
-	 * `propName`: a bare `_field` reference there must rewrite to `this.propName` (or to
-	 * `<ClassName>.propName` inside a static method, where `this` is illegal, via
-	 * `shadowQualifier`), since a plain `propName` would resolve to that binding instead of the
-	 * field (silent data loss).
-	 *
+	 * binding slot could hide a shadow (`hidesBindingNamed`). The backing field decl and every
+	 * `skipSpans` subtree (each deleted accessor, plus a relocated constructor-init statement)
+	 * are skipped; the KEPT accessor is NOT in `skipSpans`, so its references ARE renamed.
+	 * `inPattern` marks a case-pattern subtree. `shadowsProp` is set once an enclosing function
+	 * binds a parameter / local named `propName`: a bare `field` reference there must rewrite to
+	 * `this.propName` (or to `<ClassName>.propName` inside a static method, where `this` is
+	 * illegal, via `shadowQualifier`), since a plain `propName` would resolve to that binding
+	 * instead of the field (silent data loss).
 	 */
 	private static function renameWalk(
-		node: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String, inPattern: Bool,
+		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, inPattern: Bool,
 		shadowsProp: Bool, className: Null<String>, staticCtx: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		if (node == fieldNode) return true;
 		final span: Null<Span> = node.span;
-		if (span != null && span.from >= getterSpan.from && span.to <= getterSpan.to) return true;
+		if (span != null && withinAny(skipSpans, span)) return true;
 		if (hidesBindingNamed(node, span, source, field)) return false;
 		final nowPattern: Bool = inPattern || node.kind == 'Plain';
 		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, staticCtx, className, nowPattern, out)) return false;
 		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
-		return renameChildren(node, source, field, getterSpan, fieldNode, propName, nowPattern, childShadows, className, staticCtx, out);
+		return renameChildren(node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, staticCtx, out);
 	}
 
 	/**
@@ -355,13 +384,13 @@ final class TrivialGetter implements Check {
 	 * false as soon as any descendant refuses the fix.
 	 */
 	private static function renameChildren(
-		node: QueryNode, source: String, field: String, getterSpan: Span, fieldNode: QueryNode, propName: String, nowPattern: Bool,
+		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, nowPattern: Bool,
 		childShadows: Bool, className: Null<String>, staticCtx: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		var mods: Array<String> = [];
 		for (c in node.children) {
 			final childStatic: Bool = staticCtx || (isFnScope(c) && mods.contains('Static'));
-			if (!renameWalk(c, source, field, getterSpan, fieldNode, propName, nowPattern, childShadows, className, childStatic, out))
+			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childStatic, out))
 				return false;
 			mods = switch c.kind {
 				case 'VarMember' | 'FinalMember' | 'FnMember' | 'FinalModifiedMember': [];
@@ -403,16 +432,6 @@ final class TrivialGetter implements Check {
 		return i >= source.length ? null : new Span(open, i + 1);
 	}
 
-
-	/** The trivially-returned backing-field name and getter node for `propName`, or null when the getter is missing, `dynamic`, or non-trivial. */
-	private static function resolvedGetterField(
-		getters: Map<String, { node: QueryNode, dyn: Bool }>, propName: String
-	): Null<{ field: String, getterNode: QueryNode }> {
-		final getter: Null<{ node: QueryNode, dyn: Bool }> = getters['get_' + propName];
-		if (getter == null || getter.dyn) return null;
-		final field: Null<String> = trivialReturnField(getter.node);
-		return field == null ? null : { field: field, getterNode: getter.node };
-	}
 
 	/** The offset just past the `var name` prefix of `span` (keyword + whitespace + identifier), or -1 when it does not begin with `var <name>`. */
 	private static function nameEndAfterVar(source: String, span: Span): Int {
@@ -461,26 +480,32 @@ final class TrivialGetter implements Check {
 
 	/**
 	 * Build the member tables of `cls` shared by `considerClass` (report) and
-	 * `collectClassFixEdits` (fix): private field nodes by name, `get_` getters by name (with
-	 * their `dynamic` flag), and the `(get, never)` / `(get, null)` read-only properties.
+	 * `collectClassFixEdits` (fix): private field nodes by name, `get_` getters and `set_`
+	 * setters by name (each with its `dynamic` flag), and the collapsible read-only / paired
+	 * properties — `(get, never)`, `(get, null)` and `(get, set)`. The shape decision and
+	 * soundness gates for each live in `classifyProperty`.
 	 */
 	private static function memberTables(cls: QueryNode, source: String): {
 		privateFieldNodes: Map<String, QueryNode>,
 		getters: Map<String, { node: QueryNode, dyn: Bool }>,
+		setters: Map<String, { node: QueryNode, dyn: Bool }>,
 		properties: Array<{
 			name: String,
 			node: QueryNode,
 			span: Span,
-			isPublic: Bool
+			isPublic: Bool,
+			write: String
 		}>
 	} {
 		final privateFieldNodes: Map<String, QueryNode> = [];
 		final getters: Map<String, { node: QueryNode, dyn: Bool }> = [];
+		final setters: Map<String, { node: QueryNode, dyn: Bool }> = [];
 		final properties: Array<{
 			name: String,
 			node: QueryNode,
 			span: Span,
-			isPublic: Bool
+			isPublic: Bool,
+			write: String
 		}> = [];
 		var mods: Array<String> = [];
 		for (child in cls.children) {
@@ -494,26 +519,38 @@ final class TrivialGetter implements Check {
 						if (child.kind == 'VarMember') {
 							final access: Null<{ read: String, write: String }> = accessorClause(source, span);
 							if (
-								access != null && access.read == 'get' && (access.write == 'never' || access.write == 'null')
+								access != null && access.read == 'get'
+								&& (access.write == 'never' || access.write == 'null' || access.write == 'set')
 							) properties.push({
 								name: name,
 								node: child,
 								span: span,
-								isPublic: isPublic
+								isPublic: isPublic,
+								write: access.write
 							});
 						}
 					}
 					mods = [];
 				case 'FnMember' | 'FinalModifiedMember':
 					final name: Null<String> = child.name;
-					if (name != null && StringTools.startsWith(name, 'get_'))
-						getters[name] = { node: child, dyn: mods.contains('Dynamic') };
+					if (name != null) {
+						final entry: { node: QueryNode, dyn: Bool } = { node: child, dyn: mods.contains('Dynamic') };
+						if (StringTools.startsWith(name, 'get_'))
+							getters[name] = entry;
+						else if (StringTools.startsWith(name, 'set_'))
+							setters[name] = entry;
+					}
 					mods = [];
 				case _:
 					mods.push(child.kind);
 			}
 		}
-		return { privateFieldNodes: privateFieldNodes, getters: getters, properties: properties };
+		return {
+			privateFieldNodes: privateFieldNodes,
+			getters: getters,
+			setters: setters,
+			properties: properties
+		};
 	}
 
 	/** The offset of the property's accessor-clause `(` (right after `var <name>`), or -1 when there is none. */
@@ -559,6 +596,279 @@ final class TrivialGetter implements Check {
 	 */
 	private static inline function shadowQualifier(staticCtx: Bool, className: Null<String>): String {
 		return staticCtx && className != null ? className + '.' : 'this.';
+	}
+
+
+	/**
+	 * Classify one `(get, …)` property into a collapse, or null to skip. Shared by
+	 * `considerClass` (report) and `collectClassFixEdits` (fix) so the shape decision and the
+	 * soundness gates live in ONE place. Shapes:
+	 *
+	 * - `(get, never)` / `(get, null)` with a trivial getter -> `(default, null)`.
+	 * - `(get, set)`, trivial getter + NON-trivial setter -> `(default, set)` (delete get, keep
+	 *   set). The write-gate applies (see `hasExternalWrite`) plus the constructor-init exception.
+	 * - `(get, set)`, both trivial -> a plain field (delete both). No gate.
+	 *
+	 * A `(get, set)` with a NON-trivial getter + trivial setter is NOT collapsed: the sound
+	 * target would be `(get, default)`, but the kept getter, renamed to read the property, would
+	 * route through itself (infinite recursion) without `@:isVar`. Both non-trivial is skipped.
+	 * The subclass gate is applied at the call site; the interface gate applies here to every shape.
+	 */
+	private static function classifyProperty(
+		cls: QueryNode, source: String, index: Null<SymbolIndex>, prop: {
+			name: String,
+			node: QueryNode,
+			span: Span,
+			isPublic: Bool,
+			write: String
+		},
+		getters: Map<String, { node: QueryNode, dyn: Bool }>, setters: Map<String, { node: QueryNode, dyn: Bool }>,
+		privateFieldNodes: Map<String, QueryNode>
+	): Null<{
+		field: String,
+		fieldNode: QueryNode,
+		message: String,
+		clauseSpan: Span,
+		clauseText: String,
+		deletedAccessors: Array<QueryNode>,
+		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>
+	}> {
+		final getter: Null<{ node: QueryNode, dyn: Bool }> = getters['get_' + prop.name];
+		if (getter == null || getter.dyn) return null;
+		final trivGet: Null<String> = trivialReturnField(getter.node);
+		final raw: Null<{
+			field: String,
+			clauseText: String,
+			deleted: Array<QueryNode>,
+			ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
+			message: String
+		}> = if (prop.write == 'never' || prop.write == 'null')
+			trivGet == null ? null : {
+				field: trivGet,
+				clauseText: '(default, null)',
+				deleted: [getter.node],
+				ctorInit: null,
+				message: messageFor('nullcase', prop.name, trivGet)
+			}
+		else if (prop.write == 'set')
+			classifySetProperty(cls, prop, getter.node, trivGet, setters, privateFieldNodes)
+		else
+			null;
+		if (raw == null) return null;
+		if (!privateFieldNodes.exists(raw.field)) return null;
+		final fieldNode: Null<QueryNode> = privateFieldNodes[raw.field];
+		if (fieldNode == null) return null;
+		if (interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) return null;
+		final clauseSpan: Null<Span> = raw.clauseText == '' ? clauseRemovalSpan(source, prop.span) : accessorParenSpan(source, prop.span);
+		if (clauseSpan == null) return null;
+		return {
+			field: raw.field,
+			fieldNode: fieldNode,
+			message: raw.message,
+			clauseSpan: clauseSpan,
+			clauseText: raw.clauseText,
+			deletedAccessors: raw.deleted,
+			ctorInit: raw.ctorInit
+		};
+	}
+
+	/** The report message for a collapse `shape` (`nullcase` / `setA` / `setB`). */
+	private static function messageFor(shape: String, propName: String, field: String): String {
+		return switch shape {
+			case 'setA': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName(default, set)\' and remove get_$propName';
+			case 'setB': 'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var $propName\' and remove get_$propName/set_$propName';
+			case _: 'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName(default, null)\' and remove get_$propName';
+		}
+	}
+
+	/**
+	 * The backing-field name a setter trivially assigns — `_x` for a body of exactly `return _x =
+	 * value;` / `return this._x = value;` (`value` = the setter's single parameter) — else null
+	 * (any other body carries real logic).
+	 */
+	private static function trivialSetterField(setter: QueryNode): Null<String> {
+		final paramName: Null<String> = setterParamName(setter);
+		if (paramName == null) return null;
+		final body: Null<QueryNode> = bodyOf(setter);
+		if (body == null || body.children.length != 1) return null;
+		final ret: QueryNode = body.children[0];
+		final retKind: Null<String> = switch body.kind {
+			case 'BlockBody': 'ReturnStmt';
+			case 'ExprBody': 'ReturnExpr';
+			case _: null;
+		}
+		if (retKind == null || ret.kind != retKind || ret.children.length != 1) return null;
+		final assign: QueryNode = ret.children[0];
+		if (assign.kind != 'Assign' || assign.children.length != 2) return null;
+		final value: QueryNode = assign.children[1];
+		if (value.kind != 'IdentExpr' || value.name != paramName) return null;
+		return fieldRefName(assign.children[0]);
+	}
+
+	/** The name of a setter's single value parameter (its first `Required` / `Optional` child), or null. */
+	private static function setterParamName(setter: QueryNode): Null<String> {
+		final param: Null<QueryNode> = setter.children.find(c -> c.kind == 'Required' || c.kind == 'Optional');
+		return param == null ? null : param.name;
+	}
+
+	/** The field name a node references as a bare `IdentExpr <name>` or `this.<name>` `FieldAccess`, else null. */
+	private static function fieldRefName(node: QueryNode): Null<String> {
+		return switch node.kind {
+			case 'IdentExpr': node.name;
+			case 'FieldAccess':
+				node.children.length == 1 && node.children[0].kind == 'IdentExpr' && node.children[0].name == 'this' ? node.name : null;
+			case _: null;
+		}
+	}
+
+	/** The field targeted by an assignment / compound-assignment / incr / decr node (bare or `this.`), else null. */
+	private static function writeTargetField(node: QueryNode): Null<String> {
+		final isWrite: Bool = switch node.kind {
+			case 'Assign' | 'AddAssign' | 'SubAssign' | 'MulAssign' | 'DivAssign' | 'ModAssign' | 'BitAndAssign' | 'BitOrAssign'
+				| 'BitXorAssign'
+				| 'ShlAssign'
+				| 'ShrAssign'
+				| 'UShrAssign'
+				| 'PreIncr'
+				| 'PostIncr'
+				| 'PreDecr'
+				| 'PostDecr': true;
+			case _: false;
+		}
+		return isWrite && node.children.length >= 1 ? fieldRefName(node.children[0]) : null;
+	}
+
+	/**
+	 * Whether `node`'s subtree contains a WRITE to `field` outside `exclude` (the kept setter)
+	 * other than the one allowed movable constructor-init `allowWrite`. A `(default, set)`
+	 * property routes writes through `set_field` EVERYWHERE except inside `set_field` itself, so
+	 * an external backing-field write, once renamed to the property name, would start routing
+	 * through the setter — a behavior change. Reads are direct (`default` read) and never gate.
+	 */
+	private static function hasExternalWrite(node: QueryNode, field: String, exclude: Span, allowWrite: Null<QueryNode>): Bool {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return false;
+		if (node == allowWrite) return false;
+		if (writeTargetField(node) == field) return true;
+		for (child in node.children) if (hasExternalWrite(child, field, exclude, allowWrite)) return true;
+		return false;
+	}
+
+	/**
+	 * The one relocatable constructor-init write of `field` — a top-level `field = <literal>;` in
+	 * the constructor's block body, where the literal is a compile-time constant, the write is
+	 * the FIRST reference to `field` in the constructor (no earlier read to reorder past), and the
+	 * backing field has no decl-initializer (checked by the caller). Its RHS is moved onto the
+	 * `(default, set)` property (a physical init, sound) and the statement is deleted. Null when
+	 * the first constructor reference to `field` is anything else.
+	 */
+	private static function findMovableCtorInit(
+		cls: QueryNode, field: String
+	): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
+		final ctor: Null<QueryNode> = cls.children.find(c -> (c.kind == 'FnMember' || c.kind == 'FinalModifiedMember') && c.name == 'new');
+		if (ctor == null) return null;
+		final body: Null<QueryNode> = bodyOf(ctor);
+		if (body == null || body.kind != 'BlockBody') return null;
+		final firstMention: Null<QueryNode> = body.children.find(stmt -> mentionsField(stmt, field));
+		return firstMention == null ? null : movableInitOf(firstMention, field);
+	}
+
+	/** `stmt` as a movable ctor-init of `field` (`ExprStmt` of `field = <literal>`), else null. */
+	private static function movableInitOf(stmt: QueryNode, field: String): Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> {
+		if (stmt.kind != 'ExprStmt' || stmt.children.length != 1) return null;
+		final assign: QueryNode = stmt.children[0];
+		if (assign.kind != 'Assign' || assign.children.length != 2 || fieldRefName(assign.children[0]) != field) return null;
+		final rhs: QueryNode = assign.children[1];
+		if (!isMovableLiteral(rhs)) return null;
+		final rhsSpan: Null<Span> = rhs.span;
+		return rhsSpan == null ? null : { stmt: stmt, assign: assign, rhsSpan: rhsSpan };
+	}
+
+	/** Whether `node` is a compile-time literal safe to relocate to a field-initializer position. */
+	private static function isMovableLiteral(node: QueryNode): Bool {
+		return switch node.kind {
+			case 'IntLit' | 'FloatLit' | 'BoolLit' | 'NullLit': true;
+			case 'DoubleStringExpr': true;
+			case 'SingleStringExpr':
+				node.name != null && node.name.indexOf('$') == -1;
+			case _: false;
+		}
+	}
+
+	/** Whether `node`'s subtree references `field` (bare `IdentExpr` / `this.<field>`, read or write target). */
+	private static function mentionsField(node: QueryNode, field: String): Bool {
+		if (fieldRefName(node) == field) return true;
+		for (child in node.children) if (mentionsField(child, field)) return true;
+		return false;
+	}
+
+	/** Whether `span` is fully contained in any of `spans`. */
+	private static inline function withinAny(spans: Array<Span>, span: Span): Bool {
+		return spans.exists(s -> span.from >= s.from && span.to <= s.to);
+	}
+
+	/** The span to delete for a plain-field collapse — ` (read, write)` after `var <name>`, leading space included. */
+	private static function clauseRemovalSpan(source: String, propSpan: Span): Null<Span> {
+		final afterName: Int = nameEndAfterVar(source, propSpan);
+		final paren: Null<Span> = accessorParenSpan(source, propSpan);
+		return afterName < 0 || paren == null ? null : new Span(afterName, paren.to);
+	}
+
+
+	/**
+	 * The `(get, set)` shape decision for `classifyProperty`, given the already-resolved getter
+	 * node and its trivial-field name (`trivGet`, null when the getter is non-trivial): shape A
+	 * (`(default, set)`, write-gated + constructor-init) when only the getter is trivial, shape B
+	 * (plain field) when both accessors are trivial over the same backing field, else null.
+	 */
+	private static function classifySetProperty(
+		cls: QueryNode, prop: {
+			name: String,
+			node: QueryNode,
+			span: Span,
+			isPublic: Bool,
+			write: String
+		},
+		getterNode: QueryNode, trivGet: Null<String>, setters: Map<String, { node: QueryNode, dyn: Bool }>,
+		privateFieldNodes: Map<String, QueryNode>
+	): Null<{
+		field: String,
+		clauseText: String,
+		deleted: Array<QueryNode>,
+		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
+		message: String
+	}> {
+		final setter: Null<{ node: QueryNode, dyn: Bool }> = setters['set_' + prop.name];
+		if (setter == null || setter.dyn) return null;
+		final trivSet: Null<String> = trivialSetterField(setter.node);
+		if (trivGet != null && trivSet == null) {
+			if (!privateFieldNodes.exists(trivGet)) return null;
+			final fieldNode: Null<QueryNode> = privateFieldNodes[trivGet];
+			final setterSpan: Null<Span> = setter.node.span;
+			if (fieldNode == null || setterSpan == null) return null;
+			final ci: Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> = fieldNode.children.length == 0
+				? findMovableCtorInit(cls, trivGet)
+				: null;
+			if (hasExternalWrite(cls, trivGet, setterSpan, ci == null ? null : ci.assign)) return null;
+			return {
+				field: trivGet,
+				clauseText: '(default, set)',
+				deleted: [getterNode],
+				ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
+				message: messageFor('setA', prop.name, trivGet)
+			};
+		}
+		if (trivGet != null && trivSet != null) {
+			if (trivGet != trivSet) return null;
+			return {
+				field: trivGet,
+				clauseText: '',
+				deleted: [getterNode, setter.node],
+				ctorInit: null,
+				message: messageFor('setB', prop.name, trivGet)
+			};
+		}
+		return null;
 	}
 
 }
