@@ -2461,11 +2461,9 @@ class Renderer {
 				// `Hardline` lastEmit can only carry over from OUTSIDE
 				// the region. Force the space unconditionally — the
 				// drop-on-state semantic is moot inside force-flat.
-				if (!f.forceFlat && ctx.lastEmit == Hardline) {
-					ctx.pendingOptSpace = null;
-				} else {
-					ctx.pendingOptSpace = ctx.pendingOptSpace == null ? ' ' : ctx.pendingOptSpace + ' ';
-				}
+				ctx.pendingOptSpace = !f.forceFlat && ctx.lastEmit == Hardline
+					? null
+					: ctx.pendingOptSpace == null ? ' ' : ctx.pendingOptSpace + ' ';
 			case OptHardlineSkipBeforeHardline:
 				// Forward-looking opt-hardline (ω-opthardlineskipbeforehardline):
 				// defer the `\n+indent` emit to the first content-bearing

@@ -5990,11 +5990,9 @@ final class Cli {
 					// harness before every sweep write). The next-token
 					// check follows expectValue's contract: a `--`-prefixed
 					// token is a flag, not a value.
-					if (i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')) {
-						diffPath = expectValue(args, ++i, '--diff');
-					} else {
-						diffPath = 'bin/.prev-sweep.json';
-					}
+					diffPath = i + 1 < args.length && !StringTools.startsWith(args[i + 1], '--')
+						? expectValue(args, ++i, '--diff')
+						: 'bin/.prev-sweep.json';
 				case '--save':
 					savePath = expectValue(args, ++i, '--save');
 				case '--lang':

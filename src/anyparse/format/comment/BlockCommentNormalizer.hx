@@ -256,11 +256,7 @@ class BlockCommentNormalizer {
 			final body: String = lines[i].body;
 			if (body.length == 0) continue;
 			final ws: String = lines[i].ws;
-			if (commonPrefix == null) {
-				commonPrefix = ws;
-			} else {
-				commonPrefix = commonPrefixOf(commonPrefix, ws);
-			}
+			commonPrefix = commonPrefix == null ? ws : commonPrefixOf(commonPrefix, ws);
 		}
 		final cp: String = commonPrefix ?? '';
 		final cpLen: Int = cp.length;
