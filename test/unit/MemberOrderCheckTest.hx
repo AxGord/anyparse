@@ -307,6 +307,70 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip: $fixed');
 	}
 
+	/** Two `#if X` field blocks (a final and a var, split by plain fields) merge into ONE block at the field-section end, final before var, blank-separated. */
+	public function testConditionalFieldBlockMergesFinalThenVar(): Void {
+		final src: String = 'class C {\n\tpublic final a:Int = 0;\n\n\t#if X\n\tprivate final g1:Int = 0;\n\t#end\n\n\tprivate var b:Int = 0;\n\n\t#if X\n\tprivate var g2:Int = 0;\n\t#end\n\n\tpublic function new() {}\n}';
+		Assert.isTrue(violations(src).length > 0, 'unmerged conditional blocks flagged');
+		final fixed: String = fixedSource(src);
+		final between: String = fixed.substring(fixed.indexOf('g1'), fixed.indexOf('g2'));
+		Assert.isTrue(between.indexOf('#end') < 0 && between.indexOf('#if') < 0, 'g1 and g2 share one #if X block: ' + fixed);
+		Assert.isTrue(fixed.indexOf('g1') < fixed.indexOf('g2'), 'final g1 before var g2: ' + fixed);
+		Assert.isTrue(fixed.indexOf('b:Int') < fixed.indexOf('#if X'), 'plain fields before the conditional block: ' + fixed);
+		Assert.isTrue(fixed.indexOf('#end') < fixed.indexOf('function new'), 'block closed before the constructor: ' + fixed);
+		Assert.isTrue(parses(fixed), 'rebuilt parses: ' + fixed);
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: ' + fixed);
+	}
+
+	/** Two distinct conditions form two SEPARATE `#if` blocks at the section end, ordered by first occurrence, each blank-separated. */
+	public function testTwoDistinctConditionBlocks(): Void {
+		final src: String = 'class C {\n\t#if A\n\tpublic function fa():Void {}\n\t#end\n\n\t#if B\n\tpublic function fb():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'field-after-methods flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('x:Int') < fixed.indexOf('#if A'), 'field before the conditional method blocks: ' + fixed);
+		Assert.isTrue(fixed.indexOf('#if A') < fixed.indexOf('#if B'), 'block A before block B (first occurrence): ' + fixed);
+		Assert.isTrue(fixed.indexOf('fa') < fixed.indexOf('fb'), 'fa before fb: ' + fixed);
+		final between: String = fixed.substring(fixed.indexOf('fa'), fixed.indexOf('fb'));
+		Assert.isTrue(between.indexOf('#end') >= 0 && between.indexOf('#if B') >= 0, 'fa and fb stay in SEPARATE blocks: ' + fixed);
+		Assert.isTrue(parses(fixed), 'parses: ' + fixed);
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: ' + fixed);
+	}
+
+	/** A conditional block with an `#else` between member slots is exempt from the new grouping - the whole container bails, the block never moves. */
+	public function testElseBlockExemptFromGrouping(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'field-after-method still flagged');
+		Assert.equals(0, edits(src).length, 'else block bails - no reorder');
+	}
+
+	/** A guarded method mixed among plain methods moves to the END of the methods section (unconditional methods first). */
+	public function testGuardedMethodsGoToMethodsSectionEnd(): Void {
+		final src: String = 'class C {\n\tpublic var x:Int = 0;\n\n\t#if DEBUG\n\tpublic function dbg():Void {}\n\t#end\n\n\tpublic function a():Void {}\n\n\tpublic function b():Void {}\n}';
+		Assert.isTrue(violations(src).length > 0, 'conditional method before plain methods flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('function a') < fixed.indexOf('#if DEBUG'), 'plain methods before the conditional block: ' + fixed);
+		Assert.isTrue(fixed.indexOf('function b') < fixed.indexOf('function dbg'), 'both plain methods before the guarded one: ' + fixed);
+		Assert.isTrue(parses(fixed), 'parses: ' + fixed);
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: ' + fixed);
+	}
+
+	/** A member-level `#end` abutting the constructor (no blank line) is flagged; the fix sets the block off with a blank after `#end`. */
+	public function testGuardedFieldBeforeCtorSpacing(): Void {
+		final src: String = 'class C {\n\t#if X\n\tvar g:Int = 0;\n\t#end\n\tpublic function new() {}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length, 'missing blank after #end flagged');
+		Assert.isTrue(vs[0].message.indexOf('#end') >= 0, 'directive-spacing message: ' + vs[0].message);
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges through writeRoundTrip');
+	}
+
+	/** A member-level `#if` opening right after a plain member (no blank line) is flagged; the fix inserts the blank before `#if`. */
+	public function testGuardedBlockAfterFieldSpacing(): Void {
+		final src: String = 'class C {\n\tpublic var x:Int = 0;\n\t#if X\n\tpublic function m():Void {}\n\t#end\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length, 'missing blank before #if flagged');
+		Assert.isTrue(vs[0].message.indexOf('#if') >= 0, 'directive-spacing message: ' + vs[0].message);
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges through writeRoundTrip');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
