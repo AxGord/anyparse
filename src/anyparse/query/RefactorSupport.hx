@@ -1770,4 +1770,32 @@ final class RefactorSupport {
 		return n - 1;
 	}
 
+
+	/**
+	 * Span starts of `container`'s member declarations that carry a `static`
+	 * modifier (the modifier projects as a separate preceding sibling node).
+	 * Shared by field-init-at-declaration and prefer-final-field: both must
+	 * exempt statics from ctor-assignment reasoning (a static initializes at
+	 * class-load, and `static final` requires a declaration initializer).
+	 */
+	public static function staticMemberFroms(container: QueryNode, shape: RefShape): Array<Int> {
+		final staticKind: Null<String> = shape.staticModifierKind;
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		final out: Array<Int> = [];
+		if (staticKind == null) return out;
+		var pending: Bool = false;
+		for (child in container.children) {
+			if (child.kind == staticKind)
+				pending = true;
+			else if (members.contains(child.kind)) {
+				if (pending) {
+					final sp: Null<Span> = child.span;
+					if (sp != null) out.push(sp.from);
+				}
+				pending = false;
+			}
+		}
+		return out;
+	}
+
 }

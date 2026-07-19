@@ -130,7 +130,7 @@ final class FieldInitAtDeclaration implements Check {
 		if (owner == null) return;
 		final ctor: Null<QueryNode> = RefactorSupport.soleConstructor(container, shape);
 		if (ctor == null) return;
-		final statics: Array<Int> = staticMemberFroms(container, shape);
+		final statics: Array<Int> = RefactorSupport.staticMemberFroms(container, shape);
 		final fields: Array<String> = shape.fieldDeclKinds ?? [];
 		for (member in container.children) if (fields.contains(member.kind)) {
 			final span: Null<Span> = member.span;
@@ -163,26 +163,6 @@ final class FieldInitAtDeclaration implements Check {
 	 * The binding-span starts of `container`'s members preceded by a `Static`
 	 * modifier sibling — the static members a right-hand side may safely reference.
 	 */
-	private static function staticMemberFroms(container: QueryNode, shape: RefShape): Array<Int> {
-		final staticKind: Null<String> = shape.staticModifierKind;
-		final members: Array<String> = shape.memberDeclKinds ?? [];
-		final out: Array<Int> = [];
-		if (staticKind == null) return out;
-		var pending: Bool = false;
-		for (child in container.children) {
-			if (child.kind == staticKind)
-				pending = true;
-			else if (members.contains(child.kind)) {
-				if (pending) {
-					final sp: Null<Span> = child.span;
-					if (sp != null) out.push(sp.from);
-				}
-				pending = false;
-			}
-		}
-		return out;
-	}
-
 	/**
 	 * Whether every identifier read in `node` is context-independent: a global / type /
 	 * imported name (unresolved within the class) or a static member of the class — a
@@ -195,12 +175,21 @@ final class FieldInitAtDeclaration implements Check {
 	private static function contextFreeRhs(node: QueryNode, container: QueryNode, statics: Array<Int>, shape: RefShape): Bool {
 		final identKind: String = shape.identKind;
 		final selfText: Null<String> = shape.selfReferenceText;
-		if (node.kind == identKind) {
+		// `$p` inside a single-quoted string projects as the interp `Ident` kind, not
+		// `IdentExpr` - it is a reference all the same (`${p}` blocks carry a regular
+		// IdentExpr child and were already reached by the child walk).
+		final isInterpIdent: Bool = shape.stringInterpIdentKind != null && node.kind == shape.stringInterpIdentKind;
+		if (node.kind == identKind || isInterpIdent) {
 			final name: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			if (name == null || span == null) return false;
 			if (selfText != null && name == selfText) return false;
 			final bf: Null<Int> = TypeResolver.resolveBindingFrom(name, span, container, shape);
+			// A bare `$name` interp ident does not register as a binding read, so an
+			// unresolved one is NOT provably global - in practice it is almost always
+			// a local/param; fail closed. A regular unresolved IdentExpr stays the
+			// provably-global case (imports/statics).
+			if (isInterpIdent) return bf != null && statics.contains(bf);
 			return bf == null || statics.contains(bf);
 		}
 		for (child in node.children) if (!contextFreeRhs(child, container, statics, shape)) return false;

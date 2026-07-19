@@ -156,6 +156,9 @@ final class PreferFinalField implements Check {
 			target: Span
 		}> = RefactorSupport.constructorFieldInitAt(tree, span.from, plugin.refShape());
 		if (loc == null) return;
+		// A STATIC field cannot become final off a ctor assignment - `static final`
+		// requires a declaration initializer, so the no-init case skips statics.
+		if (RefactorSupport.staticMemberFroms(loc.container, plugin.refShape()).contains(span.from)) return;
 		if (writtenInFile(source, name, loc.target)) return;
 		flag(out, file, span, name, 'is assigned only in the constructor');
 	}

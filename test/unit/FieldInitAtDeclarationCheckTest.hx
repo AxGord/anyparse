@@ -151,4 +151,15 @@ class FieldInitAtDeclarationCheckTest extends Test {
 		return out;
 	}
 
+
+	public function testInterpolatedCtorParamRefNotMoved(): Void {
+		// `$p` inside a single-quoted string projects as the interp `Ident` kind,
+		// not `IdentExpr` - the context-free walk must still see it as a ctor-param
+		// reference (the `${p}` block form was already caught via its inner IdentExpr).
+		final bare: String = "class C { private final _f:String; public function new(p:String) { _f = 'x/$p.log'; } }";
+		Assert.equals(0, violations(bare).length);
+		final block: String = "class C { private final _f:String; public function new(p:String) { _f = 'x/${p}.log'; } }";
+		Assert.equals(0, violations(block).length);
+	}
+
 }

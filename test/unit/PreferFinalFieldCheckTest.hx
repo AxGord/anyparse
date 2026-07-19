@@ -164,4 +164,13 @@ class PreferFinalFieldCheckTest extends Test {
 		return out;
 	}
 
+
+	public function testNoInitStaticCtorWriteNotFlagged(): Void {
+		// A STATIC field cannot become final off a ctor assignment - `static final`
+		// requires a declaration initializer ("Static final variable must be
+		// initialized"), so the no-init case must skip statics.
+		final vs: Array<Violation> = violations('class C { private static var _i:C; public function new() { _i = this; } }');
+		Assert.equals(0, vs.length);
+	}
+
 }
