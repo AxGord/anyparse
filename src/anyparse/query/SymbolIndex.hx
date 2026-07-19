@@ -56,6 +56,9 @@ typedef MemberInfo = {
 	/** True when the member is a property whose READ accessor is a getter (`get` / `dynamic`) — reading it runs code. A plain field / method is false. */
 	var hasGetter: Bool;
 
+	/** True when the member is a property whose WRITE accessor is a setter (`set` / `dynamic`) - writing it runs code. A plain field / final / `(default|null|never)` write slot is false (no set-accessor). */
+	var hasSetter: Bool;
+
 	/** The member's return type OUTER nominal (last `.` segment, `Null<T>` → `Null`), or null for a field / `Void` / unannotated return. Drives cross-file `Null<T>`-return nullable-source resolution. */
 	var returnNominal: Null<String>;
 
@@ -485,9 +488,10 @@ final class SymbolIndex {
 				continue;
 			}
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
+			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
 			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
-			infos.push(extractFileInfo(entry.file, tree, accessors, returnTypes, typeSources));
+			infos.push(extractFileInfo(entry.file, tree, accessors, writeAccessors, returnTypes, typeSources));
 		}
 		return new SymbolIndex(infos, skipped);
 	}
@@ -520,7 +524,8 @@ final class SymbolIndex {
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
 	private static function extractFileInfo(
-		file: String, tree: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>, typeSources: Map<Int, String>
+		file: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
+		typeSources: Map<Int, String>
 	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
@@ -539,7 +544,7 @@ final class SymbolIndex {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
-					members: collectMembers(node, accessors, returnTypes, typeSources)
+					members: collectMembers(node, accessors, writeAccessors, returnTypes, typeSources)
 				});
 				continue;
 			}
@@ -646,7 +651,8 @@ final class SymbolIndex {
 	 * with its getter-property flag from the `accessors` span map (absent = plain).
 	 */
 	private static function collectMembers(
-		node: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>, typeSources: Map<Int, String>
+		node: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
+		typeSources: Map<Int, String>
 	): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
 		collectInto(node, n -> {
@@ -663,6 +669,7 @@ final class SymbolIndex {
 					out.push({
 						name: memberName,
 						hasGetter: accessors[sp.from] ?? false,
+						hasSetter: writeAccessors[sp.from] ?? false,
 						returnNominal: returnTypes[sp.from],
 						typeSource: typeSources[sp.from]
 					});

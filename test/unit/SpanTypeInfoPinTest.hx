@@ -9,8 +9,8 @@ import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 using Lambda;
 
 /**
- * Pins the batched `spanTypeInfo` bundle to the five individual `TypeInfoProvider`
- * accessors it replaces: `HaxeQueryPlugin.spanTypeInfo` computes all five span maps
+ * Pins the batched `spanTypeInfo` bundle to the six individual `TypeInfoProvider`
+ * accessors it replaces: `HaxeQueryPlugin.spanTypeInfo` computes all six span maps
  * in one parse, and `CachingGrammarPlugin` memoizes it and slices the accessors from
  * it. Both must stay byte-for-byte the pre-batching per-accessor results, so this
  * guards the (necessarily duplicated) combined visitor against drift.
@@ -30,7 +30,7 @@ class SpanTypeInfoPinTest extends Test {
 		for (src in sources)
 			assertBundleMatches(
 				plugin.spanTypeInfo(src), plugin.declaredTypes(src), plugin.returnTypes(src), plugin.propertyAccessors(src),
-				plugin.declaredTypeSources(src), plugin.castTargetSources(src), src
+				plugin.propertyWriteAccessors(src), plugin.declaredTypeSources(src), plugin.castTargetSources(src), src
 			);
 	}
 
@@ -40,7 +40,7 @@ class SpanTypeInfoPinTest extends Test {
 			final bundle: SpanTypeInfo = caching.spanTypeInfo(src);
 			assertBundleMatches(
 				bundle, caching.declaredTypes(src), caching.returnTypes(src), caching.propertyAccessors(src),
-				caching.declaredTypeSources(src), caching.castTargetSources(src), src
+				caching.propertyWriteAccessors(src), caching.declaredTypeSources(src), caching.castTargetSources(src), src
 			);
 			Assert.isTrue(bundle == caching.spanTypeInfo(src), 'the caching plugin returns the memoized bundle instance');
 			Assert.isTrue(bundle.declaredTypes == caching.declaredTypes(src), 'the accessor returns the bundle slice, not a fresh map');
@@ -53,19 +53,20 @@ class SpanTypeInfoPinTest extends Test {
 			final caching: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 			final b: SpanTypeInfo = caching.spanTypeInfo(src);
 			assertBundleMatches(
-				b, raw.declaredTypes(src), raw.returnTypes(src), raw.propertyAccessors(src), raw.declaredTypeSources(src),
-				raw.castTargetSources(src), src
+				b, raw.declaredTypes(src), raw.returnTypes(src), raw.propertyAccessors(src), raw.propertyWriteAccessors(src),
+				raw.declaredTypeSources(src), raw.castTargetSources(src), src
 			);
 		}
 	}
 
 	private static function assertBundleMatches(
 		bundle: SpanTypeInfo, declaredTypes: Map<Int, String>, returnTypes: Map<Int, String>, propertyAccessors: Map<Int, Bool>,
-		declaredTypeSources: Map<Int, String>, castTargetSources: Map<Int, String>, src: String
+		propertyWriteAccessors: Map<Int, Bool>, declaredTypeSources: Map<Int, String>, castTargetSources: Map<Int, String>, src: String
 	): Void {
 		eqStr(bundle.declaredTypes, declaredTypes, 'declaredTypes', src);
 		eqStr(bundle.returnTypes, returnTypes, 'returnTypes', src);
 		eqBool(bundle.propertyAccessors, propertyAccessors, 'propertyAccessors', src);
+		eqBool(bundle.propertyWriteAccessors, propertyWriteAccessors, 'propertyWriteAccessors', src);
 		eqStr(bundle.declaredTypeSources, declaredTypeSources, 'declaredTypeSources', src);
 		eqStr(bundle.castTargetSources, castTargetSources, 'castTargetSources', src);
 	}
