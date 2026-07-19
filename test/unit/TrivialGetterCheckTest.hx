@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.check.LintConfig;
 
 /**
  * The `trivial-getter` check: a read-only property `var x(get, never)` /
@@ -19,6 +20,14 @@ import anyparse.query.SymbolIndex;
  * custom-named read accessor, an interface property, an inherited / other-class
  * field. It keys on triviality, not the `_` naming convention. `final class`
  * bodies (`ClassForm`) are covered.
+ *
+ * The `(get, set)` shape-A collapse (trivial getter, non-trivial setter) is
+ * decided three ways on the external statement-level writes to the backing
+ * field: 0 writes collapses to `(default, set)` unchanged; 1..maxBypassWrites
+ * writes collapses and marks each write `@:bypassAccessor` (default cap 3,
+ * overridable via the `maxBypassWrites` option); more than the cap, or any write
+ * nested inside a larger expression, falls back to marking `get_x` `inline`
+ * (skipped when the getter is already `inline` or `override`).
  */
 class TrivialGetterCheckTest extends Test {
 
@@ -345,14 +354,16 @@ class TrivialGetterCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('private var _active') == -1);
 	}
 
-	public function testShapeAExternalWriteNotFlagged(): Void {
+	public function testShapeAExternalWriteBypassFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+			)
+		);
+		Assert.equals(1, vs.length);
 		Assert.equals(
-			0,
-			violations(
-				cls(
-					'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
-				)
-			).length
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove get_active and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
 		);
 	}
 
@@ -372,9 +383,16 @@ class TrivialGetterCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('_disabled = false') == -1);
 	}
 
-	public function testShapeACtorInitNotMovableNotFlagged(): Void {
+	public function testShapeACtorInitNotMovableBypassFlagged(): Void {
+		// `trace(_disabled)` reads the field before `_disabled = false`, so the init is not
+		// relocatable; the write is marked @:bypassAccessor instead and the property collapses.
 		final src: String = 'class C {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\ttrace(_disabled);\n\t\t_disabled = false;\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool { redraw(); return _disabled = v; }\n}';
-		Assert.equals(0, violations(src).length);
+		final vs: Array<Violation> = new TrivialGetter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor disabled = false') >= 0);
+		Assert.isTrue(fixed.indexOf('trace(disabled)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_disabled') == -1);
 	}
 
 	public function testBothTrivialCollapsesToPlainVar(): Void {
@@ -462,6 +480,146 @@ class TrivialGetterCheckTest extends Test {
 			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count + 1;\n\tfunction set_count(v:Int):Int return _count = v;\n\tfunction reset():Void { _count = 5; }'
 		);
 		Assert.equals(1, violations(src).length);
+	}
+
+
+	public function testShapeABypassFix(): Void {
+		final fixed: String = fixedText(
+			cls(
+				'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }'
+			)
+		);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
+		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_active') == -1);
+		Assert.isTrue(fixed.indexOf('private var _active') == -1);
+	}
+
+	public function testShapeABypassShadowedCtorWrite(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tpublic function new(?active:Bool) { _active = active ?? false; }\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor this.active = active ?? false') >= 0);
+		Assert.isTrue(fixed.indexOf('active(default, set):Bool = false') >= 0);
+	}
+
+	public function testShapeAExceedsCapInline(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\', but 4 external write(s) block a (default, set) collapse; mark get_active inline',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('inline function get_active') >= 0);
+		Assert.isTrue(fixed.indexOf('return _active') >= 0);
+		Assert.isTrue(fixed.indexOf('private var _active') >= 0);
+		Assert.isTrue(fixed.indexOf('(get, set)') >= 0);
+	}
+
+	public function testShapeANonStmtWriteInline(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction f():Void { if ((_active = true)) trace(1); }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\', but 1 external write(s) block a (default, set) collapse; mark get_active inline',
+			vs[0].message
+		);
+	}
+
+	public function testShapeAAlreadyInlineGetterNotFlagged(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tinline function get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeAOverrideGetterNotFlagged(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\toverride function get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }\n\tfunction d():Void { _active = false; }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testShapeACtorInitPlusBypass(): Void {
+		final src: String = 'class C {\n\tpublic var active(get, set):Bool;\n\tprivate var _active:Bool;\n\tpublic function new() {\n\t\t_active = false;\n\t\tinit();\n\t}\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }\n}';
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('active(default, set):Bool = false') >= 0);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
+		Assert.isTrue(fixed.indexOf('_active = false') == -1);
+	}
+
+	public function testShapeAConfigCapInline(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n\tfunction b():Void { _active = false; }'
+		);
+		final check: TrivialGetter = new TrivialGetter();
+		final cfg: LintConfig = LintConfig.parse('{"rules": {"trivial-getter": {"maxBypassWrites": 1}}}');
+		check.setConfigResolver(_ -> cfg);
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\', but 2 external write(s) block a (default, set) collapse; mark get_active inline',
+			vs[0].message
+		);
+	}
+
+	public function testShapeAZeroWritesNoBypass(): Void {
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\' and remove get_active',
+			vs[0].message
+		);
+		Assert.isTrue(fixedText(src).indexOf('@:bypassAccessor') == -1);
+	}
+
+
+	public function testShapeAExactlyCapBypass(): Void {
+		// Exactly maxBypassWrites (default 3) statement-level writes sit ON the cap boundary
+		// and still take the bypass arm — only cap + 1 falls back to the inline arm.
+		final src: String = cls(
+			'public var active(get, set):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction a():Void { _active = true; }\n\tfunction b():Void { _active = false; }\n\tfunction c():Void { _active = true; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'active\' has a trivial getter over backing field \'_active\'; use \'var active(default, set)\', remove get_active and mark 3 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
+		Assert.isTrue(fixed.indexOf('active(default, set)') >= 0);
+	}
+
+	public function testShapeACompoundAssignBypass(): Void {
+		// A compound assign (`_count += 1;`) is a statement-level WRITE (`writeTargetField`
+		// covers it), so it takes the bypass arm; under `@:bypassAccessor` both its read and
+		// write are direct — identical to the pre-collapse backing-field access.
+		final src: String = cls(
+			'public var count(get, set):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction set_count(v:Int):Int { redraw(); return _count = v; }\n\tfunction bump():Void { _count += 1; }'
+		);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'property \'count\' has a trivial getter over backing field \'_count\'; use \'var count(default, set)\', remove get_count and mark 1 external write(s) with @:bypassAccessor',
+			vs[0].message
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('@:bypassAccessor count += 1') >= 0);
+		Assert.isTrue(fixed.indexOf('count(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_count') == -1);
 	}
 
 }

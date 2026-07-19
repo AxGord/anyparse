@@ -9,6 +9,8 @@ import anyparse.runtime.Span;
 using Lambda;
 
 import anyparse.query.RefactorSupport;
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.LintConfig;
 
 /**
  * Flags a property that only bridges a private same-class backing field through trivial
@@ -23,7 +25,8 @@ import anyparse.query.RefactorSupport;
  * - `public var x(get, never):T` / `(get, null):T` with `get_x` body exactly `return _x;` ->
  *   `(default, null)`, `get_x` deleted.
  * - `public var x(get, set):T` with a TRIVIAL getter (`return _x;`) and a NON-TRIVIAL setter ->
- *   `(default, set)`, `get_x` deleted, `set_x` kept. Write-gated (below).
+ *   `(default, set)`, `get_x` deleted, `set_x` kept. Decided three ways by the external writes
+ *   (below).
  * - `public var x(get, set):T` with BOTH accessors trivial (getter `return _x;`, setter `return
  *   _x = value;`) -> a plain field `public var x:T`, both accessors deleted.
  * - `public var x(get, set):T` with a NON-TRIVIAL getter and a TRIVIAL setter -> `(get,
@@ -43,19 +46,32 @@ import anyparse.query.RefactorSupport;
  * 4. The declaring class has NO subtype in the index (`SymbolIndex.hasSubtype`) — a subclass
  *    could override an accessor, so the collapse would break the override.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
- *    may declare it and so require a physical accessor; the property is skipped unless every
+ *    may declare it and so require a physical accessor; a COLLAPSING shape is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
- *    (`SymbolIndex.typeProvablyLacksMember`).
+ *    (`SymbolIndex.typeProvablyLacksMember`). The inline arm (below) keeps `get_x`, so this gate
+ *    never applies to it.
  *
- * ## The `(default, set)` write-gate (the accessor-body rule)
+ * ## The `(default, set)` shape-A write decision (three-way)
  *
  * After the `(get, set)` -> `(default, set)` collapse the property gains physical storage, so
  * inside `set_x` the renamed `x = value` is a DIRECT physical write (no recursion), and property
  * reads that previously went through the trivial (now-deleted) getter become identical direct
- * reads. The gate exists because writes to a `(default, set)` property route through `set_x`
- * EVERYWHERE except inside `set_x` itself: an external backing-field write, once renamed to the
- * property name, would start routing through the setter — a behavior change. So the property is
- * skipped if there is ANY write to the backing field outside `set_x`, with ONE exception (below).
+ * reads. Writes to a `(default, set)` property route through `set_x` EVERYWHERE except inside
+ * `set_x` itself, so an external backing-field write, once renamed, would newly route through the
+ * setter — a behavior change unless it is marked a direct write. Let `writes` be the external
+ * statement-level writes to the backing field outside `set_x` (excluding the one movable
+ * constructor-init below):
+ *
+ * - 0 writes -> collapse to `(default, set)` exactly as before.
+ * - 1..`maxBypassWrites` writes, ALL statement-level -> collapse anyway and prefix each such write
+ *   statement with `@:bypassAccessor ` (a bypass write on a `(default, set)` property is a direct
+ *   field write — semantics preserved). Those writes still rename `_x` -> `x` (or `this.x` under
+ *   shadowing). `maxBypassWrites` is the `trivial-getter` `maxBypassWrites` option (default 3).
+ * - more than `maxBypassWrites`, or ANY write NOT at statement level (nested in a larger
+ *   expression, e.g. `if ((_x = v)) ...`, which cannot be marked) -> do NOT collapse; instead
+ *   mark `get_x` `inline` (property and backing field kept). Skipped when the getter is already
+ *   `inline` or carries `override` (inline + override do not mix; an overriding accessor must stay
+ *   overridable).
  *
  * ## The `(get, default)` read-gate
  *
@@ -74,15 +90,26 @@ import anyparse.query.RefactorSupport;
  * reference to `_x` in the constructor, and no field decl-initializer) is a deliberate
  * setter-bypass init. It is relocated onto the property declaration as `= <literal>` — a
  * physical `(default, set)` initializer, identical to the original direct write — and the
- * constructor statement is deleted. This is the one write the write-gate allows.
+ * constructor statement is deleted. It is excluded from `writes`, so it never counts toward the
+ * bypass cap.
  *
  * Internal writes to a `(get, never)` / `(get, null)` backing field from other methods are FINE
  * — that is what `(default, null)` preserves — so no write gate applies to those shapes.
  */
 @:nullSafety(Strict)
-final class TrivialGetter implements Check {
+final class TrivialGetter implements Check implements ConfigAware {
+
+	/** Default cap on statement-level backing-field writes a shape-A collapse marks `@:bypassAccessor` before it instead falls back to inlining the getter. */
+	private static inline final DEFAULT_MAX_BYPASS_WRITES: Int = 3;
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'trivial-getter';
@@ -98,7 +125,10 @@ final class TrivialGetter implements Check {
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index);
+			if (tree == null) continue;
+			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
+				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+			for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index, maxBypass);
 		}
 		return out;
 	}
@@ -125,13 +155,17 @@ final class TrivialGetter implements Check {
 	): Array<{ span: Span, text: String }> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
+		final maxBypass: Int = violations.length == 0
+			? DEFAULT_MAX_BYPASS_WRITES
+			: LintConfig.resolveWith(_resolveConfig, violations[0].file)
+				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
 		final wanted: Array<String> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in classes(tree)) collectClassFixEdits(cls, source, wanted, index, edits);
+		for (cls in classes(tree)) collectClassFixEdits(cls, source, wanted, index, edits, maxBypass);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -153,12 +187,14 @@ final class TrivialGetter implements Check {
 	 * index is skipped — a subclass could override an accessor, so the suggested rewrite would
 	 * break that override.
 	 */
-	private static function considerClass(out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex): Void {
+	private static function considerClass(
+		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, maxBypass: Int
+	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null || index.hasSubtype(className)) return;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) {
-			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes);
+			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			out.push({
 				file: file,
@@ -249,13 +285,14 @@ final class TrivialGetter implements Check {
 	 * gates, and skipping a class with any subtype (a subclass override).
 	 */
 	private static function collectClassFixEdits(
-		cls: QueryNode, source: String, wanted: Array<String>, index: Null<SymbolIndex>, out: Array<{ span: Span, text: String }>
+		cls: QueryNode, source: String, wanted: Array<String>, index: Null<SymbolIndex>, out: Array<{ span: Span, text: String }>,
+		maxBypass: Int
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null || (index != null && index.hasSubtype(className))) return;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
-			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes);
+			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, c);
 			if (e != null) for (edit in e) out.push(edit);
@@ -280,9 +317,18 @@ final class TrivialGetter implements Check {
 			clauseSpan: Span,
 			clauseText: String,
 			deletedAccessors: Array<QueryNode>,
-			ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>
+			ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
+			bypassStmts: Array<QueryNode>,
+			inlineGetter: Null<QueryNode>
 		}
 	): Null<Array<{ span: Span, text: String }>> {
+		final inlineGetter: Null<QueryNode> = c.inlineGetter;
+		if (inlineGetter != null) {
+			// The inline arm keeps the property and backing field untouched — a single `inline `
+			// insertion before the getter's `function` keyword (the FnMember span start).
+			final gSpan: Null<Span> = inlineGetter.span;
+			return gSpan == null ? null : [{ span: new Span(gSpan.from, gSpan.from), text: 'inline ' }];
+		}
 		final edits: Array<{ span: Span, text: String }> = [{ span: c.clauseSpan, text: c.clauseText }];
 		final initSpan: Null<Span> = c.ctorInit != null
 			? c.ctorInit.rhsSpan
@@ -321,7 +367,7 @@ final class TrivialGetter implements Check {
 			if (cs == null) return null;
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, cs), text: '' });
 		}
-		return edits;
+		return applyBypassMarks(c.bypassStmts, edits) ? edits : null;
 	}
 
 	/** The rename edits for every backing-field reference in `cls`, or null when any reference is not provably the field. */
@@ -498,8 +544,18 @@ final class TrivialGetter implements Check {
 	 */
 	private static function memberTables(cls: QueryNode, source: String): {
 		privateFieldNodes: Map<String, QueryNode>,
-		getters: Map<String, { node: QueryNode, dyn: Bool }>,
-		setters: Map<String, { node: QueryNode, dyn: Bool }>,
+		getters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}>,
+		setters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}>,
 		properties: Array<{
 			name: String,
 			node: QueryNode,
@@ -509,8 +565,18 @@ final class TrivialGetter implements Check {
 		}>
 	} {
 		final privateFieldNodes: Map<String, QueryNode> = [];
-		final getters: Map<String, { node: QueryNode, dyn: Bool }> = [];
-		final setters: Map<String, { node: QueryNode, dyn: Bool }> = [];
+		final getters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}> = [];
+		final setters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}> = [];
 		final properties: Array<{
 			name: String,
 			node: QueryNode,
@@ -545,7 +611,17 @@ final class TrivialGetter implements Check {
 				case 'FnMember' | 'FinalModifiedMember':
 					final name: Null<String> = child.name;
 					if (name != null) {
-						final entry: { node: QueryNode, dyn: Bool } = { node: child, dyn: mods.contains('Dynamic') };
+						final entry: {
+							node: QueryNode,
+							dyn: Bool,
+							isOverride: Bool,
+							isInline: Bool
+						} = {
+							node: child,
+							dyn: mods.contains('Dynamic'),
+							isOverride: mods.contains('Override'),
+							isInline: mods.contains('Inline')
+						};
 						if (StringTools.startsWith(name, 'get_'))
 							getters[name] = entry;
 						else if (StringTools.startsWith(name, 'set_'))
@@ -611,13 +687,17 @@ final class TrivialGetter implements Check {
 
 
 	/**
-	 * Classify one `(get, …)` property into a collapse, or null to skip. Shared by
+	 * Classify one `(get, …)` property into a finding, or null to skip. Shared by
 	 * `considerClass` (report) and `collectClassFixEdits` (fix) so the shape decision and the
 	 * soundness gates live in ONE place. Shapes:
 	 *
 	 * - `(get, never)` / `(get, null)` with a trivial getter -> `(default, null)`.
-	 * - `(get, set)`, trivial getter + NON-trivial setter -> `(default, set)` (delete get, keep
-	 *   set). Write-gated (see `hasExternalWrite`) plus the constructor-init exception.
+	 * - `(get, set)`, trivial getter + NON-trivial setter -> shape A, decided three ways by the
+	 *   external statement-level writes (see `classifySetProperty` / `collectExternalWrites`):
+	 *   collapse to `(default, set)` (delete get, keep set) with 0 writes, collapse plus
+	 *   `@:bypassAccessor` marks on 1..`maxBypass` writes (`bypassStmts`), or keep the property and
+	 *   mark the getter `inline` (`inlineGetter`) beyond the cap / on a non-statement-level write.
+	 *   Plus the constructor-init exception.
 	 * - `(get, set)`, both trivial -> a plain field (delete both). No gate.
 	 * - `(get, set)`, NON-trivial getter + trivial setter -> `(get, default)` (delete set, keep
 	 *   get). Read-gated (see `hasExternalRead`): `(get, default)` has physical storage because the
@@ -627,7 +707,8 @@ final class TrivialGetter implements Check {
 	 *   field occurs outside `get_x`. Writes are direct (`default` write) and never gate.
 	 *
 	 * A `(get, set)` with both accessors non-trivial is skipped. The subclass gate is applied at the
-	 * call site; the interface gate applies here to every shape.
+	 * call site; the interface gate applies here to every COLLAPSING shape — the inline arm keeps
+	 * `get_x`, so an interface-required accessor is never dropped and that gate does not block it.
 	 */
 	private static function classifyProperty(
 		cls: QueryNode, source: String, index: Null<SymbolIndex>, prop: {
@@ -637,8 +718,19 @@ final class TrivialGetter implements Check {
 			isPublic: Bool,
 			write: String
 		},
-		getters: Map<String, { node: QueryNode, dyn: Bool }>, setters: Map<String, { node: QueryNode, dyn: Bool }>,
-		privateFieldNodes: Map<String, QueryNode>
+		getters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}>,
+		setters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}>,
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int
 	): Null<{
 		field: String,
 		fieldNode: QueryNode,
@@ -646,9 +738,16 @@ final class TrivialGetter implements Check {
 		clauseSpan: Span,
 		clauseText: String,
 		deletedAccessors: Array<QueryNode>,
-		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>
+		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
+		bypassStmts: Array<QueryNode>,
+		inlineGetter: Null<QueryNode>
 	}> {
-		final getter: Null<{ node: QueryNode, dyn: Bool }> = getters['get_' + prop.name];
+		final getter: Null<{
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}> = getters['get_' + prop.name];
 		if (getter == null || getter.dyn) return null;
 		final trivGet: Null<String> = trivialReturnField(getter.node);
 		final raw: Null<{
@@ -656,25 +755,33 @@ final class TrivialGetter implements Check {
 			clauseText: String,
 			deleted: Array<QueryNode>,
 			ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
-			message: String
+			message: String,
+			bypassStmts: Array<QueryNode>,
+			inlineGetter: Null<QueryNode>
 		}> = if (prop.write == 'never' || prop.write == 'null')
 			trivGet == null ? null : {
 				field: trivGet,
 				clauseText: '(default, null)',
 				deleted: [getter.node],
 				ctorInit: null,
-				message: messageFor('nullcase', prop.name, trivGet)
+				message: messageFor('nullcase', prop.name, trivGet),
+				bypassStmts: [],
+				inlineGetter: null
 			}
 		else if (prop.write == 'set')
-			classifySetProperty(cls, prop, getter.node, trivGet, setters, privateFieldNodes)
+			classifySetProperty(cls, prop, getter.node, getter.isInline, getter.isOverride, trivGet, setters, privateFieldNodes, maxBypass)
 		else
 			null;
 		if (raw == null) return null;
 		if (!privateFieldNodes.exists(raw.field)) return null;
 		final fieldNode: Null<QueryNode> = privateFieldNodes[raw.field];
 		if (fieldNode == null) return null;
-		if (interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) return null;
-		final clauseSpan: Null<Span> = raw.clauseText == '' ? clauseRemovalSpan(source, prop.span) : accessorParenSpan(source, prop.span);
+		// The interface-conformance gate applies only to a COLLAPSING shape (the getter is dropped);
+		// the inline arm keeps the getter, so a required interface accessor is never removed.
+		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) return null;
+		final clauseSpan: Null<Span> = raw.clauseText == '' && raw.inlineGetter == null
+			? clauseRemovalSpan(source, prop.span)
+			: accessorParenSpan(source, prop.span);
 		if (clauseSpan == null) return null;
 		return {
 			field: raw.field,
@@ -683,14 +790,23 @@ final class TrivialGetter implements Check {
 			clauseSpan: clauseSpan,
 			clauseText: raw.clauseText,
 			deletedAccessors: raw.deleted,
-			ctorInit: raw.ctorInit
+			ctorInit: raw.ctorInit,
+			bypassStmts: raw.bypassStmts,
+			inlineGetter: raw.inlineGetter
 		};
 	}
 
-	/** The report message for a collapse `shape` (`nullcase` / `setA` / `setB`). */
-	private static function messageFor(shape: String, propName: String, field: String): String {
+	/**
+	 * The report message for a finding `shape` (`nullcase` / `setA` / `setABypass` / `setAInline` /
+	 * `setB` / `setC`). `count` is the external-write count the two write-aware shape-A arms report
+	 * (`setABypass`: writes to mark `@:bypassAccessor`; `setAInline`: writes blocking the collapse);
+	 * the other shapes ignore it.
+	 */
+	private static function messageFor(shape: String, propName: String, field: String, count: Int = 0): String {
 		return switch shape {
 			case 'setA': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName(default, set)\' and remove get_$propName';
+			case 'setABypass': 'property \'$propName\' has a trivial getter over backing field \'$field\'; use \'var $propName(default, set)\', remove get_$propName and mark $count external write(s) with @:bypassAccessor';
+			case 'setAInline': 'property \'$propName\' has a trivial getter over backing field \'$field\', but $count external write(s) block a (default, set) collapse; mark get_$propName inline';
 			case 'setB': 'property \'$propName\' has a trivial getter and setter over backing field \'$field\'; use a plain field \'var $propName\' and remove get_$propName/set_$propName';
 			case 'setC': 'property \'$propName\' has a trivial setter over backing field \'$field\'; use \'var $propName(get, default)\' and remove set_$propName';
 			case _: 'property \'$propName\' has a trivial getter returning backing field \'$field\'; use \'var $propName(default, null)\' and remove get_$propName';
@@ -754,21 +870,6 @@ final class TrivialGetter implements Check {
 		return isWrite && node.children.length >= 1 ? fieldRefName(node.children[0]) : null;
 	}
 
-	/**
-	 * Whether `node`'s subtree contains a WRITE to `field` outside `exclude` (the kept setter)
-	 * other than the one allowed movable constructor-init `allowWrite`. A `(default, set)`
-	 * property routes writes through `set_field` EVERYWHERE except inside `set_field` itself, so
-	 * an external backing-field write, once renamed to the property name, would start routing
-	 * through the setter — a behavior change. Reads are direct (`default` read) and never gate.
-	 */
-	private static function hasExternalWrite(node: QueryNode, field: String, exclude: Span, allowWrite: Null<QueryNode>): Bool {
-		final span: Null<Span> = node.span;
-		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return false;
-		if (node == allowWrite) return false;
-		if (writeTargetField(node) == field) return true;
-		for (child in node.children) if (hasExternalWrite(child, field, exclude, allowWrite)) return true;
-		return false;
-	}
 
 	/**
 	 * The one relocatable constructor-init write of `field` — a top-level `field = <literal>;` in
@@ -833,9 +934,15 @@ final class TrivialGetter implements Check {
 
 	/**
 	 * The `(get, set)` shape decision for `classifyProperty`, given the already-resolved getter
-	 * node and its trivial-field name (`trivGet`, null when the getter is non-trivial):
+	 * node, its `inline` / `override` flags, and its trivial-field name (`trivGet`, null when the
+	 * getter is non-trivial):
 	 *
-	 * - only the getter trivial -> shape A `(default, set)` (write-gated + constructor-init),
+	 * - only the getter trivial -> shape A, three-way on the external statement-level writes
+	 *   (`collectExternalWrites`, the movable constructor-init excluded): 0 writes -> `(default,
+	 *   set)` collapse; 1..`maxBypass` writes -> the collapse plus `bypassStmts` (each marked
+	 *   `@:bypassAccessor` by the fix); more than `maxBypass`, or any write NOT at statement level
+	 *   -> `inlineGetter` (keep the property, mark `get_x` `inline`), skipped entirely when the
+	 *   getter is already `inline` or carries `override`,
 	 * - both accessors trivial over the same backing field -> shape B (plain field),
 	 * - only the setter trivial -> shape C `(get, default)` (read-gated),
 	 * - else null (both non-trivial).
@@ -848,16 +955,28 @@ final class TrivialGetter implements Check {
 			isPublic: Bool,
 			write: String
 		},
-		getterNode: QueryNode, trivGet: Null<String>, setters: Map<String, { node: QueryNode, dyn: Bool }>,
-		privateFieldNodes: Map<String, QueryNode>
+		getterNode: QueryNode, getterInline: Bool, getterOverride: Bool, trivGet: Null<String>, setters: Map<String, {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}>,
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int
 	): Null<{
 		field: String,
 		clauseText: String,
 		deleted: Array<QueryNode>,
 		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
-		message: String
+		message: String,
+		bypassStmts: Array<QueryNode>,
+		inlineGetter: Null<QueryNode>
 	}> {
-		final setter: Null<{ node: QueryNode, dyn: Bool }> = setters['set_' + prop.name];
+		final setter: Null<{
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		}> = setters['set_' + prop.name];
 		if (setter == null || setter.dyn) return null;
 		final trivSet: Null<String> = trivialSetterField(setter.node);
 		if (trivGet != null && trivSet == null) {
@@ -868,13 +987,31 @@ final class TrivialGetter implements Check {
 			final ci: Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> = fieldNode.children.length == 0
 				? findMovableCtorInit(cls, trivGet)
 				: null;
-			if (hasExternalWrite(cls, trivGet, setterSpan, ci == null ? null : ci.assign)) return null;
-			return {
+			final allowStmt: Null<QueryNode> = ci == null ? null : ci.stmt;
+			final writes: Null<Array<QueryNode>> = collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
+			if (writes != null && writes.length <= maxBypass) return {
 				field: trivGet,
 				clauseText: '(default, set)',
 				deleted: [getterNode],
 				ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
-				message: messageFor('setA', prop.name, trivGet)
+				message: writes.length == 0
+					? messageFor('setA', prop.name, trivGet)
+					: messageFor('setABypass', prop.name, trivGet, writes.length),
+				bypassStmts: writes,
+				inlineGetter: null
+			};
+			// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
+			// property and just inline the getter. Skip when the getter is already inline or overrides
+			// — inline + override do not mix, and an overriding accessor must stay overridable.
+			if (getterInline || getterOverride) return null;
+			return {
+				field: trivGet,
+				clauseText: '',
+				deleted: [],
+				ctorInit: null,
+				message: messageFor('setAInline', prop.name, trivGet, countExternalWrites(cls, trivGet, setterSpan, allowStmt)),
+				bypassStmts: [],
+				inlineGetter: getterNode
 			};
 		}
 		if (trivGet != null && trivSet != null) {
@@ -884,7 +1021,9 @@ final class TrivialGetter implements Check {
 				clauseText: '',
 				deleted: [getterNode, setter.node],
 				ctorInit: null,
-				message: messageFor('setB', prop.name, trivGet)
+				message: messageFor('setB', prop.name, trivGet),
+				bypassStmts: [],
+				inlineGetter: null
 			};
 		}
 		if (trivGet == null && trivSet != null) {
@@ -897,7 +1036,9 @@ final class TrivialGetter implements Check {
 				clauseText: '(get, default)',
 				deleted: [setter.node],
 				ctorInit: null,
-				message: messageFor('setC', prop.name, trivSet)
+				message: messageFor('setC', prop.name, trivSet),
+				bypassStmts: [],
+				inlineGetter: null
 			};
 		}
 		return null;
@@ -929,6 +1070,83 @@ final class TrivialGetter implements Check {
 		if (fieldRefName(node) == field) return true;
 		for (child in node.children) if (hasExternalRead(child, field, exclude)) return true;
 		return false;
+	}
+
+
+	/**
+	 * Prefix each statement-level bypass write in `bypassStmts` with `@:bypassAccessor ` — on the
+	 * collapsed `(default, set)` property such a write is a DIRECT physical field write, so the
+	 * marker preserves the pre-collapse semantics exactly. When a backing-field rename already
+	 * replaces the statement's first token (a bare `_x` write target, at the same offset), the
+	 * marker is FOLDED into that rename's replacement text instead of emitted as a separate
+	 * zero-width edit — a zero-width insert coinciding with the rename's start is dropped by
+	 * `dropContainedEdits`. A `this._x` write starts before its renamed name token, so its marker
+	 * is a standalone insert. Returns false only on an unspanned statement the fix cannot place.
+	 */
+	private static function applyBypassMarks(bypassStmts: Array<QueryNode>, edits: Array<{ span: Span, text: String }>): Bool {
+		for (stmt in bypassStmts) {
+			final span: Null<Span> = stmt.span;
+			if (span == null) return false;
+			final at: Int = span.from;
+			final folded: Null<{ span: Span, text: String }> = edits.find(e -> e.span.from == at && e.span.to > at);
+			if (folded != null)
+				folded.text = '@:bypassAccessor ' + folded.text;
+			else
+				edits.push({ span: new Span(at, at), text: '@:bypassAccessor ' });
+		}
+		return true;
+	}
+
+	/**
+	 * The statement-level external writes to `field` in `node`'s subtree, outside `exclude` (the
+	 * kept setter) and the `allowStmt` subtree (a relocatable constructor-init statement) — each an
+	 * `ExprStmt` whose single child writes `field` (`writeTargetField`, bare or `this.`). Null the
+	 * moment a write to `field` appears NOT in statement position (nested inside a larger
+	 * expression, e.g. `if ((_x = v)) ...`): such a write cannot be marked `@:bypassAccessor`, so
+	 * the caller must fall back to inlining the getter rather than collapsing.
+	 */
+	private static function collectExternalWrites(
+		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>
+	): Null<Array<QueryNode>> {
+		final out: Array<QueryNode> = [];
+		return collectExternalWritesInto(node, field, exclude, allowStmt, out) ? out : null;
+	}
+
+	/**
+	 * Recursive worker of `collectExternalWrites`: appends each statement-level write of `field` to
+	 * `out` and returns true, or returns false the moment a write to `field` sits in a non-statement
+	 * position. A subtree inside `exclude` or equal to `allowStmt` is skipped. A statement-level
+	 * write's own RHS is still scanned (its write target aside), so a nested write there is caught.
+	 */
+	private static function collectExternalWritesInto(
+		node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>, out: Array<QueryNode>
+	): Bool {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return true;
+		if (node == allowStmt) return true;
+		if (node.kind == 'ExprStmt' && node.children.length == 1 && writeTargetField(node.children[0]) == field) {
+			out.push(node);
+			for (c in node.children[0].children) if (!collectExternalWritesInto(c, field, exclude, allowStmt, out)) return false;
+			return true;
+		}
+		if (writeTargetField(node) == field) return false;
+		for (c in node.children) if (!collectExternalWritesInto(c, field, exclude, allowStmt, out)) return false;
+		return true;
+	}
+
+	/**
+	 * The total number of writes to `field` in `node`'s subtree, at ANY expression position, outside
+	 * `exclude` and the `allowStmt` subtree — the count the inline-fallback message reports (the
+	 * statement-level list of `collectExternalWrites` is null when it bails, so the message uses this
+	 * position-agnostic count instead).
+	 */
+	private static function countExternalWrites(node: QueryNode, field: String, exclude: Span, allowStmt: Null<QueryNode>): Int {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from >= exclude.from && span.to <= exclude.to) return 0;
+		if (node == allowStmt) return 0;
+		var n: Int = writeTargetField(node) == field ? 1 : 0;
+		for (c in node.children) n += countExternalWrites(c, field, exclude, allowStmt);
+		return n;
 	}
 
 }
