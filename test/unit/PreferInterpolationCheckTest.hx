@@ -155,7 +155,7 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	public function testConcatDoubleQuotedEscapedQuote(): Void {
-		Assert.equals("'a\"b$x'", fixText(wrap("\"a\\\"b\" + x")));
+		Assert.equals("'a\"b$x'", fixText(wrap('\"a\\\"b\" + x')));
 	}
 
 	public function testConcatParenSubChain(): Void {
@@ -171,7 +171,7 @@ class PreferInterpolationCheckTest extends Test {
 	}
 
 	public function testConcatNumericOnlyNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("a + b")).length);
+		Assert.equals(0, violations(wrap('a + b')).length);
 	}
 
 	public function testConcatInterpolatedOperandSkipped(): Void {

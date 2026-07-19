@@ -378,10 +378,10 @@ final class PreferInterpolation implements Check {
 			case PLit(t):
 				buf.add(t);
 			case PExpr(e):
-				buf.add("${" + e + "}");
+				buf.add("${" + e + '}');
 			case PIdent(name):
 				final nc: Int = nextOutputChar(parts, i + 1);
-				buf.add(nc != -1 && isIdentContinue(nc) ? "${" + name + "}" : "$" + name);
+				buf.add(nc != -1 && isIdentContinue(nc) ? "${" + name + '}' : "$" + name);
 		}
 		return buf.toString();
 	}

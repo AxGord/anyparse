@@ -267,7 +267,7 @@ class ExplicitLocalTypeCheckTest extends Test {
 
 	public function testSkipNonStringReceiverTabledMethod(): Void {
 		// `indexOf` is tabled for String, but the receiver is an Array — not provably String → report-only.
-		assertNoFix("var xs:Array<Int> = [1];\n\t\tfinal i = xs.indexOf(1);");
+		assertNoFix('var xs:Array<Int> = [1];\n\t\tfinal i = xs.indexOf(1);');
 	}
 
 	public function testSkipUntabledStringMethod(): Void {
