@@ -58,6 +58,9 @@ typedef MemberInfo = {
 
 	/** The member's return type OUTER nominal (last `.` segment, `Null<T>` → `Null`), or null for a field / `Void` / unannotated return. Drives cross-file `Null<T>`-return nullable-source resolution. */
 	var returnNominal: Null<String>;
+
+	/** The member's VERBATIM declared type SOURCE — the written `:Type` text (`Null<T>` preserved), or null for an unannotated / inference-typed / function member (whose annotation is a `returnType`, not a `type`). Drives cross-file `Type.staticField` read-type resolution. */
+	var typeSource: Null<String>;
 };
 
 typedef TypeDeclInfo = {
@@ -249,6 +252,35 @@ final class SymbolIndex {
 	 */
 	public function returnNominalOf(typeName: String, memberName: String): Null<String> {
 		return returnNominalWalk(typeName, memberName, []);
+	}
+
+	/**
+	 * The VERBATIM declared type SOURCE of type `typeName`'s member `memberName` — the
+	 * written `:Type` text of a `Type.member` reference, with any `Null<…>` wrapper
+	 * PRESERVED (a read of `Null<T>` IS `Null<T>`) — or null when unknown or AMBIGUOUS.
+	 * DIRECT members only: Haxe does not inherit statics, so a `Type.staticField` never
+	 * resolves through a supertype. Unanimous across every same-named type + member: a
+	 * simple-name collision whose matches disagree on the written type (e.g. a
+	 * conditional-compilation `#if`/`#else` pair with differing types), or a member with
+	 * no recoverable type source (an inference-typed field, a method), yields null. The
+	 * returned source is the type's spelling IN ITS DECLARING FILE — its identity is
+	 * pinned there, but the SIMPLE name may not resolve in a consumer file's import scope
+	 * (a consumer copying it verbatim must confirm the name is in scope; the index models
+	 * no packages, so resolution is by simple name).
+	 */
+	public function memberTypeSourceOf(typeName: String, memberName: String): Null<String> {
+		var found: Null<String> = null;
+		var count: Int = 0;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName) {
+			final ts: Null<String> = m.typeSource;
+			if (ts == null) return null;
+			if (count == 0)
+				found = ts;
+			else if (ts != found)
+				return null;
+			count++;
+		}
+		return found;
 	}
 
 	/**
@@ -455,7 +487,8 @@ final class SymbolIndex {
 			}
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
-			infos.push(extractFileInfo(entry.file, tree, accessors, returnTypes));
+			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
+			infos.push(extractFileInfo(entry.file, tree, accessors, returnTypes, typeSources));
 		}
 		return new SymbolIndex(infos, skipped);
 	}
@@ -476,7 +509,7 @@ final class SymbolIndex {
 		final out: Array<String> = [];
 		for (segment in segments) {
 			out.push(segment);
-			if (segment.length > 0 && isUpperInitial(segment)) return out.join('.');
+			if (segment.length > 0 && RefactorSupport.isUpperInitial(segment)) return out.join('.');
 		}
 		return path;
 	}
@@ -488,7 +521,7 @@ final class SymbolIndex {
 	 * basename drives the module path and the per-type `isMain` flag.
 	 */
 	private static function extractFileInfo(
-		file: String, tree: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>
+		file: String, tree: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>, typeSources: Map<Int, String>
 	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
@@ -507,7 +540,7 @@ final class SymbolIndex {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
-					members: collectMembers(node, accessors, returnTypes)
+					members: collectMembers(node, accessors, returnTypes, typeSources)
 				});
 				continue;
 			}
@@ -566,12 +599,6 @@ final class SymbolIndex {
 		};
 	}
 
-	/** Does `segment` begin with an upper-case ASCII letter? */
-	private static inline function isUpperInitial(segment: String): Bool {
-		final c: Int = StringTools.fastCodeAt(segment, 0);
-		return c >= 'A'.code && c <= 'Z'.code;
-	}
-
 	/**
 	 * Simple names (last `.` segment) of the `extends` / `implements` targets
 	 * under `node` — its supertypes — by reading each `Named` child of an
@@ -619,7 +646,9 @@ final class SymbolIndex {
 	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
 	 * with its getter-property flag from the `accessors` span map (absent = plain).
 	 */
-	private static function collectMembers(node: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>): Array<MemberInfo> {
+	private static function collectMembers(
+		node: QueryNode, accessors: Map<Int, Bool>, returnTypes: Map<Int, String>, typeSources: Map<Int, String>
+	): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
 		collectInto(node, n -> {
 			// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -632,7 +661,12 @@ final class SymbolIndex {
 					// Re-bind to a non-null local — Strict null-safety takes a struct
 					// literal's field type from the declared type, not the narrowed one.
 					final memberName: String = nm;
-					out.push({ name: memberName, hasGetter: accessors[sp.from] ?? false, returnNominal: returnTypes[sp.from] });
+					out.push({
+						name: memberName,
+						hasGetter: accessors[sp.from] ?? false,
+						returnNominal: returnTypes[sp.from],
+						typeSource: typeSources[sp.from]
+					});
 				}
 			}
 		});

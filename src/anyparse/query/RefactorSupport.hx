@@ -567,6 +567,12 @@ final class RefactorSupport {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
 	}
 
+	/** Does `s` begin with an upper-case ASCII letter — the Haxe convention a type name follows, distinguishing a type reference from a lower-case value / package segment? */
+	public static inline function isUpperInitial(s: String): Bool {
+		final c: Int = StringTools.fastCodeAt(s, 0);
+		return c >= 'A'.code && c <= 'Z'.code;
+	}
+
 	public static inline function isIdentChar(c: Int): Bool {
 		return isIdentStartChar(c) || (c >= '0'.code && c <= '9'.code);
 	}

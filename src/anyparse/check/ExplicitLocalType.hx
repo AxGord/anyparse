@@ -35,7 +35,7 @@ import anyparse.runtime.Span;
  * type, so writing it re-states what the compiler already infers — a sound rewrite
  * by construction (the value's static type is UNCHANGED, unlike a `Dynamic`
  * narrowing whose implicit-conversion dispatch would shift). Handled shapes, via the
- * shared `LiteralInfer` (identical to `explicit-type`) plus two local extensions:
+ * shared `LiteralInfer` (identical to `explicit-type`) plus four local extensions:
  *
  *  - a literal — `String` / `Int` / `Float` / `Bool` (negatives included);
  *  - `new T<...>()` with WRITTEN type parameters → `T<...>` verbatim;
@@ -56,15 +56,35 @@ import anyparse.runtime.Span;
  *    method on it proves so). A receiver whose type does not resolve, resolves to a
  *    non-`String` type, or a method absent from the table (a generic `.map()` /
  *    `.filter()`, or nullable-return `charCodeAt`) stays report-only.
+ *  - a plain identifier read `= ident` whose binding (a local, a parameter or an
+ *    own-class field) carries a WRITTEN type → that type VERBATIM, copied unchanged
+ *    (a `Null<…>` field read stays `Null<…>` — a transcription of an existing
+ *    annotation, not an inference). An identifier whose binding does not resolve (an
+ *    inference-typed source, a cross-file inherited field), is re-shadowed in a visible
+ *    scope, or is an OPTIONAL parameter with no default (whose body type `Null<T>`
+ *    differs from its written source `T`, so a verbatim copy would drop the
+ *    nullability) stays report-only.
+ *  - a cross-class STATIC field read `= Type.field` whose type is another class in the
+ *    lint scope: the field's WRITTEN type SOURCE, copied VERBATIM (`Null<…>` preserved)
+ *    from the cross-file `SymbolIndex` (`memberTypeSourceOf`) threaded into `fix`, but ONLY
+ *    when every component of that source is an always-in-scope builtin (String / Int /
+ *    Array / Null / …) — the source is spelled in the field's DECLARING file, so a
+ *    non-builtin name (a user type) might not resolve in the consumer's import scope and
+ *    stays report-only. The receiver must be an upper-initial TYPE reference (a value-bound
+ *    / lower-initial receiver is an INSTANCE access, left report-only) named unambiguously
+ *    in the index, with a member of a single written type (a `#if`/`#else` pair of
+ *    differing types, an inference-typed member, or a simple-name type collision →
+ *    report-only). Without a threaded index — the receiver is cross-file — this shape stays
+ *    report-only.
  *
  * A `new T<...>()` whose type name is a user nominal resolves through the written
  * generics, so no symbol lookup is needed; the built-in `String` / `Int` / `Float` /
  * `Bool` / `Array` always resolve. Everything the initializer does NOT structurally
  * pin — a bare `new T()` (possibly generic), a bare `new Map()`, `= null`, a
  * `.map()` / `.filter()` or any other call whose return depends on generics /
- * inference, a field read, a ternary, an identifier — is left report-only. The
- * conservative skip is deliberate: coverage never trumps soundness, so an
- * uninferable local keeps its finding and no edit.
+ * inference, a ternary, an identifier whose binding carries no written type — is left
+ * report-only. The conservative skip is deliberate: coverage never trumps soundness,
+ * so an uninferable local keeps its finding and no edit.
  *
  * ## Grammar-agnostic
  *
@@ -74,13 +94,25 @@ import anyparse.runtime.Span;
  * `typedCastKinds` (shared with `explicit-type`) plus `arrayLiteralKind` for the
  * array shape, and `stringLiteralMethodReturns` / `callKind` / `fieldAccessKind` /
  * `identKind` / `stringLiteralKinds` / `nullableWrapperTypeNames` (+ the optional
- * `TypeInfoProvider`) for the method-call shape. Any unset seam degrades that shape
- * to report-only.
+ * `TypeInfoProvider`) for the method-call shape; `identKind` + `optionalParamKind` +
+ * the `TypeInfoProvider` also drive the identifier-read shape; `fieldAccessKind` +
+ * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape. Any
+ * unset seam (or absent index) degrades that shape to report-only.
  */
 @:nullSafety(Strict)
 final class ExplicitLocalType implements Check implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'explicit-local-type';
+
+	/**
+	 * Builtin type names available in EVERY Haxe file without an import — the only types a
+	 * cross-file static-field source may be copied verbatim as (a non-builtin name might not
+	 * resolve in, or could bind differently in, the consumer's import scope). Drives
+	 * `allComponentsAlwaysInScope`.
+	 */
+	private static final ALWAYS_IN_SCOPE: Array<String> = [
+		'Int', 'UInt', 'Float', 'Bool', 'String', 'Void', 'Dynamic', 'Any', 'Null', 'Array', 'Map'
+	];
 
 	public function new() {}
 
@@ -150,7 +182,7 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
 			if (node == null || node.children.length == 0) continue;
 			final init: QueryNode = node.children[0];
-			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources);
+			final typeSource: Null<String> = inferLocalType(init, source, shape, tree, castTargets, declaredTypeSources, index);
 			if (typeSource == null) continue;
 			final at: Int = LiteralInfer.insertPoint(node, init, source);
 			if (at >= 0) edits.push({ span: new Span(at, at), text: ':$typeSource' });
@@ -185,15 +217,75 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 	 * The structurally-certain type of a local's `init`: the shared `LiteralInfer`
 	 * shapes first (literal / neg-numeric / written-generic `new` / cast), then a
 	 * homogeneous array literal, then a fixed-return method call on a provable-String
-	 * receiver. Null when none pins the type.
+	 * receiver, then a cross-class `Type.staticField` read (via `index`), then a plain
+	 * identifier read whose binding carries a written type. Null when none pins the type.
 	 */
 	private static function inferLocalType(
 		init: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
-		declaredTypeSources: () -> Map<Int, String>
+		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>
 	): Null<String> {
 		return LiteralInfer.inferType(init, source, shape, castTargets) ?? arrayType(init, shape) ?? methodReturnType(
 			init, shape, tree, declaredTypeSources
-		);
+		) ?? staticFieldType(init, shape, tree, index) ?? resolveIdentTypeSource(init, shape, tree, declaredTypeSources, true);
+	}
+
+	/**
+	 * The verbatim declared type SOURCE of a cross-class static field read `Type.field` —
+	 * a `fieldAccessKind` init whose single receiver child is an upper-initial `identKind`
+	 * TYPE reference (not a value binding) — looked up in the cross-file `index`
+	 * (`memberTypeSourceOf`, `Null<…>` preserved). Returned ONLY when EVERY nominal
+	 * component of that source is an ALWAYS-IN-SCOPE builtin (`ALWAYS_IN_SCOPE`): the
+	 * source is spelled in the field's DECLARING file, so a non-builtin name may not
+	 * resolve in the consumer's import scope (a copied `Foo` needs an `import` the consumer
+	 * may lack, or could bind to a different `Foo`) — a builtin is unambiguously in scope
+	 * everywhere. A qualified receiver (`pkg.Type.field`, whose receiver is itself a field
+	 * access), a lower-initial or value-bound receiver (an INSTANCE access, left
+	 * report-only), an absent / ambiguous type or member, a member with no written type, or
+	 * a non-builtin-typed member all yield null. Null too when no `index` is threaded (the
+	 * receiver is cross-file, so the single-source resolver cannot reach it).
+	 */
+	private static function staticFieldType(init: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>): Null<String> {
+		if (index == null) return null;
+		final faKind: Null<String> = shape.fieldAccessKind;
+		final identKind: Null<String> = shape.identKind;
+		if (faKind == null || identKind == null) return null;
+		if (init.kind != faKind || init.children.length != 1) return null;
+		final member: Null<String> = init.name;
+		if (member == null) return null;
+		final recv: QueryNode = init.children[0];
+		final typeName: Null<String> = recv.name;
+		final span: Null<Span> = recv.span;
+		if (recv.kind != identKind || typeName == null || span == null || !RefactorSupport.isUpperInitial(typeName)) return null;
+		// A receiver that resolves to a local / parameter / field binding is a value — an
+		// INSTANCE field access, a distinct (cross-type instance) case not handled here.
+		// A genuine type reference resolves to no value binding.
+		if (TypeResolver.resolveBindingFrom(typeName, span, tree, shape) != null) return null;
+		final typeSrc: Null<String> = index.memberTypeSourceOf(typeName, member);
+		// The source is spelled in the DECLARING file; copy it into the consumer only when
+		// every component is a builtin guaranteed in scope there (see the doc).
+		return typeSrc != null && allComponentsAlwaysInScope(typeSrc) ? typeSrc : null;
+	}
+
+	/**
+	 * Whether every nominal (identifier) component of the type source `typeSrc` is an
+	 * `ALWAYS_IN_SCOPE` builtin — so the source resolves in ANY file without an import.
+	 * Scans maximal identifier runs (splitting on `<`, `>`, `,`, `.`, whitespace); a
+	 * dotted / generic component whose every segment is builtin still passes, while any
+	 * user-type segment (an unqualified `Foo`, a package segment) fails.
+	 */
+	private static function allComponentsAlwaysInScope(typeSrc: String): Bool {
+		final n: Int = typeSrc.length;
+		var i: Int = 0;
+		while (i < n) {
+			if (!RefactorSupport.isIdentStartChar(StringTools.fastCodeAt(typeSrc, i))) {
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(typeSrc, i))) i++;
+			if (!ALWAYS_IN_SCOPE.contains(typeSrc.substring(start, i))) return false;
+		}
+		return true;
 	}
 
 	/**
@@ -237,19 +329,89 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		final stringKinds: Array<String> = shape.stringLiteralKinds ?? [];
 		if (stringKinds.contains(recv.kind)) return true;
 		final stringType: Null<String> = stringTypeName(shape);
+		if (stringType == null) return false;
+		// A String method on a `Null<String>` / optional-param receiver still returns the tabled
+		// type (`split` -> `Array<String>` regardless), so this path wants the DECLARED type and
+		// must NOT drop optional params (`skipNullableOptionalParam = false`).
+		final typeSrc: Null<String> = resolveIdentTypeSource(recv, shape, tree, declaredTypeSources, false);
+		return typeSrc != null && unwrapNullable(typeSrc, shape) == stringType;
+	}
+
+	/**
+	 * The verbatim (whitespace-stripped) declared type SOURCE of an identifier `recv`'s
+	 * binding — a local, a parameter or an own-class field — via the scope resolver
+	 * (`TypeResolver.resolveBindingFrom`) plus `TypeInfoProvider.declaredTypeSources`.
+	 * Null when `recv` is not an identifier, its binding does not resolve, the binding
+	 * carries no WRITTEN type (an inference-typed source stays report-only), or the name
+	 * is RE-SHADOWED in a visible scope (`var s:String; var s:Foo; … s`) where the
+	 * first-wins resolver diverges from Haxe's nearest-preceding binding. A `Null<…>`
+	 * wrapper is PRESERVED — a caller wanting the narrowed inner type unwraps it itself.
+	 *
+	 * `skipNullableOptionalParam` additionally treats a PARAMETER whose body type differs
+	 * from its written source as unresolved (see `paramTypeSourceUnsafe`: an optional param
+	 * with no default / any `= null` default → `Null<T>`, a rest param → `haxe.Rest<T>`, each
+	 * ≠ the bare written `T`), so a caller that copies the source as the read's type (the
+	 * plain-read arm) must skip it, while a caller that only needs the declared type for a
+	 * method-return lookup passes false.
+	 */
+	private static function resolveIdentTypeSource(
+		recv: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>,
+		skipNullableOptionalParam: Bool
+	): Null<String> {
 		final identKind: Null<String> = shape.identKind;
 		final name: Null<String> = recv.name;
 		final span: Null<Span> = recv.span;
-		if (stringType == null || identKind == null || recv.kind != identKind || name == null || span == null) return false;
+		if (identKind == null || recv.kind != identKind || name == null || span == null) return null;
 		// The scope resolver is first-wins per scope, but Haxe binds to the nearest-preceding
 		// declaration; the two diverge only when a name is re-shadowed in a scope visible at the
-		// use (`var s:String; var s:Foo; s.split(...)`). More than one visible declaration ->
-		// the resolved type is untrustworthy, so bail to report-only.
-		if (visibleDeclCount(tree, shape, name, span) > 1) return false;
+		// use (`var s:String; var s:Foo; … s`). More than one visible declaration -> the
+		// resolved type is untrustworthy, so bail to report-only.
+		if (visibleDeclCount(tree, shape, name, span) > 1) return null;
 		final bindingFrom: Null<Int> = TypeResolver.resolveBindingFrom(name, span, tree, shape);
-		if (bindingFrom == null) return false;
+		if (bindingFrom == null) return null;
+		if (skipNullableOptionalParam && paramTypeSourceUnsafe(tree, shape, bindingFrom)) return null;
 		final typeSrc: Null<String> = declaredTypeSources()[bindingFrom];
-		return typeSrc != null && unwrapNullable(TypeResolver.stripWs(typeSrc), shape) == stringType;
+		return typeSrc == null ? null : TypeResolver.stripWs(typeSrc);
+	}
+
+	/**
+	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
+	 * written type source `T`, so copying the source verbatim as a read's type would be
+	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
+	 * `optionalParamKind` node with no child) and any `= null`-default parameter
+	 * (`TypeResolver.bindingIsDefaultNullParam`) are `Null<T>`; a REST parameter (`...p:T`,
+	 * a `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
+	 * param with a NON-null default, keep `T` and are safe to copy.
+	 */
+	private static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
+		final optKind: Null<String> = shape.optionalParamKind;
+		final optNode: Null<QueryNode> = optKind == null ? null : paramNodeCovering(tree, optKind, bindingFrom);
+		if (optNode != null && optNode.children.length == 0) return true;
+		final paramKinds: Null<Array<String>> = shape.paramKinds;
+		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
+		if (
+			paramKinds != null && nullLiteralKind != null
+			&& TypeResolver.bindingIsDefaultNullParam(tree, bindingFrom, paramKinds, nullLiteralKind)
+		)
+			return true;
+		final restKind: Null<String> = shape.restParamKind;
+		return restKind != null && paramNodeCovering(tree, restKind, bindingFrom) != null;
+	}
+
+	/** The `kind` node whose span covers `bindingFrom` (a parameter decl located by its binding offset), or null. */
+	private static function paramNodeCovering(tree: QueryNode, kind: String, bindingFrom: Int): Null<QueryNode> {
+		var found: Null<QueryNode> = null;
+		function walk(node: QueryNode): Void {
+			if (found != null) return;
+			final s: Null<Span> = node.span;
+			if (s != null && node.kind == kind && s.from <= bindingFrom && bindingFrom < s.to) {
+				found = node;
+				return;
+			}
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return found;
 	}
 
 	/**

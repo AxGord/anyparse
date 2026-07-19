@@ -896,6 +896,14 @@ typedef RefShape = {
 	@:optional var optionalParamKind: String;
 
 	/**
+	 * The node kind of a REST parameter (Haxe `...x: T`, projected as `Rest`), whose
+	 * body type is `haxe.Rest<T>` — NOT the written `T`. Lets a check that copies a
+	 * parameter's written type source (`explicit-local-type`) exempt a rest parameter,
+	 * whose source `T` differs from its effective type. Optional; unset disables the skip.
+	 */
+	@:optional var restParamKind: String;
+
+	/**
 	 * The null-coalescing operator node kind (`a ?? b`, Haxe `NullCoal`) — the
 	 * `redundant-null-coalescing` check flags one whose left operand is provably
 	 * non-null (`TypeResolver.isProvablyNonNull`), making the right operand dead.

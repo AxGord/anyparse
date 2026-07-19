@@ -431,6 +431,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			ifStatementKinds: ['IfStmt'],
 			equalityKinds: ['Eq', 'NotEq'],
 			optionalParamKind: 'Optional',
+			restParamKind: 'Rest',
 			nullableWrapperTypeNames: ['Null', 'Dynamic', 'Any'],
 			nullSafetyDisableArg: 'Off',
 			nonNullableTypeNames: ['Int', 'Float', 'Bool', 'UInt'],
