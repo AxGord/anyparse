@@ -123,7 +123,8 @@ final class Linter {
 			new UnusedReturnValue(),
 			new DocCoverage(),
 			new ExplicitLocalType(),
-			new RedundantBypassAccessor()
+			new RedundantBypassAccessor(),
+			new FieldInitAtDeclaration()
 		];
 	}
 

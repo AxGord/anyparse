@@ -444,6 +444,7 @@ import unit.ExplicitLocalTypeCheckTest;
 import unit.RedundantBypassAccessorCheckTest;
 import unit.PreferTernaryAssignmentCheckTest;
 import unit.InvertNegatedIfElseCheckTest;
+import unit.FieldInitAtDeclarationCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -817,6 +818,7 @@ class RunTests {
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());
 		addCase(new PreferFinalFieldCheckTest());
+		addCase(new FieldInitAtDeclarationCheckTest());
 		addCase(new PreferFinalAbstractMethodCheckTest());
 		addCase(new PreferFinalPublicFieldCheckTest());
 		addCase(new PreferReadOnlyFieldCheckTest());

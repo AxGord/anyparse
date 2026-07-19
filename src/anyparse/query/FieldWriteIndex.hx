@@ -88,6 +88,18 @@ final class FieldWriteIndex {
 	}
 
 	/**
+	 * How many resolved writes target `type`.`field` across the file set — the
+	 * exactly-one-write proof `field-init-at-declaration` needs (a movable constructor
+	 * init is the field's SOLE write). `writtenAnywhere` only answers presence; a mover
+	 * must additionally rule out a second write elsewhere.
+	 */
+	public function writeCount(type: String, field: String): Int {
+		var n: Int = 0;
+		for (w in _writes) if (w.owner == type && w.field == field) n++;
+		return n;
+	}
+
+	/**
 	 * Whether any resolved write to `type`.`field` occurs OUTSIDE the declaring type's
 	 * own source range `(declFile, declSpan)` — an external write that forbids making
 	 * the field externally read-only.

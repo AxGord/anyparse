@@ -7,20 +7,24 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
+import haxe.Exception;
 
 /**
- * Flags a private `var` field whose initializer is its only assignment — a
- * mutable field the immutable `final` should replace — and rewrites `var` to
- * `final`. `Severity.Info` (a modernization cleanup toward immutability), with an
- * autofix. Structurally a sibling of `unused-private`: same confinement gate, same
- * conservative in-file scan.
+ * Flags a private `var` field that the immutable `final` should replace, and rewrites
+ * `var` to `final`. `Severity.Info` (a modernization cleanup toward immutability), with
+ * an autofix. Structurally a sibling of `unused-private`: same confinement gate, same
+ * conservative in-file scan. Two cases qualify: a field whose declaration initializer is
+ * its only assignment, and a no-initializer field whose sole write is exactly one
+ * unconditional top-level constructor statement.
  *
  * ## Soundness — why a missed write is impossible
  *
  * A false negative (a wrong `final` the compiler rejects) is the dangerous
  * direction, so the candidate must be PROVABLY single-assignment:
  *
- * 1. The field has a declaration initializer (one assignment).
+ * 1. The field has a declaration initializer (one assignment), OR is a no-initializer
+ *    field assigned by exactly one unconditional top-level constructor statement (the
+ *    no-initializer case below).
  * 2. It is private and its enclosing type is confined to its file
  *    (`RefactorSupport.isPrivateMemberConfined`) — so every possible write lives
  *    in this file. A non-default visibility (public) is excluded: a public field
@@ -35,8 +39,7 @@ import anyparse.runtime.Span;
  *    a comment / string, reads as a write) which only ever KEEPS a `var`, never
  *    produces a wrong `final`.
  *
- * Together these prove the initializer is the sole assignment, so `var → final` is
- * always sound.
+ * Together these prove the assignment is the sole one, so `var → final` is always sound.
  *
  * ## Whole-project scope required
  *
@@ -48,12 +51,24 @@ import anyparse.runtime.Span;
  * registered as a full-scope check in the `--fix` loop, and the sound usage is
  * linting the whole project (`lint src/`).
  *
- * ## Initializer required; properties skipped
+ * ## No-initializer case; properties skipped
  *
- * A no-initializer field (`final` would need a definite-assignment proof across
- * the constructor this check does not attempt) is skipped, as is a property
- * (`var x(get, set)`) — detected by a `(` in the declaration head — whose accessor
- * machinery `final` does not fit.
+ * A no-initializer field is ALSO flagged when its sole write is exactly one
+ * unconditional top-level constructor statement (`x = expr` / `this.x = expr`, not
+ * nested in a branch / loop / closure) and no other write exists — Haxe allows a
+ * `final` assigned once in the constructor. This covers the unmovable
+ * constructor-argument-dependent fields (`_b = param`) that
+ * `field-init-at-declaration` cannot move to the declaration. A property
+ * (`var x(get, set)`, detected by a `(` in the declaration head) and a function-type
+ * field are skipped in both cases.
+ *
+ * ## Fixpoint chain with `field-init-at-declaration`
+ *
+ * (a) `field-init-at-declaration` moves a context-free constructor init to the
+ * declaration, and the declaration-initializer case above then rewrites the `var` to
+ * `final`; (b) the no-initializer case here also covers the constructor-argument
+ * fields that rule cannot move. Both rules handle `var` and `final`, so any pass
+ * ordering converges to the same fixpoint.
  */
 @:nullSafety(Strict)
 final class PreferFinalField implements Check {
@@ -76,7 +91,7 @@ final class PreferFinalField implements Check {
 		if (provider != null) for (entry in files) declaredTypesByFile[entry.file] = provider.declaredTypes(entry.source);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (!exported) considerField(violations, file, source, field, owner, index, declaredTypesByFile[file], abstractKinds);
+			if (!exported) considerField(violations, file, source, field, owner, index, plugin, declaredTypesByFile[file], abstractKinds);
 		});
 		return violations;
 	}
@@ -94,28 +109,65 @@ final class PreferFinalField implements Check {
 	}
 
 	/**
-	 * Flag `field` when it has an initializer, is not a property, its type is confined,
-	 * no other write to its name appears in the file, and a method call on it cannot
-	 * mutate an abstract's underlying value (see `abstractMethodMayMutate`).
+	 * Flag `field` for `var → final` in either case: a field WITH an initializer that is
+	 * not a property, confined, not written elsewhere, and not an abstract's mutable
+	 * underlying (`abstractMethodMayMutate`); OR a no-initializer field whose sole write
+	 * is exactly one unconditional top-level constructor statement, delegated to
+	 * `considerNoInitField`.
 	 */
 	private static function considerField(
-		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
+		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex, plugin: GrammarPlugin,
 		declaredTypes: Null<Map<Int, String>>, abstractKinds: Array<String>
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
-		if (!RefactorSupport.isInitializedNonPropertyField(source, field)) return;
+		if (RefactorSupport.isInitializedNonPropertyField(source, field)) {
+			if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
+			if (writtenInFile(source, name, span)) return;
+			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
+			if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, index, abstractKinds)) return;
+			flag(out, file, span, name, 'is assigned only at its declaration');
+			return;
+		}
+		if (field.children.length >= 1) return;
+		if (source.substring(span.from, span.to).indexOf('(') >= 0) return;
+		considerNoInitField(out, file, source, field, name, span, owner, index, plugin);
+	}
+
+	/**
+	 * Flag a no-initializer private confined `var` whose sole write is exactly one
+	 * unconditional top-level constructor statement — `final`-izable in place (the
+	 * constructor keeps the single assignment). Any other write to the field name, or a
+	 * shadowing local / parameter that owns the constructor assignment, leaves it a `var`.
+	 */
+	private static function considerNoInitField(
+		out: Array<Violation>, file: String, source: String, field: QueryNode, name: String, span: Span, owner: String, index: SymbolIndex,
+		plugin: GrammarPlugin
+	): Void {
 		if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
-		if (writtenInFile(source, name, span)) return;
-		final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-		if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, index, abstractKinds)) return;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return;
+		final loc: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			stmt: QueryNode,
+			rhs: QueryNode,
+			target: Span
+		}> = RefactorSupport.constructorFieldInitAt(tree, span.from, plugin.refShape());
+		if (loc == null) return;
+		if (writtenInFile(source, name, loc.target)) return;
+		flag(out, file, span, name, 'is assigned only in the constructor');
+	}
+
+	/** Push a `prefer-final-field` violation for `name` at `span` with the reason phrase `reason`. */
+	private static inline function flag(out: Array<Violation>, file: String, span: Span, name: String, reason: String): Void {
 		out.push({
 			file: file,
 			span: span,
 			rule: 'prefer-final-field',
 			severity: Severity.Info,
-			message: 'field \'$name\' is assigned only at its declaration; use final'
+			message: 'field \'$name\' $reason; use final'
 		});
 	}
 

@@ -1343,7 +1343,8 @@ final class Cli {
 			'prefer-final-field',
 			'unused-parameter',
 			'prefer-final-public-field',
-			'prefer-read-only-field'
+			'prefer-read-only-field',
+			'field-init-at-declaration'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];
