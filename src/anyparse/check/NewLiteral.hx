@@ -4,6 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.runtime.Span;
+import anyparse.query.GrammarPlugin.RefShape;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeResolver;
 
 /**
  * Shared engine for the collection-literal checks (`prefer-array-literal`,
@@ -48,9 +51,10 @@ final class NewLiteral {
 
 	/** Rewrite each flagged `new <typeName>()` to the `[]` literal — but only where the target type is pinned by an annotation. */
 	public static function fix(
-		source: String, violations: Array<Violation>, plugin: GrammarPlugin, typeName: String
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, typeName: String, ?symbolIndex: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final newExprKind: Null<String> = plugin.refShape().newExprKind;
+		final shape: RefShape = plugin.refShape();
+		final newExprKind: Null<String> = shape.newExprKind;
 		if (newExprKind == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
@@ -58,6 +62,11 @@ final class NewLiteral {
 		final nodeByKey: Map<String, QueryNode> = [];
 		final parentByKey: Map<String, QueryNode> = [];
 		index(tree, null, newExprKind, nodeByKey, parentByKey);
+
+		// A plain-assignment target's declared type comes from the binding's WRITTEN annotation
+		// via `TypeInfoProvider.declaredTypeSources` — resolved lazily, so a file whose findings
+		// are all annotated declarations never pays for the parse.
+		final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -69,8 +78,15 @@ final class NewLiteral {
 			final parent: Null<QueryNode> = parentByKey[key];
 			if (parent == null) continue;
 			final parentSpan: Null<Span> = parent.span;
-			if (parentSpan == null || !pinnedByTypeHint(source, parentSpan.from, span.from)) continue;
-			edits.push({ span: span, text: '[]' });
+			if (parentSpan == null) continue;
+			// Rewrite when the `new` is the direct initializer of an annotated declaration
+			// (`var xs:Array<Int> = new …`), OR the RHS of a plain assignment whose lvalue's
+			// declaration pins the collection type.
+			if (
+				pinnedByTypeHint(source, parentSpan.from, span.from)
+				|| assignmentTargetPinsType(parent, node, shape, tree, symbolIndex, declaredTypeSources, typeName)
+			)
+				edits.push({ span: span, text: '[]' });
 		}
 		return edits;
 	}
@@ -159,6 +175,71 @@ final class NewLiteral {
 			}
 		}
 		return sawColon;
+	}
+
+
+	/**
+	 * Whether the flagged `new` node is the RHS of a plain assignment (`assignKind`) whose
+	 * lvalue's DECLARATION pins the collection type — the only assignment context where `[]`
+	 * safely preserves the intended type: in a plain assignment the lvalue is already typed,
+	 * so `[]` unifies with that type (an `Array` / `Map` distinction the annotation carries).
+	 * The lvalue must be a bare identifier — resolved to its own-class field / parameter /
+	 * typed local via `TypeResolver.identDeclaredTypeSource` — or `this.<field>`, resolved to
+	 * the enclosing type's member via the cross-file `SymbolIndex` (`memberTypeSourceOf`). Any
+	 * other lvalue (a field access on another value, a static `Type.field`), an unresolved /
+	 * unannotated binding, or a binding whose declared type's outer nominal is not `typeName`
+	 * yields false — conservative by construction, never guessing across a type the resolvers
+	 * cannot prove.
+	 */
+	private static function assignmentTargetPinsType(
+		parent: QueryNode, newNode: QueryNode, shape: RefShape, tree: QueryNode, symbolIndex: Null<SymbolIndex>,
+		declaredTypeSources: () -> Map<Int, String>, typeName: String
+	): Bool {
+		final assignKind: Null<String> = shape.assignKind;
+		if (assignKind == null || parent.kind != assignKind || parent.children.length != 2) return false;
+		// The `new` must be the assignment's RHS (`children[1]`), not a nested position.
+		final rhs: QueryNode = parent.children[1];
+		final rhsSpan: Null<Span> = rhs.span;
+		final newSpan: Null<Span> = newNode.span;
+		if (rhsSpan == null || newSpan == null) return false;
+		if (rhsSpan.from != newSpan.from || rhsSpan.to != newSpan.to) return false;
+		final typeSrc: Null<String> = lvalueTypeSource(parent.children[0], shape, tree, symbolIndex, declaredTypeSources, newSpan);
+		return typeSrc != null && outerNominal(typeSrc) == typeName;
+	}
+
+	/**
+	 * The declared type SOURCE of an assignment lvalue, or null when it cannot be soundly
+	 * resolved. A bare identifier resolves through `TypeResolver.identDeclaredTypeSource`
+	 * (own-field / parameter / typed-local, shadow-guarded); a `this.<field>` access resolves
+	 * to the enclosing type's member via the `SymbolIndex` (`memberTypeSourceOf`). Every other
+	 * lvalue shape — including a field access on another receiver or a static `Type.field` —
+	 * yields null.
+	 */
+	private static function lvalueTypeSource(
+		lval: QueryNode, shape: RefShape, tree: QueryNode, symbolIndex: Null<SymbolIndex>, declaredTypeSources: () -> Map<Int, String>,
+		newSpan: Span
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final faKind: Null<String> = shape.fieldAccessKind;
+		if (identKind != null && lval.kind == identKind)
+			return TypeResolver.identDeclaredTypeSource(lval, shape, tree, declaredTypeSources, false);
+		if (faKind == null || identKind == null || lval.kind != faKind || lval.children.length != 1) return null;
+		final recv: QueryNode = lval.children[0];
+		final member: Null<String> = lval.name;
+		if (symbolIndex == null || member == null || recv.kind != identKind || recv.name != 'this') return null;
+		final enclosing: Null<String> = TypeResolver.enclosingTypeName(tree, newSpan);
+		return enclosing == null ? null : symbolIndex.memberTypeSourceOf(enclosing, member);
+	}
+
+	/**
+	 * The simple OUTER nominal of a declared type source — `Array<Int>` / `haxe.ds.Map<K, V>`
+	 * → `Array` / `Map`. The generic tail is cut at the first `<`, then the last `.`-segment
+	 * is taken (`TypeResolver.simpleNominalName`). Null when the base is not a plain nominal (a
+	 * function type, an anonymous struct), so such a target stays a finding.
+	 */
+	private static function outerNominal(typeSrc: String): Null<String> {
+		final lt: Int = typeSrc.indexOf('<');
+		return TypeResolver.simpleNominalName(lt == -1 ? typeSrc : typeSrc.substring(0, lt));
 	}
 
 }

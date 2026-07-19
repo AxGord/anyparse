@@ -33,7 +33,7 @@ final class PreferArrayLiteral implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return NewLiteral.fix(source, violations, plugin, TYPE_NAME);
+		return NewLiteral.fix(source, violations, plugin, TYPE_NAME, index);
 	}
 
 }

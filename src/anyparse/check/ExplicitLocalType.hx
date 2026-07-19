@@ -111,7 +111,17 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 	 * `allComponentsAlwaysInScope`.
 	 */
 	private static final ALWAYS_IN_SCOPE: Array<String> = [
-		'Int', 'UInt', 'Float', 'Bool', 'String', 'Void', 'Dynamic', 'Any', 'Null', 'Array', 'Map'
+		'Int',
+		'UInt',
+		'Float',
+		'Bool',
+		'String',
+		'Void',
+		'Dynamic',
+		'Any',
+		'Null',
+		'Array',
+		'Map'
 	];
 
 	public function new() {}
@@ -166,15 +176,7 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		// A variable-receiver method call needs the receiver's declared type SOURCE (verbatim,
 		// so `Null<String>` survives — `declaredTypes` would collapse it to the outer `Null`),
 		// resolved lazily and cached like the cast targets above.
-		var declaredTypeSourcesCache: Null<Map<Int, String>> = null;
-		function declaredTypeSources(): Map<Int, String> {
-			final existing: Null<Map<Int, String>> = declaredTypeSourcesCache;
-			if (existing != null) return existing;
-			final p: Null<TypeInfoProvider> = provider;
-			final computed: Map<Int, String> = p != null ? p.declaredTypeSources(source) : [];
-			declaredTypeSourcesCache = computed;
-			return computed;
-		}
+		final declaredTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -226,7 +228,7 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 	): Null<String> {
 		return LiteralInfer.inferType(init, source, shape, castTargets) ?? arrayType(init, shape) ?? methodReturnType(
 			init, shape, tree, declaredTypeSources
-		) ?? staticFieldType(init, shape, tree, index) ?? resolveIdentTypeSource(init, shape, tree, declaredTypeSources, true);
+		) ?? staticFieldType(init, shape, tree, index) ?? TypeResolver.identDeclaredTypeSource(init, shape, tree, declaredTypeSources, true);
 	}
 
 	/**
@@ -333,112 +335,10 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		// A String method on a `Null<String>` / optional-param receiver still returns the tabled
 		// type (`split` -> `Array<String>` regardless), so this path wants the DECLARED type and
 		// must NOT drop optional params (`skipNullableOptionalParam = false`).
-		final typeSrc: Null<String> = resolveIdentTypeSource(recv, shape, tree, declaredTypeSources, false);
+		final typeSrc: Null<String> = TypeResolver.identDeclaredTypeSource(recv, shape, tree, declaredTypeSources, false);
 		return typeSrc != null && unwrapNullable(typeSrc, shape) == stringType;
 	}
 
-	/**
-	 * The verbatim (whitespace-stripped) declared type SOURCE of an identifier `recv`'s
-	 * binding — a local, a parameter or an own-class field — via the scope resolver
-	 * (`TypeResolver.resolveBindingFrom`) plus `TypeInfoProvider.declaredTypeSources`.
-	 * Null when `recv` is not an identifier, its binding does not resolve, the binding
-	 * carries no WRITTEN type (an inference-typed source stays report-only), or the name
-	 * is RE-SHADOWED in a visible scope (`var s:String; var s:Foo; … s`) where the
-	 * first-wins resolver diverges from Haxe's nearest-preceding binding. A `Null<…>`
-	 * wrapper is PRESERVED — a caller wanting the narrowed inner type unwraps it itself.
-	 *
-	 * `skipNullableOptionalParam` additionally treats a PARAMETER whose body type differs
-	 * from its written source as unresolved (see `paramTypeSourceUnsafe`: an optional param
-	 * with no default / any `= null` default → `Null<T>`, a rest param → `haxe.Rest<T>`, each
-	 * ≠ the bare written `T`), so a caller that copies the source as the read's type (the
-	 * plain-read arm) must skip it, while a caller that only needs the declared type for a
-	 * method-return lookup passes false.
-	 */
-	private static function resolveIdentTypeSource(
-		recv: QueryNode, shape: RefShape, tree: QueryNode, declaredTypeSources: () -> Map<Int, String>,
-		skipNullableOptionalParam: Bool
-	): Null<String> {
-		final identKind: Null<String> = shape.identKind;
-		final name: Null<String> = recv.name;
-		final span: Null<Span> = recv.span;
-		if (identKind == null || recv.kind != identKind || name == null || span == null) return null;
-		// The scope resolver is first-wins per scope, but Haxe binds to the nearest-preceding
-		// declaration; the two diverge only when a name is re-shadowed in a scope visible at the
-		// use (`var s:String; var s:Foo; … s`). More than one visible declaration -> the
-		// resolved type is untrustworthy, so bail to report-only.
-		if (visibleDeclCount(tree, shape, name, span) > 1) return null;
-		final bindingFrom: Null<Int> = TypeResolver.resolveBindingFrom(name, span, tree, shape);
-		if (bindingFrom == null) return null;
-		if (skipNullableOptionalParam && paramTypeSourceUnsafe(tree, shape, bindingFrom)) return null;
-		final typeSrc: Null<String> = declaredTypeSources()[bindingFrom];
-		return typeSrc == null ? null : TypeResolver.stripWs(typeSrc);
-	}
-
-	/**
-	 * Whether the parameter binding at `bindingFrom` has a body type that DIFFERS from its
-	 * written type source `T`, so copying the source verbatim as a read's type would be
-	 * wrong. Three forms qualify: an OPTIONAL parameter with no default (`?p:T`, an
-	 * `optionalParamKind` node with no child) and any `= null`-default parameter
-	 * (`TypeResolver.bindingIsDefaultNullParam`) are `Null<T>`; a REST parameter (`...p:T`,
-	 * a `restParamKind` node) is `haxe.Rest<T>`. A required param, and an optional / required
-	 * param with a NON-null default, keep `T` and are safe to copy.
-	 */
-	private static function paramTypeSourceUnsafe(tree: QueryNode, shape: RefShape, bindingFrom: Int): Bool {
-		final optKind: Null<String> = shape.optionalParamKind;
-		final optNode: Null<QueryNode> = optKind == null ? null : paramNodeCovering(tree, optKind, bindingFrom);
-		if (optNode != null && optNode.children.length == 0) return true;
-		final paramKinds: Null<Array<String>> = shape.paramKinds;
-		final nullLiteralKind: Null<String> = shape.nullLiteralKind;
-		if (
-			paramKinds != null && nullLiteralKind != null
-			&& TypeResolver.bindingIsDefaultNullParam(tree, bindingFrom, paramKinds, nullLiteralKind)
-		)
-			return true;
-		final restKind: Null<String> = shape.restParamKind;
-		return restKind != null && paramNodeCovering(tree, restKind, bindingFrom) != null;
-	}
-
-	/** The `kind` node whose span covers `bindingFrom` (a parameter decl located by its binding offset), or null. */
-	private static function paramNodeCovering(tree: QueryNode, kind: String, bindingFrom: Int): Null<QueryNode> {
-		var found: Null<QueryNode> = null;
-		function walk(node: QueryNode): Void {
-			if (found != null) return;
-			final s: Null<Span> = node.span;
-			if (s != null && node.kind == kind && s.from <= bindingFrom && bindingFrom < s.to) {
-				found = node;
-				return;
-			}
-			for (c in node.children) walk(c);
-		}
-		walk(tree);
-		return found;
-	}
-
-	/**
-	 * The number of declarations of `name` VISIBLE at `useSpan` — a `declHostKinds`
-	 * node named `name` whose innermost enclosing `scopeKinds` scope also contains
-	 * `useSpan`. More than one means the name is re-shadowed in a visible scope, where
-	 * the first-wins scope resolver cannot be trusted to match Haxe's binding.
-	 */
-	private static function visibleDeclCount(tree: QueryNode, shape: RefShape, name: String, useSpan: Span): Int {
-		final declHostKinds: Array<String> = shape.declHostKinds;
-		final scopeKinds: Array<String> = shape.scopeKinds;
-		var count: Int = 0;
-		final scopeStack: Array<Span> = [];
-		function walk(node: QueryNode): Void {
-			final s: Null<Span> = node.span;
-			if (s != null && node.name == name && declHostKinds.contains(node.kind) && scopeStack.length > 0) {
-				final enc: Span = scopeStack[scopeStack.length - 1];
-				if (enc.from <= useSpan.from && useSpan.to <= enc.to) count++;
-			}
-			final scopeSpan: Null<Span> = (s != null && scopeKinds.contains(node.kind)) ? s : null;
-			if (scopeSpan != null) scopeStack.push(scopeSpan);
-			for (c in node.children) walk(c);
-			if (scopeSpan != null) scopeStack.pop();
-		}
-		walk(tree);
-		return count;
-	}
 
 	/**
 	 * The grammar's string type name (`String`) — the type a string literal denotes,
