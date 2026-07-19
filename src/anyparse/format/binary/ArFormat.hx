@@ -19,7 +19,6 @@ final class ArFormat implements BinaryFormat {
 	public var name(default, null): String = 'ar';
 	public var version(default, null): String = '1.0';
 	public var encoding(default, null): Encoding = Encoding.Binary;
-
 	public var endianness(default, null): Endianness = Endianness.Big;
 	public var tagSize(default, null): Int = 0;
 	public var magicBytes(default, null): Null<haxe.io.Bytes> = null;

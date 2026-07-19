@@ -21,6 +21,7 @@ import anyparse.core.Strategy;
 class StrategyRegistry {
 
 	private final _strategies: Array<Strategy> = [];
+
 	private var _ordered: Array<Strategy> = [];
 
 	public function new() {}

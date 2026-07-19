@@ -88,7 +88,6 @@ final class SetDoc {
 		}
 	}
 
-
 	/**
 	 * The writer-canonical form of `source` with NO edit applied — the comparison
 	 * baseline the no-op guard uses under `reformat`, where the edited result

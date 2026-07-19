@@ -30,6 +30,7 @@ class GeneratedRule {
 	public final returnCT: ComplexType;
 	public final eregs: Array<EregSpec>;
 	public final hasMinPrec: Bool;
+
 	public var body: Expr;
 
 	public function new(fnName: String, returnCT: ComplexType, body: Expr, eregs: Array<EregSpec>, hasMinPrec: Bool = false) {

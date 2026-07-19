@@ -85,7 +85,6 @@ final class RedundantNullCoalescing implements Check {
 			});
 	}
 
-
 	/** Resolve the null-coalescing seam kind plus opaque kinds and shape, or null when the coalesce kind is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
 		final shape: RefShape = plugin.refShape();

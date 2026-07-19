@@ -113,6 +113,7 @@ final class Metavar {
 
 	public static final KIND: String = 'Metavar';
 	public static final WILDCARD_NAME: String = '_';
+
 	private static final PLACEHOLDER_PREFIX: String = '__APQ_MV_';
 	private static final PLACEHOLDER_SUFFIX: String = '_END__';
 

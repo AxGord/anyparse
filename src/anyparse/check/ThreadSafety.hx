@@ -51,9 +51,7 @@ import anyparse.check.Check.ConfigAware;
 final class ThreadSafety implements Check implements ConfigAware {
 
 	private static inline final CTX_MAIN: Int = 1;
-
 	private static inline final CTX_BG: Int = 2;
-
 	private static inline final CHAIN_CAP: Int = 8;
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */

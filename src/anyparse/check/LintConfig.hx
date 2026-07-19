@@ -138,7 +138,6 @@ final class LintConfig {
 		return resolve != null ? resolve(path) : discover(path);
 	}
 
-
 	/**
 	 * Parse `apqlint.json` content. Tolerant: malformed JSON, a non-object root,
 	 * or a missing `rules` object all yield an empty config — never throws, so a
@@ -159,7 +158,6 @@ final class LintConfig {
 		}
 		return new LintConfig(rules, oracle, oracle == null ? null : baseDir);
 	}
-
 
 	private static function parseRule(raw: Dynamic): RuleConfig {
 		final props: DynamicAccess<Dynamic> = raw;

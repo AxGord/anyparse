@@ -62,7 +62,6 @@ class SpanTypeSynth {
 	private static inline final SPAN_FIELD_NAME: String = '_span';
 	private static inline final KIND_FIELD_NAME: String = '_kind';
 	private static inline final SPANNED_META: String = ':spanned';
-
 	private static final shapes: Array<ShapeBuilder.ShapeResult> = [];
 	private static final defined: Map<String, Bool> = [];
 

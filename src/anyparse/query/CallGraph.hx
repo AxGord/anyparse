@@ -110,14 +110,13 @@ final class CallGraph {
 	public final nodes: Map<String, FnNode> = [];
 	public final edges: Array<CallEdge> = [];
 	public final unresolved: Array<UnresolvedCall> = [];
-
 	public final skippedFiles: Array<String> = [];
+
 	private final _out: Map<String, Array<CallEdge>> = [];
 	private final _in: Map<String, Array<CallEdge>> = [];
 	private final _byMember: Map<String, Array<String>> = [];
 	private final _members: Map<String, Map<String, String>> = [];
 	private final _supers: Map<String, Array<String>> = [];
-
 	private final _subs: Map<String, Array<String>> = [];
 
 	private function new() {}

@@ -19,17 +19,6 @@ package anyparse.runtime;
 @:nullSafety(Strict)
 final class Parser {
 
-	public final input: Input;
-	public final errors: Array<ParseError> = [];
-	public final indentStack: Array<Int> = [];
-	public final captures: Map<String, String> = [];
-
-	public var pos: Int = 0;
-	// Deliberately mutable: the injection point for the planned cache
-	// layer (swap NoOpCache for a real ParseCache per parse session).
-	public var cache: ParseCache = NoOpCache.instance; // noqa: prefer-final-public-field
-	public var cancelled: () -> Bool = alwaysFalse;
-
 	/**
 	 * Farthest-failure tracker (PEG "max position" heuristic). Every
 	 * failed terminal match records its attempt position here; the
@@ -44,6 +33,19 @@ final class Parser {
 	public var maxFailPos(default, null): Int = -1;
 
 	public var maxFailExpected(default, null): Null<String> = null;
+
+	public final input: Input;
+	public final errors: Array<ParseError> = [];
+	public final indentStack: Array<Int> = [];
+	public final captures: Map<String, String> = [];
+
+	public var pos: Int = 0;
+
+	// Deliberately mutable: the injection point for the planned cache
+	// layer (swap NoOpCache for a real ParseCache per parse session).
+	public var cache: ParseCache = NoOpCache.instance; // noqa: prefer-final-public-field
+
+	public var cancelled: () -> Bool = alwaysFalse;
 
 	/**
 	 * Trivia carry-over slot (slice ω₆b). Generated Trivia-mode parsers

@@ -27,7 +27,6 @@ import anyparse.runtime.Span;
 final class PreferCaseWildcard implements Check {
 
 	private static final KEYWORD: String = 'default';
-
 	private static final REPLACEMENT: String = 'case _';
 
 	public function new() {}

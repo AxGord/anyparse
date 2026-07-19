@@ -104,7 +104,6 @@ final class SymbolIndex {
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = ['ClassDecl', 'InterfaceDecl', 'EnumDecl'];
 
 	private final _files: Array<FileInfo>;
-
 	private final _skipped: Array<String>;
 
 	private function new(files: Array<FileInfo>, skipped: Array<String>) {

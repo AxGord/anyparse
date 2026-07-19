@@ -60,7 +60,6 @@ final class LoopGuard implements Check {
 	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
 
-
 	public function new() {}
 
 	public function id(): String {

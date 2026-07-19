@@ -1203,7 +1203,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return value == null || value is String || Std.isOfType(value, Span);
 	}
 
-
 	/**
 	 * True when `v` is an `HxType.Anon` enum value — the anon-struct
 	 * type whose `fields` carry decl-host members + their metadata.

@@ -58,6 +58,7 @@ final class ScopeStack {
 final class ScopeFrame {
 
 	public final node: QueryNode;
+
 	private final _bindings: Map<String, Span> = [];
 
 	public function new(node: QueryNode) {

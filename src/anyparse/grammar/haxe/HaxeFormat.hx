@@ -60,23 +60,18 @@ final class HaxeFormat implements TextFormat {
 	public var name(default, null): String = 'Haxe';
 	public var version(default, null): String = '4';
 	public var encoding(default, null): Encoding = Encoding.UTF8;
-
 	public var mappingOpen(default, null): String = '{';
 	public var mappingClose(default, null): String = '}';
 	public var sequenceOpen(default, null): Null<String> = null;
 	public var sequenceClose(default, null): Null<String> = null;
 	public var keyValueSep(default, null): String = ':';
 	public var entrySep(default, null): String = ',';
-
 	public var whitespace(default, null): String = ' \t\n\r';
 	public var lineComment(default, null): Null<String> = '//';
 	public var blockComment(default, null): Null<BlockCommentDelims> = { open: '/*', close: '*/' };
-
 	public var keySyntax(default, null): KeySyntax = KeySyntax.Unquoted;
 	public var stringQuote(default, null): Array<String> = ['"', "'"];
-
 	public var fieldLookup(default, null): FieldLookup = FieldLookup.ByName;
-
 	public var trailingSep(default, null): TrailingSepPolicy = TrailingSepPolicy.Disallowed;
 	public var onMissing(default, null): MissingPolicy = MissingPolicy.Error;
 	public var onUnknown(default, null): UnknownPolicy = UnknownPolicy.Error;

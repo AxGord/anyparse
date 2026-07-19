@@ -44,7 +44,6 @@ class ParseError extends Exception {
 
 	public final span: Span;
 	public final expected: Null<String>;
-
 	public final severity: Severity;
 
 	/**

@@ -391,6 +391,16 @@ final class TypeResolver {
 		return isInferenceOpenFieldAccess(fallback, root, shape, declaredTypes);
 	}
 
+	/** `s` with every space / tab / newline removed (whitespace is insignificant in a type). */
+	public static function stripWs(s: String): String {
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...s.length) {
+			final c: Int = StringTools.fastCodeAt(s, i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
+		}
+		return buf.toString();
+	}
+
 	/** The innermost type declaration whose span contains `faSpan`, or null. */
 	private static function innermostTypeDecl(tree: QueryNode, faSpan: Span): Null<TypeDeclMatch> {
 		var best: Null<TypeDeclMatch> = null;
@@ -418,16 +428,6 @@ final class TypeResolver {
 		if (node.name == name) return true;
 		for (c in node.children) if (subtreeHasName(c, name)) return true;
 		return false;
-	}
-
-	/** `s` with every space / tab / newline removed (whitespace is insignificant in a type). */
-	public static function stripWs(s: String): String {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...s.length) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
-		}
-		return buf.toString();
 	}
 
 	/** Whether `c` is a character of a plain nominal type reference — `[A-Za-z0-9_.]`. */
@@ -479,7 +479,6 @@ final class TypeResolver {
 		return scopes;
 	}
 
-
 	/** Whether `kind` is a member or type declaration — a scope a `@:nullSafety` meta can annotate. */
 	private static inline function isDeclScope(kind: String): Bool {
 		return RefactorSupport.isFieldMemberKind(kind) || isTypeDeclScope(kind);
@@ -494,7 +493,6 @@ final class TypeResolver {
 	private static inline function isTypeDeclScope(kind: String): Bool {
 		return RefactorSupport.TYPE_DECL_KINDS.contains(kind) || kind == 'FinalDecl';
 	}
-
 
 	/**
 	 * The binding `operand` (an identifier) resolves to for nullability — the naive lexical
@@ -517,7 +515,6 @@ final class TypeResolver {
 		final selfLocal: Null<Span> = selfShadowLocalSpan(root, localDeclKinds, name, opSpan, naiveFrom);
 		return selfLocal == null ? naive : enclosingBindingFrom(root, shape, name, selfLocal, opSpan);
 	}
-
 
 	/**
 	 * The span of the local `var` / `final` declaration `operand` naively binds to WHEN that
@@ -545,7 +542,6 @@ final class TypeResolver {
 		walk(tree);
 		return found;
 	}
-
 
 	/**
 	 * The `from` of the binding of `name` visible in the scope ENCLOSING the self-shadowing
