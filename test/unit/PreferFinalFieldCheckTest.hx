@@ -10,10 +10,12 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
 /**
- * The `prefer-final-field` check: a private `var` field assigned only at its
- * declaration is flagged `Info` and `var` rewritten to `final`. A public field, a
- * field written elsewhere (`=` / `this.x =` / `++`), a no-init field, a property,
- * and a field of a non-confined type are left alone.
+ * The `prefer-final-field` check: a private `var` field is flagged `Info` and `var`
+ * rewritten to `final` when it is assigned only at its declaration, OR has no
+ * initializer and its sole write is exactly one unconditional top-level constructor
+ * statement. A public field, a field written elsewhere (`=` / `this.x =` / `++`), a
+ * no-init field written more than once / conditionally / outside the constructor, a
+ * property, and a field of a non-confined type are left alone.
  */
 class PreferFinalFieldCheckTest extends Test {
 
@@ -45,8 +47,17 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, violations('class C { private var _x:Int = 0; function i():Void { _x++; } }').length);
 	}
 
-	public function testNoInitNotFlagged(): Void {
-		Assert.equals(0, violations('class C { private var _x:Int; public function new() { _x = 1; } }').length);
+	/** A no-init private var whose sole write is one top-level constructor statement is now flagged (var → final). */
+	public function testNoInitSingleCtorWriteFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { private var _x:Int; public function new() { _x = 1; } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-final-field', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	/** A no-init field written twice in the constructor is not single-assignment — left alone. */
+	public function testNoInitWrittenTwiceNotFlagged(): Void {
+		Assert.equals(0, violations('class C { private var _x:Int; public function new() { _x = 1; _x = 2; } }').length);
 	}
 
 	/** A read (`return _x`) and a comparison (`_x == 1`) are not writes — still flagged. */
@@ -107,6 +118,35 @@ class PreferFinalFieldCheckTest extends Test {
 	/** A prefix `++`/`--` separated from the field by a comment is still detected — not flagged. */
 	public function testPrefixIncrementWithCommentNotFlagged(): Void {
 		Assert.equals(0, violations('class C { private var _d:Int = 4; function f():Void { ++ /* c */ _d; } }').length);
+	}
+
+	/** A no-init field assigned only conditionally (not a top-level constructor statement) — left alone. */
+	public function testNoInitConditionalNotFlagged(): Void {
+		Assert.equals(0, violations('class C { private var _x:Int; public function new(c:Bool) { if (c) _x = 1; } }').length);
+	}
+
+	/** A no-init field assigned only in a non-constructor method — left alone (no single constructor init). */
+	public function testNoInitMethodWriteNotFlagged(): Void {
+		Assert.equals(0, violations('class C { private var _x:Int; function s():Void { _x = 1; } }').length);
+	}
+
+	/** A constructor assignment to a shadowing parameter (not the field) — left alone. */
+	public function testNoInitShadowingParamNotFlagged(): Void {
+		Assert.equals(0, violations('class C { private var _x:Int; public function new(_x:Int) { _x = 5; } }').length);
+	}
+
+	/** A no-init field written in the constructor AND another method is reassigned — left alone. */
+	public function testNoInitAlsoWrittenElsewhereNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { private var _x:Int; public function new() { _x = 1; } function s():Void { _x = 2; } }').length
+		);
+	}
+
+	/** The no-init fix swaps var → final and leaves the single constructor assignment intact. */
+	public function testNoInitFixVarToFinal(): Void {
+		final fixed: String = fixedSource('class C { private var _x:Int; public function new() { _x = 1; } }');
+		Assert.isTrue(fixed.indexOf('private final _x:Int') >= 0);
+		Assert.isTrue(fixed.indexOf('_x = 1') >= 0);
 	}
 
 	private function violations(src: String): Array<Violation> {

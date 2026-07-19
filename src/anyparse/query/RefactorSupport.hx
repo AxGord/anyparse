@@ -1195,6 +1195,130 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The class-like container kinds — `visibilityContainerKinds` minus the
+	 * abstract-without-instance-fields kinds (`AbstractDecl` / `EnumAbstractDecl`),
+	 * whose members share one underlying `this` rather than declared instance fields.
+	 * The scope in which a constructor-initialised field can be moved to its declaration.
+	 */
+	public static function classLikeContainerKinds(shape: RefShape): Array<String> {
+		final all: Array<String> = shape.visibilityContainerKinds ?? [];
+		return [for (k in all) if (k != 'AbstractDecl' && k != 'EnumAbstractDecl') k];
+	}
+
+	/**
+	 * The single constructor (`FnMember` named `new`) directly declared in `container`,
+	 * or null when there is not exactly one — a multiple-constructor (macro-generated)
+	 * class is skipped so a field's init timing stays a plain single `new`.
+	 */
+	public static function soleConstructor(container: QueryNode, shape: RefShape): Null<QueryNode> {
+		final ctorName: Null<String> = shape.constructorName;
+		final members: Array<String> = shape.memberDeclKinds ?? [];
+		if (ctorName == null) return null;
+		var found: Null<QueryNode> = null;
+		for (child in container.children) if (members.contains(child.kind) && child.name == ctorName) {
+			if (found != null) return null;
+			found = child;
+		}
+		return found;
+	}
+
+	/**
+	 * The single unconditional top-level constructor statement that assigns `field`
+	 * (`field = expr` or `this.field = expr`, a DIRECT child of the constructor's block
+	 * body — not nested in a branch / loop / closure), paired with the assignment's
+	 * right-hand side and the assignment target's span, or null when there is not
+	 * exactly one. `container` scopes binding resolution, so a bare `field =` that
+	 * resolves to a shadowing constructor local / parameter does NOT match this field.
+	 */
+	public static function soleConstructorFieldInit(
+		container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+	): Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> {
+		final bodyKind: Null<String> = shape.blockBodyKind;
+		final stmtKind: Null<String> = shape.exprStatementKind;
+		final assignKind: Null<String> = shape.assignKind;
+		final fieldSpan: Null<Span> = field.span;
+		final fieldName: Null<String> = field.name;
+		if (bodyKind == null || stmtKind == null || assignKind == null || fieldSpan == null || fieldName == null) return null;
+		final fieldFrom: Int = fieldSpan.from;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == bodyKind);
+		if (body == null) return null;
+		var match: Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> = null;
+		for (stmt in body.children) if (stmt.kind == stmtKind && stmt.children.length >= 1) {
+			final assign: QueryNode = stmt.children[0];
+			if (assign.kind != assignKind || assign.children.length < 2) continue;
+			final target: QueryNode = assign.children[0];
+			final tSpan: Null<Span> = target.span;
+			if (tSpan == null) continue;
+			if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) continue;
+			if (match != null) return null;
+			match = { stmt: stmt, rhs: assign.children[1], target: tSpan };
+		}
+		return match;
+	}
+
+	/**
+	 * The class-like container and the field member declared at `fieldFrom`, found by
+	 * re-walking `tree` — the fix-side re-derivation from a violation's span (a
+	 * violation carries only its file and span, so the container and field are
+	 * recovered from the parsed source).
+	 */
+	public static function classLikeFieldAt(
+		tree: QueryNode, fieldFrom: Int, shape: RefShape
+	): Null<{ container: QueryNode, field: QueryNode }> {
+		return findFieldContainer(tree, fieldFrom, classLikeContainerKinds(shape), shape.fieldDeclKinds ?? []);
+	}
+
+	/**
+	 * Locate, from a parsed `tree`, the field at `fieldFrom` together with its
+	 * class-like container and the single unconditional top-level constructor statement
+	 * that initialises it — the shared entry point for `field-init-at-declaration`'s fix
+	 * and `prefer-final-field`'s no-initializer case. Null when the field is not in a
+	 * class-like container, the container has no single constructor, or the field is not
+	 * assigned by exactly one top-level constructor statement.
+	 */
+	public static function constructorFieldInitAt(tree: QueryNode, fieldFrom: Int, shape: RefShape): Null<{
+		container: QueryNode,
+		field: QueryNode,
+		stmt: QueryNode,
+		rhs: QueryNode,
+		target: Span
+	}> {
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, fieldFrom, shape);
+		if (loc == null) return null;
+		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
+		if (ctor == null) return null;
+		final init: Null<{ stmt: QueryNode, rhs: QueryNode, target: Span }> = soleConstructorFieldInit(
+			loc.container, ctor, loc.field, shape
+		);
+		return init == null ? null : {
+			container: loc.container,
+			field: loc.field,
+			stmt: init.stmt,
+			rhs: init.rhs,
+			target: init.target
+		};
+	}
+
+	/**
+	 * The offset just before a field declaration's terminating `;`, where a moved
+	 * `= <init>` is spliced. A `VarMember` / `FinalMember` span INCLUDES the trailing
+	 * `;`, so the insert goes before it rather than at `span.to`; a span with no
+	 * terminating `;` (skip-parse edge) falls back to `span.to`.
+	 */
+	public static function fieldDeclInitInsertPos(source: String, fieldSpan: Span): Int {
+		var i: Int = fieldSpan.to - 1;
+		while (i > fieldSpan.from) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code) {
+				i--;
+				continue;
+			}
+			break;
+		}
+		return (i > fieldSpan.from && StringTools.fastCodeAt(source, i) == ';'.code) ? i : fieldSpan.to;
+	}
+
+	/**
 	 * Whether `field` is a plain field with an initializer and is NOT a property — the
 	 * shared candidate-shape gate of the `final`-conversion field checks. False when the
 	 * field has no initializer (its first child carries no span) or its head before the
@@ -1362,6 +1486,40 @@ final class RefactorSupport {
 		while (out.length > 0 && StringTools.trim(out[0]) == '') out.shift();
 		while (out.length > 0 && StringTools.trim(out[out.length - 1]) == '') out.pop();
 		return out;
+	}
+
+	/** Whether `target` (a constructor assignment's left-hand side) writes the field at `fieldFrom`. */
+	private static function ctorTargetIsField(
+		target: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
+	): Bool {
+		final identKind: String = shape.identKind;
+		final faKind: Null<String> = shape.fieldAccessKind;
+		final selfText: Null<String> = shape.selfReferenceText;
+		if (faKind != null && target.kind == faKind) {
+			final recv: Null<QueryNode> = target.children.length > 0 ? target.children[0] : null;
+			return target.name == fieldName && recv != null && recv.kind == identKind && selfText != null && recv.name == selfText;
+		}
+		if (target.kind == identKind) {
+			final name: Null<String> = target.name;
+			final span: Null<Span> = target.span;
+			return name != null && span != null && TypeResolver.resolveBindingFrom(name, span, container, shape) == fieldFrom;
+		}
+		return false;
+	}
+
+	/** Recursively find the class-like container whose direct field member starts at `fieldFrom`. */
+	private static function findFieldContainer(
+		node: QueryNode, fieldFrom: Int, classLike: Array<String>, fields: Array<String>
+	): Null<{ container: QueryNode, field: QueryNode }> {
+		if (classLike.contains(node.kind)) for (child in node.children) if (fields.contains(child.kind)) {
+			final sp: Null<Span> = child.span;
+			if (sp != null && sp.from == fieldFrom) return { container: node, field: child };
+		}
+		for (child in node.children) {
+			final hit: Null<{ container: QueryNode, field: QueryNode }> = findFieldContainer(child, fieldFrom, classLike, fields);
+			if (hit != null) return hit;
+		}
+		return null;
 	}
 
 	/**
@@ -1591,7 +1749,6 @@ final class RefactorSupport {
 		}
 		return result;
 	}
-
 
 	/**
 	 * Index of the closing `quote` of the string opened at `open`, honouring

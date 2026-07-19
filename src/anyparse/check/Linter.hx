@@ -120,7 +120,8 @@ final class Linter {
 			new AvoidDynamic(),
 			new UnusedReturnValue(),
 			new DocCoverage(),
-			new ExplicitLocalType()
+			new ExplicitLocalType(),
+			new FieldInitAtDeclaration()
 		];
 	}
 
