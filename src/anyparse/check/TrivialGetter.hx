@@ -354,19 +354,9 @@ final class TrivialGetter implements Check implements ConfigAware {
 		);
 		if (renames == null) return null;
 		for (e in renames) edits.push(e);
-		for (d in deleted)
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(d.node, cls, d.span)), text: '' });
-		final fieldSpan: Null<Span> = c.fieldNode.span;
-		if (fieldSpan == null) return null;
-		edits.push(
-			{ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(c.fieldNode, cls, fieldSpan)), text: '' }
-		);
-		if (c.ctorInit != null) {
-			final cs: Null<Span> = c.ctorInit.stmt.span;
-			if (cs == null) return null;
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, cs), text: '' });
-		}
-		return applyBypassMarks(c.bypassStmts, edits) ? edits : null;
+		return !appendRemovalEdits(edits, source, cls, deleted, c.fieldNode, c.ctorInit)
+			? null
+			: applyBypassMarks(c.bypassStmts, edits) ? edits : null;
 	}
 
 	/** The rename edits for every backing-field reference in `cls`, or null when any reference is not provably the field. */
@@ -976,40 +966,10 @@ final class TrivialGetter implements Check implements ConfigAware {
 		}> = setters['set_${prop.name}'];
 		if (setter == null || setter.dyn) return null;
 		final trivSet: Null<String> = trivialSetterField(setter.node);
-		if (trivGet != null && trivSet == null) {
-			if (!privateFieldNodes.exists(trivGet)) return null;
-			final fieldNode: Null<QueryNode> = privateFieldNodes[trivGet];
-			final setterSpan: Null<Span> = setter.node.span;
-			if (fieldNode == null || setterSpan == null) return null;
-			final ci: Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> = fieldNode.children.length == 0
-				? findMovableCtorInit(cls, trivGet)
-				: null;
-			final allowStmt: Null<QueryNode> = ci == null ? null : ci.stmt;
-			final writes: Null<Array<QueryNode>> = collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
-			if (writes != null && writes.length <= maxBypass) return {
-				field: trivGet,
-				clauseText: '(default, set)',
-				deleted: [getterNode],
-				ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
-				message: writes.length == 0
-					? messageFor('setA', prop.name, trivGet)
-					: messageFor('setABypass', prop.name, trivGet, writes.length),
-				bypassStmts: writes,
-				inlineGetter: null
-			};
-			// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
-			// property and just inline the getter. Skip when the getter is already inline or overrides
-			// — inline + override do not mix, and an overriding accessor must stay overridable.
-			return getterInline || getterOverride ? null : {
-				field: trivGet,
-				clauseText: '',
-				deleted: [],
-				ctorInit: null,
-				message: messageFor('setAInline', prop.name, trivGet, countExternalWrites(cls, trivGet, setterSpan, allowStmt)),
-				bypassStmts: [],
-				inlineGetter: getterNode
-			};
-		}
+		if (trivGet != null && trivSet == null)
+			return classifyTrivGetOpaqueSetter(
+				cls, prop, getterNode, getterInline, getterOverride, trivGet, setter, privateFieldNodes, maxBypass
+			);
 		if (trivGet != null && trivSet != null) {
 			return trivGet != trivSet ? null : {
 				field: trivGet,
@@ -1142,6 +1102,100 @@ final class TrivialGetter implements Check implements ConfigAware {
 		var n: Int = writeTargetField(node) == field ? 1 : 0;
 		for (c in node.children) n += countExternalWrites(c, field, exclude, allowStmt);
 		return n;
+	}
+
+
+	/**
+	 * The `classifySetProperty` arm for a TRIVIAL getter paired with an OPAQUE
+	 * (non-trivial or absent-bodied) setter: mark the property's few external
+	 * writes as bypasses and drop to `(default, set)`, or — when there are too many
+	 * writes, or an unmarkable nested write — keep the property and just inline the
+	 * getter. Extracted from `classifySetProperty` (its sole caller) to keep that
+	 * dispatcher under the cyclomatic-complexity ceiling. `setter` is the resolved
+	 * `set_<prop>` accessor; returns null when the rewrite is unsafe.
+	 */
+	private static function classifyTrivGetOpaqueSetter(
+		cls: QueryNode, prop: {
+			name: String,
+			node: QueryNode,
+			span: Span,
+			isPublic: Bool,
+			write: String
+		},
+		getterNode: QueryNode, getterInline: Bool, getterOverride: Bool, trivGet: String, setter: {
+			node: QueryNode,
+			dyn: Bool,
+			isOverride: Bool,
+			isInline: Bool
+		},
+		privateFieldNodes: Map<String, QueryNode>, maxBypass: Int
+	): Null<{
+		field: String,
+		clauseText: String,
+		deleted: Array<QueryNode>,
+		ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>,
+		message: String,
+		bypassStmts: Array<QueryNode>,
+		inlineGetter: Null<QueryNode>
+	}> {
+		if (!privateFieldNodes.exists(trivGet)) return null;
+		final fieldNode: Null<QueryNode> = privateFieldNodes[trivGet];
+		final setterSpan: Null<Span> = setter.node.span;
+		if (fieldNode == null || setterSpan == null) return null;
+		final ci: Null<{ stmt: QueryNode, assign: QueryNode, rhsSpan: Span }> = fieldNode.children.length == 0
+			? findMovableCtorInit(cls, trivGet)
+			: null;
+		final allowStmt: Null<QueryNode> = ci == null ? null : ci.stmt;
+		final writes: Null<Array<QueryNode>> = collectExternalWrites(cls, trivGet, setterSpan, allowStmt);
+		if (writes != null && writes.length <= maxBypass) return {
+			field: trivGet,
+			clauseText: '(default, set)',
+			deleted: [getterNode],
+			ctorInit: ci == null ? null : { stmt: ci.stmt, rhsSpan: ci.rhsSpan },
+			message: writes.length == 0
+				? messageFor('setA', prop.name, trivGet)
+				: messageFor('setABypass', prop.name, trivGet, writes.length),
+			bypassStmts: writes,
+			inlineGetter: null
+		};
+		// Too many writes, or a write nested inside a larger expression (unmarkable): keep the
+		// property and just inline the getter. Skip when the getter is already inline or overrides
+		// — inline + override do not mix, and an overriding accessor must stay overridable.
+		return getterInline || getterOverride ? null : {
+			field: trivGet,
+			clauseText: '',
+			deleted: [],
+			ctorInit: null,
+			message: messageFor('setAInline', prop.name, trivGet, countExternalWrites(cls, trivGet, setterSpan, allowStmt)),
+			bypassStmts: [],
+			inlineGetter: getterNode
+		};
+	}
+
+
+	/**
+	 * Append the source-removal edits that a property→field rewrite needs: one per
+	 * deleted accessor, one for the backing field itself, and one for a moved ctor
+	 * initialiser statement when present. Each span is line-extended so the whole
+	 * declaration line goes. Extracted from `buildFix` (its sole caller) to keep it
+	 * under the cyclomatic-complexity ceiling; returns false (rewrite unsafe) if any
+	 * required span is null.
+	 */
+	private static function appendRemovalEdits(
+		edits: Array<{ span: Span, text: String }>, source: String, cls: QueryNode, deleted: Array<{ node: QueryNode, span: Span }>,
+		fieldNode: QueryNode, ctorInit: Null<{ stmt: QueryNode, rhsSpan: Span }>
+	): Bool {
+		for (d in deleted)
+			edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(d.node, cls, d.span)), text: '' });
+		final fieldSpan: Null<Span> = fieldNode.span;
+		if (fieldSpan == null) return false;
+		edits.push({ span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(fieldNode, cls, fieldSpan)), text: '' });
+		if (ctorInit != null) {
+			final cs: Null<Span> = ctorInit.stmt.span;
+			if (cs == null) return false;
+			edits.push({ span: RefactorSupport.lineExtendedSpan(source, cs), text: '' });
+		}
+		return true;
 	}
 
 }
