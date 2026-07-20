@@ -445,6 +445,7 @@ import unit.RedundantBypassAccessorCheckTest;
 import unit.PreferTernaryAssignmentCheckTest;
 import unit.InvertNegatedIfElseCheckTest;
 import unit.FieldInitAtDeclarationCheckTest;
+import unit.ExtractConstantSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -762,6 +763,7 @@ class RunTests {
 		addCase(new ExtractSuperclassSliceTest());
 		addCase(new SafeDeleteSliceTest());
 		addCase(new EncapsulateFieldSliceTest());
+		addCase(new ExtractConstantSliceTest());
 		addCase(new MakeFinalSliceTest());
 		addCase(new IntroduceParameterObjectSliceTest());
 		addCase(new SymbolIndexSliceTest());

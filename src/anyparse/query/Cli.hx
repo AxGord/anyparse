@@ -558,6 +558,8 @@ final class Cli {
 				return runInlineMethod(rest);
 			case 'extract-var':
 				return runExtractVar(rest);
+			case 'extract-constant':
+				return runExtractConstant(rest);
 			case 'extract-method':
 				return runExtractMethod(rest);
 			case 'add-param':
@@ -4864,6 +4866,7 @@ final class Cli {
 		sysPrint('  inline        Inline a local variable into its uses\n');
 		sysPrint('  inline-method Inline a single-return function into its call sites + delete it\n');
 		sysPrint('  extract-var   Hoist an expression into a new local final\n');
+		sysPrint('  extract-constant Replace a repeated single-quoted literal with a named constant\n');
 		sysPrint('  extract-method Extract a statement run into a local function (closure)\n');
 		sysPrint('  add-param     Add a backward-compatible parameter to a function\n');
 		sysPrint('  change-sig    Reorder a function\'s parameters + call-site args\n');
@@ -13995,6 +13998,96 @@ final class Cli {
 		sysPrint('the authoritative pass/fail signal.\n');
 	}
 	#end
+
+
+	private static function runExtractConstant(args: Array<String>): Int {
+		var lang: String = 'haxe';
+		var write: Bool = false;
+		var reformat: Bool = false;
+		var file: Null<String> = null;
+		var typeName: Null<String> = null;
+		var name: Null<String> = null;
+		var literal: Null<String> = null;
+
+		var i: Int = 0;
+		while (i < args.length) {
+			final a: String = args[i];
+			switch a {
+				case '--lang':
+					lang = expectValue(args, ++i, '--lang');
+				case '--type':
+					typeName = expectValue(args, ++i, '--type');
+				case '--name':
+					name = expectValue(args, ++i, '--name');
+				case '--literal':
+					literal = expectValue(args, ++i, '--literal');
+				case '--reformat':
+					reformat = true;
+				case '--write':
+					write = true;
+				case '-h', '--help':
+					printExtractConstantUsage();
+					return EXIT_OK;
+				case _:
+					if (StringTools.startsWith(a, '--')) {
+						stderr('apq extract-constant: unknown option "$a"\n');
+						return EXIT_USAGE;
+					}
+					if (file == null)
+						file = a;
+					else {
+						stderr('apq extract-constant: unexpected extra argument "$a"\n');
+						return EXIT_USAGE;
+					}
+			}
+			i++;
+		}
+		if (file == null || typeName == null || name == null || literal == null) {
+			stderr("apq extract-constant: expected <file> --type <Type> --name <NAME> --literal '<text>'\n");
+			printExtractConstantUsage();
+			return EXIT_USAGE;
+		}
+
+		final filePath: String = file;
+		final typeStr: String = typeName;
+		final nameStr: String = name;
+		final literalStr: String = literal;
+		final source: String = try readFile(filePath) catch (exception: Exception) {
+			stderr('apq extract-constant: $filePath: ${exception.message}\n');
+			return EXIT_RUNTIME;
+		};
+
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin) {
+			case Ok(text):
+				if (write) {
+					writeFile(filePath, text);
+					stderr('apq extract-constant: wrote $filePath\n');
+				} else
+					sysPrint(text);
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq extract-constant: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
+
+	private static function printExtractConstantUsage(): Void {
+		sysPrint("Usage: apq extract-constant <file> --type <Type> --name <NAME> --literal '<text>' [--reformat] [--write]\n");
+		printOptionsWriteLangHelp();
+		sysPrint('Replace every plain single-quoted string literal equal to <text>\n');
+		sysPrint('inside <Type> with a reference to a fresh `private static final <NAME>`\n');
+		sysPrint('constant, spliced as the type\'s first member. <text> is the literal\n');
+		sysPrint('CONTENT (no surrounding quotes); the constant reuses the first\n');
+		sysPrint('occurrence\'s verbatim source token, so escaping is preserved. Only\n');
+		sysPrint('plain single-quoted literals match — an interpolated string and\n');
+		sysPrint('double-quoted literals are left untouched. Deciding that the\n');
+		sysPrint('occurrences are the SAME concept is the caller\'s judgement. A name\n');
+		sysPrint('that is not an identifier or collides with a member, a non-unique or\n');
+		sysPrint('missing type, or a literal that does not occur exits non-zero with the\n');
+		sysPrint('file untouched. The rewrite is verified to re-parse.\n');
+	}
 
 }
 
