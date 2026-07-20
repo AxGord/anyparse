@@ -57,6 +57,9 @@ typedef NamingRule = {
 	 */
 	@:optional var normalize: String -> Null<String>;
 }
+/**
+ * The ordered list of `NamingRule`s the `naming` check applies to a file — the first rule whose category / modifier selector matches a declaration governs it. Loaded from a project `checkstyle.json` or the grammar built-in default.
+ */
 typedef NamingPolicy = Array<NamingRule>;
 
 /**
@@ -100,6 +103,9 @@ typedef NamedDecl = {
 	 */
 	@:optional var renameUnsafe: Bool;
 }
+/**
+ * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered project config or built-in default). Keeps the check free of grammar-specific node types.
+ */
 @:nullSafety(Strict)
 interface NamingSupport {
 

@@ -188,6 +188,9 @@ typedef ReconWalkResult = {
 	var records: Array<ReconRecord>;
 	var clusters: Map<String, ReconCluster>;
 };
+/**
+ * Per-field format-mechanism summary the `recon` walk projects from a schema field's `@:fmt` / `@:lit` metadata: whether it is optional plus its lead / trail / kw / sep tokens and `absentOn` flag. Feeds cluster keying and relaxation prediction.
+ */
 typedef MechanismMetas = {
 	var hasOptional: Bool;
 	var lead: Null<String>;
@@ -196,6 +199,9 @@ typedef MechanismMetas = {
 	var absentOn: Null<String>;
 	var sep: Null<String>;
 };
+/**
+ * Parsed options for `apq source` — `lang` selects the grammar plugin, the rest carry the address (`range` / `selectExpr` / `atSpec`) and output flags (`number` / `raw`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 typedef SourceOpts = {
 	var lang: String;
 	var range: Null<String>;
@@ -206,17 +212,26 @@ typedef SourceOpts = {
 	var file: Null<String>;
 	var errExit: Null<Int>;
 };
+/**
+ * The reduced `MechanismMetas` variant the recon `--permissive-construct` path uses: optional flag plus lead / trail / sep only (no kw / absentOn), describing the tokens a maximally-permissive reconstruction would emit.
+ */
 typedef PermissiveMetas = {
 	var hasOptional: Bool;
 	var lead: Null<String>;
 	var trail: Null<String>;
 	var sep: Null<String>;
 };
+/**
+ * Corpus-walk tallies for `apq self-status`: how many project files `parseable`, how many `skipParse`, and the `skipLines` describing each skipped file. Rolled up into the self-status report.
+ */
 typedef SelfStatusWalk = {
 	var parseable: Int;
 	var skipParse: Int;
 	var skipLines: Array<String>;
 };
+/**
+ * Parsed options for `apq self-status` — `lang`, the `rootDir` to walk, and `strict` / `showSource` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 typedef SelfStatusOpts = {
 	var lang: String;
 	var rootDir: Null<String>;
@@ -224,10 +239,16 @@ typedef SelfStatusOpts = {
 	var showSource: Bool;
 	var errExit: Null<Int>;
 };
+/**
+ * The outcome of one `lint --fix` pass over the active file set: `nextActive` is the file set (with rewritten sources) to feed the next fixpoint pass, and `fixedDelta` how many findings that pass resolved.
+ */
 typedef LintPassResult = {
 	var nextActive: Array<{ file: String, source: String }>;
 	var fixedDelta: Int;
 };
+/**
+ * A single-construct current-parse probe for `apq recon`: whether the construct is `unwired`, whether it parses `ok`, and the `line` / `col` / `msg` of the failure when it does not.
+ */
 typedef ReconCurrentParse = {
 	var unwired: Bool;
 	var ok: Bool;
@@ -235,6 +256,9 @@ typedef ReconCurrentParse = {
 	var col: Int;
 	var msg: String;
 };
+/**
+ * Tallies from an `apq recon --regression-probe` run: how many corpus constructs `regressed` (parse OK to SKIP), how many `unblocked` (SKIP to OK), how many `scanned`, and whether the target mechanism was `unwired`.
+ */
 typedef ReconRegressionResult = {
 	var regressed: Int;
 	var unblocked: Int;
@@ -284,6 +308,9 @@ enum PredictRelaxKind {
 
 }
 
+/**
+ * Full result of one `apq recon --predict-relax` probe: its `PredictRelaxKind` plus the `original` / `patched` sources, the `injected` text, and the original vs new fail loci (`origLine`/`origCol`, `newLine`/`newCol`). Consumed by `reportPredictRelax`.
+ */
 typedef PredictRelaxResult = {
 	var kind: PredictRelaxKind;
 	var original: String;
@@ -13971,6 +13998,9 @@ final class Cli {
 
 }
 
+/**
+ * Parsed options for `apq strip` (comment stripping) — `lang`, the target `files` and `patterns` / `replacements`, and mode flags (`dryRun` / `perPattern` / `regexMode` / `fromCluster`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef StripOpts = {
 	var lang: String;
@@ -13986,6 +14016,9 @@ typedef StripOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq recon` — `lang`, `topN`, the probe / cluster filters, and the family of analysis-mode flags (`predictStrip` / `regressionProbe` / `predictRelax` / `permissiveConstruct` / writer-equals). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef ReconOpts = {
 	var lang: String;
@@ -14011,6 +14044,9 @@ typedef ReconOpts = {
 	// failure -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq ast` / `apq probe` — `lang`, `json`, `depth`, the address (`selectExpr` / `atExpr`), output toggles, child-count filters, and the inline-source channels (`codeArg` / `stdinFlag`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef AstOpts = {
 	var lang: String;
@@ -14039,6 +14075,9 @@ typedef AstOpts = {
 	// failure -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq meta` — `lang`, `json`, the `argContains` / `onKind` filters, `flat`, `limit`, and input `positionals`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef MetaOpts = {
 	var lang: String;
@@ -14052,6 +14091,9 @@ typedef MetaOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq blast` — `lang`, `flat`, `limit`, `showAll`, the symbol `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef BlastOpts = {
 	var lang: String;
@@ -14064,6 +14106,9 @@ typedef BlastOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq lit` — `lang`, the `exact` / `kindFilter` / `includeComments` match controls, the `target` literal, `flat`, `limit`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef LitOpts = {
 	var lang: String;
@@ -14078,6 +14123,9 @@ typedef LitOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq new` — `lang`, the `kind` of declaration to scaffold and its shape (`asClass` / `iface` / `underlying` / `extendsList` / `fields` / bodies), the target `path`, and `write` / `open` flags. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef NewOpts = {
 	var lang: String;
@@ -14099,6 +14147,9 @@ typedef NewOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq search` — `lang`, `json`, the `kind` filter, `explain`, `flat`, `limit`, the structural `pattern`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef SearchOpts = {
 	var lang: String;
@@ -14113,6 +14164,9 @@ typedef SearchOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq lint` — `lang`, `flat`, `includeInfo`, `fix`, the `failOn` severity, output `format`, `ruleFilters`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef LintOpts = {
 	var lang: String;
@@ -14127,6 +14181,9 @@ typedef LintOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq uses` — `lang`, the `wantDoc` / `wantSource` output toggles, `flat`, `limit`, the type `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef UsesOpts = {
 	var lang: String;
@@ -14140,6 +14197,9 @@ typedef UsesOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq extract-method` — `lang`, `write` / `reformat`, the target `file`, the statement-run bounds (`startPos` / `endPos`), and the new method `name`. `errExit` non-null means arg parsing hit a terminal case (incl. a malformed position) the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef ExtractMethodOpts = {
 	var lang: String;
@@ -14153,6 +14213,9 @@ typedef ExtractMethodOpts = {
 	// position -> EXIT_USAGE); the caller returns this immediately and ignores the rest.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq add-member` — `lang`, `write` / `reformat`, the target `typeName` and `file`, and the member body (`memberText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef AddMemberOpts = {
 	var lang: String;
@@ -14166,6 +14229,9 @@ typedef AddMemberOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq set-doc` — `lang`, `write` / `reformat`, the target `file`, the address (`pos` / `selectExpr` / `matchExpr` / `nth`), and the doc body (`docText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef SetDocOpts = {
 	var lang: String;
@@ -14181,6 +14247,9 @@ typedef SetDocOpts = {
 	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq fmt` — `lang`, `write` (rewrite in place) vs `list` (name changed files only), and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef FmtOpts = {
 	var lang: String;
@@ -14192,6 +14261,9 @@ typedef FmtOpts = {
 	var errExit: Null<Int>;
 };
 
+/**
+ * Per-file outcome of `apq fmt`: whether the file `changed`, whether formatting `failed`, and `fatalExit` (non-null = an unrecoverable per-file outcome, e.g. no writer wired for the lang, that aborts the remaining files).
+ */
 @:nullSafety(Strict)
 typedef FmtFileResult = {
 	var changed: Bool;
@@ -14200,6 +14272,9 @@ typedef FmtFileResult = {
 	// the caller returns this immediately, aborting the remaining files.
 	var fatalExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq move` — `lang`, `write`, the `scope` to search, the source address (`posSpec` / `selectExpr` / `matchExpr` / `nth`), and the `destFile`. `errExit` non-null means arg parsing hit a terminal case (incl. missing --scope / address) the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef MoveOpts = {
 	var lang: String;
@@ -14215,6 +14290,9 @@ typedef MoveOpts = {
 	// --scope / missing address -> EXIT_USAGE); the caller returns this immediately.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq refs` — `lang`, `json`, the read / write / decl selection (`wantDecls` / `wantReads` / `wantWrites`), output toggles, `flat`, `limit`, the symbol `name`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef RefsOpts = {
 	var lang: String;
@@ -14232,6 +14310,9 @@ typedef RefsOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq set-comment` — `lang`, `write` / `reformat`, the target `file`, the `pos` address, and the comment body (`commentText` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef SetCommentOpts = {
 	var lang: String;
@@ -14245,6 +14326,9 @@ typedef SetCommentOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq replace-node` — `lang`, `write` / `reformat`, the address (`selectExpr` / `atSpec` / `matchExpr` / `nth` / `kind`), `withDoc`, and the replacement source (`newSource` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef ReplaceNodeOpts = {
 	var lang: String;
@@ -14262,6 +14346,9 @@ typedef ReplaceNodeOpts = {
 	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq patch` — `lang`, `write` / `reformat`, the address (`selectExpr` / `atSpec` / `matchExpr` / `nth` / `kind`), the old/new `sep`, and the `payload` (or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef PatchOpts = {
 	var lang: String;
@@ -14279,6 +14366,9 @@ typedef PatchOpts = {
 	// Non-null = parsing hit a terminal case; the caller returns it immediately.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq mentions` — `lang`, `flat`, `limit`, the `name` to search for, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef MentionsOpts = {
 	var lang: String;
@@ -14290,6 +14380,9 @@ typedef MentionsOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq gates` — `lang`, `flat`, `limit`, the `mechanism` to inspect, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef GatesOpts = {
 	var lang: String;
@@ -14301,6 +14394,9 @@ typedef GatesOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq comment-rewrite` — `lang`, `write` / `list` / `reformat`, `regex` mode, the `find` / `replace` texts, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef CommentRewriteOpts = {
 	var lang: String;
@@ -14315,6 +14411,9 @@ typedef CommentRewriteOpts = {
 	// the caller returns this immediately and ignores the rest of the struct.
 	var errExit: Null<Int>;
 };
+/**
+ * Parsed options for `apq add-element` — `lang`, `write` / `reformat`, the insertion address (`afterSpec` / `beforeSpec` / `appendSpec`, plus `selectExpr` / `matchExpr` / `nth`), and the element source (`code` or `fromFile`). `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ */
 @:nullSafety(Strict)
 typedef AddElementOpts = {
 	var lang: String;

@@ -39,6 +39,9 @@ typedef LayoutIssue = {
 	var member: OrderedMember;
 	var message: String;
 }
+/**
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing.
+ */
 @:nullSafety(Strict)
 final class MemberOrder implements Check {
 

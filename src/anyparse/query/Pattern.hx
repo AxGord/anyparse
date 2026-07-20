@@ -107,6 +107,9 @@ enum abstract PatternCategory(Int) {
 
 }
 
+/**
+ * The `$X` / `$_` metavariable token machinery for structural patterns: substitutes each metavariable with a reserved placeholder identifier the language lexer accepts, so a pattern parses as ordinary source, then maps captured nodes back by placeholder.
+ */
 @:nullSafety(Strict)
 final class Metavar {
 

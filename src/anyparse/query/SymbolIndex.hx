@@ -73,6 +73,9 @@ typedef MemberInfo = {
 	var isOverride: Bool;
 };
 
+/**
+ * A cross-file index entry for one top-level type: its `name` / `kind` / `span`, whether it is the module `isMain` type, its direct `supertypes` and `members`, and `isAnonStruct`. Feeds cross-file-safe rename and move-symbol gates.
+ */
 typedef TypeDeclInfo = {
 	var name: String;
 	var kind: String;
@@ -92,6 +95,9 @@ typedef TypeDeclInfo = {
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
 };
+/**
+ * A cross-file index entry for one source file: its `file` path, `pkg` / `module`, `imports`, declared `types`, and `accessGrants` (types it `@:access(...)`-grants itself private reach into). The unit `SymbolIndex` aggregates.
+ */
 typedef FileInfo = {
 	var file: String;
 	var pkg: String;
@@ -107,6 +113,9 @@ typedef FileInfo = {
 	var accessGrants: Array<String>;
 }
 
+/**
+ * The project-wide symbol index: a collection of per-file `FileInfo` records answering cross-file questions (which files declare a type, its import path, subtype / access-grant reachability) that a single-file parse cannot. Built once and queried by rename / move ops and type-aware checks.
+ */
 @:nullSafety(Strict)
 final class SymbolIndex {
 

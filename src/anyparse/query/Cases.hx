@@ -95,6 +95,9 @@ final class Cases {
 
 }
 
+/**
+ * One `apq cases` result: a `case` branch of a switch, its reportable source `span` (null when the grammar built the branch without span tracking), and `patternKind` — the node kind of the branch pattern the query matched.
+ */
 @:nullSafety(Strict)
 final class CasesHit {
 

@@ -23,6 +23,9 @@ private typedef Entry = {
 	var rules: Null<Array<String>>;
 	var region: Bool;
 }
+/**
+ * Applies inline suppression directives (`noqa` lines and `CHECKSTYLE:OFF`/`ON` regions) to a finding set: `apply` returns the violations minus every one silenced by a directive in its own file. A finding whose file source is unavailable, or whose span is null, is kept.
+ */
 @:nullSafety(Strict)
 final class Suppression {
 

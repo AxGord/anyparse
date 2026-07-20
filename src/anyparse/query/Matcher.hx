@@ -127,6 +127,9 @@ final class Matcher {
 
 }
 
+/**
+ * One structural-pattern match: the matched source `span` plus `bindings` mapping each pattern metavariable (`$x`) to the node it captured.
+ */
 @:nullSafety(Strict)
 final class Match {
 

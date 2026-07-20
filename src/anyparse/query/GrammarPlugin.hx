@@ -1387,6 +1387,9 @@ typedef RefShape = {
 	 */
 	@:optional var publicModifierKind: String;
 }
+/**
+ * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.
+ */
 @:nullSafety(Strict)
 typedef MetaShape = {
 	var metaKinds: Array<String>;
