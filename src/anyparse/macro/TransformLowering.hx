@@ -151,7 +151,7 @@ class TransformLowering {
 	 * Nullary constructors map to `case Ctor: Ctor`.
 	 */
 	private function lowerBranch(branch: ShapeNode, typePath: String): Case {
-		final ctor: String = branch.annotations.get('base.ctor');
+		final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 		final ctorPath: String = '$typePath.$ctor';
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath.split('.'));
 
@@ -179,7 +179,7 @@ class TransformLowering {
 	 * once at the top, since `base.optional` may sit on any node kind.
 	 */
 	private function rebuildExpr(node: ShapeNode, valueExpr: Expr): Expr {
-		final optional: Bool = node.annotations.get('base.optional') == true;
+		final optional: Bool = node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 		if (!optional) return rebuildCore(node, valueExpr);
 		// `Null<...>`: recurse only the present value, preserve null. Nodes
 		// that never reach a transformable child fall through to a plain
@@ -209,7 +209,7 @@ class TransformLowering {
 				case Ref:
 					// Dispatch into the referenced rule's own `_transform`,
 					// threading `visit` so its hooks fire deeper in the tree.
-					final ref: String = node.annotations.get('base.ref');
+					final ref: String = node.annotations.get(AnnotationKeys.BASE_REF);
 					callTransform(ref, valueExpr);
 				case Star:
 					// Array<X>: map each element through the element rebuild.
@@ -249,7 +249,7 @@ class TransformLowering {
 	private function rebuildStruct(node: ShapeNode, valueExpr: Expr): Expr {
 		final objFields: Array<ObjectField> = [
 			for (child in node.children) {
-				final fieldName: String = child.annotations.get('base.fieldName');
+				final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 				final access: Expr = { expr: EField(valueExpr, fieldName), pos: Context.currentPos() };
 				{ field: fieldName, expr: rebuildExpr(child, access) };
 			}
@@ -276,7 +276,7 @@ class TransformLowering {
 				// Every named rule has a `_transform`, so any Ref to a rule
 				// in the shape is a valid recursion target — including
 				// Terminal rules, whose hook is the rename primitive.
-				final ref: String = node.annotations.get('base.ref');
+				final ref: String = node.annotations.get(AnnotationKeys.BASE_REF);
 				_shape.rules.exists(ref);
 			case Star:
 				isTransformable(node.children[0]);

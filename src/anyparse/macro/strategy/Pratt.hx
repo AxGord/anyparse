@@ -1,5 +1,6 @@
 package anyparse.macro.strategy;
 
+import anyparse.macro.AnnotationKeys;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -70,14 +71,14 @@ class Pratt implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':infix') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':infix') {
 			if (entry.params.length < 2 || entry.params.length > 3) {
@@ -106,9 +107,9 @@ class Pratt implements Strategy {
 				}
 			} else
 				'Left';
-			node.annotations.set('pratt.op', opText);
-			node.annotations.set('pratt.prec', precValue);
-			node.annotations.set('pratt.assoc', assocValue);
+			node.annotations.set(AnnotationKeys.PRATT_OP, opText);
+			node.annotations.set(AnnotationKeys.PRATT_PREC, precValue);
+			node.annotations.set(AnnotationKeys.PRATT_ASSOC, assocValue);
 		}
 	}
 

@@ -423,7 +423,7 @@ class TriviaTypeSynth {
 		final modulePath: String = synthPack.concat([SYNTH_MODULE_LEAF]).join('.');
 		final paired: Array<TypeDefinition> = [];
 		final convertedNames: Array<String> = [];
-		for (origName => node in shape.rules) if (node.annotations.get('trivia.bearing') == true) {
+		for (origName => node in shape.rules) if (node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true) {
 			final pairedFqn: String = origName + PAIRED_SUFFIX;
 			if (defined.exists(pairedFqn)) continue;
 			defined[pairedFqn] = true;
@@ -481,14 +481,14 @@ class TriviaTypeSynth {
 		if (branch.children[0].kind != Ref) return false;
 		final star: ShapeNode = branch.children[1];
 		if (star.kind != Star) return false;
-		if (star.annotations.get('trivia.starCollects') != true) return false;
+		if (star.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) != true) return false;
 		// Tighten: `trivia.starCollects` is also set by `markStarsWithTrivia`
 		// for `:trivia` Seq branches with a single Star child. Those are NOT
 		// postfix and must not grow a `closeTrailing` slot — Lowering's
 		// `lowerPostfixLoop` is the only producer for the slot. Read
 		// `:postfix` from raw `base.meta` (Postfix strategy hasn't run yet)
 		// to ensure the branch is a postfix ctor.
-		final meta: Null<Metadata> = branch.annotations.get('base.meta');
+		final meta: Null<Metadata> = branch.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':postfix' && entry.params.length == 2) return true;
 		return false;
@@ -504,7 +504,8 @@ class TriviaTypeSynth {
 	public static function isAltCloseTrailingBranch(branch: ShapeNode): Bool {
 		if (branch.children.length != 1) return false;
 		final star: ShapeNode = branch.children[0];
-		return star.kind == Star && (star.annotations.get('trivia.starCollects') == true && branch.readMetaString(':trail') != null);
+		return star.kind == Star
+			&& (star.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true && branch.readMetaString(':trail') != null);
 	}
 
 	/**
@@ -792,7 +793,7 @@ class TriviaTypeSynth {
 	private static function buildPairedToRawSeqBody(origNode: ShapeNode, pos: Position): Expr {
 		final entries: Array<{ field: String, expr: Expr }> = [];
 		for (child in origNode.children) {
-			final fieldName: String = child.annotations.get('base.fieldName');
+			final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
 			entries.push({ field: fieldName, expr: shapePairedToRawUnwrap(access, child, pos) });
 		}
@@ -805,7 +806,7 @@ class TriviaTypeSynth {
 		final rawPack: Array<String> = packOf(origName);
 		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
-			final ctorName: String = branch.annotations.get('base.ctor');
+			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			final origArgCount: Int = branch.children.length;
 			final extraCount: Int = countAltExtras(branch);
 			if (origArgCount == 0 && extraCount == 0) {
@@ -818,7 +819,7 @@ class TriviaTypeSynth {
 			// Pattern: CtorName(arg0, arg1, _, _, ...)
 			final binders: Array<Expr> = [];
 			for (i in 0...origArgCount) {
-				final argName: String = branch.children[i].annotations.get('base.fieldName');
+				final argName: String = branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 				binders.push({ expr: EConst(CIdent(argName)), pos: pos });
 			}
 			for (_ in 0...extraCount) binders.push({ expr: EConst(CIdent('_')), pos: pos });
@@ -827,7 +828,7 @@ class TriviaTypeSynth {
 			final unwrapArgs: Array<Expr> = [];
 			for (i in 0...origArgCount) {
 				final argNode: ShapeNode = branch.children[i];
-				final argName: String = argNode.annotations.get('base.fieldName');
+				final argName: String = argNode.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 				final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
 				unwrapArgs.push(shapePairedToRawUnwrap(argAccess, argNode, pos));
 			}
@@ -847,16 +848,16 @@ class TriviaTypeSynth {
 	private static function shapePairedToRawUnwrap(access: Expr, node: ShapeNode, pos: Position): Expr {
 		switch node.kind {
 			case Ref:
-				final refName: String = node.annotations.get('base.ref');
-				final optional: Bool = node.annotations.get('base.optional') == true;
+				final refName: String = node.annotations.get(AnnotationKeys.BASE_REF);
+				final optional: Bool = node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 				if (!refIsBearing(refName)) return access; // raw type already
 				final fnName: String = 'pairedToRaw_${leafOf(refName)}';
 				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:
 				final elem: ShapeNode = node.children[0];
-				final triviaWrap: Bool = node.annotations.get('trivia.starCollects') == true;
-				final optional: Bool = node.annotations.get('base.optional') == true;
+				final triviaWrap: Bool = node.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+				final optional: Bool = node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 				final innerAccess: Expr = triviaWrap ? (macro t.node) : (macro e);
 				final iterVar: String = triviaWrap ? 't' : 'e';
 				final inner: Expr = shapePairedToRawUnwrap(innerAccess, elem, pos);
@@ -959,7 +960,7 @@ class TriviaTypeSynth {
 	private static function buildRawToPairedSeqBody(origNode: ShapeNode, pos: Position): Expr {
 		final entries: Array<{ field: String, expr: Expr }> = [];
 		for (child in origNode.children) {
-			final fieldName: String = child.annotations.get('base.fieldName');
+			final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			final access: Expr = { expr: EField(macro value, fieldName), pos: pos };
 			entries.push({ field: fieldName, expr: shapeRawToPairedWrap(access, child, pos) });
 			// Append trivia-only sibling fields with default empty values —
@@ -1032,7 +1033,7 @@ class TriviaTypeSynth {
 		final pairedPath: Array<String> = synthPack.concat([SYNTH_MODULE_LEAF, pairedSimple]);
 		final cases: Array<Case> = [];
 		for (branch in origNode.children) {
-			final ctorName: String = branch.annotations.get('base.ctor');
+			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			final origArgCount: Int = branch.children.length;
 			if (origArgCount == 0) {
 				final pattern: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
@@ -1043,14 +1044,14 @@ class TriviaTypeSynth {
 			// Pattern: CtorName(arg0, arg1, ...) — raw ctors have no extras.
 			final binders: Array<Expr> = [
 				for (i in 0...origArgCount)
-					{ expr: EConst(CIdent(branch.children[i].annotations.get('base.fieldName'))), pos: pos }
+					{ expr: EConst(CIdent(branch.children[i].annotations.get(AnnotationKeys.BASE_FIELD_NAME))), pos: pos }
 			];
 			final pattern: Expr = { expr: ECall({ expr: EConst(CIdent(ctorName)), pos: pos }, binders), pos: pos };
 			// Body: PairedType.CtorName(wrap(arg0), wrap(arg1), ...defaults).
 			final pairedArgs: Array<Expr> = [
 				for (i in 0...origArgCount) {
 					final argNode: ShapeNode = branch.children[i];
-					final argName: String = argNode.annotations.get('base.fieldName');
+					final argName: String = argNode.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 					final argAccess: Expr = { expr: EConst(CIdent(argName)), pos: pos };
 					shapeRawToPairedWrap(argAccess, argNode, pos);
 				}
@@ -1136,16 +1137,16 @@ class TriviaTypeSynth {
 	private static function shapeRawToPairedWrap(access: Expr, node: ShapeNode, pos: Position): Expr {
 		switch node.kind {
 			case Ref:
-				final refName: String = node.annotations.get('base.ref');
-				final optional: Bool = node.annotations.get('base.optional') == true;
+				final refName: String = node.annotations.get(AnnotationKeys.BASE_REF);
+				final optional: Bool = node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 				if (!refIsBearing(refName)) return access;
 				final fnName: String = 'rawToPaired_${leafOf(refName)}';
 				final call: Expr = { expr: ECall({ expr: EConst(CIdent(fnName)), pos: pos }, [access]), pos: pos };
 				return optional ? macro ($access == null ? null : $call) : call;
 			case Star:
 				final elem: ShapeNode = node.children[0];
-				final triviaWrap: Bool = node.annotations.get('trivia.starCollects') == true;
-				final optional: Bool = node.annotations.get('base.optional') == true;
+				final triviaWrap: Bool = node.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+				final optional: Bool = node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 				final iterVar: String = 'e';
 				final iterExpr: Expr = { expr: EConst(CIdent(iterVar)), pos: pos };
 				final innerWrap: Expr = shapeRawToPairedWrap(iterExpr, elem, pos);
@@ -1207,7 +1208,7 @@ class TriviaTypeSynth {
 					// the slot synthesis must not be gated on `isTriviaStarField`.
 					if (isSepBeforeOptStarField(child)) {
 						final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
-						final fieldName: String = child.annotations.get('base.fieldName');
+						final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 						fields.push({
 							name: fieldName + SEP_BEFORE_SUFFIX,
 							kind: FVar(boolCT),
@@ -1300,9 +1301,9 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final ct: ComplexType = shapeToComplexType(child, synthPack);
-		final optional: Bool = child.annotations.get('base.optional') == true;
+		final optional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 		final meta: Metadata = optional ? [{ name: ':optional', params: [], pos: pos }] : [];
 		return {
 			name: fieldName,
@@ -1327,11 +1328,12 @@ class TriviaTypeSynth {
 		// ω-cond-comp-engine). Lowering's `isOptionalKwStar` mirrors this
 		// predicate's Star branch on the parser side.
 		return (child.kind == Ref || child.kind == Star)
-			&& (child.annotations.get('base.optional') == true && child.readMetaString(':kw') != null);
+			&& (child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true && child.readMetaString(':kw') != null);
 	}
 
 	private static function isBareNonFirstRef(child: ShapeNode, parent: ShapeNode): Bool {
-		return child.kind == Ref && (child.annotations.get('base.optional') != true && (child.readMetaString(':kw') == null && (
+		return child.kind == Ref && (child.annotations.get(AnnotationKeys.BASE_OPTIONAL)
+			!= true && (child.readMetaString(':kw') == null && (
 			child.readMetaString(':lead') == null && (child != parent.children[0] || child.fmtHasFlag('beforeNewlineSlotFirst'))
 		)));
 	}
@@ -1349,13 +1351,14 @@ class TriviaTypeSynth {
 	 * writer's struct-Star emit under `opt.leftCurly == Next`.
 	 */
 	private static function isBareFirstStarNlOptIn(child: ShapeNode, parent: ShapeNode): Bool {
-		return child.kind == Star && (child.annotations.get('base.optional') != true && (child.readMetaString(':kw') == null && (
+		return child.kind == Star && (child.annotations.get(AnnotationKeys.BASE_OPTIONAL)
+			!= true && (child.readMetaString(':kw') == null && (
 			child.readMetaString(':lead') == null && (child == parent.children[0] && child.fmtHasFlag('beforeNewlineSlotFirst'))
 		)));
 	}
 
 	private static function buildBeforeNewlineSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 		return {
 			name: fieldName + BEFORE_NEWLINE_SUFFIX,
@@ -1372,7 +1375,7 @@ class TriviaTypeSynth {
 	 * `BeforeNewline` `collectTrivia` scan captured in the pre-field gap.
 	 */
 	private static function buildBeforeLeadingSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final arrayStrCT: ComplexType = TPath({
 			pack: [],
 			name: 'Array',
@@ -1403,7 +1406,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildAfterTrailSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 		return {
@@ -1427,7 +1430,7 @@ class TriviaTypeSynth {
 	 *
 	 */
 	private static function buildStructFieldTrailPresentSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 		final nullBoolCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(boolCT)] });
 		final meta: Metadata = [{ name: ':optional', params: [], pos: pos }];
@@ -1466,7 +1469,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildNewlineAfterSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 		return {
 			name: fieldName + NEWLINE_AFTER_SUFFIX,
@@ -1490,13 +1493,13 @@ class TriviaTypeSynth {
 	 * predicates rely on).
 	 */
 	private static function isCondOpenNewlineRef(child: ShapeNode): Bool {
-		return child.kind == Ref && (
-			child.annotations.get('base.optional') != true && (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline'))
-		);
+		return child.kind == Ref
+			&& (child.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+				&& (child.fmtHasFlag('condWrap') && child.fmtHasFlag('captureCondOpenNewline')));
 	}
 
 	private static function buildCondOpenNewlineSlot(child: ShapeNode, pos: Position): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
 		return {
 			name: fieldName + CONDITION_OPEN_NEWLINE_SUFFIX,
@@ -1507,7 +1510,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildKwTriviaSlots(child: ShapeNode, pos: Position): Array<Field> {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 		final nullStrCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT)] });
 		final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
@@ -1560,7 +1563,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function isTriviaStarField(child: ShapeNode): Bool {
-		return child.kind == Star && child.annotations.get('trivia.starCollects') == true;
+		return child.kind == Star && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 	}
 
 	/**
@@ -1583,7 +1586,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildStarTrailingSlots(child: ShapeNode, pos: Position): Array<Field> {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final strCT: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 		final arrayStrCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(strCT)] });
 		final boolCT: ComplexType = TPath({ pack: [], name: 'Bool', params: [] });
@@ -1691,7 +1694,7 @@ class TriviaTypeSynth {
 	}
 
 	private static function buildEnumCtor(branch: ShapeNode, pos: Position, synthPack: Array<String>): Field {
-		final ctorName: String = branch.annotations.get('base.ctor');
+		final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 		if (branch.children.length == 0) return {
 			name: ctorName,
 			kind: FVar(null),
@@ -1701,7 +1704,7 @@ class TriviaTypeSynth {
 		final args: Array<FunctionArg> = [
 			for (arg in branch.children)
 				{
-					name: (arg.annotations.get('base.fieldName'): String),
+					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
 					type: shapeToComplexType(arg, synthPack),
 				}
 		];
@@ -1959,19 +1962,19 @@ class TriviaTypeSynth {
 	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {
 		return switch node.kind {
 			case Ref:
-				final refName: String = node.annotations.get('base.ref');
+				final refName: String = node.annotations.get(AnnotationKeys.BASE_REF);
 				final base: ComplexType = refIsBearing(refName)
 					? TPath({ pack: synthPack, name: leafOf(refName) + PAIRED_SUFFIX, params: [] })
 					: TPath({ pack: packOf(refName), name: leafOf(refName), params: [] });
 				return wrapOptional(node, base);
 			case Star:
 				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
-				final wrapped: ComplexType = node.annotations.get('trivia.starCollects') == true
+				final wrapped: ComplexType = node.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true
 					? TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elementCT)] })
 					: elementCT;
 				return wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(wrapped)] }));
 			case Terminal:
-				final tp: Null<String> = node.annotations.get('base.typePath');
+				final tp: Null<String> = node.annotations.get(AnnotationKeys.BASE_TYPE_PATH);
 				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
 				final under: String = node.annotations.get('base.underlying');
 				return wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
@@ -1982,13 +1985,14 @@ class TriviaTypeSynth {
 	}
 
 	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
-		return node.annotations.get('base.optional') == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
+		return
+			node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
 	private static function refIsBearing(refName: String): Bool {
 		for (shape in shapes) {
 			final node: Null<ShapeNode> = shape.rules.get(refName);
-			if (node != null) return node.annotations.get('trivia.bearing') == true;
+			if (node != null) return node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 		}
 		return false;
 	}

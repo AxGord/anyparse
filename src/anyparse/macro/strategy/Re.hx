@@ -1,5 +1,6 @@
 package anyparse.macro.strategy;
 
+import anyparse.macro.AnnotationKeys;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -37,14 +38,14 @@ class Re implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':re') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':re') {
 			if (entry.params.length != 1) {

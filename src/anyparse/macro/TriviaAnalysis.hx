@@ -65,7 +65,7 @@ class TriviaAnalysis {
 				}
 			}
 		}
-		for (name => node in result.rules) node.annotations.set('trivia.bearing', bearing.exists(name));
+		for (name => node in result.rules) node.annotations.set(AnnotationKeys.TRIVIA_BEARING, bearing.exists(name));
 	}
 
 	private static function markStarsWithTrivia(node: ShapeNode): Void {
@@ -73,8 +73,8 @@ class TriviaAnalysis {
 		// `shapeField` attaches the field-level meta directly to the Star
 		// node (the `Array<T>` result of `shapeFieldType`), so detection
 		// is a direct meta read on the Star itself.
-		if (node.kind == Star && hasTrivia(node.annotations.get('base.meta'))) {
-			node.annotations.set('trivia.starCollects', true);
+		if (node.kind == Star && hasTrivia(node.annotations.get(AnnotationKeys.BASE_META))) {
+			node.annotations.set(AnnotationKeys.TRIVIA_STAR_COLLECTS, true);
 		}
 		// Enum-branch case: `@:trivia BlockStmt(stmts:Array<HxStatement>)`.
 		// `shapeEnum` attaches the ctor-level meta to the Seq branch and
@@ -83,9 +83,9 @@ class TriviaAnalysis {
 		// the @:trivia is unambiguously about that Star — mark it here.
 		// Multiple Stars on the same branch would need a named-arg form
 		// (`@:trivia(stmts)`), which no current grammar requires.
-		if (node.kind == Seq && hasTrivia(node.annotations.get('base.meta'))) {
+		if (node.kind == Seq && hasTrivia(node.annotations.get(AnnotationKeys.BASE_META))) {
 			final stars: Array<ShapeNode> = [for (c in node.children) if (c.kind == Star) c];
-			if (stars.length == 1) stars[0].annotations.set('trivia.starCollects', true);
+			if (stars.length == 1) stars[0].annotations.set(AnnotationKeys.TRIVIA_STAR_COLLECTS, true);
 		}
 		for (child in node.children) markStarsWithTrivia(child);
 	}
@@ -95,10 +95,10 @@ class TriviaAnalysis {
 		// Detect: branch.base.meta has `:postfix` with 2 args (open, close)
 		// AND children = [Ref operand, Star args]. Mark the Star.
 		if (
-			node.kind == Seq && hasPostfixPair(node.annotations.get('base.meta')) && node.children.length == 2
+			node.kind == Seq && hasPostfixPair(node.annotations.get(AnnotationKeys.BASE_META)) && node.children.length == 2
 			&& node.children[0].kind == Ref && node.children[1].kind == Star
 		) {
-			node.children[1].annotations.set('trivia.starCollects', true);
+			node.children[1].annotations.set(AnnotationKeys.TRIVIA_STAR_COLLECTS, true);
 		}
 		for (child in node.children) markPostfixStarSuffix(child);
 	}
@@ -116,7 +116,7 @@ class TriviaAnalysis {
 	}
 
 	private static function hasAnyTriviaStar(node: ShapeNode): Bool {
-		if (node.kind == Star && node.annotations.get('trivia.starCollects') == true) return true;
+		if (node.kind == Star && node.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true) return true;
 		for (child in node.children) if (hasAnyTriviaStar(child)) return true;
 		return false;
 	}
@@ -129,7 +129,7 @@ class TriviaAnalysis {
 
 	private static function collectRefsInto(node: ShapeNode, out: Array<String>): Void {
 		if (node.kind == Ref) {
-			final r: Null<String> = node.annotations.get('base.ref');
+			final r: Null<String> = node.annotations.get(AnnotationKeys.BASE_REF);
 			if (r != null && out.indexOf(r) == -1) out.push(r);
 		}
 		for (child in node.children) collectRefsInto(child, out);

@@ -30,7 +30,7 @@ final class MetaInspect {
 	 * params are not inspected — presence alone is the signal.
 	 */
 	public static function hasMeta(node: ShapeNode, tag: String): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == tag) return true;
 		return false;
@@ -42,7 +42,7 @@ final class MetaInspect {
 	 * more than one param, or its single param is not a string literal.
 	 */
 	public static function readMetaString(node: ShapeNode, tag: String): Null<String> {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == tag) {
 			return entry.params.length != 1
@@ -62,7 +62,7 @@ final class MetaInspect {
 	 * of `readMetaString` for tags like `@:absentOn('a', 'b', ')')`.
 	 */
 	public static function readMetaStringArgs(node: ShapeNode, tag: String): Null<Array<String>> {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == tag) {
 			if (entry.params.length == 0) return null;
@@ -85,7 +85,7 @@ final class MetaInspect {
 	 * Either form counts as flag presence.
 	 */
 	public static function fmtHasFlag(node: ShapeNode, name: String): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
@@ -106,7 +106,7 @@ final class MetaInspect {
 	 * the argument shape is not a single string literal.
 	 */
 	public static function fmtReadString(node: ShapeNode, name: String): Null<String> {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
@@ -125,7 +125,7 @@ final class MetaInspect {
 	 * any arg is not a string literal.
 	 */
 	public static function fmtReadStringArgs(node: ShapeNode, name: String): Null<Array<String>> {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
@@ -153,7 +153,7 @@ final class MetaInspect {
 	 */
 	public static function fmtReadStringArgsAll(node: ShapeNode, name: String): Array<Array<String>> {
 		final out: Array<Array<String>> = [];
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return out;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {

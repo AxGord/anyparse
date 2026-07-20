@@ -316,8 +316,8 @@ class Lowering {
 		final branches: Array<ShapeNode> = atomsOnly ? [
 			for (b in node.children)
 				if (
-					b.annotations.get('pratt.prec') == null && b.annotations.get('postfix.op') == null
-					&& b.annotations.get('ternary.op') == null
+					b.annotations.get(AnnotationKeys.PRATT_PREC) == null && b.annotations.get(AnnotationKeys.POSTFIX_OP) == null
+					&& b.annotations.get(AnnotationKeys.TERNARY_OP) == null
 				)
 					b
 		] : node.children;
@@ -374,7 +374,7 @@ class Lowering {
 		};
 		final operatorBranches: Array<ShapeNode> = [
 			for (b in node.children)
-				if (b.annotations.get('pratt.prec') != null || b.annotations.get('ternary.op') != null) b
+				if (b.annotations.get(AnnotationKeys.PRATT_PREC) != null || b.annotations.get(AnnotationKeys.TERNARY_OP) != null) b
 		];
 		// Longest-match sort: longer operator literals come first in the
 		// generated dispatch chain so `<=` is attempted before `<` (and
@@ -511,7 +511,7 @@ class Lowering {
 			pos: Context.currentPos(),
 		};
 		final postfixBranches: Array<ShapeNode> = [
-			for (b in node.children) if (b.annotations.get('postfix.op') != null) b
+			for (b in node.children) if (b.annotations.get(AnnotationKeys.POSTFIX_OP) != null) b
 		];
 		if (postfixBranches.length == 0) {
 			Context.fatalError('Lowering: lowerPostfixLoop called with no postfix branches', Context.currentPos());
@@ -528,8 +528,8 @@ class Lowering {
 		final wantOpTrail: Bool = _ctx.trivia && _hasChainBranch;
 		// Longest-first sort — same macro-time policy as lowerPrattLoop (D33).
 		postfixBranches.sort((a, b) -> {
-			final la: Int = (a.annotations.get('postfix.op'): String).length;
-			final lb: Int = (b.annotations.get('postfix.op'): String).length;
+			final la: Int = (a.annotations.get(AnnotationKeys.POSTFIX_OP): String).length;
+			final lb: Int = (b.annotations.get(AnnotationKeys.POSTFIX_OP): String).length;
 			return lb - la;
 		});
 		// Cross-category longer-prefix resolution: a postfix op that is a
@@ -545,9 +545,9 @@ class Lowering {
 		var opChain: Expr = macro _matched = false;
 		for (i in 0...postfixBranches.length) {
 			final branch: ShapeNode = postfixBranches[postfixBranches.length - 1 - i];
-			final op: String = branch.annotations.get('postfix.op');
-			final close: Null<String> = branch.annotations.get('postfix.close');
-			final ctor: String = branch.annotations.get('base.ctor');
+			final op: String = branch.annotations.get(AnnotationKeys.POSTFIX_OP);
+			final close: Null<String> = branch.annotations.get(AnnotationKeys.POSTFIX_CLOSE);
+			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			// Word-like postfix ops (ω-cond-splice: '#if' as the dispatch of
 			// `CondSpliceTail`) route through `matchKw` in
 			// `buildPostfixOpMatchExpr` — word-boundary-checked, so an
@@ -558,7 +558,7 @@ class Lowering {
 					'Lowering: @:postfix branch "$ctor" must have operand:$enumSimple as its first argument', Context.currentPos()
 				);
 			}
-			final operandRef: String = children[0].annotations.get('base.ref');
+			final operandRef: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
 			if (simpleName(operandRef) != enumSimple) {
 				Context.fatalError('Lowering: @:postfix operand must reference the same enum ($enumSimple)', Context.currentPos());
 			}
@@ -617,7 +617,7 @@ class Lowering {
 	}
 
 	private function lowerEnumBranch(branch: ShapeNode, typePath: String, recurseFnName: String): Expr {
-		final ctor: String = branch.annotations.get('base.ctor');
+		final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 		final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
 
@@ -645,7 +645,7 @@ class Lowering {
 		// wrongly accept `notx` for `not`. When a grammar needs word-like
 		// prefix ops, extend Case 5 to route through `expectKw` the same
 		// way Cases 1 and 2 dispatch by `endsWithWordChar`.
-		final prefixOp: Null<String> = branch.annotations.get('prefix.op');
+		final prefixOp: Null<String> = branch.annotations.get(AnnotationKeys.PREFIX_OP);
 		if (prefixOp != null) return lowerPrefixBranch(branch, typePath, ctorRef, recurseFnName, prefixOp);
 
 		// Case 0: zero-arg ctor with @:kw (no @:lit). Parallel to Case 1
@@ -655,17 +655,17 @@ class Lowering {
 		// When @:trail is present (e.g. `@:kw('return') @:trail(';')
 		// VoidReturnStmt`), the trail literal is emitted unconditionally
 		// after the keyword (D48).
-		final kwLeadBranch: Null<String> = branch.annotations.get('kw.leadText');
-		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get('lit.litList') == null)
+		final kwLeadBranch: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
+		if (kwLeadBranch != null && branch.children.length == 0 && branch.annotations.get(AnnotationKeys.LIT_LIT_LIST) == null)
 			return lowerKwZeroArgBranch(branch, ctorRef, kwLeadBranch);
 
 		// Classify branch shape.
-		final litList: Null<Array<String>> = branch.annotations.get('lit.litList');
+		final litList: Null<Array<String>> = branch.annotations.get(AnnotationKeys.LIT_LIT_LIST);
 		final children: Array<ShapeNode> = branch.children;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
-		final sepText: Null<String> = branch.annotations.get('lit.sepText');
-		final sepAltText: Null<String> = branch.annotations.get('lit.sepAltText');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final sepText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
+		final sepAltText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_ALT_TEXT);
 
 		// Case 1: zero-arg ctor with @:lit(single). When the literal ends
 		// with a word character (`null`, `true`, `default`, …), emit the
@@ -712,7 +712,7 @@ class Lowering {
 		final magic: Null<String> = node.annotations.get('bin.magic');
 		if (magic != null) parseSteps.push(macro expectLit(ctx, $v{magic}));
 		for (child in node.children) {
-			final fieldName: Null<String> = child.annotations.get('base.fieldName');
+			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (fieldName == null) {
 				Context.fatalError('Lowering: struct field missing base.fieldName', Context.currentPos());
 			}
@@ -747,7 +747,7 @@ class Lowering {
 			// can't dispatch.
 			final absentOnLits: Null<Array<String>> = child.readMetaStringArgs(':absentOn');
 			final isStar: Bool = child.kind == Star;
-			final isOptional: Bool = child.annotations.get('base.optional') == true;
+			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			validateStructField(child, fieldName, isOptional, isStar, kwLead, leadText, trailText, absentOnLits);
 			// Binary @:length prefix — read an N-byte ASCII-encoded length
 			// BEFORE any field-level lead literal. The parsed integer is
@@ -900,8 +900,8 @@ class Lowering {
 			// no `@:fmt(trailOptShapeGate)` here). First consumer:
 			// `HxIfExpr.thenBranch` (`if (c) e1; else e2` in value
 			// position; the Build.hx offset-25 self-parse blocker).
-			final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
-				? child.annotations.get('lit.trailText')
+			final trailOptText: Null<String> = child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true
+				? child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT)
 				: null;
 			emitFieldTrail(
 				parseSteps, isStar, isOptional, trailText, hasAfterTrailSlot, afterTrailLocal, trailOptText, captureTrailPresentExpr
@@ -1007,16 +1007,16 @@ class Lowering {
 		if (inner.kind != Ref) {
 			Context.fatalError('Lowering: Star struct field must contain a Ref', Context.currentPos());
 		}
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = parseFnName(elemRefName);
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		final openText: Null<String> = starNode.annotations.get('lit.leadText');
-		final closeText: Null<String> = starNode.annotations.get('lit.trailText');
-		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
+		final openText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final closeText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final sepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
 		if (closeText == null && sepText != null && !starNode.hasMeta(':tryparse')) {
 			Context.fatalError(
 				'Lowering: Star struct field with @:sep without @:trail requires @:tryparse for fail-rewind termination',
@@ -1029,7 +1029,7 @@ class Lowering {
 		// mode (HxModule.decls). `@:sep` and `@:tryparse` combined with
 		// @:trivia are rejected — no current grammar combines them and the
 		// semantics of "trivia around a sep-separated list" are undecided.
-		if (_ctx.trivia && starNode.annotations.get('trivia.starCollects') == true) {
+		if (_ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true) {
 			emitTriviaStarFieldSteps(starNode, localName, parseSteps, isLastField, elemCT, elemCall, openText, closeText);
 			return;
 		}
@@ -1080,8 +1080,8 @@ class Lowering {
 			final sepCharCode: Int = sepText.charCodeAt(0);
 			final hasSepBeforeOpt: Bool = starNode.fmtHasFlag('sepBeforeOpt');
 			if (hasSepBeforeOpt) emitSepBeforeOptStep(localName, parseSteps, sepCharCode);
-			final sepBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
-			final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+			final sepBlockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
+			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
 			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepCharCode, sepBlockEnded, predicateCall));
 			return;
@@ -1110,7 +1110,7 @@ class Lowering {
 		if (inner.kind != Ref) {
 			Context.fatalError('Lowering: @:optional Star struct field must contain a Ref', Context.currentPos());
 		}
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = parseFnName(elemRefName);
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
@@ -1120,9 +1120,9 @@ class Lowering {
 		// `@:lead` and `@:trail` are guaranteed non-null at this point —
 		// the validation block in `lowerStruct` rejects optional Star
 		// without both before the field-value switch fires.
-		final openText: String = starNode.annotations.get('lit.leadText');
-		final closeText: String = starNode.annotations.get('lit.trailText');
-		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
+		final openText: String = starNode.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final closeText: String = starNode.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final sepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
 		final accumCT: ComplexType = TPath({ pack: [], name: 'Array', params: [TPType(elemCT)] });
 		final optAccumCT: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(accumCT)] });
 		final closeCharCode: Int = closeText.charCodeAt(0);
@@ -1233,8 +1233,8 @@ class Lowering {
 		// Mirror of the sister `emitTriviaStarFieldSteps` (3422) /
 		// WriterLowering (3380) contract: sep without `blockEnded` is rejected
 		// because termination semantic is undefined without it.
-		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
-		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final sepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
+		final blockEndedFlag: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		// ω-sep-faithful: valid alternative — same permissive-matchLit +
 		// per-element `sepAfter` capture (the D4 loop below), writer-side
 		// re-emission keyed purely on that captured signal.
@@ -1245,14 +1245,14 @@ class Lowering {
 				Context.currentPos()
 			);
 		}
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = parseFnName(elemRefName);
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		final isTriviaCollects: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaCollects: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 		// Element wrap and accumulator types — Trivial<T> in trivia mode.
 		final accumElemCT: ComplexType = isTriviaCollects
 			? TPath({ pack: ['anyparse', 'runtime'], name: 'Trivial', params: [TPType(elemCT)] })
@@ -1407,8 +1407,8 @@ class Lowering {
 		starNode: ShapeNode, localName: String, parseSteps: Array<Expr>, isLastField: Bool, elemCT: ComplexType, elemCall: Expr,
 		openText: Null<String>, closeText: Null<String>
 	): Void {
-		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
-		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final sepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
+		final blockEndedFlag: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		// ω-blockended-trivia-tryparse (Session 3): the historical
 		// `@:trivia + @:sep + (EOF | @:tryparse)` reject is relaxed for
 		// the specific shape `@:sep(text, tailRelax, blockEnded) +
@@ -1681,7 +1681,7 @@ class Lowering {
 		// embedded VoidReturnStmt — the byte at `_prevEndPos - 1` is
 		// `;` not `}`. Permissive parser keeps backwards-compatibility
 		// with the old per-stmt-@:trailOpt model byte-for-byte.
-		final blockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final blockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		final sepMatchExpr: Expr = buildTriviaCloseSepMatchExpr(sepText, trailPresentLocal);
 		// ω-trivia-trailing-before-sep: capture trailing same-line comment
 		// BEFORE the optional sep-match. Source shape `elem /*c*/, next`
@@ -1872,10 +1872,10 @@ class Lowering {
 		final switchCases: Array<Case> = [];
 		final missingChecks: Array<Expr> = [];
 		for (child in node.children) {
-			final fieldName: Null<String> = child.annotations.get('base.fieldName');
+			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (fieldName == null) Context.fatalError('Lowering: ByName struct field missing base.fieldName', Context.currentPos());
-			final isOptional: Bool = child.annotations.get('base.optional') == true;
-			final fieldCT: Null<ComplexType> = child.annotations.get('base.fieldType');
+			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
+			final fieldCT: Null<ComplexType> = child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
 			if (fieldCT == null)
 				Context.fatalError('Lowering: ByName struct field "$fieldName" missing base.fieldType', Context.currentPos());
 			final localName: String = '_f_$fieldName';
@@ -1992,7 +1992,7 @@ class Lowering {
 	private function byNameFieldParseExpr(child: ShapeNode, fieldName: String): Expr {
 		return switch child.kind {
 			case Ref:
-				final refName: String = child.annotations.get('base.ref');
+				final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 				final fnName: String = parseFnName(refName);
 				{ expr: ECall(macro $i{fnName}, [macro ctx]), pos: Context.currentPos() };
 			case Star:
@@ -2054,9 +2054,9 @@ class Lowering {
 			);
 			throw 'unreachable';
 		}
-		final refName: String = inner.annotations.get('base.ref');
+		final refName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final fnName: String = parseFnName(refName);
-		final fieldCT: Null<ComplexType> = child.annotations.get('base.fieldType');
+		final fieldCT: Null<ComplexType> = child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
 		final innerCT: ComplexType = extractArrayElementCT(fieldCT) ?? ruleReturnCT(refName);
 		final closeCharCode: Int = seqClose.charCodeAt(0);
 		final entrySep: String = _formatInfo.entrySep;
@@ -2091,7 +2091,7 @@ class Lowering {
 	private function isTriviaBearing(refName: String): Bool {
 		if (!_ctx.trivia) return false;
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
-		return node != null && node.annotations.get('trivia.bearing') == true;
+		return node != null && node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 	}
 
 	/**
@@ -2222,16 +2222,18 @@ class Lowering {
 		// noqa: complexity
 		final returnCT: ComplexType = ruleReturnCT(typePath);
 		final loopFnName: String = parseFnName(typePath);
-		final ctor: String = branch.annotations.get('base.ctor');
+		final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 		final ctorPath: Array<String> = ruleCtorPath(typePath, ctor);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
-		final isTernary: Bool = branch.annotations.get('ternary.op') != null;
+		final isTernary: Bool = branch.annotations.get(AnnotationKeys.TERNARY_OP) != null;
 		final opText: String = getOperatorText(branch);
-		final precValue: Int = isTernary ? (branch.annotations.get('ternary.prec'): Int) : (branch.annotations.get('pratt.prec'): Int);
+		final precValue: Int = isTernary
+			? (branch.annotations.get(AnnotationKeys.TERNARY_PREC): Int)
+			: (branch.annotations.get(AnnotationKeys.PRATT_PREC): Int);
 		return if (isTernary) {
 			// Ternary branch: three operands (cond, middle, right).
 			// Both middle and right parse at minPrec=0 (full expression).
-			final sepText: String = branch.annotations.get('ternary.sep');
+			final sepText: String = branch.annotations.get(AnnotationKeys.TERNARY_SEP);
 			final fullExprCall: Expr = {
 				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
 				pos: Context.currentPos(),
@@ -2263,11 +2265,11 @@ class Lowering {
 			// right:HxType), recursing into the same loop is wrong — call
 			// the other type's parse function once at its default starting
 			// precedence and let outer Pratt iteration handle chaining.
-			final assocValue: String = branch.annotations.get('pratt.assoc');
+			final assocValue: String = branch.annotations.get(AnnotationKeys.PRATT_ASSOC);
 			final nextMinPrec: Int = assocValue == 'Right' ? precValue : precValue + 1;
 			final rightChildren: Array<ShapeNode> = branch.children;
 			final rightChild: ShapeNode = rightChildren[1];
-			final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+			final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get(AnnotationKeys.BASE_REF) : null;
 			final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simple;
 			final rightCT: ComplexType = isAsymmetric ? ruleReturnCT(rightRef) : returnCT;
 			final rightCall: Expr = if (isAsymmetric)
@@ -2984,7 +2986,7 @@ class Lowering {
 			Context.fatalError('Lowering: @:postfix Star child must be a Ref', Context.currentPos());
 			throw 'unreachable';
 		}
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = simpleName(elemRefName) == enumSimple ? selfFnName : parseFnName(elemRefName);
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro ctx]),
@@ -2997,7 +2999,7 @@ class Lowering {
 		final closeNotNextExpr: Expr = close.length == 1
 			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
 			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{close});
-		final sepText: Null<String> = branch.annotations.get('lit.sepText');
+		final sepText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
 		final ctorCall: Expr = { expr: ECall(ctorRef, [macro left, macro _args]), pos: Context.currentPos() };
 		// ω-postfix-call-trailing: when the synth pair grew a
 		// `closeTrailing:Null<String>` slot (see
@@ -3036,7 +3038,7 @@ class Lowering {
 		// trivia-Star pattern: horizontal-only-skip before sep match
 		// so an inline `// comment` or `/* x */` after each arg lands
 		// in `collectTrailing` instead of being eaten by `skipWs`.
-		final triviaCollect: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final triviaCollect: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 		if (triviaCollect && sepText != null) {
 			final wrappedCT: ComplexType = TPath({
 				pack: ['anyparse', 'runtime'],
@@ -3255,7 +3257,7 @@ class Lowering {
 			Context.fatalError('Lowering: @:postfix branch "$ctor" second argument must be a Ref', Context.currentPos());
 			throw 'unreachable';
 		}
-		final suffixRef: String = suffix.annotations.get('base.ref');
+		final suffixRef: String = suffix.annotations.get(AnnotationKeys.BASE_REF);
 		// For the wrap-with-recurse form, the inner Ref typically points
 		// at SelfType — to force a full expression parse reset we call
 		// `parseXxx` directly (via its public entry) rather than the
@@ -3290,7 +3292,7 @@ class Lowering {
 		// the matched operator and `_preWsPos` is the loop's pre-skipWs save, so
 		// the gap is non-empty iff their distance exceeds the operator length.
 		final captureOpSpace: Bool = _ctx.trivia && branch.fmtHasFlag('capturePostfixOpSpace');
-		final postfixOpLen: Int = (branch.annotations.get('postfix.op'): String).length;
+		final postfixOpLen: Int = (branch.annotations.get(AnnotationKeys.POSTFIX_OP): String).length;
 		// ω-keep-chain-receiver-comment: the FieldAccess ctor grows a 4th
 		// positional `chainLeadComment:Null<String>` slot after `chainNewline`.
 		// It reads `_opTrailComment` — the operand's trailing comment captured
@@ -3456,11 +3458,11 @@ class Lowering {
 		// postfix dispatch declines and Pratt picks up the longer op.
 		final allOps: Array<String> = [];
 		for (b in node.children) {
-			final po: Null<String> = b.annotations.get('postfix.op');
+			final po: Null<String> = b.annotations.get(AnnotationKeys.POSTFIX_OP);
 			if (po != null) allOps.push(po);
-			final pr: Null<String> = b.annotations.get('pratt.op');
+			final pr: Null<String> = b.annotations.get(AnnotationKeys.PRATT_OP);
 			if (pr != null) allOps.push(pr);
-			final tr: Null<String> = b.annotations.get('ternary.op');
+			final tr: Null<String> = b.annotations.get(AnnotationKeys.TERNARY_OP);
 			if (tr != null) allOps.push(tr);
 		}
 		return allOps;
@@ -3769,12 +3771,12 @@ class Lowering {
 		final closeNotNextExpr: Expr = closeText.length == 1
 			? macro ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}
 			: macro ctx.pos < ctx.input.length && !peekLit(ctx, $v{closeText});
-		final blockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final blockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		if (sepText != null && blockEnded) {
 			final sepCharCode: Int = sepText.charCodeAt(0);
-			final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
-			final sepStartsElement: Bool = starNode.annotations.get('lit.sepStartsElement') == true;
+			final sepStartsElement: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_STARTS_ELEMENT) == true;
 			parseSteps.push(buildCloseBlockEndedBody(
 				elemCall, accumRef, closeNotNextExpr, sepCharCode, sepText, predicateCall, sepStartsElement
 			));
@@ -3796,7 +3798,7 @@ class Lowering {
 		if (children.length != 1 || children[0].kind != Ref) {
 			Context.fatalError('Lowering: @:prefix branch must have exactly one Ref child (the operand)', Context.currentPos());
 		}
-		final refName: String = children[0].annotations.get('base.ref');
+		final refName: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
 		final enumSimple: String = simpleName(typePath);
 		if (simpleName(refName) != enumSimple) {
 			Context.fatalError('Lowering: @:prefix operand must reference the same enum ($enumSimple)', Context.currentPos());
@@ -3827,7 +3829,7 @@ class Lowering {
 	 * is emitted unconditionally after the keyword (D48).
 	 */
 	private function lowerKwZeroArgBranch(branch: ShapeNode, ctorRef: Expr, kwLeadBranch: String): Expr {
-		final trailBranch: Null<String> = branch.annotations.get('lit.trailText');
+		final trailBranch: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
 		return trailBranch != null
 			? macro {
 				skipWs(ctx);
@@ -3993,7 +3995,7 @@ class Lowering {
 		branch: ShapeNode, leadText: String, trailText: String, elemCT: ComplexType, elemCall: Expr, closeNotNextExpr: Expr,
 		ctorCall: Expr, sepCharCode: Int, sepText: String
 	): Expr {
-		final predicateName: Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
+		final predicateName: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 		final accumRefForPred: Expr = macro _items;
 		final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRefForPred) : macro false;
 		// sepStartsElement (Session 9 BlockBody Star) — when block-ended is
@@ -4002,7 +4004,7 @@ class Lowering {
 		// valid element body (Haxe `EmptyStmt`). When the flag is absent the
 		// default permissive-sep semantics applies (sep-first branch in the
 		// loop).
-		final sepStartsElement: Bool = branch.annotations.get('lit.sepStartsElement') == true;
+		final sepStartsElement: Bool = branch.annotations.get(AnnotationKeys.LIT_SEP_STARTS_ELEMENT) == true;
 		return sepStartsElement
 			? lowerStarBlockEndedSepStarts(
 				leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText, predicateCall
@@ -4291,9 +4293,9 @@ class Lowering {
 	 */
 	private function lowerKwRefBranch(branch: ShapeNode, typePath: String, ctorRef: Expr): Expr {
 		final children: Array<ShapeNode> = branch.children;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
-		final refName: String = children[0].annotations.get('base.ref');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final refName: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
 		// ω-cast-bind-tightness: `@:fmt(atomOperand)` on a
 		// single-Ref kw branch routes the operand parse to the
 		// `${parseFn}Atom` variant of the sub-rule instead of the
@@ -4315,7 +4317,7 @@ class Lowering {
 			expr: ECall(macro $i{subFnName}, [macro ctx]),
 			pos: Context.currentPos(),
 		};
-		final trailOptional: Bool = branch.annotations.get('lit.trailOptional') == true;
+		final trailOptional: Bool = branch.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true;
 		// ω-trailopt-source-track: in trivia mode, paired Alt ctors
 		// of `@:trailOpt(...)` branches carry an extra positional
 		// `trailPresent:Bool` arg synthesised by `TriviaTypeSynth`.
@@ -4378,7 +4380,7 @@ class Lowering {
 		final ctorCall: Expr = buildKwRefCtorCall(
 			ctorRef, triviaTrailOpt, triviaCaptureSource, triviaBodyPolicyKw, triviaWrapOpenNewline, triviaKwNewline
 		);
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final kwLead: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
 		final steps: Array<Expr> = [macro skipWs(ctx)];
 		// `@:kw` and `@:wrap`/`@:lead` compose on the same single-Ref
 		// branch: emit kw (word-boundary checked) first, then the lead
@@ -4689,7 +4691,7 @@ expectLit(ctx, $v{trailText}));
 		if (inner.kind != Ref) {
 			Context.fatalError('Lowering: Star child must be a Ref in Phase 2', Context.currentPos());
 		}
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = parseFnName(elemRefName);
 		final elemCT: ComplexType = ruleReturnCT(elemRefName);
 		final elemCall: Expr = {
@@ -4718,7 +4720,7 @@ expectLit(ctx, $v{trailText}));
 		// after each element via `matchLit`, before `collectTrailing`,
 		// so a same-line `// comment` after `,` attaches to the
 		// just-pushed element.
-		if (_ctx.trivia && starNode.annotations.get('trivia.starCollects') == true)
+		if (_ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true)
 			return lowerTriviaStarBranch(branch, ctorRef, leadText, trailText, sepText, elemCT, elemCall, closeNextOrEofExpr);
 		if (sepText != null) {
 			final sepCharCode: Int = sepText.charCodeAt(0);
@@ -4744,7 +4746,7 @@ expectLit(ctx, $v{trailText}));
 			// b2 — see `buildBlockEndedPredicateCall`). Strictly
 			// opt-in: when `lit.sepBlockEnded` is absent the
 			// byte-identical pre-existing path runs.
-			final blockEnded: Bool = branch.annotations.get('lit.sepBlockEnded') == true;
+			final blockEnded: Bool = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 			return blockEnded
 				? lowerStarBlockEndedBranch(branch, leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode, sepText)
 				: lowerStarSepBranch(leadText, trailText, elemCT, elemCall, closeNotNextExpr, ctorCall, sepCharCode);
@@ -4768,7 +4770,7 @@ expectLit(ctx, $v{trailText}));
 		if (kwLead == null && leadText == null && absentOnLits == null) {
 			Context.fatalError('Lowering: @:optional struct field "$fieldName" requires @:lead, @:kw or @:absentOn', Context.currentPos());
 		}
-		final refName: String = child.annotations.get('base.ref');
+		final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 		final subCallRaw: Expr = {
 			expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 			pos: Context.currentPos(),
@@ -4796,8 +4798,8 @@ expectLit(ctx, $v{trailText}));
 		// post-switch `lit.trailOptional` block (~L2500) is
 		// gated `!isOptional`, so this arm is the optional+kw
 		// path's sole emitter.
-		final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
-			? child.annotations.get('lit.trailText')
+		final trailOptText: Null<String> = child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true
+			? child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT)
 			: null;
 		final subCall: Expr = if (trailText != null)
 			macro {
@@ -4827,7 +4829,7 @@ expectLit(ctx, $v{trailText}));
 		// otherwise the cached annotation is re-used unchanged.
 		final fieldCT: ComplexType = (isSpanBearing(refName) || isTriviaBearing(refName))
 			? TPath({ pack: [], name: 'Null', params: [TPType(ruleReturnCT(refName))] })
-			: child.annotations.get('base.fieldType');
+			: child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
 		if (absentOnLits != null) {
 			// `@:absentOn(lit1, lit2, ...)` — peek-ahead absence
 			// dispatch. The listed terminators are NOT consumed
@@ -4904,8 +4906,8 @@ expectLit(ctx, $v{trailText}));
 		hasBeforeLeadingSlot: Bool,
 		optStarWithLead: Bool
 	} {
-		final triviaEofStar: Bool = isStar && child.annotations.get('trivia.starCollects') == true && child.readMetaString(':lead') == null
-			&& child.readMetaString(':kw') == null && _ctx.trivia;
+		final triviaEofStar: Bool = isStar && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true
+			&& child.readMetaString(':lead') == null && child.readMetaString(':kw') == null && _ctx.trivia;
 		// Slice ω₆a: an @:optional Ref field takes ownership of its own
 		// pre-field ws handling so the commit-check can rewind over the
 		// just-consumed whitespace (and any comments inside it, in trivia
@@ -5005,7 +5007,7 @@ expectLit(ctx, $v{trailText}));
 		// Stars (see `TriviaTypeSynth.buildStarTrailingSlots`). Gate
 		// the push on the Star's own `lit.trailText` annotation so
 		// EOF-mode Stars (e.g. `HxModule.decls`) skip the field.
-		if (child.annotations.get('lit.trailText') != null) {
+		if (child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT) != null) {
 			final trailCloseLocal: String = trailingCloseLocalName(localName);
 			structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_CLOSE_SUFFIX, expr: macro $i{trailCloseLocal} });
 		}
@@ -5013,7 +5015,7 @@ expectLit(ctx, $v{trailText}));
 		// `@:lead` AND not `@:tryparse` (the tryparse writer helper
 		// does not consume the slot — see TriviaTypeSynth gate +
 		// `emitTriviaStarFieldSteps`'s open-text capture gate).
-		if (child.annotations.get('lit.leadText') != null && !child.hasMeta(':tryparse')) {
+		if (child.annotations.get(AnnotationKeys.LIT_LEAD_TEXT) != null && !child.hasMeta(':tryparse')) {
 			final trailOpenLocal: String = trailingOpenLocalName(localName);
 			structFields.push({ field: fieldName + TriviaTypeSynth.TRAILING_OPEN_SUFFIX, expr: macro $i{trailOpenLocal} });
 		}
@@ -5031,7 +5033,7 @@ expectLit(ctx, $v{trailText}));
 		// Lit strategy before Lowering runs, so reading from
 		// annotations here mirrors the close-trailing / open-trailing
 		// gates above.
-		if (child.annotations.get('lit.sepText') != null && child.annotations.get('lit.trailText') != null) {
+		if (child.annotations.get(AnnotationKeys.LIT_SEP_TEXT) != null && child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT) != null) {
 			final trailPresentLocal: String = trailPresentLocalName(localName);
 			structFields.push({ field: fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX, expr: macro $i{trailPresentLocal} });
 		}
@@ -5086,7 +5088,7 @@ expectLit(ctx, $v{trailText}));
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_LEADING_SUFFIX, expr: macro $i{beforeKwLeadingLocal} });
 			structFields.push({ field: fieldName + TriviaTypeSynth.BEFORE_KW_TRAILING_SUFFIX, expr: macro $i{beforeKwTrailingLocal} });
 		}
-		if (_ctx.trivia && child.kind == Star && child.annotations.get('trivia.starCollects') == true) {
+		if (_ctx.trivia && child.kind == Star && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true) {
 			pushTrailingStarSlots(child, localName, fieldName, structFields);
 		}
 		// ω-condcomp-body-leading-sep: @:fmt(sepBeforeOpt)
@@ -5159,8 +5161,8 @@ expectLit(ctx, $v{trailText}));
 		// Phase 4 will read this on the writer side to gate trail
 		// re-emission on source presence; until then the captured
 		// value is unobserved and Δsweep stays 0.
-		final hasStructFieldTrailOptSlot: Bool = child.kind == Ref && !isStar && child.annotations.get('lit.trailOptional') == true
-			&& _ctx.trivia && isTriviaBearing(typePath);
+		final hasStructFieldTrailOptSlot: Bool = child.kind == Ref && !isStar
+			&& child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true && _ctx.trivia && isTriviaBearing(typePath);
 		if (hasStructFieldTrailOptSlot) {
 			parseSteps.push({
 				expr: EVars([
@@ -5209,7 +5211,7 @@ expectLit(ctx, $v{trailText}));
 					beforeKwLeadingLocal, beforeKwTrailingLocal
 				);
 			case Ref:
-				final refName: String = child.annotations.get('base.ref');
+				final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 				final callExpr: Expr = {
 					expr: ECall(macro $i{parseFnName(refName)}, [macro ctx]),
 					pos: Context.currentPos(),
@@ -5576,20 +5578,21 @@ expectLit(ctx, $v{trailText}));
 
 	private static function hasPrattBranch(node: ShapeNode): Bool {
 		for (branch in node.children) {
-			if (branch.annotations.get('pratt.prec') != null || branch.annotations.get('ternary.op') != null) return true;
+			if (branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null)
+				return true;
 		}
 		return false;
 	}
 
 	private static function hasPostfixBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (branch.annotations.get('postfix.op') != null) return true;
+		for (branch in node.children) if (branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null) return true;
 		return false;
 	}
 
 	/** Returns the operator literal for a branch in the Pratt dispatch chain.
 	*  Binary infix branches carry `pratt.op`; ternary branches carry `ternary.op`. */
 	private static function getOperatorText(branch: ShapeNode): String {
-		return (branch.annotations.get('pratt.op'): Null<String>) ?? branch.annotations.get('ternary.op');
+		return (branch.annotations.get(AnnotationKeys.PRATT_OP): Null<String>) ?? branch.annotations.get(AnnotationKeys.TERNARY_OP);
 	}
 
 	/**

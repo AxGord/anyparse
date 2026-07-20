@@ -92,9 +92,9 @@ class WriterLowering {
 		var precPostfix: Int = 0;
 		if (hasPratt) {
 			for (b in node.children) {
-				final p: Null<Int> = b.annotations.get('pratt.prec');
+				final p: Null<Int> = b.annotations.get(AnnotationKeys.PRATT_PREC);
 				if (p != null && p > precPostfix) precPostfix = p;
-				final tp: Null<Int> = b.annotations.get('ternary.prec');
+				final tp: Null<Int> = b.annotations.get(AnnotationKeys.TERNARY_PREC);
 				if (tp != null && tp > precPostfix) precPostfix = tp;
 			}
 			precPostfix++;
@@ -102,7 +102,7 @@ class WriterLowering {
 
 		final cases: Array<Case> = [];
 		for (branch in node.children) {
-			final ctor: String = branch.annotations.get('base.ctor');
+			final ctor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			final children: Array<ShapeNode> = branch.children;
 			final extraArgs: Int = branchExtraArgs(branch);
 			final argNames: Array<String> = [for (i in 0...children.length + extraArgs) '_v$i'];
@@ -232,9 +232,9 @@ class WriterLowering {
 	 */
 	private function wrapWithChainDispatch(body: Expr, chainField: String, writeFnName: String, node: ShapeNode, precPostfix: Int): Expr {
 		final cb: ShapeNode = locateChainCallBranch(node);
-		final callOpen: String = cb.annotations.get('postfix.op');
-		final callClose: String = cb.annotations.get('postfix.close') ?? '';
-		final callSep: String = cb.annotations.get('lit.sepText') ?? ',';
+		final callOpen: String = cb.annotations.get(AnnotationKeys.POSTFIX_OP);
+		final callClose: String = cb.annotations.get(AnnotationKeys.POSTFIX_CLOSE) ?? '';
+		final callSep: String = cb.annotations.get(AnnotationKeys.LIT_SEP_TEXT) ?? ',';
 		final callWrapField: Null<String> = cb.fmtReadString('wrapRules');
 		final callTcExpr: Expr = trailingCommaExpr(cb);
 		// Args list shape: the Call ctor MUST carry `@:fmt(wrapRules(
@@ -266,7 +266,7 @@ class WriterLowering {
 		// don't auto-collect on the postfix Star-suffix keep the
 		// pre-slice direct `_a` access.
 		final cbStar: ShapeNode = cb.children[1];
-		final isCallTriviaStar: Bool = _ctx.trivia && cbStar.annotations.get('trivia.starCollects') == true;
+		final isCallTriviaStar: Bool = _ctx.trivia && cbStar.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 		// ω-methodchain-reeval-after-callparam (axis 2): a chain segment's call
 		// args bypass the normal `HxExpr.Call` postfix path's per-arg
 		// `_setCallArgChainNest` wrapping (the chain segment goes through
@@ -330,14 +330,14 @@ class WriterLowering {
 		branch: ShapeNode, typePath: String, writeFnName: String, hasPratt: Bool, argNames: Array<String>, precPostfix: Int
 	): Expr {
 		final children: Array<ShapeNode> = branch.children;
-		final litList: Null<Array<String>> = branch.annotations.get('lit.litList');
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
+		final litList: Null<Array<String>> = branch.annotations.get(AnnotationKeys.LIT_LIT_LIST);
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
 
-		final prefixOp: Null<String> = branch.annotations.get('prefix.op');
-		final postfixOp: Null<String> = branch.annotations.get('postfix.op');
-		final prattPrec: Null<Int> = branch.annotations.get('pratt.prec');
-		final ternaryOp: Null<String> = branch.annotations.get('ternary.op');
+		final prefixOp: Null<String> = branch.annotations.get(AnnotationKeys.PREFIX_OP);
+		final postfixOp: Null<String> = branch.annotations.get(AnnotationKeys.POSTFIX_OP);
+		final prattPrec: Null<Int> = branch.annotations.get(AnnotationKeys.PRATT_PREC);
+		final ternaryOp: Null<String> = branch.annotations.get(AnnotationKeys.TERNARY_OP);
 		final c: LowerBranchCtx = {
 			branch: branch,
 			typePath: typePath,
@@ -379,14 +379,14 @@ class WriterLowering {
 		branch: ShapeNode, typePath: String, writeFnName: String, hasPratt: Bool, argNames: Array<String>, operandCall: Expr
 	): Expr {
 		// noqa: complexity
-		final postfixOp: String = branch.annotations.get('postfix.op');
-		final postfixClose: String = branch.annotations.get('postfix.close') ?? '';
+		final postfixOp: String = branch.annotations.get(AnnotationKeys.POSTFIX_OP);
+		final postfixClose: String = branch.annotations.get(AnnotationKeys.POSTFIX_CLOSE) ?? '';
 		final starNode: ShapeNode = branch.children[1];
 		final inner: ShapeNode = starNode.children[0];
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final isSelfRef: Bool = simpleName(elemRefName) == simpleName(typePath);
 		final elemFn: String = isSelfRef ? writeFnName : writeFnFor(elemRefName);
-		final elemSep: String = branch.annotations.get('lit.sepText') ?? ',';
+		final elemSep: String = branch.annotations.get(AnnotationKeys.LIT_SEP_TEXT) ?? ',';
 
 		// ω-postfix-starsuffix-trivia: when TriviaAnalysis auto-marks
 		// the postfix Star-suffix Star with `trivia.starCollects=true`
@@ -396,7 +396,7 @@ class WriterLowering {
 		// delimiters intact) as `_dt(' ') + trailingCommentDoc` after
 		// the element when non-null. Plain mode and non-trivia-collecting
 		// Stars keep the pre-slice direct `_args[_i]` access.
-		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 		final elemRead: Expr = isTriviaStar ? macro _args[_i].node : macro _args[_i];
 		// ω-issue-423-mech-a: ctor-level `@:fmt(propagateExprPosition)` on a
 		// postfix-Star ctor (e.g. `HxExpr.Call`, `HxNewExpr`) wraps each
@@ -542,13 +542,13 @@ class WriterLowering {
 	private function lowerEnumStar(
 		branch: ShapeNode, typePath: String, writeFnName: String, hasPratt: Bool, argNames: Array<String>
 	): Expr {
-		final leadText: String = branch.annotations.get('lit.leadText');
-		final trailText: String = branch.annotations.get('lit.trailText');
-		final sepText: Null<String> = branch.annotations.get('lit.sepText');
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final leadText: String = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: String = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final sepText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
+		final kwLead: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
 		final starNode: ShapeNode = branch.children[0];
 		final inner: ShapeNode = starNode.children[0];
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final isSelfRef: Bool = simpleName(elemRefName) == simpleName(typePath);
 		final elemFn: String = isSelfRef ? writeFnName : writeFnFor(elemRefName);
 
@@ -596,7 +596,7 @@ class WriterLowering {
 			sepText: sepText,
 			starNode: starNode,
 		};
-		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 		final emission: Expr = isTriviaStar ? lowerEnumStarTrivia(c) : lowerEnumStarPlain(c);
 		parts.push(emission);
 		return if (parts.length == 1)
@@ -667,16 +667,16 @@ class WriterLowering {
 		final stmts: Array<Expr> = [macro final _entries: Array<anyparse.core.Doc> = []];
 
 		for (child in node.children) {
-			final fieldName: Null<String> = child.annotations.get('base.fieldName');
+			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (fieldName == null)
 				Context.fatalError('WriterLowering: ByName struct field missing base.fieldName for $typePath', Context.currentPos());
-			final isOptional: Bool = child.annotations.get('base.optional') == true;
+			final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			final fieldAccess: Expr = { expr: EField(macro value, fieldName), pos: Context.currentPos() };
 			final keyPrefix: String = '"$fieldName"$keyValueSep';
 			if (isOptional) {
 				// Strict null safety does not narrow field reads — capture into
 				// a non-null local before handing off to the per-kind writer.
-				final fieldCT: Null<ComplexType> = child.annotations.get('base.fieldType');
+				final fieldCT: Null<ComplexType> = child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
 				if (fieldCT == null)
 					Context.fatalError(
 						'WriterLowering: ByName optional field "$fieldName" missing base.fieldType for $typePath', Context.currentPos()
@@ -700,7 +700,7 @@ class WriterLowering {
 	private function byNameFieldWriteExpr(child: ShapeNode, fieldName: String, valueAccess: Expr): Expr {
 		return switch child.kind {
 			case Ref:
-				final refName: String = child.annotations.get('base.ref');
+				final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 				makeWriteCall(writeFnFor(refName), valueAccess, false, -1);
 			case Star:
 				byNameStarWriteExpr(child, fieldName, valueAccess);
@@ -741,7 +741,7 @@ class WriterLowering {
 			);
 			throw 'unreachable';
 		}
-		final refName: String = inner.annotations.get('base.ref');
+		final refName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = writeFnFor(refName);
 		final entrySep: String = _formatInfo.entrySep;
 		return macro {
@@ -830,8 +830,8 @@ class WriterLowering {
 		// pick one — no such grammar exists today, and a future case
 		// can disambiguate via an explicit arg on `@:fmt(fitLineIfWithElse)`.
 		var optionalBodyFieldName: Null<String> = null;
-		for (c in node.children) if (c.annotations.get('base.optional') == true && c.fmtReadStringArgs('bodyPolicy') != null) {
-			optionalBodyFieldName = c.annotations.get('base.fieldName');
+		for (c in node.children) if (c.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true && c.fmtReadStringArgs('bodyPolicy') != null) {
+			optionalBodyFieldName = c.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			break;
 		}
 
@@ -1386,8 +1386,8 @@ class WriterLowering {
 		// between two non-`}`-ending elements. Non-blockEnded
 		// tryparse Stars (every existing consumer) pass null sepText
 		// and the helper splices a no-op.
-		final tryparseSepText: Null<String> = starNode.annotations.get('lit.sepText');
-		final tryparseBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final tryparseSepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
+		final tryparseBlockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		final tryparseSepFaithful: Bool = starNode.annotations.get('lit.sepFaithful') == true;
 		// ω-sep-faithful: re-emit a source-captured LEADING sep
 		// (`#if X, elem #end`) from the `<field>SepBefore` slot — the trivia
@@ -1480,7 +1480,7 @@ class WriterLowering {
 		final trailLCAccess: Null<Expr> = c.trailLCAccess;
 		final trailCloseAccess: Null<Expr> = c.trailCloseAccess;
 		final trailOpenAccess: Null<Expr> = c.trailOpenAccess;
-		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final blockEndedFlag: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		// `openText ?? ''` (was `?? '{'` through ω₅) — when a
 		// close-peek Star has no `@:lead`, the surrounding Seq
 		// emits the open delimiter before this field, so the Star
@@ -1553,7 +1553,7 @@ class WriterLowering {
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
-			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
+			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob
 		));
 	}
@@ -1622,7 +1622,7 @@ class WriterLowering {
 		// flat-or-multi `triviaSepStarExpr`. Detect the flag here
 		// and skip the sep dispatch so the fall-through reaches
 		// the block dispatch with sepText/blockEnded threaded.
-		final blockEndedFlag: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final blockEndedFlag: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		if (sepText != null && !blockEndedFlag) {
 			// ω-cascade-emits-comments: emit the funcParamParens /
 			// typeParamOpen space inside the @:trivia + sep
@@ -1762,7 +1762,7 @@ class WriterLowering {
 		final openText: Null<String> = c.openText;
 		final closeText: Null<String> = c.closeText;
 		final sepText: Null<String> = c.sepText;
-		final predicateName: Null<String> = starNode.annotations.get('lit.sepBlockEndedPredicate');
+		final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 		final predicateCheck: Expr = if (predicateName != null) {
 			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 			{
@@ -1954,7 +1954,7 @@ class WriterLowering {
 		final firstStarNlKeep: Bool = isFirstField && _ctx.trivia && isTriviaBearing(typePath)
 			&& starNode.fmtHasFlag('beforeNewlineSlotFirst');
 		final patternListExpr: Expr = if (firstStarNlKeep) {
-			final nlFieldName: String = starNode.annotations.get('base.fieldName');
+			final nlFieldName: String = starNode.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			final beforeNlAccess: Expr = {
 				expr: EField(macro value, nlFieldName + TriviaTypeSynth.BEFORE_NEWLINE_SUFFIX),
 				pos: Context.currentPos(),
@@ -2195,12 +2195,12 @@ class WriterLowering {
 		final fieldAccess: Expr = c.fieldAccess;
 		final elemCall: Expr = c.elemCall;
 		final leadingPush: Expr = if (sepBeforeOptActive) {
-			final fieldName: String = starNode.annotations.get('base.fieldName');
+			final fieldName: String = starNode.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			final sepBeforeAccess: Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.SEP_BEFORE_SUFFIX),
 				pos: Context.currentPos(),
 			};
-			final sepText: Null<String> = starNode.annotations.get('lit.sepText');
+			final sepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
 			final sepLeadText: String = '${(sepText ?? ',')} ';
 			macro _docs.push($sepBeforeAccess ? _dt($v{sepLeadText}) : _dt(' '));
 		} else if (padLeading)
@@ -2216,7 +2216,7 @@ class WriterLowering {
 		// with `@:sep(',')`) emit their actual sep + space so multi-
 		// element bodies round-trip the source comma. Falls back to
 		// `' '` when sepText is absent.
-		final sepTextForInter: Null<String> = starNode.annotations.get('lit.sepText');
+		final sepTextForInter: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
 		final interSepText: String = sepTextForInter != null ? '$sepTextForInter ' : ' ';
 		if (softFill) {
 			// ω-condcomp-body-softfill: route inter-element sep
@@ -2444,7 +2444,7 @@ class WriterLowering {
 		final sepText: Null<String> = args.sepText;
 		final prevBareRefBody: Null<PrevBodyInfo> = args.prevBareRefBody;
 		final prevTrailFieldName: Null<String> = args.prevTrailFieldName;
-		final fieldName: Null<String> = starNode.annotations.get('base.fieldName');
+		final fieldName: Null<String> = starNode.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final trailBBAccess: Null<Expr> = fieldName == null ? null : {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_BLANK_BEFORE_SUFFIX),
 			pos: Context.currentPos()
@@ -2532,7 +2532,7 @@ class WriterLowering {
 		// @:tryparse is now allowed when the `blockEnded` flag is
 		// present (sole consumer: HxCaseBranch.body / HxDefaultBranch.stmts).
 		// EOF mode (closeText == null, no @:tryparse) still rejects.
-		final writerBlockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final writerBlockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		// ω-sep-faithful: valid alternative to blockEnded — sep re-emission
 		// keyed purely on the captured per-element `sepAfter`.
 		final writerSepFaithful: Bool = starNode.annotations.get('lit.sepFaithful') == true;
@@ -2572,12 +2572,12 @@ class WriterLowering {
 		final inner: ShapeNode = starNode.children[0];
 		if (inner.kind != Ref) Context.fatalError('WriterLowering: Star struct field must contain a Ref', Context.currentPos());
 
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = writeFnFor(elemRefName);
-		final openText: Null<String> = starNode.annotations.get('lit.leadText');
-		final closeText: Null<String> = starNode.annotations.get('lit.trailText');
-		final sepText: Null<String> = starNode.annotations.get('lit.sepText');
-		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get('trivia.starCollects') == true;
+		final openText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final closeText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final sepText: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
+		final isTriviaStar: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 		final args: StarFieldArgs = {
 			starNode: starNode,
 			fieldAccess: fieldAccess,
@@ -2670,7 +2670,7 @@ class WriterLowering {
 		// smoke test regressed 35 unit tests because function bodies
 		// collapsed to one line; the blockBody-shape layout restores
 		// parity with the non-`@:sep` path at L3981.
-		final blockEnded: Bool = starNode.annotations.get('lit.sepBlockEnded') == true;
+		final blockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		if (closeText != null && sepText != null && blockEnded) {
 			emitBlockEndedPlainStar(plainCtx, parts);
 			return;
@@ -2829,7 +2829,7 @@ class WriterLowering {
 		// last body element still ends with a hardline).
 		if (flagName == null) return withPadTrailingDrop(prevPadTrailing, macro _dossh());
 		final optFlag: Expr = optFieldAccess(flagName);
-		final fieldName: Null<String> = child.annotations.get('base.fieldName');
+		final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		// Mirror of Lowering's `hasKwTriviaSlots` gate — `<field>BeforeKwNewline`
 		// only exists on the synth paired `*T` type of trivia-bearing enclosing
 		// rules. Non-bearing rules with `@:optional @:kw @:fmt(sameLine(...))`
@@ -2838,7 +2838,7 @@ class WriterLowering {
 		// `HxIfExpr.elseBranch`, which has no `@:fmt(sameLine)`), but closing
 		// the gap preemptively avoids recurrence of the Lowering fix pattern.
 		final hasKeepSlot: Bool = _ctx.trivia && isTriviaBearing(typePath) && fieldName != null && child.kind == Ref
-			&& child.annotations.get('base.optional') == true && child.readMetaString(':kw') != null;
+			&& child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true && child.readMetaString(':kw') != null;
 		final keepExpr: Expr = if (hasKeepSlot) {
 			final slotAccess: Expr = {
 				expr: EField(macro value, fieldName + TriviaTypeSynth.BEFORE_KW_NEWLINE_SUFFIX),
@@ -2979,10 +2979,10 @@ class WriterLowering {
 		if (startIdx < 0) return out;
 		for (i in (startIdx + 1) ... parent.children.length) {
 			final next: ShapeNode = parent.children[i];
-			final nextFieldName: Null<String> = next.annotations.get('base.fieldName');
+			final nextFieldName: Null<String> = next.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (nextFieldName == null) continue;
 			final nextAccess: Expr = { expr: EField(macro value, nextFieldName), pos: Context.currentPos() };
-			final isOptional: Bool = next.annotations.get('base.optional') == true;
+			final isOptional: Bool = next.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			final isOptKw: Bool = (next.kind == Ref || next.kind == Star) && isOptional && next.readMetaString(':kw') != null;
 			if (isOptKw) {
 				final slotAccess: Expr = {
@@ -2992,7 +2992,7 @@ class WriterLowering {
 				out.push({ guard: macro $nextAccess != null, signal: slotAccess });
 				continue;
 			}
-			final isTriviaStar: Bool = next.kind == Star && next.annotations.get('trivia.starCollects') == true;
+			final isTriviaStar: Bool = next.kind == Star && next.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 			if (isTriviaStar) {
 				final firstNl: Expr = macro $nextAccess[0].newlineBefore;
 				final guard: Expr = isOptional ? macro $nextAccess != null && $nextAccess.length > 0 : macro $nextAccess.length > 0;
@@ -3019,7 +3019,7 @@ class WriterLowering {
 		// folds to `(present ? signal : … : s_n)`, so this entry is
 		// the chain's tail and only fires when no earlier guard
 		// matched a present downstream field.
-		final childFieldName: Null<String> = child.annotations.get('base.fieldName');
+		final childFieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		if (childFieldName != null && child.kind == Ref && child.fmtHasFlag('captureSourceNewlineAfter')) {
 			final terminalSlot: Expr = {
 				expr: EField(macro value, childFieldName + TriviaTypeSynth.NEWLINE_AFTER_SUFFIX),
@@ -3363,19 +3363,19 @@ class WriterLowering {
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return result;
 		for (branch in node.children) {
-			final ctor: Null<String> = branch.annotations.get('base.ctor');
+			final ctor: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctor == null) continue;
-			final lead: Null<String> = branch.annotations.get('lit.leadText');
+			final lead: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
 			if (lead != null && lead == '{') {
 				result.push(ctor);
 				continue;
 			}
 			if (!(branch.children.length == 1 && branch.children[0].kind == Ref)) continue;
-			final innerName: Null<String> = branch.children[0].annotations.get('base.ref');
+			final innerName: Null<String> = branch.children[0].annotations.get(AnnotationKeys.BASE_REF);
 			final innerNode: Null<ShapeNode> = innerName == null ? null : _shape.rules.get(innerName);
 			if (!(innerNode != null && innerNode.kind == Seq && innerNode.children.length > 0)) continue;
 			final firstField: ShapeNode = innerNode.children[0];
-			final firstLead: Null<String> = firstField.annotations.get('lit.leadText') ?? firstField.readMetaString(':lead');
+			final firstLead: Null<String> = firstField.annotations.get(AnnotationKeys.LIT_LEAD_TEXT) ?? firstField.readMetaString(':lead');
 			if (firstLead != null && firstLead.charAt(0) == '{') result.push(ctor);
 		}
 		return result;
@@ -3403,15 +3403,15 @@ class WriterLowering {
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return ctors;
 		for (branch in node.children) {
-			final ctor: Null<String> = branch.annotations.get('base.ctor');
+			final ctor: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctor == null || lcCtorNames.indexOf(ctor) != -1) continue;
-			if (branch.annotations.get('lit.litList') != null) continue;
-			if (branch.annotations.get('lit.leadText') != null) continue;
-			if (branch.annotations.get('kw.leadText') != null) continue;
-			if (branch.annotations.get('prefix.op') != null) continue;
-			if (branch.annotations.get('postfix.op') != null) continue;
-			if (branch.annotations.get('pratt.prec') != null) continue;
-			if (branch.annotations.get('ternary.op') != null) continue;
+			if (branch.annotations.get(AnnotationKeys.LIT_LIT_LIST) != null) continue;
+			if (branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT) != null) continue;
+			if (branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT) != null) continue;
+			if (branch.annotations.get(AnnotationKeys.PREFIX_OP) != null) continue;
+			if (branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null) continue;
+			if (branch.annotations.get(AnnotationKeys.PRATT_PREC) != null) continue;
+			if (branch.annotations.get(AnnotationKeys.TERNARY_OP) != null) continue;
 			if (branch.children.length != 1 || branch.children[0].kind != Ref) continue;
 			ctors.push(ctor);
 		}
@@ -3432,7 +3432,7 @@ class WriterLowering {
 	private function ctorHasBodyPolicy(refName: String, ctorName: String): Bool {
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
 		if (node == null || node.kind != Alt) return false;
-		for (branch in node.children) if (branch.annotations.get('base.ctor') == ctorName)
+		for (branch in node.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) == ctorName)
 			return branch.fmtReadStringArgs('bodyPolicy') != null;
 		return false;
 	}
@@ -3582,9 +3582,9 @@ class WriterLowering {
 		final rule: Null<ShapeNode> = _shape.rules.get(elemTypePath);
 		if (rule == null || rule.kind != Seq) return null;
 		for (child in rule.children) if (child.kind == Ref) {
-			if (child.annotations.get('base.optional') == true) continue;
-			final ref: Null<String> = child.annotations.get('base.ref');
-			if (ref == bodyTypePath) return child.annotations.get('base.fieldName');
+			if (child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true) continue;
+			final ref: Null<String> = child.annotations.get(AnnotationKeys.BASE_REF);
+			if (ref == bodyTypePath) return child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		}
 		return null;
 	}
@@ -3608,7 +3608,7 @@ class WriterLowering {
 		if (rule == null || rule.kind != Alt) return null;
 		final cases: Array<Case> = [];
 		for (branch in rule.children) if (TriviaTypeSynth.isAltCloseTrailingBranch(branch)) {
-			final ctorName: String = branch.annotations.get('base.ctor');
+			final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			final ctorPath: Array<String> = ruleCtorPath(prevBareRefBody.typePath, ctorName);
 			final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
 			// Pattern arity: child shape (1 Star) + the closeTrailing slot
@@ -3671,7 +3671,7 @@ class WriterLowering {
 	}
 
 	private function branchCtorPattern(bodyTypePath: String, branch: ShapeNode): Expr {
-		final ctorName: String = branch.annotations.get('base.ctor');
+		final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 		final arity: Int = branch.children.length + branchSynthExtraArity(bodyTypePath, branch);
 		final ctorPath: Array<String> = ruleCtorPath(bodyTypePath, ctorName);
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPath);
@@ -3715,7 +3715,7 @@ class WriterLowering {
 		final rule: Null<ShapeNode> = _shape.rules.get(bodyTypePath);
 		if (rule == null || rule.kind != Alt) return null;
 		for (branch in rule.children) {
-			final branchCtor: String = branch.annotations.get('base.ctor');
+			final branchCtor: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (branchCtor != ctorName) continue;
 			final arity: Int = branch.children.length + branchSynthExtraArity(bodyTypePath, branch);
 			final ctorPath: Array<String> = ruleCtorPath(bodyTypePath, branchCtor);
@@ -3775,8 +3775,9 @@ class WriterLowering {
 	 */
 	private function subStructStartsWithBodyPolicy(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
-			&& first.readMetaString(':lead') == null && first.fmtReadStringArgs('bodyPolicy') != null;
+		return first != null && first.kind == Ref && first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+			&& first.readMetaString(':kw') == null && first.readMetaString(':lead') == null
+			&& first.fmtReadStringArgs('bodyPolicy') != null;
 	}
 
 	/**
@@ -3792,8 +3793,8 @@ class WriterLowering {
 	 */
 	private function subStructStartsWithBodyBreak(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
-			&& first.readMetaString(':lead') == null && first.fmtReadString('bodyBreak') != null;
+		return first != null && first.kind == Ref && first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+			&& first.readMetaString(':kw') == null && first.readMetaString(':lead') == null && first.fmtReadString('bodyBreak') != null;
 	}
 
 	/**
@@ -3810,8 +3811,8 @@ class WriterLowering {
 	 */
 	private function subStructStartsWithBareBodyBreaks(refName: String): Bool {
 		final first: Null<ShapeNode> = firstFieldOfSubSeq(refName);
-		return first != null && first.kind == Ref && first.annotations.get('base.optional') != true && first.readMetaString(':kw') == null
-			&& first.readMetaString(':lead') == null && first.fmtHasFlag('bareBodyBreaks');
+		return first != null && first.kind == Ref && first.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true
+			&& first.readMetaString(':kw') == null && first.readMetaString(':lead') == null && first.fmtHasFlag('bareBodyBreaks');
 	}
 
 	/**
@@ -3839,7 +3840,7 @@ class WriterLowering {
 	private function isTriviaBearing(refName: String): Bool {
 		if (!_ctx.trivia) return false;
 		final node: Null<ShapeNode> = _shape.rules.get(refName);
-		return node != null && node.annotations.get('trivia.bearing') == true;
+		return node != null && node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 	}
 
 	/** `write<name>T` when trivia-bearing, else `write<name>` — every ref fn-name site goes through this. */
@@ -3999,20 +4000,22 @@ class WriterLowering {
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) requires element rule $elemRefName to be a Seq struct',
 				Context.currentPos()
 			);
-		final classifierNode: Null<ShapeNode> = elemRule.children.find(child -> child.annotations.get('base.fieldName') == fieldName);
+		final classifierNode: Null<ShapeNode> = elemRule.children.find(child ->
+			child.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName
+		);
 		if (classifierNode == null || classifierNode.kind != Ref)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier field "$fieldName" must be a plain Ref to an enum rule on $elemRefName',
 				Context.currentPos()
 			);
-		final enumRuleName: Null<String> = classifierNode.annotations.get('base.ref');
+		final enumRuleName: Null<String> = classifierNode.annotations.get(AnnotationKeys.BASE_REF);
 		final enumRule: Null<ShapeNode> = enumRuleName == null ? null : _shape.rules.get(enumRuleName);
 		if (enumRule == null || enumRule.kind != Alt)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) classifier target for "$fieldName" must be an Alt (enum)',
 				Context.currentPos()
 			);
-		final condBranch: Null<ShapeNode> = enumRule.children.find(branch -> branch.annotations.get('base.ctor') == condCtor);
+		final condBranch: Null<ShapeNode> = enumRule.children.find(branch -> branch.annotations.get(AnnotationKeys.BASE_CTOR) == condCtor);
 		if (condBranch == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(beforeDocCondLookThrough) condCtor "$condCtor" not found on enum $enumRuleName',
@@ -4288,7 +4291,7 @@ class WriterLowering {
 		final cases: Array<Case> = [];
 		var matched: Bool = false;
 		for (branch in enumRule.children) {
-			final branchCtor: Null<String> = branch.annotations.get('base.ctor');
+			final branchCtor: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (branchCtor == null) continue;
 			final arity: Int = branch.children.length + branchSynthExtraArity(enumRuleName, branch);
 			final ctorIdent: Expr = { expr: EConst(CIdent(branchCtor)), pos: pos };
@@ -4624,7 +4627,9 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
 			);
-		final classifierNode: Null<ShapeNode> = Lambda.find(elemRule.children, c -> c.annotations.get('base.fieldName') == fieldName);
+		final classifierNode: Null<ShapeNode> = Lambda.find(
+			elemRule.children, c -> c.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName
+		);
 		if (classifierNode == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" not found on element rule $elemRefName',
@@ -4634,7 +4639,7 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" must be a plain Ref to an enum rule', Context.currentPos()
 			);
-		final enumRuleName: Null<String> = classifierNode.annotations.get('base.ref');
+		final enumRuleName: Null<String> = classifierNode.annotations.get(AnnotationKeys.BASE_REF);
 		if (enumRuleName == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt($metaName) classifier field "$fieldName" has no base.ref annotation', Context.currentPos()
@@ -4683,7 +4688,7 @@ class WriterLowering {
 		final cases: Array<Case> = [];
 		final matched: Array<String> = [];
 		for (branch in enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctorName == null) continue;
 			// Synth-aware arity: in trivia mode, ctors carrying `@:trailOpt` /
 			// `@:lead` close-trailing / `@:fmt(captureSource)` etc. grow
@@ -4769,7 +4774,7 @@ class WriterLowering {
 			null
 		else {
 			final argNode: ShapeNode = branch.children[0];
-			final argTypeName: Null<String> = argNode.annotations.get('base.ref');
+			final argTypeName: Null<String> = argNode.annotations.get(AnnotationKeys.BASE_REF);
 			if (argTypeName == null)
 				null
 			else
@@ -4846,7 +4851,7 @@ class WriterLowering {
 	private function buildMultilinePredicate(typeName: String, accessExpr: Expr): Null<Expr> {
 		final node: Null<ShapeNode> = _shape.rules.get(typeName);
 		if (node == null) return null;
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta != null) {
 			final folded: Null<Expr> = buildMultilineMetaPredicate(node, typeName, accessExpr, meta);
 			if (folded != null) return folded;
@@ -5136,7 +5141,7 @@ class WriterLowering {
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks, false, false, null, false, null,
 			anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
-			altBlockEndedFlag ? (branch.annotations.get('lit.sepBlockEndedPredicate'): Null<String>) : null,
+			altBlockEndedFlag ? (branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			altBlockEndedFlag ? _formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail')
 		);
 	}
@@ -5210,7 +5215,7 @@ class WriterLowering {
 		// flat-or-multi dispatch and fall through to the block-mode
 		// dispatch with sepText/blockEnded threaded into
 		// `triviaBlockStarExpr`.
-		final altBlockEndedFlag: Bool = branch.annotations.get('lit.sepBlockEnded') == true;
+		final altBlockEndedFlag: Bool = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 		return sepText != null && !altBlockEndedFlag ? triviaSepStarBuild(c, slots) : triviaBlockStarBuild(c, slots, altBlockEndedFlag);
 	}
 
@@ -5222,7 +5227,7 @@ class WriterLowering {
 		final leadText: String = c.leadText;
 		final trailText: String = c.trailText;
 		final starNode: ShapeNode = c.starNode;
-		if (sepText != null && branch.annotations.get('lit.sepBlockEnded') == true) {
+		if (sepText != null && branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true) {
 			// Block-ended exemption (Session 2 pilot — mirror of
 			// `emitWriterStarField`). Suppress between-element sep
 			// emission when EITHER:
@@ -5240,7 +5245,7 @@ class WriterLowering {
 			// the parser-side blockEnded branch in `Lowering.emitStarFieldSteps`
 			// (`b == '}'.code || b == ';'.code || $predicateCall`).
 			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded[('pred'[, sepStartsElement])])`.
-			final predicateName: Null<String> = branch.annotations.get('lit.sepBlockEndedPredicate');
+			final predicateName: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 			final predicateCheckPrior: Expr = if (predicateName != null) {
 				final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 				{
@@ -5319,7 +5324,7 @@ class WriterLowering {
 			// nodes (`HxType.Anon.fields`) don't carry trivia, so the
 			// plain-path dispatch is their only wrapRules surface —
 			// a `@:trivia` flip would synthesize unused machinery.
-			final isTriviaCollecting: Bool = starNode.annotations.get('trivia.starCollects') == true;
+			final isTriviaCollecting: Bool = starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 			final wrapRulesField: Null<String> = isTriviaCollecting ? null : branch.fmtReadString('wrapRules');
 			final listCall: Expr = if (wrapRulesField != null) {
 				final rulesExpr: Expr = optFieldAccess(wrapRulesField);
@@ -5367,7 +5372,9 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
 			);
-		final modifierNode: Null<ShapeNode> = elemRule.children.find(child -> child.annotations.get('base.fieldName') == modifierField);
+		final modifierNode: Null<ShapeNode> = elemRule.children.find(child ->
+			child.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == modifierField
+		);
 		if (modifierNode == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" not found on element rule $elemRefName',
@@ -5386,7 +5393,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" must have exactly one Star child',
 				Context.currentPos()
 			);
-		final modifierEnumName: Null<String> = modifierNode.children[0].annotations.get('base.ref');
+		final modifierEnumName: Null<String> = modifierNode.children[0].annotations.get(AnnotationKeys.BASE_REF);
 		if (modifierEnumName == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier field "$modifierField" has no base.ref annotation',
@@ -5398,7 +5405,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(staticVarSubdivision) modifier target $modifierEnumName must be an Alt (enum)', Context.currentPos()
 			);
 		var staticBranchFound: Bool = false;
-		for (branch in modifierEnum.children) if (branch.annotations.get('base.ctor') == staticCtor) {
+		for (branch in modifierEnum.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) == staticCtor) {
 			staticBranchFound = true;
 			break;
 		}
@@ -5637,7 +5644,7 @@ class WriterLowering {
 						Context.fatalError(
 							'WriterLowering: @:fmt(multilineWhenFieldShape) field "$field" not found on $typeName', Context.currentPos()
 						);
-					final targetType: Null<String> = fieldNode.annotations.get('base.ref');
+					final targetType: Null<String> = fieldNode.annotations.get(AnnotationKeys.BASE_REF);
 					if (targetType == null) continue;
 					final fieldExpr: Expr = { expr: EField(accessExpr, field), pos: pos };
 					final inner: Null<Expr> = buildMultilinePredicate(targetType, fieldExpr);
@@ -5710,7 +5717,7 @@ class WriterLowering {
 		final cases: Array<Case> = [];
 		var anyTagged: Bool = false;
 		for (branch in node.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctorName == null) continue;
 			final arity: Int = branch.children.length;
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
@@ -5728,7 +5735,7 @@ class WriterLowering {
 			else {
 				anyTagged = true;
 				final argNode: ShapeNode = branch.children[0];
-				final argTypeName: Null<String> = argNode.annotations.get('base.ref');
+				final argTypeName: Null<String> = argNode.annotations.get(AnnotationKeys.BASE_REF);
 				final inner: Null<Expr> = argTypeName == null ? null : buildMultilinePredicate(argTypeName, macro _v);
 				inner ?? macro false;
 			};
@@ -5787,7 +5794,9 @@ class WriterLowering {
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) requires element rule $elemRefName to be a Seq struct', Context.currentPos()
 			);
-		final classifierNode: Null<ShapeNode> = elemRule.children.find(child -> child.annotations.get('base.fieldName') == fieldName);
+		final classifierNode: Null<ShapeNode> = elemRule.children.find(child ->
+			child.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == fieldName
+		);
 		if (classifierNode == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" not found on element rule $elemRefName',
@@ -5798,7 +5807,7 @@ class WriterLowering {
 				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" must be a plain Ref to an enum rule',
 				Context.currentPos()
 			);
-		final enumRuleName: Null<String> = classifierNode.annotations.get('base.ref');
+		final enumRuleName: Null<String> = classifierNode.annotations.get(AnnotationKeys.BASE_REF);
 		if (enumRuleName == null)
 			Context.fatalError(
 				'WriterLowering: @:fmt(interMemberBlankLines) classifier field "$fieldName" has no base.ref annotation',
@@ -5826,7 +5835,7 @@ class WriterLowering {
 		final matchedB: Array<String> = [];
 		final transparentMatched: Array<String> = [];
 		for (branch in c.enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctorName == null) continue;
 			final shapeArity: Int = branch.children.length;
 			// In trivia mode, ctors with `@:trailOpt` / `@:lead` close-trailing /
@@ -6495,9 +6504,9 @@ class WriterLowering {
 		final writeFnName: String = c.writeFnName;
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
-		final ternaryOp: String = branch.annotations.get('ternary.op');
-		final tPrec: Int = (branch.annotations.get('ternary.prec'): Int);
-		final sep: String = (branch.annotations.get('ternary.sep'): String);
+		final ternaryOp: String = branch.annotations.get(AnnotationKeys.TERNARY_OP);
+		final tPrec: Int = (branch.annotations.get(AnnotationKeys.TERNARY_PREC): Int);
+		final sep: String = (branch.annotations.get(AnnotationKeys.TERNARY_SEP): String);
 		// ω-compare-operand-linewrap: mark the ternary CONDITION's opt so a
 		// `==`/`!=` compare that IS the condition suppresses its operand-overflow
 		// break (`lowerInfixBranch` reads `opt._inTernaryCond`) -- the fork breaks
@@ -6553,7 +6562,7 @@ class WriterLowering {
 	 * Prefix branch (`prefix.op`): `op operand`.
 	 */
 	private function lowerPrefixBranch(c: LowerBranchCtx): Expr {
-		final prefixOp: String = c.branch.annotations.get('prefix.op');
+		final prefixOp: String = c.branch.annotations.get(AnnotationKeys.PREFIX_OP);
 		final operandCall: Expr = makeWriteCall(c.writeFnName, macro $i{c.argNames[0]}, c.hasPratt, c.precPostfix);
 		return macro _dc([_dt($v{prefixOp}), $operandCall]);
 	}
@@ -6569,8 +6578,8 @@ class WriterLowering {
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
 		final children: Array<ShapeNode> = branch.children;
-		final postfixOp: String = branch.annotations.get('postfix.op');
-		final postfixClose: Null<String> = branch.annotations.get('postfix.close');
+		final postfixOp: String = branch.annotations.get(AnnotationKeys.POSTFIX_OP);
+		final postfixClose: Null<String> = branch.annotations.get(AnnotationKeys.POSTFIX_CLOSE);
 		final operandCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, c.precPostfix);
 		if (children.length == 1) {
 			final text: String = postfixOp + (postfixClose ?? '');
@@ -6579,7 +6588,7 @@ class WriterLowering {
 		if (children.length == 2 && children[1].kind == Star)
 			return lowerPostfixStar(branch, typePath, writeFnName, hasPratt, argNames, operandCall);
 		if (children.length == 2) {
-			final suffixRef: String = children[1].annotations.get('base.ref');
+			final suffixRef: String = children[1].annotations.get(AnnotationKeys.BASE_REF);
 			final suffixFn: String = writeFnFor(suffixRef);
 			final suffixCall: Expr = {
 				expr: ECall(macro $i{suffixFn}, [macro $i{argNames[1]}, macro opt]),
@@ -6647,8 +6656,8 @@ class WriterLowering {
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
 		final children: Array<ShapeNode> = branch.children;
-		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
-		final assoc: String = (branch.annotations.get('pratt.assoc'): Null<String>) ?? 'Left';
+		final prec: Int = (branch.annotations.get(AnnotationKeys.PRATT_PREC): Int);
+		final assoc: String = (branch.annotations.get(AnnotationKeys.PRATT_ASSOC): Null<String>) ?? 'Left';
 		final opText: String = getOperatorText(branch);
 		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
 		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
@@ -6667,7 +6676,7 @@ class WriterLowering {
 		// at its default ctxPrec (no precedence parenthesisation cross-
 		// type). Self-symmetric branches keep the existing same-fn path.
 		final rightChild: ShapeNode = children[1];
-		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get(AnnotationKeys.BASE_REF) : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptExpr: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
 		final leftCall: Expr = makeWriteCall(writeFnName, macro $i{argNames[0]}, hasPratt, leftCtx, null);
@@ -6802,8 +6811,8 @@ class WriterLowering {
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
 		final children: Array<ShapeNode> = branch.children;
-		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
-		final assoc: String = (branch.annotations.get('pratt.assoc'): Null<String>) ?? 'Left';
+		final prec: Int = (branch.annotations.get(AnnotationKeys.PRATT_PREC): Int);
+		final assoc: String = (branch.annotations.get(AnnotationKeys.PRATT_ASSOC): Null<String>) ?? 'Left';
 		final opText: String = getOperatorText(branch);
 		final leftCtx: Int = assoc == 'Right' ? prec + 1 : prec;
 		final rightCtx: Int = assoc == 'Right' ? prec : prec + 1;
@@ -6812,7 +6821,7 @@ class WriterLowering {
 		final isAssign: Bool = prec == 0;
 		final opWithSpaces: String = isTight ? opText : ' $opText ';
 		final rightChild: ShapeNode = children[1];
-		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get('base.ref') : null;
+		final rightRef: Null<String> = rightChild.kind == Ref ? rightChild.annotations.get(AnnotationKeys.BASE_REF) : null;
 		final isAsymmetric: Bool = rightRef != null && simpleName(rightRef) != simpleName(typePath);
 		final rightOptBase: Null<Expr> = branch.fmtHasFlag('propagateExprPosition') ? macro _setExprPosition(opt) : null;
 		// ω-arrow-body-objlit-pad: `@:fmt(propagateArrowLambdaBody)` on the
@@ -6900,7 +6909,7 @@ class WriterLowering {
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
 		final children: Array<ShapeNode> = branch.children;
-		final prec: Int = (branch.annotations.get('pratt.prec'): Int);
+		final prec: Int = (branch.annotations.get(AnnotationKeys.PRATT_PREC): Int);
 		final opText: String = getOperatorText(branch);
 		final isChainBool: Bool = opText == '||' || opText == '&&';
 		final isChainNullCoal: Bool = opText == '??';
@@ -7221,7 +7230,7 @@ class WriterLowering {
 		final hasPratt: Bool = c.hasPratt;
 		final argNames: Array<String> = c.argNames;
 		final children: Array<ShapeNode> = branch.children;
-		final refName: String = children[0].annotations.get('base.ref');
+		final refName: String = children[0].annotations.get(AnnotationKeys.BASE_REF);
 		final subFn: String = writeFnFor(refName);
 		final isSelfRef: Bool = simpleName(refName) == simpleName(typePath);
 		// ω-issue-423-mech-a: when the kw-Ref ctor itself carries
@@ -7458,11 +7467,11 @@ class WriterLowering {
 	private function lowerLitKwBranch(c: LowerBranchCtx): Null<Expr> {
 		final branch: ShapeNode = c.branch;
 		final children: Array<ShapeNode> = branch.children;
-		final litList: Null<Array<String>> = branch.annotations.get('lit.litList');
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final litList: Null<Array<String>> = branch.annotations.get(AnnotationKeys.LIT_LIT_LIST);
+		final kwLead: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
 		// ---- Case 0: zero-arg kw ----
 		if (kwLead != null && children.length == 0 && litList == null) {
-			final trail: Null<String> = branch.annotations.get('lit.trailText');
+			final trail: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
 			final text: String = kwLead + (trail ?? '');
 			return macro _dt($v{text});
 		}
@@ -7489,9 +7498,9 @@ class WriterLowering {
 	 */
 	private function kwRefWrapShape(c: LowerBranchCtx, parts: Array<Expr>, wrapOpenNewlineExpr: Null<Expr>): Null<Expr> {
 		final branch: ShapeNode = c.branch;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final kwLead: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
 		// ω-paren-wrap-break: `@:wrap(open, close)` enum ctor (no kw,
 		// both lead and trail set) renders as a Group whose break
 		// shape adds a hardline before the close delimiter, so a
@@ -7765,7 +7774,7 @@ class WriterLowering {
 	): { strip: Bool, space: Null<Expr> } {
 		final branch: ShapeNode = c.branch;
 		final argNames: Array<String> = c.argNames;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
 		// ω-kw-word-lead-spacing: a ctor-level `@:lead` whose
 		// first char is a word character is a second keyword, NOT a tight
 		// symbol delimiter (`static var` / `inline function`) — it keeps
@@ -7808,9 +7817,9 @@ class WriterLowering {
 	private function kwRefParts(c: LowerBranchCtx, bodyExpr: Expr, kwTrailSpace: Null<Expr>, stripKwTrailingSpace: Bool): Array<Expr> {
 		final branch: ShapeNode = c.branch;
 		final argNames: Array<String> = c.argNames;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
-		final kwLead: Null<String> = branch.annotations.get('kw.leadText');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final kwLead: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
 		final leadIsWord: Bool = leadText != null && isWordStart(leadText);
 		final parts: Array<Expr> = [];
 		if (kwLead != null) {
@@ -7991,9 +8000,9 @@ class WriterLowering {
 		// flags as empty.
 		var bodyRef: Null<String> = null;
 		var bodyIsOptional: Bool = false;
-		for (c in node.children) if (c.annotations.get('base.fieldName') == bodyField) {
-			bodyRef = c.annotations.get('base.ref');
-			bodyIsOptional = c.annotations.get('base.optional') == true;
+		for (c in node.children) if (c.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == bodyField) {
+			bodyRef = c.annotations.get(AnnotationKeys.BASE_REF);
+			bodyIsOptional = c.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 			break;
 		}
 		if (bodyRef == null)
@@ -8937,7 +8946,7 @@ class WriterLowering {
 						Context.currentPos()
 					);
 				if (startKnob == null) Context.fatalError('WriterLowering: @:fmt(condWrap) requires a knob arg', Context.currentPos());
-				if (c.kind != Ref || c.annotations.get('base.optional') == true)
+				if (c.kind != Ref || c.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true)
 					Context.fatalError(
 						'WriterLowering: @:fmt(condWrapEnd) is supported only on bare mandatory Ref fields', Context.currentPos()
 					);
@@ -9703,7 +9712,7 @@ class WriterLowering {
 		bodyPolicyExprFlag: Null<String>, hasElseIf: Bool, elseFieldName: Null<String>, prevBodyField: Null<PrevBodyInfo>,
 		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>
 	): Null<Expr> {
-		final refName: String = child.annotations.get('base.ref');
+		final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 		final writeFn: String = writeFnFor(refName);
 		// ω-issue-423-mech-a / ω-anonfunction-empty-curly /
 		// ω-expressionif-collapse: opt-fanout flags wrapping the descendant
@@ -9838,9 +9847,9 @@ class WriterLowering {
 	 */
 	private function findThenSiblingAccess(node: ShapeNode): Null<{ sibling: ShapeNode, name: String, access: Expr }> {
 		final thenSibling: Null<ShapeNode> = node.children.find(c ->
-			c.annotations.get('base.optional') != true && c.fmtHasFlag('dropSingleStmtBraces')
+			c.annotations.get(AnnotationKeys.BASE_OPTIONAL) != true && c.fmtHasFlag('dropSingleStmtBraces')
 		);
-		final thenName: Null<String> = thenSibling?.annotations.get('base.fieldName');
+		final thenName: Null<String> = thenSibling?.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		return thenSibling == null || thenName == null ? null : {
 			sibling: thenSibling,
 			name: thenName,
@@ -9863,7 +9872,7 @@ class WriterLowering {
 		final thenAccess: Expr = found.access;
 		final trailSlot: String = found.name + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX;
 		final thenTrailAccess: Expr = { expr: EField(macro value, trailSlot), pos: Context.currentPos() };
-		final thenTrail: Expr = found.sibling.annotations.get('lit.trailOptional') == true && isTriviaBearing(typePath)
+		final thenTrail: Expr = found.sibling.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true && isTriviaBearing(typePath)
 			? macro ($thenTrailAccess == true)
 			: macro false;
 		// The probed sibling IS an if-then-body, so the omega-ssb-wrap arm applies
@@ -9987,7 +9996,7 @@ class WriterLowering {
 		}>,
 		fieldIdx: Int, typePath: String
 	): FieldMeta {
-		final fieldName: Null<String> = child.annotations.get('base.fieldName');
+		final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		if (fieldName == null) Context.fatalError('WriterLowering: struct field missing base.fieldName', Context.currentPos());
 		final kwLead: Null<String> = child.readMetaString(':kw');
 		final leadText: Null<String> = child.readMetaString(':lead');
@@ -9995,11 +10004,11 @@ class WriterLowering {
 		// `@:trailOpt(LIT)` sets `lit.trailText` + `lit.trailOptional=true` in
 		// `strategy/Lit.hx`; the writer reads it as a separate `trailOptText` to
 		// keep the raw-`@:trail`-only consumers untouched.
-		final trailOptText: Null<String> = child.annotations.get('lit.trailOptional') == true
-			? (child.annotations.get('lit.trailText'): Null<String>)
+		final trailOptText: Null<String> = child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true
+			? (child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT): Null<String>)
 			: null;
 		final isStar: Bool = child.kind == Star;
-		final isOptional: Bool = child.annotations.get('base.optional') == true;
+		final isOptional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 		// ω-condition-wrap-wiring: `@:fmt(condWrap('<knob>'))` on a bare mandatory
 		// Ref routes lead+value+trail through the runtime `WrapList.emitCondition`
 		// cascade. First consumers: `HxIfStmt.cond`, `HxWhileStmt.cond`.
@@ -10013,8 +10022,8 @@ class WriterLowering {
 		// struct-typedef Ref field carrying `@:trailOpt(LIT)` reads
 		// `value.<field>TrailPresent:Null<Bool>` (synth slot) so the writer
 		// preserves source presence of the trail rather than always re-emitting it.
-		final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref && child.annotations.get('lit.trailOptional') == true
-			&& _ctx.trivia && isTriviaBearing(typePath);
+		final hasStructFieldTrailOptSlot: Bool = !isStar && child.kind == Ref
+			&& child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true && _ctx.trivia && isTriviaBearing(typePath);
 		final structTrailOptAccess: Null<Expr> = hasStructFieldTrailOptSlot ? {
 			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX),
 			pos: Context.currentPos()
@@ -10054,7 +10063,7 @@ class WriterLowering {
 		spanInfoPresent: Bool, trailText: Null<String>, prevTrailFieldName: Null<String>, prevAnyStarNonEmpty: Null<Expr>,
 		prevPadTrailing: Null<Expr>, condFitGroup: Bool
 	): { justWrappedBody: Null<PrevBodyInfo>, prevBareRefBody: PrevBodyInfo } {
-		final refName: String = child.annotations.get('base.ref');
+		final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 		final writeFn: String = writeFnFor(refName);
 		// (opt-fanout / writeCall assembly lives in buildMandatoryRefWriteCall.)
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
@@ -10150,7 +10159,8 @@ class WriterLowering {
 		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`): a redundant
 		// trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once de-braced — invalid
 		// to the Haxe compiler — so it fails the unwrap closed (braces kept).
-		final trailSemiExpr: Expr = dropBraces && child.annotations.get('lit.trailOptional') == true && isTriviaBearing(typePath)
+		final trailSemiExpr: Expr = dropBraces && child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true
+			&& isTriviaBearing(typePath)
 			? macro (${{ expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos() }} == true)
 			: macro false;
 		// ω-single-stmt-braces symmetry (gate 7): probe whether the `else` sibling would
@@ -10204,7 +10214,7 @@ class WriterLowering {
 	 * is not exactly `name(<single-expr>)`.
 	 */
 	private static function fmtReadCall(node: ShapeNode, name: String): Null<Expr> {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return null;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
@@ -10886,13 +10896,13 @@ class WriterLowering {
 	 */
 	private static function isCurlyBlockCtorBranch(branch: ShapeNode): Bool {
 		if (!isBlockCtorBranch(branch)) return false;
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
 		return leadText != null && StringTools.startsWith(leadText, '{');
 	}
 
 	private static function isBlockCtorBranch(branch: ShapeNode): Bool {
-		final leadText: Null<String> = branch.annotations.get('lit.leadText');
-		final trailText: Null<String> = branch.annotations.get('lit.trailText');
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
 		return leadText != null && trailText != null && (branch.children.length == 1 && branch.children[0].kind == Star);
 	}
 
@@ -10952,9 +10962,9 @@ class WriterLowering {
 	 */
 	private static function isBareTryparseStar(child: ShapeNode): Bool {
 		if (child.kind != Star) return false;
-		final leadText: Null<String> = child.annotations.get('lit.leadText');
-		final trailText: Null<String> = child.annotations.get('lit.trailText');
-		final sepText: Null<String> = child.annotations.get('lit.sepText');
+		final leadText: Null<String> = child.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = child.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+		final sepText: Null<String> = child.annotations.get(AnnotationKeys.LIT_SEP_TEXT);
 		return leadText == null && trailText == null && sepText == null;
 	}
 
@@ -11909,17 +11919,19 @@ class WriterLowering {
 	}
 
 	private static function getOperatorText(branch: ShapeNode): String {
-		return (branch.annotations.get('pratt.op'): Null<String>) ?? branch.annotations.get('ternary.op');
+		return (branch.annotations.get(AnnotationKeys.PRATT_OP): Null<String>) ?? branch.annotations.get(AnnotationKeys.TERNARY_OP);
 	}
 
 	private static function hasPrattBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (branch.annotations.get('pratt.prec') != null || branch.annotations.get('ternary.op') != null)
+		for (branch in node.children) if (
+			branch.annotations.get(AnnotationKeys.PRATT_PREC) != null || branch.annotations.get(AnnotationKeys.TERNARY_OP) != null
+		)
 			return true;
 		return false;
 	}
 
 	private static function hasPostfixBranch(node: ShapeNode): Bool {
-		for (branch in node.children) if (branch.annotations.get('postfix.op') != null) return true;
+		for (branch in node.children) if (branch.annotations.get(AnnotationKeys.POSTFIX_OP) != null) return true;
 		return false;
 	}
 
@@ -11939,7 +11951,7 @@ class WriterLowering {
 	 * adapter unwraps the wrapper internally.
 	 */
 	private static function trailOptShapeGateWrap(branch: ShapeNode, trailText: String, rootArg: String): Null<Expr> {
-		final trailOptional: Bool = branch.annotations.get('lit.trailOptional') == true;
+		final trailOptional: Bool = branch.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true;
 		if (!trailOptional) return null;
 		final args: Null<Array<String>> = branch.fmtReadStringArgs('trailOptShapeGate');
 		if (args == null || args.length != 2) return null;
@@ -11979,11 +11991,11 @@ class WriterLowering {
 	}
 
 	private static function findFieldByName(node: ShapeNode, name: String): Null<ShapeNode> {
-		return node.children.find(child -> child.annotations.get('base.fieldName') == name);
+		return node.children.find(child -> child.annotations.get(AnnotationKeys.BASE_FIELD_NAME) == name);
 	}
 
 	private static function ctorBranchHasFlag(branch: ShapeNode, flag: String): Bool {
-		final meta: Null<Metadata> = branch.annotations.get('base.meta');
+		final meta: Null<Metadata> = branch.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':fmt') {
 			for (param in entry.params) switch param.expr {
@@ -12272,7 +12284,7 @@ class WriterLowering {
 		final matched: Array<String> = [];
 		final transparentMatched: Array<String> = [];
 		for (branch in enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctorName == null) continue;
 			final arity: Int = branch.children.length;
 			final ctorIdent: Expr = { expr: EConst(CIdent(ctorName)), pos: pos };
@@ -12388,14 +12400,14 @@ class WriterLowering {
 		// function-bearing conditional members get a `betweenFunctions` blank,
 		// nothing else changes.
 		final innerCases: Array<Case> = condCtor == null ? [] : [
-			for (branch in enumRule.children) if (branch.annotations.get('base.ctor') != null) {
-				final ctorName: String = branch.annotations.get('base.ctor');
+			for (branch in enumRule.children) if (branch.annotations.get(AnnotationKeys.BASE_CTOR) != null) {
+				final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 				{ values: [patternFor(branch, ctorName, false)], guard: null, expr: (fnCtors.contains(ctorName) ? macro 2 : macro 0) };
 			}
 		];
 		final cases: Array<Case> = [];
 		for (branch in enumRule.children) {
-			final ctorName: Null<String> = branch.annotations.get('base.ctor');
+			final ctorName: Null<String> = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 			if (ctorName == null) continue;
 			final isLookThrough: Bool = condCtor != null && ctorName == condCtor;
 			final pattern: Expr = patternFor(branch, ctorName, isLookThrough);

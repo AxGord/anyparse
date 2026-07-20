@@ -1,5 +1,6 @@
 package anyparse.macro.strategy;
 
+import anyparse.macro.AnnotationKeys;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -87,14 +88,14 @@ class Postfix implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':postfix') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':postfix') {
 			if (entry.params.length < 1 || entry.params.length > 2) {
@@ -108,7 +109,7 @@ class Postfix implements Strategy {
 					Context.fatalError('@:postfix first argument must be a string literal', entry.params[0].pos);
 					throw 'unreachable';
 			};
-			node.annotations.set('postfix.op', opText);
+			node.annotations.set(AnnotationKeys.POSTFIX_OP, opText);
 			if (entry.params.length == 2) {
 				final closeText: String = switch entry.params[1].expr {
 					case EConst(CString(s, _)): s;
@@ -116,7 +117,7 @@ class Postfix implements Strategy {
 						Context.fatalError('@:postfix second argument must be a string literal', entry.params[1].pos);
 						throw 'unreachable';
 				};
-				node.annotations.set('postfix.close', closeText);
+				node.annotations.set(AnnotationKeys.POSTFIX_CLOSE, closeText);
 			}
 		}
 	}

@@ -74,7 +74,7 @@ class BinaryWriterLowering {
 		if (magic != null) steps.push(macro output.writeString($v{magic}));
 
 		for (child in node.children) {
-			final fieldName: Null<String> = child.annotations.get('base.fieldName');
+			final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 			if (fieldName == null) Context.fatalError('BinaryWriterLowering: struct field missing base.fieldName', Context.currentPos());
 
 			final fieldAccess: Expr = {
@@ -194,7 +194,7 @@ class BinaryWriterLowering {
 	private static function emitStarField(child: ShapeNode, fieldAccess: Expr, steps: Array<Expr>): Void {
 		final inner: ShapeNode = child.children[0];
 		if (inner.kind != Ref) Context.fatalError('BinaryWriterLowering: Star field must contain a Ref', Context.currentPos());
-		final elemRefName: String = inner.annotations.get('base.ref');
+		final elemRefName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
 		final elemFn: String = 'write${simpleName(elemRefName)}';
 		final elemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _arr[_i], macro output]),

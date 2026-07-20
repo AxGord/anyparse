@@ -129,9 +129,9 @@ class SpanTypeSynth {
 	}
 
 	private static function buildStructField(child: ShapeNode, pos: Position, synthPack: Array<String>): Field {
-		final fieldName: String = child.annotations.get('base.fieldName');
+		final fieldName: String = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
 		final ct: ComplexType = shapeToComplexType(child, synthPack);
-		final optional: Bool = child.annotations.get('base.optional') == true;
+		final optional: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 		final meta: Metadata = optional ? [{ name: ':optional', params: [], pos: pos }] : [];
 		return {
 			name: fieldName,
@@ -143,12 +143,12 @@ class SpanTypeSynth {
 	}
 
 	private static function buildEnumCtor(branch: ShapeNode, pos: Position, synthPack: Array<String>): Field {
-		final ctorName: String = branch.annotations.get('base.ctor');
+		final ctorName: String = branch.annotations.get(AnnotationKeys.BASE_CTOR);
 		final spanCT: ComplexType = TPath({ pack: ['anyparse', 'runtime'], name: 'Span', params: [] });
 		final args: Array<FunctionArg> = [
 			for (arg in branch.children)
 				{
-					name: (arg.annotations.get('base.fieldName'): String),
+					name: (arg.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String),
 					type: shapeToComplexType(arg, synthPack),
 				}
 		];
@@ -164,7 +164,7 @@ class SpanTypeSynth {
 	private static function shapeToComplexType(node: ShapeNode, synthPack: Array<String>): ComplexType {
 		return switch node.kind {
 			case Ref:
-				final refName: String = node.annotations.get('base.ref');
+				final refName: String = node.annotations.get(AnnotationKeys.BASE_REF);
 				final base: ComplexType = refIsBearing(refName)
 					? TPath({
 						pack: synthPack,
@@ -178,7 +178,7 @@ class SpanTypeSynth {
 				final elementCT: ComplexType = shapeToComplexType(node.children[0], synthPack);
 				wrapOptional(node, TPath({ pack: [], name: 'Array', params: [TPType(elementCT)] }));
 			case Terminal:
-				final tp: Null<String> = node.annotations.get('base.typePath');
+				final tp: Null<String> = node.annotations.get(AnnotationKeys.BASE_TYPE_PATH);
 				if (tp != null) return wrapOptional(node, TPath({ pack: packOf(tp), name: leafOf(tp), params: [] }));
 				final under: String = node.annotations.get('base.underlying');
 				wrapOptional(node, TPath({ pack: [], name: under, params: [] }));
@@ -189,7 +189,8 @@ class SpanTypeSynth {
 	}
 
 	private static inline function wrapOptional(node: ShapeNode, base: ComplexType): ComplexType {
-		return node.annotations.get('base.optional') == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
+		return
+			node.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true ? TPath({ pack: [], name: 'Null', params: [TPType(base)] }) : base;
 	}
 
 	private static function refIsBearing(refName: String): Bool {

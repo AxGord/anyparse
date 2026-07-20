@@ -1,5 +1,6 @@
 package anyparse.macro.strategy;
 
+import anyparse.macro.AnnotationKeys;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -50,14 +51,14 @@ class Ternary implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) if (entry.name == ':ternary') return true;
 		return false;
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return;
 		for (entry in meta) if (entry.name == ':ternary') {
 			if (entry.params.length != 3)
@@ -80,9 +81,9 @@ class Ternary implements Strategy {
 					Context.fatalError('@:ternary third argument must be an integer literal', entry.params[2].pos);
 					throw 'unreachable';
 			};
-			node.annotations.set('ternary.op', opText);
-			node.annotations.set('ternary.sep', sepText);
-			node.annotations.set('ternary.prec', precValue);
+			node.annotations.set(AnnotationKeys.TERNARY_OP, opText);
+			node.annotations.set(AnnotationKeys.TERNARY_SEP, sepText);
+			node.annotations.set(AnnotationKeys.TERNARY_PREC, precValue);
 		}
 	}
 

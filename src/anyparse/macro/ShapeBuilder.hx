@@ -114,14 +114,14 @@ class ShapeBuilder {
 
 	private function shapeEnum(e: EnumType): ShapeNode {
 		final node: ShapeNode = new ShapeNode(Alt);
-		node.annotations.set('base.typePath', typePathOfEnum(e));
-		node.annotations.set('base.meta', e.meta.get());
+		node.annotations.set(AnnotationKeys.BASE_TYPE_PATH, typePathOfEnum(e));
+		node.annotations.set(AnnotationKeys.BASE_META, e.meta.get());
 		for (name in e.names) {
 			final ef: EnumField = e.constructs.get(name);
 			final branch: ShapeNode = new ShapeNode(Seq);
-			branch.annotations.set('base.ctor', name);
-			branch.annotations.set('base.typePath', typePathOfEnum(e));
-			branch.annotations.set('base.meta', ef.meta.get());
+			branch.annotations.set(AnnotationKeys.BASE_CTOR, name);
+			branch.annotations.set(AnnotationKeys.BASE_TYPE_PATH, typePathOfEnum(e));
+			branch.annotations.set(AnnotationKeys.BASE_META, ef.meta.get());
 			switch ef.type {
 				case TFun(args, _):
 					for (arg in args) branch.children.push(shapeField(arg.name, arg.t, null));
@@ -139,8 +139,8 @@ class ShapeBuilder {
 			case TAnonymous(aref):
 				final a: AnonType = aref.get();
 				final node: ShapeNode = new ShapeNode(Seq);
-				node.annotations.set('base.typePath', typePathOfDef(td));
-				node.annotations.set('base.meta', td.meta.get());
+				node.annotations.set(AnnotationKeys.BASE_TYPE_PATH, typePathOfDef(td));
+				node.annotations.set(AnnotationKeys.BASE_META, td.meta.get());
 				// AnonType.fields is NOT guaranteed to preserve source declaration
 				// order — on some Haxe builds it comes back in hash/alphabetical
 				// order. The JSON grammar's alphabetical order happened to match
@@ -164,8 +164,8 @@ class ShapeBuilder {
 
 	private function shapeAbstract(a: AbstractType): ShapeNode {
 		final node: ShapeNode = new ShapeNode(Terminal);
-		node.annotations.set('base.typePath', typePathOfAbstract(a));
-		node.annotations.set('base.meta', a.meta.get());
+		node.annotations.set(AnnotationKeys.BASE_TYPE_PATH, typePathOfAbstract(a));
+		node.annotations.set(AnnotationKeys.BASE_META, a.meta.get());
 		node.annotations.set('base.underlying', primitiveName(a.type));
 		final enumValues: Null<Array<{ name: String, value: String }>> = extractStringEnumValues(a);
 		if (enumValues != null) {
@@ -196,16 +196,16 @@ class ShapeBuilder {
 
 	private function shapeField(fieldName: String, t: Type, meta: Null<Metadata>): ShapeNode {
 		final child: ShapeNode = shapeFieldType(t);
-		child.annotations.set('base.fieldName', fieldName);
-		child.annotations.set('base.fieldType', Context.toComplexType(t));
-		if (meta != null) child.annotations.set('base.meta', meta);
+		child.annotations.set(AnnotationKeys.BASE_FIELD_NAME, fieldName);
+		child.annotations.set(AnnotationKeys.BASE_FIELD_TYPE, Context.toComplexType(t));
+		if (meta != null) child.annotations.set(AnnotationKeys.BASE_META, meta);
 		// Optionality must be documented on both axes so a reader of the
 		// grammar source spots it without cross-referencing — `@:optional`
 		// on the field AND `Null<T>` on the type. `shapeFieldType` marks
 		// the child node when it unwraps a `Null<T>` wrapper; this check
 		// enforces bidirectional agreement.
 		final hasOptMeta: Bool = meta != null && meta.exists(e -> e.name == ':optional');
-		final hasOptShape: Bool = child.annotations.get('base.optional') == true;
+		final hasOptShape: Bool = child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
 		if (hasOptShape && !hasOptMeta) {
 			Context.fatalError('ShapeBuilder: field "$fieldName" has type Null<T> but is missing @:optional meta', Context.currentPos());
 		}
@@ -239,14 +239,14 @@ class ShapeBuilder {
 				final a: AbstractType = ref.get();
 				if (a.pack.length == 0 && a.name == 'Null' && params.length == 1) {
 					final inner: ShapeNode = shapeFieldType(params[0]);
-					inner.annotations.set('base.optional', true);
+					inner.annotations.set(AnnotationKeys.BASE_OPTIONAL, true);
 					return inner;
 				}
 			case TType(ref, params):
 				final d: DefType = ref.get();
 				if (d.pack.length == 0 && d.name == 'Null' && params.length == 1) {
 					final inner: ShapeNode = shapeFieldType(params[0]);
-					inner.annotations.set('base.optional', true);
+					inner.annotations.set(AnnotationKeys.BASE_OPTIONAL, true);
 					return inner;
 				}
 			case _:
@@ -279,7 +279,7 @@ class ShapeBuilder {
 				final mappedType: Type = Context.getType(mapped);
 				enqueue(mapped, mappedType);
 				final node: ShapeNode = new ShapeNode(Ref);
-				node.annotations.set('base.ref', mapped);
+				node.annotations.set(AnnotationKeys.BASE_REF, mapped);
 				return node;
 			}
 			final term: ShapeNode = new ShapeNode(Terminal);
@@ -291,7 +291,7 @@ class ShapeBuilder {
 		if (refName != null) {
 			enqueue(refName, t);
 			final node: ShapeNode = new ShapeNode(Ref);
-			node.annotations.set('base.ref', refName);
+			node.annotations.set(AnnotationKeys.BASE_REF, refName);
 			return node;
 		}
 		Context.fatalError('ShapeBuilder: unsupported field type: ${typeToString(t)}', Context.currentPos());

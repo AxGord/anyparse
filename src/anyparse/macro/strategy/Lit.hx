@@ -1,5 +1,6 @@
 package anyparse.macro.strategy;
 
+import anyparse.macro.AnnotationKeys;
 #if macro
 import haxe.macro.Context;
 import haxe.macro.Expr;
@@ -98,7 +99,7 @@ class Lit implements Strategy {
 	public function new() {}
 
 	public function appliesTo(node: ShapeNode): Bool {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return false;
 		for (entry in meta) switch entry.name {
 			case ':lit' | ':lead' | ':trail' | ':trailOpt' | ':wrap' | ':sep' | ':sepAlt':
@@ -109,25 +110,25 @@ class Lit implements Strategy {
 	}
 
 	public function annotate(node: ShapeNode, ctx: LoweringCtx): Void {
-		final meta: Null<Metadata> = node.annotations.get('base.meta');
+		final meta: Null<Metadata> = node.annotations.get(AnnotationKeys.BASE_META);
 		if (meta == null) return;
 		for (entry in meta) switch entry.name {
 			case ':lit':
 				final list: Array<String> = collectStrings(entry.params);
-				node.annotations.set('lit.litList', list);
+				node.annotations.set(AnnotationKeys.LIT_LIT_LIST, list);
 			case ':lead':
-				node.annotations.set('lit.leadText', singleString(entry.params, ':lead'));
+				node.annotations.set(AnnotationKeys.LIT_LEAD_TEXT, singleString(entry.params, ':lead'));
 			case ':trail':
-				node.annotations.set('lit.trailText', singleString(entry.params, ':trail'));
+				node.annotations.set(AnnotationKeys.LIT_TRAIL_TEXT, singleString(entry.params, ':trail'));
 			case ':trailOpt':
-				node.annotations.set('lit.trailText', singleString(entry.params, ':trailOpt'));
-				node.annotations.set('lit.trailOptional', true);
+				node.annotations.set(AnnotationKeys.LIT_TRAIL_TEXT, singleString(entry.params, ':trailOpt'));
+				node.annotations.set(AnnotationKeys.LIT_TRAIL_OPTIONAL, true);
 			case ':wrap':
 				annotateWrap(node, entry);
 			case ':sep':
 				annotateSep(node, entry);
 			case ':sepAlt':
-				node.annotations.set('lit.sepAltText', singleString(entry.params, ':sepAlt'));
+				node.annotations.set(AnnotationKeys.LIT_SEP_ALT_TEXT, singleString(entry.params, ':sepAlt'));
 			case _:
 		}
 	}
@@ -162,8 +163,8 @@ class Lit implements Strategy {
 		if (entry.params.length != 2) {
 			Context.fatalError('@:wrap expects exactly two string arguments', entry.pos);
 		}
-		node.annotations.set('lit.leadText', stringOrFail(entry.params[0], ':wrap'));
-		node.annotations.set('lit.trailText', stringOrFail(entry.params[1], ':wrap'));
+		node.annotations.set(AnnotationKeys.LIT_LEAD_TEXT, stringOrFail(entry.params[0], ':wrap'));
+		node.annotations.set(AnnotationKeys.LIT_TRAIL_TEXT, stringOrFail(entry.params[1], ':wrap'));
 	}
 
 	private static function annotateSep(node: ShapeNode, entry: MetadataEntry): Void {
@@ -172,10 +173,10 @@ class Lit implements Strategy {
 				'@:sep expects 1-3 arguments: @:sep("text"), @:sep("text", tailRelax | sepFaithful), or @:sep("text", tailRelax, blockEnded[(\'<predicate>\'[, sepStartsElement])])',
 				entry.pos
 			);
-		node.annotations.set('lit.sepText', stringOrFail(entry.params[0], ':sep'));
+		node.annotations.set(AnnotationKeys.LIT_SEP_TEXT, stringOrFail(entry.params[0], ':sep'));
 		if (entry.params.length >= 2) switch entry.params[1].expr {
 			case EConst(CIdent('tailRelax')):
-				node.annotations.set('lit.sepTailRelax', true);
+				node.annotations.set(AnnotationKeys.LIT_SEP_TAIL_RELAX, true);
 			// `sepFaithful` (ω-sep-faithful): source-fidelity sep mode for
 			// comma-lists inside preprocessor-guarded element groups
 			// (`HxConditionalArgs.body` and kin). Parse side reuses the
@@ -193,7 +194,7 @@ class Lit implements Strategy {
 			Context.fatalError('@:sep `sepFaithful` does not combine with a third argument', entry.params[2].pos);
 		if (entry.params.length == 3) switch entry.params[2].expr {
 			case EConst(CIdent('blockEnded')):
-				node.annotations.set('lit.sepBlockEnded', true);
+				node.annotations.set(AnnotationKeys.LIT_SEP_BLOCK_ENDED, true);
 			// `blockEnded('predicateName')` — option (b2) AST-shape
 			// adapter: instead of (or in addition to) the byte-check
 			// `_prevEndPos - 1 == '}'`, the Star primitive calls
@@ -207,8 +208,8 @@ class Lit implements Strategy {
 					Context.fatalError(
 						'@:sep `blockEnded(...)` expects 1-2 arguments: predicate name [, sepStartsElement]', entry.params[2].pos
 					);
-				node.annotations.set('lit.sepBlockEnded', true);
-				node.annotations.set('lit.sepBlockEndedPredicate', stringOrFail(callArgs[0], ':sep'));
+				node.annotations.set(AnnotationKeys.LIT_SEP_BLOCK_ENDED, true);
+				node.annotations.set(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE, stringOrFail(callArgs[0], ':sep'));
 				// Optional 2nd arg `sepStartsElement` (Session 9 BlockBody Star) —
 				// flips byte-ambiguity policy: when block-ended is TRUE, the sep
 				// byte at pos belongs to the NEXT element, never a separator.
@@ -217,7 +218,7 @@ class Lit implements Strategy {
 				// flag the default permissive-sep semantics applies.
 				if (callArgs.length == 2) switch callArgs[1].expr {
 					case EConst(CIdent('sepStartsElement')):
-						node.annotations.set('lit.sepStartsElement', true);
+						node.annotations.set(AnnotationKeys.LIT_SEP_STARTS_ELEMENT, true);
 					case _:
 						Context.fatalError('@:sep `blockEnded(...)` second argument must be the ident `sepStartsElement`', callArgs[1].pos);
 				}

@@ -74,7 +74,7 @@ class Build {
 
 		#if anyparse_trivia_dump
 		for (name => node in shape.rules) {
-			final bearing: Bool = node.annotations.get('trivia.bearing') == true;
+			final bearing: Bool = node.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 			Sys.println('// trivia.bearing: $name = $bearing');
 		}
 		#end
@@ -86,7 +86,7 @@ class Build {
 
 		final rootSimple: String = simpleName(shape.root);
 		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootTriviaBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootTriviaBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 		final rootSpansBearing: Bool = ctx.spans && rootNode != null && rootNode.kind != Terminal;
 		final rootReturnCT: ComplexType = if (rootSpansBearing)
 			TPath({
@@ -228,7 +228,7 @@ class Build {
 
 		final rootSimple: String = simpleName(shape.root);
 		final rootNode: anyparse.core.ShapeTree.ShapeNode = shape.rules.get(shape.root);
-		final rootBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get('trivia.bearing') == true;
+		final rootBearing: Bool = ctx.trivia && rootNode != null && rootNode.annotations.get(AnnotationKeys.TRIVIA_BEARING) == true;
 		final rootReturnCT: ComplexType = rootBearing
 			? TPath({
 				pack: packOf(shape.root).concat(['trivia']),
