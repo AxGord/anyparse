@@ -11611,7 +11611,10 @@ final class Cli {
 			return EXIT_RUNTIME;
 		};
 		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
-		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin);
+		// Discover the file's format config so the canonical gate matches the project's writer
+		// style (space-after-colon, etc.), else a non-default-formatted file is wrongly rejected.
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
+		final result: EditResult = EncapsulateField.encapsulate(source, typeNameNN, fieldNameNN, reformat, plugin, optsJson);
 		switch result {
 			case Ok(text):
 				if (write) {
