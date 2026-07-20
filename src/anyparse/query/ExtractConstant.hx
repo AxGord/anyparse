@@ -72,6 +72,71 @@ final class ExtractConstant {
 		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
+	/**
+	 * Extract every occurrence of the plain single-quoted `literal` across
+	 * `scopeFiles` into a shared `public static final` named `name` on the
+	 * constants module `moduleClass` (package `modulePkg`). Each occurrence
+	 * becomes `<moduleClass>.<name>`; a scope file whose package differs from
+	 * the module's gains an `import`. When `moduleExists` the constant is added
+	 * to `moduleSource` (refused if a `name` member already exists); otherwise a
+	 * new `final class` module is created with a private constructor. `reformat`
+	 * canonicalises drifted files. Returns the changed files plus the final
+	 * module source, or an `Err`.
+	 */
+	public static function extractInto(
+		scopeFiles: Array<{ file: String, source: String }>, modulePkg: String, moduleClass: String, moduleExists: Bool,
+		moduleSource: Null<String>, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): ExtractIntoResult {
+		if (!RefactorSupport.isIdentifier(name)) return Err('"$name" is not a valid identifier for a constant name');
+
+		final modulePath: String = modulePkg == '' ? moduleClass : '$modulePkg.$moduleClass';
+		final ref: String = '$moduleClass.$name';
+		final changes: Array<{ file: String, newSource: String, count: Int }> = [];
+		var token: Null<String> = null;
+		var total: Int = 0;
+
+		for (sf in scopeFiles) {
+			final tree: QueryNode = try plugin.parseFile(sf.source) catch (exception: ParseError) return Err(
+				'${sf.file} does not parse: ${exception.toString()}'
+			)
+			catch (exception: Exception) return Err('${sf.file} does not parse: ${exception.message}');
+
+			final occurrences: Array<Span> = collectOccurrences(tree, literal);
+			if (occurrences.length == 0) continue;
+			total += occurrences.length;
+			if (token == null) token = sf.source.substring(occurrences[0].from, occurrences[0].to);
+
+			final edits: Array<{ span: Span, text: String }> = [for (occ in occurrences) { span: occ, text: ref }];
+			final replaced: String = switch RefactorSupport.canonicalize(sf.source, edits, reformat, plugin, optsJson) {
+				case Ok(text): text;
+				case Err(message): return Err('${sf.file}: $message');
+			};
+
+			// Same-package files (and a root-package module, globally visible)
+			// reference the module with no import; a differing real package needs one.
+			final needsImport: Bool = modulePkg != '' && packageOf(tree) != modulePkg && !alreadyImportsModule(tree, modulePath);
+			final newSource: String = if (!needsImport)
+				replaced
+			else
+				switch AddImport.addImport(replaced, modulePath, false, true, plugin, optsJson) {
+					case Ok(text): text;
+					case Err(message): return Err('${sf.file}: import: $message');
+				};
+			changes.push({ file: sf.file, newSource: newSource, count: occurrences.length });
+		}
+
+		if (total == 0 || token == null) return Err('no single-quoted literal \'$literal\' occurs across the scope');
+		final constToken: String = token;
+		final memberText: String = 'public static final $name:String = $constToken;';
+
+		return switch buildModuleSource(
+			moduleExists, moduleSource, modulePkg, moduleClass, modulePath, name, memberText, reformat, plugin, optsJson
+		) {
+			case Ok(moduleFinal): Ok(changes, moduleFinal, !moduleExists);
+			case Err(message): Err(message);
+		};
+	}
+
 	/** The sole type declaration named `typeName`, or null. Final-aware. */
 	private static function uniqueType(tree: QueryNode, typeName: String): Null<TypeDeclMatch> {
 		final matches: Array<TypeDeclMatch> = [];
@@ -131,4 +196,73 @@ final class ExtractConstant {
 		return -1;
 	}
 
+	/** The package of a parsed source (`PackageDecl.name`), or `''` when none. */
+	private static function packageOf(tree: QueryNode): String {
+		for (child in tree.children) if (child.kind == 'PackageDecl') return child.name ?? '';
+		return '';
+	}
+
+	/**
+	 * Build the constants-module source: append `memberText` to the existing
+	 * `moduleSource` (refused on a duplicate `name` member or a missing
+	 * `moduleClass` type), or create a fresh `final class` module holding that
+	 * member plus a private constructor. Returns the module source or an `Err`.
+	 */
+	private static function buildModuleSource(
+		moduleExists: Bool, moduleSource: Null<String>, modulePkg: String, moduleClass: String, modulePath: String, name: String,
+		memberText: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
+	): EditResult {
+		if (!moduleExists) return switch NewFile.create({
+			className: moduleClass,
+			pkg: modulePkg,
+			fields: [memberText, 'private function new() {}']
+		}, plugin, optsJson).result {
+			case Ok(text): Ok(text);
+			case Err(message): Err('module: $message');
+		};
+
+		if (moduleSource == null) return Err('module "$modulePath" is marked existing but no source was provided');
+		final existing: String = moduleSource;
+		final mtree: QueryNode = try plugin.parseFile(existing) catch (exception: ParseError) return Err(
+			'module "$modulePath" does not parse: ${exception.toString()}'
+		)
+		catch (exception: Exception) return Err('module "$modulePath" does not parse: ${exception.message}');
+		final decl: Null<TypeDeclMatch> = uniqueType(mtree, moduleClass);
+		if (decl == null) return Err('module "$modulePath" has no unique type "$moduleClass"');
+		final declNN: TypeDeclMatch = decl;
+		if (memberNamed(declNN, name)) return Err('module "$moduleClass" already has a member named "$name"');
+		// Splice the constant into the constants rank (before the first member) rather than
+		// appending — an appended `public static final` after the holder's `private new()`
+		// would sit out of canonical member order. Empty module (no member): fall back to append.
+		final insertAt: Int = firstMemberStart(existing, declNN);
+		return insertAt < 0
+			? AddMember.addMember(existing, moduleClass, memberText, reformat, plugin, optsJson)
+			: RefactorSupport.canonicalize(
+				existing, [{ span: new Span(insertAt, insertAt), text: '$memberText\n' }], reformat, plugin, optsJson
+			);
+	}
+
+
+	/**
+	 * Does `tree` already carry a top-level `import <modulePath>;` / `using
+	 * <modulePath>;`? Mirrors `AddImport`'s own dedup so a consumer that already
+	 * imports the shared module is left as-is instead of aborting the whole
+	 * cross-file op with an "already imported" error.
+	 */
+	private static function alreadyImportsModule(tree: QueryNode, modulePath: String): Bool {
+		for (c in tree.children) if ((c.kind == 'ImportDecl' || c.kind == 'UsingDecl') && c.name == modulePath) return true;
+		return false;
+	}
+
+}
+
+/**
+ * Cross-file `extract-constant --into` result: the changed scope files
+ * (each with the literal replaced by `<ModuleClass>.<NAME>`, plus an
+ * import when the file's package differs from the module's), the final
+ * constants-module source, and whether that module was freshly created.
+ */
+enum ExtractIntoResult {
+	Ok(changes: Array<{ file: String, newSource: String, count: Int }>, moduleSource: String, created: Bool);
+	Err(message: String);
 }

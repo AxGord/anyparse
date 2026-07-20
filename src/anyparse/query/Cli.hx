@@ -396,6 +396,9 @@ final class Cli {
 	/** Cap on the cluster-key suggestion preview (top keys by frequency) shown when `--cluster` / `--from-cluster` finds no exact match. */
 	private static final CLUSTER_PREVIEW_LIMIT: Int = 10;
 
+	/** Below this length a literal is short/generic enough to risk coupling unrelated occurrences in `extract-constant --into`. */
+	private static final SHORT_LITERAL_LEN: Int = 4;
+
 	private static final RECON_TOP_N_DEFAULT: Int = 30;
 	private static final RECON_EXAMPLES_PER_CLUSTER: Int = 2;
 	private static final RECON_HEAD_LEN: Int = 70;
@@ -14004,10 +14007,11 @@ final class Cli {
 		var lang: String = 'haxe';
 		var write: Bool = false;
 		var reformat: Bool = false;
-		var file: Null<String> = null;
 		var typeName: Null<String> = null;
 		var name: Null<String> = null;
 		var literal: Null<String> = null;
+		var intoPath: Null<String> = null;
+		final scopeArgs: Array<String> = [];
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -14021,6 +14025,8 @@ final class Cli {
 					name = expectValue(args, ++i, '--name');
 				case '--literal':
 					literal = expectValue(args, ++i, '--literal');
+				case '--into':
+					intoPath = expectValue(args, ++i, '--into');
 				case '--reformat':
 					reformat = true;
 				case '--write':
@@ -14033,31 +14039,37 @@ final class Cli {
 						stderr('apq extract-constant: unknown option "$a"\n');
 						return EXIT_USAGE;
 					}
-					if (file == null)
-						file = a;
-					else {
-						stderr('apq extract-constant: unexpected extra argument "$a"\n');
-						return EXIT_USAGE;
-					}
+					scopeArgs.push(a);
 			}
 			i++;
 		}
-		if (file == null || typeName == null || name == null || literal == null) {
-			stderr("apq extract-constant: expected <file> --type <Type> --name <NAME> --literal '<text>'\n");
+		if (name == null || literal == null) {
+			stderr("apq extract-constant: expected --name <NAME> --literal '<text>'\n");
 			printExtractConstantUsage();
 			return EXIT_USAGE;
 		}
-
-		final filePath: String = file;
-		final typeStr: String = typeName;
 		final nameStr: String = name;
 		final literalStr: String = literal;
+		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
+
+		// --into selects cross-file mode; its absence keeps the single-file --type mode.
+		final into: Null<String> = intoPath;
+		if (into != null) return runExtractConstantInto(scopeArgs, into, nameStr, literalStr, reformat, write, plugin);
+
+		if (scopeArgs.length != 1 || typeName == null) {
+			stderr(
+				"apq extract-constant: expected <file> --type <Type> --name <NAME> --literal '<text>' (or --into <module> for cross-file)\n"
+			);
+			printExtractConstantUsage();
+			return EXIT_USAGE;
+		}
+		final filePath: String = scopeArgs[0];
+		final typeStr: String = typeName;
 		final source: String = try readFile(filePath) catch (exception: Exception) {
 			stderr('apq extract-constant: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
 
-		final plugin: GrammarPlugin = new CachingGrammarPlugin(pickPlugin(lang));
 		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin) {
 			case Ok(text):
 				if (write) {
@@ -14072,21 +14084,103 @@ final class Cli {
 		}
 	}
 
+	/**
+	 * Cross-file `extract-constant --into` mode: collect every plain
+	 * single-quoted `literal` across `scopeArgs`, replace each with a reference
+	 * to a `public static final` on the constants module at `intoPath`
+	 * (created if absent, extended otherwise). Preview (no `write`) prints
+	 * per-file counts and whether the module is created or extended; `write`
+	 * applies the changes and the module.
+	 */
+	private static function runExtractConstantInto(
+		scopeArgs: Array<String>, intoPath: String, name: String, literal: String, reformat: Bool, write: Bool, plugin: GrammarPlugin
+	): Int {
+		if (scopeArgs.length == 0) {
+			stderr('apq extract-constant: --into mode expects one or more <scope> files/dirs/globs to search\n');
+			return EXIT_USAGE;
+		}
+		final paths: Array<String> = expandInputs(scopeArgs, '.hx').paths;
+		if (paths.length == 0) {
+			stderr('apq extract-constant: scope matched no .hx files\n');
+			return EXIT_RUNTIME;
+		}
+
+		// The module file is not a consumer of itself: exclude it from the scan so it is
+		// not both rewritten-as-consumer and written-as-module (the second write would
+		// clobber the first, silently dropping the in-module occurrence).
+		final intoAbs: String = FileSystem.absolutePath(intoPath);
+		final scopeFiles: Array<{ file: String, source: String }> = [];
+		for (path in paths) if (FileSystem.absolutePath(path) != intoAbs) {
+			final fileSource: String = try readSourceForParse(path) catch (exception: Exception) {
+				stderr('apq extract-constant: $path: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+			scopeFiles.push({ file: path, source: fileSource });
+		}
+
+		final moduleExists: Bool = FileSystem.exists(intoPath);
+		final moduleSource: Null<String> = if (!moduleExists)
+			null
+		else
+			try readFile(intoPath) catch (exception: Exception) {
+				stderr('apq extract-constant: $intoPath: ${exception.message}\n');
+				return EXIT_RUNTIME;
+			};
+		final modulePkg: String = derivePackage(intoPath);
+		final moduleClass: String = newFileClassName(intoPath);
+		final optsJson: Null<String> = discoverFormatConfig(intoPath);
+
+		// A short / generic literal risks coupling unrelated occurrences — warn but proceed.
+		if (literal.length < SHORT_LITERAL_LEN)
+			stderr(
+				'apq extract-constant: warning: literal \'$literal\' is short (<$SHORT_LITERAL_LEN chars) — eyeball the preview, unrelated occurrences may be coupled\n'
+			);
+
+		switch ExtractConstant.extractInto(
+			scopeFiles, modulePkg, moduleClass, moduleExists, moduleSource, name, literal, reformat, plugin, optsJson
+		) {
+			case Ok(changes, finalModule, created):
+				var total: Int = 0;
+				for (c in changes) total += c.count;
+				final verb: String = created ? 'create' : 'extend';
+				if (write) {
+					for (c in changes) writeFile(c.file, c.newSource);
+					writeFile(intoPath, finalModule);
+					stderr('apq extract-constant: wrote ${changes.length} file(s), $total occurrence(s); module $verb $intoPath\n');
+				} else {
+					for (c in changes) sysPrint('${c.file}: ${c.count} occurrence(s)\n');
+					sysPrint('total: ${changes.length} file(s), $total occurrence(s)\n');
+					sysPrint('module: $verb $intoPath\n');
+				}
+				return EXIT_OK;
+			case Err(message):
+				stderr('apq extract-constant: $message\n');
+				return EXIT_RUNTIME;
+		}
+	}
+
 
 	private static function printExtractConstantUsage(): Void {
 		sysPrint("Usage: apq extract-constant <file> --type <Type> --name <NAME> --literal '<text>' [--reformat] [--write]\n");
+		sysPrint("       apq extract-constant <scope...> --into <module.hx> --name <NAME> --literal '<text>' [--reformat] [--write]\n");
 		printOptionsWriteLangHelp();
-		sysPrint('Replace every plain single-quoted string literal equal to <text>\n');
-		sysPrint('inside <Type> with a reference to a fresh `private static final <NAME>`\n');
-		sysPrint('constant, spliced as the type\'s first member. <text> is the literal\n');
-		sysPrint('CONTENT (no surrounding quotes); the constant reuses the first\n');
-		sysPrint('occurrence\'s verbatim source token, so escaping is preserved. Only\n');
-		sysPrint('plain single-quoted literals match — an interpolated string and\n');
-		sysPrint('double-quoted literals are left untouched. Deciding that the\n');
-		sysPrint('occurrences are the SAME concept is the caller\'s judgement. A name\n');
-		sysPrint('that is not an identifier or collides with a member, a non-unique or\n');
-		sysPrint('missing type, or a literal that does not occur exits non-zero with the\n');
-		sysPrint('file untouched. The rewrite is verified to re-parse.\n');
+		sysPrint('Single-file mode (--type): replace every plain single-quoted string\n');
+		sysPrint('literal equal to <text> inside <Type> with a reference to a fresh\n');
+		sysPrint('`private static final <NAME>`, spliced as the type\'s first member.\n');
+		sysPrint('Cross-file mode (--into): search every <scope> file/dir/glob for the\n');
+		sysPrint('literal and replace each occurrence with <Module>.<NAME>, where <Module>\n');
+		sysPrint('is the class at <module.hx> (created as a `final class` constants holder\n');
+		sysPrint('if absent, extended with a `public static final` otherwise). Files in a\n');
+		sysPrint('different package than the module gain an import; same-package files do\n');
+		sysPrint('not. Without --write, prints per-file occurrence counts and whether the\n');
+		sysPrint('module is created or extended.\n');
+		sysPrint('In both modes <text> is the literal CONTENT (no surrounding quotes); the\n');
+		sysPrint('constant reuses the first occurrence\'s verbatim source token, so escaping\n');
+		sysPrint('is preserved. Only plain single-quoted literals match — interpolated and\n');
+		sysPrint('double-quoted literals, and literals inside metadata, are left untouched.\n');
+		sysPrint('Deciding the occurrences are the SAME concept is the caller\'s judgement.\n');
+		sysPrint('An invalid / colliding <NAME>, a missing type or module, or a literal\n');
+		sysPrint('that does not occur exits non-zero with nothing written. Rewrites re-parse.\n');
 	}
 
 }
