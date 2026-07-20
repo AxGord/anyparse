@@ -149,24 +149,10 @@ final class CheckScan {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
 		if (support != null && !hasCommentMarker(source, cs.from, cs.to)) return support.negateCondition(cond, source);
-		final notKind: Null<String> = seams.notKind;
-		if (notKind != null && cond.kind == notKind && cond.children.length >= 1) {
-			var inner: QueryNode = cond.children[0];
-			final parenKind: Null<String> = seams.parenKind;
-			if (parenKind != null && inner.kind == parenKind && inner.children.length == 1) inner = inner.children[0];
-			final innerSpan: Null<Span> = inner.span;
-			if (innerSpan != null) return source.substring(innerSpan.from, innerSpan.to);
-		}
-		final eqKind: Null<String> = seams.eqKind;
-		final notEqKind: Null<String> = seams.notEqKind;
-		if (eqKind != null && notEqKind != null && (cond.kind == eqKind || cond.kind == notEqKind) && cond.children.length == 2) {
-			final l: Null<Span> = cond.children[0].span;
-			final r: Null<Span> = cond.children[1].span;
-			if (l != null && r != null && !hasCommentMarker(source, l.to, r.from)) {
-				final op: String = cond.kind == eqKind ? ' != ' : ' == ';
-				return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
-			}
-		}
+		final unwrapped: Null<String> = notUnwrapText(cond, source, seams);
+		if (unwrapped != null) return unwrapped;
+		final flipped: Null<String> = eqFlipText(cond, source, seams);
+		if (flipped != null) return flipped;
 		final src: String = source.substring(cs.from, cs.to);
 		return seams.atomicKinds.contains(cond.kind) ? '!$src' : '!($src)';
 	}
@@ -313,6 +299,43 @@ final class CheckScan {
 			lastTo = e.span.to;
 		}
 		return kept;
+	}
+
+
+	/**
+	 * The `!e` → `e` STRIP arm of `negateConditionText`: unwraps a leading logical-not
+	 * (and one redundant paren under it), returning the inner source verbatim.
+	 * Null when `cond` is not a not-node or the shape does not match.
+	 */
+	private static function notUnwrapText(cond: QueryNode, source: String, seams: NegationSeams): Null<String> {
+		final notKind: Null<String> = seams.notKind;
+		if (notKind == null || cond.kind != notKind || cond.children.length < 1) return null;
+		var inner: QueryNode = cond.children[0];
+		final parenKind: Null<String> = seams.parenKind;
+		if (parenKind != null && inner.kind == parenKind && inner.children.length == 1) inner = inner.children[0];
+		final innerSpan: Null<Span> = inner.span;
+		return innerSpan == null ? null : source.substring(innerSpan.from, innerSpan.to);
+	}
+
+
+	/**
+	 * The `==` / `!=` FLIP arm of `negateConditionText`: rewrites a binary (in)equality
+	 * to its complement operator (NaN-safe; see the caller's doc for the non-complementary
+	 * `@:op` abstract caveat shared with `loop-guard`). Null when `cond` is not a binary
+	 * (in)equality or a comment sits in the operator gap (the flip would drop it).
+	 */
+	private static function eqFlipText(cond: QueryNode, source: String, seams: NegationSeams): Null<String> {
+		final eqKind: Null<String> = seams.eqKind;
+		final notEqKind: Null<String> = seams.notEqKind;
+		if (eqKind == null || notEqKind == null) return null;
+		if ((cond.kind != eqKind && cond.kind != notEqKind) || cond.children.length != 2) return null;
+		final l: Null<Span> = cond.children[0].span;
+		final r: Null<Span> = cond.children[1].span;
+		if (l != null && r != null && !hasCommentMarker(source, l.to, r.from)) {
+			final op: String = cond.kind == eqKind ? ' != ' : ' == ';
+			return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
+		}
+		return null;
 	}
 
 }
