@@ -7,8 +7,8 @@ import anyparse.runtime.Span;
 import haxe.Exception;
 
 /**
- * `extract-constant` — replace every occurrence of a plain single-quoted
- * string literal inside one type with a reference to a fresh
+ * `extract-constant` — replace every occurrence of a plain single- or
+ * double-quoted string literal inside one type with a reference to a fresh
  * `private static final` constant, so a repeated key / tag lives in one
  * named place (a typo in one of many occurrences becomes impossible).
  *
@@ -22,24 +22,26 @@ import haxe.Exception;
  *
  * ## Boundary
  *
- * Only PLAIN single-quoted literals match — an interpolated `'$x'`
- * (which is not a constant value) and a double-quoted `"…"` are left
- * untouched; the caller supplies the exact literal CONTENT (the text
- * between the quotes). The constant reuses the first occurrence's verbatim
- * source token, so its escaping is preserved exactly. Refuses a name that
- * is not a valid identifier, a name that collides with an existing member,
- * a non-unique / missing type, or a literal that does not occur. Semantic
- * sameness is the caller's judgement — the op couples only the occurrences
- * it is told to. Writer-emitted and canonical-gated like the other
- * structural-insert ops.
+ * Both plain single- AND double-quoted literals match — only an
+ * interpolated `'$x'` (not a constant value; a SingleStringExpr with more
+ * than one child) is left untouched. Haxe double-quoted strings never
+ * interpolate, so any `"…"` is a plain literal. The caller supplies the
+ * exact literal CONTENT (the text between the quotes). A value that appears
+ * in both quote styles is matched in each and unified into one constant; a
+ * value containing a quote has different raw forms per style (`'it\'s'` vs
+ * `"it's"`), so those match per style, not cross-unified. The constant
+ * reuses the first occurrence's verbatim source token, so its quote style
+ * and escaping are preserved. Refuses a name that is not a valid
+ * identifier, a name that collides with an existing member, a non-unique /
+ * missing type, or a literal that does not occur. Semantic sameness is the
+ * caller's judgement — the op couples only the occurrences it is told to.
+ * Writer-emitted and canonical-gated like the other structural-insert ops.
  */
 @:nullSafety(Strict)
 final class ExtractConstant {
 
 	/**
-	 * Extract the single-quoted literal `literal` in `typeName` into a
-	 * `private static final` named `name`. `reformat` canonicalises a drifted
-	 * file. Returns `Ok(rewritten)` or an `Err`.
+	 * Extract the plain string literal `literal` (single- or double-quoted) in `typeName` into a `private static final` named `name`. `reformat` canonicalises a drifted file. Returns `Ok(rewritten)` or an `Err`.
 	 */
 	public static function extractConstant(
 		source: String, typeName: String, name: String, literal: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
@@ -57,7 +59,7 @@ final class ExtractConstant {
 		if (memberNamed(declNN, name)) return Err('type "$typeName" already has a member named "$name"');
 
 		final occurrences: Array<Span> = collectOccurrences(declNN.nameNode, literal);
-		if (occurrences.length == 0) return Err('no single-quoted literal \'$literal\' occurs in type "$typeName"');
+		if (occurrences.length == 0) return Err('no plain literal \'$literal\' occurs in type "$typeName"');
 
 		final insertAt: Int = firstMemberStart(source, declNN);
 		if (insertAt < 0) return Err('type "$typeName" has no member to anchor the constant before');
@@ -73,15 +75,7 @@ final class ExtractConstant {
 	}
 
 	/**
-	 * Extract every occurrence of the plain single-quoted `literal` across
-	 * `scopeFiles` into a shared `public static final` named `name` on the
-	 * constants module `moduleClass` (package `modulePkg`). Each occurrence
-	 * becomes `<moduleClass>.<name>`; a scope file whose package differs from
-	 * the module's gains an `import`. When `moduleExists` the constant is added
-	 * to `moduleSource` (refused if a `name` member already exists); otherwise a
-	 * new `final class` module is created with a private constructor. `reformat`
-	 * canonicalises drifted files. Returns the changed files plus the final
-	 * module source, or an `Err`.
+	 * Extract every occurrence of the plain `literal` (single- or double-quoted) across `scopeFiles` into a shared `public static final` named `name` on the constants module `moduleClass` (package `modulePkg`). Each occurrence becomes `<moduleClass>.<name>`; a scope file whose package differs from the modules gains an `import`. When `moduleExists` the constant is added to `moduleSource` (refused if a `name` member already exists); otherwise a new `final class` module is created with a private constructor. `reformat` canonicalises drifted files. Returns the changed files plus the final module source, or an `Err`.
 	 */
 	public static function extractInto(
 		scopeFiles: Array<{ file: String, source: String }>, modulePkg: String, moduleClass: String, moduleExists: Bool,
@@ -125,7 +119,7 @@ final class ExtractConstant {
 			changes.push({ file: sf.file, newSource: newSource, count: occurrences.length });
 		}
 
-		if (total == 0 || token == null) return Err('no single-quoted literal \'$literal\' occurs across the scope');
+		if (total == 0 || token == null) return Err('no plain literal \'$literal\' occurs across the scope');
 		final constToken: String = token;
 		final memberText: String = 'public static final $name:String = $constToken;';
 
@@ -159,10 +153,7 @@ final class ExtractConstant {
 	}
 
 	/**
-	 * Spans of every PLAIN single-quoted string literal equal to `literal`
-	 * anywhere under `typeNode`. A plain literal is a `SingleStringExpr` with
-	 * exactly one `Literal` child (an interpolated string carries extra
-	 * children); its content is that child's name.
+	 * Spans of every plain string literal equal to `literal` anywhere under `typeNode`: a single-quoted `SingleStringExpr` with exactly one `Literal` child (an interpolated string carries extra children, so it is skipped), or any `DoubleStringExpr` (Haxe double-quoted strings never interpolate, so each is a plain literal). Matched on the raw source between the quotes; metadata subtrees are skipped.
 	 */
 	private static function collectOccurrences(typeNode: QueryNode, literal: String): Array<Span> {
 		final spans: Array<Span> = [];
@@ -174,6 +165,12 @@ final class ExtractConstant {
 				final only: QueryNode = node.children[0];
 				final span: Null<Span> = node.span;
 				if (only.kind == 'Literal' && only.name == literal && span != null) spans.push(span);
+			} else if (node.kind == 'DoubleStringExpr') {
+				// Haxe double-quoted strings never interpolate, so every DoubleStringExpr is a plain
+				// literal; its `name` is the raw `"..."` token INCLUDING the quotes.
+				final span: Null<Span> = node.span;
+				final tok: Null<String> = node.name;
+				if (span != null && tok != null && tok.length >= 2 && tok.substring(1, tok.length - 1) == literal) spans.push(span);
 			}
 			for (c in node.children) walk(c);
 		}

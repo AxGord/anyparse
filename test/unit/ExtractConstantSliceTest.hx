@@ -61,13 +61,9 @@ class ExtractConstantSliceTest extends Test {
 		assertErr(ExtractConstant.extractConstant(src, 'K', '9BAD', 'x', true, plugin()));
 	}
 
-	/** A double-quoted literal is not matched (single-quoted only). */
-	public function testDoubleQuotedNotMatched(): Void {
-		final src: String = 'package pkg;\n\nclass K {\n\tstatic function f(k:String):Bool {\n\t\treturn k == "base.ref";\n\t}\n}';
-		assertErr(ExtractConstant.extractConstant(src, 'K', 'BASE_REF', 'base.ref', true, plugin()));
-	}
-
-	/** An interpolated string is not matched (it is not a constant value). */
+	/**
+	 * An interpolated string is not matched (it is not a constant value).
+	 */
 	public function testInterpolatedNotMatched(): Void {
 		final src: String = "package pkg;\n\nclass K {\n\tstatic function f(y:String):String {\n\t\treturn 'x$y';\n\t}\n}";
 		assertErr(ExtractConstant.extractConstant(src, 'K', 'X', 'x', true, plugin()));
@@ -193,6 +189,39 @@ class ExtractConstantSliceTest extends Test {
 		final imports: Int = res.changes[0].newSource.split('import pkg.Keys').length - 1;
 		Assert.equals(1, imports, 'existing import kept, not duplicated');
 		Assert.isTrue(StringTools.contains(res.changes[0].newSource, 'k == Keys.BASE_REF'), 'occurrence replaced');
+	}
+
+	/** A plain double-quoted literal is matched and extracted, keeping the double-quoted form. */
+	public function testDoubleQuotedMatched(): Void {
+		final src: String = 'package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n\t\treturn k == "base.ref" || j == "base.ref";\n\t}\n}';
+		final text: String = okExtract(src, 'K', 'BASE_REF', 'base.ref');
+		Assert.isTrue(
+			StringTools.contains(text, 'private static final BASE_REF:String = "base.ref"'), 'constant keeps the double-quoted form'
+		);
+		Assert.isTrue(StringTools.contains(text, 'k == BASE_REF'), 'first occurrence replaced');
+		Assert.isTrue(StringTools.contains(text, 'j == BASE_REF'), 'second occurrence replaced');
+		Assert.isFalse(StringTools.contains(text, '== "base.ref"'), 'no literal left at a use site');
+	}
+
+	/** The same content in both quote styles is matched and unified into one constant. */
+	public function testMixedQuotesUnified(): Void {
+		final src: String = 'package pkg;\n\nclass K {\n\tstatic function f(k:String, j:String):Bool {\n\t\treturn k == \'x.y\' || j == "x.y";\n\t}\n}';
+		final text: String = okExtract(src, 'K', 'X_Y', 'x.y');
+		Assert.isTrue(StringTools.contains(text, 'k == X_Y'), 'single-quoted occurrence replaced');
+		Assert.isTrue(StringTools.contains(text, 'j == X_Y'), 'double-quoted occurrence replaced');
+		final consts: Int = text.split('static final X_Y').length - 1;
+		Assert.equals(1, consts, 'exactly one constant for both quote styles');
+	}
+
+	/** Cross-file --into mode extracts double-quoted literals too. */
+	public function testIntoDoubleQuoted(): Void {
+		final a: String = 'package pkg;\n\nclass A {\n\tstatic function f(k:String):Bool {\n\t\treturn k == "shared.key";\n\t}\n}';
+		final res: IntoOk = okInto([{ file: 'A.hx', source: a }], 'pkg', 'Keys', false, null, 'SHARED_KEY', 'shared.key');
+		Assert.isTrue(
+			StringTools.contains(res.moduleSource, 'public static final SHARED_KEY:String = "shared.key"'),
+			'module constant keeps double-quoted form'
+		);
+		Assert.isTrue(StringTools.contains(res.changes[0].newSource, 'k == Keys.SHARED_KEY'), 'occurrence replaced');
 	}
 
 	private function okExtract(src: String, typeName: String, name: String, literal: String): String {

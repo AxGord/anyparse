@@ -14176,8 +14176,8 @@ final class Cli {
 		sysPrint('module is created or extended.\n');
 		sysPrint('In both modes <text> is the literal CONTENT (no surrounding quotes); the\n');
 		sysPrint('constant reuses the first occurrence\'s verbatim source token, so escaping\n');
-		sysPrint('is preserved. Only plain single-quoted literals match — interpolated and\n');
-		sysPrint('double-quoted literals, and literals inside metadata, are left untouched.\n');
+		sysPrint('is preserved. Plain single- and double-quoted literals match; an\n');
+		sysPrint('interpolated literal and literals inside metadata are left untouched.\n');
 		sysPrint('Deciding the occurrences are the SAME concept is the caller\'s judgement.\n');
 		sysPrint('An invalid / colliding <NAME>, a missing type or module, or a literal\n');
 		sysPrint('that does not occur exits non-zero with nothing written. Rewrites re-parse.\n');
