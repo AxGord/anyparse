@@ -14069,8 +14069,12 @@ final class Cli {
 			stderr('apq extract-constant: $filePath: ${exception.message}\n');
 			return EXIT_RUNTIME;
 		};
+		// Discover the file's format config so the canonical gate matches the project's
+		// writer style (e.g. space-after-colon), exactly as the --into mode does — else a
+		// non-default-formatted file is wrongly rejected and --reformat rewrites its style.
+		final optsJson: Null<String> = discoverFormatConfig(filePath);
 
-		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin) {
+		switch ExtractConstant.extractConstant(source, typeStr, nameStr, literalStr, reformat, plugin, optsJson) {
 			case Ok(text):
 				if (write) {
 					writeFile(filePath, text);

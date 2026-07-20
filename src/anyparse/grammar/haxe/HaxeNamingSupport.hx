@@ -19,6 +19,8 @@ using Lambda;
 @:nullSafety(Strict)
 final class HaxeNamingSupport implements NamingSupport {
 
+	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
+
 	/**
 	 * Modifier node kinds the Haxe projection surfaces as separate siblings
 	 * preceding a declaration, mapped to neutral modifier strings. `Meta` (an
@@ -104,7 +106,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.Local,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ''),
+				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase local',
 				normalize: lowercaseFirst
 			},
@@ -112,7 +114,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.Param,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ''),
+				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase parameter',
 				normalize: lowercaseFirst
 			},
@@ -120,7 +122,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.CatchVar,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg("^[a-z_][a-zA-Z0-9]*$", ''),
+				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase catch variable',
 				normalize: lowercaseFirst
 			}
