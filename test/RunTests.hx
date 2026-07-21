@@ -459,6 +459,7 @@ import unit.HxCondModSliceTest;
 import unit.HxElseifTypeSliceTest;
 import unit.HxImportAliasInSliceTest;
 import unit.HxCondTypeSlotSliceTest;
+import unit.HxBinopStmtNoSemiSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -539,6 +540,7 @@ class RunTests {
 		addCase(new HxIsStmtNoSemiSliceTest());
 		addCase(new HxStmtBlockEndNoSemiSliceTest());
 		addCase(new HxStmtBeforeCaseNoSemiSliceTest());
+		addCase(new HxBinopStmtNoSemiSliceTest());
 		addCase(new HxAbstractClassSliceTest());
 		addCase(new HxModifierFlattenSliceTest());
 		addCase(new HxMacroClassSliceTest());

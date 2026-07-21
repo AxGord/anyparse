@@ -90,6 +90,60 @@ final class HxExprUtil {
 	];
 
 	/**
+	 * `HxExpr` ctor names for every NON-assign binary infix operator whose
+	 * right operand is an `HxExpr`: `*` `/` `%` `+` `-` `<<` `>>>` `>>`
+	 * `|` `&` `^` `==` `!=` `<=` `>=` `<` `>` `...` `&&` `||` `??` `in`
+	 * `->` `=>`. Consumed by `stmtExprNoSemi` through the same
+	 * right-operand walk `ASSIGN_CTORS` gets: the statement's last token
+	  * IS the right operand's last token, so `a << function () { ... }` and
+	 * `s += "" + switch (e) { ... }` are `}`-terminated exactly like the
+	 * already-supported `a = switch (e) { ... }`.
+	 *
+	 * Haxe's own rule is purely lexical -- `Parser.semicolon` makes the `;`
+	 * optional whenever the previously consumed token was `}`, with no
+	 * regard for which operator produced it. Restricting the walk to the
+	 * `*Assign` family was therefore an under-approximation, not a
+	 * deliberate narrowing; real sources hit it constantly (Pony
+	 * `pony/pixi/nape/NapeGroupView.hx:47` `obj.core.onDestroy < function
+	 * () { ... }` followed by `return obj;`, openfl
+	 * `openfl/text/_internal/TextEngine.hx:540` `font += "" + switch
+	  * (fontName) { ... }`, std `cs|java|jvm|python/_std/Std.hx` `final
+	 * isNegative = hasIndex(index) && { ... }`).
+	 *
+	 * `Is` is deliberately absent: its right operand is an `HxType`, not
+	 * an `HxExpr`, and `a is T` already carries its own statement-position
+	 * entry in `STMT_BRACE_TERMINAL_CTORS`. `Ternary` is absent because it
+	 * is not binary -- it has its own arm in `stmtExprNoSemi` walking
+	 * `elseExpr` (parameter index 2, not 1).
+	 */
+	private static final BINOP_RHS_CTORS: Array<String> = [
+		'Mul',
+		'Div',
+		'Mod',
+		'Add',
+		'Sub',
+		'Shl',
+		'UShr',
+		'Shr',
+		'BitOr',
+		'BitAnd',
+		'BitXor',
+		'Eq',
+		'NotEq',
+		'LtEq',
+		'GtEq',
+		'Lt',
+		'Gt',
+		'Interval',
+		'And',
+		'Or',
+		'NullCoal',
+		'In',
+		'ThinArrow',
+		'Arrow',
+	];
+
+	/**
 	 * `HxExpr` constructors whose surface form always ends with `}`:
 	 * `switch … { … }`, a `{ … }` block, a `{ k: v }` object literal,
 	 * and `macro class … { members }`. No recursion needed.
@@ -103,17 +157,29 @@ final class HxExprUtil {
 	];
 
 	/**
-	 * `HxExpr` constructors that, at statement-expression position, leave
+		  * `HxExpr` constructors that, at statement-expression position, leave
 	 * the statement `}`/`]`/literal-terminated so no trailing `;` is
 	 * needed: `{ … }` block, `{ k: v }` object literal, `[ … ]` array,
-	 * `${expr}` interpolation block, and `a is T`. These are the
+	 * `${expr}` interpolation block, `$b{exprs}` reification splice, and
+	 * `a is T`. These are the
 	 * recursion target reached through Assign / If / Meta / Return arms.
+	 *
+	 * `DollarReifExpr` is the `@:lead("$") @:trail('}')` sibling of
+	 * `DollarBlockExpr` -- `$b{loadBody}` / `$a{args}` / `$v{value}`
+	 * spliced as a bare statement inside a `macro class { ... }` body. Its
+	 * last token is the splice's own `}`, exactly like `${expr}`.
+	 * Motivating source: Pony `pony/magic/builder/DIBuilder.hx:353`, four
+	 * sites of `tasks.add();` / `$b{loadBody}` / `tasks.end();`. It is NOT
+	 * added to `binopRhsNoSemi`'s carve-out: that carve-out encodes a
+	 * corpus contract for `x = ${expr}` / `x = {a: 1}` / `x = [1, 2]`, and
+	 * no fixture covers a reification splice as an assignment RHS.
 	 */
 	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
 		'BlockExpr',
 		'ObjectLit',
 		'ArrayExpr',
 		'DollarBlockExpr',
+		'DollarReifExpr',
 		'Is',
 	];
 
@@ -421,25 +487,65 @@ final class HxExprUtil {
 	 * `HxExpr` enum values and Trivia-mode `Trivial<HxExprT>` wrappers
 	 * (see `unwrap`).
 	 */
-	public static function stmtExprNoSemi(raw: Null<Dynamic>): Bool {
+	public static function stmtExprNoSemi(raw: Null<Dynamic>): Bool return stmtExprNoSemiAt(raw, false);
+
+	/**
+	 * `stmtExprNoSemi`'s worker, carrying the one bit the public entry
+	 * cannot: whether `raw` sits at the TOP of an `ExprStmt` (`nested`
+	 * false) or was reached by walking into an operand of it (`nested`
+	 * true).
+	 *
+	 * The bit exists for the three ctors whose grammar node owns an inner
+	 * `@:trailOpt(';')` -- `IfExpr` (`HxIfExpr.thenBranch`), `ForExpr`
+	 * (`HxForExpr.body`) and `FnExpr` (`HxFnBody.ExprBody`). Those slots
+	 * consume the statement's `;` before the `ExprStmt` gate ever runs, so
+	 * for a NESTED occurrence the gate must not `expectLit` a second one:
+	 * `a << if (e) f(m); x();` failed at `x` while `a << if (e) f(m);;
+	 * x();` parsed -- that pair is what exposed the swallow.
+	 *
+	 * At the TOP of an `ExprStmt` the same relaxation is WRONG. A
+	 * statement that starts with `if` / `for` / `function` is dispatched to
+	 * `HxStatement.IfStmt` / `ForStmt` / `LocalFnStmt` first and only
+	 * fail-rewinds into the `ExprStmt` catch-all when that branch could NOT
+	 * parse it -- which for `if (c) g() h();` is precisely because the
+	 * then-body's `;` is missing. Relaxing there re-accepts that input,
+	 * which `HxControlFlowSliceTest.testElsePeekScopedToElseOnly` pins as
+	 * fatal. So the expression-position node reached top-level is exactly
+	 * the statement-position node that already failed, and it must keep the
+	 * strict answer.
+	 *
+	  * The alternative discriminator -- the trivia `<field>TrailPresent`
+	 * synth slot, which records whether the `;` really was consumed -- was
+	 * tried and rejected: `struct-trailopt-source-track` only synthesises
+	 * it in trivia mode, so plain-mode parsing (what `hxq ast` and
+	 * `hxq self-status` run) would have kept rejecting every real source
+	 * this slice targets, and the two modes would have accepted different
+	 * languages. Position is available in both.
+	 *
+	 * Transparent wrappers (`MacroExpr` / `MetaExpr`) propagate `nested`
+	 * unchanged -- `@:meta expr` leaves `expr` in the same statement slot.
+	 * Every genuine operand descent (binop RHS, ternary else, return value,
+	 * lambda body) passes `true`.
+	 */
+	private static function stmtExprNoSemiAt(raw: Null<Dynamic>, nested: Bool): Bool {
 		final e: Null<Dynamic> = unwrap(raw);
 		if (e == null) return false;
 		final ctor: Null<String> = Type.enumConstructor(e);
 		if (ctor == null) return false;
-		return ASSIGN_CTORS.contains(ctor)
-			? assignRhsNoSemi(e)
+		return ASSIGN_CTORS.contains(ctor) || BINOP_RHS_CTORS.contains(ctor)
+			? binopRhsNoSemi(e)
 			: switch ctor {
 				// `macro class … { members }` always ends with the members
 				// block's closing `}`, so a bare-statement `macro class {}`
 				// needs no trailing `;` — regardless of named / anon / empty.
 				case 'MacroClassExpr': true;
 				case 'MacroExpr':
-					macroExprNoSemi(e);
+					macroExprNoSemi(e, nested);
 				// Walk through `@:meta expr` into its inner expression —
 				// `@:nullSafety(Off) return switch (…) { … }` and
 				// `@:nullSafety(Off) if (…) { … }` end with the inner expr's `}`.
 				case 'MetaExpr':
-					metaExprNoSemi(e);
+					metaExprNoSemi(e, nested);
 				// Walk through `return expr` into its operand —
 				// `return switch (…) { … }` ends with the switch's `}`. The
 				// statement-position `return` routes through `HxStatement.ReturnStmt`,
@@ -448,12 +554,49 @@ final class HxExprUtil {
 				// through `MetaExpr`).
 				case 'ReturnExpr':
 					final params: Null<Array<Dynamic>> = Type.enumParameters(e);
-					params != null && params.length != 0 && stmtExprNoSemi(params[0]);
+					params != null && params.length != 0 && stmtExprNoSemiAt(params[0], true);
 				// An `IfExpr` carries `thenBranch`/`elseBranch`; the
-				// statement's last token is the else branch's last token, or
-				// the then branch's when there is no `else`.
+				// statement's last token is the else branch's last token.
+				// Without an `else`, `HxIfExpr.thenBranch`'s own
+				// `@:trailOpt(';')` has already claimed the terminator for a
+				// NESTED occurrence; only at the top of an `ExprStmt` does
+				// the then-branch walk still apply.
 				case 'IfExpr':
-					ifExprNoSemi(e);
+					ifExprNoSemi(e, nested);
+				// `c ? a : b` -- the statement's last token is the else
+				// branch's last token, so `x = c ? a : switch (e) { ... }`
+				// is `}`-terminated. `endsWithCloseBrace` carries the same
+				// arm but recurses through ITSELF, so it cannot see a
+				// binop / lambda tail below the ternary; re-entering here
+				// keeps the whole walk inside the statement-side predicate.
+				// Motivating source: std `haxe/macro/Printer.hx:311` `var
+				// str = t == null ? "#NULL" : (...) + ... + switch (t.kind) {
+				// }` followed by `tabs = old;` on the same line.
+				case 'Ternary':
+					final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+					params != null && params.length >= 3 && stmtExprNoSemiAt(params[2], true);
+				// `function (...) body` -- `HxFnBody` dispatch, incl. the
+				// `ExprBody` `@:trailOpt(';')` swallow. Motivating source:
+				// Pony `pony/ui/gui/ButtonCore.hx:33` `t.onClick <<
+				// function () if (enabled) eClick.dispatch(mode);`.
+				case 'FnExpr':
+					fnExprNoSemi(e, nested);
+				// `for (...) body` -- `HxForExpr.body` carries its own
+				// `@:trailOpt(';')`, same swallow as `HxIfExpr.thenBranch`.
+				// `WhileExpr` deliberately gets NO arm -- `HxWhileExpr.body`
+				// has no trail slot, so its `;` survives to the enclosing
+				// gate and the body walk in `endsWithCloseBrace` stays the
+				// right answer. That asymmetry is exactly what the probe
+				// pair `a << for (i in e) f(m); x();` (failed) vs
+				// `a << while (e) f(m); x();` (parsed) measured.
+				case 'ForExpr':
+					forExprNoSemi(e, nested);
+				// `(...) -> body` / `(...) => body` -- unlike `FnExpr` the
+				// lambda structs own no terminator slot, so the answer is
+				// the body's: `var cb = () -> { ... }` is `}`-terminated
+				// (std `python/_std/sys/thread/Thread.hx:116`).
+				case 'ThinParenLambdaExpr', 'ParenLambdaExpr':
+					lambdaBodyNoSemi(e);
 				// Recursion target. Standalone `{ … }` at statement
 				// position is `HxStatement.BlockStmt`, so the brace-terminal
 				// ctors only fire when reached through Assign / IfExpr above.
@@ -805,66 +948,155 @@ final class HxExprUtil {
 	 * `macro <operand>` at statement position — `}`-terminated iff the
 	 * operand is a `BlockExpr` or itself statement-brace-terminated.
 	 */
-	private static function macroExprNoSemi(e: Dynamic): Bool {
+	private static function macroExprNoSemi(e: Dynamic, nested: Bool): Bool {
 		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
 		if (params == null || params.length == 0) return false;
 		final operand: Null<Dynamic> = unwrap(params[0]);
 		if (operand == null) return false;
 		final operandCtor: Null<String> = Type.enumConstructor(operand);
-		return operandCtor == 'BlockExpr' || stmtExprNoSemi(operand);
+		return operandCtor == 'BlockExpr' || stmtExprNoSemiAt(operand, nested);
 	}
 
 	/**
 	 * `@:meta expr` at statement position — recurse on `params[0].expr`
 	 * (same struct shape as `IfExpr`).
 	 */
-	private static function metaExprNoSemi(e: Dynamic): Bool {
+	private static function metaExprNoSemi(e: Dynamic, nested: Bool): Bool {
 		final inner: Null<Dynamic> = metaInnerExpr(e);
-		return inner != null && stmtExprNoSemi(inner);
+		return inner != null && stmtExprNoSemiAt(inner, nested);
 	}
 
 	/**
-	 * `*Assign` at statement position — recurse on the right operand. Carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
+	  * Any binary infix operator at statement position -- `*Assign`
+	 * (`ASSIGN_CTORS`) or a plain binop (`BINOP_RHS_CTORS`) -- recurse on
+	 * the right operand, which owns the statement's last token in both
+	 * families. Carve-out: `x = {a: 1}`, `x = [1, 2, 3]`,
 	 * `x = ${expr}` and `x = a is Int` keep `;` strict (the corpus
 	 * contract — distinct from bare `{a: 1}` / `[1, 2, 3]` / `${expr}` /
 	 * `a is Int` at stmt position). The carve-out lives here, not in the
 	 * brace-terminal set below, so other recursive arms (Meta / Return /
-	 * If) still see them as brace-terminated.
+	 * If) still see them as brace-terminated; it is applied to the
+	 * non-assign family too, so the two stay indistinguishable to the
+	 * corpus.
 	 */
-	private static function assignRhsNoSemi(e: Dynamic): Bool {
+	private static function binopRhsNoSemi(e: Dynamic): Bool {
 		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
 		if (params == null || params.length < 2) return false;
 		final rhs: Null<Dynamic> = unwrap(params[1]);
 		if (rhs == null) return false;
 		final rhsCtor: Null<String> = Type.enumConstructor(rhs);
-		return rhsCtor != 'ObjectLit' && rhsCtor != 'ArrayExpr' && rhsCtor != 'DollarBlockExpr' && rhsCtor != 'Is' && stmtExprNoSemi(rhs);
+		return rhsCtor != 'ObjectLit' && rhsCtor != 'ArrayExpr' && rhsCtor != 'DollarBlockExpr' && rhsCtor != 'Is'
+			&& stmtExprNoSemiAt(rhs, true);
 	}
 
 	/**
-	 * `if (…) … else …` at statement position — recurse on the else
-	 * branch when present, otherwise the then branch. `params[0]` is the
-	 * `HxIfExpr` struct; its field values are wrapped and re-entered
-	 * through `stmtExprNoSemi` (which calls `unwrap`).
+			 * `if (...) ... else ...` at statement position -- recurse on the else
+			 * branch when present. `params[0]` is the `HxIfExpr` struct; its
+			 * field values are wrapped and re-entered through `stmtExprNoSemi`
+			 * (which calls `unwrap`).
+			 *
+			   * With no else branch a NESTED occurrence answers `true` outright:
+	 * `HxIfExpr.thenBranch` carries `@:trailOpt(';')`, so the `;` that
+	 * terminated the enclosing statement has already been consumed and
+	 * asking the enclosing `ExprStmt` to `expectLit` a second one is a
+	 * double-count (`a << if (e) f(m); x();` failed at `x` while
+	 * `a << if (e) f(m);; x();` parsed -- that pair exposed the swallow).
+	 * The mirror case `a << if (e) f(m) else g(m); x();` already parsed,
+	 * because the `else` branch has no trail slot and the `;` survives to
+	 * the statement gate.
+	 *
+	 * At the top of an `ExprStmt` (`nested` false) the then-branch walk
+	 * stays: see `stmtExprNoSemiAt` for why that position means "the
+	 * statement-position `if` already failed".
 	 */
-	private static function ifExprNoSemi(e: Dynamic): Bool {
+	private static function ifExprNoSemi(e: Dynamic, nested: Bool): Bool {
 		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
 		if (params == null || params.length == 0) return false;
 		final ifExpr: Null<Dynamic> = params[0];
 		if (ifExpr == null) return false;
 		final elseBranch: Null<Dynamic> = Reflect.field(ifExpr, 'elseBranch');
-		if (elseBranch != null) return stmtExprNoSemi(elseBranch);
+		if (elseBranch != null) return stmtExprNoSemiAt(elseBranch, true);
+		if (nested) return true;
 		final thenBranch: Null<Dynamic> = Reflect.field(ifExpr, 'thenBranch');
-		return thenBranch != null && stmtExprNoSemi(thenBranch);
+		return thenBranch != null && stmtExprNoSemiAt(thenBranch, true);
 	}
 
 	/**
-	 * `var x = expr` / `final x = expr` / static-variant stmts whose init
-	 * expression ends with `}` (Switch / TryCatch / FnExpr with
-	 * BlockBody). Byte-check on `_prevEndPos - 1` misses these because the
-	 * stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s `matchLit`)
+		 * `function (...) body` at statement position -- dispatch on the
+		 * `HxFnBody` ctor:
+		 *  - `BlockBody` / `UntypedBlockBody` end with `}`.
+		 *  - `NoBody` is `HxFnBody`'s `@:lit(';')` -- terminator consumed.
+		  *  - `ExprBody` carries `@:trailOpt(';')`, which has already claimed
+	 *    the statement's `;` for a NESTED occurrence -- demanding a second
+	 *    one there is a double-count. At the top of an `ExprStmt` the body
+	 *    walk stays (see `stmtExprNoSemiAt`).
+	 */
+	private static function fnExprNoSemi(e: Dynamic, nested: Bool): Bool {
+		final fn: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (fn == null) return false;
+		final body: Null<Dynamic> = unwrap(Reflect.field(fn, 'body'));
+		if (body == null) return false;
+		return switch Type.enumConstructor(body) {
+			case 'BlockBody', 'UntypedBlockBody', 'NoBody': true;
+			case 'ExprBody':
+				final params: Null<Array<Dynamic>> = Type.enumParameters(body);
+				nested || (params != null && params.length != 0 && stmtExprNoSemiAt(params[0], true));
+			case _: false;
+		};
+	}
+
+	/**
+	 * `for (...) body` at statement position -- `HxForExpr.body` carries
+	 * `@:trailOpt(';')`, the same swallow `ifExprNoSemi` documents, so a
+	 * NESTED occurrence answers `true` outright; at the top of an
+	 * `ExprStmt` the body walk stays.
+	 */
+	private static function forExprNoSemi(e: Dynamic, nested: Bool): Bool {
+		if (nested) return true;
+		final stmt: Null<Dynamic> = Type.enumParameters(e)[0];
+		if (stmt == null) return false;
+		final body: Null<Dynamic> = Reflect.field(stmt, 'body');
+		return body != null && stmtExprNoSemiAt(body, true);
+	}
+
+	/**
+	 * `(...) -> body` / `(...) => body` at statement position -- recurse on
+	 * the lambda body. `params[0]` is the `HxThinParenLambda` /
+	 * `HxParenLambda` struct, which owns no terminator slot of its own,
+	 * so the statement's last token is the body's last token.
+	 */
+	private static function lambdaBodyNoSemi(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length == 0) return false;
+		final lambda: Null<Dynamic> = params[0];
+		if (lambda == null) return false;
+		final body: Null<Dynamic> = Reflect.field(lambda, 'body');
+		return body != null && stmtExprNoSemiAt(body, true);
+	}
+
+	/**
+		 * `var x = expr` / `final x = expr` / static-variant stmts whose init
+		 * expression ends with `}` (Switch / TryCatch / FnExpr with
+		 * BlockBody). Byte-check on `_prevEndPos - 1` misses these because the
+		  * stmt's own trailing `skipWs` (before `@:trailOpt(';')`'s `matchLit`)
 	 * advances past the brace + newline + tabs when no trailing `;` is
 	 * present, leaving `_prevEndPos` past the `}`. Delegate to
 	 * `endsWithCloseBrace` on the `HxVarDecl.init` field.
+	 *
+	 * `stmtExprNoSemi` is consulted as a SECOND, more permissive opinion
+	 * on the same init expression. The two predicates deliberately differ:
+	 * `endsWithCloseBrace` is also the writer-side gate behind
+	 * `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` on
+	 * `VarStmt` / `FinalStmt` / `Var|FinalMember`, so widening it would
+	 * start DROPPING the `;` the formatter currently emits after
+	 * `var f = () -> { ... };` and `var x = a && { ... };`. Only the parser
+	 * needs the wider answer, and `stmtExprNoSemi` is exactly the
+	 * parser-side statement-terminator predicate -- reusing it here keeps
+	 * the binop / ternary / lambda walks in one place. Motivating sources:
+	 * std `cs|java|jvm|python/_std/Std.hx` (`final isNegative =
+	  * hasIndex(index) && { ... }` with no `;`), std `haxe/macro/Printer.hx`
+	 * (`var str = ... ? ... : ... + switch (t.kind) { ... }`), std
+	 * `python/_std/sys/thread/Thread.hx` (`var wrappedCallB = () -> { ... }`).
 	 */
 	private static function varInitEndsWithBrace(s: Dynamic): Bool {
 		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
@@ -872,7 +1104,7 @@ final class HxExprUtil {
 		final decl: Null<Dynamic> = params[0];
 		if (decl == null) return false;
 		final init: Null<Dynamic> = Reflect.field(decl, 'init');
-		return init != null && endsWithCloseBrace(init);
+		return init != null && (endsWithCloseBrace(init) || stmtExprNoSemiAt(init, true));
 	}
 
 	/**
