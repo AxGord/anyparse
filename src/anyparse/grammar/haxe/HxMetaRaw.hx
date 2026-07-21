@@ -2,8 +2,8 @@ package anyparse.grammar.haxe;
 
 /**
  * Raw-string regex terminal capturing a single metadata tag verbatim:
- * `@name`, `@:name`, or `@:name(args)` with up to three levels of
- * nested parentheses. The fallthrough catch-all branch of the
+ * `@name`, `@:name`, `@:pack.name`, or `@:name(args)` with up to three
+ * levels of nested parentheses. The fallthrough catch-all branch of the
  * `HxMetadata` enum — preserves the byte-exact regex semantics of the
  * pre-enum `HxMetadata` abstract for non-structurally-parsed metas
  * (`@:enum`, `@:allow(pack.Cls)`, `@:keep`, `@test("foo")`, etc.).
@@ -32,6 +32,6 @@ package anyparse.grammar.haxe;
  * compiling — tests can build expected values with plain strings
  * without explicit casts and read them back with `(raw : String)`.
  */
-@:re('@:?[A-Za-z_][A-Za-z0-9_]*(?:\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))?')
+@:re('@:?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*(?:\\((?:[^()]|\\((?:[^()]|\\([^()]*\\))*\\))*\\))?')
 @:rawString
 abstract HxMetaRaw(String) from String to String {}

@@ -6,6 +6,10 @@ package anyparse.grammar.haxe;
  * of `HxMetadata` to disambiguate `@:meta(args)` from `@:meta (X)`
  * where the `(X)` is a separate expression in the meta-expr context.
  *
+ * The tag itself is a dot path (`@:flash.property`), matching
+ * `HxMetaName`; the lookahead applies after the whole path so
+ * `@:pack.name(args)` still routes through `MetaCall`.
+ *
  * The lookahead `(?=\()` does NOT consume the `(`; the structural
  * branch's `@:lead('(')` field consumes it as the open of the args
  * list. Any whitespace between name and `(` breaks the lookahead, the
@@ -18,6 +22,6 @@ package anyparse.grammar.haxe;
  * `@:rawString` routes the matched slice through `Lowering.lower-
  * Terminal` without the JSON-style unescape loop.
  */
-@:re('@:?[A-Za-z_][A-Za-z0-9_]*(?=\\()')
+@:re('@:?[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*(?=\\()')
 @:rawString
 abstract HxMetaNameTight(String) from String to String {}
