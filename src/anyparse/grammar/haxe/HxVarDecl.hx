@@ -140,6 +140,22 @@ package anyparse.grammar.haxe;
  * the inner Star here is permissive, accepting the unusual
  * `var @:meta x;` placement that would normally be written
  * `@:meta var x;`.
+ *
+ * `condInit` is the optional `#if <cond> = <expr> #end` slot — a
+ * preprocessor-guarded initializer whose `=` lives inside the region
+ * (`var current:MovieClip #if flash = flash.Lib.current #end;`). The `#if`
+ * keyword rides the field while `#end` rides the `HxVarInitRegion` branch,
+ * which is where `@:fmt(spaceBeforeTrail)` is read from — the struct-field
+ * emit path has no equivalent flag.
+ *
+ * It sits BETWEEN `type` and `init`, matching source order (the `#if`
+ * opens exactly where a plain `=` would). That position is load-bearing,
+ * not cosmetic: placing it AFTER `init` shifted the trivia slot the writer
+ * reads for the blank line following a declaration, and silently dropped
+ * the blank after every `var x = try {...} catch {...}` in a real project
+ * tree. The two fields are mutually exclusive in practice, so ordering
+ * carries no parsing cost either way — only the trivia one.
+ * /
  */
 @:peg
 @:fmt(multiVarWrap('multiVarWrap', 'more'))
@@ -149,6 +165,7 @@ typedef HxVarDecl = {
 	@:optional @:fmt(tightLead) @:lead('(') var access: Null<HxAccessClause>;
 	@:optional @:fmt(typeHintColon, indentValueIfCtor('Anon', 'indentVarTypeHintAnon', 'anonTypeLeftCurly'))
 	@:lead(':') var type: Null<HxType>;
+	@:optional @:kw('#if') var condInit: Null<HxVarInitRegion>;
 	@:optional
 	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
 		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), breakAfterLeadIfLhsTypeParam('type'), propagateExprPosition)
