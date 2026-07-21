@@ -11,6 +11,27 @@ package anyparse.grammar.haxe;
  *
  * Branches:
  *
+ *  - `Conditional(inner:HxConditionalAnonField)` - a `#if <cond>
+ *    <fields> [#elseif ...] [#else <fields>] #end` preprocessor-guarded
+ *    run of whole fields (`typedef Data = { var pixels:Bytes; #if
+ *    (haxe_ver < 4) var colorTable:Null<Bytes>; #else var
+ *    ?colorTable:Bytes; #end }` - format/bmp/Data.hx). Dispatched by
+ *    `@:kw('#if')`, closed by `@:trail('#end')` on the ctor; the body
+ *    lives in `HxConditionalAnonField`. Listed first per the
+ *    kw-before-lead-before-catch-all convention (`HxParam`); `#` shares
+ *    no prefix with `?`, `>`, `var`, `final`, `function` or a name
+ *    terminal, so dispatch order carries no meaning here.
+ *
+ *    The branch has to sit on this enum rather than on the
+ *    `HxAnonMember` wrapper because `HxAnonMember` is a struct typedef -
+ *    it has no alternatives to add one to. A `#if` reaching this
+ *    dispatch has already been offered to, and rejected by, the
+ *    wrapper's metadata Star (`HxMetadata.Conditional` fails its own
+ *    `@:trail('#end')` as soon as the region body holds a field rather
+ *    than tags, and the try-parse Star rewinds), so the
+ *    `#if <tags> #end var x:T;` and `#if <fields> #end` forms stay
+ *    unambiguous.
+ *
  *  - `Optional(field:HxAnonFieldBody)` — the optional short form
  *    `?name:Type` (`{?name:String}`). Dispatched by `@:lead('?')`.
  *
@@ -99,6 +120,7 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxAnonField {
 
+	@:kw('#if') @:trail('#end') Conditional(inner: HxConditionalAnonField);
 	@:lead('?') Optional(field: HxAnonFieldBody);
 	@:lead('>') @:fmt(spaceAfterLead) ExtendsField(type: HxTypeRef);
 	@:kw('var') @:trailOpt(';') VarField(body: HxAnonVarBody);

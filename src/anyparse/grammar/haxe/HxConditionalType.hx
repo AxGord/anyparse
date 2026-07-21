@@ -57,11 +57,67 @@ package anyparse.grammar.haxe;
  * scope's elseifs/elseBody pair). Motivating shape:
  * `typedef T = #if js A #elseif hl C #else B #end;`
  * (`haxe.ds.Vector` / `haxe.io.BytesInput` std-lib pattern).
+ *
+ * `init` is the optional `= <expr>` that a guarded type may drag along
+ * when the region opens in a FIELD's type slot and closes past the
+ * initializer (openfl `display/Preloader.hx:20`):
+ *
+ * ```haxe
+ * public var onComplete:#if lime lime.app.Event<Void->Void> = new lime.app.Event<Void->Void>() #else Dynamic #end;
+ * ```
+ *
+ * Exact mirror-image of `HxVarDecl.condInit` / `HxConditionalVarInit`,
+ * which handles the case where the `#if` opens WHERE THE `=` WOULD BE
+ * (`var x:Bool #if !js = false #end;`). There the type is outside the
+ * guard and the assignment inside; here the type is inside the guard
+ * and drags the assignment with it. The two slots are disjoint by
+ * construction - `HxVarDecl` reaches this one through its `type` field
+ * and that one through `condInit` - so a declaration can carry both.
+ *
+ * `@:optional @:lead('=')` (not a bare `@:lead`) so the optional-Ref
+ * emit path supplies the ` = ` spacing: `=` is in neither
+ * `HaxeFormat.spacedLeads` nor `tightLeads`, and the NON-optional lead
+ * path emits tight. Same reasoning, same annotation, as
+ * `HxConditionalVarInit.init`.
+ *
+ * `moreParams` carries whole FUNCTION PARAMETERS that follow the
+ * guarded type inside the same region (openfl
+ * `text/_internal/ShapeCache.hx:37`):
+ *
+ * ```haxe
+ * getPositions:#if (js && html5) Void->Array<Float>, wordKey:String = null #else TextLayout #end
+ * ```
+ *
+ * `HxParam.Conditional` already covers a `#if` that WRAPS whole
+ * parameters; it cannot cover this one, because the region opens inside
+ * a parameter's type and only then reaches the parameter boundary. The
+ * run is led by the comma that terminates the host parameter, so it is
+ * modelled as `HxCondTypeParamMore` elements each carrying their own
+ * `@:lead(',')` - the `HxVarMore` shape - rather than a parent-level
+ * `@:sep(',')`, which by definition sits BETWEEN elements and cannot
+ * consume a leading one. See `HxCondTypeParamMore`.
+ *
+ * Field order is source order throughout: `type`, then the `= init` a
+ * var-decl would put there, then the `, param` run a signature would
+ * put there, then `elseifs`, then `elseClause`. `elseifs` before
+ * `elseClause` is the hard constraint every cond-comp scope shares (the
+ * `#elseif` chain must terminate before the `#else` dispatch fires);
+ * the rest is convention, but keeping it means a reader can match the
+ * struct against the source left to right.
+ *
+ * `elseifs` gained `@:trivia` in the same change and it is NOT
+ * cosmetic. Referencing `HxExpr` from `init` promotes this struct into
+ * trivia-bearing mode, and in that mode a non-`@:trivia` Star of a
+ * paired element type fails to compile
+ * (`HxElseifTypeT has no field newlineBefore`). The Star's runtime
+ * behaviour with an empty `elseifs` is unchanged.
  */
 @:peg
 typedef HxConditionalType = {
 	var cond: HxPpCondLit;
 	@:trailOpt(';') var type: HxType;
-	@:tryparse @:fmt(padLeading) var elseifs: Array<HxElseifType>;
+	@:optional @:lead('=') var init: Null<HxExpr>;
+	@:tryparse var moreParams: Array<HxCondTypeParamMore>;
+	@:trivia @:tryparse @:fmt(padLeading) var elseifs: Array<HxElseifType>;
 	@:optional @:kw('#else') var elseClause: Null<HxConditionalTypeElse>;
 };

@@ -49,6 +49,58 @@ package anyparse.grammar.haxe;
  * betweenImportsLevel=all` config now fires the same blank-line
  * override anyparse's top-level Star already honored.
  *
+ * `trailingMeta` captures metadata left DANGLING at the end of the region
+ * - tags that belong to the declaration AFTER `#end`, written inside
+ * the guard so they apply only under the condition. Two lime modules
+ * need it:
+ *
+ * ```haxe
+ * #if (lime_cffi && !macro)
+ * import lime._internal.backend.native.NativeCFFI;
+ *
+ * @:access(lime._internal.backend.native.NativeCFFI)
+ * #end
+ * @:access(haxe.io.Bytes)
+ * abstract DataPointer(DataPointerType) to DataPointerType
+ * ```
+ *
+ * (`lime/utils/DataPointer.hx`, `lime/tools/HXProject.hx`.)
+ *
+ * Without the slot the `body` Star's last iteration parses the `@:access`
+ * into a `HxTopLevelDecl.meta` prefix, then fails on the mandatory
+ * `decl` field when it reaches `#end`, rewinds, and leaves the metadata
+ * unconsumed in front of the outer `@:trail('#end')`.
+ *
+ * The obvious alternative was to widen `HxCondDeclPrefix` with an
+ * `import` arm so the WHOLE region rides `HxTopLevelDecl.meta` as a
+ * `HxMetadata.Conditional` - the routing trick that arm's doc already
+ * describes for `#if (haxe_ver >= 4.0) enum #else @:enum #end`. It was
+ * implemented, measured, and rejected: the metadata Star is tried
+ * BEFORE the decl dispatch, so an `import` arm makes the meta path win
+ * for import-ONLY regions too, re-routing the 25 fork fixtures that
+ * put an `import` inside a `#if` (`emptylines/imports_and_using_*`,
+ * `emptylines/issue_49_imports_with_conditional`,
+ * `sameline/issue_504_conditional_import`, ...) away from this typedef
+ * and its blank-line cascades. A trailing Star here is strictly
+ * additive: it is empty for every shape that parsed before, so no
+ * existing routing moves.
+ *
+ * It carries `@:fmt(padTrailing)` and NOT `padLeading`. The pad pair is
+ * documented as firing only when the Star is non-empty; measured, the
+ * leading pad fires on an EMPTY Star as well and inserted a blank line
+ * before `#end` in every module-level `#if` region in a real project
+ * tree (50 files of `hxq fmt --list` drift, none of them related to
+ * dangling metadata). `padTrailing` alone closes the gap before `#end`
+ * without that side effect. The gap between the last body decl and the
+ * metadata is left to `body`'s own `padTrailing`, which costs the blank
+ * line the source had there - a byte-fidelity gap, not a parse or
+ * re-parse one: the emitted form round-trips through the parser
+ * unchanged.
+ *
+ * `#else` / `#elseif` branches have no equivalent slot. No observed
+ * source dangles metadata off an alternative branch, and each one would
+ * need its own Star.
+ *
  * `@:optional @:kw('#else') @:tryparse var elseBody:Null<Array<…>>`
  * uses the kw-led optional Star path (Lowering's
  * `emitOptionalKwStarFieldSteps`, slice ω-cond-comp-engine). The path
@@ -80,6 +132,7 @@ typedef HxConditionalDecl = {
 	@:fmt(blankLinesBetweenSameCtorTailTransparent('decl', 'Conditional', 'betweenImportsTailLeafClassify'))
 	@:fmt(blankLinesBetweenSameCtorHeadTransparent('decl', 'Conditional', 'betweenImportsHeadLeafClassify'))
 	var body: Array<HxTopLevelDecl>;
+	@:trivia @:tryparse @:fmt(padTrailing) var trailingMeta: Array<HxMetadata>;
 	@:trivia @:tryparse var elseifs: Array<HxElseifDecl>;
 	@:optional @:kw('#else') @:trivia @:tryparse @:fmt(padLeading, padTrailing, conditionalBodyIndent)
 	@:fmt(blankLinesOnTransitionAcross(
