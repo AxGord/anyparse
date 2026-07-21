@@ -13,15 +13,22 @@ using Lambda;
  * matches the verbatim payload the grammar exposes for the statement:
  * `import pkg.Mod;` → `pkg.Mod`, `import pkg.Mod.Sub;` → `pkg.Mod.Sub`,
  * `using pkg.Mod;` → `pkg.Mod`, `import pkg.*;` → `pkg.*`, and for an
- * aliased `import pkg.Mod as Alias;` it is the alias `Alias` (the original
- * path is not exposed — the documented grammar limitation). The path must
- * name EXACTLY ONE import — zero or many is an `Err` — and the statement is
- * removed through `RefactorSupport.deleteNode`.
+ * aliased import — either spelling, `import pkg.Mod as Alias;` or the
+ * legacy `import pkg.Mod in Alias;` — it is the alias `Alias` (the
+ * original path is not exposed — the documented grammar limitation). The
+ * path must name EXACTLY ONE import — zero or many is an `Err` — and the
+ * statement is removed through `RefactorSupport.deleteNode`.
  */
 @:nullSafety(Strict)
 final class RemoveImport {
 
-	private static final IMPORT_KINDS: Array<String> = ['ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl'];
+	private static final IMPORT_KINDS: Array<String> = [
+		'ImportDecl',
+		'ImportAliasDecl',
+		'ImportAliasInDecl',
+		'ImportWildDecl',
+		'UsingDecl'
+	];
 
 	/**
 	 * Remove the import / using whose exposed path equals `modulePath`.

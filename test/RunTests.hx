@@ -456,6 +456,8 @@ import unit.FieldInitAtDeclarationCheckTest;
 import unit.ExtractConstantSliceTest;
 import unit.HxPpCondDottedSliceTest;
 import unit.HxCondModSliceTest;
+import unit.HxElseifTypeSliceTest;
+import unit.HxImportAliasInSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -526,6 +528,7 @@ class RunTests {
 		addCase(new HxStaticLocalStmtSliceTest());
 		addCase(new HxCondCompStmtTrailOptSliceTest());
 		addCase(new HxConditionalTypeSliceTest());
+		addCase(new HxElseifTypeSliceTest());
 		addCase(new HxAssignStmtNoSemiSliceTest());
 		addCase(new HxMetaExprStmtNoSemiSliceTest());
 		addCase(new HxMetaCallStmtSpaceTest());
@@ -599,6 +602,7 @@ class RunTests {
 		addCase(new HxToplevelImportUsingSliceTest());
 		addCase(new HxToplevelImportWildSliceTest());
 		addCase(new HxImportAliasSliceTest());
+		addCase(new HxImportAliasInSliceTest());
 		addCase(new HxToplevelMetaSliceTest());
 		addCase(new HxDottedMetaNameSliceTest());
 		addCase(new HxCondDeclPrefixSliceTest());

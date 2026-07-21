@@ -497,7 +497,14 @@ final class PreferFind implements Check {
 
 	/** A zero-width edit inserting `using Lambda;` after the last package / import / using line (or at the file head when there is none). */
 	private static function usingLambdaInsert(tree: QueryNode): Null<{ span: Span, text: String }> {
-		final anchorKinds: Array<String> = ['PackageDecl', 'ImportDecl', 'ImportAliasDecl', 'ImportWildDecl', 'UsingDecl'];
+		final anchorKinds: Array<String> = [
+			'PackageDecl',
+			'ImportDecl',
+			'ImportAliasDecl',
+			'ImportAliasInDecl',
+			'ImportWildDecl',
+			'UsingDecl'
+		];
 		var anchor: Null<Span> = null;
 		for (c in tree.children) if (anchorKinds.contains(c.kind)) {
 			final sp: Null<Span> = c.span;

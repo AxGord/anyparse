@@ -221,7 +221,7 @@ final class CatchDynamic implements Check {
 		var lastImport: Null<QueryNode> = null;
 		var packageDecl: Null<QueryNode> = null;
 		for (c in root.children) switch c.kind {
-			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl':
+			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
 				lastImport = c;
 			case 'PackageDecl':
 				packageDecl = c;

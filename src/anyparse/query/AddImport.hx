@@ -44,7 +44,7 @@ final class AddImport {
 		var lastImport: Null<QueryNode> = null;
 		var packageDecl: Null<QueryNode> = null;
 		for (c in tree.children) switch c.kind {
-			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl':
+			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
 				lastImport = c;
 				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
 			case 'PackageDecl':

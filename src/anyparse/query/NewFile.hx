@@ -67,7 +67,13 @@ final class NewFile {
 	private static final EXTENDABLE_KINDS: Array<String> = ['class', 'interface', 'typedef'];
 
 	/** Import-declaration kinds carried verbatim from the interface file. */
-	private static final IMPORT_KINDS: Array<String> = ['ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl'];
+	private static final IMPORT_KINDS: Array<String> = [
+		'ImportDecl',
+		'UsingDecl',
+		'ImportWildDecl',
+		'ImportAliasDecl',
+		'ImportAliasInDecl'
+	];
 
 	/** Top-level type-declaration kinds (for the interface module's sibling sub-types). */
 	private static final DECL_KINDS: Array<String> = [
