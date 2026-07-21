@@ -241,6 +241,48 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 		Assert.equals(src, triviaWrite(src));
 	}
 
+	/**
+	 * `lime/system/ThreadPool.hx:463` in plain mode: the orphan `else if`
+	 * block is followed by more statements, so its `;`-elision verdict
+	 * has to come from the payload statement (`stmtNoSemi` recursion).
+	 * Trivia mode tolerates the missing separator by itself; the plain
+	 * parse is the one `self-status` runs.
+	 */
+	public function testOrphanElsePlainParseKeepsFollowingStatements(): Void {
+		final body: Array<HxStatement> = parseBody(
+			'class C { function f():Void { if (a) { g(); } #if X else if (b) { h(); } #end '
+			+ 'else if (c) { i(); } switch (e) { case A: j(); } } }'
+		);
+		Assert.equals(4, body.length);
+		switch body[2] {
+			case OrphanElseStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected OrphanElseStmt');
+		}
+	}
+
+	/**
+	 * Plain-mode twin of the map-remove round-trip. The trivia Star
+	 * tolerates the missing separator on its own, so ONLY a plain parse
+	 * exercises the `stmtNoSemi` delegation into the splice's `tail` --
+	 * and the plain parse is the one `self-status` (and therefore
+	 * `SymbolIndex`) runs.
+	 */
+	public function testMapRemoveSplicePlainParseKeepsFollowingStatements(): Void {
+		final body: Array<HxStatement> = parseBody(
+			'class C { function remove(key:Int):Bool { var idx = -1; '
+			+ '#if !no_map_cache if (!(cachedKey == key)) #end { idx = lookup(key); } if (idx == -1) { return false; } return true; } }'
+		);
+		Assert.equals(4, body.length);
+		switch body[1] {
+			case CondSpliceStmt(_):
+				Assert.pass();
+			case null, _:
+				Assert.fail('expected CondSpliceStmt');
+		}
+	}
+
 	private function parseBody(source: String): Array<HxStatement> {
 		return fnBodyStmts(parseSingleFnDecl(source));
 	}
