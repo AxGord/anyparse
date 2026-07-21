@@ -12226,9 +12226,9 @@ class WriterLowering {
 			var _piuI: Int = 0;
 			while (_piuI < _arr.length) {
 				if (!_hasPiu) switch _arr[_piuI].node.decl {
-					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportWildDecl(_) | UsingDecl(_) | UsingWildDecl(
+					case PackageDecl(_) | PackageEmpty | ImportDecl(_) | ImportAliasDecl(_) | ImportAliasInDecl(_) | ImportWildDecl(_) | UsingDecl(
 						_
-					):
+					) | UsingWildDecl(_):
 						_hasPiu = true;
 					case _:
 				}

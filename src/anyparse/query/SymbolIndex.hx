@@ -668,7 +668,7 @@ final class SymbolIndex {
 						alias: null,
 						span: span
 					});
-				case 'ImportAliasDecl':
+				case 'ImportAliasDecl' | 'ImportAliasInDecl':
 					imports.push({
 						raw: name,
 						kind: ImportKind.Alias,

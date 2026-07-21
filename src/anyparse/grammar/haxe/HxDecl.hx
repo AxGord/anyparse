@@ -29,15 +29,23 @@ package anyparse.grammar.haxe;
  *    falls through to the plain `HxTypeName` ctor when the `.*` tail
  *    isn't present (mirrors the `PackageDecl` → `PackageEmpty`
  *    rollback).
- *  - `ImportAliasDecl` — single-symbol aliased import
- *    `import Std.is as isOfType;` (slice ω-import-as-alias). Payload is
- *    `HxImportAlias` (path + mandatory `as <ident>` suffix). Placed
- *    BEFORE the plain `ImportDecl` so `tryBranch` attempts the longer
- *    match first; a missing `as` rolls back to the plain ctor (same
- *    longer-match-first pattern as `ImportWildDecl` → `ImportDecl`).
- *    `using ... as ...` is not legal Haxe and gets no twin ctor;
- *    wildcard imports never carry `as` (`import foo.*` only) so there
- *    is no `ImportWildAliasDecl` either.
+ *  - `ImportAliasDecl` / `ImportAliasInDecl` — single-symbol aliased
+ *    import, modern `import Std.is as isOfType;` (slice
+ *    ω-import-as-alias) and legacy pre-Haxe-4 `import Std.is in
+ *    isOfType;` (slice ω-import-in-alias). Payloads are `HxImportAlias`
+ *    / `HxImportAliasIn` (path + mandatory `as` / `in <ident>` suffix
+ *    respectively) — two struct shapes rather than one shared shape
+ *    with a keyword choice, because the writer must re-emit whichever
+ *    spelling the source used verbatim (an `in` import is never
+ *    rewritten to `as`). Both are placed BEFORE the plain `ImportDecl`
+ *    so `tryBranch` attempts the longer match first; a missing `as` /
+ *    `in` rolls back to the plain ctor (same longer-match-first
+ *    pattern as `ImportWildDecl` → `ImportDecl`). Order between the
+ *    two alias ctors themselves does not matter — `as` and `in` are
+ *    mutually exclusive keywords, so at most one ever matches a given
+ *    import. `using ... as ...` / `using ... in ...` are not legal
+ *    Haxe and get no twin ctors; wildcard imports never carry an alias
+ *    (`import foo.*` only) so there is no `ImportWildAliasDecl` either.
  *
  *    Like `Package*`, the parser does not enforce ordering or
  *    position of imports relative to other top-level decls; semantic
@@ -98,6 +106,9 @@ enum HxDecl {
 
 	@:kw('import') @:trail(';')
 	ImportAliasDecl(decl: HxImportAlias);
+
+	@:kw('import') @:trail(';')
+	ImportAliasInDecl(decl: HxImportAliasIn);
 
 	@:kw('import') @:trail(';')
 	ImportDecl(path: HxTypeName);
