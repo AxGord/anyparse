@@ -212,6 +212,7 @@ class HxTestHelpers extends Test {
 			case UntypedBlockBody(body): body.block.stmts;
 			case NoBody: throw 'expected BlockBody, got NoBody';
 			case ExprBody(_): throw 'expected BlockBody, got ExprBody';
+			case CondBody(_): throw 'expected BlockBody, got CondBody';
 		};
 	}
 

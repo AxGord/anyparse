@@ -78,4 +78,34 @@ enum HxFnBody {
 	@:trailOpt(';')
 	ExprBody(expr: HxExpr);
 
+
+	/**
+	 * `#if <cond> <body> [#elseif ...] [#else <body>] #end` occupying the
+	 * ENTIRE function-body slot (slice C1). See `HxConditionalFnBody`
+	 * for the motivating std sources and the Ref-vs-Star rationale.
+	 *
+	 * LAST in dispatch order on purpose: `ExprBody` routes a region whose
+	 * branches are single expressions through `HxExpr.ConditionalExpr`
+	 * (`function f() #if a { 1; } #else { 2; } #end` parsed that way
+	 * before this ctor existed and still does), so `CondBody` fires only
+	 * where the expression-scope conditional fail-rewinds - a `;`-only
+	 * branch (`NoBody`) or a `;`-terminated statement inside the region.
+	 * Putting it earlier would silently re-route already-parsing sources.
+	 *
+	 * The `#if` keyword lives on `HxConditionalFnBody.cond` rather than
+	 * on this branch - the `HxUntypedFnBody` precedent one ctor up.
+	 * Keeping the branch a bare single-Ref (no `@:kw` / `@:lead`) is what
+	 * puts it in `WriterLowering.spacePrefixCtors`, so the parent
+	 * `HxFnDecl.body`'s `@:fmt(leftCurly)` emits the `<signature> #if`
+	 * separating space; a branch-level `@:kw` is excluded from that list
+	 * and glued the region straight onto the return type (`:Dynamic#if`).
+	 * Dispatch is unaffected: the inner `@:kw('#if')` still enforces the
+	 * non-word-char boundary (so `#iff` is rejected) and fails fast
+	 * through `tryBranch` on any other input. `@:trail('#end')` stays on
+	 * the branch so the closing directive is consumed after the whole
+	 * region - the byte twin of `HxClassMember.Conditional` /
+	 * `HxStatement.Conditional`.
+	 */
+	@:trail('#end')
+	CondBody(inner: HxConditionalFnBody);
 }

@@ -91,6 +91,27 @@ package anyparse.grammar.haxe;
 @:peg
 enum HxClassMember {
 
+	/**
+	 * `var name:Type = #if <cond> <expr>; [#else <expr>;] #end` - a field
+	 * whose initializer AND terminator both live inside a `#if` region
+	 * (slice C3). See `HxVarSemiCondInitDecl` for the motivating Pony
+	 * source and for why the widening is scoped to member position
+	 * instead of `HxExpr`.
+	 *
+	 * Tried BEFORE `VarMember`: the region's mandatory `@:kw('#if')` and
+	 * mandatory per-branch `;` make every ordinary field fail fast,
+	 * `tryBranch` restores `ctx.pos`, and dispatch falls through - the
+	 * same ordered first-match rollback as `FinalModifiedMember` before
+	 * `FinalMember`. Ordering it AFTER `VarMember` would be useless:
+	 * `HxVarDecl.init` reaches `HxExpr.CondSpliceExpr`, which swallows the
+	 * region raw and binds the NEXT member's leading `public` as its tail
+	 * - a silently wrong parse rather than the fail-rewind this ctor needs.
+	 *
+	 * No `@:trailOpt(';')`: the terminator is inside the region.
+	 */
+	@:kw('var')
+	VarSemiCondInitMember(decl: HxVarSemiCondInitDecl);
+
 	@:kw('var') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
 	VarMember(decl: HxVarDecl);
 
@@ -114,6 +135,22 @@ enum HxClassMember {
 
 	@:kw('final') @:trailOpt(';') @:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'), propagateFieldLevelVar)
 	FinalMember(decl: HxVarDecl);
+
+	/**
+	 * `function #if <cond> <name> [#else <name>] #end(params) ...` - a
+	 * method whose NAME is a preprocessor-guarded region (slice C2). See
+	 * `HxCondNameFnDecl` for the motivating haxelib `format` source and
+	 * for why the widening is confined to a scope-narrow ctor instead of
+	 * relaxing `HxFnDecl.name`.
+	 *
+	 * Tried BEFORE `FnMember` so the guarded form wins when it applies;
+	 * a plain `function foo(...)` fails `HxCondNameFnDecl`'s mandatory
+	 * leading `@:kw('#if')`, `tryBranch` restores `ctx.pos`, and dispatch
+	 * falls through - the `FinalModifiedMember`-before-`FinalMember`
+	 * ordering pattern one member up.
+	 */
+	@:kw('function')
+	CondNameFnMember(decl: HxCondNameFnDecl);
 
 	@:kw('function')
 	FnMember(decl: HxFnDecl);
@@ -158,5 +195,20 @@ enum HxClassMember {
 
 	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
 	Conditional(inner: HxConditionalMember);
+
+	/**
+	 * Token-splice fallback for a member-scope `#if` region holding
+	 * parallel SIGNATURES whose shared function body follows the `#end`
+	 * (slice C5) - see `HxCondSharedBodyMember` for the motivating Pony
+	 * source and for why the tail is typed `HxFnBody`.
+	 *
+	 * Tried directly after `Conditional`, the same ordering as
+	 * `HxStatement.CondSpliceStmt` after `HxStatement.Conditional`: the
+	 * structured ctor fail-rewinds on this shape, and going first would
+	 * let the raw swallow + `ExprBody` tail mis-claim ordinary guarded
+	 * members.
+	 */
+	@:kw('#if')
+	CondSpliceMember(inner: HxCondSharedBodyMember);
 
 }
