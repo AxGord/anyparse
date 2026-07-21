@@ -126,8 +126,22 @@ typedef FileInfo = {
 @:nullSafety(Strict)
 final class SymbolIndex {
 
+	/** The grammar kind a `class` declaration projects as. */
+	private static final CLASS_DECL_KIND: String = 'ClassDecl';
+
 	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
-	private static final PLAIN_NOMINAL_KINDS: Array<String> = ['ClassDecl', 'InterfaceDecl', 'EnumDecl'];
+	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
+
+	/**
+	 * The bodyless declaration heads a `CondSharedBodyDecl` region can carry,
+	 * mapped to the decl kind the same declaration projects as when written
+	 * whole. `HxDeclHead` has exactly these two branches (`class` / `abstract`
+	 * are the only forms observed splitting a header across `#if`).
+	 */
+	private static final DECL_HEAD_KINDS: Map<String, String> = [
+		'ClassHead' => CLASS_DECL_KIND,
+		'AbstractHead' => 'AbstractDecl'
+	];
 
 	private final _files: Array<FileInfo>;
 	private final _skipped: Array<String>;
@@ -522,7 +536,7 @@ final class SymbolIndex {
 	/** Exactly one indexed decl is named `name`, and it is a class. */
 	private function isUniqueClass(name: String): Bool {
 		final ds: Array<TypeDeclInfo> = declsNamed(name);
-		return ds.length == 1 && ds[0].kind == 'ClassDecl';
+		return ds.length == 1 && ds[0].kind == CLASS_DECL_KIND;
 	}
 
 	/** Every indexed type decl whose simple name is `name`, across all files. */
@@ -617,9 +631,15 @@ final class SymbolIndex {
 
 	/**
 	 * Build a `FileInfo` from a parsed `parseFile` tree: walk the
-	 * top-level module children for the `PackageDecl`, the import /
-	 * using statements, and the top-level type declarations. The
-	 * basename drives the module path and the per-type `isMain` flag.
+	 * module's declarations for the `PackageDecl`, the import /
+	 * using statements, and the type declarations. The basename
+	 * drives the module path and the per-type `isMain` flag.
+	 *
+	 * The walk runs over `declNodes`, not over `tree.children`
+	 * directly, so a type declared inside a `#if ... #end` region is
+	 * indexed like a plain top-level one. Imports and usings are
+	 * still read from the TOP LEVEL only - a guarded `import` stays
+	 * invisible to the index.
 	 */
 	private static function extractFileInfo(
 		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
@@ -630,8 +650,8 @@ final class SymbolIndex {
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
 
-		for (node in tree.children) {
-			final typeDecl: Null<TypeDeclMatch> = RefactorSupport.typeDeclOf(node);
+		for (node in declNodes(tree)) {
+			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				types.push({
 					name: typeDecl.name,
@@ -797,13 +817,19 @@ final class SymbolIndex {
 
 	/**
 	 * Count the type parameters written on `decl`'s header: locate the name token
-	 * in the header text (the projection drops `<...>` params entirely, so the name
-	 * NODE's span cannot anchor the scan), then bracket-match a following `<...>`
-	 * (a `->` return arrow's `>` is not a closer) and count the top-level commas.
-	 * No `<` after the name → 0 (non-generic).
+	 * in the header text (the projection drops `<...>` params entirely, so no node's
+	 * span points AT the name), then bracket-match a following `<...>` (a `->`
+	 * return arrow's `>` is not a closer) and count the top-level commas. No `<`
+	 * after the name yields 0 (non-generic).
+	 *
+	 * The scan starts at `decl.nameNode`'s span, falling back to `fullSpan`. The
+	 * name node IS the header for every shape - the inner `ClassForm` of a `final
+	 * class`, the `*Head` of a split-header conditional region - so the scan never
+	 * has to cross a `final` keyword or a whole `#if` line to reach the name.
 	 */
 	private static function declTypeParamArity(source: String, decl: TypeDeclMatch): Int {
-		final from: Int = decl.fullSpan.from;
+		final anchor: Null<Span> = decl.nameNode.span;
+		final from: Int = anchor == null ? decl.fullSpan.from : anchor.from;
 		final bodyAt: Int = source.indexOf('{', from);
 		final nameAt: Int = source.indexOf(decl.name, from);
 		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return 0;
@@ -826,6 +852,118 @@ final class SymbolIndex {
 			i++;
 		}
 		return 0;
+	}
+
+
+	/**
+	 * `tree`'s top-level children with every conditional-compilation region
+	 * REPLACED, in document order, by the type declarations it guards - the
+	 * input `extractFileInfo` walks, so a type declared inside `#if ... #end`
+	 * is indexed like a plain top-level one. Non-declaration children of a
+	 * region (its imports, metadata and modifiers) are DROPPED: they are the
+	 * caller's other concern and this slice does not change how they are read.
+	 *
+	 * Two grammar shapes carry a guarded declaration. A `Conditional` wrapper
+	 * holds the region's decls FLATTENED - every branch's decls are its
+	 * siblings, with no branch boundary visible in the projection (the shape
+	 * `AddImport.guardedDuplicate` reads) - and is descended into. A
+	 * `CondSharedBodyDecl` wrapper (a header split across `#if`, see
+	 * `HxCondSharedBodyDecl`) is passed through as ITSELF: it is the node its
+	 * declaration resolves from (`condSharedBodyDeclOf`).
+	 */
+	private static function declNodes(tree: QueryNode): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		final guardedNames: Array<String> = [];
+		for (node in tree.children) switch node.kind {
+			case 'Conditional':
+				collectGuardedDecls(node, out, guardedNames);
+			case 'CondSharedBodyDecl':
+				pushGuardedDecl(node, out, guardedNames);
+			case _:
+				out.push(node);
+		}
+		return out;
+	}
+
+	/**
+	 * Append every type declaration `node` - a `#if ... #end` region wrapper -
+	 * guards to `out`, recursing through nested regions.
+	 *
+	 * The projection flattens all branches into one wrapper, so an `#if js
+	 * class X {...} #else class X {...} #end` region yields TWO `ClassDecl X`
+	 * children even though no compilation ever sees more than one of them.
+	 * Indexing both would make `declaringFiles` (and `apq declares`) report an
+	 * ambiguity that does not exist, so `pushGuardedDecl` keeps the FIRST
+	 * declaration of a name and drops later same-named ones - the same
+	 * "first branch live, alternates raw" rule the grammar already applies to
+	 * split-header regions (`HxCondSharedBodyDecl`). Distinct names across
+	 * branches (`#if js class A {} #elseif cpp class B {} #else typedef C =
+	 * Int; #end`) are all kept.
+	 */
+	private static function collectGuardedDecls(node: QueryNode, out: Array<QueryNode>, guardedNames: Array<String>): Void {
+		for (child in node.children) if (child.kind == 'Conditional')
+			collectGuardedDecls(child, out, guardedNames);
+		else
+			pushGuardedDecl(child, out, guardedNames);
+	}
+
+	/**
+	 * Append `node` to `out` when it is a type declaration whose name no
+	 * conditional region has contributed yet, recording the name. A node that
+	 * is not a declaration (an import, a metadata or a modifier lifted out of
+	 * a region) is skipped.
+	 */
+	private static function pushGuardedDecl(node: QueryNode, out: Array<QueryNode>, guardedNames: Array<String>): Void {
+		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
+		if (decl == null || guardedNames.contains(decl.name)) return;
+		guardedNames.push(decl.name);
+		out.push(node);
+	}
+
+	/**
+	 * The type declaration `node` carries, across all three grammar shapes: a
+	 * plain decl, a `final`-wrapped one (both via `RefactorSupport.typeDeclOf`)
+	 * and a split-header conditional region. One resolver so the lifting done
+	 * by `declNodes` and the indexing done by `extractFileInfo` can never
+	 * disagree about what counts as a declaration.
+	 */
+	private static inline function typeDeclAt(node: QueryNode): Null<TypeDeclMatch> {
+		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
+	}
+
+	/**
+	 * The FIRST branch's type declaration of a split-header conditional region
+	 * (`CondSharedBodyDecl`), or null for any other node and for a region
+	 * carrying no recognised head. The head child holds the name, the type
+	 * parameters and the heritage; the shared members are that head's
+	 * SIBLINGS, written after `#end`.
+	 *
+	 * `fullSpan` is the WRAPPER's span, not the head's. It is the only span
+	 * that CONTAINS the members, so a span-containment lookup (the
+	 * innermost-enclosing-type scan in `RedundantBypassAccessor`) resolves
+	 * them; and it is the only one that is a complete syntactic unit - the
+	 * head stops at the `{` it opens, so a mutation addressed by the head span
+	 * would leave a dangling `#else ... #end` and an unmatched `}`. `nameNode`
+	 * is the head, which keeps the type-parameter scan anchored past the `#if`
+	 * line.
+	 */
+	private static function condSharedBodyDeclOf(node: QueryNode): Null<TypeDeclMatch> {
+		if (node.kind != 'CondSharedBodyDecl') return null;
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		// A plain `find` would have to re-read the map for the kind, so the head is
+		// resolved and mapped in one pass.
+		for (child in node.children) {
+			final kind: Null<String> = DECL_HEAD_KINDS[child.kind];
+			final name: Null<String> = child.name;
+			if (kind != null && name != null) return {
+				name: name,
+				kind: kind,
+				nameNode: child,
+				fullSpan: span
+			};
+		}
+		return null;
 	}
 
 }
