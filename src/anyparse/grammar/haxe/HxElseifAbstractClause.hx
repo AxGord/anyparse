@@ -8,8 +8,9 @@ package anyparse.grammar.haxe;
  * `HxAbstractClause` terminated by the next `#elseif` / `#else` /
  * `#end` token.
  *
- * No lime / openfl / std module currently chains `#elseif` in an
- * abstract clause run - the field exists because every other
+ * None of the three modules that motivated the parent typedef chains
+ * `#elseif` in an abstract clause run, and no other such region turned
+ * up in the dependency trees - the field exists because every other
  * conditional-compilation scope (`HxElseifHeritage`, `HxElseifMeta`,
  * `HxElseifParam`, `HxElseifType`, ...) carries one, and omitting it
  * here would make the abstract-clause region the single scope where a
