@@ -51,6 +51,19 @@ enum HxSwitchCase {
 	DefaultBranch(branch: HxDefaultBranch);
 
 	/**
+	 * `#if`-guarded run of whole case LABELS whose body is shared after
+	 * the `#end` -- see `HxCondSpliceCase`. Tried BEFORE `Conditional`
+	 * because `Conditional` parses the same bytes successfully and only
+	 * strands the shared body afterwards, at which point the enclosing
+	 * `HxSwitchStmt.cases` Star can no longer re-dispatch this element.
+	 * The mandatory `tail` statement inside `HxCondSpliceCase` is the
+	 * guard that hands every ordinary whole-clause region back to
+	 * `Conditional` via `tryBranch` rollback.
+	 */
+	@:kw('#if') @:fmt(conditionalMarkerDedent)
+	CondSpliceCase(inner: HxCondSpliceCase);
+
+	/**
 	 * `#if`-guarded run of whole case/default clauses — see
 	 * `HxConditionalCase` for the shape and the dispatch-order
 	 * interplay with statement-scope conditionals inside case bodies.

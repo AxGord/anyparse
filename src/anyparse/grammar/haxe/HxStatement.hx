@@ -417,6 +417,77 @@ enum HxStatement {
 	@:kw('#if') @:fmt(condSpliceCaseMarkerDedent)
 	CondSpliceStmt(inner: HxCondSpliceStmt);
 
+	/**
+	 * Orphan `else` continuation: an `else` clause whose governing `if`
+	 * head lives in a DIFFERENT lexical region, so the two cannot be
+	 * joined into one `HxIfStmt`. Two live shapes, both produced by a
+	 * conditional-compilation boundary cutting an if-chain in half:
+	 *
+	 *  - COND-ELSE-SLOT -- the entire `else` branch sits inside a
+	 *    brace-balanced `#if` region that FOLLOWS a complete
+	 *    if-statement:
+	 *
+	 *        if (reconnectDelay == 0) { reopen(); }
+	 *        #if ((!dox && HUGS) || nodejs || flash)
+	 *        else if (reconnectDelay > 0) { Timer.delay(reopen, d); }
+	 *        #end
+	 *
+	 *    Live sources: `pony/net/SocketClientBase.hx:93`,
+	 *    `openfl/display/DisplayObjectContainer.hx:218`,
+	 *    `swf/exporters/swflite/DynamicTextSymbol.hx:139`,
+	 *    `haxe/format/JsonParser.hx:227` and
+	 *    `lime/system/ThreadPool.hx:463` (the last two additionally
+	 *    carry a SECOND, unguarded `else if` after the `#end`, which
+	 *    reaches this ctor at block scope). `HxStatement.Conditional`
+	 *    parses the region structurally and its body Star dispatches
+	 *    here for the `else` head, so BOTH compilation variants keep a
+	 *    fully structured representation -- no raw byte capture, no
+	 *    `HxCondSpliceStmt` fallback.
+	 *
+	 *  - The `else` trailing a `CondSpliceStmt` whose raw fragment
+	 *    carried the parallel `if` heads:
+	 *
+	 *        #if (haxe_ver >= 4.10)
+	 *        if (Std.isOfType(obj, NodeBitmap))
+	 *        #else
+	 *        if (Std.is(obj, NodeBitmap))
+	 *        #end
+	 *            cast(obj, NodeBitmap).tint = t;
+	 *        else
+	 *            cast(obj, Drawable).color = c;
+	 *
+	 *    (`pony/ui/xml/HeapsXmlUi.hx:222`.) The splice's `tail` binds
+	 *    the shared then-branch; the `else` that follows has no `if` to
+	 *    attach to at this scope. The same shape WITHOUT the trailing
+	 *    `else` already parsed before this ctor existed, and still does
+	 *    -- this branch only adds the previously-orphaned tail.
+	 *
+	 * Why a statement ctor and NOT an `@:optional @:kw('#if')` else-slot
+	 * on `HxIfStmt`: an optional kw field COMMITS on its keyword and
+	 * never backtracks over the sub-rule
+	 * (`Lowering.emitOptionalRefLeadCommit`, D24), so an ordinary
+	 * structured `#if` region that merely FOLLOWS an if-statement would
+	 * be swallowed by the slot with no way to hand it back to the
+	 * statement Star. Guarding the slot on a leading `else` INSIDE the
+	 * region is not expressible either -- the commit literal is a single
+	 * token and the `else` sits past the condition atom.
+	 *
+	 * Dispatch is unambiguous without any ordering constraint: no other
+	 * `HxStatement` ctor starts with `else`, and `HxIfStmt.elseBody` is
+	 * a greedy `@:optional @:kw('else')`, so a well-formed if/else never
+	 * leaves an `else` for the enclosing Star to see. This ctor fires
+	 * exactly where the if/else pairing is broken by a preprocessor
+	 * boundary.
+	 *
+	 * The payload is a bare `HxStatement`, so `else if (...) ...` nests
+	 * as `OrphanElseStmt(IfStmt(...))` and `else { ... }` as
+	 * `OrphanElseStmt(BlockStmt(...))`. `HxExprUtil.stmtNoSemi` recurses
+	 * into the payload so the `;`-elision verdict is the inner
+	 * statement's, exactly as it would be inside a real if-chain.
+	 */
+	@:kw('else')
+	OrphanElseStmt(stmt: HxStatement);
+
 	@:kw('function')
 	LocalFnStmt(decl: HxFnDecl);
 

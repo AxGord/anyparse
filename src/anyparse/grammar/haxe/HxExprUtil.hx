@@ -633,6 +633,18 @@ final class HxExprUtil {
 	 *  - `Conditional` (`#if … #end`) → true (`#end`-terminated; byte at
 	 *    `_prevEndPos - 1` is `d` so byte-check does NOT cover this case,
 	 *    AST predicate is the only path).
+	 *  - `CondSpliceStmt` (`#if <raw> #end <tail>`) -> recurse into the
+	 *    splice's `tail` field. The raw region contributes no terminator of
+	 *    its own, so the verdict belongs to the shared tail statement: a
+	 *    brace-terminated tail (`#if !no_map_cache if (!(...)) #end { idx =
+	 *    lookup(key); }` -- the std `haxe/ds/*Map.remove` idiom) elides the
+	 *    `;`, a bare `ExprStmt` tail does not. Without this arm the byte
+	 *    check saw the tail's closing `}` (not `;`) and the Star demanded a
+	 *    separator that valid Haxe never writes.
+	 *  - `OrphanElseStmt` (`else <stmt>`) -> recurse into the payload
+	 *    statement, for the same reason: the `else` keyword adds no
+	 *    terminator, so `else if (...) { ... }` elides the `;` and
+	 *    `else foo();` does not.
 	 *  - `EllipsisStmt` (`....` placeholder) → true (no terminator; byte
 	 *    at `_prevEndPos - 1` is `.`, AST predicate is the only path).
 	 *
@@ -650,6 +662,18 @@ final class HxExprUtil {
 		if (ctor == 'ExprStmt') {
 			final params: Null<Array<Dynamic>> = Type.enumParameters(s);
 			return params != null && params.length > 0 && stmtExprNoSemi(params[0]);
+		}
+		// CondSpliceStmt / OrphanElseStmt carry a nested statement that owns
+		// the terminator question; delegate instead of hard-coding a verdict.
+		if (ctor == 'CondSpliceStmt') {
+			final params: Null<Array<Dynamic>> = Type.enumParameters(s);
+			if (params == null || params.length == 0) return false;
+			final inner: Null<Dynamic> = params[0];
+			return inner != null && stmtNoSemi(Reflect.field(inner, 'tail'));
+		}
+		if (ctor == 'OrphanElseStmt') {
+			final params: Null<Array<Dynamic>> = Type.enumParameters(s);
+			return params != null && params.length != 0 && stmtNoSemi(params[0]);
 		}
 		if (BRACE_TERMINAL_STMT_CTORS.contains(ctor)) return true;
 		if (SEP_TERMINAL_STMT_CTORS.contains(ctor)) return true;

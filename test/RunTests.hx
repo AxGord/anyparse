@@ -460,6 +460,7 @@ import unit.HxElseifTypeSliceTest;
 import unit.HxImportAliasInSliceTest;
 import unit.HxCondTypeSlotSliceTest;
 import unit.HxBinopStmtNoSemiSliceTest;
+import unit.HxCondSpliceScopeSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -677,6 +678,7 @@ class RunTests {
 		addCase(new HxChainFillBoundaryCallOperandTest());
 		addCase(new HxReturnCallOpenParenSliceTest());
 		addCase(new HxCondSpliceFidelitySliceTest());
+		addCase(new HxCondSpliceScopeSliceTest());
 		addCase(new HxCondSpliceChainWrapSliceTest());
 		addCase(new HxMetaAllmanObjectLitSliceTest());
 		addCase(new HxBinaryChainWrapSliceTest());
