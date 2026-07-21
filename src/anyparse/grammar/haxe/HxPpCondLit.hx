@@ -5,18 +5,25 @@ package anyparse.grammar.haxe;
  * `#if` / `#elseif`.
  *
  * Captured verbatim as the matched substring, preserving the original
- * condition text across round-trip. Three shapes cover the idiomatic
+ * condition text across round-trip. Four shapes cover the idiomatic
  * Haxe forms:
  *
  *  - Bare identifier: `cppia`, `neko_v21`.
+ *  - Integer literal: `#if 0` / `#if 1` — Haxe's macro-condition parser
+ *    accepts a constant, and openfl uses `#if 0` to comment out whole
+ *    regions (`utils/_internal/Lib.hx`, `AssetsMacro.hx`, `ShaderMacro.hx`).
  *  - Negated identifier or paren atom: `!cppia`, `!!x`, `!(cond)`.
  *  - Parenthesised compound: `(cppia && !flash)`, `(neko_v21 || (cpp && !cppia) || flash)`.
+ *
+ * The digits alternative sits AFTER the identifier one so a leading-letter
+ * name is never split — the identifier branch already claims anything
+ * starting with `[A-Za-z_]`, and a bare `0`/`1` cannot start an identifier.
  *
  * The regex supports parentheses nested up to **two** levels inside the
  * outer group — enough for every `#if` condition in the haxe-formatter
  * fixtures (max observed: 2 levels in `issue_332_conditional_modifiers`).
  * A depth-3 condition produces a truncated prefix match (the regex
- * greedily consumes what it can at depth ≤ 2 and stops), leaving the
+ * greedily consumes what it can at depth <= 2 and stops), leaving the
  * unmatched inner parens in the stream for the next field to choke on;
  * downstream parse fails one way or another. Deepen the regex when a
  * real grammar site demands it.
@@ -26,6 +33,6 @@ package anyparse.grammar.haxe;
  * preprocessor condition is not a Haxe string literal, so `\n` etc.
  * stay as literal backslash-n in the captured text.
  */
-@:re('!*(?:[A-Za-z_][A-Za-z0-9_]*|\\((?:[^()]|\\([^()]*\\))*\\))')
+@:re('!*(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|\\((?:[^()]|\\([^()]*\\))*\\))')
 @:rawString
 abstract HxPpCondLit(String) from String to String {}

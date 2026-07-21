@@ -53,6 +53,7 @@ import unit.HxToplevelImportWildSliceTest;
 import unit.HxImportAliasSliceTest;
 import unit.HxToplevelMetaSliceTest;
 import unit.HxDottedMetaNameSliceTest;
+import unit.HxCondDeclPrefixSliceTest;
 import unit.HxFnExprBodySliceTest;
 import unit.HxFnExprSliceTest;
 import unit.HxLambdaParamOptionalSliceTest;
@@ -592,6 +593,7 @@ class RunTests {
 		addCase(new HxImportAliasSliceTest());
 		addCase(new HxToplevelMetaSliceTest());
 		addCase(new HxDottedMetaNameSliceTest());
+		addCase(new HxCondDeclPrefixSliceTest());
 		addCase(new HxFnExprBodySliceTest());
 		addCase(new HxFnExprSliceTest());
 		addCase(new HxLambdaParamOptionalSliceTest());
