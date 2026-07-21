@@ -8,7 +8,6 @@ import anyparse.grammar.haxe.HxConditionalStmt;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxStatement;
 import anyparse.grammar.haxe.HxSwitchStmt;
-import anyparse.grammar.haxe.HxFnDecl;
 
 /**
  * Slice D -- conditional-compilation splices in STATEMENT and CASE scope.
