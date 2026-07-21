@@ -25,7 +25,7 @@ import anyparse.query.SymbolIndex;
  * cross-class `Type.staticField` read whose field's builtin (always-in-scope) written
  * type is recovered from the cross-file `SymbolIndex`, `Null<…>` preserved), re-stating
  * the compiler's own inference; every inference-resolved shape (empty / heterogeneous
- * array, bare `new`, `new Map()`, `null`, a generic `.map()`, an unresolved / non-String
+ * array, a generic-or-unknown bare `new` (`new Map()`; a provably non-generic bare `new T()` annotates verbatim), `null`, a generic `.map()`, an unresolved / non-String
  * receiver, an untabled method, an identifier whose binding carries no written type or is
  * a parameter whose body type differs from its source (optional-no-default, `= null`
  * default, or rest), a static field read with no index / an unknown-or-ambiguous type /
@@ -102,6 +102,39 @@ class ExplicitLocalTypeCheckTest extends Test {
 
 	public function testFixNewWithWrittenGenerics(): Void {
 		assertFixContains('final m = new Map<String, Int>();', ':Map<String, Int>');
+	}
+
+	// --- fix: bare new with provable non-generic arity ---
+
+	public function testFixBareNewBuiltin(): Void {
+		assertFixContains('final sb = new StringBuf();', ':StringBuf');
+	}
+
+	public function testFixBareNewQualifiedBuiltin(): Void {
+		assertFixContains('final b = new haxe.io.BytesBuffer();', ':haxe.io.BytesBuffer');
+	}
+
+	public function testFixBareNewIndexedPlainClass(): Void {
+		assertFixIdx(
+			wrap('final t = new Widget();'), [{ file: 'Widget.hx', source: 'class Widget {\n\tpublic function new() {}\n}' }], ':Widget'
+		);
+	}
+
+	public function testBareNewGenericDeclSkipped(): Void {
+		assertNoFixIdx(wrap('final b = new Box();'), [{ file: 'Box.hx', source: 'class Box<T> {\n\tpublic function new() {}\n}' }]);
+	}
+
+	public function testBareNewAmbiguousAritySkipped(): Void {
+		assertNoFixIdx(wrap('final w = new Widget();'), [
+			{ file: 'Widget.hx', source: 'class Widget {\n\tpublic function new() {}\n}' },
+			{ file: 'other/Widget.hx', source: 'class Widget<T> {\n\tpublic function new() {}\n}' }
+		]);
+	}
+
+	public function testBareNewIndexShadowedBuiltinSkipped(): Void {
+		assertNoFixIdx(wrap('final s = new StringBuf();'), [
+			{ file: 'StringBuf.hx', source: 'class StringBuf<T> {\n\tpublic function new() {}\n}' }
+		]);
 	}
 
 	// --- fix: method call on a provable-String receiver (literal or typed variable) ---
@@ -423,6 +456,17 @@ class ExplicitLocalTypeCheckTest extends Test {
 		final fixFile: { file: String, source: String } = { file: 'C.hx', source: fixSrc };
 		final index: SymbolIndex = SymbolIndex.build([fixFile].concat(otherFiles), plugin);
 		Assert.equals(0, check.fix(fixSrc, check.run([fixFile], plugin), plugin, index).length);
+	}
+
+
+	public function testBareNewWhitelistedAmbiguousAritySkipped(): Void {
+		// StringBuf is whitelisted as non-generic, but the index disagrees on its arity
+		// (arity 0 vs arity 1). Ambiguity must never prove non-genericity: the whitelist
+		// fallback must NOT fire, so this stays report-only (no fix).
+		assertNoFixIdx(wrap('final s = new StringBuf();'), [
+			{ file: 'a/StringBuf.hx', source: 'class StringBuf {\n\tpublic function new() {}\n}' },
+			{ file: 'b/StringBuf.hx', source: 'class StringBuf<T> {\n\tpublic function new() {}\n}' }
+		]);
 	}
 
 }

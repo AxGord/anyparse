@@ -1386,6 +1386,58 @@ typedef RefShape = {
 	 * never explicitly public.
 	 */
 	@:optional var publicModifierKind: String;
+
+	/**
+	 * Type-declaration kinds that are PLAIN CLASSES — nominal types with no
+	 * implicit-conversion semantics (no `@:from` casts, no aliasing), as they
+	 * appear in the `SymbolIndex` (Haxe `ClassDecl`; a `final class` is
+	 * normalised to it by `typeDeclOf`). `FieldWriteIndex.hasUnresolvedWriteTargeting`
+	 * frees a candidate field only when its declared type resolves to exactly one
+	 * of these — any other kind (abstract, interface, typedef, enum) could accept
+	 * a builtin-typed value through an implicit conversion or aliasing, so the
+	 * candidate stays poisoned. Optional; unset disables the targeting bail.
+	 */
+	@:optional var classDeclKinds: Array<String>;
+
+	/**
+	 * Maps a container type's SIMPLE name to the index of the type parameter that
+	 * its index-access `x[k]` yields (Haxe `Map<K, V>` → 1, `Array<T>` → 0).
+	 * `FieldWriteIndex` uses it to resolve the receiver of a
+	 * `container[key].field = …` write to the container's ELEMENT type. Only
+	 * containers whose index access provably yields the listed parameter belong
+	 * here; any other container type leaves the write unresolved. Optional; unset
+	 * makes every index-access receiver unresolved.
+	 */
+	@:optional var indexedElementTypeParams: Map<String, Int>;
+
+	/**
+	 * Expression kinds whose SUBTREE escapes the type system (Haxe `untyped` —
+	 * `UntypedExpr`). A write inside one has neither a trustworthy receiver type
+	 * nor a trustworthy RHS type, so `FieldWriteIndex` treats the subtree like an
+	 * opaque reification: every write target there is an unresolved write with an
+	 * unknown RHS. Optional; unset means no such escape hatch exists.
+	 */
+	@:optional var untypedKinds: Array<String>;
+
+	/**
+	 * Case-pattern BINDER kinds that carry the bound name on the node itself with
+	 * no identifier child (Haxe `case var x:` — `Capture`). Pattern binders are
+	 * invisible to the scope resolver, so `FieldWriteIndex` collects these names
+	 * (with every name inside a `plainCasePatternKind` subtree) as potential
+	 * shadowers that disable identifier-receiver resolution for the file.
+	 * Optional; unset means only `plainCasePatternKind` subtrees are scanned.
+	 */
+	@:optional var casePatternBinderKinds: Array<String>;
+
+	/**
+	 * Type-declaration kinds with ALIASING semantics — a value's field access does
+	 * not target the declared name itself: a typedef (an alias of another type) and
+	 * an abstract (whose `@:forward` field access reaches the UNDERLYING type).
+	 * `FieldWriteIndex` refuses to record a resolved write under such an owner —
+	 * the write would be filed away from the type it actually mutates — and falls
+	 * back to the unresolved bail. Optional; unset rejects nothing.
+	 */
+	@:optional var aliasingDeclKinds: Array<String>;
 }
 /**
  * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.

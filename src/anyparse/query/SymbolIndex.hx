@@ -83,6 +83,13 @@ typedef TypeDeclInfo = {
 	var isMain: Bool;
 
 	/**
+	 * The number of type parameters written on the declaration header
+	 * (`class Box<T, U>` → 2; 0 = non-generic). Drives bare-`new` local-type
+	 * annotation: an arity-0 type's written name IS its complete type.
+	 */
+	var typeParamArity: Int;
+
+	/**
 	 * Simple names (last `.` segment) of this type's `extends` / `implements`
 	 * targets — its direct supertypes. Drives `hasSubtype`, the first gate of a
 	 * cross-file-safe private-member rename (a subtype could access the member).
@@ -396,6 +403,22 @@ final class SymbolIndex {
 		return ds.length == 1 && PLAIN_NOMINAL_KINDS.contains(ds[0].kind);
 	}
 
+	/**
+	 * The unanimous type-parameter arity of every indexed declaration named
+	 * `typeName` (simple name), or null when the name is undeclared or the
+	 * declarations disagree — an ambiguous arity must never prove non-genericity.
+	 */
+	public function typeParamArityOf(typeName: String): Null<Int> {
+		var arity: Null<Int> = null;
+		for (f in _files) for (t in f.types) if (t.name == typeName) {
+			if (arity == null)
+				arity = t.typeParamArity;
+			else if (arity != t.typeParamArity)
+				return null;
+		}
+		return arity;
+	}
+
 	/** Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`. */
 	private function lacksMemberClosure(typeName: String, member: String, seen: Array<String>): Bool {
 		if (seen.contains(typeName)) return true;
@@ -615,6 +638,7 @@ final class SymbolIndex {
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
 					isMain: typeDecl.name == basename,
+					typeParamArity: declTypeParamArity(source, typeDecl),
 					supertypes: collectSupertypes(node),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
@@ -768,6 +792,40 @@ final class SymbolIndex {
 			}
 		});
 		return out;
+	}
+
+
+	/**
+	 * Count the type parameters written on `decl`'s header: locate the name token
+	 * in the header text (the projection drops `<...>` params entirely, so the name
+	 * NODE's span cannot anchor the scan), then bracket-match a following `<...>`
+	 * (a `->` return arrow's `>` is not a closer) and count the top-level commas.
+	 * No `<` after the name → 0 (non-generic).
+	 */
+	private static function declTypeParamArity(source: String, decl: TypeDeclMatch): Int {
+		final from: Int = decl.fullSpan.from;
+		final bodyAt: Int = source.indexOf('{', from);
+		final nameAt: Int = source.indexOf(decl.name, from);
+		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return 0;
+		var i: Int = nameAt + decl.name.length;
+		while (i < source.length && StringTools.isSpace(source, i)) i++;
+		if (i >= source.length || StringTools.fastCodeAt(source, i) != '<'.code) return 0;
+		var depth: Int = 0;
+		var commas: Int = 0;
+		while (i < source.length) {
+			switch StringTools.fastCodeAt(source, i) {
+				case '<'.code:
+					depth++;
+				case '>'.code if (StringTools.fastCodeAt(source, i - 1) != '-'.code):
+					depth--;
+					if (depth == 0) return commas + 1;
+				case ','.code if (depth == 1):
+					commas++;
+				case _:
+			}
+			i++;
+		}
+		return 0;
 	}
 
 }

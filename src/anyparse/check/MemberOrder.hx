@@ -40,10 +40,13 @@ typedef LayoutIssue = {
 	var message: String;
 }
 /**
- * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing.
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A container whose field initializers make reordering unsafe keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised.
  */
 @:nullSafety(Strict)
 final class MemberOrder implements Check {
+
+	/** The inter-slot separator carrying exactly one blank line - what both fix arms (the reorder rebuild and the spacing-only fallback) place between rank groups. */
+	private static final GROUP_SEPARATOR: String = '\n\n';
 
 	public function new() {}
 
@@ -73,8 +76,10 @@ final class MemberOrder implements Check {
 	/**
 	 * Reorder each flagged container's members into canonical order and normalise the
 	 * blank lines between rank groups. Re-parses `source`, emits edits only for a
-	 * container whose first flagged member's slot matches a passed violation, and bails
-	 * a container whose field initializers make reordering unsafe (see the class doc).
+	 * container whose first flagged member's slot matches a passed violation; a
+	 * container whose field initializers make reordering unsafe degrades to
+	 * spacing-only edits - the blank-line normalisation still lands, the order
+	 * finding stays report-only (see the class doc).
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -119,7 +124,10 @@ final class MemberOrder implements Check {
 		for (c in node.children) walk(out, file, source, c, shape, accessors);
 	}
 
-	/** Walk `node`; reorder each flagged, reorder-safe container. */
+	/**
+	 * Walk `node`; reorder each flagged, reorder-safe container (a reorder-unsafe one
+	 * degrades to spacing-only fixes).
+	 */
 	private static function fixWalk(
 		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>,
 		accessors: Map<Int, Bool>
@@ -135,7 +143,9 @@ final class MemberOrder implements Check {
 	 * edit - blank-line separating rank groups and comment-led slots - or, for
 	 * `#if`-guarded members, a rebuilt region with regenerated `#if`/`#end`
 	 * directives. Falls back to in-place slot swaps when an inter-member gap holds
-	 * non-whitespace a rebuild would silently drop.
+	 * non-whitespace a rebuild would silently drop. A reorder-unsafe container
+	 * (`reorderSafe` refused) degrades to `emitSpacingOnly`: the blank-line
+	 * normalisation between rank groups still lands, the order stays untouched.
 	 */
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
@@ -148,7 +158,10 @@ final class MemberOrder implements Check {
 		final groupFirst: Map<String, Int> = computeGroupFirst(members);
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> compareOrder(a, b, groupFirst));
-		if (!reorderSafe(members, sorted, source, shape)) return;
+		if (!reorderSafe(members, sorted, source, shape)) {
+			emitSpacingOnly(edits, members, source);
+			return;
+		}
 		if (!hasConditionalMember(members)) {
 			if (hasNonWhitespaceGap(members, source)) {
 				for (i in 0...members.length) if (members[i].node != sorted[i].node)
@@ -162,6 +175,30 @@ final class MemberOrder implements Check {
 		final rebuilt: Null<String> = buildConditionalRegion(sorted, source, shape);
 		if (rebuilt == null) return;
 		edits.push({ span: new Span(members[0].regionFrom, members[members.length - 1].regionTo), text: rebuilt });
+	}
+
+	/**
+	 * The spacing-only degradation for a container whose member order cannot be
+	 * rewritten safely (`reorderSafe` refused): normalise every violating
+	 * inter-slot gap over the ORIGINAL member sequence - one blank line between
+	 * rank groups, none inside a tight field group - leaving the order itself
+	 * untouched (the order finding stays report-only). Shares `spacingViolation`
+	 * with `firstSpacingIssue`, so the fix emits nothing exactly where the check
+	 * finds no spacing issue and a re-run converges.
+	 */
+	private static function emitSpacingOnly(
+		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
+	): Void {
+		if (spacingDisabled(members, source)) return;
+		for (i in 0...members.length - 1) {
+			final a: OrderedMember = members[i];
+			final b: OrderedMember = members[i + 1];
+			final want: Null<Int> = spacingViolation(a, b, source);
+			if (want == null) continue;
+			final gap: String = source.substring(a.span.to, b.span.from);
+			final indent: String = gap.substring(gap.lastIndexOf('\n') + 1);
+			edits.push({ span: new Span(a.span.to, b.span.from), text: (want == 1 ? GROUP_SEPARATOR : '\n') + indent });
+		}
 	}
 
 	/**
@@ -408,7 +445,7 @@ final class MemberOrder implements Check {
 				prevMember = null;
 			}
 			final blankBefore: Bool = if (prevMember != null)
-				separatorBetween(prevMember, m, source) == '\n\n';
+				separatorBetween(prevMember, m, source) == GROUP_SEPARATOR;
 			else if (m.condition != null)
 				false;
 			else
@@ -574,31 +611,58 @@ final class MemberOrder implements Check {
 
 	/**
 	 * The first member separated from its predecessor by the wrong number of blank
-	 * lines, or null. Different-rank neighbours want exactly one blank line; same-rank
-	 * FIELD neighbours want none (a tight group), unless either slot leads with a
-	 * comment - the writer itself keeps a blank line after a doc-commented member, and
-	 * a blank before a doc comment is never stripped or demanded. Same-rank methods
-	 * are left alone - they are conventionally blank-separated. Disabled outright for
-	 * a non-conditional container with a non-whitespace inter-slot gap (a stray `;`,
-	 * a trailing comment): the fixer falls back to order-only slot swaps there, so a
-	 * spacing finding could never converge. Skips pairs sharing a line, crossing an
-	 * `#if` boundary, or whose gap holds directive / stray text.
+	 * lines, or null. The per-pair policy lives in `spacingViolation` (shared with
+	 * the fixer's spacing-only fallback): different-rank neighbours want exactly one
+	 * blank line; same-rank FIELD neighbours want none (a tight group), unless either
+	 * slot leads with a comment - the writer itself keeps a blank line after a
+	 * doc-commented member, and a blank before a doc comment is never stripped or
+	 * demanded. Same-rank methods are left alone - they are conventionally
+	 * blank-separated. Disabled outright (`spacingDisabled`) for a non-conditional
+	 * container with a non-whitespace inter-slot gap (a stray `;`, a trailing
+	 * comment): the fixer falls back to order-only slot swaps there, so a spacing
+	 * finding could never converge. Skips pairs sharing a line, crossing an `#if`
+	 * boundary, or whose gap holds directive / stray text.
 	 */
 	private static function firstSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		if (!hasConditionalMember(members) && hasNonWhitespaceGap(members, source)) return null;
+		if (spacingDisabled(members, source)) return null;
 		for (i in 0...members.length - 1) {
-			final a: OrderedMember = members[i];
-			final b: OrderedMember = members[i + 1];
-			if (a.condition != b.condition) continue;
-			final gap: String = source.substring(a.span.to, b.span.from);
-			if (gap.indexOf('\n') < 0 || StringTools.trim(gap) != '') continue;
-			final blanks: Int = blankLineCount(gap);
-			if (a.rank != b.rank) {
-				if (blanks != 1) return { member: b, message: 'rank groups are not separated by a blank line' };
-			} else if (b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source))
-				return { member: b, message: 'members of one rank group are separated by a blank line' };
+			final want: Null<Int> = spacingViolation(members[i], members[i + 1], source);
+			if (want != null) return {
+				member: members[i + 1],
+				message: want == 1
+					? 'rank groups are not separated by a blank line'
+					: 'members of one rank group are separated by a blank line'
+			};
 		}
 		return null;
+	}
+
+	/**
+	 * The blank-line count the spacing rule demands between the adjacent slots `a`
+	 * and `b` when the pair currently violates it, or null when the pair is exempt
+	 * (different `#if` condition, same-line, directive / stray text in the gap,
+	 * same-rank non-field or comment-led pair) or already correct. The single source
+	 * of the per-pair spacing policy - shared by the check (`firstSpacingIssue`) and
+	 * the fixer's spacing-only fallback (`emitSpacingOnly`) so the two cannot drift.
+	 */
+	private static function spacingViolation(a: OrderedMember, b: OrderedMember, source: String): Null<Int> {
+		if (a.condition != b.condition) return null;
+		final gap: String = source.substring(a.span.to, b.span.from);
+		if (gap.indexOf('\n') < 0 || StringTools.trim(gap) != '') return null;
+		final blanks: Int = blankLineCount(gap);
+		return a.rank != b.rank
+			? blanks != 1 ? 1 : null
+			: b.isField && blanks != 0 && !slotStartsWithComment(a, source) && !slotStartsWithComment(b, source) ? 0 : null;
+	}
+
+	/**
+	 * Whether the spacing rule is disabled for this container outright: a
+	 * non-conditional container with non-whitespace in an inter-slot gap (a stray
+	 * `;`, a trailing comment) - the order fixer falls back to slot swaps there, so
+	 * a spacing finding could never converge.
+	 */
+	private static function spacingDisabled(members: Array<OrderedMember>, source: String): Bool {
+		return !hasConditionalMember(members) && hasNonWhitespaceGap(members, source);
 	}
 
 	/** The number of whitespace-only lines wholly inside `gap` (the inter-slot text) - a tab-only line counts. */
@@ -623,7 +687,7 @@ final class MemberOrder implements Check {
 	 * verbatim; outside `#if`, the writer re-inserts blank-after-doc during canonicalization.
 	 */
 	private static function separatorBetween(prev: OrderedMember, next: OrderedMember, source: String): String {
-		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) ? '\n\n' : '\n';
+		return prev.rank != next.rank || !next.isField || slotStartsWithComment(next, source) ? GROUP_SEPARATOR : '\n';
 	}
 
 	/** Whether any inter-member gap in the region holds non-whitespace (a stray `;`, a trailing comment) a rebuild would silently drop - the guard that falls the reorder back to per-slot swaps. */

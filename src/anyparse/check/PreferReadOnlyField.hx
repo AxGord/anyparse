@@ -61,7 +61,7 @@ final class PreferReadOnlyField implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
+		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex);

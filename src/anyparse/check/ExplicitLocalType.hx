@@ -39,6 +39,13 @@ import anyparse.runtime.Span;
  *
  *  - a literal — `String` / `Int` / `Float` / `Bool` (negatives included);
  *  - `new T<...>()` with WRITTEN type parameters → `T<...>` verbatim;
+ *  - a bare `new T(...)` whose `T` is PROVABLY non-generic → the written `T`
+ *    verbatim: every indexed declaration of the simple name agrees on zero type
+ *    parameters (`SymbolIndex.typeParamArityOf`), or - when the index declares
+ *    no such name - `T` is a whitelisted always-in-scope non-generic constructor
+ *    type (`StringBuf`, `EReg`, ...). A generic, ambiguous-arity or unknown `T`
+ *    stays report-only (a bare `:T` would be a compile error or an inference
+ *    change);
  *  - a typed cast / check-type `(x : T)` → `T`;
  *  - a NON-EMPTY, HOMOGENEOUS array literal of one KNOWN literal element type →
  *    `Array<T>` (a non-empty literal pins the element type — `[1, 2, 3]` is
@@ -122,6 +129,22 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		'Null',
 		'Array',
 		'Map'
+	];
+
+	/**
+	 * Always-in-scope constructor types with NO type parameters — a bare `new T()`'s
+	 * written name is provably its complete type. Consulted only when the project
+	 * index declares no same-named type (an indexed declaration's arity wins).
+	 */
+	private static final NON_GENERIC_NEW_TYPES: Array<String> = [
+		'StringBuf',
+		'EReg',
+		'Date',
+		'StringInput',
+		'BytesBuffer',
+		'BytesInput',
+		'BytesOutput',
+		'Http'
 	];
 
 	public function new() {}
@@ -226,9 +249,37 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		init: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
 		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>
 	): Null<String> {
-		return LiteralInfer.inferType(init, source, shape, castTargets) ?? arrayType(init, shape) ?? methodReturnType(
-			init, shape, tree, declaredTypeSources
-		) ?? staticFieldType(init, shape, tree, index) ?? TypeResolver.identDeclaredTypeSource(init, shape, tree, declaredTypeSources, true);
+		return
+			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index) ?? arrayType(init, shape) ?? methodReturnType(
+				init, shape, tree, declaredTypeSources
+			) ?? staticFieldType(init, shape, tree, index) ?? TypeResolver.identDeclaredTypeSource(
+				init, shape, tree, declaredTypeSources, true
+			);
+	}
+
+	/**
+	 * The written type of a bare (parameterless) `new T(...)` initializer, when `T`
+	 * is provably non-generic: a name every indexed declaration agrees has zero type
+	 * parameters, or — when the index declares no such name — a whitelisted
+	 * always-in-scope constructor type. A generic, ambiguous-arity or unknown `T`
+	 * stays report-only (a bare `:T` annotation would be a compile error or an
+	 * inference change), as does a written-generic `new` (`newTypeSource`'s arm).
+	 */
+	private static function bareNewType(init: QueryNode, source: String, shape: RefShape, index: Null<SymbolIndex>): Null<String> {
+		final newKind: Null<String> = shape.newExprKind;
+		if (newKind == null || init.kind != newKind) return null;
+		final written: Null<String> = LiteralInfer.bareNewTypeName(init, source);
+		if (written == null) return null;
+		final simple: String = written.substring(written.lastIndexOf('.') + 1);
+		if (index != null && index.declaringFiles(simple).length > 0)
+			// Declared in the index: provably non-generic ONLY when every declaration agrees on zero type
+			// parameters. A unanimous non-zero arity, or an ambiguous one (declarations disagree, so
+			// typeParamArityOf returns null), both fail `== 0` and stay report-only — ambiguity must never
+			// prove non-genericity.
+			return index.typeParamArityOf(simple) == 0 ? written : null;
+		// Undeclared anywhere in the index: the whitelist of always-in-scope non-generic stdlib
+		// constructors is the only remaining signal.
+		return NON_GENERIC_NEW_TYPES.contains(simple) ? written : null;
 	}
 
 	/**

@@ -118,6 +118,7 @@ final class RefactorSupport {
 	 */
 	public static final TYPE_DECL_KINDS: Array<String> = [
 		'ClassDecl',
+		'AbstractClassDecl',
 		'InterfaceDecl',
 		'EnumDecl',
 		'EnumAbstractDecl',

@@ -96,13 +96,33 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { public var x = ').length);
 	}
 
-	/** A field declared `var` by an interface must stay externally writable — `(default, null)` breaks the contract. */
+	/** A field whose interface declares it as `var` must keep its access — skipped. */
 	public function testInterfaceVarFieldNotFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'I.hx', source: 'interface I { public var x:Int; }' },
 			{ file: 'C.hx', source: 'class C implements I { public var x:Int = 0; function s():Void { x = 1; } }' }
 		];
 		Assert.equals(0, new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * An index-access write to ANOTHER type no longer poisons the name: the
+	 * internally-written field is flagged, while the element type written through
+	 * the container is correctly treated as externally written.
+	 */
+	public function testUnrelatedIndexWriteNoLongerPoisons(): Void {
+		final vs: Array<Violation> = new PreferReadOnlyField().run([
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
+			{ file: 'Tab.hx', source: 'class Tab { public var x:Int = 0; }' },
+			{ file: 'U.hx', source: 'class U { public function f(tabs:Map<String, Tab>):Void { tabs["k"].x = 5; } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('C.hx', vs[0].file);
+	}
+
+	/** A resolved chain write INSIDE the declaring class counts as internal — the field is flagged. */
+	public function testInternalChainWriteFlagged(): Void {
+		Assert.equals(1, violations('class C { public var v:Int = 0; var next:C; function s():Void { next.next.v = 3; } }').length);
 	}
 
 	private function violations(src: String): Array<Violation> {

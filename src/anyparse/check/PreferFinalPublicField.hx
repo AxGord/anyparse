@@ -29,12 +29,20 @@ import anyparse.runtime.Span;
  * 2. Its enclosing type has NO subtype in the index (`SymbolIndex.hasSubtype`). A
  *    subtype writing the inherited field via `this.field` / a bare `field` resolves
  *    to the SUBTYPE, not this type — so an inherited write could be misattributed;
- *    the gate rules that out. The same gate also bails when a SUPERtype declares the same field (SymbolIndex.supertypeDeclaresMember): its property access is then fixed by that interface / superclass var, which final would violate.
- * 3. No write to the field NAME anywhere is unresolved
- *    (`FieldWriteIndex.hasUnresolvedWrite`). An unresolved `recv.field = …` could be
- *    a hidden write to this type's field; the index over-counts toward "written".
+ *    the gate rules that out. The same gate also bails when a SUPERtype declares
+ *    the same field (`SymbolIndex.supertypeDeclaresMember`): its property access is
+ *    then fixed by that interface / superclass var, which final would violate.
+ * 3. No unresolved write can target the field
+ *    (`FieldWriteIndex.hasUnresolvedWriteTargeting`): a write to the field NAME
+ *    whose receiver could not be attributed to a type could be a hidden write to
+ *    this field, so any such write bails the candidate — UNLESS every one is a
+ *    plain `=` of a builtin-typed literal AND the candidate's declared type is a
+ *    plain project class no builtin can convert into (then the write provably
+ *    targets some other type). The index over-counts toward "written".
  * 4. No resolved write targets this type's field
- *    (`FieldWriteIndex.writtenAnywhere`).
+ *    (`FieldWriteIndex.writtenAnywhere`). Receiver resolution covers `this`, typed
+ *    identifiers, field-access chains, index accesses, inherited-field and static
+ *    roots — see `FieldWriteIndex`'s receiver-resolution doc.
  *
  * Together these prove the initializer is the sole assignment, so `var → final` is
  * always sound; any gap is a loud compile error, never silent corruption.
@@ -63,7 +71,7 @@ final class PreferFinalPublicField implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin);
+		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
 			if (exported) considerField(violations, file, source, field, owner, index, writeIndex);
@@ -84,7 +92,10 @@ final class PreferFinalPublicField implements Check {
 
 	/**
 	 * Flag `field` when it has an initializer, is not a property, its enclosing type
-	 * has no subtype, and no write — resolved or unresolved — targets it.
+	 * has no subtype, and no write — resolved, or unresolved-but-possibly-targeting
+	 * (`hasUnresolvedWriteTargeting`, which re-derives the candidate's declared type
+	 * and applies the type-parameter / unique-plain-class / import-shadow guards) —
+	 * targets it.
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
@@ -95,7 +106,7 @@ final class PreferFinalPublicField implements Check {
 		if (name == null || span == null) return;
 		if (!RefactorSupport.isInitializedNonPropertyField(source, field)) return;
 		if (index.hasSubtype(owner) || index.supertypeDeclaresMember(owner, name)) return;
-		if (writeIndex.hasUnresolvedWrite(name)) return;
+		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (writeIndex.writtenAnywhere(owner, name)) return;
 		out.push({
 			file: file,

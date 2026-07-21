@@ -371,6 +371,51 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges through writeRoundTrip');
 	}
 
+	/**
+	 * A reorder-unsafe container (the side-effecting `final` init would flip past
+	 * the `var` fields) degrades to spacing-only edits: the missing blank line
+	 * between the rank groups is inserted, the order stays untouched, and the fix
+	 * applied to its own output emits nothing - the order finding remains as a
+	 * report-only advisory.
+	 */
+	public function testUnsafeReorderDegradesToSpacingOnly(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		Assert.equals(
+			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			fixedSource(src)
+		);
+		final fixed: String = canonicalizedFix(src);
+		Assert.equals(0, edits(fixed).length, 'fix applied to its own output emits no edits: $fixed');
+		assertOrderAdvisoryOnly(violations(fixed));
+	}
+
+	/**
+	 * The spacing-only fallback also collapses a stray blank line WITHIN a rank
+	 * group while inserting the missing one between groups - both arms of the
+	 * spacing policy apply over the original member order.
+	 */
+	public function testUnsafeReorderCollapsesStrayBlankWithinGroup(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		Assert.equals(
+			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			fixedSource(src)
+		);
+	}
+
+	/**
+	 * The spacing-only fallback honours the `spacingDisabled` guard: a
+	 * non-conditional container with non-whitespace in an inter-slot gap (a stray
+	 * `;`) gets NO spacing edits when the reorder bails - the check's spacing rule
+	 * is disabled there too, so such an edit could never converge.
+	 */
+	public function testUnsafeReorderStrayGapEmitsNoSpacingEdits(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\t;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		Assert.equals(0, edits(src).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
@@ -380,7 +425,6 @@ class MemberOrderCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
 	}
-
 
 	private function fixedSource(src: String): String {
 		final sorted: Array<{ span: Span, text: String }> = edits(src).copy();
@@ -397,7 +441,6 @@ class MemberOrderCheckTest extends Test {
 			true;
 		} catch (exception: haxe.Exception) false;
 	}
-
 
 	/**
 	 * The single member line containing `needle`, or null - lets an assertion
@@ -423,6 +466,17 @@ class MemberOrderCheckTest extends Test {
 				Assert.fail(message);
 				src;
 		};
+	}
+
+	/**
+	 * Asserts `vs` is exactly the one canonical-order Info (the advisory the
+	 * spacing-only fallback leaves report-only), with no spacing finding alongside.
+	 */
+	private function assertOrderAdvisoryOnly(vs: Array<Violation>): Void {
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			'type members are not in canonical order (constants, fields, constructor, methods; public before private)', vs[0].message
+		);
 	}
 
 }
