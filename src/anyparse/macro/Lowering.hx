@@ -3506,8 +3506,13 @@ class Lowering {
 		//    looks like.
 		// The same-line case is untouched (no newline => always a splice tail),
 		// so the relaxation only ever ADDS accepted input.
+		//
+		// The leading `peekLit` is a pure cost guard: `matchKw` has to stay LAST
+		// (it consumes on success), so without it both scanners would run at
+		// every postfix-loop iteration whose operand happens to end a line.
 		var matchExpr: Expr = endsWithWordChar(op)
-			? macro (!hasNewlineIn(ctx.input, _preWsPos, ctx.pos)
+			? macro peekLit(ctx, $v{op})
+				&& (!hasNewlineIn(ctx.input, _preWsPos, ctx.pos)
 					|| (!endsWithBlockClose(ctx.input, _preWsPos) && spliceFragmentIsInfix(ctx.input, ctx.pos + $v{op.length})))
 				&& matchKw(ctx, $v{op})
 			: macro matchLit(ctx, $v{op});

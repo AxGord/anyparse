@@ -800,8 +800,42 @@ class Codegen {
 	 * a division operator.
 	 */
 	private static function spliceFragmentIsInfixField(): Field {
+		final skipCondAtom: Expr = spliceCondAtomSkipExpr();
+		final skipGap: Expr = spliceGapSkipExpr();
+		final infixTest: Expr = infixOpByteTestExpr();
 		final body: Expr = macro {
 			var i: Int = from;
+			$skipCondAtom;
+			$skipGap;
+			if (i >= input.length) return false;
+			final c: Int = input.charCodeAt(i);
+			return $infixTest;
+		};
+		return {
+			name: 'spliceFragmentIsInfix',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'input', type: macro :anyparse.runtime.Input },
+					{ name: 'from', type: macro :Int },
+				],
+				ret: macro :Bool,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Statement fragment of `spliceFragmentIsInfix`: advance the cursor `i`
+	 * past the preprocessor CONDITION ATOM. Leading whitespace and `!`
+	 * negations are skipped, then either a `(`-balanced group or a run of
+	 * identifier / digit / `_` / `.` bytes. Bails out at end of input, which
+	 * the caller reads as "no infix fragment".
+	 */
+	private static function spliceCondAtomSkipExpr(): Expr {
+		final atomByteTest: Expr = condAtomByteTestExpr();
+		return macro {
 			while (i < input.length) {
 				final c: Int = input.charCodeAt(i);
 				if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == '!'.code) {
@@ -826,49 +860,61 @@ class Codegen {
 			} else {
 				while (i < input.length) {
 					final c: Int = input.charCodeAt(i);
-					final isAtomByte: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
-						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code || c == '.'.code;
-					if (!isAtomByte) break;
+					if (!$atomByteTest) break;
 					i++;
 				}
 			}
-			while (i < input.length) {
-				final c: Int = input.charCodeAt(i);
-				if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
-					i++;
-					continue;
-				}
-				if (c == '/'.code && i + 1 < input.length && input.charCodeAt(i + 1) == '/'.code) {
-					while (i < input.length && input.charCodeAt(i) != '\n'.code) i++;
-					continue;
-				}
-				if (c == '/'.code && i + 1 < input.length && input.charCodeAt(i + 1) == '*'.code) {
-					i += 2;
-					while (i + 1 < input.length && !(input.charCodeAt(i) == '*'.code && input.charCodeAt(i + 1) == '/'.code)) i++;
-					i += 2;
-					continue;
-				}
-				break;
-			}
-			if (i >= input.length) return false;
+		};
+	}
+
+	/**
+	 * Statement fragment of `spliceFragmentIsInfix`: advance the cursor `i`
+	 * past whitespace AND comments between the condition atom and the
+	 * fragment. Skipping comments is what makes a leading `/` unambiguously
+	 * a division operator in the byte test that follows.
+	 */
+	private static function spliceGapSkipExpr(): Expr {
+		return macro while (i < input.length) {
 			final c: Int = input.charCodeAt(i);
-			return c == '+'.code || c == '-'.code || c == '*'.code || c == '/'.code || c == '%'.code || c == '='.code || c == '!'.code
-				|| c == '<'.code || c == '>'.code || c == '&'.code || c == '|'.code || c == '^'.code || c == '?'.code || c == ':'.code
-				|| c == '.'.code;
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+				i++;
+				continue;
+			}
+			if (c == '/'.code && i + 1 < input.length && input.charCodeAt(i + 1) == '/'.code) {
+				while (i < input.length && input.charCodeAt(i) != '\n'.code) i++;
+				continue;
+			}
+			if (c == '/'.code && i + 1 < input.length && input.charCodeAt(i + 1) == '*'.code) {
+				i += 2;
+				while (i + 1 < input.length && !(input.charCodeAt(i) == '*'.code && input.charCodeAt(i + 1) == '/'.code)) i++;
+				i += 2;
+				continue;
+			}
+			break;
 		};
-		return {
-			name: 'spliceFragmentIsInfix',
-			access: [APrivate, AStatic],
-			kind: FFun({
-				args: [
-					{ name: 'input', type: macro :anyparse.runtime.Input },
-					{ name: 'from', type: macro :Int },
-				],
-				ret: macro :Bool,
-				expr: body,
-			}),
-			pos: Context.currentPos(),
-		};
+	}
+
+	/**
+	 * Expression fragment of `spliceCondAtomSkipExpr`: is byte `c` part of an
+	 * unparenthesised preprocessor condition atom? Identifier bytes plus `.`,
+	 * which covers the dotted `#if haxe.something` form.
+	 */
+	private static function condAtomByteTestExpr(): Expr {
+		return macro (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code || c == '.'.code;
+	}
+
+	/**
+	 * Expression fragment of `spliceFragmentIsInfix`: is byte `c` a legal
+	 * FIRST byte of a Haxe infix (or chain) operator? The set is deliberately
+	 * over-broad on the accept side -- every byte here is one no declaration,
+	 * statement, list separator or metadata tag can start with, which is the
+	 * only property the own-line gate needs.
+	 */
+	private static function infixOpByteTestExpr(): Expr {
+		return macro c == '+'.code || c == '-'.code || c == '*'.code || c == '/'.code || c == '%'.code || c == '='.code || c == '!'.code
+			|| c == '<'.code || c == '>'.code || c == '&'.code || c == '|'.code || c == '^'.code || c == '?'.code || c == ':'.code
+			|| c == '.'.code;
 	}
 
 	/**
