@@ -53,6 +53,8 @@ class Codegen {
 		// `hasNewlineIn` moved out of the trivia gate (ω-cond-splice): the
 		// word-op postfix dispatch's same-line gate reads it in EVERY build.
 		fields.push(hasNewlineInField());
+		fields.push(endsWithBlockCloseField());
+		fields.push(spliceFragmentIsInfixField());
 		if (trivia) {
 			fields.push(collectTriviaField(formatInfo));
 			fields.push(collectTrailingField(formatInfo));
@@ -719,6 +721,200 @@ class Codegen {
 			}),
 			pos: Context.currentPos(),
 		};
+	}
+
+	/**
+	 * Companion predicate to `hasNewlineIn` for the word-op postfix
+	 * dispatch's own-line gate (`Lowering.buildPostfixOpMatchExpr`).
+	 * Reports whether the last non-whitespace byte BEFORE `pos` is a
+	 * block close `}`.
+	 *
+	 * WHY `}` specifically: an own-line `#if` following a complete operand
+	 * is a STATEMENT-scope conditional exactly when the statement before it
+	 * was already terminable, and in Haxe a statement that needs no `;`
+	 * always ends with `}` -- a block, an `if`/`for`/`while`/`switch`/`try`
+	 * whose last branch is a block, or a metadata-prefixed block statement.
+	 * Any other trailing byte leaves the enclosing expression incomplete, so
+	 * a following `#if` can only be an infix splice tail.
+	 *
+	 * The backward whitespace skip is defensive: the caller passes the
+	 * postfix loop's `_preWsPos`, saved immediately after the previously
+	 * consumed token, so in practice `pos - 1` is already the operand's last
+	 * byte.
+	 */
+	private static function endsWithBlockCloseField(): Field {
+		final body: Expr = macro {
+			var i: Int = pos - 1;
+			while (i >= 0) {
+				final c: Int = input.charCodeAt(i);
+				if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+					i--;
+					continue;
+				}
+				return c == '}'.code;
+			}
+			return false;
+		};
+		return {
+			name: 'endsWithBlockClose',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'input', type: macro :anyparse.runtime.Input },
+					{ name: 'pos', type: macro :Int },
+				],
+				ret: macro :Bool,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Second half of the word-op postfix own-line gate
+	 * (`Lowering.buildPostfixOpMatchExpr`). `from` is the byte just past the
+	 * matched operator (`#if`); the scan skips the preprocessor CONDITION
+	 * ATOM and reports whether the fragment that follows it opens with an
+	 * INFIX operator byte.
+	 *
+	 * That is the discriminator between the two things an own-line `#if` can
+	 * be. A splice TAIL continues the operand expression, so its fragment
+	 * necessarily opens with an operator:
+	 *   `return __idleThreads` + `#if lime_threads - __queuedExitEvents #end`
+	 *   `if (intf != null`     + `#if (js_es >= 6) && (...) #end)`
+	 * Every other own-line `#if` opens a SCOPE-level region whose fragment
+	 * starts with a declaration, statement, list separator or metadata:
+	 *   `#if debug final t1:Float = Sys.time(); #end`  (statement scope)
+	 *   `#if (haxe_ver >= 4.10) if (...) #else ... #end` (statement scope)
+	 *   `#if air, commandKey:Bool = false, ... #end`   (param-list scope)
+	 *   `#if debug @doc("...") ["--check-stability"] => ... #end` (array scope)
+	 * All four of those were live PASS shapes that a newline-blind relaxation
+	 * broke; the infix test is what keeps them with their own productions.
+	 *
+	 * CONDITION-ATOM SKIP. The atom is a `(`-balanced group or a run of
+	 * identifier / dot bytes, optionally preceded by `!`. An unparenthesised
+	 * multi-term condition (`#if a && b`) is deliberately read as atom `a`
+	 * plus an infix fragment: both readings agree that nothing scope-level
+	 * follows, which is all this predicate has to decide. Comments between
+	 * the atom and the fragment are skipped so a leading `/` is unambiguously
+	 * a division operator.
+	 */
+	private static function spliceFragmentIsInfixField(): Field {
+		final skipCondAtom: Expr = spliceCondAtomSkipExpr();
+		final skipGap: Expr = spliceGapSkipExpr();
+		final infixTest: Expr = infixOpByteTestExpr();
+		final body: Expr = macro {
+			var i: Int = from;
+			$skipCondAtom;
+			$skipGap;
+			if (i >= input.length) return false;
+			final c: Int = input.charCodeAt(i);
+			return $infixTest;
+		};
+		return {
+			name: 'spliceFragmentIsInfix',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'input', type: macro :anyparse.runtime.Input },
+					{ name: 'from', type: macro :Int },
+				],
+				ret: macro :Bool,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Statement fragment of `spliceFragmentIsInfix`: advance the cursor `i`
+	 * past the preprocessor CONDITION ATOM. Leading whitespace and `!`
+	 * negations are skipped, then either a `(`-balanced group or a run of
+	 * identifier / digit / `_` / `.` bytes. Bails out at end of input, which
+	 * the caller reads as "no infix fragment".
+	 */
+	private static function spliceCondAtomSkipExpr(): Expr {
+		final atomByteTest: Expr = condAtomByteTestExpr();
+		return macro {
+			while (i < input.length) {
+				final c: Int = input.charCodeAt(i);
+				if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == '!'.code) {
+					i++;
+					continue;
+				}
+				break;
+			}
+			if (i >= input.length) return false;
+			if (input.charCodeAt(i) == '('.code) {
+				var depth: Int = 0;
+				while (i < input.length) {
+					final c: Int = input.charCodeAt(i);
+					i++;
+					if (c == '('.code) {
+						depth++;
+					} else if (c == ')'.code) {
+						depth--;
+						if (depth == 0) break;
+					}
+				}
+			} else {
+				while (i < input.length) {
+					final c: Int = input.charCodeAt(i);
+					if (!$atomByteTest) break;
+					i++;
+				}
+			}
+		};
+	}
+
+	/**
+	 * Statement fragment of `spliceFragmentIsInfix`: advance the cursor `i`
+	 * past whitespace AND comments between the condition atom and the
+	 * fragment. Skipping comments is what makes a leading `/` unambiguously
+	 * a division operator in the byte test that follows.
+	 */
+	private static function spliceGapSkipExpr(): Expr {
+		return macro while (i < input.length) {
+			final c: Int = input.charCodeAt(i);
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+				i++;
+				continue;
+			}
+			if (c == '/'.code && i + 1 < input.length && input.charCodeAt(i + 1) == '/'.code) {
+				while (i < input.length && input.charCodeAt(i) != '\n'.code) i++;
+				continue;
+			}
+			if (c == '/'.code && i + 1 < input.length && input.charCodeAt(i + 1) == '*'.code) {
+				i += 2;
+				while (i + 1 < input.length && !(input.charCodeAt(i) == '*'.code && input.charCodeAt(i + 1) == '/'.code)) i++;
+				i += 2;
+				continue;
+			}
+			break;
+		};
+	}
+
+	/**
+	 * Expression fragment of `spliceCondAtomSkipExpr`: is byte `c` part of an
+	 * unparenthesised preprocessor condition atom? Identifier bytes plus `.`,
+	 * which covers the dotted `#if haxe.something` form.
+	 */
+	private static function condAtomByteTestExpr(): Expr {
+		return macro (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
+			|| c == '_'.code || c == '.'.code;
+	}
+
+	/**
+	 * Expression fragment of `spliceFragmentIsInfix`: is byte `c` a legal
+	 * FIRST byte of a Haxe infix (or chain) operator? The set is deliberately
+	 * over-broad on the accept side -- every byte here is one no declaration,
+	 * statement, list separator or metadata tag can start with, which is the
+	 * only property the own-line gate needs.
+	 */
+	private static function infixOpByteTestExpr(): Expr {
+		return macro c == '+'.code || c == '-'.code || c == '*'.code || c == '/'.code || c == '%'.code || c == '='.code || c == '!'.code
+			|| c == '<'.code || c == '>'.code || c == '&'.code || c == '|'.code || c == '^'.code || c == '?'.code || c == ':'.code
+			|| c == '.'.code;
 	}
 
 	/**
