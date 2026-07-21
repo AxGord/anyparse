@@ -402,6 +402,23 @@ enum HxStatement {
 	Conditional(inner: HxConditionalStmt);
 
 	/**
+	 * Token-splice fallback for a `#if` region whose every branch OPENS a
+	 * block, with the block's body and its closing `}` shared after
+	 * `#end` - see `HxCondSpliceBlockOpen`.
+	 *
+	 * Tried BEFORE `CondSpliceStmt`, which is the one inversion of the
+	 * "structured production first" rule in this enum. `CondSpliceStmt`'s
+	 * `{raw, tail}` shape matches these regions too - it binds the first
+	 * shared statement as `tail` and leaves the region's `{` unclosed, so
+	 * the parse dies downstream with no backtracking left. The two are
+	 * disjoint anyway because `HxCondBlockOpenRaw` requires the fragment
+	 * to end on an unclosed `{`, which no dangling-else fragment and no
+	 * structurally representable region does.
+	 */
+	@:kw('#if')
+	CondSpliceBlockOpen(inner: HxCondSpliceBlockOpen);
+
+	/**
 	 * Token-splice fallback for `#if` statement regions the structured
 	 * `Conditional` fail-rewinds on (dangling-else if-heads) — see
 	 * `HxCondSpliceStmt`. Tried directly after it. Also catches a `#if`
@@ -416,6 +433,22 @@ enum HxStatement {
 	 */
 	@:kw('#if') @:fmt(condSpliceCaseMarkerDedent)
 	CondSpliceStmt(inner: HxCondSpliceStmt);
+
+	/**
+	 * Token-splice fallback for a `#if` region that CLOSES its enclosing
+	 * block and re-opens a continuation of the same if-chain, leaving the
+	 * shared `}` after `#end` - see `HxCondBlockCloseRaw`.
+	 *
+	 * Payload-only: nothing between `#end` and the enclosing block's own
+	 * `}` belongs to this statement, so there is no tail field and no
+	 * `@:trail`. Tried AFTER `CondSpliceStmt` for the ordinary reason -
+	 * every region an earlier ctor can represent is already gone. The
+	 * leading-`}` constraint in the terminal keeps this maximally greedy
+	 * shape from swallowing regions a future structural production
+	 * should own.
+	 */
+	@:kw('#if')
+	CondSpliceBlockClose(raw: HxCondBlockCloseRaw);
 
 	/**
 	 * Orphan `else` continuation: an `else` clause whose governing `if`
