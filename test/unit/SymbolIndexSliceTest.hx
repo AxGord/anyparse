@@ -281,6 +281,142 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.hasAccessGrant('Sub'));
 	}
 
+	/**
+	 * A type declared inside a `#if ... #end` region is indexed like a plain
+	 * top-level one, with its members and its cross-file declaring-file entry.
+	 */
+	public function testConditionalRegionTypeIsIndexed(): Void {
+		final source: String = 'package pkg;\n#if js\nclass Guarded {\n\tpublic var gv:Int;\n}\n#end\nclass Cond {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Cond.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Cond.hx');
+
+		Assert.equals(2, fi.types.length);
+		final guarded: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'Guarded');
+		Assert.notNull(guarded);
+		Assert.equals('ClassDecl', (guarded: TypeDeclInfo).kind);
+		Assert.isFalse((guarded: TypeDeclInfo).isMain);
+		Assert.isTrue((guarded: TypeDeclInfo).members.exists(m -> m.name == 'gv'));
+		Assert.equals(1, index.declaringFiles('Guarded').length);
+	}
+
+	/**
+	 * Both branches of a `#if / #else` region project as siblings of one
+	 * wrapper, but no compilation sees more than one: the FIRST declaration of
+	 * a name is indexed and later same-named ones are dropped, so the name
+	 * never reads as ambiguous.
+	 */
+	public function testConditionalDuplicateNameKeepsFirstBranch(): Void {
+		final source: String = 'package pkg;\n#if js\nclass Dup {\n\tpublic var jsOnly:Int;\n}\n#else\nclass Dup {\n\tpublic var cppOnly:Int;\n}\n#end\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Dup.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Dup.hx');
+
+		Assert.equals(1, fi.types.length);
+		Assert.equals(1, index.declaringFiles('Dup').length);
+		final dup: TypeDeclInfo = fi.types[0];
+		Assert.equals('Dup', dup.name);
+		Assert.isTrue(dup.members.exists(m -> m.name == 'jsOnly'));
+		Assert.isFalse(dup.members.exists(m -> m.name == 'cppOnly'));
+	}
+
+	/** Two SIBLING regions declaring the same type collapse to one entry too. */
+	public function testSiblingConditionalRegionsDedupeByName(): Void {
+		final source: String = 'package pkg;\n#if js\nclass Twin {\n\tpublic var jsOnly:Int;\n}\n#end\n#if !js\nclass Twin {\n\tpublic var nativeOnly:Int;\n}\n#end\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Twin.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Twin.hx');
+
+		Assert.equals(1, fi.types.length);
+		Assert.isTrue(fi.types[0].members.exists(m -> m.name == 'jsOnly'));
+	}
+
+	/** Distinct names across `#if` / `#elseif` / `#else` branches are ALL indexed. */
+	public function testConditionalBranchDistinctNamesAllIndexed(): Void {
+		final source: String = 'package pkg;\n#if js\nclass MA {}\n#elseif cpp\nclass MB {}\n#else\ntypedef MC = Int;\n#end\nclass Multi {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Multi.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Multi.hx');
+
+		Assert.equals(4, fi.types.length);
+		Assert.notNull(fi.types.find(t -> t.name == 'MA'));
+		Assert.notNull(fi.types.find(t -> t.name == 'MB'));
+		final mc: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'MC');
+		Assert.notNull(mc);
+		Assert.equals('TypedefDecl', (mc: TypeDeclInfo).kind);
+		final multi: Null<TypeDeclInfo> = fi.types.find(t -> t.name == 'Multi');
+		Assert.notNull(multi);
+		Assert.isTrue((multi: TypeDeclInfo).isMain);
+	}
+
+	/** A region nested inside another region is descended into as well. */
+	public function testNestedConditionalRegionTypeIsIndexed(): Void {
+		final source: String = 'package pkg;\n#if js\n#if debug\nclass Nested {}\n#end\n#end\nclass Outer {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Outer.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Outer.hx');
+
+		Assert.equals(2, fi.types.length);
+		Assert.notNull(fi.types.find(t -> t.name == 'Nested'));
+	}
+
+	/**
+	 * A SPLIT-HEADER region - `#if a class X extends B { #else class X { #end
+	 * <members> }` - indexes the first branch's header: its name, kind and
+	 * heritage come from the `*Head` child, its members are the head's
+	 * SIBLINGS, and its span is the WRAPPER's, so the members written after
+	 * `#end` are inside it.
+	 */
+	public function testSplitHeaderDeclIndexed(): Void {
+		final source: String = 'package pkg;\n#if js\nclass Split extends Base implements Marker {\n#else\nclass Split {\n#end\n\tpublic var shared:Int;\n}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Split.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Split.hx');
+
+		Assert.equals(1, fi.types.length);
+		final split: TypeDeclInfo = fi.types[0];
+		Assert.equals('Split', split.name);
+		Assert.equals('ClassDecl', split.kind);
+		Assert.isTrue(split.isMain);
+		Assert.equals(0, split.typeParamArity);
+		Assert.isFalse(split.isAnonStruct);
+		Assert.isTrue(split.supertypes.contains('Base'));
+		Assert.isTrue(split.supertypes.contains('Marker'));
+		Assert.isTrue(split.members.exists(m -> m.name == 'shared'));
+		Assert.isTrue(index.hasSubtype('Base'));
+
+		final memberAt: Int = source.indexOf('shared');
+		Assert.isTrue(split.span.from <= memberAt && memberAt < split.span.to);
+	}
+
+	/** The `abstract` split-header form, with its type-parameter arity read off the head. */
+	public function testSplitHeaderAbstractTypeParamArity(): Void {
+		final source: String = 'package pkg;\n#if js\nabstract Gen<T>(Array<T>) from Array<T> {\n#else\nabstract Gen<T>(List<T>) from List<T> {\n#end\n\tpublic var g:Int;\n}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Gen.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Gen.hx');
+
+		Assert.equals(1, fi.types.length);
+		final gen: TypeDeclInfo = fi.types[0];
+		Assert.equals('Gen', gen.name);
+		Assert.equals('AbstractDecl', gen.kind);
+		Assert.equals(1, gen.typeParamArity);
+		Assert.isTrue(gen.members.exists(m -> m.name == 'g'));
+	}
+
+	/**
+	 * Imports guarded by a region stay OUT of the index - the descent lifts
+	 * type declarations only, so a `#if`-guarded `import` is still invisible.
+	 */
+	public function testConditionalRegionImportsStayUnindexed(): Void {
+		final source: String = 'package pkg;\n#if js\nimport js.Browser;\n#end\nimport other.Thing;\nclass Guard {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Guard.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Guard.hx');
+
+		Assert.equals(1, fi.imports.length);
+		Assert.equals('other.Thing', fi.imports[0].raw);
+	}
+
+	/** The `FileInfo` `index` holds for `file`, asserted present. */
+	private function fileInfoOf(index: SymbolIndex, file: String): FileInfo {
+		final info: Null<FileInfo> = index.fileInfo(file);
+		Assert.notNull(info);
+		return (info: FileInfo);
+	}
+
 	private function assertImport(imp: ImportInfo, raw: String, kind: ImportKind, alias: Null<String>): Void {
 		Assert.equals(raw, imp.raw);
 		Assert.isTrue(imp.kind == kind);
