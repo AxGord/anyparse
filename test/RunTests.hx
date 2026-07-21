@@ -54,6 +54,7 @@ import unit.HxImportAliasSliceTest;
 import unit.HxToplevelMetaSliceTest;
 import unit.HxDottedMetaNameSliceTest;
 import unit.HxCondDeclPrefixSliceTest;
+import unit.HxCondDeclPrefixKeywordSliceTest;
 import unit.HxCondHeritageSliceTest;
 import unit.HxCondVarInitSliceTest;
 import unit.HxCondParamElseSepSliceTest;
@@ -451,6 +452,7 @@ import unit.PreferTernaryAssignmentCheckTest;
 import unit.InvertNegatedIfElseCheckTest;
 import unit.FieldInitAtDeclarationCheckTest;
 import unit.ExtractConstantSliceTest;
+import unit.HxPpCondDottedSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -935,6 +937,8 @@ class RunTests {
 		addCase(new CallGraphTest());
 		addCase(new ClustersTest());
 		addCase(new ThreadSafetyCheckTest());
+		addCase(new HxCondDeclPrefixKeywordSliceTest());
+		addCase(new HxPpCondDottedSliceTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

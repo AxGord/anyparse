@@ -5,10 +5,18 @@ package anyparse.grammar.haxe;
  * `#if` / `#elseif`.
  *
  * Captured verbatim as the matched substring, preserving the original
- * condition text across round-trip. Four shapes cover the idiomatic
+ * condition text across round-trip. Five shapes cover the idiomatic
  * Haxe forms:
  *
  *  - Bare identifier: `cppia`, `neko_v21`.
+ *  - Dotted identifier: `target.threaded`, `perf.js` — Haxe's define
+ *    parser accepts a dot-separated path, and `std/sys/thread/*.hx` /
+ *    lime's `perf.js` guards use the bare (unparenthesised) form.
+ *    `#if (target.threaded)` already parsed before this shape was added
+ *    — the dot path only extends the BARE identifier alternative, mirroring
+ *    `HxTypeName`'s `(?:\.[A-Za-z_][A-Za-z0-9_]*)*` tail. Requiring an
+ *    identifier after each `.` keeps a following float literal or field
+ *    access out of the condition.
  *  - Integer literal: `#if 0` / `#if 1` — Haxe's macro-condition parser
  *    accepts a constant, and openfl uses `#if 0` to comment out whole
  *    regions (`utils/_internal/Lib.hx`, `AssetsMacro.hx`, `ShaderMacro.hx`).
@@ -33,6 +41,6 @@ package anyparse.grammar.haxe;
  * preprocessor condition is not a Haxe string literal, so `\n` etc.
  * stay as literal backslash-n in the captured text.
  */
-@:re('!*(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|\\((?:[^()]|\\([^()]*\\))*\\))')
+@:re('!*(?:[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*|[0-9]+|\\((?:[^()]|\\([^()]*\\))*\\))')
 @:rawString
 abstract HxPpCondLit(String) from String to String {}
