@@ -174,6 +174,13 @@ final class HxExprUtil {
 	 * corpus contract for `x = ${expr}` / `x = {a: 1}` / `x = [1, 2]`, and
 	 * no fixture covers a reification splice as an assignment RHS.
 	 */
+	/**
+	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
+	 * is an if-chain continuation rather than a standalone guarded
+	 * statement. See `condSpliceTailElseLed`.
+	 */
+	private static final ELSE_KEYWORD: String = 'else';
+
 	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
 		'BlockExpr',
 		'ObjectLit',
@@ -1107,10 +1114,26 @@ final class HxExprUtil {
 		if (rawNode == null) return false;
 		final raw: Null<String> = rawNode is String ? cast rawNode : cast Reflect.field(rawNode, 'node');
 		if (raw == null) return false;
+		final start: Int = skipCondAtom(raw);
+		if (raw.substr(start, ELSE_KEYWORD.length) != ELSE_KEYWORD) return false;
+		final after: Int = start + ELSE_KEYWORD.length;
+		return after >= raw.length || !isCondWordChar(StringTools.fastCodeAt(raw, after));
+	}
+
+	/**
+	 * Index of the first character past a splice fragment's leading
+	 * condition atom (and the whitespace on either side of it).
+	 *
+	 * The scan is paren-depth aware rather than a plain "up to the first
+	 * whitespace": `!(js && html5)` carries spaces INSIDE its parens, so
+	 * only a depth-0 space ends the atom. An unbalanced fragment drives
+	 * `depth` negative and the scan simply runs to the end - the caller
+	 * then reads no keyword and answers `false`, which is the safe verdict.
+	 */
+	private static function skipCondAtom(raw: String): Int {
 		final n: Int = raw.length;
 		var i: Int = 0;
-		inline function isWs(c: Int): Bool return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-		while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
+		while (i < n && isCondWs(StringTools.fastCodeAt(raw, i))) i++;
 		var depth: Int = 0;
 		while (i < n) {
 			final c: Int = StringTools.fastCodeAt(raw, i);
@@ -1118,16 +1141,23 @@ final class HxExprUtil {
 				depth++;
 			else if (c == ')'.code)
 				depth--;
-			else if (depth == 0 && isWs(c))
+			else if (depth == 0 && isCondWs(c))
 				break;
 			i++;
 		}
-		while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
-		if (raw.substr(i, 4) != 'else') return false;
-		final after: Int = i + 4;
-		if (after >= n) return true;
-		final c: Int = StringTools.fastCodeAt(raw, after);
-		return !(c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code));
+		while (i < n && isCondWs(StringTools.fastCodeAt(raw, i))) i++;
+		return i;
+	}
+
+	private static inline function isCondWs(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+	private static inline function isCondWordChar(c: Int): Bool {
+		if (c == '_'.code) return true;
+		if (c >= 'a'.code && c <= 'z'.code) return true;
+		if (c >= 'A'.code && c <= 'Z'.code) return true;
+		return c >= '0'.code && c <= '9'.code;
 	}
 
 	/**
