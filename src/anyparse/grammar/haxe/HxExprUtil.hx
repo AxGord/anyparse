@@ -597,6 +597,25 @@ final class HxExprUtil {
 				// (std `python/_std/sys/thread/Thread.hx:116`).
 				case 'ThinParenLambdaExpr', 'ParenLambdaExpr':
 					lambdaBodyNoSemi(e);
+				// `untyped <expr>` -- a transparent keyword wrapper that owns
+				// no terminator slot of its own, so the verdict is the
+				// operand's, asked as a NESTED occurrence: whatever swallowed
+				// the `;` sits inside the operand, not at the statement top.
+				// Motivating source: std
+				// `neko/_std/sys/db/Mysql.hx:131` `untyped if (...) e = e.msg;`
+				// followed by `untyped __dollar__rethrow(e);` -- the
+				// if-expr's `thenBranch` `@:trailOpt(';')` already claimed the
+				// statement terminator, so the enclosing `ExprStmt` must not
+				// demand a second one.
+				case 'UntypedExpr':
+					final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+					params != null && params.length != 0 && stmtExprNoSemiAt(params[0], true);
+				// `<operand> #if ... #end` -- the postfix token-splice tail.
+				// Only an `else`-led fragment elides the terminator; see
+				// `condSpliceTailElseLed` for why every other shape must keep
+				// demanding the `;`.
+				case 'CondSpliceTail':
+					condSpliceTailElseLed(e);
 				// Recursion target. Standalone `{ … }` at statement
 				// position is `HxStatement.BlockStmt`, so the brace-terminal
 				// ctors only fire when reached through Assign / IfExpr above.
@@ -1043,6 +1062,72 @@ final class HxExprUtil {
 		if (nested) return true;
 		final thenBranch: Null<Dynamic> = Reflect.field(ifExpr, 'thenBranch');
 		return thenBranch != null && stmtExprNoSemiAt(thenBranch, true);
+	}
+
+	/**
+	 * True iff a `HxExpr.CondSpliceTail` fragment is an if-chain
+	 * CONTINUATION -- its raw text, past the condition atom, starts with
+	 * the `else` keyword.
+	 *
+	 * Such a region cannot begin a statement on its own: the governing
+	 * `if` head is the operand the postfix bound to, and that head's own
+	 * terminator slot (`HxIfExpr.thenBranch`'s `@:trailOpt(';')`) already
+	 * swallowed the statement's `;` BEFORE the region opened. Demanding a
+	 * second `;` after the `#end` terminates the enclosing block Star one
+	 * statement early. Motivating source -- openfl
+	 * `text/_internal/TextEngine.hx:1183`:
+	 *
+	 * ```haxe
+	 * layoutGroup._textDirection = if (!f.textDirection.invalid) f.textDirection; #if !(js && html5) else if (positions.length > 0)
+	 *     positions[0].textDirection; #end
+	 * else
+	 *     mainDirection();
+	 * ```
+	 *
+	 * Every OTHER fragment shape is an independent guarded statement that
+	 * merely happens to follow the operand, and the mandatory `;` is what
+	 * keeps it independent: it makes the Trivia-mode parser reject the
+	 * postfix reading and re-read the region as a statement-scope
+	 * `HxStatement.Conditional`. Tactics Manager
+	 * `video/GpuDirectPipeline.hx:48` is the measured case -- a
+	 * `@:privateAccess { ... }` block followed on its own line by
+	 * `#if debug final t1:Float = Sys.time(); #end`. A blanket `true` here
+	 * glued the two into one postfix expression and rewrote the file.
+	 * (Plain mode never binds the postfix across that gap at all, so the
+	 * divergence is Trivia-only and invisible to `ast --count`.)
+	 *
+	 * The condition atom is skipped with a paren-depth scan rather than a
+	 * regex: `!(js && html5)` carries spaces INSIDE its parens, so the
+	 * "first whitespace" rule only works at depth 0.
+	 */
+	private static function condSpliceTailElseLed(e: Dynamic): Bool {
+		final params: Null<Array<Dynamic>> = Type.enumParameters(e);
+		if (params == null || params.length < 2) return false;
+		final rawNode: Null<Dynamic> = params[1];
+		if (rawNode == null) return false;
+		final raw: Null<String> = rawNode is String ? cast rawNode : cast Reflect.field(rawNode, 'node');
+		if (raw == null) return false;
+		final n: Int = raw.length;
+		var i: Int = 0;
+		inline function isWs(c: Int): Bool return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+		while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
+		var depth: Int = 0;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(raw, i);
+			if (c == '('.code)
+				depth++;
+			else if (c == ')'.code)
+				depth--;
+			else if (depth == 0 && isWs(c))
+				break;
+			i++;
+		}
+		while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
+		if (raw.substr(i, 4) != 'else') return false;
+		final after: Int = i + 4;
+		if (after >= n) return true;
+		final c: Int = StringTools.fastCodeAt(raw, after);
+		return !(c == '_'.code || (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code));
 	}
 
 	/**
