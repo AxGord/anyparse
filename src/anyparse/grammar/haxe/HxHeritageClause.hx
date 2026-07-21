@@ -15,6 +15,14 @@ package anyparse.grammar.haxe;
  * `TriviaTypeSynth` synthesize the bare-Star + Case-3 `@:kw` shape
  * exactly as they already do for `HxAbstractClause`.
  *
+ * `Conditional` adds a `#if <cond> ... #end` region as a Star element,
+ * so the `extends` / `implements` keyword may itself sit inside the
+ * guard (`class Window #if lime extends LimeWindow #end`). It is the
+ * heritage-scope sibling of `HxMetadata.Conditional` and
+ * `HxMemberModifier.Conditional`, and is distinct from the conditional
+ * in the TYPE slot of a clause (`extends #if x A #else B #end`), which
+ * `HxType` already covers via `HxConditionalType` — the two compose.
+ *
  * The parser is intentionally permissive: it does not enforce Haxe's
  * semantic rules (a class has at most one `extends` and uses
  * `implements` for interfaces; an interface uses only `extends`, and
@@ -35,5 +43,8 @@ enum HxHeritageClause {
 
 	@:kw('implements')
 	ImplementsClause(type: HxType);
+
+	@:kw('#if') @:trail('#end')
+	Conditional(inner: HxConditionalHeritage);
 
 }

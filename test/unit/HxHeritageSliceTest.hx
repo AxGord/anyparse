@@ -117,6 +117,7 @@ class HxHeritageSliceTest extends HxTestHelpers {
 		return switch clause {
 			case ExtendsClause(type): type;
 			case ImplementsClause(type): type;
+			case Conditional(_): throw 'expected a plain clause, got a #if region';
 		};
 	}
 
@@ -124,6 +125,7 @@ class HxHeritageSliceTest extends HxTestHelpers {
 		return switch clause {
 			case ExtendsClause(_): true;
 			case ImplementsClause(_): false;
+			case Conditional(_): false;
 		};
 	}
 
