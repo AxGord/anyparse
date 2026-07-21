@@ -20,8 +20,8 @@ package anyparse.grammar.haxe;
  * existing class declaration's slots. Duplication here is the cheaper
  * side of that trade - `HxClassDecl` is left byte-identical.
  *
- * The opening `{` is NOT part of this type. It is consumed by
- * `HxCondSharedBodyDecl.head`'s `@:trail('{')`, so the same header type
+ * The opening `{` is NOT part of this type. It is consumed by the
+ * `@:trail('{')` on `HxDeclHead.ClassHead`, so the same header type
  * could serve a future production that does not open a body at all.
  */
 @:peg

@@ -236,9 +236,10 @@ enum HxDecl {
 	 * `}` is outside the region, and rolls back before this ctor is
 	 * reached.
 	 *
-	 * `@:trail('}')` closes the shared body - the brace the FIRST
-	 * branch's header opened is consumed inside the payload, by
-	 * `HxCondSharedBodyDecl.head`.
+	 * Both braces are consumed inside the payload: the one the FIRST
+	 * branch's header opens by `HxDeclHead`'s `@:trail('{')`, the
+	 * closer by `HxCondSharedBodyDecl.members`' `@:trail('}')`. The ctor
+	 * itself carries no trail.
 	 */
 	@:kw('#if')
 	CondSharedBodyDecl(inner: HxCondSharedBodyDecl);

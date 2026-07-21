@@ -29,16 +29,22 @@ package anyparse.grammar.haxe;
  *
  * SHAPE - first branch live, alternates raw:
  *
- *  - `head` parses the FIRST branch STRUCTURALLY, and its `@:trail('{')`
- *    consumes the brace that branch opens;
+ *  - `head` parses the FIRST branch STRUCTURALLY; the `@:trail('{')` on
+ *    each `HxDeclHead` branch consumes the brace that branch opens;
  *  - `alt` captures `#else` / `#elseif` through `#end` byte-verbatim;
- *  - `members` parses the shared member list, and the owning ctor's
- *    `@:trail('}')` closes the body.
+ *  - `members` parses the shared member list, and its own `@:trail('}')`
+ *    closes the body.
  *
  * The first branch's type name, type parameters, heritage and every
  * shared member therefore stay in the tree and queryable; the
  * alternative headers are not. That asymmetry is accepted and intended -
  * the same blindness already holds for `#if` bodies generally.
+ *
+ * The closing `}` sits on `members` rather than on the owning ctor so the
+ * Star can also carry `@:fmt(rightCurly)`, which puts the closer on its
+ * own line at the OUTER indent - `HxClassDecl.members` emits its `}` the
+ * same way. A ctor-level trail lands one level too deep, inside the
+ * Star's `nestBody` indent scope.
  *
  * WHY NOT SPLICE THE WHOLE REGION. `HxCondSpliceRaw` swallows from the
  * `#if` to the `#end`; after that the parser meets a stray `}` with no
