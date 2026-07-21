@@ -3472,15 +3472,44 @@ class Lowering {
 		// Prepend `!peekLit(longerOp)` guards for every op literal that
 		// strictly starts with `op`. Short-circuits so matchLit is not
 		// called when a longer op is about to match.
-		// Word-like postfix ops (ω-cond-splice `#if`) additionally require
-		// SAME-LINE adjacency to the operand: a `#if` on its own line after
-		// a no-semi block-ended statement is a structured STATEMENT
-		// conditional, not an infix splice-tail — without the newline gate
-		// the splice raw-swallows it and the enclosing statement then fails
-		// on the next token (caught live in dogfood:
-		// `@:privateAccess {…}` + own-line `#if debug var t…#end`).
+		// Word-like postfix ops (cond-splice `#if`) carry an OWN-LINE gate.
+		// A `#if` on its own line after a no-semi BLOCK-ENDED statement is a
+		// structured STATEMENT conditional, not an infix splice-tail: without
+		// the gate the splice raw-swallows it and the enclosing statement then
+		// fails on the next token. Two live shapes need the rejection --
+		// `@:privateAccess { ... }` followed by an own-line
+		// `#if debug final t = ...; #end`
+		// (`TM-Haxe4/src/video/GpuDirectPipeline.hx:52`, the original dogfood
+		// catch recorded when this gate was written), and a `switch { ... }`
+		// assignment followed by an own-line
+		// `#if (haxe_ver >= 4.10) if (...) #else if (...) #end`
+		// (`pony/ui/xml/HeapsXmlUi.hx:202`).
+		//
+		// The gate was UNCONDITIONAL on the newline until this slice, which
+		// also rejected the two legitimate own-line SPLICE TAILS --
+		// `return __idleThreads\n#if lime_threads - __queuedExitEvents #end;`
+		// (`lime/system/ThreadPool.hx:1029`) and the in-condition operand form
+		// `if (intf != null\n// ...\n#if (js_es >= 6) && (...) #end)`
+		// (`std/js/Boot.hx:151`). Two predicates admit those without admitting
+		// the scope-level regions:
+		//  - `spliceFragmentIsInfix` is the discriminator: a splice TAIL
+		//    continues the operand, so past the condition atom its fragment
+		//    opens with an infix operator, while a scope-level region opens
+		//    with a declaration, statement, list separator or metadata. It is
+		//    what keeps the param-list
+		//    (`whitespace/issue_582_type_hints_conditionals`) and array-element
+		//    (`wrapping/issue_207_array_wrapping_with_conditionals`) fixtures
+		//    on their own productions -- a newline-blind relaxation broke both.
+		//  - `endsWithBlockClose` is the belt-and-braces half: a Haxe statement
+		//    terminable WITHOUT a `;` always ends with `}`, so an own-line
+		//    `#if` after a `}` is a statement conditional whatever its fragment
+		//    looks like.
+		// The same-line case is untouched (no newline => always a splice tail),
+		// so the relaxation only ever ADDS accepted input.
 		var matchExpr: Expr = endsWithWordChar(op)
-			? macro !hasNewlineIn(ctx.input, _preWsPos, ctx.pos) && matchKw(ctx, $v{op})
+			? macro (!hasNewlineIn(ctx.input, _preWsPos, ctx.pos)
+					|| (!endsWithBlockClose(ctx.input, _preWsPos) && spliceFragmentIsInfix(ctx.input, ctx.pos + $v{op.length})))
+				&& matchKw(ctx, $v{op})
 			: macro matchLit(ctx, $v{op});
 		for (other in allOps) {
 			if (other.length > op.length && StringTools.startsWith(other, op)) {
