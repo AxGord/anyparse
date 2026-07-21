@@ -20,14 +20,42 @@ package anyparse.grammar.haxe;
  * The `#end` is swallowed INTO the raw match (rather than living on a
  * `@:trail`) so the enclosing ctors can parse their continuation tail
  * immediately after this terminal with no mid-struct keyword field.
- * Nested `#if` inside a splice region is NOT supported — the guarded
- * lookahead stops at the FIRST `#end` (no such nesting exists in the
- * corpus or the dogfood tree; a structural conditional inside a splice
- * would be mis-bracketed anyway).
+ *
+ * NESTING. The regex is a two-branch alternation. The FIRST branch skips
+ * over BALANCED inner `#if ... #end` pairs and stops at the first UNMATCHED
+ * `#end`, so a splice fragment may itself contain a complete nested
+ * conditional. Three live sources need this, and all three were skip-parse
+ * until it existed:
+ *
+ *  - `lime/system/ThreadPool.hx:829` -- `if (activeJobs #if lime_threads +
+ *    __queuedExitEvents #if lime_threads_deque + __queuedWorkEvents #end
+ *    #end <= 0)`, a postfix `CondSpliceTail` whose fragment nests one
+ *    region.
+ *  - `motion/actuators/SimpleActuator.hx:232` -- `#if (!neko && !hl) if
+ *    (Reflect.hasField(target, i) #if flash ... #elseif js ... #end) { ... }
+ *    else #end { ... }`, a statement `CondSpliceStmt` whose dangling-else
+ *    if-head carries a region inside its condition.
+ *  - `lime/text/Font.hx:111` -- `#if js if (ascender == untyped #if haxe4
+ *    js.Syntax.code #else __js__ #end ("undefined")) #end ascender = 0;`,
+ *    the same statement shape with the nested region in the condition's
+ *    operand position.
+ *
+ * The SECOND branch is the original stop-at-the-first-`#end` rule, kept as
+ * a fallback so an UNBALANCED inner `#if` (one whose `#end` also closes the
+ * outer region) still matches exactly as it did before -- the nesting-aware
+ * branch cannot represent that shape and would otherwise scan forward to an
+ * unrelated `#end`. Branch order matters: regex alternation is first-match,
+ * so the balanced reading wins whenever it applies. Both branches end at a
+ * `#end`, so the terminal's contract (byte-verbatim capture through the
+ * closing directive) is unchanged.
+ *
+ * The whole alternation is wrapped in a non-capturing group because
+ * `Codegen.eregField` prepends a bare `^`, and `^A|B` parses as `(^A)|B` --
+ * the second alternative would otherwise be free to match mid-buffer.
  *
  * `@:rawString` — byte-exact round-trip through `_dt(value)`, no
  * unescape pass; the writer re-emits the fragment verbatim.
  */
-@:re('(?:(?!#end)[\\s\\S])*#end')
+@:re('(?:(?:(?!#if|#end)[\\s\\S])*(?:#if(?:(?!#end)[\\s\\S])*#end(?:(?!#if|#end)[\\s\\S])*)*#end|(?:(?!#end)[\\s\\S])*#end)')
 @:rawString
 abstract HxCondSpliceRaw(String) from String to String {}
