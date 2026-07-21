@@ -6,7 +6,6 @@ import anyparse.grammar.haxe.HaxeFormat;
 import anyparse.grammar.haxe.HaxeFormatConfigLoader;
 import anyparse.grammar.haxe.HaxeModuleParser;
 import anyparse.grammar.haxe.HxArrowFnType;
-import anyparse.grammar.haxe.HxArrowParam;
 import anyparse.grammar.haxe.HxArrowParamBody;
 import anyparse.grammar.haxe.HxFnDecl;
 import anyparse.grammar.haxe.HxModule;
@@ -283,28 +282,6 @@ class HxArrowFnTypeSliceTest extends HxTestHelpers {
 		roundTrip('class Foo { function bar(cb:() -> Void):Void {} }', 'fn-param-type');
 		roundTrip('class Foo { function bar():(Int) -> Bool { return null; } }', 'fn-return-type');
 		roundTrip('typedef Cb = (Int, String) -> Bool;', 'typedef-rhs');
-	}
-
-	private function expectArrowFnType(t: Null<HxType>): HxArrowFnType {
-		return switch t {
-			case null: throw 'expected HxType.ArrowFn, got null';
-			case ArrowFn(fn): fn;
-			case _: throw 'expected HxType.ArrowFn, got non-ArrowFn variant';
-		};
-	}
-
-	private function expectPositionalParam(p: HxArrowParam): HxType {
-		return switch p {
-			case Positional(type): type;
-			case Named(_): throw 'expected HxArrowParam.Positional, got Named';
-		};
-	}
-
-	private function expectNamedParam(p: HxArrowParam): HxArrowParamBody {
-		return switch p {
-			case Named(body): body;
-			case Positional(_): throw 'expected HxArrowParam.Named, got Positional';
-		};
 	}
 
 	private inline function writeWith(src: String, policy: WhitespacePolicy): String {

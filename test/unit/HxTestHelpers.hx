@@ -42,6 +42,9 @@ import anyparse.grammar.haxe.HxType;
 import anyparse.grammar.haxe.HxTypeRef;
 import anyparse.grammar.haxe.HxTypedefDecl;
 import anyparse.grammar.haxe.HxVarDecl;
+import anyparse.grammar.haxe.HxArrowFnType;
+import anyparse.grammar.haxe.HxArrowParam;
+import anyparse.grammar.haxe.HxArrowParamBody;
 
 /**
  * Shared test helpers for Phase 3 Haxe grammar tests.
@@ -466,6 +469,62 @@ class HxTestHelpers extends Test {
 		return switch e {
 			case MacroClassExpr(v): v;
 			case _: throw 'expected MacroClassExpr, got $e';
+		};
+	}
+
+	/**
+	 * Unwraps a `HxType.ArrowFn` to its `HxArrowFnType`. Accepts
+	 * `Null<HxType>` so optional type-position fields can be unwrapped at
+	 * the assertion site, same convention as `expectNamedType`.
+	 */
+	private function expectArrowFnType(t: Null<HxType>): HxArrowFnType {
+		return switch t {
+			case null: throw 'expected HxType.ArrowFn, got null';
+			case ArrowFn(fn): fn;
+			case _: throw 'expected HxType.ArrowFn, got non-ArrowFn variant';
+		};
+	}
+
+	/**
+	 * Unwraps `HxArrowParam.OptionalNamed` (`?name:Type`) to its body.
+	 *
+	 * This and the two `HxArrowParam` helpers below belong to the arrow
+	 * function TYPE family (`(args) -> ret`), NOT to the `HxParam` family of
+	 * `expectRequiredParam` / `expectOptionalParam` / `expectRestParam`
+	 * above — those destructure a function DECLARATION's parameters. The
+	 * compiler separates them (different enum, different body type), so a
+	 * wrong pick is a compile error, but the names sit close enough to be
+	 * worth stating.
+	 *
+	 * All three enumerate every ctor rather than ending on `case _:` so a
+	 * future `HxArrowParam` branch breaks the build right here — that
+	 * tripwire is how the `OptionalNamed` slice found the switches it had
+	 * to update. `expectArrowFnType` above switches on `HxType`, not on
+	 * `HxArrowParam`, so its catch-all is correct.
+	 */
+	private function expectOptionalNamedParam(p: HxArrowParam): HxArrowParamBody {
+		return switch p {
+			case OptionalNamed(body): body;
+			case Named(_): throw 'expected HxArrowParam.OptionalNamed, got Named';
+			case Positional(_): throw 'expected HxArrowParam.OptionalNamed, got Positional';
+		};
+	}
+
+	/** Unwraps `HxArrowParam.Named` (`name:Type`) to its body. */
+	private function expectNamedParam(p: HxArrowParam): HxArrowParamBody {
+		return switch p {
+			case Named(body): body;
+			case OptionalNamed(_): throw 'expected HxArrowParam.Named, got OptionalNamed';
+			case Positional(_): throw 'expected HxArrowParam.Named, got Positional';
+		};
+	}
+
+	/** Unwraps `HxArrowParam.Positional` (a bare type) to its `HxType`. */
+	private function expectPositionalParam(p: HxArrowParam): HxType {
+		return switch p {
+			case Positional(type): type;
+			case Named(_): throw 'expected HxArrowParam.Positional, got Named';
+			case OptionalNamed(_): throw 'expected HxArrowParam.Positional, got OptionalNamed';
 		};
 	}
 

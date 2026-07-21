@@ -18,10 +18,13 @@ package anyparse.grammar.haxe;
  *    token is the parameter name (`HxIdentLit`).
  *
  * Byte-twin of `HxParam`'s Required/Optional split, minus the `Rest`
- * and `Conditional` branches. Lambda / anon-fn params carry no default
- * value (no `defaultValue` slot in `HxLambdaParamBody`); rest-style
- * (`...name`) lambda params have no fork-fixture coverage and stay out
- * of scope.
+ * and `Conditional` branches. Both branches carry an optional default
+ * value through `HxLambdaParamBody.defaultValue`
+ * (`function(a:Int = 1) {}`, `(b:Int = 2) -> b`) — see that typedef's
+ * docstring for why the pre-slice "lambdas carry no default value"
+ * claim was wrong and why the slot cannot swallow `(a = 1)` as a
+ * lambda. Rest-style (`...name`) lambda params have no fork-fixture
+ * coverage and stay out of scope.
  *
  * Branch order: lead-dispatched `Optional` (`?`) FIRST, the catch-all
  * `Required` LAST. Mirrors the established `HxParam` / `HxAnonField`
