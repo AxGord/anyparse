@@ -66,16 +66,30 @@ package anyparse.grammar.haxe;
  * (above `#if`, below `#end`) are preserved by the outer
  * `HxFnDecl.params` Star.
  *
- * `elseBody` is `@:optional @:kw('#else') @:tryparse` (no `@:sep` — the
- * `emitOptionalKwStarFieldSteps` Lowering path does not support sep
- * peek). Consequence: a comma-separated body inside `#else` fail-rewinds
- * after the first param when a comma follows — a multi-param `#else`
- * body does not parse; the single-param case works.
+ * `elseBody` is `@:optional @:kw('#else') @:sep(',', sepFaithful)
+ * @:tryparse`. The `sepFaithful` flag is what makes the sep legal on the
+ * `emitOptionalKwStarFieldSteps` path: that path rejects a bare `@:sep`
+ * because termination is undefined without either `blockEnded(...)` or
+ * per-element `sepAfter` capture, and `sepFaithful` supplies the latter —
+ * permissive `matchLit` on the separator, writer-side re-emission keyed
+ * purely on the captured signal. Same annotation as the call-arg twin
+ * `HxConditionalArgs.elseBody`.
+ *
+ * Before that flag was added the field carried no `@:sep` at all, so a
+ * comma-separated `#else` body fail-rewound after its first param and only
+ * the single-param case parsed. Two openfl signatures depend on the
+ * multi-param form: `TextLayout.new` (`#else direction:TextDirection =
+ * LEFT_TO_RIGHT, script:TextScript = COMMON, language:String = "en" #end`)
+ * and `Stage.new` (`#else window:Window, color:Null<Int> = null #end`).
+ *
+ * `body` keeps its plain `@:sep(',')`: it is not kw-led, so it lowers
+ * through the ordinary sep-tryparse branch where a bare separator is
+ * already well-defined.
  */
 @:peg
 typedef HxConditionalParam = {
 	var cond: HxPpCondLit;
 	@:sep(',') @:tryparse @:fmt(padLeading, padTrailing, sepBeforeOpt, softFill) var body: Array<HxParam>;
 	@:tryparse var elseifs: Array<HxElseifParam>;
-	@:optional @:kw('#else') @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxParam>>;
+	@:optional @:kw('#else') @:sep(',', sepFaithful) @:tryparse @:fmt(padLeading, padTrailing) var elseBody: Null<Array<HxParam>>;
 };
