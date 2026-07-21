@@ -206,6 +206,8 @@ final class HxExprUtil {
 		'LocalFnStmt',
 		'LocalInlineFnStmt',
 		'UntypedBlockStmt',
+		// `#if <raw ending on '{'> #end <stmts> }` - the ctor's own `@:trail('}')` is its last token.
+		'CondSpliceBlockOpen',
 	];
 
 	/**
@@ -227,7 +229,7 @@ final class HxExprUtil {
 	 * (`Conditional`) ends with `d`, and the `....` placeholder
 	 * (`EllipsisStmt`) ends with `.`. The AST predicate is required here.
 	 */
-	private static final NON_BYTE_TERMINAL_STMT_CTORS: Array<String> = ['Conditional', 'EllipsisStmt'];
+	private static final NON_BYTE_TERMINAL_STMT_CTORS: Array<String> = ['Conditional', 'EllipsisStmt', 'CondSpliceBlockClose'];
 
 	/**
 	 * `var` / `final` (and static variants) statement constructors whose

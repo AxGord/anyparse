@@ -223,4 +223,25 @@ enum HxDecl {
 	@:kw('#if') @:trail('#end') @:fmt(conditionalMarkerDedent)
 	Conditional(inner: HxConditionalDecl);
 
+	/**
+	 * `#if <cond> <type-decl header> { #else <header> { #end <members> }`
+	 * - a conditional region holding PARALLEL type-declaration headers
+	 * whose shared body lives after `#end`. See `HxCondSharedBodyDecl`
+	 * for the shape, the motivating sources and the rejected
+	 * alternatives.
+	 *
+	 * Tried AFTER `Conditional` so every balanced `#if` declaration
+	 * region keeps its structured representation: `Conditional` fails on
+	 * this shape because its body Star cannot parse a declaration whose
+	 * `}` is outside the region, and rolls back before this ctor is
+	 * reached.
+	 *
+	 * Both braces are consumed inside the payload: the one the FIRST
+	 * branch's header opens by `HxDeclHead`'s `@:trail('{')`, the
+	 * closer by `HxCondSharedBodyDecl.members`' `@:trail('}')`. The ctor
+	 * itself carries no trail.
+	 */
+	@:kw('#if')
+	CondSharedBodyDecl(inner: HxCondSharedBodyDecl);
+
 }
