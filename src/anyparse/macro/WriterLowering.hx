@@ -8052,6 +8052,7 @@ class WriterLowering {
 					case BlockBody(_b): $blockEmptyExpr;
 					case UntypedBlockBody(_u): $untypedBlockEmptyExpr;
 					case ExprBody(_): false;
+					case CondBody(_): false;
 				};
 			case 'HxFnExprBody' | 'HxFnExprBodyT':
 				macro switch _body {
