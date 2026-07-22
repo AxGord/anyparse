@@ -381,7 +381,7 @@ final class CallGraph {
 		}
 
 		function unwrap(node: QueryNode): QueryNode {
-			return parenKind != null && node.kind == parenKind && node.children.length == 1 ? unwrap(node.children[0]) : node;
+			return RefactorSupport.unwrapParens(node, parenKind);
 		}
 
 		/** Declared simple type of a value identifier, `Null<T>` unwrapped to `T`. */

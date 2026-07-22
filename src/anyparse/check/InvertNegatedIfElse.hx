@@ -123,7 +123,7 @@ final class InvertNegatedIfElse implements Check {
 	 */
 	private static function isInvertible(ifNode: QueryNode, source: String, seams: Seams): Bool {
 		final cond: QueryNode = ifNode.children[0];
-		if (unwrapParens(cond, seams.parenKind).kind != seams.notKind) return false;
+		if (RefactorSupport.unwrapParens(cond, seams.parenKind).kind != seams.notKind) return false;
 		if (seams.ifKinds.contains(ifNode.children[2].kind)) return false;
 		final condSpan: Null<Span> = cond.span;
 		return condSpan != null && !CheckScan.hasCommentMarker(source, condSpan.from, condSpan.to);
@@ -141,7 +141,7 @@ final class InvertNegatedIfElse implements Check {
 		final cond: QueryNode = ifNode.children[0];
 		final thenBranch: QueryNode = ifNode.children[1];
 		final elseBranch: QueryNode = ifNode.children[2];
-		final notNode: QueryNode = unwrapParens(cond, seams.parenKind);
+		final notNode: QueryNode = RefactorSupport.unwrapParens(cond, seams.parenKind);
 		if (notNode.children.length != 1) return;
 		final condSpan: Null<Span> = cond.span;
 		final thenSpan: Null<Span> = thenBranch.span;
@@ -167,12 +167,6 @@ final class InvertNegatedIfElse implements Check {
 		return span == null ? null : source.substring(span.from, span.to);
 	}
 
-	/** Unwrap single-child paren layers to reach the wrapped node (no-op when `parenKind` is unset). */
-	private static function unwrapParens(node: QueryNode, parenKind: Null<String>): QueryNode {
-		var n: QueryNode = node;
-		while (parenKind != null && n.kind == parenKind && n.children.length == 1) n = n.children[0];
-		return n;
-	}
 
 	/** Resolve the if / not / paren seam kinds, or null when a required piece is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {

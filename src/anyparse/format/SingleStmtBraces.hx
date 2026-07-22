@@ -58,7 +58,19 @@ package anyparse.format;
  *     sibling keeps its braces, so `if (b) { one; } else { a; b; }`
  *     stays fully braced instead of the asymmetric
  *     `if (b) one; else { a; b; }`. Loop bodies (for / while / do) have
- *     no sibling - they always pass `false`.
+ *     no sibling - they always pass `false`. The gate runs in BOTH
+ *     directions: a braced branch keeps its braces (fail closed), and a
+ *     branch that arrives BARE opposite a brace-keeping sibling GAINS
+ *     them through `wrapInBlock` - the same repair direction gate 8
+ *     uses - so `if (a) { p(); q(); } else r();` canonicalises to a
+ *     fully braced if/else instead of staying asymmetric. The wrap
+ *     direction has ONE exemption of its own - an `IfStmt` in ELSE
+ *     position, an `else if` chain link whose wrapping would rebuild
+ *     the `else { if … }` shape the `collapsible-else-if` rule exists
+ *     to remove - and otherwise defers to gate 3's
+ *     `innerSelfTerminates`, which excludes both a `;`-less statement
+ *     (it would not re-parse inside braces) and an already
+ *     brace-bearing body (it would nest a redundant level).
  */
 class SingleStmtBraces {
 
@@ -74,6 +86,8 @@ class SingleStmtBraces {
 		// sources. Runs even under `suppress` (adding braces is always semantics-safe:
 		// the parse tree already fixed the else binding).
 		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block);
+		// Gate 7 repair direction (omega-ssb-symmetry-wrap) - see `needsSymmetryWrap`.
+		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block);
 		if (suppress) return body;
 		if (Type.enumConstructor(block) == 'BlockBody') return unwrapDoBody(block);
 		if (Type.enumConstructor(block) != 'BlockStmt') return body;
@@ -105,6 +119,15 @@ class SingleStmtBraces {
 	 * asymmetric against. The if/else splices call this to probe the OTHER
 	 * branch, feeding gate 7 so `if (b) { one; } else { a; b; }` keeps both
 	 * braced while `if (a) x(); else if (b) y(); else z();` still de-braces.
+	 *
+	 * It stays consistent with gate 7's repair direction WITHOUT recursing:
+	 * the probe calls `unwrapStmt` with symmetry forced OFF, and the repair arm
+	 * fires only when symmetry is ON - so a probe can never reach it (it also
+	 * calls in only for a `BlockStmt`, which `innerSelfTerminates` excludes
+	 * from the arm anyway). That is what keeps a chain from oscillating: no
+	 * branch's answer depends on an answer that depends on it. The one wrap a
+	 * probe MUST account for is gate 8's (then-position bare `if`), which is
+	 * unconditional and handled by the `IfStmt` arm below.
 	 */
 	public static function keepsBraces(
 		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, isIfThenBody: Bool
@@ -135,12 +158,20 @@ class SingleStmtBraces {
 	 * read from each else-if then-body's own `TrailPresent` slot: only the
 	 * TERMINAL branch (no further `else`) can carry a redundant trailing `;`
 	 * (gate 6) — missing it would leave that branch braced while earlier branches
-	 * de-brace. Byte-inert when `drop` is off; `suppress` short-circuits (all
-	 * branches keep braces anyway).
+	 * de-brace. Byte-inert when `drop` is off. `suppress` is THREADED into every
+	 * `keepsBraces` probe rather than short-circuiting the scan: inside a suppress
+	 * frame a `BlockStmt` renders braced whatever its own merits say, and the
+	 * immediate-pair probe at each splice already reads it that way — a scan that
+	 * ignored it would answer `false` for a chain whose links visibly keep their
+	 * braces, leaving the head branch bare while its siblings gained braces from the
+	 * pair probe. That mixed state is the one thing the chain gate exists to prevent.
+	 * Suppress can only ever ADD braces here: `unwrapStmt` returns on its own
+	 * `suppress` guard before gate 7's de-brace arm is reached, so the widened
+	 * answer feeds the wrap direction alone.
 	 */
 	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, suppress: Bool): Bool {
-		if (!drop || suppress) return false;
-		if (keepsBraces(thenBody, drop, false, elseBody != null, false, true)) return true;
+		if (!drop) return false;
+		if (keepsBraces(thenBody, drop, suppress, elseBody != null, false, true)) return true;
 		var cur: Dynamic = elseBody;
 		while (cur != null && Reflect.isEnumValue(cur) && Type.enumConstructor(cast cur) == 'IfStmt') {
 			final ps: Array<Dynamic> = Type.enumParameters(cast cur);
@@ -153,17 +184,49 @@ class SingleStmtBraces {
 			// splice, so the scan must see it too. Non-terminal then-bodies are always
 			// false — a `;` never sits between a then-block and `else`.
 			final innerTrail: Bool = stmt.thenBodyTrailPresent == true;
-			if (keepsBraces(innerThen, drop, false, innerElse != null, innerTrail, true)) return true;
+			if (keepsBraces(innerThen, drop, suppress, innerElse != null, innerTrail, true)) return true;
 			cur = innerElse;
 		}
-		return cur != null && keepsBraces(cur, drop, false, false, false, false);
+		return cur != null && keepsBraces(cur, drop, suppress, false, false, false);
 	}
 
+	/**
+	 * Gate 7's repair direction (omega-ssb-symmetry-wrap): should this body gain the
+	 * braces its brace-keeping sibling has? Runs under `suppress` for the same reason
+	 * the gate-8 wrap does - adding braces never changes semantics. `!= 'IfStmt'` is
+	 * the ELSE-position exemption: `unwrapStmt` returns the then-position bare `if`
+	 * before this is reached, so any `IfStmt` still here is an `else if` chain link,
+	 * and wrapping it would rebuild the `else { if … }` shape `collapsible-else-if`
+	 * exists to remove. `innerSelfTerminates` is gate 3 read in reverse and carries
+	 * TWO exclusions: a statement with no terminator of its own (`else r()` with no
+	 * `;`) would not re-parse inside braces, and a brace-bearing `BlockStmt` /
+	 * `BlockBody` is already braced - wrapping it again would nest a redundant level.
+	 */
+	private static inline function needsSymmetryWrap(block: EnumValue, siblingKeepsBraces: Bool): Bool {
+		return siblingKeepsBraces && Type.enumConstructor(block) != 'IfStmt' && innerSelfTerminates(block);
+	}
+
+	/**
+	 * Does this statement carry its own terminator when it stands alone outside a
+	 * block? Gate 3 asks it about HOISTING a statement OUT of braces; the gate-7
+	 * repair arm asks the reverse question (may this statement be put INSIDE braces).
+	 * The two differ only on inputs that are already invalid Haxe - e.g. a
+	 * `WhileStmt` whose own body is a bare unterminated statement answers `true`
+	 * here, but both that input and its wrapped form are rejected by the compiler, so
+	 * no valid program is affected.
+	 */
 	private static function innerSelfTerminates(inner: EnumValue): Bool {
 		return switch Type.enumConstructor(inner) {
 			case 'ReturnStmt' | 'ExprStmt': Type.enumParameters(inner)[1] == true;
 			case 'VoidReturnStmt' | 'ThrowStmt' | 'BreakStmt' | 'ContinueStmt' | 'DoWhileStmt': true;
-			case 'IfStmt' | 'WhileStmt' | 'ForStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'TryCatchStmt': true;
+			case 'IfStmt' | 'WhileStmt' | 'ForStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'TryCatchStmt':
+				true;
+			// Brace-bearing already - it self-terminates on `}`, but neither caller wants it:
+			// gate 3 would unwrap `{ { x; } }` one level (that is `unnecessary-block`'s job) and
+			// the gate-7 repair arm would wrap an ALREADY braced branch a second time. This arm
+			// is the only thing keeping either from happening, so do not move it to the `true`
+			// side without giving both callers their own guard.
+			case 'BlockStmt' | 'BlockBody': false;
 			case _: false;
 		};
 	}

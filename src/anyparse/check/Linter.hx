@@ -49,6 +49,7 @@ final class Linter {
 			new RedundantElse(),
 			new ComparisonToBoolean(),
 			new CollapsibleIf(),
+			new CollapsibleElseIf(),
 			new DoubleNegation(),
 			new InvertNegatedIfElse(),
 			new PreferNullCoalescing(),

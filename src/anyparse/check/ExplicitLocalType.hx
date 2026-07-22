@@ -103,8 +103,12 @@ import anyparse.runtime.Span;
  * `identKind` / `stringLiteralKinds` / `nullableWrapperTypeNames` (+ the optional
  * `TypeInfoProvider`) for the method-call shape; `identKind` + `optionalParamKind` +
  * the `TypeInfoProvider` also drive the identifier-read shape; `fieldAccessKind` +
- * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape. Any
- * unset seam (or absent index) degrades that shape to report-only.
+ * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape.
+ * `parenKind` peels the initializer's parentheses BEFORE any of them runs, so a
+ * wrapped `(-1)` infers exactly as a bare `-1` does — `LiteralInfer` peels for its own
+ * shared arms too, which is what keeps a field, a parameter and a local in agreement.
+ * Any unset seam (or absent index) degrades that shape to report-only; an unset
+ * `parenKind` simply means no unwrapping.
  */
 @:nullSafety(Strict)
 final class ExplicitLocalType implements Check implements DefaultOff {
@@ -239,16 +243,33 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The structurally-certain type of a local's `init`: the shared `LiteralInfer`
-	 * shapes first (literal / neg-numeric / written-generic `new` / cast), then a
-	 * homogeneous array literal, then a fixed-return method call on a provable-String
-	 * receiver, then a cross-class `Type.staticField` read (via `index`), then a plain
-	 * identifier read whose binding carries a written type. Null when none pins the type.
+	 * The structurally-certain type of a local's `init`, with every enclosing parenthesis
+	 * layer peeled off FIRST (`RefactorSupport.unwrapParens` via the grammar's `parenKind`
+	 * seam) — `(-1)` is the same `Int` as `-1`, and every arm dispatches on the node KIND,
+	 * so a wrapped initializer would otherwise miss all of them. The arms: the shared
+	 * `LiteralInfer` shapes (literal / neg-numeric / written-generic `new` / cast), then a
+	 * bare non-generic `new T()`, a homogeneous array literal, a fixed-return method call on
+	 * a provable-String receiver, a cross-class `Type.staticField` read (via `index`), and a
+	 * plain identifier read whose binding carries a written type. Null when none pins the
+	 * type.
+	 *
+	 * There are TWO peels and they overlap. `LiteralInfer.inferType` peels for itself, so a
+	 * field and a parameter agree with a local on the shared shapes; on those shapes either
+	 * peel alone would do, the second landing on an already-peeled node as a no-op. Each is
+	 * still load-bearing for what only it reaches — this one for the local-only arms listed
+	 * above, `LiteralInfer`'s for `explicit-type`'s fields and parameters, which never pass
+	 * through here.
+	 *
+	 * Unwrapping NARROWS the node, so every span-reading arm (the cast lookup, the `new`
+	 * type scan, the resolver's scope + shadow guards) sees the real expression's own
+	 * position rather than the wrapper's — the same view it would have without the parens;
+	 * `insertPoint` still takes the ORIGINAL initializer.
 	 */
 	private static function inferLocalType(
-		init: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
+		rawInit: QueryNode, source: String, shape: RefShape, tree: QueryNode, castTargets: () -> Map<Int, String>,
 		declaredTypeSources: () -> Map<Int, String>, index: Null<SymbolIndex>
 	): Null<String> {
+		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, shape.parenKind);
 		return
 			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index) ?? arrayType(init, shape) ?? methodReturnType(
 				init, shape, tree, declaredTypeSources

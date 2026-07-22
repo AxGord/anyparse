@@ -288,6 +288,66 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.isTrue(out.indexOf('c:Bool =') != -1, 'got: $out');
 	}
 
+	// --- a PARENTHESIZED initializer / default infers exactly as the bare one ---
+
+	public function testFixParenNegativeIntField(): Void {
+		// The field twin of the local-rule case: `(-1)` must annotate like a bare `-1`.
+		final out: String = applyFix('class C { var a = (-1); }');
+		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixDoubleParenIntField(): Void {
+		final out: String = applyFix('class C { var a = ((1)); }');
+		Assert.isTrue(out.indexOf('a:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixParenStringLiteralField(): Void {
+		final out: String = applyFix("class C { var a = ('hi'); }");
+		Assert.isTrue(out.indexOf('a:String =') != -1, 'got: $out');
+	}
+
+	public function testFixParenBoolLiteralField(): Void {
+		final out: String = applyFix('class C { var a = (true); }');
+		Assert.isTrue(out.indexOf('a:Bool =') != -1, 'got: $out');
+	}
+
+	public function testFixParenTypedCastField(): Void {
+		final out: String = applyFix('class C { function f(x:Int) { } var a = (cast(x, Foo)); }');
+		Assert.isTrue(out.indexOf('a:Foo =') != -1, 'got: $out');
+	}
+
+	public function testFixParenWrappedCheckTypeField(): Void {
+		// `(x : Bar)` IS the check-type node; an EXTRA wrap must peel back to it.
+		final out: String = applyFix('class C { var a = ((x : Bar)); }');
+		Assert.isTrue(out.indexOf('a:Bar =') != -1, 'got: $out');
+	}
+
+	public function testFixParenNewWithTypeParamsField(): Void {
+		final out: String = applyFix('class C { public var a = (new Map<Int, String>()); }');
+		Assert.isTrue(out.indexOf('a:Map<Int, String> =') != -1, 'got: $out');
+	}
+
+	public function testFixParenParamDefault(): Void {
+		// A parenthesized DEFAULT VALUE annotates like a bare one — the parameter twin.
+		final out: String = applyFix('class C { public function f(p = (5)):Void {} }');
+		Assert.isTrue(out.indexOf('p:Int =') != -1, 'got: $out');
+	}
+
+	public function testFixSkipsParenCall(): Void {
+		// Unwrapping exposes the arm, but a call still pins nothing -> report-only.
+		Assert.equals(0, fixCount('class C { var a = (foo()); }'));
+	}
+
+	public function testFixSkipsParenArrayLiteral(): Void {
+		// `explicit-type` has no array-literal arm (that one is local-only) — unchanged.
+		Assert.equals(0, fixCount('class C { var a = ([1, 2]); }'));
+	}
+
+	public function testFixSkipsParenBareNew(): Void {
+		// A bare `new Foo()` could be generic — the paren must not change that verdict.
+		Assert.equals(0, fixCount('class C { public var a = (new Foo()); }'));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new ExplicitType().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

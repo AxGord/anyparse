@@ -1145,9 +1145,21 @@ final class RefactorSupport {
 	 * without types. Shared by `comparison-to-boolean` and `prefer-ternary-return`.
 	 */
 	public static function provablyBoolOperand(operand: QueryNode, boolOpKinds: Array<String>, parenKind: Null<String>): Bool {
-		var n: QueryNode = operand;
+		return boolOpKinds.contains(unwrapParens(operand, parenKind).kind);
+	}
+
+	/**
+	 * `node` with every enclosing parenthesis layer peeled off — `((e))` yields `e`.
+	 * The grammar-agnostic paren seam: an UNSET `parenKind` (the grammar declares no
+	 * parenthesized-expression kind) returns `node` unchanged, so a caller degrades to
+	 * its un-unwrapped behaviour rather than guessing a kind. A paren node that does not
+	 * hold exactly one child stops the walk — only a plain single-child wrap is
+	 * semantically transparent.
+	 */
+	public static function unwrapParens(node: QueryNode, parenKind: Null<String>): QueryNode {
+		var n: QueryNode = node;
 		while (parenKind != null && n.kind == parenKind && n.children.length == 1) n = n.children[0];
-		return boolOpKinds.contains(n.kind);
+		return n;
 	}
 
 	/**

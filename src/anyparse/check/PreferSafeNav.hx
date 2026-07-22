@@ -284,7 +284,7 @@ final class PreferSafeNav implements Check {
 
 	/** The plain-identifier operand of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {
-		final c: QueryNode = unwrapParens(cond, s);
+		final c: QueryNode = RefactorSupport.unwrapParens(cond, s.parenKind);
 		if (c.kind != s.notEqKind || c.children.length != COMPARISON_CHILD_COUNT) return null;
 		final a: QueryNode = c.children[0];
 		final b: QueryNode = c.children[1];
@@ -346,19 +346,10 @@ final class PreferSafeNav implements Check {
 		if (sole != null) return { operand: sole, rest: null };
 		final andKind: Null<String> = s.andKind;
 		if (andKind == null) return null;
-		final c: QueryNode = unwrapParens(cond, s);
+		final c: QueryNode = RefactorSupport.unwrapParens(cond, s.parenKind);
 		if (c.kind != andKind || c.children.length != AND_CHILD_COUNT) return null;
 		final operand: Null<QueryNode> = guardOperand(c.children[1], s);
 		return operand == null ? null : { operand: operand, rest: c.children[0] };
-	}
-
-
-	/** Peel redundant single-child parenthesis wrappers off `node` (`(((e)))` → `e`). */
-	private static inline function unwrapParens(node: QueryNode, s: Seams): QueryNode {
-		var c: QueryNode = node;
-		final parenKind: Null<String> = s.parenKind;
-		if (parenKind != null) while (c.kind == parenKind && c.children.length == 1) c = c.children[0];
-		return c;
 	}
 
 

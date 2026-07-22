@@ -327,6 +327,9 @@ typedef RefShape = {
 	 * The function-call node kind — lets the `identical-operands` check EXCLUDE an
 	 * operand that contains a call (so `g() == g()`, whose two calls may differ, is
 	 * not flagged). Optional.
+	 *
+	 * SEAM: `redundant-parens` reads it (with `arrayLiteralKind` / `newExprKind`) as
+	 * a SPLICING host — see `spliceSensitiveExprKinds`.
 	 */
 	@:optional var callKind: String;
 
@@ -477,8 +480,13 @@ typedef RefShape = {
 	/**
 	 * The `new T(...)` node kind — `prefer-array-literal` / `prefer-map-literal`
 	 * recognise a `new Array()` / `new Map()` replaceable by the `[]` literal. The
-	 * node's `name` is the constructed type; its children are type parameters, not
-	 * constructor arguments. Optional; unset makes both checks a no-op.
+	 * node's `name` is the constructed type; its children are the type parameters
+	 * FOLLOWED BY the constructor arguments (`new Array<Int>((1))` projects as
+	 * `NewExpr Array (Named Int) (ParenExpr …)`), so a consumer that cares about one
+	 * group must tell them apart by kind. Optional; unset makes both checks a no-op.
+	 *
+	 * SEAM: `redundant-parens` reads it (with `callKind` / `arrayLiteralKind`) as a
+	 * SPLICING host — see `spliceSensitiveExprKinds`.
 	 */
 	@:optional var newExprKind: String;
 
@@ -525,6 +533,11 @@ typedef RefShape = {
 	 * Conditional kinds whose condition is `children[0]` (`if` / `while`) — the
 	 * `assignment-in-condition` check looks at that child for an `assignKind` node
 	 * (`if (a = b)`). Optional; unset (with `conditionLastChildKinds`) → no-op.
+	 *
+	 * SEAM: `redundant-parens` reads the same slot as a DELIMITED position — the
+	 * construct writes its own `(` `)` around the condition, so a `parenKind` node
+	 * there is a second, redundant pair. A kind belongs here only if its condition
+	 * really is bracketed by the construct and really is `children[0]`.
 	 */
 	@:optional var conditionFirstChildKinds: Array<String>;
 
@@ -533,6 +546,9 @@ typedef RefShape = {
 	 * `assignment-in-condition` check looks at that child for an `assignKind` node.
 	 * Separate from `conditionFirstChildKinds` because the condition position differs
 	 * per construct. Optional.
+	 *
+	 * SEAM: read by `redundant-parens` as a delimited position too — see
+	 * `conditionFirstChildKinds`.
 	 */
 	@:optional var conditionLastChildKinds: Array<String>;
 
@@ -1203,6 +1219,9 @@ typedef RefShape = {
 	 * initializer is a NON-EMPTY array literal of one KNOWN literal element type as
 	 * `Array<T>` (a non-empty literal pins the element type, so the annotation
 	 * re-states the compiler's inference). Optional; unset disables array inference.
+	 *
+	 * SEAM: `redundant-parens` reads it (with `callKind` / `newExprKind`) as a
+	 * SPLICING host — see `spliceSensitiveExprKinds`.
 	 */
 	@:optional var arrayLiteralKind: String;
 
@@ -1438,6 +1457,81 @@ typedef RefShape = {
 	 * back to the unresolved bail. Optional; unset rejects nothing.
 	 */
 	@:optional var aliasingDeclKinds: Array<String>;
+
+	/**
+	 * Node kinds EVERY child of which sits in a DELIMITED expression slot — one the
+	 * surrounding construct bounds on both sides with its own hard tokens (bracket,
+	 * separator, terminator or keyword) and parses at the loosest precedence, so no
+	 * operator can bind across the boundary. A lone `parenKind` node there cannot be
+	 * load-bearing and `redundant-parens` flags it. Haxe: the var / final
+	 * initializer hosts (`VarStmt` / `FinalStmt` / `VarExpr` / `FinalExpr` /
+	 * `VarMember` / `FinalMember` — `= expr` up to `;` or `,`), the value returns
+	 * (`ReturnStmt` / `ReturnExpr` — the `return` keyword parses its value as a full
+	 * expression), the array / map literal (`ArrayExpr` — `[` `,` … `,` `]`), the
+	 * object-literal field (`Field` — `:` … `,` or `}`) and `new T(args)`
+	 * (`NewExpr`). A host may also carry non-expression children (a type annotation,
+	 * a type argument); those never project as `parenKind`, so listing the host is
+	 * still exact. Optional; unset leaves `redundant-parens` with only its
+	 * double-paren arm.
+	 */
+	@:optional var delimitedAllChildKinds: Array<String>;
+
+	/**
+	 * Node kinds whose children are delimited EXCEPT the first — a head plus a
+	 * delimited tail. Haxe: `Call` (the callee at child 0 is NOT delimited —
+	 * `(a ? b : c)(x)` needs its parens — while every argument after it is bounded
+	 * by `(` / `,` … `,` / `)`), and the assignment family (`Assign` and the
+	 * compound `*Assign` forms: the target at child 0 is an operand position, the
+	 * right-hand side is not — those operators are the loosest precedence tier AND
+	 * right-associative, so their right operand is parsed as a full expression that
+	 * already reaches the slot's terminator). Read by `redundant-parens` together
+	 * with `delimitedAllChildKinds`. Optional; unset lists no such host.
+	 */
+	@:optional var delimitedTailChildKinds: Array<String>;
+
+	/**
+	 * Expression kinds whose own syntax can CONSUME the separator that ends a
+	 * delimited slot, so a `parenKind` wrapping one must KEEP its parentheses even
+	 * there. Haxe: the expression-position declarations `VarExpr` / `FinalExpr` —
+	 * their multi-declaration form (`var a = 1, b = 2`) reaches past the `,` that
+	 * separates a call argument, an array element, an object field or a second
+	 * declarator. The reachable case in practice is a `macro` quotation around one,
+	 * which re-enters the unrestricted expression parse that allows the
+	 * continuation: `f((macro final w = 1), x)` unwrapped becomes
+	 * `f(macro final w = 1, x)`, where the compiler reads `x` as a second declarator
+	 * and rejects the whole call.
+	 *
+	 * The hazard is positional, not structural: it exists only while the greedy
+	 * construct is the RIGHTMOST thing inside the parens, with no bracket of its own
+	 * closing after it. `redundant-parens` therefore walks the interior's LAST child
+	 * while that child ends where its parent ends — which reaches through a metadata
+	 * wrapper (`@:m macro final w = 1`), a ternary / `if`-`else` whose last branch is
+	 * one, and a trailing binary operand, and correctly stops at a bracket-closed
+	 * host (`q(macro final w = 1)`, `[macro final w = 1]`, `{k: macro final w = 1}`),
+	 * whose closing token already bounds the construct. Optional; unset excludes
+	 * nothing.
+	 */
+	@:optional var separatorGreedyExprKinds: Array<String>;
+
+	/**
+	 * Expression kinds whose meaning is POSITION-SENSITIVE — the construct expands to
+	 * a different ARITY when it is directly an argument / element of a splicing host
+	 * than when anything, a `parenKind` included, wraps it. Removing that paren is a
+	 * silent rewrite: it changes the call, not the syntax, so nothing rejects it.
+	 * Haxe: `DollarReifExpr`, the `$x{…}` macro-reification kind. Its `$a{}` form
+	 * splices an `Array<Expr>` into the surrounding argument / element list, so
+	 * `macro g(($a{args}))` builds a ONE-argument call and `macro g($a{args})` a
+	 * two-argument one; wrapping it in a paren is what suppresses the splice.
+	 *
+	 * `redundant-parens` tests it at the paren's DIRECT child, and only in the slots
+	 * of a splicing host — the existing `callKind` / `arrayLiteralKind` /
+	 * `newExprKind` seams. Nothing else splices, so an object-literal field value or
+	 * a var initializer is left to the ordinary rules. The sibling `$b{}` / `$v{}` /
+	 * `$i{}` / `$p{}` forms share this one kind and are arity-neutral, so listing the
+	 * kind is deliberately conservative there: it costs a missed cleanup, never a
+	 * wrong rewrite. Optional; unset excludes nothing.
+	 */
+	@:optional var spliceSensitiveExprKinds: Array<String>;
 }
 /**
  * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.
