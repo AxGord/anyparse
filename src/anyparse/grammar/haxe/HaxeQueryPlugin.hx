@@ -100,6 +100,31 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	];
 
 	/**
+	 * The assignment-operator kinds — plain `=` plus every compound form, in
+	 * declaration order. Shared so `refShape`'s `writeParentKinds` (which adds the
+	 * increment / decrement mutators) and its `delimitedTailChildKinds` (which adds
+	 * `Call`) cannot drift: a new assignment operator is added here once and both
+	 * lists follow.
+	 */
+	private static final ASSIGN_KINDS: Array<String> = [
+		'Assign',
+		'AddAssign',
+		'SubAssign',
+		'MulAssign',
+		'DivAssign',
+		'ModAssign',
+		'ShlAssign',
+		'ShrAssign',
+		'UShrAssign',
+		'BitOrAssign',
+		'BitAndAssign',
+		'BitXorAssign',
+		'NullCoalAssign',
+		'BoolAndAssign',
+		'BoolOrAssign',
+	];
+
+	/**
 	 * Search-only kind-equivalence. A Haxe `var` declaration surfaces
 	 * as three position-specific `QueryNode` kinds — module-level
 	 * `VarDecl`, class-field `VarMember`, local `VarStmt` — all
@@ -366,27 +391,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ForExpr',
 				'CatchClause',
 			],
-			writeParentKinds: [
-				'Assign',
-				'AddAssign',
-				'SubAssign',
-				'MulAssign',
-				'DivAssign',
-				'ModAssign',
-				'ShlAssign',
-				'ShrAssign',
-				'UShrAssign',
-				'BitOrAssign',
-				'BitAndAssign',
-				'BitXorAssign',
-				'NullCoalAssign',
-				'BoolAndAssign',
-				'BoolOrAssign',
-				'PreIncr',
-				'PreDecr',
-				'PostIncr',
-				'PostDecr',
-			],
+			writeParentKinds: ASSIGN_KINDS.concat(['PreIncr', 'PreDecr', 'PostIncr', 'PostDecr']),
 			// Self-scoped decl kinds: scope-introducers whose own name binds
 			// into the frame they open (the for-loop iterator pattern). Listed
 			// in scopeKinds, absent from declHostKinds — the binding is visible
@@ -612,6 +617,46 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			untypedKinds: ['UntypedExpr'],
 			casePatternBinderKinds: ['Capture'],
 			aliasingDeclKinds: ['TypedefDecl', 'AbstractDecl', 'EnumAbstractDecl'],
+			// Delimited expression slots, derived from the grammar productions:
+			// `HxVarDecl.init` is `@:lead('=')` up to the decl's `;` / `,`;
+			// `HxStatement.ReturnStmt` is `@:kw('return') @:trail(';')` and its
+			// expression twin `HxExpr.ReturnExpr` parses its value at minPrec 0;
+			// `HxExpr.ArrayExpr` is `@:lead('[') @:trail(']') @:sep(',')`;
+			// `HxObjectFieldBody.value` is `@:lead(':')` inside the literal's
+			// `@:lead('{') @:trail('}') @:sep(',')`; `HxNewExpr` closes its argument
+			// Star with `)`. The `VarStmt`/`VarMember` type-annotation child and the
+			// `NewExpr` type arguments project as type kinds (`Anon` / `Named`), never
+			// as `ParenExpr`, so a whole-host listing stays exact.
+			delimitedAllChildKinds: [
+				'VarStmt',
+				'FinalStmt',
+				'VarExpr',
+				'FinalExpr',
+				'VarMember',
+				'FinalMember',
+				'ReturnStmt',
+				'ReturnExpr',
+				'ArrayExpr',
+				'Field',
+				'NewExpr',
+			],
+			// `Call`'s child 0 is the callee — an operand position, where parens can be
+			// load-bearing (`(a ? b : c)(x)`); the arguments after it are delimited by
+			// `(` / `,` / `)`. The assignment family's child 0 is likewise the target,
+			// while the right-hand side is the right operand of a prec-0
+			// right-associative operator, i.e. parsed at minPrec 0 up to the enclosing
+			// terminator. `Interval`, `Arrow` and the other infix kinds are deliberately
+			// absent: their operands parse above minPrec 0 and re-associate on unwrap.
+			delimitedTailChildKinds: ['Call'].concat(ASSIGN_KINDS),
+			// `macro final w = 1` re-enters the unrestricted expression parse, where the
+			// declaration's `, b = 2` continuation reaches past the separator that ends
+			// the slot — so a paren around one is load-bearing while it is the last thing
+			// inside them.
+			separatorGreedyExprKinds: ['VarExpr', 'FinalExpr'],
+			// `$a{exprs}` splices its array into the surrounding argument / element list
+			// only when nothing wraps it, so a paren around one changes the built call's
+			// ARITY with no syntax error. All `$x{…}` forms share this kind.
+			spliceSensitiveExprKinds: ['DollarReifExpr'],
 		};
 	}
 
