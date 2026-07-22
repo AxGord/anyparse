@@ -6,6 +6,7 @@ import anyparse.check.NullableSource.NullableSourceCfg;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
@@ -381,8 +382,7 @@ final class NullableSwitchMissingNull implements Check {
 	 * flow-based `NullFlow` path's job, not this positional scanner's.
 	 */
 	private static function relationalAssertOperand(arg: QueryNode, s: Seams, asTrue: Bool): Null<QueryNode> {
-		var e: QueryNode = arg;
-		while (s.parenKind != null && e.kind == s.parenKind && e.children.length == 1) e = e.children[0];
+		final e: QueryNode = RefactorSupport.unwrapParens(arg, s.parenKind);
 		final wantKind: Null<String> = asTrue ? s.shape.notEqKind : s.shape.eqKind;
 		if (wantKind == null || e.kind != wantKind) return null;
 		return NullFlow.nullComparisonOperand(e, s.identKind, s.nullLitKind);

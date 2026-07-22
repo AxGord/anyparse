@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 
 using Lambda;
 
@@ -1130,7 +1131,7 @@ final class NullFlow {
 	 */
 	private static function establishAux(state: FlowState, ctx: FlowCtx, name: String, rhs: Null<QueryNode>): Void {
 		if (rhs == null || !ctx.ownNames.contains(name) || ctx.captured.contains(name)) return;
-		final r: QueryNode = unwrapParens(rhs, ctx);
+		final r: QueryNode = RefactorSupport.unwrapParens(rhs, ctx.parenKind);
 		final rk: String = r.kind;
 		if (rk == ctx.notEqKind || rk == ctx.eqKind) {
 			final operand: Null<QueryNode> = nullComparisonOperand(r, ctx.identKind, ctx.nullLitKind);
@@ -1231,7 +1232,7 @@ final class NullFlow {
 	 */
 	private static function isExistsGuard(rawCond: QueryNode, ctx: FlowCtx): Null<ExistsFact> {
 		if (ctx.callKind == null || ctx.fieldAccessKind == null || ctx.mapExistsMethods.length == 0) return null;
-		final cond: QueryNode = unwrapParens(rawCond, ctx);
+		final cond: QueryNode = RefactorSupport.unwrapParens(rawCond, ctx.parenKind);
 		if (cond.kind != ctx.callKind || cond.children.length != 2) return null;
 		final callee: QueryNode = cond.children[0];
 		final method: Null<String> = callee.name;
@@ -1253,7 +1254,7 @@ final class NullFlow {
 	 */
 	private static function suppressedByExists(rawInit: Null<QueryNode>, state: FlowState, ctx: FlowCtx): Bool {
 		if (rawInit == null || ctx.indexAccessKind == null) return false;
-		final init: QueryNode = unwrapParens(rawInit, ctx);
+		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, ctx.parenKind);
 		if (init.kind != ctx.indexAccessKind || init.children.length < 2) return false;
 		final recv: QueryNode = init.children[0];
 		final key: QueryNode = init.children[1];
@@ -1263,12 +1264,6 @@ final class NullFlow {
 		return state.present.exists(e -> e.map == mapName && e.key == keyName);
 	}
 
-	/** `node` with any parenthesized wrappers peeled off — the shared normalization of the auxiliary-fact recognizers. */
-	private static function unwrapParens(node: QueryNode, ctx: FlowCtx): QueryNode {
-		var r: QueryNode = node;
-		while (ctx.parenKind != null && r.kind == ctx.parenKind && r.children.length == 1) r = r.children[0];
-		return r;
-	}
 
 	/**
 	 * Feature 2: seed one-way (`compound`) predicates from a conjunctive Bool RHS
