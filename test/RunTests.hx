@@ -465,6 +465,7 @@ import unit.HxCondMemberSlotSliceTest;
 import unit.HxExprStmtTerminatorSliceTest;
 import unit.HxCondUnbalancedRegionSliceTest;
 import unit.HxCondSpliceOwnLineSliceTest;
+import unit.CollapsibleElseIfCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -894,6 +895,7 @@ class RunTests {
 		addCase(new RedundantElseCheckTest());
 		addCase(new ComparisonToBooleanCheckTest());
 		addCase(new CollapsibleIfCheckTest());
+		addCase(new CollapsibleElseIfCheckTest());
 		addCase(new DoubleNegationCheckTest());
 		addCase(new InvertNegatedIfElseCheckTest());
 		addCase(new PreferNullCoalescingCheckTest());
