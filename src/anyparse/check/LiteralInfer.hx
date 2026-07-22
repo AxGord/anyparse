@@ -2,6 +2,7 @@ package anyparse.check;
 
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 
@@ -26,14 +27,25 @@ private typedef WrittenNewType = {
 final class LiteralInfer {
 
 	/**
-	 * The type source to annotate for `init` when its type is statically certain,
-	 * else null. A literal maps through `shape.literalTypeNames`; a `Neg` wrapping a
-	 * numeric literal takes that literal's type; a `new T<...>()` with WRITTEN type
-	 * parameters carries `T<...>` verbatim (a bare `new T()` — possibly generic —
-	 * yields null); a typed cast / check-type takes its target type. Anything else
-	 * (a call, a field read, an array / map / ternary) is null — report-only.
+	 * The type source to annotate for `init` when its type is statically certain, else
+	 * null. Every enclosing parenthesis layer is peeled off FIRST
+	 * (`RefactorSupport.unwrapParens` via the grammar's `parenKind` seam) — the arms below
+	 * dispatch on the node KIND, so without it a wrapped `(-1)` would miss all of them
+	 * while a bare `-1` annotates; unwrapping here rather than per-caller is what keeps a
+	 * field, a parameter and a local agreeing on one initializer. A literal maps through
+	 * `shape.literalTypeNames`; a `Neg` wrapping a numeric literal takes that literal's
+	 * type; a `new T<...>()` with WRITTEN type parameters carries `T<...>` verbatim (a bare
+	 * `new T()` — possibly generic — yields null); a typed cast / check-type takes its
+	 * target type. Anything else (a call, a field read, an array / map / ternary) is null —
+	 * report-only. The unwrap NARROWS the node, so the span-reading arms (the `new` type
+	 * scan, the cast-target lookup) see the real expression's own position, exactly the view
+	 * they would have without the parens; `insertPoint` still takes the caller's ORIGINAL
+	 * initializer, whose start bounds the `=` search.
 	 */
-	public static function inferType(init: QueryNode, source: String, shape: RefShape, castTargets: () -> Map<Int, String>): Null<String> {
+	public static function inferType(
+		rawInit: QueryNode, source: String, shape: RefShape, castTargets: () -> Map<Int, String>
+	): Null<String> {
+		final init: QueryNode = RefactorSupport.unwrapParens(rawInit, shape.parenKind);
 		final literalTypes: Map<String, String> = shape.literalTypeNames ?? [];
 		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
 		final negKind: Null<String> = shape.negationKind;
