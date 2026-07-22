@@ -1287,7 +1287,11 @@ final class Cli {
 			'unused-parameter',
 			'prefer-final-public-field',
 			'prefer-read-only-field',
-			'field-init-at-declaration'
+			'field-init-at-declaration',
+			// Resolves a path receiver's member types through a SymbolIndex over the set it is
+			// given — on the active SUBSET a type declared elsewhere reads as unresolvable, which
+			// re-flags the very loops the type gate is meant to skip.
+			'map-keys-lookup'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];

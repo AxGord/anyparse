@@ -70,6 +70,36 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+	/**
+	 * `Reg` is a custom `keys()`-bearing NON-map and `Svc` — which holds it — is declared in a
+	 * THIRD file, so resolving the receiver path `s.reg` needs a file A.hx does not contain.
+	 * A.hx is made active for pass 2 by a redundant-else fix. `map-keys-lookup` is registered in
+	 * the `--fix` loop's `fullScopeIds`, so pass 2 over the subset {A} still sees Svc.hx, still
+	 * resolves `Svc.reg` to `Reg`, and the type gate keeps skipping the loop. Were the check
+	 * active-scope, pass 2 would re-lint {A} alone, read `Svc.reg` as unresolvable, and rewrite
+	 * the loop to `for (k => value in s.reg)` — which does not compile, `Reg` having no
+	 * `keyValueIterator`.
+	 */
+	public function testMapKeysLookupFullScopeAcrossPasses(): Void {
+		#if (sys || nodejs)
+		final reg: String = 'package p;\n\nclass Reg {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}\n';
+		final svc: String = 'package p;\n\nclass Svc {\n\tpublic var reg:Reg;\n}\n';
+		final a: String = 'package p;\n\nclass A {\n\tpublic function u():Int {\n\t\tif (c) return 1;\n\t\telse return 2;\n\t}\n\n\tpublic function f(s:Svc):Void {\n\t\tfor (k in s.reg.keys()) trace(s.reg.get(k));\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixmkl', [
+			{ name: 'Reg.hx', source: reg },
+			{ name: 'Svc.hx', source: svc },
+			{ name: 'A.hx', source: a }
+		]);
+		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
+		final outA: String = File.getContent('$dir/A.hx');
+		Assert.isTrue(outA.indexOf('else') == -1, 'redundant else de-nested (pass 1 ran): $outA');
+		Assert.isTrue(outA.indexOf('s.reg.keys()') != -1, 'custom keys() type kept — Svc stayed resolvable on every pass: $outA');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	public function testParamRemovalConflictWithTernaryStaysConsistent(): Void {
 		#if (sys || nodejs)
 		// `caller`'s `if (flag) return helper(...); return helper(...);` is a
