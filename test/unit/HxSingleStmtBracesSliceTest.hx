@@ -69,8 +69,12 @@ class HxSingleStmtBracesSliceTest extends Test {
 
 	public function testDanglingElseKeepsBraces(): Void {
 		// KEY safety gate: dropping the outer braces would rebind `else`
-		// to the inner else-less `if`.
-		roundTrip('class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n\t}\n}');
+		// to the inner else-less `if`. The bare `else` gains braces (gate 7's
+		// repair direction) — the then-branch keeps its own, so symmetry demands it.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else {\n\t\t\ty();\n\t\t}\n\t}\n}'
+		);
 	}
 
 	public function testDanglingElseThroughLoopBodyKeepsBraces(): Void {
@@ -245,10 +249,7 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	public function testDefaultConfigKeepsBracesByteIdentical(): Void {
-		final source: String = 'class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}';
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals('$source\n', out);
+		assertInert('class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}', '{}');
 	}
 
 	public function testDoWhileBodyUnbraced(): Void {
@@ -305,6 +306,126 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	public function testBareElseOppositeBracedThenGetsBraces(): Void {
+		// Gate 7 repair direction: the then-branch is multi-statement and keeps its
+		// braces, so the BARE else gains its own instead of staying asymmetric.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testBareThenOppositeBracedElseGetsBraces(): Void {
+		// The mirror direction: the else-branch keeps its braces, so the BARE
+		// then-branch gains its own.
+		assertFmt(
+			'class F {\n\tfunction f(c:Bool):Void {\n\t\tif (c)\n\t\t\ts();\n\t\telse {\n\t\t\tt();\n\t\t\tu();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ts();\n\t\t} else {\n\t\t\tt();\n\t\t\tu();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testElseIfChainLinkNotWrapped(): Void {
+		// An `IfStmt` in ELSE position is an `else if` chain link, not a bare
+		// statement needing braces: wrapping it would emit `else { if (b) … }`,
+		// the shape `collapsible-else-if` exists to remove. The chain keeper
+		// (`m1(); m2();`) forces braces on every BODY, never on the link itself.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\tx();\n\t\telse if (b) {\n\t\t\tm1();\n\t\t\tm2();\n\t\t} else\n\t\t\tz();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tx();\n\t\t} else if (b) {\n\t\t\tm1();\n\t\t\tm2();\n\t\t} else {\n\t\t\tz();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testBothBareStayBare(): Void {
+		// No sibling keeps braces, so none are invented — symmetric-unbraced is a
+		// canonical form, and the repair arm must not turn it into fully braced.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) x();\n\t\telse if (b) y();\n\t\telse z();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\tx();\n\t\telse if (b)\n\t\t\ty();\n\t\telse\n\t\t\tz();\n\t}\n}'
+		);
+	}
+
+	public function testSymmetryWrapIsPolicyGated(): Void {
+		// ONE asymmetric source, three configs: the repair fires under `remove` and is
+		// byte-inert under both `keep` and an omitted key. Asserting the two halves
+		// together is what makes this a gate test — the inert halves alone pass with the
+		// repair arm deleted, and the `remove` half alone says nothing about gating.
+		final source: String = 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}';
+		assertInert(source, '{}');
+		assertInert(source, '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }');
+		assertFmt(
+			source, 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSuppressedFrameAsymmetryStillRepaired(): Void {
+		// ORDER pin: the repair arm sits BEFORE `unwrapStmt`'s `suppress` guard. The inner
+		// if/else lives in the then-body of an if-with-else, so `_ssbSuppress` is set — and
+		// suppress must block only the DE-brace direction. Moving the arm after the guard
+		// leaves the whole suite green but emits the unrepaired `} else\n\tr();` here.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t\tq();\n\t\t\t} else\n\t\t\t\tr();\n\t\t} else\n\t\t\ts();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) {\n\t\t\t\tp();\n\t\t\t\tq();\n\t\t\t} else {\n\t\t\t\tr();\n\t\t\t}\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSuppressedFrameChainBracesEveryBranch(): Void {
+		// CHAIN invariant inside a suppress frame: the head's immediate sibling is the
+		// `else if` link (never brace-bearing), so only the spine scan can see the keeper.
+		// `chainForcesBraces` therefore threads `suppress` instead of short-circuiting on
+		// it — short-circuiting leaves the head bare while the pair probe braces the other
+		// two, the mixed state the chain gate exists to prevent.
+		assertFmt(
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a)\n\t\t\t\tx();\n\t\t\telse if (b) {\n\t\t\t\tm1();\n\t\t\t\tm2();\n\t\t\t} else\n\t\t\t\tz();\n\t\t} else\n\t\t\ts();\n\t}\n}',
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a) {\n\t\t\t\tx();\n\t\t\t} else if (b) {\n\t\t\t\tm1();\n\t\t\t\tm2();\n\t\t\t} else {\n\t\t\t\tz();\n\t\t\t}\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSuppressedFrameSingleStmtBlockLinkBracesChain(): Void {
+		// Same shape with a SINGLE-statement block as the keeper: on its own merits that
+		// block de-braces, and it only renders braced because of the suppress frame. The
+		// scan must ask the suppressed question, not the on-merits one, or the head and
+		// the terminal else drift apart from it.
+		assertFmt(
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a)\n\t\t\t\tx();\n\t\t\telse if (b) {\n\t\t\t\tm1();\n\t\t\t} else\n\t\t\t\tz();\n\t\t} else\n\t\t\ts();\n\t}\n}',
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a) {\n\t\t\t\tx();\n\t\t\t} else if (b) {\n\t\t\t\tm1();\n\t\t\t} else {\n\t\t\t\tz();\n\t\t\t}\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSuppressedFrameAllBareChainStaysBare(): Void {
+		// The counterweight to the two above: no branch of the inner chain is brace-bearing,
+		// so the widened scan must still answer `false` and invent nothing. Only the outer
+		// `else` (whose sibling IS a block) gains braces.
+		assertFmt(
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a)\n\t\t\t\tx();\n\t\t\telse if (b)\n\t\t\t\ty();\n\t\t\telse\n\t\t\t\tz();\n\t\t} else\n\t\t\ts();\n\t}\n}',
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a)\n\t\t\t\tx();\n\t\t\telse if (b)\n\t\t\t\ty();\n\t\t\telse\n\t\t\t\tz();\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSuppressedChainSignalDoesNotLeakIntoBranchBody(): Void {
+		// The chain force-keep must not follow the writer INTO a branch's own block: the
+		// nested `if (c) d();` is an independent statement, not a chain branch, and keeps
+		// de-bracing on its own merits even though the enclosing chain braces everything.
+		roundTrip(
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool, c:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a) {\n\t\t\t\tm1();\n\t\t\t\tm2();\n\t\t\t} else if (b) {\n\t\t\t\tif (c) d();\n\t\t\t}\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testChainKeeperForcesBracesOnEveryBareBranch(): Void {
+		// Chain symmetry through the repair arm: one brace-keeping branch in the
+		// middle of a 4-link chain braces every OTHER branch, bare ones included.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) p();\n\t\telse if (b) {\n\t\t\tq();\n\t\t} else if (a) {\n\t\t\tm1();\n\t\t\tm2();\n\t\t} else r();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t} else if (b) {\n\t\t\tq();\n\t\t} else if (a) {\n\t\t\tm1();\n\t\t\tm2();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testMissingSemicolonBareElseNotWrapped(): Void {
+		// `else r()` with no `;` fails gate 3 read in reverse — wrapping it would
+		// emit `else { r() }`, which does not re-parse before a `}`. Fail closed:
+		// the asymmetry stays rather than an invalid brace pair.
+		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr()\n\t}\n}');
+	}
+
 	private static function assertFmt(source: String, expected: String): Void {
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
@@ -312,9 +433,13 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	private static function roundTrip(source: String): Void {
-		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
-		final out: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
-		Assert.equals('$source\n', out);
+		assertInert(source, removeConfig);
+	}
+
+	/** `source` written back byte-identically under `configJson` — the shape all three inertness claims share. */
+	private static function assertInert(source: String, configJson: String): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(configJson);
+		Assert.equals('$source\n', HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 	}
 
 }
