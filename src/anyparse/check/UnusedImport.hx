@@ -6,6 +6,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
+import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -61,37 +62,46 @@ final class UnusedImport implements Check {
 		final sourceOf: Map<String, String> = [];
 		for (entry in files) sourceOf[entry.file] = entry.source;
 
+		// The report-scoped index drives the per-file violation loop and the static-
+		// wildcard member set (kept report-scoped so a wildcard verdict never widens).
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		// Top-level type names per in-set module path — a plain module import
+		// The resolution index — report files UNION configured library roots (openfl /
+		// lime) — when the plugin carries a resolution scope, else the report index.
+		// Named-import liveness and existence resolve against it, so an unused library
+		// import becomes a verifiable deletable Warning, while a library import kept
+		// live by a secondary type / bare enum constructor stays live.
+		final resolveIndex: SymbolIndex = resolutionIndexOf(plugin) ?? index;
+		// Top-level type names per resolution-scoped module — a plain module import
 		// binds ALL of them, so the used-check must consult every name.
 		final moduleTypes: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
+		for (info in resolveIndex.allFiles()) moduleTypes[info.module] = [for (t in info.types) t.name];
 		// Enum-constructor names per importable path (a main type binds under its
 		// module, a sub-module type under `module.Type`) — a bare `import pkg.Enum;`
 		// is in use when one of its constructors is referenced bare, even if `Enum`
 		// itself never appears.
 		final enumKinds: Array<String> = plugin.refShape().bareConstructorTypeKinds ?? [];
 		final enumCtorsByPath: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) for (t in info.types) if (enumKinds.contains(t.kind)) {
+		for (info in resolveIndex.allFiles()) for (t in info.types) if (enumKinds.contains(t.kind)) {
 			final path: String = t.isMain ? info.module : '${info.module}.${t.name}';
 			enumCtorsByPath[path] = [for (m in t.members) m.name];
 		}
-		// Every in-set type's members keyed by its importable path — a static
-		// wildcard `import pkg.Type.*;` brings ALL of them (static fields, enum /
-		// enum-abstract values, enum constructors) into unqualified scope, so a
-		// bare reference to any one keeps the import.
-		final membersByPath: Map<String, Array<String>> = [];
-		for (info in index.allFiles()) for (t in info.types) {
-			final memberPath: String = t.isMain ? info.module : '${info.module}.${t.name}';
-			membersByPath[memberPath] = [for (m in t.members) m.name];
-		}
+		// Members keyed by importable path from the resolution index — drives the
+		// named-import existence gate (a module resolvable in the report set OR the
+		// library is verifiable).
+		final membersByPath: Map<String, Array<String>> = membersByImportPath(resolveIndex);
+		// Report-scoped members for the STATIC WILDCARD path only: a wildcard verdict
+		// must NOT widen to the library, so `import lib.Type.*;` on an out-of-report
+		// type stays an unverifiable Info. Reuse the resolution map when no scope.
+		final wildMembersByPath: Map<String, Array<String>> = resolveIndex == index ? membersByPath : membersByImportPath(index);
 		final violations: Array<Violation> = [];
 		for (info in index.allFiles()) {
 			final source: String = sourceOf[info.file] ?? '';
 			final importSpans: Array<Span> = [for (imp in info.imports) imp.span];
 			final ignoreModules: Array<String> = plugin.checkOverrides(info.file)?.unusedImportIgnoreModules ?? [];
 			for (imp in info.imports) if (!moduleIgnored(imp, ignoreModules))
-				addViolation(violations, info.file, imp, source, importSpans, plugin, moduleTypes, enumCtorsByPath, membersByPath);
+				addViolation(
+					violations, info.file, imp, source, importSpans, plugin, moduleTypes, enumCtorsByPath, membersByPath, wildMembersByPath
+				);
 		}
 		return violations;
 	}
@@ -121,12 +131,13 @@ final class UnusedImport implements Check {
 	 * region); a wildcard (`import pkg.*;`) is an unverifiable `Info`; a `using`
 	 * is delegated to `addUsingViolation`; every other form is a `Warning` when
 	 * its bound name is not referenced outside the import statements AND (for a
-	 * plain in-set module import) no secondary top-level type of the module is
-	 * referenced either.
+	 * plain resolvable module import — report set or resolution scope) no
+	 * secondary top-level type of the module is referenced either.
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin,
-		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>
+		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>,
+		wildMembersByPath: Map<String, Array<String>>
 	): Void {
 		if (imp.guarded) {
 			// Only report a guarded import as possibly-unused when its bound name
@@ -134,15 +145,16 @@ final class UnusedImport implements Check {
 			// scan cannot tell used-here from used-in-another-branch. Never a
 			// Warning: the fix must not delete a line inside a `#if` region.
 			final bound: String = imp.alias ?? lastSegment(imp.raw);
-			if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) out.push(make(
-				file, imp, Severity.Info,
-				'guarded import \'${imp.raw}\': bound name not referenced, but usage is `#if`-conditional — cannot verify unused'
-			));
+			if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans))
+				out.push(make(
+					file, imp, Severity.Info,
+					'guarded import \'${imp.raw}\': bound name not referenced, but usage is `#if`-conditional — cannot verify unused'
+				));
 			return;
 		}
 		switch imp.kind {
 			case ImportKind.Wild:
-				addWildViolation(out, file, imp, source, importSpans, membersByPath);
+				addWildViolation(out, file, imp, source, importSpans, wildMembersByPath);
 			case ImportKind.Using:
 				addUsingViolation(out, file, imp, source, importSpans, plugin);
 			case _:
@@ -151,9 +163,10 @@ final class UnusedImport implements Check {
 				// A plain `import pkg.Mod;` binds every top-level type of the
 				// module, not only the main one — a reference to a SECONDARY
 				// typedef/enum keeps the import even though `Mod` itself is
-				// never named (deleting it broke real builds). Only resolvable
-				// when the module is in the lint file set; an out-of-set module
-				// (stdlib, haxelib) falls back to the bound-name verdict. An
+				// never named (deleting it broke real builds). Resolvable when
+				// the module is in the report set OR the resolution scope (a
+				// library root); a module resolvable in neither (stdlib, an
+				// unconfigured haxelib) falls back to the bound-name verdict. An
 				// alias import binds just the alias — never widened.
 				if (imp.kind == ImportKind.Import && secondaryTypeReferenced(imp.raw, bound, source, importSpans, moduleTypes)) return;
 				// A bare `import pkg.Enum;` whose constructor is used as a bare
@@ -261,6 +274,27 @@ final class UnusedImport implements Check {
 	/** `pkg.Type.*` -> `pkg.Type` (the path whose members the static wildcard imports); unchanged when it has no trailing `.*`. */
 	private static function stripWildStar(raw: String): String {
 		return StringTools.endsWith(raw, '.*') ? raw.substr(0, raw.length - 2) : raw;
+	}
+
+	/**
+	 * The plugin's memoised resolution-scoped `SymbolIndex` (report files UNION the
+	 * configured library roots) when it carries a resolution scope, else null — the
+	 * named-import checks then fall back to the report-only index. Mirrors
+	 * `RefactorSupport.lazySymbolIndex`'s host resolution.
+	 */
+	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
+	}
+
+	/** Member names keyed by importable path (`module` for a main type, `module.Type` for a sub-module type). */
+	private static function membersByImportPath(index: SymbolIndex): Map<String, Array<String>> {
+		final map: Map<String, Array<String>> = [];
+		for (info in index.allFiles()) for (t in info.types) {
+			final memberPath: String = t.isMain ? info.module : '${info.module}.${t.name}';
+			map[memberPath] = [for (m in t.members) m.name];
+		}
+		return map;
 	}
 
 }
