@@ -10,7 +10,7 @@ import anyparse.runtime.Span;
 
 /**
  * Flags an `if (cond) lhs = a; else lhs = b;` whose two branches assign the SAME
- * l-value with the SAME operator, collapsing the pair to a single
+ * l-value with a plain `=`, collapsing the pair to a single
  * `lhs = cond ? a : b;`. Purely structural (no type information), so it holds
  * without a type-checker. `Info` -- the code is correct, this is a readability
  * simplification (the sibling of `prefer-ternary-return`, for assignment rather
@@ -25,10 +25,14 @@ import anyparse.runtime.Span;
  * - both branches are exactly ONE statement -- a bare `lhs = e;` expression
  *   statement or a braced `{ lhs = e; }` wrapping exactly one (a multi-statement
  *   block is deliberately grouped and never matched);
- * - both statements are BINARY assignments (an l-value and an r-value) of the
- *   SAME operator kind -- plain `=`, or an identical compound `+=` / `??=` / ...
- *   on both sides (`++` / `--`, being single-operand, never match; a `=` paired
- *   with a `+=`, or two different compound ops, never match);
+ * - both statements are PLAIN `=` assignments (`assignKind`, an l-value and an
+ *   r-value). Compound operators are deliberately EXCLUDED: a short-circuit `??=`
+ *   would change behaviour (its r-value -- now the ternary holding the condition --
+ *   is skipped when the l-value is non-null, so the condition stops being
+ *   evaluated), and an ordinary compound (`+=`, …) whose two r-values do not unify
+ *   to one type (`s += anInt` vs `s += "text"`) compiles per-branch but not as one
+ *   ternary. Plain `=` flows the l-value's type into both branches, sidestepping
+ *   both (`++` / `--`, being single-operand, never match either);
  * - the two l-values are TEXTUALLY IDENTICAL (whitespace-normalized source).
  *
  * A null-narrowing guard condition (`x != null && x.f`) is skipped: the ternary
@@ -103,11 +107,13 @@ final class PreferTernaryAssignment implements Check {
 		final exprStmtKind: Null<String> = shape.exprStatementKind;
 		if (exprStmtKind == null) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
-		return blockStmtKind == null ? null : {
+		if (blockStmtKind == null) return null;
+		final assignKind: Null<String> = shape.assignKind;
+		return assignKind == null ? null : {
 			ifKinds: ifKinds,
 			exprStmtKind: exprStmtKind,
 			blockStmtKind: blockStmtKind,
-			assignKinds: shape.writeParentKinds,
+			assignKind: assignKind,
 			shape: shape
 		};
 	}
@@ -164,10 +170,10 @@ final class PreferTernaryAssignment implements Check {
 	}
 
 	/**
-	 * The lone binary assignment (two children: l-value, r-value) that is the single
+	 * The lone plain-`=` assignment (two children: l-value, r-value) that is the single
 	 * statement of `branch` -- a bare `x = e;` expression statement or a braced
-	 * `{ x = e; }` wrapping exactly one. Null when `branch` is not a single binary
-	 * assignment statement (increment / decrement, being one-operand, are excluded).
+	 * `{ x = e; }` wrapping exactly one. Null when `branch` is not a single plain
+	 * assignment (a compound `+=` / `??=`, or an increment / decrement, is excluded).
 	 */
 	private static function assignmentIn(branch: QueryNode, s: Seams): Null<QueryNode> {
 		final stmt: QueryNode = if (branch.kind == s.blockStmtKind && branch.children.length == 1)
@@ -176,7 +182,7 @@ final class PreferTernaryAssignment implements Check {
 			branch;
 		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
 		final assign: QueryNode = stmt.children[0];
-		return s.assignKinds.contains(assign.kind) && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
+		return assign.kind == s.assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
 	}
 
 	/** Whether two l-value subtrees have identical whitespace-normalized source. */
@@ -256,7 +262,7 @@ private typedef Seams = {
 	var ifKinds: Array<String>;
 	var exprStmtKind: String;
 	var blockStmtKind: String;
-	var assignKinds: Array<String>;
+	var assignKind: String;
 	var shape: RefShape;
 }
 

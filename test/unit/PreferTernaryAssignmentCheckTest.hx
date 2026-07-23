@@ -11,11 +11,12 @@ import anyparse.runtime.Span;
 
 /**
  * The `prefer-ternary-assignment` check: an `if (cond) lhs = a; else lhs = b;`
- * whose two branches assign the same l-value with the same operator is flagged
+ * whose two branches assign the same l-value with a plain `=` is flagged
  * `Info` and `fix` collapses the pair to `lhs = cond ? a : b;`. Only a real
- * `if`/`else` (no else-if) of two single-statement binary assignments to a
- * textually identical l-value qualifies; the condition is parenthesised only
- * when it binds no tighter than `?:`.
+ * `if`/`else` (no else-if) of two single-statement plain `=` assignments to a
+ * textually identical l-value qualifies; a compound operator (`+=`, `??=`) is
+ * excluded (collapsing it can change behaviour or break r-value unification);
+ * the condition is parenthesised only when it binds no tighter than `?:`.
  */
 class PreferTernaryAssignmentCheckTest extends Test {
 
@@ -48,10 +49,9 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals('_text.defaultTextFormat = value ? _selectedTextFormat : _blackTextFormat;', es[0].text);
 	}
 
-	public function testCompoundSameOperatorFixed(): Void {
-		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f() {\n\t\tif (a) x += 1;\n\t\telse x += 2;\n\t}\n}');
-		Assert.equals(1, es.length);
-		Assert.equals('x += a ? 1 : 2;', es[0].text);
+	/** A compound operator (`+=`) is excluded — collapsing it can break r-value type unification. */
+	public function testCompoundOperatorNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x += 1;\n\t\telse x += 2;\n\t}\n}').length);
 	}
 
 	public function testCompoundDifferentOperatorNotFlagged(): Void {
@@ -112,6 +112,11 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals(
 			0, violations('class C {\n\tfunction f(s:Null<S>) {\n\t\tif (s != null && s.g()) x = 1;\n\t\telse x = 2;\n\t}\n}').length
 		);
+	}
+
+	/** REPRODUCTION: a short-circuit `??=` must NOT be flagged — the ternary RHS is skipped when the l-value is non-null, so the conditions stop being evaluated (silent behaviour change). Currently flagged (bug). */
+	public function testNullCoalAssignNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) x ??= 1;\n\t\telse x ??= 2;\n\t}\n}').length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
