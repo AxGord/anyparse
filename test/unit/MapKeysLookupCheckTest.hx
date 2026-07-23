@@ -380,6 +380,95 @@ class MapKeysLookupCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f(m:Map<String,Int>) { for (k in m.keys()) trace(m[k]);').length);
 	}
 
+	public function testStaticTypeRootMapFlaggedAcrossFiles(): Void {
+		// keys()-then-lookup on a static Map field reached through a TYPE-name root, resolved
+		// cross-file via the SymbolIndex (not a value binding).
+		final registry: String = 'class Registry {\n\tpublic static var m:Map<String, Int>;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tfor (k in Registry.m.keys()) trace(Registry.m.get(k));\n\t}\n}';
+		Assert.equals(1, violationsAcross([registry, user]).length);
+	}
+
+	public function testStaticTypeRootNonMapNotFlagged(): Void {
+		// A custom keys()-bearing type reached through a static-type root resolves to a concrete
+		// non-map — skip, exactly as through a value root.
+		final registry: String = 'class Registry {\n\tpublic static var box:Box;\n}';
+		final box: String = 'class Box {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n'
+			+ '\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tfor (k in Registry.box.keys()) trace(Registry.box.get(k));\n\t}\n}';
+		Assert.equals(0, violationsAcross([registry, box, user]).length);
+	}
+
+	public function testAmbiguousStaticRootStillFlagged(): Void {
+		// Two 'Reg' types → root ambiguous → receiver type unresolvable → the permissive
+		// polarity FLAGS (the polarity difference from prefer-index-access, which skips here).
+		final regA: String = 'class Reg {\n\tpublic static var m:Map<String, Int>;\n}';
+		final regB: String = 'class Reg {\n\tpublic static var m:Map<String, Int>;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tfor (k in Reg.m.keys()) trace(Reg.m.get(k));\n\t}\n}';
+		Assert.equals(1, violationsAcross([regA, regB, user]).length);
+	}
+
+	public function testValueBindingShadowsTypeNameResolvesAsValue(): Void {
+		// A param `Registry:Holder` shadows class Registry. Value wins → the receiver resolves to
+		// Holder.m : Box (a custom keys() type — skip), NOT class Registry.m : Map (would flag).
+		// A 0 can only arise from resolving the concrete non-map Box, so it proves value wins.
+		final registry: String = 'class Registry {\n\tpublic static var m:Map<String, Int>;\n}';
+		final box: String = 'class Box {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n'
+			+ '\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}';
+		final holder: String = 'class Holder {\n\tpublic var m:Box;\n}';
+		final user: String = 'class D {\n\tfunction f(Registry:Holder):Void {\n\t\tfor (k in Registry.m.keys()) trace(Registry.m.get(k));\n\t}\n}';
+		Assert.equals(0, violationsAcross([registry, box, holder, user]).length);
+	}
+
+	public function testFixStaticTypeRoot(): Void {
+		final src: String = 'class Registry {\n\tpublic static var m:Map<String, Int>;\n}\n\n'
+			+ 'class C {\n\tfunction f():Void {\n\t\tfor (k in Registry.m.keys()) trace(Registry.m.get(k));\n\t}\n}';
+		assertFixCanonical(src, 'for (k => value in Registry.m) trace(value);', '.keys()');
+	}
+
+	public function testStaticRootCrossPackageInheritedNonMapNotFlagged(): Void {
+		// Cross-package poison: the import-correct a.Mid INHERITS m:CustomKeys (a keys()/get()
+		// type that is NOT a Map — no key-value iteration), while an unrelated b.Mid declares
+		// m:Map directly. The package-blind walk resolved b.Mid's Map → flagged → a broken
+		// `for (k => v in ...)` rewrite; the import-aware walk resolves CustomKeys → skip.
+		Assert.equals(0, violationsForFiles([
+			{
+				file: 'keys/CustomKeys.hx',
+				source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
+				+ '\t\treturn null;\n\t}\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}'
+			},
+			{ file: 'a/Base.hx', source: 'package a;\nimport keys.CustomKeys;\nclass Base {\n\tpublic var m:CustomKeys;\n}' },
+			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
+			{
+				file: 'top/User.hx',
+				source: 'package top;\nclass User {\n\tfunction f():Void {'
+				+ '\n\t\tfor (k in Outer.mid.m.keys()) trace(Outer.mid.m.get(k));\n\t}\n}'
+			}
+		]).length);
+	}
+
+	public function testValueRootCrossPackageInheritedNonMapNotFlagged(): Void {
+		// Same cross-package poison via a VALUE root `o.mid.m` (o:Outer) — closes the pre-existing
+		// value-root hole too.
+		Assert.equals(0, violationsForFiles([
+			{
+				file: 'keys/CustomKeys.hx',
+				source: 'package keys;\nclass CustomKeys {\n\tpublic function keys():Iterator<String> {\n'
+				+ '\t\treturn null;\n\t}\n\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}'
+			},
+			{ file: 'a/Base.hx', source: 'package a;\nimport keys.CustomKeys;\nclass Base {\n\tpublic var m:CustomKeys;\n}' },
+			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic var mid:Mid;\n}' },
+			{
+				file: 'top/User.hx',
+				source: 'package top;\nclass User {\n\tfunction f(o:Outer):Void {'
+				+ '\n\t\tfor (k in o.mid.m.keys()) trace(o.mid.m.get(k));\n\t}\n}'
+			}
+		]).length);
+	}
+
 	private function wrapMap(loopCode: String): String {
 		return 'class C {\n\tfunction f(m:Map<String,Int>):Void {\n\t\t$loopCode\n\t}\n}';
 	}
@@ -400,6 +489,11 @@ class MapKeysLookupCheckTest extends Test {
 	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */
 	private function violationsAcross(sources: Array<String>): Array<Violation> {
 		return new MapKeysLookup().run([for (i in 0...sources.length) { file: 'F$i.hx', source: sources[i] }], new HaxeQueryPlugin());
+	}
+
+	/** Run over explicit file paths, so package + import scope (isMain module names) resolves. */
+	private function violationsForFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new MapKeysLookup().run(files, new HaxeQueryPlugin());
 	}
 
 

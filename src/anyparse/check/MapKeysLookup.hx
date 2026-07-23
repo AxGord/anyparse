@@ -235,7 +235,7 @@ final class MapKeysLookup implements Check {
 		if (rebinds(p.body, p.path[0], p.keyName, cfg)) return null;
 		if (writesMap(p.body, stripSelf(p.path, cfg), cfg)) return null;
 		if (!hasLookup(p.body, p.path, p.keyName, cfg)) return null;
-		if (!receiverTypeAllows(p.recv, root, declaredTypes, cfg, symbols)) return null;
+		if (!receiverTypeAllows(p.recv, root, declaredTypes, cfg, symbols, file)) return null;
 		final iterSpan: Null<Span> = p.iterable.span;
 		final pathText: String = p.path.join('.');
 		return iterSpan == null ? null : {
@@ -429,10 +429,10 @@ final class MapKeysLookup implements Check {
 	 * for a bare identifier.
 	 */
 	private static function receiverTypeAllows(
-		recv: QueryNode, root: QueryNode, declaredTypes: Null<Map<Int, String>>, cfg: Cfg, symbols: () -> Null<SymbolIndex>
+		recv: QueryNode, root: QueryNode, declaredTypes: Null<Map<Int, String>>, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String
 	): Bool {
 		if (declaredTypes == null) return true;
-		final typeName: Null<String> = receiverTypeName(recv, root, declaredTypes, cfg, symbols);
+		final typeName: Null<String> = receiverTypeName(recv, root, declaredTypes, cfg, symbols, file);
 		if (typeName == null) return true;
 		if (cfg.mapFamily.contains(typeName)) return true;
 		return cfg.nullableWrappers.contains(typeName);
@@ -441,22 +441,24 @@ final class MapKeysLookup implements Check {
 	/**
 	 * The simple nominal the receiver's declared type resolves to, or null when any link cannot
 	 * be resolved. A bare identifier resolves through its binding declaration; a PATH resolves
-	 * its root the same way (or, for the self reference, to the enclosing type declaration) and
-	 * then walks each field segment's member type through the run's `SymbolIndex`, so
+	 * its root the same way (or, for the self reference, to the enclosing type declaration; or,
+	 * for a static TYPE-name root such as `Lib.application`, the unique type the root names in
+	 * scope) and then walks each field segment's member type through the run's `SymbolIndex`, so
 	 * `session.files` with `SessionData.files : Map<String, String>` resolves to `Map` and
 	 * `svc.registry` with a custom `Registry` resolves to `Registry`.
 	 */
 	private static function receiverTypeName(
-		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg, symbols: () -> Null<SymbolIndex>
+		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String
 	): Null<String> {
 		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		if (path == null) return null;
 		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
-		if (rootType == null) return null;
 		if (path.length == 1) return rootType;
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return null;
-		final src: Null<String> = RefactorSupport.pathFinalMemberTypeSource(path, rootType, index);
+		// A value / this root walks the simple-name segments; a static TYPE-name root (no value
+		// binding) resolves import-aware from the reference file's scope.
+		final src: Null<String> = RefactorSupport.pathReceiverMemberTypeSource(path, rootType, index, file);
 		return src == null ? null : RefactorSupport.outerNominalOf(src);
 	}
 

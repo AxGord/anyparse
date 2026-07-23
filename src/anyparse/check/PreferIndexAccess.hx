@@ -99,7 +99,8 @@ final class PreferIndexAccess implements Check {
 			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
 			final matcher: (
 				QueryNode, Null<String>
-			) -> Null<Match> = (call, parentKind) -> match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols);
+			) -> Null<Match> = (call, parentKind) ->
+				match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols, entry.file);
 			collect(
 				root, null, c, matcher, m -> violations.push({
 					file: entry.file,
@@ -192,12 +193,12 @@ final class PreferIndexAccess implements Check {
 	 */
 	private static function match(
 		call: QueryNode, parentKind: Null<String>, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
-		cfg: Cfg, symbols: () -> Null<SymbolIndex>
+		cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String
 	): Null<Match> {
 		final m: Null<Match> = structuralMatch(call, parentKind, cfg);
 		if (m == null) return null;
 		final matched: Match = m;
-		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols)) return null;
+		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols, file)) return null;
 		for (i in 1...call.children.length) {
 			if (containsFragileNullGuard(call.children[i], matched.callSpan, root, declaredTypes, cfg)) return null;
 		}
@@ -223,13 +224,14 @@ final class PreferIndexAccess implements Check {
 	 * Whether `recv` is an identifier or path whose declared type resolves to a `Map`-abstract
 	 * nominal — directly (`Map`), or a nullable wrapper unwrapping to one (`Null<Map<…>>`). A bare
 	 * identifier resolves through its binding annotation; a path resolves its root the same way
-	 * (or, for `this`, the enclosing type) and walks each field segment's member type cross-file
-	 * through `symbols`. An unresolved binding / path / type is a conservative miss — index access
-	 * `[]` compiles only on the abstract, so this gate never flags without positive Map proof.
+	 * (or, for `this`, the enclosing type; or, for a static TYPE-name root, the unique type it
+	 * names in scope) and walks each field segment's member type cross-file through `symbols`. An
+	 * unresolved binding / path / type is a conservative miss — index access `[]` compiles only on
+	 * the abstract, so this gate never flags without positive Map proof.
 	 */
 	private static function receiverIsMap(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
-		symbols: () -> Null<SymbolIndex>
+		symbols: () -> Null<SymbolIndex>, file: String
 	): Bool {
 		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		if (path == null) return false;
@@ -241,9 +243,10 @@ final class PreferIndexAccess implements Check {
 		}
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return false;
+		// A value / this root resolves through the simple-name segment walk; a static TYPE-name
+		// root (no value binding) resolves import-aware from the reference file's scope.
 		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
-		if (rootType == null) return false;
-		final src: Null<String> = RefactorSupport.pathFinalMemberTypeSource(path, rootType, index);
+		final src: Null<String> = RefactorSupport.pathReceiverMemberTypeSource(path, rootType, index, file);
 		if (src == null) return false;
 		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
 		return nominal != null && nominalIsMap(nominal, src, cfg);

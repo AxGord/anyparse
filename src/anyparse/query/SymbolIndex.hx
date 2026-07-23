@@ -369,6 +369,34 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * The verbatim declared type SOURCE of a receiver path's FINAL member, resolved IMPORT- and
+	 * INHERITANCE-aware from `fromFile`'s scope. `startTypeName` is the path root's type name (a
+	 * value's declared type, `this`'s enclosing type, or a static TYPE-name root); it resolves via
+	 * `resolveTypeRef` to the SPECIFIC type in scope, then each `memberPath[i]` is looked up on
+	 * that exact type + its supertype closure and its nominal resolved import-aware to the next
+	 * type in ITS declaring file's scope. Package-safe by construction: a same-simple-named type in
+	 * ANOTHER package never contributes a member (the flaw of the package-blind simple-name walk).
+	 * Null when the root, any intermediate type, or any member is unresolved / ambiguous (fails
+	 * closed). Feeds `RefactorSupport.staticRootPathTypeSource` and the value-root gate.
+	 */
+	public function resolvePathFinalMemberTypeSource(fromFile: String, startTypeName: String, memberPath: Array<String>): Null<String> {
+		if (memberPath.length == 0) return null;
+		final origin: Null<FileInfo> = _files.find(f -> f.file == fromFile);
+		if (origin == null) return null;
+		var current: Null<ResolvedType> = resolveTypeRef(startTypeName, origin);
+		for (i in 0...memberPath.length - 1) {
+			if (current == null) return null;
+			final cur: ResolvedType = current;
+			final memberSource: Null<String> = memberTypeSourceWalk(cur, memberPath[i], []);
+			if (memberSource == null) return null;
+			final nominal: String = StringTools.trim(memberSource.split('<')[0]);
+			current = resolveTypeRef(nominal, cur.file);
+		}
+		return current == null ? null : memberTypeSourceWalk(current, memberPath[memberPath.length - 1], []);
+	}
+
+
+	/**
 	 * Whether a (transitive) supertype of `typeName` declares a member named `field`.
 	 * Such a field's property access is fixed by the supertype, so a check must not
 	 * tighten it (`var` → `final` / `(default, null)`) — Haxe rejects an override /
@@ -523,6 +551,27 @@ final class SymbolIndex {
 			if (inheritsMemberWalk(ancestor, member, seen)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The verbatim declared type source of `member` on `cur`'s type or its supertype closure
+	 * (import-aware via `resolveTypeRef` over `supertypesRaw`), or null when absent. The
+	 * type-source counterpart of `inheritsMemberWalk` — resolution stays anchored to the SPECIFIC
+	 * resolved type, so a same-simple-name namesake never contributes a member.
+	 */
+	private function memberTypeSourceWalk(cur: ResolvedType, member: String, seen: Array<String>): Null<String> {
+		final key: String = '${cur.file.file}#${cur.type.name}';
+		if (seen.contains(key)) return null;
+		seen.push(key);
+		final direct: Null<MemberInfo> = cur.type.members.find(m -> m.name == member);
+		if (direct != null) return direct.typeSource;
+		for (raw in cur.type.supertypesRaw) {
+			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
+			if (anc == null) continue;
+			final src: Null<String> = memberTypeSourceWalk(anc, member, seen);
+			if (src != null) return src;
+		}
+		return null;
 	}
 
 	/**

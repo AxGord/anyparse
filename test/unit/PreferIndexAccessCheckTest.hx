@@ -212,6 +212,114 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(1, violations(source).length);
 	}
 
+	public function testStaticTypeRootMapFlaggedAcrossFiles(): Void {
+		// The root ident is a TYPE name owning a static Map field, resolved through the
+		// SymbolIndex (not a value binding) — the static-type-root arm.
+		final registry: String = 'class Registry {\n\tpublic static var m:Map<String, Int>;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = Registry.m.get("a");\n\t}\n}';
+		Assert.equals(1, violationsAcross([registry, user]).length);
+	}
+
+	public function testStaticTypeRootMapFixed(): Void {
+		// Same static-type-root resolution, fixed in place (two classes, one file so applyFix reaches it).
+		final source: String = 'class Registry {\n\tpublic static var m:Map<String, Int>;\n}\n\n'
+			+ 'class C {\n\tfunction f():Void {\n\t\tvar v = Registry.m.get("a");\n\t}\n}';
+		Assert.equals(1, violations(source).length);
+		final fixed: String = applyFix(source);
+		Assert.isTrue(fixed.indexOf('var v = Registry.m["a"];') != -1);
+		Assert.equals(-1, fixed.indexOf('.get'));
+	}
+
+	public function testThreeLevelStaticPathFlaggedAcrossFiles(): Void {
+		// A.b.c across THREE files: root TYPE Outer (static var mid:Mid), Mid.m:Map.
+		final mid: String = 'class Mid {\n\tpublic var m:Map<String, Int>;\n}';
+		final outer: String = 'class Outer {\n\tpublic static var mid:Mid;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}';
+		Assert.equals(1, violationsAcross([mid, outer, user]).length);
+	}
+
+	public function testStaticRootNotDeclaredNotFlagged(): Void {
+		// The root ident is not a declared type anywhere in scope — unresolvable, skip.
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar v = Unknown.m.get("a");\n\t}\n}').length);
+	}
+
+	public function testStaticRootNonMapMemberNotFlagged(): Void {
+		// A resolved static-type root whose member is a StringMap (no @:arrayAccess) — a safe miss.
+		final registry: String = 'class Registry {\n\tpublic static var sm:StringMap<Int>;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = Registry.sm.get("a");\n\t}\n}';
+		Assert.equals(0, violationsAcross([registry, user]).length);
+	}
+
+	public function testAmbiguousStaticRootNotFlagged(): Void {
+		// Two types share the simple name 'Reg' — the root is ambiguous, fails closed (skip),
+		// even though both carry an identical Map member.
+		final regA: String = 'class Reg {\n\tpublic static var m:Map<String, Int>;\n}';
+		final regB: String = 'class Reg {\n\tpublic static var m:Map<String, Int>;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = Reg.m.get("a");\n\t}\n}';
+		Assert.equals(0, violationsAcross([regA, regB, user]).length);
+	}
+
+	public function testAmbiguousSegmentNominalNotFlagged(): Void {
+		// The mid-segment nominal `Mid` is declared twice with DIFFERENT `m` types — the
+		// simple-name member walk fails closed (divergent typeSource → null) → skip.
+		final midA: String = 'class Mid {\n\tpublic var m:Map<String, Int>;\n}';
+		final midB: String = 'class Mid {\n\tpublic var m:StringMap<Int>;\n}';
+		final outer: String = 'class Outer {\n\tpublic static var mid:Mid;\n}';
+		final user: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}';
+		Assert.equals(0, violationsAcross([midA, midB, outer, user]).length);
+	}
+
+	public function testValueBindingShadowsTypeNameResolvesAsValue(): Void {
+		// A param named like a type (`Registry`) shadows the class. The value binding WINS: the
+		// receiver resolves to the param's type Holder (whose `m` is a Map — flag), NOT to class
+		// Registry (whose static `m` is a StringMap — would skip). Asserting 1 proves value wins.
+		final registry: String = 'class Registry {\n\tpublic static var m:StringMap<Int>;\n}';
+		final holder: String = 'class Holder {\n\tpublic var m:Map<String, Int>;\n}';
+		final user: String = 'class C {\n\tfunction f(Registry:Holder):Void {\n\t\tvar v = Registry.m.get("a");\n\t}\n}';
+		Assert.equals(1, violationsAcross([registry, holder, user]).length);
+	}
+
+	public function testStaticRootCrossPackageInheritedNonMapNotFlagged(): Void {
+		// Reviewer repro: `Outer.mid.m` where the import-correct a.Mid INHERITS m:StringMap, while
+		// an unrelated b.Mid in another package declares m:Map DIRECTLY. The package-blind
+		// simple-name walk returned b.Mid's Map (→ a compile-breaking `[]` on a StringMap); the
+		// import-aware walk reads m off a.Mid through a.Base → StringMap → skip.
+		Assert.equals(0, violationsForFiles([
+			{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
+			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
+			{ file: 'top/User.hx', source: 'package top;\nclass User {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}' }
+		]).length);
+	}
+
+	public function testValueRootCrossPackageInheritedNonMapNotFlagged(): Void {
+		// Same cross-package poison via a VALUE root `o.mid.m` (o:Outer) — proves the pre-existing
+		// value-root hole is closed too, not only the new static-root surface.
+		Assert.equals(0, violationsForFiles([
+			{ file: 'a/Base.hx', source: 'package a;\nclass Base {\n\tpublic var m:StringMap<Int>;\n}' },
+			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid extends Base {\n}' },
+			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic var mid:Mid;\n}' },
+			{
+				file: 'top/User.hx',
+				source: 'package top;\nclass User {\n\tfunction f(o:Outer):Void {\n\t\tvar v = o.mid.m.get("a");\n\t}\n}'
+			}
+		]).length);
+	}
+
+	public function testCrossPackageDirectMapStillFlagged(): Void {
+		// Positive control: when the import-correct a.Mid ITSELF declares m:Map directly (no
+		// inheritance divergence), the same shape flags — the fix does not over-refuse ≥3-segment
+		// cross-package paths, only the poisoned ones.
+		Assert.equals(1, violationsForFiles([
+			{ file: 'a/Mid.hx', source: 'package a;\nclass Mid {\n\tpublic var m:Map<String, Int>;\n}' },
+			{ file: 'b/Mid.hx', source: 'package b;\nclass Mid {\n\tpublic var m:StringMap<Int>;\n}' },
+			{ file: 'top/Outer.hx', source: 'package top;\nimport a.Mid;\nclass Outer {\n\tpublic static var mid:Mid;\n}' },
+			{ file: 'top/User.hx', source: 'package top;\nclass User {\n\tfunction f():Void {\n\t\tvar v = Outer.mid.m.get("a");\n\t}\n}' }
+		]).length);
+	}
+
 	private function src(decl: String, body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$decl\n\t\t$body\n\t}\n}';
 	}
@@ -244,6 +352,11 @@ class PreferIndexAccessCheckTest extends Test {
 	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */
 	private function violationsAcross(sources: Array<String>): Array<Violation> {
 		return new PreferIndexAccess().run([for (i in 0...sources.length) { file: 'F$i.hx', source: sources[i] }], new HaxeQueryPlugin());
+	}
+
+	/** Run over explicit file paths, so package + import scope (isMain module names) resolves. */
+	private function violationsForFiles(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new PreferIndexAccess().run(files, new HaxeQueryPlugin());
 	}
 
 }

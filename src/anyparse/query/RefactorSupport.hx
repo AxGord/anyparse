@@ -1559,7 +1559,9 @@ final class RefactorSupport {
 	/**
 	 * The declared type nominal of a receiver path's ROOT — the enclosing type declaration for
 	 * the self reference, else the root identifier's binding annotation from `declaredTypes` — or
-	 * null when the root cannot be resolved. Shared by the map-abstract / keys()-type gates.
+	 * null when the root cannot be resolved. Shared by the map-abstract / keys()-type gates. A
+	 * root that is a static TYPE name (no value binding) is resolved separately, import-aware,
+	 * by `staticRootPathTypeSource`.
 	 */
 	public static function pathRootTypeName(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, shape: RefShape
@@ -1593,6 +1595,35 @@ final class RefactorSupport {
 			current = nominal;
 		}
 		return index.memberTypeSourceOf(current, path[path.length - 1]);
+	}
+
+	/**
+	 * The verbatim declared type SOURCE of a receiver path's final member, for a value / `this` /
+	 * static-TYPE-name root. Resolves PACKAGE-SAFE FIRST via the import- and inheritance-aware
+	 * `SymbolIndex.resolvePathFinalMemberTypeSource` (so an import-correct intermediate type's
+	 * INHERITED member is read off THAT exact type, never a same-simple-named type in another
+	 * package — the cross-package poisoning that made the package-blind walk emit `[]` on a
+	 * non-Map). Only when the import-aware walk cannot follow the chain — an aliased conditional
+	 * supertype the index does not model (openfl's `Application` inherits `meta` from lime's via
+	 * `import … as LimeApplication`) — does it FALL BACK to the package-blind simple-name walk: a
+	 * value / `this` root walks the whole path by simple name; a static TYPE root still resolves
+	 * its FIRST member import-aware (dodging a same-named root's `#if`-typed member) before the
+	 * simple-name tail. `rootType` is the value / `this` root's type name, or null for a static
+	 * TYPE root (then `path[0]` is the type). Null when unresolved / ambiguous (fails closed).
+	 */
+	public static function pathReceiverMemberTypeSource(
+		path: Array<String>, rootType: Null<String>, index: SymbolIndex, fromFile: String
+	): Null<String> {
+		if (path.length < 2) return null;
+		final startType: String = rootType ?? path[0];
+		final resolved: Null<String> = index.resolvePathFinalMemberTypeSource(fromFile, startType, path.slice(1));
+		if (resolved != null) return resolved;
+		if (rootType != null) return pathFinalMemberTypeSource(path, rootType, index);
+		final firstSource: Null<String> = index.resolvePathFinalMemberTypeSource(fromFile, path[0], [path[1]]);
+		if (firstSource == null) return null;
+		if (path.length == 2) return firstSource;
+		final firstNominal: Null<String> = outerNominalOf(firstSource);
+		return firstNominal == null ? null : pathFinalMemberTypeSource(path.slice(1), firstNominal, index);
 	}
 
 	/**
