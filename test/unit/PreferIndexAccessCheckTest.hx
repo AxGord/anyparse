@@ -80,11 +80,86 @@ class PreferIndexAccessCheckTest extends Test {
 		Assert.equals(0, violations(src('var m:Map<String, String> = [];', 'm.set("a");')).length);
 	}
 
-	public function testQualifiedReceiverNotFlagged(): Void {
+	public function testThisPathFlagged(): Void {
+		// A `this.<field>` path receiver resolving to Map is now flagged (path support).
 		Assert.equals(
-			0,
+			1,
 			violations('class C {\n\tfinal m:Map<String, String> = [];\n\tfunction f():Void {\n\t\tvar v = this.m.get("a");\n\t}\n}').length
 		);
+	}
+
+	public function testThisPathFix(): Void {
+		final fixed: String = applyFix(
+			'class C {\n\tfinal m:Map<String, String> = [];\n\tfunction f():Void {\n\t\tvar v = this.m.get("a");\n\t}\n}'
+		);
+		Assert.isTrue(fixed.indexOf('this.m["a"]') != -1);
+		Assert.equals(-1, fixed.indexOf('.get'));
+	}
+
+	public function testObjectPathFieldFlagged(): Void {
+		// obj.field where the field type resolves (same file) to Map.
+		Assert.equals(1, violations(holderUser('h.m.get("a")')).length);
+	}
+
+	public function testObjectPathFieldFlaggedAcrossFiles(): Void {
+		// The declaring type is in a SEPARATE file — resolution needs the cross-file SymbolIndex.
+		final holder: String = 'class Holder {\n\tpublic var m:Map<String, Int>;\n}';
+		final user: String = 'class C {\n\tfunction f(h:Holder):Void {\n\t\tvar v = h.m.get("a");\n\t}\n}';
+		Assert.equals(1, violationsAcross([holder, user]).length);
+	}
+
+	public function testThreeLevelPathFlaggedAcrossFiles(): Void {
+		// s.h.m across THREE files: root Svc, mid Holder, leaf Map<...>.
+		final holder: String = 'class Holder {\n\tpublic var m:Map<String, Int>;\n}';
+		final svc: String = 'class Svc {\n\tpublic var h:Holder;\n}';
+		final user: String = 'class C {\n\tfunction f(s:Svc):Void {\n\t\tvar v = s.h.m.get("a");\n\t}\n}';
+		Assert.equals(1, violationsAcross([holder, svc, user]).length);
+	}
+
+	public function testObjectPathGetFix(): Void {
+		final fixed: String = applyFix(holderUser('var v = h.m.get("a")'));
+		Assert.isTrue(fixed.indexOf('var v = h.m["a"];') != -1);
+		Assert.equals(-1, fixed.indexOf('.get'));
+	}
+
+	public function testPathNullMapFlagged(): Void {
+		Assert.equals(1, violations(holderUserField('nm:Null<Map<String, Int>>', 'var v = h.nm.get("a")')).length);
+	}
+
+	public function testPathStringMapNotFlagged(): Void {
+		// StringMap has get/set but no @:arrayAccess — a path to it is a safe miss.
+		Assert.equals(0, violations(holderUserField('sm:StringMap<Int>', 'var v = h.sm.get("a")')).length);
+	}
+
+	public function testUnresolvablePathNotFlagged(): Void {
+		// Untyped root -> path unresolvable -> skip (never flag without positive Map proof).
+		Assert.equals(0, violations('class C {\n\tfunction f(h):Void {\n\t\tvar v = h.m.get("a");\n\t}\n}').length);
+	}
+
+	public function testAnonStructPathNotFlagged(): Void {
+		// An anon-struct receiver has no nominal for the SymbolIndex to resolve — conservative miss.
+		Assert.equals(0, violations('class C {\n\tfunction f(o:{ m:Map<String, Int> }):Void {\n\t\tvar v = o.m.get("a");\n\t}\n}').length);
+	}
+
+	public function testCallInPathNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(h:Dynamic):Void {\n\t\tvar v = h.f().get("a");\n\t}\n}').length);
+	}
+
+	public function testNullSafeLinkInPathNotFlagged(): Void {
+		// A `?.` link is not a plain path segment — skipped even when the type is Map.
+		Assert.equals(0, violations(holderUser('var v = h?.m.get("a")')).length);
+	}
+
+	public function testPathSetFixInStatementPosition(): Void {
+		final fixed: String = applyFix(holderUserField('m:Map<String, String>', 'h.m.set("a", "b")'));
+		Assert.isTrue(fixed.indexOf('h.m["a"] = "b";') != -1);
+		Assert.equals(-1, fixed.indexOf('.set'));
+	}
+
+	public function testPathSetNotFixedInExpressionPosition(): Void {
+		final source: String = holderUserField('m:Map<String, String>', 'var r = h.m.set("a", "b")');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(source, applyFix(source));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -154,6 +229,21 @@ class PreferIndexAccessCheckTest extends Test {
 		var out: String = source;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
+	}
+
+	/** A two-class same-file source: a `Holder` with field `<field>` and a `C.f(h:Holder)` body `<body>;`. */
+	private function holderUserField(field: String, body: String): String {
+		return 'class Holder {\n\tpublic var $field;\n}\n\nclass C {\n\tfunction f(h:Holder):Void {\n\t\t$body;\n\t}\n}';
+	}
+
+	/** `holderUserField` with the default `m:Map<String, Int>` field. */
+	private function holderUser(body: String): String {
+		return holderUserField('m:Map<String, Int>', body);
+	}
+
+	/** Run over several sources at once, so the type gate can resolve a member declared in another file. */
+	private function violationsAcross(sources: Array<String>): Array<Violation> {
+		return new PreferIndexAccess().run([for (i in 0...sources.length) { file: 'F$i.hx', source: sources[i] }], new HaxeQueryPlugin());
 	}
 
 }

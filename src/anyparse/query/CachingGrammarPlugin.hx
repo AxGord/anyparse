@@ -30,7 +30,8 @@ import anyparse.query.SpanTypeInfoProvider;
  * skip-parse file re-parses per check, a negligible minority).
  */
 @:nullSafety(Strict)
-final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider {
+final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoProvider implements SpanTypeInfoProvider
+		implements SymbolIndexHost {
 
 	private final _inner: GrammarPlugin;
 	private final _parseCache: Map<String, QueryNode> = [];
@@ -49,8 +50,60 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// re-walking per query.
 	private final _refsCache: RefsCache = new RefsCache();
 
+	// Resolution scope (SymbolIndexHost): a thunk yielding the report files UNION the
+	// configured library sources, and the memoised index built from it. Both stay unset
+	// for a run with no resolution scope, so the checks fall back to their report-only
+	// index. The library sources are read (inside the thunk) and the index built only on
+	// the first resolutionIndex() demand, so a run needing no cross-file resolution never
+	// touches the library.
+	private var _resolutionFiles: Null<() -> Array<{ file: String, source: String }>> = null;
+	private var _resolutionIndex: Null<SymbolIndex> = null;
+	private var _resolutionIndexBuilt: Bool = false;
+
 	public function new(inner: GrammarPlugin) {
 		_inner = inner;
+	}
+
+	/**
+	 * Inject the resolution file-set thunk: the report files UNION the configured library
+	 * sources. Read from disk (inside the thunk) and indexed only on the first
+	 * `resolutionIndex()` demand, keeping a resolution-free run off the library.
+	 */
+	public function setResolutionFiles(files: () -> Array<{ file: String, source: String }>): Void {
+		_resolutionFiles = files;
+	}
+
+	/** `SymbolIndexHost`: whether a resolution scope was injected, tested without forcing the (library-reading) index build. */
+	public function hasResolutionScope(): Bool {
+		return _resolutionFiles != null;
+	}
+
+	/**
+	 * Adopt an externally-built resolution-scoped index as the memoised one. The `--fix`
+	 * loop builds a fresh index per pass over the CURRENT report sources UNION the library
+	 * (its naming / edit index) and shares it here, so the cross-file checks resolve against
+	 * this pass's sources — the per-pass rebuild the loop relies on, extended to the checks —
+	 * instead of a frozen first-demand snapshot. Re-settable: each pass overwrites.
+	 */
+	public function setResolutionIndex(index: SymbolIndex): Void {
+		_resolutionIndex = index;
+		_resolutionIndexBuilt = true;
+	}
+
+	/**
+	 * `SymbolIndexHost`: the resolution-scoped index — an externally adopted one
+	 * (`setResolutionIndex`, the `--fix` loop's per-pass index) when present, else built once
+	 * over the thunk's file set (report UNION library) and memoised for the report path, else
+	 * null when no scope was injected. The self-build runs through `this`, so library parses
+	 * land in this wrapper's parse cache.
+	 */
+	public function resolutionIndex(): Null<SymbolIndex> {
+		if (_resolutionIndexBuilt) return _resolutionIndex;
+		final thunk: Null<() -> Array<{ file: String, source: String }>> = _resolutionFiles;
+		if (thunk == null) return null;
+		_resolutionIndexBuilt = true;
+		_resolutionIndex = SymbolIndex.build(thunk(), this);
+		return _resolutionIndex;
 	}
 
 	public function parseFile(source: String): QueryNode {

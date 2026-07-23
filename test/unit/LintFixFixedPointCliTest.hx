@@ -143,4 +143,29 @@ class LintFixFixedPointCliTest extends Test {
 		CliFixture.removeDir(dir);
 	}
 
+	/**
+	 * `Holder` (with two `Map` fields) is declared in a SEPARATE file, so resolving the nested
+	 * receiver paths `h.byId` / `h.other` needs a file A.hx does not contain. Pass 1 (whole set
+	 * active) converts the OUTER get and defers the contained inner one; that edit makes A active
+	 * for pass 2. `prefer-index-access` is registered in the `--fix` loop's `fullScopeIds`, so
+	 * pass 2 over the subset {A} still sees Holder.hx, resolves `h.other` to `Map`, and converts
+	 * the inner get too. Were the check active-scope, pass 2 would re-lint {A} alone, read
+	 * `h.other` as unresolvable, and leave the inner `.get(` behind — a converged fixed point that
+	 * still has a Map get spelled as a call.
+	 */
+	public function testPreferIndexAccessFullScopeAcrossPasses(): Void {
+		#if (sys || nodejs)
+		final holder: String = 'package p;\n\nclass Holder {\n\tpublic var byId:Map<Int, Int>;\n\tpublic var other:Map<Int, Int>;\n}\n';
+		final a: String = 'package p;\n\nclass A {\n\tpublic function f(h:Holder):Int {\n\t\treturn h.byId.get(h.other.get(0));\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixpia', [{ name: 'Holder.hx', source: holder }, { name: 'A.hx', source: a }]);
+		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
+		final outA: String = File.getContent('$dir/A.hx');
+		Assert.isTrue(outA.indexOf('h.byId[h.other[0]]') != -1, 'both nested Map gets converted across passes: $outA');
+		Assert.isTrue(outA.indexOf('.get(') == -1, 'inner get resolved on the pass-2 subset via full scope: $outA');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

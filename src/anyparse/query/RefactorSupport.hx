@@ -1528,6 +1528,98 @@ final class RefactorSupport {
 		return out;
 	}
 
+	/**
+	 * The dotted segments of a PATH expression — a root identifier (or a self reference)
+	 * followed by plain field accesses, so `session.files` yields `['session', 'files']` — or
+	 * null when `node` is anything else. Only `fieldKind` links over an `identKind` root are
+	 * accepted: a call, an index access or a null-safe `?.` link anywhere in the chain projects
+	 * as a different kind and yields null, keeping every segment a plain field read with no side
+	 * effect of its own. Shared by the `map-keys-lookup` and `prefer-index-access` type gates.
+	 */
+	public static function pathOf(node: QueryNode, identKind: String, fieldKind: String): Null<Array<String>> {
+		final name: Null<String> = node.name;
+		if (name == null) return null;
+		if (node.kind == identKind) return [name];
+		if (node.kind != fieldKind || node.children.length != 1) return null;
+		final base: Null<Array<String>> = pathOf(node.children[0], identKind, fieldKind);
+		if (base == null) return null;
+		base.push(name);
+		return base;
+	}
+
+	/** The simple outer nominal of a written type — `pkg.Map<String, Int>` → `Map` — or null when the text is not a nominal at all. */
+	public static function outerNominalOf(typeSource: String): Null<String> {
+		final lt: Int = typeSource.indexOf('<');
+		final head: String = StringTools.trim(lt < 0 ? typeSource : typeSource.substring(0, lt));
+		final dot: Int = head.lastIndexOf('.');
+		final name: String = dot < 0 ? head : head.substring(dot + 1);
+		return isIdentifier(name) ? name : null;
+	}
+
+	/**
+	 * The declared type nominal of a receiver path's ROOT — the enclosing type declaration for
+	 * the self reference, else the root identifier's binding annotation from `declaredTypes` — or
+	 * null when the root cannot be resolved. Shared by the map-abstract / keys()-type gates.
+	 */
+	public static function pathRootTypeName(
+		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, shape: RefShape
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		if (identKind == null) return null;
+		var node: QueryNode = recv;
+		while (node.kind != identKind && node.children.length == 1) node = node.children[0];
+		if (node.kind != identKind) return null;
+		if (node.name == shape.selfReferenceText) {
+			final span: Null<Span> = recv.span ?? node.span;
+			return span == null ? null : TypeResolver.enclosingTypeName(root, span);
+		}
+		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, shape);
+		return bindingFrom == null ? null : declaredTypes[bindingFrom];
+	}
+
+	/**
+	 * The verbatim declared-type SOURCE of the FINAL segment of a multi-segment path receiver
+	 * (`path.length >= 2`), resolved through `index`: the `rootType` nominal seeds the walk, each
+	 * intermediate field segment resolves to its outer nominal via `memberTypeSourceOf`, and the
+	 * last segment returns its raw type source — null when any link is unresolvable. A consumer
+	 * that wants the final NOMINAL wraps this in `outerNominalOf`.
+	 */
+	public static function pathFinalMemberTypeSource(path: Array<String>, rootType: String, index: SymbolIndex): Null<String> {
+		var current: String = rootType;
+		for (i in 1...path.length - 1) {
+			final memberType: Null<String> = index.memberTypeSourceOf(current, path[i]);
+			final nominal: Null<String> = memberType == null ? null : outerNominalOf(memberType);
+			if (nominal == null) return null;
+			current = nominal;
+		}
+		return index.memberTypeSourceOf(current, path[path.length - 1]);
+	}
+
+	/**
+	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
+	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
+	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying
+	 * a resolution scope (report files UNION configured library roots), that host's memoised
+	 * resolution index is preferred instead, so the check resolves against libraries too; absent a
+	 * scope it falls back to the report-only `files` build — byte-identical to the pre-scope path.
+	 */
+	public static function lazySymbolIndex(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): () -> Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		if (host != null && host.hasResolutionScope()) {
+			final resolver: SymbolIndexHost = host;
+			return () -> resolver.resolutionIndex();
+		}
+		var index: Null<SymbolIndex> = null;
+		var built: Bool = false;
+		return () -> {
+			if (!built) {
+				built = true;
+				index = SymbolIndex.build(files, plugin);
+			}
+			return index;
+		};
+	}
+
 	/** Whether `target` (a constructor assignment's left-hand side) writes the field at `fieldFrom`. */
 	private static function ctorTargetIsField(
 		target: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape

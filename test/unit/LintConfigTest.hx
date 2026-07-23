@@ -93,4 +93,53 @@ class LintConfigTest extends Test {
 		Assert.isNull(viaDiscover.intOption('complexity', 'max'), 'a null resolver falls back to discover (empty when no file on disk)');
 	}
 
+	/** The `resolutionRoots` key: absent yields an empty scope, so no-key projects are byte-inert. */
+	public function testResolutionRootsAbsentIsEmpty(): Void {
+		Assert.equals(0, LintConfig.parse('{}').resolutionRoots().length, 'no key yields an empty resolution scope');
+	}
+
+	/** Each declared root is resolved to absolute against the config directory; an absolute root is kept verbatim. */
+	public function testResolutionRootsResolvedAgainstBaseDir(): Void {
+		final roots: Array<String> = LintConfig.parse('{"resolutionRoots":["lib","../shared/src","/abs/root"]}', '/proj/cfg')
+			.resolutionRoots();
+		Assert.equals(3, roots.length);
+		Assert.equals('/proj/cfg/lib', roots[0], 'a relative root joins the config dir');
+		Assert.equals('/proj/shared/src', roots[1], 'a ../ root normalises against the config dir');
+		Assert.equals('/abs/root', roots[2], 'an absolute root is kept verbatim');
+	}
+
+	/** A non-array `resolutionRoots`, or non-string elements, are dropped — never coerced. */
+	public function testResolutionRootsMalformedFiltered(): Void {
+		Assert.equals(0, LintConfig.parse('{"resolutionRoots":"lib"}', '/p')
+			.resolutionRoots()
+			.length, 'a non-array value yields no roots');
+		final mixed: Array<String> = LintConfig.parse('{"resolutionRoots":["ok",5,null,true]}', '/p').resolutionRoots();
+		Assert.equals(1, mixed.length, 'non-string elements are dropped');
+		Assert.equals('/p/ok', mixed[0]);
+	}
+
+
+	/** The `resolutionLibs` key: absent yields an empty list, so no-key projects are byte-inert. */
+	public function testResolutionLibsAbsentIsEmpty(): Void {
+		Assert.equals(0, LintConfig.parse('{}').resolutionLibs().length, 'no key yields no resolution libs');
+	}
+
+	/** Library names are kept VERBATIM — never path-resolved at parse time (resolution is the CLI's lazy job). */
+	public function testResolutionLibsKeptVerbatim(): Void {
+		final libs: Array<String> = LintConfig.parse('{"resolutionLibs":["openfl","lime"]}', '/proj/cfg').resolutionLibs();
+		Assert.equals(2, libs.length);
+		Assert.equals('openfl', libs[0], 'a lib name is not joined to the config dir');
+		Assert.equals('lime', libs[1]);
+	}
+
+	/** A non-array `resolutionLibs`, or non-string elements, are dropped — never coerced. */
+	public function testResolutionLibsMalformedFiltered(): Void {
+		Assert.equals(0, LintConfig.parse('{"resolutionLibs":"openfl"}', '/p')
+			.resolutionLibs()
+			.length, 'a non-array value yields no libs');
+		final mixed: Array<String> = LintConfig.parse('{"resolutionLibs":["ok",5,null,true]}', '/p').resolutionLibs();
+		Assert.equals(1, mixed.length, 'non-string elements are dropped');
+		Assert.equals('ok', mixed[0]);
+	}
+
 }

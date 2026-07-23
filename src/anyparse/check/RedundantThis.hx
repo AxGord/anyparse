@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.RefactorSupport;
 
 /**
  * Flags a redundant `this.` qualifier — a `this.field` access where no local,
@@ -17,12 +18,12 @@ import anyparse.runtime.Span;
  * the canonical `this.x = x` constructor pattern, where the parameter `x`
  * shadows the field and `this.` is load-bearing.
  *
- * A `this.name` is also kept unless `name` is a member (field / method /
- * property) DECLARED by the enclosing type in this file. A name that is not a
+ * A `this.name` is also kept unless `name` is provably a member (field / method /
+ * property) of the enclosing type or an in-scope ancestor. A name that is not a
  * local member may be a `using` static-extension call (`this.getClass()` under
  * `using Type` resolves via static extension — the bare name is not a member,
  * and dropping `this.` yields an `Unknown identifier`) or a member inherited
- * from an `extends` base (invisible single-file). Either way `this.` may be
+ * from a base OUTSIDE the linted file set. Either way `this.` may be
  * required, so the check stays silent — the membership check is the primary gate
  * against stripping a load-bearing qualifier.
  *
@@ -56,9 +57,14 @@ final class RedundantThis implements Check {
 		final ctx: Null<Ctx> = context(plugin);
 		if (ctx == null) return [];
 		final violations: Array<Violation> = [];
+		// The inheritance index is consulted only by a `this.name` that misses the same-file
+		// member scan (an inherited base member or a `using` extension) — rare — so it is built
+		// at most once per run, on first demand, via the shared lazy builder. When the plugin
+		// carries a resolution scope, that builder resolves supertypes against library roots too.
+		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walkMembers(violations, entry.file, tree, ctx, []);
+			if (tree != null) walkMembers(violations, entry.file, tree, ctx, null, [], resolveSymbols);
 		}
 		return violations;
 	}
@@ -114,29 +120,35 @@ final class RedundantThis implements Check {
 	 * mandatory) is skipped entirely.
 	 *
 	 * `members` is the set of field / method / property names declared by the
-	 * enclosing type. Entering a type-declaration container collects a fresh set
-	 * from THAT container and threads it down — a `this.name` is flagged only when
-	 * `name` is one of those members. A name absent from the enclosing type is
-	 * either a `using` static-extension call (`this.getClass()` via `using Type`,
-	 * where `this.` is load-bearing and stripping it breaks compile) or an
-	 * inherited base-class member (not visible single-file); the check stays
-	 * silent in that ambiguity rather than remove a possibly-required `this.`.
+	 * enclosing type, `typeName` its name (for the inheritance lookup). Entering a
+	 * type-declaration container collects a fresh set from THAT container and
+	 * threads it, with the container's own name, down. A `this.name` is flagged
+	 * when `name` is one of those same-file members, or — when it is not — when an
+	 * ancestor reachable through the `extends` / `implements` chain declares it
+	 * (resolved through the run's lazily-built `SymbolIndex`, `symbols`). A name
+	 * neither declared here nor by any in-scope ancestor is ambiguous — a `using`
+	 * static-extension call (`this.getClass()` via `using Type`, where `this.` is
+	 * load-bearing) or a member inherited from a base OUTSIDE the file set — so the
+	 * check stays silent rather than remove a possibly-required `this.`.
 	 */
-	private static function walkMembers(out: Array<Violation>, file: String, node: QueryNode, c: Ctx, members: Array<String>): Void {
+	private static function walkMembers(
+		out: Array<Violation>, file: String, node: QueryNode, c: Ctx, typeName: Null<String>, members: Array<String>,
+		symbols: () -> Null<SymbolIndex>
+	): Void {
 		if (c.underlyingThisKinds.contains(node.kind)) return;
 		if (c.containerKinds.contains(node.kind)) {
 			final ownMembers: Array<String> = [];
 			collectMemberNames(node, c, ownMembers);
-			for (child in node.children) walkMembers(out, file, child, c, ownMembers);
+			for (child in node.children) walkMembers(out, file, child, c, node.name, ownMembers, symbols);
 			return;
 		}
 		if (c.functionKinds.contains(node.kind)) {
 			final names: Array<String> = [];
 			collectBindingNames(node, c, names);
-			flagThisAccess(out, file, node, c, names, members);
+			flagThisAccess(out, file, node, c, names, typeName, members, symbols);
 			return;
 		}
-		for (child in node.children) walkMembers(out, file, child, c, members);
+		for (child in node.children) walkMembers(out, file, child, c, typeName, members, symbols);
 	}
 
 	/**
@@ -173,13 +185,14 @@ final class RedundantThis implements Check {
 	 * shadow-only test.
 	 */
 	private static function flagThisAccess(
-		out: Array<Violation>, file: String, node: QueryNode, c: Ctx, names: Array<String>, members: Array<String>
+		out: Array<Violation>, file: String, node: QueryNode, c: Ctx, names: Array<String>, typeName: Null<String>, members: Array<String>,
+		symbols: () -> Null<SymbolIndex>
 	): Void {
 		if (isThisAccess(node, c)) {
 			final fieldName: Null<String> = node.name;
 			final span: Null<Span> = node.span;
 			if (
-				fieldName != null && span != null && !names.contains(fieldName) && (!c.membershipGate || members.contains(fieldName))
+				fieldName != null && span != null && !names.contains(fieldName) && isMember(c, file, fieldName, typeName, members, symbols)
 			) out.push({
 				file: file,
 				span: span,
@@ -188,7 +201,32 @@ final class RedundantThis implements Check {
 				message: 'redundant this. qualifier — reduces to $fieldName'
 			});
 		}
-		for (child in node.children) flagThisAccess(out, file, child, c, names, members);
+		for (child in node.children) flagThisAccess(out, file, child, c, names, typeName, members, symbols);
+	}
+
+	/**
+	 * Whether `name` is provably a member of the enclosing type. When the grammar
+	 * supplies no type-container / member seams the membership gate is inert, so
+	 * the check falls back to the shadow-only test (`true`). Otherwise `name` must
+	 * be a member declared by the enclosing type in THIS file (the same-file fast
+	 * path) or — when that misses — proven inherited by `SymbolIndex.inheritsMemberUnambiguously`
+	 * (built lazily, at most once), which pins the enclosing type to its `(file, name)`
+	 * declaration and resolves each supertype link import / qualified-path aware. The
+	 * proof is POSITIVE and UNAMBIGUOUS: it holds only when a UNIQUELY-resolved ancestor
+	 * declares `name`. Every case that is not that proof yields `false` — an ancestor
+	 * outside the file set (e.g. `openfl.display.Sprite` when only the project is linted),
+	 * a supertype whose simple name merely collides with an unrelated in-set type, an
+	 * ambiguous enclosing / supertype resolution, or a `using` static-extension name — so
+	 * the check stays silent rather than strip a possibly load-bearing `this.`.
+	 */
+	private static function isMember(
+		c: Ctx, file: String, name: String, typeName: Null<String>, members: Array<String>, symbols: () -> Null<SymbolIndex>
+	): Bool {
+		if (!c.membershipGate) return true;
+		if (members.contains(name)) return true;
+		if (typeName == null) return false;
+		final index: Null<SymbolIndex> = symbols();
+		return index != null && index.inheritsMemberUnambiguously(file, typeName, name);
 	}
 
 

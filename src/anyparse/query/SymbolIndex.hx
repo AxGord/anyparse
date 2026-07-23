@@ -96,6 +96,16 @@ typedef TypeDeclInfo = {
 	 */
 	var supertypes: Array<String>;
 
+	/**
+	 * The VERBATIM written names of this type's `extends` / `implements` targets
+	 * (qualified when written qualified), parallel to `supertypes`. Preserves the
+	 * dotted path a simple-name reduction loses, so a supertype reference can be
+	 * resolved to a SINGLE declaring type — import / qualified-path aware — rather
+	 * than unioned across every same-simple-name decl. Drives
+	 * `inheritsMemberUnambiguously`.
+	 */
+	var supertypesRaw: Array<String>;
+
 	/** True when this is a `typedef X = {…}` anonymous struct — its fields can never be properties, so field access on it is side-effect-free. */
 	var isAnonStruct: Bool;
 
@@ -119,6 +129,12 @@ typedef FileInfo = {
 	 */
 	var accessGrants: Array<String>;
 }
+
+/** A type declaration paired with its declaring file, for the inheritance-resolution walk. */
+private typedef ResolvedType = {
+	var file: FileInfo;
+	var type: TypeDeclInfo;
+};
 
 /**
  * The project-wide symbol index: a collection of per-file `FileInfo` records answering cross-file questions (which files declare a type, its import path, subtype / access-grant reachability) that a single-file parse cannot. Built once and queried by rename / move ops and type-aware checks.
@@ -365,6 +381,25 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether the type named `typeName` DECLARED IN `file` provably inherits a member
+	 * named `member` from a supertype, resolved through UNAMBIGUOUS, import-aware links
+	 * only. The enclosing type is pinned to its `(file, name)` declaration, so a
+	 * same-named unrelated type elsewhere in the set can never contribute the proof;
+	 * each supertype reference is resolved to the SINGLE in-set type its written path
+	 * names (a qualified path by identity, a simple name through the declaring file's
+	 * import scope or its own package), so a base that is external — or whose simple
+	 * name merely collides with an unrelated in-set type — yields NO proof. Every
+	 * unresolved or ambiguous link is skipped (a safe miss); `true` is returned only on
+	 * a POSITIVE proof that a uniquely-resolved ancestor declares `member`. The precise
+	 * counterpart of `supertypeDeclaresMember` for a caller that must never over-claim
+	 * membership (stripping a load-bearing `this.`).
+	 */
+	public function inheritsMemberUnambiguously(file: String, typeName: String, member: String): Bool {
+		final start: Null<ResolvedType> = findDeclaredType(file, typeName);
+		return start != null && inheritsMemberWalk(start, member, []);
+	}
+
+	/**
 	 * Whether `a` and `b` are provably UNRELATED classes — both resolve to a unique
 	 * indexed CLASS decl, are distinct, and neither is a transitive supertype of the
 	 * other with BOTH supertype closures fully resolved inside the index. Sound for the
@@ -460,6 +495,83 @@ final class SymbolIndex {
 	private function declaresMember(typeName: String, field: String): Bool {
 		for (fi in _files) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == field)) return true;
 		return false;
+	}
+
+	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
+	private function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {
+		final fi: Null<FileInfo> = _files.find(f -> f.file == file);
+		if (fi == null) return null;
+		final host: FileInfo = fi;
+		final t: Null<TypeDeclInfo> = host.types.find(td -> td.name == typeName);
+		return t == null ? null : { file: host, type: t };
+	}
+
+	/**
+	 * `inheritsMemberUnambiguously`'s recursion: whether any UNAMBIGUOUSLY-resolved
+	 * supertype of `cur` declares `member`, or transitively inherits it. `seen`
+	 * cycle-guards on the resolved `(file, name)` identity.
+	 */
+	private function inheritsMemberWalk(cur: ResolvedType, member: String, seen: Array<String>): Bool {
+		final key: String = '${cur.file.file}#${cur.type.name}';
+		if (seen.contains(key)) return false;
+		seen.push(key);
+		for (raw in cur.type.supertypesRaw) {
+			final anc: Null<ResolvedType> = resolveTypeRef(raw, cur.file);
+			if (anc == null) continue;
+			final ancestor: ResolvedType = anc;
+			if (ancestor.type.members.exists(m -> m.name == member)) return true;
+			if (inheritsMemberWalk(ancestor, member, seen)) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Resolve a written supertype reference `raw` (as it appears in `fromFile`) to the
+	 * SINGLE in-set type it names, or null when it is external (no in-set match) or
+	 * AMBIGUOUS (more than one distinct in-set match). A qualified `raw` matches an
+	 * in-set type whose import path equals it; a simple `raw` matches a type in scope of
+	 * `fromFile` — named by an explicit `import` / `using`, reached through a `pkg.*`
+	 * wildcard, or declared in `fromFile`'s own package.
+	 */
+	private function resolveTypeRef(raw: String, fromFile: FileInfo): Null<ResolvedType> {
+		final dot: Int = raw.lastIndexOf('.');
+		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
+		final matches: Array<ResolvedType> = [];
+		final seen: Array<String> = [];
+		for (fi in _files) for (t in fi.types) if (t.name == simple) {
+			final inScope: Bool = dot < 0 ? simpleRefInScope(fromFile, fi, t) : importPathFor(fi, t) == raw;
+			final key: String = '${fi.file}#${t.name}';
+			if (inScope && !seen.contains(key)) {
+				seen.push(key);
+				matches.push({ file: fi, type: t });
+			}
+		}
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	/**
+	 * Whether a bare simple reference in `fromFile` resolves to type `t` of file `fi`:
+	 * `fi` shares `fromFile`'s package, or `fromFile` names `t` through an explicit
+	 * `import` / `using` (its raw equals `t`'s import path) or a `pkg.*` wildcard over
+	 * `fi`'s package.
+	 */
+	private function simpleRefInScope(fromFile: FileInfo, fi: FileInfo, t: TypeDeclInfo): Bool {
+		if (fi.pkg == fromFile.pkg) return true;
+		final path: String = importPathFor(fi, t);
+		final wild: String = '${fi.pkg}.*';
+		for (imp in fromFile.imports) switch imp.kind {
+			case ImportKind.Import | ImportKind.Using:
+				if (imp.raw == path) return true;
+			case ImportKind.Wild:
+				if (imp.raw == wild) return true;
+			case ImportKind.Alias:
+		}
+		return false;
+	}
+
+	/** The import path naming type `t` in file `fi`: its module when `t` is the module main type, else `module.name`. */
+	private inline function importPathFor(fi: FileInfo, t: TypeDeclInfo): String {
+		return t.isMain ? fi.module : '${fi.module}.${t.name}';
 	}
 
 	/**
@@ -653,13 +765,15 @@ final class SymbolIndex {
 		for (node in declNodes(tree)) {
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
+				final supersRaw: Array<String> = collectSupertypesRaw(node);
 				types.push({
 					name: typeDecl.name,
 					kind: typeDecl.kind,
 					span: typeDecl.fullSpan,
 					isMain: typeDecl.name == basename,
 					typeParamArity: declTypeParamArity(source, typeDecl),
-					supertypes: collectSupertypes(node),
+					supertypes: supersRaw.map(simpleName),
+					supertypesRaw: supersRaw,
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
@@ -725,16 +839,18 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Simple names (last `.` segment) of the `extends` / `implements` targets
-	 * under `node` — its supertypes — by reading each `Named` child of an
-	 * `ExtendsClause` / `ImplementsClause`.
+	 * The VERBATIM written names of the `extends` / `implements` targets under
+	 * `node` — its supertypes, qualified when written qualified — by reading each
+	 * `Named` child of an `ExtendsClause` / `ImplementsClause`. The parallel
+	 * simple-name form is derived by the caller; this preserves the dotted path a
+	 * simple-name reduction loses, so a reference can be resolved to a single type.
 	 */
-	private static function collectSupertypes(node: QueryNode): Array<String> {
+	private static function collectSupertypesRaw(node: QueryNode): Array<String> {
 		final out: Array<String> = [];
 		collectInto(node, n -> {
 			if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause') for (c in n.children) {
 				final nm: Null<String> = c.name;
-				if (nm != null) out.push(simpleName(nm));
+				if (nm != null) out.push(nm);
 			}
 		});
 		return out;

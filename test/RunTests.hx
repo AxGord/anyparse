@@ -281,6 +281,7 @@ import unit.ComplexityCheckTest;
 import unit.FoldStringLiteralsCheckTest;
 import unit.LintConfigTest;
 import unit.LintConfigCliTest;
+import unit.ResolutionScopeCliTest;
 import unit.DeadCodeCheckTest;
 import unit.EmptyBlockCheckTest;
 import unit.MissingVisibilityCheckTest;
@@ -466,6 +467,7 @@ import unit.HxExprStmtTerminatorSliceTest;
 import unit.HxCondUnbalancedRegionSliceTest;
 import unit.HxCondSpliceOwnLineSliceTest;
 import unit.CollapsibleElseIfCheckTest;
+import unit.HaxelibResolverTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -807,6 +809,8 @@ class RunTests {
 		addCase(new SpanTypeInfoPinTest());
 		addCase(new SymbolQuerySliceTest());
 		addCase(new LintConfigCliTest());
+		addCase(new ResolutionScopeCliTest());
+		addCase(new HaxelibResolverTest());
 		addCase(new LintPerFileConfigCliTest());
 		addCase(new LintFixFixedPointCliTest());
 		addCase(new LintConfigTest());

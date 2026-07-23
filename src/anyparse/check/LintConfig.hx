@@ -41,10 +41,21 @@ final class LintConfig {
 	/** The directory of the `apqlint.json` that declared the oracle — the compile CWD — or null when parsed without a base. */
 	private final _compilerOracleDir: Null<String>;
 
-	public function new(rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String) {
+	/** The declared library source roots (`resolutionRoots`), each resolved to absolute against the config directory; an empty array when the key is absent. */
+	private final _resolutionRoots: Array<String>;
+
+	/** The declared haxelib library names (`resolutionLibs`) — verbatim strings; the CLI resolves each to a source dir lazily via `haxelib libpath`. An empty array when the key is absent. */
+	private final _resolutionLibs: Array<String>;
+
+	public function new(
+		rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String, ?resolutionRoots: Array<String>,
+		?resolutionLibs: Array<String>
+	) {
 		_rules = rules;
 		_compilerOracle = compilerOracle;
 		_compilerOracleDir = compilerOracleDir;
+		_resolutionRoots = resolutionRoots ?? [];
+		_resolutionLibs = resolutionLibs ?? [];
 	}
 
 	/**
@@ -60,6 +71,28 @@ final class LintConfig {
 	/** The working directory for the compiler-oracle run (the config file's directory), or null. */
 	public function compilerOracleDir(): Null<String> {
 		return _compilerOracleDir;
+	}
+
+	/**
+	 * The declared library source roots (`resolutionRoots`) — extra directories whose
+	 * `.hx` sources join the resolution scope so the cross-file type / inheritance
+	 * checks resolve against libraries, without those files ever being reported or
+	 * edited. Each is resolved to absolute against the config directory; an empty
+	 * array when the key is absent.
+	 */
+	public function resolutionRoots(): Array<String> {
+		return _resolutionRoots;
+	}
+
+	/**
+	 * The declared haxelib library names (`resolutionLibs`) — the preferred form for
+	 * an installed library: the CLI resolves each name to the library's source dir via
+	 * `haxelib libpath` (honouring a `haxelib dev` link and the current version) and
+	 * joins them into the resolution scope, LAZILY, only when a check demands the index.
+	 * Verbatim names here (no shell-out at parse time); an empty array when the key is absent.
+	 */
+	public function resolutionLibs(): Array<String> {
+		return _resolutionLibs;
 	}
 
 	/**
@@ -146,6 +179,8 @@ final class LintConfig {
 	public static function parse(content: String, ?baseDir: String): LintConfig {
 		final rules: Map<String, RuleConfig> = [];
 		var oracle: Null<String> = null;
+		final roots: Array<String> = [];
+		final libs: Array<String> = [];
 		final root: Null<Dynamic> = try haxe.Json.parse(content) catch (exception: Exception) null;
 		if (root != null && Reflect.isObject(root)) {
 			final rulesField: Null<Dynamic> = Reflect.field(root, 'rules');
@@ -155,8 +190,14 @@ final class LintConfig {
 			}
 			final oracleField: Null<Dynamic> = Reflect.field(root, 'compilerOracle');
 			if (oracleField != null && oracleField is String) oracle = (oracleField: String);
+			final rootsField: Null<Dynamic> = Reflect.field(root, 'resolutionRoots');
+			if (rootsField != null && rootsField is Array) for (entry in (rootsField: Array<Dynamic>)) if (entry is String)
+				roots.push(resolveRoot(baseDir, (entry: String)));
+			final libsField: Null<Dynamic> = Reflect.field(root, 'resolutionLibs');
+			if (libsField != null && libsField is Array) for (entry in (libsField: Array<Dynamic>)) if (entry is String)
+				libs.push((entry: String));
 		}
-		return new LintConfig(rules, oracle, oracle == null ? null : baseDir);
+		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, libs);
 	}
 
 	private static function parseRule(raw: Dynamic): RuleConfig {
@@ -166,6 +207,11 @@ final class LintConfig {
 		final enabled: Null<Bool> = enabledRaw is Bool ? enabledRaw : null;
 		final severity: Null<Severity> = severityRaw != null && severityRaw is String ? Severity.fromName(severityRaw) : null;
 		return { enabled: enabled, severity: severity, props: props };
+	}
+
+	/** Resolve a `resolutionRoots` entry to absolute against the config directory; a verbatim absolute path (or one parsed without a base) is kept as-is. */
+	private static function resolveRoot(baseDir: Null<String>, root: String): String {
+		return baseDir == null || haxe.io.Path.isAbsolute(root) ? root : haxe.io.Path.normalize(haxe.io.Path.join([baseDir, root]));
 	}
 
 }

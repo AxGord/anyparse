@@ -22,32 +22,46 @@ import anyparse.runtime.Span;
  * type, and index access `x[k]` / `x[k] = v` is valid ONLY on Haxe's `Map` abstract (its
  * `@:arrayAccess` operators). The concrete `haxe.ds.StringMap` / `IntMap` / `ObjectMap`
  * classes carry `.get` / `.set` but NO array access, so rewriting a `StringMap`-typed
- * receiver to `m[k]` would not compile. So the check flags only when the receiver is a plain
- * identifier whose declared outer-nominal type (via `TypeResolver.identTypeName`) is a
- * `RefShape.mapAbstractTypeNames` (`Map`), OR a `RefShape.nullableWrapperTypeNames` (`Null`)
- * whose verbatim `:Type` source (`TypeInfoProvider.declaredTypeSources`) unwraps to a
- * `mapAbstractTypeNames` nominal (`Null<Map<…>>`). An unresolvable receiver, a `StringMap` /
- * `IntMap` / other concrete-map or unrelated type, and a non-simple receiver
- * (`this.m.get(k)`, `obj.m.get(k)`) are all conservative misses.
+ * receiver to `m[k]` would not compile. So the check flags only when the receiver's declared
+ * outer-nominal type is a `RefShape.mapAbstractTypeNames` (`Map`), OR a
+ * `RefShape.nullableWrapperTypeNames` (`Null`) whose verbatim `:Type` source unwraps to a
+ * `mapAbstractTypeNames` nominal (`Null<Map<…>>`). The receiver may be a bare identifier
+ * (resolved via `TypeResolver.identBindingFrom` + `TypeInfoProvider.declaredTypes`) OR a PATH
+ * — a chain of plain field accesses over an identifier or `this` (`this.m`, `obj.m`, `a.b.c`),
+ * whose root resolves the same way and whose field segments resolve cross-file through a
+ * `SymbolIndex` (`RefactorSupport.pathRootTypeName` / `pathFinalMemberTypeSource`). An
+ * unresolvable receiver, a `StringMap` / `IntMap` / other concrete-map or unrelated type, and
+ * a receiver with a call / index access / `?.` link anywhere in its path are all conservative
+ * misses — the rule never flags without positive Map proof, since rewriting a non-Map to `[]`
+ * is a compile error.
  *
  * ## Arity + position
  *
  * A `get` call must have exactly one argument and a `set` call exactly two (`m.get(k, d)` /
  * `m.set(k)` are a foreign method or a nonexistent overload — not rewritten). The `set`
- * rewrite produces an ASSIGNMENT (`m[k] = v`), valid only in STATEMENT position, so `fix`
- * emits it only when the call is a direct child of an `exprStatementKind` (`ExprStmt`); a
- * `set` used as an expression is still flagged but left for a human. An unbraced control-flow branch body
- * (`if (c) m.set(k, v);`) is still an `ExprStmt` — statement position — so the `set`
- * fix DOES fire there, producing `if (c) m[k] = v;`. A `get` rewrite is an
- * expression and fixes anywhere (`m.get(k).foo`, `f(m.get(k))`). Nested matches
- * (`m.get(n.get(k))`) yield overlapping edits; `RefactorSupport.dropContainedEdits` keeps
- * the outer, the inner is caught on the next `--fix` pass.
+ * rewrite produces an ASSIGNMENT (`m[k] = v` / `obj.m[k] = v`), valid only in STATEMENT
+ * position, so `fix` emits it only when the call is a direct child of an `exprStatementKind`
+ * (`ExprStmt`); a `set` used as an expression is still flagged but left for a human. An
+ * unbraced control-flow branch body (`if (c) m.set(k, v);`) is still an `ExprStmt` — statement
+ * position — so the `set` fix DOES fire there, producing `if (c) m[k] = v;`. A `get` rewrite
+ * is an expression and fixes anywhere (`m.get(k).foo`, `f(m.get(k))`). Nested matches
+ * (`m.get(n.get(k))`) yield overlapping edits; `RefactorSupport.dropContainedEdits` keeps the
+ * outer, the inner is caught on the next `--fix` pass.
+ *
+ * ## Cross-file scope
+ *
+ * A path receiver's member types resolve through a `SymbolIndex` over the file set `run` is
+ * given, so on a changed-files SUBSET a type declared elsewhere reads as unresolvable and the
+ * finding is re-skipped. To keep nested cross-file lookups exposed by an earlier `--fix` pass
+ * converging, the check is listed among the `Cli` fixed-point loop's full-scope ids. `fix`
+ * itself needs no index: it re-extracts each call's structural shape and keeps only the spans
+ * `run` already validated.
  *
  * ## Grammar-agnostic
  *
  * Driven by `identKind`, `callKind`, `fieldAccessKind`, `exprStatementKind`,
- * `mapAbstractTypeNames`, and `nullableWrapperTypeNames` (any missing kind → no-op); all
- * type resolution requires `plugin is TypeInfoProvider`.
+ * `mapAbstractTypeNames`, and `nullableWrapperTypeNames` (any missing kind → no-op); all type
+ * resolution requires `plugin is TypeInfoProvider`.
  */
 @:nullSafety(Strict)
 final class PreferIndexAccess implements Check {
@@ -72,14 +86,22 @@ final class PreferIndexAccess implements Check {
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final cfg: Null<Cfg> = config(plugin);
 		if (cfg == null) return [];
+		final c: Cfg = cfg;
 		final violations: Array<Violation> = [];
+		// A path receiver's member types resolve cross-file; the index is built at most once, on
+		// first demand, because most runs never reach a path receiver that cleared every other gate.
+		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
-			final declaredTypes: Map<Int, String> = cfg.typed.declaredTypes(entry.source);
-			final declaredTypeSources: Map<Int, String> = cfg.typed.declaredTypeSources(entry.source);
+			final root: QueryNode = tree;
+			final declaredTypes: Map<Int, String> = c.typed.declaredTypes(entry.source);
+			final declaredTypeSources: Map<Int, String> = c.typed.declaredTypeSources(entry.source);
+			final matcher: (
+				QueryNode, Null<String>
+			) -> Null<Match> = (call, parentKind) -> match(call, parentKind, root, declaredTypes, declaredTypeSources, c, resolveSymbols);
 			collect(
-				tree, tree, null, declaredTypes, declaredTypeSources, cfg, m -> violations.push({
+				root, null, c, matcher, m -> violations.push({
 					file: entry.file,
 					span: m.callSpan,
 					rule: 'prefer-index-access',
@@ -91,7 +113,7 @@ final class PreferIndexAccess implements Check {
 		return violations;
 	}
 
-	/** Rewrite each flagged `get` to `m[k]` and each statement-position `set` to `m[k] = v`. */
+	/** Rewrite each flagged `get` to `m[k]` and each statement-position `set` to `m[k] = v`, trusting `run`'s validated spans. */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
@@ -99,10 +121,11 @@ final class PreferIndexAccess implements Check {
 		if (cfg == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final declaredTypes: Map<Int, String> = cfg.typed.declaredTypes(source);
-		final declaredTypeSources: Map<Int, String> = cfg.typed.declaredTypeSources(source);
 		final byKey: Map<String, Match> = [];
-		collect(tree, tree, null, declaredTypes, declaredTypeSources, cfg, m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m);
+		collect(
+			tree, null, cfg, (call, parentKind) -> structuralMatch(call, parentKind, cfg),
+			m -> byKey['${m.callSpan.from}:${m.callSpan.to}'] = m
+		);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -147,56 +170,38 @@ final class PreferIndexAccess implements Check {
 
 	/** Walk `node`, invoking `sink` for every `get` / `set` call on a `Map`-abstract receiver. */
 	private static function collect(
-		node: QueryNode, root: QueryNode, parentKind: Null<String>, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
-		cfg: Cfg, sink: Match -> Void
+		node: QueryNode, parentKind: Null<String>, cfg: Cfg, matcher: (QueryNode, Null<String>) -> Null<Match>, sink: Match -> Void
 	): Void {
 		if (cfg.opaqueKinds.contains(node.kind)) return;
 		if (node.kind == cfg.callKind) {
-			final m: Null<Match> = match(node, parentKind, root, declaredTypes, declaredTypeSources, cfg);
+			final m: Null<Match> = matcher(node, parentKind);
 			if (m != null) sink(m);
 		}
-		for (c in node.children) collect(c, root, node.kind, declaredTypes, declaredTypeSources, cfg, sink);
+		for (c in node.children) collect(c, node.kind, cfg, matcher, sink);
 	}
 
 	/**
-	 * If `call` is a `Map`-abstract `get(k)` / `set(k, v)` on a plain-identifier receiver,
-	 * return the resolved match; else null. Enforces the exact arity, the receiver-type gate,
-	 * and the INFERENCE-FRAGILITY gate: a key (or set value) whose subtree contains a null
-	 * guard — a null-comparison ternary or `??` — with an inference-open fallback is a
-	 * conservative miss, because dropping the method-argument context (`m[k]` types the key in
-	 * VALUE mode) would flip that fallback's inferred constraint to `Null<…>` and break an
-	 * active `@:nullSafety` scope downstream (`TypeResolver.isInferenceFragileNullGuard`).
+	 * If `call` is a `Map`-abstract `get(k)` / `set(k, v)` on an identifier or path receiver,
+	 * return the resolved match; else null. Layers the receiver-type gate and the
+	 * INFERENCE-FRAGILITY gate onto the structural shape from `structuralMatch`: a key (or set
+	 * value) whose subtree contains a null guard — a null-comparison ternary or `??` — with an
+	 * inference-open fallback is a conservative miss, because dropping the method-argument context
+	 * (`m[k]` types the key in VALUE mode) would flip that fallback's inferred constraint to
+	 * `Null<…>` and break an active `@:nullSafety` scope downstream
+	 * (`TypeResolver.isInferenceFragileNullGuard`).
 	 */
 	private static function match(
 		call: QueryNode, parentKind: Null<String>, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>,
-		cfg: Cfg
+		cfg: Cfg, symbols: () -> Null<SymbolIndex>
 	): Null<Match> {
-		if (call.children.length < 1) return null;
-		final callee: QueryNode = call.children[0];
-		final method: Null<String> = callee.name;
-		if (callee.kind != cfg.fieldKind || method == null || callee.children.length != 1) return null;
-		final recv: QueryNode = callee.children[0];
-		if (recv.kind != cfg.identKind) return null;
-		final isSet: Bool = if (method == GET_METHOD && call.children.length == GET_ARG_COUNT + 1)
-			false;
-		else if (method == SET_METHOD && call.children.length == SET_ARG_COUNT + 1)
-			true;
-		else
-			return null;
-		if (!receiverIsMap(recv, root, declaredTypes, declaredTypeSources, cfg)) return null;
-		final callSpan: Null<Span> = call.span;
-		if (callSpan == null) return null;
+		final m: Null<Match> = structuralMatch(call, parentKind, cfg);
+		if (m == null) return null;
+		final matched: Match = m;
+		if (!receiverIsMap(matched.recv, root, declaredTypes, declaredTypeSources, cfg, symbols)) return null;
 		for (i in 1...call.children.length) {
-			if (containsFragileNullGuard(call.children[i], callSpan, root, declaredTypes, cfg)) return null;
+			if (containsFragileNullGuard(call.children[i], matched.callSpan, root, declaredTypes, cfg)) return null;
 		}
-		return {
-			callSpan: callSpan,
-			recv: recv,
-			key: call.children[1],
-			value: isSet ? call.children[2] : null,
-			isSet: isSet,
-			isStatement: parentKind == cfg.exprStmtKind
-		};
+		return matched;
 	}
 
 	/** The rewrite text for `m`, or null when it is a `set` outside statement position (no safe expression form). */
@@ -215,21 +220,33 @@ final class PreferIndexAccess implements Check {
 	}
 
 	/**
-	 * Whether `recv` is a plain identifier whose declared type resolves to a `Map`-abstract
-	 * nominal — directly (`Map`), or a nullable wrapper unwrapping to one (`Null<Map<…>>`).
-	 * An unresolved binding / type is a conservative miss.
+	 * Whether `recv` is an identifier or path whose declared type resolves to a `Map`-abstract
+	 * nominal — directly (`Map`), or a nullable wrapper unwrapping to one (`Null<Map<…>>`). A bare
+	 * identifier resolves through its binding annotation; a path resolves its root the same way
+	 * (or, for `this`, the enclosing type) and walks each field segment's member type cross-file
+	 * through `symbols`. An unresolved binding / path / type is a conservative miss — index access
+	 * `[]` compiles only on the abstract, so this gate never flags without positive Map proof.
 	 */
 	private static function receiverIsMap(
-		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg
+		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, declaredTypeSources: Map<Int, String>, cfg: Cfg,
+		symbols: () -> Null<SymbolIndex>
 	): Bool {
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
-		if (bindingFrom == null) return false;
-		final typeName: Null<String> = declaredTypes[bindingFrom];
-		if (typeName == null) return false;
-		if (cfg.mapTypes.contains(typeName)) return true;
-		if (!cfg.nullableWrappers.contains(typeName)) return false;
-		final src: Null<String> = declaredTypeSources[bindingFrom];
-		return src != null && nullWrapsMap(src, typeName, cfg.mapTypes);
+		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
+		if (path == null) return false;
+		if (path.length == 1) {
+			final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(recv, root, cfg.shape);
+			if (bindingFrom == null) return false;
+			final typeName: Null<String> = declaredTypes[bindingFrom];
+			return typeName != null && nominalIsMap(typeName, declaredTypeSources[bindingFrom], cfg);
+		}
+		final index: Null<SymbolIndex> = symbols();
+		if (index == null) return false;
+		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
+		if (rootType == null) return false;
+		final src: Null<String> = RefactorSupport.pathFinalMemberTypeSource(path, rootType, index);
+		if (src == null) return false;
+		final nominal: Null<String> = RefactorSupport.outerNominalOf(src);
+		return nominal != null && nominalIsMap(nominal, src, cfg);
 	}
 
 	/** Whether the verbatim type `source` is `wrapper<Nominal…>` whose inner nominal is a `mapTypes` name. */
@@ -274,6 +291,44 @@ final class PreferIndexAccess implements Check {
 			return true;
 		for (c in node.children) if (containsFragileNullGuard(c, site, root, declaredTypes, cfg)) return true;
 		return false;
+	}
+
+
+	/**
+	 * The structural shape of a `get(k)` / `set(k, v)` call on an identifier or path receiver —
+	 * the arity check, the receiver as a plain path, and the key / value / statement-position
+	 * extraction — WITHOUT the type gate. `run` layers the type + null-guard gates on top; `fix`
+	 * uses it alone and keeps only the spans `run` already flagged, so the fix trusts detection
+	 * and needs no cross-file index of its own.
+	 */
+	private static function structuralMatch(call: QueryNode, parentKind: Null<String>, cfg: Cfg): Null<Match> {
+		if (call.children.length < 1) return null;
+		final callee: QueryNode = call.children[0];
+		final method: Null<String> = callee.name;
+		if (callee.kind != cfg.fieldKind || method == null || callee.children.length != 1) return null;
+		final recv: QueryNode = callee.children[0];
+		if (RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind) == null) return null;
+		final isSet: Bool = if (method == GET_METHOD && call.children.length == GET_ARG_COUNT + 1)
+			false;
+		else if (method == SET_METHOD && call.children.length == SET_ARG_COUNT + 1)
+			true;
+		else
+			return null;
+		final callSpan: Null<Span> = call.span;
+		return callSpan == null ? null : {
+			callSpan: callSpan,
+			recv: recv,
+			key: call.children[1],
+			value: isSet ? call.children[2] : null,
+			isSet: isSet,
+			isStatement: parentKind == cfg.exprStmtKind
+		};
+	}
+
+	/** Whether `nominal` (with optional verbatim `source`) is a `Map`-abstract name, or a nullable wrapper whose inner nominal is one. */
+	private static function nominalIsMap(nominal: String, source: Null<String>, cfg: Cfg): Bool {
+		return cfg.mapTypes.contains(nominal)
+			|| (source != null && cfg.nullableWrappers.contains(nominal) && nullWrapsMap(source, nominal, cfg.mapTypes));
 	}
 
 }

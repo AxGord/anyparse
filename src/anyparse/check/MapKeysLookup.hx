@@ -6,7 +6,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
-import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import anyparse.query.RefactorSupport;
 
@@ -124,15 +123,7 @@ final class MapKeysLookup implements Check {
 		final violations: Array<Violation> = [];
 		// Cross-file member types are needed only by a loop that already cleared every structural
 		// gate, which most runs never have — so the index is built at most once, on first demand.
-		var symbols: Null<SymbolIndex> = null;
-		var indexed: Bool = false;
-		final resolveSymbols: () -> Null<SymbolIndex> = () -> {
-			if (!indexed) {
-				indexed = true;
-				symbols = SymbolIndex.build(files, plugin);
-			}
-			return symbols;
-		};
+		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
@@ -275,7 +266,7 @@ final class MapKeysLookup implements Check {
 		final body: QueryNode = loop.children[loop.children.length - 1];
 		final recv: Null<QueryNode> = keysReceiver(iterable, cfg);
 		if (recv == null) return null;
-		final path: Null<Array<String>> = pathOf(recv, cfg);
+		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
 		if (path == null) return null;
 		final parts = {
 			keyName: keyName,
@@ -293,27 +284,9 @@ final class MapKeysLookup implements Check {
 		final callee: QueryNode = iterable.children[0];
 		if (callee.kind != cfg.fieldKind || callee.name != KEYS_METHOD || callee.children.length != 1) return null;
 		final recv: QueryNode = callee.children[0];
-		return pathOf(recv, cfg) == null ? null : recv;
+		return RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind) == null ? null : recv;
 	}
 
-	/**
-	 * The dotted segments of a PATH expression — a root identifier (or the self reference)
-	 * followed by plain field accesses, so `session.files` yields `['session', 'files']` — or
-	 * null when `node` is anything else. The accepted SHAPE is deliberately narrow: only
-	 * `fieldKind` links over an `identKind` root. A call, an index access or a null-safe `?.`
-	 * link anywhere in the chain projects as a different kind and yields null, keeping every
-	 * segment a plain field read with no side effect of its own.
-	 */
-	private static function pathOf(node: QueryNode, cfg: Cfg): Null<Array<String>> {
-		final name: Null<String> = node.name;
-		if (name == null) return null;
-		if (node.kind == cfg.identKind) return [name];
-		if (node.kind != cfg.fieldKind || node.children.length != 1) return null;
-		final base: Null<Array<String>> = pathOf(node.children[0], cfg);
-		if (base == null) return null;
-		base.push(name);
-		return base;
-	}
 
 	/**
 	 * Whether `node` is the SAME path as `path`, compared segment by segment rather than by
@@ -321,7 +294,7 @@ final class MapKeysLookup implements Check {
 	 * and the per-link kind check keeps `a.b` from matching the differently-evaluated `a?.b`.
 	 */
 	private static function isPath(node: QueryNode, path: Array<String>, cfg: Cfg): Bool {
-		final other: Null<Array<String>> = pathOf(node, cfg);
+		final other: Null<Array<String>> = RefactorSupport.pathOf(node, cfg.identKind, cfg.fieldKind);
 		if (other == null || other.length != path.length) return false;
 		for (i in 0...path.length) if (other[i] != path[i]) return false;
 		return true;
@@ -376,7 +349,7 @@ final class MapKeysLookup implements Check {
 
 	/** `pathOf` with a leading self-reference segment dropped, so `this.files` and `files` denote one path. */
 	private static function memberPathOf(node: QueryNode, cfg: Cfg): Null<Array<String>> {
-		final p: Null<Array<String>> = pathOf(node, cfg);
+		final p: Null<Array<String>> = RefactorSupport.pathOf(node, cfg.identKind, cfg.fieldKind);
 		return p == null ? null : stripSelf(p, cfg);
 	}
 
@@ -476,43 +449,17 @@ final class MapKeysLookup implements Check {
 	private static function receiverTypeName(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg, symbols: () -> Null<SymbolIndex>
 	): Null<String> {
-		final path: Null<Array<String>> = pathOf(recv, cfg);
-		final rootType: Null<String> = path == null ? null : rootTypeName(recv, root, declaredTypes, cfg);
-		if (path == null || rootType == null) return null;
+		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
+		if (path == null) return null;
+		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
+		if (rootType == null) return null;
 		if (path.length == 1) return rootType;
 		final index: Null<SymbolIndex> = symbols();
 		if (index == null) return null;
-		var current: String = rootType;
-		for (i in 1...path.length) {
-			final memberType: Null<String> = index.memberTypeSourceOf(current, path[i]);
-			final nominal: Null<String> = memberType == null ? null : outerNominalOf(memberType);
-			if (nominal == null) return null;
-			current = nominal;
-		}
-		return current;
+		final src: Null<String> = RefactorSupport.pathFinalMemberTypeSource(path, rootType, index);
+		return src == null ? null : RefactorSupport.outerNominalOf(src);
 	}
 
-	/** The declared type of a receiver path's ROOT — the enclosing type for the self reference, else the root identifier's annotation. */
-	private static function rootTypeName(recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg): Null<String> {
-		var node: QueryNode = recv;
-		while (node.kind != cfg.identKind && node.children.length == 1) node = node.children[0];
-		if (node.kind != cfg.identKind) return null;
-		if (node.name == cfg.selfRef) {
-			final span: Null<Span> = recv.span ?? node.span;
-			return span == null ? null : TypeResolver.enclosingTypeName(root, span);
-		}
-		final bindingFrom: Null<Int> = TypeResolver.identBindingFrom(node, root, cfg.shape);
-		return bindingFrom == null ? null : declaredTypes[bindingFrom];
-	}
-
-	/** The simple outer nominal of a written type — `pkg.Map<String, Int>` → `Map` — or null when the text is not a nominal at all. */
-	private static function outerNominalOf(typeSource: String): Null<String> {
-		final lt: Int = typeSource.indexOf('<');
-		final head: String = StringTools.trim(lt < 0 ? typeSource : typeSource.substring(0, lt));
-		final dot: Int = head.lastIndexOf('.');
-		final name: String = dot < 0 ? head : head.substring(dot + 1);
-		return RefactorSupport.isIdentifier(name) ? name : null;
-	}
 
 	private static function isIdentNamed(node: QueryNode, name: String, cfg: Cfg): Bool {
 		return node.kind == cfg.identKind && node.name == name;

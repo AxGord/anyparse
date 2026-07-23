@@ -1203,8 +1203,17 @@ final class Cli {
 		final activeChecks: Array<Check> = applyEnablement ? [
 			for (c in checks) if (Lambda.exists(files, f -> resolveConfig(f.file).enabledFor(c.id(), !(c is DefaultOff)))) c
 		] : checks;
-		final all: Array<Violation> = Linter.run(files, plugin, activeChecks, resolveConfig, applyEnablement);
 
+		// Resolution scope (opt-in via apqlint.json `resolutionRoots` = explicit dirs and/or
+		// `resolutionLibs` = haxelib names): the UNION of both across every discovered config. Their
+		// `.hx` sources join the SymbolIndex the cross-file checks resolve against — never reported,
+		// never edited — read lazily on first demand, and the lib names are resolved to dirs via
+		// `haxelib libpath` only then. Null when no config declares either, so a project without
+		// both keys is byte-inert (the null-decision never runs haxelib).
+		final resolution: Null<() -> Array<{ file: String, source: String }>> = resolutionThunk(
+			files, unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots()),
+			unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs())
+		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
 		// whole run — its hxml is typechecked as ground truth below.
@@ -1212,7 +1221,12 @@ final class Cli {
 		final oracleHxml: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracle();
 		final oracleDir: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracleDir();
 
-		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, oracleHxml, oracleDir);
+		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
+
+		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
+		// --fix run. The resolution scope (if any) joins the checks' SymbolIndex; findings stay in the
+		// report files (wrapResolution returns the plugin untouched when no scope is configured).
+		final all: Array<Violation> = Linter.run(files, wrapResolution(plugin, resolution), activeChecks, resolveConfig, applyEnablement);
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
 		renderLintReport(paths, shown, sourceOf, o.format, o.flat);
@@ -1250,9 +1264,84 @@ final class Cli {
 	 * just stops that file quietly. The pass count is capped as a runaway guard.
 	 * Exit is always success — `--fix` is best-effort.
 	 */
+	/** The UNION of `resolutionRoots` across the configs discovered for `paths` — the library dirs whose sources join the resolution scope. */
+	/**
+	 * The deduped union of a per-config string list across every linted path — the
+	 * shared shape of the `resolutionRoots` / `resolutionLibs` gathering, differing
+	 * only in which `LintConfig` accessor supplies each config's values.
+	 */
+	private static function unionConfigStrings(
+		paths: Array<String>, resolveConfig: (String) -> LintConfig, select: (LintConfig) -> Array<String>
+	): Array<String> {
+		final out: Array<String> = [];
+		for (p in paths) for (s in select(resolveConfig(p))) if (!out.contains(s)) out.push(s);
+		return out;
+	}
+
+	/**
+	 * The UNION of `resolutionLibs` (haxelib NAMES) across the configs discovered for `paths`.
+	 * A pure string union — no `haxelib` shell-out here; the names are resolved to source dirs
+	 * lazily inside `resolutionThunk` so the eager null-decision never pays the haxelib cost.
+	 */
+	/**
+	 * The resolution file-set thunk for `roots` (explicit dirs) plus `libNames` (haxelib names,
+	 * resolved to source dirs on first demand via `haxelib libpath`): on first call it resolves the
+	 * lib names, globs every root's `.hx`, reads their sources once (memoised) and returns the LIVE
+	 * report `files` UNION those library entries, deduped against the report paths. Null when BOTH
+	 * `roots` and `libNames` are empty — that decision NEVER shells out — so a project with neither
+	 * `resolutionRoots` nor `resolutionLibs` stays byte-inert. Reading the `files` array live keeps
+	 * the report portion current across `--fix` passes; the library portion is immutable.
+	 */
+	private static function resolutionThunk(
+		files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>
+	): Null<() -> Array<{ file: String, source: String }>> {
+		if (roots.length == 0 && libNames.length == 0) return null;
+		// Dedup by ABSOLUTE path: a library glob path is always absolute, a report path keeps the
+		// CLI-arg spelling (often relative), so a raw-string compare misses an overlap and indexes
+		// the shared file TWICE — duplicate declarations that trip the resolver's ambiguity gate and
+		// silently suppress the cross-file finding. Normalise both sides; the report file keeps its
+		// original spelling in `files` (report/edit scope), the overlapping library copy is dropped.
+		final reportPaths: Array<String> = [for (f in files) FileSystem.absolutePath(f.file)];
+		var library: Null<Array<{ file: String, source: String }>> = null;
+		return () -> {
+			final built: Null<Array<{ file: String, source: String }>> = library;
+			if (built != null) return files.concat(built);
+			// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
+			// `haxelib libpath` spawn lives here, inside the thunk, never in the null-decision
+			// above, so a run whose checks never build the index (e.g. `--rule prefer-single-quotes`)
+			// pays no haxelib cost. A name that does not resolve (typo / uninstalled) is dropped
+			// with a stderr note so the run proceeds exactly as if the lib were absent.
+			final scanRoots: Array<String> = roots.copy();
+			for (name in libNames) {
+				final dir: Null<String> = HaxelibResolver.libSourceDir(name);
+				if (dir == null)
+					stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
+				else if (!scanRoots.contains(dir))
+					scanRoots.push(dir);
+			}
+			final libFiles: Array<{ file: String, source: String }> = [];
+			for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.contains(FileSystem.absolutePath(path))) {
+				final src: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
+				if (src != null) libFiles.push({ file: path, source: src });
+			}
+			library = libFiles;
+			return files.concat(libFiles);
+		};
+	}
+
+	/** Wrap `plugin` in a resolution-scope-carrying `CachingGrammarPlugin` when `resolution` is set; else return it untouched (byte-inert). */
+	private static function wrapResolution(
+		plugin: GrammarPlugin, resolution: Null<() -> Array<{ file: String, source: String }>>
+	): GrammarPlugin {
+		if (resolution == null) return plugin;
+		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
+		host.setResolutionFiles(resolution);
+		return host;
+	}
+
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, ?oracleHxml: String, ?oracleDir: String
+		applyEnablement: Bool, ?resolution: () -> Array<{ file: String, source: String }>, ?oracleHxml: String, ?oracleDir: String
 	): Int {
 		// A RiskyFix check's edits are verified against the compiler oracle (below);
 		// every other check is trusted and runs the normal fixed-point loop. No
@@ -1264,7 +1353,8 @@ final class Cli {
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
 		// check, and every fix — keyed by source content, so an unchanged file is
 		// reused across passes and only a rewritten one re-parses on its new content.
-		final cached: GrammarPlugin = new CachingGrammarPlugin(plugin);
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
+		if (resolution != null) cached.setResolutionFiles(resolution);
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
 		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
@@ -1291,7 +1381,11 @@ final class Cli {
 			// Resolves a path receiver's member types through a SymbolIndex over the set it is
 			// given — on the active SUBSET a type declared elsewhere reads as unresolvable, which
 			// re-flags the very loops the type gate is meant to skip.
-			'map-keys-lookup'
+			'map-keys-lookup',
+			// Same cross-file path-receiver resolution as map-keys-lookup: on the active SUBSET a
+			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
+			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
+			'prefer-index-access'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];
@@ -1304,7 +1398,7 @@ final class Cli {
 			passes++;
 			final pass: LintPassResult = applyLintPass(
 				active, files, cached, activeScopeChecks, fullScopeChecks, safeChecks, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles
+				noted, changedFiles, resolution
 			);
 			fixedCount += pass.fixedDelta;
 			active = pass.nextActive;
@@ -8879,13 +8973,18 @@ final class Cli {
 	 * and the count of edits applied. Mutates `changedFiles` / `noted`.
 	 */
 	private static function applyLintPass(
-		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: GrammarPlugin,
+		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>
+		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
+		?resolution: () -> Array<{ file: String, source: String }>
 	): LintPassResult {
-		// Rebuild over the CURRENT (mutated) sources — naming's cross-file
-		// rename consults the index, so it must reflect this pass's input.
-		final index: SymbolIndex = SymbolIndex.build(files, cached);
+		// Rebuild over the CURRENT (mutated) sources UNION the resolution scope — naming's
+		// cross-file rename consults the index, so it must reflect this pass's input and
+		// resolve against any configured library roots. `resolution` null → report-only (byte-inert).
+		final index: SymbolIndex = SymbolIndex.build(resolution == null ? files : resolution(), cached);
+		// Share this pass's fresh index with the cross-file checks (via the host) so they resolve
+		// against the same current sources UNION library, not a frozen first-demand snapshot.
+		if (resolution != null) cached.setResolutionIndex(index);
 		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		final nextActive: Array<{ file: String, source: String }> = [];

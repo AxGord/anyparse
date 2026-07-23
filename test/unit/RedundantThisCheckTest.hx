@@ -81,6 +81,183 @@ class RedundantThisCheckTest extends Test {
 		Assert.isTrue(ids.contains('redundant-this'));
 	}
 
+	// Inheritance: a member inherited from a base declared in the SAME file is now
+	// flagged — membership resolves through the extends chain via SymbolIndex.
+	public function testInheritedFromSameFileBaseFlagged(): Void {
+		final src: String = 'class Base { public function inh():Void {} } class S extends Base { function m():Void { this.inh(); } }';
+		Assert.equals(1, new RedundantThis().run([{ file: 'S.hx', source: src }], new HaxeQueryPlugin()).length);
+	}
+
+	// A member inherited from a base in ANOTHER file in the set is flagged — the index
+	// is built over every linted file, not just the one holding the access.
+	public function testInheritedFromOtherFileBaseFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
+			{ file: 'S.hx', source: 'class S extends Base { function m():Void { this.inh(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('S.hx', vs[0].file);
+	}
+
+	// A base OUTSIDE the linted set leaves the access silent — `inh` cannot be proven a
+	// member (inherited member OR `using` extension), so `this.` is kept.
+	public function testInheritedFromBaseOutsideSetNotFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'S.hx', source: 'class S extends Base { function m():Void { this.inh(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Load-bearing: with the base IN the set, a `using` static-extension call whose name
+	// is NOT declared by the type or any ancestor stays silent — dropping `this.` would
+	// break compile (`Unknown identifier`).
+	public function testUsingExtensionSilentEvenWithBaseInSet(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
+			{
+				file: 'W.hx',
+				source: 'using Type; class W extends Base { function m():Class<Dynamic> { return this.getClass(); } }'
+			}
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// A local binding that shadows an INHERITED member name still wins — the shadow gate
+	// runs before the membership check, so `this.inh` (with a local `inh`) is kept.
+	public function testShadowedBindingWinsOverInheritedMembership(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'Base.hx', source: 'class Base { public function inh():Void {} }' },
+			{ file: 'S.hx', source: 'class S extends Base { function m():Void { var inh = 1; trace(this.inh); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Vector A — a SECOND unrelated `class S extends Lib` (Lib declares getClass) must NOT
+	// make the REAL `S`'s `this.getClass()` (a `using Type` extension) flag. The simple-name
+	// union claimed the real S inherits getClass; pinning the enclosing type to its own
+	// `(file, name)` declaration keeps it silent. Fails before the ambiguity fix.
+	public function testVectorAUnrelatedSameNamedEnclosingNotFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'Lib.hx', source: 'class Lib { public function getClass():Class<Dynamic> return null; }' },
+			{ file: 'pa/S.hx', source: 'package pa; class S extends Lib {}' },
+			{
+				file: 'pr/S.hx',
+				source: 'package pr; using Type; class S { function m():Class<Dynamic> { return this.getClass(); } }'
+			}
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Vector B (qualified) — the real base `b.Widget` is OUT of the set and its simple name
+	// collides with an unrelated in-set `a.Widget` that declares getClass. Import-path-precise
+	// resolution binds the base to `b.Widget` (external ⇒ no proof), so `a.Widget` never spoofs
+	// the membership and `this.getClass()` stays silent. Fails before the ambiguity fix.
+	public function testVectorBQualifiedSupertypeCollisionNotFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'a/Widget.hx', source: 'package a; class Widget { public function getClass():Class<Dynamic> return null; }' },
+			{
+				file: 'pr/S.hx',
+				source: 'package pr; using Type; class S extends b.Widget { function m():Class<Dynamic> { return this.getClass(); } }'
+			}
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Vector B (simple + import) — the base is written `extends Widget` with `import b.Widget`,
+	// and both `a.Widget` (declares getClass) and the real `b.Widget` (does not) are in the set.
+	// The import binds `Widget` to `b.Widget`, so the collider `a.Widget` is never consulted and
+	// `this.getClass()` stays silent. Fails before the ambiguity fix.
+	public function testVectorBImportedSupertypeCollisionNotFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'a/Widget.hx', source: 'package a; class Widget { public function getClass():Class<Dynamic> return null; }' },
+			{ file: 'b/Widget.hx', source: 'package b; class Widget {}' },
+			{
+				file: 'pr/S.hx',
+				source: 'package pr; import b.Widget; using Type; class S extends Widget { function m():Class<Dynamic> { return this.getClass(); } }'
+			}
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Positive control (over-conservatism guard): a real cross-PACKAGE inheritance resolved
+	// through an explicit `import` — mirroring `class X extends Sprite` with `import ...Sprite` —
+	// is still proven, so `this.inh()` is flagged. Guards against the resolver refusing legit
+	// inherited members.
+	public function testInheritedCrossPackageViaImportFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'lib/Base.hx', source: 'package lib; class Base { public function inh():Void {} }' },
+			{ file: 'app/S.hx', source: 'package app; import lib.Base; class S extends Base { function m():Void { this.inh(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals('app/S.hx', vs[0].file);
+	}
+
+	// Positive control: a TRANSITIVE inheritance (S extends Mid extends Grand) where the
+	// declaring ancestor is reached through a same-package intermediate is proven and flagged.
+	public function testInheritedTransitiveFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'g/Grand.hx', source: 'package g; class Grand { public function inh():Void {} }' },
+			{ file: 'g/Mid.hx', source: 'package g; class Mid extends Grand {}' },
+			{ file: 'app/S.hx', source: 'package app; import g.Mid; class S extends Mid { function m():Void { this.inh(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+	}
+
+	// Wildcard AMBIGUITY → silent. `import a.*; import b.*;` bring both `a.Widget`
+	// (declares getClass) and `b.Widget`; `extends Widget` cannot be uniquely resolved, so
+	// `this.getClass()` stays silent. Pins the `matches.length == 1` ambiguity gate: under a
+	// `>= 1` weakening the resolver would take the FIRST match (a.Widget, listed first) and
+	// falsely flag. Must FAIL under that mutation.
+	public function testWildcardAmbiguousSupertypeNotFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'a/Widget.hx', source: 'package a; class Widget { public function getClass():Class<Dynamic> return null; }' },
+			{ file: 'b/Widget.hx', source: 'package b; class Widget {}' },
+			{
+				file: 's/S.hx',
+				source: 'package s; import a.*; import b.*; using Type; class S extends Widget { function m():Class<Dynamic> { return this.getClass(); } }'
+			}
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Wildcard POSITIVE → flagged. A single `import pkg.*` brings one `Base` declaring
+	// `bump`; `extends Base` resolves unambiguously, so `this.bump()` is flagged. Locks that
+	// wildcard resolution still works in the unambiguous case (the ambiguity gate must not
+	// refuse all wildcards).
+	public function testWildcardUnambiguousInheritedFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'pkg/Base.hx', source: 'package pkg; class Base { public function bump():Void {} }' },
+			{ file: 'app/S.hx', source: 'package app; import pkg.*; class S extends Base { function m():Void { this.bump(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+	}
+
+	// Aliased import → silent (CONSERVATIVE MISS, not a resolution). `import a.B as C; class
+	// S extends C`, with an unrelated in-set `other.B` declaring `bump`. The resolver does
+	// not follow `as` aliases, so `C` resolves to nothing (external) and the collider
+	// `other.B` is never consulted (its name is `B`, not `C`) — `this.bump()` stays silent.
+	// Fails CLOSED by design.
+	public function testAliasedSupertypeNotFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'a/B.hx', source: 'package a; class B {}' },
+			{ file: 'other/B.hx', source: 'package other; class B { public function bump():Void {} }' },
+			{ file: 'app/S.hx', source: 'package app; import a.B as C; class S extends C { function m():Void { this.bump(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	// Qualified POSITIVE → flagged. `extends pkg.T` where `pkg.T` is IN-set and declares
+	// `bump`, resolved by import-path identity — so `this.bump()` is flagged. Pins the
+	// `importPathFor == raw` positive branch (the Vector-B-qualified test only exercises the
+	// external/negative direction).
+	public function testQualifiedInheritedFlagged(): Void {
+		final vs: Array<Violation> = new RedundantThis().run([
+			{ file: 'pkg/T.hx', source: 'package pkg; class T { public function bump():Void {} }' },
+			{ file: 'app/S.hx', source: 'package app; class S extends pkg.T { function m():Void { this.bump(); } }' }
+		], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new RedundantThis().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
