@@ -328,7 +328,7 @@ class GuardContinueCheckTest extends Test {
 		Assert.notNull(Linter.byId('guard-continue'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('guard-continue'));
-		Assert.equals(96, Linter.builtins().length);
+		Assert.equals(98, Linter.builtins().length);
 	}
 
 	// --- helpers -------------------------------------------------------------------

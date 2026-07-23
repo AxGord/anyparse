@@ -452,6 +452,8 @@ import unit.SpanTypeInfoPinTest;
 import unit.ExplicitLocalTypeCheckTest;
 import unit.RedundantBypassAccessorCheckTest;
 import unit.PreferTernaryAssignmentCheckTest;
+import unit.PreferIfExpressionAssignmentCheckTest;
+import unit.PreferIfExpressionReturnCheckTest;
 import unit.InvertNegatedIfElseCheckTest;
 import unit.FieldInitAtDeclarationCheckTest;
 import unit.ExtractConstantSliceTest;
@@ -910,6 +912,8 @@ class RunTests {
 		addCase(new PreferFinalCheckTest());
 		addCase(new PreferTernaryReturnCheckTest());
 		addCase(new PreferTernaryAssignmentCheckTest());
+		addCase(new PreferIfExpressionReturnCheckTest());
+		addCase(new PreferIfExpressionAssignmentCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());
