@@ -84,7 +84,7 @@ final class PreferFinal implements Check {
 		if (mutableKinds.length == 0) return violations;
 		final scopeKinds: Array<String> = shape.scopeKinds;
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final index: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		for (entry in files) {
@@ -122,14 +122,17 @@ final class PreferFinal implements Check {
 
 	/**
 	 * Collect this file's candidates and emit a `Warning`-free `Info` for each that is
-	 * never reassigned within its scope AND whose type is not an `abstract` mutated
-	 * through a method call (see `RefactorSupport.abstractMethodMayMutate` — finalizing
-	 * such a local would fail to compile). One write scan per distinct name is memoized
+	 * never reassigned within its scope AND whose type is not an `abstract` that may REBIND
+	 * `this` through a method call (see `RefactorSupport.abstractMethodMayMutate` — finalizing
+	 * such a local would fail to compile). The gate resolves through the plugin's resolution
+	 * scope when configured, and answers precisely for a RESOLVED abstract: one whose only
+	 * `this`-writes are in its constructor (a ctor-only wrapper such as openfl `ByteArray`) is
+	 * now flagged rather than conservatively kept. One write scan per distinct name is memoized
 	 * — several candidates can share a name.
 	 */
 	private static function checkTree(
 		out: Array<Violation>, file: String, source: String, tree: QueryNode, shape: RefShape, scopeKinds: Array<String>,
-		opaqueKinds: Array<String>, mutableKinds: Array<String>, index: SymbolIndex, declaredTypes: Null<Map<Int, String>>,
+		opaqueKinds: Array<String>, mutableKinds: Array<String>, index: () -> Null<SymbolIndex>, declaredTypes: Null<Map<Int, String>>,
 		abstractKinds: Array<String>
 	): Void {
 		final candidates: Array<{ name: String, span: Span, scope: Span }> = [];

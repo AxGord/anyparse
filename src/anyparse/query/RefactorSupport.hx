@@ -1352,20 +1352,28 @@ final class RefactorSupport {
 	 * only via `_s.next()`). Finalizing such a binding produces code the compiler rejects
 	 * ("Cannot modify abstract value of final field").
 	 *
-	 * True (keep the `var`) when `name` has a method call in `source` outside its own
-	 * declaration `exclude` AND its type is either an `abstract` resolved in `index`
-	 * (`abstractKinds`) or an UNRESOLVED non-stdlib type whose abstractness cannot be
-	 * ruled out. False — the `final` suggestion stays sound and useful — for a resolved
-	 * non-abstract type (a class method does not reassign the binding), a stdlib value
-	 * type, an untyped binding, or no method call. Conservative: it only ever KEEPS a
-	 * `var`, never produces a wrong `final`.
+	 * `index` is forced lazily — only after a method call is found — so most runs never build it. When
+	 * the plugin carries a resolution scope, the forced index resolves against the configured libraries
+	 * too, so a library abstract (e.g. openfl `ByteArray`) is recognised rather than treated as unknown.
+	 *
+	 * True (keep the `var`) when `name` has a method call in `source` outside its own declaration
+	 * `exclude` AND its type either resolves to an abstract that may REBIND `this`
+	 * (`SymbolIndex.abstractRebindsThis`) or is an UNRESOLVED non-stdlib type whose abstractness cannot
+	 * be ruled out. False — the `final` suggestion stays sound and useful — for a resolved non-abstract
+	 * type, a RESOLVED abstract whose only `this`-writes are in its constructor (the compiler forbids
+	 * `this =` outside inline members and `final` rejects an inline this-writer transitively, so a
+	 * ctor-only writer like `ByteArray` is final-safe) or that only `@:forward`s to a class underlying
+	 * (which mutates the object, never the binding), a stdlib value type, an untyped binding, or no
+	 * method call. A `@:build` abstract bails conservative (its members may be macro-generated and
+	 * invisible). Conservative: it only ever KEEPS a `var`, never produces a wrong `final`.
 	 */
 	public static function abstractMethodMayMutate(
-		source: String, name: String, declType: Null<String>, exclude: Span, index: SymbolIndex, abstractKinds: Array<String>
+		source: String, name: String, declType: Null<String>, exclude: Span, index: () -> Null<SymbolIndex>, abstractKinds: Array<String>
 	): Bool {
 		if (declType == null || !methodCalledOn(source, name, exclude)) return false;
-		final resolvedAbstract: Null<Bool> = index.isAbstractType(declType, abstractKinds);
-		return resolvedAbstract ?? !finalSafeStdlibTypes.contains(declType);
+		final idx: Null<SymbolIndex> = index();
+		final resolvedRebind: Null<Bool> = idx == null ? null : idx.abstractRebindsThis(declType, abstractKinds);
+		return resolvedRebind ?? !finalSafeStdlibTypes.contains(declType);
 	}
 
 	/** Index of the first byte at or after `pos` that is neither whitespace nor inside a line or block comment. */
@@ -1633,12 +1641,22 @@ final class RefactorSupport {
 	 * a resolution scope (report files UNION configured library roots), that host's memoised
 	 * resolution index is preferred instead, so the check resolves against libraries too; absent a
 	 * scope it falls back to the report-only `files` build — byte-identical to the pre-scope path.
+	 * `prebuilt`, when supplied, is an already-built report-scope index the fallback returns as-is
+	 * instead of building a second one (a caller that already keeps an eager report index — e.g.
+	 * `prefer-final-field` — passes it to avoid a duplicate build); it is ignored when a resolution
+	 * scope is present, since the library-aware index must win.
 	 */
-	public static function lazySymbolIndex(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): () -> Null<SymbolIndex> {
+	public static function lazySymbolIndex(
+		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?prebuilt: SymbolIndex
+	): () -> Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
 		if (host != null && host.hasResolutionScope()) {
 			final resolver: SymbolIndexHost = host;
 			return () -> resolver.resolutionIndex();
+		}
+		if (prebuilt != null) {
+			final ready: SymbolIndex = prebuilt;
+			return () -> ready;
 		}
 		var index: Null<SymbolIndex> = null;
 		var built: Bool = false;

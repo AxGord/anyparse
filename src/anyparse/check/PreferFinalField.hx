@@ -85,13 +85,15 @@ final class PreferFinalField implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final lazyIndex: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin, index);
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final abstractKinds: Array<String> = plugin.refShape().underlyingThisTypeKinds ?? [];
 		final declaredTypesByFile: Map<String, Map<Int, String>> = [];
 		if (provider != null) for (entry in files) declaredTypesByFile[entry.file] = provider.declaredTypes(entry.source);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (!exported) considerField(violations, file, source, field, owner, index, plugin, declaredTypesByFile[file], abstractKinds);
+			if (!exported)
+				considerField(violations, file, source, field, owner, index, lazyIndex, plugin, declaredTypesByFile[file], abstractKinds);
 		});
 		return violations;
 	}
@@ -116,8 +118,8 @@ final class PreferFinalField implements Check {
 	 * `considerNoInitField`.
 	 */
 	private static function considerField(
-		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex, plugin: GrammarPlugin,
-		declaredTypes: Null<Map<Int, String>>, abstractKinds: Array<String>
+		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
+		lazyIndex: () -> Null<SymbolIndex>, plugin: GrammarPlugin, declaredTypes: Null<Map<Int, String>>, abstractKinds: Array<String>
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -126,7 +128,7 @@ final class PreferFinalField implements Check {
 			if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
 			if (writtenInFile(source, name, span)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
-			if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, index, abstractKinds)) return;
+			if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
 			flag(out, file, span, name, 'is assigned only at its declaration');
 			return;
 		}

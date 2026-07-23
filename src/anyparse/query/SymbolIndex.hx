@@ -7,6 +7,8 @@ import haxe.Exception;
 
 using Lambda;
 
+import anyparse.query.Refs.RefKind;
+
 /**
  * The four import-statement forms a Haxe file may carry, distinguished
  * structurally so a consumer can decide which forms participate in a
@@ -121,6 +123,25 @@ typedef TypeDeclInfo = {
 
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
+
+	/**
+	 * True for an `abstract` declaration that may REBIND its underlying `this` — it either writes
+	 * `this` in a member OTHER than the constructor (a non-`new` `this =` compiles only in an
+	 * `inline` member, and calling such a writer on a `final` binding is a transitive compile error),
+	 * or carries a `@:build` / `@:autoBuild` macro that could generate an invisible such member
+	 * (conservative). Always false for a non-abstract kind — its methods mutate the instance, never
+	 * the binding.
+	 */
+	var abstractSelfRebind: Bool;
+
+	/**
+	 * The SIMPLE name of a `@:forward` abstract's underlying type (its first `Named` child), or null
+	 * when the decl is not a `@:forward` abstract. `@:forward` routes method calls to the underlying,
+	 * so whether such a call can rebind the binding is decided by the underlying: a class underlying
+	 * mutates the object (final-safe), an abstract underlying recurses. Null for every non-forward or
+	 * non-abstract decl.
+	 */
+	var abstractForwardUnderlying: Null<String>;
 };
 /**
  * A cross-file index entry for one source file: its `file` path, `pkg` / `module`, `imports`, declared `types`, and `accessGrants` (types it `@:access(...)`-grants itself private reach into). The unit `SymbolIndex` aggregates.
@@ -282,23 +303,19 @@ final class SymbolIndex {
 		return found;
 	}
 
+
 	/**
-	 * Whether the type named `typeName` resolves in the index to an `abstract` — a
-	 * decl whose grammar kind is in `abstractKinds` (Haxe `AbstractDecl` /
-	 * `EnumAbstractDecl`). `true` when ANY matching decl is one (conservative under a
-	 * simple-name collision: an abstract match wins), `false` when it resolves only to
-	 * non-abstract decls, `null` when NO indexed type declares the name (external /
-	 * unknown). Lets the `final`-conversion checks tell an abstract-typed binding —
-	 * whose method call may reassign the underlying `this` — from a class-typed or
-	 * unresolved one. Resolution is by SIMPLE name (the index models no packages).
+	 * Whether the abstract named `typeName` may REBIND its underlying `this` through a method call on
+	 * a binding of it — the precise `final`-conversion gate, tri-state like the other name-keyed
+	 * queries: `null` when NO indexed type declares the name (external / unknown), `false` when the name
+	 * resolves only to declarations that provably cannot rebind (a non-abstract class, or an abstract
+	 * whose only `this`-writes are in its constructor and whose `@:forward` — if any — reaches a
+	 * non-rebinding underlying), `true` when a matching abstract may rebind. Conservative under a
+	 * simple-name collision (a rebinding match wins) and under an unresolved `@:forward` underlying (a
+	 * call it forwards could rebind). Resolution is by SIMPLE name (the index models no packages).
 	 */
-	public function isAbstractType(typeName: String, abstractKinds: Array<String>): Null<Bool> {
-		var found: Bool = false;
-		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
-			if (abstractKinds.contains(t.kind)) return true;
-			found = true;
-		}
-		return found ? false : null;
+	public function abstractRebindsThis(typeName: String, abstractKinds: Array<String>): Null<Bool> {
+		return abstractRebindsWalk(typeName, abstractKinds, []);
 	}
 
 	/**
@@ -515,6 +532,35 @@ final class SymbolIndex {
 				return null;
 		}
 		return arity;
+	}
+
+	/**
+	 * `abstractRebindsThis`'s recursion, cycle-guarded by `seen` (a cycle is treated as
+	 * possibly-rebinding — conservative). A non-abstract match contributes "found" without rebinding; an
+	 * abstract with `abstractSelfRebind` rebinds; a `@:forward` abstract defers to its underlying (an
+	 * unresolved or rebinding underlying rebinds, a non-rebinding one contributes "found"); any other
+	 * abstract contributes "found". `null` when nothing named `typeName` is indexed, else `false`.
+	 */
+	private function abstractRebindsWalk(typeName: String, abstractKinds: Array<String>, seen: Array<String>): Null<Bool> {
+		if (seen.contains(typeName)) return true;
+		seen.push(typeName);
+		var found: Bool = false;
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
+			if (!abstractKinds.contains(t.kind)) {
+				found = true;
+				continue;
+			}
+			if (t.abstractSelfRebind) return true;
+			final underlying: Null<String> = t.abstractForwardUnderlying;
+			if (underlying == null) {
+				found = true;
+				continue;
+			}
+			final rec: Null<Bool> = abstractRebindsWalk(underlying, abstractKinds, seen);
+			if (rec == null || rec == true) return true;
+			found = true;
+		}
+		return found ? false : null;
 	}
 
 	/** Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`. */
@@ -773,6 +819,7 @@ final class SymbolIndex {
 		final shape: RefShape = plugin.refShape();
 		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
 		final overrideKind: Null<String> = shape.overrideModifierKind;
+		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (tree == null) {
@@ -784,7 +831,8 @@ final class SymbolIndex {
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
 			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
 			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
+				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind, shape,
+				abstractKinds
 			));
 		}
 		return new SymbolIndex(infos, skipped);
@@ -826,18 +874,21 @@ final class SymbolIndex {
 	 */
 	private static function extractFileInfo(
 		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
-		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>
+		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>,
+		shape: RefShape, abstractKinds: Array<String>
 	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
+		var pendingMeta: Array<String> = [];
 
 		for (gn in declNodes(tree)) {
 			final node: QueryNode = gn.node;
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
+				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
 				types.push({
 					name: typeDecl.name,
 					kind: typeDecl.kind,
@@ -851,11 +902,23 @@ final class SymbolIndex {
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
 					members: collectMembers(
 						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
-					)
+					),
+					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
+					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta) : null
 				});
+				pendingMeta = [];
 				continue;
 			}
 
+			if (isMetaNodeKind(node.kind)) {
+				final metaName: Null<String> = node.name;
+				if (metaName != null) pendingMeta.push(metaName);
+				continue;
+			}
+			// A modifier (`private` / `extern`), comment or other module node between a meta and its decl
+			// PRESERVES the pending meta run — over-attaching a meta to the wrong decl only makes the abstract
+			// gate more conservative, while dropping one is the unsound direction. Only an import / package /
+			// using statement ends the run (a meta can never legally precede one); each clears it below.
 			final nullableName: Null<String> = node.name;
 			final nullableSpan: Null<Span> = node.span;
 			if (nullableName == null || nullableSpan == null) {
@@ -867,6 +930,7 @@ final class SymbolIndex {
 			switch node.kind {
 				case 'PackageDecl':
 					pkg = name;
+					pendingMeta = [];
 				case 'ImportDecl':
 					imports.push({
 						raw: name,
@@ -875,6 +939,7 @@ final class SymbolIndex {
 						span: span,
 						guarded: gn.guarded
 					});
+					pendingMeta = [];
 				case 'ImportAliasDecl' | 'ImportAliasInDecl':
 					imports.push({
 						raw: name,
@@ -883,6 +948,7 @@ final class SymbolIndex {
 						span: span,
 						guarded: gn.guarded
 					});
+					pendingMeta = [];
 				case 'ImportWildDecl':
 					imports.push({
 						raw: name,
@@ -891,6 +957,7 @@ final class SymbolIndex {
 						span: span,
 						guarded: gn.guarded
 					});
+					pendingMeta = [];
 				case 'UsingDecl':
 					imports.push({
 						raw: name,
@@ -899,6 +966,7 @@ final class SymbolIndex {
 						span: span,
 						guarded: gn.guarded
 					});
+					pendingMeta = [];
 				case _:
 			}
 		}
@@ -1006,6 +1074,50 @@ final class SymbolIndex {
 		return out;
 	}
 
+	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
+	private static inline function isMetaNodeKind(kind: String): Bool {
+		return kind == 'Meta' || kind == 'MetaCall';
+	}
+
+	/**
+	 * Whether the abstract rooted at `node` may rebind its underlying `this`: it carries a
+	 * `@:build` / `@:autoBuild` (any macro-generated member is invisible to the scan, so treat it as
+	 * possibly-rebinding) or writes `this` in a member other than the constructor. `pendingMeta` holds
+	 * the module-level meta names accumulated before the decl.
+	 */
+	private static function abstractRebindsThisScan(node: QueryNode, shape: RefShape, pendingMeta: Array<String>): Bool {
+		return pendingMeta.contains('@:build') || pendingMeta.contains('@:autoBuild') || memberRebindsThis(node, shape);
+	}
+
+	/**
+	 * Whether any `FnMember` under `node` other than the constructor writes `this` — a non-`new`
+	 * `this =` compiles only in an `inline` member and makes the abstract rebind on that call. The
+	 * `new` subtree is skipped whole (a constructor `this =` is compiler-legal and final-safe); every
+	 * other member is scanned with the write walker, so a write hidden in a `#if` branch counts too.
+	 */
+	private static function memberRebindsThis(node: QueryNode, shape: RefShape): Bool {
+		if (node.kind == 'FnMember') {
+			if (node.name == 'new') return false;
+			for (h in Refs.find('this', node, shape)) if (h.kind == RefKind.Write) return true;
+			return false;
+		}
+		for (c in node.children) if (memberRebindsThis(c, shape)) return true;
+		return false;
+	}
+
+	/**
+	 * The SIMPLE underlying-type name of a `@:forward` abstract `node` — its first `Named` child, last
+	 * dot-segment, type parameters stripped — or null when `pendingMeta` carries no `@:forward` or the
+	 * decl has no underlying.
+	 */
+	private static function forwardUnderlyingOf(node: QueryNode, pendingMeta: Array<String>): Null<String> {
+		if (!pendingMeta.contains('@:forward')) return null;
+		final named: Null<QueryNode> = node.children.find(c -> c.kind == 'Named');
+		if (named == null) return null;
+		final raw: Null<String> = named.name;
+		return raw == null ? null : simpleName(StringTools.trim(raw.split('<')[0]));
+	}
+
 
 	/**
 	 * Count the type parameters written on `decl`'s header: locate the name token
@@ -1110,10 +1222,10 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Append `node` to `out` when it is a type declaration whose name no
-	 * conditional region has contributed yet, recording the name. A node that
-	 * is not a declaration (an import, a metadata or a modifier lifted out of
-	 * a region) is skipped.
+	  * Append `node` to `out` when it is a type declaration whose name no
+	 * conditional region has contributed yet, recording the name. A guarded import / using is
+	 * lifted (deduped) into the import scope and a guarded leading `Meta` / `MetaCall` is lifted so
+	 * its abstract sees it; a lifted modifier has no place and is dropped.
 	 */
 	private static function pushGuardedDecl(
 		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
@@ -1125,10 +1237,17 @@ final class SymbolIndex {
 			out.push({ node: node, guarded: true });
 			return;
 		}
+		// A guarded leading meta: lift it so it reaches `extractFileInfo`'s meta run and attaches to
+		// the abstract it guards. An `#if`-split abstract carries its `@:forward` INSIDE the region
+		// (openfl `Vector`), and document-order preserves the meta-before-decl attachment.
+		if (isMetaNodeKind(node.kind)) {
+			out.push({ node: node, guarded: true });
+			return;
+		}
 		// A guarded import / using: lift it so it joins the per-file import scope,
 		// deduped against every import already seen (a top-level one seeded up
 		// front, or an earlier guarded branch). A non-import, non-declaration node
-		// (a lifted metadata or modifier) has no key and is dropped.
+		// (a lifted modifier) has no key and is dropped.
 		final key: Null<String> = importDedupKey(node);
 		if (key == null || seenImports.contains(key)) return;
 		seenImports.push(key);
