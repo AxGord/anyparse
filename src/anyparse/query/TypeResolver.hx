@@ -231,6 +231,17 @@ final class TypeResolver {
 	public static function isProvablyNonNull(operand: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>): Bool {
 		final bindingFrom: Null<Int> = operandBindingFrom(operand, root, shape);
 		if (bindingFrom == null) return false;
+		// A re-shadowed name whose resolved binding sits AFTER the use is a forward bind: the
+		// first-wins scope resolver picked a later same-name shadow (a `n:Null<T>` param plus a
+		// later `final n:T = n;` capture) that does not dominate this use, so its declared type
+		// is untrustworthy -> grant no non-null proof. A self-referential initializer
+		// (`final p:T = p ?? ...`) re-resolves in operandBindingFrom to the earlier enclosing
+		// binding (backward) and stays provable; a field used before its own later declaration
+		// has a single visible decl, so it is untouched.
+		final useName: Null<String> = operand.name;
+		final useSpan: Null<Span> = operand.span;
+		if (useName != null && useSpan != null && bindingFrom > useSpan.from && visibleDeclCount(root, shape, useName, useSpan) > 1)
+			return false;
 		final optionalParamKind: Null<String> = shape.optionalParamKind;
 		if (optionalParamKind != null && bindingIsOptionalParam(root, bindingFrom, optionalParamKind)) return false;
 		final paramKinds: Null<Array<String>> = shape.paramKinds;

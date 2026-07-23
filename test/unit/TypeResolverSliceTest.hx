@@ -204,4 +204,19 @@ class TypeResolverSliceTest extends Test {
 		return found;
 	}
 
+
+	public function testReshadowedNullableParamNotAffirmed(): Void {
+		// A later same-name non-null local (`final n:String = n;`) must NOT poison the
+		// proof for the EARLIER `n == null` guard on the nullable param: the first-wins
+		// scope resolver binds the guard's `n` to the later, non-null shadow, so the
+		// proof must bail when the name is re-shadowed in a scope visible at the use
+		// (mirrors `identDeclaredTypeSource`). This is the root of the 8-consumer family.
+		Assert.isFalse(
+			nonNull(
+				'@:nullSafety(Strict) class C { static function m(n:Null<String>):Void { if (n == null) return; final n:String = n; trace(n); } }'
+			),
+			'a nullable param re-shadowed by a later same-name non-null local is NOT provably non-null at the earlier guard'
+		);
+	}
+
 }
