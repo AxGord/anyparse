@@ -7,6 +7,8 @@ import anyparse.query.GrammarPlugin.TypeRefShape;
 import anyparse.query.MoveSymbol;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.MoveSymbol.MoveChange;
+import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndex.FileInfo;
 
 /**
  * `MoveSymbol.moveType` — scope-correct, format-preserving move of a
@@ -251,6 +253,23 @@ class MoveSymbolSliceTest extends Test {
 			'pkg/A.hx', 3, 7, 'pkg/Missing.hx', [{ file: 'pkg/A.hx', source: a },], plugin(), typeRefShape()
 		);
 		assertErr(result);
+	}
+
+	/**
+	 * A fresh import is anchored after the last TOP-LEVEL import, never after a
+	 * `#if`-guarded one written lower in the file: anchoring on the guarded
+	 * import would drop the new line inside the conditional region. The offset
+	 * is the start of the `#if js` line (right after `import a.Top;`), NOT the
+	 * `#end` line (which is where an unfiltered anchor would land).
+	 */
+	public function testImportAnchorSkipsGuardedImport(): Void {
+		final source: String = 'package pkg;\nimport a.Top;\n#if js\nimport b.Guarded;\n#end\nclass C {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'pkg/C.hx', source: source }], plugin());
+		final info: Null<FileInfo> = index.fileInfo('pkg/C.hx');
+		Assert.notNull(info);
+
+		final at: Int = MoveSymbol.importInsertionOffset(source, (info: FileInfo));
+		Assert.equals(source.indexOf('#if js'), at);
 	}
 
 	/**

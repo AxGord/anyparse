@@ -30,17 +30,27 @@ enum abstract ImportKind(Int) {
 }
 
 /**
- * One import / using statement extracted from a file's top-level
- * declarations. `raw` is the verbatim payload the grammar exposes for
- * the kind (the dotted path for `Import` / `Using`, the alias for
- * `Alias`, `pkg.*` for `Wild`); `alias` is the bound alias when the
- * kind is `Alias`, else null; `span` is the statement's source range.
+ * One import / using statement extracted from a file's declarations. `raw`
+ * is the verbatim payload the grammar exposes for the kind (the dotted path
+ * for `Import` / `Using`, the alias for `Alias`, `pkg.*` for `Wild`); `alias`
+ * is the bound alias when the kind is `Alias`, else null; `span` is the
+ * statement's source range.
+ *
+ * `guarded` is true when the statement was LIFTED out of a `#if ... #end`
+ * region rather than written at the file top level. It participates in type
+ * resolution like any other import (it genuinely brings a name into scope
+ * under its guard), but a consumer that MUTATES on the basis of an import —
+ * placing a fresh import after the last one (`MoveSymbol`), or deleting an
+ * unreferenced one (`unused-import`) — must treat it specially: its position
+ * is inside a conditional region, and its "unused" verdict is unverifiable
+ * because usage is `#if`-conditional while the reference scan is branch-blind.
  */
 typedef ImportInfo = {
 	var raw: String;
 	var kind: ImportKind;
 	var alias: Null<String>;
 	var span: Span;
+	var guarded: Bool;
 }
 
 /**
@@ -134,6 +144,17 @@ typedef FileInfo = {
 private typedef ResolvedType = {
 	var file: FileInfo;
 	var type: TypeDeclInfo;
+};
+
+/**
+ * A declaration / import node from `declNodes`, tagged with whether it was
+ * LIFTED out of a `#if ... #end` region (`guarded`) or written at the file
+ * top level. `extractFileInfo` carries the tag onto each `ImportInfo`; type
+ * declarations ignore it (a guarded type is indexed exactly like a plain one).
+ */
+private typedef GuardedNode = {
+	var node: QueryNode;
+	var guarded: Bool;
 };
 
 /**
@@ -798,9 +819,10 @@ final class SymbolIndex {
 	 *
 	 * The walk runs over `declNodes`, not over `tree.children`
 	 * directly, so a type declared inside a `#if ... #end` region is
-	 * indexed like a plain top-level one. Imports and usings are
-	 * still read from the TOP LEVEL only - a guarded `import` stays
-	 * invisible to the index.
+	 * indexed like a plain top-level one, and a guarded `import` /
+	 * `using` is LIFTED into the file's import scope (deduped against
+	 * the top-level imports by `declNodes`, so a guarded copy of a
+	 * top-level import does not double it).
 	 */
 	private static function extractFileInfo(
 		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
@@ -811,7 +833,8 @@ final class SymbolIndex {
 		final imports: Array<ImportInfo> = [];
 		final types: Array<TypeDeclInfo> = [];
 
-		for (node in declNodes(tree)) {
+		for (gn in declNodes(tree)) {
+			final node: QueryNode = gn.node;
 			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
 			if (typeDecl != null) {
 				final supersRaw: Array<String> = collectSupertypesRaw(node);
@@ -849,28 +872,32 @@ final class SymbolIndex {
 						raw: name,
 						kind: ImportKind.Import,
 						alias: null,
-						span: span
+						span: span,
+						guarded: gn.guarded
 					});
 				case 'ImportAliasDecl' | 'ImportAliasInDecl':
 					imports.push({
 						raw: name,
 						kind: ImportKind.Alias,
 						alias: name,
-						span: span
+						span: span,
+						guarded: gn.guarded
 					});
 				case 'ImportWildDecl':
 					imports.push({
 						raw: name,
 						kind: ImportKind.Wild,
 						alias: null,
-						span: span
+						span: span,
+						guarded: gn.guarded
 					});
 				case 'UsingDecl':
 					imports.push({
 						raw: name,
 						kind: ImportKind.Using,
 						alias: null,
-						span: span
+						span: span,
+						guarded: gn.guarded
 					});
 				case _:
 			}
@@ -1036,16 +1063,24 @@ final class SymbolIndex {
 	 * `HxCondSharedBodyDecl`) is passed through as ITSELF: it is the node its
 	 * declaration resolves from (`condSharedBodyDeclOf`).
 	 */
-	private static function declNodes(tree: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
+	private static function declNodes(tree: QueryNode): Array<GuardedNode> {
+		final out: Array<GuardedNode> = [];
 		final guardedNames: Array<String> = [];
+		// Every top-level import's dedup key, seeded up front so a guarded import
+		// duplicating ANY top-level one is dropped regardless of document order,
+		// while a genuine top-level duplicate stays in `out` for `duplicate-import`.
+		final seenImports: Array<String> = [];
+		for (node in tree.children) {
+			final key: Null<String> = importDedupKey(node);
+			if (key != null && !seenImports.contains(key)) seenImports.push(key);
+		}
 		for (node in tree.children) switch node.kind {
 			case 'Conditional':
-				collectGuardedDecls(node, out, guardedNames);
+				collectGuardedDecls(node, out, guardedNames, seenImports);
 			case 'CondSharedBodyDecl':
-				pushGuardedDecl(node, out, guardedNames);
+				pushGuardedDecl(node, out, guardedNames, seenImports);
 			case _:
-				out.push(node);
+				out.push({ node: node, guarded: false });
 		}
 		return out;
 	}
@@ -1065,11 +1100,13 @@ final class SymbolIndex {
 	 * branches (`#if js class A {} #elseif cpp class B {} #else typedef C =
 	 * Int; #end`) are all kept.
 	 */
-	private static function collectGuardedDecls(node: QueryNode, out: Array<QueryNode>, guardedNames: Array<String>): Void {
+	private static function collectGuardedDecls(
+		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
+	): Void {
 		for (child in node.children) if (child.kind == 'Conditional')
-			collectGuardedDecls(child, out, guardedNames);
+			collectGuardedDecls(child, out, guardedNames, seenImports);
 		else
-			pushGuardedDecl(child, out, guardedNames);
+			pushGuardedDecl(child, out, guardedNames, seenImports);
 	}
 
 	/**
@@ -1078,11 +1115,24 @@ final class SymbolIndex {
 	 * is not a declaration (an import, a metadata or a modifier lifted out of
 	 * a region) is skipped.
 	 */
-	private static function pushGuardedDecl(node: QueryNode, out: Array<QueryNode>, guardedNames: Array<String>): Void {
+	private static function pushGuardedDecl(
+		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
+	): Void {
 		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
-		if (decl == null || guardedNames.contains(decl.name)) return;
-		guardedNames.push(decl.name);
-		out.push(node);
+		if (decl != null) {
+			if (guardedNames.contains(decl.name)) return;
+			guardedNames.push(decl.name);
+			out.push({ node: node, guarded: true });
+			return;
+		}
+		// A guarded import / using: lift it so it joins the per-file import scope,
+		// deduped against every import already seen (a top-level one seeded up
+		// front, or an earlier guarded branch). A non-import, non-declaration node
+		// (a lifted metadata or modifier) has no key and is dropped.
+		final key: Null<String> = importDedupKey(node);
+		if (key == null || seenImports.contains(key)) return;
+		seenImports.push(key);
+		out.push({ node: node, guarded: true });
 	}
 
 	/**
@@ -1129,6 +1179,28 @@ final class SymbolIndex {
 			};
 		}
 		return null;
+	}
+
+
+	/**
+	 * The `(kind, raw)` dedup key of an import-declaration `node`, or null when
+	 * `node` is not an import / using declaration. `raw` is the node's exposed
+	 * name — the dotted path for `import` / `using`, `pkg.*` for a wildcard, the
+	 * alias for an alias import (so two distinct aliases of one path stay
+	 * distinct) — which with the import kind uniquely identifies a repeat across
+	 * `#if` branches or a top-level / guarded pair. The `as` and `in` alias forms
+	 * share one key, so a cross-form alias duplicate collapses too.
+	 */
+	private static function importDedupKey(node: QueryNode): Null<String> {
+		final raw: Null<String> = node.name;
+		if (raw == null) return null;
+		return switch node.kind {
+			case 'ImportDecl': 'import|$raw';
+			case 'ImportAliasDecl' | 'ImportAliasInDecl': 'alias|$raw';
+			case 'ImportWildDecl': 'wild|$raw';
+			case 'UsingDecl': 'using|$raw';
+			case _: null;
+		};
 	}
 
 }

@@ -115,13 +115,31 @@ final class UnusedImport implements Check {
 	}
 
 	/**
-	 * Append the verdict for one import. A wildcard (`import pkg.*;`) is an
-	 * unverifiable `Info`; a `using` is delegated to `addUsingViolation`; every other form is a `Warning` when its bound name is not referenced outside the import statements AND (for a plain in-set module import) no secondary top-level type of the module is referenced either.
+	 * Append the verdict for one import. A `#if`-guarded import is an
+	 * unverifiable `Info` (its usage is conditional while the reference scan is
+	 * branch-blind, and deleting it would touch code inside a conditional
+	 * region); a wildcard (`import pkg.*;`) is an unverifiable `Info`; a `using`
+	 * is delegated to `addUsingViolation`; every other form is a `Warning` when
+	 * its bound name is not referenced outside the import statements AND (for a
+	 * plain in-set module import) no secondary top-level type of the module is
+	 * referenced either.
 	 */
 	private static function addViolation(
 		out: Array<Violation>, file: String, imp: ImportInfo, source: String, importSpans: Array<Span>, plugin: GrammarPlugin,
 		moduleTypes: Map<String, Array<String>>, enumCtorsByPath: Map<String, Array<String>>, membersByPath: Map<String, Array<String>>
 	): Void {
+		if (imp.guarded) {
+			// Only report a guarded import as possibly-unused when its bound name
+			// appears nowhere in the file text at all — otherwise the branch-blind
+			// scan cannot tell used-here from used-in-another-branch. Never a
+			// Warning: the fix must not delete a line inside a `#if` region.
+			final bound: String = imp.alias ?? lastSegment(imp.raw);
+			if (!RefactorSupport.referencedInRange(source, bound, 0, source.length, importSpans)) out.push(make(
+				file, imp, Severity.Info,
+				'guarded import \'${imp.raw}\': bound name not referenced, but usage is `#if`-conditional — cannot verify unused'
+			));
+			return;
+		}
 		switch imp.kind {
 			case ImportKind.Wild:
 				addWildViolation(out, file, imp, source, importSpans, membersByPath);

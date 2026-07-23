@@ -398,16 +398,78 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
-	 * Imports guarded by a region stay OUT of the index - the descent lifts
-	 * type declarations only, so a `#if`-guarded `import` is still invisible.
+	 * An `import` guarded by a `#if ... #end` region is LIFTED into the file's
+	 * import scope, so a reference resolvable only through that guarded import is
+	 * seen by the index. The top-level import is kept alongside it.
 	 */
-	public function testConditionalRegionImportsStayUnindexed(): Void {
+	public function testConditionalRegionImportIsIndexed(): Void {
 		final source: String = 'package pkg;\n#if js\nimport js.Browser;\n#end\nimport other.Thing;\nclass Guard {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Guard.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Guard.hx');
+
+		Assert.equals(2, fi.imports.length);
+		final guarded: Null<ImportInfo> = fi.imports.find(i -> i.raw == 'js.Browser');
+		Assert.notNull(guarded);
+		Assert.isTrue((guarded: ImportInfo).guarded);
+		final topLevel: Null<ImportInfo> = fi.imports.find(i -> i.raw == 'other.Thing');
+		Assert.notNull(topLevel);
+		Assert.isFalse((topLevel: ImportInfo).guarded);
+	}
+
+	/**
+	 * A guarded `using` and a guarded aliased import are lifted too, each with
+	 * the correct kind and (for the alias) its alias name.
+	 */
+	public function testConditionalRegionUsingAndAliasIndexed(): Void {
+		final source: String = 'package pkg;\n#if js\nusing other.Ext;\nimport other.Mod.Sub as Aliased;\n#end\nclass Guard {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Guard.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Guard.hx');
+
+		final u: Null<ImportInfo> = fi.imports.find(i -> i.raw == 'other.Ext');
+		Assert.notNull(u);
+		Assert.isTrue((u: ImportInfo).kind == ImportKind.Using);
+		final a: Null<ImportInfo> = fi.imports.find(i -> i.raw == 'Aliased');
+		Assert.notNull(a);
+		Assert.isTrue((a: ImportInfo).kind == ImportKind.Alias);
+		Assert.equals('Aliased', (a: ImportInfo).alias);
+	}
+
+	/**
+	 * A guarded import that DUPLICATES a top-level one is dropped regardless of
+	 * document order - the top-level appears once, the guarded copy does not
+	 * double it.
+	 */
+	public function testGuardedImportDedupedAgainstTopLevel(): Void {
+		final source: String = 'package pkg;\nimport other.Thing;\n#if js\nimport other.Thing;\n#end\nclass Guard {}\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Guard.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Guard.hx');
 
 		Assert.equals(1, fi.imports.length);
 		Assert.equals('other.Thing', fi.imports[0].raw);
+	}
+
+	/**
+	 * The same import in a `#if` and its `#else` branch - which project as
+	 * siblings of one wrapper - collapses to a single entry.
+	 */
+	public function testGuardedImportBranchesDedupe(): Void {
+		final source: String = 'package pkg;\n#if js\nimport other.Thing;\n#else\nimport other.Thing;\n#end\nclass Guard {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Guard.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Guard.hx');
+
+		Assert.equals(1, fi.imports.length);
+		Assert.equals('other.Thing', fi.imports[0].raw);
+	}
+
+	/** Distinct imports across `#if` branches are all lifted. */
+	public function testGuardedImportBranchesDistinctAllIndexed(): Void {
+		final source: String = 'package pkg;\n#if js\nimport js.Browser;\n#else\nimport sys.io.File;\n#end\nclass Guard {}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Guard.hx', source: source }], plugin());
+		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Guard.hx');
+
+		Assert.equals(2, fi.imports.length);
+		Assert.notNull(fi.imports.find(i -> i.raw == 'js.Browser'));
+		Assert.notNull(fi.imports.find(i -> i.raw == 'sys.io.File'));
 	}
 
 	/** The `FileInfo` `index` holds for `file`, asserted present. */

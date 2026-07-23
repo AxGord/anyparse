@@ -225,10 +225,12 @@ final class MoveSymbol {
 
 		final carried: Array<ImportInfo> = [];
 		for (dep in depNames) {
-			// The source's explicit import that provides `dep` (path's last
-			// segment is `dep`).
+			// The source's explicit TOP-LEVEL import that provides `dep` (path's
+			// last segment is `dep`). A guarded (`#if`) provider is skipped: it
+			// would be carried into the destination as an unconditional import,
+			// which could be platform-inappropriate.
 			final provider: Null<ImportInfo> = cursorInfo.imports.find(
-				imp -> (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using) && lastSegment(imp.raw) == dep
+				imp -> !imp.guarded && (imp.kind == ImportKind.Import || imp.kind == ImportKind.Using) && lastSegment(imp.raw) == dep
 			);
 			if (provider == null) continue;
 			// Already present in the destination → no carry.
@@ -248,7 +250,10 @@ final class MoveSymbol {
 	 * when the import is already present.
 	 */
 	public static function addImportEdit(source: String, info: FileInfo, path: String): Null<{ span: Span, text: String }> {
-		final already: Bool = info.imports.exists(imp -> imp.kind == ImportKind.Import && imp.raw == path);
+		// A guarded (`#if`) import of the same path does NOT satisfy `already`: the
+		// moved reference must resolve in every config, so an unconditional
+		// top-level import is still added.
+		final already: Bool = info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
 		final insertAt: Int = importInsertionOffset(source, info);
 		return { span: new Span(insertAt, insertAt), text: 'import $path;\n' };
@@ -262,7 +267,9 @@ final class MoveSymbol {
 	 */
 	public static function importInsertionOffset(source: String, info: FileInfo): Int {
 		var anchorEnd: Int = -1;
-		for (imp in info.imports) if (imp.span.to > anchorEnd) anchorEnd = imp.span.to;
+		// TOP-LEVEL imports only: a guarded import's span sits inside a `#if`
+		// region, so anchoring on it would place the fresh line inside that region.
+		for (imp in info.imports) if (!imp.guarded && imp.span.to > anchorEnd) anchorEnd = imp.span.to;
 		if (anchorEnd < 0) {
 			// No imports — anchor after the package decl's line, if any.
 			final pkgIdx: Int = source.indexOf('package ');

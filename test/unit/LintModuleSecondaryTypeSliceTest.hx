@@ -136,6 +136,39 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 		Assert.equals(Severity.Warning, vs[0].severity);
 	}
 
+	/**
+	 * A `#if`-guarded unused import is NEVER a `Warning` — its usage is
+	 * `#if`-conditional and the reference scan is branch-blind, so it cannot be
+	 * verified unused, and the fix must not delete a line inside a `#if` region.
+	 * The unreferenced case is reported `Info` only (advisory, unfixed). The
+	 * module is IN the lint set, so absent the guard downgrade this identical
+	 * import would be a deletable `Warning` (cf. `testWhollyUnusedModuleImport…`)
+	 * — the guard alone drops it to `Info`.
+	 */
+	public function testGuardedUnusedImportIsInfoNotWarning(): Void {
+		final mod: String = 'package a.b;\n\nclass Mod {}';
+		final use: String = 'package pkg;\n\n#if js\nimport a.b.Mod;\n#end\n\nclass C {}';
+		final vs: Array<Violation> = new UnusedImport().run([
+			{ file: 'a/b/Mod.hx', source: mod },
+			{ file: 'pkg/C.hx', source: use },
+		], plugin());
+
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	/** A guarded import whose bound name IS referenced anywhere in the file text is not flagged at all. */
+	public function testGuardedReferencedImportNotFlagged(): Void {
+		final mod: String = 'package a.b;\n\nclass Mod {}';
+		final use: String = 'package pkg;\n\n#if js\nimport a.b.Mod;\n#end\n\nclass C {\n\tvar x: Mod;\n}';
+		final vs: Array<Violation> = new UnusedImport().run([
+			{ file: 'a/b/Mod.hx', source: mod },
+			{ file: 'pkg/C.hx', source: use },
+		], plugin());
+
+		Assert.equals(0, vs.length);
+	}
+
 	private static function plugin(): HaxeQueryPlugin {
 		return new HaxeQueryPlugin();
 	}
