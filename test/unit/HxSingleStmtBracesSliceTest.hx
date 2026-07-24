@@ -442,4 +442,46 @@ class HxSingleStmtBracesSliceTest extends Test {
 		Assert.equals('$source\n', HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts));
 	}
 
+
+	public function testBareTryCatchIfBodyUnbraced(): Void {
+		// GAP FIX (TryCatchStmtBare): a bare try-catch self-terminates via the `;` on the
+		// HxStatement.TryCatchStmtBare ctor (`@:trail(';')`), so a single bare try-catch
+		// if-body must de-brace exactly like the block-body TryCatchStmt form does.
+		assertFmt(
+			'class F {\n\tfunction f(c:Bool):Void {\n\t\tif (c) {\n\t\t\ttry foo() catch (e:Dynamic) bar();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(c:Bool):Void {\n\t\tif (c) try\n\t\t\tfoo()\n\t\tcatch (e:Dynamic)\n\t\t\tbar();\n\t}\n}'
+		);
+	}
+
+
+	public function testBareTryCatchForBodyUnbraced(): Void {
+		// GAP FIX: for-body counterpart of the bare try-catch de-brace (loop bodies have no
+		// dangling-else sibling, so they always de-brace a self-terminating single statement).
+		assertFmt(
+			'class F {\n\tfunction ff(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\ttry use(x) catch (e:Dynamic) skip();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction ff(xs:Array<Int>):Void {\n\t\tfor (x in xs) try\n\t\t\tuse(x)\n\t\tcatch (e:Dynamic)\n\t\t\tskip();\n\t}\n}'
+		);
+	}
+
+
+	public function testBareTryCatchWhileBodyUnbraced(): Void {
+		// GAP FIX: while-body counterpart of the bare try-catch de-brace.
+		assertFmt(
+			'class F {\n\tfunction fw(c:Bool):Void {\n\t\twhile (c) {\n\t\t\ttry tick() catch (e:Dynamic) stop();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction fw(c:Bool):Void {\n\t\twhile (c) try\n\t\t\ttick()\n\t\tcatch (e:Dynamic)\n\t\t\tstop();\n\t}\n}'
+		);
+	}
+
+
+	public function testBareTryCatchDanglingElseKeepsBraces(): Void {
+		// KEY safety gate for the TryCatchStmtBare de-brace: a bare try whose catch body is a bare
+		// `if` (an if-EXPR) sits under a trailing `else`. De-bracing would put the try-catch `;`
+		// before that `else` (`... if (b) y(); else z()`), and Haxe absorbs a `;` before `else` —
+		// the `else` would rebind to `if (b)` inside the catch. Gate 4's recursive `containsIf`
+		// detects the nested if and keeps the braces (ctor-agnostic, so it covers the bare form).
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\ttry x() catch (e:Dynamic) if (b) y();\n\t\t} else {\n\t\t\tz();\n\t\t\tw();\n\t\t}\n\t}\n}'
+		);
+	}
+
 }
