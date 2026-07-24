@@ -12,8 +12,14 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a local declaration whose value is set by an IMMEDIATELY following statement-position
- * `switch` in every arm, collapsing the pair to one assignment of a switch-expression:
+ * Flags two shapes that collapse a statement-position `switch` assigning in every arm into a single
+ * switch-expression assignment. Purely structural (no type information). `Info` -- the code is
+ * correct, this is a readability simplification.
+ *
+ * ## The decl-pairing arm
+ *
+ * A local declaration whose value is set by an IMMEDIATELY following `switch` in every arm collapses
+ * the pair to one assignment:
  *
  * ```haxe
  * var otherslash:String = '';
@@ -29,74 +35,87 @@ import anyparse.runtime.Span;
  * };
  * ```
  *
- * The `switch` twin of `prefer-if-expression-assignment` (the `if`-chain rule) and the
- * decl-pairing sibling of `join-declaration-assignment`. Purely structural (no type
- * information). `Info` -- the code is correct, this is a readability simplification.
+ * The `switch` twin of `prefer-if-expression-assignment` (the `if`-chain rule) and the decl-pairing
+ * sibling of `join-declaration-assignment`. Two CONSECUTIVE statements of one statement list
+ * (`ControlFlowSupport.blockKinds`) where:
  *
- * ## What is flagged
- *
- * Two CONSECUTIVE statements of one statement list (`ControlFlowSupport.blockKinds`) where:
- *
- * - the first is a single-variable mutable local declaration (`mutableLocalDeclKinds`) named
- *   `x` -- a multi-declarator `var a, b;` (detected by a top-level comma in the declaration
- *   text) is skipped; an initializer is optional;
- * - the second is a statement-position `switch` (`switchKinds`) whose subject does NOT
- *   reference `x` (a subject reading `x` becomes a self-reference in `x`'s own initializer
- *   after the collapse);
- * - every non-subject child of the switch is a `case` / `default` arm (`caseBranchKind` /
- *   `defaultBranchKind`) -- a `#if`-guarded arm run projects as a `Conditional` node, which
- *   disqualifies the whole switch (a conditional-compilation arm can never be safely lifted);
- * - every arm body is EXACTLY the single statement `x = <expr>;` -- a plain `=` (`assignKind`)
- *   whose l-value is the declared identifier (`identKind`, same name), a bare `x = e;` or a
- *   braced `{ x = e; }` wrapping one. A compound (`+=`) / short-circuit (`??=`) assignment, a
- *   multi-statement body, a non-assignment body, or an l-value other than `x` (`x.f = …`)
- *   disqualifies -- mirroring the plain-`=`-only rule of the `if` twin;
+ * - the first is a single-variable mutable local declaration (`mutableLocalDeclKinds`) named `x` -- a
+ *   multi-declarator `var a, b;` is skipped; an initializer is optional;
+ * - the second is a statement-position `switch` (`switchKinds`) whose subject does NOT reference `x`;
+ * - every non-subject child of the switch is a `case` / `default` arm (a `#if`-guarded arm projects
+ *   as a `Conditional`, which disqualifies the whole switch);
+ * - every arm body is EXACTLY the single statement `x = <expr>;` -- a plain `=` (`assignKind`) whose
+ *   l-value is the declared identifier, a bare `x = e;` or a braced `{ x = e; }`. A compound (`+=`) /
+ *   short-circuit (`??=`) assignment, a multi-statement body, a non-assignment body, or an l-value
+ *   other than `x` disqualifies;
  * - no arm value references `x` (`x = x + 1` becomes a rejected self-reference after collapse);
- * - `x` is written ONLY by the arm assignments: every reassignment of `x` anywhere
- *   (`prefer-final`'s complete write scan) falls inside the switch and their count equals the
- *   arm count, so after the collapse `x` is genuinely `final` (no external write, no
- *   assignment hidden in a guard);
- * - no comment sits in a region the collapse drops (the `var`/`= init` glue, an arm's `x = `
- *   prefix, the switch keywords).
+ * - `x` is written ONLY by the arm assignments, so after the collapse `x` is genuinely `final`;
+ * - no comment sits in a region the collapse drops.
  *
- * ## Exhaustiveness and the initializer
+ * ### Exhaustiveness and the initializer
  *
- * A switch-expression must yield a value on every path, so the collapsed form needs a default:
+ * A switch-expression must yield a value on every path, so the collapsed form needs a default: an
+ * existing unguarded `case _:` / `default:` arm makes it exhaustive and DROPS the initializer;
+ * otherwise, with an initializer, a synthetic `case _: <init>;` is appended; otherwise (a bare
+ * `var x;` and a non-exhaustive switch) it is SKIPPED. Relocating the initializer changes WHEN it
+ * evaluates, so an impure one (`RefactorSupport.isSideEffectFree`) also SKIPS the pair.
  *
- * - the switch already has an unguarded `case _:` / `default:` arm (also assigning `x`): it is
- *   exhaustive, so the declaration's initializer is DROPPED and the existing default's value
- *   is used;
- * - otherwise, with an initializer: a synthetic `case _: <init>;` is appended, moving the
- *   initializer onto the default path;
- * - otherwise (a bare `var x;` and a non-exhaustive switch): SKIPPED. Exhaustiveness over enum
- *   constructors is a type-checker judgement this structural rule does not attempt -- with no
- *   default arm in the source it requires an initializer to synthesize one.
+ * ## The l-value arm
  *
- * ## Initializer purity
+ * A standalone statement-position `switch` (no paired declaration) whose EVERY arm assigns the SAME
+ * l-value -- a field-access path or a plain identifier that is NOT freshly declared by an adjacent
+ * local -- hoists the l-value out of the arms:
  *
- * Relocating the initializer into the default arm (or dropping it under an existing default)
- * changes WHEN it evaluates -- from unconditionally-before-the-switch to only on the default
- * path. That is observationally free only for a side-effect-free initializer, so an impure one
- * (`RefactorSupport.isSideEffectFree`) SKIPS the pair. This is the switch analogue of the
- * plain-`=`-only guard the `if` twin uses to keep every branch's evaluation faithful.
+ * ```haxe
+ * switch x {
+ *     case A: controlsHolder.y = 1;
+ *     case B: controlsHolder.y = 2;
+ *     case _: controlsHolder.y = 0;
+ * }
+ * // ->
+ * controlsHolder.y = switch x {
+ *     case A: 1;
+ *     case B: 2;
+ *     case _: 0;
+ * };
+ * ```
+ *
+ * Gates:
+ *
+ * - the switch must have a source `case _:` / `default:` arm -- there is no initializer to synthesize
+ *   one, so a non-exhaustive switch is SKIPPED;
+ * - the l-value's RECEIVER path must be side-effect-free (`RefactorSupport.isSideEffectFree`): idents /
+ *   `this` / plain field reads, but not a getter the machinery cannot prove pure. The terminal setter
+ *   is exempt -- it ran once per taken arm before and after the collapse. A multi-segment receiver
+ *   (`a.b.c`) carries an unprovable field read, so it is conservatively SKIPPED;
+ * - the subject must not reference the l-value path (a shared reference is order-sensitive with the
+ *   receiver after the collapse);
+ * - guard-carrying arms are fine; a `#if`-guarded arm (`Conditional`), a compound / `??=` assignment,
+ *   or arms disagreeing on the l-value all disqualify, as in the decl arm;
+ * - when the l-value is a plain identifier declared by an immediately preceding mutable local, the
+ *   decl-pairing arm keeps priority.
  *
  * ## Autofix
  *
- * `fix` replaces both statements with `final x:T = switch subj { … };` -- the `var` keyword
- * swapped for `final` (after the collapse `x` is never reassigned), the declared `:type`
- * preserved (explicit-type preference), the subject and every arm's pattern / guard / value
- * copied verbatim from their spans, arm bodies emitted as value expressions. The compact
- * output is re-emitted through the canonical writer, which lays the switch-expression out in
- * canonical form. Needs `switchKinds`, `caseBranchKind`, `defaultBranchKind`,
- * `plainCasePatternKind`, `wildcardPatternName`, `parenKind`, `exprStatementKind`,
- * `blockStmtKind`, `assignKind`, `mutableLocalDeclKinds` and `controlFlowSupport` (any unset
- * makes the check a no-op).
+ * `fix` replaces the matched region with `<lvalue> = switch subj { … };` (the decl arm swaps the
+ * `var` keyword for `final` and preserves the declared `:type`). The subject and every arm's pattern /
+ * guard / value are copied verbatim from their spans; the compact output is re-emitted through the
+ * canonical writer. Needs `switchKinds`, `caseBranchKind`, `defaultBranchKind`, `plainCasePatternKind`,
+ * `wildcardPatternName`, `parenKind`, `exprStatementKind`, `blockStmtKind`, `assignKind`,
+ * `mutableLocalDeclKinds` and `controlFlowSupport` (any unset makes the check a no-op);
+ * `fieldAccessKind` is optional -- without it the l-value arm handles only plain-identifier l-values.
  */
 @:nullSafety(Strict)
 final class PreferSwitchExpressionAssignment implements Check {
 
 	/** A binary assignment node has exactly [l-value, r-value] children. */
 	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
+
+	/** The finding message for the decl-pairing arm (a `var` and its following switch). */
+	private static inline final DECL_MESSAGE: String = 'this declaration and its following switch assignment can be a single switch-expression assignment';
+
+	/** The finding message for the l-value arm (a standalone switch assigning one l-value in every arm). */
+	private static inline final LVALUE_MESSAGE: String = 'this switch that assigns the same l-value in every arm can be a single switch-expression assignment';
 
 	public function new() {}
 
@@ -106,7 +125,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 
 	public function description(): String {
 		return
-			'a local declaration whose value is set by a following switch in every arm, collapsible to a single switch-expression assignment';
+			'a switch that assigns the same target in every arm (optionally paired with its preceding local declaration), collapsible to a single switch-expression assignment';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -124,7 +143,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 				span: m.declSpan,
 				rule: 'prefer-switch-expression-assignment',
 				severity: Severity.Info,
-				message: 'this declaration and its following switch assignment can be a single switch-expression assignment'
+				message: m.message
 			});
 		}
 		return violations;
@@ -190,6 +209,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 			mutableKinds: mutableKinds,
 			identKind: shape.identKind,
 			stringInterpKind: shape.stringInterpIdentKind,
+			fieldAccessKind: shape.fieldAccessKind,
 			blockKinds: support.blockKinds(),
 			shape: shape
 		};
@@ -202,9 +222,15 @@ final class PreferSwitchExpressionAssignment implements Check {
 	): Void {
 		if (s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
-			for (i in 0...kids.length - 1) {
-				final m: Null<Match> = matchPair(kids[i], kids[i + 1], root, source, comments, s);
-				if (m != null) out.push(m);
+			for (i in 0...kids.length) {
+				if (i + 1 < kids.length) {
+					final m: Null<Match> = matchPair(kids[i], kids[i + 1], root, source, comments, s);
+					if (m != null) out.push(m);
+				}
+				if (s.switchKinds.contains(kids[i].kind)) {
+					final lm: Null<Match> = matchLvalueSwitch(kids[i], i > 0 ? kids[i - 1] : null, source, comments, s);
+					if (lm != null) out.push(lm);
+				}
 			}
 		}
 		for (c in node.children) collectMatches(c, root, source, comments, s, out);
@@ -293,19 +319,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		buf.add(' = switch ');
 		buf.add(subjectSrc);
 		buf.add(' {');
-		for (a in arms) {
-			final header: Null<String> = armHeader(a.arm, source, s);
-			final value: Null<String> = slice(source, a.value);
-			if (header == null || value == null) return null;
-			buf.add(' ');
-			buf.add(header);
-			buf.add(': ');
-			buf.add(value);
-			buf.add(';');
-			final hs: Null<Span> = headerKeptSpan(a.arm, s);
-			if (hs != null) kept.push(hs);
-			if (a.value.span != null) kept.push((a.value.span: Span));
-		}
+		if (!emitArms(buf, arms, kept, source, s)) return null;
 		if (!hasDefault) {
 			// A source default arm is exhaustive, so the initializer is dropped; otherwise it moves here.
 			final initNode: Null<QueryNode> = init;
@@ -322,7 +336,8 @@ final class PreferSwitchExpressionAssignment implements Check {
 		return IfExpressionChain.droppedComment(region, kept, comments) ? null : {
 			declSpan: declSpan,
 			editSpan: region,
-			text: buf.toString()
+			text: buf.toString(),
+			message: DECL_MESSAGE
 		};
 	}
 
@@ -333,12 +348,8 @@ final class PreferSwitchExpressionAssignment implements Check {
 	 * multi-statement body, a non-assignment, or an l-value other than `name` all disqualify).
 	 */
 	private static function armAssignment(branch: QueryNode, name: String, s: Seams): Null<QueryNode> {
-		final body: Null<QueryNode> = armBody(branch, s);
-		if (body == null) return null;
-		final stmt: QueryNode = body.kind == s.blockStmtKind ? (body.children.length == 1 ? body.children[0] : body) : body;
-		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
-		final assign: QueryNode = stmt.children[0];
-		if (assign.kind != s.assignKind || assign.children.length != ASSIGN_CHILD_COUNT) return null;
+		final assign: Null<QueryNode> = armPlainAssign(branch, s);
+		if (assign == null) return null;
 		final lhs: QueryNode = assign.children[0];
 		return lhs.kind == s.identKind && lhs.name == name ? assign : null;
 	}
@@ -481,6 +492,168 @@ final class PreferSwitchExpressionAssignment implements Check {
 		return span == null ? null : source.substring(span.from, span.to);
 	}
 
+	/**
+	 * The single plain `=` assignment (`assignKind`) an arm body holds — a bare `lvalue = e;` or a
+	 * braced `{ lvalue = e; }` wrapping one, with ANY l-value. Null when the arm body is not exactly
+	 * one such plain assignment (a compound / `??=` operator, a multi-statement body, or a
+	 * non-assignment all disqualify). The l-value validation is left to the caller.
+	 */
+	private static function armPlainAssign(branch: QueryNode, s: Seams): Null<QueryNode> {
+		final body: Null<QueryNode> = armBody(branch, s);
+		if (body == null) return null;
+		final stmt: QueryNode = body.kind == s.blockStmtKind ? (body.children.length == 1 ? body.children[0] : body) : body;
+		if (stmt.kind != s.exprStmtKind || stmt.children.length != 1) return null;
+		final assign: QueryNode = stmt.children[0];
+		return assign.kind == s.assignKind && assign.children.length == ASSIGN_CHILD_COUNT ? assign : null;
+	}
+
+	/**
+	 * Append `case <header>: <value>;` for every arm to `buf` and record each header / value span in
+	 * `kept` (the comment-drop guard's surviving regions). False when an arm's header or value source
+	 * is missing.
+	 */
+	private static function emitArms(
+		buf: StringBuf, arms: Array<{ arm: QueryNode, value: QueryNode }>, kept: Array<Span>, source: String, s: Seams
+	): Bool {
+		for (a in arms) {
+			final header: Null<String> = armHeader(a.arm, source, s);
+			final value: Null<String> = slice(source, a.value);
+			if (header == null || value == null) return false;
+			buf.add(' ');
+			buf.add(header);
+			buf.add(': ');
+			buf.add(value);
+			buf.add(';');
+			final hs: Null<Span> = headerKeptSpan(a.arm, s);
+			if (hs != null) kept.push(hs);
+			if (a.value.span != null) kept.push((a.value.span: Span));
+		}
+		return true;
+	}
+
+	/** Whether two l-value nodes are structurally identical (same kind, name, and children). */
+	private static function sameLvalue(a: QueryNode, b: QueryNode): Bool {
+		if (a.kind != b.kind || a.name != b.name || a.children.length != b.children.length) return false;
+		for (i in 0...a.children.length) if (!sameLvalue(a.children[i], b.children[i])) return false;
+		return true;
+	}
+
+	/**
+	 * Whether the switch subject references any identifier that appears in the l-value path. The
+	 * field name of a `FieldAccess` is the node's own `name` (not a child), so only receiver idents
+	 * count: a shared reference makes the receiver / subject evaluation order-sensitive after the
+	 * collapse, disqualifying the switch.
+	 */
+	private static function subjectTouchesLvalue(subject: QueryNode, lvalue: QueryNode, s: Seams): Bool {
+		final name: Null<String> = lvalue.name;
+		if ((lvalue.kind == s.identKind || lvalue.kind == s.stringInterpKind) && name != null && referencesName(subject, name, s))
+			return true;
+		for (c in lvalue.children) if (subjectTouchesLvalue(subject, c, s)) return true;
+		return false;
+	}
+
+	/**
+	 * Collect each arm's (branch, assigned value) pair, the common l-value assigned in every arm, and
+	 * whether the switch has an exhaustive default arm. Null when a child is not a `case` / `default`
+	 * arm (a `#if`-guarded `Conditional` run), an arm body is not exactly a plain `<lvalue> = <expr>;`,
+	 * the l-value is neither a bare identifier nor a field-access path, or the arms do not all assign
+	 * the SAME l-value.
+	 */
+	private static function collectLvalueArms(
+		switchStmt: QueryNode, s: Seams
+	): Null<{ arms: Array<{ arm: QueryNode, value: QueryNode }>, lvalue: QueryNode, hasDefault: Bool }> {
+		final arms: Array<{ arm: QueryNode, value: QueryNode }> = [];
+		var lvalue: Null<QueryNode> = null;
+		var hasDefault: Bool = false;
+		for (i in 1...switchStmt.children.length) {
+			final branch: QueryNode = switchStmt.children[i];
+			if (branch.kind != s.caseBranchKind && branch.kind != s.defaultBranchKind) return null;
+			final assign: Null<QueryNode> = armPlainAssign(branch, s);
+			if (assign == null) return null;
+			final lhs: QueryNode = assign.children[0];
+			final isField: Bool = s.fieldAccessKind != null && lhs.kind == s.fieldAccessKind;
+			if (lhs.kind != s.identKind && !isField) return null;
+			if (lvalue == null)
+				lvalue = lhs;
+			else if (!sameLvalue(lvalue, lhs))
+				return null;
+			arms.push({ arm: branch, value: assign.children[1] });
+			if (isDefaultArm(branch, s)) hasDefault = true;
+		}
+		return lvalue == null ? null : { arms: arms, lvalue: lvalue, hasDefault: hasDefault };
+	}
+
+	/**
+	 * Assemble the `<lvalue> = switch subj { … };` replacement over the switch span, or null when a
+	 * span is missing or a comment sits in a region the collapse would drop.
+	 */
+	private static function buildLvalueMatch(
+		switchSpan: Span, lvalue: QueryNode, subject: QueryNode, arms: Array<{ arm: QueryNode, value: QueryNode }>, source: String,
+		comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
+	): Null<Match> {
+		final lvalueSrc: Null<String> = slice(source, lvalue);
+		final subjectSrc: Null<String> = slice(source, subject);
+		final lvalueSpan: Null<Span> = lvalue.span;
+		final subjectSpan: Null<Span> = subject.span;
+		if (lvalueSrc == null || subjectSrc == null || lvalueSpan == null || subjectSpan == null) return null;
+
+		final kept: Array<Span> = [lvalueSpan, subjectSpan];
+		final buf: StringBuf = new StringBuf();
+		buf.add(lvalueSrc);
+		buf.add(' = switch ');
+		buf.add(subjectSrc);
+		buf.add(' {');
+		if (!emitArms(buf, arms, kept, source, s)) return null;
+		buf.add(' };');
+
+		return IfExpressionChain.droppedComment(switchSpan, kept, comments) ? null : {
+			declSpan: switchSpan,
+			editSpan: switchSpan,
+			text: buf.toString(),
+			message: LVALUE_MESSAGE
+		};
+	}
+
+	/**
+	 * The collapse match for a statement-position `switchStmt` whose every arm assigns the SAME
+	 * l-value (a field-access path or a plain identifier), or null when a gate fails. `prev` is the
+	 * switch's preceding sibling in the statement list: the decl-pairing arm keeps priority, so a
+	 * switch whose l-value is a plain identifier declared by an immediately preceding mutable local is
+	 * left to `matchPair`.
+	 */
+	private static function matchLvalueSwitch(
+		switchStmt: QueryNode, prev: Null<QueryNode>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams
+	): Null<Match> {
+		if (!s.switchKinds.contains(switchStmt.kind) || switchStmt.children.length < 2) return null;
+		final switchSpan: Null<Span> = switchStmt.span;
+		if (switchSpan == null) return null;
+		final subject: QueryNode = switchStmt.children[0];
+
+		final collected: Null<{ arms: Array<{ arm: QueryNode, value: QueryNode }>, lvalue: QueryNode, hasDefault: Bool }> =
+			collectLvalueArms(switchStmt, s);
+		if (collected == null) return null;
+		// No source default arm and no initializer to synthesize one from — cannot make it exhaustive.
+		if (!collected.hasDefault) return null;
+		final lvalue: QueryNode = collected.lvalue;
+
+		// The decl arm keeps priority: an identifier l-value declared by the immediately preceding
+		// mutable local is a `matchPair` case, collapsed to `final x = switch …` instead.
+		if (lvalue.kind == s.identKind && prev != null && s.mutableKinds.contains(prev.kind) && prev.name == lvalue.name) return null;
+
+		// The l-value receiver path must be side-effect-free (a field read could be a getter, which the
+		// purity machinery cannot prove pure); the terminal setter ran once per taken arm before and
+		// after, so it is exempt.
+		if (s.fieldAccessKind != null && lvalue.kind == s.fieldAccessKind) {
+			final receiver: Null<QueryNode> = lvalue.children.length > 0 ? lvalue.children[0] : null;
+			if (receiver == null || !RefactorSupport.isSideEffectFree(receiver)) return null;
+		}
+
+		// A subject reading the l-value path becomes order-sensitive with the receiver after the collapse.
+		return subjectTouchesLvalue(subject, lvalue, s)
+			? null
+			: buildLvalueMatch(switchSpan, lvalue, subject, collected.arms, source, comments, s);
+	}
+
 }
 
 /** The kinds `PreferSwitchExpressionAssignment` reads. */
@@ -497,6 +670,7 @@ private typedef Seams = {
 	var mutableKinds: Array<String>;
 	var identKind: String;
 	var stringInterpKind: Null<String>;
+	var fieldAccessKind: Null<String>;
 	var blockKinds: Array<String>;
 	var shape: RefShape;
 }
@@ -506,4 +680,5 @@ private typedef Match = {
 	var declSpan: Span;
 	var editSpan: Span;
 	var text: String;
+	var message: String;
 }
