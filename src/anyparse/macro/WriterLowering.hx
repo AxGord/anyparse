@@ -1548,14 +1548,31 @@ class WriterLowering {
 		// statement `if` in an anon-fn body inlines via `ifBody` instead of
 		// `expressionIf`. Struct-block Stars without the flag stay byte-identical.
 		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
-		parts.push(triviaBlockStarExpr(
+		// omega-condswitchopen-cases-nest: `HxCondSpliceSwitchOpen.cases` (the shared
+		// switch case list of a `#if for { switch { #else ... #end` region) sits
+		// TWO block levels below the enclosing statement - the region's outer
+		// block AND the switch - but a block Star's body Doc carries only one
+		// `_dn` level. This flag wraps the whole field emit in one extra
+		// `_dn(_cols, ...)` so the case labels land at statement+2 and the
+		// switch-closing `}` at statement+1, matching a physically-nested
+		// `for (..) { switch (..) { case .. } }`. Byte-inert for every other
+		// block Star (the flag is unique to that one field).
+		final condSwitchOpenCasesNest: Bool = starNode.fmtHasFlag('condSwitchOpenCasesNest');
+		final emptyBlockBreak: Bool = starNode.fmtHasFlag('emptyBlockBreak');
+		final blockStar: Expr = triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
-			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob
-		));
+			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
+			emptyBlockBreak
+		);
+		final blockStarNested: Expr = macro {
+			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			_dn(_cols, $blockStar);
+		};
+		parts.push(condSwitchOpenCasesNest ? blockStarNested : blockStar);
 	}
 
 	/**
@@ -11048,7 +11065,11 @@ class WriterLowering {
 		// `@:fmt(beginEndType('a', 'b'))` names knobs (e.g. `HxEnumDecl.ctors`)
 		// reads those instead, so per-type-kind begin/end scopes never share.
 		beginTypeKnob: String = 'beginType',
-		endTypeKnob: String = 'endType'
+		endTypeKnob: String = 'endType',
+		// omega-condswitchopen-for-close: force an empty body to break its close
+		// onto its own line (the outer-block `}` of a `#if for { switch { #end`
+		// region). See `triviaBlockEmptyDocExpr`.
+		forceEmptyBreak: Bool = false
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -11056,7 +11077,9 @@ class WriterLowering {
 		final emptyText: String = openText + closeText;
 		// ω-empty-curly-break / ω-anonfunction-empty-curly / ω-blockempty:
 		// empty-body Doc dispatch moved to `triviaBlockEmptyDocExpr`.
-		final emptyDocExpr: Expr = triviaBlockEmptyDocExpr(openText, closeText, emptyText, emptyCurlyBreak, emptyCurlyKnob);
+		final emptyDocExpr: Expr = triviaBlockEmptyDocExpr(
+			openText, closeText, emptyText, emptyCurlyBreak, emptyCurlyKnob, forceEmptyBreak
+		);
 		// ω-blockright-curly / ω-anonfunction-right-curly: before-`}` hardline
 		// dispatch moved to `triviaBlockBeforeCloseHardlineExpr`.
 		final beforeCloseHardlineExpr: Expr = triviaBlockBeforeCloseHardlineExpr(rightCurlyKnob, rightCurlyAnonFnKnob);
@@ -15479,8 +15502,16 @@ class WriterLowering {
 	 * `{}`.
 	 */
 	private static function triviaBlockEmptyDocExpr(
-		openText: String, closeText: String, emptyText: String, emptyCurlyBreak: Bool, emptyCurlyKnob: Null<String>
+		openText: String, closeText: String, emptyText: String, emptyCurlyBreak: Bool, emptyCurlyKnob: Null<String>,
+		forceBreak: Bool = false
 	): Expr {
+		// omega-condswitchopen-for-close: a block Star whose open `{` lives OUTSIDE
+		// this field (the outer block of a `#if for { switch { ... #end` region,
+		// captured verbatim in `raw`) must still break its close onto its own line
+		// when its body is empty - a glued `_dt('}')` would fuse the outer-block
+		// close onto the switch-close line (`}}`). Unlike `emptyCurly` (which
+		// governs a self-contained `{}` pair), this is unconditional.
+		if (forceBreak) return macro _dc([_dt($v{openText}), _dhl(), _dt($v{closeText})]);
 		final emptyCurlyAccess: Expr = emptyCurlyKnob != null ? {
 			expr: EField(macro opt, emptyCurlyKnob),
 			pos: Context.currentPos()
