@@ -942,7 +942,7 @@ class WriterLowering {
 			// D61: kw prefix + mandatory @:lead lead-in — see emitFieldLeadIn.
 			emitFieldLeadIn(
 				child, parts, kwLead, leadText, isOptional, isFirstField, isRaw, prevBodyField, typePath, prevPadTrailing, hasCondWrap,
-				hasCondWrapEnd, prevAnyStarNonEmpty
+				hasCondWrapEnd, prevAnyStarNonEmpty, fieldAccess
 			);
 
 			// Field value.
@@ -8875,7 +8875,7 @@ class WriterLowering {
 	 * runtime `opt._intersectionOperandBreak` decision. Pushes onto `parts`.
 	 *
 	 */
-	private function emitMandatoryLead(child: ShapeNode, parts: Array<Expr>, leadText: String): Void {
+	private function emitMandatoryLead(child: ShapeNode, parts: Array<Expr>, leadText: String, fieldAccess: Expr): Void {
 		// ω-typedef-intersection-operand-break: `HxIntersectionClause.type`
 		// (`@:lead('&') @:fmt(typedefIntersection, typedefIntersectionBreak)`)
 		// makes the `&`→operand whitespace a runtime decision. When the
@@ -8890,16 +8890,16 @@ class WriterLowering {
 		// follows a `BrClose`. Flag false (every single-line intersection)
 		// falls through to the `typedefIntersection` After space, byte-
 		// identical to the pre-slice layout.
-		if (child.fmtHasFlag('typedefIntersectionBreak')) {
+		final leadDoc: Expr = if (child.fmtHasFlag('typedefIntersectionBreak')) {
 			final gluedLead: Expr = whitespacePolicyLead(child, leadText, ['typedefIntersection']);
-			parts.push(macro opt._intersectionOperandBreak
+			macro opt._intersectionOperandBreak
 				? _dc([
 					_dt($v{leadText}),
 					_dn(opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth, _dhl())
 				])
-				: $gluedLead);
+				: $gluedLead;
 		} else
-			parts.push(whitespacePolicyLead(child, leadText, [
+			whitespacePolicyLead(child, leadText, [
 				'objectFieldColon',
 				'typeHintColon',
 				'typeCheckColon',
@@ -8910,7 +8910,16 @@ class WriterLowering {
 				'catchParensInsideOpen',
 				'switchCondParensInsideOpen',
 				'whileCondParensInsideOpen'
-			]));
+			]);
+		// ω-switch-subject-parens: drop the switch-subject open `(` when the knob
+		// is on and the subject is not a leading-brace expr (object literal / block
+		// keep their parens). Nothing replaces it — the `switch` keyword already
+		// emits its trailing space, so `switch (v)` → `switch v` like the bare form.
+		if (child.fmtHasFlag('switchSubjectParensStrip')) {
+			final cond: Expr = switchParensStripCond(fieldAccess);
+			parts.push(macro $cond ? _de() : $leadDoc);
+		} else
+			parts.push(leadDoc);
 	}
 
 	/**
@@ -9519,17 +9528,27 @@ class WriterLowering {
 	 */
 	private function emitMandatoryRefTrail(
 		child: ShapeNode, parts: Array<Expr>, isOptional: Bool, trailText: Null<String>, trailOptText: Null<String>, hasCondWrap: Bool,
-		hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>
+		hasCondWrapEnd: Bool, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, fieldAccess: Expr
 	): Void {
 		// ω-condition-parens (Stage C): `@:fmt(catchParensInsideClose)` on
 		// a mandatory-Ref `@:trail(')')` field routes the close literal
 		// through `opt.catchParensInsideClose` (`Before`/`Both` → inner
 		// ` )` pad). No flag → tight `_dt(trailText)` byte-identical.
-		if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd) parts.push(whitespacePolicyTrail(child, trailText, [
-			'catchParensInsideClose',
-			'switchCondParensInsideClose',
-			'whileCondParensInsideClose'
-		]));
+		if (!isOptional && trailText != null && !hasCondWrap && !hasCondWrapEnd) {
+			final trailDoc: Expr = whitespacePolicyTrail(child, trailText, [
+				'catchParensInsideClose',
+				'switchCondParensInsideClose',
+				'whileCondParensInsideClose'
+			]);
+			// ω-switch-subject-parens: drop the switch-subject close `)` under the
+			// same condition as the open `(` (see switchParensStripCond); nothing
+			// replaces it — the cases block `{` follows directly.
+			if (child.fmtHasFlag('switchSubjectParensStrip')) {
+				final cond: Expr = switchParensStripCond(fieldAccess);
+				parts.push(macro $cond ? _de() : $trailDoc);
+			} else
+				parts.push(trailDoc);
+		}
 		// ω-struct-trailopt-source-track: mandatory-
 		// Ref `@:trailOpt(LIT)` field gates the trail emission on the
 		// synth slot `<field>TrailPresent:Null<Bool>` so the writer
@@ -9949,7 +9968,7 @@ class WriterLowering {
 	): { prevBodyField: Null<PrevBodyInfo>, prevPadTrailing: Null<Expr>, prevTrailFieldName: Null<String> } {
 		emitMandatoryRefTrail(
 			child, parts, isOptional, trailText, trailOptText, hasCondWrap, hasCondWrapEnd, hasStructFieldTrailOptSlot,
-			structTrailOptAccess
+			structTrailOptAccess, fieldAccess
 		);
 		// ω-pad-trailing-ref: bare-Ref `@:fmt(padTrailing)` — mandatory Ref
 		// always fires, so push a trailing space unconditionally and set the
@@ -10111,7 +10130,7 @@ class WriterLowering {
 	private function emitFieldLeadIn(
 		child: ShapeNode, parts: Array<Expr>, kwLead: Null<String>, leadText: Null<String>, isOptional: Bool, isFirstField: Bool,
 		isRaw: Bool, prevBodyField: Null<PrevBodyInfo>, typePath: String, prevPadTrailing: Null<Expr>, hasCondWrap: Bool,
-		hasCondWrapEnd: Bool, prevAnyStarNonEmpty: Null<Expr>
+		hasCondWrapEnd: Bool, prevAnyStarNonEmpty: Null<Expr>, fieldAccess: Expr
 	): Void {
 		// D61: kw prefix — space before kw (unless first), kw text with trailing
 		// space. @:fmt(sameLine(...)) switches the leading space to a hardline;
@@ -10121,7 +10140,7 @@ class WriterLowering {
 		// D61: non-optional lead — no space before lead. The end-field of a
 		// condWrap span cannot push its own `@:lead` (the open paren is owned by
 		// the start field and emitted via the splice's emitCondition wrap).
-		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText);
+		if (leadText != null && !isOptional && !hasCondWrap && !hasCondWrapEnd) emitMandatoryLead(child, parts, leadText, fieldAccess);
 	}
 
 	/**
@@ -16286,6 +16305,22 @@ class WriterLowering {
 				$pushExpr;
 				_bbi++;
 			}
+		};
+	}
+
+
+	/**
+	 * ω-switch-subject-parens: the runtime condition under which the switch
+	 * subject's parens are dropped — the `dropSwitchSubjectParens` knob is on
+	 * AND the subject is not a leading-brace expression (object literal / block,
+	 * kept so a brace-first subject never abuts the cases brace). Shared by the
+	 * `@:lead('(')` and `@:trail(')')` emit sites of `HxSwitchStmt.expr`
+	 * (`@:fmt(switchSubjectParensStrip)`).
+	 */
+	private function switchParensStripCond(fieldAccess: Expr): Expr {
+		return macro opt.dropSwitchSubjectParens && {
+			final _sc: String = Type.enumConstructor(cast $fieldAccess);
+			_sc != 'ObjectLit' && _sc != 'BlockExpr';
 		};
 	}
 

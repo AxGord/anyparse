@@ -54,6 +54,7 @@ import anyparse.grammar.haxe.format.HxFormatWrapRule;
 import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
+import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -558,6 +559,7 @@ final class HaxeFormatConfigLoader {
 			expressionForBody: base.expressionForBody,
 			expressionIfWithBlocks: base.expressionIfWithBlocks,
 			dropSingleStmtBraces: base.dropSingleStmtBraces,
+			dropSwitchSubjectParens: base.dropSwitchSubjectParens,
 			leftCurly: base.leftCurly,
 			emptyCurly: base.emptyCurly,
 			objectLiteralLeftCurly: base.objectLiteralLeftCurly,
@@ -1730,6 +1732,11 @@ final class HaxeFormatConfigLoader {
 			applyConditionParens(paren.switchConditionParens, opt, false, 'switch');
 			applyConditionParens(paren.catchParens, opt, false, 'catch');
 			applyConditionParens(paren.sharpConditionParens, opt, false, 'sharp');
+			// ω-switch-subject-parens: `switchSubjectParens: "remove"` drops the
+			// redundant parens around the switch subject. Any other value (incl.
+			// the default "keep") leaves the knob at its `false` default — byte-inert.
+			final switchParens: Null<HxFormatSwitchSubjectParensPolicy> = paren.switchSubjectParens;
+			if (switchParens != null) opt.dropSwitchSubjectParens = switchParens == HxFormatSwitchSubjectParensPolicy.Remove;
 		}
 	}
 
