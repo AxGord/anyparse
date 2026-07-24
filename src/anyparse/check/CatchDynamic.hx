@@ -20,8 +20,13 @@ import anyparse.query.TypeInfoProvider;
  * `fix` swaps `Dynamic` / `Any` to `Exception` ONLY when the caught variable is never
  * mentioned in the catch body — an unused catch-all swaps with zero behaviour change (Haxe 4.1
  * unified exceptions), adding `import haxe.Exception;` when the name is free (fully-qualified
- * `haxe.Exception` on a name collision). A body that READS the raw value (a different API from
- * the `Exception` wrapper's) stays a finding — that needs a manual `.unwrap` migration.
+ * `haxe.Exception` on a name collision). A swap inside a conditional-compilation region
+ * (`#if … #end`) emits fully-qualified `haxe.Exception` and adds no import — a top-level import
+ * would be unused in a build where that branch is compiled out. A body that USES the caught
+ * value stays a finding: one that reads its raw-value API needs a manual `.unwrap` migration,
+ * and a purely stringifying use (`Std.string` / interpolation / a trace argument) is left
+ * report-only too — the swap rebinds the value to a `ValueException` wrapper, not a provable
+ * equivalence.
  *
  * ## What is flagged
  *
@@ -62,6 +67,7 @@ final class CatchDynamic implements Check {
 		if (seams == null) return [];
 		final kind: String = seams.kind;
 		final catchAll: Array<String> = seams.catchAll;
+		final condKind: Null<String> = seams.condKind;
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
@@ -74,19 +80,21 @@ final class CatchDynamic implements Check {
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		final ex = resolveExceptionType(root, importMap);
 		final edits: Array<{ span: Span, text: String }> = [];
-		var rewrote: Bool = false;
-		function walk(node: QueryNode): Void {
+		var rewroteNonConditional: Bool = false;
+		function walk(node: QueryNode, insideConditional: Bool): Void {
 			if (node.kind == kind) {
-				final edit: Null<{ span: Span, text: String }> = swapEdit(node, source, catchAll, ex.text, flagged);
+				final exText: String = insideConditional ? 'haxe.Exception' : ex.text;
+				final edit: Null<{ span: Span, text: String }> = swapEdit(node, source, catchAll, exText, flagged);
 				if (edit != null) {
 					edits.push(edit);
-					rewrote = true;
+					if (!insideConditional) rewroteNonConditional = true;
 				}
 			}
-			for (c in node.children) walk(c);
+			final childCond: Bool = insideConditional || (condKind != null && node.kind == condKind);
+			for (c in node.children) walk(c, childCond);
 		}
-		walk(root);
-		if (rewrote && ex.needImport) edits.push(importInsertEdit(root));
+		walk(root, false);
+		if (rewroteNonConditional && ex.needImport) edits.push(importInsertEdit(root));
 		return edits;
 	}
 
@@ -235,12 +243,12 @@ final class CatchDynamic implements Check {
 
 
 	/** The catch-clause kind and catch-all type names, or null when the grammar sets neither (the check is then a no-op). */
-	private static function readKinds(plugin: GrammarPlugin): Null<{ kind: String, catchAll: Array<String> }> {
+	private static function readKinds(plugin: GrammarPlugin): Null<{ kind: String, catchAll: Array<String>, condKind: Null<String> }> {
 		final shape: RefShape = plugin.refShape();
 		final catchKind: Null<String> = shape.catchClauseKind;
 		if (catchKind == null) return null;
 		final catchAll: Array<String> = shape.catchAllTypeNames ?? [];
-		return catchAll.length == 0 ? null : { kind: catchKind, catchAll: catchAll };
+		return catchAll.length == 0 ? null : { kind: catchKind, catchAll: catchAll, condKind: shape.conditionalMemberKind };
 	}
 
 }
