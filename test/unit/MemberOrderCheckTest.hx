@@ -416,6 +416,25 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	/**
+	 * A reorder-unsafe container (the guarded `new` field would flip past the
+	 * trailing `var`) whose single-member `#if` block lacks its surrounding blank
+	 * lines degrades to spacing-only edits that STILL set the `#if`/`#end` block
+	 * off with a blank line before it and after it; the order stays a report-only
+	 * advisory and the fix converges on its own output (the CheckBox shape).
+	 */
+	public function testUnsafeReorderSpacesConditionalBlock(): Void {
+		final src: String = 'class C {\n\tprivate final b:S = new S();\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\tprivate var ht:Float;\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		Assert.equals(
+			'class C {\n\tprivate final b:S = new S();\n\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\n\tprivate var ht:Float;\n}',
+			fixedSource(src)
+		);
+		final fixed: String = canonicalizedFix(src);
+		Assert.equals(0, edits(fixed).length, 'fix applied to its own output emits no edits: $fixed');
+		assertOrderAdvisoryOnly(violations(fixed));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

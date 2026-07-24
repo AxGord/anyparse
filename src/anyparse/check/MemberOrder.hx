@@ -39,8 +39,18 @@ typedef LayoutIssue = {
 	var member: OrderedMember;
 	var message: String;
 }
+
 /**
- * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A container whose field initializers make reordering unsafe keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised.
+ * The two optional blank-line edits `directiveGapEdits` computes for one cross-condition
+ * member gap: `ifEdit` the blank before the gap's `#if`, `endEdit` the blank after its
+ * `#end`; each null when that blank already exists or the gap has no such directive.
+ */
+typedef DirectiveGap = {
+	var ifEdit: Null<{ span: Span, text: String }>;
+	var endEdit: Null<{ span: Span, text: String }>;
+}
+/**
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A container whose field initializers make reordering unsafe keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours.
  */
 @:nullSafety(Strict)
 final class MemberOrder implements Check {
@@ -181,10 +191,12 @@ final class MemberOrder implements Check {
 	 * The spacing-only degradation for a container whose member order cannot be
 	 * rewritten safely (`reorderSafe` refused): normalise every violating
 	 * inter-slot gap over the ORIGINAL member sequence - one blank line between
-	 * rank groups, none inside a tight field group - leaving the order itself
-	 * untouched (the order finding stays report-only). Shares `spacingViolation`
-	 * with `firstSpacingIssue`, so the fix emits nothing exactly where the check
-	 * finds no spacing issue and a re-run converges.
+	 * rank groups, none inside a tight field group - and, via `emitDirectiveSpacing`,
+	 * set every member-level `#if`/`#end` block off with a blank line before and
+	 * after, leaving the order itself untouched (the order finding stays report-only).
+	 * Shares `spacingViolation` with `firstSpacingIssue` and `directiveGapEdits` with
+	 * `firstDirectiveSpacingIssue`, so the fix emits nothing exactly where the check
+	 * finds no issue and a re-run converges.
 	 */
 	private static function emitSpacingOnly(
 		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
@@ -199,6 +211,7 @@ final class MemberOrder implements Check {
 			final indent: String = gap.substring(gap.lastIndexOf('\n') + 1);
 			edits.push({ span: new Span(a.span.to, b.span.from), text: (want == 1 ? GROUP_SEPARATOR : '\n') + indent });
 		}
+		emitDirectiveSpacing(edits, members, source);
 	}
 
 	/**
@@ -768,31 +781,17 @@ final class MemberOrder implements Check {
 	/**
 	 * The first member preceded (across an `#if`) by a missing blank line: a member-level
 	 * `#if` must have a blank line before it and its `#end` a blank line after, so a
-	 * conditional block stands apart from its neighbours. Scans only inter-member gaps that
-	 * cross a condition boundary; the container's leading `#if` / trailing `#end` (no member
-	 * pair spans them) are exempt, as is an `#else` gap (same condition on both sides).
+	 * conditional block stands apart from its neighbours. Reads `directiveGapEdits` (shared
+	 * with the spacing-only fix so the two agree on which blanks are missing); the container's
+	 * leading `#if` / trailing `#end` (no member pair spans them) are exempt, as is an `#else`
+	 * gap (same condition on both sides).
 	 */
 	private static function firstDirectiveSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
 		if (hasElseBranch(members, source)) return null;
 		for (i in 0...members.length - 1) {
-			final a: OrderedMember = members[i];
-			final b: OrderedMember = members[i + 1];
-			if (a.condition == b.condition) continue;
-			final gapFrom: Int = a.span.to;
-			final gapTo: Int = b.span.from;
-			var firstIfStart: Int = -1;
-			var lastEndTo: Int = -1;
-			var cursor: Int = gapFrom;
-			for (seg in source.substring(gapFrom, gapTo).split('\n')) {
-				final t: String = StringTools.trim(seg);
-				if (firstIfStart < 0 && StringTools.startsWith(t, '#if')) firstIfStart = cursor;
-				if (t == '#end') lastEndTo = cursor + seg.length;
-				cursor += seg.length + 1;
-			}
-			if (firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1)
-				return { member: b, message: 'a member-level #if is not preceded by a blank line' };
-			if (lastEndTo >= 0 && blankLineCount(source.substring(lastEndTo, gapTo)) < 1)
-				return { member: b, message: 'a member-level #end is not followed by a blank line' };
+			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
+			if (gap.ifEdit != null) return { member: members[i + 1], message: 'a member-level #if is not preceded by a blank line' };
+			if (gap.endEdit != null) return { member: members[i + 1], message: 'a member-level #end is not followed by a blank line' };
 		}
 		return null;
 	}
@@ -817,6 +816,61 @@ final class MemberOrder implements Check {
 	/** The `computeGroupFirst` / `compareOrder` map key for a member's conditional block, keyed by section so a condition shared across two sections keeps a distinct block per section. */
 	private static inline function groupKey(section: Int, cond: String): String {
 		return '$section $cond';
+	}
+
+	/**
+	 * The directive-spacing arm of the spacing-only fallback: set every member-level `#if` off
+	 * with a blank line before it and its `#end` with a blank line after it - the blanks
+	 * `directiveGapEdits` reports - so a reorder-unsafe container whose guarded block cannot
+	 * move still gets that block visually separated from its neighbours (the CheckBox shape).
+	 * Exempts an `#else`-branched container, as the check does.
+	 */
+	private static function emitDirectiveSpacing(
+		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
+	): Void {
+		if (hasElseBranch(members, source)) return;
+		for (i in 0...members.length - 1) {
+			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
+			final ifEdit: Null<{ span: Span, text: String }> = gap.ifEdit;
+			if (ifEdit != null) edits.push(ifEdit);
+			final endEdit: Null<{ span: Span, text: String }> = gap.endEdit;
+			if (endEdit != null) edits.push(endEdit);
+		}
+	}
+
+	/**
+	 * The blank-line edits the directive-spacing rule wants for the cross-condition gap between
+	 * two consecutive members `a` and `b`: `ifEdit` inserts a blank line before the gap's first
+	 * `#if`, `endEdit` a blank line after its last `#end`; each null when that blank already
+	 * exists, the gap holds no such directive, or the pair shares a condition. The single source
+	 * of the directive-spacing policy - the check (`firstDirectiveSpacingIssue`, its message from
+	 * which edit is present) and the spacing-only fix (`emitDirectiveSpacing`, both applied) read
+	 * it, so the two cannot drift.
+	 */
+	private static function directiveGapEdits(a: OrderedMember, b: OrderedMember, source: String): DirectiveGap {
+		if (a.condition == b.condition) return { ifEdit: null, endEdit: null };
+		final gapFrom: Int = a.span.to;
+		final gapTo: Int = b.span.from;
+		var firstIfStart: Int = -1;
+		var lastEndTo: Int = -1;
+		var cursor: Int = gapFrom;
+		for (seg in source.substring(gapFrom, gapTo).split('\n')) {
+			final t: String = StringTools.trim(seg);
+			if (firstIfStart < 0 && StringTools.startsWith(t, '#if')) firstIfStart = cursor;
+			if (t == '#end') lastEndTo = cursor + seg.length;
+			cursor += seg.length + 1;
+		}
+		final ifEdit: Null<{ span: Span, text: String }> =
+			firstIfStart >= 0 && blankLineCount(source.substring(gapFrom, firstIfStart)) < 1 ? {
+				span: new Span(gapFrom, firstIfStart),
+				text: GROUP_SEPARATOR
+			} : null;
+		final endEdit: Null<{ span: Span, text: String }> = if (lastEndTo >= 0 && blankLineCount(source.substring(lastEndTo, gapTo)) < 1) {
+			final tail: String = source.substring(lastEndTo, gapTo);
+			{ span: new Span(lastEndTo, gapTo), text: GROUP_SEPARATOR + tail.substring(tail.lastIndexOf('\n') + 1) };
+		} else
+			null;
+		return { ifEdit: ifEdit, endEdit: endEdit };
 	}
 
 }
