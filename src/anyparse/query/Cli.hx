@@ -1326,6 +1326,15 @@ final class Cli {
 				else if (!scanRoots.contains(dir))
 					scanRoots.push(dir);
 			}
+			// The auto-discovered Haxe std joins the SAME scope as the declared roots / libs
+			// (StdResolver — ONE channel, no hardcoded machine-specific paths): its
+			// target-agnostic core (toplevel *.hx + haxe/ + sys/) as expandInputs specs,
+			// deduped against any explicit std root. Reached ONLY when the scope is already
+			// active (this thunk is null otherwise), so a config-less run never discovers std
+			// — byte-inert. Lazy like the libs: the `which haxe` probe fires only on first
+			// index demand. Null (no std on the machine) leaves the scope exactly as declared.
+			final stdDir: Null<String> = StdResolver.stdDir();
+			if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
 			final libFiles: Array<{ file: String, source: String }> = [];
 			for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.contains(FileSystem.absolutePath(path))) {
 				final src: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
