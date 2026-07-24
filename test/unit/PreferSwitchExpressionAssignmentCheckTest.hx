@@ -110,11 +110,13 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		);
 	}
 
-	/** A field l-value (`obj.x = …`) is not the bare declared identifier. */
+	/**
+	 * A field l-value (`obj.x = …`) is not the bare declared identifier, so the decl pair does not collapse; with no default the l-value arm does not fire either.
+	 */
 	public function testFieldLvalueNotFlagged(): Void {
 		Assert.equals(
 			0,
-			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: obj.x = \'a\';\n\t\t\tcase _: obj.x = \'d\';\n\t\t}')).length
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: obj.x = \'a\';\n\t\t\tcase 2: obj.x = \'b\';\n\t\t}')).length
 		);
 	}
 
@@ -202,12 +204,14 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
 	}
 
-	/** A statement between the declaration and the switch breaks adjacency — not flagged. */
+	/**
+	 * A statement between the declaration and the switch breaks adjacency, so the decl pair does not collapse; with no default the l-value arm does not fire either.
+	 */
 	public function testNonAdjacentNotFlagged(): Void {
 		Assert.equals(
 			0,
 			violations(
-				wrap('var x:String = \'\';\n\t\ttrace(\'mid\');\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+				wrap('var x:String = \'\';\n\t\ttrace(\'mid\');\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')
 			).length
 		);
 	}
@@ -236,6 +240,132 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.notNull(Linter.byId('prefer-switch-expression-assignment'));
 		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
 		Assert.isTrue(ids.contains('prefer-switch-expression-assignment'));
+	}
+
+	/** The driving case: a field-access l-value assigned in every arm hoists out of the switch. */
+	public function testLvalueFieldFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap(
+				'switch x {\n\t\t\tcase A: controlsHolder.y = 1;\n\t\t\tcase B: controlsHolder.y = 2;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}'
+			)
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('controlsHolder.y = switch x { case A: 1; case B: 2; case _: 0; };', es[0].text);
+	}
+
+	/** The l-value arm reports its own message and `Info` severity. */
+	public function testLvalueMessage(): Void {
+		final vs: Array<Violation> =
+			violations(wrap('switch x {\n\t\t\tcase 1: controlsHolder.y = 1;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}'));
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('this switch that assigns the same l-value in every arm can be a single switch-expression assignment', vs[0].message);
+	}
+
+	/** A standalone switch with no default arm cannot synthesize one — not exhaustive, so not flagged. */
+	public function testLvalueNoDefaultNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\tcase 2: obj.y = 2;\n\t\t}')).length);
+	}
+
+	/** A plain-identifier l-value with no adjacent declaration collapses; the prior statement stays. */
+	public function testLvaluePlainIdentFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('existing = 5;\n\t\tswitch v {\n\t\t\tcase 1: existing = 1;\n\t\t\tcase _: existing = 0;\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('existing = switch v { case 1: 1; case _: 0; };', es[0].text);
+	}
+
+	/** With an adjacent matching declaration the decl-pairing arm keeps priority (one decl-form fix). */
+	public function testLvalueDeclPriority(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A field l-value whose receiver is an impure call is skipped (the receiver would reorder). */
+	public function testLvalueImpureReceiverNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: obj().y = 1;\n\t\t\tcase _: obj().y = 0;\n\t\t}')).length);
+	}
+
+	/** A subject reading the l-value receiver is order-sensitive with it after the collapse — skipped. */
+	public function testLvalueSubjectReferencesReceiverNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('switch controlsHolder {\n\t\t\tcase 1: controlsHolder.y = 1;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}')).length
+		);
+	}
+
+	/** A multi-segment receiver (`a.b.c`) carries an unprovable field read — conservatively skipped. */
+	public function testLvalueDeepPathNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: a.b.c = 1;\n\t\t\tcase _: a.b.c = 0;\n\t\t}')).length);
+	}
+
+	/** A guard-carrying arm is fine; the pattern and guard are copied verbatim into the header. */
+	public function testLvalueGuardedArmFixed(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('switch v {\n\t\t\tcase n if (n > 0): obj.y = 1;\n\t\t\tcase _: obj.y = 0;\n\t\t}'));
+		Assert.equals(1, es.length);
+		Assert.equals('obj.y = switch v { case n if (n > 0): 1; case _: 0; };', es[0].text);
+	}
+
+	/** A `this.field` l-value collapses — the receiver `this` is side-effect-free. */
+	public function testLvalueThisFieldFixed(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('switch v {\n\t\t\tcase 1: this.y = 1;\n\t\t\tcase _: this.y = 0;\n\t\t}'));
+		Assert.equals(1, es.length);
+		Assert.equals('this.y = switch v { case 1: 1; case _: 0; };', es[0].text);
+	}
+
+	/** Arms disagreeing on the l-value disqualify. */
+	public function testLvalueDifferentLvalueNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\tcase _: obj.z = 0;\n\t\t}')).length);
+	}
+
+	/** A compound `+=` arm is excluded on the l-value arm too. */
+	public function testLvalueCompoundNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: obj.y += 1;\n\t\t\tcase _: obj.y += 2;\n\t\t}')).length);
+	}
+
+	/** A `#if`-guarded arm run projects as a `Conditional`, disqualifying the l-value switch. */
+	public function testLvalueConditionalArmNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap(
+					'switch v {\n\t\t\tcase 1: obj.y = 1;\n\t\t\t#if debug\n\t\t\tcase 2: obj.y = 2;\n\t\t\t#end\n\t\t\tcase _: obj.y = 0;\n\t\t}'
+				)
+			).length
+		);
+	}
+
+	/** An index-access l-value (`a[i]`) is neither an identifier nor a field path — skipped. */
+	public function testLvalueArrayAccessNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: a[i] = 1;\n\t\t\tcase _: a[i] = 0;\n\t\t}')).length);
+	}
+
+	/** A multi-statement arm body is never collapsed on the l-value arm. */
+	public function testLvalueMultiStatementArmNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase 1: { obj.y = 1; z = 2; }\n\t\t\tcase _: obj.y = 0;\n\t\t}')).length);
+	}
+
+	/** End-to-end through the canonical writer: the field l-value assignment is hoisted. */
+	public function testLvalueFixOutputCollapses(): Void {
+		final out: String = applyFixOnce(
+			wrap('switch v {\n\t\t\tcase 1: controlsHolder.y = 1;\n\t\t\tcase _: controlsHolder.y = 0;\n\t\t}')
+		);
+		Assert.isTrue(out.indexOf('controlsHolder.y = switch v {') != -1);
+	}
+
+	/** A plain-ident switch whose declaration is NOT adjacent (a statement between) is an l-value-arm match — the decl-pairing needs adjacency, the l-value arm does not. */
+	public function testLvalueNonAdjacentIdentFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\ttrace(\'mid\');\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('x = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
 	}
 
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
