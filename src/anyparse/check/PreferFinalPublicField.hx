@@ -31,7 +31,7 @@ import anyparse.runtime.Span;
  *    to the SUBTYPE, not this type — so an inherited write could be misattributed;
  *    the gate rules that out. The same gate also bails when a SUPERtype declares
  *    the same field (`SymbolIndex.supertypeDeclaresMember`): its property access is
- *    then fixed by that interface / superclass var, which final would violate.
+ *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
  *    (`FieldWriteIndex.hasUnresolvedWriteTargeting`): a write to the field NAME
  *    whose receiver could not be attributed to a type could be a hidden write to
@@ -106,6 +106,11 @@ final class PreferFinalPublicField implements Check {
 		if (name == null || span == null) return;
 		if (!RefactorSupport.isInitializedNonPropertyField(source, field)) return;
 		if (index.hasSubtype(owner) || index.supertypeDeclaresMember(owner, name)) return;
+		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
+		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an
+		// implemented interface that cannot be resolved may still declare a mutable
+		// `name`, so `var → final` is unsafe and skipped conservatively.
+		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (writeIndex.writtenAnywhere(owner, name)) return;
 		out.push({

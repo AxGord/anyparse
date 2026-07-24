@@ -8,6 +8,7 @@ import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
 import anyparse.check.FixVerifier.FixVerifyResult;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.Cli;
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -85,6 +86,26 @@ final class AvoidDynamicRiskyFixE2ETest extends Test {
 		Assert.equals(1, result.reverted.length, 'it is reverted to a report-only fallback');
 		final onDisk: String = File.getContent(path);
 		Assert.isTrue(onDisk.indexOf('var x:Dynamic = a;') != -1, 'disk is restored to the original Dynamic local');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	public function testRiskyFixReportOnlyWithoutOracleViaCli(): Void {
+		#if (sys || nodejs)
+		// A RiskyFix check with NO safe subset (avoid-dynamic) driven through `lint --fix` WITHOUT a
+		// compilerOracle must be left report-only — its unverified narrowing is never applied. Regression
+		// guard for the oracle-gated risky/safe partition: only an OracleRelaxable RiskyFix (prefer-inline)
+		// falls back to the safe loop without an oracle; a plain RiskyFix stays out of it. No oracle key,
+		// so no haxe is spawned.
+		final dir: String = CliFixture.writeDir('addynnooracle', [{ name: 'Good.hx', source: APPLIES }]);
+		Cli.run(['lint', '--fix', '--rule', 'avoid-dynamic', '$dir/Good.hx']);
+		final onDisk: String = File.getContent('$dir/Good.hx');
+		Assert.isTrue(
+			onDisk.indexOf('var x:Dynamic = a;') != -1,
+			'without an oracle the risky narrowing is report-only — the Dynamic local is untouched'
+		);
 		CliFixture.removeDir(dir);
 		#else
 		Assert.pass('non-sys target');

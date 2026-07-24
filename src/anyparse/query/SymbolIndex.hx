@@ -118,6 +118,15 @@ typedef TypeDeclInfo = {
 	 */
 	var supertypesRaw: Array<String>;
 
+	/**
+	 * Simple names (last `.` segment) of the type's `implements` targets ONLY — the
+	 * interfaces it declares itself to satisfy, a subset of `supertypes` excluding the
+	 * `extends` superclass / super-interfaces. Drives the interface-mutability gate: a
+	 * field whose name an implemented interface declares as a member is pinned to that
+	 * interface's property access and cannot become `final`.
+	 */
+	var interfaces: Array<String>;
+
 	/** True when this is a `typedef X = {…}` anonymous struct — its fields can never be properties, so field access on it is side-effect-free. */
 	var isAnonStruct: Bool;
 
@@ -507,6 +516,28 @@ final class SymbolIndex {
 	 */
 	public function typeProvablyLacksMember(typeName: String, member: String): Bool {
 		return lacksMemberClosure(typeName, member, []);
+	}
+
+	/**
+	 * Whether `typeName` IMPLEMENTS an interface that declares a member named `field` —
+	 * or implements an interface that cannot be resolved in the current scope. Such a
+	 * field is pinned to the interface's declared property access, so a `var → final`
+	 * rewrite would break the access parity Haxe requires ("Field `field` has different
+	 * property access than in <Interface>"). An unresolvable interface is blocked
+	 * CONSERVATIVELY: out of scope, it MAY declare `field` as a mutable member, so the
+	 * safe direction is to skip the rewrite. Interfaces are enumerated from the type's
+	 * `implements` clause only (`TypeDeclInfo.interfaces`), and each is tested with
+	 * `typeProvablyLacksMember`, whose false result already unions "declares the member
+	 * (transitively)" with "unresolvable". Superclass `extends` supertypes are NOT
+	 * consulted — a subclass cannot redeclare an inherited field, so only implemented
+	 * interfaces can pin a field's access here.
+	 */
+	public function implementsInterfaceDeclaringMember(typeName: String, field: String): Bool {
+		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (iface in t.interfaces) if (!typeProvablyLacksMember(
+			iface, field
+		))
+			return true;
+		return false;
 	}
 
 	/**
@@ -944,6 +975,7 @@ final class SymbolIndex {
 					typeParamArity: declTypeParamArity(source, typeDecl),
 					supertypes: supersRaw.map(simpleName),
 					supertypesRaw: supersRaw,
+					interfaces: collectImplementsRaw(node).map(simpleName),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
@@ -1365,6 +1397,24 @@ final class SymbolIndex {
 			case 'UsingDecl': 'using|$raw';
 			case _: null;
 		};
+	}
+
+
+	/**
+	 * The RAW written names of a decl's `implements` targets only (its `ImplementsClause`
+	 * children), excluding the `extends` `ExtendsClause`. Parallel to `collectSupertypesRaw`
+	 * but interface-scoped, so a class's implemented interfaces can be enumerated apart from
+	 * its superclass.
+	 */
+	private static function collectImplementsRaw(node: QueryNode): Array<String> {
+		final out: Array<String> = [];
+		collectInto(node, n -> {
+			if (n.kind == 'ImplementsClause') for (c in n.children) {
+				final nm: Null<String> = c.name;
+				if (nm != null) out.push(nm);
+			}
+		});
+		return out;
 	}
 
 }

@@ -66,6 +66,7 @@ import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.CompilerDisplayOracle;
+import anyparse.check.Check.OracleRelaxable;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1346,12 +1347,20 @@ final class Cli {
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
 		applyEnablement: Bool, ?resolution: () -> Array<{ file: String, source: String }>, ?oracleHxml: String, ?oracleDir: String
 	): Int {
-		// A RiskyFix check's edits are verified against the compiler oracle (below);
-		// every other check is trusted and runs the normal fixed-point loop. No
-		// builtin implements RiskyFix, so a real run partitions to safeChecks ==
-		// checks and the oracle path is inert — byte-identical to before this key.
-		final riskyChecks: Array<Check> = [for (c in checks) if (c is RiskyFix) c];
-		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix)) c];
+		// A RiskyFix check is verified against the compiler oracle (below) and is EXCLUDED
+		// from the unverified safe loop. prefer-inline is the exception: as an
+		// `OracleRelaxable` check it has a byte-identical safe subset, so WITHOUT an oracle
+		// it runs in the safe loop (null-safety gate on) instead of being left report-only,
+		// and WITH an oracle it joins the verified risky set with its candidate set widened
+		// (`setOracleRelaxed`). Every OTHER RiskyFix check (avoid-dynamic) keeps the contract:
+		// verified when an oracle is configured, report-only via `verifyRiskyFixes` otherwise —
+		// its risky fix is NEVER applied unverified. So a RiskyFix check only leaves the risky
+		// set for the safe loop when it is OracleRelaxable AND no oracle is configured.
+		final oracleConfigured: Bool = oracleHxml != null;
+		final relaxableNoOracle: (Check) -> Bool = c -> !oracleConfigured && c is OracleRelaxable;
+		final riskyChecks: Array<Check> = [for (c in checks) if (c is RiskyFix && !relaxableNoOracle(c)) c];
+		final safeChecks: Array<Check> = [for (c in checks) if (!(c is RiskyFix) || relaxableNoOracle(c)) c];
+		for (c in riskyChecks) if (c is OracleRelaxable) (cast c: OracleRelaxable).setOracleRelaxed(true);
 		final maxPasses: Int = 10;
 		// Parse each file once and reuse the tree across the SymbolIndex build, every
 		// check, and every fix — keyed by source content, so an unchanged file is

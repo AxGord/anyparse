@@ -8,6 +8,9 @@ import anyparse.runtime.Span;
 
 using Lambda;
 
+import anyparse.check.Check.RiskyFix;
+import anyparse.check.Check.OracleRelaxable;
+
 /**
  * Flags a SIMPLE method — one whose body is a single expression — that can be marked
  * `inline`, per the user's rule: use `inline` on single-expression methods (trivial
@@ -49,9 +52,23 @@ using Lambda;
  * methods are skipped (nothing to do). The gates mirror `trivial-getter`'s soundness model.
  */
 @:nullSafety(Strict)
-final class PreferInline implements Check {
+final class PreferInline implements Check implements RiskyFix implements OracleRelaxable {
+
+	private var _oracleRelaxed: Bool = false;
 
 	public function new() {}
+
+	/**
+	 * Enable RELAXED candidate selection: drop the structural null-safety gate
+	 * (`bodyHasNullSafetyRisk`) so an object-literal / null-value / block-lambda
+	 * single-expression method also becomes a candidate. Set by `Cli.applyLintFixes`
+	 * ONLY when this check runs as a verified `RiskyFix` (a compiler oracle is
+	 * configured), so the extra candidates are always applied through the
+	 * typecheck-and-revert pipeline, never unverified.
+	 */
+	public function setOracleRelaxed(relaxed: Bool): Void {
+		_oracleRelaxed = relaxed;
+	}
 
 	public function id(): String {
 		return 'prefer-inline';
@@ -74,7 +91,7 @@ final class PreferInline implements Check {
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
 		for (t in trees) for (cls in classes(t.tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
-			if (isCandidateMethod(name, fn, mods, metas) && !candidateNames.contains(name)) candidateNames.push(name);
+			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed) && !candidateNames.contains(name)) candidateNames.push(name);
 		});
 		// Pass B: the reference-kind gate over the whole scope — a candidate name used as a VALUE
 		// (a method-value reference forbids inlining) or passed to `Reflect.*` as a string literal.
@@ -86,7 +103,7 @@ final class PreferInline implements Check {
 		}
 		// Pass C: emit a finding for each candidate the cross-file gates leave standing.
 		final out: Array<Violation> = [];
-		for (t in trees) for (cls in classes(t.tree)) considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked);
+		for (t in trees) for (cls in classes(t.tree)) considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed);
 		return out;
 	}
 
@@ -134,14 +151,15 @@ final class PreferInline implements Check {
 	 * macro / @:keep / already-inline / self-recursive method.
 	 */
 	private static function considerClass(
-		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>, reflectBlocked: Array<String>
+		out: Array<Violation>, cls: QueryNode, file: String, index: SymbolIndex, valueBlocked: Array<String>,
+		reflectBlocked: Array<String>, relaxed: Bool
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
 		final subtypeMembers: Array<String> = index.hasSubtype(className) ? subtypeMemberNames(index, className) : [];
 		final ifaces: Array<String> = implementedInterfaces(cls);
 		forEachMethod(cls, (name, fn, mods, metas) -> {
-			if (!isCandidateMethod(name, fn, mods, metas)) return;
+			if (!isCandidateMethod(name, fn, mods, metas, relaxed)) return;
 			if (valueBlocked.contains(name) || reflectBlocked.contains(name) || subtypeMembers.contains(name)) return;
 			if (interfaceRequires(index, ifaces, name)) return;
 			final span: Null<Span> = fn.span;
@@ -187,11 +205,18 @@ final class PreferInline implements Check {
 	 * body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, and not
 	 * self-recursive (a bare `name` / `this.name` in its body).
 	 */
-	private static function isCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
+	private static function isCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool): Bool {
+		return isBaseCandidateMethod(name, fn, mods, metas) && (relaxed || !bodyHasNullSafetyRisk(fn));
+	}
+
+	/**
+	 * The candidate gates EXCEPT the context-sensitive null-safety one: a non-constructor method with a single-expression body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, and not self-recursive. `isCandidateMethod` layers the null-safety gate on top, unless `relaxed` (the oracle path) drops it so an object-literal / null-value / block-lambda body also qualifies.
+	 */
+	private static function isBaseCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
 		if (name == 'new') return false;
 		if (mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')) return false;
 		if (metas.contains('@:keep')) return false;
-		return isSingleExpressionBody(fn) && !referencesSelf(fn, name) && !bodyHasNullSafetyRisk(fn);
+		return isSingleExpressionBody(fn) && !referencesSelf(fn, name);
 	}
 
 	/** Whether `fn`'s body is a single expression — an `ExprBody`, or a `BlockBody` with one `return` / expression statement. */
@@ -300,7 +325,6 @@ final class PreferInline implements Check {
 			if (!out.contains(m.name)) out.push(m.name);
 		return out;
 	}
-
 
 	/**
 	 * Whether `fn`'s body contains a construct whose null-safety validity is CONTEXT-SENSITIVE, so

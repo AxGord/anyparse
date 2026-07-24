@@ -39,7 +39,7 @@ import haxe.Exception;
  *    a comment / string, reads as a write) which only ever KEEPS a `var`, never
  *    produces a wrong `final`.
  *
- * Together these prove the assignment is the sole one, so `var → final` is always sound.
+ * Together these prove the assignment is the sole one, so `var → final` is always sound. An interface-mutability gate additionally skips a field an implemented interface declares — or that ANY unresolvable implemented interface might declare — since the interface pins its property access and finalizing would break parity.
  *
  * ## Whole-project scope required
  *
@@ -124,6 +124,11 @@ final class PreferFinalField implements Check {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
+		// Interface-mutability gate: a field an implemented interface declares (or ANY
+		// unresolvable implemented interface) is pinned to that interface's property
+		// access — `var → final` would break parity ("different property access than in
+		// <Interface>"). Applies to both the init and no-init cases below.
+		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (RefactorSupport.isInitializedNonPropertyField(source, field)) {
 			if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
 			if (writtenInFile(source, name, span)) return;

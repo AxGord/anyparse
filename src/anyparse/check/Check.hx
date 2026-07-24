@@ -103,6 +103,23 @@ interface ConfigAware {
 interface RiskyFix {}
 
 /**
+ * Opt-in capability of a `RiskyFix` `Check` whose autofix has a RELAXED candidate set the
+ * compiler oracle unlocks. `Cli.applyLintFixes` calls `setOracleRelaxed(true)` exactly when it
+ * moves the check into the verified `RiskyFix` path (an oracle is configured), so the check may
+ * drop a structural gate it keeps for the no-oracle safe path and emit the extra candidates —
+ * always applied through the typecheck-and-revert pipeline, never unverified. Without the call
+ * (no oracle, or a non-relaxable risky check) the gate stays on. The first consumer is
+ * `prefer-inline`, which drops its null-safety gate to reach object-literal / block-lambda bodies.
+ */
+@:nullSafety(Strict)
+interface OracleRelaxable {
+
+	/** Toggle the oracle-relaxed candidate set (see the type doc). */
+	public function setOracleRelaxed(relaxed: Bool): Void;
+
+}
+
+/**
  * Opt-in marker for a `Check` that is OFF by default — dropped from the default
  * check set and from a bare `lint … --all` report unless a project explicitly
  * opts in via `apqlint.json` (`"rules": { "<id>": { "enabled": true } }`), or an

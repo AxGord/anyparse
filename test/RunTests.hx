@@ -479,6 +479,7 @@ import unit.ExtractRepeatedExpressionTest;
 import unit.JoinReturnCheckTest;
 import unit.ExplicitLocalTypeOracleTest;
 import unit.ExplicitLocalTypeOracleE2ETest;
+import unit.PreferInlineOracleTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -862,6 +863,7 @@ class RunTests {
 		addCase(new TrivialGetterCheckTest());
 		addCase(new TrivialGetterStaticShadowTest());
 		addCase(new PreferInlineCheckTest());
+		addCase(new PreferInlineOracleTest());
 		addCase(new NullableSwitchMissingNullCheckTest());
 		addCase(new DuplicateCodeCheckTest());
 		addCase(new DuplicateCodeCrossFileCheckTest());
