@@ -47,7 +47,8 @@ final class IfExpressionChain {
 	 * with no final `else` yields no if-expression value on the missing path and is
 	 * rejected. Rule-agnostic: the branch statements are returned raw, not inspected.
 	 */
-	public static function collect(head: QueryNode, ifKinds: Array<String>, blockStmtKind: String): Null<IfChain> {
+	public static function collect(head: QueryNode, ifKinds: Array<String>, blockStmtKind: String, ?minBranches: Int): Null<IfChain> {
+		final min: Int = minBranches ?? MIN_CHAIN_BRANCHES;
 		final branches: Array<{ cond: QueryNode, stmt: QueryNode }> = [];
 		var current: QueryNode = head;
 		while (true) {
@@ -61,7 +62,7 @@ final class IfExpressionChain {
 			} else {
 				final terminal: Null<QueryNode> = singleStmt(elseBranch, blockStmtKind);
 				if (terminal == null) return null;
-				return branches.length >= MIN_CHAIN_BRANCHES ? { branches: branches, terminal: terminal } : null;
+				return branches.length >= min ? { branches: branches, terminal: terminal } : null;
 			}
 		}
 	}
@@ -105,13 +106,22 @@ final class IfExpressionChain {
 	 * `if (…)` syntax already delimits each condition.
 	 */
 	public static function buildText(prefix: String, pairs: Array<{ cond: String, value: String }>, terminalValue: String): String {
+		return '$prefix${buildValue(pairs, terminalValue)};';
+	}
+
+	/**
+	 * Assemble `if (c1) v1 else if (c2) v2 … else vTerminal` (no prefix, no trailing `;`) — the
+	 * if-EXPRESSION VALUE form used both as a statement's r-value (via `buildText`, which wraps it
+	 * with a prefix and a terminating `;`) and, recursively, as the branch / arm value of an
+	 * enclosing assignment-tree hoist.
+	 */
+	public static function buildValue(pairs: Array<{ cond: String, value: String }>, terminalValue: String): String {
 		final buf: StringBuf = new StringBuf();
-		buf.add(prefix);
 		for (i in 0...pairs.length) {
 			if (i > 0) buf.add(' else ');
 			buf.add('if (${pairs[i].cond}) ${pairs[i].value}');
 		}
-		buf.add(' else $terminalValue;');
+		buf.add(' else $terminalValue');
 		return buf.toString();
 	}
 

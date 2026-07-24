@@ -130,6 +130,45 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-if-expression-assignment'));
 	}
 
+	/**
+	 * The driving recursive case: a 2-branch `if`/`else` whose else-branch is a `switch` assigning the
+	 * same l-value hoists to `x = if (c) v else switch subj { … };` — the if-expression form with the
+	 * switch-expression as its else value. A flat 2-branch is the ternary rule's, but a nested-construct
+	 * branch is not a plain assignment, so this rule claims it.
+	 */
+	public function testSwitchInElseFlagged(): Void {
+		final src: String = wrap(
+			'if (a) x = f();\n\t\telse switch line {\n\t\t\tcase \'3.1\': x = \'a\';\n\t\t\tcase _: x = \'b\';\n\t\t}'
+		);
+		Assert.equals(1, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) f() else switch line { case \'3.1\': \'a\'; case _: \'b\'; };', es[0].text);
+	}
+
+	/** End-to-end through the canonical writer: the emitted file holds the hoisted if-expression whose else value is a switch-expression. */
+	public function testSwitchInElseEndToEnd(): Void {
+		final out: String = applyFixOnce(
+			wrap('if (a) x = f();\n\t\telse switch line {\n\t\t\tcase \'3.1\': x = \'a\';\n\t\t\tcase _: x = \'b\';\n\t\t}')
+		);
+		Assert.isTrue(out.indexOf('x = if (a) f() else switch line {') != -1);
+	}
+
+	/** A chain with a nested construct but NO terminal `else` still yields no value on the missing path — skipped. */
+	public function testNestedChainNoTerminalElseNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\telse if (b) switch v {\n\t\t\tcase _: x = 2;\n\t\t}')).length);
+	}
+
+	/** A tree whose branches assign DIFFERENT l-values (head `x`, switch `y`) does not collapse. */
+	public function testMixedLvalueTreeNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\telse switch v {\n\t\t\tcase 1: y = 2;\n\t\t\tcase _: y = 3;\n\t\t}')).length);
+	}
+
+	/** A `#if` splice cutting through the construct (the `else` lands in a `Conditional`) leaves the `if` without an else — skipped. */
+	public function testConditionalSplitNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\t#if foo\n\t\telse switch v {\n\t\t\tcase _: x = 2;\n\t\t}\n\t\t#end')).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
