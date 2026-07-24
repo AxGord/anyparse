@@ -310,6 +310,22 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether `name` occurs as a word-boundary identifier token in ANY indexed
+	 * source, ignoring offsets inside `excludedSpan` of `excludedFile` (a member's
+	 * own declaration). A raw-text scan (sees inside `#if` regions, comments and
+	 * strings), so a `false` result proves `name` unreferenced in every branch of
+	 * every indexed file — the cross-file zero-occurrence proof `unused-private`'s
+	 * `--fix` uses to lift its whole-file conditional-compilation veto.
+	 */
+	public function nameOccursOutside(name: String, excludedFile: String, excludedSpan: Span): Bool {
+		for (file => src in _sources) {
+			final excluded: Array<Span> = file == excludedFile ? [excludedSpan] : [];
+			if (RefactorSupport.referencedInRange(src, name, 0, src.length, excluded)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * True iff every indexed type with simple name `name` is an anonymous-struct
 	 * typedef (and at least one exists) — so a value of that type has only plain
 	 * fields and `value.field` access is provably side-effect-free. Conservative

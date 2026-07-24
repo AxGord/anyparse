@@ -8,6 +8,7 @@ import anyparse.query.NamingPolicy.NamingSupport;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
@@ -52,19 +53,24 @@ import anyparse.query.StringFold.StringLiteral;
  *
  * Deletion is CONSERVATIVE: the report stays broad (a member is flagged as soon as
  * it is unreferenced and confined), but `fix` removes one only when every doubt is
- * ruled out, so it never breaks another platform's build. A file carrying ANY
- * conditional compilation (`#if` / `#elseif` / `#else`) is off-limits wholesale
- * (`fileHasConditional`): the reference scan is branch-blind. Otherwise a member is
- * deleted only when its initializer is side-effect-free (a method always qualifies,
+ * ruled out, so it never breaks another platform's build. A member is deleted only
+ * when its initializer is side-effect-free (a method always qualifies,
  * `RefactorSupport.isSideEffectFree`), it is not an abstract-method impl of an
  * `extends` class (`mayImplementAbstractMethod`: Haxe impls carry no `override` and
  * the base's call is invisible to a single-file scan), its enclosing type carries no
  * `@:rtti` (drill-Node serialization by field name), `@:keep`, or `@:build`, and its
- * name appears in no string literal in scope (a possible `Reflect.field` target). A
- * separate arm deletes a `private function new() {}` that `run` proved never
- * instantiated (the static-utility idiom), under the same no-`#if` / no-`@:build`
- * gates. The member is removed with its modifier / meta group and whole line,
- * batched per file by the caller.
+ * name appears in no string literal in scope (a possible `Reflect.field` target).
+ *
+ * Conditional compilation (`#if` / `#elseif` / `#else`) refines the reference scan
+ * rather than vetoing the file wholesale: a member in a `#if`-carrying file is deleted
+ * only when a raw word-boundary scan over EVERY file in report UNION resolution scope
+ * finds ZERO occurrences of its name outside its own declaration (`referencedElsewhere`)
+ * — raw text sees inside `#if` regions and comments, so zero hits proves it unreferenced
+ * in every branch; any occurrence keeps the whole-file veto in force. A separate arm
+ * deletes a `private function new() {}` that `run` proved never instantiated (the
+ * static-utility idiom), keeping the coarse whole-file `#if` veto (no-`#if` / no-`@:build`
+ * gates). The member is removed with its modifier / meta group and whole line, batched
+ * per file by the caller.
  */
 @:nullSafety(Strict)
 final class UnusedPrivate implements Check {
@@ -131,17 +137,23 @@ final class UnusedPrivate implements Check {
 	/**
 	 * Delete the auto-fixable subset of `violations` under conservative gates: a
 	 * doubtful case stays report-only, so `--fix` never breaks another platform's
-	 * build. A file carrying ANY conditional compilation is off-limits wholesale
-	 * (`fileHasConditional` - the reference scan is branch-blind). A flagged MEMBER is
-	 * removed only when its initializer is side-effect-free (a method always
-	 * qualifies), it is not an abstract-method impl of an `extends` class
-	 * (`mayImplementAbstractMethod`), its enclosing type carries no `@:rtti` (drill-Node
-	 * field-name serialization, via the index), `@:keep`, or `@:build`, and its name
-	 * appears in no string literal in scope (a possible `Reflect.field` target). The
-	 * private empty constructor `run` flagged (a never-instantiated utility class) is
-	 * deleted here under the same no-`#if` / no-`@:build` gates. Each removal folds in
-	 * the member's modifier / meta group and whole line; the caller batches them into
-	 * one canonicalize per file.
+	 * build. A flagged MEMBER is removed only when its initializer is side-effect-free
+	 * (a method always qualifies), it is not an abstract-method impl of an `extends`
+	 * class (`mayImplementAbstractMethod`), its enclosing type carries no `@:rtti`
+	 * (drill-Node field-name serialization, via the index), `@:keep`, or `@:build`, and
+	 * its name appears in no string literal in scope (a possible `Reflect.field` target).
+	 *
+	 * Conditional compilation refines rather than vetoes wholesale: a file carrying ANY
+	 * `#if` makes the single-file reference scan branch-blind, so a MEMBER in such a file
+	 * is deleted only when the raw word-boundary scan over EVERY file in report UNION
+	 * resolution scope finds ZERO occurrences of its name outside its own declaration
+	 * (`referencedElsewhere` over `widestScopeIndex`) — raw text sees inside `#if` regions
+	 * and comments, so zero hits proves it unreferenced in every branch. When an occurrence
+	 * exists (code under a `#if` arm, or a comment mention) the whole-file veto stands and
+	 * the member is kept. The private empty constructor arm keeps the coarse whole-file
+	 * `#if` veto (deleted only under no-`#if` / no-`@:build`). Each removal folds in the
+	 * member's modifier / meta group and whole line; the caller batches them into one
+	 * canonicalize per file.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -149,7 +161,8 @@ final class UnusedPrivate implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return edits;
-		if (fileHasConditional(source)) return edits;
+		final hasConditional: Bool = fileHasConditional(source);
+		final scopeIndex: Null<SymbolIndex> = widestScopeIndex(plugin, index);
 
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
 		collectMembers(tree, false, memberByFrom);
@@ -165,14 +178,49 @@ final class UnusedPrivate implements Check {
 			final node: QueryNode = hit.node;
 			final owner: Null<String> = hit.parent.name;
 			if (isPrivateEmptyCtor(node)) {
+				if (hasConditional) continue;
 				final ctorMeta: Null<{ hasBuild: Bool, hasKeep: Bool }> = owner == null ? null : classMeta[owner];
 				if (ctorMeta == null || !ctorMeta.hasBuild) edits.push(deletionEdit(source, node, hit.parent, span));
 				continue;
 			}
+			if (hasConditional && referencedElsewhere(node.name, v.file, span, scopeIndex, source)) continue;
 			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected))
 				edits.push(deletionEdit(source, node, hit.parent, span));
 		}
 		return edits;
+	}
+
+	/**
+	 * The widest source scope available for the zero-occurrence proof: the host's
+	 * resolution-scoped index (report UNION configured library roots) when `plugin` is a
+	 * `SymbolIndexHost` carrying one, else the report-scoped `index` the caller passed,
+	 * else null (a direct `fix` call with no index — the caller falls back to the single
+	 * file it was handed). Mirrors `RefactorSupport.lazySymbolIndex`'s host preference.
+	 */
+	private static function widestScopeIndex(plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		if (host != null && host.hasResolutionScope()) {
+			final res: Null<SymbolIndex> = host.resolutionIndex();
+			if (res != null) return res;
+		}
+		return index;
+	}
+
+	/**
+	 * Whether `name` is referenced anywhere in scope outside its own declaration `span` —
+	 * the gate that decides if a `#if`-carrying file's whole-file veto can be lifted. Scans
+	 * every file in `scopeIndex` (report UNION resolution) when present, excluding the
+	 * member's own declaration in its own `file`; falls back to the single `source` the
+	 * caller was handed when no index is available (a direct `fix` call). A null `name` has
+	 * nothing to prove absent, so the veto stands (`true`). Conservative: any occurrence —
+	 * code under a `#if` arm, a comment or string mention — keeps the member.
+	 */
+	private static function referencedElsewhere(
+		name: Null<String>, file: String, span: Span, scopeIndex: Null<SymbolIndex>, source: String
+	): Bool {
+		if (name == null) return true;
+		if (scopeIndex != null) return scopeIndex.nameOccursOutside(name, file, span);
+		return RefactorSupport.referencedInRange(source, name, 0, source.length, [span]);
 	}
 
 	/**
@@ -334,10 +382,11 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Raw-text presence of ANY conditional-compilation directive. A file carrying one
-	 * is off-limits to `--fix`: the reference scan is branch-blind, so a member used
-	 * only under a `#if` arm (and members declared inside one) read as unused. The
-	 * whole-file veto is what makes the reference verdict safe to act on.
+	 * Raw-text presence of ANY conditional-compilation directive. In a file carrying one
+	 * the single-file reference scan is branch-blind, so a member used only under a `#if`
+	 * arm (and members declared inside one) would read as unused. A flagged MEMBER survives
+	 * this only via the report-UNION-resolution zero-occurrence proof (`referencedElsewhere`);
+	 * the empty-constructor arm keeps the coarse whole-file veto.
 	 */
 	private static inline function fileHasConditional(source: String): Bool {
 		return source.indexOf('#if') >= 0 || source.indexOf('#else') >= 0 || source.indexOf('#elseif') >= 0;

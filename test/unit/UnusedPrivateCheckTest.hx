@@ -255,16 +255,83 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	/**
-	 * Gate 1 (#if-in-file skip): a dead private member is still reported, but a file
-	 * carrying ANY conditional-compilation directive makes `--fix` delete NOTHING — the
-	 * reference scan is branch-blind, so a caller behind a `#if` arm is invisible.
+	 * Refined #if gate (member arm): a dead private FIELD in a `#if`-carrying file whose
+	 * name occurs NOWHERE in scope outside its declaration is deleted — the raw
+	 * report-UNION-resolution scan sees inside every `#if` branch, so zero hits proves it
+	 * unreferenced and lifts the whole-file veto (the four provably-dead PlayerBase fields).
 	 */
-	public function testFixSkipsDeletionWhenFileHasConditional(): Void {
-		final src: String = 'class C {\n\tprivate function dead() {}\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
+	public function testFixDeletesDeadMemberInConditionalFileWhenUnreferenced(): Void {
+		final src: String = 'class C {\n\tprivate var _x:Int = 5;\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
-		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * Refined #if gate (member arm, member INSIDE the region): a dead private member
+	 * declared inside a `#if … #end` region with zero scope occurrences is deleted — the
+	 * raw scan proves it unreferenced in every branch, so removing it is safe in every
+	 * configuration (a PlayerBase field may itself sit inside a platform `#if`).
+	 */
+	public function testFixDeletesDeadMemberDeclaredInsideConditional(): Void {
+		final src: String = 'class C {\n\tpublic function keep() {}\n\t#if debug\n\tprivate var _dead:Int = 5;\n\t#end\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(1, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * Refined #if gate (member arm, cross-file): a dead private member flagged in a
+	 * `#if`-carrying file whose name appears inside another scope file's `#if` region is
+	 * KEPT — an occurrence in any branch of any indexed file keeps the whole-file veto.
+	 */
+	public function testFixKeepsConditionalFileMemberReferencedElsewhere(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\t#if debug\n\tpublic function bar() { foo(); }\n\t#end\n}' }
+		];
+		final check: UnusedPrivate = new UnusedPrivate();
+		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cViol.length);
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * Refined #if gate (member arm, comment mention): a dead private member flagged in a
+	 * `#if`-carrying file whose name appears only in a COMMENT in another scope file is
+	 * KEPT — the raw scan counts comment mentions, so the veto stands. Deletion through a
+	 * comment mention is a deliberate non-goal (possible future refinement).
+	 */
+	public function testFixKeepsConditionalFileMemberMentionedInComment(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\t// once called foo here\n\tpublic function bar() {}\n}' }
+		];
+		final check: UnusedPrivate = new UnusedPrivate();
+		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cViol.length);
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * Refined #if gate does NOT bypass the @:rtti gate: an `@:rtti` class member in a
+	 * `#if`-carrying file with zero scope occurrences lifts the whole-file veto but is
+	 * still kept — field-name serialization reaches it reflectively (`transitivelyCarriesRtti`).
+	 */
+	public function testFixKeepsRttiMemberInConditionalFile(): Void {
+		final src: String = '@:rtti class C {\n\tprivate var _x:Int;\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
 	}
 
 	/**
@@ -299,11 +366,13 @@ class UnusedPrivateCheckTest extends Test {
 	}
 
 	/**
-	 * Empty-ctor arm: the file-has-`#if` gate applies to the constructor arm too — a
-	 * utility class in a conditionally-compiled file yields no deletion.
+	 * Empty-ctor arm: the whole-file `#if` veto still applies to the constructor arm
+	 * (unlike the member arm's zero-occurrence refinement) — a utility class in a
+	 * conditionally-compiled file yields no constructor deletion. The `#if` region carries
+	 * a referenced member so the only candidate edit is the constructor itself.
 	 */
 	public function testEmptyCtorKeptWhenFileHasConditional(): Void {
-		final src: String = 'class U {\n\tpublic static function draw() {}\n\tprivate function new() {}\n\t#if debug\n\tstatic var d = 1;\n\t#end\n}';
+		final src: String = 'class U {\n\tpublic static function draw() { dbg(); }\n\tprivate function new() {}\n\t#if debug\n\tstatic function dbg() { trace(1); }\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
