@@ -277,7 +277,10 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `inline` — passed as a `NamingRule.normalize` function value.
 	 */
 	private static function underscoreCamel(name: String): Null<String> {
-		return name.length == 0 ? null : '_${name.charAt(0).toLowerCase()}${name.substr(1)}';
+		var start: Int = 0;
+		while (start < name.length && StringTools.fastCodeAt(name, start) == '_'.code) start++;
+		final core: String = name.substr(start);
+		return core.length == 0 ? null : '_${core.charAt(0).toLowerCase()}${core.substr(1)}';
 	}
 
 	/**
