@@ -475,6 +475,7 @@ import unit.LintUnusedImportResolutionScopeTest;
 import unit.HxSwitchSubjectParensStripSliceTest;
 import unit.PreferInlineCheckTest;
 import unit.InlineConstantCheckTest;
+import unit.ExtractRepeatedExpressionTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -880,6 +881,7 @@ class RunTests {
 		addCase(new UncheckedNullableTest());
 		addCase(new PossibleNullDereferenceTest());
 		addCase(new UnusedReturnValueTest());
+		addCase(new ExtractRepeatedExpressionTest());
 		addCase(new CompilerOracleE2ETest());
 		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());

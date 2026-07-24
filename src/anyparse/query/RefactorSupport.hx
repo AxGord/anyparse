@@ -1761,7 +1761,7 @@ final class RefactorSupport {
 	 * `SAFE_KINDS` member, or any leaf whose kind ends with `Lit` / `StringExpr`
 	 * (a literal payload not separately enumerated).
 	 */
-	private static inline function isSafeKind(kind: String): Bool {
+	public static inline function isSafeKind(kind: String): Bool {
 		return SAFE_KINDS.contains(kind) || StringTools.endsWith(kind, 'Lit') || StringTools.endsWith(kind, 'StringExpr');
 	}
 
