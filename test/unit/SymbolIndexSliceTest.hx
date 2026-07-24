@@ -566,4 +566,26 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(SymbolIndex.build(safe, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
 	}
 
+
+	public function testSubtypeReferencesField(): Void {
+		final files = [
+			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {\n\tprivate var _x:Int = 0;\n}' },
+			{ file: 'pkg/Reader.hx', source: 'package pkg;\nclass Reader extends Base {\n\tpublic function get():Int return _x;\n}' },
+			{ file: 'pkg/Clean.hx', source: 'package pkg;\nclass Clean {\n\tprivate var _y:Int = 0;\n}' },
+			{ file: 'pkg/CleanSub.hx', source: 'package pkg;\nclass CleanSub extends Clean {\n\tpublic function ping():Void {}\n}' },
+			{ file: 'pkg/Owner2.hx', source: 'package pkg;\nclass Owner2 {\n\tprivate var _x:Int = 0;\n}' },
+			{
+				file: 'pkg/Peer.hx',
+				source: 'package pkg;\nclass Peer {\n\tprivate var _x:Int = 5;\n\tpublic function get():Int return _x;\n}'
+			}
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		// Reader, a subtype of Base, reads Base._x directly -> deleting _x would break it.
+		Assert.isTrue(index.subtypeReferencesField('Base', '_x'));
+		// CleanSub, a subtype of Clean, never mentions _y -> safe to drop.
+		Assert.isFalse(index.subtypeReferencesField('Clean', '_y'));
+		// Peer is NOT a subtype of Owner2 and references its OWN _x (which it declares) -> Owner2's _x is safe.
+		Assert.isFalse(index.subtypeReferencesField('Owner2', '_x'));
+	}
+
 }

@@ -684,4 +684,22 @@ class TrivialGetterCheckTest extends Test {
 		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
 	}
 
+
+	public function testSubclassReadingBackingFieldNotFlagged(): Void {
+		// Sub extends Base and reads Base's PRIVATE _active directly (legal — private members are
+		// subclass-accessible in Haxe). Collapsing Base deletes _active, breaking Sub's reference
+		// ('Unknown identifier: _active'), so the property must be skipped even though Sub overrides
+		// no accessor.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Bool return _active;\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+
+	public function testSubclassReadingDifferentFieldCollapses(): Void {
+		// Sub reads a DIFFERENT inherited private field (_other), never _active, so deleting _active
+		// is safe — the field-reference gate is field-specific and the property collapses.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate var _other:Int = 0;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Int return _other;\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
 }

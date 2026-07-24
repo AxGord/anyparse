@@ -45,7 +45,7 @@ import anyparse.query.SymbolIndexHost;
  * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor
  *    bodies) are skipped wholesale: only `ClassDecl` / `ClassForm` bodies are inspected.
  * 4. No (transitive) subtype overrides the property accessor or redeclares it
- *    (`SymbolIndex.subtypeOverridesProperty`, over report + resolution scope). A subclass merely extending the class no longer blocks; an unresolvable subtype hierarchy is kept conservatively.
+ *    (`SymbolIndex.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SymbolIndex.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an unresolvable subtype hierarchy is kept conservatively.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
  *    may declare it and so require a physical accessor; a COLLAPSING shape is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
@@ -150,9 +150,9 @@ final class TrivialGetter implements Check implements ConfigAware {
 	 * A bare backing-field reference inside a function that binds a parameter / local of the
 	 * PROPERTY name is rewritten as `this.<prop>` (a plain `<prop>` would resolve to that
 	 * binding, not the field — silent data loss). NOTE: a null `index` skips the
-	 * subclass-override and interface-conformance gates — the production `lint --fix` caller
-	 * always passes one; a direct caller without an index must ensure no subtype overrides
-	 * the getter and no implemented interface requires it.
+	 * subclass-override, backing-field-reference and interface-conformance gates — the production `lint --fix` caller
+	 * always passes one; a direct caller without an index must ensure no subtype overrides or reads
+	 * the getter or its backing field and no implemented interface requires it.
 	 *
 	 */
 	public function fix(
@@ -202,6 +202,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
+			if (subtypeFieldBlocks(subtypeIndex, className, c.field, c.inlineGetter)) continue;
 			out.push({
 				file: file,
 				span: prop.span,
@@ -221,6 +222,19 @@ final class TrivialGetter implements Check implements ConfigAware {
 	 */
 	private static inline function subtypeBlocks(index: Null<SymbolIndex>, className: Null<String>, propName: String): Bool {
 		return index != null && className != null && index.subtypeOverridesProperty(className, propName);
+	}
+
+	/**
+	 * Whether a subtype references the backing field `field` the collapse would DELETE
+	 * (`SymbolIndex.subtypeReferencesField`) — a subclass reading `owner`'s private `_x` directly
+	 * breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references
+	 * inside the owner. The inline arm keeps the backing field, so it is exempt; a null index (a
+	 * direct fix caller) cannot resolve the hierarchy and never blocks (the report pass already gated).
+	 */
+	private static inline function subtypeFieldBlocks(
+		index: Null<SymbolIndex>, className: Null<String>, field: String, inlineGetter: Null<QueryNode>
+	): Bool {
+		return inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
 	}
 
 	/**
@@ -321,6 +335,7 @@ final class TrivialGetter implements Check implements ConfigAware {
 			if (subtypeBlocks(index, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
+			if (subtypeFieldBlocks(index, className, c.field, c.inlineGetter)) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, c);
 			if (e != null) for (edit in e) out.push(edit);
 		}
