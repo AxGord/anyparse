@@ -579,6 +579,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'indexOf' => 'Int',
 				'lastIndexOf' => 'Int'
 			],
+			staticMethodReturns: [
+				'Context.resolvePath' => 'String',
+				'Context.currentPos' => 'haxe.macro.Expr.Position',
+				'Date.now' => 'Date',
+				'File.append' => 'sys.io.FileOutput'
+			],
 			nullableIndexTypeNames: ['Map', 'StringMap', 'IntMap', 'ObjectMap', 'EnumValueMap', 'WeakMap'],
 			mapAbstractTypeNames: ['Map'],
 			nullableInstanceReturnCalls: [
