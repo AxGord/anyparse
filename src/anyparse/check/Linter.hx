@@ -128,7 +128,8 @@ final class Linter {
 			new DocCoverage(),
 			new ExplicitLocalType(),
 			new RedundantBypassAccessor(),
-			new FieldInitAtDeclaration()
+			new FieldInitAtDeclaration(),
+			new PreferInline()
 		];
 	}
 
