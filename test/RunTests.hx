@@ -471,6 +471,7 @@ import unit.HxCondUnbalancedRegionSliceTest;
 import unit.HxCondSpliceOwnLineSliceTest;
 import unit.CollapsibleElseIfCheckTest;
 import unit.HaxelibResolverTest;
+import unit.JoinReturnCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -916,6 +917,7 @@ class RunTests {
 		addCase(new PreferIfExpressionReturnCheckTest());
 		addCase(new PreferIfExpressionAssignmentCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
+		addCase(new JoinReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
 		addCase(new CachingGrammarPluginTest());
 		addCase(new RefsCacheTest());
