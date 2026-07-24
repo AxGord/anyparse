@@ -1552,7 +1552,6 @@ class WriterLowering {
 		// (`HxExpr.BlockExpr.stmts`, `HxFnBlock.stmts`). Drives the
 		// `_uniformCollapse` pre-pass + per-element blank suppression.
 		final uniformStmtBlanks: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
-		parts.push(triviaBlockStarExpr(
 		// omega-condswitchopen-cases-nest: `HxCondSpliceSwitchOpen.cases` (the shared
 		// switch case list of a `#if for { switch { #else ... #end` region) sits
 		// TWO block levels below the enclosing statement - the region's outer
@@ -1571,9 +1570,7 @@ class WriterLowering {
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
 			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
-			uniformStmtBlanks
-		));
-			emptyBlockBreak
+			uniformStmtBlanks, emptyBlockBreak
 		);
 		final blockStarNested: Expr = macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -11103,8 +11100,7 @@ class WriterLowering {
 		// `@:fmt(beginEndType('a', 'b'))` names knobs (e.g. `HxEnumDecl.ctors`)
 		// reads those instead, so per-type-kind begin/end scopes never share.
 		beginTypeKnob: String = 'beginType',
-		endTypeKnob: String = 'endType', uniformStmtBlanks: Bool = false
-		endTypeKnob: String = 'endType',
+		endTypeKnob: String = 'endType', uniformStmtBlanks: Bool = false,
 		// omega-condswitchopen-for-close: force an empty body to break its close
 		// onto its own line (the outer-block `}` of a `#if for { switch { #end`
 		// region). See `triviaBlockEmptyDocExpr`.
