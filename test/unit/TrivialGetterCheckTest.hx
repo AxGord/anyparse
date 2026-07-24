@@ -10,6 +10,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.check.LintConfig;
+import anyparse.runtime.Span;
 
 /**
  * The `trivial-getter` check: a read-only property `var x(get, never)` /
@@ -601,6 +602,141 @@ class TrivialGetterCheckTest extends Test {
 		Assert.equals(0, violations(src).length);
 	}
 
+	public function testSubclassedNotOverriddenCollapses(): Void {
+		// Sub extends Base but overrides NEITHER get_active/set_active nor redeclares `active`
+		// (the DarkDropDownListItem shape), so dropping get_active strands no override — collapse.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function ping():Void {}\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
+	public function testSubclassTransitiveOverrideStillSkipped(): Void {
+		// Leaf -> Mid -> Base: a TRANSITIVE subtype overrides get_active, so dropping it would strand
+		// the override — the collapse is still skipped even though the direct subtype Mid is inert.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Mid extends Base {}\nclass Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+	public function testUnresolvableSubtypeHierarchyStillSkipped(): Void {
+		// Leaf OVERRIDES get_active but reaches Base only through Mid, which is NOT in the lint scope
+		// — the hierarchy below Base is unresolvable, so a hidden override cannot be ruled out and the
+		// collapse is kept conservatively.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Leaf.hx', source: 'class Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}' }
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	public function testSubclassReadingBackingFieldCollapsesCrossFile(): Void {
+		// Sub extends Base and reads Base's PRIVATE _active directly (legal — subclass-visible). The
+		// collapse deletes _active; the cross-file fix rewrites Sub's READ `_active` -> `active` so the
+		// property is flagged AND fixed atomically (both slices land in the one source file here).
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Bool return _active;\n}';
+		Assert.equals(1, violations(source).length);
+		final fixed: String = crossFixApply([{ file: 'C.hx', source: source }])['C.hx'] ?? '';
+		Assert.isTrue(fixed.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(fixed.indexOf('get_active') == -1);
+		Assert.isTrue(fixed.indexOf('_active') == -1);
+		Assert.isTrue(fixed.indexOf('return active;') >= 0);
+	}
+
+	public function testSubclassReadingDifferentFieldCollapses(): Void {
+		// Sub reads a DIFFERENT inherited private field (_other), never _active, so deleting _active
+		// is safe — the field-reference gate is field-specific and the property collapses.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate var _other:Int = 0;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Int return _other;\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
+	public function testCrossFileSubtypeReadCollapses(): Void {
+		// Base in one file, a subtype in ANOTHER file reads Base's private _active. The property is
+		// flagged and the cross-file fix collapses Base AND rewrites the subtype's read `_active` -> `active`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
+		];
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		final sub: String = out['Sub.hx'] ?? '';
+		Assert.isTrue(base.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(base.indexOf('get_active') == -1);
+		Assert.isTrue(base.indexOf('_active') == -1);
+		Assert.isTrue(sub.indexOf('return active;') >= 0);
+		Assert.isTrue(sub.indexOf('_active') == -1);
+	}
+
+	public function testCrossFileSubtypeWriteBlocked(): Void {
+		// The subtype WRITES the backing field; after a collapse that write would route through the
+		// (default, null) storage illegally — the whole collapse stays blocked (0 findings).
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function set():Void { _active = true; }\n}' }
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	public function testCrossFileUnresolvableReceiverBlocked(): Void {
+		// The subtype reads the backing field through a NON-this/super receiver (`o._active`); the
+		// receiver's binding is not proven owner-or-subtype, so the occurrence is unattributable and
+		// the collapse stays blocked (fail-closed).
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek(o:Base):Bool return o._active;\n}' }
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	public function testCrossFileMultiSubtypeReadsAtomic(): Void {
+		// Two subtypes in two files each read the backing field; ALL are rewritten in one atomic rename.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub1.hx', source: 'class Sub1 extends Base {\n\tpublic function a():Bool return _active;\n}' },
+			{ file: 'Sub2.hx', source: 'class Sub2 extends Base {\n\tpublic function b():Bool return this._active;\n}' }
+		];
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		final out: Map<String, String> = crossFixApply(files);
+		Assert.isTrue((out['Base.hx'] ?? '').indexOf('_active') == -1);
+		Assert.isTrue((out['Sub1.hx'] ?? '').indexOf('return active;') >= 0);
+		Assert.isTrue((out['Sub2.hx'] ?? '').indexOf('return this.active;') >= 0);
+		Assert.isTrue((out['Sub1.hx'] ?? '').indexOf('_active') == -1);
+		Assert.isTrue((out['Sub2.hx'] ?? '').indexOf('_active') == -1);
+	}
+
+	public function testCrossFileShapeASubtypeRead(): Void {
+		// The TextLink.label shape: a (get, set) property with a trivial getter and a NON-trivial
+		// setter, whose backing field a subtype reads in another file. The collapse to (default, set)
+		// deletes get_x, keeps set_x, and rewrites the subtype read `_label` -> `label`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var label(get, set):String;\n\tprivate var _label:String = \'\';\n\tfunction get_label():String return _label;\n\tfunction set_label(v:String):String { redraw(); return _label = v; }\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function draw():String return _label;\n}' }
+		];
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		Assert.isTrue(base.indexOf('label(default, set)') >= 0);
+		Assert.isTrue(base.indexOf('get_label') == -1);
+		Assert.isTrue(base.indexOf('return label = v') >= 0);
+		Assert.isTrue((out['Sub.hx'] ?? '').indexOf('return label;') >= 0);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}
@@ -653,53 +789,37 @@ class TrivialGetterCheckTest extends Test {
 		}
 	}
 
-
-	public function testSubclassedNotOverriddenCollapses(): Void {
-		// Sub extends Base but overrides NEITHER get_active/set_active nor redeclares `active`
-		// (the DarkDropDownListItem shape), so dropping get_active strands no override — collapse.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function ping():Void {}\n}';
-		Assert.equals(1, violations(source).length);
-	}
-
-
-	public function testSubclassTransitiveOverrideStillSkipped(): Void {
-		// Leaf -> Mid -> Base: a TRANSITIVE subtype overrides get_active, so dropping it would strand
-		// the override — the collapse is still skipped even though the direct subtype Mid is inert.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Mid extends Base {}\nclass Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}';
-		Assert.equals(0, violations(source).length);
-	}
-
-
-	public function testUnresolvableSubtypeHierarchyStillSkipped(): Void {
-		// Leaf OVERRIDES get_active but reaches Base only through Mid, which is NOT in the lint scope
-		// — the hierarchy below Base is unresolvable, so a hidden override cannot be ruled out and the
-		// collapse is kept conservatively.
-		final files: Array<{ file: String, source: String }> = [
-			{
-				file: 'Base.hx',
-				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
-			},
-			{ file: 'Leaf.hx', source: 'class Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}' }
-		];
-		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
-	}
-
-
-	public function testSubclassReadingBackingFieldNotFlagged(): Void {
-		// Sub extends Base and reads Base's PRIVATE _active directly (legal — private members are
-		// subclass-accessible in Haxe). Collapsing Base deletes _active, breaking Sub's reference
-		// ('Unknown identifier: _active'), so the property must be skipped even though Sub overrides
-		// no accessor.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Bool return _active;\n}';
-		Assert.equals(0, violations(source).length);
-	}
-
-
-	public function testSubclassReadingDifferentFieldCollapses(): Void {
-		// Sub reads a DIFFERENT inherited private field (_other), never _active, so deleting _active
-		// is safe — the field-reference gate is field-specific and the property collapses.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate var _other:Int = 0;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Int return _other;\n}';
-		Assert.equals(1, violations(source).length);
+	/**
+	 * Run the check + `crossFileFix` over `files`, apply every rename's per-file edits (unioned,
+	 * canonicalized), and return the resulting source per file — the in-test equivalent of `apq lint
+	 * --fix`'s cross-file commit. A file with no edits keeps its source.
+	 */
+	private function crossFixApply(files: Array<{ file: String, source: String }>): Map<String, String> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: TrivialGetter = new TrivialGetter();
+		final vs: Array<Violation> = check.run(files, plugin);
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
+		for (rename in check.crossFileFix(files, vs, plugin, index)) for (slice in rename) {
+			if (!byFile.exists(slice.file)) byFile[slice.file] = [];
+			for (e in slice.edits) byFile[slice.file].push(e);
+		}
+		final out: Map<String, String> = [];
+		for (f in files) {
+			final edits: Null<Array<{ span: Span, text: String }>> = byFile[f.file];
+			if (edits == null) {
+				out[f.file] = f.source;
+				continue;
+			}
+			out[f.file] = switch RefactorSupport.canonicalize(f.source, edits, true, plugin) {
+				case Ok(text): text;
+				case Err(message): {
+					Assert.fail('crossFix canonicalize Err ($message)');
+					f.source;
+				}
+			}
+		}
+		return out;
 	}
 
 }
