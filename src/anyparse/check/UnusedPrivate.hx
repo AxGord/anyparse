@@ -17,21 +17,26 @@ import anyparse.query.StringFold.StringLiteral;
  * Flags `private` class members (fields / methods) that are never referenced —
  * dead members the formatter cannot remove. The completion of the unused-*
  * family (import -> local -> private member) and the second consumer of the
- * cross-file `SymbolIndex`: a member is only flagged when the index proves its
- * enclosing type confined to its file, so the in-file reference scan sees every
- * possible reference.
+ * cross-file `SymbolIndex`.
  *
- * ## Why both a confinement gate and a text scan
+ * ## Confinement is occurrence-based, not structure-based
  *
  * A Haxe `private` member is reachable only from its own class — UNLESS a
  * subtype, an `@:access` grant, or an `@:allow` exposes it across files, or a
- * file the parser skipped hides one of those.
- * `RefactorSupport.isPrivateMemberConfined` rules those out (conservatively —
- * any doubt keeps the member). When confined, the member's only possible
- * references live in its declaring file, so a raw word-boundary scan of that
- * file outside the declaration (`RefactorSupport.referencedInRange`) is a
- * complete usage test — the conservative approach `unused-local` / `unused-import`
- * use, erring only toward keeping a live member.
+ * file the parser skipped hides one of those. When
+ * `RefactorSupport.isPrivateMemberConfined` proves none of those apply, the
+ * member's only possible references live in its declaring file, so a raw
+ * word-boundary scan of that file outside the declaration
+ * (`RefactorSupport.referencedInRange`) is a complete usage test.
+ *
+ * When the type is NOT structurally confined, the member is still flagged if the
+ * STRONGER cross-file proof holds (a project-owner decision): a raw word-boundary
+ * scan over EVERY file in report UNION resolution scope finds ZERO occurrences of
+ * the name outside its own declaration (`provablyDeadProjectWide`). A subtype /
+ * `@:access` grantee / `@:allow`ed type can only reach the member by NAMING it, so
+ * a name that appears nowhere is dead regardless of structure. The one arm that
+ * stays coarse is skip-parse: a skip-parsed report file could hide a reference the
+ * scan cannot see, so any skip-parse in report scope keeps structural confinement.
  *
  * ## Implicitly-reachable members are skipped
  *
@@ -93,10 +98,11 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Report every unused private member (the `violationFor` reference test over
-	 * index-confined types) plus a deletable private empty constructor: a `private
-	 * function new() {}` in a never-instantiated all-static utility class (no structural
-	 * `new C`, no reflection mention of the class name, no `@:build`, no subtype). The
+	 * Report every unused private member (the `violationFor` reference test — an in-file
+	 * scan for a confined type, else the report-UNION-resolution zero-occurrence proof)
+	 * plus a deletable private empty constructor: a `private function new() {}` in a
+	 * never-instantiated all-static utility class (no structural `new C`, no reflection
+	 * mention of the class name, no `@:build`, no subtype). The
 	 * cross-file string-literal contents gathered here are stashed for `fix`'s
 	 * reflection gate.
 	 */
@@ -104,6 +110,7 @@ final class UnusedPrivate implements Check {
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final scopeIndex: SymbolIndex = widestScopeIndex(plugin, index) ?? index;
 		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
 		final reflected: Array<String> = [];
 		final violations: Array<Violation> = [];
@@ -115,7 +122,7 @@ final class UnusedPrivate implements Check {
 			final externTypes: Array<String> = [];
 			collectExternTypes(tree, externTypes);
 			for (decl in support.project(tree)) {
-				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, support, externTypes);
+				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, scopeIndex, support, externTypes);
 				if (v != null) violations.push(v);
 			}
 			collectCtorCandidates(tree, entry.file, ctorCandidates);
@@ -224,10 +231,21 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * A `Warning` for `decl` if it is an unreferenced, confined, non-implicitly-
-	 * reachable private member, else null. Skips public members, non-members
-	 * (types / locals / params), implicitly-reachable members, and any member
-	 * whose enclosing type the index cannot prove confined.
+	 * A `Warning` for `decl` if it is an unreferenced, non-implicitly-reachable private
+	 * member, else null. Skips public members, non-members (types / locals / params),
+	 * implicitly-reachable members.
+	 *
+	 * The usage test is OCCURRENCE-based, not structure-based (a project-owner decision):
+	 * a subtype, an `@:access` grant, or an `@:allow` could in principle reach a private
+	 * member across files, but only if it actually NAMES it — so the coarse structural
+	 * confinement gate is lifted whenever the STRONGER cross-file proof holds. When the
+	 * enclosing type is index-confined (`isPrivateMemberConfined`) an in-file reference
+	 * scan is a complete usage test; otherwise the member is flagged only when a raw
+	 * word-boundary scan over EVERY file in report UNION resolution finds ZERO occurrences
+	 * of the name outside its own declaration (`provablyDeadProjectWide`) — an unreferenced
+	 * name cannot be referenced by a subtype / grantee / allowed type either. That path
+	 * RETAINS the skip-parse veto (a skip-parsed report file could hide a reference the
+	 * scan cannot see, so any skip-parse in report scope keeps structural confinement).
 	 *
 	 * Two visibility carve-outs never reach the reference scan: an `override`
 	 * member inherits the base's visibility (not private) and is invoked
@@ -236,7 +254,8 @@ final class UnusedPrivate implements Check {
 	 * is reached from outside the file (`externTypes` names its enclosing type).
 	 */
 	private static function violationFor(
-		file: String, source: String, decl: NamedDecl, index: SymbolIndex, support: NamingSupport, externTypes: Array<String>
+		file: String, source: String, decl: NamedDecl, index: SymbolIndex, scopeIndex: SymbolIndex, support: NamingSupport,
+		externTypes: Array<String>
 	): Null<Violation> {
 		final category: NamingCategory = decl.category;
 		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
@@ -247,17 +266,38 @@ final class UnusedPrivate implements Check {
 			return null;
 		final owner: Null<String> = decl.enclosingType;
 		final span: Null<Span> = decl.span;
-		return owner == null || span == null || externTypes.contains(owner)
-			? null
-			: !RefactorSupport.isPrivateMemberConfined(owner, source, index)
-				? null
-				: RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span]) ? null : {
-					file: file,
-					span: span,
-					rule: 'unused-private',
-					severity: Severity.Warning,
-					message: 'unused private \'${decl.name}\''
-				};
+		if (owner == null || span == null || externTypes.contains(owner)) return null;
+		final unused: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index)
+			? !RefactorSupport.referencedInRange(source, decl.name, 0, source.length, [span])
+			: provablyDeadProjectWide(decl.name, file, source, span, index, scopeIndex);
+		return unused ? {
+			file: file,
+			span: span,
+			rule: 'unused-private',
+			severity: Severity.Warning,
+			message: 'unused private \'${decl.name}\''
+		} : null;
+	}
+
+	/**
+	 * The unconfined-member usage test: whether `name` is provably dead across the whole
+	 * project — zero word-boundary occurrences outside its own declaration `span` in EVERY
+	 * file of report UNION resolution scope. A private member is reachable only from its own
+	 * class or a subtype / `@:access` grantee / `@:allow`ed type; if the raw scan (which sees
+	 * inside `#if` regions and comments) finds the name nowhere but its declaration, none of
+	 * those name it. The report index must be fully parsed (`skippedFiles == 0`) — a
+	 * skip-parsed report file could hide the reference, so any skip in report scope keeps the
+	 * structural confinement gate. A cheap own-file pre-scan short-circuits the common
+	 * referenced case before the cross-file walk; the library scan runs only for a name
+	 * already unique in report scope.
+	 */
+	private static function provablyDeadProjectWide(
+		name: String, file: String, source: String, span: Span, index: SymbolIndex, scopeIndex: SymbolIndex
+	): Bool {
+		if (index.skippedFiles().length != 0) return false;
+		if (RefactorSupport.referencedInRange(source, name, 0, source.length, [span])) return false;
+		if (index.nameOccursOutside(name, file, span)) return false;
+		return scopeIndex == index || !scopeIndex.nameOccursOutside(name, file, span);
 	}
 
 	/**

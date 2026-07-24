@@ -15,11 +15,13 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 
 /**
- * The `unused-private` check: a `private` field / method with no reference in
- * its (confined) declaring file is flagged; referenced, public, implicitly-
- * reachable (constructor / accessor / annotated), and cross-file-reachable
- * (subtype / @:access / @:allow / skip-parse) members are not. The autofix
- * deletes a dead method or side-effect-free field and keeps a side-effecting one.
+ * The `unused-private` check: a `private` field / method with no reference is flagged.
+ * Confinement is occurrence-based — a subtype / @:access / @:allow keeps a member only
+ * when it NAMES it (zero occurrences project-wide is dead regardless of structure); a
+ * skip-parse in report scope still keeps the member (a reference could be hidden).
+ * Referenced, public, and implicitly-reachable (constructor / accessor / annotated)
+ * members are not flagged. The autofix deletes a dead method or side-effect-free field
+ * and keeps a side-effecting one.
  */
 class UnusedPrivateCheckTest extends Test {
 
@@ -67,24 +69,53 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, one('class C {\n\t@:keep private function dead() {}\n}').length);
 	}
 
-	public function testSubtypeKeepsMember(): Void {
+	/**
+	 * Occurrence-based confinement (project-owner decision): a subtype that NAMES the
+	 * private member reaches it, so the member is kept. Replaces the old structure-only
+	 * `testSubtypeKeepsMember` invariant — a subtype no longer keeps a member unconditionally.
+	 */
+	public function testSubtypeKeepsREFERENCEDMember(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' },
-			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {}' }
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {\n\tpublic function f() { return _x; }\n}' }
 		];
 		Assert.equals(0, violations(files).filter(v -> v.file == 'pkg/C.hx').length);
 	}
 
+	/**
+	 * Occurrence-based confinement: a subtype EXISTS but never names the private member, so
+	 * the name has zero occurrences project-wide — provably dead, reported AND deleted (the
+	 * lifted `hasSubtype` arm; the four dead PlayerBase fields motivating this change).
+	 */
+	public function testSubtypeDeadMemberDeletes(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D extends C {}' }
+		];
+		final check: UnusedPrivate = new UnusedPrivate();
+		final cViol: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cViol.length);
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(1, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
+	}
+
+	/** Occurrence-based: an `@:access` grantee that NAMES the member reaches it -> kept. */
 	public function testAccessGrantKeepsMember(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/C.hx', source: 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}' },
-			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {}' }
+			{ file: 'pkg/E.hx', source: 'package pkg;\n@:access(pkg.C)\nclass E {\n\tpublic function f(c:C) { return c._x; }\n}' }
 		];
 		Assert.equals(0, violations(files).filter(v -> v.file == 'pkg/C.hx').length);
 	}
 
+	/** Occurrence-based: an `@:allow`ed type that NAMES the member reaches it -> kept. */
 	public function testAllowKeepsMember(): Void {
-		Assert.equals(0, one('package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var _x:Int;\n}').length);
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: 'package pkg;\n@:allow(pkg.X)\nclass C {\n\tprivate var _x:Int;\n}' },
+			{ file: 'pkg/X.hx', source: 'package pkg;\nclass X {\n\tpublic function f(c:C) { return c._x; }\n}' }
+		];
+		Assert.equals(0, violations(files).filter(v -> v.file == 'pkg/C.hx').length);
 	}
 
 	public function testSkipParseKeepsMember(): Void {
