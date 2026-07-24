@@ -213,16 +213,20 @@ final class Naming implements Check {
 		if (normalize == null) return null;
 		final newName: Null<String> = normalize(decl.name);
 		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
-		// Conflict-safety for a de-underscored local (VarStmt / FinalStmt): the bare name
-		// must not shadow an own or inherited member of the enclosing type. In-file members,
-		// locals, params and used static imports are caught by the textual collision scan
-		// below; a member INHERITED from another file is not, so resolve it through the
-		// cross-file index. When the local sits in a type whose inheritance the index cannot
-		// fully resolve (no index, or an unindexed supertype), skip: a hidden inherited member
-		// cannot be ruled out.
-		if (decl.category == NamingCategory.Local && StringTools.startsWith(decl.name, '_')) {
+		// A private INSTANCE field renamed to `_x` must not REDEFINE a field named `_x`
+		// inherited from a supertype - Haxe rejects "Redefinition of variable in subclass"
+		// (verified). A local / param renamed to a bare name only SHADOWS an inherited member,
+		// which Haxe permits (verified) - the whole-file textual collision scan below covers
+		// that case - so the inheritance gate is FIELD-only. Skip when the inherited-`_x`
+		// possibility cannot be ruled out (an unresolvable supertype closure), and skip a field
+		// of a `@:rtti` / drill-Node hierarchy whose subtype-ward `@:rtti` only the index reveals
+		// (the direct-`@:rtti` case is already `renameUnsafe`): such a class serializes by
+		// reflecting on field NAMES, so a rename would silently break saved files.
+		if (decl.category == NamingCategory.Field) {
 			final owner: Null<String> = decl.enclosingType;
-			if (owner != null && (index == null || !index.typeProvablyLacksMember(owner, newName))) return null;
+			if (owner == null || index == null) return null;
+			final idx: SymbolIndex = index;
+			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
 		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
 		// Completeness: the scope resolver can miss a reference the rename must

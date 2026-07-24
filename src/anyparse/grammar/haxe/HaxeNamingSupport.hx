@@ -92,7 +92,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
-		walk(tree, null, null, out);
+		walk(tree, null, null, false, out);
 		return out;
 	}
 
@@ -165,7 +165,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg(LOCAL_CASE_PATTERN, ''),
 				label: 'camelCase local (no _ prefix)',
-				normalize: deprefixLocal
+				normalize: snakeToCamel
 			},
 			{
 				category: NamingCategory.Param,
@@ -173,7 +173,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase parameter',
-				normalize: lowercaseFirst
+				normalize: snakeToCamel
 			},
 			{
 				category: NamingCategory.CatchVar,
@@ -181,7 +181,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				forbidMods: [],
 				format: new EReg(CAMEL_CASE_PATTERN, ''),
 				label: 'camelCase catch variable',
-				normalize: lowercaseFirst
+				normalize: snakeToCamel
 			}
 		];
 	}
@@ -193,7 +193,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `(Public)(Static)(FnMember)`), so a `final` field is a Constant when
 	 * static and a Field otherwise.
 	 */
-	private static function walk(node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, out: Array<NamedDecl>): Void {
+	private static function walk(
+		node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, out: Array<NamedDecl>
+	): Void {
 		// Macro reification (`macro { … }`) is opaque: its identifiers are splice
 		// templates (`$name`), not real declarations — skip the whole subtree, as
 		// `unused-local` does with the plugin's `opaqueKinds`.
@@ -219,12 +221,16 @@ final class HaxeNamingSupport implements NamingSupport {
 				enclosingType: enclosingType,
 				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods),
 				renameUnsafe: isStructuralField(parent) || hasPhysicalAccessors(node, parent, declName)
+				|| (enclosingRtti && isMemberCategory(categoryValue))
 			});
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
 		// on the node carrying category Type (the inner ClassForm for a final class).
 		final childEnclosing: Null<String> = category == NamingCategory.Type && name != null ? name : enclosingType;
-		for (child in node.children) walk(child, node, childEnclosing, out);
+		// A `@:rtti` type serializes by reflecting on its field NAMES, so its member
+		// fields are rename-unsafe. Once true it stays true for every descendant.
+		final childEnclosingRtti: Bool = category == NamingCategory.Type ? enclosingRtti || carriesRtti(node, parent) : enclosingRtti;
+		for (child in node.children) walk(child, node, childEnclosing, childEnclosingRtti, out);
 	}
 
 	/**
@@ -263,14 +269,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		}
 	}
 
-	/**
-	 * The mechanical fix for a PascalCase local / param / catch name: lowercase
-	 * the first character. Returns null only for the empty string. Not `inline`
-	 * — it is passed as a `NamingRule.normalize` function value.
-	 */
-	private static function lowercaseFirst(name: String): Null<String> {
-		return name.length == 0 ? null : name.charAt(0).toLowerCase() + name.substr(1);
-	}
 
 	/**
 	 * The mechanical fix for a private field missing its `_` prefix: prepend `_`
@@ -300,23 +298,6 @@ final class HaxeNamingSupport implements NamingSupport {
 		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) ? stripped : null;
 	}
 
-	/**
-	 * The mechanical fix for a local wrongly carrying the private-field `_` (or `__`)
-	 * prefix, or a PascalCase local: strip every leading underscore and lowercase the
-	 * first letter, so `__adjust` and `_Adjust` both become `adjust` and `MyLocal`
-	 * becomes `myLocal`. Returns null when nothing survives the strip (`_`, `__`) or the
-	 * result is a Haxe keyword (`_new` becomes `new`) - neither is a usable identifier, so
-	 * the local stays report-only. Not `inline` - passed as a `NamingRule.normalize`
-	 * function value.
-	 */
-	private static function deprefixLocal(name: String): Null<String> {
-		var i: Int = 0;
-		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
-		final stripped: String = name.substr(i);
-		if (stripped.length == 0) return null;
-		final lowered: String = stripped.charAt(0).toLowerCase() + stripped.substr(1);
-		return HAXE_KEYWORDS.contains(lowered) ? null : lowered;
-	}
 
 	/**
 	 * Whether a member can be reached without an in-source identifier reference: a
@@ -418,6 +399,73 @@ final class HaxeNamingSupport implements NamingSupport {
 	/** Whether `kind` is a metadata sibling — a bare `@:tag` (`Meta`) or an argumented `@:tag(...)` (`MetaCall`, e.g. `@:op(A < B)`). */
 	private static function isMetaKind(kind: String): Bool {
 		return kind == 'Meta' || kind == 'MetaCall';
+	}
+
+
+	/**
+	 * One `snake_case` segment normalized: an ALL-UPPERCASE segment (a screaming
+	 * constant word like `FILE`) is lowercased whole so the camel join reads
+	 * naturally (`missingFile`, not `mISSINGFILE`); any segment carrying a lowercase
+	 * letter is kept verbatim, preserving an already-camel word (`Id`, `scaleX`). A
+	 * digit-only segment has no letters and is kept as-is. Not `inline` - a helper of
+	 * `snakeToCamel`.
+	 */
+	private static function smartSegment(segment: String): String {
+		return new EReg("^[A-Z][A-Z0-9]*$", '').match(segment) ? segment.toLowerCase() : segment;
+	}
+
+
+	/**
+	 * The mechanical fix for a local / param / catch name violating camelCase: strip
+	 * every leading underscore, convert internal `snake_case` segments to camelCase,
+	 * and lowercase the first letter. An all-uppercase segment is lowercased whole
+	 * (`MISSING_FILE` -> `missingFile`); a mixed-case segment is preserved
+	 * (`coachingQualification_Id` -> `coachingQualificationId`), so `_items` ->
+	 * `items`, `__scaleX` -> `scaleX`, `MyLocal` -> `myLocal`, `min_gap` -> `minGap`.
+	 * Returns null when nothing survives the strip (`_`, `__`) or the result is a Haxe
+	 * keyword (`_new` -> `new`) - neither is a usable identifier, so the binding stays
+	 * report-only. Subsumes the former de-prefix / lowercase-first normalizers. Not
+	 * `inline` - passed as a `NamingRule.normalize` function value.
+	 */
+	private static function snakeToCamel(name: String): Null<String> {
+		var start: Int = 0;
+		while (start < name.length && StringTools.fastCodeAt(name, start) == '_'.code) start++;
+		final segments: Array<String> = [for (s in name.substr(start).split('_')) if (s.length > 0) smartSegment(s)];
+		if (segments.length == 0) return null;
+		final buf: StringBuf = new StringBuf();
+		for (i in 0...segments.length) {
+			final seg: String = segments[i];
+			buf.add(i == 0 ? seg : seg.charAt(0).toUpperCase() + seg.substr(1));
+		}
+		final joined: String = buf.toString();
+		final lowered: String = joined.charAt(0).toLowerCase() + joined.substr(1);
+		return HAXE_KEYWORDS.contains(lowered) ? null : lowered;
+	}
+
+
+	/** Whether `category` is a type MEMBER (field / constant / method) - the categories a `@:rtti` class's reflection reads by name. */
+	private static inline function isMemberCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
+	}
+
+
+	/**
+	 * Whether a `@:rtti` metadata sibling precedes `node` in its modifier / meta run
+	 * - the type carries `@:rtti` directly. The same preceding-sibling scan as
+	 * `metaPrecedes`, narrowed to the `@:rtti` tag.
+	 */
+	private static function carriesRtti(node: QueryNode, parent: Null<QueryNode>): Bool {
+		if (parent == null) return false;
+		final siblings: Array<QueryNode> = parent.children;
+		var i: Int = siblings.indexOf(node) - 1;
+		while (i >= 0) {
+			if (isMetaKind(siblings[i].kind)) {
+				if (siblings[i].name == '@:rtti') return true;
+			} else if (!MOD_KIND_TO_NAME.exists(siblings[i].kind))
+				break;
+			i--;
+		}
+		return false;
 	}
 
 }

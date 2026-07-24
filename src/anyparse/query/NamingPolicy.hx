@@ -94,11 +94,13 @@ typedef NamedDecl = {
 	/**
 	 * True when the autofix must not mechanically rename this declaration even
 	 * though the check still reports it - its identifier is a contract a
-	 * single-file rename cannot honour. Two grammar-set cases: a structural /
+	 * single-file rename cannot honour. Three grammar-set cases: a structural /
 	 * serialization field (a typedef or inline anon-structure member - a JSON /
-	 * wire key whose cross-file consumers a rename never updates), and a property
+	 * wire key whose cross-file consumers a rename never updates), a property
 	 * backed by physical `get_` / `set_` accessors a single-decl rename would
-	 * leave dangling. The warning still fires; only `fix` skips it. Absent
+	 * leave dangling, and a member of a class carrying `@:rtti` (serialized by
+	 * reflecting on field NAMES, e.g. drill Node - renaming breaks saved files).
+	 * The warning still fires; only `fix` skips it. Absent
 	 * (false) for ordinary declarations.
 	 */
 	@:optional var renameUnsafe: Bool;
