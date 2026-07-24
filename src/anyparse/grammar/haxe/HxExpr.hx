@@ -371,7 +371,7 @@ enum HxExpr {
 	ObjectLit(lit: HxObjectLit);
 
 	@:fmt(leftCurly('blockLeftCurly'), leftCurlyAnonFnOverride('anonFunctionLeftCurly'), emptyCurlyBreak('blockEmptyCurly'),
-		rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail)
+		rightCurly('blockRightCurly'), keepCurlyBlanks, clearExprPositionNonTail, uniformStmtBlanks)
 	@:lead('{') @:trail('}') @:trivia
 	@:sep(';', tailRelax, blockEnded('stmtNoSemi', sepStartsElement))
 	BlockExpr(stmts: Array<HxStatement>);

@@ -1548,13 +1548,18 @@ class WriterLowering {
 		// statement `if` in an anon-fn body inlines via `ifBody` instead of
 		// `expressionIf`. Struct-block Stars without the flag stay byte-identical.
 		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
+		// ω-uniform-statement-blanks: opt-in on statement-block Stars
+		// (`HxExpr.BlockExpr.stmts`, `HxFnBlock.stmts`). Drives the
+		// `_uniformCollapse` pre-pass + per-element blank suppression.
+		final uniformStmtBlanks: Bool = starNode.fmtHasFlag('uniformStmtBlanks');
 		parts.push(triviaBlockStarExpr(
 			fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, false,
 			afterDocComments, keepBetweenFields, beforeDocComments, interMemberInfo, indentCaseLabelsGate, emptyCurlyBreak, beginEndType,
 			keepCurlyBlanks, lineCommentTrailBlank, blankBeforeFinalDocInLeading, staticVarSubdivInfo, betweenMultilineCommentsBlanks,
 			uniformBetweenOptField, anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, blockEndedFlag ? sepText : null,
 			blockEndedFlag, blockEndedFlag ? (starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
-			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob
+			blockEndedFlag ? _formatInfo.schemaTypePath : null, condLeadingDocInfo, clearExprPositionNonTail, beginTypeKnob, endTypeKnob,
+			uniformStmtBlanks
 		));
 	}
 
@@ -5142,7 +5147,8 @@ class WriterLowering {
 			c.trailText, true, false, false, false, null, false, emptyCurlyBreak, false, keepCurlyBlanks, false, false, null, false, null,
 			anonFnClear, emptyCurlyKnob, rightCurlyKnob, rightCurlyAnonFnKnob, altBlockEndedFlag ? sepText : null, altBlockEndedFlag,
 			altBlockEndedFlag ? (branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE): Null<String>) : null,
-			altBlockEndedFlag ? _formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail')
+			altBlockEndedFlag ? _formatInfo.schemaTypePath : null, null, branch.fmtHasFlag('clearExprPositionNonTail'), 'beginType',
+			'endType', branch.fmtHasFlag('uniformStmtBlanks')
 		);
 	}
 
@@ -11048,7 +11054,7 @@ class WriterLowering {
 		// `@:fmt(beginEndType('a', 'b'))` names knobs (e.g. `HxEnumDecl.ctors`)
 		// reads those instead, so per-type-kind begin/end scopes never share.
 		beginTypeKnob: String = 'beginType',
-		endTypeKnob: String = 'endType'
+		endTypeKnob: String = 'endType', uniformStmtBlanks: Bool = false
 	): Expr {
 		// ω-condcomp-stray-semi (Stage A): the schema-instance predicate-call build
 		// moved to `triviaBlockPredCallExpr` (consumed by `triviaBlockSepExprs`).
@@ -11145,7 +11151,8 @@ class WriterLowering {
 		// `opt.betweenEnumCtors`) can opt in by pointing at its own knob.
 		final blankBeforeExpr: Expr = triviaBlockBlankBeforeExpr(
 			afterFieldsWithDocComments, existingBetweenFields, beforeDocCommentEmptyLines, condLeadingDocInfo, interMember,
-			interMemberInfo, staticVarSubdiv, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag
+			interMemberInfo, staticVarSubdiv, staticVarSubdivInfo, uniformBetween, uniformBetweenOptField, anyEmptyLinesFlag,
+			uniformStmtBlanks
 		);
 		// Remaining per-flag leaf builders moved to grouped helpers:
 		// ω-indent-case-labels / ω-block-orphan-trail-blank + init/track exprs ->
@@ -11204,6 +11211,7 @@ class WriterLowering {
 			uniformBetween: uniformBetween,
 			uniformBetweenOptField: uniformBetweenOptField,
 			anyEmptyLinesFlag: anyEmptyLinesFlag,
+			uniformStmtBlanks: uniformStmtBlanks,
 		};
 		return triviaBlockMainExpr(ctx);
 	}
@@ -15680,15 +15688,24 @@ class WriterLowering {
 		afterFieldsWithDocComments: Bool, existingBetweenFields: Bool, beforeDocCommentEmptyLines: Bool,
 		condLeadingDocInfo: Null<CondLeadingDocLookThroughInfo>, interMember: Bool, interMemberInfo: Null<InterMemberClassifyInfo>,
 		staticVarSubdiv: Bool, staticVarSubdivInfo: Null<StaticVarSubdivisionInfo>, uniformBetween: Bool,
-		uniformBetweenOptField: Null<String>, anyEmptyLinesFlag: Bool
+		uniformBetweenOptField: Null<String>, anyEmptyLinesFlag: Bool, uniformStmtBlanks: Bool
 	): Expr {
 		final blankExtras: Expr = blankBefore2ExtrasExpr(macro _inner.push(_dhl()));
-		if (!anyEmptyLinesFlag) return macro {
-			if (_t.blankBefore && _si > 0) {
-				_inner.push(_dhl());
-				$blankExtras;
-			}
-		};
+		if (!anyEmptyLinesFlag) {
+			// ω-uniform-statement-blanks: gate the source-blank push on the
+			// pre-pass `_uniformCollapse` flag (declared in `triviaBlockElseBody`
+			// when this Star opted into `@:fmt(uniformStmtBlanks)`). Non-opted
+			// block Stars keep the pre-slice guard byte-identical.
+			final blankGuardExpr: Expr = uniformStmtBlanks
+				? macro (_t.blankBefore && _si > 0 && !_uniformCollapse)
+				: macro (_t.blankBefore && _si > 0);
+			return macro {
+				if ($blankGuardExpr) {
+					_inner.push(_dhl());
+					$blankExtras;
+				}
+			};
+		}
 		final stripByDocExpr: Expr = afterFieldsWithDocComments
 			? macro (_prevHadDocComment && opt.afterFieldsWithDocComments == anyparse.format.CommentEmptyLinesPolicy.None)
 			: macro false;
@@ -15739,6 +15756,32 @@ class WriterLowering {
 			addByInterMemberExpr: addByInterMemberExpr,
 			addByUniformBetweenExpr: addByUniformBetweenExpr,
 		});
+	}
+
+	/**
+	 * ω-uniform-statement-blanks: pre-pass Expr declaring `_uniformCollapse`
+	 * over the captured statement array. `true` when the runtime knob is
+	 * `Collapse` AND every interior gap between adjacent statements is blank
+	 * AND no statement carries a leading comment (a comment can be a group
+	 * header, so the grouping intent is unclear and collapse bails). Declared
+	 * as a bare `EVars` so the var lands in the `triviaBlockElseBody` scope
+	 * the per-element blank guard reads. `macro {}` (no declaration) for every
+	 * non-opted block Star, keeping the pre-slice emit byte-identical.
+	 */
+	private static function triviaBlockUniformCollapseInitExpr(uniformStmtBlanks: Bool): Expr {
+		if (!uniformStmtBlanks) return macro {};
+		return macro var _uniformCollapse: Bool = opt.uniformStatementBlanks == anyparse.format.UniformStatementBlanksPolicy.Collapse && {
+			var _ok: Bool = true;
+			var _uci: Int = 0;
+			while (_uci < _arr.length) {
+				if (_arr[_uci].leadingComments.length > 0 || (_uci > 0 && !_arr[_uci].blankBefore)) {
+					_ok = false;
+					break;
+				}
+				_uci++;
+			}
+			_ok;
+		};
 	}
 
 	/**
@@ -16147,6 +16190,7 @@ class WriterLowering {
 		final initCurrDocCommentExpr: Expr = c.initCurrDocCommentExpr;
 		final initCurrSplitLeadingExpr: Expr = c.initCurrSplitLeadingExpr;
 		final initPrevKindExpr: Expr = c.initPrevKindExpr;
+		final uniformCollapseInitExpr: Expr = triviaBlockUniformCollapseInitExpr(c.uniformStmtBlanks);
 		final whileExpr: Expr = triviaBlockWhileExpr(c);
 		final blockTrailSepEmitExpr: Expr = c.blockTrailSepEmitExpr;
 		final extraInnerTrailBlankExpr: Expr = c.extraInnerTrailBlankExpr;
@@ -16163,6 +16207,7 @@ class WriterLowering {
 			$initCurrDocCommentExpr;
 			$initCurrSplitLeadingExpr;
 			$initPrevKindExpr;
+			$uniformCollapseInitExpr;
 			// ω-blockended-trivia (Session 3): tracks the prior iteration's rendered
 			// element Doc so the between-element sep emission can query
 			// `DocMeasure.endsWithStmtTerminator`. Null on the first iteration.
@@ -16860,6 +16905,7 @@ typedef BlockStarCtx = {
 	final uniformBetween: Bool;
 	final uniformBetweenOptField: Null<String>;
 	final anyEmptyLinesFlag: Bool;
+	final uniformStmtBlanks: Bool;
 };
 typedef EofStarCtx = {
 	final fieldAccess: Expr;
