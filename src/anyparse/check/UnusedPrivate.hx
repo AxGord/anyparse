@@ -9,6 +9,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.StringFold.StringFoldSupport;
+import anyparse.query.StringFold.StringLiteral;
 
 /**
  * Flags `private` class members (fields / methods) that are never referenced —
@@ -48,18 +50,31 @@ import anyparse.runtime.Span;
  *
  * ## Autofix
  *
- * A flagged member is wholly unreferenced, so deleting a method is safe and
- * deleting a field is safe when its initializer carries no side effect
- * (`RefactorSupport.isSideEffectFree`); a side-effecting field initializer is
- * reported but left for the author. One method shape is reported but NOT
- * auto-deleted: a method of a class with an `extends` clause may implement one of
- * the base's abstract methods (Haxe abstract-method impls carry no `override`,
- * and the base's call is invisible to a single-file scan) — see
- * `mayImplementAbstractMethod`. The member is removed with its modifier / meta
- * group and whole line, batched per file by the caller.
+ * Deletion is CONSERVATIVE: the report stays broad (a member is flagged as soon as
+ * it is unreferenced and confined), but `fix` removes one only when every doubt is
+ * ruled out, so it never breaks another platform's build. A file carrying ANY
+ * conditional compilation (`#if` / `#elseif` / `#else`) is off-limits wholesale
+ * (`fileHasConditional`): the reference scan is branch-blind. Otherwise a member is
+ * deleted only when its initializer is side-effect-free (a method always qualifies,
+ * `RefactorSupport.isSideEffectFree`), it is not an abstract-method impl of an
+ * `extends` class (`mayImplementAbstractMethod`: Haxe impls carry no `override` and
+ * the base's call is invisible to a single-file scan), its enclosing type carries no
+ * `@:rtti` (drill-Node serialization by field name), `@:keep`, or `@:build`, and its
+ * name appears in no string literal in scope (a possible `Reflect.field` target). A
+ * separate arm deletes a `private function new() {}` that `run` proved never
+ * instantiated (the static-utility idiom), under the same no-`#if` / no-`@:build`
+ * gates. The member is removed with its modifier / meta group and whole line,
+ * batched per file by the caller.
  */
 @:nullSafety(Strict)
 final class UnusedPrivate implements Check {
+
+	/**
+	 * Cross-file string-literal contents gathered by the last `run`, consulted by
+	 * `fix`'s reflection gate. Null until `run` populates it; `fix` then falls back
+	 * to the single file it is handed.
+	 */
+	private var _reflectedContents: Null<Array<String>> = null;
 
 	public function new() {}
 
@@ -71,31 +86,62 @@ final class UnusedPrivate implements Check {
 		return 'private field/method declared but never referenced';
 	}
 
+	/**
+	 * Report every unused private member (the `violationFor` reference test over
+	 * index-confined types) plus a deletable private empty constructor: a `private
+	 * function new() {}` in a never-instantiated all-static utility class (no structural
+	 * `new C`, no reflection mention of the class name, no `@:build`, no subtype). The
+	 * cross-file string-literal contents gathered here are stashed for `fix`'s
+	 * reflection gate.
+	 */
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		final reflected: Array<String> = [];
 		final violations: Array<Violation> = [];
+		final ctorCandidates: Array<{ file: String, className: String, span: Span }> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
+			if (stringFold != null) collectStringContents(tree, entry.source, stringFold, reflected);
 			final externTypes: Array<String> = [];
 			collectExternTypes(tree, externTypes);
 			for (decl in support.project(tree)) {
 				final v: Null<Violation> = violationFor(entry.file, entry.source, decl, index, support, externTypes);
 				if (v != null) violations.push(v);
 			}
+			collectCtorCandidates(tree, entry.file, ctorCandidates);
 		}
+		_reflectedContents = reflected;
+		if (index.skippedFiles()
+			.length == 0) for (c in ctorCandidates) if (
+			!index.hasSubtype(c.className) && !isInstantiatedAnywhere(c.className, files) && !mentionedInStrings(c.className, reflected)
+		) violations.push({
+			file: c.file,
+			span: c.span,
+			rule: 'unused-private',
+			severity: Severity.Warning,
+			message: 'unused private constructor \'new\' of never-instantiated \'${c.className}\''
+		});
 		return violations;
 	}
 
 	/**
-	 * Delete each fixable unused private member. A flagged member is wholly
-	 * unreferenced, so a method is always safe to remove and a field is safe when
-	 * its initializer has no side effect; a side-effecting field initializer is
-	 * skipped (no edit). The member is removed with its modifier / meta group
-	 * (`declGroupSpan`) and whole physical line (`lineExtendedSpan`); the caller
-	 * batches the edits into one canonicalize per file.
+	 * Delete the auto-fixable subset of `violations` under conservative gates: a
+	 * doubtful case stays report-only, so `--fix` never breaks another platform's
+	 * build. A file carrying ANY conditional compilation is off-limits wholesale
+	 * (`fileHasConditional` - the reference scan is branch-blind). A flagged MEMBER is
+	 * removed only when its initializer is side-effect-free (a method always
+	 * qualifies), it is not an abstract-method impl of an `extends` class
+	 * (`mayImplementAbstractMethod`), its enclosing type carries no `@:rtti` (drill-Node
+	 * field-name serialization, via the index), `@:keep`, or `@:build`, and its name
+	 * appears in no string literal in scope (a possible `Reflect.field` target). The
+	 * private empty constructor `run` flagged (a never-instantiated utility class) is
+	 * deleted here under the same no-`#if` / no-`@:build` gates. Each removal folds in
+	 * the member's modifier / meta group and whole line; the caller batches them into
+	 * one canonicalize per file.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -103,19 +149,28 @@ final class UnusedPrivate implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return edits;
+		if (fileHasConditional(source)) return edits;
 
 		final memberByFrom: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }> = [];
 		collectMembers(tree, false, memberByFrom);
+		final classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }> = [];
+		collectClassMeta(tree, classMeta);
+		final reflected: Array<String> = _reflectedContents ?? inFileStringContents(source, plugin);
 
 		for (v in violations) if (v.severity == Severity.Warning) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final hit: Null<{ node: QueryNode, parent: QueryNode, inExtends: Bool }> = memberByFrom[span.from];
 			if (hit == null) continue;
-			if (!deletableMember(hit.node)) continue;
-			if (mayImplementAbstractMethod(hit.node, hit.inExtends)) continue;
-			final group: Span = RefactorSupport.declGroupSpan(hit.node, hit.parent, span);
-			edits.push({ span: RefactorSupport.lineExtendedSpan(source, group), text: '' });
+			final node: QueryNode = hit.node;
+			final owner: Null<String> = hit.parent.name;
+			if (isPrivateEmptyCtor(node)) {
+				final ctorMeta: Null<{ hasBuild: Bool, hasKeep: Bool }> = owner == null ? null : classMeta[owner];
+				if (ctorMeta == null || !ctorMeta.hasBuild) edits.push(deletionEdit(source, node, hit.parent, span));
+				continue;
+			}
+			if (memberDeletable(node, owner, hit.inExtends, index, classMeta, reflected))
+				edits.push(deletionEdit(source, node, hit.parent, span));
 		}
 		return edits;
 	}
@@ -260,6 +315,244 @@ final class UnusedPrivate implements Check {
 			i--;
 		}
 		return false;
+	}
+
+
+	/**
+	 * Whether `node` is the private empty constructor `private function new() {}` — a
+	 * `FnMember` named `new` with no parameters and an empty block body. Such a member
+	 * is only ever a violation via the constructor arm (`run` skips it for the member
+	 * scan), so a `new` finding in `fix` routes here.
+	 */
+	private static function isPrivateEmptyCtor(node: QueryNode): Bool {
+		return node.kind == 'FnMember' && node.name == 'new' && isEmptyCtorBody(node);
+	}
+
+	/** Whether a `FnMember`'s only child is an empty block body (no params, no statements). */
+	private static function isEmptyCtorBody(node: QueryNode): Bool {
+		return node.children.length == 1 && node.children[0].kind == 'BlockBody' && node.children[0].children.length == 0;
+	}
+
+	/**
+	 * Raw-text presence of ANY conditional-compilation directive. A file carrying one
+	 * is off-limits to `--fix`: the reference scan is branch-blind, so a member used
+	 * only under a `#if` arm (and members declared inside one) read as unused. The
+	 * whole-file veto is what makes the reference verdict safe to act on.
+	 */
+	private static inline function fileHasConditional(source: String): Bool {
+		return source.indexOf('#if') >= 0 || source.indexOf('#else') >= 0 || source.indexOf('#elseif') >= 0;
+	}
+
+	/** Collect every plain string-literal's raw content in `node`'s subtree into `out`. */
+	private static function collectStringContents(
+		node: QueryNode, source: String, stringFold: StringFoldSupport, out: Array<String>
+	): Void {
+		final lit: Null<StringLiteral> = stringFold.literalOf(node, source);
+		if (lit != null) out.push(lit.content);
+		for (child in node.children) collectStringContents(child, source, stringFold, out);
+	}
+
+	/** The single-file string-literal contents — `fix`'s fallback when `run` left no cross-file stash. */
+	private static function inFileStringContents(source: String, plugin: GrammarPlugin): Array<String> {
+		final stringFold: Null<StringFoldSupport> = plugin.stringFoldSupport();
+		if (stringFold == null) return [];
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final out: Array<String> = [];
+		if (tree != null) collectStringContents(tree, source, stringFold, out);
+		return out;
+	}
+
+	/** Whether `name` occurs as a word inside any collected string-literal content (a possible reflection target). */
+	private static function mentionedInStrings(name: String, contents: Array<String>): Bool {
+		for (c in contents) if (RefactorSupport.referencedInRange(c, name, 0, c.length, [])) return true;
+		return false;
+	}
+
+	/**
+	 * The class-scope node a decl child represents: itself for a plain `class`, the
+	 * inner `ClassForm` for a `final class` (`FinalDecl` wrapper), else null.
+	 */
+	private static function classFormOf(child: QueryNode): Null<QueryNode> {
+		if (isClassScopeNode(child.kind)) return child;
+		if (child.kind == 'FinalDecl') for (c in child.children) if (isClassScopeNode(c.kind)) return c;
+		return null;
+	}
+
+	/**
+	 * Whether a `@:meta` sibling named `metaName` precedes the class-decl child at
+	 * `index`, scanning back over the class's leading meta / visibility run
+	 * (`@:meta` / `Private` / `Extern`) and stopping at the first other sibling.
+	 */
+	private static function metaPrecedesClass(siblings: Array<QueryNode>, index: Int, metaName: String): Bool {
+		var i: Int = index - 1;
+		while (i >= 0) {
+			final kind: String = siblings[i].kind;
+			if ((kind == 'Meta' || kind == 'MetaCall') && siblings[i].name == metaName) return true;
+			if (kind != 'Meta' && kind != 'MetaCall' && kind != 'Private' && kind != 'Extern') return false;
+			i--;
+		}
+		return false;
+	}
+
+	/**
+	 * Index each class by name with its `@:build` / `@:keep` presence. Recurses into a
+	 * class BODY (never the `FinalDecl` wrapper) so a `final class`'s leading meta —
+	 * a sibling of the wrapper, not of the inner form — is read once at the right level.
+	 */
+	private static function collectClassMeta(tree: QueryNode, out: Map<String, { hasBuild: Bool, hasKeep: Bool }>): Void {
+		forEachClassDecl(
+			tree, (classNode, name, siblings, index) -> out[name] = {
+				hasBuild: metaPrecedesClass(siblings, index, '@:build'),
+				hasKeep: metaPrecedesClass(siblings, index, '@:keep')
+			}
+		);
+	}
+
+	/**
+	 * Collect every class with a deletable-candidate private empty constructor: an
+	 * all-static-shaped utility class (has a `static` member) whose `private function
+	 * new() {}` exists purely to forbid instantiation, and which carries no `@:build`
+	 * macro. Instantiation / reflection are filtered by the caller (needs the full
+	 * file set).
+	 */
+	private static function collectCtorCandidates(
+		tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
+	): Void {
+		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+			if (metaPrecedesClass(siblings, index, '@:build')) return;
+			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode);
+			final cspan: Null<Span> = ctor == null ? null : ctor.span;
+			if (ctor != null && cspan != null && hasStaticMember(classNode)) out.push({ file: file, className: name, span: cspan });
+		});
+	}
+
+	/** The class's `private function new() {}` (empty body, no params), or null. */
+	private static function privateEmptyCtorOf(classNode: QueryNode): Null<QueryNode> {
+		final kids: Array<QueryNode> = classNode.children;
+		for (i in 0...kids.length) {
+			final child: QueryNode = kids[i];
+			if (child.kind == 'FnMember' && child.name == 'new' && isEmptyCtorBody(child) && precededByPrivate(kids, i)) return child;
+		}
+		return null;
+	}
+
+	/** Whether the member at `index` is preceded by a `Private` modifier (and not `Public`) in its meta / modifier run. */
+	private static function precededByPrivate(siblings: Array<QueryNode>, index: Int): Bool {
+		var i: Int = index - 1;
+		var sawPrivate: Bool = false;
+		while (i >= 0) {
+			final kind: String = siblings[i].kind;
+			if (kind == 'Private')
+				sawPrivate = true;
+			else if (kind == 'Public')
+				return false;
+			else if (kind != 'Meta' && kind != 'MetaCall')
+				break;
+			i--;
+		}
+		return sawPrivate;
+	}
+
+	/** Whether the class carries at least one `static` member (the utility-class shape). */
+	private static function hasStaticMember(classNode: QueryNode): Bool {
+		for (child in classNode.children) if (child.kind == 'Static') return true;
+		return false;
+	}
+
+	/** Whether `className` is instantiated (`new ClassName`) anywhere in the file set. */
+	private static function isInstantiatedAnywhere(className: String, files: Array<{ file: String, source: String }>): Bool {
+		for (entry in files) if (containsInstantiation(entry.source, className)) return true;
+		return false;
+	}
+
+	/**
+	 * Raw-text scan for `new ClassName` in `source`: an occurrence of `className` at
+	 * an identifier boundary, immediately preceded (past whitespace) by the `new`
+	 * keyword. Sees inside `#if` regions (unlike the AST walkers), so a
+	 * conditionally-compiled instantiation is not missed.
+	 */
+	private static function containsInstantiation(source: String, className: String): Bool {
+		final len: Int = className.length;
+		if (len == 0) return false;
+		var i: Int = 0;
+		while (i + len <= source.length) {
+			final at: Int = source.indexOf(className, i);
+			if (at < 0) return false;
+			final afterIdx: Int = at + len;
+			final beforeOk: Bool = at == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			if (beforeOk && afterOk && precededByNew(source, at)) return true;
+			i = at + 1;
+		}
+		return false;
+	}
+
+	/** Whether the token ending just before `pos` (past whitespace) is the `new` keyword at a word boundary. */
+	private static function precededByNew(source: String, pos: Int): Bool {
+		final kw: String = 'new';
+		var j: Int = pos - 1;
+		while (j >= 0 && isWhitespace(StringTools.fastCodeAt(source, j))) j--;
+		final start: Int = j + 1 - kw.length;
+		if (start < 0) return false;
+		for (k in 0...kw.length) if (StringTools.fastCodeAt(source, start + k) != StringTools.fastCodeAt(kw, k)) return false;
+		return start == 0 || !RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, start - 1));
+	}
+
+	/** Space / tab / newline / carriage-return. */
+	private static inline function isWhitespace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	}
+
+
+	/**
+	 * Whether a flagged MEMBER (not the constructor) clears every deletion gate: a
+	 * side-effect-free declaration (`deletableMember`), not an abstract-method impl of
+	 * an `extends` class (`mayImplementAbstractMethod`), an enclosing type with no
+	 * `@:rtti` / `@:keep` / `@:build`, and a name in no in-scope string literal (a
+	 * possible reflection target). Any doubt keeps the member (still reported).
+	 */
+	private static function memberDeletable(
+		node: QueryNode, owner: Null<String>, inExtends: Bool, index: Null<SymbolIndex>,
+		classMeta: Map<String, { hasBuild: Bool, hasKeep: Bool }>, reflected: Array<String>
+	): Bool {
+		if (!deletableMember(node)) return false;
+		if (mayImplementAbstractMethod(node, inExtends)) return false;
+		if (owner != null) {
+			if (index != null && index.transitivelyCarriesRtti(owner)) return false;
+			final meta: Null<{ hasBuild: Bool, hasKeep: Bool }> = classMeta[owner];
+			if (meta != null && (meta.hasBuild || meta.hasKeep)) return false;
+		}
+		final name: Null<String> = node.name;
+		return name == null || !mentionedInStrings(name, reflected);
+	}
+
+	/** The delete-the-whole-member edit: the member's modifier / meta group and whole line, replaced by nothing. */
+	private static inline function deletionEdit(
+		source: String, node: QueryNode, parent: QueryNode, span: Span
+	): { span: Span, text: String } {
+		return { span: RefactorSupport.lineExtendedSpan(source, RefactorSupport.declGroupSpan(node, parent, span)), text: '' };
+	}
+
+
+	/**
+	 * Visit each class declaration in `node`'s subtree, passing the class-scope node,
+	 * its name (guaranteed non-null), and its sibling run + index (for a leading-meta
+	 * scan). Descends into a class BODY, never the `FinalDecl` wrapper, so a `final
+	 * class`'s leading meta is read once at the right level.
+	 */
+	private static function forEachClassDecl(node: QueryNode, visit: (QueryNode, String, Array<QueryNode>, Int) -> Void): Void {
+		final kids: Array<QueryNode> = node.children;
+		for (i in 0...kids.length) {
+			final child: QueryNode = kids[i];
+			final classNode: Null<QueryNode> = classFormOf(child);
+			final name: Null<String> = classNode == null ? null : classNode.name;
+			if (classNode != null && name != null) {
+				visit(classNode, name, kids, i);
+				forEachClassDecl(classNode, visit);
+			} else {
+				forEachClassDecl(child, visit);
+			}
+		}
 	}
 
 }

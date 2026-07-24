@@ -12,6 +12,7 @@ import anyparse.runtime.Span;
 using StringTools;
 
 import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndex;
 
 /**
  * The `unused-private` check: a `private` field / method with no reference in
@@ -251,6 +252,131 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(1, vs.length);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(0, edits.length);
+	}
+
+	/**
+	 * Gate 1 (#if-in-file skip): a dead private member is still reported, but a file
+	 * carrying ANY conditional-compilation directive makes `--fix` delete NOTHING — the
+	 * reference scan is branch-blind, so a caller behind a `#if` arm is invisible.
+	 */
+	public function testFixSkipsDeletionWhenFileHasConditional(): Void {
+		final src: String = 'class C {\n\tprivate function dead() {}\n\t#if debug\n\tpublic function d() { trace(1); }\n\t#end\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * Empty-ctor arm (positive): a `private function new() {}` in a never-instantiated
+	 * all-static utility class is pure instantiation-prevention boilerplate — reported
+	 * and deleted. Reconstructs the pre-edit shape of TM's DashLineUtil (ctor since
+	 * hand-removed) and asserts the rule deletes exactly that constructor.
+	 */
+	public function testEmptyCtorOfUtilityClassDeleted(): Void {
+		final src: String = 'class DashLineUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'DashLineUtil.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'new'"));
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		Assert.equals(1, edits.length);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('function new') == -1);
+				Assert.isTrue(text.indexOf('draw') >= 0);
+			case Err(message):
+				Assert.fail('canonicalize Err: $message');
+		}
+	}
+
+	/**
+	 * Empty-ctor arm: a `new <Class>(` anywhere in scope (e.g. a static factory) means
+	 * the class IS instantiated — the constructor is reachable and never flagged.
+	 */
+	public function testEmptyCtorKeptWhenInstantiated(): Void {
+		Assert.equals(0, one('class U {\n\tpublic static function make():U { return new U(); }\n\tprivate function new() {}\n}').length);
+	}
+
+	/**
+	 * Empty-ctor arm: the file-has-`#if` gate applies to the constructor arm too — a
+	 * utility class in a conditionally-compiled file yields no deletion.
+	 */
+	public function testEmptyCtorKeptWhenFileHasConditional(): Void {
+		final src: String = 'class U {\n\tpublic static function draw() {}\n\tprivate function new() {}\n\t#if debug\n\tstatic var d = 1;\n\t#end\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * Empty-ctor arm: a `@:build` macro class may generate an instantiation the scan
+	 * cannot see, so its constructor is never flagged.
+	 */
+	public function testEmptyCtorNotFlaggedWhenClassHasBuild(): Void {
+		final src: String = '@:build(M.b()) class U {\n\tpublic static function draw() {}\n\tprivate function new() {}\n}';
+		Assert.equals(
+			0,
+			new UnusedPrivate().run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin()).filter(v -> v.message.contains("'new'")).length
+		);
+	}
+
+	/**
+	 * Gate 3 (@:rtti / drill-Node): a private field of a class in an `@:rtti` hierarchy
+	 * is serialized by reflecting on field NAMES — reported but never deleted; only the
+	 * cross-file index reveals the rtti.
+	 */
+	public function testFixKeepsRttiClassMember(): Void {
+		final src: String = '@:rtti class C {\n\tprivate var _x:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * Gate 5 (@:build): a private member of a `@:build` macro class may be referenced by
+	 * generated code — reported but never deleted.
+	 */
+	public function testFixKeepsBuildClassMember(): Void {
+		final src: String = '@:build(M.build()) class C {\n\tprivate function dead() {}\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * Gate 3 (@:keep on the class): all members are retained for reflection / DCE — a
+	 * private member is reported but never deleted.
+	 */
+	public function testFixKeepsKeepClassMember(): Void {
+		final src: String = '@:keep class C {\n\tprivate function dead() {}\n}';
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * Gate 2 (reflection string-literal mention): a confined private member whose NAME
+	 * appears in a string literal in ANOTHER file may be reached by reflection — reported
+	 * but never deleted.
+	 */
+	public function testFixKeepsReflectionMentionedMember(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var _x:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\tpublic function f(o:Dynamic) { Reflect.setField(o, "_x", 1); }\n}' }
+		];
+		final check: UnusedPrivate = new UnusedPrivate();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final cViol: Array<Violation> = vs.filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cViol.length);
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.fix(cSrc, cViol, new HaxeQueryPlugin(), index).length);
 	}
 
 	private function one(source: String): Array<Violation> {
