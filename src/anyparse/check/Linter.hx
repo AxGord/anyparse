@@ -129,8 +129,8 @@ final class Linter {
 			new ExplicitLocalType(),
 			new RedundantBypassAccessor(),
 			new FieldInitAtDeclaration(),
-			new PreferInline()
-			new InlineConstant()
+			new PreferInline(),
+			new InlineConstant(),
 			new ExtractRepeatedExpression()
 		];
 	}
