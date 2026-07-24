@@ -166,4 +166,98 @@ class JoinReturnCheckTest extends Test {
 		};
 	}
 
+
+	// --- assignment arm: `x = e; return x;` where `x` is a pre-existing param / local ---
+
+	/** The assignment arm: `str = e;` before `return str;` (param `str`) is flagged Info with the assignment message. */
+	public function testAssignParamFlagged(): Void {
+		final vs: Array<Violation> = violations(wrapAssignRet('String', 'str = g(str);\n\t\treturn str;'));
+		Assert.equals(1, vs.length);
+		Assert.equals('join-return', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('this assignment and its next-line return can be joined into a single return', vs[0].message);
+	}
+
+	/** Function return type equal to the param type -> plain `return e;`. */
+	public function testAssignParamExplicitReturnPlainFix(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrapAssignRet('String', 'str = g(str);\n\t\treturn str;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return g(str);', es[0].text);
+	}
+
+	/** An inferred function return type does not re-state the param type, so it survives as an ascription. */
+	public function testAssignParamInferredReturnAscribesFix(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrapAssign('str = g(str);\n\t\treturn str;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (g(str) : String);', es[0].text);
+	}
+
+	/** A pre-existing (untyped) local joins just like a param -- plain collapse, `x` survives via the r-value read. */
+	public function testAssignLocalFix(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('var s = "x";\n\t\ts = g(s);\n\t\treturn s;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return g(s);', es[0].text);
+	}
+
+	/** A bare field write (`field = e; return field;`) must NOT join -- the store is observable on the object. */
+	public function testAssignFieldNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tvar field:Int = 0;\n\tfunction m():Int {\n\t\tfield = g();\n\t\treturn field;\n\t}\n}').length
+		);
+	}
+
+	/** A param / local captured by a lambda anywhere in the function is a conservative escape -- not joined. */
+	public function testAssignCapturedByLambdaNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var y = 0;\n\t\tvar cb = () -> y;\n\t\tuse(cb);\n\t\ty = g();\n\t\treturn y;')).length);
+	}
+
+	/** A read of `str` after the assignment (even in unreachable trailing code) disqualifies. */
+	public function testAssignReadAfterNotFlagged(): Void {
+		Assert.equals(0, violations(wrapAssignRet('String', 'str = g(str);\n\t\treturn str;\n\t\tafter(str);')).length);
+	}
+
+	/** When `e` does not reference `str` and `str` has no earlier read, the collapse would orphan it -- not joined. */
+	public function testAssignNoSurvivingReadNotFlagged(): Void {
+		Assert.equals(0, violations(wrapAssignRet('String', 'str = "c";\n\t\treturn str;')).length);
+	}
+
+	/** A compound assignment (`+=`) is a distinct node kind and never joins. */
+	public function testAssignCompoundNotFlagged(): Void {
+		Assert.equals(0, violations(wrapAssignRet('String', 'str += "x";\n\t\treturn str;')).length);
+	}
+
+	/** A statement between the assignment and the return blocks the join. */
+	public function testAssignNonAdjacentNotFlagged(): Void {
+		Assert.equals(0, violations(wrapAssignRet('String', 'str = g(str);\n\t\tside();\n\t\treturn str;')).length);
+	}
+
+	/** The return must return exactly the assigned identifier. */
+	public function testAssignReturnDifferentNameNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(str:String, y:String):String {\n\t\tstr = g(str);\n\t\treturn y;\n\t}\n}').length
+		);
+	}
+
+	/** A comment between the assignment and the return would be dropped by the join. */
+	public function testAssignDroppedCommentNotFlagged(): Void {
+		Assert.equals(0, violations(wrapAssignRet('String', 'str = g(str);\n\t\t// note\n\t\treturn str;')).length);
+	}
+
+	/** End-to-end through the canonical writer: the assignment arm emits the single return and drops the assignment line. */
+	public function testAssignFixOutputJoins(): Void {
+		final out: String = applyFixOnce(wrapAssignRet('String', 'str = g(str);\n\t\treturn str;'));
+		Assert.isTrue(out.indexOf('return g(str);') != -1);
+		Assert.equals(-1, out.indexOf('str = g(str);'));
+	}
+
+	/** Wrap an assignment-arm body in a method with a pre-existing `str` param and an inferred return type. */
+	private function wrapAssign(body: String): String {
+		return 'class C {\n\tfunction f(str:String) {\n\t\t$body\n\t}\n}';
+	}
+
+	/** Wrap an assignment-arm body in a method with a pre-existing `str` param and an explicit return type. */
+	private function wrapAssignRet(retType: String, body: String): String {
+		return 'class C {\n\tfunction f(str:String):$retType {\n\t\t$body\n\t}\n}';
+	}
+
 }

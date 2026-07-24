@@ -10,10 +10,13 @@ import anyparse.query.Refs;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+import anyparse.query.Refs.RefHit;
+import anyparse.query.Refs.RefKind;
 
 /**
- * Flags a local declaration whose value is IMMEDIATELY returned, collapsing the pair to a
- * single return:
+ * Flags a value that is IMMEDIATELY returned right after it is produced, collapsing the pair
+ * to a single return. The value is produced either by a local DECLARATION or by a plain
+ * ASSIGNMENT to a pre-existing param / local:
  *
  * ```haxe
  * final x:Int = compute();
@@ -69,6 +72,36 @@ import anyparse.runtime.Span;
  * detection additionally reads `functionKinds` / `lambdaKinds` / `paramKinds` /
  * `functionBodyKinds`, and when those are unset an annotated decl always ascribes (a
  * type-check that always compiles).
+ * ## The assignment arm
+ *
+ * The second form is an assignment `x = e;` to a PRE-EXISTING binding (a param, or a local
+ * declared earlier), immediately followed by `return x;`:
+ *
+ * ```haxe
+ * str = normalise(str);
+ * return str;
+ * // ->
+ * return normalise(str);
+ * ```
+ *
+ * Because `x` already exists, sole-reference counting does not apply; safety rests on
+ * reference analysis (through `Refs`, needs `exprStatementKind` / `assignKind`, else this arm
+ * is a no-op) over the whole function:
+ *
+ * - `x` must resolve to a LOCAL or PARAM, never a field -- a bare field write (`this.x = e`
+ *   spelled `x = e`) would silently drop the store the collapse removes;
+ * - `x` is captured by NO lambda (`lambdaKinds`) -- a closure could observe the dropped store
+ *   after the function returns, so any capture is a conservative escape gate;
+ * - `x` has NO read after the assignment other than this return (a trailing / branch read,
+ *   even unreachable, disqualifies -- the return is the function tail);
+ * - `x` keeps a SURVIVING read (a read before the assignment or inside `e`), so the collapse
+ *   does not orphan the binding into a dead local;
+ * - a plain `=` only (a compound `+=` / `-=` is a distinct node kind and never joins).
+ *
+ * The DECLARATION arm keeps priority: when the statement before the return is a decl it is
+ * matched there, never here. `x`'s declared type drives the SAME ascription decision as the
+ * declaration arm -- plain `return e;` when it matches the function return type or `x` is
+ * unannotated, else `return (e : T);`.
  */
 @:nullSafety(Strict)
 final class JoinReturn implements Check {
@@ -78,6 +111,12 @@ final class JoinReturn implements Check {
 
 	/** A valued `return` node has exactly one child: the returned expression. */
 	private static inline final RETURN_VALUE_CHILD_COUNT: Int = 1;
+
+	/** An expression statement wraps exactly one expression (here, the assignment). */
+	private static inline final EXPR_STMT_CHILD_COUNT: Int = 1;
+
+	/** A binary assignment node has exactly [l-value, r-value] children. */
+	private static inline final ASSIGN_CHILD_COUNT: Int = 2;
 
 	public function new() {}
 
@@ -98,14 +137,16 @@ final class JoinReturn implements Check {
 			if (tree == null) continue;
 			final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(entry.source);
 			final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, entry.source);
+			final lambdaSpans: Array<Span> = [];
+			collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
 			final matches: Array<Match> = [];
-			collectMatches(tree, entry.source, comments, null, seams, tree, declTypeSources, matches);
+			collectMatches(tree, entry.source, comments, null, seams, tree, declTypeSources, lambdaSpans, matches);
 			for (m in matches) violations.push({
 				file: entry.file,
 				span: m.declSpan,
 				rule: 'join-return',
 				severity: Severity.Info,
-				message: 'this declaration and its next-line return can be joined into a single return'
+				message: m.message
 			});
 		}
 		return violations;
@@ -120,8 +161,10 @@ final class JoinReturn implements Check {
 		if (tree == null) return [];
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
 		final declTypeSources: () -> Map<Int, String> = TypeResolver.memoizedDeclaredTypeSources(plugin, source);
+		final lambdaSpans: Array<Span> = [];
+		collectLambdaSpans(tree, seams.shape.lambdaKinds ?? [], lambdaSpans);
 		final matches: Array<Match> = [];
-		collectMatches(tree, source, comments, null, seams, tree, declTypeSources, matches);
+		collectMatches(tree, source, comments, null, seams, tree, declTypeSources, lambdaSpans, matches);
 		final byKey: Map<String, Match> = [];
 		for (m in matches) byKey['${m.declSpan.from}:${m.declSpan.to}'] = m;
 
@@ -148,6 +191,8 @@ final class JoinReturn implements Check {
 		return {
 			localDeclKinds: localDeclKinds,
 			returnKind: returnKind,
+			exprStmtKind: shape.exprStatementKind,
+			assignKind: shape.assignKind,
 			identKind: shape.identKind,
 			functionKinds: functionKinds,
 			paramKinds: shape.paramKinds ?? [],
@@ -165,17 +210,18 @@ final class JoinReturn implements Check {
 	 */
 	private static function collectMatches(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>, s: Seams,
-		tree: QueryNode, declTypeSources: () -> Map<Int, String>, out: Array<Match>
+		tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>, out: Array<Match>
 	): Void {
 		final childRetType: Null<String> = s.functionKinds.contains(node.kind) ? functionReturnTypeSource(node, s, source) : retType;
 		if (s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length - 1) {
-				final m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, retType, s, tree, declTypeSources);
+				var m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, retType, s, tree, declTypeSources);
+				if (m == null) m = matchAssignPair(kids[i], kids[i + 1], source, comments, retType, s, tree, declTypeSources, lambdaSpans);
 				if (m != null) out.push(m);
 			}
 		}
-		for (c in node.children) collectMatches(c, source, comments, childRetType, s, tree, declTypeSources, out);
+		for (c in node.children) collectMatches(c, source, comments, childRetType, s, tree, declTypeSources, lambdaSpans, out);
 	}
 
 	/**
@@ -238,7 +284,8 @@ final class JoinReturn implements Check {
 		final m: Match = {
 			declSpan: keySpan,
 			editSpan: new Span(keySpan.from, retSpan.to),
-			text: buildReturn(initSource, annotation, retType)
+			text: buildReturn(initSource, annotation, retType),
+			message: 'this declaration and its next-line return can be joined into a single return'
 		};
 		return m;
 	}
@@ -315,12 +362,111 @@ final class JoinReturn implements Check {
 		return false;
 	}
 
+
+	/**
+	 * The join match for an assignment `x = e;` immediately followed by `return x;`, or null
+	 * when the pair is not collapsible (see the class doc for every gate). Unlike `matchPair`,
+	 * `x` is a PRE-EXISTING binding (a param or an earlier local, never a fresh decl), so safety
+	 * rests on reference analysis rather than sole-reference counting: `x` resolves to a local /
+	 * param (not a field), is captured by no lambda (a closure could observe the dropped store),
+	 * has no read after the assignment other than this return, and keeps a surviving read (the
+	 * collapse must not orphan it). `retType` is the enclosing function's return-type source.
+	 */
+	private static function matchAssignPair(
+		assign: QueryNode, ret: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, retType: Null<String>,
+		s: Seams, tree: QueryNode, declTypeSources: () -> Map<Int, String>, lambdaSpans: Array<Span>
+	): Null<Match> {
+		final exprStmtKind: Null<String> = s.exprStmtKind;
+		final assignKind: Null<String> = s.assignKind;
+		if (exprStmtKind == null || assignKind == null) return null;
+		if (assign.kind != exprStmtKind || assign.children.length != EXPR_STMT_CHILD_COUNT) return null;
+		final binary: QueryNode = assign.children[0];
+		if (binary.kind != assignKind || binary.children.length != ASSIGN_CHILD_COUNT) return null;
+		final lhs: QueryNode = binary.children[0];
+		final name: Null<String> = lhs.name;
+		if (lhs.kind != s.identKind || name == null) return null;
+
+		if (ret.kind != s.returnKind || ret.children.length != RETURN_VALUE_CHILD_COUNT) return null;
+		final retIdent: QueryNode = ret.children[0];
+		if (retIdent.kind != s.identKind || retIdent.name != name) return null;
+
+		final assignSpan: Null<Span> = assign.span;
+		final rhs: QueryNode = binary.children[1];
+		final rhsSpan: Null<Span> = rhs.span;
+		final retSpan: Null<Span> = ret.span;
+		final lhsSpan: Null<Span> = lhs.span;
+		final retIdentSpan: Null<Span> = retIdent.span;
+		if (assignSpan == null || rhsSpan == null || retSpan == null || lhsSpan == null || retIdentSpan == null) return null;
+
+		// `x` must resolve to a local or param -- a bare field write (`this.x = e` spelled `x = e`)
+		// would silently drop the store the collapse removes.
+		final hits: Array<RefHit> = Refs.find(name, tree, s.shape);
+		var binding: Null<Span> = null;
+		for (h in hits) if (h.kind == RefKind.Write && h.span.from == lhsSpan.from && h.span.to == lhsSpan.to) {
+			binding = h.bindingSpan;
+			break;
+		}
+		if (binding == null) return null;
+		final b: Span = binding;
+		if (!TypeResolver.bindingIsLocalOrParam(tree, b.from, s.localDeclKinds, s.paramKinds)) return null;
+
+		// Gate on every reference resolving to THIS binding (a shadowing inner `x` is skipped): no
+		// capturing lambda, no read after the assignment other than the return, and at least one
+		// surviving read so the collapse does not orphan the binding.
+		var survivingRead: Bool = false;
+		for (h in hits) {
+			final bs: Null<Span> = h.bindingSpan;
+			if (bs == null || bs.from != b.from || bs.to != b.to) continue;
+			if (h.kind != RefKind.Decl && inAnyLambda(h.span, lambdaSpans)) return null;
+			if (h.kind == RefKind.Read) {
+				final isReturn: Bool = h.span.from == retIdentSpan.from && h.span.to == retIdentSpan.to;
+				if (!isReturn) {
+					if (h.span.from >= assignSpan.to) return null;
+					survivingRead = true;
+				}
+			}
+		}
+		if (!survivingRead) return null;
+
+		if (droppedComment(assignSpan, rhsSpan, retSpan.to, comments)) return null;
+
+		final annotation: Null<String> = declTypeSources()[b.from];
+		final initSource: String = source.substring(rhsSpan.from, rhsSpan.to);
+		final keySpan: Span = assignSpan;
+		final m: Match = {
+			declSpan: keySpan,
+			editSpan: new Span(keySpan.from, retSpan.to),
+			text: buildReturn(initSource, annotation, retType),
+			message: 'this assignment and its next-line return can be joined into a single return'
+		};
+		return m;
+	}
+
+
+	/** Whether `span` is nested inside any lambda span in `lambdaSpans` -- i.e. a captured reference. */
+	private static function inAnyLambda(span: Span, lambdaSpans: Array<Span>): Bool {
+		for (ls in lambdaSpans) if (ls.from <= span.from && span.to <= ls.to) return true;
+		return false;
+	}
+
+
+	/** Collect the span of every lambda (`RefShape.lambdaKinds`) reachable under `node`. */
+	private static function collectLambdaSpans(node: QueryNode, lambdaKinds: Array<String>, out: Array<Span>): Void {
+		if (lambdaKinds.contains(node.kind)) {
+			final sp: Null<Span> = node.span;
+			if (sp != null) out.push(sp);
+		}
+		for (c in node.children) collectLambdaSpans(c, lambdaKinds, out);
+	}
+
 }
 
 /** The kinds `JoinReturn` reads. */
 private typedef Seams = {
 	var localDeclKinds: Array<String>;
 	var returnKind: String;
+	var exprStmtKind: Null<String>;
+	var assignKind: Null<String>;
 	var identKind: String;
 	var functionKinds: Array<String>;
 	var paramKinds: Array<String>;
@@ -334,4 +480,5 @@ private typedef Match = {
 	var declSpan: Span;
 	var editSpan: Span;
 	var text: String;
+	var message: String;
 }
