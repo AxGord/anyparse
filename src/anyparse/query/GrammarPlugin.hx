@@ -1554,6 +1554,23 @@ typedef RefShape = {
 	 * wrong rewrite. Optional; unset excludes nothing.
 	 */
 	@:optional var spliceSensitiveExprKinds: Array<String>;
+
+	/**
+	 * Expression kinds that bind STRICTLY TIGHTER than the ternary `?:` operator, so a
+	 * `parenKind` wrapping one as a ternary CONDITION (`(e) ? a : b`) is redundant —
+	 * unwrapping it re-parses to the same tree. A fail-closed WHITELIST: a kind absent
+	 * from it keeps its parentheses, because the loose / right-greedy kinds (assignment,
+	 * a nested ternary, an arrow lambda, `untyped` / `macro` / a metadata wrapper, a
+	 * block-like `if` / `switch` expression) would otherwise ABSORB the `? … : …` on
+	 * unwrap and change the parse. Haxe: the comparison / boolean / null-coalescing /
+	 * arithmetic / bitwise / shift binary operators, the interval and `is` operators,
+	 * the unary prefixes and in/decrement, and the primary atoms (identifier, literal,
+	 * call, field / index access, array literal, `new`). Object literals and casts are
+	 * deliberately omitted (a leading `{` is block-ambiguous; a cast condition is rare)
+	 * — both cost only a missed cleanup. Read by `redundant-parens` with `ternaryKind`.
+	 * Optional; unset drops the ternary-condition arm.
+	 */
+	@:optional var ternaryConditionUnwrapKinds: Array<String>;
 }
 /**
  * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.

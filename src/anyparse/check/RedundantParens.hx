@@ -9,13 +9,20 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags redundant parentheses in two shapes. A parenthesized expression wrapped
+ * Flags redundant parentheses in three shapes. A parenthesized expression wrapped
  * directly in another (`((e))`) — the outer pair adds nothing wherever it sits. And a
  * LONE `(e)` sitting in a DELIMITED position: one where the surrounding construct
  * supplies its own boundaries on both sides, so no operator can bind across the
  * parens. `Info` severity (a cosmetic cleanup); `fix` unwraps the chain to a single
  * pair (`((e))` / `(((e)))` → `(e)`) outside a delimited position and to nothing
  * inside it (`final m = (-1);` → `final m = -1;`, `((e))` → `e`).
+ *
+ * The third shape is PRECEDENCE-GATED: a lone `(e)` wrapping the CONDITION of a
+ * ternary (`(a < b) ? 1 : -1` → `a < b ? 1 : -1`). That position is an operand, not a
+ * delimited slot, so the drop is proven per-content — it fires only when the bare
+ * inner binds strictly tighter than `?:` (`RefShape.ternaryConditionUnwrapKinds`),
+ * never for a loose / right-greedy inner (assignment, a nested ternary, an arrow, an
+ * `untyped` / `macro` / metadata wrapper) that would absorb the `? … : …` on unwrap.
  *
  * In a delimited position the content's PRECEDENCE is irrelevant — `f((a + b))`
  * unwraps as safely as `f((x))` — but its SYNTAX is not: two content shapes keep
@@ -75,9 +82,10 @@ import anyparse.runtime.Span;
  *   `a + b * c`, and a map-literal key `[(a ? b : c) => d]` ≢ `[a ? b : c => d]`.
  *   That is why a call's CALLEE and an assignment's TARGET are excluded while their
  *   tails are not, and why the map-literal `=>` VALUE is left alone even though its
- *   right-associative prec-0 operator would make it provably safe.
+ *   right-associative prec-0 operator would make it provably safe. The lone exception
+ *   is a ternary CONDITION, which the precedence-gated third shape above handles.
  *
- * The two arms compose without overlapping: the check flags the OUTERMOST paren of a
+ * The three arms compose without overlapping: the check flags the OUTERMOST paren of a
  * chain and does not descend into it, so a site yields one finding and one edit, and
  * in a delimited position `((e))` collapses to `e` outright.
  */
@@ -147,6 +155,8 @@ final class RedundantParens implements Check {
 		final parenKind: Null<String> = shape.parenKind;
 		return parenKind == null ? null : {
 			parenKind: parenKind,
+			ternaryKind: shape.ternaryKind,
+			ternaryUnwrap: shape.ternaryConditionUnwrapKinds ?? [],
 			allChild: shape.delimitedAllChildKinds ?? [],
 			tailChild: shape.delimitedTailChildKinds ?? [],
 			condFirstChild: shape.conditionFirstChildKinds ?? [],
@@ -203,6 +213,9 @@ final class RedundantParens implements Check {
 		// The fix drops the WHOLE chain, so both tests read the content that would be
 		// left bare, not the next paren layer down.
 		final bare: QueryNode = RefactorSupport.unwrapParens(inner, slots.parenKind);
+		// A ternary condition drops its parens only when the bare content binds strictly
+		// tighter than `?:` — otherwise unwrapping lets it absorb the `? … : …` branches.
+		if (slot == SlotKind.TernaryCondition) return slots.ternaryUnwrap.contains(bare.kind);
 		return (slot != SlotKind.DelimitedSplice || !slots.splice.contains(bare.kind)) && !separatorGreedy(bare, slots);
 	}
 
@@ -237,6 +250,7 @@ final class RedundantParens implements Check {
 
 	/** How `parent`'s child at `i` is bounded: not delimited, delimited, or delimited by a SPLICING host. */
 	private static function slotOf(parent: QueryNode, i: Int, slots: ParenSlots): SlotKind {
+		if (parent.kind == slots.ternaryKind && i == 0) return SlotKind.TernaryCondition;
 		return !childDelimited(parent, i, slots)
 			? SlotKind.Plain
 			: slots.spliceHost.contains(parent.kind) ? SlotKind.DelimitedSplice : SlotKind.Delimited;
@@ -284,6 +298,8 @@ final class RedundantParens implements Check {
  */
 private typedef ParenSlots = {
 	var parenKind: String;
+	var ternaryKind: Null<String>;
+	var ternaryUnwrap: Array<String>;
 	var allChild: Array<String>;
 	var tailChild: Array<String>;
 	var condFirstChild: Array<String>;
@@ -307,6 +323,9 @@ private typedef ParenSite = {
  * load-bearing for precedence. `Delimited` — the construct supplies its own boundaries.
  * `DelimitedSplice` — delimited AND the host expands a splicing reification argument
  * (`RefShape.spliceSensitiveExprKinds`), where a paren changes ARITY, not syntax.
+ * `TernaryCondition` — a ternary's condition child, a precedence-gated slot where the
+ * paren drops only when the bare inner binds strictly tighter than `?:`
+ * (`RefShape.ternaryConditionUnwrapKinds`).
  */
 private enum abstract SlotKind(Int) {
 
@@ -315,5 +334,7 @@ private enum abstract SlotKind(Int) {
 	final Delimited = 1;
 
 	final DelimitedSplice = 2;
+
+	final TernaryCondition = 3;
 
 }

@@ -155,6 +155,50 @@ class RedundantParensCheckTest extends Test {
 		Assert.equals(inFn('var s = if (c) (a) else (b);'), fixed(inFn('var s = if ((c)) (a) else (b);')));
 	}
 
+	public function testTernaryConditionComparisonFlagged(): Void {
+		final vs: Array<Violation> = violations(inFn('x = (a < b) ? 1 : -1;'));
+		Assert.equals(1, vs.length);
+		Assert.equals('redundant-parens', vs[0].rule);
+		Assert.equals(inFn('x = a < b ? 1 : -1;'), fixed(inFn('x = (a < b) ? 1 : -1;')));
+	}
+
+	public function testTernaryConditionBooleanAndNullCoalFlagged(): Void {
+		Assert.equals(inFn('x = a && b ? c : d;'), fixed(inFn('x = (a && b) ? c : d;')));
+		Assert.equals(inFn('x = a ?? b ? c : d;'), fixed(inFn('x = (a ?? b) ? c : d;')));
+	}
+
+	public function testTernaryConditionPrimaryFlagged(): Void {
+		Assert.equals(inFn('x = flag ? c : d;'), fixed(inFn('x = (flag) ? c : d;')));
+		Assert.equals(inFn('x = obj.check() ? c : d;'), fixed(inFn('x = (obj.check()) ? c : d;')));
+	}
+
+	public function testTernaryConditionDoubleParensCollapseFully(): Void {
+		Assert.equals(inFn('x = a < b ? c : d;'), fixed(inFn('x = ((a < b)) ? c : d;')));
+	}
+
+	public function testTernaryConditionIdempotent(): Void {
+		final once: String = fixed(inFn('x = (a < b) ? 1 : -1;'));
+		Assert.equals(once, fixed(once));
+	}
+
+	public function testTernaryConditionAssignmentKeepsParens(): Void {
+		Assert.equals(0, violations(inFn('x = (a = b) ? c : d;')).length);
+	}
+
+	public function testTernaryConditionNestedTernaryKeepsParens(): Void {
+		Assert.equals(0, violations(inFn('x = (a ? b : c) ? d : e;')).length);
+	}
+
+	public function testTernaryConditionRightGreedyKeepsParens(): Void {
+		Assert.equals(0, violations(inFn('x = (untyped a) ? c : d;')).length);
+		Assert.equals(0, violations(inFn('x = (a -> b) ? c : d;')).length);
+		Assert.equals(0, violations(inFn('x = (@:meta a) ? c : d;')).length);
+	}
+
+	public function testTernaryBranchesNotFlagged(): Void {
+		Assert.equals(0, violations(inFn('x = c ? (a) : (b);')).length);
+	}
+
 	public function testSwitchSubjectNotFlagged(): Void {
 		Assert.equals(0, violations(inFn('switch ((v)) {\n\t\t\tcase _:\n\t\t}')).length);
 	}

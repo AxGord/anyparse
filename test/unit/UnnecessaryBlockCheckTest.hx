@@ -55,6 +55,37 @@ class UnnecessaryBlockCheckTest extends Test {
 		Assert.equals(0, violations(wrap('{\n\t\t\tfunction h():Void {}\n\t\t\th();\n\t\t}')).length);
 	}
 
+	/** A `case` arm body is a statement list; a bare block there (an AS3-conversion artifact) is flagged. */
+	public function testCaseBranchBlockFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap('switch s {\n\t\t\tcase "/": {\n\t\t\t\ttrace(1);\n\t\t\t}\n\t\t}'));
+		Assert.equals(1, vs.length);
+		Assert.equals('unnecessary-block', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	/** A `default` arm body is a statement list too. */
+	public function testDefaultBranchBlockFlagged(): Void {
+		Assert.equals(
+			1, violations(wrap('switch s {\n\t\t\tcase 1: trace(9);\n\t\t\tdefault: {\n\t\t\t\ttrace(2);\n\t\t\t}\n\t\t}')).length
+		);
+	}
+
+	/** A case GUARD is not a block, so listing the branch as a container stays exact. */
+	public function testGuardedCaseBranchBlockFlagged(): Void {
+		Assert.equals(1, violations(wrap('switch s {\n\t\t\tcase x if (g): {\n\t\t\t\ttrace(1);\n\t\t\t}\n\t\t}')).length);
+	}
+
+	/** A case-arm block that declares a local is a real scope — left alone. */
+	public function testCaseBranchBlockWithLocalNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch s {\n\t\t\tcase "/": {\n\t\t\t\tvar y = 1;\n\t\t\t\ttrace(y);\n\t\t\t}\n\t\t}')).length);
+	}
+
+	public function testCaseBranchBlockUnwraps(): Void {
+		final fixed: String = fixedSource(wrap('switch s {\n\t\t\tcase "/": {\n\t\t\t\ttrace(1);\n\t\t\t}\n\t\t}'));
+		Assert.isTrue(fixed.indexOf('trace(1);') >= 0);
+		Assert.equals(-1, fixed.indexOf('case "/": {'));
+	}
+
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f():Void {\n\t\t$body\n\t}\n}';
 	}
