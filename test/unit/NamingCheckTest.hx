@@ -428,6 +428,75 @@ class NamingCheckTest extends Test {
 		assertFixCanonicalWithIndex(src, '_shape', 'var shape');
 	}
 
+	public function testUnderscoreLocalFlagged(): Void {
+		// A local carrying the private-field `_` prefix violates the camelCase-local rule.
+		final vs: Array<Violation> = violations('class C {\n\tpublic function f() {\n\t\tvar _x = 1;\n\t\ttrace(_x);\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('local'));
+		Assert.isTrue(vs[0].message.contains("'_x'"));
+	}
+
+	public function testUnderscoreParamNotFlagged(): Void {
+		// A `_`-prefixed PARAMETER is the deliberate unused-marker - not flagged.
+		Assert.equals(0, violations('class C {\n\tpublic function f(_unused:Int) {\n\t\treturn 1;\n\t}\n}').length);
+	}
+
+	public function testFixRenamesUnderscoreLocal(): Void {
+		// A local wrongly carrying the private-field `_`/`__` prefix, in a class whose
+		// inheritance is fully resolvable (here: no supertype) - the prefix is stripped.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar __adjust = 1;\n\t\ttrace(__adjust);\n\t}\n}';
+		assertFixCanonicalWithIndex(src, 'var adjust', '_adjust');
+	}
+
+	public function testFixSkipsLocalCollidingWithSiblingLocal(): Void {
+		// De-prefixing `_adjust` to `adjust` collides with a sibling local `adjust` - skip.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar adjust = 2;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixSkipsLocalCollidingWithParam(): Void {
+		// De-prefixing `_adjust` to `adjust` collides with a parameter `adjust` - skip.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(adjust:Int) {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixSkipsLocalCollidingWithOwnMember(): Void {
+		// De-prefixing `_adjust` to `adjust` collides with an own field `adjust` - skip.
+		final src: String = 'package pkg;\nclass C {\n\tpublic var adjust:Int = 0;\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixSkipsLocalCollidingWithInheritedMember(): Void {
+		// De-prefixing `_adjust` to `adjust` collides with a member INHERITED from a
+		// superclass in ANOTHER file - invisible to the in-file scan, caught via the index.
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var adjust:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
+	}
+
+	public function testFixSkipsLocalWhenInheritanceUnresolvable(): Void {
+		// The enclosing type extends a base absent from the index - its members cannot be
+		// enumerated, so a hidden inherited collision cannot be ruled out - skip.
+		final src: String = 'package pkg;\nclass C extends UnknownBase {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixSkipsLocalDeprefixingToKeyword(): Void {
+		// De-prefixing `_new` to `new` yields a Haxe keyword - not a usable identifier - skip.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _new = 1;\n\t\ttrace(_new);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		final superSrc: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _super = 1;\n\t\ttrace(_super);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: superSrc }], 'pkg/C.hx', superSrc);
+	}
+
+	public function testFixSkipsLocalReferencedBehindConditional(): Void {
+		// A reference behind a mid-expression `#if` is kept as raw trivia (a CondSpliceTail),
+		// invisible to the resolver - the rename would leave that occurrence dangling, so the
+		// completeness guard bails - skip.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar x = _adjust #if cpp + _adjust #end;\n\t\ttrace(x);\n\t}\n}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
 	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
 		final support: HaxeNamingSupport = new HaxeNamingSupport();
 		final tree: QueryNode = new HaxeQueryPlugin().parseFile(src);
@@ -468,6 +537,14 @@ class NamingCheckTest extends Test {
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
+	}
+
+	private function assertLocalSkipped(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
+		Assert.isTrue(vs.length >= 1);
+		Assert.equals(0, check.fix(targetSrc, vs, new HaxeQueryPlugin(), index).length);
 	}
 
 }

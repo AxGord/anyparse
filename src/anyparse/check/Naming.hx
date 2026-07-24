@@ -213,6 +213,17 @@ final class Naming implements Check {
 		if (normalize == null) return null;
 		final newName: Null<String> = normalize(decl.name);
 		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
+		// Conflict-safety for a de-underscored local (VarStmt / FinalStmt): the bare name
+		// must not shadow an own or inherited member of the enclosing type. In-file members,
+		// locals, params and used static imports are caught by the textual collision scan
+		// below; a member INHERITED from another file is not, so resolve it through the
+		// cross-file index. When the local sits in a type whose inheritance the index cannot
+		// fully resolve (no index, or an unindexed supertype), skip: a hidden inherited member
+		// cannot be ruled out.
+		if (decl.category == NamingCategory.Local && StringTools.startsWith(decl.name, '_')) {
+			final owner: Null<String> = decl.enclosingType;
+			if (owner != null && (index == null || !index.typeProvablyLacksMember(owner, newName))) return null;
+		}
 		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
 		// Completeness: the scope resolver can miss a reference the rename must
 		// also rewrite — a bare field access whose binding span disagrees with the

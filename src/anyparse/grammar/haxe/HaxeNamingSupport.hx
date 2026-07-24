@@ -21,6 +21,63 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	private static final CAMEL_CASE_PATTERN: String = "^[a-z_][a-zA-Z0-9]*$";
 
+	/** Camel-case with NO leading underscore - a local must not carry the private-field `_` prefix. */
+	private static final LOCAL_CASE_PATTERN: String = "^[a-z][a-zA-Z0-9]*$";
+
+	/**
+	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
+	 * these is not a usable identifier, so its rename is skipped (report-only).
+	 */
+	private static final HAXE_KEYWORDS: Array<String> = [
+		'abstract',
+		'break',
+		'case',
+		'cast',
+		'catch',
+		'class',
+		'continue',
+		'default',
+		'do',
+		'dynamic',
+		'else',
+		'enum',
+		'extends',
+		'extern',
+		'false',
+		'final',
+		'for',
+		'function',
+		'if',
+		'implements',
+		'import',
+		'in',
+		'inline',
+		'interface',
+		'is',
+		'macro',
+		'new',
+		'null',
+		'operator',
+		'overload',
+		'override',
+		'package',
+		'private',
+		'public',
+		'return',
+		'static',
+		'super',
+		'switch',
+		'this',
+		'throw',
+		'true',
+		'try',
+		'typedef',
+		'untyped',
+		'using',
+		'var',
+		'while'
+	];
+
 	/**
 	 * Modifier node kinds the Haxe projection surfaces as separate siblings
 	 * preceding a declaration, mapped to neutral modifier strings. `Meta` (an
@@ -106,9 +163,9 @@ final class HaxeNamingSupport implements NamingSupport {
 				category: NamingCategory.Local,
 				requireMods: [],
 				forbidMods: [],
-				format: new EReg(CAMEL_CASE_PATTERN, ''),
-				label: 'camelCase local',
-				normalize: lowercaseFirst
+				format: new EReg(LOCAL_CASE_PATTERN, ''),
+				label: 'camelCase local (no _ prefix)',
+				normalize: deprefixLocal
 			},
 			{
 				category: NamingCategory.Param,
@@ -241,6 +298,24 @@ final class HaxeNamingSupport implements NamingSupport {
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
 		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) ? stripped : null;
+	}
+
+	/**
+	 * The mechanical fix for a local wrongly carrying the private-field `_` (or `__`)
+	 * prefix, or a PascalCase local: strip every leading underscore and lowercase the
+	 * first letter, so `__adjust` and `_Adjust` both become `adjust` and `MyLocal`
+	 * becomes `myLocal`. Returns null when nothing survives the strip (`_`, `__`) or the
+	 * result is a Haxe keyword (`_new` becomes `new`) - neither is a usable identifier, so
+	 * the local stays report-only. Not `inline` - passed as a `NamingRule.normalize`
+	 * function value.
+	 */
+	private static function deprefixLocal(name: String): Null<String> {
+		var i: Int = 0;
+		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
+		final stripped: String = name.substr(i);
+		if (stripped.length == 0) return null;
+		final lowered: String = stripped.charAt(0).toLowerCase() + stripped.substr(1);
+		return HAXE_KEYWORDS.contains(lowered) ? null : lowered;
 	}
 
 	/**
