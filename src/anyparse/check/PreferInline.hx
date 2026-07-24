@@ -36,6 +36,14 @@ using Lambda;
  * - A method whose single expression references itself (a bare `foo` / `this.foo`) — a
  *   potential recursive inline; a delegation to a same-named method on another receiver
  *   (`other.foo()`) is NOT a self-reference and stays a candidate.
+ * - A method whose single-expression body carries a CONTEXT-SENSITIVE null-safety construct
+ *   (`bodyHasNullSafetyRisk`) — a `null` literal in a VALUE slot (not a `==` / `!=` / `??`
+ *   null-check), an anonymous object literal, or a MULTI-STATEMENT (block-bodied) lambda. Haxe
+ *   re-type-checks an inline body in the CALLER's null-safety mode, so such a body can compile
+ *   in its own (looser / off) context yet fail Strict re-checking at a caller; a single-expression
+ *   arrow lambda (a pure forward) stays a candidate. A cheap structural over-approximation that
+ *   over-skips a safe object-literal / null-value body (the sound direction; a precise split would
+ *   need null-flow typing).
  *
  * Only `ClassDecl` / `final class` (`ClassForm`) bodies are inspected; already-`inline`
  * methods are skipped (nothing to do). The gates mirror `trivial-getter`'s soundness model.
@@ -183,7 +191,7 @@ final class PreferInline implements Check {
 		if (name == 'new') return false;
 		if (mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')) return false;
 		if (metas.contains('@:keep')) return false;
-		return isSingleExpressionBody(fn) && !referencesSelf(fn, name);
+		return isSingleExpressionBody(fn) && !referencesSelf(fn, name) && !bodyHasNullSafetyRisk(fn);
 	}
 
 	/** Whether `fn`'s body is a single expression — an `ExprBody`, or a `BlockBody` with one `return` / expression statement. */
@@ -291,6 +299,44 @@ final class PreferInline implements Check {
 		for (fi in index.allFiles()) for (t in fi.types) if (t.name != className && index.isSubtype(t.name, className)) for (m in t.members)
 			if (!out.contains(m.name)) out.push(m.name);
 		return out;
+	}
+
+
+	/**
+	 * Whether `fn`'s body contains a construct whose null-safety validity is CONTEXT-SENSITIVE, so
+	 * inlining could break a caller. Haxe re-type-checks an inline body at every call site in the
+	 * CALLER's null-safety mode, so a body that compiles in its own (looser / null-safety-off) context
+	 * can fail Strict re-checking elsewhere. A cheap structural over-approximation (no typer, via
+	 * `isRiskyHere`): a `null` literal in a VALUE slot — a call argument, assignment RHS, return or
+	 * ternary branch — but NOT a `==` / `!=` / `??` null-check operand (which is context-neutral); an
+	 * anonymous object literal (each field value is re-checked against its non-nullable declared field
+	 * type); or a MULTI-STATEMENT (block-bodied) lambda (its own control flow / narrowing is re-typed in
+	 * the caller's mode). A single-expression arrow lambda is a pure parameter forward and stays a
+	 * candidate. Over-skips a safe object-literal / null-value body (the sound direction — the rule's
+	 * primary targets, trivial getters/setters and thin delegation wrappers, carry none of these);
+	 * distinguishing a safe from a risky slot would require null-flow typing.
+	 */
+	private static function bodyHasNullSafetyRisk(fn: QueryNode): Bool {
+		final body: Null<QueryNode> = fn.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+		return body != null && subtreeHasNullSafetyRisk(body, body.kind);
+	}
+
+	/** Whether `node`'s subtree contains a null literal, an anonymous object literal, or a function literal. */
+	private static function subtreeHasNullSafetyRisk(node: QueryNode, parentKind: String): Bool {
+		if (isRiskyHere(node, parentKind)) return true;
+		for (c in node.children) if (subtreeHasNullSafetyRisk(c, node.kind)) return true;
+		return false;
+	}
+
+	/** Whether `kind` is a construct whose null-safety validity depends on the surrounding context (a null / anonymous-object / function literal). */
+	private static function isRiskyHere(node: QueryNode, parentKind: String): Bool {
+		return switch node.kind {
+			case 'NullLit':
+				parentKind != 'Eq' && parentKind != 'NotEq' && parentKind != 'NullCoal';
+			case 'ObjectLit': true;
+			case 'ThinArrow' | 'ParenLambdaExpr' | 'ThinParenLambdaExpr' | 'FnExpr': node.children.exists(c -> c.kind == 'BlockBody');
+			case _: false;
+		}
 	}
 
 }

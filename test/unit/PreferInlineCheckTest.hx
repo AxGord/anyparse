@@ -139,4 +139,41 @@ class PreferInlineCheckTest extends Test {
 		return false;
 	}
 
+
+	public function testNullLiteralArgBodySkipped(): Void {
+		Assert.equals(
+			0, violations(cls('public function clear():Void down(null);\n\tfunction down(p:Int):Void {}')).length,
+			'null-literal body not inlinable (re-checked in caller Strict context)'
+		);
+	}
+
+	public function testAnonObjectLiteralBodySkipped(): Void {
+		Assert.equals(
+			0, violations(cls('private var _f:Int;\n\tpublic function rec():Dynamic return {object: _f};')).length,
+			'anon-object-literal body not inlinable'
+		);
+	}
+
+	public function testBlockLambdaBodySkipped(): Void {
+		Assert.equals(
+			0, violations(cls('public function loadX():Void run(function() { step(); });')).length,
+			'block-bodied lambda re-narrows in the caller null-safety mode — not inlinable'
+		);
+	}
+
+
+	public function testArrowLambdaDelegationFlagged(): Void {
+		Assert.equals(
+			1, violations(cls('public function wireUp():Void run(y -> handle(y));')).length,
+			'single-expression arrow lambda is a pure forward — stays a candidate'
+		);
+	}
+
+	public function testNullCheckBodyNotSkipped(): Void {
+		Assert.equals(
+			1, violations(cls('public function isNull(x:Dynamic):Bool return x == null;')).length,
+			'a null-CHECK (== null) is context-neutral — not gated'
+		);
+	}
+
 }

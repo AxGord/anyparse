@@ -1385,7 +1385,13 @@ final class Cli {
 			// Same cross-file path-receiver resolution as map-keys-lookup: on the active SUBSET a
 			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
 			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
-			'prefer-index-access'
+			'prefer-index-access',
+			// prefer-inline's soundness gates are ALL whole-project: the subtype-override gate
+			// (SymbolIndex.hasSubtype + a strict-subtype member lookup), the value-reference name scan, and
+			// the interface gate. On the active SUBSET a subtype / value-use / interface declared elsewhere
+			// reads as absent, so an overridden or value-referenced method is wrongly inlined ("Field X is
+			// inlined and cannot be overridden").
+			'prefer-inline'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];

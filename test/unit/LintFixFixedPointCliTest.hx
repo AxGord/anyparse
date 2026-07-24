@@ -188,4 +188,25 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+
+	public function testPreferInlineFullScopeAcrossPasses(): Void {
+		#if (sys || nodejs)
+		// A's getW is a single-expression method OVERRIDDEN by B. A is made active for pass 2
+		// by prefer-inline's OWN pass-1 fix of useX. `prefer-inline` must be in the --fix loop's
+		// `fullScopeIds`: on the pass-2 subset {A} an active-scope check would not see B, wrongly
+		// conclude getW has no override, and inline it — a "Field getW is inlined and cannot be
+		// overridden" compile error at B.
+		final a: String = 'package p;\n\nclass A {\n\tpublic function useX():Int\n\t\treturn 1;\n\n\tpublic function getW():Int\n\t\treturn 2;\n}\n';
+		final b: String = 'package p;\n\nclass B extends A {\n\toverride public function getW():Int\n\t\treturn 3;\n}\n';
+		final dir: String = CliFixture.writeDir('fixpinl', [{ name: 'A.hx', source: a }, { name: 'B.hx', source: b }]);
+		Assert.equals(0, Cli.run(['lint', '--rule', 'prefer-inline', '--fix', dir]), 'lint --fix exits ok');
+		final outA: String = File.getContent('$dir/A.hx');
+		Assert.isTrue(outA.indexOf('inline function useX') != -1, 'non-overridden useX inlined (pass 1 ran): $outA');
+		Assert.isTrue(outA.indexOf('inline function getW') == -1, 'overridden getW NOT inlined — B stayed visible on every pass: $outA');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }
