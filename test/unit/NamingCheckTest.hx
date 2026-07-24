@@ -802,10 +802,11 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
-	public function testCrossFileFixBlocksOnDifferentTypedReceiver(): Void {
+	public function testCrossFileFixIgnoresDifferentTypedReceiver(): Void {
 		// A subtype method accessing a SAME-NAMED field on a DIFFERENT-typed receiver (`o.size` where
-		// `o` is `Other`, not the owner `C` nor a subtype of it) must NOT be renamed — the occurrence
-		// is fail-closed treated as a blocker, so the whole cross-file rename is refused (report-only).
+		// `o` is `Other`, not the owner `C` nor a subtype of it) provably binds to a different owner, so
+		// it is IGNORED — neither renamed nor a blocker. The cross-file rename proceeds, rewriting only
+		// the declaring file; the subtype's `o.size` is left untouched.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
 		final otherSrc: String = 'package pkg;\nclass Other {\n\tpublic var size:Int;\n}';
 		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(o:Other) { return o.size; }\n}';
@@ -817,7 +818,11 @@ class NamingCheckTest extends Test {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		final rename: Array<CrossFileEdits> = renames[0];
+		Assert.equals(1, rename.length);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, '_size', 'var size');
 	}
 
 	public function testCrossFileFixRenamesSubtypeTypedReceiver(): Void {
@@ -892,6 +897,78 @@ class NamingCheckTest extends Test {
 		final applied: String = RefactorSupport.applyEdits(source, slice.edits);
 		Assert.isTrue(applied.indexOf(present) >= 0, 'expected "$present" in: $applied');
 		Assert.isTrue(applied.indexOf(absent) == -1, 'unexpected "$absent" in: $applied');
+	}
+
+
+	public function testCrossFileFixRenamesUnrelatedSameNamedFieldsIndependently(): Void {
+		// Two UNRELATED classes A and B each declare a private `size` and are each subclassed, so both
+		// are non-confined cross-file candidates. Each subtype reaches the OTHER class's same-named field
+		// through a differently-typed receiver (`b.size` in A's subtype, `a.size` in B's) — a provably
+		// DIFFERENT owner that is IGNORED, so neither blocks the other. Both renames proceed in one run.
+		final aSrc: String = 'package pkg;\nclass A {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final subASrc: String = 'package pkg;\nclass SubA extends A {\n\tpublic function g(b:B) { return b.size; }\n}';
+		final bSrc: String = 'package pkg;\nclass B {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final subBSrc: String = 'package pkg;\nclass SubB extends B {\n\tpublic function g(a:A) { return a.size; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/A.hx', source: aSrc },
+			{ file: 'pkg/SubA.hx', source: subASrc },
+			{ file: 'pkg/B.hx', source: bSrc },
+			{ file: 'pkg/SubB.hx', source: subBSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(2, renames.length);
+		var renamedA: Bool = false;
+		var renamedB: Bool = false;
+		for (rename in renames) {
+			Assert.equals(1, rename.length);
+			if (rename[0].file == 'pkg/A.hx') {
+				renamedA = true;
+				assertRenameSlice(rename, 'pkg/A.hx', aSrc, '_size', 'var size');
+			}
+			if (rename[0].file == 'pkg/B.hx') {
+				renamedB = true;
+				assertRenameSlice(rename, 'pkg/B.hx', bSrc, '_size', 'var size');
+			}
+		}
+		Assert.isTrue(renamedA);
+		Assert.isTrue(renamedB);
+	}
+
+
+	public function testCrossFileFixBlocksOnUnresolvableReceiver(): Void {
+		// A subtype method reaching `.size` through a receiver whose type cannot be resolved (an untyped
+		// parameter) is an occurrence whose owner cannot be proven — it is left uncovered, so the
+		// completeness gate blocks the whole cross-file rename (fail-closed, unchanged behaviour).
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(o) { return o.size; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+
+	public function testFixDePrefixesDoubleUnderscoreField(): Void {
+		// A private field with a doubled underscore (`__size`) de-prefixes to the single-underscore
+		// convention (`_size`), mirroring the snake/de-prefix normalisation already applied to locals.
+		final src: String = 'package pkg;\nclass C {\n\tprivate var __size:Int;\n\tpublic function f() { return this.__size; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin(), index);
+		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('_size') >= 0);
+				Assert.isTrue(text.indexOf('__size') == -1);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
 	}
 
 }
