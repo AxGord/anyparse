@@ -822,6 +822,28 @@ typedef RefShape = {
 	@:optional var staticModifierKind: String;
 
 	/**
+	 * The `inline` modifier kind (Haxe `Inline`) — the `inline-constant` check reads it
+	 * to skip a field that is ALREADY inline, and (paired with the member host span) to
+	 * place an inserted `inline` keyword after `static` and before `final` in canonical
+	 * modifier order. Optional; unset makes the check a no-op.
+	 */
+	@:optional var inlineModifierKind: String;
+
+	/**
+	 * The literal node kinds whose `static final` constant can be safely and beneficially
+	 * rewritten to `static inline final` — the `inline-constant` check inlines only an
+	 * initializer of one of these kinds (or a `negationKind` wrapping a numeric one). The
+	 * grammar owns the policy: the Haxe grammar lists the basic scalar kinds (`IntLit` /
+	 * `HexLit` / `FloatLit` / `BoolLit`) and DELIBERATELY OMITS the string kinds. Evidence
+	 * (hxcpp codegen): an inlined String re-emits its full literal (`HX_("...")`) at every
+	 * use site, duplicating the string bytes once per use across translation units, whereas
+	 * a non-inline `static final` keeps a single shared copy — with no compensating runtime
+	 * benefit (both are static-backed, allocation-free). A scalar instead folds to an
+	 * immediate at each use with zero duplication. Optional; unset makes the check a no-op.
+	 */
+	@:optional var inlineConstantLiteralKinds: Array<String>;
+
+	/**
 	 * The constructor's member name (Haxe `new`) — the `member-order` check ranks the
 	 * constructor between the fields and the instance methods. Optional; unset means no
 	 * constructor is recognised (it sorts as an ordinary instance method).
