@@ -16,6 +16,20 @@ import anyparse.runtime.Span;
  * cleanup), with an autofix. An inline scalar constant folds to an immediate at
  * every use site instead of a static-field load.
  *
+ * ## Also: `static inline var` -> `static inline final`
+ *
+ * A `static inline var` of a constant literal (scalar OR String) is ALSO flagged and
+ * rewritten to `final`. Behaviour-neutral: a write to a `static inline var` is already
+ * a compile error ("This expression cannot be accessed for writing"), so `final` merely
+ * makes the existing immutability explicit. PUBLIC is included here (the add-inline case
+ * is non-public only) because the field is already `inline` - `var` -> `final` changes
+ * no ABI and no reflection surface (`Reflect.field` / `Type.getClassFields` are identical
+ * for inline var vs inline final, verified). String is accepted here (excluded for the
+ * add-inline case) for the same reason: no per-use-site codegen change, only the keyword.
+ * The reflection-name and `#if`-divergent gates below still apply, except a self-named
+ * event constant (`X = 'X'`) does not self-trip the reflection gate (its own value is
+ * subtracted from the reflection-key count).
+ *
  * ## The type annotation is PRESERVED (not dropped)
  *
  * The fix inserts only `inline`; it does NOT strip the `:Type` annotation. Dropping
@@ -75,6 +89,9 @@ final class InlineConstant implements Check {
 	/** The `final` keyword the member host span starts at — `inline ` is inserted immediately before it. */
 	private static inline final FINAL_KEYWORD: String = 'final';
 
+	/** The `var` keyword a `static inline var` host span starts at - swapped to `final`. */
+	private static inline final VAR_KEYWORD: String = 'var';
+
 	/** The meta that pins a field in place (reflection / external tooling); such a field is never inlined. */
 	private static inline final KEEP_META: String = '@:keep';
 
@@ -85,7 +102,7 @@ final class InlineConstant implements Check {
 	}
 
 	public function description(): String {
-		return 'a non-public static final scalar constant that can be inline';
+		return 'a non-public static final scalar that can be inline, or a static inline var that can be final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -113,8 +130,14 @@ final class InlineConstant implements Check {
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			if (source.substring(span.from, span.from + FINAL_KEYWORD.length) != FINAL_KEYWORD) continue;
-			edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
+			// Two flag shapes share this rule. The add-inline case flags a `static final`
+			// host (span starts at `final`) - insert `inline `. The var->final case flags a
+			// `static inline var` host (span starts at `var`) - swap the keyword. The byte
+			// check gates each, so an unexpected span simply produces no edit.
+			if (source.substring(span.from, span.from + FINAL_KEYWORD.length) == FINAL_KEYWORD)
+				edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
+			else if (source.substring(span.from, span.from + VAR_KEYWORD.length) == VAR_KEYWORD)
+				edits.push({ span: new Span(span.from, span.from + VAR_KEYWORD.length), text: FINAL_KEYWORD });
 		}
 		return edits;
 	}
@@ -154,6 +177,8 @@ final class InlineConstant implements Check {
 			else if (seams.members.contains(kind)) {
 				if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !exported && !sawKeep)
 					consider(out, file, child, seams, reflected);
+				else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
+					considerInlineVar(out, file, source, child, seams, reflected);
 				sawStatic = false;
 				sawInline = false;
 				exported = false;
@@ -180,13 +205,7 @@ final class InlineConstant implements Check {
 		if (reflected.contains(name)) return;
 		final init: Null<QueryNode> = initializerOf(field);
 		if (init == null || !isInlinableLiteral(init, seams)) return;
-		out.push({
-			file: file,
-			span: span,
-			rule: 'inline-constant',
-			severity: Severity.Info,
-			message: 'static constant \'$name\' is a scalar literal; use inline'
-		});
+		flag(out, file, span, 'static constant \'$name\' is a scalar literal; use inline');
 	}
 
 	/** The member host's initializer — its last child (the value expression; the type annotation is not a child). */
@@ -233,6 +252,7 @@ final class InlineConstant implements Check {
 		final defaultVis: Null<String> = shape.defaultVisibilityModifierText;
 		final staticKind: Null<String> = shape.staticModifierKind;
 		final literalKinds: Array<String> = shape.inlineConstantLiteralKinds ?? [];
+		final stringKinds: Array<String> = shape.stringLiteralKinds ?? [];
 		if (
 			containers.length == 0 || members.length == 0 || fieldKinds.length == 0 || visibility.length == 0 || defaultVis == null
 			|| staticKind == null || literalKinds.length == 0
@@ -244,16 +264,84 @@ final class InlineConstant implements Check {
 			containers: containers,
 			members: members,
 			finalFieldKinds: finalFieldKinds,
+			mutableFieldKinds: mutable,
 			visibility: visibility,
 			defaultVis: defaultVis,
 			staticKind: staticKind,
 			inlineKind: shape.inlineModifierKind,
 			metaKinds: plugin.metaShape().metaKinds,
 			literalKinds: literalKinds,
+			stringLiteralKinds: stringKinds,
 			numericKinds: shape.numericLiteralKinds ?? [],
 			negationKind: shape.negationKind,
 			stringFold: plugin.stringFoldSupport()
 		};
+	}
+
+	/**
+	 * Flag a `static inline var` whose initializer is a compile-time constant literal for
+	 * `var` -> `final`. Behaviour-neutral: a write to a `static inline var` is already a
+	 * compile error ("This expression cannot be accessed for writing"), so finalizing it
+	 * changes nothing at runtime, and PUBLIC is included (an inline field is erased
+	 * identically whether `var` or `final`, so reflection is unchanged). The `static` /
+	 * `inline` / `@:keep` gates are applied by the caller.
+	 */
+	private static function considerInlineVar(
+		out: Array<Violation>, file: String, source: String, field: QueryNode, seams: Seams, reflected: Array<String>
+	): Void {
+		final name: Null<String> = field.name;
+		final span: Null<Span> = field.span;
+		if (name == null || span == null) return;
+		final init: Null<QueryNode> = initializerOf(field);
+		if (init == null || !isConstLiteral(init, seams)) return;
+		if (reflectedElsewhere(name, init, source, seams, reflected)) return;
+		flag(out, file, span, 'static inline var \'$name\' is a constant; use final');
+	}
+
+	/**
+	 * Whether `init` is a compile-time constant literal for the `var` -> `final` case: a
+	 * scalar (`isInlinableLiteral`) OR a String literal. Unlike the add-inline case, String
+	 * is accepted here - the field is already inline, so there is no per-use-site codegen
+	 * change, only the keyword. Rejects arithmetic, calls, identifiers and an
+	 * `#if`-divergent value (a `ConditionalExpr`, not a literal).
+	 */
+	private static function isConstLiteral(init: QueryNode, seams: Seams): Bool {
+		return isInlinableLiteral(init, seams) || seams.stringLiteralKinds.contains(init.kind);
+	}
+
+	/**
+	 * Whether `name` is read as a reflection key SOMEWHERE OTHER than this field's own
+	 * value. The whole-scope reflection gate is kept, but a self-named event constant
+	 * (`X = 'X'`, the common event-name shape) must not self-trip it: `var` -> `final` is
+	 * reflection-neutral, so only a name stringified in OTHER code (`Reflect.field(o, "X")`)
+	 * keeps the field a `var`. The field's own value string is subtracted from the count.
+	 */
+	private static function reflectedElsewhere(
+		name: String, init: QueryNode, source: String, seams: Seams, reflected: Array<String>
+	): Bool {
+		var count: Int = 0;
+		for (s in reflected) if (s == name) count++;
+		if (count == 0) return false;
+		final self: Int = ownValueIsName(name, init, source, seams.stringFold) ? 1 : 0;
+		return count > self;
+	}
+
+	/** Whether `init` is a String literal whose content equals `name` (a self-named event constant). */
+	private static function ownValueIsName(name: String, init: QueryNode, source: String, stringFold: Null<StringFoldSupport>): Bool {
+		if (stringFold == null) return false;
+		final lit: Null<StringLiteral> = stringFold.literalOf(init, source);
+		return lit != null && lit.content == name;
+	}
+
+	/** Push an `inline-constant` Info violation for a field at `span` with `message`. */
+	private static function flag(out: Array<Violation>, file: String, span: Span, message: String): Void {
+		out.push({
+			file: file,
+			span: span,
+			rule: 'inline-constant',
+			severity: Severity.Info,
+			message: message
+		});
 	}
 
 }
@@ -263,12 +351,14 @@ private typedef Seams = {
 	final containers: Array<String>;
 	final members: Array<String>;
 	final finalFieldKinds: Array<String>;
+	final mutableFieldKinds: Array<String>;
 	final visibility: Array<String>;
 	final defaultVis: String;
 	final staticKind: String;
 	final inlineKind: Null<String>;
 	final metaKinds: Array<String>;
 	final literalKinds: Array<String>;
+	final stringLiteralKinds: Array<String>;
 	final numericKinds: Array<String>;
 	final negationKind: Null<String>;
 	final stringFold: Null<StringFoldSupport>;

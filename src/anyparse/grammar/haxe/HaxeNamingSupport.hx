@@ -191,7 +191,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * maps to a category. `mods` come from the modifier siblings preceding the
 	 * node in its parent (the projection surfaces `public static fn` as
 	 * `(Public)(Static)(FnMember)`), so a `final` field is a Constant when
-	 * static and a Field otherwise.
+	 * static and a Field otherwise, and a `static inline var` is a Constant too
+	 * (a compile-time constant - a write to it is a compile error).
 	 */
 	private static function walk(
 		node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, out: Array<NamedDecl>
@@ -259,7 +260,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		return switch node.kind {
 			case 'ClassDecl' | 'ClassForm' | 'InterfaceDecl' | 'EnumDecl' | 'AbstractDecl' | 'EnumAbstractDecl' | 'TypedefDecl': NamingCategory.Type;
 			case 'FnMember' | 'FinalModifiedMember': NamingCategory.Method;
-			case 'VarMember': NamingCategory.Field;
+			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'SimpleCtor' | 'ParamCtor': NamingCategory.EnumValue;
 			case 'VarStmt' | 'FinalStmt': NamingCategory.Local;

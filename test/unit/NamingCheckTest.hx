@@ -649,4 +649,29 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
 	}
 
+
+	public function testStaticInlineVarConstantOk(): Void {
+		// A `static inline var` is a compile-time constant (a write is a compile error,
+		// "This expression cannot be accessed for writing" - verified with haxe 4.3.7), so
+		// UPPER_SNAKE is the correct convention: an event-name constant must NOT be flagged
+		// as a camelCase public field.
+		Assert.equals(0, violations('class C {\n\tpublic static inline var ITEM_SELECTED:String = "ITEM_SELECTED";\n}').length);
+	}
+
+	public function testStaticInlineVarPascalFlaggedAsConstant(): Void {
+		// Reclassified as a Constant: a PascalCase `static inline var` is flagged by the
+		// constant rule (UPPER_SNAKE or camelCase), not by the camelCase-public-field rule.
+		final vs: Array<Violation> = violations('class C {\n\tpublic static inline var BadName:Int = 1;\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('static final'));
+	}
+
+	public function testStaticMutableVarStillPublicField(): Void {
+		// A plain (non-inline) static var is mutable, NOT a constant - it stays under the
+		// public-field rule; the reclassification must not over-reach to mutable statics.
+		final vs: Array<Violation> = violations('class C {\n\tpublic static var Count:Int = 0;\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('public field'));
+	}
+
 }

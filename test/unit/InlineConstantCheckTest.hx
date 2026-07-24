@@ -166,4 +166,72 @@ class InlineConstantCheckTest extends Test {
 		return out;
 	}
 
+
+	public function testInlineVarIntFlagged(): Void {
+		// A `static inline var` scalar constant is flagged for var -> final (behaviour-neutral:
+		// a write to a static inline var is already a compile error - verified).
+		final vs: Array<Violation> = violations('class C { public static inline var N:Int = 5; }');
+		Assert.equals(1, vs.length);
+		Assert.equals('inline-constant', vs[0].rule);
+		Assert.isTrue(vs[0].message.indexOf('use final') >= 0);
+	}
+
+	public function testInlineVarStringFlagged(): Void {
+		// Unlike the add-inline case (String excluded for hxcpp per-use-site duplication), the
+		// var -> final case accepts String: the field is already inline, so nothing about its
+		// codegen changes - only the keyword.
+		Assert.equals(1, violations('class C { public static inline var EV:String = "evt"; }').length);
+	}
+
+	public function testInlineVarSelfNamedEventConstantFlagged(): Void {
+		// An event-name constant whose value equals its own name must NOT self-trip the
+		// reflection gate (var -> final is reflection-neutral: Reflect.field / Type.getClassFields
+		// identical for inline var vs inline final - verified).
+		Assert.equals(1, violations('class C { public static inline var ITEM_SELECTED:String = "ITEM_SELECTED"; }').length);
+	}
+
+	public function testInlineVarPublicFlagged(): Void {
+		// PUBLIC is included: inline var -> inline final changes no ABI (the field stays inline).
+		Assert.equals(1, violations('class C { public static inline var N:Int = 5; }').length);
+	}
+
+	public function testInlineVarFixVarToFinal(): Void {
+		final fixed: String = fixedSource('class C { public static inline var N:Int = 5; }');
+		Assert.isTrue(fixed.indexOf('public static inline final N:Int = 5') >= 0);
+	}
+
+	public function testInlineVarStringFixVarToFinal(): Void {
+		final fixed: String = fixedSource('class C { public static inline var ITEM_SELECTED:String = "ITEM_SELECTED"; }');
+		Assert.isTrue(fixed.indexOf('public static inline final ITEM_SELECTED:String') >= 0);
+	}
+
+	public function testInlineVarKeepNotFlagged(): Void {
+		// A @:keep field is explicitly retained (reflection / tooling) - never rewritten.
+		Assert.equals(0, violations('class C { @:keep public static inline var N:Int = 5; }').length);
+	}
+
+	public function testInlineVarReflectedElsewhereNotFlagged(): Void {
+		// The name read as a reflection key in OTHER code (not its own value) keeps it a var.
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public static inline var MYCONST:Int = 5; }' },
+			{ file: 'D.hx', source: 'class D { function f():Void { Reflect.field(C, "MYCONST"); } }' }
+		];
+		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	public function testInlineVarExprInitNotFlagged(): Void {
+		// An arithmetic initializer is not a bare literal - left alone (conservative constant test).
+		Assert.equals(0, violations('class C { public static inline var N:Int = 1 + 2; }').length);
+	}
+
+	public function testInlineVarConditionalValueNotFlagged(): Void {
+		// An #if-divergent initializer is a ConditionalExpr, not a plain literal - left alone.
+		Assert.equals(0, violations('class C { public static inline var N:Int = #if debug 1 #else 2 #end; }').length);
+	}
+
+	public function testNonInlineStaticVarNotFlagged(): Void {
+		// A plain (non-inline) static var is mutable - writes are allowed, so var -> final is unsound.
+		Assert.equals(0, violations('class C { public static var n:Int = 5; }').length);
+	}
+
 }
