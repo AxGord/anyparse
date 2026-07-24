@@ -481,6 +481,9 @@ import unit.ExplicitLocalTypeOracleTest;
 import unit.ExplicitLocalTypeOracleE2ETest;
 import unit.PreferInlineOracleTest;
 import unit.PreferSwitchExpressionAssignmentCheckTest;
+import unit.AvoidDynamicBagCheckTest;
+import unit.AvoidDynamicBagFixTest;
+import unit.AvoidDynamicBagOracleE2ETest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -871,6 +874,9 @@ class RunTests {
 		addCase(new AvoidDynamicCheckTest());
 		addCase(new AvoidDynamicNarrowFixTest());
 		addCase(new AvoidDynamicRiskyFixE2ETest());
+		addCase(new AvoidDynamicBagCheckTest());
+		addCase(new AvoidDynamicBagFixTest());
+		addCase(new AvoidDynamicBagOracleE2ETest());
 		addCase(new PreferSwitchCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
