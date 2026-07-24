@@ -1,0 +1,128 @@
+package unit;
+
+import utest.Assert;
+import utest.Test;
+import anyparse.check.Check.Violation;
+import anyparse.check.EmptyComment;
+import anyparse.check.Linter;
+import anyparse.check.Severity;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.runtime.Span;
+
+/**
+ * The `empty-comment` check: a content-free comment (a line comment with only
+ * whitespace after the slashes, an empty block comment, or an empty doc comment
+ * including multi-line ones whose interior is only stars and whitespace) is
+ * flagged `Warning`. `fix` removes it — the whole physical line(s) when the
+ * comment is alone on them, otherwise it strips the comment and rtrims the code
+ * line. Deliberate dividers, directives, and any printable content are kept.
+ */
+class EmptyCommentCheckTest extends Test {
+
+	public function testStandaloneLineCommentFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tfunction f():Void {\n\t\t//\n\t\tg();\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals('empty-comment', vs[0].rule);
+		Assert.equals(Severity.Warning, vs[0].severity);
+		Assert.equals('empty comment', vs[0].message);
+	}
+
+	public function testTrailingLineCommentFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\tg(); //\n\t}\n}').length);
+	}
+
+	public function testWhitespaceOnlyLineCommentFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t//   \t\n}').length);
+	}
+
+	public function testSeparatorLineKept(): Void {
+		Assert.equals(0, violations('class C {\n\t//--------\n}').length);
+	}
+
+	public function testNoqaDirectiveKept(): Void {
+		Assert.equals(0, violations('class C {\n\tvar x:Int = 0; // noqa\n}').length);
+	}
+
+	public function testNonEmptyLineCommentKept(): Void {
+		Assert.equals(0, violations('class C {\n\t// a real comment\n}').length);
+	}
+
+	public function testEmptyBlockCommentFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t/**/\n}').length);
+	}
+
+	public function testWhitespaceBlockCommentFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t/*   */\n}').length);
+	}
+
+	public function testEmptyDocCommentFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t/** */\n}').length);
+	}
+
+	public function testMultilineEmptyDocCommentFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\t/**\n\t *\n\t */\n}').length);
+	}
+
+	public function testNonEmptyBlockCommentKept(): Void {
+		Assert.equals(0, violations('class C {\n\t/* e */\n}').length);
+	}
+
+	public function testNonEmptyDocCommentKept(): Void {
+		Assert.equals(0, violations('class C {\n\t/** Returns x. */\n}').length);
+	}
+
+	public function testCommentInStringLiteralKept(): Void {
+		Assert.equals(0, violations('class C {\n\tvar s:String = "//";\n}').length);
+	}
+
+	public function testFixRemovesStandaloneLine(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar day:Int = 0;\n\t\t//\n\t\tg(day);\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tvar day:Int = 0;\n\t\tg(day);\n\t}\n}', applyFix(src));
+	}
+
+	public function testFixStripsTrailingComment(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tg(); //\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t}\n}', applyFix(src));
+	}
+
+	public function testFixRemovesEmptyBlockLine(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\t/**/\n\t\tg();\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t}\n}', applyFix(src));
+	}
+
+	public function testFixRemovesMultilineDoc(): Void {
+		final src: String = 'class C {\n\t/**\n\t *\n\t */\n\tfunction f():Void {}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {}\n}', applyFix(src));
+	}
+
+	public function testSeparatorNotFixed(): Void {
+		final src: String = 'class C {\n\t//--------\n}';
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('empty-comment'));
+		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		Assert.isTrue(ids.contains('empty-comment'));
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function f() { /* ').length);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new EmptyComment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function applyFix(src: String): String {
+		final check: EmptyComment = new EmptyComment();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+}

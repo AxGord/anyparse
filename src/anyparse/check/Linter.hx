@@ -46,6 +46,7 @@ final class Linter {
 			new RedundantParens(),
 			new ConstantCondition(),
 			new EmptyStatement(),
+			new EmptyComment(),
 			new RedundantElse(),
 			new ComparisonToBoolean(),
 			new CollapsibleIf(),

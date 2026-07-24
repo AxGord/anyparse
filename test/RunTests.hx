@@ -486,6 +486,7 @@ import unit.AvoidDynamicBagCheckTest;
 import unit.AvoidDynamicBagFixTest;
 import unit.AvoidDynamicBagOracleE2ETest;
 import unit.ClassifyOccurrencesTest;
+import unit.EmptyCommentCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -926,6 +927,7 @@ class RunTests {
 		addCase(new TypeResolverSliceTest());
 		addCase(new ConstantConditionCheckTest());
 		addCase(new EmptyStatementCheckTest());
+		addCase(new EmptyCommentCheckTest());
 		addCase(new RedundantElseCheckTest());
 		addCase(new ComparisonToBooleanCheckTest());
 		addCase(new CollapsibleIfCheckTest());
