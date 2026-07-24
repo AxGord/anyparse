@@ -115,3 +115,49 @@ interface RiskyFix {}
  */
 @:nullSafety(Strict)
 interface DefaultOff {}
+
+/**
+ * The type-query seam a `CompilerOracle`-backed display server exposes to an
+ * `OracleAssisted` check: `typeAt` returns the compiler's OWN inferred type at a
+ * byte position (the local's name token), or null when the position carries no
+ * type / the query failed. The type text is already XML-decoded and trimmed — the
+ * fully-qualified, possibly-generic form the compiler prints (`haxe.ds.Map<String, Int>`);
+ * the check normalises and rejects it. The concrete implementation
+ * (`CompilerDisplayOracle`) drives the Haxe display protocol against a warm
+ * compilation server, but the seam is compiler-agnostic — a test double supplies
+ * canned types with no process.
+ */
+@:nullSafety(Strict)
+interface TypeOracle {
+
+	/** The compiler's inferred type at `bytePos` in `file` (XML-decoded, trimmed), or null when none / the query failed. */
+	public function typeAt(file: String, bytePos: Int): Null<String>;
+
+}
+
+/**
+ * Opt-in marker for a `Check` whose autofix needs the compiler ORACLE while it
+ * COMPUTES its edits (not merely to verify them afterwards, as `RiskyFix` does) —
+ * a type the check cannot resolve structurally is asked of the `TypeOracle`. Active
+ * ONLY when the project configures a `compilerOracle`; `Cli.applyLintFixes` then runs
+ * `fixWithOracle` for each unfixed finding, applies the edits per file, and verifies
+ * the file still typechecks (reverting it otherwise — the report-only fallback). With
+ * no oracle configured the seam is never entered, so behaviour is byte-identical to a
+ * run without the key. The first consumer is `explicit-local-type`, whose
+ * resolver-unreachable tail (generics / inference) only the compiler can name.
+ */
+@:nullSafety(Strict)
+interface OracleAssisted {
+
+	/**
+	 * The oracle-assisted source edits for `violations` (this check's OWN, for ONE
+	 * `source` / file), each a raw `{span, text}` the caller batches into a single
+	 * `RefactorSupport.canonicalize` — the same contract as `Check.fix`, but free to
+	 * consult `oracle` for a type it cannot pin structurally. A finding the oracle
+	 * cannot soundly type yields no edit.
+	 */
+	public function fixWithOracle(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): Array<{ span: Span, text: String }>;
+
+}

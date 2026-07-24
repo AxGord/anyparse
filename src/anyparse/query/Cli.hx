@@ -63,6 +63,9 @@ import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
 import anyparse.check.FixVerifier.FixVerifyResult;
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.CompilerDisplayOracle;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1422,10 +1425,21 @@ final class Cli {
 		fixedCount += risky.appliedCount;
 		final riskyTail: String = risky.tail;
 
+		// OracleAssisted checks (explicit-local-type's generics/inference tail): applied
+		// ONLY with a compilerOracle — each finding's type is asked of a warm display
+		// server, the edited files are re-typechecked, and any that break the build are
+		// reverted to report-only (verifyOracleBatch). No oracle / no such check → inert.
+		final oracleAssisted: Array<Check> = [for (c in checks) if (c is OracleAssisted) c];
+		final oa: { tail: String, appliedCount: Int } = applyOracleAssistedFixes(
+			files, oracleAssisted, cached, oracleHxml, oracleDir, optsByFile, changedFiles, resolveConfig
+		);
+		fixedCount += oa.appliedCount;
+		final oracleTail: String = oa.tail;
+
 		final skipTail: String = noted.length > 0 ? ', ${noted.length} file(s) skipped' : '';
 		final capTail: String = hitCap ? ' (stopped at $maxPasses passes — re-run if more remain)' : '';
 		stderr(
-			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail$riskyTail\n'
+			'apq lint --fix: fixed $fixedCount issue(s) in ${changedFiles.length} file(s) over $passes pass(es)$skipTail$capTail$riskyTail$oracleTail\n'
 		);
 		return EXIT_OK;
 	}
@@ -5077,8 +5091,11 @@ final class Cli {
 		sysPrint('\n');
 		sysPrint('A top-level "compilerOracle" key (path to an .hxml, relative to the config)\n');
 		sysPrint('runs "haxe <hxml> --no-output" as a ground-truth typecheck: a compile error\n');
-		sysPrint('fails the run, and a RiskyFix rule fix is reverted under --fix if it breaks\n');
-		sysPrint('the build. Without the key no compiler is ever spawned.\n');
+		sysPrint('fails the run, a RiskyFix rule fix is reverted under --fix if it breaks the\n');
+		sysPrint('build, and an OracleAssisted rule (explicit-local-type) asks a warm display\n');
+		sysPrint('server for the inferred type of each finding it cannot resolve structurally,\n');
+		sysPrint('reverting any annotated file that fails to typecheck. Without the key no\n');
+		sysPrint('compiler is ever spawned.\n');
 		sysPrint('\n');
 		sysPrint('Options:\n');
 		sysPrint('  --rule <id>       Run only this check (repeatable; default: all)\n');
@@ -14296,6 +14313,142 @@ final class Cli {
 		sysPrint('the authoritative pass/fail signal.\n');
 	}
 	#end
+
+
+	/**
+	 * The OracleAssisted tail of `--fix`: for each oracle-assisted check (only
+	 * `explicit-local-type` today), ask a warm Haxe display server for the compiler's
+	 * inferred type of every finding the structural arm left, annotate it, then WRITE
+	 * the edited files and VERIFY the project still typechecks with a FRESH
+	 * `CompilerOracle.typecheck` — reverting any file the compiler rejects (the
+	 * report-only fallback). Runs ONLY when a `compilerOracle` is configured and the
+	 * baseline typechecks (so a failure is attributable to our annotation); otherwise a
+	 * note and zero edits, byte-identical to a run without the key. The display server is
+	 * queried READ-ONLY (files unchanged since the warm) — verification is a fresh
+	 * process because the server's mtime cache is stale within the same second (see
+	 * `CompilerDisplayOracle`). Split from `applyLintFixes` for the complexity budget.
+	 */
+	private static function applyOracleAssistedFixes(
+		files: Array<{ file: String, source: String }>, oracleChecks: Array<Check>, plugin: GrammarPlugin, oracleHxml: Null<String>,
+		oracleDir: Null<String>, optsByFile: Map<String, Null<String>>, changedFiles: Array<String>, resolveConfig: (String) -> LintConfig
+	): { tail: String, appliedCount: Int } {
+		if (oracleChecks.length == 0) return { tail: '', appliedCount: 0 };
+		if (oracleHxml == null) return {
+			tail: ', ${oracleChecks.length} oracle-assisted rule(s) left report-only (no compilerOracle configured)',
+			appliedCount: 0
+		};
+		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+			case Confirmed:
+			case Unavailable(reason):
+				return { tail: ', oracle-assisted skipped (oracle unavailable: $reason)', appliedCount: 0 };
+			case Rejected(_):
+				return { tail: ', oracle-assisted skipped (oracle baseline does not typecheck)', appliedCount: 0 };
+		}
+		final display: Null<CompilerDisplayOracle> = CompilerDisplayOracle.start(oracleHxml, oracleDir);
+		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
+		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
+		final candidates: Array<{ file: String, before: String, after: String }> = [];
+		for (entry in files) {
+			final allEdits: Array<{ span: Span, text: String }> = [];
+			for (check in oracleChecks) {
+				final own: Array<Violation> = check.run([{ file: entry.file, source: entry.source }], plugin)
+					.filter(v -> v.rule == check.id());
+				if (own.length == 0) continue;
+				for (e in (cast check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) allEdits.push(e);
+			}
+			if (allEdits.length == 0) continue;
+			switch RefactorSupport.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {
+				case Ok(text) if (text != entry.source):
+					candidates.push({ file: entry.file, before: entry.source, after: text });
+				case _:
+			}
+		}
+		display.stop();
+		if (candidates.length == 0) return { tail: ', oracle-assisted: 0 applied', appliedCount: 0 };
+		final result: { applied: Array<String>, reverted: Array<String> } = verifyOracleBatch(candidates, oracleHxml, oracleDir);
+		for (f in result.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
+		return {
+			tail: ', oracle-assisted: ${result.applied.length} applied, ${result.reverted.length} reverted to report-only',
+			appliedCount: result.applied.length
+		};
+	}
+
+	/**
+	 * Write every candidate's annotated source, then typecheck FRESH and REVERT any file
+	 * the compiler blames — retrying until the build is clean, unattributable, or a pass
+	 * budget is spent. A file whose annotation breaks the build is restored to `before`
+	 * (report-only); the rest are kept. Batch-then-error-guided-revert keeps the verify
+	 * to a FEW full compiles instead of one per file — the throughput the per-file spec
+	 * degrades to at scale (a local's annotation errors in its OWN file, so the compiler
+	 * names the culprits precisely). A pass-budget or unverifiable outcome reverts ALL
+	 * remaining, never keeping an unverified edit.
+	 */
+	private static function verifyOracleBatch(
+		candidates: Array<{ file: String, before: String, after: String }>, oracleHxml: String, oracleDir: Null<String>
+	): { applied: Array<String>, reverted: Array<String> } {
+		for (c in candidates) writeFile(c.file, c.after);
+		final reverted: Array<String> = [];
+		var confirmed: Bool = false;
+		var pass: Int = 0;
+		final maxPasses: Int = 6;
+		while (pass < maxPasses && !confirmed) {
+			pass++;
+			switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+				case Confirmed:
+					confirmed = true;
+				case Unavailable(_):
+					revertRemaining(candidates, reverted);
+					break;
+				case Rejected(errors):
+					final culprits: Array<String> = oracleErrorFiles(errors, candidates, reverted);
+					if (culprits.length == 0) {
+						revertRemaining(candidates, reverted);
+						break;
+					}
+					for (f in culprits) {
+						for (c in candidates) if (c.file == f) writeFile(c.file, c.before);
+						reverted.push(f);
+					}
+			}
+		}
+		if (!confirmed) revertRemaining(candidates, reverted);
+		final applied: Array<String> = [for (c in candidates) if (!reverted.contains(c.file)) c.file];
+		return { applied: applied, reverted: reverted };
+	}
+
+	/** Candidate files (not already reverted) the compiler error text blames — a local's bad annotation errors in its own file, so the error's `path:` names the culprit. */
+	private static function oracleErrorFiles(
+		errors: String, candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
+	): Array<String> {
+		final out: Array<String> = [];
+		for (c in candidates) {
+			if (reverted.contains(c.file) || out.contains(c.file)) continue;
+			if (errorMentionsFile(errors, c.file)) out.push(c.file);
+		}
+		return out;
+	}
+
+	/** Whether any error line's leading `path:` token equals `full`, IS its basename, or ends with `/<basename>`. */
+	private static function errorMentionsFile(errors: String, full: String): Bool {
+		final base: String = haxe.io.Path.withoutDirectory(full);
+		for (line in errors.split('\n')) {
+			final colon: Int = line.indexOf(':');
+			if (colon <= 0) continue;
+			final path: String = StringTools.trim(line.substring(0, colon));
+			if (path == full || path == base || StringTools.endsWith(path, '/$base')) return true;
+		}
+		return false;
+	}
+
+	/** Restore every not-yet-reverted candidate to its pre-annotation bytes and mark it reverted. */
+	private static function revertRemaining(
+		candidates: Array<{ file: String, before: String, after: String }>, reverted: Array<String>
+	): Void {
+		for (c in candidates) if (!reverted.contains(c.file)) {
+			writeFile(c.file, c.before);
+			reverted.push(c.file);
+		}
+	}
 
 }
 

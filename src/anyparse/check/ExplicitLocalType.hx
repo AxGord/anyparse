@@ -10,6 +10,10 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
+import anyparse.check.Check.OracleAssisted;
+import anyparse.check.Check.ConfigAware;
+import anyparse.check.Check.TypeOracle;
+import anyparse.check.LintConfig;
 
 /**
  * Flags a local `var` / `final` declared WITHOUT an explicit `:Type` annotation —
@@ -111,7 +115,7 @@ import anyparse.runtime.Span;
  * `parenKind` simply means no unwrapping.
  */
 @:nullSafety(Strict)
-final class ExplicitLocalType implements Check implements DefaultOff {
+final class ExplicitLocalType implements Check implements DefaultOff implements OracleAssisted implements ConfigAware {
 
 	private static inline final RULE_ID: String = 'explicit-local-type';
 
@@ -461,5 +465,143 @@ final class ExplicitLocalType implements Check implements DefaultOff {
 		}
 		return elem == null ? null : 'Array<$elem>';
 	}
+
+
+	/**
+	 * The compiler-oracle TAIL of the autofix: for each finding the structural arm left
+	 * report-only, ask the `TypeOracle` for the compiler's OWN inferred type at the
+	 * local's name token, reject the ones no sound annotation can restate
+	 * (`normalizeInferredType`), and emit `:Type` for the rest. Entered only when the
+	 * project configures a `compilerOracle` — `Cli.applyLintFixes` verifies each edited
+	 * file still typechecks and reverts it otherwise, so an over-eager annotation is
+	 * caught rather than shipped. The query byte position is `insertPoint - 1` (the name
+	 * token's last char, a position the display protocol resolves; the char AFTER the
+	 * name is not a completion point); the SAME `insertPoint` is the edit anchor.
+	 */
+	public function fixWithOracle(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, oracle: TypeOracle
+	): Array<{ span: Span, text: String }> {
+		final shape: RefShape = plugin.refShape();
+		final locals: Array<String> = shape.localDeclKinds ?? [];
+		final tree: Null<QueryNode> = locals.length == 0 ? null : CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return [];
+		final byKey: Map<String, QueryNode> = [];
+		RefactorSupport.indexNodesByKind(tree, locals, byKey);
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		final maxAnon: Int = maxAnonLen(violations);
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (v in violations) {
+			final span: Null<Span> = v.span;
+			if (span == null) continue;
+			final node: Null<QueryNode> = byKey['${span.from}:${span.to}'];
+			if (node == null || node.children.length == 0) continue;
+			final at: Int = LiteralInfer.insertPoint(node, node.children[0], source);
+			if (at <= 0) continue;
+			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
+			if (raw == null) continue;
+			final norm: Null<String> = normalizeInferredType(raw, importMap, maxAnon);
+			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
+		}
+		return edits;
+	}
+
+	/** Inject the linter's per-file config resolver (for `maxInferredTypeLength`), or null to fall back to `discover`. */
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_configResolver = resolve;
+	}
+
+	/**
+	 * The `maxInferredTypeLength` cap (chars) for an anonymous-structure annotation,
+	 * read from the file's `apqlint.json` via the injected resolver (or discovered), or
+	 * `DEFAULT_MAX_ANON_LEN` when unset. Resolved off the first violation's file — the
+	 * oracle pass groups a `fixWithOracle` call per file.
+	 */
+	private function maxAnonLen(violations: Array<Violation>): Int {
+		if (violations.length == 0) return DEFAULT_MAX_ANON_LEN;
+		final cfg: LintConfig = LintConfig.resolveWith(_configResolver, violations[0].file);
+		return cfg.intOption(RULE_ID, 'maxInferredTypeLength') ?? DEFAULT_MAX_ANON_LEN;
+	}
+
+	/**
+	 * Normalise a compiler-inferred type text to a sound, short annotation, or null when
+	 * no annotation should be written. REJECTS: a monomorph / inference hole (`Unknown<`
+	 * — the compiler could not pin it either), an anonymous structure longer than
+	 * `maxAnonLen` (annotatable but noisy), and a bare `_` type-param placeholder (not a
+	 * nameable type; a clean function type or a small anon struct is kept). Otherwise
+	 * shortens qualified nominals to the file's short form where provably in scope
+	 * (`shortenType`), leaving anything else fully qualified (which always resolves).
+	 * PURE: unit-testable with a plain `importMap` and no compiler.
+	 */
+	public static function normalizeInferredType(raw: String, importMap: Map<String, String>, maxAnonLen: Int): Null<String> {
+		final t: String = StringTools.trim(raw);
+		if (t == '') return null;
+		if (t.indexOf('Unknown<') != -1) return null;
+		if (t.indexOf('{') != -1 && t.length > maxAnonLen) return null;
+		if (hasBareUnderscore(t)) return null;
+		return shortenType(t, importMap);
+	}
+
+	/** Whether `t` contains a standalone `_` identifier run — an unnameable type-param placeholder. */
+	private static function hasBareUnderscore(t: String): Bool {
+		final n: Int = t.length;
+		var i: Int = 0;
+		while (i < n) {
+			if (!RefactorSupport.isIdentChar(StringTools.fastCodeAt(t, i))) {
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(t, i))) i++;
+			if (t.substring(start, i) == '_') return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Rewrite every maximal qualified-nominal run (`[A-Za-z0-9_.]+`) of `t` to its short
+	 * form where that is provably in scope, copying generic punctuation / spaces / field
+	 * names verbatim. A dotted run shortens to its simple name when the simple name is an
+	 * always-in-scope builtin (`haxe.ds.Map` -> `Map`) or the file imports EXACTLY that
+	 * FQN (`importMap[simple] == run`); otherwise the run stays fully qualified — which
+	 * resolves in any file — so the result never fails to compile for want of an import.
+	 */
+	private static function shortenType(t: String, importMap: Map<String, String>): String {
+		final buf: StringBuf = new StringBuf();
+		final n: Int = t.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(t, i);
+			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
+				buf.addChar(c);
+				i++;
+				continue;
+			}
+			final start: Int = i;
+			while (i < n) {
+				final cc: Int = StringTools.fastCodeAt(t, i);
+				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
+				i++;
+			}
+			buf.add(shortenComponent(t.substring(start, i), importMap));
+		}
+		return buf.toString();
+	}
+
+	/** Short form of ONE nominal run when provably in scope (builtin or exact-FQN import), else the run verbatim (fully qualified always resolves). */
+	private static function shortenComponent(run: String, importMap: Map<String, String>): String {
+		final dot: Int = run.lastIndexOf('.');
+		if (dot < 0) return run;
+		final simple: String = run.substring(dot + 1);
+		if (ALWAYS_IN_SCOPE.contains(simple)) return simple;
+		final imported: Null<String> = importMap.get(simple);
+		return imported != null && imported == run ? simple : run;
+	}
+
+	/** The per-file config resolver injected by the linter (`ConfigAware`), or null to fall back to `LintConfig.discover`. */
+	private var _configResolver: Null<(String) -> LintConfig> = null;
+
+	/** Default `maxInferredTypeLength`: an anonymous-structure annotation longer than this stays report-only. */
+	private static inline final DEFAULT_MAX_ANON_LEN: Int = 80;
 
 }
