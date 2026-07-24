@@ -165,20 +165,14 @@ final class TypeResolver {
 		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
 	): Bool {
 		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
-		final identKind: Null<String> = shape.identKind;
-		if (fieldAccessKind == null || identKind == null || callNode.children.length == 0) return false;
+		if (fieldAccessKind == null || callNode.children.length == 0) return false;
 		final callee: QueryNode = callNode.children[0];
 		if (callee.kind != fieldAccessKind || callee.children.length != 1) return false;
 		final method: Null<String> = callee.name;
 		final receiver: QueryNode = callee.children[0];
 		final typeName: Null<String> = receiver.name;
 		if (method == null || typeName == null || !PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')) return false;
-		var root: QueryNode = receiver;
-		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
-		final rootName: Null<String> = root.name;
-		final rootSpan: Null<Span> = root.span;
-		if (root.kind != identKind || rootName == null || rootSpan == null) return false;
-		if (resolveBindingFrom(rootName, rootSpan, tree, shape) != null) return false;
+		if (!receiverRootIsUnboundType(receiver, tree, shape)) return false;
 		if (index.declaringFiles(typeName).length != 0) return false;
 		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
 		return true;
@@ -197,6 +191,26 @@ final class TypeResolver {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `receiver` is a genuine TYPE reference — its ROOT identifier (walking down any
+	 * `pkg.Type` field-access chain) binds to NO value: a local / parameter / field of the same
+	 * name would make the access an INSTANCE access, not a static one. Shared by
+	 * `isPureStdlibCall` and `ExplicitLocalType`'s static-method-return arm. False when the
+	 * `fieldAccessKind` / `identKind` seams are unset, the root is not a bare identifier, or it
+	 * resolves to a value binding.
+	 */
+	public static function receiverRootIsUnboundType(receiver: QueryNode, tree: QueryNode, shape: RefShape): Bool {
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		final identKind: Null<String> = shape.identKind;
+		if (fieldAccessKind == null || identKind == null) return false;
+		var root: QueryNode = receiver;
+		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
+		final rootName: Null<String> = root.name;
+		final rootSpan: Null<Span> = root.span;
+		if (root.kind != identKind || rootName == null || rootSpan == null) return false;
+		return resolveBindingFrom(rootName, rootSpan, tree, shape) == null;
 	}
 
 	/**

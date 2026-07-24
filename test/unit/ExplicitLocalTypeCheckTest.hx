@@ -555,4 +555,51 @@ class ExplicitLocalTypeCheckTest extends Test {
 		]);
 	}
 
+
+	// --- fix: static-method call whose Type.method return is tabled (macro-API + stdlib) ---
+
+	public function testFixStaticMethodCallResolvePath(): Void {
+		// Context.resolvePath(path):String inside a (macro) function body — display-oracle blind,
+		// pinned structurally by the static-method-return table.
+		assertFixContains('final p = Context.resolvePath(path);', 'p:String');
+	}
+
+
+	public function testFixStaticMethodCallCurrentPosDotted(): Void {
+		// A dotted `haxe.macro.Context` receiver still resolves by simple type name.
+		assertFixContains('final pos = haxe.macro.Context.currentPos();', 'pos:haxe.macro.Expr.Position');
+	}
+
+	public function testFixStaticMethodDateNow(): Void {
+		// stdlib static return, non-generic.
+		assertFixContains('final n = Date.now();', 'n:Date');
+	}
+
+	public function testFixStaticMethodFileAppend(): Void {
+		assertFixContains("final f = sys.io.File.append('x', false);", 'f:sys.io.FileOutput');
+	}
+
+	public function testFixBareNewQualifiedPath(): Void {
+		// `Path` is a whitelisted non-generic constructor type -> the written name verbatim.
+		assertFixContains("final p = new haxe.io.Path('x');", 'p:haxe.io.Path');
+	}
+
+	public function testSkipUntabledStaticMethod(): Void {
+		// `Context.getType` returns a generic-dependent `Type`, deliberately absent from the table.
+		assertNoFix("final t = Context.getType('Foo');");
+	}
+
+	public function testSkipStaticMethodReceiverShadowedByLocal(): Void {
+		// A local named `Date` shadows the type: `Date.now()` reads the local's field, not the
+		// static. The receiver resolves to a value binding -> report-only.
+		assertNoFix('var Date:C = this;\n\t\tfinal n = Date.now();');
+	}
+
+	public function testSkipStaticMethodIndexShadowedType(): Void {
+		// An indexed project type named `Date` shadows the stdlib -> its `now()` may differ -> report-only.
+		assertNoFixIdx(wrap('final n = Date.now();'), [
+			{ file: 'Date.hx', source: 'class Date {\n\tpublic static function now():Int return 0;\n}' }
+		]);
+	}
+
 }

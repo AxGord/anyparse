@@ -67,6 +67,14 @@ import anyparse.check.LintConfig;
  *    method on it proves so). A receiver whose type does not resolve, resolves to a
  *    non-`String` type, or a method absent from the table (a generic `.map()` /
  *    `.filter()`, or nullable-return `charCodeAt`) stays report-only.
+ *  - a static call `Type.method(...)` whose `Type.method` has a fixed, non-generic return
+ *    in `RefShape.staticMethodReturns` (`Context.resolvePath` → `String`, `Context.currentPos`
+ *    → `haxe.macro.Expr.Position`, `Date.now` → `Date`) — the receiver a genuine TYPE
+ *    reference (its root ident binds to no local / parameter / field), unshadowed by a
+ *    same-named indexed project type. Mirrors `TypeResolver.isPureStdlibCall`'s receiver
+ *    resolution; the arguments are irrelevant, the return being fixed. This is the ONLY
+ *    structural route inside a macro function, where the display oracle is blind. A method
+ *    absent from the table (a generic / inference-dependent return) stays report-only.
  *  - a plain identifier read `= ident` whose binding (a local, a parameter or an
  *    own-class field) carries a WRITTEN type → that type VERBATIM, copied unchanged
  *    (a `Null<…>` field read stays `Null<…>` — a transcription of an existing
@@ -107,7 +115,7 @@ import anyparse.check.LintConfig;
  * `identKind` / `stringLiteralKinds` / `nullableWrapperTypeNames` (+ the optional
  * `TypeInfoProvider`) for the method-call shape; `identKind` + `optionalParamKind` +
  * the `TypeInfoProvider` also drive the identifier-read shape; `fieldAccessKind` +
- * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape.
+ * `identKind` + the cross-file `SymbolIndex` drive the static-field-read shape. `staticMethodReturns` + `callKind` + `fieldAccessKind` + `identKind` (+ the cross-file `SymbolIndex`) drive the static-method-call shape.
  * `parenKind` peels the initializer's parentheses BEFORE any of them runs, so a
  * wrapped `(-1)` infers exactly as a bare `-1` does — `LiteralInfer` peels for its own
  * shared arms too, which is what keeps a field, a parameter and a local in agreement.
@@ -152,7 +160,8 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		'BytesBuffer',
 		'BytesInput',
 		'BytesOutput',
-		'Http'
+		'Http',
+		'Path'
 	];
 
 	public function new() {}
@@ -277,7 +286,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		return
 			LiteralInfer.inferType(init, source, shape, castTargets) ?? bareNewType(init, source, shape, index) ?? arrayType(init, shape) ?? methodReturnType(
 				init, shape, tree, declaredTypeSources
-			) ?? staticFieldType(init, shape, tree, index) ?? TypeResolver.identDeclaredTypeSource(
+			) ?? staticMethodReturnType(init, shape, tree, index) ?? staticFieldType(init, shape, tree, index) ?? TypeResolver.identDeclaredTypeSource(
 				init, shape, tree, declaredTypeSources, true
 			);
 	}
@@ -464,6 +473,40 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 				return null;
 		}
 		return elem == null ? null : 'Array<$elem>';
+	}
+
+	/**
+	 * The fixed return type of a static call `Type.method(...)` whose `Type.method` names a
+	 * `shape.staticMethodReturns` entry (`Context.resolvePath` → `String`, `Context.currentPos`
+	 * → `haxe.macro.Expr.Position`, `Date.now` → `Date`, …). The receiver must be a genuine TYPE
+	 * reference — a `fieldAccessKind` callee over an ident, or a dotted `pkg.Type` chain, whose
+	 * ROOT ident resolves to NO value binding (a local / parameter / field of the same name would
+	 * make it an INSTANCE access) — and, when an `index` is threaded, must NOT be shadowed by a
+	 * same-named indexed project type (whose method could return something else). Mirrors
+	 * `TypeResolver.isPureStdlibCall`'s receiver resolution; unlike a String-receiver call the
+	 * arguments are irrelevant, the return being fixed. Null when the shape lacks the seams, the
+	 * call is not the `Type.method(...)` form, the method is untabled, or the receiver is not a
+	 * provable type reference. This is the ONLY structural route to a sound annotation inside a
+	 * macro function, where the display oracle is blind.
+	 */
+	private static function staticMethodReturnType(
+		init: QueryNode, shape: RefShape, tree: QueryNode, index: Null<SymbolIndex>
+	): Null<String> {
+		final table: Null<Map<String, String>> = shape.staticMethodReturns;
+		final callKind: Null<String> = shape.callKind;
+		final faKind: Null<String> = shape.fieldAccessKind;
+		if (table == null || callKind == null || faKind == null) return null;
+		if (init.kind != callKind || init.children.length == 0) return null;
+		final callee: QueryNode = init.children[0];
+		if (callee.kind != faKind || callee.children.length != 1) return null;
+		final method: Null<String> = callee.name;
+		final receiver: QueryNode = callee.children[0];
+		final typeName: Null<String> = receiver.name;
+		if (method == null || typeName == null) return null;
+		final ret: Null<String> = table['$typeName.$method'];
+		if (ret == null) return null;
+		if (!TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)) return null;
+		return index != null && index.declaringFiles(typeName).length > 0 ? null : ret;
 	}
 
 

@@ -1263,6 +1263,20 @@ typedef RefShape = {
 	@:optional var stringLiteralMethodReturns: Map<String, String>;
 
 	/**
+	 * Maps a simple `Type.method` name of a stdlib / macro-API STATIC function to the
+	 * FIXED, non-generic type its call returns (`Context.resolvePath` → `String`,
+	 * `Context.currentPos` → `haxe.macro.Expr.Position`, `Date.now` → `Date`). The
+	 * `explicit-local-type` autofix annotates a local whose initializer is
+	 * `Type.method(...)` — the receiver a genuine TYPE reference (not a value binding),
+	 * unshadowed by a same-named indexed project type — with the tabled return type; the
+	 * display oracle is BLIND inside a macro function, so this table is the only route to a
+	 * sound annotation there. A call whose return depends on generics / inference is
+	 * deliberately ABSENT, so it stays report-only. Optional; unset disables the
+	 * static-method-return inference.
+	 */
+	@:optional var staticMethodReturns: Map<String, String>;
+
+	/**
 	 * Node kinds that constitute a value-returning `return <expr>` — both the statement
 	 * form (`ReturnStmt`) and the expression form (`ReturnExpr`, e.g. a `return` inside
 	 * a ternary or an expression-bodied function). The `explicit-type` autofix infers a
