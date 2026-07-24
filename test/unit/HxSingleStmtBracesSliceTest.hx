@@ -185,8 +185,13 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\t// keep me\n\t\t\tx();\n\t\t}\n\t}\n}');
 	}
 
-	public function testTrailingCommentKeepsBraces(): Void {
-		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tx(); // trailing\n\t\t}\n\t}\n}');
+	public function testTrailingCommentIfBodyDeBraces(): Void {
+		// Owner spec: a same-line trailing comment on the single statement TRAVELS with the
+		// de-braced statement - braces removed, comment stays after the statement's `;`.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tx(); // trailing\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) x(); // trailing\n\t}\n}'
+		);
 	}
 
 	public function testCommentBeforeCloseKeepsBraces(): Void {
@@ -482,6 +487,49 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip(
 			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\ttry x() catch (e:Dynamic) if (b) y();\n\t\t} else {\n\t\t\tz();\n\t\t\tw();\n\t\t}\n\t}\n}'
 		);
+	}
+
+
+	public function testTrailingCommentForBodyDeBraces(): Void {
+		// Loop-body counterpart: the trailing comment travels with the de-braced for-body.
+		assertFmt(
+			'class F {\n\tfunction f():Void {\n\t\tfor (i in 0...3) {\n\t\t\ttrace(i); // c\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f():Void {\n\t\tfor (i in 0...3) trace(i); // c\n\t}\n}'
+		);
+	}
+
+	public function testTrailingCommentWhileBodyDeBraces(): Void {
+		assertFmt(
+			'class F {\n\tfunction f():Void {\n\t\twhile (cond()) {\n\t\t\tstep(); // c\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f():Void {\n\t\twhile (cond()) step(); // c\n\t}\n}'
+		);
+	}
+
+	public function testTrailingCommentElseBodyDeBraces(): Void {
+		// The else-body splice hoists its own trailing comment too (a separate writer path
+		// from the mandatory then / for / while bodies). Both branches de-brace symmetrically.
+		assertFmt(
+			'class F {\n\tfunction f(b:Bool):Void {\n\t\tif (b) {\n\t\t\tone();\n\t\t} else {\n\t\t\ttwo(); // ec\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(b:Bool):Void {\n\t\tif (b)\n\t\t\tone();\n\t\telse\n\t\t\ttwo(); // ec\n\t}\n}'
+		);
+	}
+
+	public function testTrailingCommentDanglingElseKeepsBraces(): Void {
+		// Safety gate wins over the hoist: the then-body's lone inner `if` keeps its braces
+		// (gate 8 / dangling-else), so the trailing comment stays INSIDE the kept braces
+		// rather than being hoisted out. The bare else gains braces (gate 7 symmetry).
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x(); // tc\n\t\t} else y();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x(); // tc\n\t\t} else {\n\t\t\ty();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testTrailingCommentDeBraceIdempotent(): Void {
+		final source: String = 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tx(); // trailing\n\t\t}\n\t}\n}';
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
+		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
+		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
+		Assert.equals(pass1, pass2);
 	}
 
 }

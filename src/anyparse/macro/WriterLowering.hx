@@ -6029,18 +6029,25 @@ class WriterLowering {
 		// override on a different block-shaped ctor, extend the meta to
 		// `inlineBlockBodyIfFlag('<flag>', '<ctorName>')` and read both
 		// args here.
-		if (inlineBlockBodyArgs == null) return opts.writeCall;
-		if (inlineBlockBodyArgs.length != 1)
-			Context.fatalError(
-				'WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args',
-				Context.currentPos()
-			);
-		final inlineFlag: Expr = optFieldAccess(inlineBlockBodyArgs[0]);
-		final origWriteCall: Expr = opts.writeCall;
-		return macro {
-			final _bodyDoc: anyparse.core.Doc = $origWriteCall;
-			($inlineFlag && Type.enumConstructor($bodyValueExpr) == 'BlockExpr') ? anyparse.core.D.flatten(_bodyDoc) : _bodyDoc;
-		};
+		final base: Expr = if (inlineBlockBodyArgs == null)
+			opts.writeCall;
+		else {
+			if (inlineBlockBodyArgs.length != 1)
+				Context.fatalError(
+					'WriterLowering: bodyPolicyWrap inlineBlockBodyArgs requires (flagName), got ${inlineBlockBodyArgs.length} args',
+					Context.currentPos()
+				);
+			final inlineFlag: Expr = optFieldAccess(inlineBlockBodyArgs[0]);
+			final origWriteCall: Expr = opts.writeCall;
+			macro {
+				final _bodyDoc: anyparse.core.Doc = $origWriteCall;
+				($inlineFlag && Type.enumConstructor($bodyValueExpr) == 'BlockExpr') ? anyparse.core.D.flatten(_bodyDoc) : _bodyDoc;
+			};
+		}
+		// ω-single-stmt-braces trailing-comment hoist: fold a de-braced statement's
+		// same-line trailing comment after its `;` so it enters the body fit/break
+		// measurement. Null off the dropSingleStmtBraces path -> base unchanged.
+		return foldSsbTrailingComment(base, opts.ssbTrailCommentExpr);
 	}
 
 	/**
@@ -8368,7 +8375,8 @@ class WriterLowering {
 	private function emitBodyPolicyBareRef(
 		child: ShapeNode, parts: Array<Expr>, prevTrailFieldName: Null<String>, isFirstField: Bool, fieldName: String,
 		bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr, fieldAccess: Expr, refName: String, hasElseIf: Bool,
-		elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, fallbackFlag: Null<String>, condFitGroup: Bool
+		elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, fallbackFlag: Null<String>, condFitGroup: Bool,
+		ssbTrailCommentExpr: Null<Expr>
 	): PrevBodyInfo {
 		final kwPolicyFlag: Null<String> = child.fmtReadString('kwPolicy');
 		// ω-trivia-after-trail: when the IMMEDIATELY preceding
@@ -8481,6 +8489,7 @@ class WriterLowering {
 			fallbackFlagName: fallbackFlag,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 			condFitGroup: condFitGroup,
+			ssbTrailCommentExpr: ssbTrailCommentExpr,
 		}));
 		return { access: fieldAccess, typePath: refName };
 	}
@@ -9760,6 +9769,17 @@ class WriterLowering {
 		// unwrap gate (terminal else block) AND the else-if writeCall propagation.
 		// `macro false` off-path (plain mode / non-dropSingleStmtBraces field).
 		final elseChainSuppressExpr: Expr = buildElseChainSuppressExpr(node, child, fieldAccess);
+		final dropElseBraces: Bool = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
+		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(node, typePath) : macro false;
+		// ω-single-stmt-braces trailing-comment hoist for the else-body: same gate args as
+		// its `unwrapStmt` splice below (elseFollows=false, hasTrailingSemi=false, isThenBody=false)
+		// so the hoisted comment fires exactly when the de-brace does.
+		final elseTrailCommentExpr: Null<Expr> = dropElseBraces
+			? macro anyparse.format.SingleStmtBraces.hoistTrailingComment(
+				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, false, false, ($thenSiblingKeepsExpr || $elseChainSuppressExpr),
+				false
+			)
+			: null;
 		final optArgExpr: Expr = {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
@@ -9791,9 +9811,10 @@ class WriterLowering {
 		// `@:fmt(bodyPolicy)` routes `indentValueIfCtor` through the subtractive
 		// `bodyPolicyWrap.indentObjArgs` channel instead.
 		final indentObjArgs: Null<Array<String>> = child.fmtReadStringArgs('indentValueIfCtor');
-		final writeCall: Expr = bodyPolicyFlag != null && indentObjArgs != null
-			? rawWriteCall
-			: maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child);
+		final writeCall: Expr = foldSsbTrailingComment(
+			bodyPolicyFlag != null && indentObjArgs != null ? rawWriteCall : maybeIndentValueIfCtor(rawWriteCall, macro _optVal, child),
+			elseTrailCommentExpr
+		);
 		// Leading separator is runtime-conditional when @:fmt(sameLine(...)) is
 		// present; @:fmt(bodyPolicy(...)) replaces the final ' ' before the body
 		// with a runtime-switched separator. The per-parent kw-trivia slots are
@@ -9842,8 +9863,6 @@ class WriterLowering {
 		// for / while / then-body splice — de-bracing is always safe and never gated.
 		// ω-single-stmt-braces symmetry (gate 7): an else-body must keep its braces whenever
 		// the sibling then-body keeps its own (see buildThenSiblingKeepsProbe).
-		final dropElseBraces: Bool = _ctx.trivia && child.fmtHasFlag('dropSingleStmtBraces');
-		final thenSiblingKeepsExpr: Expr = dropElseBraces ? buildThenSiblingKeepsProbe(node, typePath) : macro false;
 		final optValInit: Expr = dropElseBraces
 			? macro {
 				var _sv = $fieldAccess;
@@ -10096,6 +10115,7 @@ class WriterLowering {
 		final deBraced = deBraceBodyAccess(child, fieldAccess, elseFieldName, typePath, fieldName);
 		final effAccess: Expr = deBraced.effAccess;
 		final ssbSuppressCond: Null<Expr> = deBraced.ssbSuppressCond;
+		final ssbTrailCommentExpr: Null<Expr> = deBraced.ssbTrailCommentExpr;
 		final writeCall: Expr = buildMandatoryRefWriteCall(
 			child, effAccess, typePath, writeFn, bodyPolicyFlag, indentObjArgs, ssbSuppressCond
 		);
@@ -10108,7 +10128,7 @@ class WriterLowering {
 			// Bare-Ref body with @:fmt(bodyPolicy(...)) — see emitBodyPolicyBareRef.
 			emitBodyPolicyBareRef(
 				child, parts, prevTrailFieldName, isFirstField, fieldName, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, effAccess,
-				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag, condFitGroup
+				refName, hasElseIf, elseFieldName, indentObjArgs, fallbackFlag, condFitGroup, ssbTrailCommentExpr
 			);
 		else {
 			// Bare-Ref body without @:fmt(bodyPolicy) — leftCurly / bodyBreak /
@@ -10160,7 +10180,7 @@ class WriterLowering {
 	 */
 	private function deBraceBodyAccess(
 		child: ShapeNode, fieldAccess: Expr, elseFieldName: Null<String>, typePath: String, fieldName: String
-	): { effAccess: Expr, ssbSuppressCond: Null<Expr> } {
+	): { effAccess: Expr, ssbSuppressCond: Null<Expr>, ssbTrailCommentExpr: Null<Expr> } {
 		// ω-single-stmt-braces: a body field carrying `@:fmt(dropSingleStmtBraces)`
 		// (trivia mode only) substitutes its runtime value with
 		// `SingleStmtBraces.unwrapStmt(value.<field>, …)` BEFORE any writeCall /
@@ -10227,7 +10247,17 @@ class WriterLowering {
 		// path never allocates a suppress-frame opt copy (byte-inert AND
 		// allocation-inert).
 		final ssbSuppressCond: Null<Expr> = elseAccess == null ? null : macro ($elseAccess != null && opt.dropSingleStmtBraces);
-		return { effAccess: effAccess, ssbSuppressCond: ssbSuppressCond };
+		// ω-single-stmt-braces trailing-comment hoist: when the de-brace fires AND the
+		// single statement carries a same-line trailing comment, `hoistTrailingComment`
+		// returns it (else null) so `buildBodyWriteCall` folds it after the bare
+		// statement's own `;`. Same gate args as the `unwrapStmt` splice above.
+		final ssbTrailCommentExpr: Null<Expr> = dropBraces
+			? macro anyparse.format.SingleStmtBraces.hoistTrailingComment(
+				$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, $elseFollowsExpr, $trailSemiExpr,
+				($elseSiblingKeepsExpr || $thenChainSuppressExpr), $isThenBodyExpr
+			)
+			: null;
+		return { effAccess: effAccess, ssbSuppressCond: ssbSuppressCond, ssbTrailCommentExpr: ssbTrailCommentExpr };
 	}
 
 	/**
@@ -16369,6 +16399,23 @@ class WriterLowering {
 		};
 	}
 
+
+	/**
+	 * ω-single-stmt-braces trailing-comment hoist: fold a de-braced single
+	 * statement's same-line trailing comment (`ssbTrailCommentExpr`, a runtime
+	 * `Null<String>`) after the body's `;` via `foldTrailingIntoBodyGroup`, so it
+	 * enters the body's fit/break measurement. Null off the dropSingleStmtBraces
+	 * path -> the base writeCall is returned unchanged (byte-inert).
+	 */
+	private function foldSsbTrailingComment(base: Expr, ssbTrailCommentExpr: Null<Expr>): Expr {
+		if (ssbTrailCommentExpr == null) return base;
+		return macro {
+			final _ssbBodyDoc: anyparse.core.Doc = $base;
+			final _ssbTc: Null<String> = $ssbTrailCommentExpr;
+			_ssbTc != null ? foldTrailingIntoBodyGroup(_ssbBodyDoc, trailingCommentDocVerbatim(_ssbTc, opt)) : _ssbBodyDoc;
+		};
+	}
+
 }
 
 /** Output of WriterLowering for one rule. */
@@ -16526,7 +16573,11 @@ typedef WrapBodyOpts = {
 	// dispatch unchanged. The ctor names (`ExprBody`/`MetaExpr`/`BlockExpr`)
 	// are passed declaratively from the grammar flag to keep the macro
 	// format-neutral. Null/false → byte-inert.
-	?metaBlockGlueArgs: Null<Array<String>>
+	?metaBlockGlueArgs: Null<Array<String>>,
+	// ω-single-stmt-braces trailing-comment hoist: runtime Null<String> comment to
+	// fold after a de-braced body's `;` (hoistTrailingComment result). Null off the
+	// dropSingleStmtBraces path so buildBodyWriteCall skips the fold (byte-inert).
+	?ssbTrailCommentExpr: Null<Expr>
 };
 
 /**
