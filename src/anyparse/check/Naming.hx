@@ -22,6 +22,10 @@ import anyparse.query.RefactorSupport.ClassifiedOccurrence;
 import anyparse.query.RefactorSupport.OccurrenceClass;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.CrossFileEdits;
+import anyparse.query.Refs;
+import anyparse.query.Refs.RefHit;
+import anyparse.query.Refs.RefKind;
+import anyparse.query.TypeInfoProvider;
 
 /**
  * Flags declarations whose identifier violates a naming convention. The check
@@ -382,7 +386,7 @@ final class Naming implements Check implements CrossFileFix {
 			final fsrc: String = fileSource;
 			final spans: Null<Array<Span>> = file == c.declFile
 				? declaringFileRenameSpans(fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive)
-				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive);
+				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex);
 			if (spans == null) return null;
 			// A `targetName` already bound in this file would collide once the rename lands.
 			if (RefactorSupport.referencedInRange(fsrc, c.targetName, 0, fsrc.length, [])) return null;
@@ -427,22 +431,120 @@ final class Naming implements Check implements CrossFileFix {
 	 * occurrence bails the whole rename. Null on a parse failure (fail-closed).
 	 */
 	private static function otherFileRenameSpans(
-		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool
+		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool, ownerName: String, shape: RefShape,
+		resolutionIndex: SymbolIndex
 	): Null<Array<Span>> {
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (tree == null) return null;
+		// The reference forms that provably bind to the inherited field: a bare identifier, `this.` /
+		// `super.`, or a receiver whose declared type is the owner or a subtype of it. Every OTHER
+		// occurrence of the name (a field access on a different / unresolvable receiver, a coincidental
+		// same-named binding) is left out and turns the whole rename report-only via the gate below —
+		// fail-closed, so an inherited-field rename can never rewrite a `ToolData.textSize` access.
+		final refs: Array<Span> = inheritedFieldRefSpans(source, tree, name, ownerName, plugin, shape, resolutionIndex);
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
-			source, name, plugin, 0, source.length, []
+			source, name, plugin, 0, source.length, refs
 		);
 		if (classified == null) return null;
-		final spans: Array<Span> = [];
+		final spans: Array<Span> = refs.copy();
 		for (occ in classified) switch occ.kind {
-			case OccurrenceClass.ActiveCode:
-				spans.push(occ.span);
 			case OccurrenceClass.CommentTrivia if (distinctive):
 				spans.push(occ.span);
 			case _:
 				return null;
 		}
 		return spans;
+	}
+
+	/**
+	 * The occurrence-token spans in a subtype / `@:access` file that provably bind to `ownerName`'s
+	 * inherited field `name`: a bare `IdentExpr` reference, a `this.name` / `super.name` access, and a
+	 * `recv.name` access whose receiver's declared type (`TypeInfoProvider.declaredTypes` + the scope
+	 * resolver) is `ownerName` or a subtype of it. A field access on a receiver of a DIFFERENT type, or
+	 * one whose type cannot be resolved, is deliberately OMITTED — the caller's completeness gate then
+	 * sees it as an uncovered active-code occurrence and refuses the whole rename (fail-closed).
+	 */
+	private static function inheritedFieldRefSpans(
+		source: String, tree: QueryNode, name: String, ownerName: String, plugin: GrammarPlugin, shape: RefShape,
+		resolutionIndex: SymbolIndex
+	): Array<Span> {
+		final out: Array<Span> = [];
+		final seen: Array<Int> = [];
+		inline function addToken(off: Int): Void if (off >= 0) RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
+		final idents: Array<QueryNode> = [];
+		final accesses: Array<QueryNode> = [];
+		collectRefNodes(tree, name, idents, accesses);
+		// Bare `IdentExpr` references and `this.` / `super.` accesses always bind to the inherited field.
+		for (node in idents) {
+			final s: Null<Span> = node.span;
+			if (s != null) addToken(RefactorSupport.identTokenOffset(source, s, name));
+		}
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
+		final typedAccesses: Array<{ recv: QueryNode, fa: QueryNode }> = [];
+		final recvNames: Array<String> = [];
+		for (fa in accesses) {
+			final recv: QueryNode = fa.children[0];
+			final recvSpan: Null<Span> = recv.span;
+			final faSpan: Null<Span> = fa.span;
+			if (recvSpan == null || faSpan == null) continue;
+			final rn: Null<String> = recv.name;
+			if (recv.kind == 'IdentExpr' && (rn == 'this' || rn == 'super'))
+				addToken(RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name));
+			else if (recv.kind == 'IdentExpr' && rn != null) {
+				typedAccesses.push({ recv: recv, fa: fa });
+				if (!recvNames.contains(rn)) recvNames.push(rn);
+			}
+		}
+		if (typedAccesses.length == 0) return out;
+		// A `recv.name` access renames only when `recv`'s declared type IS the owner or a subtype of it.
+		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(recvNames, tree, shape);
+		for (cand in typedAccesses) addToken(resolvedInheritedToken(cand, ownerName, source, name, declared, hitsByName, resolutionIndex));
+		return out;
+	}
+
+	/**
+	 * Collect every bare `IdentExpr` named `name` into `idents` and every `FieldAccess` named `name`
+	 * (with a receiver) into `accesses`, NOT descending into `#if...#end` regions (their interior is
+	 * platform-conditional and stays a `ConditionalRaw` blocker in the completeness gate, like
+	 * `Refs.find`).
+	 */
+	private static function collectRefNodes(node: QueryNode, name: String, idents: Array<QueryNode>, accesses: Array<QueryNode>): Void {
+		if (RefactorSupport.isConditionalKind(node.kind)) return;
+		if (node.kind == 'IdentExpr' && node.name == name)
+			idents.push(node);
+		else if (node.kind == 'FieldAccess' && node.name == name && node.children.length > 0)
+			accesses.push(node);
+		for (c in node.children) collectRefNodes(c, name, idents, accesses);
+	}
+
+	/**
+	 * The member-name-token offset of one `recv.name` access when `recv` resolves (scope binding +
+	 * declared type) to `ownerName` or a subtype of it, else -1. The token is located AFTER the
+	 * receiver span so a receiver containing `name` as a substring is never mistaken for it.
+	 */
+	private static function resolvedInheritedToken(
+		cand: { recv: QueryNode, fa: QueryNode }, ownerName: String, source: String, name: String, declared: Map<Int, String>,
+		hitsByName: Map<String, Array<RefHit>>, resolutionIndex: SymbolIndex
+	): Int {
+		final rn: Null<String> = cand.recv.name;
+		final recvSpan: Null<Span> = cand.recv.span;
+		final faSpan: Null<Span> = cand.fa.span;
+		if (rn == null || recvSpan == null || faSpan == null) return -1;
+		final bindingFrom: Null<Int> = receiverBindingOffset(hitsByName[rn] ?? [], recvSpan.from);
+		if (bindingFrom == null) return -1;
+		final recvType: Null<String> = declared[bindingFrom];
+		if (recvType == null || (recvType != ownerName && !resolutionIndex.isSubtype(recvType, ownerName))) return -1;
+		return RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), name);
+	}
+
+	/** The binding-decl offset of the read / write hit at `recvFrom`, or null when it is unresolved. */
+	private static function receiverBindingOffset(hits: Array<RefHit>, recvFrom: Int): Null<Int> {
+		for (h in hits) if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.span.from == recvFrom) {
+			final b: Null<Span> = h.bindingSpan;
+			return b == null ? null : b.from;
+		}
+		return null;
 	}
 
 	/**

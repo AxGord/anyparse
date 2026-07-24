@@ -2087,7 +2087,7 @@ final class RefactorSupport {
 	 * mid-expression / statement splice. An unrecognised conditional kind
 	 * degrades to `ActiveCode`, which still blocks — fail-closed.
 	 */
-	private static inline function isConditionalKind(kind: String): Bool {
+	public static inline function isConditionalKind(kind: String): Bool {
 		return kind == 'Conditional' || kind == 'ConditionalExpr' || StringTools.startsWith(kind, 'CondSplice');
 	}
 

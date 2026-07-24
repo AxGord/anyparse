@@ -802,6 +802,42 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
 	}
 
+	public function testCrossFileFixBlocksOnDifferentTypedReceiver(): Void {
+		// A subtype method accessing a SAME-NAMED field on a DIFFERENT-typed receiver (`o.size` where
+		// `o` is `Other`, not the owner `C` nor a subtype of it) must NOT be renamed — the occurrence
+		// is fail-closed treated as a blocker, so the whole cross-file rename is refused (report-only).
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final otherSrc: String = 'package pkg;\nclass Other {\n\tpublic var size:Int;\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(o:Other) { return o.size; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/Other.hx', source: otherSrc },
+			{ file: 'pkg/D.hx', source: dSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testCrossFileFixRenamesSubtypeTypedReceiver(): Void {
+		// A subtype method accessing the inherited field through a receiver typed as the OWNER (or a
+		// subtype of it) — here `d:D`, a subtype of `C` — DOES bind to the inherited field, so the
+		// cross-file rename rewrites the declaring file AND the `d.size` access.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		final rename: Array<CrossFileEdits> = renames[0];
+		Assert.equals(2, rename.length);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, '_size', 'var size');
+		assertRenameSlice(rename, 'pkg/D.hx', dSrc, 'd._size', 'd.size');
+	}
+
 	public function testStageCrossFileRenameRevertsAllOnCanonicalizationFailure(): Void {
 		// Any one file's canonicalization failure reverts the WHOLE multi-file edit set.
 		final slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }> = [
