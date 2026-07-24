@@ -14,6 +14,7 @@ import anyparse.format.WriteOptions;
 import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
+import anyparse.format.UniformStatementBlanksPolicy;
 
 /**
  * Write options specific to the Haxe module grammar (`HxModule`).
@@ -377,6 +378,20 @@ import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
  *  - `beforeRightCurly` — `Keep` / `Remove` gating source-blank
  *    preservation before the closing `}` when `endType` is `0`. Default
  *    `Keep`. `endType > 0` overrides.
+ *
+ * STATEMENT-BLOCK INTERIOR BLANKS (fires at `@:fmt(uniformStmtBlanks)`
+ * sites — `HxExpr.BlockExpr.stmts`, `HxFnBlock.stmts`):
+ *  - `uniformStatementBlanks` — `Keep` / `Collapse` over the blank-line
+ *    gaps BETWEEN adjacent statements of one block (function / if / for /
+ *    while / plain-block bodies, never a type member list). `Keep`
+ *    (default) round-trips source blanks byte-identically. `Collapse`
+ *    applies "separators that separate everything separate nothing":
+ *    when every interior gap is blank the blanks are uniform noise and
+ *    all get stripped; a selective blank/adjacent mix (or any comment
+ *    between statements) is left byte-exact. Uniformity is measured over
+ *    interior gaps only — the head/tail `{` / `}` blanks are already
+ *    resolved by `afterLeftCurly` / `beforeRightCurly`. See
+ *    `UniformStatementBlanksPolicy`.
  *
  * TYPEDEF-RHS AND TYPE-SYNTAX WHITESPACE:
  *  - `typedefAssign` — around the `=` joining a typedef name to its RHS
@@ -866,6 +881,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	typedefEndType: Int,
 	afterLeftCurly: KeepEmptyLinesPolicy,
 	beforeRightCurly: KeepEmptyLinesPolicy,
+	uniformStatementBlanks: UniformStatementBlanksPolicy,
 	typedefAssign: WhitespacePolicy,
 	typedefIntersection: WhitespacePolicy,
 	typeParamDefaultEquals: WhitespacePolicy,

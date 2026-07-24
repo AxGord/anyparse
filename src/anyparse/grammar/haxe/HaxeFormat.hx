@@ -28,6 +28,7 @@ import anyparse.format.wrap.WrapMode;
 import anyparse.format.wrap.WrapRules;
 import anyparse.format.wrap.WrappingLocation;
 import anyparse.grammar.haxe.format.HxBetweenImportsLevel;
+import anyparse.format.UniformStatementBlanksPolicy;
 
 /**
  * Text-format descriptor for the Haxe programming language.
@@ -718,6 +719,7 @@ final class HaxeFormat implements TextFormat {
 		typedefEndType: 0,
 		afterLeftCurly: KeepEmptyLinesPolicy.Keep,
 		beforeRightCurly: KeepEmptyLinesPolicy.Keep,
+		uniformStatementBlanks: UniformStatementBlanksPolicy.Keep,
 		typedefAssign: WhitespacePolicy.Both,
 		typedefIntersection: WhitespacePolicy.After,
 		typeParamDefaultEquals: WhitespacePolicy.Both,

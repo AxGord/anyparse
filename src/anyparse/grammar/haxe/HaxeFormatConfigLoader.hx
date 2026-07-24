@@ -55,6 +55,8 @@ import anyparse.grammar.haxe.format.HxFormatWrapRules;
 import anyparse.grammar.haxe.format.HxFormatWrappingSection;
 import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
 import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
+import anyparse.format.UniformStatementBlanksPolicy;
+import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -613,6 +615,7 @@ final class HaxeFormatConfigLoader {
 			typedefEndType: base.typedefEndType,
 			afterLeftCurly: base.afterLeftCurly,
 			beforeRightCurly: base.beforeRightCurly,
+			uniformStatementBlanks: base.uniformStatementBlanks,
 			typedefAssign: base.typedefAssign,
 			typedefIntersection: base.typedefIntersection,
 			typeParamDefaultEquals: base.typeParamDefaultEquals,
@@ -1120,6 +1123,11 @@ final class HaxeFormatConfigLoader {
 		// section runs, so here we only honour an explicit JSON override.
 		if (section.afterLeftCurly != null) opt.afterLeftCurly = keepEmptyLinesToRuntime(section.afterLeftCurly);
 		if (section.beforeRightCurly != null) opt.beforeRightCurly = keepEmptyLinesToRuntime(section.beforeRightCurly);
+		// ω-uniform-statement-blanks: anyparse-specific knob (no fork
+		// counterpart). Defaults `Keep` and never re-baselines, so a
+		// fixture that omits it stays byte-inert.
+		if (section.uniformStatementBlanks != null)
+			opt.uniformStatementBlanks = uniformStatementBlanksToRuntime(section.uniformStatementBlanks);
 		applyImportAndUsingEmptyLines(section, opt);
 	}
 
@@ -1300,6 +1308,13 @@ final class HaxeFormatConfigLoader {
 		return switch policy {
 			case HxFormatKeepEmptyLinesPolicy.Remove: KeepEmptyLinesPolicy.Remove;
 			case _: KeepEmptyLinesPolicy.Keep;
+		};
+	}
+
+	private static function uniformStatementBlanksToRuntime(policy: HxFormatUniformStatementBlanksPolicy): UniformStatementBlanksPolicy {
+		return switch policy {
+			case HxFormatUniformStatementBlanksPolicy.Collapse: UniformStatementBlanksPolicy.Collapse;
+			case _: UniformStatementBlanksPolicy.Keep;
 		};
 	}
 
