@@ -70,6 +70,26 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+	public function testCrossFileNamingFieldRenameAcrossFiles(): Void {
+		#if (sys || nodejs)
+		// A non-confined private field `shape` (missing its `_`), read by a subclass, renames in
+		// BOTH files in one `lint --fix` invocation via naming's cross-file fix. C is unconfined
+		// (subtype D reads `shape`), so the single-file rename would refuse it; the cross-file
+		// rename rewrites C's declaration AND D's inherited read atomically.
+		final c: String = 'package p;\n\nclass C {\n\tprivate var shape:Int = 0;\n\n\tpublic function f():Int {\n\t\treturn this.shape;\n\t}\n}\n';
+		final d: String = 'package p;\n\nclass D extends C {\n\tpublic function g():Int {\n\t\treturn shape;\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixcrossnaming', [{ name: 'C.hx', source: c }, { name: 'D.hx', source: d }]);
+		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
+		final outC: String = File.getContent('$dir/C.hx');
+		final outD: String = File.getContent('$dir/D.hx');
+		Assert.isTrue(outC.indexOf('_shape') != -1, 'C declaration renamed: $outC');
+		Assert.isTrue(outD.indexOf('_shape') != -1, 'D inherited read renamed in the same invocation: $outD');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * `Reg` is a custom `keys()`-bearing NON-map and `Svc` — which holds it — is declared in a
 	 * THIRD file, so resolving the receiver path `s.reg` needs a file A.hx does not contain.

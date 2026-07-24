@@ -20,6 +20,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndexHost;
 import anyparse.query.RefactorSupport.ClassifiedOccurrence;
 import anyparse.query.RefactorSupport.OccurrenceClass;
+import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.CrossFileEdits;
 
 /**
  * Flags declarations whose identifier violates a naming convention. The check
@@ -45,7 +47,7 @@ import anyparse.query.RefactorSupport.OccurrenceClass;
  * edits (a rename-based autofix is a later slice).
  */
 @:nullSafety(Strict)
-final class Naming implements Check {
+final class Naming implements Check implements CrossFileFix {
 
 	public function new() {}
 
@@ -123,6 +125,37 @@ final class Naming implements Check {
 			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
 		}
 		return edits;
+	}
+
+	/**
+	 * Cross-file autofix (the `CrossFileFix` seam): rename each flagged NON-confined
+	 * private field / constant whose references reach into its subtypes / `@:access`-grant
+	 * files. The single-file `fix` skips such a member (it is not confined); here the
+	 * rename is proven complete across EVERY affected report file and emitted as one atomic
+	 * multi-file edit set. The declaring file resolves scope-correctly (the T29 occurrence
+	 * set + completeness gate); each subtype / grant file classifies every occurrence of the
+	 * old name — an `ActiveCode` one is a reference to rename, a `CommentTrivia` one renames
+	 * along when the name is distinctive, and a `ConditionalRaw` / `StringLiteral` /
+	 * `DirectiveComment` occurrence (or a `targetName` already colliding in a file, an
+	 * unresolvable hierarchy, an `@:rtti` / reflection-string hazard) turns the WHOLE rename
+	 * report-only. The caller (`apq lint --fix`) commits every affected file or none.
+	 */
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>> {
+		if (violations.length == 0 || index == null) return [];
+		final support: Null<NamingSupport> = plugin.namingSupport();
+		if (support == null) return [];
+		final idx: SymbolIndex = index;
+		final shape: RefShape = plugin.refShape();
+		final resolutionIndex: SymbolIndex = resolutionIndexOf(plugin) ?? idx;
+		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		final out: Array<Array<CrossFileEdits>> = [];
+		for (v in violations) {
+			final rename: Null<Array<CrossFileEdits>> = crossFileRenameFor(v, sourceByFile, support, shape, plugin, idx, resolutionIndex);
+			if (rename != null) out.push(rename);
+		}
+		return out;
 	}
 
 	/**
@@ -243,43 +276,194 @@ final class Naming implements Check {
 			final idx: SymbolIndex = resolutionIndex;
 			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
-		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
-		if (occurrences.length == 0) return null;
 		// Collision: a `newName` already occurring as an identifier in the file (another member of
 		// the same type, a sibling local) would be duplicated or shadowed by the rename — the
 		// re-parse gate accepts the result but it does not type-check, so skip. (Raw scan; the
 		// collision side keeps the old scan for now — classifying it is a later slice.)
 		if (RefactorSupport.referencedInRange(source, newName, 0, source.length, [])) return null;
-		// Completeness: classify every textual occurrence of the old name left outside the resolved
-		// spans. A plain comment mention (commented-out code, prose) is renamed ALONG with the code
-		// so the two stay consistent; a `#if...#end` occurrence (platform-conditional, invisible to
-		// the resolver), a string mention (a possible reflection key), a `noqa` directive line, or an
-		// active-code occurrence the resolver missed (a bare `$name` interpolation, a binding-span
-		// mismatch) all mean the rename would dangle or change semantics — bail. A source that fails
-		// to parse falls back to the fail-closed raw scan.
-		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
-			source, decl.name, plugin, 0, source.length, occurrences
+		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
+		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
+		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
+		final renameSpans: Null<Array<Span>> = declaringFileRenameSpans(
+			source, tree, span.from, decl.name, shape, plugin, isDistinctiveName(decl.name)
 		);
-		if (classified == null) return RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences) ? null : {
-			occurrences: occurrences,
-			name: newName
-		};
-		// A comment mention is renamed along with the code ONLY when the old name is distinctive
-		// (carries an underscore or an uppercase letter). An all-lowercase name like `container` or
-		// `db` is a common English word / file-extension token that word-boundary-matches PROSE, so
-		// its comment mention blocks the rename (report-only, as before) rather than corrupting prose.
-		final distinctive: Bool = isDistinctiveName(decl.name);
-		final renameSpans: Array<Span> = occurrences.copy();
-		for (occ in classified) switch occ.kind {
-			case OccurrenceClass.CommentTrivia if (distinctive):
-				renameSpans.push(occ.span);
-			case _:
-				return null;
-		}
-		return {
+		return renameSpans == null ? null : {
 			occurrences: renameSpans,
 			name: newName
 		};
+	}
+
+	/**
+	 * The resolved cross-file rename CANDIDATE for one flagged violation, or null when it must be
+	 * skipped: not a NON-confined private field / constant, something the single-file path already
+	 * covers (a confined member), an unenumerable hierarchy (a skip-parse file hiding a subtype, an
+	 * `@:allow` grant, a non-unique owner), no derivable corrected name, or a blocked
+	 * inherited-member / `@:rtti` guard. Carries the parsed declaring file plus the names the
+	 * per-file span pass needs.
+	 */
+	private static function crossFileCandidate(
+		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, plugin: GrammarPlugin, index: SymbolIndex,
+		resolutionIndex: SymbolIndex
+	): Null<CrossFileCandidate> {
+		final declFile: String = v.file;
+		final vspan: Null<Span> = v.span;
+		if (vspan == null) return null;
+		final declSource: Null<String> = sourceByFile[declFile];
+		if (declSource == null) return null;
+		final source: String = declSource;
+		final declTree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		if (declTree == null) return null;
+		final tree: QueryNode = declTree;
+		final decl: Null<NamedDecl> = support.project(tree).find(d -> d.span != null && d.span.from == vspan.from);
+		if (decl == null) return null;
+		// Candidate: a NON-confined private field / constant the single-file `fix` skips.
+		if (decl.renameUnsafe == true) return null;
+		final cat: NamingCategory = decl.category;
+		if (!((cat == NamingCategory.Field || cat == NamingCategory.Constant) && !decl.mods.contains('public'))) return null;
+		final owner: Null<String> = decl.enclosingType;
+		if (owner == null) return null;
+		final ownerName: String = owner;
+		// A confined member is the single-file path's job; only a non-confined one crosses files.
+		if (RefactorSupport.isPrivateMemberConfined(ownerName, source, index)) return null;
+		// Unresolvable hierarchy: a skip-parse file could hide a subtype / grant we never see; an
+		// `@:allow` grants an unenumerable type; a non-unique owner makes the subtype match ambiguous.
+		if (index.skippedFiles().length > 0 || source.indexOf('@:allow') >= 0 || index.declaringFiles(ownerName).length != 1) return null;
+		final targetName: Null<String> = correctedFieldName(decl, support.policyFor(declFile), ownerName, resolutionIndex);
+		if (targetName == null) return null;
+		return {
+			declFile: declFile,
+			source: source,
+			tree: tree,
+			declFrom: vspan.from,
+			oldName: decl.name,
+			targetName: targetName,
+			ownerName: ownerName,
+			distinctive: isDistinctiveName(decl.name)
+		};
+	}
+
+	/**
+	 * The corrected name for `decl` under `policy`, or null when there is none / it must not apply:
+	 * no normalizer, an unchanged or non-conformant result, a supertype that already declares the
+	 * name (Haxe's "Redefinition of variable in subclass"), or a transitive `@:rtti` serialization
+	 * hierarchy (renaming a reflected field name breaks saved files). `ownerName` / `resolutionIndex`
+	 * drive the inheritance + rtti guards through the resolution scope.
+	 */
+	private static function correctedFieldName(
+		decl: NamedDecl, policy: NamingPolicy, ownerName: String, resolutionIndex: SymbolIndex
+	): Null<String> {
+		final rule: Null<NamingRule> = applicableRule(decl, policy);
+		if (rule == null) return null;
+		final normalize: Null<String -> Null<String>> = rule.normalize;
+		if (normalize == null) return null;
+		final newName: Null<String> = normalize(decl.name);
+		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
+		if (!resolutionIndex.typeProvablyLacksMember(ownerName, newName) || resolutionIndex.transitivelyCarriesRtti(ownerName)) return null;
+		return newName;
+	}
+
+	/**
+	 * The cross-file rename fixing one flagged NON-confined private field / constant, or null when
+	 * it cannot be proven complete. Resolves the candidate (`crossFileCandidate`), then collects and
+	 * gates each affected file's occurrence spans; a bail in ANY file makes the whole rename
+	 * report-only. Returns the per-file `CrossFileEdits` slices.
+	 */
+	private static function crossFileRenameFor(
+		v: Violation, sourceByFile: Map<String, String>, support: NamingSupport, shape: RefShape, plugin: GrammarPlugin,
+		index: SymbolIndex, resolutionIndex: SymbolIndex
+	): Null<Array<CrossFileEdits>> {
+		final candidate: Null<CrossFileCandidate> = crossFileCandidate(v, sourceByFile, support, plugin, index, resolutionIndex);
+		if (candidate == null) return null;
+		final c: CrossFileCandidate = candidate;
+		final slices: Array<CrossFileEdits> = [];
+		for (file in affectedFiles(c.ownerName, c.declFile, index)) {
+			final fileSource: Null<String> = sourceByFile[file];
+			if (fileSource == null) return null;
+			final fsrc: String = fileSource;
+			final spans: Null<Array<Span>> = file == c.declFile
+				? declaringFileRenameSpans(fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive)
+				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive);
+			if (spans == null) return null;
+			// A `targetName` already bound in this file would collide once the rename lands.
+			if (RefactorSupport.referencedInRange(fsrc, c.targetName, 0, fsrc.length, [])) return null;
+			if (spans.length > 0) slices.push({ file: file, edits: [for (s in spans) { span: s, text: c.targetName }] });
+		}
+		return slices.length == 0 ? null : slices;
+	}
+
+	/**
+	 * The occurrence spans to rewrite in the DECLARING file — the T29 single-file model: the
+	 * scope-correct resolved reference set (decl + reads / writes + `this.<name>`), gated for
+	 * completeness. Any resolved-outside occurrence that is `ActiveCode` (a reference the
+	 * resolver missed) or a `ConditionalRaw` / `StringLiteral` / `DirectiveComment` bails
+	 * (null); a distinctive-name `CommentTrivia` mention renames along. Null on a parse failure
+	 * when the fail-closed raw scan finds an uncovered mention.
+	 */
+	private static function declaringFileRenameSpans(
+		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool
+	): Null<Array<Span>> {
+		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
+		if (resolved.length == 0) return null;
+		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+			source, name, plugin, 0, source.length, resolved
+		);
+		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, resolved) ? null : resolved;
+		final spans: Array<Span> = resolved.copy();
+		for (occ in classified) switch occ.kind {
+			case OccurrenceClass.CommentTrivia if (distinctive):
+				spans.push(occ.span);
+			case _:
+				return null;
+		}
+		return spans;
+	}
+
+	/**
+	 * The occurrence spans to rewrite in a SUBTYPE / `@:access`-grant file. Scope resolution
+	 * cannot cross files, so every `ActiveCode` occurrence of the old name is taken as a
+	 * reference to rename (the field is private — its name in such a file is a reference to
+	 * the inherited member); a distinctive-name `CommentTrivia` renames along; a
+	 * `ConditionalRaw` / `StringLiteral` / `DirectiveComment` (or a non-distinctive comment)
+	 * occurrence bails the whole rename. Null on a parse failure (fail-closed).
+	 */
+	private static function otherFileRenameSpans(
+		source: String, name: String, plugin: GrammarPlugin, distinctive: Bool
+	): Null<Array<Span>> {
+		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+			source, name, plugin, 0, source.length, []
+		);
+		if (classified == null) return null;
+		final spans: Array<Span> = [];
+		for (occ in classified) switch occ.kind {
+			case OccurrenceClass.ActiveCode:
+				spans.push(occ.span);
+			case OccurrenceClass.CommentTrivia if (distinctive):
+				spans.push(occ.span);
+			case _:
+				return null;
+		}
+		return spans;
+	}
+
+	/**
+	 * Every report file affected by renaming `owner`'s private member: the declaring file, every
+	 * file declaring a TRANSITIVE subtype of `owner`, and every file with an `@:access(owner)`
+	 * grant. Deduped, in discovery order (declaring file first). All are report files (the index
+	 * is report-scoped), hence editable.
+	 */
+	private static function affectedFiles(owner: String, declFile: String, index: SymbolIndex): Array<String> {
+		final out: Array<String> = [declFile];
+		final closure: Array<String> = [owner];
+		var i: Int = 0;
+		while (i < closure.length) {
+			final parent: String = closure[i++];
+			for (fi in index.allFiles()) for (t in fi.types) if (t.supertypes.contains(parent) && !closure.contains(t.name)) {
+				closure.push(t.name);
+				if (!out.contains(fi.file)) out.push(fi.file);
+			}
+		}
+		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
+		return out;
 	}
 
 	/**
@@ -354,4 +538,20 @@ final class Naming implements Check {
 private typedef RenameEdits = {
 	final occurrences: Array<Span>;
 	final name: String;
+};
+
+/**
+ * A resolved cross-file rename candidate: the parsed declaring file, the flagged binding's cursor
+ * offset, the old / corrected names, the owning type, and whether the old name is distinctive
+ * (drives the comment-along gate). Passed from `crossFileCandidate` to the per-file span pass.
+ */
+private typedef CrossFileCandidate = {
+	final declFile: String;
+	final source: String;
+	final tree: QueryNode;
+	final declFrom: Int;
+	final oldName: String;
+	final targetName: String;
+	final ownerName: String;
+	final distinctive: Bool;
 };

@@ -18,6 +18,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.query.RefactorSupport.EditResult;
 
 /**
  * The `naming` check: declarations are tested against the first applicable
@@ -757,6 +759,76 @@ class NamingCheckTest extends Test {
 		Assert.equals(0, edits.length);
 	}
 
+	public function testCrossFileFixRenamesSubtypeField(): Void {
+		// A non-confined private field read by a subclass renames in BOTH the declaring file and
+		// the subclass as one atomic cross-file rename — the single-file `fix` leaves it report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { return shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		// The single-file fix still refuses the non-confined field.
+		Assert.equals(0, check.fix(cSrc, vs.filter(v -> v.file == 'pkg/C.hx'), new HaxeQueryPlugin(), index).length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		final rename: Array<CrossFileEdits> = renames[0];
+		Assert.equals(2, rename.length);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, '_shape', 'var shape');
+		assertRenameSlice(rename, 'pkg/D.hx', dSrc, '_shape', 'return shape');
+	}
+
+	public function testCrossFileFixBlocksOnSubtypeConditional(): Void {
+		// A `#if...#end` occurrence of the field name in a subtype is platform-conditional and
+		// invisible to the resolver — the whole cross-file rename is refused (report-only).
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Int {\n\t\t#if flag\n\t\treturn shape;\n\t\t#else\n\t\treturn 0;\n\t\t#end\n\t}\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testCrossFileFixBlocksOnReflectionString(): Void {
+		// A subtype naming the field as a reflection string (`Reflect.field(this, "shape")`) would
+		// break silently after a rename — the string occurrence turns the whole rename report-only.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Dynamic { return Reflect.field(this, "shape"); }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testStageCrossFileRenameRevertsAllOnCanonicalizationFailure(): Void {
+		// Any one file's canonicalization failure reverts the WHOLE multi-file edit set.
+		final slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }> = [
+			{ file: 'A.hx', edits: [{ span: new Span(0, 1), text: 'X' }] },
+			{ file: 'B.hx', edits: [{ span: new Span(0, 1), text: 'Y' }] }
+		];
+		final sources: Map<String, String> = ['A.hx' => 'a', 'B.hx' => 'b'];
+		final staged: Null<Array<{ file: String, source: String }>> = RefactorSupport.stageCrossFileRename(
+			slices, file -> sources[file], (file, source, edits) -> file == 'B.hx' ? EditResult.Err('boom') : EditResult.Ok('X')
+		);
+		Assert.isNull(staged);
+	}
+
+	public function testStageCrossFileRenameCommitsAllOnSuccess(): Void {
+		// When every file canonicalizes to a changed result, all rewrites are returned together.
+		final slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }> = [
+			{ file: 'A.hx', edits: [{ span: new Span(0, 1), text: 'X' }] },
+			{ file: 'B.hx', edits: [{ span: new Span(0, 1), text: 'Y' }] }
+		];
+		final sources: Map<String, String> = ['A.hx' => 'a', 'B.hx' => 'b'];
+		final staged: Null<Array<{ file: String, source: String }>> = RefactorSupport.stageCrossFileRename(
+			slices, file -> sources[file], (file, source, edits) -> EditResult.Ok(file == 'A.hx' ? 'X' : 'Y')
+		);
+		Assert.notNull(staged);
+		if (staged != null) Assert.equals(2, staged.length);
+	}
+
 
 	/**
 	 * Run naming's field fix on `subSrc` (the sole report file) with `libSrc` as the
@@ -773,6 +845,17 @@ class NamingCheckTest extends Test {
 		final vs: Array<Violation> = check.run(report, scoped).filter(v -> v.file == 'pkg/Sub.hx');
 		Assert.equals(1, vs.length);
 		return check.fix(subSrc, vs, scoped, reportIndex);
+	}
+
+	/** Apply one file's slice of a cross-file rename and assert the `present` name appears and `absent` is gone. */
+	private function assertRenameSlice(rename: Array<CrossFileEdits>, file: String, source: String, present: String, absent: String): Void {
+		var slice: Null<CrossFileEdits> = null;
+		for (s in rename) if (s.file == file) slice = s;
+		Assert.notNull(slice);
+		if (slice == null) return;
+		final applied: String = RefactorSupport.applyEdits(source, slice.edits);
+		Assert.isTrue(applied.indexOf(present) >= 0, 'expected "$present" in: $applied');
+		Assert.isTrue(applied.indexOf(absent) == -1, 'unexpected "$absent" in: $applied');
 	}
 
 }

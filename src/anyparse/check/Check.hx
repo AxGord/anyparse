@@ -178,3 +178,45 @@ interface OracleAssisted {
 	): Array<{ span: Span, text: String }>;
 
 }
+
+/**
+ * One file's slice of a cross-file rename: the file path plus the raw
+ * `{span, text}` edits that fall within THAT file's source. A `CrossFileFix`
+ * groups its edits this way so `apq lint --fix` can canonicalize each affected
+ * file independently while committing the whole rename atomically.
+ */
+typedef CrossFileEdits = {
+	final file: String;
+	final edits: Array<{ span: Span, text: String }>;
+};
+
+/**
+ * Opt-in capability of a `Check` whose autofix spans MULTIPLE files atomically —
+ * a rename whose references live in files OTHER than the one carrying the
+ * violation (a private field read by a subtype, an `@:access` grantee). The
+ * per-file `fix` seam cannot express this: its edits all land in one `source`.
+ *
+ * `crossFileFix` returns a list of INDEPENDENT renames; each rename is the set
+ * of per-file edit slices (`CrossFileEdits`) that must all apply or none. `apq
+ * lint --fix` canonicalizes every affected file and commits a rename only when
+ * EVERY file's canonicalization succeeds — any failure reverts the whole rename
+ * (the `CrossRename` / `CrossRenameMember` all-or-nothing contract, routed
+ * through the lint pipeline). A check with no cross-file fix returns an empty
+ * array. The first (and only) consumer is `naming`, for a non-confined private
+ * field whose references cross into its subtypes / `@:access`-grant files.
+ */
+@:nullSafety(Strict)
+interface CrossFileFix {
+
+	/**
+	 * The cross-file renames fixing `violations` (this check's OWN, across ALL
+	 * `files`). `plugin` carries the resolution scope (report UNION libraries) for
+	 * the checks that consult it; `index` is the report-scoped `SymbolIndex`. Each
+	 * returned rename is a set of per-file `CrossFileEdits` the caller applies
+	 * atomically. An empty array = nothing to fix.
+	 */
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>>;
+
+}

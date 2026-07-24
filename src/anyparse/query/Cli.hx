@@ -68,6 +68,8 @@ import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.Check.OracleRelaxable;
+import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.CrossFileEdits;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1404,7 +1406,12 @@ final class Cli {
 			// the interface gate. On the active SUBSET a subtype / value-use / interface declared elsewhere
 			// reads as absent, so an overridden or value-referenced method is wrongly inlined ("Field X is
 			// inlined and cannot be overridden").
-			'prefer-inline'
+			'prefer-inline',
+			// naming's cross-file field rename (crossFileFix) resolves an owner's subtype /
+			// @:access-grant files through the whole-project index; on the active SUBSET a subtype
+			// declared elsewhere reads as absent. Full-scope also re-reports the declaring file's
+			// violation every pass, so a rename deferred by a same-file conflict re-fires until it lands.
+			'naming'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];
@@ -9024,7 +9031,20 @@ final class Cli {
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		final nextActive: Array<{ file: String, source: String }> = [];
 		var fixedDelta: Int = 0;
+		// Cross-file fixes (naming's non-confined private-field rename) run FIRST, against this
+		// pass's pristine sources so every slice matches the index. Renames that share a target file
+		// are grouped into one component and committed together (all its files canonicalize or none)
+		// — so a mega-class's many field renames all land in ONE pass instead of serialising across
+		// passes. A committed file joins `touchedThisPass`, so the per-file loop skips it this pass.
+		final touchedThisPass: Array<String> = [];
+		final crossRenames: Array<Array<CrossFileEdits>> = [];
+		for (check in checks) if (check is CrossFileFix) {
+			final own: Array<Violation> = violations.filter(v -> v.rule == check.id());
+			for (rename in (cast check: CrossFileFix).crossFileFix(files, own, cached, index)) crossRenames.push(rename);
+		}
+		fixedDelta += applyCrossFileRenames(crossRenames, files, optsByFile, cached, touchedThisPass, changedFiles, nextActive);
 		for (entry in active) {
+			if (touchedThisPass.contains(entry.file)) continue;
 			final fileViolations: Array<Violation> = violations.filter(v -> v.file == entry.file);
 			if (fileViolations.length == 0) continue;
 			final disjoint: Array<{ span: Span, text: String }> = computeFileLintEdits(entry.source, fileViolations, checks, cached, index);
@@ -9045,6 +9065,107 @@ final class Cli {
 			}
 		}
 		return { nextActive: nextActive, fixedDelta: fixedDelta };
+	}
+
+	/**
+	 * Commit every cross-file `rename` this pass. Renames that share a target file are grouped into
+	 * one component and committed together: the component's per-file edits are unioned (distinct
+	 * fields → pairwise-disjoint spans) and each file canonicalized once — all files or none, so any
+	 * one file's canonicalization failure reverts the whole component. Components touch disjoint
+	 * files, so every commit-able one lands in this pass (no serialisation across passes). A
+	 * committed file is written back into `files` and marked touched / changed / active. Returns the
+	 * number of edits applied.
+	 */
+	private static function applyCrossFileRenames(
+		renames: Array<Array<CrossFileEdits>>, files: Array<{ file: String, source: String }>, optsByFile: Map<String, Null<String>>,
+		cached: GrammarPlugin, touchedThisPass: Array<String>, changedFiles: Array<String>,
+		nextActive: Array<{ file: String, source: String }>
+	): Int {
+		var total: Int = 0;
+		for (component in crossFileComponents(renames)) {
+			final byFile: Map<String, Array<{ span: Span, text: String }>> = [];
+			final slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }> = [];
+			for (rename in component) for (slice in rename) {
+				var edits: Null<Array<{ span: Span, text: String }>> = byFile[slice.file];
+				if (edits == null) {
+					edits = [];
+					byFile[slice.file] = edits;
+					slices.push({ file: slice.file, edits: edits });
+				}
+				for (e in slice.edits) edits.push(e);
+			}
+			final staged: Null<Array<{ file: String, source: String }>> = RefactorSupport.stageCrossFileRename(
+				slices, file -> fileSourceOf(files, file),
+				(file, source, edits) -> RefactorSupport.canonicalize(source, edits, false, cached, optsByFile[file])
+			);
+			if (staged == null) continue;
+			for (s in staged) for (entry in files) if (entry.file == s.file) {
+				entry.source = s.source;
+				if (!touchedThisPass.contains(s.file)) touchedThisPass.push(s.file);
+				if (!changedFiles.contains(s.file)) changedFiles.push(s.file);
+				if (!containsFile(nextActive, s.file)) nextActive.push(entry);
+				break;
+			}
+			for (slice in slices) total += slice.edits.length;
+		}
+		return total;
+	}
+
+	/**
+	 * Partition `renames` into connected components — two renames join when they share any target
+	 * file — via union-find. Different components touch disjoint files, so each can be committed
+	 * independently and atomically in the same pass. Preserves discovery order within and across
+	 * components.
+	 */
+	private static function crossFileComponents(renames: Array<Array<CrossFileEdits>>): Array<Array<Array<CrossFileEdits>>> {
+		final n: Int = renames.length;
+		final parent: Array<Int> = [for (i in 0...n) i];
+		function find(x: Int): Int {
+			var r: Int = x;
+			while (parent[r] != r) r = parent[r];
+			while (parent[x] != r) {
+				final next: Int = parent[x];
+				parent[x] = r;
+				x = next;
+			}
+			return r;
+		}
+		final fileOwner: Map<String, Int> = [];
+		for (i in 0...n) for (slice in renames[i]) {
+			final owner: Null<Int> = fileOwner[slice.file];
+			if (owner == null)
+				fileOwner[slice.file] = i;
+			else {
+				final ra: Int = find(i);
+				final rb: Int = find(owner);
+				if (ra != rb) parent[ra] = rb;
+			}
+		}
+		final groups: Map<Int, Array<Array<CrossFileEdits>>> = [];
+		final out: Array<Array<Array<CrossFileEdits>>> = [];
+		for (i in 0...n) {
+			final root: Int = find(i);
+			var g: Null<Array<Array<CrossFileEdits>>> = groups[root];
+			if (g == null) {
+				g = [];
+				groups[root] = g;
+				out.push(g);
+			}
+			g.push(renames[i]);
+		}
+		return out;
+	}
+
+	/** The in-memory source of `name` in `files`, or null when absent. */
+	private static function fileSourceOf(files: Array<{ file: String, source: String }>, name: String): Null<String> {
+		for (entry in files) if (entry.file == name) return entry.source;
+		return null;
+	}
+
+	/** Whether `list` already holds an entry for `name`. */
+	private static function containsFile(list: Array<{ file: String, source: String }>, name: String): Bool {
+		for (e in list) if (e.file == name) return true;
+		return false;
 	}
 
 	/**
