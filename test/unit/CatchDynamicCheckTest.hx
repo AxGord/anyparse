@@ -149,4 +149,38 @@ class CatchDynamicCheckTest extends Test {
 		return new CatchDynamic().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
+
+	public function testFixInsideConditionalUsesQualifiedNoImport(): Void {
+		// An unused catch-all inside `#if … #end` must swap to fully-qualified `haxe.Exception`
+		// with NO added import — a top-level `import haxe.Exception;` would be unused in builds
+		// where the conditional block is compiled out (the project's #if-Exception convention).
+		final out: String = applyFix(
+			'class C {\n\tpublic function f():Void {\n\t\t#if debug\n\t\ttry g() catch (e:Dynamic) {}\n\t\t#end\n\t}\n}'
+		);
+		Assert.isTrue(out.indexOf('(e:haxe.Exception)') != -1, 'conditional swap should use qualified name, got: $out');
+		Assert.isTrue(out.indexOf('import haxe.Exception;') == -1, 'no import for a conditional-only swap, got: $out');
+		Assert.isTrue(out.indexOf('Dynamic') == -1, 'Dynamic should be gone, got: $out');
+	}
+
+
+	public function testFixMixedConditionalAndPlainCatches(): Void {
+		// A plain unused catch takes the short `Exception` + import; a sibling inside `#if`
+		// takes qualified `haxe.Exception`. The import is added once, driven by the plain swap.
+		final src: String = 'class C {\n\tpublic function f():Void {\n\t\ttry a() catch (e:Dynamic) {}\n\t\t#if debug\n\t\ttry b() catch (e:Dynamic) {}\n\t\t#end\n\t}\n}';
+		final out: String = applyFix(src);
+		Assert.isTrue(out.indexOf('(e:haxe.Exception)') != -1, 'conditional swap should be qualified, got: $out');
+		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'plain swap should use the short name, got: $out');
+		Assert.isTrue(out.indexOf('import haxe.Exception;') != -1, 'plain swap should add the import once, got: $out');
+	}
+
+
+	public function testFixKeepsStdStringUseAsFinding(): Void {
+		// Arm (b), deliberately report-only: a body that stringifies the caught value
+		// (`Std.string(e)`, interpolation, a trace/log argument) is NOT provably equivalent —
+		// the swap rebinds `e` from the raw thrown value to a ValueException wrapper. It is
+		// left a finding for a manual decision (accept the wrapper, or migrate to `.unwrap()`).
+		final src: String = 'class C { public function f():Void { try g() catch (e:Dynamic) { Std.string(e); } } }';
+		Assert.equals(0, editCount(src));
+	}
+
 }
