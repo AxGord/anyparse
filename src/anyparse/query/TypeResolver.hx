@@ -20,6 +20,75 @@ import anyparse.query.RefactorSupport.TypeDeclMatch;
 @:nullSafety(Strict)
 final class TypeResolver {
 
+	/**
+	 * Simple `Type.method` names of stdlib STATIC functions that are provably
+	 * side-effect-free — a discarded call to one cannot change observable
+	 * behaviour, so `unused-local`'s autofix may delete a dead binding whose
+	 * initializer is such a call. Explicitly enumerated (not "every method
+	 * except"), so a future impure addition is never auto-trusted. `Math.random`
+	 * / `Std.random` are deliberately ABSENT — they advance PRNG state (a side
+	 * effect); every I/O-bearing type (`Sys`, `File`, …) is out entirely.
+	 */
+	private static final PURE_STDLIB_STATIC_FUNCS: Array<String> = [
+		'Date.now',
+		'Date.fromTime',
+		'Date.fromString',
+		'Std.string',
+		'Std.int',
+		'Std.parseInt',
+		'Std.parseFloat',
+		'Std.isOfType',
+		'Std.downcast',
+		'Math.abs',
+		'Math.min',
+		'Math.max',
+		'Math.floor',
+		'Math.ceil',
+		'Math.round',
+		'Math.fround',
+		'Math.ffloor',
+		'Math.fceil',
+		'Math.sqrt',
+		'Math.pow',
+		'Math.sin',
+		'Math.cos',
+		'Math.tan',
+		'Math.asin',
+		'Math.acos',
+		'Math.atan',
+		'Math.atan2',
+		'Math.exp',
+		'Math.log',
+		'Math.isNaN',
+		'Math.isFinite',
+		'StringTools.trim',
+		'StringTools.ltrim',
+		'StringTools.rtrim',
+		'StringTools.lpad',
+		'StringTools.rpad',
+		'StringTools.replace',
+		'StringTools.startsWith',
+		'StringTools.endsWith',
+		'StringTools.contains',
+		'StringTools.isSpace',
+		'StringTools.hex',
+		'StringTools.urlEncode',
+		'StringTools.urlDecode',
+		'StringTools.htmlEscape',
+		'StringTools.htmlUnescape',
+		'StringTools.fastCodeAt',
+		'StringTools.isEof',
+		'Path.join',
+		'Path.directory',
+		'Path.extension',
+		'Path.withoutExtension',
+		'Path.withoutDirectory',
+		'Path.normalize',
+		'Path.addTrailingSlash',
+		'Path.removeTrailingSlash',
+		'Path.isAbsolute',
+	];
+
 	private function new() {}
 
 	/**
@@ -51,6 +120,68 @@ final class TypeResolver {
 		if (bindingFrom == null) return false;
 		final typeName: Null<String> = declaredTypes[bindingFrom];
 		return typeName != null && (index.isAnonStructType(typeName) || index.memberGetter(typeName, field) == false);
+	}
+
+	/**
+	 * Whether `node` is safe to DELETE when its bound value is unused — the
+	 * analysis-layer delete-fix's purity test, a strict superset of
+	 * `RefactorSupport.isSideEffectFree`. It must stay SEPARATE from that shared
+	 * predicate: `Inline` reuses `isSideEffectFree` to DUPLICATE an initializer
+	 * across every read, where an array / object literal's identity matters, so
+	 * widening the shared kind-set would corrupt inlining. Three shapes the base
+	 * predicate conservatively rejects are added here: an array literal whose
+	 * elements are each deletion-pure, a plain (non-getter) field read
+	 * (`isPlainFieldRead`), and a provably-pure stdlib static call
+	 * (`isPureStdlibCall`). Any other node keeps the base conservative answer.
+	 */
+	public static function isDeletionPure(
+		node: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
+	): Bool {
+		if (RefactorSupport.isSideEffectFree(node)) return true;
+		final arrayLiteralKind: Null<String> = shape.arrayLiteralKind;
+		if (arrayLiteralKind != null && node.kind == arrayLiteralKind) {
+			for (c in node.children) if (!isDeletionPure(c, tree, shape, declaredTypes, index)) return false;
+			return true;
+		}
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		if (fieldAccessKind != null && node.kind == fieldAccessKind) return isPlainFieldRead(node, tree, shape, declaredTypes, index);
+		final callKind: Null<String> = shape.callKind;
+		if (callKind != null && node.kind == callKind) return isPureStdlibCall(node, tree, shape, declaredTypes, index);
+		return false;
+	}
+
+	/**
+	 * Whether `callNode` is a call to a provably-pure stdlib STATIC function.
+	 * Requires: the callee is a field access `Type.method` whose flattened
+	 * `Type.method` names a `PURE_STDLIB_STATIC_FUNCS` entry; the receiver is a
+	 * genuine type / package reference (its root identifier binds to NO local —
+	 * a same-named local would make it a value call, not a static one); no
+	 * project type shadows the simple type name (`index.declaringFiles` empty);
+	 * and every argument is itself `isDeletionPure`. A discarded such call has no
+	 * observable effect, so a dead local bound to one is safe to delete. Any
+	 * deviation keeps the conservative default (the binding is kept).
+	 */
+	public static function isPureStdlibCall(
+		callNode: QueryNode, tree: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: SymbolIndex
+	): Bool {
+		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		final identKind: Null<String> = shape.identKind;
+		if (fieldAccessKind == null || identKind == null || callNode.children.length == 0) return false;
+		final callee: QueryNode = callNode.children[0];
+		if (callee.kind != fieldAccessKind || callee.children.length != 1) return false;
+		final method: Null<String> = callee.name;
+		final receiver: QueryNode = callee.children[0];
+		final typeName: Null<String> = receiver.name;
+		if (method == null || typeName == null || !PURE_STDLIB_STATIC_FUNCS.contains('$typeName.$method')) return false;
+		var root: QueryNode = receiver;
+		while (root.kind == fieldAccessKind && root.children.length == 1) root = root.children[0];
+		final rootName: Null<String> = root.name;
+		final rootSpan: Null<Span> = root.span;
+		if (root.kind != identKind || rootName == null || rootSpan == null) return false;
+		if (resolveBindingFrom(rootName, rootSpan, tree, shape) != null) return false;
+		if (index.declaringFiles(typeName).length != 0) return false;
+		for (i in 1...callNode.children.length) if (!isDeletionPure(callNode.children[i], tree, shape, declaredTypes, index)) return false;
+		return true;
 	}
 
 	/**
