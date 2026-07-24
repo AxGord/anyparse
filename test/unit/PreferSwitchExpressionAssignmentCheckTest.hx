@@ -1,0 +1,263 @@
+package unit;
+
+import utest.Assert;
+import utest.Test;
+import anyparse.check.Check.Violation;
+import anyparse.check.PreferSwitchExpressionAssignment;
+import anyparse.check.Linter;
+import anyparse.check.Severity;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.RefactorSupport;
+import anyparse.runtime.Span;
+
+/**
+ * The `prefer-switch-expression-assignment` check: a single mutable local declaration
+ * immediately followed by a statement-position `switch` that assigns that local in every arm
+ * is flagged `Info`, and `fix` collapses the pair to `final x:T = switch subj { … };`. The
+ * `switch` twin of `prefer-if-expression-assignment` and the decl-pairing sibling of
+ * `join-declaration-assignment`: an existing `case _:` / `default:` arm drops the initializer,
+ * otherwise a `case _: <init>;` is synthesized from it; a bare decl with a non-exhaustive
+ * switch, an impure initializer, a compound / `??=` arm, an external write, or a `#if` arm all
+ * disqualify.
+ */
+class PreferSwitchExpressionAssignmentCheckTest extends Test {
+
+	public function testBasicFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-switch-expression-assignment', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.equals('this declaration and its following switch assignment can be a single switch-expression assignment', vs[0].message);
+	}
+
+	/** No source default arm, so the initializer becomes a synthesized `case _: <init>;`. */
+	public function testFixAppendsDefaultFromInit(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case 2: \'b\'; case _: \'\'; };', es[0].text);
+	}
+
+	/** An unguarded `case _:` arm makes the switch exhaustive, so the initializer is dropped. */
+	public function testExistingWildcardDropsInit(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'z\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A `default:` arm is a default too — initializer dropped, keyword preserved. */
+	public function testExistingDefaultBranchDropsInit(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'z\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tdefault: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; default: \'d\'; };', es[0].text);
+	}
+
+	/** A bare `var x;` is collapsible when the switch already has a default (definite assignment holds). */
+	public function testBareDeclWithDefaultFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('var x:String;\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}'));
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A bare `var x;` with no default arm cannot synthesize one — not exhaustive, so not flagged. */
+	public function testBareDeclNoDefaultNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrap('var x:String;\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')).length
+		);
+	}
+
+	/** An impure initializer cannot move to (or be dropped from) the default path without losing its effect. */
+	public function testImpureInitNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:String = compute();\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')).length
+		);
+	}
+
+	/** Even with an existing default (initializer dropped), an impure initializer's effect must not vanish. */
+	public function testImpureInitWithDefaultNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:String = compute();\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')).length
+		);
+	}
+
+	/** A compound `+=` arm is excluded — collapsing it can break per-branch type unification. */
+	public function testCompoundOperatorNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase 1: x += 1;\n\t\t\tcase _: x += 2;\n\t\t}')).length);
+	}
+
+	/** A short-circuit `??=` arm is excluded. */
+	public function testNullCoalAssignNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x ??= \'a\';\n\t\t\tcase _: x ??= \'d\';\n\t\t}')).length
+		);
+	}
+
+	/** An arm assigning a different l-value disqualifies. */
+	public function testDifferentLvalueNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: y = \'d\';\n\t\t}')).length
+		);
+	}
+
+	/** A field l-value (`obj.x = …`) is not the bare declared identifier. */
+	public function testFieldLvalueNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: obj.x = \'a\';\n\t\t\tcase _: obj.x = \'d\';\n\t\t}')).length
+		);
+	}
+
+	/** A multi-statement arm body is deliberately grouped, never collapsed. */
+	public function testMultiStatementArmNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: { x = \'a\'; y = 2; }\n\t\t\tcase _: x = \'d\';\n\t\t}')).length
+		);
+	}
+
+	/** A non-assignment arm body disqualifies. */
+	public function testNonAssignmentArmNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: trace(\'a\');\n\t\t\tcase _: x = \'d\';\n\t\t}')).length
+		);
+	}
+
+	/** A subject reading `x` would become a self-reference in `x`'s own initializer after the collapse. */
+	public function testSubjectReferencesXNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tswitch x {\n\t\t\tcase 1: x = 5;\n\t\t\tcase _: x = 6;\n\t\t}')).length);
+	}
+
+	/** An arm value reading `x` becomes a rejected self-reference after the collapse. */
+	public function testArmValueReferencesXNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase 1: x = x + 1;\n\t\t\tcase _: x = 2;\n\t\t}')).length);
+	}
+
+	/** A write to `x` after the switch means it is not final — cannot collapse. */
+	public function testExternalWriteNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}\n\t\tx = \'later\';')
+			).length
+		);
+	}
+
+	/** A `#if`-guarded arm run projects as a `Conditional`, disqualifying the whole switch. */
+	public function testConditionalArmNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap(
+					'var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\t#if debug\n\t\t\tcase 2: x = \'b\';\n\t\t\t#end\n\t\t\tcase _: x = \'d\';\n\t\t}'
+				)
+			).length
+		);
+	}
+
+	/** A guard-carrying arm is fine when the body shape matches; the pattern and guard are copied verbatim. */
+	public function testGuardedArmFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase n if (n > 0): x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case n if (n > 0): \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A braced single-statement arm body (`{ x = e; }`) is unwrapped to the value. */
+	public function testBracedArmFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: { x = \'a\'; }\n\t\t\tcase _: { x = \'d\'; }\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A comma-alternative pattern (`case 1, 2:`) is copied verbatim into the header. */
+	public function testCommaAltFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1, 2: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1, 2: \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A parenthesized subject (`switch (v)`) collapses; the subject is copied without the parens. */
+	public function testParenSwitchFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:String = \'\';\n\t\tswitch (v) {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:String = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
+	}
+
+	/** A statement between the declaration and the switch breaks adjacency — not flagged. */
+	public function testNonAdjacentNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap('var x:String = \'\';\n\t\ttrace(\'mid\');\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase _: x = \'d\';\n\t\t}')
+			).length
+		);
+	}
+
+	/** The pair yields exactly ONE finding. */
+	public function testFlaggedOnce(): Void {
+		Assert.equals(
+			1, violations(wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')).length
+		);
+	}
+
+	/** End-to-end through the canonical writer: the emitted file holds the collapsed switch-expression assignment. */
+	public function testFixOutputCollapsesPair(): Void {
+		final out: String = applyFixOnce(
+			wrap('var x:String = \'\';\n\t\tswitch v {\n\t\t\tcase 1: x = \'a\';\n\t\t\tcase 2: x = \'b\';\n\t\t}')
+		);
+		Assert.isTrue(out.indexOf('final x:String = switch v {') != -1);
+		Assert.isTrue(out.indexOf('case _: \'\';') != -1);
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	public function testRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('prefer-switch-expression-assignment'));
+		final ids: Array<String> = [for (c in Linter.builtins()) c.id()];
+		Assert.isTrue(ids.contains('prefer-switch-expression-assignment'));
+	}
+
+	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
+	private function applyFixOnce(src: String): String {
+		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
+			case Ok(text): text;
+			case Err(message): throw message;
+		};
+	}
+
+	/** Wrap a statement body in a minimal parseable class + method. */
+	private function wrap(body: String): String {
+		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferSwitchExpressionAssignment().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function edits(src: String): Array<{ span: Span, text: String }> {
+		final check: PreferSwitchExpressionAssignment = new PreferSwitchExpressionAssignment();
+		return check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
+	}
+
+}

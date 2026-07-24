@@ -62,6 +62,7 @@ final class Linter {
 			new PreferTernaryAssignment(),
 			new PreferIfExpressionReturn(),
 			new PreferIfExpressionAssignment(),
+			new PreferSwitchExpressionAssignment(),
 			new JoinDeclarationAssignment(),
 			new JoinReturn(),
 			new PreferSingleQuotes(),

@@ -480,6 +480,7 @@ import unit.JoinReturnCheckTest;
 import unit.ExplicitLocalTypeOracleTest;
 import unit.ExplicitLocalTypeOracleE2ETest;
 import unit.PreferInlineOracleTest;
+import unit.PreferSwitchExpressionAssignmentCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -932,6 +933,7 @@ class RunTests {
 		addCase(new PreferTernaryAssignmentCheckTest());
 		addCase(new PreferIfExpressionReturnCheckTest());
 		addCase(new PreferIfExpressionAssignmentCheckTest());
+		addCase(new PreferSwitchExpressionAssignmentCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
 		addCase(new JoinReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());
