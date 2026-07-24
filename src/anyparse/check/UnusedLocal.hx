@@ -50,7 +50,7 @@ import anyparse.query.TypeInfoProvider;
  * A flagged local is by construction wholly unreferenced, so the only
  * deletion hazard is a side-effecting initializer (`final x = compute();`).
  * `fix` deletes the declaration line only when it has no initializer or a
- * side-effect-free one (`RefactorSupport.isSideEffectFree`); a side-effecting
+ * side-effect-free one, or (with a symbol index) a type-aware deletion-pure expression — a plain field read, a pure array literal, or a provably-pure stdlib static call (`TypeResolver.isDeletionPure`); a side-effecting
  * initializer is reported but left for the author to resolve.
  */
 @:nullSafety(Strict)
@@ -99,12 +99,12 @@ final class UnusedLocal implements Check {
 		final declByFrom: Map<Int, QueryNode> = [];
 		collectLocalDecls(tree, declByFrom, opaqueKinds, localDeclKinds);
 
-		// Type-aware purity allow-path: `final x = recv.field;` whose receiver is an
-		// anonymous-struct value is a side-effect-free read (anon fields can never be
-		// property getters), so it is safe to delete even though `isSideEffectFree`
-		// conservatively rejects any field access. Available only when the grammar
-		// supplies declared types (`TypeInfoProvider`) and a symbol index is passed.
-		final fieldAccessKind: Null<String> = shape.fieldAccessKind;
+		// Type-aware purity allow-path: with a symbol index and declared types,
+		// `TypeResolver.isDeletionPure` widens the plain `isSideEffectFree` set — a
+		// plain (non-getter) field read, an array literal of pure elements, and a
+		// provably-pure stdlib static call all become safe to discard. Without an
+		// index it falls back to the conservative base predicate. A side-effecting
+		// or unprovable initializer is reported but left in place for the author.
 		final treeRoot: QueryNode = tree;
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final declaredTypes: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
@@ -115,12 +115,12 @@ final class UnusedLocal implements Check {
 			final decl: Null<QueryNode> = declByFrom[span.from];
 			if (decl == null) continue;
 			final init: Null<QueryNode> = decl.children.length > 0 ? decl.children[0] : null;
-			if (init != null && !RefactorSupport.isSideEffectFree(init)) {
-				var plainFieldRead: Bool = false;
-				if (index != null && fieldAccessKind != null && init.kind == fieldAccessKind)
-					plainFieldRead = TypeResolver.isPlainFieldRead(init, treeRoot, shape, declaredTypes, index);
-				if (!plainFieldRead) continue;
-			}
+			final deletable: Bool = init == null || (
+				index != null
+					? TypeResolver.isDeletionPure(init, treeRoot, shape, declaredTypes, index)
+					: RefactorSupport.isSideEffectFree(init)
+			);
+			if (!deletable) continue;
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;

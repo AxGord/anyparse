@@ -219,4 +219,52 @@ class TypeResolverSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * The autofix now deletes a dead local whose initializer is a provably-pure
+	 * stdlib static call: `Date.now()` (no args) and a fully-qualified
+	 * `haxe.io.Path.join([...])` whose `ArrayExpr` elements are side-effect-free.
+	 */
+	public function testPureStdlibCallDeleted(): Void {
+		final now: String = 'class C { static function m():Int { final dead = Date.now(); return 1; } }';
+		Assert.equals(1, fixEdits(now).length, 'Date.now() is a pure stdlib static call — deletable');
+		final path: String = 'class C { static function m():Int { final dead = haxe.io.Path.join(["a", "b"]); return 1; } }';
+		Assert.equals(1, fixEdits(path).length, 'haxe.io.Path.join of pure args — deletable');
+	}
+
+	/**
+	 * A call the pure-stdlib whitelist does not cover is kept: an impure stdlib
+	 * member (`Math.random`, `Sys.getEnv`), an unknown instance call, and a
+	 * whitelisted call whose argument is itself impure (`Std.string(o.foo())`).
+	 */
+	public function testImpureOrUnknownCallKept(): Void {
+		Assert.equals(
+			0, fixEdits('class C { static function m():Int { final dead = Math.random(); return 1; } }').length,
+			'Math.random advances PRNG state — kept'
+		);
+		Assert.equals(
+			0, fixEdits('class C { static function m():Int { final dead = Sys.getEnv("X"); return 1; } }').length,
+			'Sys is not whitelisted — kept'
+		);
+		Assert.equals(
+			0, fixEdits('class C { static function m(o:T):Int { final dead = o.foo(); return 1; } }').length,
+			'an unknown instance call — kept'
+		);
+		Assert.equals(
+			0, fixEdits('class C { static function m(o:T):Int { final dead = Std.string(o.foo()); return 1; } }').length,
+			'a whitelisted call with an impure argument — kept'
+		);
+	}
+
+	/**
+	 * A stdlib name shadowed by a project type or a local binding is kept: a
+	 * project `Path` class (`declaringFiles` non-empty) and a local `Date`
+	 * variable (the receiver resolves to a binding, not a type reference).
+	 */
+	public function testStdlibShadowKept(): Void {
+		final project: String = 'class Path { public static function join(a:Array<String>):String { return ""; } } class C { static function m():Int { final dead = Path.join(["a"]); return 1; } }';
+		Assert.equals(0, fixEdits(project).length, 'a project-declared Path shadows stdlib — kept');
+		final local: String = 'class C { static function m():Int { final Date = 0; final dead = Date.now(); return 1; } }';
+		Assert.equals(0, fixEdits(local).length, 'a local Date binding is not the stdlib type — kept');
+	}
+
 }
