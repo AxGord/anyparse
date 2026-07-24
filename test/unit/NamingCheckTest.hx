@@ -256,6 +256,61 @@ class NamingCheckTest extends Test {
 		assertFixCanonical(src, "${badLocal}", 'BadLocal');
 	}
 
+	public function testFixRenamesLocalWithCommentedMention(): Void {
+		// A commented-out / prose mention of the old name no longer blocks the rename;
+		// the occurrence inside the comment is renamed together with the code.
+		final src: String = 'class C {\n\tpublic function f() {\n\t\t// legacy MyLocal reference\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin()), '// legacy myLocal reference', 'MyLocal');
+	}
+
+	public function testFixSkipsLocalMentionedInStringLiteral(): Void {
+		// A plain string literal mentioning the old name may be a reflection key, so it
+		// blocks the rename (consistent with the reflection-string guards).
+		final src: String = 'class C {\n\tpublic function f():String {\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t\treturn "MyLocal";\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsLocalMentionedInNoqaComment(): Void {
+		// A `noqa`-carrying comment is a machine-meaningful directive line; the rename
+		// must not rewrite inside it, so the mention blocks (unlike a plain comment).
+		final src: String = 'class C {\n\tpublic function f() {\n\t\t// noqa: naming keep MyLocal\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+	public function testFixSkipsNonDistinctiveFieldMentionedInComment(): Void {
+		// An all-lowercase field name is a common word; a word-boundary match inside a comment
+		// is likely prose, so the mention blocks the rename (report-only) rather than risk
+		// corrupting the comment's prose.
+		final src: String = 'package pkg;\nclass C {\n\t// resets the shape state\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	public function testFixRenamesDistinctiveFieldMentionedInComment(): Void {
+		// A distinctive field name (carries an uppercase letter) is safe to rename inside a
+		// comment too, so a commented-out reference stays consistent with the renamed code.
+		final src: String = 'package pkg;\nclass C {\n\t// legacy xShape fallback\n\tprivate var xShape:Int;\n\tpublic function f() { return this.xShape; }\n}';
+		final files = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), '// legacy _xShape fallback', 'var xShape');
+	}
+
 	public function testFixRenamesConfinedStaticFinal(): Void {
 		// A confined private static final wrongly given a `_` prefix (the macro-build
 		// anchor shape) → the underscore is stripped to a camelCase constant name.

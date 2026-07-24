@@ -485,6 +485,7 @@ import unit.PreferSwitchExpressionAssignmentCheckTest;
 import unit.AvoidDynamicBagCheckTest;
 import unit.AvoidDynamicBagFixTest;
 import unit.AvoidDynamicBagOracleE2ETest;
+import unit.ClassifyOccurrencesTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -955,6 +956,7 @@ class RunTests {
 		addCase(new RedundantMapIterKeyCheckTest());
 		addCase(new FoldStringLiteralsCheckTest());
 		addCase(new NamingCheckTest());
+		addCase(new ClassifyOccurrencesTest());
 		addCase(new FmtSliceTest());
 		addCase(new NewFileSliceTest());
 		addCase(new SetDocSliceTest());

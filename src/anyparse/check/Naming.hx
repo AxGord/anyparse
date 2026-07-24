@@ -18,6 +18,8 @@ import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndexHost;
+import anyparse.query.RefactorSupport.ClassifiedOccurrence;
+import anyparse.query.RefactorSupport.OccurrenceClass;
 
 /**
  * Flags declarations whose identifier violates a naming convention. The check
@@ -116,7 +118,7 @@ final class Naming implements Check {
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
 			final rename: Null<RenameEdits> = renameEditsFor(
-				decl, source, tree, policy, shape, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index
+				decl, source, tree, policy, shape, plugin, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index
 			);
 			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
 		}
@@ -201,15 +203,18 @@ final class Naming implements Check {
 	/**
 	 * The rename to apply to one projected declaration, or null when it must be
 	 * skipped: not among the flagged spans, not rename-safe, no applicable rule
-	 * with a normalizer, already conformant, an incomplete rename whose old name
-	 * still occurs outside the resolved spans (a bare `$name` interpolation the
-	 * resolver misses, a reflection string), or a rename to a name already bound
-	 * in the file (a collision). When non-null, every returned occurrence span is
-	 * rewritten to `name`.
+	 * with a normalizer, already conformant, a rename to a name already bound in
+	 * the file (a collision), or an incomplete rename — the old name still occurs
+	 * outside the resolved spans as active code, inside a `#if...#end` region, in a
+	 * string literal, or on a `noqa` directive line. A plain comment mention does
+	 * NOT block: its occurrence is added to the returned spans and renamed together
+	 * with the code. When non-null, every returned occurrence span is rewritten to
+	 * `name`.
 	 */
 	private static function renameEditsFor(
-		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, flaggedFroms: Array<Int>,
-		otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>, ?index: SymbolIndex
+		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
+		flaggedFroms: Array<Int>, otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>,
+		?index: SymbolIndex
 	): Null<RenameEdits> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
@@ -239,26 +244,42 @@ final class Naming implements Check {
 			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
 		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
-		// Completeness: the scope resolver can miss a reference the rename must
-		// also rewrite — a bare field access whose binding span disagrees with the
-		// decl node, or a simple `$name` string interpolation (the braced
-		// `${name}` form IS resolved, the bare `$name` form is not). Any textual
-		// occurrence of the old name left outside the resolved spans means an
-		// incomplete rename that would dangle, so bail. This applies to EVERY
-		// category, not only fields: a local read solely through `$name`
-		// interpolation hits the same gap, and without the guard `--fix` would
-		// emit non-compiling source.
-		// Collision: a `newName` already occurring as an identifier in the file
-		// (another member of the same type, a sibling local) would be duplicated
-		// or shadowed by the rename — the re-parse gate accepts the result but it
-		// does not type-check, so skip that too.
-		return occurrences.length == 0 || RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences)
-			|| RefactorSupport.referencedInRange(source, newName, 0, source.length, [])
-			? null
-			: {
-				occurrences: occurrences,
-				name: newName
-			};
+		if (occurrences.length == 0) return null;
+		// Collision: a `newName` already occurring as an identifier in the file (another member of
+		// the same type, a sibling local) would be duplicated or shadowed by the rename — the
+		// re-parse gate accepts the result but it does not type-check, so skip. (Raw scan; the
+		// collision side keeps the old scan for now — classifying it is a later slice.)
+		if (RefactorSupport.referencedInRange(source, newName, 0, source.length, [])) return null;
+		// Completeness: classify every textual occurrence of the old name left outside the resolved
+		// spans. A plain comment mention (commented-out code, prose) is renamed ALONG with the code
+		// so the two stay consistent; a `#if...#end` occurrence (platform-conditional, invisible to
+		// the resolver), a string mention (a possible reflection key), a `noqa` directive line, or an
+		// active-code occurrence the resolver missed (a bare `$name` interpolation, a binding-span
+		// mismatch) all mean the rename would dangle or change semantics — bail. A source that fails
+		// to parse falls back to the fail-closed raw scan.
+		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+			source, decl.name, plugin, 0, source.length, occurrences
+		);
+		if (classified == null) return RefactorSupport.referencedInRange(source, decl.name, 0, source.length, occurrences) ? null : {
+			occurrences: occurrences,
+			name: newName
+		};
+		// A comment mention is renamed along with the code ONLY when the old name is distinctive
+		// (carries an underscore or an uppercase letter). An all-lowercase name like `container` or
+		// `db` is a common English word / file-extension token that word-boundary-matches PROSE, so
+		// its comment mention blocks the rename (report-only, as before) rather than corrupting prose.
+		final distinctive: Bool = isDistinctiveName(decl.name);
+		final renameSpans: Array<Span> = occurrences.copy();
+		for (occ in classified) switch occ.kind {
+			case OccurrenceClass.CommentTrivia if (distinctive):
+				renameSpans.push(occ.span);
+			case _:
+				return null;
+		}
+		return {
+			occurrences: renameSpans,
+			name: newName
+		};
 	}
 
 	/**
@@ -306,6 +327,22 @@ final class Naming implements Check {
 	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
 		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
+	}
+
+
+	/**
+	 * Whether `name` is distinctive enough that a word-boundary match inside a comment is
+	 * very unlikely to be prose: it carries an underscore or an uppercase letter (`_x`,
+	 * `yMul`, `MAX_SIZE`). An all-lowercase name (`container`, `db`, `mixed`) is a common
+	 * word or file-extension token, so a comment mention is treated as a blocker rather
+	 * than renamed along with the code — avoiding prose / filename corruption in comments.
+	 */
+	private static function isDistinctiveName(name: String): Bool {
+		for (i in 0...name.length) {
+			final c: Int = StringTools.fastCodeAt(name, i);
+			if (c == '_'.code || (c >= 'A'.code && c <= 'Z'.code)) return true;
+		}
+		return false;
 	}
 
 }

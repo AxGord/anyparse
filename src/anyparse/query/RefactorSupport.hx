@@ -68,6 +68,45 @@ typedef TypeDeclMatch = {
  * The helpers never re-implement scope analysis — they ride on top of
  * the `Refs.find` resolver and operate on `QueryNode` spans only.
  */
+/**
+ * Lexical classification of one word-boundary occurrence of an identifier.
+ * Drives the naming completeness gate: only `CommentTrivia` occurrences are
+ * renamed along with the code, every other class blocks the rename.
+ */
+enum abstract OccurrenceClass(Int) {
+
+	final ActiveCode = 0;
+	final ConditionalRaw = 1;
+	final CommentTrivia = 2;
+	final StringLiteral = 3;
+	final DirectiveComment = 4;
+
+}
+
+/**
+ * One classified word-boundary occurrence: the span of the matched identifier
+ * and its lexical class.
+ */
+typedef ClassifiedOccurrence = {
+	final span: Span;
+	final kind: OccurrenceClass;
+};
+
+/** Kind of a lexically-scanned non-code source region (comment or string). */
+private enum abstract LexRegionKind(Int) {
+
+	final LineComment = 0;
+	final BlockComment = 1;
+	final StringLit = 2;
+
+}
+
+/** A lexically-scanned non-code region: `[from, to)` and its kind. */
+private typedef LexRegion = {
+	final from: Int;
+	final to: Int;
+	final kind: LexRegionKind;
+};
 @:nullSafety(Strict)
 final class RefactorSupport {
 
@@ -903,54 +942,12 @@ final class RefactorSupport {
 	 */
 	public static function collectCommentTokens(source: String): Array<{ from: Int, to: Int, isLine: Bool }> {
 		final out: Array<{ from: Int, to: Int, isLine: Bool }> = [];
-		final n: Int = source.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c == '"'.code || c == "'".code) {
-				final quote: Int = c;
-				i++;
-				while (i < n) {
-					final ch: Int = StringTools.fastCodeAt(source, i);
-					if (ch == '\\'.code) {
-						i += 2;
-						continue;
-					}
-					if (ch == quote) {
-						i++;
-						break;
-					}
-					i++;
-				}
-				continue;
-			}
-			if (c == '/'.code && i + 1 < n) {
-				final next: Int = StringTools.fastCodeAt(source, i + 1);
-				if (next == '/'.code) {
-					final start: Int = i;
-					i += 2;
-					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
-					out.push({ from: start, to: i, isLine: true });
-					continue;
-				}
-				if (next == '*'.code) {
-					final start: Int = i;
-					i += 2;
-					var closed: Bool = false;
-					while (i + 1 < n) {
-						if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
-							i += 2;
-							closed = true;
-							break;
-						}
-						i++;
-					}
-					if (!closed) i = n;
-					out.push({ from: start, to: i, isLine: false });
-					continue;
-				}
-			}
-			i++;
+		for (region in scanLexicalRegions(source)) switch region.kind {
+			case LineComment:
+				out.push({ from: region.from, to: region.to, isLine: true });
+			case BlockComment:
+				out.push({ from: region.from, to: region.to, isLine: false });
+			case StringLit:
 		}
 		return out;
 	}
@@ -1949,6 +1946,145 @@ final class RefactorSupport {
 			i++;
 		}
 		return n - 1;
+	}
+
+
+	/**
+	 * Classify every word-boundary occurrence of `name` in `source[from...end)`
+	 * (offsets inside `excluded` skipped) by lexical context, built on top of the
+	 * parse so `#if...#end` regions and trivia are exact. Returns null when
+	 * `source` does not parse — the caller then falls back to the raw scan
+	 * (fail-closed). See `OccurrenceClass` for what each class means.
+	 */
+	public static function classifyOccurrences(
+		source: String, name: String, plugin: GrammarPlugin, from: Int, end: Int, excluded: Array<Span>
+	): Null<Array<ClassifiedOccurrence>> {
+		final tree: QueryNode = try plugin.parseFile(source) catch (exception: ParseError) return null catch (exception: Exception) return null;
+		final out: Array<ClassifiedOccurrence> = [];
+		final len: Int = name.length;
+		if (len == 0) return out;
+		final condSpans: Array<Span> = [];
+		collectConditionalSpans(tree, condSpans);
+		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		final stop: Int = end <= source.length ? end : source.length;
+		var i: Int = from;
+		while (i + len <= stop) {
+			final at: Int = source.indexOf(name, i);
+			if (at < 0 || at + len > stop) break;
+			i = at + 1;
+			final afterIdx: Int = at + len;
+			final beforeOk: Bool = at == 0 || !isIdentChar(StringTools.fastCodeAt(source, at - 1));
+			final afterOk: Bool = afterIdx >= source.length || !isIdentChar(StringTools.fastCodeAt(source, afterIdx));
+			if (beforeOk && afterOk && !offsetWithinAny(at, excluded))
+				out.push({ span: new Span(at, afterIdx), kind: classifyAt(source, at, condSpans, regions) });
+		}
+		return out;
+	}
+
+	/**
+	 * Single-pass lexer emitting every non-code region (line/block comment,
+	 * string literal) with byte offsets. Strings are skipped with `\`-escape
+	 * handling; `collectCommentTokens` filters this to its comment tokens.
+	 */
+	private static function scanLexicalRegions(source: String): Array<LexRegion> {
+		final out: Array<LexRegion> = [];
+		final n: Int = source.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == '"'.code || c == "'".code) {
+				final quote: Int = c;
+				final start: Int = i;
+				i++;
+				while (i < n) {
+					final ch: Int = StringTools.fastCodeAt(source, i);
+					if (ch == '\\'.code) {
+						i += 2;
+						continue;
+					}
+					if (ch == quote) {
+						i++;
+						break;
+					}
+					i++;
+				}
+				out.push({ from: start, to: i, kind: StringLit });
+				continue;
+			}
+			if (c == '/'.code && i + 1 < n) {
+				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				if (next == '/'.code) {
+					final start: Int = i;
+					i += 2;
+					while (i < n && StringTools.fastCodeAt(source, i) != '\n'.code) i++;
+					out.push({ from: start, to: i, kind: LineComment });
+					continue;
+				}
+				if (next == '*'.code) {
+					final start: Int = i;
+					i += 2;
+					var closed: Bool = false;
+					while (i + 1 < n) {
+						if (StringTools.fastCodeAt(source, i) == '*'.code && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
+							i += 2;
+							closed = true;
+							break;
+						}
+						i++;
+					}
+					if (!closed) i = n;
+					out.push({ from: start, to: i, kind: BlockComment });
+					continue;
+				}
+			}
+			i++;
+		}
+		return out;
+	}
+
+	/** Collect the span of every `#if...#end` region node into `out` (recursive). */
+	private static function collectConditionalSpans(node: QueryNode, out: Array<Span>): Void {
+		if (isConditionalKind(node.kind)) {
+			final s: Null<Span> = node.span;
+			if (s != null) out.push(s);
+		}
+		for (child in node.children) collectConditionalSpans(child, out);
+	}
+
+	/**
+	 * Whether a projected node kind denotes a `#if...#end` region — a block
+	 * `Conditional`, an expression `ConditionalExpr`, or any `CondSplice*`
+	 * mid-expression / statement splice. An unrecognised conditional kind
+	 * degrades to `ActiveCode`, which still blocks — fail-closed.
+	 */
+	private static inline function isConditionalKind(kind: String): Bool {
+		return kind == 'Conditional' || kind == 'ConditionalExpr' || StringTools.startsWith(kind, 'CondSplice');
+	}
+
+	/** The lexical class of the occurrence at `at`; see `OccurrenceClass`. */
+	private static function classifyAt(source: String, at: Int, condSpans: Array<Span>, regions: Array<LexRegion>): OccurrenceClass {
+		if (offsetWithinAny(at, condSpans)) return ConditionalRaw;
+		for (region in regions) if (at >= region.from && at < region.to) return switch region.kind {
+			case StringLit: StringLiteral;
+			case LineComment | BlockComment: isNoqaComment(source, region) ? DirectiveComment : CommentTrivia;
+		};
+		return ActiveCode;
+	}
+
+	/**
+	 * Whether a comment region carries a `noqa` suppression directive on any of
+	 * its lines (`noqa` or `noqa: rules`, case-insensitive — the flake8 form the
+	 * `Suppression` check honours). Such a line is machine-meaningful, so the
+	 * rename must not rewrite inside it.
+	 */
+	private static function isNoqaComment(source: String, region: LexRegion): Bool {
+		for (raw in source.substring(region.from, region.to).split('\n')) {
+			var line: String = StringTools.trim(raw);
+			if (StringTools.startsWith(line, '//') || StringTools.startsWith(line, '/*')) line = StringTools.trim(line.substr(2));
+			final lower: String = line.toLowerCase();
+			if (lower == 'noqa' || StringTools.startsWith(lower, 'noqa:')) return true;
+		}
+		return false;
 	}
 
 }
