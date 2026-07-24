@@ -10,78 +10,99 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
 /**
- * Flags a non-public `static final` constant of a basic scalar type whose
- * initializer is a compile-time literal, and rewrites it to `static inline final`
- * by inserting the `inline` keyword. `Severity.Info` (a codegen / modernization
- * cleanup), with an autofix. An inline scalar constant folds to an immediate at
- * every use site instead of a static-field load.
+ * Flags a `static final` constant of a basic scalar type whose initializer is a compile-time
+ * literal, and rewrites it to `static inline final` by inserting the `inline` keyword.
+ * `Severity.Info` (a codegen / modernization cleanup), with an autofix. An inline scalar constant
+ * folds to an immediate at every use site instead of a static-field load. PUBLIC constants are
+ * included, gated by the reflection-name and macro-consumption checks below.
  *
  * ## Also: `static inline var` -> `static inline final`
  *
- * A `static inline var` of a constant literal (scalar OR String) is ALSO flagged and
- * rewritten to `final`. Behaviour-neutral: a write to a `static inline var` is already
- * a compile error ("This expression cannot be accessed for writing"), so `final` merely
- * makes the existing immutability explicit. PUBLIC is included here (the add-inline case
- * is non-public only) because the field is already `inline` - `var` -> `final` changes
- * no ABI and no reflection surface (`Reflect.field` / `Type.getClassFields` are identical
- * for inline var vs inline final, verified). String is accepted here (excluded for the
- * add-inline case) for the same reason: no per-use-site codegen change, only the keyword.
- * The reflection-name and `#if`-divergent gates below still apply, except a self-named
- * event constant (`X = 'X'`) does not self-trip the reflection gate (its own value is
- * subtracted from the reflection-key count).
+ * A `static inline var` of a constant literal (scalar OR String) is ALSO flagged and rewritten to
+ * `final`. Behaviour-neutral: a write to a `static inline var` is already a compile error ("This
+ * expression cannot be accessed for writing"), so `final` merely makes the existing immutability
+ * explicit. `var` -> `final` changes no ABI and no reflection surface (`Reflect.field` /
+ * `Type.getClassFields` are identical for inline var vs inline final, verified). String is accepted
+ * here (excluded for the add-inline case) for the same reason: no per-use-site codegen change, only
+ * the keyword. The reflection-name and `#if`-divergent gates below still apply, except a self-named
+ * event constant (`X = 'X'`) does not self-trip the reflection gate (its own value is subtracted
+ * from the reflection-key count).
  *
  * ## The type annotation is PRESERVED (not dropped)
  *
- * The fix inserts only `inline`; it does NOT strip the `:Type` annotation. Dropping
- * it is unsound: `static final X:Float = 5` would re-infer as `Int` (the literal's
- * type), silently changing `X`'s type and every use — the classic
- * Float-constant-becomes-Int hazard. Keeping the annotation is also consistent with
- * the project's explicit-type preference. So `static final X:Int = 5` becomes
+ * The fix inserts only `inline`; it does NOT strip the `:Type` annotation. Dropping it is unsound:
+ * `static final X:Float = 5` would re-infer as `Int` (the literal's type), silently changing `X`'s
+ * type and every use — the classic Float-constant-becomes-Int hazard. Keeping the annotation is
+ * also consistent with the project's explicit-type preference. So `static final X:Int = 5` becomes
  * `static inline final X:Int = 5`.
  *
  * ## Why String is excluded (hxcpp evidence)
  *
- * `inlineConstantLiteralKinds` (the grammar's policy seam) lists only `IntLit` /
- * `HexLit` / `FloatLit` / `BoolLit` and OMITS the string kinds. Measured against
- * hxcpp 4.3 codegen: an inlined String re-emits its full literal (`HX_("...")`) at
- * EVERY use site, duplicating the string's bytes once per use across translation
- * units, whereas a non-inline `static final` keeps exactly one shared copy — with no
- * compensating runtime benefit (both are static-backed, allocation-free). A scalar
- * instead constant-folds to a tiny immediate with zero duplication. So String
- * constants stay `static final`; only scalars are inlined.
+ * `inlineConstantLiteralKinds` (the grammar's policy seam) lists only `IntLit` / `HexLit` /
+ * `FloatLit` / `BoolLit` and OMITS the string kinds. Measured against hxcpp 4.3 codegen: an inlined
+ * String re-emits its full literal (`HX_("...")`) at EVERY use site, duplicating the string's bytes
+ * once per use across translation units, whereas a non-inline `static final` keeps exactly one
+ * shared copy — with no compensating runtime benefit (both are static-backed, allocation-free). A
+ * scalar instead constant-folds to a tiny immediate with zero duplication. So String constants stay
+ * `static final`; only scalars are inlined.
+ *
+ * ## Reflection visibility: the name-as-string gate is MANDATORY (hxcpp evidence)
+ *
+ * Adding `inline` REMOVES the constant's value from run-time reflection — unlike `var` -> `final`,
+ * which is reflection-neutral. Measured on hxcpp 4.3.7 (default `-dce std`): a
+ * `public static final X = 5` is reflectively readable, `Reflect.field(Cls, "X")` returns `5`;
+ * adding `inline` folds the value into every use site and drops the runtime field storage, so
+ * `Reflect.field(Cls, "X")` then returns `null` (the NAME may still stub in `Type.getClassFields` /
+ * `Reflect.hasField`, but the VALUE is gone). Any `Reflect.field(o, "X")` read therefore silently
+ * degrades to `null` after inlining. This is why the name-as-string gate (gate 4) is MANDATORY, not
+ * advisory: a constant whose name appears as any string literal in scope — the shape a reflective
+ * read takes — is never inlined.
+ *
+ * ## Macro-consumption gate (public arm)
+ *
+ * A public constant may be consumed by another module's macro. Instead of the old blanket public
+ * exclusion, the check skips a PUBLIC constant only when its owning MODULE (class name) is
+ * referenced inside macro-context code anywhere in scope. The detector
+ * (`collectMacroConsumedModules` / `isMacroContext`) is deliberately cheap and conservative: a file
+ * is macro-context when its source imports `haxe.macro`, contains a `#if macro` / `#elseif macro`
+ * region, or declares a `macro function`; every capitalised (type-name) identifier token of such a
+ * file — code AND trivia, so a name mentioned only inside a `#if macro` block still counts — is
+ * collected, and a public constant whose class name is in that set is left alone. Textual by design
+ * (it reaches `#if macro` interiors that project as opaque trivia) and conservative (it only ever
+ * KEEPS a constant non-inline). A private constant is off every external module surface, so the gate
+ * is public-only.
  *
  * ## Soundness gates (must-skip)
  *
- * 1. NON-PUBLIC only. A public constant may be consumed by another module's macro or
- *    reflected across files; inlining erases the field. Restricting to private /
- *    default visibility keeps the field off any external surface — a private inline
- *    constant cannot be a macro-consumed public one.
- * 2. STATIC final only. `inline` requires a static field; an instance `final` and a
- *    `var` are skipped, as is an already-`inline` field (nothing to do).
- * 3. COMPILE-TIME LITERAL initializer only — a bare `inlineConstantLiteralKinds`
- *    literal, or `negationKind` wrapping a numeric one (`-5`). Any other initializer
- *    (arithmetic, a call, another identifier, an array / object literal, `null`, an
- *    `#if`-divergent value, a String) is not provably a basic constant and is left
- *    alone.
- * 4. NO reflection. A constant whose NAME appears as a string literal ANYWHERE in the
- *    lint scope is skipped — it may be read by `Reflect.field(o, "NAME")`, which an
- *    inline field (erased from the runtime type) would break. Conservative: the name
- *    matches any string content, which only ever KEEPS a constant non-inline.
- * 5. NO `@:keep`. A `@:keep`-annotated field is explicitly retained (often for
- *    reflection / external tooling); inlining would erase it.
- * 6. ENUM ABSTRACT and `#if` members are structurally excluded — an enum abstract's
- *    values live under `EnumAbstractDecl` (not a `visibilityContainerKinds` host, and
- *    handled by `prefer-enum-abstract`), and a `#if`-guarded member is nested in a
- *    `Conditional` rather than a direct container child, so neither is ever scanned.
+ * 1. VISIBILITY. A non-public constant is always a candidate. A PUBLIC constant is a candidate too
+ *    (the blanket public exclusion is lifted), additionally gated by the reflection-name gate
+ *    (mandatory — see above) and the macro-consumption gate, which together keep an inlined public
+ *    field off any external reflection / macro surface.
+ * 2. STATIC final only. `inline` requires a static field; an instance `final` and a `var` are
+ *    skipped, as is an already-`inline` field (nothing to do).
+ * 3. COMPILE-TIME LITERAL initializer only — a bare `inlineConstantLiteralKinds` literal, or
+ *    `negationKind` wrapping a numeric one (`-5`). Any other initializer (arithmetic, a call,
+ *    another identifier, an array / object literal, `null`, an `#if`-divergent value, a String) is
+ *    not provably a basic constant and is left alone.
+ * 4. NO reflection. A constant whose NAME appears as a string literal ANYWHERE in the lint scope is
+ *    skipped — it may be read by `Reflect.field(o, "NAME")`, which an inline field (whose value is
+ *    erased) would break. Conservative: the name matches any string content, which only ever KEEPS a
+ *    constant non-inline.
+ * 5. NO `@:keep` / `@:rtti`. A `@:keep`- or `@:rtti`-annotated field, or any member of a class
+ *    carrying class-level `@:keep` / `@:rtti`, is explicitly retained for reflection / external
+ *    tooling; inlining would erase its reflective value.
+ * 6. ENUM ABSTRACT and `#if` members are structurally excluded — an enum abstract's values live
+ *    under `EnumAbstractDecl` (not a `visibilityContainerKinds` host, and handled by
+ *    `prefer-enum-abstract`), and a `#if`-guarded member is nested in a `Conditional` rather than a
+ *    direct container child, so neither is ever scanned.
  *
  * ## Grammar-agnostic
  *
- * Reads `visibilityContainerKinds` / `memberDeclKinds` / `fieldDeclKinds` /
- * `mutableFieldDeclKinds` (the final-field host = field minus mutable),
- * `visibilityModifierKinds` + `defaultVisibilityModifierText`, `staticModifierKind`,
- * `inlineModifierKind`, `inlineConstantLiteralKinds`, `numericLiteralKinds` +
- * `negationKind`, plus `metaShape().metaKinds` and `stringFoldSupport()`. Any required
- * seam unset makes the check a no-op.
+ * Reads `visibilityContainerKinds` / `memberDeclKinds` / `fieldDeclKinds` / `mutableFieldDeclKinds`
+ * (the final-field host = field minus mutable), `visibilityModifierKinds` +
+ * `defaultVisibilityModifierText`, `staticModifierKind`, `inlineModifierKind`,
+ * `inlineConstantLiteralKinds`, `numericLiteralKinds` + `negationKind`, plus `metaShape().metaKinds`
+ * and `stringFoldSupport()`. Any required seam unset makes the check a no-op.
  */
 @:nullSafety(Strict)
 final class InlineConstant implements Check {
@@ -95,6 +116,9 @@ final class InlineConstant implements Check {
 	/** The meta that pins a field in place (reflection / external tooling); such a field is never inlined. */
 	private static inline final KEEP_META: String = '@:keep';
 
+	/** The meta that enables runtime type info (`haxe.rtti.Rtti`) for a type; a field it exposes is never inlined. */
+	private static inline final RTTI_META: String = '@:rtti';
+
 	public function new() {}
 
 	public function id(): String {
@@ -102,17 +126,18 @@ final class InlineConstant implements Check {
 	}
 
 	public function description(): String {
-		return 'a non-public static final scalar that can be inline, or a static inline var that can be final';
+		return 'a static final scalar that can be inline, or a static inline var that can be final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
 		final reflected: Array<String> = collectReflectedNames(files, plugin, seams.stringFold);
+		final macroConsumed: Array<String> = collectMacroConsumedModules(files);
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, reflected);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, seams, reflected, macroConsumed, false);
 		}
 		return violations;
 	}
@@ -142,24 +167,45 @@ final class InlineConstant implements Check {
 		return edits;
 	}
 
-	/** Walk `node`; scan every visibility-bearing container's direct children for inlinable static final constants. */
+	/**
+	 * Walk `node`; scan every visibility-bearing container's direct children for inlinable static
+	 * final constants. Class-level `@:keep` / `@:rtti` meta projects as `Meta` siblings PRECEDING the
+	 * container (not as its children), so a running pin flag over each node's direct children — set by
+	 * such a meta, cleared at the next non-meta node — marks the container it attaches to; a pinned
+	 * container's members are retained for reflection / tooling and never inlined. A `final class`
+	 * nests its body in a `FinalDecl(ClassForm …)` wrapper, so the pin is carried into the recursion
+	 * (`inheritedPin`) to reach the container one level down.
+	 */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: Seams, reflected: Array<String>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, seams: Seams, reflected: Array<String>,
+		macroConsumed: Array<String>, inheritedPin: Bool
 	): Void {
-		if (seams.containers.contains(node.kind)) scanContainer(out, file, source, node, seams, reflected);
-		for (child in node.children) walk(out, file, source, child, seams, reflected);
+		var classPinned: Bool = inheritedPin;
+		for (child in node.children) {
+			if (seams.metaKinds.contains(child.kind))
+				classPinned = classPinned || isPinMeta(child.name);
+			else {
+				if (seams.containers.contains(child.kind))
+					scanContainer(out, file, source, child, seams, reflected, macroConsumed, classPinned);
+				walk(out, file, source, child, seams, reflected, macroConsumed, classPinned);
+				classPinned = false;
+			}
+		}
 	}
 
 	/**
-	 * Scan `container`'s DIRECT children in source order. Modifier / meta siblings precede
-	 * the member they attach to, so a running flag set (`static`, `inline`, exported
-	 * visibility, `@:keep`) — reset at each member — describes the member that just
-	 * appeared. A `#if`-guarded member is nested in a `Conditional` (not a direct child),
-	 * so it is never seen here.
+	 * Scan `container`'s DIRECT children in source order. Modifier / meta siblings precede the member
+	 * they attach to, so a running flag set (`static`, `inline`, exported visibility, `@:keep` /
+	 * `@:rtti`) — reset at each member — describes the member that just appeared. Public members are
+	 * candidates too (the reflection and macro-consumption gates in `consider` keep them sound);
+	 * `classPinned` (a class-level `@:keep` / `@:rtti`) blocks the add-inline arm for every member. A
+	 * `#if`-guarded member is nested in a `Conditional` (not a direct child), so it is never seen here.
 	 */
 	private static function scanContainer(
-		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, reflected: Array<String>
+		out: Array<Violation>, file: String, source: String, container: QueryNode, seams: Seams, reflected: Array<String>,
+		macroConsumed: Array<String>, classPinned: Bool
 	): Void {
+		final containerName: Null<String> = container.name;
 		var sawStatic: Bool = false;
 		var sawInline: Bool = false;
 		var exported: Bool = false;
@@ -173,10 +219,10 @@ final class InlineConstant implements Check {
 			else if (seams.visibility.contains(kind))
 				exported = exported || isExportedVisibility(source, child, seams.defaultVis);
 			else if (seams.metaKinds.contains(kind))
-				sawKeep = sawKeep || child.name == KEEP_META;
+				sawKeep = sawKeep || isPinMeta(child.name);
 			else if (seams.members.contains(kind)) {
-				if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !exported && !sawKeep)
-					consider(out, file, child, seams, reflected);
+				if (seams.finalFieldKinds.contains(kind) && sawStatic && !sawInline && !sawKeep && !classPinned)
+					consider(out, file, child, seams, reflected, macroConsumed, containerName, exported);
 				else if (seams.mutableFieldKinds.contains(kind) && sawStatic && sawInline && !sawKeep)
 					considerInlineVar(out, file, source, child, seams, reflected);
 				sawStatic = false;
@@ -194,15 +240,22 @@ final class InlineConstant implements Check {
 	}
 
 	/**
-	 * Flag `field` when its initializer is an inlinable compile-time literal and its name is
-	 * not read by reflection. The visibility / static / inline / keep gates are already
-	 * applied by the caller.
+	 * Flag `field` when its initializer is an inlinable compile-time literal, its name is not read by
+	 * reflection, and (when PUBLIC) its owning module is not macro-consumed. The visibility / static /
+	 * inline / keep gates are already applied by the caller; the reflection gate runs for every
+	 * visibility (mandatory for public — see the reflection-visibility note on the class), and the
+	 * macro-consumption gate applies only to a public constant (a private one is off every external
+	 * module surface).
 	 */
-	private static function consider(out: Array<Violation>, file: String, field: QueryNode, seams: Seams, reflected: Array<String>): Void {
+	private static function consider(
+		out: Array<Violation>, file: String, field: QueryNode, seams: Seams, reflected: Array<String>, macroConsumed: Array<String>,
+		containerName: Null<String>, exported: Bool
+	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
 		if (reflected.contains(name)) return;
+		if (exported && containerName != null && macroConsumed.contains(containerName)) return;
 		final init: Null<QueryNode> = initializerOf(field);
 		if (init == null || !isInlinableLiteral(init, seams)) return;
 		flag(out, file, span, 'static constant \'$name\' is a scalar literal; use inline');
@@ -342,6 +395,76 @@ final class InlineConstant implements Check {
 			severity: Severity.Info,
 			message: message
 		});
+	}
+
+	/**
+	 * Whether `meta` is an annotation that pins a member in place for reflection / external tooling
+	 * (`@:keep` or `@:rtti`) — a field it covers is never inlined. Applies to a field-level meta and,
+	 * via `walk`, to a class-level one covering every member.
+	 */
+	private static inline function isPinMeta(meta: Null<String>): Bool {
+		return meta == KEEP_META || meta == RTTI_META;
+	}
+
+	/**
+	 * The module (class) names referenced inside macro-context code across `files` — a public constant
+	 * of one is macro-consumed and left non-inline. Cheap and conservative: a file is macro-context
+	 * when its source imports `haxe.macro`, contains a `#if macro` / `#elseif macro` region, or
+	 * declares a `macro function`; every capitalised (type-name) identifier token of such a file — code
+	 * AND trivia, so a name mentioned only inside a `#if macro` block still counts — is collected.
+	 * Textual by design: it reaches `#if macro` interiors that project as opaque trivia, and it only
+	 * ever KEEPS a constant non-inline.
+	 */
+	private static function collectMacroConsumedModules(files: Array<{ file: String, source: String }>): Array<String> {
+		final out: Array<String> = [];
+		for (entry in files) if (isMacroContext(entry.source)) collectTypeTokens(entry.source, out);
+		return out;
+	}
+
+	/** Whether `source` is macro-context code — it imports `haxe.macro`, has a positive `#if` / `#elseif macro` region, or declares a `macro function`. */
+	private static function isMacroContext(source: String): Bool {
+		final signals: Array<String> = [
+			'haxe.macro',
+			'#if macro',
+			'#if (macro',
+			'#elseif macro',
+			'#elseif (macro',
+			'macro function'
+		];
+		for (signal in signals) if (source.indexOf(signal) >= 0) return true;
+		return false;
+	}
+
+	/** Append every capitalised identifier token (a type / module name) in `source` to `out`, de-duplicated. */
+	private static function collectTypeTokens(source: String, out: Array<String>): Void {
+		final n: Int = source.length;
+		var i: Int = 0;
+		while (i < n) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (isIdentStart(c)) {
+				final start: Int = i;
+				i++;
+				while (i < n && isIdentPart(StringTools.fastCodeAt(source, i))) i++;
+				final token: String = source.substring(start, i);
+				if (isUpper(StringTools.fastCodeAt(token, 0)) && !out.contains(token)) out.push(token);
+			} else
+				i++;
+		}
+	}
+
+	/** Whether `c` can start an identifier — a letter or `_`. */
+	private static inline function isIdentStart(c: Int): Bool {
+		return c == '_'.code || isUpper(c) || (c >= 'a'.code && c <= 'z'.code);
+	}
+
+	/** Whether `c` can continue an identifier — an identifier-start char or a digit. */
+	private static inline function isIdentPart(c: Int): Bool {
+		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
+	}
+
+	/** Whether `c` is an ASCII uppercase letter — the first char of a type / module name. */
+	private static inline function isUpper(c: Int): Bool {
+		return c >= 'A'.code && c <= 'Z'.code;
 	}
 
 }

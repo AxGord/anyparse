@@ -10,12 +10,13 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
 /**
- * The `inline-constant` check: a non-public `static final` constant of a basic scalar
- * type (Int / Float / Bool, NOT String) whose initializer is a compile-time literal is
- * flagged `Info` and rewritten to `static inline final` (the `:Type` annotation kept).
- * A String constant, a public / non-static / already-inline / `var` field, a non-literal
- * initializer, a reflected name, a `@:keep` field, and an enum-abstract / `#if` member
- * are all left alone.
+ * The `inline-constant` check: a `static final` constant of a basic scalar type (Int /
+ * Float / Bool, NOT String) whose initializer is a compile-time literal is flagged `Info`
+ * and rewritten to `static inline final` (the `:Type` annotation kept). PUBLIC constants are
+ * included, gated by the reflection-name and macro-consumption checks. A String constant, a
+ * non-static / already-inline / `var` field, a non-literal initializer, a reflected name, a
+ * macro-consumed module, a `@:keep` / `@:rtti` field or class, and an enum-abstract / `#if`
+ * member are all left alone.
  */
 class InlineConstantCheckTest extends Test {
 
@@ -58,8 +59,13 @@ class InlineConstantCheckTest extends Test {
 		Assert.equals(0, violations('class C { static final A:String = "x"; }').length);
 	}
 
-	public function testPublicNotFlagged(): Void {
-		Assert.equals(0, violations('class C { public static final A:Int = 5; }').length);
+	public function testPublicFlagged(): Void {
+		// PUBLIC scalar constants are now inlinable too (the blanket public exclusion is
+		// lifted), gated only by the reflection and macro-consumption checks.
+		final vs: Array<Violation> = violations('class C { public static final A:Int = 5; }');
+		Assert.equals(1, vs.length);
+		Assert.equals('inline-constant', vs[0].rule);
+		Assert.isTrue(vs[0].message.indexOf('use inline') >= 0);
 	}
 
 	/** An instance `final` cannot be inline (inline requires static). */
@@ -166,7 +172,6 @@ class InlineConstantCheckTest extends Test {
 		return out;
 	}
 
-
 	public function testInlineVarIntFlagged(): Void {
 		// A `static inline var` scalar constant is flagged for var -> final (behaviour-neutral:
 		// a write to a static inline var is already a compile error - verified).
@@ -232,6 +237,76 @@ class InlineConstantCheckTest extends Test {
 	public function testNonInlineStaticVarNotFlagged(): Void {
 		// A plain (non-inline) static var is mutable - writes are allowed, so var -> final is unsound.
 		Assert.equals(0, violations('class C { public static var n:Int = 5; }').length);
+	}
+
+	/** A PUBLIC String constant stays excluded (hxcpp per-use-site literal duplication) even though public scalars now convert. */
+	public function testPublicStringNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public static final A:String = "x"; }').length);
+	}
+
+	/**
+	 * A PUBLIC constant whose name appears as a string literal may be read by reflection; the
+	 * name-as-string gate keeps it non-inline. Mandatory for the public arm: on hxcpp adding
+	 * inline erases the field's reflective value (`Reflect.field` returns null), unlike var -> final.
+	 */
+	public function testPublicReflectedNameNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public static final MYCONST:Int = 5; function f():Void { Reflect.field(C, "MYCONST"); } }').length
+		);
+	}
+
+	/** A PUBLIC constant whose owning module is referenced in macro-context code (a file importing haxe.macro that mentions the class) is macro-consumed and left alone. */
+	public function testMacroContextReferencedModuleNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public static final A:Int = 5; }' },
+			{ file: 'Build.hx', source: 'import haxe.macro.Context;\nclass Build { public static function f():Void { C; } }' }
+		];
+		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** The same class mentioned in a NON-macro file is not macro-consumed — its public constant still converts. */
+	public function testNonMacroContextReferenceStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public static final A:Int = 5; }' },
+			{ file: 'User.hx', source: 'class User { public static function f():Void { C; } }' }
+		];
+		Assert.equals(1, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** A field-level `@:rtti` pins the constant for runtime type info — never inlined. */
+	public function testRttiFieldNotFlagged(): Void {
+		Assert.equals(0, violations('class C { @:rtti public static final A:Int = 5; }').length);
+	}
+
+	/** A class-level `@:rtti` exposes every member to `haxe.rtti.Rtti` — none inlined. */
+	public function testRttiClassNotFlagged(): Void {
+		Assert.equals(0, violations('@:rtti class C { public static final A:Int = 5; }').length);
+	}
+
+	/** A class-level `@:keep` pins all members — none inlined. */
+	public function testKeepClassNotFlagged(): Void {
+		Assert.equals(0, violations('@:keep class C { public static final A:Int = 5; }').length);
+	}
+
+	/** The fix inserts `inline` on a public constant, preserving canonical order: `public static final` -> `public static inline final`. */
+	public function testFixPublicInsertsInline(): Void {
+		final fixed: String = fixedSource('class C { public static final A:Int = 5; }');
+		Assert.isTrue(fixed.indexOf('public static inline final A:Int = 5') >= 0);
+	}
+
+	/** A class-level `@:rtti` on a `final class` (nested in a FinalDecl wrapper) still pins all members. */
+	public function testRttiFinalClassNotFlagged(): Void {
+		Assert.equals(0, violations('@:rtti final class C { public static final A:Int = 5; }').length);
+	}
+
+	/** A class-level `@:keep` on a `final class` pins all members. */
+	public function testKeepFinalClassNotFlagged(): Void {
+		Assert.equals(0, violations('@:keep final class C { public static final A:Int = 5; }').length);
+	}
+
+	/** A plain `final class` with no pin meta still has its public constant flagged (scanning reaches the wrapped container). */
+	public function testFinalClassPublicFlagged(): Void {
+		Assert.equals(1, violations('final class C { public static final A:Int = 5; }').length);
 	}
 
 }
