@@ -3,6 +3,7 @@ package unit;
 import utest.Assert;
 import utest.Test;
 import anyparse.check.Check.Violation;
+import anyparse.check.LintConfig;
 import anyparse.check.MemberOrder;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
@@ -435,22 +436,96 @@ class MemberOrderCheckTest extends Test {
 		assertOrderAdvisoryOnly(violations(fixed));
 	}
 
+	/**
+	 * With the opt-in `movableArglessNew` option a field whose initializer is a pure argless
+	 * `new T()` becomes order-movable: the `final t = new T()` reorders ahead of the `var`
+	 * fields it belongs before, instead of degrading to spacing-only. Reordered output parses
+	 * and converges through the production canonicalization.
+	 */
+	public function testMovableArglessNewReordersUnderOption(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		final fixed: String = fixedSource(src, movableArglessNewResolver());
+		Assert.isTrue(fixed.indexOf('final t') < fixed.indexOf('var a'), 'argless-new final moved before the vars: $fixed');
+		Assert.isTrue(parses(fixed), 'reordered output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src, movableArglessNewResolver())).length, 'converges through writeRoundTrip: $fixed');
+	}
+
+	/**
+	 * Option OFF (the default) is byte-identical to the pre-option behaviour: the same
+	 * `final t = new T()` container degrades to spacing-only edits, its order untouched.
+	 */
+	public function testMovableArglessNewOffByteIdentical(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}';
+		Assert.equals(
+			'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\n\tpublic final t:T = new T();\n\n\tpublic function new() {\n\t\ta = 0;\n\t}\n}',
+			fixedSource(src)
+		);
+	}
+
+	/** An argful `new T(0)` initializer stays blocking even with the option on - only ZERO-argument allocations are movable. */
+	public function testArgfulNewStillBlocksUnderOption(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T(0);\n\n\tpublic function new() {}\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		final fixed: String = fixedSource(src, movableArglessNewResolver());
+		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('final t'), 'argful new NOT moved before the vars: $fixed');
+	}
+
+	/**
+	 * A `new T(a)` whose argument references a sibling field keeps blocking under the option -
+	 * the whole init expression references a class-bound ident, so it is not a pure allocation.
+	 */
+	public function testFieldReferencingNewStillBlocksUnderOption(): Void {
+		final src: String = 'class C {\n\tpublic var a:Int;\n\tpublic var b:Int;\n\tpublic final t:T = new T(a);\n\n\tpublic function new() {}\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		final fixed: String = fixedSource(src, movableArglessNewResolver());
+		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('final t'), 'field-referencing new NOT moved before the vars: $fixed');
+	}
+
+	/** The option does not relax the sibling-read guard: a non-`new` init reading a sibling field still blocks. */
+	public function testSiblingReadStillBlocksUnderOption(): Void {
+		final src: String = 'class C { public function m():Void {} private var y:Int = 0; public var x:Int = y; }';
+		Assert.isTrue(violations(src).length > 0);
+		Assert.equals(0, edits(src, movableArglessNewResolver()).length, 'sibling-referencing init still blocks under the option');
+	}
+
+	/**
+	 * A single-member `#if` block wrapping an argless-`new` field moves atomically with its
+	 * guard under the option: the unconditional argless-new final sorts ahead of the plain
+	 * `var`, and the guarded one moves to the section end still wrapped in its `#if`.
+	 */
+	public function testConditionalArglessNewReordersUnderOption(): Void {
+		final src: String = 'class C {\n\tprivate final b:S = new S();\n\t#if !mobile\n\tprivate final h:S = new S();\n\t#end\n\tprivate var ht:Float;\n}';
+		final fixed: String = fixedSource(src, movableArglessNewResolver());
+		Assert.isTrue(fixed.indexOf('final b') < fixed.indexOf('var ht'), 'unconditional final before the var: $fixed');
+		Assert.isTrue(fixed.indexOf('var ht') < fixed.indexOf('#if !mobile'), 'guarded final moved to the section end: $fixed');
+		Assert.isTrue(fixed.indexOf('#if !mobile') < fixed.indexOf('final h'), 'guarded final still opens its #if: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src, movableArglessNewResolver())).length, 'converges: $fixed');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
-	private function edits(src: String): Array<{ span: Span, text: String }> {
+	private function edits(src: String, ?resolve: (String) -> LintConfig): Array<{ span: Span, text: String }> {
 		final check: MemberOrder = new MemberOrder();
+		if (resolve != null) check.setConfigResolver(resolve);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		return check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
 	}
 
-	private function fixedSource(src: String): String {
-		final sorted: Array<{ span: Span, text: String }> = edits(src).copy();
+	private function fixedSource(src: String, ?resolve: (String) -> LintConfig): String {
+		final sorted: Array<{ span: Span, text: String }> = edits(src, resolve).copy();
 		sorted.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = src;
 		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
+	}
+
+	/** A config resolver that enables the opt-in `movableArglessNew` member-order option for every file. */
+	private function movableArglessNewResolver(): (String) -> LintConfig {
+		final cfg: LintConfig = LintConfig.parse('{"rules": {"member-order": {"movableArglessNew": true}}}');
+		return _ -> cfg;
 	}
 
 	/** Whether `src` parses — used to assert a conditional-reorder rebuild round-trips through the parse gate `canonicalize` applies (which `fixedSource`'s raw splice skips). */
@@ -475,9 +550,10 @@ class MemberOrderCheckTest extends Test {
 	 * splice skips, which is exactly where a writer-reinserted blank line can undo
 	 * a naive spacing fix.
 	 */
-	private function canonicalizedFix(src: String): String {
+	private function canonicalizedFix(src: String, ?resolve: (String) -> LintConfig): String {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: MemberOrder = new MemberOrder();
+		if (resolve != null) check.setConfigResolver(resolve);
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
 		return switch RefactorSupport.canonicalize(src, check.fix(src, vs, plugin), true, plugin) {
 			case Ok(text): text;
