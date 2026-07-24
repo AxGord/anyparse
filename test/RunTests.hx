@@ -473,6 +473,7 @@ import unit.CollapsibleElseIfCheckTest;
 import unit.HaxelibResolverTest;
 import unit.LintUnusedImportResolutionScopeTest;
 import unit.HxSwitchSubjectParensStripSliceTest;
+import unit.PreferInlineCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -853,6 +854,7 @@ class RunTests {
 		addCase(new PreferRangeLoopCheckTest());
 		addCase(new TrivialGetterCheckTest());
 		addCase(new TrivialGetterStaticShadowTest());
+		addCase(new PreferInlineCheckTest());
 		addCase(new NullableSwitchMissingNullCheckTest());
 		addCase(new DuplicateCodeCheckTest());
 		addCase(new DuplicateCodeCrossFileCheckTest());
