@@ -418,9 +418,14 @@ final class Naming implements Check implements CrossFileFix {
 		);
 		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : resolved;
 		final spans: Array<Span> = resolved.copy();
+		// A distinctive comment mention renames along, but only within the binding's own lexical container:
+		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
+		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its
+		// comment-along still spans the whole class.
+		final container: Null<Span> = innermostSpanOfKinds(tree, shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']), declFrom);
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
-				spans.push(occ.span);
+				if (container != null && occ.span.from >= container.from && occ.span.from < container.to) spans.push(occ.span);
 			case _:
 				return null;
 		}
@@ -686,19 +691,32 @@ final class Naming implements Check implements CrossFileFix {
 	/**
 	 * Every same-name occurrence in the DECLARING file that provably binds to a DIFFERENT binding than
 	 * the one at `declFrom` - a param / loop var / sibling local sharing the name. Attributed via the
-	 * scope resolver's per-hit binding: a Decl self-binds, a Read / Write follows its `bindingSpan`.
-	 * Such occurrences are excluded from the completeness scan (neither renamed with `declFrom`'s
-	 * binding nor a blocker). An occurrence whose binding is unresolved is NOT returned - it stays
-	 * uncovered so the completeness gate blocks the rename (fail-closed).
+	 * scope resolver's per-hit binding (a Decl self-binds, a Read / Write follows its `bindingSpan`) AND
+	 * verified to sit inside that binding's own lexical container: the resolver can leak a case-branch
+	 * local past its branch and mis-bind a bare field use to it, so an occurrence OUTSIDE the attributed
+	 * binding's container is NOT excluded. Excluded occurrences drop out of the completeness scan
+	 * (neither renamed with `declFrom`'s binding nor a blocker). An occurrence whose binding is
+	 * unresolved, or resolves outside its container, is NOT returned - it stays uncovered so the
+	 * completeness gate blocks the rename (fail-closed).
 	 */
 	private static function otherBindingSpans(source: String, tree: QueryNode, name: String, declFrom: Int, shape: RefShape): Array<Span> {
 		final out: Array<Span> = [];
 		final seen: Array<Int> = [];
+		final containerKinds: Array<String> = shape.scopeKinds.concat(['CaseBranch', 'DefaultBranch']);
 		for (h in Refs.find(name, tree, shape)) {
 			final bindingSpan: Null<Span> = h.bindingSpan;
 			final boundFrom: Null<Int> = h.kind == RefKind.Decl ? h.span.from : (bindingSpan == null ? null : bindingSpan.from);
 			if (boundFrom == null || boundFrom == declFrom) continue;
-			RefactorSupport.pushUniqueSpan(out, seen, RefactorSupport.identTokenOffset(source, h.span, name), name.length);
+			final off: Int = RefactorSupport.identTokenOffset(source, h.span, name);
+			if (off < 0) continue;
+			// Fail-closed attribution: exclude this occurrence as belonging to a DIFFERENT binding only when
+			// it sits inside that binding's own lexical container. A scope resolver can leak a case-branch
+			// local past its branch (a `case` opens no scope frame), mis-binding a bare field use to it; such
+			// a use lies OUTSIDE the binding's container, so it is left uncovered and the completeness gate
+			// blocks the whole rename rather than silently excluding - and orphaning - a real reference.
+			final container: Null<Span> = innermostSpanOfKinds(tree, containerKinds, boundFrom);
+			if (container == null || off < container.from || off >= container.to) continue;
+			RefactorSupport.pushUniqueSpan(out, seen, off, name.length);
 		}
 		return out;
 	}
@@ -707,10 +725,11 @@ final class Naming implements Check implements CrossFileFix {
 	 * Whether `newName` would collide with a binding reachable from `decl`'s scope. A FIELD / Constant
 	 * (class-level) stays whole-file: it is visible everywhere in the type, and its inherited-member
 	 * redefinition is separately gated. A Local / Param / CatchVar is SCOPE-AWARE - `newName` conflicts
-	 * only when it occurs in `decl`'s enclosing function (an enclosing / sibling local or param) or at
-	 * class / file level (an own member, static, or import); an occurrence inside an UNRELATED function
-	 * body (one that does not enclose `decl`) is out of scope. An inherited member in another file never
-	 * appears in-file, so a local legally shadowing one still renames.
+	 * when it occurs anywhere in `decl`'s innermost enclosing FUNCTION (its whole body, INCLUDING the
+	 * nested closures / local functions that capture `decl`), or at class / file level (an own member,
+	 * static, or import). Only a function DISJOINT from that enclosing one (a sibling / unrelated body)
+	 * is out of scope. An inherited member in another file never appears in-file, so a local legally
+	 * shadowing one still renames.
 	 */
 	private static function collidesInScope(decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape): Bool {
 		final span: Null<Span> = decl.span;
@@ -718,24 +737,47 @@ final class Naming implements Check implements CrossFileFix {
 		final cat: NamingCategory = decl.category;
 		if (cat != NamingCategory.Local && cat != NamingCategory.Param && cat != NamingCategory.CatchVar)
 			return RefactorSupport.referencedInRange(source, newName, 0, source.length, []);
+		final funcKinds: Array<String> = shape.functionKinds ?? [];
+		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
+		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.
+		// Only a function DISJOINT from it (a sibling / unrelated body) is out of scope. Fall back to a
+		// whole-file scan when no enclosing function is found (defensive; a local / param always has one).
+		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from);
 		final excluded: Array<Span> = [];
-		collectUnrelatedFunctionSpans(tree, shape.functionKinds ?? [], span.from, excluded);
+		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.referencedInRange(source, newName, 0, source.length, excluded);
 	}
 
 	/**
-	 * Collect the span of every function node that does NOT enclose `declFrom` - an unrelated /
-	 * sibling-nested body whose locals & parameters are unreachable from the binding's scope, so a
-	 * same-named binding there is not a collision. Recursive; the enclosing function(s) are kept.
+	 * Collect the span of every function node DISJOINT from `enclosing` (no overlap) - a sibling /
+	 * unrelated body whose locals & parameters are unreachable from the binding's scope, so a same-named
+	 * binding there is not a collision. A function nested INSIDE `enclosing` (a capturing closure) or one
+	 * that contains it is kept. Recursive.
 	 */
-	private static function collectUnrelatedFunctionSpans(
-		node: QueryNode, functionKinds: Array<String>, declFrom: Int, out: Array<Span>
+	private static function collectDisjointFunctionSpans(
+		node: QueryNode, functionKinds: Array<String>, enclosing: Span, out: Array<Span>
 	): Void {
 		if (functionKinds.contains(node.kind)) {
 			final s: Null<Span> = node.span;
-			if (s != null && !(s.from <= declFrom && declFrom < s.to)) out.push(s);
+			if (s != null && (s.to <= enclosing.from || s.from >= enclosing.to)) out.push(s);
 		}
-		for (child in node.children) collectUnrelatedFunctionSpans(child, functionKinds, declFrom, out);
+		for (child in node.children) collectDisjointFunctionSpans(child, functionKinds, enclosing, out);
+	}
+
+	/** The tightest enclosing node span (whose kind is in `kinds`) containing `pos`, or null when none does. */
+	private static function innermostSpanOfKinds(node: QueryNode, kinds: Array<String>, pos: Int): Null<Span> {
+		var bestFrom: Int = -1;
+		var best: Null<Span> = null;
+		function walk(n: QueryNode): Void {
+			final s: Null<Span> = n.span;
+			if (s != null && s.from <= pos && pos < s.to && kinds.contains(n.kind) && s.from > bestFrom) {
+				bestFrom = s.from;
+				best = s;
+			}
+			for (c in n.children) walk(c);
+		}
+		walk(node);
+		return best;
 	}
 
 }

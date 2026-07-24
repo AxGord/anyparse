@@ -1022,4 +1022,69 @@ class NamingCheckTest extends Test {
 		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
+
+	public function testFixSkipsParamCapturedByNestedFunctionLocal(): Void {
+		// A `__`-param captured by a NESTED local function whose body declares a same-named local:
+		// de-prefixing `__items` -> `items` rebinds the param's in-closure use to that local (capture,
+		// "has no field push"). A same-named binding ANYWHERE in the param's own function body -
+		// including nested local functions - conflicts, so the rename must skip.
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function f(__items:Array<Int>):Void {\n'
+			+ '\t\tfunction finish():Void {\n' + '\t\t\tfinal items:Int = 1;\n' + '\t\t\t__items.push(items);\n' + '\t\t}\n'
+			+ '\t\tfinish();\n' + '\t}\n' + '}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixRenamesParamDespiteSameNameLocalInUnrelatedFunction(): Void {
+		// `items` names a local only in an UNRELATED method `g` - out of `f`'s scope, so de-prefixing
+		// param `__items` -> `items` in `f` still applies (scope-awareness exempts unrelated functions,
+		// but never the binding's own body or its nested closures).
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function f(__items:Array<Int>):Void {\n'
+			+ '\t\t__items.push(1);\n' + '\t}\n' + '\tpublic function g():Void {\n' + '\t\tfinal items:Int = 2;\n' + '\t\ttrace(items);\n'
+			+ '\t}\n' + '}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'items.push', '__items');
+	}
+
+	public function testFixBlocksFieldWhenCaseLocalLeaksOverUses(): Void {
+		// The field `logo` is used bare before and after a `switch` whose case branches each declare a
+		// `logo` local. A scope resolver that opens no frame per case branch mis-binds those bare field
+		// uses to a case-local; the fix must NOT silently exclude them (which would rename the field decl
+		// alone and orphan the uses). It renames them with the field OR - fail-closed - blocks the whole
+		// field rename. Here it blocks (the leaked uses stay uncovered active code).
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tprivate var logo:Null<Sprite>;\n'
+			+ '\tpublic function make(kind:Int):Void {\n' + '\t\tif (logo != null) removeChild(logo);\n' + '\t\tlogo = switch kind {\n'
+			+ '\t\t\tcase 0:\n' + '\t\t\t\tfinal logo:Sprite = new Sprite();\n' + '\t\t\t\tlogo;\n' + '\t\t\tcase _:\n'
+			+ '\t\t\t\tfinal logo:Sprite = new Sprite();\n' + '\t\t\t\tlogo;\n' + '\t\t};\n' + '\t\taddChild(logo);\n' + '\t}\n'
+			+ '\tfunction removeChild(o:Sprite):Void {}\n' + '\tfunction addChild(o:Sprite):Void {}\n' + '}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixRenamesFieldWithSameNamedParamInAnotherMethod(): Void {
+		// The valid counterpart of the leak case: a same-named PARAM in one method (properly scoped) does
+		// NOT steal the field's bare uses in ANOTHER method - those correctly bind to the field and rename
+		// with it; the param is excluded (it genuinely binds elsewhere) and stays put.
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tprivate var logo:Null<Sprite>;\n'
+			+ '\tpublic function set(logo:Sprite):Void {\n' + '\t\tthis.logo = logo;\n' + '\t}\n' + '\tpublic function use():Void {\n'
+			+ '\t\tif (logo != null) logo.x = 0;\n' + '\t}\n' + '}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'var _logo', 'var logo');
+	}
+
+
+	public function testFixDoesNotRenameCommentMentionOfUnrelatedBinding(): Void {
+		// Two methods each declare a DISTINCT `__x`. Renaming method `a`'s `__x` -> `x` must not rewrite
+		// the `__x` mention in method `b`'s comment (which refers to b's own, un-renamed `__x`): comment
+		// -along is scoped to the binding's container, so a same-named binding elsewhere is left alone.
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function a(__x:Int):Int {\n' + '\t\treturn __x;\n' + '\t}\n'
+			+ '\tpublic function b(__x:Int):Int {\n' + '\t\tvar x:Int = 5;\n' + '\t\t// keep __x here\n' + '\t\treturn __x + x;\n'
+			+ '\t}\n' + '}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin()), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.isTrue(text.indexOf('// keep __x here') >= 0);
+				Assert.isTrue(text.indexOf('a(x:Int)') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
 }
