@@ -17,6 +17,7 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.query.RefactorSupport;
+import anyparse.query.SymbolIndexHost;
 
 /**
  * Flags declarations whose identifier violates a naming convention. The check
@@ -105,11 +106,17 @@ final class Naming implements Check {
 		// project-wide confinement scan a single time.
 		final otherSources: Array<String> = index == null ? [] : otherIndexedSources(index, violations[0].file);
 		final confinedMemo: Map<String, Bool> = [];
+		// The inherited-member proof of a `_`-prefix field rename walks the FULL supertype
+		// closure, so it resolves through the plugin's resolution scope (report files UNION the
+		// configured libraries) when present — a field of an `openfl` / `lime` subclass is then
+		// provable rather than blocked as unresolvable. The report-scope `index` still backs the
+		// confinement / reflection-string proofs (they reason about report-file reachability).
+		final resolutionIndex: Null<SymbolIndex> = resolutionIndexOf(plugin) ?? index;
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
 			final rename: Null<RenameEdits> = renameEditsFor(
-				decl, source, tree, policy, shape, flaggedFroms, otherSources, confinedMemo, index
+				decl, source, tree, policy, shape, flaggedFroms, otherSources, confinedMemo, resolutionIndex, index
 			);
 			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
 		}
@@ -202,7 +209,7 @@ final class Naming implements Check {
 	 */
 	private static function renameEditsFor(
 		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, flaggedFroms: Array<Int>,
-		otherSources: Array<String>, confinedMemo: Map<String, Bool>, ?index: SymbolIndex
+		otherSources: Array<String>, confinedMemo: Map<String, Bool>, resolutionIndex: Null<SymbolIndex>, ?index: SymbolIndex
 	): Null<RenameEdits> {
 		final span: Null<Span> = decl.span;
 		if (span == null || !flaggedFroms.contains(span.from) || !isRenameSafe(decl, source, index, otherSources, confinedMemo))
@@ -217,15 +224,18 @@ final class Naming implements Check {
 		// inherited from a supertype - Haxe rejects "Redefinition of variable in subclass"
 		// (verified). A local / param renamed to a bare name only SHADOWS an inherited member,
 		// which Haxe permits (verified) - the whole-file textual collision scan below covers
-		// that case - so the inheritance gate is FIELD-only. Skip when the inherited-`_x`
-		// possibility cannot be ruled out (an unresolvable supertype closure), and skip a field
-		// of a `@:rtti` / drill-Node hierarchy whose subtype-ward `@:rtti` only the index reveals
-		// (the direct-`@:rtti` case is already `renameUnsafe`): such a class serializes by
-		// reflecting on field NAMES, so a rename would silently break saved files.
+		// that case - so the inheritance gate is FIELD-only. The proof walks the FULL supertype
+		// closure through `resolutionIndex` (the RESOLUTION scope — report files UNION the
+		// configured libraries — when the plugin carries one, else the report index): an `openfl`
+		// / `lime` subclass's inherited members are then resolvable rather than unprovable. Skip
+		// when the inherited-`_x` possibility cannot be ruled out (a still-unresolvable supertype
+		// closure), and skip a field of a `@:rtti` / drill-Node hierarchy whose subtype-ward
+		// `@:rtti` only the index reveals (the direct-`@:rtti` case is already `renameUnsafe`):
+		// such a class serializes by reflecting on field NAMES, so a rename would break saved files.
 		if (decl.category == NamingCategory.Field) {
 			final owner: Null<String> = decl.enclosingType;
-			if (owner == null || index == null) return null;
-			final idx: SymbolIndex = index;
+			if (owner == null || resolutionIndex == null) return null;
+			final idx: SymbolIndex = resolutionIndex;
 			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
 		final occurrences: Array<Span> = Rename.renameOccurrences(source, tree, span.from, shape);
@@ -284,6 +294,18 @@ final class Naming implements Check {
 		final single: String = '\'$name\'';
 		final double: String = '"$name"';
 		return sources.exists(src -> src.indexOf(single) >= 0 || src.indexOf(double) >= 0);
+	}
+
+
+	/**
+	 * The plugin's memoised resolution-scoped `SymbolIndex` (report files UNION the
+	 * configured library roots) when it carries a resolution scope, else null — the
+	 * field inheritance proof then falls back to the report-only index. Mirrors
+	 * `RefactorSupport.lazySymbolIndex`'s host resolution.
+	 */
+	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
 	}
 
 }

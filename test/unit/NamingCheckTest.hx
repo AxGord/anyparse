@@ -17,6 +17,7 @@ using StringTools;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 import anyparse.query.SymbolIndex;
+import anyparse.query.CachingGrammarPlugin;
 
 /**
  * The `naming` check: declarations are tested against the first applicable
@@ -672,6 +673,51 @@ class NamingCheckTest extends Test {
 		final vs: Array<Violation> = violations('class C {\n\tpublic static var Count:Int = 0;\n}');
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.contains('public field'));
+	}
+
+
+	/**
+	 * A `_`-prefix field rename resolves its supertype closure through the plugin's
+	 * RESOLUTION scope: `Base` lives only in the resolution-scope library (not the
+	 * report files), and a clean `Base` lets `x -> _x` proceed. The report-only
+	 * `index` (confinement) cannot see `Base`; before the resolution wiring the field
+	 * gate consulted THAT index and blocked the rename as an unresolvable supertype.
+	 */
+	public function testFixFieldResolvesCleanSupertypeThroughResolutionScope(): Void {
+		final subSrc: String = 'package pkg;\nclass Sub extends Base {\n\tprivate var x:Int;\n\tpublic function f() { return this.x; }\n}';
+		final edits: Array<{ span: Span, text: String }> = fixWithResolutionScope(subSrc, 'package ext;\nclass Base {}');
+		assertCanonicalized(subSrc, edits, '_x', 'var x');
+	}
+
+	/**
+	 * The mirror: when the resolution-scope `Base` DECLARES `_x`, the rename `x -> _x`
+	 * would trigger Haxe's "Redefinition of variable in subclass", so the field gate —
+	 * now walking the closure through the resolution index — blocks it (report-only).
+	 */
+	public function testFixFieldBlockedBySupertypeMemberInResolutionScope(): Void {
+		final subSrc: String = 'package pkg;\nclass Sub extends Base {\n\tprivate var x:Int;\n\tpublic function f() { return this.x; }\n}';
+		final edits: Array<{ span: Span, text: String }> = fixWithResolutionScope(
+			subSrc, 'package ext;\nclass Base {\n\tprivate var _x:Int;\n}'
+		);
+		Assert.equals(0, edits.length);
+	}
+
+
+	/**
+	 * Run naming's field fix on `subSrc` (the sole report file) with `libSrc` as the
+	 * only resolution-scope library file. Confinement uses the report-only index; the
+	 * field inheritance proof uses the host's resolution index (report UNION library).
+	 */
+	private function fixWithResolutionScope(subSrc: String, libSrc: String): Array<{ span: Span, text: String }> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
+		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionFiles(report.concat.bind(lib));
+		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(report, scoped).filter(v -> v.file == 'pkg/Sub.hx');
+		Assert.equals(1, vs.length);
+		return check.fix(subSrc, vs, scoped, reportIndex);
 	}
 
 }

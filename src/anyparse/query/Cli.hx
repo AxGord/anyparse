@@ -9011,13 +9011,15 @@ final class Cli {
 		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
 		?resolution: () -> Array<{ file: String, source: String }>
 	): LintPassResult {
-		// Rebuild over the CURRENT (mutated) sources UNION the resolution scope — naming's
-		// cross-file rename consults the index, so it must reflect this pass's input and
-		// resolve against any configured library roots. `resolution` null → report-only (byte-inert).
-		final index: SymbolIndex = SymbolIndex.build(resolution == null ? files : resolution(), cached);
-		// Share this pass's fresh index with the cross-file checks (via the host) so they resolve
-		// against the same current sources UNION library, not a frozen first-demand snapshot.
-		if (resolution != null) cached.setResolutionIndex(index);
+		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
+		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
+		// prefer-final-field's confinement — reason about what a REPORT file can reach, and a
+		// library file that skip-parses (openfl / lime carry a few) must not poison them. The
+		// resolution-scoped index (report UNION library) rides the HOST instead, so a check's
+		// resolution gate (naming's inherited-member proof) resolves a library supertype through
+		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
+		final index: SymbolIndex = SymbolIndex.build(files, cached);
+		if (resolution != null) cached.setResolutionIndex(SymbolIndex.build(resolution(), cached));
 		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		final nextActive: Array<{ file: String, source: String }> = [];

@@ -690,9 +690,17 @@ final class SymbolIndex {
 		return found ? false : null;
 	}
 
-	/** Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`. */
+	/**
+	 * Recursive closure walk for `typeProvablyLacksMember`, cycle-guarded by `seen`.
+	 * A `Dynamic` supertype is skipped, not treated as an unresolvable dead end:
+	 * `implements Dynamic<T>` marks dynamic FIELD ACCESS, it declares no NAMED member,
+	 * so it can never be the inherited `_x` a rename would redefine. It reaches
+	 * `supertypes` from a clause like openfl `DisplayObject`'s `#if (…) implements
+	 * Dynamic<DisplayObject> #end`; counting it as unresolvable (`ds.length != 1`)
+	 * would wrongly block every `openfl` display subclass's field rename.
+	 */
 	private function lacksMemberClosure(typeName: String, member: String, seen: Array<String>): Bool {
-		if (seen.contains(typeName)) return true;
+		if (typeName == 'Dynamic' || seen.contains(typeName)) return true;
 		seen.push(typeName);
 		final ds: Array<TypeDeclInfo> = declsNamed(typeName);
 		if (ds.length != 1) return false;

@@ -588,4 +588,25 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.subtypeReferencesField('Owner2', '_x'));
 	}
 
+
+	/**
+	 * `typeProvablyLacksMember` walks the full supertype closure, but a `Dynamic` supertype
+	 * — `implements Dynamic<T>` marks dynamic field ACCESS and declares no NAMED member, and
+	 * reaches `supertypes` from a `#if`-guarded openfl `DisplayObject`-style `implements
+	 * Dynamic<..>` clause — is SKIPPED, not treated as an unresolvable dead end. So a
+	 * subclass field is still provably absent (the openfl display-subclass rename case),
+	 * while a genuinely inherited member is still found.
+	 */
+	public function testProvablyLacksMemberSkipsDynamicSupertype(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Base.hx', source: 'class Base extends EventDispatcher implements Dynamic<Base> { private var _taken:Int; }' },
+			{ file: 'src/EventDispatcher.hx', source: 'class EventDispatcher {}' },
+			{ file: 'src/Sub.hx', source: 'class Sub extends Base {}' }
+		], plugin());
+		// `Dynamic` is skipped, the rest of the closure resolves, and nothing declares `_absent`.
+		Assert.isTrue(index.typeProvablyLacksMember('Sub', '_absent'));
+		// A real inherited member (Base's `_taken`) is still found through the closure.
+		Assert.isFalse(index.typeProvablyLacksMember('Sub', '_taken'));
+	}
+
 }
