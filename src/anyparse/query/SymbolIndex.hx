@@ -221,9 +221,13 @@ final class SymbolIndex {
 	private final _files: Array<FileInfo>;
 	private final _skipped: Array<String>;
 
-	private function new(files: Array<FileInfo>, skipped: Array<String>) {
+	/** Per-file source text, retained so a subtype-ward body scan (`subtypeReferencesField`) can inspect a subtype's raw declaration span for a backing-field reference. */
+	private final _sources: Map<String, String>;
+
+	private function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>) {
 		_files = files;
 		_skipped = skipped;
+		_sources = sources;
 	}
 
 	/** The `FileInfo` for `file`, or null when the file is not indexed. */
@@ -615,6 +619,27 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
+	 */
+	public function subtypeReferencesField(owner: String, field: String): Bool {
+		final closure: Array<String> = [owner];
+		var i: Int = 0;
+		while (i < closure.length) {
+			final parent: String = closure[i++];
+			for (fi in _files) for (t in fi.types) {
+				if (t.name == owner || closure.contains(t.name) || !t.supertypes.contains(parent)) continue;
+				closure.push(t.name);
+				// A subtype declaring its OWN `field` binds a bare reference to that member, not to the
+				// inherited one, so its mention is not a read of the deleted field.
+				if (t.members.exists(m -> m.name == field)) continue;
+				final src: Null<String> = _sources[fi.file];
+				if (src == null || RefactorSupport.identTokenOffset(src, t.span, field) >= 0) return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Whether `typeName` OR any type in its transitive supertype closure carries
 	 * `@:rtti` (resolved via the index). True marks a serialization-sensitive
 	 * hierarchy - a class reflected on its field NAMES at runtime (a drill Node) -
@@ -917,6 +942,7 @@ final class SymbolIndex {
 	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): SymbolIndex {
 		final infos: Array<FileInfo> = [];
 		final skipped: Array<String> = [];
+		final sources: Map<String, String> = [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final shape: RefShape = plugin.refShape();
 		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
@@ -928,6 +954,7 @@ final class SymbolIndex {
 				skipped.push(entry.file);
 				continue;
 			}
+			sources[entry.file] = entry.source;
 			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
 			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
@@ -937,7 +964,7 @@ final class SymbolIndex {
 				abstractKinds
 			));
 		}
-		return new SymbolIndex(infos, skipped);
+		return new SymbolIndex(infos, skipped, sources);
 	}
 
 	/**
