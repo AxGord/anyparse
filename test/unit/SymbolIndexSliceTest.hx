@@ -472,6 +472,26 @@ class SymbolIndexSliceTest extends Test {
 		Assert.notNull(fi.imports.find(i -> i.raw == 'sys.io.File'));
 	}
 
+	/**
+	 * `subtypeDeclaresMember` — a member is OVERRIDDEN below `typeName` when a
+	 * transitive subtype declares it. Backs `unused-parameter`'s rename gate,
+	 * which leaves a base method's parameter alone when an override may use it.
+	 */
+	public function testSubtypeDeclaresMember(): Void {
+		final files = [
+			{ file: 'pkg/Base.hx', source: 'package pkg;\nclass Base {\n\tfunction over():Void {}\n\n\tfunction only():Void {}\n}' },
+			{ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends Base {}' },
+			{ file: 'pkg/Leaf.hx', source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function over():Void {}\n}' }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		// `over` is overridden by Leaf, a TRANSITIVE subtype of Base (Leaf -> Mid -> Base).
+		Assert.isTrue(index.subtypeDeclaresMember('Base', 'over'));
+		// `only` is declared solely in Base — no subtype declares it.
+		Assert.isFalse(index.subtypeDeclaresMember('Base', 'only'));
+		// A leaf type has no subtype at all.
+		Assert.isFalse(index.subtypeDeclaresMember('Leaf', 'over'));
+	}
+
 	/** The `FileInfo` `index` holds for `file`, asserted present. */
 	private function fileInfoOf(index: SymbolIndex, file: String): FileInfo {
 		final info: Null<FileInfo> = index.fileInfo(file);
