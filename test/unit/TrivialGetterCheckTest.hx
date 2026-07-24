@@ -564,6 +564,43 @@ class TrivialGetterCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('get_count') == -1);
 	}
 
+	public function testShapeAStringInterpSimpleReadRenamed(): Void {
+		// A simple `$_backing` string-interpolation READ of the backing field must be
+		// renamed to `$prop` on a (get, set) -> (default, set) collapse — the property has
+		// physical storage, so the interpolation reads it directly. Previously the simple
+		// `$name` form (a bare `Ident` node, not `IdentExpr`) tripped the rename refusal.
+		final src: String = cls(
+			'public var sel(get, set):Int;\n\tprivate var _sel:Int = -1;\n\tfunction get_sel():Int return _sel;\n\tfunction set_sel(v:Int):Int { redraw(); return _sel = v; }\n\tfunction log():Void { trace(\'v=$$_sel\'); }'
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('sel(default, set)') >= 0);
+		Assert.isTrue(fixed.indexOf('get_sel') == -1);
+		Assert.isTrue(fixed.indexOf('v=$$sel') >= 0);
+		Assert.isTrue(fixed.indexOf('v=$$_sel') == -1);
+	}
+
+	public function testShapeAStringInterpSimpleReadShadowedRefused(): Void {
+		// When a local of the PROPERTY name shadows the field in a function, a simple
+		// `$_backing` interpolation cannot be safely rewritten to `$prop` (a bare `$prop`
+		// would bind the local, not the field, and the `$name` form admits no `this.`
+		// qualifier) — the collapse is refused (conservative).
+		final src: String = cls(
+			'public var sel(get, set):Int;\n\tprivate var _sel:Int = -1;\n\tfunction get_sel():Int return _sel;\n\tfunction set_sel(v:Int):Int { redraw(); return _sel = v; }\n\tfunction log():Void { var sel = 3; trace(\'v=$$_sel\'); }'
+		);
+		assertFixRefused(src);
+	}
+
+	public function testShapeCStringInterpReadBlocksCollapse(): Void {
+		// Shape C (non-trivial getter + trivial setter) would collapse to (get, default), but a
+		// simple `$_backing` interpolation READ outside the getter would route through the
+		// non-trivial getter after the collapse -- the read-gate must see the interpolation read
+		// (it is a bare `Ident`, not `IdentExpr`) and skip the property.
+		final src: String = cls(
+			'public var x(get, set):Int;\n\tprivate var _x:Int = 0;\n\tfunction get_x():Int { redraw(); return _x; }\n\tfunction set_x(v:Int):Int return _x = v;\n\tfunction log():Void { trace(\'v=$$_x\'); }'
+		);
+		Assert.equals(0, violations(src).length);
+	}
+
 	private function cls(members: String): String {
 		return 'class C {\n\t$members\n}';
 	}

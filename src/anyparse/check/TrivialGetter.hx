@@ -414,12 +414,32 @@ final class TrivialGetter implements Check implements ConfigAware {
 			case 'FieldAccess':
 				if (span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this')
 					return false;
-				final off: Int = RefactorSupport.identTokenOffset(source, span, field);
-				if (off < 0) return false;
-				out.push({ span: new Span(off, off + field.length), text: propName });
+				return pushTokenRename(source, span, field, propName, out);
+			case 'Ident':
+				// A simple `$field` string-interpolation read: grammar kind `Ident` (not `IdentExpr`),
+				// its span covering `$field`, so rename only the identifier token. The `$name` form
+				// carries no `this.`/`C.` qualifier, so a prop-name local shadowing the field cannot be
+				// disambiguated -- refuse rather than bind the wrong slot.
+				if (shadowsProp || span == null) return false;
+				return pushTokenRename(source, span, field, propName, out);
 			case _:
 				return false;
 		}
+		return true;
+	}
+
+	/**
+	 * Emit the rename edit for a backing-field reference whose `span` includes syntax around the
+	 * identifier -- a `this.` receiver (`FieldAccess`) or a `$` interpolation sigil (`Ident`):
+	 * locate the `field` identifier token inside `span` and rewrite just that token to `propName`.
+	 * False when the token cannot be located.
+	 */
+	private static function pushTokenRename(
+		source: String, span: Span, field: String, propName: String, out: Array<{ span: Span, text: String }>
+	): Bool {
+		final off: Int = RefactorSupport.identTokenOffset(source, span, field);
+		if (off < 0) return false;
+		out.push({ span: new Span(off, off + field.length), text: propName });
 		return true;
 	}
 
@@ -830,10 +850,13 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return param == null ? null : param.name;
 	}
 
-	/** The field name a node references as a bare `IdentExpr <name>` or `this.<name>` `FieldAccess`, else null. */
+	/**
+	 * The field name a node references as a bare `IdentExpr <name>`, a simple `$<name>` string-interpolation `Ident`, or a `this.<name>` `FieldAccess`, else null.
+	 */
 	private static function fieldRefName(node: QueryNode): Null<String> {
 		return switch node.kind {
 			case 'IdentExpr': node.name;
+			case 'Ident': node.name;
 			case 'FieldAccess':
 				node.children.length == 1 && node.children[0].kind == 'IdentExpr' && node.children[0].name == 'this' ? node.name : null;
 			case _: null;
