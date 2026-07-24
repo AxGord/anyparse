@@ -591,6 +591,30 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether collapsing `owner`'s property `prop` could break a subtype — the precise,
+	 * per-property replacement for the blanket `hasSubtype` gate the accessor-collapse checks
+	 * use. True when any indexed type declaring `get_<prop>` / `set_<prop>` / `<prop>` is a PROVEN
+	 * transitive subtype of `owner` (its accessor override / property redeclaration would be
+	 * stranded by the collapse), OR is an OVERRIDE of the accessor whose supertype chain cannot be
+	 * resolved to rule `owner` out — an unresolvable hierarchy could hide the override, so it is
+	 * kept conservatively. A type whose chain is fully resolved and EXCLUDES `owner`, or a FRESH
+	 * (non-override) same-named member on an unresolvable type, never blocks: an unrelated class
+	 * merely sharing the property name leaves the collapse alone. False when no subtype touches the
+	 * property (or `owner` has none). Names are SIMPLE, so a same-named unrelated type is the
+	 * residual soundness boundary, as in `isSubtype`.
+	 */
+	public function subtypeOverridesProperty(owner: String, prop: String): Bool {
+		final names: Array<String> = ['get_$prop', 'set_$prop', prop];
+		for (fi in _files) for (t in fi.types) if (t.name != owner) {
+			final matches: Array<MemberInfo> = t.members.filter(m -> names.contains(m.name));
+			if (matches.length == 0) continue;
+			if (isSubtype(t.name, owner)) return true;
+			if (!closureExcludes(t.name, owner, [t.name]) && matches.exists(m -> m.isOverride)) return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Whether `typeName` OR any type in its transitive supertype closure carries
 	 * `@:rtti` (resolved via the index). True marks a serialization-sensitive
 	 * hierarchy - a class reflected on its field NAMES at runtime (a drill Node) -

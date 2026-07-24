@@ -510,4 +510,60 @@ class SymbolIndexSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+
+	public function testSubtypeOverridesProperty(): Void {
+		final files = [
+			{
+				file: 'pkg/Base.hx',
+				source: 'package pkg;\nclass Base {\n\tpublic var data(get, set):Int;\n\tfunction get_data():Int return 0;\n}'
+			},
+			{ file: 'pkg/Plain.hx', source: 'package pkg;\nclass Plain extends Base {\n\tpublic function ping():Void {}\n}' },
+			{ file: 'pkg/Over.hx', source: 'package pkg;\nclass Over extends Base {\n\toverride function get_data():Int return 1;\n}' },
+			{
+				file: 'pkg/Solo.hx',
+				source: 'package pkg;\nclass Solo {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n}'
+			},
+			{ file: 'pkg/SoloSub.hx', source: 'package pkg;\nclass SoloSub extends Solo {\n\tpublic function ping():Void {}\n}' },
+			{
+				file: 'pkg/Fresh.hx',
+				source: 'package pkg;\nclass Fresh {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 5;\n}'
+			}
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		// A resolved subtype (Over) overriding get_data blocks Base's collapse.
+		Assert.isTrue(index.subtypeOverridesProperty('Base', 'data'));
+		// Solo has only a non-touching resolved subtype (SoloSub); Fresh is an unrelated same-named
+		// declarer, not a subtype -> collapse stays safe.
+		Assert.isFalse(index.subtypeOverridesProperty('Solo', 'tag'));
+		// A leaf owner with no subtype at all is clean.
+		Assert.isFalse(index.subtypeOverridesProperty('Over', 'data'));
+	}
+
+
+	public function testSubtypeOverridesPropertyUnresolvable(): Void {
+		// Loose OVERRIDES get_tag but reaches through Ext, which is NOT indexed -> its position
+		// relative to Root is unresolvable, so it conservatively blocks Root's collapse.
+		final blocking = [
+			{
+				file: 'pkg/Root.hx',
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n}'
+			},
+			{ file: 'pkg/Loose.hx', source: 'package pkg;\nclass Loose extends Ext {\n\toverride function get_tag():Int return 7;\n}' }
+		];
+		Assert.isTrue(SymbolIndex.build(blocking, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
+		// Fresh declares get_tag as a FRESH (non-override) accessor through the same unresolvable Ext
+		// base -> it is not overriding Root, so the collapse stays safe (the DropDownListItem shape).
+		final safe = [
+			{
+				file: 'pkg/Root.hx',
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n}'
+			},
+			{
+				file: 'pkg/Fresh.hx',
+				source: 'package pkg;\nclass Fresh extends Ext {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 7;\n}'
+			}
+		];
+		Assert.isFalse(SymbolIndex.build(safe, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
+	}
+
 }
