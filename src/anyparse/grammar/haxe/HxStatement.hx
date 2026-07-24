@@ -402,6 +402,22 @@ enum HxStatement {
 	Conditional(inner: HxConditionalStmt);
 
 	/**
+	 * Token-splice fallback for a `#if` region whose every branch opens an
+	 * OUTER block and, inside it, a `switch (...) {` header, with the case
+	 * list, the switch's `}` and the outer block's `}` all shared after
+	 * `#end` - see `HxCondSpliceSwitchOpen`.
+	 *
+	 * Tried BEFORE `CondSpliceBlockOpen`: `HxCondBlockOpenRaw` also matches
+	 * this region (it ends on `{ #end` with a `#else`), and the block-open
+	 * ctor's `Array<HxStatement>` body would strand the shared case list on
+	 * its `@:trail('}')`. `HxCondSwitchOpenRaw`'s outer-`{`-before-`switch`
+	 * constraint keeps the two terminals disjoint for regions with no
+	 * switch.
+	 */
+	@:kw('#if')
+	CondSpliceSwitchOpen(inner: HxCondSpliceSwitchOpen);
+
+	/**
 	 * Token-splice fallback for a `#if` region whose every branch OPENS a
 	 * block, with the block's body and its closing `}` shared after
 	 * `#end` - see `HxCondSpliceBlockOpen`.

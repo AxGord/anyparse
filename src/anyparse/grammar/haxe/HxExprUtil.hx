@@ -208,6 +208,8 @@ final class HxExprUtil {
 		'UntypedBlockStmt',
 		// `#if <raw ending on '{'> #end <stmts> }` - the ctor's own `@:trail('}')` is its last token.
 		'CondSpliceBlockOpen',
+		// `#if <raw ending on 'switch (..) {'> #end <cases> } }` - `body`'s `@:trail('}')` is its last token.
+		'CondSpliceSwitchOpen',
 	];
 
 	/**
