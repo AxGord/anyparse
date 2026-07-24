@@ -443,6 +443,7 @@ import unit.StringLiteralDupCheckTest;
 import unit.AvoidDynamicCheckTest;
 import unit.UnusedReturnValueTest;
 import unit.CompilerOracleE2ETest;
+import unit.FixVerifierBisectTest;
 import unit.DocCoverageCheckTest;
 import unit.GuardContinueCheckTest;
 import unit.AvoidDynamicNarrowFixTest;
@@ -897,6 +898,7 @@ class RunTests {
 		addCase(new UnusedReturnValueTest());
 		addCase(new ExtractRepeatedExpressionTest());
 		addCase(new CompilerOracleE2ETest());
+		addCase(new FixVerifierBisectTest());
 		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());
 		addCase(new SelfAssignmentCheckTest());

@@ -62,6 +62,7 @@ import anyparse.check.CompilerOracle;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.check.FixVerifier;
 import anyparse.check.FixVerifier.FixVerifyResult;
+import anyparse.check.FixVerifier.FixVerifyPartial;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.OracleAssisted;
 import anyparse.check.Check.ConfigAware;
@@ -12081,7 +12082,8 @@ final class Cli {
 			case Confirmed:
 				for (f in verified.applied) if (!changedFiles.contains(f)) changedFiles.push(f);
 				return {
-					tail: ', risky-fix verified: ${verified.applied.length} applied, ${verified.reverted.length} reverted to report-only',
+					tail: ', risky-fix verified: ${verified.applied.length} applied, ${verified.reverted.length} reverted to report-only'
+						+ bisectTail(verified.partials),
 					appliedCount: verified.applied.length
 				};
 			case Unavailable(reason):
@@ -12089,6 +12091,24 @@ final class Cli {
 			case Rejected(_):
 				return { tail: ', risky-fix skipped (oracle baseline does not typecheck)', appliedCount: 0 };
 		}
+	}
+
+	/**
+	 * One-line summary of the per-edit bisect activity for the `lint --fix` tail:
+	 * how many files had their failing edit set split, and the aggregate edits
+	 * kept / reverted and oracle spawns spent. Empty when no file was bisected.
+	 */
+	private static function bisectTail(partials: Array<FixVerifyPartial>): String {
+		if (partials.length == 0) return '';
+		var kept: Int = 0;
+		var reverted: Int = 0;
+		var probes: Int = 0;
+		for (partial in partials) {
+			kept += partial.appliedEdits;
+			reverted += partial.revertedEdits;
+			probes += partial.oracleInvocations;
+		}
+		return ' (bisect: ${partials.length} file(s), $kept edit(s) kept, $reverted reverted, $probes oracle run(s))';
 	}
 
 	/**

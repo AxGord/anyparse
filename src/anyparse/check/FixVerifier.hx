@@ -12,13 +12,47 @@ import anyparse.runtime.Span;
  * trusted (safe-only) state BEFORE any risky edit — verification proceeds only
  * when it is `Confirmed`, so a compile failure is always attributable to the
  * risky edit rather than to pre-existing breakage. `applied` lists the files
- * whose risky edit survived the compile; `reverted` lists the files whose risky
- * edit broke it (or could not be verified) and was rolled back to report-only.
+ * whose risky edit survived the compile (fully OR partially — a partially-applied
+ * file changed on disk and belongs here); `reverted` lists the files whose risky
+ * edits were all rolled back to report-only. `partials` carries per-file detail
+ * for every file whose full edit set failed and was bisected (see below).
  */
 typedef FixVerifyResult = {
 	var baseline: OracleOutcome;
 	var applied: Array<String>;
 	var reverted: Array<String>;
+	var partials: Array<FixVerifyPartial>;
+}
+
+/**
+ * Per (risky-check, file) detail for a file whose full edit set failed the oracle
+ * and was BISECTED: `appliedEdits` survived (the safe complement was written),
+ * `revertedEdits` were isolated as the failer(s) — or all of them on a budget /
+ * confirm fallback (`appliedEdits == 0`). `oracleInvocations` is the total
+ * compiler spawns spent verifying this file: the initial full-set typecheck, the
+ * bisect probes, and the complement confirm. Emitted only for the bisect path; a
+ * fully-applied file or a single-edit file carries no entry.
+ */
+typedef FixVerifyPartial = {
+	var file: String;
+	var rule: String;
+	var appliedEdits: Int;
+	var revertedEdits: Int;
+	var oracleInvocations: Int;
+}
+
+/**
+ * The verdict `verifyEntry` returns for one (check, file) edit set: nothing
+ * happened (`NoChange`), the whole set survived (`Applied`), the whole set was
+ * rolled back (`Reverted`), or the set was bisected into a kept complement and a
+ * reverted remainder (`Partial`, carrying the kept / reverted counts and the
+ * oracle spawns spent). The caller folds these into the `FixVerifyResult` lists.
+ */
+private enum EntryVerdict {
+	NoChange;
+	Applied;
+	Reverted;
+	Partial(appliedEdits: Int, revertedEdits: Int, oracleInvocations: Int);
 }
 
 /**
@@ -26,15 +60,20 @@ typedef FixVerifyResult = {
  * key's promise that a rewrite/deletion is applied ONLY if it still compiles. It
  * assumes the safe (non-risky) fixes are already applied on disk, then for each
  * risky check and each file it applies that check's edits speculatively, writes the
- * candidate, runs the compiler oracle, and KEEPS it on `Confirmed` or REVERTS it
- * (restoring the pre-edit bytes on disk) otherwise — the report-only fallback.
+ * candidate, runs the compiler oracle, and KEEPS it on `Confirmed` or reconciles
+ * otherwise — the report-only fallback.
  *
- * Rollback granularity is per-file × per-risky-check: one file's edits from one
- * check are the smallest speculatively-applied unit, and one compile verifies them.
- * Cost is O(riskyChecks × changedFiles) compiles, acceptable because risky checks
- * are opt-in and rare; finer bisection WITHIN a single (check, file) edit set is a
- * documented future refinement. Cross-file risky checks are out of scope — the
- * intended consumers (avoid-dynamic and other targeted rewrites) are single-file.
+ * Rollback granularity is PER-EDIT within a (check, file) set: when the full set
+ * fails, the edits are bisected (`isolateFailers` — binary-split group testing) so
+ * one unsafe edit among N no longer reverts the safe others. Each probe
+ * re-canonicalises from the ORIGINAL source with a subset (spans are
+ * original-source-relative, never stacked onto already-edited text); the isolated
+ * safe complement is confirm-typechecked and written, only the failer(s) revert.
+ * Oracle spawns per file are capped at `2*ceil(log2(N)) + 2` (the initial
+ * typecheck + the bisect search + the confirm); beyond the cap the file falls back
+ * to a whole-file revert. Cross-file risky checks are out of scope — the intended
+ * consumers (avoid-dynamic / prefer-inline and other targeted rewrites) are
+ * single-file.
  *
  * Stateless and free of global mutable state (the invariant): all state is the
  * caller's `files`/disk plus locals; `write` is the caller's own file sink so the
@@ -49,11 +88,17 @@ final class FixVerifier {
 	): FixVerifyResult {
 		final applied: Array<String> = [];
 		final reverted: Array<String> = [];
+		final partials: Array<FixVerifyPartial> = [];
 		final baseline: OracleOutcome = CompilerOracle.typecheck(oracleHxml, oracleDir);
 		switch baseline {
 			case Confirmed:
 			case Rejected(_) | Unavailable(_):
-				return { baseline: baseline, applied: applied, reverted: reverted };
+				return {
+					baseline: baseline,
+					applied: applied,
+					reverted: reverted,
+					partials: partials
+				};
 		}
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
 		for (check in riskyChecks) for (entry in files) {
@@ -62,23 +107,179 @@ final class FixVerifier {
 			final edits: Array<{ span: Span, text: String }> = check.fix(entry.source, own, plugin, index);
 			if (edits.length == 0) continue;
 			final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
-			switch RefactorSupport.canonicalize(entry.source, edits, false, plugin, opts) {
-				case Ok(text) if (text != entry.source):
-					final before: String = entry.source;
-					entry.source = text;
-					write(entry.file, text);
-					switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
-						case Confirmed:
-							applied.push(entry.file);
-						case Rejected(_) | Unavailable(_):
-							entry.source = before;
-							write(entry.file, before);
-							reverted.push(entry.file);
-					}
-				case _:
+			switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write) {
+				case NoChange:
+				case Applied:
+					applied.push(entry.file);
+				case Reverted:
+					reverted.push(entry.file);
+				case Partial(keptEdits, revertedEdits, probes):
+					if (keptEdits > 0)
+						applied.push(entry.file)
+					else
+						reverted.push(entry.file);
+					partials.push({
+						file: entry.file,
+						rule: check.id(),
+						appliedEdits: keptEdits,
+						revertedEdits: revertedEdits,
+						oracleInvocations: probes
+					});
 			}
 		}
-		return { baseline: baseline, applied: applied, reverted: reverted };
+		return {
+			baseline: baseline,
+			applied: applied,
+			reverted: reverted,
+			partials: partials
+		};
+	}
+
+	/**
+	 * Speculatively apply `edits` to one file and reconcile with the oracle. The
+	 * full set is written and typechecked first: `Confirmed` keeps it (`Applied`);
+	 * `Unavailable` (the oracle cannot run) or a single-edit `Rejected` reverts the
+	 * whole file (`Reverted`). A multi-edit `Rejected` is BISECTED — `isolateFailers`
+	 * isolates the failing edits by binary search (each probe re-canonicalises from
+	 * the ORIGINAL `before` with a subset), the safe complement is confirm-typechecked
+	 * and written, and only the failers revert (`Partial`). A budget overrun or an
+	 * unexpectedly-failing complement falls back to a whole-file revert, still reported
+	 * as `Partial` with `appliedEdits == 0`. Mutates `entry.source` and the disk
+	 * (`write`) to the final decided text.
+	 */
+	private static function verifyEntry(
+		entry: { file: String, source: String }, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, opts: Null<String>,
+		oracleHxml: String, oracleDir: Null<String>, write: (String, String) -> Void
+	): EntryVerdict {
+		final before: String = entry.source;
+		final fullText: String = switch RefactorSupport.canonicalize(before, edits, false, plugin, opts) {
+			case Ok(text) if (text != before): text;
+			case _: return NoChange;
+		};
+		write(entry.file, fullText);
+		switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+			case Confirmed:
+				entry.source = fullText;
+				return Applied;
+			case Unavailable(_):
+				entry.source = before;
+				write(entry.file, before);
+				return Reverted;
+			case Rejected(_):
+		}
+		final n: Int = edits.length;
+		if (n < 2) {
+			entry.source = before;
+			write(entry.file, before);
+			return Reverted;
+		}
+		// Cap all oracle spawns for this file at 2*ceil(log2(n)) + 2: the initial
+		// full-set typecheck (already spent) + the bisect search + the confirm. The
+		// search gets the middle 2*ceil(log2(n)) probes; a single failer needs at most
+		// that, so it never spuriously falls back.
+		final searchBudget: Int = 2 * ceilLog2(n);
+		final spent: Array<Int> = [0];
+		function probe(indices: Array<Int>): Bool {
+			final subset: Array<{ span: Span, text: String }> = [for (i in indices) edits[i]];
+			return switch RefactorSupport.canonicalize(before, subset, false, plugin, opts) {
+				case Ok(text):
+					write(entry.file, text);
+					switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+						case Confirmed: true;
+						case _: false;
+					}
+				case _: false;
+			};
+		}
+		final failers: Null<Array<Int>> = isolateFailers(n, searchBudget, probe, spent);
+		if (failers == null || failers.length >= n) {
+			entry.source = before;
+			write(entry.file, before);
+			return Partial(0, n, 1 + spent[0]);
+		}
+		final failerIndices: Array<Int> = failers;
+		final safe: Array<{ span: Span, text: String }> = [for (i in 0...n) if (!failerIndices.contains(i)) edits[i]];
+		final invocations: Int = 1 + spent[0] + 1;
+		return switch RefactorSupport.canonicalize(before, safe, false, plugin, opts) {
+			case Ok(safeText) if (safeText != before):
+				write(entry.file, safeText);
+				switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
+					case Confirmed:
+						entry.source = safeText;
+						Partial(safe.length, failerIndices.length, invocations);
+					case _:
+						entry.source = before;
+						write(entry.file, before);
+						Partial(0, n, invocations);
+				}
+			case _:
+				entry.source = before;
+				write(entry.file, before);
+				Partial(0, n, 1 + spent[0]);
+		};
+	}
+
+	/**
+	 * Isolate the failing edit indices among `[0, count)` by binary-split group
+	 * testing. `probe(indices)` is true when that SUBSET (canonicalised from the
+	 * ORIGINAL source with exactly those edits) typechecks. Precondition: the FULL
+	 * set is known to fail, so no probe re-establishes it. Returns the sorted failer
+	 * indices whose removal makes the complement pass, or null when the probe budget
+	 * is exhausted (the caller falls back to a whole-file revert). `spent[0]` receives
+	 * the probe count.
+	 */
+	private static function isolateFailers(count: Int, budget: Int, probe: Array<Int> -> Bool, spent: Array<Int>): Null<Array<Int>> {
+		spent[0] = 0;
+		return try bisectRec([for (i in 0...count) i], probe, budget, spent) catch (_: BudgetExceeded) null;
+	}
+
+	/**
+	 * Recurse over a KNOWN-FAILING index block. A singleton is the failer. Otherwise
+	 * split in half and probe each: recurse into a failing half, keep a passing one.
+	 * When BOTH halves pass alone yet the block fails, the failure is a cross-half
+	 * interaction (e.g. a failing pair straddling the split) — keep the passing left
+	 * half and treat the right as the failers; the caller's confirm validates the
+	 * whole complement.
+	 */
+	private static function bisectRec(indices: Array<Int>, probe: Array<Int> -> Bool, budget: Int, spent: Array<Int>): Array<Int> {
+		if (indices.length <= 1) return indices;
+		final mid: Int = indices.length >> 1;
+		final left: Array<Int> = indices.slice(0, mid);
+		final right: Array<Int> = indices.slice(mid);
+		final leftPasses: Bool = countedProbe(left, probe, budget, spent);
+		final rightPasses: Bool = countedProbe(right, probe, budget, spent);
+		if (leftPasses && rightPasses) return right.copy();
+		final failers: Array<Int> = [];
+		if (!leftPasses) for (i in bisectRec(left, probe, budget, spent)) failers.push(i);
+		if (!rightPasses) for (i in bisectRec(right, probe, budget, spent)) failers.push(i);
+		return failers;
+	}
+
+	/** One budget-guarded probe; the call that would exceed `budget` throws `BudgetExceeded`. */
+	private static function countedProbe(indices: Array<Int>, probe: Array<Int> -> Bool, budget: Int, spent: Array<Int>): Bool {
+		if (spent[0] >= budget) throw new BudgetExceeded();
+		spent[0]++;
+		return probe(indices);
+	}
+
+	/** Smallest `k` with `2^k >= n` (the integer ceil of log2), for `n >= 1`. */
+	private static function ceilLog2(n: Int): Int {
+		var k: Int = 0;
+		var v: Int = 1;
+		while (v < n) {
+			v <<= 1;
+			k++;
+		}
+		return k;
+	}
+
+}
+
+/** Internal control-flow signal: the bisect probe budget was exhausted. */
+private class BudgetExceeded extends haxe.Exception {
+
+	public function new() {
+		super('fix-verifier bisect budget exceeded');
 	}
 
 }
