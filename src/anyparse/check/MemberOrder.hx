@@ -244,7 +244,11 @@ final class MemberOrder implements Check implements ConfigAware {
 		node: QueryNode, isStatic: Bool, isPublic: Bool, isField: Bool, accessors: Map<Int, Bool>, shape: RefShape
 	): MemberRank {
 		if (isField) {
-			if (isStatic) return isPublic ? StaticPublicField : StaticPrivateField;
+			final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
+			if (isStatic)
+				return !mutable
+					? (isPublic ? StaticPublicImmutableField : StaticPrivateImmutableField)
+					: (isPublic ? StaticPublicMutableField : StaticPrivateMutableField);
 			final span: Null<Span> = node.span;
 			if (span != null && accessors.exists(span.from)) {
 				final getter: Bool = accessors[span.from] == true;
@@ -252,7 +256,6 @@ final class MemberOrder implements Check implements ConfigAware {
 					? (getter ? PublicGetterProperty : PublicReadOnlyProperty)
 					: (getter ? PrivateGetterProperty : PrivateReadOnlyProperty);
 			}
-			final mutable: Bool = (shape.mutableFieldDeclKinds ?? []).contains(node.kind);
 			return !mutable
 				? (isPublic ? PublicImmutableField : PrivateImmutableField)
 				: (isPublic ? PublicMutableField : PrivateMutableField);
@@ -922,31 +925,34 @@ final class MemberOrder implements Check implements ConfigAware {
 /**
  * The canonical member-order ranks - a smaller rank sorts earlier. Fields precede
  * the constructor precede accessors precede methods; within each group public
- * precedes private; static fields lead, static methods trail. Non-static property
- * fields (those with a `(get, set)`-style accessor clause) sub-split ahead of the
- * plain fields: a read-only property (stored read) before a getter property, both
- * before the `final` field, before the plain `var`. A distinct type rather than a
- * bare `Int` so a rank can never be confused with an unrelated count; the two `@:op`
- * forwards give it the `<` ordering and `-` difference that the sort comparator and
- * `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an abstract).
+ * precedes private; static fields lead (immutable `final` / constant before mutable
+ * `var`), static methods trail. Non-static property fields (those with a `(get, set)`-style
+ * accessor clause) sub-split ahead of the plain fields: a read-only property (stored read)
+ * before a getter property, both before the `final` field, before the plain `var`. A
+ * distinct type rather than a bare `Int` so a rank can never be confused with an unrelated
+ * count; the two `@:op` forwards give it the `<` ordering and `-` difference that the sort
+ * comparator and `firstOutOfOrder` need (Haxe otherwise forbids ordered comparison on an
+ * abstract).
  */
 private enum abstract MemberRank(Int) {
-	final StaticPublicField = 0;
-	final StaticPrivateField = 1;
-	final PublicReadOnlyProperty = 2;
-	final PublicGetterProperty = 3;
-	final PublicImmutableField = 4;
-	final PublicMutableField = 5;
-	final PrivateReadOnlyProperty = 6;
-	final PrivateGetterProperty = 7;
-	final PrivateImmutableField = 8;
-	final PrivateMutableField = 9;
-	final Constructor = 10;
-	final Accessor = 11;
-	final PublicMethod = 12;
-	final PrivateMethod = 13;
-	final StaticPublicMethod = 14;
-	final StaticPrivateMethod = 15;
+	final StaticPublicImmutableField = 0;
+	final StaticPublicMutableField = 1;
+	final StaticPrivateImmutableField = 2;
+	final StaticPrivateMutableField = 3;
+	final PublicReadOnlyProperty = 4;
+	final PublicGetterProperty = 5;
+	final PublicImmutableField = 6;
+	final PublicMutableField = 7;
+	final PrivateReadOnlyProperty = 8;
+	final PrivateGetterProperty = 9;
+	final PrivateImmutableField = 10;
+	final PrivateMutableField = 11;
+	final Constructor = 12;
+	final Accessor = 13;
+	final PublicMethod = 14;
+	final PrivateMethod = 15;
+	final StaticPublicMethod = 16;
+	final StaticPrivateMethod = 17;
 
 	@:op(A < B) static function lt(a: MemberRank, b: MemberRank): Bool;
 

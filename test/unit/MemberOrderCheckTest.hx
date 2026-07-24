@@ -503,6 +503,46 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src, movableArglessNewResolver())).length, 'converges: $fixed');
 	}
 
+	/** A static const (immutable) directly followed by a static var (mutable) is a rank boundary: the missing blank is flagged and the fix inserts exactly one. */
+	public function testStaticImmutableBeforeStaticMutableBlank(): Void {
+		final src: String = 'class C {\n\tpublic static final A:Int = 0;\n\tpublic static var b:Int;\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length, 'const-to-var missing blank flagged');
+		Assert.equals('rank groups are not separated by a blank line', vs[0].message);
+		Assert.equals('class C {\n\tpublic static final A:Int = 0;\n\npublic static var b:Int;\n}', fixedSource(src));
+		Assert.equals(0, violations(fixedSource(src)).length, 'fix converges');
+	}
+
+	/** Two same-rank static consts stay free - grouping within a rank is the author's, no blank demanded. */
+	public function testStaticSameRankNoBlank(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic static final A:Int = 0;\n\tpublic static final B:Int = 0;\n}').length);
+	}
+
+	/** The reorder path emits rank boundaries too: a static var before a static const reorders after it, blank-separated. */
+	public function testStaticVarReordersAfterConstWithBlank(): Void {
+		final src: String = 'class C {\n\tprivate static var v:Float = 30;\n\tprivate static final A:Float = 1;\n}';
+		Assert.isTrue(violations(src).length > 0, 'var-before-const flagged');
+		Assert.equals('class C {\n\tprivate static final A:Float = 1;\n\nprivate static var v:Float = 30;\n}', fixedSource(src));
+	}
+
+	/** A rank boundary coinciding with a member-level #if composes to ONE blank, not two (spacing bails cross-condition; directive spacing owns the gap). */
+	public function testStaticRankConditionalComposesNoDoubleBlank(): Void {
+		final src: String = 'class C {\n\tpublic static final A:Int = 0;\n\t#if X\n\tpublic static var b:Int;\n\t#end\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length, 'missing blank before #if flagged');
+		Assert.isTrue(vs[0].message.indexOf('#if') >= 0, 'directive-spacing message: ${vs[0].message}');
+		final fixed: String = canonicalizedFix(src);
+		Assert.isTrue(fixed.indexOf('\n\n\n') < 0, 'no double blank at the composed boundary: $fixed');
+		Assert.equals(0, violations(fixed).length, 'converges through writeRoundTrip');
+	}
+
+	/** The static-rank spacing fix converges through the production canonicalization (writeRoundTrip re-indents, the check accepts the result). */
+	public function testStaticRankSpacingConvergesCanonical(): Void {
+		final src: String = 'class C {\n\tpublic static final A:Int = 0;\n\tpublic static var b:Int;\n}';
+		Assert.isTrue(violations(src).length > 0, 'boundary flagged');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges through writeRoundTrip');
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new MemberOrder().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
