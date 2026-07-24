@@ -547,6 +547,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			positionMethodNames: ['substr', 'substring', 'charAt', 'charCodeAt', 'indexOf', 'lastIndexOf', 'hex'],
 			additiveKinds: ['Add', 'Sub'],
 			staticModifierKind: 'Static',
+			inlineModifierKind: 'Inline',
+			inlineConstantLiteralKinds: ['IntLit', 'HexLit', 'FloatLit', 'BoolLit'],
 			constructorName: 'new',
 			accessorMethodPrefixes: ['get_', 'set_'],
 			conditionalMemberKind: 'Conditional',

@@ -130,6 +130,7 @@ final class Linter {
 			new RedundantBypassAccessor(),
 			new FieldInitAtDeclaration(),
 			new PreferInline()
+			new InlineConstant()
 		];
 	}
 
