@@ -8,6 +8,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
+import anyparse.check.Check.ConfigAware;
 
 /**
  * One type-member paired with its canonical-order rank and its full source slot
@@ -50,15 +51,22 @@ typedef DirectiveGap = {
 	var endEdit: Null<{ span: Span, text: String }>;
 }
 /**
- * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A container whose field initializers make reordering unsafe keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours.
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A container whose field initializers make reordering unsafe keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable — reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
-final class MemberOrder implements Check {
+final class MemberOrder implements Check implements ConfigAware {
 
 	/** The inter-slot separator carrying exactly one blank line - what both fix arms (the reorder rebuild and the spacing-only fallback) place between rank groups. */
 	private static final GROUP_SEPARATOR: String = '\n\n';
 
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`) - read for the `movableArglessNew` option in `fix`. */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
+
 	public function new() {}
+
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
 
 	public function id(): String {
 		return 'member-order';
@@ -100,13 +108,15 @@ final class MemberOrder implements Check {
 		if (tree == null) return [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(source) : [];
+		final movableArglessNew: Bool = violations.length > 0
+			&& LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption('member-order', 'movableArglessNew') == true;
 		final flagged: Array<Int> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span != null) flagged.push(span.from);
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		fixWalk(edits, source, tree, shape, flagged, accessors);
+		fixWalk(edits, source, tree, shape, flagged, accessors, movableArglessNew);
 		return edits;
 	}
 
@@ -140,10 +150,11 @@ final class MemberOrder implements Check {
 	 */
 	private static function fixWalk(
 		edits: Array<{ span: Span, text: String }>, source: String, node: QueryNode, shape: RefShape, flagged: Array<Int>,
-		accessors: Map<Int, Bool>
+		accessors: Map<Int, Bool>, movableArglessNew: Bool
 	): Void {
-		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) emitReorder(edits, source, node, shape, flagged, accessors);
-		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors);
+		if ((shape.visibilityContainerKinds ?? []).contains(node.kind))
+			emitReorder(edits, source, node, shape, flagged, accessors, movableArglessNew);
+		for (c in node.children) fixWalk(edits, source, c, shape, flagged, accessors, movableArglessNew);
 	}
 
 	/**
@@ -159,7 +170,7 @@ final class MemberOrder implements Check {
 	 */
 	private static function emitReorder(
 		edits: Array<{ span: Span, text: String }>, source: String, container: QueryNode, shape: RefShape, flagged: Array<Int>,
-		accessors: Map<Int, Bool>
+		accessors: Map<Int, Bool>, movableArglessNew: Bool
 	): Void {
 		final members: Array<OrderedMember> = collectMembers(container, source, shape, accessors);
 		if (members.length < 2) return;
@@ -168,7 +179,7 @@ final class MemberOrder implements Check {
 		final groupFirst: Map<String, Int> = computeGroupFirst(members);
 		final sorted: Array<OrderedMember> = members.copy();
 		sorted.sort((a, b) -> compareOrder(a, b, groupFirst));
-		if (!reorderSafe(members, sorted, source, shape)) {
+		if (!reorderSafe(members, sorted, source, shape, movableArglessNew)) {
 			emitSpacingOnly(edits, members, source);
 			return;
 		}
@@ -289,13 +300,15 @@ final class MemberOrder implements Check {
 	 * only via FIELD initializers (they run in declaration order; statics at class-load,
 	 * instance fields in the constructor — independent phases). Bails on stranded trivia
 	 * (an `#else`, an orphan comment) or a field-init order flip a text scan cannot prove
-	 * safe.
+	 * safe. `movableArglessNew` (the opt-in option) exempts a pure argless-`new` allocation
+	 * from the side-effecting-flip bail — see `isMovableAllocation`.
 	 */
 	private static function reorderSafe(
-		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape
+		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool
 	): Bool {
 		return !hasElseBetweenMembers(members, source, shape) && !hasOrphanComment(members, source)
-			&& !hasSideEffectingFieldFlip(members, sorted, shape) && !hasSiblingReadFlip(members, sorted, source);
+			&& !hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew)
+			&& !hasSiblingReadFlip(members, sorted, source);
 	}
 
 	/** Whether `a` and `b`'s relative order differs between source (`index`) and `sorted`. */
@@ -305,10 +318,35 @@ final class MemberOrder implements Check {
 		return srcBefore != sortedBefore;
 	}
 
-	/** Whether `m` is a field whose initializer has a side effect (a call / `new` / assignment). */
-	private static function sideEffecting(m: OrderedMember, unsafe: Array<String>): Bool {
+	/**
+	 * Whether `m` is a field whose initializer has a side effect (a call / `new` / assignment)
+	 * that reordering could make observable. Under `movableArglessNew` a pure argless-`new`
+	 * allocation is exempt (returns false) - see `isMovableAllocation`.
+	 */
+	private static function sideEffecting(
+		m: OrderedMember, unsafe: Array<String>, shape: RefShape, source: String, movableArglessNew: Bool
+	): Bool {
 		final init: Null<QueryNode> = m.initNode;
-		return m.isField && init != null && subtreeContainsAny(init, unsafe);
+		if (!m.isField || init == null) return false;
+		if (!subtreeContainsAny(init, unsafe)) return false;
+		return !(movableArglessNew && isMovableAllocation(init, shape, source));
+	}
+
+	/**
+	 * Whether `init` is a pure argless allocation - a `new T()` whose source ends in an empty
+	 * argument list `()` (the `NewLiteral` argless test). A bare `new T()` carries no argument,
+	 * so it references no other field/ident bound in the class; reordering it past another field
+	 * only changes the relative construction order of two INDEPENDENT allocations, unobservable
+	 * without cross-init data flow (which the empty `()` rules out). The opt-in `movableArglessNew`
+	 * option is the project's acceptance of that - the rationale for treating such an initializer
+	 * as order-movable. An initializer with arguments, a field/param reference, or any other call
+	 * is NOT of this shape (its source does not end in `()`), so it keeps blocking as before.
+	 */
+	private static function isMovableAllocation(init: QueryNode, shape: RefShape, source: String): Bool {
+		final newExprKind: Null<String> = shape.newExprKind;
+		if (newExprKind == null || init.kind != newExprKind) return false;
+		final span: Null<Span> = init.span;
+		return span != null && StringTools.endsWith(StringTools.rtrim(source.substring(span.from, span.to)), '()');
 	}
 
 	/** Index of `node` (by identity) in `members`, or -1. */
@@ -546,13 +584,19 @@ final class MemberOrder implements Check {
 		return false;
 	}
 
-	/** Whether a side-effecting field initializer would flip order with a same-phase field — its callee may read/mutate that field (invisible to a text scan). */
-	private static function hasSideEffectingFieldFlip(members: Array<OrderedMember>, sorted: Array<OrderedMember>, shape: RefShape): Bool {
+	/**
+	 * Whether a side-effecting field initializer would flip order with a same-phase field — its
+	 * callee may read/mutate that field (invisible to a text scan). Under `movableArglessNew` a
+	 * pure argless-`new` allocation is not counted side-effecting (see `sideEffecting`).
+	 */
+	private static function hasSideEffectingFieldFlip(
+		members: Array<OrderedMember>, sorted: Array<OrderedMember>, shape: RefShape, source: String, movableArglessNew: Bool
+	): Bool {
 		final unsafe: Array<String> = shape.writeParentKinds.copy();
 		if (shape.callKind != null) unsafe.push(shape.callKind);
 		if (shape.newExprKind != null) unsafe.push(shape.newExprKind);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
-		for (f in fields) if (sideEffecting(f, unsafe)) for (g in fields) if (
+		for (f in fields) if (sideEffecting(f, unsafe, shape, source, movableArglessNew)) for (g in fields) if (
 			g.node != f.node && f.isStatic == g.isStatic && orderFlips(f, g, sorted)
 		)
 			return true;
