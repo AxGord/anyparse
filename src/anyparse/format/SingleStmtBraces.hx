@@ -219,7 +219,7 @@ class SingleStmtBraces {
 		return switch Type.enumConstructor(inner) {
 			case 'ReturnStmt' | 'ExprStmt': Type.enumParameters(inner)[1] == true;
 			case 'VoidReturnStmt' | 'ThrowStmt' | 'BreakStmt' | 'ContinueStmt' | 'DoWhileStmt': true;
-			case 'IfStmt' | 'WhileStmt' | 'ForStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'TryCatchStmt':
+			case 'IfStmt' | 'WhileStmt' | 'ForStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'TryCatchStmt' | 'TryCatchStmtBare':
 				true;
 			// Brace-bearing already - it self-terminates on `}`, but neither caller wants it:
 			// gate 3 would unwrap `{ { x; } }` one level (that is `unnecessary-block`'s job) and
