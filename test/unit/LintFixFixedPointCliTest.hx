@@ -168,4 +168,24 @@ class LintFixFixedPointCliTest extends Test {
 		#end
 	}
 
+
+	public function testRenameSkipsOverriddenBaseParam(): Void {
+		#if (sys || nodejs)
+		// A is unconfined (subtype B), so neither param is removable — both are `Info`.
+		// `hook` is OVERRIDDEN by B, which USES `ctx`, so the rename gate leaves the base
+		// param alone (renaming it to `_ctx` would misdescribe it); `solo` is not
+		// overridden and IS silenced to `_dead`.
+		final a: String = 'package p;\n\nclass A {\n\tpublic function hook(ctx:Int):Void {}\n\n\tpublic function solo(dead:Int):Void {}\n}\n';
+		final b: String = 'package p;\n\nclass B extends A {\n\toverride public function hook(ctx:Int):Void {\n\t\ttrace(ctx);\n\t}\n}\n';
+		final dir: String = CliFixture.writeDir('fixrename', [{ name: 'A.hx', source: a }, { name: 'B.hx', source: b }]);
+		Assert.equals(0, Cli.run(['lint', '--fix', dir]), 'lint --fix exits ok');
+		final outA: String = File.getContent('$dir/A.hx');
+		Assert.isTrue(outA.indexOf('hook(ctx:Int)') != -1, 'overridden base param kept, not renamed: $outA');
+		Assert.isTrue(outA.indexOf('solo(_dead:Int)') != -1, 'non-overridden param renamed to _dead: $outA');
+		CliFixture.removeDir(dir);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

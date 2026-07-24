@@ -303,7 +303,6 @@ final class SymbolIndex {
 		return found;
 	}
 
-
 	/**
 	 * Whether the abstract named `typeName` may REBIND its underlying `this` through a method call on
 	 * a binding of it — the precise `final`-conversion gate, tri-state like the other name-keyed
@@ -433,7 +432,6 @@ final class SymbolIndex {
 		return current == null ? null : memberTypeSourceWalk(current, memberPath[memberPath.length - 1], []);
 	}
 
-
 	/**
 	 * Whether a (transitive) supertype of `typeName` declares a member named `field`.
 	 * Such a field's property access is fixed by the supertype, so a check must not
@@ -532,6 +530,25 @@ final class SymbolIndex {
 				return null;
 		}
 		return arity;
+	}
+
+	/**
+	 * Whether any indexed type that is a (transitive) SUBTYPE of `typeName` declares
+	 * a member named `member` — i.e. `typeName`'s member is OVERRIDDEN somewhere
+	 * below it. The subtype-ward, member-specific counterpart of
+	 * `supertypeDeclaresMember`: it scans every indexed type, and for each that
+	 * declares `member` tests `isSubtype` against `typeName` (transitive extends +
+	 * implements). Names are SIMPLE (the index models no packages), so a same-named
+	 * unrelated type is the residual soundness boundary, as in `isSubtype`. Used by
+	 * `unused-parameter`'s rename fix to leave a base method's parameter alone when
+	 * a subclass override may use it.
+	 */
+	public function subtypeDeclaresMember(typeName: String, member: String): Bool {
+		for (fi in _files) for (t in fi.types) if (t.name != typeName && t.members.exists(m ->
+			m.name == member
+		) && isSubtype(t.name, typeName))
+			return true;
+		return false;
 	}
 
 	/**
@@ -1118,7 +1135,6 @@ final class SymbolIndex {
 		return raw == null ? null : simpleName(StringTools.trim(raw.split('<')[0]));
 	}
 
-
 	/**
 	 * Count the type parameters written on `decl`'s header: locate the name token
 	 * in the header text (the projection drops `<...>` params entirely, so no node's
@@ -1157,7 +1173,6 @@ final class SymbolIndex {
 		}
 		return 0;
 	}
-
 
 	/**
 	 * `tree`'s top-level children with every conditional-compilation region
@@ -1299,7 +1314,6 @@ final class SymbolIndex {
 		}
 		return null;
 	}
-
 
 	/**
 	 * The `(kind, raw)` dedup key of an import-declaration `node`, or null when
