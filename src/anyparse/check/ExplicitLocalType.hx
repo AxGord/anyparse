@@ -151,6 +151,12 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	 * Always-in-scope constructor types with NO type parameters — a bare `new T()`'s
 	 * written name is provably its complete type. Consulted only when the project
 	 * index declares no same-named type (an indexed declaration's arity wins).
+	 *
+	 * The ALWAYS-IN-SCOPE property (that these builtins need no import to name) is NOT
+	 * derivable from a declaration — so, even once `StdResolver` joins std and their
+	 * arity becomes index-derivable (the `index` arm above), this small whitelist
+	 * stays as intrinsic in-scope-ness knowledge and the unindexed-run fallback,
+	 * unlike the extension-method and static-return tables now derived from std.
 	 */
 	private static final NON_GENERIC_NEW_TYPES: Array<String> = [
 		'StringBuf',
@@ -506,6 +512,13 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final ret: Null<String> = table['$typeName.$method'];
 		if (ret == null) return null;
 		if (!TypeResolver.receiverRootIsUnboundType(receiver, tree, shape)) return null;
+		// The table is the FALLBACK for a type absent from the resolution index (a config-less
+		// run): its values are deliberately import-safe (`sys.io.FileOutput` fully qualified).
+		// When the type IS indexed (std joined via `StdResolver`, or a same-named project type),
+		// defer (null): `SymbolIndex.returnNominalOf` verifies these same return types (see
+		// `StdResolverReturnTypeTest`) but yields a SIMPLE nominal that may be out of the consumer's
+		// import scope, so the oracle — or report-only — resolves it rather than risk a wrong
+		// structural annotation.
 		return index != null && index.declaringFiles(typeName).length > 0 ? null : ret;
 	}
 

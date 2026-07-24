@@ -14,6 +14,7 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.SpanTypeInfoProvider;
+import anyparse.query.StdResolver;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -158,12 +159,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	);
 
 	/**
-	 * Extension-method names that `using <module>` brings into scope, for the
-	 * Haxe standard-library modules used with `using` in practice. Sourced from
-	 * the installed Haxe std (every `FnMember` of each module), so the set is
-	 * complete: `unused-import` deletes a `using` only when NONE of these is
-	 * called, and a missing name would risk deleting a live `using`. A superset
-	 * name is harmless — it only makes the "used" test more generous.
+	 * FALLBACK table of `using`-eligible extension-method names, consulted only when `StdResolver` cannot discover the std sources `knownExtensionMethods` derives these from at runtime. Its entries were themselves sourced from the installed std (every static `FnMember` of each module, private helpers included), so it is a subset of what the live extraction returns — a superset there is harmless (it only makes the `unused-import` "used" test more generous).
 	 */
 	private static final EXTENSION_METHODS: Map<String, Array<String>> = [
 		'StringTools' => [
@@ -215,6 +211,26 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			'mapi'
 		]
 	];
+
+	/** Per-module-path cache of the std extension-method extraction; a cached null (a non-std / missing module) is retained via `exists`, not recomputed. */
+	private static final _extMethodsCache: Map<String, Null<Array<String>>> = new Map();
+
+	/** Member-modifier node kinds — a `Static` among these marks the following `FnMember` static; any other is a non-`Static` modifier that preserves the accumulated flag (used by `collectStaticMethodsWithParam`). */
+	private static final MODIFIER_KINDS: Array<String> = [
+		'Static',
+		'Public',
+		'Private',
+		'Inline',
+		'Override',
+		'Final',
+		'Dynamic',
+		'Extern',
+		'Macro',
+		'Abstract'
+	];
+
+	/** Non-function member kinds that end a modifier run (a static var / final field), so their `Static` never leaks onto a following method (used by `collectStaticMethodsWithParam`). */
+	private static final FIELD_BOUNDARY_KINDS: Array<String> = ['VarMember', 'FinalMember', 'FinalModifiedMember'];
 
 	public function new() {}
 
@@ -822,8 +838,18 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return new HaxeBooleanLogicSupport();
 	}
 
+	/**
+	 * The `using`-eligible extension methods `using <modulePath>` brings into scope,
+	 * DERIVED from the discovered std source via `StdResolver`: any-visibility static
+	 * `FnMember`s of the module that take at least a first parameter, computed lazily
+	 * and cached per module path. Falls back to the hardcoded `EXTENSION_METHODS`
+	 * constant when std is undiscovered or the module is not a std file — so a name a
+	 * live `using` relies on is never dropped. `unused-import` deletes a `using` only
+	 * when NONE of the returned names is called, and a superset name is harmless (it
+	 * only makes the "used" test more generous).
+	 */
 	public function knownExtensionMethods(modulePath: String): Null<Array<String>> {
-		return EXTENSION_METHODS[modulePath];
+		return extensionMethodsFromStd(modulePath) ?? EXTENSION_METHODS[modulePath];
 	}
 
 	public function checkOverrides(path: String): Null<CheckOverrides> {
@@ -998,6 +1024,27 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		}
 		for (tp in typeParamNames(source)) out.remove(tp);
 		return out;
+	}
+
+	/** Lazily extract + cache the `using`-eligible method names of `modulePath` from the std source, or null when std / the module file is absent. */
+	private function extensionMethodsFromStd(modulePath: String): Null<Array<String>> {
+		if (_extMethodsCache.exists(modulePath)) return _extMethodsCache[modulePath];
+		final computed: Null<Array<String>> = computeExtensionMethodsFromStd(modulePath);
+		_extMethodsCache[modulePath] = computed;
+		return computed;
+	}
+
+	/** Parse `<std>/<modulePath>.hx` and collect its static-with-first-param `FnMember` names, or null when std is undiscovered or the file is missing / unparseable. */
+	private function computeExtensionMethodsFromStd(modulePath: String): Null<Array<String>> {
+		final dir: Null<String> = StdResolver.stdDir();
+		if (dir == null) return null;
+		final src: Null<String> = readStdModule(dir, modulePath);
+		if (src == null) return null;
+		final tree: Null<QueryNode> = try parseFile(src) catch (exception: Exception) null;
+		if (tree == null) return null;
+		final names: Array<String> = [];
+		collectStaticMethodsWithParam(tree, names);
+		return names;
 	}
 
 	/** Every declare-site type-parameter name in the file (`class C<T>`, `function f<U>`, …). */
@@ -1340,6 +1387,67 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	/** A non-structural leaf the grammar walkers skip: null, a `String`, or a `Span`. */
 	private inline function isLeafValue(value: Dynamic): Bool {
 		return value == null || value is String || Std.isOfType(value, Span);
+	}
+
+	/** Read `<dir>/<modulePath-as-path>.hx`, or null when it does not exist / is unreadable (a non-std module then falls back to the table). */
+	private static function readStdModule(dir: String, modulePath: String): Null<String> {
+		#if (sys || nodejs)
+		final file: String = haxe.io.Path.join([dir, modulePath.split('.').join('/') + '.hx']);
+		if (!sys.FileSystem.exists(file)) return null;
+		return try sys.io.File.getContent(file) catch (exception: Exception) null;
+		#else
+		return null;
+		#end
+	}
+
+	/**
+	 * Walk `container`'s children collecting the names of static `FnMember`s that take
+	 * at least one parameter. Modifiers are FLAT siblings preceding their member, so a
+	 * `Static` seen since the last member marks the next `FnMember` static; a
+	 * non-`Static` modifier preserves the flag. `#if` members nest in a `Conditional`
+	 * (their own modifier + member sequence) and type decls nest their members — both
+	 * are recursed into. Visibility is intentionally NOT filtered: a private static can
+	 * never be reached through `using`, so including it is a harmless superset that
+	 * also preserves the historical `EXTENSION_METHODS` table (which listed private
+	 * helpers).
+	 */
+	private static function collectStaticMethodsWithParam(container: QueryNode, into: Array<String>): Void {
+		var sawStatic: Bool = false;
+		// A `#if X inline #end` between `static` and the function wraps its modifiers in a
+		// `Conditional`; flattening those inline keeps the modifier run continuous, and a
+		// whole `#if`-guarded member (its own modifiers + FnMember) is handled by the same
+		// linear pass — so target-conditional statics are captured either way.
+		for (child in flattenConditionals(container.children)) {
+			final kind: String = child.kind;
+			if (kind == 'Static')
+				sawStatic = true;
+			else if (kind == 'FnMember') {
+				final name: Null<String> = child.name;
+				if (sawStatic && name != null && hasParam(child)) into.push(name);
+				sawStatic = false;
+			} else if (FIELD_BOUNDARY_KINDS.contains(kind))
+				sawStatic = false;
+			else if (!MODIFIER_KINDS.contains(kind)) {
+				collectStaticMethodsWithParam(child, into);
+				sawStatic = false;
+			}
+		}
+	}
+
+	/** Dissolve `Conditional` (`#if`) wrappers, splicing their children in place (recursively), so a modifier or member guarded by conditional compilation reads as a plain sibling. */
+	private static function flattenConditionals(children: Array<QueryNode>): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		for (c in children) if (c.kind == 'Conditional')
+			for (g in flattenConditionals(c.children)) out.push(g);
+		else
+			out.push(c);
+		return out;
+	}
+
+	/** Whether `fn` declares at least one parameter (a `Required` / `Optional` / `Rest` child) — the `using`-eligibility gate. */
+	private static function hasParam(fn: QueryNode): Bool {
+		for (c in fn.children) if (c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest') return true;
+		return false;
 	}
 
 	/**

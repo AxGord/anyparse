@@ -27,7 +27,12 @@ final class TypeResolver {
 	 * initializer is such a call. Explicitly enumerated (not "every method
 	 * except"), so a future impure addition is never auto-trusted. `Math.random`
 	 * / `Std.random` are deliberately ABSENT — they advance PRNG state (a side
-	 * effect); every I/O-bearing type (`Sys`, `File`, …) is out entirely.
+	 * effect); every I/O-bearing type (`Sys`, `File`, ...) is out entirely.
+	 *
+	 * PURITY is NOT derivable from a declaration — a signature never states
+	 * side-effect freedom — so, unlike the extension-method and static-return
+	 * tables now derived from the std sources via `StdResolver`, this list is
+	 * intrinsic semantic knowledge and stays hand-maintained.
 	 */
 	private static final PURE_STDLIB_STATIC_FUNCS: Array<String> = [
 		'Date.now',

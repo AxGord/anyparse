@@ -266,6 +266,11 @@ final class RefactorSupport {
 	 * `final`: `String` is immutable; `Array` / `Map` and the others mutate their
 	 * contents, not the binding. The `final`-conversion checks keep suggesting `final`
 	 * for such bindings even when their type is not resolvable in the lint scope.
+	 *
+	 * This MUTABILITY fact is NOT derivable from a declaration — a method signature
+	 * never states whether it reassigns `this` — so, unlike the extension-method and
+	 * static-return tables now derived from the std sources via `StdResolver`, this
+	 * list is intrinsic semantic knowledge and stays hand-maintained.
 	 */
 	private static final finalSafeStdlibTypes: Array<String> = [
 		'String',

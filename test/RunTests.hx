@@ -488,6 +488,10 @@ import unit.AvoidDynamicBagOracleE2ETest;
 import unit.ClassifyOccurrencesTest;
 import unit.EmptyCommentCheckTest;
 import unit.HxUniformStatementBlanksSliceTest;
+import unit.StdResolverTest;
+import unit.ImplicitStdScopeTest;
+import unit.ExtensionMethodsExtractionTest;
+import unit.StdResolverReturnTypeTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -833,6 +837,10 @@ class RunTests {
 		addCase(new LintConfigCliTest());
 		addCase(new ResolutionScopeCliTest());
 		addCase(new HaxelibResolverTest());
+		addCase(new StdResolverTest());
+		addCase(new ImplicitStdScopeTest());
+		addCase(new ExtensionMethodsExtractionTest());
+		addCase(new StdResolverReturnTypeTest());
 		addCase(new LintPerFileConfigCliTest());
 		addCase(new LintFixFixedPointCliTest());
 		addCase(new LintConfigTest());
