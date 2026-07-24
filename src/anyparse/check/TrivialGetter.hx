@@ -11,6 +11,7 @@ using Lambda;
 import anyparse.query.RefactorSupport;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.LintConfig;
+import anyparse.query.SymbolIndexHost;
 
 /**
  * Flags a property that only bridges a private same-class backing field through trivial
@@ -43,8 +44,8 @@ import anyparse.check.LintConfig;
  * 2. Neither accessor is `dynamic` (re-bindable at runtime — real behaviour).
  * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor
  *    bodies) are skipped wholesale: only `ClassDecl` / `ClassForm` bodies are inspected.
- * 4. The declaring class has NO subtype in the index (`SymbolIndex.hasSubtype`) — a subclass
- *    could override an accessor, so the collapse would break the override.
+ * 4. No (transitive) subtype overrides the property accessor or redeclares it
+ *    (`SymbolIndex.subtypeOverridesProperty`, over report + resolution scope). A subclass merely extending the class no longer blocks; an unresolvable subtype hierarchy is kept conservatively.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
  *    may declare it and so require a physical accessor; a COLLAPSING shape is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
@@ -122,13 +123,17 @@ final class TrivialGetter implements Check implements ConfigAware {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		// The subtype-override gate resolves over report + resolution scope (a subtype declared
+		// in a configured resolution library reaches the index too), falling back to the report
+		// index when no resolution scope is configured.
+		final subtypeIndex: SymbolIndex = resolutionIndexOf(plugin) ?? index;
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-			for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index, maxBypass);
+			for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass);
 		}
 		return out;
 	}
@@ -183,17 +188,18 @@ final class TrivialGetter implements Check implements ConfigAware {
 
 	/**
 	 * Flag each collapsible property of `cls` (`classifyProperty` decides the shape and applies
-	 * the soundness gates), using the shared `memberTables`. A class with any subtype in the
+	 * the soundness gates), using the shared `memberTables`. A class whose property a subtype overrides in the
 	 * index is skipped — a subclass could override an accessor, so the suggested rewrite would
 	 * break that override.
 	 */
 	private static function considerClass(
-		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, maxBypass: Int
+		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, subtypeIndex: SymbolIndex, maxBypass: Int
 	): Void {
 		final className: Null<String> = cls.name;
-		if (className == null || index.hasSubtype(className)) return;
+		if (className == null) return;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) {
+			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			out.push({
@@ -204,6 +210,27 @@ final class TrivialGetter implements Check implements ConfigAware {
 				message: c.message
 			});
 		}
+	}
+
+	/**
+	 * Whether a (transitive) subtype overrides property `propName`'s accessor or redeclares the
+	 * property (`SymbolIndex.subtypeOverridesProperty`) — the precise per-property subtype gate
+	 * that replaces the blanket `hasSubtype` skip. A null index (a direct fix caller without one)
+	 * cannot resolve the hierarchy and so never blocks: the report pass, which always carries an
+	 * index, has already gated the finding.
+	 */
+	private static inline function subtypeBlocks(index: Null<SymbolIndex>, className: Null<String>, propName: String): Bool {
+		return index != null && className != null && index.subtypeOverridesProperty(className, propName);
+	}
+
+	/**
+	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
+	 * configured resolution library is indexed there too — or null when the plugin is not a
+	 * resolution host or no resolution scope is configured (the caller falls back to the report index).
+	 */
+	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
 	}
 
 	/**
@@ -281,16 +308,17 @@ final class TrivialGetter implements Check implements ConfigAware {
 	/**
 	 * Collect the rewrite edits for every wanted collapsible property of `cls`, using the shared
 	 * `memberTables` + `classifyProperty` for the shape / backing-field / accessor nodes and
-	 * gates, and skipping a class with any subtype (a subclass override).
+	 * gates, and skipping a property a subtype overrides (a subclass override).
 	 */
 	private static function collectClassFixEdits(
 		cls: QueryNode, source: String, wanted: Array<String>, index: Null<SymbolIndex>, out: Array<{ span: Span, text: String }>,
 		maxBypass: Int
 	): Void {
 		final className: Null<String> = cls.name;
-		if (className == null || (index != null && index.hasSubtype(className))) return;
+		if (className == null) return;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) if (wanted.contains('${prop.span.from}:${prop.span.to}')) {
+			if (subtypeBlocks(index, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, c);

@@ -653,4 +653,35 @@ class TrivialGetterCheckTest extends Test {
 		}
 	}
 
+
+	public function testSubclassedNotOverriddenCollapses(): Void {
+		// Sub extends Base but overrides NEITHER get_active/set_active nor redeclares `active`
+		// (the DarkDropDownListItem shape), so dropping get_active strands no override — collapse.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function ping():Void {}\n}';
+		Assert.equals(1, violations(source).length);
+	}
+
+
+	public function testSubclassTransitiveOverrideStillSkipped(): Void {
+		// Leaf -> Mid -> Base: a TRANSITIVE subtype overrides get_active, so dropping it would strand
+		// the override — the collapse is still skipped even though the direct subtype Mid is inert.
+		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Mid extends Base {}\nclass Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}';
+		Assert.equals(0, violations(source).length);
+	}
+
+
+	public function testUnresolvableSubtypeHierarchyStillSkipped(): Void {
+		// Leaf OVERRIDES get_active but reaches Base only through Mid, which is NOT in the lint scope
+		// — the hierarchy below Base is unresolvable, so a hidden override cannot be ruled out and the
+		// collapse is kept conservatively.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Leaf.hx', source: 'class Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}' }
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
 }
