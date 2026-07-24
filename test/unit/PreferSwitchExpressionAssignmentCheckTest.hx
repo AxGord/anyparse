@@ -368,6 +368,51 @@ class PreferSwitchExpressionAssignmentCheckTest extends Test {
 		Assert.equals('x = switch v { case 1: \'a\'; case _: \'d\'; };', es[0].text);
 	}
 
+	/**
+	 * The recursive case: a `switch` whose arm is an `if`/`else` that itself ends in a nested `switch`,
+	 * all assigning the same l-value, hoists in one shot to a switch-expression whose arm value is the
+	 * nested if-expression / switch-expression tree.
+	 */
+	public function testNestedSwitchInIfInSwitchFixed(): Void {
+		final src: String = wrap(
+			'switch outer {\n\t\t\tcase A:\n\t\t\t\tif (c) x = 1;\n\t\t\t\telse switch inner {\n\t\t\t\t\tcase P: x = 2;\n\t\t\t\t\tcase _: x = 3;\n\t\t\t\t}\n\t\t\tcase _: x = 0;\n\t\t}'
+		);
+		Assert.equals(1, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('x = switch outer { case A: if (c) 1 else switch inner { case P: 2; case _: 3; }; case _: 0; };', es[0].text);
+	}
+
+	/** A switch arm holding a 2-branch `if`/`else` (both plain, same l-value) hoists the `if` to an if-expression value. */
+	public function testNestedIfInSwitchArmFixed(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('switch v {\n\t\t\tcase A: if (c) x = 1; else x = 2;\n\t\t\tcase _: x = 0;\n\t\t}'));
+		Assert.equals(1, es.length);
+		Assert.equals('x = switch v { case A: if (c) 1 else 2; case _: 0; };', es[0].text);
+	}
+
+	/** A nested arm whose branches disagree on the l-value disqualifies the whole tree. */
+	public function testNestedMixedLvalueNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('switch v {\n\t\t\tcase A: if (c) x = 1; else y = 2;\n\t\t\tcase _: x = 0;\n\t\t}')).length);
+	}
+
+	/** The decl-pairing arm gains the same recursion: a nested `if` arm value collapses to `final x = switch … { case A: if (c) a else b; … };`. */
+	public function testDeclArmNestedIfFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase A: if (c) x = 1; else x = 2;\n\t\t\tcase _: x = 3;\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('final x:Int = switch v { case A: if (c) 1 else 2; case _: 3; };', es[0].text);
+	}
+
+	/** A nested arm reading the declared local (`if (x > 0) …`) is a self-reference after the decl collapse — skipped. */
+	public function testDeclArmNestedSelfReferenceNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('var x:Int = 0;\n\t\tswitch v {\n\t\t\tcase A: if (x > 0) x = 1; else x = 2;\n\t\t\tcase _: x = 3;\n\t\t}')).length
+		);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
