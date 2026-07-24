@@ -157,6 +157,37 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, vs.length);
 	}
 
+	/**
+	 * A field whose name an IMPLEMENTED interface declares as a `var` is pinned to that
+	 * interface's read+write property access — `var → final` would break parity
+	 * ("different property access than in I"). The implementing field carries no explicit
+	 * `public`, so it routes through this (non-exported) check. Must be skipped.
+	 */
+	public function testInterfaceVarFieldNotFinalized(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
+			{ file: 'C.hx', source: 'class C implements I {\n\tvar needsResync:Bool = false;\n}' }
+		];
+		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** An implemented interface that is not in scope MAY declare the field as a mutable member — skipped conservatively. */
+	public function testUnresolvableInterfaceSkips(): Void {
+		final vs: Array<Violation> = new PreferFinalField().run([
+			{ file: 'C.hx', source: 'class C implements ExternalIface {\n\tvar needsResync:Bool = false;\n}' }
+		], new HaxeQueryPlugin());
+		Assert.equals(0, vs.length);
+	}
+
+	/** Control: a field an implemented interface does NOT declare still converts. */
+	public function testNonInterfaceFieldStillConverts(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
+			{ file: 'C.hx', source: 'class C implements I {\n\tvar _other:Int = 0;\n}' }
+		];
+		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

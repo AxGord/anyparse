@@ -495,6 +495,33 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		Assert.equals('A.hx', vs[0].file);
 	}
 
+	/**
+	 * A public field implementing an UNRESOLVABLE interface: `supertypeDeclaresMember` treats the
+	 * out-of-scope interface as absent, so this was wrongly finalized before the interface gate. The
+	 * interface may declare `needsResync` as a mutable member — skip conservatively.
+	 */
+	public function testUnresolvableInterfacePublicSkips(): Void {
+		Assert.equals(0, multi([
+			{ file: 'C.hx', source: 'class C implements ExternalIface {\n\tpublic var needsResync:Bool = false;\n}' }
+		]).length);
+	}
+
+	/** A public field a RESOLVABLE implemented interface declares as a `var` is skipped. */
+	public function testResolvableInterfaceVarPublicSkips(): Void {
+		Assert.equals(0, multi([
+			{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
+			{ file: 'C.hx', source: 'class C implements I {\n\tpublic var needsResync:Bool = false;\n}' }
+		]).length);
+	}
+
+	/** Control: a public field an implemented interface does NOT declare still converts. */
+	public function testNonInterfacePublicFieldStillConverts(): Void {
+		Assert.equals(1, multi([
+			{ file: 'I.hx', source: 'interface I {\n\tvar needsResync:Bool;\n}' },
+			{ file: 'C.hx', source: 'class C implements I {\n\tpublic var other:Int = 0;\n}' }
+		]).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
