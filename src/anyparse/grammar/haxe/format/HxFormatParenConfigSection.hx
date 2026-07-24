@@ -31,4 +31,5 @@ package anyparse.grammar.haxe.format;
 	@:optional var catchParens: HxFormatParenPolicySection;
 	@:optional var sharpConditionParens: HxFormatParenPolicySection;
 	@:optional var conditionParens: HxFormatParenPolicySection;
+	@:optional var switchSubjectParens: HxFormatSwitchSubjectParensPolicy;
 };

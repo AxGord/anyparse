@@ -900,6 +900,13 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// ignores the knob. Default `false` (keep braces — byte-inert). Fed by
 	// `whitespace.bracesConfig.singleStatementBraces` (`"remove"` → true).
 	dropSingleStmtBraces: Bool,
+	// ω-switch-subject-parens: `true` drops the redundant parens around a
+	// `switch (subject) { … }` subject (`switch v { … }`); the leading-brace
+	// subject carve-out (object literal / block) still keeps them. Covers both
+	// statement- and expression-position switch (shared `HxSwitchStmt`
+	// grammar). Default `false` (keep parens — byte-inert). Fed by
+	// `whitespace.parenConfig.switchSubjectParens` (`"remove"` → true).
+	dropSwitchSubjectParens: Bool,
 	accessBracketsOpen: WhitespacePolicy,
 	accessBracketsClose: WhitespacePolicy,
 	arrayLiteralBracketsOpen: WhitespacePolicy,

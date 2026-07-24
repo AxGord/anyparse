@@ -471,6 +471,7 @@ import unit.HxCondUnbalancedRegionSliceTest;
 import unit.HxCondSpliceOwnLineSliceTest;
 import unit.CollapsibleElseIfCheckTest;
 import unit.HaxelibResolverTest;
+import unit.HxSwitchSubjectParensStripSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -517,6 +518,7 @@ class RunTests {
 		addCase(new HxPrattOpsTest());
 		addCase(new HxParenSliceTest());
 		addCase(new HxSwitchAfterParenSpaceSliceTest());
+		addCase(new HxSwitchSubjectParensStripSliceTest());
 		addCase(new HxAssignSliceTest());
 		addCase(new HxBitwiseSliceTest());
 		addCase(new HxPrefixSliceTest());
