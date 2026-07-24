@@ -466,20 +466,6 @@ class NamingCheckTest extends Test {
 		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
-	public function testFixSkipsLocalCollidingWithInheritedMember(): Void {
-		// De-prefixing `_adjust` to `adjust` collides with a member INHERITED from a
-		// superclass in ANOTHER file - invisible to the in-file scan, caught via the index.
-		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var adjust:Int = 0;\n}';
-		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
-	}
-
-	public function testFixSkipsLocalWhenInheritanceUnresolvable(): Void {
-		// The enclosing type extends a base absent from the index - its members cannot be
-		// enumerated, so a hidden inherited collision cannot be ruled out - skip.
-		final src: String = 'package pkg;\nclass C extends UnknownBase {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
-	}
 
 	public function testFixSkipsLocalDeprefixingToKeyword(): Void {
 		// De-prefixing `_new` to `new` yields a Haxe keyword - not a usable identifier - skip.
@@ -545,6 +531,122 @@ class NamingCheckTest extends Test {
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
 		Assert.isTrue(vs.length >= 1);
 		Assert.equals(0, check.fix(targetSrc, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+
+	private function assertLocalRenamed(
+		files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String, present: String, absent: String
+	): Void {
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
+		Assert.isTrue(vs.length >= 1);
+		assertCanonicalized(targetSrc, check.fix(targetSrc, vs, new HaxeQueryPlugin(), index), present, absent);
+	}
+
+
+	public function testFixRenamesLocalShadowingInheritedMember(): Void {
+		// De-prefixing `_adjust` -> `adjust` where `adjust` is an inherited field: a local
+		// SHADOWING an inherited member is legal Haxe (verified), and the whole-file collision
+		// scan sees no bare in-file `adjust`, so the rename applies (the inheritance gate is field-only).
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var adjust:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		assertLocalRenamed(
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc, 'var adjust', '_adjust'
+		);
+	}
+
+
+	public function testFixRenamesLocalUnderUnresolvableInheritance(): Void {
+		// The enclosing type extends a base absent from the index. A local cannot clash by
+		// REDEFINITION (only a field can) and shadowing is legal, so a local rename no longer
+		// depends on resolving inheritance - it applies.
+		final src: String = 'package pkg;\nclass C extends UnknownBase {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'var adjust', '_adjust');
+	}
+
+
+	public function testFixRenamesSnakeCaseLocal(): Void {
+		// A snake_case local is converted to camelCase - the widened normalizer (`min_gap` -> `minGap`).
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar min_gap = 5;\n\t\ttrace(min_gap);\n\t}\n}';
+		assertFixCanonical(src, 'minGap', 'min_gap');
+	}
+
+
+	public function testFixRenamesSnakeCaseParam(): Void {
+		// A snake_case parameter is converted to camelCase (`grant_type` -> `grantType`).
+		final src: String = 'class C {\n\tpublic function f(grant_type:String) {\n\t\treturn grant_type;\n\t}\n}';
+		assertFixCanonical(src, 'grantType', 'grant_type');
+	}
+
+
+	public function testFixRenamesUpperSnakeLocal(): Void {
+		// An UPPER_SNAKE local is lowercased per-segment then camel-joined (`MAX_LEN` -> `maxLen`).
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar MAX_LEN = 5;\n\t\ttrace(MAX_LEN);\n\t}\n}';
+		assertFixCanonical(src, 'maxLen', 'MAX_LEN');
+	}
+
+
+	public function testFixRenamesParamDeprefix(): Void {
+		// A `__`-prefixed parameter is de-prefixed to camelCase (a single leading `_` is the
+		// deliberate unused-marker and stays conformant; `__` is flagged).
+		final src: String = 'class C {\n\tpublic function f(__focusType:Int) {\n\t\treturn __focusType;\n\t}\n}';
+		assertFixCanonical(src, 'focusType', '__focusType');
+	}
+
+
+	public function testFixSkipsSnakeLocalCollidingInFile(): Void {
+		// The camelCase form already occurs in the file (a sibling local) - the collision scan
+		// skips it to avoid a duplicate/shadow the re-parse gate accepts but that would not type-check.
+		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar minGap = 1;\n\t\tvar min_gap = 2;\n\t\ttrace(minGap + min_gap);\n\t}\n}';
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.isTrue(vs.length >= 1);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
+	}
+
+
+	public function testFixSkipsFieldRedefiningInheritedUnderscoreName(): Void {
+		// Renaming `count` -> `_count` would REDEFINE `_count` inherited from Base - a Haxe compile
+		// error ("Redefinition of variable in subclass") a local shadow does not have. The field
+		// inheritance gate skips it - report-only.
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate var _count:Int = 0;\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tprivate var count:Int = 1;\n\tpublic function f() { return this.count; }\n}';
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.isTrue(cVs.length >= 1);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
+	}
+
+
+	public function testFixSkipsFieldInRttiClass(): Void {
+		// A field of a class carrying `@:rtti` directly is serialized by reflecting on field NAMES;
+		// renaming it breaks saved files. Report-only even though the field is otherwise confined.
+		final src: String = 'package pkg;\n@:rtti\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+
+	public function testFixSkipsFieldExtendingRttiClass(): Void {
+		// A subclass extending a `@:rtti` base (without its own `@:rtti`) is still name-reflected
+		// through the base - the transitive index check skips its field.
+		final baseSrc: String = 'package pkg;\n@:rtti\nclass Base {\n\tpublic function new() {}\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final files: Array<{ file: String, source: String }> =
+			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final cVs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'pkg/C.hx');
+		Assert.equals(1, cVs.length);
+		Assert.equals(0, check.fix(cSrc, cVs, new HaxeQueryPlugin(), index).length);
 	}
 
 }

@@ -121,6 +121,14 @@ typedef TypeDeclInfo = {
 	/** True when this is a `typedef X = {…}` anonymous struct — its fields can never be properties, so field access on it is side-effect-free. */
 	var isAnonStruct: Bool;
 
+	/**
+	 * True when the type declaration carries `@:rtti` metadata directly. Such a
+	 * class is serialized by reflecting on its runtime field NAMES (e.g. drill
+	 * Node), so a naming autofix must not rename its fields. Feeds
+	 * `transitivelyCarriesRtti` for the subtype-ward serialization guard.
+	 */
+	var hasRtti: Bool;
+
 	/** This type's directly-declared members (name + getter-property flag), for type-aware purity. */
 	var members: Array<MemberInfo>;
 
@@ -552,6 +560,28 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether `typeName` OR any type in its transitive supertype closure carries
+	 * `@:rtti` (resolved via the index). True marks a serialization-sensitive
+	 * hierarchy - a class reflected on its field NAMES at runtime (a drill Node) -
+	 * whose fields a naming autofix must not rename. An unresolved / ambiguous
+	 * supertype simply ends that branch (a safe miss, matching `isSubtype`); the
+	 * direct-`@:rtti` case is caught by the projection's `renameUnsafe` regardless.
+	 */
+	public function transitivelyCarriesRtti(typeName: String): Bool {
+		final seen: Array<String> = [typeName];
+		var i: Int = 0;
+		while (i < seen.length) {
+			final name: String = seen[i];
+			i++;
+			for (f in _files) for (t in f.types) if (t.name == name) {
+				if (t.hasRtti) return true;
+				for (s in t.supertypes) if (!seen.contains(s)) seen.push(s);
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * `abstractRebindsThis`'s recursion, cycle-guarded by `seen` (a cycle is treated as
 	 * possibly-rebinding — conservative). A non-abstract match contributes "found" without rebinding; an
 	 * abstract with `abstractSelfRebind` rebinds; a `@:forward` abstract defers to its underlying (an
@@ -917,6 +947,7 @@ final class SymbolIndex {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
+					hasRtti: pendingMeta.contains('@:rtti'),
 					members: collectMembers(
 						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
 					),
