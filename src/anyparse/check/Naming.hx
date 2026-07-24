@@ -280,11 +280,11 @@ final class Naming implements Check implements CrossFileFix {
 			final idx: SymbolIndex = resolutionIndex;
 			if (!idx.typeProvablyLacksMember(owner, newName) || idx.transitivelyCarriesRtti(owner)) return null;
 		}
-		// Collision: a `newName` already occurring as an identifier in the file (another member of
-		// the same type, a sibling local) would be duplicated or shadowed by the rename — the
-		// re-parse gate accepts the result but it does not type-check, so skip. (Raw scan; the
-		// collision side keeps the old scan for now — classifying it is a later slice.)
-		if (RefactorSupport.referencedInRange(source, newName, 0, source.length, [])) return null;
+		// Collision: a `newName` already bound where the rename lands would be duplicated or shadowed
+		// (the re-parse gate accepts it but it does not type-check), so skip. Scope-aware for a local /
+		// param / catch var - an occurrence in an UNRELATED function does not conflict; a field / constant
+		// stays whole-file (see `collidesInScope`).
+		if (collidesInScope(decl, source, tree, newName, shape)) return null;
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
@@ -408,10 +408,15 @@ final class Naming implements Check implements CrossFileFix {
 	): Null<Array<Span>> {
 		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (resolved.length == 0) return null;
+		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
+		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
+		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
+		// binding is unresolved is left uncovered so the completeness gate below blocks (fail-closed).
+		final excluded: Array<Span> = resolved.concat(otherBindingSpans(source, tree, name, declFrom, shape));
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
-			source, name, plugin, 0, source.length, resolved
+			source, name, plugin, 0, source.length, excluded
 		);
-		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, resolved) ? null : resolved;
+		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : resolved;
 		final spans: Array<Span> = resolved.copy();
 		for (occ in classified) switch occ.kind {
 			case OccurrenceClass.CommentTrivia if (distinctive):
@@ -675,6 +680,62 @@ final class Naming implements Check implements CrossFileFix {
 			else
 				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, off, name.length);
 		}
+	}
+
+
+	/**
+	 * Every same-name occurrence in the DECLARING file that provably binds to a DIFFERENT binding than
+	 * the one at `declFrom` - a param / loop var / sibling local sharing the name. Attributed via the
+	 * scope resolver's per-hit binding: a Decl self-binds, a Read / Write follows its `bindingSpan`.
+	 * Such occurrences are excluded from the completeness scan (neither renamed with `declFrom`'s
+	 * binding nor a blocker). An occurrence whose binding is unresolved is NOT returned - it stays
+	 * uncovered so the completeness gate blocks the rename (fail-closed).
+	 */
+	private static function otherBindingSpans(source: String, tree: QueryNode, name: String, declFrom: Int, shape: RefShape): Array<Span> {
+		final out: Array<Span> = [];
+		final seen: Array<Int> = [];
+		for (h in Refs.find(name, tree, shape)) {
+			final bindingSpan: Null<Span> = h.bindingSpan;
+			final boundFrom: Null<Int> = h.kind == RefKind.Decl ? h.span.from : (bindingSpan == null ? null : bindingSpan.from);
+			if (boundFrom == null || boundFrom == declFrom) continue;
+			RefactorSupport.pushUniqueSpan(out, seen, RefactorSupport.identTokenOffset(source, h.span, name), name.length);
+		}
+		return out;
+	}
+
+	/**
+	 * Whether `newName` would collide with a binding reachable from `decl`'s scope. A FIELD / Constant
+	 * (class-level) stays whole-file: it is visible everywhere in the type, and its inherited-member
+	 * redefinition is separately gated. A Local / Param / CatchVar is SCOPE-AWARE - `newName` conflicts
+	 * only when it occurs in `decl`'s enclosing function (an enclosing / sibling local or param) or at
+	 * class / file level (an own member, static, or import); an occurrence inside an UNRELATED function
+	 * body (one that does not enclose `decl`) is out of scope. An inherited member in another file never
+	 * appears in-file, so a local legally shadowing one still renames.
+	 */
+	private static function collidesInScope(decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape): Bool {
+		final span: Null<Span> = decl.span;
+		if (span == null) return true;
+		final cat: NamingCategory = decl.category;
+		if (cat != NamingCategory.Local && cat != NamingCategory.Param && cat != NamingCategory.CatchVar)
+			return RefactorSupport.referencedInRange(source, newName, 0, source.length, []);
+		final excluded: Array<Span> = [];
+		collectUnrelatedFunctionSpans(tree, shape.functionKinds ?? [], span.from, excluded);
+		return RefactorSupport.referencedInRange(source, newName, 0, source.length, excluded);
+	}
+
+	/**
+	 * Collect the span of every function node that does NOT enclose `declFrom` - an unrelated /
+	 * sibling-nested body whose locals & parameters are unreachable from the binding's scope, so a
+	 * same-named binding there is not a collision. Recursive; the enclosing function(s) are kept.
+	 */
+	private static function collectUnrelatedFunctionSpans(
+		node: QueryNode, functionKinds: Array<String>, declFrom: Int, out: Array<Span>
+	): Void {
+		if (functionKinds.contains(node.kind)) {
+			final s: Null<Span> = node.span;
+			if (s != null && !(s.from <= declFrom && declFrom < s.to)) out.push(s);
+		}
+		for (child in node.children) collectUnrelatedFunctionSpans(child, functionKinds, declFrom, out);
 	}
 
 }

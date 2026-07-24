@@ -971,4 +971,55 @@ class NamingCheckTest extends Test {
 		}
 	}
 
+
+	public function testFixRenamesThreeSameNameBindings(): Void {
+		// One file with THREE distinct `__id` bindings - a private field, a parameter, and a
+		// for-loop iterator. Each renames to its OWN target (field -> `_id`, param & loop -> `id`)
+		// in a single fix pass; the per-binding spans are disjoint so the edits do not corrupt.
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tprivate var __id:Int = 0;\n' + '\tpublic function add():Int {\n'
+			+ '\t\treturn __id++;\n' + '\t}\n' + '\tpublic function remove(__id:Int):Void {\n' + '\t\tremoveAt(__id);\n' + '\t}\n'
+			+ '\tpublic function clear():Void {\n' + '\t\tfor (__id in [1, 2, 3]) removeAt(__id);\n' + '\t}\n'
+			+ '\tfunction removeAt(x:Int):Void {}\n' + '}';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run([{ file: 'pkg/C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.isTrue(vs.length >= 3);
+		switch RefactorSupport.canonicalize(src, check.fix(src, vs, new HaxeQueryPlugin(), index), true, new HaxeQueryPlugin()) {
+			case Ok(text):
+				Assert.equals(-1, text.indexOf('__id'));
+				Assert.isTrue(text.indexOf('var _id') >= 0);
+				Assert.isTrue(text.indexOf('remove(id') >= 0);
+				Assert.isTrue(text.indexOf('for (id in') >= 0);
+			case Err(message):
+				Assert.fail('fix canonicalize Err: $message');
+		}
+	}
+
+	public function testFixRenamesLocalDespiteSameNameInUnrelatedFunction(): Void {
+		// `adjust` also names a local in an UNRELATED method `g` - out of `f`'s scope, so it no
+		// longer blocks de-prefixing `_adjust` -> `adjust` in `f` (the collision scan is scope-aware).
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function f() {\n' + '\t\tvar _adjust = 1;\n'
+			+ '\t\ttrace(_adjust);\n' + '\t}\n' + '\tpublic function g() {\n' + '\t\tvar adjust = 2;\n' + '\t\ttrace(adjust);\n' + '\t}\n'
+			+ '}';
+		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'var adjust', '_adjust');
+	}
+
+	public function testFixSkipsLocalCollidingWithEnclosingScopeLocal(): Void {
+		// `adjust` is bound in an ENCLOSING block of the SAME function - reachable from the inner
+		// scope, so de-prefixing `_adjust` -> `adjust` is a genuine conflict and still skips
+		// (scope-awareness exempts only UNRELATED functions, never the binding's own scope chain).
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function f() {\n' + '\t\tvar adjust = 1;\n'
+			+ '\t\tif (adjust > 0) {\n' + '\t\t\tvar _adjust = 2;\n' + '\t\t\ttrace(_adjust + adjust);\n' + '\t\t}\n' + '\t}\n' + '}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	public function testFixBlocksFieldWithUnresolvableOccurrence(): Void {
+		// A field reference behind a mid-expression `#if` is raw trivia the resolver cannot bind -
+		// an uncovered active-code occurrence. Even with per-binding attribution, an UNRESOLVABLE
+		// occurrence still fails the completeness gate closed, so the field rename is skipped.
+		final src: String = 'package pkg;\n' + 'class C {\n' + '\tprivate var __id:Int = 0;\n' + '\tpublic function f():Int {\n'
+			+ '\t\treturn __id #if cpp + __id #end;\n' + '\t}\n' + '}';
+		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
 }
