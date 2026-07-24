@@ -25,9 +25,7 @@ package anyparse.format;
  * SAFETY GATES (a wrong drop changes semantics — every gate fails
  * CLOSED, i.e. keeps the braces):
  *  1. Exactly one statement in the block.
- *  2. No comment anywhere the braces own: block `openTrailing` /
- *     `closeTrailing` / `trailingLeading` slots, element
- *     `leadingComments` / `trailingComment`.
+ *  2. No comment in a brace-owned slot the bare statement cannot carry: block `openTrailing` / `closeTrailing` / `trailingLeading` slots, element `leadingComments`. A same-line element `trailingComment` is the exception - it travels with the de-braced statement (hoisted by the writer via `hoistTrailingComment`), so it no longer keeps the braces.
  *  3. The inner statement must self-terminate when written standalone:
  *     `ReturnStmt` / `ExprStmt` (and the other `@:trailOpt(';')`
  *     kinds) qualify only when their own `trailPresent` is true —
@@ -99,16 +97,12 @@ class SingleStmtBraces {
 		// the `@:trailOpt(';')` slot): de-bracing would emit `for (…) x;;`, which anyparse
 		// parses but the Haxe compiler rejects ("Expected }"). Keep the braces (fail closed).
 		if (hasTrailingSemi) return body;
-		final inner: Null<Dynamic> = singleCleanInner(Type.enumParameters(block));
-		// Gate 8 - then-branch readability: when the sole inner statement is itself an
-		// `if`, the braces stay even though every removal gate passes. Loop bodies and
-		// else-bodies are exempt (`for (...) if (...)` guard headers and `else if`
-		// chains are the preferred style).
-		return inner == null
-			? body
-			: isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt'
-				? body
-				: !innerSelfTerminates(cast inner) ? body : elseFollows && containsIf(inner) ? body : inner;
+		// The de-brace decision (gates 1-8) lives in `deBracedElem`, shared with
+		// `hoistTrailingComment` so a same-line trailing comment on the single statement
+		// travels with the bare statement (the writer folds it after the statement's own
+		// `;`); every standalone-comment / dangling-else / symmetry gate still fails closed there.
+		final elem: Null<Dynamic> = deBracedElem(body, drop, suppress, elseFollows, hasTrailingSemi, siblingKeepsBraces, isIfThenBody);
+		return elem == null ? body : elem.node;
 	}
 
 	/**
@@ -182,12 +176,27 @@ class SingleStmtBraces {
 			// The terminal else-if then-body (no further `else`) can carry the
 			// enclosing statement's trailing `;`; gate 6 keeps its braces at the real
 			// splice, so the scan must see it too. Non-terminal then-bodies are always
-			// false — a `;` never sits between a then-block and `else`.
+			// false - a `;` never sits between a then-block and `else`.
 			final innerTrail: Bool = stmt.thenBodyTrailPresent == true;
 			if (keepsBraces(innerThen, drop, suppress, innerElse != null, innerTrail, true)) return true;
 			cur = innerElse;
 		}
 		return cur != null && keepsBraces(cur, drop, suppress, false, false, false);
+	}
+
+	/**
+	 * The same-line trailing comment (verbatim, delimiters intact) that must
+	 * travel with the de-braced single statement, or `null` when `unwrapStmt`
+	 * does not de-brace `body` to a plain inner statement OR the statement
+	 * carries no trailing comment. The writer folds the returned comment in
+	 * after the bare statement's own `;` (`foldTrailingIntoBodyGroup`). Same
+	 * gate arguments as `unwrapStmt` so the two stay in lock-step.
+	 */
+	public static function hoistTrailingComment(
+		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
+	): Null<String> {
+		final elem: Null<Dynamic> = deBracedElem(body, drop, suppress, elseFollows, hasTrailingSemi, siblingKeepsBraces, isIfThenBody);
+		return elem == null ? null : elem.trailingComment;
 	}
 
 	/**
@@ -255,15 +264,18 @@ class SingleStmtBraces {
 
 
 	/**
-	 * Gates 1–2: the trivia `BlockStmt` param list must hold exactly one
-	 * element and no comment in any brace-owned slot (block
-	 * `openTrailing` / `closeTrailing` / `trailingLeading`, element
-	 * `leadingComments` / `trailingComment`) nor a stray Star-owned
-	 * trailing `;`. Returns the single inner statement (an enum value)
-	 * when every gate passes, `null` otherwise.
+	 * Gates 1-2: the trivia `BlockStmt` param list must hold exactly one
+	 * element and no comment in any brace-owned slot (block `openTrailing`
+	 * / `closeTrailing` / `trailingLeading`, element `leadingComments`).
+	 * Returns the single inner ELEMENT (the `Trivial` wrapper) when every
+	 * gate passes, `null` otherwise. `allowTrailingComment` relaxes the
+	 * element `trailingComment` gate: a same-line trailing comment on the
+	 * single statement is permitted (it travels with the de-braced
+	 * statement, hoisted by `hoistTrailingComment`), while every OTHER
+	 * comment slot still fails closed.
 	 */
-	private static function singleCleanInner(ps: Array<Dynamic>): Null<Dynamic> {
-		if (ps.length < 6) return null; // plain-mode arity — not supported
+	private static function singleCleanElem(ps: Array<Dynamic>, allowTrailingComment: Bool): Null<Dynamic> {
+		if (ps.length < 6) return null; // plain-mode arity - not supported
 		final stmts: Null<Array<Dynamic>> = ps[0];
 		if (stmts == null || stmts.length != 1) return null;
 		if (ps[1] != null) return null; // closeTrailing comment before `}`
@@ -275,7 +287,18 @@ class SingleStmtBraces {
 		if (elem == null) return null;
 		final leading: Null<Array<Dynamic>> = elem.leadingComments;
 		if (leading != null && leading.length > 0) return null;
-		if (elem.trailingComment != null) return null;
+		if (!allowTrailingComment && elem.trailingComment != null) return null;
+		return elem;
+	}
+
+	/**
+	 * Strict single-inner-statement gate (no trailing comment) returning the
+	 * inner statement node - the do-body path, which has no channel to hoist
+	 * a comment and so keeps its braces when one is present.
+	 */
+	private static function singleCleanInner(ps: Array<Dynamic>): Null<Dynamic> {
+		final elem: Null<Dynamic> = singleCleanElem(ps, false);
+		if (elem == null) return null;
 		final inner: Dynamic = elem.node;
 		if (inner == null || !Reflect.isEnumValue(inner)) return null;
 		return inner;
@@ -330,6 +353,36 @@ class SingleStmtBraces {
 		};
 		final args: Array<Dynamic> = [[elem], null, null, false, [], false];
 		return Type.createEnum(en, 'BlockStmt', args);
+	}
+
+
+	/**
+	 * The single inner ELEMENT (`Trivial` wrapper) IFF `unwrapStmt` de-braces
+	 * `body` to a plain inner statement - the ONLY case where a same-line
+	 * trailing comment must be hoisted onto the de-braced statement. Every
+	 * keep / wrap / do-body / non-BlockStmt case returns `null`. Shared by
+	 * `unwrapStmt` (reads `.node`) and `hoistTrailingComment` (reads
+	 * `.trailingComment`) so the two never disagree on whether de-bracing happened.
+	 */
+	private static function deBracedElem(
+		body: Dynamic, drop: Bool, suppress: Bool, elseFollows: Bool, hasTrailingSemi: Bool, siblingKeepsBraces: Bool, isIfThenBody: Bool
+	): Null<Dynamic> {
+		if (!drop || body == null || !Reflect.isEnumValue(body)) return null;
+		final block: EnumValue = cast body;
+		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return null; // gate 8 wrap - no de-brace
+		if (needsSymmetryWrap(block, siblingKeepsBraces)) return null; // gate 7 wrap - no de-brace
+		if (suppress) return null;
+		if (Type.enumConstructor(block) != 'BlockStmt') return null; // do-body / non-block - no plain de-brace
+		if (siblingKeepsBraces) return null; // gate 7 keep
+		if (hasTrailingSemi) return null; // gate 6 keep
+		final elem: Null<Dynamic> = singleCleanElem(Type.enumParameters(block), true);
+		if (elem == null) return null; // gates 1-2
+		final inner: Dynamic = elem.node;
+		if (inner == null || !Reflect.isEnumValue(inner)) return null;
+		if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt') return null; // gate 8 keep
+		if (!innerSelfTerminates(cast inner)) return null; // gate 3 terminator
+		if (elseFollows && containsIf(inner)) return null; // gate 4 dangling-else
+		return elem;
 	}
 
 }
