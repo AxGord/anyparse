@@ -12,6 +12,10 @@ import anyparse.query.RefactorSupport;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.LintConfig;
 import anyparse.query.SymbolIndexHost;
+import anyparse.check.Check.CrossFileFix;
+import anyparse.check.Check.CrossFileEdits;
+import anyparse.query.RefactorSupport.ClassifiedOccurrence;
+import anyparse.query.RefactorSupport.OccurrenceClass;
 
 /**
  * Flags a property that only bridges a private same-class backing field through trivial
@@ -98,7 +102,7 @@ import anyparse.query.SymbolIndexHost;
  * — that is what `(default, null)` preserves — so no write gate applies to those shapes.
  */
 @:nullSafety(Strict)
-final class TrivialGetter implements Check implements ConfigAware {
+final class TrivialGetter implements Check implements ConfigAware implements CrossFileFix {
 
 	/** Default cap on statement-level backing-field writes a shape-A collapse marks `@:bypassAccessor` before it instead falls back to inlining the getter. */
 	private static inline final DEFAULT_MAX_BYPASS_WRITES: Int = 3;
@@ -127,13 +131,15 @@ final class TrivialGetter implements Check implements ConfigAware {
 		// in a configured resolution library reaches the index too), falling back to the report
 		// index when no resolution scope is configured.
 		final subtypeIndex: SymbolIndex = resolutionIndexOf(plugin) ?? index;
+		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-			for (cls in classes(tree)) considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass);
+			for (cls in classes(tree))
+				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin);
 		}
 		return out;
 	}
@@ -174,6 +180,77 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
+	/**
+	 * Cross-file autofix (the `CrossFileFix` seam): collapse a property whose backing field is READ
+	 * by a subtype in another file. The single-file `fix` (via its `subtypeFieldBlocks` gate) skips
+	 * such a property — deleting the field would strand the subtype read; here the read is rewritten
+	 * to the property name in every affected file and the whole collapse committed atomically. Each
+	 * rename is the owner's shape-A collapse (property -> (default, ...) / @:bypassAccessor writes,
+	 * backing field renamed to the property) PLUS every strict-subtype READ of the backing field
+	 * rewritten `_x` -> `x` (identical semantics: a direct read of the (default, ...) storage). ANY
+	 * subtype WRITE, an unprovable occurrence, an `#if` / string / directive mention turns the whole
+	 * collapse report-only (fail-closed). `apq lint --fix` commits every affected file or none.
+	 */
+	public function crossFileFix(
+		files: Array<{ file: String, source: String }>, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<Array<CrossFileEdits>> {
+		if (violations.length == 0 || index == null) return [];
+		final idx: SymbolIndex = index;
+		final subtypeIndex: SymbolIndex = resolutionIndexOf(plugin) ?? idx;
+		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
+		final out: Array<Array<CrossFileEdits>> = [];
+		for (v in violations) {
+			final rename: Null<Array<CrossFileEdits>> = crossFileCollapseFor(v, sourceByFile, idx, subtypeIndex, plugin);
+			if (rename != null) out.push(rename);
+		}
+		return out;
+	}
+
+	/**
+	 * The atomic cross-file collapse fixing one flagged property, or null when it must stay
+	 * report-only. Re-derives the owner's shape-A collapse edits (`buildFix`) from the violation's
+	 * span, then the strict-subtype read-rewrite slices (`crossFileReadRewrite`); a null from either,
+	 * an inline-arm classification (the field is kept — no cross-file edit needed), or a property
+	 * with no subtype backing-field reference (the single-file `fix` handles that) yields null. The
+	 * owner slice and the subtype slices are returned as ONE rename the caller commits all-or-nothing.
+	 */
+	private function crossFileCollapseFor(
+		v: Violation, sourceByFile: Map<String, String>, index: SymbolIndex, subtypeIndex: SymbolIndex, plugin: GrammarPlugin
+	): Null<Array<CrossFileEdits>> {
+		final span: Null<Span> = v.span;
+		if (span == null) return null;
+		final source: Null<String> = sourceByFile[v.file];
+		if (source == null) return null;
+		final src: String = source;
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+		if (tree == null) return null;
+		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
+			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
+		for (cls in classes(tree)) {
+			final className: Null<String> = cls.name;
+			if (className == null) continue;
+			final owner: String = className;
+			final t = memberTables(cls, src);
+			for (prop in t.properties) if (prop.span.from == span.from) {
+				if (subtypeBlocks(subtypeIndex, className, prop.name)) return null;
+				final c = classifyProperty(cls, src, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
+				if (c == null || c.inlineGetter != null) return null;
+				if (!subtypeIndex.subtypeReferencesField(owner, c.field)) return null;
+				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, c);
+				if (ownerEdits == null) return null;
+				final oe: Array<{ span: Span, text: String }> = ownerEdits;
+				final subtypeSlices: Null<Array<CrossFileEdits>> = crossFileReadRewrite(
+					owner, c.field, prop.name, v.file, subtypeIndex, sourceByFile, plugin
+				);
+				if (subtypeSlices == null) return null;
+				final rename: Array<CrossFileEdits> = [{ file: v.file, edits: oe }];
+				for (slice in subtypeSlices) rename.push(slice);
+				return rename;
+			}
+		}
+		return null;
+	}
+
 	/** Every class-body node in the tree — `ClassDecl` and `final class`'s `ClassForm`. */
 	private static function classes(root: QueryNode): Array<QueryNode> {
 		final out: Array<QueryNode> = [];
@@ -193,16 +270,24 @@ final class TrivialGetter implements Check implements ConfigAware {
 	 * break that override.
 	 */
 	private static function considerClass(
-		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, subtypeIndex: SymbolIndex, maxBypass: Int
+		out: Array<Violation>, cls: QueryNode, source: String, file: String, index: SymbolIndex, subtypeIndex: SymbolIndex, maxBypass: Int,
+		sourceByFile: Map<String, String>, plugin: GrammarPlugin
 	): Void {
 		final className: Null<String> = cls.name;
 		if (className == null) return;
+		final owner: String = className;
 		final t = memberTables(cls, source);
 		for (prop in t.properties) {
 			if (subtypeBlocks(subtypeIndex, className, prop.name)) continue;
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
-			if (subtypeFieldBlocks(subtypeIndex, className, c.field, c.inlineGetter)) continue;
+			// A subtype references the backing field the collapse deletes; still emit when every such
+			// occurrence is a provable READ (the cross-file collapse rewrites them), else stay blocked.
+			if (
+				subtypeFieldBlocks(subtypeIndex, className, c.field, c.inlineGetter)
+				&& crossFileReadRewrite(owner, c.field, prop.name, file, subtypeIndex, sourceByFile, plugin) == null
+			)
+				continue;
 			out.push({
 				file: file,
 				span: prop.span,
@@ -317,7 +402,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 	private static inline function isSpace(c: Int): Bool {
 		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 	}
-
 
 	/**
 	 * Collect the rewrite edits for every wanted collapsible property of `cls`, using the shared
@@ -541,7 +625,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return i >= source.length ? null : new Span(open, i + 1);
 	}
 
-
 	/** The offset just past the `var name` prefix of `span` (keyword + whitespace + identifier), or -1 when it does not begin with `var <name>`. */
 	private static function nameEndAfterVar(source: String, span: Span): Int {
 		final n: Int = source.length;
@@ -552,7 +635,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		while (i < n && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
 		return i == nameStart ? -1 : i;
 	}
-
 
 	/**
 	 * Whether collapsing the property `propName` of `cls` to `(default, null)` could drop a
@@ -700,7 +782,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return open < source.length && StringTools.fastCodeAt(source, open) == '('.code ? open : -1;
 	}
 
-
 	/**
 	 * Whether `node` can BIND a name the grammar drops from the projection, and that
 	 * hidden slot textually mentions `field` — the two blind spots of the by-name shadow
@@ -726,7 +807,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		}
 	}
 
-
 	/**
 	 * The qualifier prefix for a shadowed backing-field write: the enclosing class name
 	 * (`C.`) inside a static method — where `this` is illegal — else `this.` for an instance
@@ -736,7 +816,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 	private static inline function shadowQualifier(staticCtx: Bool, className: Null<String>): String {
 		return staticCtx && className != null ? '$className.' : 'this.';
 	}
-
 
 	/**
 	 * Classify one `(get, …)` property into a finding, or null to skip. Shared by
@@ -923,7 +1002,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return isWrite && node.children.length >= 1 ? fieldRefName(node.children[0]) : null;
 	}
 
-
 	/**
 	 * The one relocatable constructor-init write of `field` — a top-level `field = <literal>;` in
 	 * the constructor's block body, where the literal is a compile-time constant, the write is
@@ -983,7 +1061,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		final paren: Null<Span> = accessorParenSpan(source, propSpan);
 		return afterName < 0 || paren == null ? null : new Span(afterName, paren.to);
 	}
-
 
 	/**
 	 * The `(get, set)` shape decision for `classifyProperty`, given the already-resolved getter
@@ -1065,7 +1142,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return null;
 	}
 
-
 	/**
 	 * Whether `node`'s subtree contains a READ of `field` outside `exclude` (the kept getter).
 	 * After the `(get, set)` -> `(get, default)` collapse, reading the property routes through the
@@ -1092,7 +1168,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		for (child in node.children) if (hasExternalRead(child, field, exclude)) return true;
 		return false;
 	}
-
 
 	/**
 	 * Prefix each statement-level bypass write in `bypassStmts` with `@:bypassAccessor ` — on the
@@ -1170,7 +1245,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		return n;
 	}
 
-
 	/**
 	 * The `classifySetProperty` arm for a TRIVIAL getter paired with an OPAQUE
 	 * (non-trivial or absent-bodied) setter: mark the property's few external
@@ -1238,7 +1312,6 @@ final class TrivialGetter implements Check implements ConfigAware {
 		};
 	}
 
-
 	/**
 	 * Append the source-removal edits that a property→field rewrite needs: one per
 	 * deleted accessor, one for the backing field itself, and one for a moved ctor
@@ -1262,6 +1335,230 @@ final class TrivialGetter implements Check implements ConfigAware {
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, cs), text: '' });
 		}
 		return true;
+	}
+
+	/**
+	 * Whether `name` is distinctive enough (an underscore or an uppercase letter) that a
+	 * word-boundary comment mention is unlikely to be prose — a backing field like `_x` is, so its
+	 * comment mentions rename along with the code on a cross-file collapse.
+	 */
+	private static function isDistinctiveName(name: String): Bool {
+		for (i in 0...name.length) {
+			final code: Int = StringTools.fastCodeAt(name, i);
+			if (code == '_'.code || (code >= 'A'.code && code <= 'Z'.code)) return true;
+		}
+		return false;
+	}
+
+	/** Whether `kind` is an assignment / compound-assignment / increment / decrement whose first child is its write target. */
+	private static function isWriteNodeKind(kind: String): Bool {
+		return switch kind {
+			case 'Assign' | 'AddAssign' | 'SubAssign' | 'MulAssign' | 'DivAssign' | 'ModAssign' | 'BitAndAssign' | 'BitOrAssign'
+				| 'BitXorAssign'
+				| 'ShlAssign'
+				| 'ShrAssign'
+				| 'UShrAssign'
+				| 'PreIncr'
+				| 'PostIncr'
+				| 'PreDecr'
+				| 'PostDecr': true;
+			case _: false;
+		}
+	}
+
+	/** Whether any indexed type named `typeName` directly declares a member named `member`. */
+	private static function typeDeclaresMember(index: SymbolIndex, typeName: String, member: String): Bool {
+		for (fi in index.allFiles()) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == member)) return true;
+		return false;
+	}
+
+	/**
+	 * Every report file that may reference `owner`'s backing field through inheritance: the
+	 * declaring file of each TRANSITIVE subtype of `owner`, plus every file granting itself
+	 * `@:access(owner)`. Deduped, in discovery order.
+	 */
+	private static function affectedSubtypeFiles(owner: String, index: SymbolIndex): Array<String> {
+		final out: Array<String> = [];
+		final closure: Array<String> = [owner];
+		var i: Int = 0;
+		while (i < closure.length) {
+			final parent: String = closure[i++];
+			for (fi in index.allFiles()) for (t in fi.types) if (t.supertypes.contains(parent) && !closure.contains(t.name)) {
+				closure.push(t.name);
+				if (!out.contains(fi.file)) out.push(fi.file);
+			}
+		}
+		for (fi in index.allFiles()) if (fi.accessGrants.contains(owner) && !out.contains(fi.file)) out.push(fi.file);
+		return out;
+	}
+
+	/** The `field` token offset inside a `this.`/`super.` field access `node` (`span` its whole access), or -1 for any other receiver shape. */
+	private static function fieldAccessTokenOffset(node: QueryNode, span: Span, source: String, field: String): Int {
+		if (node.children.length != 1) return -1;
+		final recv: QueryNode = node.children[0];
+		final recvSpan: Null<Span> = recv.span;
+		return recv.kind == 'IdentExpr' && (recv.name == 'this' || recv.name == 'super') && recvSpan != null
+			? RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, span.to), field)
+			: -1;
+	}
+
+	/**
+	 * Classify an owner-attributed occurrence at `off` by its enclosing class `cls`: an occurrence in
+	 * the OWNER class (only when its file is scanned) is excluded (`buildFix` rewrites it); a strict
+	 * subtype's READ is a rename edit (`_x` -> `x`, or `this.x` under a prop-name shadow when the ref
+	 * is a bare identifier), a strict subtype's WRITE returns false (block — the collapsed setter
+	 * would intercept it); an occurrence in a class that declares `field` itself or inherits it from a
+	 * non-owner supertype is excluded; any other (unresolvable) class leaves it uncovered so the
+	 * completeness gate blocks. `bareIdent` distinguishes a bare identifier (shadow-qualifiable) from
+	 * a `this.`/`super.` field-token rewrite (already receiver-qualified).
+	 */
+	private static function classifyOwnerBinding(
+		off: Int, bareIdent: Bool, owner: String, field: String, propName: String, index: SymbolIndex, ownerFileScan: Bool,
+		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
+	): Bool {
+		if (cls == null) return true;
+		final c: String = cls;
+		if (ownerFileScan && c == owner) {
+			excludeSpans.push(new Span(off, off + field.length));
+			return true;
+		}
+		if (index.isSubtype(c, owner) && !typeDeclaresMember(index, c, field)) {
+			if (writePos) return false;
+			renameEdits.push({ span: new Span(off, off + field.length), text: bareIdent && shadowsProp ? 'this.$propName' : propName });
+			return true;
+		}
+		if (typeDeclaresMember(index, c, field) || index.supertypeDeclaresMember(c, field))
+			excludeSpans.push(new Span(off, off + field.length));
+		return true;
+	}
+
+	/**
+	 * Attribute ONE occurrence node whose name is `field`: a bare `IdentExpr` or a `this.`/`super.`
+	 * `FieldAccess` is bound by its enclosing `cls` (`classifyOwnerBinding`); any other shape (typed
+	 * receiver, interpolation, pattern) is left uncovered (returns true without recording, so the
+	 * completeness gate blocks). Returns false only on an owner-bound WRITE.
+	 */
+	private static function attributeOccurrence(
+		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
+		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
+	): Bool {
+		final span: Null<Span> = node.span;
+		if (span == null) return true;
+		final off: Int = switch node.kind {
+			case 'IdentExpr': RefactorSupport.identTokenOffset(source, span, field);
+			case 'FieldAccess': fieldAccessTokenOffset(node, span, source, field);
+			case _: -1;
+		}
+		return off < 0
+			? true
+			: classifyOwnerBinding(
+				off, node.kind == 'IdentExpr', owner, field, propName, index, ownerFileScan, cls, writePos, shadowsProp, renameEdits,
+				excludeSpans
+			);
+	}
+
+	/**
+	 * Recursive worker of `collectSubtypeFieldRefs`: walks `node` tracking the enclosing class
+	 * (`cls`), whether the node sits in the WRITE-target position of its parent (`writePos`), and
+	 * whether an enclosing function binds `propName` (`shadowsProp`, so a bare rewritten read is
+	 * qualified `this.propName`). `#if...#end` interiors are not descended (they stay `ConditionalRaw`
+	 * for the completeness gate). Returns false on the first owner-bound WRITE.
+	 */
+	private static function subtypeRefWalk(
+		node: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool,
+		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
+	): Bool {
+		if (RefactorSupport.isConditionalKind(node.kind)) return true;
+		final isClass: Bool = node.kind == 'ClassDecl' || node.kind == 'ClassForm';
+		// The owner's own class is rewritten wholesale by `buildFix`; exclude its whole span from the
+		// completeness scan and stop descending, so a same-file sibling subtype is still walked.
+		if (ownerFileScan && isClass && node.name == owner) {
+			final ownerSpan: Null<Span> = node.span;
+			if (ownerSpan != null) excludeSpans.push(ownerSpan);
+			return true;
+		}
+		final cls2: Null<String> = isClass && node.name != null ? node.name : cls;
+		if (
+			node.name == field
+			&& !attributeOccurrence(
+				node, field, owner, propName, index, source, ownerFileScan, cls2, writePos, shadowsProp, renameEdits, excludeSpans
+			)
+		)
+			return false;
+		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
+		final isWrite: Bool = isWriteNodeKind(node.kind);
+		for (i in 0...node.children.length) if (!subtypeRefWalk(
+			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,
+			excludeSpans
+		))
+			return false;
+		return true;
+	}
+
+	/**
+	 * Attribute every occurrence of `field` in one file's `tree` into `renameEdits` (owner-bound
+	 * subtype READS, `_x` -> `x`) and `excludeSpans` (owner-class / different-owner occurrences the
+	 * completeness gate must ignore). Null on the first owner-bound WRITE (`subtypeRefWalk` bails).
+	 * `ownerFileScan` marks the owner's own file, whose owner-class occurrences are excluded because
+	 * `buildFix` rewrites them.
+	 */
+	private static function collectSubtypeFieldRefs(
+		tree: QueryNode, field: String, owner: String, propName: String, index: SymbolIndex, source: String, ownerFileScan: Bool
+	): Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> {
+		final renameEdits: Array<{ span: Span, text: String }> = [];
+		final excludeSpans: Array<Span> = [];
+		return subtypeRefWalk(tree, field, owner, propName, index, source, ownerFileScan, null, false, false, renameEdits, excludeSpans)
+			? {
+				renameEdits: renameEdits,
+				excludeSpans: excludeSpans
+			}
+			: null;
+	}
+
+	/**
+	 * The per-file read-rewrite slices for every strict subtype of `owner` that READS the backing
+	 * field `field`, or null when the cross-file collapse cannot be proven safe. Enumerates the
+	 * transitive-subtype declaring files plus `@:access(owner)` grant files; in each, attributes
+	 * every occurrence of `field` (`collectSubtypeFieldRefs`) and gates the remainder through
+	 * `classifyOccurrences` (ConditionalRaw / StringLiteral / DirectiveComment / uncovered ActiveCode
+	 * block; a distinctive comment mention renames along). The owner's declaring file is scanned too
+	 * (its owner-class occurrences excluded — `buildFix` owns them) so a same-file sibling subtype is
+	 * handled. An empty result (no subtype reads) means the collapse is safe with no subtype edits.
+	 */
+	private static function crossFileReadRewrite(
+		owner: String, field: String, propName: String, ownerFile: String, index: SymbolIndex, sourceByFile: Map<String, String>,
+		plugin: GrammarPlugin
+	): Null<Array<CrossFileEdits>> {
+		final distinctive: Bool = isDistinctiveName(field);
+		final slices: Array<CrossFileEdits> = [];
+		for (file in affectedSubtypeFiles(owner, index)) {
+			final source: Null<String> = sourceByFile[file];
+			if (source == null) return null;
+			final src: String = source;
+			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, src);
+			if (tree == null) return null;
+			final refs: Null<{ renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span> }> = collectSubtypeFieldRefs(
+				tree, field, owner, propName, index, src, file == ownerFile
+			);
+			if (refs == null) return null;
+			final excluded: Array<Span> = [for (e in refs.renameEdits) e.span];
+			for (s in refs.excludeSpans) excluded.push(s);
+			final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
+				src, field, plugin, 0, src.length, excluded
+			);
+			final edits: Array<{ span: Span, text: String }> = refs.renameEdits.copy();
+			if (classified == null) {
+				if (RefactorSupport.referencedInRange(src, field, 0, src.length, excluded)) return null;
+			} else
+				for (occ in classified) switch occ.kind {
+					case OccurrenceClass.CommentTrivia if (distinctive):
+						edits.push({ span: occ.span, text: propName });
+					case _:
+						return null;
+				}
+			if (edits.length > 0) slices.push({ file: file, edits: edits });
+		}
+		return slices;
 	}
 
 }
