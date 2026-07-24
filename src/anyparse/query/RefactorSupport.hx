@@ -589,6 +589,36 @@ final class RefactorSupport {
 		return result == null ? Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result') : Ok(result);
 	}
 
+	/**
+	 * Stage a cross-file rename all-or-nothing: canonicalize each file's edit
+	 * `slice` through `canon` and return every file's rewritten source ONLY when
+	 * EVERY slice canonicalizes to a genuinely-changed result. Any `Err`, any
+	 * missing source (`sourceOf` returns null), or any no-op slice reverts the
+	 * WHOLE set (returns null) — the multi-file counterpart of a single
+	 * `canonicalize`, so a partial application can never reach disk. Pure:
+	 * `sourceOf` supplies each file's current source and `canon` performs the
+	 * per-file canonicalization (`file, source, edits`), both injected by the
+	 * caller.
+	 */
+	public static function stageCrossFileRename(
+		slices: Array<{ file: String, edits: Array<{ span: Span, text: String }> }>, sourceOf: (String) -> Null<String>,
+		canon: (String, String, Array<{ span: Span, text: String }>) -> EditResult
+	): Null<Array<{ file: String, source: String }>> {
+		final out: Array<{ file: String, source: String }> = [];
+		for (slice in slices) {
+			final src: Null<String> = sourceOf(slice.file);
+			if (src == null) return null;
+			switch canon(slice.file, src, slice.edits) {
+				case Ok(text):
+					if (text == src) return null;
+					out.push({ file: slice.file, source: text });
+				case Err(_):
+					return null;
+			}
+		}
+		return out.length == 0 ? null : out;
+	}
+
 	/** A name is renameable when it is a valid identifier and not `this`. */
 	public static inline function isRenameableName(name: Null<String>): Bool {
 		return name != null && name != 'this' && isIdentifier(name);
