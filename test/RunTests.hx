@@ -471,6 +471,7 @@ import unit.HxCondUnbalancedRegionSliceTest;
 import unit.HxCondSpliceOwnLineSliceTest;
 import unit.CollapsibleElseIfCheckTest;
 import unit.HaxelibResolverTest;
+import unit.ExtractRepeatedExpressionTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -872,6 +873,7 @@ class RunTests {
 		addCase(new UncheckedNullableTest());
 		addCase(new PossibleNullDereferenceTest());
 		addCase(new UnusedReturnValueTest());
+		addCase(new ExtractRepeatedExpressionTest());
 		addCase(new CompilerOracleE2ETest());
 		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());
