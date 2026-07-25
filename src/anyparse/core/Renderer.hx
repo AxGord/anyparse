@@ -1175,7 +1175,7 @@ class Renderer {
 				// An `IfNaturalFirstLineExceeds` relocates its content to its own
 				// line when that content's natural first line overflows `lineWidth`
 				// (the typed var-init `=`-break emitted by
-				// `breakAfterLeadIfLhsTypeParamWrap`). A trailing-width lookahead
+				// `breakAfterLeadOnOverflowWrap`). A trailing-width lookahead
 				// must treat it as a break boundary: abort here instead of
 				// descending its flat branch, so the rest-probe stops at the `=`
 				// (matching fork's post-`=`-break `lengthAfter`) rather than

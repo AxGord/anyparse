@@ -3295,24 +3295,40 @@ class WriterLowering {
 	/**
 	 * ω-N-break-after-eq: bundle a non-tight optional `@:lead` + its RHS
 	 * through the natural-first-line probe so the lead breaks (LF + Nest
-	 * +1) ONLY when the LHS declared type carries type-params AND the
-	 * RHS's NATURAL first line (its own wrap decisions active) still
-	 * overflows `opt.lineWidth`. A NoWrap-pinned RHS keeps its full flat
-	 * first line -> probe crosses -> break after `=`; a RHS that wraps
-	 * its own call-args has a short natural first line -> probe stays
-	 * flat -> keep ` = RHS` inline (the fork wraps the RHS bracket, not
-	 * the `=`). The LHS-type-param gate (gate 1) reads the sibling field
-	 * named by `typeFieldName` (today `HxVarDecl.type`): fires only for a
-	 * `Named` type ctor with a non-empty `params` list. Mode-agnostic —
-	 * a single optional Ref's paired value is the paired enum directly
-	 * (NOT Trivial<…>-wrapped, unlike Star elements).
+	 * +1) ONLY when the probe arm is armed AND the RHS's NATURAL first
+	 * line (its own wrap decisions active) still overflows
+	 * `opt.lineWidth`. Two arming gates, either suffices:
+	 *
+	 *  - the LHS declared type carries type-params (gate 1, fork parity —
+	 *    reads the sibling field named by `typeFieldName`, today
+	 *    `HxVarDecl.type`: a `Named` ctor with a non-empty `params`
+	 *    list);
+	 *  - the RHS is an unbreakable string atom (`SingleStringExpr` /
+	 *    `DoubleStringExpr` on `_optVal`) — a long interpolated string
+	 *    has NO internal wrap point, so without the `=`-break the writer
+	 *    emits a line past `maxLineLength` untouched (the motivating
+	 *    real-code shape).
+	 *
+	 * An un-armed field keeps the glued ` = RHS` emit byte-identical to
+	 * the plain path. The probe itself: a NoWrap-pinned / atom RHS keeps
+	 * its full flat first line -> probe crosses -> break after `=`; a RHS
+	 * that wraps its own call-args has a short natural first line ->
+	 * probe stays flat -> keep ` = RHS` inline (the fork wraps the RHS
+	 * bracket, not the `=`). The gates stay narrow deliberately: a
+	 * fill-wrapping RHS (an opAdd / shift / bool chain, a call, a `new`)
+	 * fits by breaking its LATER lines, so its natural first line is long
+	 * by design and an unconditional probe would double-break it
+	 * (`x =\n\ta << b\n\t\t<< c`) — caught by the corpus sweep when the
+	 * gate was briefly dropped. Mode-agnostic — a single optional Ref's
+	 * paired value is the paired enum directly (NOT Trivial<…>-wrapped,
+	 * unlike Star elements).
 	 *
 	 * Differs from the `bodyPolicyWrap` `_difle` precedent (same file,
 	 * width path) by calling `_dinfle` (natural-first-line probe) instead
 	 * of `_difle` (flat first-line probe): the flat probe cannot tell a
 	 * wrappable RHS bracket from a NoWrap-pinned one and over-breaks.
 	 */
-	private function breakAfterLeadIfLhsTypeParamWrap(leadText: String, writeCall: Expr, typeFieldName: String): Expr {
+	private function breakAfterLeadOnOverflowWrap(leadText: String, writeCall: Expr, typeFieldName: String): Expr {
 		final typeAccess: Expr = { expr: EField(macro value, typeFieldName), pos: Context.currentPos() };
 		return macro {
 			final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
@@ -3322,7 +3338,8 @@ class WriterLowering {
 				final _p = Reflect.field(Type.enumParameters(_lhsType)[0], 'params');
 				_p != null && (_p: Array<Dynamic>).length > 0;
 			};
-			if (_lhsHasTypeParam)
+			final _rhsCtor: String = Type.enumConstructor(cast _optVal);
+			if (_lhsHasTypeParam || _rhsCtor == 'SingleStringExpr' || _rhsCtor == 'DoubleStringExpr')
 				_dc([
 					_dt($v{leadText}),
 					_dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _rhs])), _dc([_dop(' '), _rhs]))
@@ -7464,7 +7481,7 @@ class WriterLowering {
 		// `whitespace.switchPolicy` `before` / `around`); with the default (or
 		// `after` / `none`) the `(` stays tight. The inner is a single Ref, so
 		// its paired/plain value is `argNames[0]` directly (NOT Trivial<…>-
-		// wrapped — see breakAfterLeadIfLhsTypeParamWrap). Appending the
+		// wrapped — see breakAfterLeadOnOverflowWrap). Appending the
 		// conditional space to the lead Doc lands it after `(` in the flat wrap
 		// shape (the only shape a subject-fits switch takes; the switch's own
 		// `{ }` supplies the internal breaks). Runtime-gated on both the policy
@@ -8640,16 +8657,16 @@ class WriterLowering {
 			optParts.push(whitespacePolicyLead(child, leadText, ['typeParamDefaultEquals']));
 		} else {
 			optParts.push(sameLineSeparator(child, prevBodyField, typePath, prevPadTrailing));
-			// ω-N-break-after-eq: `@:fmt(breakAfterLeadIfLhsTypeParam('type'))`
+			// ω-N-break-after-eq: `@:fmt(breakAfterLeadOnOverflow('type'))`
 			// (today: `HxVarDecl.init`) bundles the lead + RHS through
 			// the natural-first-line probe so the `=`-break only fires
 			// when the RHS's NATURAL first line still overflows (a
 			// NoWrap-pinned RHS), NOT when the RHS wraps its own
 			// call-args. The bundled Doc already contains the RHS, so
 			// the post-branch unconditional `writeCall` push is skipped.
-			final breakAfterEqArg: Null<String> = child.fmtReadString('breakAfterLeadIfLhsTypeParam');
+			final breakAfterEqArg: Null<String> = child.fmtReadString('breakAfterLeadOnOverflow');
 			if (breakAfterEqArg != null && !isTightLead(leadText)) {
-				optParts.push(breakAfterLeadIfLhsTypeParamWrap(leadText, writeCall, breakAfterEqArg));
+				optParts.push(breakAfterLeadOnOverflowWrap(leadText, writeCall, breakAfterEqArg));
 				breakAfterEqEmitted = true;
 			} else {
 				// Trailing space after a non-tight optional lead

@@ -168,7 +168,7 @@ typedef HxVarDecl = {
 	@:optional @:kw('#if') var condInit: Null<HxVarInitRegion>;
 	@:optional
 	@:fmt(indentValueIfCtor('ObjectLit', 'indentObjectLiteral', 'objectLiteralLeftCurly'),
-		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), breakAfterLeadIfLhsTypeParam('type'), propagateExprPosition)
+		indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'), breakAfterLeadOnOverflow('type'), propagateExprPosition)
 	@:lead('=') var init: Null<HxExpr>;
 	@:trivia @:tryparse var more: Array<HxVarMore>;
 }
