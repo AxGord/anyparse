@@ -35,9 +35,12 @@ import anyparse.runtime.Span;
  *   both (`++` / `--`, being single-operand, never match either);
  * - the two l-values are TEXTUALLY IDENTICAL (whitespace-normalized source).
  *
- * A null-narrowing guard condition (`x != null && x.f`) is skipped: the ternary
- * condition would lose the in-condition narrowing and fail to compile under
- * `@:nullSafety(Strict)`. The reported span is the whole `if` statement.
+ * A null-narrowing guard condition (`x != null && x.f`) is refused ONLY when an
+ * r-value is a bool literal -- that collapse hands off to
+ * `simplify-boolean-ternary`, whose boolean flattening would lose the
+ * in-condition narrowing under `@:nullSafety(Strict)`; a VALUE collapse keeps
+ * the narrowing (the ternary condition types exactly like the if) and is
+ * allowed. The reported span is the whole `if` statement.
  *
  * ## Autofix
  *
@@ -152,7 +155,6 @@ final class PreferTernaryAssignment implements Check {
 		final condition: QueryNode = ifNode.children[0];
 		final elseBranch: QueryNode = ifNode.children[2];
 		if (s.ifKinds.contains(elseBranch.kind)) return null;
-		if (RefactorSupport.hasNullNarrowingGuard(condition, s.shape)) return null;
 		final thenRaw: Null<QueryNode> = assignmentIn(ifNode.children[1], s);
 		final elseRaw: Null<QueryNode> = assignmentIn(elseBranch, s);
 		if (thenRaw == null || elseRaw == null) return null;
@@ -166,7 +168,12 @@ final class PreferTernaryAssignment implements Check {
 			thenRhs: thenAssign.children[1],
 			elseRhs: elseAssign.children[1]
 		};
-		return droppedComment(ifNode, m, comments) ? null : m;
+		// The narrowing-guard refusal fires only for a bool-literal collapse (see
+		// RefactorSupport.refusesNullNarrowingBoolCollapse).
+		return RefactorSupport.refusesNullNarrowingBoolCollapse(m.thenRhs, m.elseRhs, condition, s.shape)
+			|| droppedComment(ifNode, m, comments)
+			? null
+			: m;
 	}
 
 	/**

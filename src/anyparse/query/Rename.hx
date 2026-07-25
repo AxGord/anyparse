@@ -112,6 +112,12 @@ final class Rename {
 		final occurrences: Array<Span> = renameOccurrences(source, tree, cursor, shape);
 		if (occurrences.length == 0) return Err('position $line:$col is not on a renameable identifier');
 
+		// Two known resolution blind spots make a silent partial rename possible;
+		// refuse outright rather than corrupt semantics (see sameNameBlindSpot).
+		final oldName: String = source.substring(occurrences[0].from, occurrences[0].to);
+		final blindSpot: Null<String> = sameNameBlindSpot(source, tree, cursor, occurrences, oldName, plugin, shape);
+		if (blindSpot != null) return Err(blindSpot);
+
 		final rewritten: String = spliceRename(source, occurrences, newName);
 		if (rewritten == source) return Err('rename to "$newName" is a no-op');
 
@@ -227,6 +233,96 @@ final class Rename {
 		if (targetName == null) return false;
 		final bindingFrom: Null<Int> = RefactorSupport.resolveBindingFrom(node, Refs.find(targetName, tree, shape));
 		return bindingFrom == null ? false : nodeAtFromIsFieldMember(tree, bindingFrom);
+	}
+
+	/**
+	 * A same-name RESOLUTION BLIND SPOT that would turn this rename into a silent
+	 * semantic change, or null when none applies. Two known cases, both scoped to
+	 * the enclosing function subtree of the cursor (a local / param cannot be
+	 * referenced outside it):
+	 *
+	 *  - a `$oldName` string-interpolation read whose span the occurrence set does
+	 *    not cover — the resolution index does not yet track interpolation reads,
+	 *    so the rename would leave them bound to whatever `oldName` still means;
+	 *  - `oldName` declared MORE THAN ONCE in one block (Haxe-legal
+	 *    re-declaration, reached through a metadata wrapper too) — the index
+	 *    mis-binds the references that follow the second declaration.
+	 *
+	 * Both refusals are deliberately conservative: a false positive costs a
+	 * manual rename, a false negative silently changes behaviour.
+	 */
+	private static function sameNameBlindSpot(
+		source: String, tree: QueryNode, cursor: Int, occurrences: Array<Span>, oldName: String, plugin: GrammarPlugin, shape: RefShape
+	): Null<String> {
+		final scope: QueryNode = enclosingFunctionSubtree(tree, cursor, shape);
+		final interpKind: Null<String> = shape.stringInterpIdentKind;
+		if (interpKind != null) {
+			final stray: Null<Span> = uncoveredInterpRead(scope, interpKind, oldName, occurrences);
+			if (stray != null) {
+				final at: Position = stray.lineCol(source);
+				return 'rename of "$oldName" is unsafe: it is also read through string interpolation at ${at.line}:${at.col},'
+					+ ' which the resolution index does not yet track - rewrite that read first';
+			}
+		}
+		final dup: Null<Span> = sameBlockRedeclaration(scope, oldName, plugin, shape);
+		if (dup != null) {
+			final at: Position = dup.lineCol(source);
+			return 'rename of "$oldName" is unsafe: the name is declared more than once in the block at ${at.line}:${at.col},'
+				+ ' where reference resolution mis-binds - split the scopes or rename the other declaration first';
+		}
+		return null;
+	}
+
+	/** The deepest function / lambda subtree containing `cursor`, or the whole tree when none does. */
+	private static function enclosingFunctionSubtree(tree: QueryNode, cursor: Int, shape: RefShape): QueryNode {
+		final fnKinds: Array<String> = (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []);
+		// No containment pruning: the parse root (and other synthesized wrappers)
+		// carries NO span, so a prune at a null-span node would stop at the root
+		// and silently widen the scope to the whole file (false refusals for a
+		// same-named local in a SIBLING function). Gate only the match.
+		var best: QueryNode = tree;
+		function walk(node: QueryNode): Void {
+			final span: Null<Span> = node.span;
+			if (span != null && cursor >= span.from && cursor < span.to && fnKinds.contains(node.kind)) best = node;
+			for (c in node.children) walk(c);
+		}
+		walk(tree);
+		return best;
+	}
+
+	/** The span of a `$oldName` interpolation read in `scope` that no occurrence covers, or null. */
+	private static function uncoveredInterpRead(
+		scope: QueryNode, interpKind: String, oldName: String, occurrences: Array<Span>
+	): Null<Span> {
+		if (scope.kind == interpKind && scope.name == oldName) {
+			final span: Null<Span> = scope.span;
+			if (span != null && !occurrences.exists(o -> o.from <= span.from && span.to <= o.to)) return span;
+		}
+		for (c in scope.children) {
+			final found: Null<Span> = uncoveredInterpRead(c, interpKind, oldName, occurrences);
+			if (found != null) return found;
+		}
+		return null;
+	}
+
+	/** The span of a second same-block declaration of `oldName` in `scope`, or null. */
+	private static function sameBlockRedeclaration(scope: QueryNode, oldName: String, plugin: GrammarPlugin, shape: RefShape): Null<Span> {
+		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final localDeclExprKinds: Array<String> = shape.localDeclExprKinds ?? [];
+		final metaKinds: Array<String> = plugin.metaShape().metaKinds;
+		function walk(node: QueryNode): Null<Span> {
+			var seen: Bool = false;
+			for (c in node.children) {
+				if (RefactorSupport.topLevelDeclaredName(c, localDeclKinds, localDeclExprKinds, metaKinds) == oldName) {
+					if (seen) return c.span;
+					seen = true;
+				}
+				final found: Null<Span> = walk(c);
+				if (found != null) return found;
+			}
+			return null;
+		}
+		return walk(scope);
 	}
 
 	/**

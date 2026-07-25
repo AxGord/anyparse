@@ -63,6 +63,53 @@ class RenameSliceTest extends Test {
 		assertRename(FIXTURE, 4, 3, 'sum', expected);
 	}
 
+	public function testInterpolationReadRefused(): Void {
+		// The resolution index does not yet track `$name` interpolation reads —
+		// renaming the binding would silently re-bind them to an outer name (or
+		// leave them dangling), so the rename must REFUSE, not partially apply.
+		final src: String =
+			"class C {\n\tfunction f():String {\n\t\tvar path = \"a\";\n\t\tpath = \"b\" + path;\n\t\treturn 'x/$path';\n\t}\n}";
+		switch renameOf(src, 3, 7, 'relPath') {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok: $text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('interpolation') != -1, message);
+		}
+	}
+
+	public function testSameBlockRedeclarationRefused(): Void {
+		// Haxe allows re-declaring a name in the same block; the resolution index
+		// mis-binds the references that follow the second declaration, so renaming
+		// either binding must REFUSE until the scopes are split.
+		final src: String = 'class C {\n\tfunction f(v:String):String {\n\t\tfinal path = v + "!";\n\t\ttrace(path);\n'
+			+ '\t\t@:nullSafety(Off) var path = v;\n\t\treturn path;\n\t}\n}';
+		switch renameOf(src, 5, 21, 'relPath') {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok: $text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('declared more than once') != -1, message);
+		}
+	}
+
+	public function testSiblingFunctionInterpReadDoesNotRefuse(): Void {
+		// A `$name` read in ANOTHER function is a different binding — the net is
+		// scoped to the enclosing function and must not refuse this rename.
+		final src: String =
+			"class C {\n\tfunction g():String {\n\t\tvar y = 'a';\n\t\treturn 'y/$y';\n\t}\n\tfunction h():Int {\n\t\tvar y = 2;\n\t\treturn y;\n\t}\n}";
+		final expected: String =
+			"class C {\n\tfunction g():String {\n\t\tvar y = 'a';\n\t\treturn 'y/$y';\n\t}\n\tfunction h():Int {\n\t\tvar z = 2;\n\t\treturn z;\n\t}\n}";
+		assertRename(src, 7, 7, 'z', expected);
+	}
+
+	public function testSiblingFunctionSameNameDeclDoesNotRefuse(): Void {
+		// One declaration per block, in two different functions — no redeclaration.
+		final src: String =
+			'class C {\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\treturn y;\n\t}\n\tfunction h():Int {\n\t\tvar y = 2;\n\t\treturn y;\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\treturn y;\n\t}\n\tfunction h():Int {\n\t\tvar z = 2;\n\t\treturn z;\n\t}\n}';
+		assertRename(src, 7, 7, 'z', expected);
+	}
+
 	/**
 	 * Field `count` (decl `2:2`) → `n`: the field decl and the explicit
 	 * `this.count` read change. The shadowing param `count` and loop var

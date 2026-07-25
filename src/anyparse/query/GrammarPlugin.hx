@@ -388,6 +388,18 @@ typedef RefShape = {
 	@:optional var localDeclKinds: Array<String>;
 
 	/**
+	 * EXPRESSION-position local declaration kinds — the same local `var` / `final`
+	 * bindings when they parse as expressions rather than statements (Haxe:
+	 * `VarExpr` / `FinalExpr`, e.g. under a metadata wrapper
+	 * `@:nullSafety(Off) var x = …` or inside a macro quotation). A scope- or
+	 * collision-scan that walks `localDeclKinds` must usually also recognise
+	 * these (reaching through the wrapper) or it under-counts declared names —
+	 * `guard-continue`'s shadowing gate is the motivating consumer. Optional —
+	 * unset treats the set as empty.
+	 */
+	@:optional var localDeclExprKinds: Array<String>;
+
+	/**
 	 * Statement-position `if` kinds — the `redundant-else-after-return` check flags
 	 * an `else` on one of these whose then-branch always exits. Expression-position
 	 * `if` (`var x = if (c) a else b`) is excluded: its `else` is required. Optional;

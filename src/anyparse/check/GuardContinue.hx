@@ -34,37 +34,77 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  *
  * ## Gates — every one is a correctness gate; a violated gate is a semantic bug
  *
- * The `if` must be the loop body's EXACT last statement (no code after it, so the guard
- * skips nothing when `cond` is false), preceded by ≥1 statement (a SOLE-`if` body is the
+ * The `if` must be the loop body's last statement — exactly, or followed ONLY by a
+ * hoistable tail: independent plain `=` assignments of read-free literals (bool / null /
+ * numeric; never strings, whose interpolation could read state the body writes) to locals
+ * that are not the iterator and are mentioned nowhere in the `if` (condition, body,
+ * nested captures). Such a tail is emitted ABOVE the guard, which is order-safe (nothing
+ * it touches is touched by the `if`) — but only when the then-branch cannot escape the
+ * iteration early (no `return` / `throw` / grammar exit outside nested functions, no
+ * `break` / `continue` outside an inner loop): an escaping path SKIPPED the tail in the
+ * original, so hoisting would newly execute it. The `if` must also be preceded by ≥1
+ * statement (or a non-empty tail) (a SOLE-`if` body is the
  * positive `for (…) if (cond) …` combine form — a different, non-`continue` shape this
  * check leaves to `loop-guard` and does not fight), with NO `else` (an `else` branch the
  * `continue` form would lose), and a braced, non-empty then-branch. It must be a DIRECT
  * child of the loop's own body block — an `if` nested in an inner loop / `switch` / `try`
  * targets a different `continue` or `finally` and is never reached. Additionally refused:
  *
- *  - a then-branch that (outside a nested function) reaches a `break` / `continue` /
- *    `return` — its flow equivalence after de-nesting is not re-derived here, so the
- *    conservative direction is to skip (a nested function's own jumps do not count);
- *  - a then-branch top-level local whose name collides with a preceding sibling local or
- *    the loop iterator — de-nesting would widen it into the loop scope and same-scope
- *    re-declare it (a `-D no-shadowing` hazard), so it is refused;
- *  - a comment in the `if (` or `) {` glue the rewrite drops (comments in the condition or
- *    the then-body are preserved).
+ *  - a comment in the `if (` or `) {` glue, or between the `if` and its hoisted tail
+ *    statements, that the rewrite drops (comments in the condition or the then-body are
+ *    preserved).
+ *
+ * ## The collision rename
+ *
+ * A then-branch top-level local whose name collides with a preceding sibling local or the
+ * loop iterator is NOT refused — de-nesting would widen it into the loop scope and
+ * same-scope re-declare it (a `-D no-shadowing` hazard), so it is AUTO-RENAMED inside the
+ * moved block to the first free `<name>2`…`<name>99` (`path` → `path2`): the binder token
+ * plus every read, plain identifiers and `$name` string interpolations alike. "Free" is
+ * judged against the WHOLE parse tree, not the loop — a class field is invisible to any
+ * local scan, yet an unqualified read of a same-named field binds to it silently.
+ *
+ * That rename — and with it the whole de-nest — is refused when the name is re-declared
+ * DEEPER inside the then-branch (a nested block, or a nested loop's iterator), when a nested
+ * function / lambda subtree mentions it (an inner scope may own the occurrence), when the
+ * grammar exposes no string-interpolation seam (interpolated reads would be missed), when
+ * every candidate suffix is taken, when an occurrence sits AHEAD of the declaring
+ * statement's end — there the name still resolves to the OUTER binding, as in
+ * `final path = path + '/sub';`, whose initializer reads the outer `path` — or when the
+ * then-branch holds a standalone textual occurrence no rewritten span accounts for: an
+ * invisible binder (a `catch` variable, a `k => v` value iterator, a lambda parameter) or a
+ * mention in a comment or a plain string.
+ *
+ * A flow exit (`break` / `continue` / `return` / `throw`) anywhere in the then-branch does
+ * NOT refuse the plain (tail-less) de-nest: it moves the then-branch's statements into the
+ * SAME loop body, in the same function, executed under the same condition — every jump
+ * target (nearest enclosing loop, enclosing function) is unchanged, so the transform is
+ * flow-equivalent by construction. (An earlier over-conservative gate refused these and
+ * silenced the check on exactly the deeply nested real-code bodies it exists for.) Only
+ * the HOIST variant re-checks escapes, per above — there the tail's execution set changes.
  *
  * ## Grammar-agnostic
  *
  * Driven by `loopStatementKinds` (body = last child) and `doWhileLoopKinds` (body = first
  * child), `ifStatementKinds`, `continueStatementKind`, and `ControlFlowSupport.blockKinds`
- * (any of which unset → no-op), plus `localDeclKinds` (collision gate), the break/continue/
- * return kinds (flow gate), the function / lambda kinds (nested-scope stop), `opaqueKinds`
- * (skip macro reification), and the `notKind` / `eqKind` / `notEqKind` / `parenKind` /
- * atomic kinds that shape the inversion.
+ * (any of which unset → no-op), plus `localDeclKinds` (collision rename), `opaqueKinds`
+ * (skip macro reification), the `notKind` / `eqKind` / `notEqKind` / `parenKind` /
+ * atomic kinds that shape the inversion, and the optional hoist seams
+ * (`exprStatementKind` / `assignKind` / literal, exit and nested-scope kinds — any
+ * missing piece disables only the hoist, and its `identKind` / `stringInterpIdentKind`
+ * pair also gates the collision rename).
  */
 @:nullSafety(Strict)
 final class GuardContinue implements Check {
 
 	/** A guard `if` with no `else` has exactly [condition, then-branch] children. */
 	private static inline final IF_NO_ELSE_CHILD_COUNT: Int = 2;
+
+	/** The first suffix a collision rename tries (`path` → `path2`). */
+	private static inline final FRESH_NAME_FIRST: Int = 2;
+
+	/** One past the last suffix a collision rename tries (`path99` is the last candidate). */
+	private static inline final FRESH_NAME_LIMIT: Int = 100;
 
 	public function new() {}
 
@@ -82,7 +122,7 @@ final class GuardContinue implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(tree, violations, entry.file, entry.source, seams);
+			if (tree != null) walk(tree, tree, violations, entry.file, entry.source, seams);
 		}
 		return violations;
 	}
@@ -96,7 +136,7 @@ final class GuardContinue implements Check {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final byIf: Map<String, Candidate> = [];
-		indexCandidates(tree, source, seams, byIf);
+		indexCandidates(tree, tree, source, seams, byIf);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -139,9 +179,10 @@ final class GuardContinue implements Check {
 			ifKinds: ifKinds,
 			blockKinds: support.blockKinds(),
 			localDeclKinds: shape.localDeclKinds ?? [],
-			flowExitKinds: flowExitKinds(shape),
-			nestedScopeKinds: nestedScopeKinds(shape),
+			localDeclExprKinds: shape.localDeclExprKinds ?? [],
+			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
+			hoist: hoistSeams(shape),
 			negation: {
 				notKind: shape.notKind,
 				parenKind: shape.parenKind,
@@ -153,23 +194,65 @@ final class GuardContinue implements Check {
 		};
 	}
 
-	/** The break / continue / return kinds (statement and expression forms) whose presence in a then-branch refuses the de-nest — throws are excluded (always safe). */
-	private static function flowExitKinds(shape: RefShape): Array<String> {
-		final throwKinds: Array<String> = shape.throwKinds ?? [];
+	/**
+	 * The optional hoistable-tail seams, or null (hoist disabled — only an EXACT
+	 * trailing `if` matches) when a required kind is unset.
+	 */
+	private static function hoistSeams(shape: RefShape): Null<HoistSeams> {
+		final exprStmtKind: Null<String> = shape.exprStatementKind;
+		if (exprStmtKind == null) return null;
+		final assignKind: Null<String> = shape.assignKind;
+		if (assignKind == null) return null;
+		final baseLiterals: Array<String> = [
+			for (k in [
+				(shape.boolLitKind: Null<String>),
+				shape.nullLiteralKind
+			]) if (k != null) k
+		];
+		final literalKinds: Array<String> = baseLiterals.concat(shape.numericLiteralKinds ?? []);
+		if (literalKinds.length == 0) return null;
+		final loopJumpKinds: Array<String> = [
+			for (k in [
+				(shape.breakStatementKind: Null<String>),
+				shape.continueStatementKind
+			]) if (k != null) k
+		];
+		return {
+			exprStmtKind: exprStmtKind,
+			assignKind: assignKind,
+			identKind: shape.identKind,
+			interpIdentKind: shape.stringInterpIdentKind,
+			literalKinds: literalKinds,
+			hardExitKinds: hoistHardExitKinds(shape, loopJumpKinds),
+			loopJumpKinds: loopJumpKinds,
+			nestedScopeKinds: hoistNestedScopeKinds(shape)
+		};
+	}
+
+	/**
+	 * The return / throw / grammar-specific exit kinds that always escape the
+	 * iteration — minus the loop jumps, which get the inner-loop exemption
+	 * (`controlExitKinds` carries the break / continue kinds too).
+	 */
+	private static function hoistHardExitKinds(shape: RefShape, loopJumpKinds: Array<String>): Array<String> {
 		final out: Array<String> = [];
 		for (k in [
-			shape.continueStatementKind,
-			shape.breakStatementKind,
-			shape.returnStatementKind,
+			(shape.returnStatementKind: Null<String>),
 			shape.voidReturnKind
 		]) if (k != null && !out.contains(k)) out.push(k);
-		for (k in (shape.valueReturnKinds ?? [])) if (!out.contains(k)) out.push(k);
-		for (k in (shape.controlExitKinds ?? [])) if (!throwKinds.contains(k) && !out.contains(k)) out.push(k);
+		for (grp in [
+			shape.valueReturnKinds ?? [],
+			shape.throwKinds ?? [],
+			shape.controlExitKinds ?? []
+		]) for (k in grp) if (!out.contains(k) && !loopJumpKinds.contains(k)) out.push(k);
 		return out;
 	}
 
-	/** Function / lambda kinds whose subtree the flow scan does NOT descend — a nested function's own jumps and returns are unrelated to this loop. */
-	private static function nestedScopeKinds(shape: RefShape): Array<String> {
+	/**
+	 * Function / lambda kinds whose subtree the escape scan does NOT descend — a
+	 * nested function's own jumps and returns are unrelated to this loop.
+	 */
+	private static function hoistNestedScopeKinds(shape: RefShape): Array<String> {
 		final out: Array<String> = [];
 		for (grp in [
 			shape.functionKinds ?? [],
@@ -179,11 +262,12 @@ final class GuardContinue implements Check {
 		return out;
 	}
 
+
 	/** Walk `node`, flagging each loop whose body ends in a de-nestable trailing `if`. */
-	private static function walk(node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams): Void {
+	private static function walk(node: QueryNode, root: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
-			final m: Null<Candidate> = match(node, source, s);
+			final m: Null<Candidate> = match(node, root, source, s);
 			if (m != null) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out.push({
@@ -195,20 +279,20 @@ final class GuardContinue implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(c, out, file, source, s);
+		for (c in node.children) walk(c, root, out, file, source, s);
 	}
 
 	/** Index every de-nestable loop's candidate by its `if`'s `from:to` span key (for `fix` to re-find it). */
-	private static function indexCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, Candidate>): Void {
+	private static function indexCandidates(node: QueryNode, root: QueryNode, source: String, s: Seams, out: Map<String, Candidate>): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (isLoop(node, s)) {
-			final m: Null<Candidate> = match(node, source, s);
+			final m: Null<Candidate> = match(node, root, source, s);
 			if (m != null) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out['${span.from}:${span.to}'] = m;
 			}
 		}
-		for (c in node.children) indexCandidates(c, source, s, out);
+		for (c in node.children) indexCandidates(c, root, source, s, out);
 	}
 
 	private static function isLoop(node: QueryNode, s: Seams): Bool {
@@ -216,28 +300,114 @@ final class GuardContinue implements Check {
 	}
 
 	/**
-	 * If `loop`'s braced body's last statement is a de-nestable bare `if (c) { … }` (no
-	 * `else`, non-empty braced then-branch) preceded by ≥1 statement, and every gate holds
-	 * (flow, name-collision, glue-comment), return that `if`, its then-branch and its
-	 * condition; else null.
+	 * If `loop`'s braced body ends in a de-nestable bare `if (c) { … }` (no `else`,
+	 * non-empty braced then-branch) — either as the EXACT last statement, or followed
+	 * only by a hoistable tail of independent literal assignments — and every gate
+	 * holds (tail-hoist safety, name-collision, glue-comment), return that `if`, its
+	 * then-branch, its condition and the tail; else null.
 	 */
-	private static function match(loop: QueryNode, source: String, s: Seams): Null<Candidate> {
+	private static function match(loop: QueryNode, root: QueryNode, source: String, s: Seams): Null<Candidate> {
 		final body: Null<QueryNode> = loopBody(loop, s);
 		if (body == null || !s.blockKinds.contains(body.kind)) return null;
 		final stmts: Array<QueryNode> = body.children;
-		if (stmts.length < IF_NO_ELSE_CHILD_COUNT) return null;
-		final ifNode: QueryNode = stmts[stmts.length - 1];
+		var ifIndex: Int = stmts.length - 1;
+		while (ifIndex >= 0 && isHoistableTailStmt(stmts[ifIndex], s)) ifIndex--;
+		if (ifIndex < 0) return null;
+		final tail: Array<QueryNode> = stmts.slice(ifIndex + 1);
+		// A SOLE trailing if (no preceding statement, no tail) is the positive
+		// `for (…) if (cond) …` combine form — loop-guard's territory.
+		if (ifIndex == 0 && tail.length == 0) return null;
+		final ifNode: QueryNode = stmts[ifIndex];
 		if (!s.ifKinds.contains(ifNode.kind) || ifNode.children.length != IF_NO_ELSE_CHILD_COUNT) return null;
 		final cond: QueryNode = ifNode.children[0];
 		final thenBlock: QueryNode = ifNode.children[1];
-		return !s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length == 0 || bodyHasFlowExit(thenBlock, s)
-			|| hasNameCollision(loop, body, ifNode, thenBlock, s) || headerHasComment(source, ifNode, cond, thenBlock)
-			? null
-			: {
-				ifNode: ifNode,
-				thenBlock: thenBlock,
-				cond: cond
-			};
+		if (!s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length == 0) return null;
+		if (tail.length != 0 && !tailHoistSafe(loop, ifNode, thenBlock, tail, source, s)) return null;
+		if (headerHasComment(source, ifNode, cond, thenBlock)) return null;
+		final renames: Null<Array<LocalRename>> = collisionRenames(loop, root, body, ifNode, thenBlock, source, s);
+		return renames == null ? null : {
+			ifNode: ifNode,
+			thenBlock: thenBlock,
+			cond: cond,
+			tail: tail,
+			renames: renames
+		};
+	}
+
+	/**
+	 * Whether `stmt` is shaped like a hoistable tail statement: an expression
+	 * statement holding a plain `=` assignment of a READ-FREE literal (bool /
+	 * null / numeric — never a string, whose interpolation could read state the
+	 * then-branch writes) to a bare identifier. Shape only — the semantic gates
+	 * live in `tailHoistSafe`. A grammar without the hoist seams never matches.
+	 */
+	private static function isHoistableTailStmt(stmt: QueryNode, s: Seams): Bool {
+		final h: Null<HoistSeams> = s.hoist;
+		if (h == null) return false;
+		if (stmt.kind != h.exprStmtKind || stmt.children.length != 1) return false;
+		final assign: QueryNode = stmt.children[0];
+		return assign.kind == h.assignKind && assign.children.length == 2 && assign.children[0].kind == h.identKind
+			&& h.literalKinds.contains(assign.children[1].kind);
+	}
+
+	/**
+	 * Whether hoisting `tail` above the flagged `if` is semantics-preserving:
+	 * no assigned name is the loop iterator or is mentioned ANYWHERE in the `if`
+	 * (condition or then-branch, including string-interpolation reads and nested
+	 * functions — a capture reads the hoisted value too), the then-branch cannot
+	 * escape the iteration early (a `return` / `throw`, or a `break` / `continue`
+	 * outside a nested loop, would have SKIPPED the tail on that path), and no
+	 * comment sits in the dropped gaps between the `if` and the tail statements.
+	 */
+	private static function tailHoistSafe(
+		loop: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, tail: Array<QueryNode>, source: String, s: Seams
+	): Bool {
+		final iter: Null<String> = loop.name;
+		for (t in tail) {
+			final name: Null<String> = t.children[0].children[0].name;
+			if (name == null || name == '' || name == iter || mentionsName(ifNode, name, s)) return false;
+		}
+		if (thenEscapesIteration(thenBlock, s, false)) return false;
+		final ifSpan: Null<Span> = ifNode.span;
+		if (ifSpan == null) return false;
+		var prevTo: Int = ifSpan.to;
+		for (t in tail) {
+			final ts: Null<Span> = t.span;
+			if (ts == null || gapComment(source, prevTo, ts.from)) return false;
+			prevTo = ts.to;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether `node`'s subtree mentions the identifier `name` — an `identKind` or
+	 * `stringInterpIdentKind` leaf with that name. Deliberately descends into
+	 * nested functions (a lambda capturing the name reads the hoisted value).
+	 */
+	private static function mentionsName(node: QueryNode, name: String, s: Seams): Bool {
+		final h: Null<HoistSeams> = s.hoist;
+		if (h == null) return true;
+		if ((node.kind == h.identKind || node.kind == h.interpIdentKind) && node.name == name) return true;
+		for (c in node.children) if (mentionsName(c, name, s)) return true;
+		return false;
+	}
+
+	/**
+	 * Whether the then-branch can leave the loop iteration early — a `return` /
+	 * `throw` / grammar-specific exit anywhere (outside nested function scopes),
+	 * or a `break` / `continue` NOT nested in an inner loop (an inner loop's own
+	 * jumps never escape it). Such a path skipped the tail statements in the
+	 * original, so hoisting them above the guard would newly execute them.
+	 */
+	private static function thenEscapesIteration(node: QueryNode, s: Seams, inInnerLoop: Bool): Bool {
+		final h: Null<HoistSeams> = s.hoist;
+		if (h == null) return true;
+		if (s.opaqueKinds.contains(node.kind) || h.nestedScopeKinds.contains(node.kind)) return false;
+		if (h.hardExitKinds.contains(node.kind)) return true;
+		if (!inInnerLoop && h.loopJumpKinds.contains(node.kind)) return true;
+		final inner: Bool = inInnerLoop || isLoop(node, s);
+		for (c in node.children) if (thenEscapesIteration(c, s, inner)) return true;
+		return false;
 	}
 
 	/** The loop's body block: the LAST child for a body-last loop (`for` / `while`), the FIRST for a body-first `do … while`. */
@@ -246,34 +416,197 @@ final class GuardContinue implements Check {
 		return kids.length == 0 ? null : s.doWhileKinds.contains(loop.kind) ? kids[0] : kids[kids.length - 1];
 	}
 
-	/** Whether `node`'s subtree reaches a flow-exit (break / continue / return) OUTSIDE any nested function scope — the conservative flow gate. */
-	private static function bodyHasFlowExit(node: QueryNode, s: Seams): Bool {
-		if (s.nestedScopeKinds.contains(node.kind)) return false;
-		if (s.flowExitKinds.contains(node.kind)) return true;
-		for (c in node.children) if (bodyHasFlowExit(c, s)) return true;
+
+	/**
+	 * The renames that resolve every then-branch top-level local whose name is already bound
+	 * in the loop body scope at the `if` — a preceding sibling local or the loop iterator —
+	 * and which de-nesting would therefore same-scope re-declare. Empty when nothing collides;
+	 * null when a collision cannot be renamed away, which refuses the whole de-nest. Both
+	 * sides resolve declarations through `declaredNode`, so an expression-position declaration
+	 * under a metadata wrapper (`@:nullSafety(Off) var x = …`) counts too.
+	 */
+	private static function collisionRenames(
+		loop: QueryNode, root: QueryNode, body: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, source: String, s: Seams
+	): Null<Array<LocalRename>> {
+		final scopeNames: Array<String> = [];
+		final iter: Null<String> = loop.name;
+		if (iter != null && iter != '') scopeNames.push(iter);
+		for (stmt in body.children) {
+			if (stmt == ifNode) break;
+			final n: Null<String> = declaredNode(stmt, s)?.name;
+			if (n != null && n != '') scopeNames.push(n);
+		}
+		final renames: Array<LocalRename> = [];
+		for (stmt in thenBlock.children) {
+			final decl: Null<QueryNode> = declaredNode(stmt, s);
+			if (decl == null) continue;
+			final name: Null<String> = decl.name;
+			if (name == null || name == '' || !scopeNames.contains(name)) continue;
+			final rename: Null<LocalRename> = renameFor(decl, stmt, name, root, thenBlock, renames, source, s);
+			if (rename == null) return null;
+			renames.push(rename);
+		}
+		return renames;
+	}
+
+	/**
+	 * The rename that moves the colliding declaration `decl` (binding `name`, declared by the
+	 * top-level statement `stmt`) out of the way, or null when renaming would be unsound and
+	 * the de-nest must be refused: the grammar cannot see string-interpolation reads, `name` is
+	 * re-declared deeper inside the then-branch (including as a nested loop's iterator), a
+	 * nested function subtree mentions it (an inner scope may own it), no `<name>2`…`<name>99`
+	 * is free, an occurrence sits AHEAD of `stmt`'s end (where the name still resolves to the
+	 * OUTER binding — `final path = path + '/sub';` reads the outer `path`), or the then-branch
+	 * holds a standalone textual `name` no rewritten span accounts for — an invisible binder (a
+	 * `catch` variable, a `k => v` value iterator, a lambda parameter) or a mention in a comment
+	 * or plain string, any of which the rename would leave behind.
+	 */
+	private static function renameFor(
+		decl: QueryNode, stmt: QueryNode, name: String, root: QueryNode, thenBlock: QueryNode, done: Array<LocalRename>, source: String,
+		s: Seams
+	): Null<LocalRename> {
+		final h: Null<HoistSeams> = s.hoist;
+		if (h == null || h.interpIdentKind == null) return null;
+		if (bindsName(thenBlock, name, s, decl) || nestedScopeMentions(thenBlock, name, s)) return null;
+		final newName: Null<String> = freshName(name, root, done);
+		final binder: Null<Span> = binderSpan(source, decl, name);
+		final thenSpan: Null<Span> = thenBlock.span;
+		final stmtSpan: Null<Span> = stmt.span;
+		if (newName == null || binder == null || thenSpan == null || stmtSpan == null) return null;
+		final spans: Array<Span> = [binder];
+		collectOccurrenceSpans(thenBlock, name, source, h, spans);
+		// Everything ahead of the declaring STATEMENT's end still resolves to the OUTER
+		// binding — the shadow only starts after it — so an occurrence there (the
+		// initializer's own reads included) must not be renamed. Both nets: the collected
+		// occurrence spans, and the raw text, which also catches a pre-binder mention the
+		// grammar hides (a comment, a plain string, an invisible binder).
+		for (i in 1...spans.length) if (spans[i].from < stmtSpan.to) return null;
+		final innerFrom: Int = thenSpan.from + 1;
+		final inner: String = source.substring(innerFrom, thenSpan.to - 1);
+		final headLength: Int = stmtSpan.to - innerFrom;
+		return headLength >= 0 && standaloneCount(inner.substring(0, headLength), name) == 1 && standaloneCount(inner, name) == spans.length
+			? {
+				name: name,
+				newName: newName,
+				spans: spans
+			}
+			: null;
+	}
+
+	/**
+	 * The first `<name>2`…`<name>99` that appears NOWHERE in the parse tree as a node label and
+	 * that no earlier rename in this de-nest already claimed, or null when all are taken. The
+	 * scan spans the WHOLE tree, not just the loop: a class field is invisible to any local
+	 * scan, yet an unqualified read of a same-named field binds to it silently.
+	 */
+	private static function freshName(name: String, root: QueryNode, done: Array<LocalRename>): Null<String> {
+		for (k in FRESH_NAME_FIRST ... FRESH_NAME_LIMIT) {
+			final candidate: String = '$name$k';
+			if (!namedAnywhere(root, candidate) && !Lambda.exists(done, r -> r.newName == candidate)) return candidate;
+		}
+		return null;
+	}
+
+	/**
+	 * Whether ANY node in `node`'s subtree carries `name` as its label — a declaration, a
+	 * loop iterator, an identifier, a field name, even literal text. Deliberately blunt:
+	 * declaration labels are not `identKind` leaves, so an identifier scan alone would miss
+	 * a class field a renamed local could silently capture.
+	 */
+	private static function namedAnywhere(node: QueryNode, name: String): Bool {
+		if (node.name == name) return true;
+		for (c in node.children) if (namedAnywhere(c, name)) return true;
 		return false;
 	}
 
 	/**
-	 * Whether a then-branch top-level local name collides with a name already bound in the
-	 * loop body scope at the `if` — a preceding sibling local or the loop iterator — which
-	 * de-nesting would same-scope re-declare.
+	 * Whether `node`'s subtree BINDS `name` — a local declaration (statement or
+	 * expression position) or a loop iterator of that name, ignoring `except` (the
+	 * declaration being renamed). Name-carrying occurrence nodes (identifiers, field
+	 * names, literal text) are reads, not bindings, and never match.
 	 */
-	private static function hasNameCollision(loop: QueryNode, body: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, s: Seams): Bool {
-		final scopeNames: Map<String, Bool> = [];
-		final iter: Null<String> = loop.name;
-		if (iter != null && iter != '') scopeNames[iter] = true;
-		for (stmt in body.children) {
-			if (stmt == ifNode) break;
-			if (!s.localDeclKinds.contains(stmt.kind)) continue;
-			final n: Null<String> = stmt.name;
-			if (n != null) scopeNames[n] = true;
-		}
-		for (stmt in thenBlock.children) if (s.localDeclKinds.contains(stmt.kind)) {
-			final n: Null<String> = stmt.name;
-			if (n != null && scopeNames.exists(n)) return true;
-		}
+	private static function bindsName(node: QueryNode, name: String, s: Seams, ?except: QueryNode): Bool {
+		final binds: Bool = s.localDeclKinds.contains(node.kind) || s.localDeclExprKinds.contains(node.kind) || isLoop(node, s);
+		if (binds && node.name == name && node != except) return true;
+		for (c in node.children) if (bindsName(c, name, s, except)) return true;
 		return false;
+	}
+
+	/** Whether a nested function / lambda subtree inside `node` mentions `name` — that inner scope may own it. */
+	private static function nestedScopeMentions(node: QueryNode, name: String, s: Seams): Bool {
+		final h: Null<HoistSeams> = s.hoist;
+		if (h == null) return true;
+		for (c in node.children) if (h.nestedScopeKinds.contains(c.kind) ? mentionsName(c, name, s) : nestedScopeMentions(c, name, s))
+			return true;
+		return false;
+	}
+
+	/**
+	 * The span of the binder token inside a declaration node: the FIRST standalone `name`
+	 * (neighbours outside `[A-Za-z0-9_]`) not preceded by `$`. The declaration node starts at
+	 * the `var` / `final` keyword — a metadata wrapper projects as a separate sibling — so
+	 * nothing ahead of the binder can hold the name. Null when the grammar's span does not
+	 * cover it.
+	 */
+	private static function binderSpan(source: String, decl: QueryNode, name: String): Null<Span> {
+		final span: Null<Span> = decl.span;
+		if (span == null) return null;
+		var at: Int = source.indexOf(name, span.from);
+		while (at != -1 && at + name.length <= span.to) {
+			if (isStandaloneAt(source, at, name.length) && source.charAt(at - 1) != '$') return new Span(at, at + name.length);
+			at = source.indexOf(name, at + 1);
+		}
+		return null;
+	}
+
+	/** Append the span of every `name` read in `node`'s subtree — a plain identifier, or the identifier of a `$name` interpolation. */
+	private static function collectOccurrenceSpans(node: QueryNode, name: String, source: String, h: HoistSeams, out: Array<Span>): Void {
+		final span: Null<Span> = node.span;
+		if (span != null && node.name == name) {
+			if (node.kind == h.identKind)
+				out.push(span);
+			else if (node.kind == h.interpIdentKind)
+				out.push(interpNameSpan(source, span, name));
+		}
+		for (c in node.children) collectOccurrenceSpans(c, name, source, h, out);
+	}
+
+	/**
+	 * The identifier-only span of a `$name` string-interpolation read, whose node span
+	 * INCLUDES the `$` sigil (`'x/$p'` projects the interpolation over `$p`, not `p`) —
+	 * narrowing it keeps the sigil in place when the name is spliced. A grammar whose span
+	 * already excludes the sigil is returned unchanged.
+	 */
+	private static function interpNameSpan(source: String, span: Span, name: String): Span {
+		return span.to - span.from == name.length + 1 && source.charAt(span.from) == '$' ? new Span(span.from + 1, span.to) : span;
+	}
+
+	/** How many standalone `name` tokens (a non-word character or the text edge on both sides) `text` holds. */
+	private static function standaloneCount(text: String, name: String): Int {
+		var count: Int = 0;
+		var at: Int = text.indexOf(name);
+		while (at != -1) {
+			if (isStandaloneAt(text, at, name.length)) count++;
+			at = text.indexOf(name, at + 1);
+		}
+		return count;
+	}
+
+	/** Whether the `length` characters of `text` at `at` are flanked by non-word characters (or the text edge). */
+	private static function isStandaloneAt(text: String, at: Int, length: Int): Bool {
+		return !isWordCode(text.charCodeAt(at - 1)) && !isWordCode(text.charCodeAt(at + length));
+	}
+
+	/** Whether `code` is an identifier character; a null code (out of range) is a boundary, not a word character. */
+	private static function isWordCode(code: Null<Int>): Bool {
+		return code != null
+			&& (code >= '0'.code && code <= '9'.code || code >= 'A'.code && code <= 'Z'.code || code >= 'a'.code && code <= 'z'.code
+				|| code == '_'.code);
+	}
+
+	/** The local declaration node a top-level statement holds, or null — see `RefactorSupport.topLevelDeclaredNode`. */
+	private static function declaredNode(stmt: QueryNode, s: Seams): Null<QueryNode> {
+		return RefactorSupport.topLevelDeclaredNode(stmt, s.localDeclKinds, s.localDeclExprKinds, s.metaKinds);
 	}
 
 	/** Whether a comment sits in the dropped `if (` or `) {` glue (a comment in the condition or the then-body is preserved and does NOT refuse). */
@@ -293,14 +626,43 @@ final class GuardContinue implements Check {
 		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
 	}
 
-	/** Replace the flagged `if` statement with `if (!cond) continue;` followed by the then-branch's inner statements (the writer re-indents the de-nested run). */
+	/**
+	 * Replace the flagged `if` (and its hoisted tail, when present) with the tail
+	 * statements, an `if (!cond) continue;` guard, and the then-branch's inner
+	 * statements (the writer re-indents the de-nested run).
+	 */
 	private static function editFor(m: Candidate, source: String, s: Seams): Null<{ span: Span, text: String }> {
 		final ifSpan: Null<Span> = m.ifNode.span;
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		if (ifSpan == null || thenSpan == null) return null;
 		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.support);
-		final inner: String = StringTools.rtrim(source.substring(thenSpan.from + 1, thenSpan.to - 1));
-		return { span: ifSpan, text: 'if ($neg) continue;$inner' };
+		final innerFrom: Int = thenSpan.from + 1;
+		final inner: String = StringTools.rtrim(applyRenames(source.substring(innerFrom, thenSpan.to - 1), innerFrom, m.renames));
+		var to: Int = ifSpan.to;
+		final hoisted: StringBuf = new StringBuf();
+		for (t in m.tail) {
+			final span: Null<Span> = t.span;
+			if (span == null) return null;
+			hoisted.add(source.substring(span.from, span.to));
+			hoisted.add('\n');
+			to = span.to;
+		}
+		return { span: new Span(ifSpan.from, to), text: '${hoisted.toString()}if ($neg) continue;$inner' };
+	}
+
+	/**
+	 * Splice each rename's new name over its spans inside `inner`, whose first character sits
+	 * at absolute offset `from`. Rightmost first, so the earlier offsets stay valid.
+	 */
+	private static function applyRenames(inner: String, from: Int, renames: Array<LocalRename>): String {
+		final edits: Array<{ span: Span, text: String }> = [
+			for (r in renames) for (span in r.spans) if (span.from >= from && span.to <= from + inner.length)
+				{ span: span, text: r.newName }
+		];
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = inner;
+		for (e in edits) out = out.substring(0, e.span.from - from) + e.text + out.substring(e.span.to - from);
+		return out;
 	}
 
 }
@@ -312,16 +674,49 @@ private typedef Seams = {
 	var ifKinds: Array<String>;
 	var blockKinds: Array<String>;
 	var localDeclKinds: Array<String>;
-	var flowExitKinds: Array<String>;
-	var nestedScopeKinds: Array<String>;
+	var localDeclExprKinds: Array<String>;
+	var metaKinds: Array<String>;
 	var opaqueKinds: Array<String>;
+	var hoist: Null<HoistSeams>;
 	var negation: NegationSeams;
 	var support: Null<BooleanLogicSupport>;
 }
 
-/** A matched loop guard: the trailing `if` statement, its braced then-branch, and its condition. */
+/**
+ * The optional seams the hoistable-tail extension reads; null disables the hoist (strict tail position only).
+ */
+private typedef HoistSeams = {
+	var exprStmtKind: String;
+	var assignKind: String;
+	var identKind: String;
+	var interpIdentKind: Null<String>;
+	var literalKinds: Array<String>;
+	var hardExitKinds: Array<String>;
+	var loopJumpKinds: Array<String>;
+	var nestedScopeKinds: Array<String>;
+}
+/**
+ * A matched loop guard: the trailing `if` statement, its braced then-branch, its
+ * condition, the hoistable tail statements following the `if` (empty when it is the
+ * exact last statement), and the collision renames the de-nested block needs (empty
+ * when no de-nested local clashes with the surrounding scope).
+ */
 private typedef Candidate = {
 	var ifNode: QueryNode;
 	var thenBlock: QueryNode;
 	var cond: QueryNode;
+	var tail: Array<QueryNode>;
+	var renames: Array<LocalRename>;
+}
+
+/**
+ * One de-nested local renamed out of a scope collision: the name it binds, the
+ * mechanically fresh replacement, and every absolute span to splice that replacement
+ * over — the declaration's binder token plus each read, a plain identifier or the
+ * identifier of a `$name` interpolation (the `$` itself is outside the span).
+ */
+private typedef LocalRename = {
+	var name: String;
+	var newName: String;
+	var spans: Array<Span>;
 }

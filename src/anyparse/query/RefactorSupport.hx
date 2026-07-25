@@ -1133,10 +1133,14 @@ final class RefactorSupport {
 	 * Whether the condition subtree `cond` contains a null-narrowing guard: an
 	 * identifier compared against null (`x == null` / `x != null`) that is then
 	 * REUSED elsewhere in the same condition (`x.f`, `x[i]`, `x()`, `g(x)`, a bare
-	 * `x`, …). Haxe narrows such an `x` only inside the `if`-condition, so a check
-	 * that flattens the condition into a `||` / ternary `return` loses the
-	 * narrowing and the result fails to compile under `@:nullSafety(Strict)` — the
-	 * finding must be skipped. Conservative: a reuse in ANY position counts (it
+	 * `x`, …). Haxe narrows such an `x` only inside a condition, so a check that
+	 * flattens the condition into a bare boolean `||` chain loses the narrowing and
+	 * the result fails to compile under `@:nullSafety(Strict)` —
+	 * `simplify-boolean-ternary` must always skip a guarded finding. A ternary
+	 * `cond ? a : b` KEEPS the narrowing (it types like if/else), so the ternary
+	 * checks consult this only through `refusesNullNarrowingBoolCollapse` (refusing
+	 * just the bool-literal collapse that would hand off to the flattening
+	 * `simplify-boolean-ternary`). Conservative: a reuse in ANY position counts (it
 	 * over-skips a comparison-only reuse like `x != null && x == y`, which is
 	 * actually safe to flatten — never a compile break), and a grammar without the
 	 * null/equality kinds yields false.
@@ -1154,6 +1158,54 @@ final class RefactorSupport {
 			if (checks != null && total > checks) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether collapsing an `if`/branch pair with condition `cond` and branch
+	 * values `a` / `b` into a ternary must be REFUSED: `cond` carries a
+	 * null-narrowing guard (`hasNullNarrowingGuard`) AND a branch value is a bool
+	 * literal (`boolLitKind`; an unset kind never refuses). A VALUE ternary keeps
+	 * the in-condition narrowing (`cond ? a : b` types exactly like if/else), so a
+	 * guarded condition alone is fine — but a bool-literal pair hands off to
+	 * `simplify-boolean-ternary`, whose boolean flattening loses the narrowing
+	 * (and whose own guard then strands a stuck ternary uglier than the original).
+	 * The shared gate of `prefer-ternary-return` / `prefer-ternary-assignment`.
+	 */
+	public static function refusesNullNarrowingBoolCollapse(a: QueryNode, b: QueryNode, cond: QueryNode, shape: RefShape): Bool {
+		final boolLitKind: Null<String> = shape.boolLitKind;
+		return boolLitKind != null && (a.kind == boolLitKind || b.kind == boolLitKind) && hasNullNarrowingGuard(cond, shape);
+	}
+
+	/**
+	 * The local name a top-level statement DECLARES, or null — the `name` of
+	 * `topLevelDeclaredNode`'s result. Shared by `guard-continue`'s collision gate and
+	 * `Rename`'s same-name blind-spot net.
+	 */
+	public static function topLevelDeclaredName(
+		stmt: QueryNode, localDeclKinds: Array<String>, localDeclExprKinds: Array<String>, metaKinds: Array<String>
+	): Null<String> {
+		final decl: Null<QueryNode> = topLevelDeclaredNode(stmt, localDeclKinds, localDeclExprKinds, metaKinds);
+		return decl == null ? null : decl.name;
+	}
+
+	/**
+	 * The declaration NODE a top-level statement DECLARES a local in, or null — the
+	 * node `topLevelDeclaredName` reads the name off, exposed for callers that also
+	 * need its span (`guard-continue`'s collision rename locates the binder token
+	 * inside it). Same walk: a `localDeclKinds` statement answers directly, otherwise
+	 * the walk descends through single-payload wrappers (`metaKinds` children skipped)
+	 * to an expression-position declaration.
+	 */
+	public static function topLevelDeclaredNode(
+		stmt: QueryNode, localDeclKinds: Array<String>, localDeclExprKinds: Array<String>, metaKinds: Array<String>
+	): Null<QueryNode> {
+		var cur: QueryNode = stmt;
+		while (true) {
+			if (localDeclKinds.contains(cur.kind) || localDeclExprKinds.contains(cur.kind)) return cur;
+			final payload: Array<QueryNode> = [for (c in cur.children) if (!metaKinds.contains(c.kind)) c];
+			if (payload.length != 1) return null;
+			cur = payload[0];
+		}
 	}
 
 	/**

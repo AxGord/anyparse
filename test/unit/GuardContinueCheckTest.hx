@@ -19,11 +19,14 @@ import anyparse.runtime.Span;
  * (backed by the grammar's `BooleanLogicSupport`): `a && b` → `!a || !b`, `==` / `!=`
  * flipped, but an ordered comparison (`< <= > >=`) kept wrapped `!(…)` (NaN-safe — `!(a <
  * b)` and `a >= b` differ under NaN), and a comment inside the condition falls back to the
- * verbatim `!(cond)` wrap. Guarded by a flow gate (no `break`/`continue`/`return` in the
- * body), a name-collision gate (a de-nested local must not clash with a preceding sibling /
- * the iterator), a glue-comment gate, and the sole-`if` / else / empty / unbraced /
- * non-tail exclusions. Runs to a fixpoint, so a two-level chain flattens over successive
- * passes.
+ * verbatim `!(cond)` wrap. A de-nested local whose name clashes with a preceding sibling or
+ * the iterator is AUTO-RENAMED to a fresh `<name>2` (binder, plain reads and `$name`
+ * interpolation reads together); a deeper redeclaration of that name, an inner lambda
+ * mentioning it, or an unaccounted-for textual occurrence refuses instead. Plus a
+ * glue-comment gate and the sole-`if` / else / empty / unbraced / non-tail exclusions. A
+ * flow exit (`break` / `continue` / `return`) in the then-branch does NOT refuse: the
+ * de-nested body stays in the same loop and function, so every jump target is unchanged.
+ * Runs to a fixpoint, so a two-level chain flattens over successive passes.
  */
 class GuardContinueCheckTest extends Test {
 
@@ -208,27 +211,116 @@ class GuardContinueCheckTest extends Test {
 		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) body();\n\t\t}').length);
 	}
 
-	public function testBodyReturnNotFlagged(): Void {
-		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\treturn;\n\t\t\t}\n\t\t}').length);
+	public function testBodyReturnFlagged(): Void {
+		// A `return` in the then-branch is flow-equivalent after the de-nest: the body
+		// still runs under the same condition, inside the same function.
+		Assert.equals(1, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\treturn;\n\t\t\t}\n\t\t}').length);
 	}
 
-	public function testBodyBreakNotFlagged(): Void {
-		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}').length);
+	public function testBodyBreakFlagged(): Void {
+		// A `break` in the then-branch still targets this same loop after the de-nest.
+		Assert.equals(1, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}').length);
 	}
 
-	public function testBodyContinueNotFlagged(): Void {
-		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t}').length);
+	public function testBodyContinueFlagged(): Void {
+		// A `continue` in the then-branch still targets this same loop after the de-nest.
+		Assert.equals(1, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t}').length);
 	}
 
-	public function testNestedLoopBreakConservativelySkipped(): Void {
-		// A `break` inside a nested loop targets the nested loop and is safe, but the flow
-		// gate over-skips it (documented conservative limitation).
+	public function testNestedLoopBreakFlaggedAndFixed(): Void {
+		// A `break` inside a nested loop targets the nested loop; the de-nest keeps the
+		// then-branch inside the same outer loop, so the jump target is unchanged.
 		Assert.equals(
-			0,
+			1,
 			v(
 				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfor (y in ys) {\n\t\t\t\t\tif (y == 0) break;\n\t\t\t\t}\n\t\t\t}\n\t\t}'
 			).length
 		);
+		Assert.equals(
+			wrap(
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (!cond) continue;\n\t\t\tfor (y in ys) {\n\t\t\t\tif (y == 0) break;\n\t\t\t}\n\t\t}'
+			),
+			fx(
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfor (y in ys) {\n\t\t\t\t\tif (y == 0) break;\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+			)
+		);
+	}
+
+	public function testBodyMidReturnFlaggedAndFixed(): Void {
+		// A multi-statement then-branch with an interior return de-nests intact —
+		// the real-code shape the retired flow gate used to refuse.
+		Assert.equals(
+			wrap('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a == null) continue;\n\t\t\tif (bad(a)) return;\n\t\t\tuse(a);\n\t\t}'),
+			fx('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a != null) {\n\t\t\t\tif (bad(a)) return;\n\t\t\t\tuse(a);\n\t\t\t}\n\t\t}')
+		);
+	}
+
+	public function testTailAssignHoistedAndFixed(): Void {
+		// An independent literal assignment after the trailing if hoists above the
+		// guard, making the if effectively trailing.
+		final vs: Array<Violation> = v(
+			'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a != null) {\n\t\t\t\tbody(a);\n\t\t\t}\n\t\t\tdone = true;\n\t\t}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals(
+			wrap('for (x in xs) {\n\t\t\tpre();\n\t\t\tdone = true;\n\t\t\tif (a == null) continue;\n\t\t\tbody(a);\n\t\t}'),
+			fx('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a != null) {\n\t\t\t\tbody(a);\n\t\t\t}\n\t\t\tdone = true;\n\t\t}')
+		);
+	}
+
+	public function testTailMultipleAssignsHoistedInOrder(): Void {
+		Assert.equals(
+			wrap(
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tdone = true;\n\t\t\tcount = 0;\n\t\t\tif (a == null) continue;\n\t\t\tbody(a);\n\t\t}'
+			),
+			fx(
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (a != null) {\n\t\t\t\tbody(a);\n\t\t\t}\n\t\t\tdone = true;\n\t\t\tcount = 0;\n\t\t}'
+			)
+		);
+	}
+
+	public function testTailAssignBodyInnerBreakFlagged(): Void {
+		// The real-code shape: a nested-loop break in the body does NOT escape the
+		// iteration, so the tail assignment still hoists.
+		Assert.equals(
+			1,
+			v(
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\twhile (go()) {\n\t\t\t\t\tif (x == 0) break;\n\t\t\t\t}\n\t\t\t}\n\t\t\tdone = true;\n\t\t}'
+			).length
+		);
+	}
+
+	public function testTailAssignVarReferencedInIfNotFlagged(): Void {
+		// The body writes `done` — hoisting `done = true` above it would invert the
+		// final value; refused.
+		Assert.equals(
+			0,
+			v(
+				'for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tdone = false;\n\t\t\t\tbody();\n\t\t\t}\n\t\t\tdone = true;\n\t\t}'
+			).length
+		);
+	}
+
+	public function testTailAssignBodyReturnNotFlagged(): Void {
+		// A return in the body skips the tail assignment on that path; hoisting
+		// would run it early — refused (contrast testBodyReturnFlagged: no tail).
+		Assert.equals(
+			0,
+			v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tdone = true;\n\t\t}').length
+		);
+	}
+
+	public function testTailAssignBodyOuterContinueNotFlagged(): Void {
+		// A continue targeting THIS loop skips the tail on that path — refused.
+		Assert.equals(
+			0,
+			v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t\tcontinue;\n\t\t\t}\n\t\t\tdone = true;\n\t\t}').length
+		);
+	}
+
+	public function testTailCallNotFlagged(): Void {
+		// Only side-effect-free literal assignments hoist; a call in the tail refuses.
+		Assert.equals(0, v('for (x in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t\tlog();\n\t\t}').length);
 	}
 
 	public function testBodyThrowFlagged(): Void {
@@ -264,16 +356,137 @@ class GuardContinueCheckTest extends Test {
 		);
 	}
 
-	public function testNameCollisionPrecedingNotFlagged(): Void {
+	public function testNameCollisionPrecedingAutoRenamed(): Void {
+		// The colliding de-nested local is mechanically renamed to `b2`, not refused.
 		Assert.equals(
-			0,
+			1,
 			v('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}').length
+		);
+		Assert.equals(
+			wrap('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'),
+			fx('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}')
 		);
 	}
 
-	public function testNameCollisionIteratorNotFlagged(): Void {
+	public function testNameCollisionIteratorAutoRenamed(): Void {
 		Assert.equals(
-			0, v('for (b in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}').length
+			1, v('for (b in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}').length
+		);
+		Assert.equals(
+			wrap('for (b in xs) {\n\t\t\tpre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'),
+			fx('for (b in xs) {\n\t\t\tpre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}')
+		);
+	}
+
+	public function testCollisionRenameCoversInterpReads(): Void {
+		// Every read moves with the declaration — plain identifiers AND `$name` reads
+		// inside string interpolation (double-quoted here so the host string is literal).
+		Assert.equals(
+			wrap(
+				"for (x in xs) {\n\t\t\tfinal p = pre();\n\t\t\tif (!cond) continue;\n\t\t\tvar p2 = start();\n\t\t\tp2 = 'a/$p2';\n\t\t\tuse('$p2-x');\n\t\t}"
+			),
+			fx(
+				"for (x in xs) {\n\t\t\tfinal p = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar p = start();\n\t\t\t\tp = 'a/$p';\n\t\t\t\tuse('$p-x');\n\t\t\t}\n\t\t}"
+			)
+		);
+	}
+
+	public function testCollisionDeeperRedeclarationNotFlagged(): Void {
+		// A deeper re-declaration of the colliding name makes occurrence attribution
+		// unsound — the rename is refused, and with it the de-nest.
+		Assert.equals(
+			0,
+			v(
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar b = 1;\n\t\t\t\tif (q) {\n\t\t\t\t\tvar b = 2;\n\t\t\t\t\ttrace(b);\n\t\t\t\t}\n\t\t\t}\n\t\t}'
+			).length
+		);
+	}
+
+	public function testCollisionLambdaMentionNotFlagged(): Void {
+		// An inner lambda could own the name (its params are invisible to the scan) — refused.
+		Assert.equals(
+			0,
+			v('for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tvar b = 1;\n\t\t\t\trun(() -> use(b));\n\t\t\t}\n\t\t}').length
+		);
+	}
+
+	public function testCollisionFreshNameSkipsTaken(): Void {
+		// `b2` is already bound in the loop body, so the fresh name walks on to `b3`.
+		Assert.equals(
+			wrap(
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tfinal b2 = spare();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b3 = other();\n\t\t\tuse(b3);\n\t\t}'
+			),
+			fx(
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tfinal b2 = spare();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
+			)
+		);
+	}
+
+	public function testCollisionInitializerReadsOuterNotFlagged(): Void {
+		// The initializer reads the OUTER binding — not yet shadowed there — so renaming
+		// would rebind that read to the fresh local. Refused.
+		Assert.equals(
+			0,
+			v(
+				'for (x in xs) {\n\t\t\tfinal path = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal path = path + "/sub";\n\t\t\t\tuse(path);\n\t\t\t}\n\t\t}'
+			).length
+		);
+	}
+
+	public function testCollisionReadBeforeDeclNotFlagged(): Void {
+		// A read AHEAD of the shadowing declaration still resolves to the outer binding.
+		Assert.equals(
+			0,
+			v(
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tuse(b);\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
+			).length
+		);
+	}
+
+	public function testCollisionFreshNameSkipsClassField(): Void {
+		// `b2` is a class FIELD — invisible to any loop-local scan, and an unqualified read
+		// of it would bind silently. The fresh name must walk past it to `b3`.
+		final field: String = 'var b2:Int = 99;';
+		Assert.equals(
+			canon(wrapField(
+				field,
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b3 = other();\n\t\t\tuse(b3);\n\t\t}'
+			)),
+			fxSource(wrapField(
+				field,
+				'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}'
+			))
+		);
+	}
+
+	public function testMetaWrappedDeclCollisionAutoRenamed(): Void {
+		// `@:meta var b` parses as an expression-position declaration under a metadata
+		// wrapper — the rename reaches its binder token through the wrapper.
+		final code: String =
+			'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (cond) {\n\t\t\t\t@:nullSafety(Off) var b:String = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
+		Assert.equals(1, v(code).length);
+		Assert.equals(
+			canon(
+				wrap(
+					'for (x in xs) {\n\t\t\tfinal b = pre();\n\t\t\tif (!cond) continue;\n\t\t\t@:nullSafety(Off) var b2:String = other();\n\t\t\tuse(b2);\n\t\t}'
+				)
+			),
+			fx(code)
+		);
+	}
+
+	public function testMetaWrappedSiblingCollisionAutoRenamed(): Void {
+		// The preceding-sibling scan reaches through the metadata wrapper too.
+		final code: String =
+			'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (cond) {\n\t\t\t\tfinal b = other();\n\t\t\t\tuse(b);\n\t\t\t}\n\t\t}';
+		Assert.equals(1, v(code).length);
+		Assert.equals(
+			canon(
+				wrap(
+					'for (x in xs) {\n\t\t\t@:nullSafety(Off) var b:String = pre();\n\t\t\tif (!cond) continue;\n\t\t\tfinal b2 = other();\n\t\t\tuse(b2);\n\t\t}'
+				)
+			),
+			fx(code)
 		);
 	}
 
@@ -337,6 +550,11 @@ class GuardContinueCheckTest extends Test {
 		return 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\t$loopCode\n\t}\n}\n';
 	}
 
+	/** `wrap` with a class field ahead of the method — a scope no loop-local fresh-name scan can see. */
+	private function wrapField(fieldCode: String, loopCode: String): String {
+		return 'class C {\n\t$fieldCode\n\n\tfunction f(xs:Array<Int>):Void {\n\t\t$loopCode\n\t}\n}\n';
+	}
+
 	private function cond(c: String): String {
 		return 'for (x in xs) {\n\t\t\tpre();\n\t\t\tif ($c) {\n\t\t\t\tbody();\n\t\t\t}\n\t\t}';
 	}
@@ -352,7 +570,12 @@ class GuardContinueCheckTest extends Test {
 
 	/** Canonicalise the loop code then de-nest to a fixpoint, exactly as the `lint --fix` CLI does. */
 	private function fx(loopCode: String): String {
-		var cur: String = canon(wrap(loopCode));
+		return fxSource(wrap(loopCode));
+	}
+
+	/** `fx` over a whole class source — for fixtures `wrap` cannot carry, such as a class field. */
+	private function fxSource(source: String): String {
+		var cur: String = canon(source);
 		while (true) {
 			final next: String = applyFixOnce(cur);
 			if (next == cur) return cur;

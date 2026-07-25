@@ -29,7 +29,10 @@ import anyparse.runtime.Span;
  * un-braced body of another statement) is not flagged, since the trailing
  * `return` is then a sibling of the OUTER statement, not the inner `if`. A
  * statement between the `if` and the `return` also blocks the match (the
- * collapse would reorder it). The reported span is the `if` statement.
+ * collapse would reorder it). A null-narrowing guard condition refuses ONLY a
+ * bool-literal collapse (see `RefactorSupport.refusesNullNarrowingBoolCollapse`)
+ * — a value ternary keeps the in-condition narrowing and is allowed. The
+ * reported span is the `if` statement.
  *
  * ## Autofix
  *
@@ -138,7 +141,6 @@ final class PreferTernaryReturn implements Check {
 	): Null<TernaryMatch> {
 		final ifNode: QueryNode = kids[i];
 		if (!ifKinds.contains(ifNode.kind) || ifNode.children.length != 2) return null;
-		if (RefactorSupport.hasNullNarrowingGuard(ifNode.children[0], shape)) return null;
 		final thenValue: Null<QueryNode> = thenReturnValue(ifNode.children[1], shape, returnKind);
 		if (thenValue == null) return null;
 		if (i + 1 >= kids.length) return null;
@@ -149,13 +151,18 @@ final class PreferTernaryReturn implements Check {
 		// (`cond ? true : g()`) that simplify-boolean-ternary cannot reduce without a typer
 		// — uglier than the guard. Leave it: a fully-reducible boolean guard chain is
 		// `simplify-boolean-return-chain`'s job; a value ternary still collapses here.
-		return isStuckBooleanCollapse(thenValue, elseValue, shape) ? null : {
-			ifNode: ifNode,
-			condition: ifNode.children[0],
-			thenValue: thenValue,
-			elseValue: elseValue,
-			nextReturn: next
-		};
+		// The narrowing-guard refusal fires only for a bool-literal collapse (see
+		// RefactorSupport.refusesNullNarrowingBoolCollapse).
+		return RefactorSupport.refusesNullNarrowingBoolCollapse(thenValue, elseValue, ifNode.children[0], shape)
+			|| isStuckBooleanCollapse(thenValue, elseValue, shape)
+			? null
+			: {
+				ifNode: ifNode,
+				condition: ifNode.children[0],
+				thenValue: thenValue,
+				elseValue: elseValue,
+				nextReturn: next
+			};
 	}
 
 	/**

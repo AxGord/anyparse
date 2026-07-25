@@ -108,9 +108,18 @@ class PreferTernaryAssignmentCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tif (a) /* keep */ x = 1;\n\t\telse x = 2;\n\t}\n}').length);
 	}
 
-	public function testNullNarrowingGuardNotFlagged(): Void {
+	public function testNullGuardValueBranchesFlagged(): Void {
+		// Value r-values: the collapse keeps the in-condition narrowing, so it is allowed.
 		Assert.equals(
-			0, violations('class C {\n\tfunction f(s:Null<S>) {\n\t\tif (s != null && s.g()) x = 1;\n\t\telse x = 2;\n\t}\n}').length
+			1, violations('class C {\n\tfunction f(s:Null<S>) {\n\t\tif (s != null && s.g()) x = 1;\n\t\telse x = 2;\n\t}\n}').length
+		);
+	}
+
+	public function testNullGuardBoolLiteralNotFlagged(): Void {
+		// A bool-literal r-value hands off to simplify-boolean-ternary, whose flattening
+		// would lose the narrowing — refused while the condition carries a null guard.
+		Assert.equals(
+			0, violations('class C {\n\tfunction f(s:Null<S>) {\n\t\tif (s != null && s.g()) x = true;\n\t\telse x = g();\n\t}\n}').length
 		);
 	}
 
