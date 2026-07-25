@@ -10,16 +10,20 @@ import anyparse.runtime.Span;
 
 /**
  * Flags a stray empty statement — a lone `;` with no expression (SonarLint
- * S1116), usually an editing leftover or a misplaced terminator. Covers both a
- * statement-scope `;` (inside a body, e.g. the trailing `;` of `g();;`) and a
- * member-scope `;` (after a class member, e.g. `function f():Void {};`). Purely
- * structural. `Warning`; `fix` deletes the `;` — the whole physical line when the
- * `;` sits alone on it (so no blank residue is left), otherwise only the `;` itself.
+ * S1116), usually an editing leftover or a misplaced terminator. Three positions:
+ * a statement-scope `;` (inside a body, e.g. the trailing `;` of `g();;`), a
+ * member-scope `;` (after a class member, e.g. `function f():Void {};`), and the
+ * one the parser ABSORBS into a block-terminated statement (`for (…) { … };`),
+ * which no node marks — see `absorbedSemicolon`. Purely structural. `Warning`;
+ * `fix` deletes the `;` — the whole physical line when the `;` sits alone on it
+ * (so no blank residue is left), otherwise only the `;` itself.
  *
  * ## Grammar-agnostic
  *
  * The node kinds come from `RefShape.emptyStmtKind` (statement scope) and
- * `RefShape.emptyMemberKind` (member scope); with neither set the check is a no-op.
+ * `RefShape.emptyMemberKind` (member scope); the absorbed position needs
+ * `RefShape.blockStmtKind` / `catchClauseKind`. With none of them set the check is
+ * a no-op.
  */
 @:nullSafety(Strict)
 final class EmptyStatement implements Check {
@@ -41,11 +45,16 @@ final class EmptyStatement implements Check {
 		final emptyKinds: Array<String> = [];
 		if (stmtKind != null) emptyKinds.push(stmtKind);
 		if (memberKind != null) emptyKinds.push(memberKind);
-		if (emptyKinds.length == 0) return [];
+		final blockKinds: Array<String> = [];
+		final blockStmtKind: Null<String> = shape.blockStmtKind;
+		final catchClauseKind: Null<String> = shape.catchClauseKind;
+		if (blockStmtKind != null) blockKinds.push(blockStmtKind);
+		if (catchClauseKind != null) blockKinds.push(catchClauseKind);
+		if (emptyKinds.length == 0 && blockKinds.length == 0) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, emptyKinds);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, emptyKinds, blockKinds);
 		}
 		return violations;
 	}
@@ -63,7 +72,9 @@ final class EmptyStatement implements Check {
 	}
 
 	/** Walk `node`, flagging every empty statement reached. */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, emptyKinds: Array<String>): Void {
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, emptyKinds: Array<String>, blockKinds: Array<String>
+	): Void {
 		if (emptyKinds.contains(node.kind)) {
 			final span: Null<Span> = node.span;
 			if (span != null) out.push({
@@ -74,7 +85,15 @@ final class EmptyStatement implements Check {
 				message: 'empty statement'
 			});
 		}
-		for (c in node.children) walk(out, file, c, emptyKinds);
+		final absorbed: Null<Span> = absorbedSemicolon(source, node, blockKinds);
+		if (absorbed != null) out.push({
+			file: file,
+			span: absorbed,
+			rule: 'empty-statement',
+			severity: Severity.Warning,
+			message: 'stray ; after a block that already terminates the statement'
+		});
+		for (c in node.children) walk(out, file, source, c, emptyKinds, blockKinds);
 	}
 
 	/**
@@ -90,6 +109,41 @@ final class EmptyStatement implements Check {
 		final alone: Bool = StringTools.trim(source.substring(lineStart, span.from)) == ''
 			&& StringTools.trim(source.substring(span.to, lineEnd)) == '';
 		return alone ? RefactorSupport.lineExtendedSpan(source, span) : span;
+	}
+
+
+	/**
+	 * The span of a `;` the parser ABSORBED into `node` rather than projecting as an
+	 * empty-statement node, or null when there is none. A block-terminated statement
+	 * (`for (…) { … };`, `if (…) { … } else { … };`, `try … catch (…) { … };`) needs no
+	 * terminator, so the `;` is stray - but it lands INSIDE the statement's own span,
+	 * past its last child, where no node marks it. Requiring that last child to be a
+	 * BLOCK (`blockStmtKind` / `catchClauseKind`) is what separates this from every
+	 * `;` that is mandatory: a value-position block is a different kind
+	 * (`BlockExpr` / `IfExpr` / `TryExpr` / `FnExpr` / `ObjectLit`), and
+	 * `do { … } while (c);` / `if (c) g();` end in a condition or an inner statement.
+	 */
+	private static function absorbedSemicolon(source: String, node: QueryNode, blockKinds: Array<String>): Null<Span> {
+		final span: Null<Span> = node.span;
+		if (span == null || blockKinds.length == 0) return null;
+		var lastSpan: Null<Span> = null;
+		var lastKind: String = '';
+		for (child in node.children) if (child.span != null) {
+			lastSpan = child.span;
+			lastKind = child.kind;
+		}
+		if (lastSpan == null || !blockKinds.contains(lastKind)) return null;
+		final childEnd: Int = lastSpan.to;
+		if (childEnd >= span.to) return null;
+		final tail: String = source.substring(childEnd, span.to);
+		if (StringTools.trim(tail) != ';') return null;
+		final at: Int = childEnd + tail.indexOf(';');
+		// A `}` must be what already terminated the statement. A CatchClause with a
+		// SINGLE-STATEMENT body (`catch (e) log(x);`) also ends before the `;`, but there
+		// the terminator is mandatory - the char before it is `)`, not `}`.
+		var before: Int = at - 1;
+		while (before >= 0 && StringTools.isSpace(source, before)) before--;
+		return before >= 0 && source.charAt(before) == '}' ? new Span(at, at + 1) : null;
 	}
 
 }
