@@ -297,8 +297,10 @@ final class CrossRenameMember {
 				seen.push(off);
 				offsets.push(off);
 			}
-			if (entry.file == cursorFile) for (occ in Rename.renameOccurrences(entry.source, entry.tree, cursor, refShape))
-				addOff(occ.from);
+			final resolved: Array<Span> = entry.file == cursorFile
+				? Rename.renameOccurrences(entry.source, entry.tree, cursor, refShape)
+				: [];
+			for (occ in resolved) addOff(occ.from);
 			for (off in qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape)) addOff(off);
 			if (offsets.length == 0) continue;
 
@@ -307,12 +309,15 @@ final class CrossRenameMember {
 			];
 			final newSource: String = RefactorSupport.applyEdits(entry.source, edits);
 
-			try
-				plugin.parseFile(newSource)
-			catch (exception: ParseError)
-				return Err('rewritten ${entry.file} does not parse: ${exception.toString()}')
-			catch (exception: Exception)
-				return Err('rewritten ${entry.file} does not parse: ${exception.message}');
+			final newTree: QueryNode = try plugin.parseFile(newSource) catch (exception: ParseError) return Err(
+				'rewritten ${entry.file} does not parse: ${exception.toString()}'
+			)
+			catch (exception: Exception) return Err('rewritten ${entry.file} does not parse: ${exception.message}');
+
+			final capture: Null<String> = Rename.captureDiagnostic(
+				newSource, newTree, [for (edit in edits) edit.span], resolved, newName, cursor, refShape
+			);
+			if (capture != null) return Err('${entry.file}: $capture');
 
 			changes.push({ file: entry.file, newSource: newSource, count: offsets.length });
 		}

@@ -150,9 +150,111 @@ class RenameSliceTest extends Test {
 		assertRename(source, 2, 2, '_v', expected);
 	}
 
+	/**
+	 * Field -> the name of a ctor PARAM in a scope that reads the field: the
+	 * rewrite would produce `x = x;` — legal Haxe (a param self-assignment), so
+	 * neither the re-parse nor a typecheck catches it and the field silently stays
+	 * unassigned. Must be refused.
+	 */
+	public function testRenameRefusedWhenParamCapturesFieldOccurrence(): Void {
+		final source: String = 'class C {\n\tvar m_x:Int;\n\tfunction new(x:Int) {\n\t\tm_x = x;\n\t}\n}';
+		assertRenameErr(source, 2, 2, 'x', 'capture');
+	}
+
+	/**
+	 * The inverse direction — PARAM -> the name of a field it was disambiguating
+	 * (the trailing-underscore idiom): `v = v_` becomes `v = v`, and the field
+	 * write silently becomes a param self-assignment. Must be refused.
+	 */
+	public function testRenameRefusedWhenFieldWriteIsCapturedByParam(): Void {
+		final source: String = 'class C {\n\tvar v:Int;\n\tfunction new(v_:Int) {\n\t\tv = v_;\n\t}\n}';
+		assertRenameErr(source, 3, 15, 'v', 'capture');
+	}
+
+	/**
+	 * Field -> the name of a LOCAL declared in a method that reads the field: the
+	 * field read is captured by the local, so the rewrite compiles and reads the
+	 * wrong value. Must be refused.
+	 */
+	public function testRenameRefusedWhenLocalCapturesFieldRead(): Void {
+		final source: String = 'class C {\n\tvar f:Int;\n\tfunction g():Int {\n\t\tvar t:Int = 1;\n\t\treturn f + t;\n\t}\n}';
+		assertRenameErr(source, 2, 2, 't', 'capture');
+	}
+
+	/**
+	 * The guard must not over-refuse: a same-named binding in a scope that never
+	 * touches the renamed one cannot capture anything. `h`'s local `a` is
+	 * unrelated to the field, so the rename proceeds — this is what a whole-file
+	 * textual scan for the new name would wrongly block.
+	 */
+	public function testRenameAllowedWhenSameNamedLocalLivesInAnotherScope(): Void {
+		final source: String = 'class C {\n\tvar m_a:Int;\n\tfunction g():Int {\n\t\treturn m_a;\n\t}\n'
+			+ '\tfunction h():Int {\n\t\tvar a:Int = 1;\n\t\treturn a;\n\t}\n}';
+		final expected: String = 'class C {\n\tvar a:Int;\n\tfunction g():Int {\n\t\treturn a;\n\t}\n'
+			+ '\tfunction h():Int {\n\t\tvar a:Int = 1;\n\t\treturn a;\n\t}\n}';
+		assertRename(source, 2, 2, 'a', expected);
+	}
+
+	/**
+	 * `--qualify-shadowed` on the param idiom: the field takes its ctor param's
+	 * name and the assignment becomes `this.x = x` - the form a human writes when
+	 * the param and the member are the same concept.
+	 */
+	public function testQualifyShadowedRepairsParamCapture(): Void {
+		final source: String = 'class C {\n\tvar m_x:Int;\n\tfunction new(x:Int) {\n\t\tm_x = x;\n\t}\n}';
+		final expected: String = 'class C {\n\tvar x:Int;\n\tfunction new(x:Int) {\n\t\tthis.x = x;\n\t}\n}';
+		assertQualified(source, 2, 2, 'x', expected);
+	}
+
+	/**
+	 * The flag does NOT rescue a capture by a LOCAL: `return this.t + t` would be
+	 * correct but confusing, so a local capture stays a refusal even with the flag.
+	 */
+	public function testQualifyShadowedStillRefusesLocalCapture(): Void {
+		final source: String = 'class C {\n\tvar f:Int;\n\tfunction g():Int {\n\t\tvar t:Int = 1;\n\t\treturn f + t;\n\t}\n}';
+		switch renameQualified(source, 2, 2, 't') {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
+		}
+	}
+
+	/**
+	 * A STATIC function cannot say `this.`, so the flag must refuse there rather
+	 * than emit code that parses and fails to typecheck.
+	 */
+	public function testQualifyShadowedRefusesInStaticFunction(): Void {
+		final source: String = 'class C {\n\n\tstatic var m_x:Int;\n\n\tstatic function set(x:Int):Void {\n\t\tm_x = x;\n\t}\n\n}';
+		switch renameQualified(source, 3, 9, 'x') {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf('capture') >= 0, 'message lacks "capture": $message');
+		}
+	}
+
 	private function assertRename(source: String, line: Int, col: Int, newName: String, expected: String): Void {
 		final result: RenameResult = renameOf(source, line, col, newName);
 		switch result {
+			case Ok(text):
+				Assert.equals(expected, text);
+			case Err(message):
+				Assert.fail('expected Ok, got Err: $message');
+		}
+	}
+
+	private function assertRenameErr(source: String, line: Int, col: Int, newName: String, fragment: String): Void {
+		switch renameOf(source, line, col, newName) {
+			case Ok(text):
+				Assert.fail('expected Err, got Ok:\n$text');
+			case Err(message):
+				Assert.isTrue(message.indexOf(fragment) >= 0, 'message lacks "$fragment": $message');
+		}
+	}
+
+	private function assertQualified(source: String, line: Int, col: Int, newName: String, expected: String): Void {
+		switch renameQualified(source, line, col, newName) {
 			case Ok(text):
 				Assert.equals(expected, text);
 			case Err(message):
@@ -164,6 +266,11 @@ class RenameSliceTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final shape: RefShape = plugin.refShape();
 		return Rename.rename(source, line, col, newName, plugin, shape);
+	}
+
+	private static function renameQualified(source: String, line: Int, col: Int, newName: String): RenameResult {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return Rename.rename(source, line, col, newName, plugin, plugin.refShape(), true);
 	}
 
 }

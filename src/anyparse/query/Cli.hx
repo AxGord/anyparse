@@ -766,6 +766,7 @@ final class Cli {
 		var matchExpr: Null<String> = null;
 		var nth: Null<Int> = null;
 		var newName: Null<String> = null;
+		var qualifyShadowed: Bool = false;
 
 		var i: Int = 0;
 		while (i < args.length) {
@@ -783,6 +784,8 @@ final class Cli {
 					write = true;
 				case '--scope':
 					scope = expectValue(args, ++i, '--scope');
+				case '--qualify-shadowed':
+					qualifyShadowed = true;
 				case '-h', '--help':
 					printRenameUsage();
 					return EXIT_OK;
@@ -824,7 +827,7 @@ final class Cli {
 		if (scope != null) return runRenameScope(filePath, source, pos.line, pos.col, newNameStr, scope, write, plugin);
 
 		final shape: RefShape = plugin.refShape();
-		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape);
+		final result: RenameResult = Rename.rename(source, pos.line, pos.col, newNameStr, plugin, shape, qualifyShadowed);
 		switch result {
 			case Ok(text):
 				if (write) {
@@ -5349,6 +5352,8 @@ final class Cli {
 		sysPrint('Options:\n');
 		sysPrint('  --write             Overwrite <file> in place (default: emit to stdout)\n');
 		sysPrint('  --scope <dir>       Cross-file rename of a TYPE or a MEMBER across <dir>\n');
+		sysPrint('  --qualify-shadowed  On a capture by a PARAMETER of the same name, insert\n');
+		sysPrint('                      `this.` on the member access instead of refusing\n');
 		sysPrint('  --lang <name>       Grammar plugin (default: haxe)\n');
 		sysPrint('\n');
 		sysPrint('Scope-correct, format-preserving rename of the binding identified by\n');
