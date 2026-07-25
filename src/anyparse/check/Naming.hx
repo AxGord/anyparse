@@ -167,13 +167,14 @@ final class Naming implements Check implements CrossFileFix {
 	 * against the first rule whose category matches and whose `requireMods` are
 	 * all present and `forbidMods` all absent; a name failing that rule's
 	 * `format` is a `Warning`. A declaration with no span is skipped (no
-	 * location to report), as is one no rule applies to.
+	 * location to report), as is one no rule applies to and one whose name is a
+	 * language idiom outside any policy (`NamedDecl.reservedName`).
 	 */
 	public static function violationsFor(file: String, decls: Array<NamedDecl>, policy: NamingPolicy): Array<Violation> {
 		final out: Array<Violation> = [];
 		for (decl in decls) {
 			final span: Null<Span> = decl.span;
-			if (span == null) continue;
+			if (span == null || decl.reservedName == true) continue;
 			final rule: Null<NamingRule> = applicableRule(decl, policy);
 			if (rule == null || rule.format.match(decl.name)) continue;
 			out.push({

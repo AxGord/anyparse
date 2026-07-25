@@ -24,6 +24,12 @@ final class HaxeNamingSupport implements NamingSupport {
 	/** Camel-case with NO leading underscore - a local must not carry the private-field `_` prefix. */
 	private static final LOCAL_CASE_PATTERN: String = "^[a-z][a-zA-Z0-9]*$";
 
+	/** A discard binding: underscores only, nothing to name (`for (_ in items)`). */
+	private static final DISCARD_NAME_PATTERN: EReg = new EReg("^_+$", '');
+
+	/** A magic dunder name (`__init__`) - a language / framework contract, not a style choice. */
+	private static final DUNDER_NAME_PATTERN: EReg = new EReg("^__.+__$", '');
+
 	/**
 	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
 	 * these is not a usable identifier, so its rename is skipped (report-only).
@@ -222,7 +228,8 @@ final class HaxeNamingSupport implements NamingSupport {
 				enclosingType: enclosingType,
 				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods),
 				renameUnsafe: isStructuralField(parent) || hasPhysicalAccessors(node, parent, declName)
-				|| (enclosingRtti && isMemberCategory(categoryValue))
+				|| (enclosingRtti && isMemberCategory(categoryValue)),
+				reservedName: isReservedName(declName)
 			});
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
@@ -304,17 +311,20 @@ final class HaxeNamingSupport implements NamingSupport {
 
 
 	/**
-	 * Whether a member can be reached without an in-source identifier reference: a
-	 * constructor (`new`), a property accessor (`get_` / `set_`, invoked through a
-	 * `(get, set)` property), or an annotation-bearing member a framework / macro
-	 * may reach. Non-members are never implicitly reachable.
+	 * Is a member of `category` named `name` reachable without an in-source
+	 * identifier reference? A constructor (`new`), a magic dunder name the runtime
+	 * calls (`__init__` - the static module initialiser), a `get_` / `set_`
+	 * property accessor invoked through `(get, set)`, an annotated member a
+	 * framework / macro / `@:keep` may reach, and a static final initialised with a
+	 * type reference (a `Class<T>` registry entry) all qualify.
 	 */
 	private static function isImplicitlyReachable(
 		category: NamingCategory, name: String, node: QueryNode, parent: Null<QueryNode>, mods: Array<String>
 	): Bool {
 		return (category == NamingCategory.Field || category == NamingCategory.Method || category == NamingCategory.Constant)
-			&& (name == 'new' || StringTools.startsWith(name, 'get_') || StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent)
-				|| node.kind == 'FinalMember' && mods.contains('static') && isTypeReferenceInit(node));
+			&& (name == 'new' || DUNDER_NAME_PATTERN.match(name) || StringTools.startsWith(name, 'get_')
+				|| StringTools.startsWith(name, 'set_') || metaPrecedes(node, parent) || node.kind == 'FinalMember'
+				&& mods.contains('static') && isTypeReferenceInit(node));
 	}
 
 	/**
@@ -470,6 +480,19 @@ final class HaxeNamingSupport implements NamingSupport {
 			i--;
 		}
 		return false;
+	}
+
+
+	/**
+	 * Is `name` a Haxe idiom no naming policy governs? A discard binding
+	 * (`_`, `__` - `for (_ in items)`, a placeholder param) carries no meaning to
+	 * spell correctly, and a dunder name (`__init__` - the static module
+	 * initialiser; `__initializeUtest__`) is a language / framework contract a
+	 * rename silently breaks. A single leading `__` is NOT reserved: `__width` is
+	 * an ordinary field the policy still governs.
+	 */
+	private static function isReservedName(name: String): Bool {
+		return DISCARD_NAME_PATTERN.match(name) || DUNDER_NAME_PATTERN.match(name);
 	}
 
 }

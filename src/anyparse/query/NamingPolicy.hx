@@ -104,6 +104,17 @@ typedef NamedDecl = {
 	 * (false) for ordinary declarations.
 	 */
 	@:optional var renameUnsafe: Bool;
+
+	/**
+	 * True when the identifier is a language / framework idiom rather than a
+	 * name the policy governs, so no rule applies to it at all. Two grammar-set
+	 * cases in Haxe: a discard binding (`for (_ in items)` - there is nothing to
+	 * rename), and a magic dunder name (`__init__`, the static module
+	 * initialiser - renaming it silently disables the code). Unlike
+	 * `renameUnsafe`, this suppresses the WARNING too: the name is correct as
+	 * written. Absent (false) for ordinary declarations.
+	 */
+	@:optional var reservedName: Bool;
 }
 /**
  * A grammar plugins projection for the `naming` check: `project` lists the name-checkable declarations of a tree, and the policy lookup resolves each file to its effective `NamingPolicy` (discovered project config or built-in default). Keeps the check free of grammar-specific node types.

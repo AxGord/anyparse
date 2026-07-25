@@ -1149,4 +1149,26 @@ class NamingCheckTest extends Test {
 	 * the inheritance gate blocks the rename (report-only). Provable-positive only, so an
 	 * unresolvable supertype closure still renames.
 	 */
+
+	public function testDiscardLoopVarNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f(items:Array<Int>):Void {\n\t\tfor (_ in items) {}\n\t}\n}').length);
+	}
+
+
+	public function testDiscardParamNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f(_:Int):Void {}\n}').length);
+	}
+
+
+	public function testModuleInitMagicMethodNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tstatic function __init__():Void {}\n}').length);
+	}
+
+
+	public function testLeadingDunderPrefixFieldStillFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tprivate var __width:Float;\n}');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'__width'"));
+	}
+
 }

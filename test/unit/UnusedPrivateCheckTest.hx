@@ -492,4 +492,9 @@ class UnusedPrivateCheckTest extends Test {
 		return check.fix(source, check.run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()), new HaxeQueryPlugin());
 	}
 
+
+	public function testModuleInitMagicMethodNotFlagged(): Void {
+		Assert.equals(0, one('class C {\n\tprivate static function __init__():Void {\n\t\ttrace(1);\n\t}\n}').length);
+	}
+
 }
