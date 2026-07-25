@@ -1087,4 +1087,66 @@ class NamingCheckTest extends Test {
 		}
 	}
 
+
+	/**
+	 * The subtype lives as a SECONDARY type in a module whose PRIMARY type belongs to an
+	 * UNRELATED hierarchy that already uses the target name (`_w`, inherited from its own
+	 * `Base`). That occurrence cannot clash with the owner's renamed field - different class,
+	 * different inherited member - so it must NOT block the cross-file rename. The old guard
+	 * was a blunt WHOLE-FILE textual scan and refused the whole rename.
+	 */
+	public function testCrossFileFixIgnoresTargetNameInUnrelatedSiblingType(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var __w:Int;\n\tpublic function f() { return this.__w; }\n}';
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate var _w:Int;\n}';
+		final hostSrc: String = 'package pkg;\nclass Host extends Base {\n\tpublic function h() { return _w; }\n}\n\nclass Sub extends C {\n\tpublic function g() { return __w; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/Base.hx', source: baseSrc },
+			{ file: 'pkg/Host.hx', source: hostSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		final rename: Array<CrossFileEdits> = renames[0];
+		Assert.equals(2, rename.length);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, '_w', 'var __w');
+		assertRenameSlice(rename, 'pkg/Host.hx', hostSrc, '_w', 'return __w');
+	}
+
+
+	/**
+	 * The mirror: the target name is already declared INSIDE the subtype itself, where the
+	 * renamed inherited field would hit Haxe's "Redefinition of variable in subclass" - a real
+	 * collision, so the rename stays report-only even under the scope-aware guard.
+	 */
+	public function testCrossFileFixBlocksOnTargetNameInsideSubtype(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var __w:Int;\n\tpublic function f() { return this.__w; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tprivate var _w:Int;\n\tpublic function g() { return __w + _w; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+	/**
+	 * A same-named MEMBER ACCESS through another value (`t.width`) can never be captured by renaming
+	 * a function-scoped binding, so it must not block the de-prefixing. The collision scan is
+	 * raw-textual, and without the field-access carve-out `t.width` read as a collision - the shape is
+	 * everywhere in UI code (`textField.width = __width`).
+	 */
+	/**
+	 * The mirror: a `this.`-received access DOES resolve in the binding's scope, so the carve-out must
+	 * not exclude it - de-prefixing would make the local shadow the member and flip the meaning of
+	 * every bare reference. Report-only.
+	 */
+	/**
+	 * De-prefixing `__x -> x` inside a subclass whose supertype declares `x` would SHADOW that
+	 * inherited member - and the `__` prefix exists precisely to avoid the clash. The member is in
+	 * scope even when the file never mentions it textually, so the whole-file scan cannot see it:
+	 * the inheritance gate blocks the rename (report-only). Provable-positive only, so an
+	 * unresolvable supertype closure still renames.
+	 */
 }

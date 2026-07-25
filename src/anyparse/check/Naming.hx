@@ -284,7 +284,7 @@ final class Naming implements Check implements CrossFileFix {
 		// (the re-parse gate accepts it but it does not type-check), so skip. Scope-aware for a local /
 		// param / catch var - an occurrence in an UNRELATED function does not conflict; a field / constant
 		// stays whole-file (see `collidesInScope`).
-		if (collidesInScope(decl, source, tree, newName, shape)) return null;
+		if (collidesInScope(decl, source, tree, newName, shape, resolutionIndex)) return null;
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
@@ -384,12 +384,17 @@ final class Naming implements Check implements CrossFileFix {
 			final fileSource: Null<String> = sourceByFile[file];
 			if (fileSource == null) return null;
 			final fsrc: String = fileSource;
+			final fileTree: Null<QueryNode> = file == c.declFile ? c.tree : CheckScan.parseOrNull(plugin, fsrc);
+			if (fileTree == null) return null;
 			final spans: Null<Array<Span>> = file == c.declFile
 				? declaringFileRenameSpans(fsrc, c.tree, c.declFrom, c.oldName, shape, plugin, c.distinctive)
 				: otherFileRenameSpans(fsrc, c.oldName, plugin, c.distinctive, c.ownerName, shape, resolutionIndex);
 			if (spans == null) return null;
-			// A `targetName` already bound in this file would collide once the rename lands.
-			if (RefactorSupport.referencedInRange(fsrc, c.targetName, 0, fsrc.length, [])) return null;
+			// A `targetName` already bound where the rename lands would collide once it does - scanned
+			// across the OWNER's own hierarchy in this file only, since a sibling hierarchy's same-named
+			// member is not reachable from it (see `unrelatedTypeSpans`).
+			final unrelated: Array<Span> = unrelatedTypeSpans(fileTree, c.ownerName, shape, resolutionIndex);
+			if (RefactorSupport.referencedInRange(fsrc, c.targetName, 0, fsrc.length, unrelated)) return null;
 			if (spans.length > 0) slices.push({ file: file, edits: [for (s in spans) { span: s, text: c.targetName }] });
 		}
 		return slices.length == 0 ? null : slices;
@@ -731,12 +736,21 @@ final class Naming implements Check implements CrossFileFix {
 	 * is out of scope. An inherited member in another file never appears in-file, so a local legally
 	 * shadowing one still renames.
 	 */
-	private static function collidesInScope(decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape): Bool {
+	private static function collidesInScope(
+		decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape, resolutionIndex: Null<SymbolIndex>
+	): Bool {
 		final span: Null<Span> = decl.span;
 		if (span == null) return true;
 		final cat: NamingCategory = decl.category;
-		if (cat != NamingCategory.Local && cat != NamingCategory.Param && cat != NamingCategory.CatchVar)
-			return RefactorSupport.referencedInRange(source, newName, 0, source.length, []);
+		if (cat != NamingCategory.Local && cat != NamingCategory.Param && cat != NamingCategory.CatchVar) {
+			// Whole-file EXCEPT the sibling hierarchies sharing the module: a same-named member of an
+			// UNRELATED class is not reachable from this one, so it is no collision (see `unrelatedTypeSpans`).
+			final owner: Null<String> = decl.enclosingType;
+			final unrelated: Array<Span> = (owner == null || resolutionIndex == null)
+				? []
+				: unrelatedTypeSpans(tree, owner, shape, resolutionIndex);
+			return RefactorSupport.referencedInRange(source, newName, 0, source.length, unrelated);
+		}
 		final funcKinds: Array<String> = shape.functionKinds ?? [];
 		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
 		// / local functions that capture it - so a same-named binding anywhere in that function conflicts.
@@ -778,6 +792,34 @@ final class Naming implements Check implements CrossFileFix {
 		}
 		walk(node);
 		return best;
+	}
+
+
+	/**
+	 * The spans of every top-level type declaration in `tree` that is NEITHER `ownerName` nor a
+	 * subtype of it - a sibling hierarchy sharing the module. The target-name collision scan
+	 * excludes them: a `_x` bound inside an UNRELATED class cannot clash with the owner's renamed
+	 * inherited member (different class, different inherited field), yet a whole-file textual scan
+	 * reads it as a collision and refuses the rename. Modules routinely park a small helper subtype
+	 * next to a class of another hierarchy that already uses the same conventional name, so the
+	 * blunt scan blocked most `__x -> _x` field renames. A type whose name or span is unresolvable,
+	 * or one nested behind a `#if` (not a direct child), is NOT excluded - it keeps blocking
+	 * (fail-closed).
+	 */
+	private static function unrelatedTypeSpans(
+		tree: QueryNode, ownerName: String, shape: RefShape, resolutionIndex: SymbolIndex
+	): Array<Span> {
+		final kinds: Array<String> = shape.typeDeclKinds ?? [];
+		if (kinds.length == 0) return [];
+		final out: Array<Span> = [];
+		for (child in tree.children) {
+			final name: Null<String> = child.name;
+			final span: Null<Span> = child.span;
+			if (!kinds.contains(child.kind) || name == null || span == null) continue;
+			final n: String = name;
+			if (n != ownerName && !resolutionIndex.isSubtype(n, ownerName)) out.push(span);
+		}
+		return out;
 	}
 
 }
