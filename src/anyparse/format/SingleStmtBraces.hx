@@ -48,7 +48,11 @@ package anyparse.format;
  *     `elseFollows` signal.
  *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing
  *     statement (the `@:trailOpt(';')` slot, e.g. `for (c) { x; };`).
- *     De-bracing would emit `for (c) x;;`, which anyparse parses but
+ *     UNREACHABLE since omega-ssb-trailopt-drop: the writer no longer re-emits
+ *     that slot on a brace-droppable field, so every splice passes `false`.
+ *     It survives as a fail-closed guard for a future field that both drops
+ *     braces and emits a trail. It once mattered because de-bracing would
+ *     emit `for (c) x;;`, which anyparse parses but
  *     the Haxe compiler rejects ("Expected }"), so the braces stay.
  *  7. `siblingKeepsBraces` - if/else brace symmetry: an if/else must
  *     de-brace BOTH branches or NEITHER. Each splice probes the OTHER
@@ -93,9 +97,14 @@ class SingleStmtBraces {
 		// branch keeps its own too. De-bracing one half of an if/else while the other stays
 		// braced (`if (b) return true; else { ... }`) is an asymmetry violation, so fail closed.
 		if (siblingKeepsBraces) return body;
-		// Gate 6 — a redundant trailing `;` on the enclosing statement (`for (…) { x; };`,
-		// the `@:trailOpt(';')` slot): de-bracing would emit `for (…) x;;`, which anyparse
-		// parses but the Haxe compiler rejects ("Expected }"). Keep the braces (fail closed).
+		// Gate 6 — UNREACHABLE for the fields spliced today, kept as a fail-closed guard.
+		// A redundant trailing `;` on the enclosing statement (`for (…) { x; };`) once
+		// forced the braces to stay, because de-bracing would have emitted `for (…) x;;` -
+		// parsed by anyparse, rejected by the Haxe compiler ("Expected }"). Since
+		// omega-ssb-trailopt-drop the writer no longer RE-EMITS that slot on a
+		// brace-droppable field (`WriterLowering.emitMandatoryRefTrail`), so every splice
+		// passes `false` here and the hazard is gone at the root. The gate survives for a
+		// future field that both drops braces and does emit a trail.
 		if (hasTrailingSemi) return body;
 		// The de-brace decision (gates 1-8) lives in `deBracedElem`, shared with
 		// `hoistTrailingComment` so a same-line trailing comment on the single statement
@@ -173,12 +182,12 @@ class SingleStmtBraces {
 			if (stmt == null) break;
 			final innerThen: Dynamic = stmt.thenBody;
 			final innerElse: Dynamic = stmt.elseBody;
-			// The terminal else-if then-body (no further `else`) can carry the
-			// enclosing statement's trailing `;`; gate 6 keeps its braces at the real
-			// splice, so the scan must see it too. Non-terminal then-bodies are always
-			// false - a `;` never sits between a then-block and `else`.
-			final innerTrail: Bool = stmt.thenBodyTrailPresent == true;
-			if (keepsBraces(innerThen, drop, suppress, innerElse != null, innerTrail, true)) return true;
+			// omega-ssb-trailopt-drop: always `false`. The terminal else-if then-body
+			// CAN carry the enclosing statement's redundant trailing `;`, but the writer
+			// no longer re-emits that slot, so gate 6 cannot fire at the real splice -
+			// and a scan that still read the slot would hold the whole chain braced over
+			// a `;` that never reaches the output.
+			if (keepsBraces(innerThen, drop, suppress, innerElse != null, false, true)) return true;
 			cur = innerElse;
 		}
 		return cur != null && keepsBraces(cur, drop, suppress, false, false, false);

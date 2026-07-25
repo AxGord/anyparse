@@ -9590,7 +9590,18 @@ class WriterLowering {
 		// behaviour for now. `null` on `<field>TrailPresent` is reserved
 		// for raw->paired upcasts from `Converters.rawToPaired_*` and
 		// falls through to canonical emit via the `==false` test.
-		if (hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null)
+		// omega-ssb-trailopt-drop: a field whose braces may be dropped
+		// (`@:fmt(dropSingleStmtBraces)` — `HxIfStmt.thenBody` / `HxForStmt.body` /
+		// `HxWhileStmt.body` / `HxDoWhileStmt.body`) never re-emits this slot: a
+		// STATEMENT owns its own terminator (`if (c) g();` puts the `;` inside the
+		// inner `ExprStmt`), so the slot can only ever hold a REDUNDANT `;`
+		// (`for (…) { x; };`). Canonicalising it away removes the `for (…) x;;`
+		// hazard at the root instead of defending against it with a keep-braces
+		// gate, and matches what the optional `elseBody` path has always done.
+		if (
+			hasStructFieldTrailOptSlot && !isOptional && !hasCondWrap && !hasCondWrapEnd && trailOptText != null
+			&& !child.fmtHasFlag('dropSingleStmtBraces')
+		)
 			parts.push(macro $structTrailOptAccess == false ? _de() : _dt($v{trailOptText}));
 	}
 
@@ -10221,10 +10232,11 @@ class WriterLowering {
 		// The body's own `@:trailOpt(';')` slot (`value.<field>TrailPresent`): a redundant
 		// trailing `;` (`for (…) { x; };`) would become `for (…) x;;` once de-braced — invalid
 		// to the Haxe compiler — so it fails the unwrap closed (braces kept).
-		final trailSemiExpr: Expr = dropBraces && child.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true
-			&& isTriviaBearing(typePath)
-			? macro (${{ expr: EField(macro value, fieldName + TriviaTypeSynth.TRAIL_PRESENT_SUFFIX), pos: Context.currentPos() }} == true)
-			: macro false;
+		// omega-ssb-trailopt-drop: always `false` — the trail slot of a brace-droppable
+		// field is no longer emitted (see `emitMandatoryRefTrail`), so the `for (…) x;;`
+		// shape the keep-braces gate defended against cannot occur. The gate itself stays
+		// as a fail-closed guard for any FUTURE field that both drops braces and emits a trail.
+		final trailSemiExpr: Expr = macro false;
 		// ω-single-stmt-braces symmetry (gate 7): probe whether the `else` sibling would
 		// KEEP its braces. If it does, this then-body keeps its own too - an if/else must
 		// de-brace both branches or neither. The else-body's own splice unwraps with

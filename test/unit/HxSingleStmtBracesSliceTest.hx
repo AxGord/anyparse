@@ -148,13 +148,16 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
-	public function testTrailingSemiTerminalElseIfKeepsChainBraced(): Void {
-		// The TERMINAL else-if then-body carries the enclosing statement's redundant
-		// trailing `;`, so gate 6 keeps its braces at the real splice. The chain scan
-		// must read that then-body's own trail slot (not assume false) or the earlier
-		// branch de-braces asymmetrically. Fully braced round-trips (the `;` stays).
-		roundTrip(
-			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tA();\n\t\t} else if (b) {\n\t\t\tB();\n\t\t};\n\t}\n}'
+	public function testTrailingSemiTerminalElseIfDropsSemiAndDeBraces(): Void {
+		// The terminal else-if then-body carried the enclosing statement's redundant
+		// trailing `;`. Now that the slot never re-emits, no branch is held braced by it,
+		// so the whole chain de-braces symmetrically. Each body keeps its own line - the
+		// `ifBody` policy honours the source layout and `fitLineIfWithElse` governs a
+		// chain that has an `else`, unlike the `else`-less cases above which go inline.
+		// Verified idempotent, and the shape compiles and runs.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tA();\n\t\t} else if (b) {\n\t\t\tB();\n\t\t};\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\tA();\n\t\telse if (b)\n\t\t\tB();\n\t}\n}'
 		);
 	}
 
@@ -204,15 +207,23 @@ class HxSingleStmtBracesSliceTest extends Test {
 		roundTrip('class F {\n\tfunction f(a:Bool):Bool {\n\t\tif (a) {\n\t\t\treturn true\n\t\t}\n\t\treturn false;\n\t}\n}');
 	}
 
-	public function testTrailingEmptyStmtAfterForKeepsBraces(): Void {
-		// `for (...) { stmt; };` — a block FOLLOWED by a redundant empty statement.
-		// De-bracing yields `for (...) stmt;;`, which anyparse parses but the Haxe
-		// compiler rejects ("Expected }"). The gate must fail closed and keep braces.
-		roundTrip('class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) {\n\t\t\ttrace(v);\n\t\t};\n\t}\n}');
+	public function testTrailingEmptyStmtAfterForDropsSemiAndDeBraces(): Void {
+		// `for (...) { stmt; };` — the trailing `;` sits in the body's own
+		// `@:trailOpt(';')` slot, where it can only ever be REDUNDANT (the inner
+		// statement owns its own terminator), so the writer canonicalises it away.
+		// With the `;` gone the `for (...) stmt;;` hazard cannot arise and the single
+		// statement de-braces normally.
+		assertFmt(
+			'class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) {\n\t\t\ttrace(v);\n\t\t};\n\t}\n}',
+			'class F {\n\tfunction f(m:Map<Int, Int>):Void {\n\t\tfor (k => v in m) trace(v);\n\t}\n}'
+		);
 	}
 
-	public function testTrailingEmptyStmtAfterIfKeepsBraces(): Void {
-		roundTrip('class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t};\n\t}\n}');
+	public function testTrailingEmptyStmtAfterIfDropsSemiAndDeBraces(): Void {
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tg();\n\t\t};\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) g();\n\t}\n}'
+		);
 	}
 
 	public function testTrailingEmptyStmtAfterElseDropsSemiKeepsBraces(): Void {
