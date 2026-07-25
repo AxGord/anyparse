@@ -23,12 +23,14 @@ class ClustersTest extends Test {
 	 * members alone and reports the natural split.
 	 * Two 2-member islands glued by a logger every member calls.
 	 */
-	private static final HUB_GLUED: String = 'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); } function d():Void log(); function log():Void {} }';
+	private static final HUB_GLUED: String =
+		'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); } function d():Void log(); function log():Void {} }';
 
 	/**
 	 * HUB_GLUED with the hub calling back into the second island.
 	 */
-	private static final HUB_CALLBACK: String = 'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); } function d():Void log(); function log():Void d(); }';
+	private static final HUB_CALLBACK: String =
+		'class A { function a():Void { b(); log(); } function b():Void log(); function c():Void { d(); log(); } function d():Void log(); function log():Void d(); }';
 
 	public function testTwoIslandsSplitWithoutHubs(): Void {
 		final r: Null<ClusterReport> = analyzeOf([

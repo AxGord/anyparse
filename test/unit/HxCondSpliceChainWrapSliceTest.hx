@@ -24,7 +24,8 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxCondSpliceChainWrapSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
+	private static final CONFIG: String =
+		'{"indentation":{"character":"tab","tabWidth":4},"wrapping":{"maxLineLength":140,"opAddSubChain":{"defaultWrap":"noWrap","rules":[{"conditions":[{"cond":"exceedsMaxLineLength","value":0}],"type":"noWrap"},{"conditions":[{"cond":"exceedsMaxLineLength","value":1}],"type":"fillLine","location":"beforeLast"}]}}}';
 
 	public function new(): Void {
 		super();
@@ -37,7 +38,8 @@ final class HxCondSpliceChainWrapSliceTest extends Test {
 	 * operand and over-indents the tail continuation by one level.
 	 */
 	public function testCondSpliceOperandPacksFirstLineAndTailCoIndents(): Void {
-		final src: String = 'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl" + #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff\n\t\t\t+ "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl"\n\t\t\t+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl" + #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff\n\t\t\t+ "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl"\n\t\t\t+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -46,8 +48,10 @@ final class HxCondSpliceChainWrapSliceTest extends Test {
 	 * indent level too deep) re-flows to the canonical form.
 	 */
 	public function testCondSpliceChainReflowsBrokenForm(): Void {
-		final canonical: String = 'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl" + #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff\n\t\t\t+ "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl"\n\t\t\t+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
-		final broken: String = 'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl"\n\t\t\t+ #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff\n\t\t\t+ "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl"\n\t\t\t\t+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
+		final canonical: String =
+			'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl" + #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff\n\t\t\t+ "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl"\n\t\t\t+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
+		final broken: String =
+			'class C {\n\tpublic function render():String {\n\t\treturn "AlphaObject" + "nl" + "{" + head() + "  aa: " + aa + "nl" + "  bbbbb: " + bbbbb + "nl" + "  ccccccc: " + ccccccc + "nl"\n\t\t\t+ "  ddddddddd: " + ddddddddd + "nl"\n\t\t\t+ #if flag "  eeeeeeeeee: " + eeeeeeeeee + "nl" + "  ffffffffffffff: " + ffffffffffffff\n\t\t\t+ "nl" + #end\n\t\t\t"  gggggggggggg: " + wrapp(gggggggggggg) + "nl" + "  hhhhhhh: " + hhhhhhh + "nl" + "  iiiiiiii: " + iiiiiiii + "nl"\n\t\t\t\t+ "  jjjjjjjjjjjjjjjjjj: " + jjjjjjjjjjjjjjjjjj + "nl" + "}";\n\t}\n}';
 		Assert.equals(canonical, triviaWrite(broken));
 	}
 

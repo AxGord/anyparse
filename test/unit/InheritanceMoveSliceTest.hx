@@ -16,11 +16,13 @@ import anyparse.query.MoveSymbol.MoveResult;
  */
 class InheritanceMoveSliceTest extends Test {
 
-	private static final ANIMAL: String = 'package pkg;\n\nclass Animal {\n\tpublic var name:String;\n\tpublic function new(n:String) { name = n; }\n}';
+	private static final ANIMAL: String =
+		'package pkg;\n\nclass Animal {\n\tpublic var name:String;\n\tpublic function new(n:String) { name = n; }\n}';
 
 	/** Pull an instance method up to its superclass; no call sites change. */
 	public function testPullUpMethod(): Void {
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function describe():String return name + \' dog\';\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function describe():String return name + \' dog\';\n}';
 		final changes: Array<MoveChange> = okChanges(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog },
@@ -32,7 +34,8 @@ class InheritanceMoveSliceTest extends Test {
 
 	/** An instance field pulls up too. */
 	public function testPullUpField(): Void {
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic var breed:String = \'mutt\';\n\tpublic function new(n:String) { super(n); }\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic var breed:String = \'mutt\';\n\tpublic function new(n:String) { super(n); }\n}';
 		final changes: Array<MoveChange> = okChanges(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'breed', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog },
@@ -42,7 +45,8 @@ class InheritanceMoveSliceTest extends Test {
 
 	/** Pull-up is refused when the body references a subclass-only member. */
 	public function testPullUpStrandedRefused(): Void {
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function bark():String return \'woof\';\n\tpublic function describe():String return bark();\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function bark():String return \'woof\';\n\tpublic function describe():String return bark();\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'describe', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog },
@@ -73,7 +77,8 @@ class InheritanceMoveSliceTest extends Test {
 
 	/** A static member is refused (statics are not inherited the same way). */
 	public function testStaticRefused(): Void {
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic static function make():Dog return new Dog(\'x\');\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic static function make():Dog return new Dog(\'x\');\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'make', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: ANIMAL },
 			{ file: 'pkg/Dog.hx', source: dog },
@@ -82,8 +87,10 @@ class InheritanceMoveSliceTest extends Test {
 
 	/** An override member is refused. */
 	public function testOverrideRefused(): Void {
-		final animal: String = 'package pkg;\n\nclass Animal {\n\tpublic function new() {}\n\tpublic function speak():String return \'?\';\n}';
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new() { super(); }\n\toverride public function speak():String return \'woof\';\n}';
+		final animal: String =
+			'package pkg;\n\nclass Animal {\n\tpublic function new() {}\n\tpublic function speak():String return \'?\';\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new() { super(); }\n\toverride public function speak():String return \'woof\';\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'speak', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: animal },
 			{ file: 'pkg/Dog.hx', source: dog },
@@ -101,8 +108,10 @@ class InheritanceMoveSliceTest extends Test {
 
 	/** A member the target already declares is refused. */
 	public function testTargetCollisionRefused(): Void {
-		final animal: String = 'package pkg;\n\nclass Animal {\n\tpublic function new() {}\n\tpublic function tag():String return \'a\';\n}';
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new() { super(); }\n\tpublic function tag():String return \'d\';\n}';
+		final animal: String =
+			'package pkg;\n\nclass Animal {\n\tpublic function new() {}\n\tpublic function tag():String return \'a\';\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new() { super(); }\n\tpublic function tag():String return \'d\';\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'tag', 'Animal', [
 			{ file: 'pkg/Animal.hx', source: animal },
 			{ file: 'pkg/Dog.hx', source: dog },
@@ -111,7 +120,8 @@ class InheritanceMoveSliceTest extends Test {
 
 	/** A target class absent from the scope is refused. */
 	public function testNoSuchTargetRefused(): Void {
-		final dog: String = 'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function d():Void {}\n}';
+		final dog: String =
+			'package pkg;\n\nclass Dog extends Animal {\n\tpublic function new(n:String) { super(n); }\n\tpublic function d():Void {}\n}';
 		assertErr(InheritanceMove.pullUp('pkg/Dog.hx', 'Dog', 'd', 'Missing', [{ file: 'pkg/Dog.hx', source: dog },], plugin()));
 	}
 

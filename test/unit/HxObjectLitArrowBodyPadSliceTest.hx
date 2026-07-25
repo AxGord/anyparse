@@ -21,9 +21,12 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxObjectLitArrowBodyPadSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
-	private static final CONFIG_KEEP_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
-	private static final CONFIG_REFLOW: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+	private static final CONFIG: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before"}}}}';
+	private static final CONFIG_KEEP_PAD: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true}}}}';
+	private static final CONFIG_REFLOW: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
 
 	public function new(): Void {
 		super();
@@ -46,7 +49,8 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 	}
 
 	public function testNestedObjectLitInsideArrowBodyKeepsPad(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {alpha: { gamma: u.g }, beta: u.b });\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {alpha: { gamma: u.g }, beta: u.b });\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -103,13 +107,15 @@ final class HxObjectLitArrowBodyPadSliceTest extends Test {
 	 * inline form when it fits.
 	 */
 	public function testArrowBodyMultilineSourceReflowsInline(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
 		final expected: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> { alpha: u.a, beta: u.b });\n\t}\n}';
 		Assert.equals(expected, triviaWriteReflow(src));
 	}
 
 	public function testArrowBodyMultilineSourceKeptWithoutReflowKnob(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal entries = users.map(u -> {\n\t\t\talpha: u.a,\n\t\t\tbeta: u.b\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWriteKeepPad(src));
 	}
 

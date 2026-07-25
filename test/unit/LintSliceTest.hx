@@ -241,7 +241,8 @@ class LintSliceTest extends Test {
 	 * the same name.
 	 */
 	public function testScopeBoundedScan(): Void {
-		final src: String = 'class C {\n\tfunction a() {\n\t\tfinal v:Int = 1;\n\t}\n\tfunction b() {\n\t\tfinal v:Int = 2;\n\t\ttrace(v);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction a() {\n\t\tfinal v:Int = 1;\n\t}\n\tfunction b() {\n\t\tfinal v:Int = 2;\n\t\ttrace(v);\n\t}\n}';
 		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
 		Assert.equals(1, vs.length);
 	}
@@ -470,7 +471,8 @@ class LintSliceTest extends Test {
 	 * call) is in use — the same word-boundary test as a plain import.
 	 */
 	public function testUsingUsedViaTypeName(): Void {
-		final src: String = 'package pkg;\nusing StringTools;\nclass C {\n\tfunction f(s:String):Int return StringTools.fastCodeAt(s, 0);\n}';
+		final src: String =
+			'package pkg;\nusing StringTools;\nclass C {\n\tfunction f(s:String):Int return StringTools.fastCodeAt(s, 0);\n}';
 		final vs: Array<Violation> = new UnusedImport().run([{ file: 'pkg/C.hx', source: src }], plugin());
 		Assert.equals(0, vs.length);
 	}

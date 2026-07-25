@@ -473,7 +473,8 @@ class HxTriviaWriteTest extends Test {
 	 * `case B:` round-trips with the gap intact.
 	 */
 	public function testCaseBodyEmptyTrailWithBlankAfter(): Void {
-		final source: String = 'class Main {\n\tstatic function main():Void {\n\t\tswitch v {\n\t\t\tcase A:\n\t\t\t\t// Case A\n\n\t\t\tcase B:\n\t\t\t\ttrace(\'b\');\n\t\t}\n\t}\n}';
+		final source: String =
+			'class Main {\n\tstatic function main():Void {\n\t\tswitch v {\n\t\t\tcase A:\n\t\t\t\t// Case A\n\n\t\t\tcase B:\n\t\t\t\ttrace(\'b\');\n\t\t}\n\t}\n}';
 		assertRoundtrip(source);
 	}
 
@@ -511,7 +512,8 @@ class HxTriviaWriteTest extends Test {
 		// one — and expanded one-element-per-line. Since the writer always emits the
 		// branch on its own line, that made re-formatting non-idempotent. It must
 		// stay compact (a fixed point).
-		final source: String = 'class C {\n\tfunction f(c:Bool) {\n\t\tvar x = c\n\t\t\t? [\'A\', \'B\']\n\t\t\t: [\'C\'];\n\t\treturn x;\n\t}\n}';
+		final source: String =
+			'class C {\n\tfunction f(c:Bool) {\n\t\tvar x = c\n\t\t\t? [\'A\', \'B\']\n\t\t\t: [\'C\'];\n\t\treturn x;\n\t}\n}';
 		final once: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source));
 		Assert.equals('class C {\n\tfunction f(c:Bool) {\n\t\tvar x = c ? [\'A\', \'B\'] : [\'C\'];\n\t\treturn x;\n\t}\n}\n', once);
 		final twice: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(once));

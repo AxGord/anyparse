@@ -21,30 +21,36 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
-	private static final CONFIG_PAD: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"comprehensionFor": "fitLine"}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
+	private static final CONFIG: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CONFIG_PAD: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "sameLine": {"comprehensionFor": "fitLine"}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}, "whitespace": {"bracesConfig": {"objectLiteralBraces": {"openingPolicy": "after", "closingPolicy": "before", "arrowBodyOpenPad": true, "arrowBodyReflow": true}}}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testDotBreakKeptWhenArrowSegmentFitsAfterBreak(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal result = alpha.beta.filter(SomeHelper.isValid)\n\t\t\t.map(u -> makeEntry(u.name, u.level == HIGH1))\n\t\t\t.concat(alpha.gamma.filter(SomeHelper.isValid).map(u -> makeEntry(u.name, u.level == HIGH1)));\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal result = alpha.beta.filter(SomeHelper.isValid)\n\t\t\t.map(u -> makeEntry(u.name, u.level == HIGH1))\n\t\t\t.concat(alpha.gamma.filter(SomeHelper.isValid).map(u -> makeEntry(u.name, u.level == HIGH1)));\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testDotBreakKeptWhenLastSegmentFitsAfterBreak(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.getInstance()\n\t\t\t.add(longArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longArgumentEchoValue);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tmanager.getInstance()\n\t\t\t.add(longArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longArgumentEchoValue);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testReglueKeptWhenLastSegmentOverflowsAfterBreak(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tmanager.getInstance().add(\n\t\t\tlongArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longArgumentEchoValue,\n\t\t\tlongArgumentFoxtrotValue\n\t\t);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tmanager.getInstance().add(\n\t\t\tlongArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longArgumentEchoValue,\n\t\t\tlongArgumentFoxtrotValue\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testGlueKeptWhenSegmentBodiesForceBreaks(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tservice.request({\n\t\t\talpha: alphaValue,\n\t\t\tbeta: betaValue\n\t\t}).success(response -> {\n\t\t\thideMask();\n\t\t\tapply(response);\n\t\t}).error(response -> {\n\t\t\thideMask();\n\t\t\treport(response);\n\t\t});\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tservice.request({\n\t\t\talpha: alphaValue,\n\t\t\tbeta: betaValue\n\t\t}).success(response -> {\n\t\t\thideMask();\n\t\t\tapply(response);\n\t\t}).error(response -> {\n\t\t\thideMask();\n\t\t\treport(response);\n\t\t});\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -55,7 +61,8 @@ final class HxMethodChainDotBreakOverReglueSliceTest extends Test {
 	 * not useless, so the chain keeps it (no re-glue, no arrow explosion).
 	 */
 	public function testDotBreakKeptWhenLastSegSingleArgFitsOwnLine(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\treturn [ for (holder in holders) {\n\t\t\tfinal a:SomeLocalGroupsDataHolder = {\n\t\t\t\tmainGroups: holder.mainGroups != null\n\t\t\t\t\t? holder.mainGroups.first.filter(SomeUtils.notEmpty)\n\t\t\t\t\t\t.map(u -> { label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t.concat(\n\t\t\t\t\t\t\tholder.mainGroups.backups.filter(SomeUtils.notEmpty).map(u -> { label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t)\n\t\t\t\t\t: null\n\t\t\t};\n\t\t} ];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\treturn [ for (holder in holders) {\n\t\t\tfinal a:SomeLocalGroupsDataHolder = {\n\t\t\t\tmainGroups: holder.mainGroups != null\n\t\t\t\t\t? holder.mainGroups.first.filter(SomeUtils.notEmpty)\n\t\t\t\t\t\t.map(u -> { label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t.concat(\n\t\t\t\t\t\t\tholder.mainGroups.backups.filter(SomeUtils.notEmpty).map(u -> { label: u.label, enabled: u.status == OPEN })\n\t\t\t\t\t\t)\n\t\t\t\t\t: null\n\t\t\t};\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite2(src));
 	}
 

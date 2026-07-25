@@ -93,7 +93,8 @@ private typedef ParsedFile = {
 final class CrossRenameMember {
 
 	/** The advisory appended to every successful member rename. */
-	private static final ADVISORY: String = 'member rename resolves instance receivers via declared types only — unresolved receivers (chained calls, un-annotated locals, casts), super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left as loud compile errors; verify by hand.';
+	private static final ADVISORY: String =
+		'member rename resolves instance receivers via declared types only — unresolved receivers (chained calls, un-annotated locals, casts), super-access, `using` extension calls, aliased-import homonyms, and overrides declared outside this scope are left as loud compile errors; verify by hand.';
 
 	/**
 	 * Rename the member declaration at `line:col` (in `cursorFile` /

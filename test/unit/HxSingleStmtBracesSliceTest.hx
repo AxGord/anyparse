@@ -257,7 +257,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 	}
 
 	public function testIdempotentAndReparses(): Void {
-		final source: String = 'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n\t\tif (a) {\n\t\t\treturn;\n\t\t}\n\t}\n}';
+		final source: String =
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x();\n\t\t} else\n\t\t\ty();\n\t\tif (a) {\n\t\t\treturn;\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);
 		final pass1: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(source), opts);
 		final pass2: String = HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(pass1), opts);
@@ -365,7 +366,8 @@ class HxSingleStmtBracesSliceTest extends Test {
 		// byte-inert under both `keep` and an omitted key. Asserting the two halves
 		// together is what makes this a gate test — the inert halves alone pass with the
 		// repair arm deleted, and the `remove` half alone says nothing about gating.
-		final source: String = 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}';
+		final source: String =
+			'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tp();\n\t\t\tq();\n\t\t} else\n\t\t\tr();\n\t}\n}';
 		assertInert(source, '{}');
 		assertInert(source, '{ "whitespace": { "bracesConfig": { "singleStatementBraces": "keep" } } }');
 		assertFmt(

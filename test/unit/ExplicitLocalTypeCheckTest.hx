@@ -207,13 +207,15 @@ class ExplicitLocalTypeCheckTest extends Test {
 
 	public function testFixSameFileStaticFieldRead(): Void {
 		// Both types in one module file — the index still carries the sibling type.
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = API.API_URL;\n\t}\n}\nclass API {\n\tpublic static final API_URL:Int = 5;\n}';
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tvar v = API.API_URL;\n\t}\n}\nclass API {\n\tpublic static final API_URL:Int = 5;\n}';
 		assertFixIdx(src, [], 'v:Int');
 	}
 
 	public function testFixStaticFieldReadUnderConditional(): Void {
 		// `#if`/`#else` static field, SAME type in both branches -> unanimous -> resolves.
-		final api: String = 'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n\tpublic static final API_URL:String = "b";\n#end\n}';
+		final api: String =
+			'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n\tpublic static final API_URL:String = "b";\n#end\n}';
 		assertFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: api }], 'v:String');
 	}
 
@@ -253,7 +255,8 @@ class ExplicitLocalTypeCheckTest extends Test {
 
 	public function testSkipStaticFieldConditionalDiffers(): Void {
 		// `#if`/`#else` static field of DIFFERING types -> not unanimous -> report-only.
-		final api: String = 'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n\tpublic static final API_URL:Int = 1;\n#end\n}';
+		final api: String =
+			'class API {\n#if release\n\tpublic static final API_URL:String = "a";\n#else\n\tpublic static final API_URL:Int = 1;\n#end\n}';
 		assertNoFixIdx(wrap('var v = API.API_URL;'), [{ file: 'API.hx', source: api }]);
 	}
 

@@ -79,7 +79,8 @@ class SwallowedExceptionCheckTest extends Test {
 	}
 
 	public function testFixReturnsEmpty(): Void {
-		final src: String = 'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace("oops");\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function f():Void {\n\t\ttry { g(); } catch (e:Exception) {\n\t\t\ttrace("oops");\n\t\t}\n\t}\n}';
 		final check: SwallowedException = new SwallowedException();
 		Assert.equals(0, check.fix(src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()).length);
 	}

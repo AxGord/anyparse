@@ -82,7 +82,8 @@ class HxMetaExprSliceTest extends HxTestHelpers {
 	}
 
 	public function testTriviaRoundTripByteExact(): Void {
-		final src: String = 'class Main {\n\t@:overload(function())\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
+		final src: String =
+			'class Main {\n\t@:overload(function())\n\tstatic function main() {\n\t\ttrace(@:privateAccess (X).object);\n\t}\n}';
 		final mod: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(src);
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.finalNewline = false;

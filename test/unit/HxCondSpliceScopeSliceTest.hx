@@ -166,7 +166,8 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	 * must not be captured by the new case-scope splice.
 	 */
 	public function testInsidePatternConditionalStillRoundTrips(): Void {
-		final src: String = 'class C {\n\tfunction f(x) {\n\t\tswitch (x) {\n\t\t\tcase #if flag "a" #else "b" #end:\n\t\t\t\tg();\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(x) {\n\t\tswitch (x) {\n\t\t\tcase #if flag "a" #else "b" #end:\n\t\t\t\tg();\n\t\t}\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -236,7 +237,8 @@ class HxCondSpliceScopeSliceTest extends HxTestHelpers {
 	 * exactly as before the alternation was introduced.
 	 */
 	public function testDanglingElseSpliceRoundTrips(): Void {
-		final src: String = 'class C {\n\tfunction f(file) {\n\t\t#if share\n\t\tif (file != null) upload(file); else\n\t\t#end\n\t\tsendForm();\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(file) {\n\t\t#if share\n\t\tif (file != null) upload(file); else\n\t\t#end\n\t\tsendForm();\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

@@ -103,7 +103,8 @@ typedef FileChange = {
 final class CrossRename {
 
 	/** The advisory appended to every successful rename. */
-	private static final ADVISORY: String = 'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`), aliased imports (`import pkg.T as U;`), and any cross-package declarations by hand.';
+	private static final ADVISORY: String =
+		'type-namespace rename only — verify bare `Class<T>` value uses (`var c = T;`), aliased imports (`import pkg.T as U;`), and any cross-package declarations by hand.';
 
 	/**
 	 * Rename the type declaration at `line:col` (in `cursorFile` /

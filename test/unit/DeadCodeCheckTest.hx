@@ -77,7 +77,8 @@ class DeadCodeCheckTest extends Test {
 		// An outer dead run contains a nested block with its own dead run; the outer
 		// deletion subsumes the inner one — `fix` returns a single non-overlapping
 		// edit and the whole outer run (incl. the nested block) is removed.
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\twhile (true) {\n\t\t\tbreak;\n\t\t\tinner();\n\t\t}\n\t\touter();\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\treturn;\n\t\twhile (true) {\n\t\t\tbreak;\n\t\t\tinner();\n\t\t}\n\t\touter();\n\t}\n}';
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\treturn;\n\t}\n}', applyFix(src));
 	}
 

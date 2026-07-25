@@ -30,7 +30,8 @@ class ApqJsonSchemaProbe extends Test {
 	}
 
 	public function testParseRecursive(): Void {
-		final src: String = '{"kind":"root","children":[{"kind":"a","children":[]},{"kind":"b","children":[{"kind":"deep","children":[]}]}]}';
+		final src: String =
+			'{"kind":"root","children":[{"kind":"a","children":[]},{"kind":"b","children":[{"kind":"deep","children":[]}]}]}';
 		final node: ApqProbeNode = ApqProbeNodeParser.parse(src);
 		Assert.equals('root', node.kind);
 		Assert.equals(2, node.children.length);
@@ -51,7 +52,8 @@ class ApqJsonSchemaProbe extends Test {
 	}
 
 	public function testWriteRecursiveRoundTrip(): Void {
-		final src: String = '{"kind":"root","children":[{"kind":"a","children":[]},{"kind":"b","children":[{"kind":"deep","children":[]}]}]}';
+		final src: String =
+			'{"kind":"root","children":[{"kind":"a","children":[]},{"kind":"b","children":[{"kind":"deep","children":[]}]}]}';
 		final parsed: ApqProbeNode = ApqProbeNodeParser.parse(src);
 		final out: String = ApqProbeNodeWriter.write(parsed, JsonFormat.instance.defaultWriteOptions);
 		final back: ApqProbeNode = ApqProbeNodeParser.parse(out);
@@ -89,7 +91,8 @@ class ApqJsonSchemaProbe extends Test {
 	}
 
 	public function testRoundTripMixedOptional(): Void {
-		final src: String = '{"kind":"root","children":[{"kind":"a","name":"alpha","children":[]},{"kind":"b","children":[{"kind":"deep","name":"d","children":[]}]}]}';
+		final src: String =
+			'{"kind":"root","children":[{"kind":"a","name":"alpha","children":[]},{"kind":"b","children":[{"kind":"deep","name":"d","children":[]}]}]}';
 		final parsed: ApqProbeNode = ApqProbeNodeParser.parse(src);
 		final out: String = ApqProbeNodeWriter.write(parsed, JsonFormat.instance.defaultWriteOptions);
 		final back: ApqProbeNode = ApqProbeNodeParser.parse(out);

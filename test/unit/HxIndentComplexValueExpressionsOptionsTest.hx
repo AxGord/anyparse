@@ -60,7 +60,8 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 		// (one tab). With the knob true, the if-expression's block content
 		// shifts one tab deeper: `""` at base+3 instead of base+2; `} else {`
 		// at base+2 instead of base+1; `};` at base+2 instead of base+1.
-		final src: String = 'class C {\n\tpublic static function main() {\n\t\tvar foo = if (bar) {\n\t\t\t"";\n\t\t} else {\n\t\t\t"";\n\t\t};\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic static function main() {\n\t\tvar foo = if (bar) {\n\t\t\t"";\n\t\t} else {\n\t\t\t"";\n\t\t};\n\t}\n}';
 		final out: String = writeWith(src, true);
 		Assert.isTrue(
 			out.indexOf('var foo = if (bar) {\n\t\t\t\t"";\n\t\t\t} else {\n\t\t\t\t"";\n\t\t\t};') != -1,
@@ -70,7 +71,8 @@ class HxIndentComplexValueExpressionsOptionsTest extends Test {
 
 	public function testFalseLeavesIfExprBlockBodiesUnchanged(): Void {
 		// Default `false` keeps the layout source-faithful (no extra Nest).
-		final src: String = 'class C {\n\tpublic static function main() {\n\t\tvar foo = if (bar) {\n\t\t\t"";\n\t\t} else {\n\t\t\t"";\n\t\t};\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic static function main() {\n\t\tvar foo = if (bar) {\n\t\t\t"";\n\t\t} else {\n\t\t\t"";\n\t\t};\n\t}\n}';
 		final out: String = writeWith(src, false);
 		Assert.isTrue(
 			out.indexOf('var foo = if (bar) {\n\t\t\t"";\n\t\t} else {\n\t\t\t"";\n\t\t};') != -1,

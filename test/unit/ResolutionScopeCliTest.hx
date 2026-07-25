@@ -25,7 +25,8 @@ class ResolutionScopeCliTest extends Test {
 
 	#if (sys || nodejs)
 	private static final BASE: String = 'package lib;\nclass Base {\n\tpublic function new() {}\n\tpublic function foo(): Void {}\n}';
-	private static final DERIVED: String = 'package proj;\n\nimport lib.Base;\n\nclass Derived extends Base {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.foo();\n\t}\n\n}\n';
+	private static final DERIVED: String =
+		'package proj;\n\nimport lib.Base;\n\nclass Derived extends Base {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function bar():Void {\n\t\tthis.foo();\n\t}\n\n}\n';
 	#end
 
 	public function testInheritedMemberResolvedThroughResolutionRoots(): Void {
@@ -151,7 +152,8 @@ class ResolutionScopeCliTest extends Test {
 	 */
 	public function testPreferSingleQuotesNeverSpawnsHaxelib(): Void {
 		#if (sys || nodejs)
-		final stringy: String = 'package q;\n\nclass Q {\n\n\tpublic function new() {}\n\n\tpublic function s(): String {\n\t\treturn "plain";\n\t}\n\n}\n';
+		final stringy: String =
+			'package q;\n\nclass Q {\n\n\tpublic function new() {}\n\n\tpublic function s(): String {\n\t\treturn "plain";\n\t}\n\n}\n';
 		final proj: String = CliFixture.writeDir('reslibquotes', [
 			{ name: 'Q.hx', source: stringy },
 			{ name: 'apqlint.json', source: '{"resolutionLibs":["openfl"]}' }

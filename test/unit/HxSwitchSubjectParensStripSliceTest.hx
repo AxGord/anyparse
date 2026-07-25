@@ -70,7 +70,8 @@ final class HxSwitchSubjectParensStripSliceTest extends Test {
 	// Carve-out: a block subject keeps its parens.
 	public function testBlockSubjectKeepsParens(): Void {
 		final input: String = 'class C { function f() { switch ({ g(); v; }) { case _: a; } } }';
-		final expected: String = 'class C {\n\tfunction f() {\n\t\tswitch ({\n\t\t\tg();\n\t\t\tv;\n\t\t}) {\n\t\t\tcase _:\n\t\t\t\ta;\n\t\t}\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f() {\n\t\tswitch ({\n\t\t\tg();\n\t\t\tv;\n\t\t}) {\n\t\t\tcase _:\n\t\t\t\ta;\n\t\t}\n\t}\n}\n';
 		Assert.equals(expected, triviaWriteRemove(input));
 	}
 

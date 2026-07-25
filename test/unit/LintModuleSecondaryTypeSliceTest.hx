@@ -76,7 +76,8 @@ class LintModuleSecondaryTypeSliceTest extends Test {
 	 * does not keep it.
 	 */
 	public function testSubTypeImportNotWidened(): Void {
-		final mod: String = 'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\ntypedef ModOther = {\n\tvar n: Int;\n}\n\nclass Mod {}';
+		final mod: String =
+			'package a.b;\n\ntypedef ModExtra = {\n\tvar id: Int;\n}\n\ntypedef ModOther = {\n\tvar n: Int;\n}\n\nclass Mod {}';
 		final use: String = 'package pkg;\n\nimport a.b.Mod.ModExtra;\n\nclass C {\n\tvar x: ModOther;\n}';
 		final vs: Array<Violation> = new UnusedImport().run([
 			{ file: 'a/b/Mod.hx', source: mod },

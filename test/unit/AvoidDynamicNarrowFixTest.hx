@@ -251,7 +251,8 @@ class AvoidDynamicNarrowFixTest extends Test {
 
 	public function testMixedViolationsEditsOnlyLocal(): Void {
 		// A file with a field Dynamic AND a narrowable local: only the local is edited.
-		final src: String = 'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO';
+		final src: String =
+			'class C {\n\tvar keep:Dynamic;\n\tfunction f(a:Foo):Void {\n\t\tvar x:Dynamic = a;\n\t\tvar y:Foo = x;\n\t}\n}$FOO';
 		final e: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, e.length);
 		final out: String = apply(src, e);

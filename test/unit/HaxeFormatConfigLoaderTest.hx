@@ -663,7 +663,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// inserts one. Between a() and c() (both plain) `remove` strips
 		// the source blank. Disable `betweenFunctions` default to isolate
 		// the Remove + before-doc-One composition.
-		final src: String = 'class M {\n\tpublic function a():Void {}\n\n\tpublic function c():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
+		final src: String =
+			'class M {\n\tpublic function a():Void {}\n\n\tpublic function c():Void {}\n\t/** */\n\tpublic function b():Void {}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"emptyLines": {"afterFieldsWithDocComments": "ignore", "classEmptyLines": {"existingBetweenFields": "remove", "betweenFunctions": 0}}}'
 		);
@@ -702,7 +703,8 @@ class HaxeFormatConfigLoaderTest extends Test {
 		// catch / switch / do-while keyword→`(` gap previously stacked the
 		// gap space with the inner-pad knob's before-`(` space, emitting a
 		// double `catch  (` / `switch  (` / `} while  (`. Expect single.
-		final src: String = 'class M {\n\tfunction f(x:Int):Void {\n\t\tswitch (x) {\n\t\t\tcase _:\n\t\t}\n\t\tdo {\n\t\t\tg(x);\n\t\t} while (x > 0);\n\t\ttry {\n\t\t\tg(x);\n\t\t} catch (e:E) {\n\t\t\th(x);\n\t\t}\n\t}\n}';
+		final src: String =
+			'class M {\n\tfunction f(x:Int):Void {\n\t\tswitch (x) {\n\t\t\tcase _:\n\t\t}\n\t\tdo {\n\t\t\tg(x);\n\t\t} while (x > 0);\n\t\ttry {\n\t\t\tg(x);\n\t\t} catch (e:E) {\n\t\t\th(x);\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(
 			'{"whitespace": {"parenConfig": {"conditionParens": {"openingPolicy": "before"}}}}'
 		);

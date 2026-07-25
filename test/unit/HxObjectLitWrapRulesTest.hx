@@ -157,7 +157,8 @@ final class HxObjectLitWrapRulesTest extends Test {
 		// measure the NoWrap layout; on overflow the Group breaks and
 		// the IfBreak picks `OnePerLine` per the cascade's
 		// `exceeds=true` arm (rule 2: `anyItem >= 30`).
-		final src: String = 'class Foo { static var x = {alpha: "first really really really really really long value here", beta: "second really really really really really long value here", gamma: "third really really really really really long value here"}; }';
+		final src: String =
+			'class Foo { static var x = {alpha: "first really really really really really long value here", beta: "second really really really really really long value here", gamma: "third really really really really really long value here"}; }';
 		final out: String = writeWith(src);
 		Assert.isTrue(out.indexOf('{\n') != -1, 'expected wrap when line overflows in: <$out>');
 	}

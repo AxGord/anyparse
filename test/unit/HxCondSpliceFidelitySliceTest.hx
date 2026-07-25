@@ -35,7 +35,8 @@ final class HxCondSpliceFidelitySliceTest extends Test {
 	}
 
 	public function testCondEndCalleeKeepsSpaceBeforeCallParen(): Void {
-		final src: String = "class C {\n\tfunction f() {\n\t\tvar process = #if sys new sys.io.Process #elseif nodejs js.node.ChildProcess.spawn #end ('curl', []);\n\t}\n}";
+		final src: String =
+			"class C {\n\tfunction f() {\n\t\tvar process = #if sys new sys.io.Process #elseif nodejs js.node.ChildProcess.spawn #end ('curl', []);\n\t}\n}";
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -48,7 +49,8 @@ final class HxCondSpliceFidelitySliceTest extends Test {
 	 * `#if` at the case-list level. Fails on the un-dedented writer.
 	 */
 	public function testSwitchCaseLabelSpliceIfMarkerAtCaseListLevel(): Void {
-		final src: String = 'class C {\n\tfunction f(x) {\n\t\tswitch (x) {\n\t\t\tcase A:\n\t\t\t\tg();\n\t\t\t#if flag\n\t\t\tcase B:\n\t\t\t#else\n\t\t\tcase D:\n\t\t\t#end\n\t\t\t\th();\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(x) {\n\t\tswitch (x) {\n\t\t\tcase A:\n\t\t\t\tg();\n\t\t\t#if flag\n\t\t\tcase B:\n\t\t\t#else\n\t\t\tcase D:\n\t\t\t#end\n\t\t\t\th();\n\t\t}\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
@@ -59,7 +61,8 @@ final class HxCondSpliceFidelitySliceTest extends Test {
 	 * the dedent must NOT fire for non-case splices.
 	 */
 	public function testDanglingElseSpliceIfMarkerStaysAtStatementLevel(): Void {
-		final src: String = 'class C {\n\tfunction f(file) {\n\t\t#if share\n\t\tif (file != null) upload(file); else\n\t\t#end\n\t\tsendForm();\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(file) {\n\t\t#if share\n\t\tif (file != null) upload(file); else\n\t\t#end\n\t\tsendForm();\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

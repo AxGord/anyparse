@@ -84,7 +84,8 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	public function testUnreadArrayNotFlagged(): Void {
-		final source: String = 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfinal out:Array<Int> = [];\n\t\tfor (x in xs) out.push(x);\n\t}\n}';
+		final source: String =
+			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfinal out:Array<Int> = [];\n\t\tfor (x in xs) out.push(x);\n\t}\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -115,8 +116,10 @@ class PreferComprehensionCheckTest extends Test {
 	}
 
 	public function testApplyFixByteExact(): Void {
-		final input: String = 'class C {\n\tfunction f(xs:Array<Int>):Array<Int> {\n\t\tfinal out:Array<Int> = [];\n\t\tfor (x in xs) out.push(x * 2);\n\t\treturn out;\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(xs:Array<Int>):Array<Int> {\n\t\tfinal out:Array<Int> = [for (x in xs) x * 2];\n\t\treturn out;\n\t}\n}';
+		final input: String =
+			'class C {\n\tfunction f(xs:Array<Int>):Array<Int> {\n\t\tfinal out:Array<Int> = [];\n\t\tfor (x in xs) out.push(x * 2);\n\t\treturn out;\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction f(xs:Array<Int>):Array<Int> {\n\t\tfinal out:Array<Int> = [for (x in xs) x * 2];\n\t\treturn out;\n\t}\n}';
 		Assert.equals(expected, applyFix(input));
 	}
 

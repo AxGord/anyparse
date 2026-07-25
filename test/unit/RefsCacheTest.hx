@@ -34,7 +34,8 @@ class RefsCacheTest extends Test {
 	// `x++`), a `macro { … }` opaque subtree, a forward-declared same-scope
 	// binding, class members + a this-less member read, and an unresolved
 	// (cross-file) name via `externalCall()`.
-	private static final FIXTURE: String = '
+	private static final FIXTURE: String =
+		'
 		class X {
 			var shared: Int = 0;
 

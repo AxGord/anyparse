@@ -73,7 +73,8 @@ class HxComprehensionBracketPolicyTest extends Test {
 	}
 
 	public function testExplicitBracketConfigPadsComprehension(): Void {
-		final json: String = '{"whitespace":{"bracketConfig":{"comprehensionBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
+		final json: String =
+			'{"whitespace":{"bracketConfig":{"comprehensionBrackets":{"openingPolicy":"after","closingPolicy":"before"}}}}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.comprehensionBracketsOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.comprehensionBracketsClose);

@@ -162,7 +162,8 @@ private enum ViaResult {
 @:nullSafety(Strict)
 final class MoveMember {
 
-	private static final ADVISORY: String = 'import-carrying is best-effort (type-position dependencies only) — a missed import fails the destination compile loudly; references through strings, Reflect, or macro-built identifiers are not rewritten.';
+	private static final ADVISORY: String =
+		'import-carrying is best-effort (type-position dependencies only) — a missed import fails the destination compile loudly; references through strings, Reflect, or macro-built identifiers are not rewritten.';
 
 	/**
 	 * DATA-field member kinds (`RefactorSupport.FIELD_MEMBER_KINDS` also

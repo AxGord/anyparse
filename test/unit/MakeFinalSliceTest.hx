@@ -17,7 +17,8 @@ class MakeFinalSliceTest extends Test {
 
 	/** A field assigned only at its declaration becomes final. */
 	public function testDeclInitToFinal(): Void {
-		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 5;\n\tpublic function new() {}\n\tpublic function read():Int return x;\n}';
+		final src: String =
+			'package pkg;\n\nclass Cfg {\n\tpublic var x:Int = 5;\n\tpublic function new() {}\n\tpublic function read():Int return x;\n}';
 		final text: String = okFinal('pkg/Cfg.hx', 'Cfg', 'x', [{ file: 'pkg/Cfg.hx', source: src },]);
 		Assert.isTrue(StringTools.contains(text, 'public final x:Int = 5'), 'var became final');
 	}
@@ -31,13 +32,15 @@ class MakeFinalSliceTest extends Test {
 
 	/** A field reassigned in a method is refused. */
 	public function testReassignedRefused(): Void {
-		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n = n + 1;\n}';
+		final src: String =
+			'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n = n + 1;\n}';
 		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
 	}
 
 	/** A compound-assign counts as a reassignment. */
 	public function testCompoundAssignRefused(): Void {
-		final src: String = 'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n += 1;\n}';
+		final src: String =
+			'package pkg;\n\nclass Cfg {\n\tpublic var n:Int = 0;\n\tpublic function new() {}\n\tpublic function bump():Void n += 1;\n}';
 		assertErr(MakeFinal.makeFinal('pkg/Cfg.hx', 'Cfg', 'n', [{ file: 'pkg/Cfg.hx', source: src },], plugin()));
 	}
 

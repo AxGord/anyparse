@@ -31,7 +31,8 @@ using StringTools;
  */
 class NewFileSliceTest extends Test {
 
-	private static inline final IFACE: String = 'package p;\nimport a.B;\ntypedef T = { var v: Int; }\ninterface I {\n\tpublic function f(x: T): B;\n\tpublic function g(): Void;\n}\n';
+	private static inline final IFACE: String =
+		'package p;\nimport a.B;\ntypedef T = { var v: Int; }\ninterface I {\n\tpublic function f(x: T): B;\n\tpublic function g(): Void;\n}\n';
 
 	#if (sys || nodejs)
 	private static var counter: Int = 0;

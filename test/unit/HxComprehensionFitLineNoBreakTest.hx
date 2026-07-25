@@ -28,7 +28,8 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxComprehensionFitLineNoBreakTest extends Test {
 
-	private static final CFG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
+	private static final CFG: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
 
 	public function new(): Void {
 		super();
@@ -36,7 +37,8 @@ final class HxComprehensionFitLineNoBreakTest extends Test {
 
 	/** A comprehension whose flat width (~111) fits maxLineLength (140) stays on one line even though its sole for-expr element is ~90 chars (> 80). */
 	public function testFittingComprehensionStaysOnOneLine(): Void {
-		final src: String = 'class M {\n\tfunction f() {\n\t\t_series = [for (k in 0...Std.int(values.length / 2)) new Vector(values[k * 2 + 0], values[k * 2 + 1])];\n\t}\n}';
+		final src: String =
+			'class M {\n\tfunction f() {\n\t\t_series = [for (k in 0...Std.int(values.length / 2)) new Vector(values[k * 2 + 0], values[k * 2 + 1])];\n\t}\n}';
 		final out: String = triviaWrite(src);
 		Assert.isTrue(
 			out.indexOf('[ for (k in 0...Std.int(values.length / 2)) new Vector(values[k * 2 + 0], values[k * 2 + 1]) ]') != -1,
@@ -48,7 +50,8 @@ final class HxComprehensionFitLineNoBreakTest extends Test {
 
 	/** An already-wrapped (source-multiline) comprehension that still fits maxLineLength reflows back to one line, and the result is idempotent. */
 	public function testWrappedFittingComprehensionCollapses(): Void {
-		final src: String = 'class M {\n\tfunction f() {\n\t\t_series = [\n\t\t\tfor (k in 0...Std.int(values.length / 2)) new Vector(values[k * 2 + 0], values[k * 2 + 1])\n\t\t];\n\t}\n}';
+		final src: String =
+			'class M {\n\tfunction f() {\n\t\t_series = [\n\t\t\tfor (k in 0...Std.int(values.length / 2)) new Vector(values[k * 2 + 0], values[k * 2 + 1])\n\t\t];\n\t}\n}';
 		final out: String = triviaWrite(src);
 		Assert.isTrue(
 			out.indexOf('[ for (k in 0...Std.int(values.length / 2)) new Vector(values[k * 2 + 0], values[k * 2 + 1]) ]') != -1,

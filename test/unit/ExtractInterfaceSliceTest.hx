@@ -22,7 +22,8 @@ class ExtractInterfaceSliceTest extends Test {
 	 * `implements`.
 	 */
 	public function testBasicExtract(): Void {
-		final src: String = 'package pkg;\n\nclass Service {\n\tvar count:Int = 0;\n\tpublic function new() {}\n\tpublic function fetch(id:Int):String return \'x\';\n\tpublic function reset():Void {}\n\tfunction helper():Int return count;\n\tpublic static function make():Service return null;\n}';
+		final src: String =
+			'package pkg;\n\nclass Service {\n\tvar count:Int = 0;\n\tpublic function new() {}\n\tpublic function fetch(id:Int):String return \'x\';\n\tpublic function reset():Void {}\n\tfunction helper():Int return count;\n\tpublic static function make():Service return null;\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/Service.hx', 'Service', 'IService', 'pkg/IService.hx', null, src);
 		Assert.equals(2, changes.length);
 		final iface: String = changeFor(changes, 'pkg/IService.hx').newSource;
@@ -38,7 +39,8 @@ class ExtractInterfaceSliceTest extends Test {
 
 	/** Only the imports the signatures reference are carried into the interface. */
 	public function testImportCarry(): Void {
-		final src: String = 'package pkg;\n\nimport haxe.ds.Option;\nimport haxe.ds.StringMap;\n\nclass S {\n\tpublic function new() {}\n\tpublic function f():Option<Int> return null;\n\tpublic function g(x:Int):Void {}\n}';
+		final src: String =
+			'package pkg;\n\nimport haxe.ds.Option;\nimport haxe.ds.StringMap;\n\nclass S {\n\tpublic function new() {}\n\tpublic function f():Option<Int> return null;\n\tpublic function g(x:Int):Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
 		final iface: String = changeFor(changes, 'pkg/IS.hx').newSource;
 		Assert.isTrue(StringTools.contains(iface, 'import haxe.ds.Option;'), 'carries the referenced import');
@@ -47,7 +49,8 @@ class ExtractInterfaceSliceTest extends Test {
 
 	/** `--members` selects a subset; the others are not in the interface. */
 	public function testMembersSubset(): Void {
-		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
+		final src: String =
+			'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n\tpublic function b():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', ['a'], src);
 		final iface: String = changeFor(changes, 'pkg/IS.hx').newSource;
 		Assert.isTrue(StringTools.contains(iface, 'function a():Void;'), 'includes the selected method');
@@ -56,7 +59,8 @@ class ExtractInterfaceSliceTest extends Test {
 
 	/** An existing `extends` clause is preserved; `implements` is appended. */
 	public function testExtendsPreserved(): Void {
-		final src: String = 'package pkg;\n\nclass S extends Base {\n\tpublic function new() { super(); }\n\tpublic function a():Void {}\n}';
+		final src: String =
+			'package pkg;\n\nclass S extends Base {\n\tpublic function new() { super(); }\n\tpublic function a():Void {}\n}';
 		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
 		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
 		Assert.isTrue(StringTools.contains(newSrc, 'class S extends Base implements IS {'), 'extends preserved, implements added');
@@ -72,7 +76,8 @@ class ExtractInterfaceSliceTest extends Test {
 
 	/** A class with no public instance method is refused. */
 	public function testNoPublicMethodsRefused(): Void {
-		final src: String = 'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tfunction hidden():Void {}\n\tpublic static function s():Void {}\n}';
+		final src: String =
+			'package pkg;\n\nclass S {\n\tpublic function new() {}\n\tfunction hidden():Void {}\n\tpublic static function s():Void {}\n}';
 		assertErr(ExtractInterface.extract('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src, plugin()));
 	}
 

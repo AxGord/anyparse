@@ -62,7 +62,8 @@ class HxOverloadMetaSliceTest extends HxTestHelpers {
 	}
 
 	public function testWriterTightensTypeHintColons(): Void {
-		final src: String = 'class M {\n\t@:overload(function<T>(key : String, defaultValue : T):T {})\n\tfunction get<T>(key:String):Null<T>;\n}';
+		final src: String =
+			'class M {\n\t@:overload(function<T>(key : String, defaultValue : T):T {})\n\tfunction get<T>(key:String):Null<T>;\n}';
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src));
 		Assert.isTrue(out.indexOf('key:String') >= 0);
 		Assert.isTrue(out.indexOf('defaultValue:T') >= 0);

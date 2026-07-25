@@ -18,30 +18,36 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxComprehensionBlockHugSliceTest extends Test {
 
-	private static final FIT: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
-	private static final SAME: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "same"}}';
+	private static final FIT: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "fitLine"}}';
+	private static final SAME: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140}, "sameLine": {"comprehensionFor": "same"}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testForBlockBodyComprehensionHugsHead(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (typeKey => colorList in folderColorsMapValueHere) {\n\t\t\tfinal bitmap = makeBitmapFromColors(colorList);\n\t\t\tbitmap;\n\t\t} ];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal r = [ for (typeKey => colorList in folderColorsMapValueHere) {\n\t\t\tfinal bitmap = makeBitmapFromColors(colorList);\n\t\t\tbitmap;\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, FIT));
 	}
 
 	public function testWhileBlockBodyComprehensionHugsHead(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ while (iteratorValue.hasNextElement()) {\n\t\t\tfinal item = iteratorValue.getNextElement();\n\t\t\ttransformItem(item);\n\t\t} ];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal r = [ while (iteratorValue.hasNextElement()) {\n\t\t\tfinal item = iteratorValue.getNextElement();\n\t\t\ttransformItem(item);\n\t\t} ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, FIT));
 	}
 
 	public function testSingleExprComprehensionStaysInline(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [ for (indexValue in sourceCollectionValue) computeElement(indexValue) ];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal r = [ for (indexValue in sourceCollectionValue) computeElement(indexValue) ];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, FIT));
 	}
 
 	public function testComprehensionForSameLeadingBreaksNoHug(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tfor (typeKey => colorList in folderColorsMapValueHere) {\n\t\t\t\tfinal bitmap = makeBitmapFromColors(colorList);\n\t\t\t\tbitmap;\n\t\t\t}\n\t\t];\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tfinal r = [\n\t\t\tfor (typeKey => colorList in folderColorsMapValueHere) {\n\t\t\t\tfinal bitmap = makeBitmapFromColors(colorList);\n\t\t\t\tbitmap;\n\t\t\t}\n\t\t];\n\t}\n}';
 		Assert.equals(src, triviaWrite(src, SAME));
 	}
 

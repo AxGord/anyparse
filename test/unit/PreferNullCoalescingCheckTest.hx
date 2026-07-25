@@ -104,7 +104,8 @@ class PreferNullCoalescingCheckTest extends Test {
 
 	public function testIdentFallbackUnderNullSafetyStillFlagged(): Void {
 		// Bare-identifier operands (no field access) are not inference-fragile — still converts.
-		final src: String = '@:nullSafety class C {\n\tfunction f(a:Null<String>, b:Null<String>):Void {\n\t\tvar v = a != null ? a : b;\n\t}\n}';
+		final src: String =
+			'@:nullSafety class C {\n\tfunction f(a:Null<String>, b:Null<String>):Void {\n\t\tvar v = a != null ? a : b;\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 	}
 

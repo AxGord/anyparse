@@ -23,15 +23,18 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxCondForContainerGlueSliceTest extends Test {
 
-	private static final CONFIG: String = '{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"forBody": "fitLine"}}';
-	private static final GLUED: String = 'class C {\n\tfunction f() {\n\t\tfor (item in [\n\t\t\tfirstLongItemNameValue,\n\t\t\tsecondLongItemNameValue,\n\t\t\tthirdLongItemNameValue,\n\t\t\tfourthLongItemNameV\n\t\t]) {\n\t\t\tdoWork(item);\n\t\t}\n\t}\n}';
+	private static final CONFIG: String =
+		'{"wrapping": {"maxLineLength": 140, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"forBody": "fitLine"}}';
+	private static final GLUED: String =
+		'class C {\n\tfunction f() {\n\t\tfor (item in [\n\t\t\tfirstLongItemNameValue,\n\t\t\tsecondLongItemNameValue,\n\t\t\tthirdLongItemNameValue,\n\t\t\tfourthLongItemNameV\n\t\t]) {\n\t\t\tdoWork(item);\n\t\t}\n\t}\n}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testFlatSourceForArrayKeepsParenGlued(): Void {
-		final flat: String = 'class C {\n\tfunction f() {\n\t\tfor (item in [firstLongItemNameValue, secondLongItemNameValue, thirdLongItemNameValue, fourthLongItemNameV]) {\n\t\t\tdoWork(item);\n\t\t}\n\t}\n}';
+		final flat: String =
+			'class C {\n\tfunction f() {\n\t\tfor (item in [firstLongItemNameValue, secondLongItemNameValue, thirdLongItemNameValue, fourthLongItemNameV]) {\n\t\t\tdoWork(item);\n\t\t}\n\t}\n}';
 		Assert.equals(GLUED, triviaWrite(flat));
 	}
 
@@ -48,9 +51,12 @@ final class HxCondForContainerGlueSliceTest extends Test {
 	 * (a separate, pre-existing writer trait), so only flat -> opened is asserted.
 	 */
 	public function testChainContainerCondOpensNotGlued(): Void {
-		final config: String = '{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine"}}';
-		final flat: String = 'class C {\n\tfunction f() {\n\t\tif (aa == null || bb == null || [alphaItemNameHere, betaItemNameHere, gammaItemNameHere, deltaItemNameHere, epsilonItemName].indexOf(k) < 0) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
-		final opened: String = 'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taa == null || bb == null\n\t\t\t|| [\n\t\t\t\talphaItemNameHere,\n\t\t\t\tbetaItemNameHere,\n\t\t\t\tgammaItemNameHere,\n\t\t\t\tdeltaItemNameHere,\n\t\t\t\tepsilonItemName\n\t\t\t].indexOf(k) < 0\n\t\t) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
+		final config: String =
+			'{"wrapping": {"maxLineLength": 140, "opBoolChain": {"defaultWrap": "noWrap", "rules": [{"conditions": [{"cond": "itemCount <= n", "value": 3}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "totalItemLength <= n", "value": 120}, {"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "exceedsMaxLineLength", "value": 1}], "type": "fillLine", "location": "beforeLast"}]}, "conditionWrapping": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}]}}, "sameLine": {"ifBody": "fitLine"}}';
+		final flat: String =
+			'class C {\n\tfunction f() {\n\t\tif (aa == null || bb == null || [alphaItemNameHere, betaItemNameHere, gammaItemNameHere, deltaItemNameHere, epsilonItemName].indexOf(k) < 0) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
+		final opened: String =
+			'class C {\n\tfunction f() {\n\t\tif (\n\t\t\taa == null || bb == null\n\t\t\t|| [\n\t\t\t\talphaItemNameHere,\n\t\t\t\tbetaItemNameHere,\n\t\t\t\tgammaItemNameHere,\n\t\t\t\tdeltaItemNameHere,\n\t\t\t\tepsilonItemName\n\t\t\t].indexOf(k) < 0\n\t\t) {\n\t\t\tdoWork();\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(config);
 		opts.finalNewline = false;
 		Assert.equals(opened, HaxeModuleTriviaWriter.write(HaxeModuleTriviaParser.parse(flat), opts));

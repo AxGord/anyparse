@@ -26,7 +26,8 @@ class HxCaseCommentWriteTest extends Test {
 	}
 
 	public function testEmptyCaseLabelLineCommentStaysOnColonLine(): Void {
-		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: // note\n\t\t\tcase B:\n\t\t\t\trun();\n\t\t}\n\t}\n}';
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tswitch (x) {\n\t\t\tcase A: // note\n\t\t\tcase B:\n\t\t\t\trun();\n\t\t}\n\t}\n}';
 		Assert.equals('$source\n', roundTrip(source));
 	}
 

@@ -19,12 +19,14 @@ class HxCondElseifChainBlankTest extends Test {
 	private static final forceBuild: Class<HaxeModuleTriviaWriter> = HaxeModuleTriviaWriter;
 
 	public function testStmtChainNoSpuriousBlank(): Void {
-		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#elseif d\n\t\treturn 4;\n\t\t#end\n\t}\n}';
+		final source: String =
+			'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#elseif d\n\t\treturn 4;\n\t\t#end\n\t}\n}';
 		Assert.equals('$source\n', roundTrip(source));
 	}
 
 	public function testStmtChainIdempotent(): Void {
-		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#end\n\t}\n}';
+		final source: String =
+			'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\t\t#elseif c\n\t\treturn 3;\n\t\t#end\n\t}\n}';
 		final once: String = roundTrip(source);
 		Assert.equals(once, roundTrip(once));
 	}
@@ -35,7 +37,8 @@ class HxCondElseifChainBlankTest extends Test {
 	}
 
 	public function testAuthoredBlankBeforeElseifPreserved(): Void {
-		final source: String = 'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\n\t\t#elseif c\n\t\treturn 3;\n\t\t#end\n\t}\n}';
+		final source: String =
+			'class M {\n\tfunction f() {\n\t\t#if a\n\t\treturn 1;\n\t\t#elseif b\n\t\treturn 2;\n\n\t\t#elseif c\n\t\treturn 3;\n\t\t#end\n\t}\n}';
 		Assert.equals('$source\n', roundTrip(source));
 	}
 

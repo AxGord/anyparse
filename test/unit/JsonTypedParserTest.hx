@@ -54,7 +54,8 @@ class JsonTypedParserTest extends Test {
 	}
 
 	public function testUnknownKeysIgnored(): Void {
-		final src: String = '{"name":"z","count":0,"policy":"first","nested":{"kind":"n"},"future":"skipped","listed":[1,2,3],"nestedFuture":{"a":1}}';
+		final src: String =
+			'{"name":"z","count":0,"policy":"first","nested":{"kind":"n"},"future":"skipped","listed":[1,2,3],"nestedFuture":{"a":1}}';
 		final cfg: TestConfig = TestConfigParser.parse(src);
 		Assert.equals('z', cfg.name);
 		Assert.equals(0, cfg.count);

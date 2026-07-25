@@ -63,7 +63,8 @@ class RemoveElementSliceTest extends Test {
 
 	/** Remove a `case` from a switch. */
 	public function testRemoveSwitchCase(): Void {
-		final source: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
+		final source: String =
+			'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
 		final expected: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t}\n\t}\n}\n';
 		assertRemove(source, 5, 4, true, expected);
 	}

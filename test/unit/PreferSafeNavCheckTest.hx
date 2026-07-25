@@ -142,8 +142,10 @@ class PreferSafeNavCheckTest extends Test {
 	}
 
 	public function testConjunctionArgumentStaysGuarded(): Void {
-		final source: String = 'class C {\n\tfunction f(c:Sys, axis:Sys):Void {\n\t\tif (c != null && axis != null) axis.setScrollPos(c, value, h());\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(c:Sys, axis:Sys):Void {\n\t\tif (c != null) axis?.setScrollPos(c, value, h());\n\t}\n}';
+		final source: String =
+			'class C {\n\tfunction f(c:Sys, axis:Sys):Void {\n\t\tif (c != null && axis != null) axis.setScrollPos(c, value, h());\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction f(c:Sys, axis:Sys):Void {\n\t\tif (c != null) axis?.setScrollPos(c, value, h());\n\t}\n}';
 		Assert.equals(1, violations(source).length);
 		Assert.equals(expected, applyFix(source));
 	}

@@ -15,7 +15,8 @@ import anyparse.query.Address.AddressSpec;
  */
 class AddressTest extends Test {
 
-	private static final SRC: String = 'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\ttrace(x);\n\t\ttrace(x);\n\t\treturn x;\n\t}\n}\n';
+	private static final SRC: String =
+		'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\ttrace(x);\n\t\ttrace(x);\n\t\treturn x;\n\t}\n}\n';
 
 	public function testAtLineCol(): Void {
 		// 3:3 = `var x = 1;` first token.
@@ -229,7 +230,8 @@ class AddressTest extends Test {
 	public function testDescribePrefixesNamedAncestor(): Void {
 		// Two same-named locals in different functions — the enclosing FnMember
 		// segment disambiguates without an ordinal.
-		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t}\n\tfunction g():Void {\n\t\tvar v = 2;\n\t\ttrace(v);\n\t}\n}\n';
+		final src: String =
+			'class C {\n\tfunction f():Void {\n\t\tvar v = 1;\n\t\ttrace(v);\n\t}\n\tfunction g():Void {\n\t\tvar v = 2;\n\t\ttrace(v);\n\t}\n}\n';
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(src);
 		switch Address.resolve(tree, src, plugin, { select: 'FnMember:g >> VarStmt:v' }) {

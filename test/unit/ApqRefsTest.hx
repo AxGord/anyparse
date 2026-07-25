@@ -384,7 +384,8 @@ class ApqRefsTest extends Test {
 		// `arr[i] = v` — LHS is IndexAccess wrapping two IdentExprs.
 		// Write reclassification fires only for the direct child of the
 		// Assign ctor; IdentExprs nested inside IndexAccess stay as Reads.
-		final source: String = 'class X { static function f():Void { var arr:Array<Int> = []; var i:Int = 0; var v:Int = 0; arr[i] = v; } }';
+		final source: String =
+			'class X { static function f():Void { var arr:Array<Int> = []; var i:Int = 0; var v:Int = 0; arr[i] = v; } }';
 		final arrHits: Array<RefHit> = findIn(source, 'arr');
 		final iHits: Array<RefHit> = findIn(source, 'i');
 		final vHits: Array<RefHit> = findIn(source, 'v');

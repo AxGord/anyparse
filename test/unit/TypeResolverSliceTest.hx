@@ -32,7 +32,8 @@ class TypeResolverSliceTest extends Test {
 	}
 
 	public function testUnannotatedReceiverKept(): Void {
-		final src: String = 'typedef Ctx = { var f:Int; }; class C { static function mk():Ctx { return null; } static function m():Void { final c = mk(); final dead = c.f; } }';
+		final src: String =
+			'typedef Ctx = { var f:Int; }; class C { static function mk():Ctx { return null; } static function m():Void { final c = mk(); final dead = c.f; } }';
 		Assert.equals(0, fixEdits(src).length, 'no annotation on the receiver → unresolved → kept');
 	}
 
@@ -63,7 +64,8 @@ class TypeResolverSliceTest extends Test {
 	}
 
 	public function testClassGetterFieldKept(): Void {
-		final src: String = 'class T { public var f(get, never):Int; } class C { static function m(t:T):Int { final dead = t.f; return 1; } }';
+		final src: String =
+			'class T { public var f(get, never):Int; } class C { static function m(t:T):Int { final dead = t.f; return 1; } }';
 		Assert.equals(0, fixEdits(src).length, 'a getter property read may run code — kept');
 	}
 
@@ -261,7 +263,8 @@ class TypeResolverSliceTest extends Test {
 	 * variable (the receiver resolves to a binding, not a type reference).
 	 */
 	public function testStdlibShadowKept(): Void {
-		final project: String = 'class Path { public static function join(a:Array<String>):String { return ""; } } class C { static function m():Int { final dead = Path.join(["a"]); return 1; } }';
+		final project: String =
+			'class Path { public static function join(a:Array<String>):String { return ""; } } class C { static function m():Int { final dead = Path.join(["a"]); return 1; } }';
 		Assert.equals(0, fixEdits(project).length, 'a project-declared Path shadows stdlib — kept');
 		final local: String = 'class C { static function m():Int { final Date = 0; final dead = Date.now(); return 1; } }';
 		Assert.equals(0, fixEdits(local).length, 'a local Date binding is not the stdlib type — kept');

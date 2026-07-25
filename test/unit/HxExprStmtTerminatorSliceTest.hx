@@ -33,7 +33,8 @@ final class HxExprStmtTerminatorSliceTest extends Test {
 	}
 
 	public function testUntypedIfExprStatementNeedsNoTrailingSemicolon(): Void {
-		final src: String = 'class C {\n\tfunction f(e:Dynamic) {\n\t\tuntyped if (t(e) == o)\n\t\t\te = e.msg;\n\t\tuntyped rethrow(e);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(e:Dynamic) {\n\t\tuntyped if (t(e) == o)\n\t\t\te = e.msg;\n\t\tuntyped rethrow(e);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

@@ -58,7 +58,8 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	public function testDifferentMapNotFlagged(): Void {
-		final src: String = 'class C {\n\tfunction f(m:Map<String,Int>, n:Map<String,Int>):Void {\n\t\tfor (k in m.keys()) trace(n[k]);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(m:Map<String,Int>, n:Map<String,Int>):Void {\n\t\tfor (k in m.keys()) trace(n[k]);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -102,7 +103,8 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	public function testThisPathReceiverFlagged(): Void {
-		final src: String = 'class C {\n\tvar files:Map<String,Int>;\n\tfunction f():Void {\n\t\tfor (k in this.files.keys()) trace(this.files[k]);\n\t}\n}';
+		final src: String =
+			'class C {\n\tvar files:Map<String,Int>;\n\tfunction f():Void {\n\t\tfor (k in this.files.keys()) trace(this.files[k]);\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals('iterate key-value instead of keys()-then-lookup — for (k => value in this.files)', vs[0].message);
@@ -246,8 +248,10 @@ class MapKeysLookupCheckTest extends Test {
 		final registry: String = 'class Registry {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n'
 			+ '\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}';
 		final svc: String = 'class Svc {\n\tpublic var registry:Registry;\n}';
-		final bare: String = 'class C {\n\tfunction f(registry:Registry):Void {\n\t\tfor (k in registry.keys()) trace(registry.get(k));\n\t}\n}';
-		final path: String = 'class D {\n\tfunction f(svc:Svc):Void {\n\t\tfor (k in svc.registry.keys()) trace(svc.registry.get(k));\n\t}\n}';
+		final bare: String =
+			'class C {\n\tfunction f(registry:Registry):Void {\n\t\tfor (k in registry.keys()) trace(registry.get(k));\n\t}\n}';
+		final path: String =
+			'class D {\n\tfunction f(svc:Svc):Void {\n\t\tfor (k in svc.registry.keys()) trace(svc.registry.get(k));\n\t}\n}';
 		Assert.equals(0, violationsAcross([registry, svc, bare]).length);
 		Assert.equals(0, violationsAcross([registry, svc, path]).length);
 	}
@@ -260,7 +264,8 @@ class MapKeysLookupCheckTest extends Test {
 	}
 
 	public function testThisPathResolvesEnclosingTypeMember(): Void {
-		final src: String = 'class Holder {\n\tvar reg:Registry;\n\tfunction f():Void {\n\t\tfor (k in this.reg.keys()) trace(this.reg.get(k));\n\t}\n}';
+		final src: String =
+			'class Holder {\n\tvar reg:Registry;\n\tfunction f():Void {\n\t\tfor (k in this.reg.keys()) trace(this.reg.get(k));\n\t}\n}';
 		final registry: String = 'class Registry {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n'
 			+ '\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}';
 		Assert.equals(0, violationsAcross([registry, src]).length);
@@ -415,7 +420,8 @@ class MapKeysLookupCheckTest extends Test {
 		final box: String = 'class Box {\n\tpublic function keys():Iterator<String> {\n\t\treturn null;\n\t}\n'
 			+ '\tpublic function get(k:String):Int {\n\t\treturn 0;\n\t}\n}';
 		final holder: String = 'class Holder {\n\tpublic var m:Box;\n}';
-		final user: String = 'class D {\n\tfunction f(Registry:Holder):Void {\n\t\tfor (k in Registry.m.keys()) trace(Registry.m.get(k));\n\t}\n}';
+		final user: String =
+			'class D {\n\tfunction f(Registry:Holder):Void {\n\t\tfor (k in Registry.m.keys()) trace(Registry.m.get(k));\n\t}\n}';
 		Assert.equals(0, violationsAcross([registry, box, holder, user]).length);
 	}
 

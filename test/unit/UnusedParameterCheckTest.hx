@@ -76,14 +76,16 @@ class UnusedParameterCheckTest extends Test {
 	}
 
 	public function testLocalFunctionParameterAutofixed(): Void {
-		final src: String = 'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\tinner(1);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\tinner(1);\n\t}\n}';
 		Assert.equals(
 			'class C {\n\tpublic function m():Void {\n\t\tfunction inner():Void {\n\t\t\tg();\n\t\t}\n\t\tinner();\n\t}\n}', applyFix(src)
 		);
 	}
 
 	public function testConfinedPrivateMethodParameterAutofixed(): Void {
-		final src: String = 'class C {\n\tprivate function h(a:Int, b:Int):Int {\n\t\treturn a;\n\t}\n\n\tfunction u():Int {\n\t\treturn h(1, 2);\n\t}\n}';
+		final src: String =
+			'class C {\n\tprivate function h(a:Int, b:Int):Int {\n\t\treturn a;\n\t}\n\n\tfunction u():Int {\n\t\treturn h(1, 2);\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Warning, vs[0].severity);
@@ -108,7 +110,8 @@ class UnusedParameterCheckTest extends Test {
 		// `inner` is captured as a value (passed to `take`), so its call set cannot be
 		// proven complete — removal is unsafe, so the parameter stays `Info` and `fix`
 		// renames it to `_value` instead of removing it.
-		final src: String = 'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\ttake(inner);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\ttake(inner);\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
@@ -122,7 +125,8 @@ class UnusedParameterCheckTest extends Test {
 		// `dynamic` marks a reassignable callback slot — an assigner elsewhere relies
 		// on the signature, so an unreferenced param in the default body is by
 		// design, not dead code. The whole function is skipped, never autofixed.
-		final src: String = 'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic static dynamic function cb(value:Bool):Void {}\n\n\tpublic static function assign():Void {\n\t\tcb = v -> trace(v);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 		Assert.equals(src, applyFix(src));
 	}

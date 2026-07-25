@@ -79,7 +79,8 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testFinalClassFlagged(): Void {
-		final src: String = 'final class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
+		final src: String =
+			'final class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
@@ -165,36 +166,42 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testFixRenamesThisAndBareRefs(): Void {
-		final src: String = 'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tpublic function new() { _active = true; }\n\tfunction get_active():Bool return _active;\n\tfunction toggle():Void { this._active = !_active; }\n}';
+		final src: String =
+			'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tpublic function new() { _active = true; }\n\tfunction get_active():Bool return _active;\n\tfunction toggle():Void { this._active = !_active; }\n}';
 		assertFixCanonical(src, 'this.active = !active', '_active');
 	}
 
 	public function testFixRefusesOtherReceiverAccess(): Void {
-		final src: String = 'class C {\n\tpublic var name(get, null):String;\n\tprivate var _name:String;\n\tpublic function new(n:String) { _name = n; }\n\tfunction get_name():String return _name;\n\tfunction other(c:C):String { return c._name; }\n}';
+		final src: String =
+			'class C {\n\tpublic var name(get, null):String;\n\tprivate var _name:String;\n\tpublic function new(n:String) { _name = n; }\n\tfunction get_name():String return _name;\n\tfunction other(c:C):String { return c._name; }\n}';
 		assertFixRefused(src);
 	}
 
 	public function testFixRefusesLocalShadow(): Void {
-		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction loc():Void { var _tag = 9; trace(_tag); }\n}';
+		final src: String =
+			'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction loc():Void { var _tag = 9; trace(_tag); }\n}';
 		assertFixRefused(src);
 	}
 
 	public function testFixRefusesMultiVarShadow(): Void {
 		// The grammar keeps only the FIRST name of a multi-var declaration, so a shadowing
 		// second `_tag` is invisible as a node — the fix must refuse on the hidden slot.
-		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m():Void {\n\t\tvar a = 1, _tag = 2;\n\t\ttrace(_tag);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m():Void {\n\t\tvar a = 1, _tag = 2;\n\t\ttrace(_tag);\n\t}\n}';
 		assertFixRefused(src);
 	}
 
 	public function testFixRefusesKeyValueForShadow(): Void {
 		// The grammar keeps only the KEY name of a key-value for header, so a shadowing
 		// value variable `_tag` is invisible as a node — the fix must refuse on the header.
-		final src: String = 'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m(mp:Map<Int, Int>):Void {\n\t\tfor (k => _tag in mp) trace(_tag);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m(mp:Map<Int, Int>):Void {\n\t\tfor (k => _tag in mp) trace(_tag);\n\t}\n}';
 		assertFixRefused(src);
 	}
 
 	public function testFixRefusesCasePatternCapture(): Void {
-		final src: String = 'class C {\n\tpublic var kind(get, never):Int;\n\tprivate var _kind:Int = 1;\n\tfunction get_kind():Int return _kind;\n\tfunction m(x:Any):Void { switch x { case _kind: trace(_kind); case _: trace(0); } }\n}';
+		final src: String =
+			'class C {\n\tpublic var kind(get, never):Int;\n\tprivate var _kind:Int = 1;\n\tfunction get_kind():Int return _kind;\n\tfunction m(x:Any):Void { switch x { case _kind: trace(_kind); case _: trace(0); } }\n}';
 		assertFixRefused(src);
 	}
 
@@ -211,7 +218,8 @@ class TrivialGetterCheckTest extends Test {
 	public function testSubclassOverrideNotFlagged(): Void {
 		// A subclass overriding get_active would break if the base property became
 		// (default, null) with the getter dropped, so a class with any subtype is skipped.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\toverride function get_active():Bool return true;\n}';
+		final source: String =
+			'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\toverride function get_active():Bool return true;\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -223,7 +231,8 @@ class TrivialGetterCheckTest extends Test {
 	public function testInterfaceImplementerNotFlagged(): Void {
 		// The interface `Toggleable` is not in the lint scope, so it cannot be proven to lack
 		// `active` — the collapse could break a required `get_active`, so the property is skipped.
-		final src: String = 'class C implements Toggleable {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
+		final src: String =
+			'class C implements Toggleable {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -254,12 +263,14 @@ class TrivialGetterCheckTest extends Test {
 
 	public function testPrivatePropInImplementerStillFlagged(): Void {
 		// A PRIVATE property is not exposed through the interface, so `implements` is irrelevant.
-		final src: String = 'class C implements Toggleable {\n\tprivate var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
+		final src: String =
+			'class C implements Toggleable {\n\tprivate var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
 		Assert.equals(1, violations(src).length);
 	}
 
 	public function testFixProceedsWhenInterfaceLacksProp(): Void {
-		final classSrc: String = 'class C implements Named {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
+		final classSrc: String =
+			'class C implements Named {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'Named.hx', source: 'interface Named {\n\tpublic var label(get, never):String;\n}' },
 			{ file: 'C.hx', source: classSrc }
@@ -277,12 +288,14 @@ class TrivialGetterCheckTest extends Test {
 	// backing-field write must be qualified as `this.x` when the enclosing function shadows `x`.
 
 	public function testFixShadowedParamUsesThis(): Void {
-		final src: String = 'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool;\n\tpublic function new(active:Bool) { _active = active; }\n\tfunction get_active():Bool return _active;\n}';
+		final src: String =
+			'class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool;\n\tpublic function new(active:Bool) { _active = active; }\n\tfunction get_active():Bool return _active;\n}';
 		assertFixContains(src, 'this.active = active');
 	}
 
 	public function testFixShadowedLocalUsesThis(): Void {
-		final src: String = 'class C {\n\tpublic var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction bump():Void { var count = 5; _count = count; }\n}';
+		final src: String =
+			'class C {\n\tpublic var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction bump():Void { var count = 5; _count = count; }\n}';
 		assertFixContains(src, 'this.count = count');
 	}
 
@@ -326,12 +339,14 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeACtorInitMoveFlagged(): Void {
-		final src: String = 'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
+		final src: String =
+			'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
 		Assert.equals(1, new TrivialGetter().run([{ file: 'LicenseButton.hx', source: src }], new HaxeQueryPlugin()).length);
 	}
 
 	public function testShapeACtorInitMoveFix(): Void {
-		final src: String = 'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
+		final src: String =
+			'class LicenseButton {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\t_disabled = false;\n\t\tinit();\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool {\n\t\t_disabled = v;\n\t\talpha = v ? 0.5 : 1;\n\t\treturn _disabled;\n\t}\n}';
 		final fixed: String = fixedText(src);
 		Assert.isTrue(fixed.indexOf('disabled(default, set):Bool = false') >= 0);
 		Assert.isTrue(fixed.indexOf('return disabled;') >= 0);
@@ -344,7 +359,8 @@ class TrivialGetterCheckTest extends Test {
 	public function testShapeACtorInitNotMovableBypassFlagged(): Void {
 		// `trace(_disabled)` reads the field before `_disabled = false`, so the init is not
 		// relocatable; the write is marked @:bypassAccessor instead and the property collapses.
-		final src: String = 'class C {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\ttrace(_disabled);\n\t\t_disabled = false;\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool { redraw(); return _disabled = v; }\n}';
+		final src: String =
+			'class C {\n\tpublic var disabled(get, set):Bool;\n\tprivate var _disabled:Bool;\n\tpublic function new() {\n\t\ttrace(_disabled);\n\t\t_disabled = false;\n\t}\n\tfunction get_disabled():Bool return _disabled;\n\tfunction set_disabled(v:Bool):Bool { redraw(); return _disabled = v; }\n}';
 		final vs: Array<Violation> = new TrivialGetter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
 		final fixed: String = fixedText(src);
@@ -494,7 +510,8 @@ class TrivialGetterCheckTest extends Test {
 	}
 
 	public function testShapeACtorInitPlusBypass(): Void {
-		final src: String = 'class C {\n\tpublic var active(get, set):Bool;\n\tprivate var _active:Bool;\n\tpublic function new() {\n\t\t_active = false;\n\t\tinit();\n\t}\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }\n}';
+		final src: String =
+			'class C {\n\tpublic var active(get, set):Bool;\n\tprivate var _active:Bool;\n\tpublic function new() {\n\t\t_active = false;\n\t\tinit();\n\t}\n\tfunction get_active():Bool return _active;\n\tfunction set_active(v:Bool):Bool { redraw(); return _active = v; }\n\tfunction reset():Void { _active = true; }\n}';
 		final fixed: String = fixedText(src);
 		Assert.isTrue(fixed.indexOf('active(default, set):Bool = false') >= 0);
 		Assert.isTrue(fixed.indexOf('@:bypassAccessor active = true') >= 0);
@@ -605,14 +622,16 @@ class TrivialGetterCheckTest extends Test {
 	public function testSubclassedNotOverriddenCollapses(): Void {
 		// Sub extends Base but overrides NEITHER get_active/set_active nor redeclares `active`
 		// (the DarkDropDownListItem shape), so dropping get_active strands no override — collapse.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function ping():Void {}\n}';
+		final source: String =
+			'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function ping():Void {}\n}';
 		Assert.equals(1, violations(source).length);
 	}
 
 	public function testSubclassTransitiveOverrideStillSkipped(): Void {
 		// Leaf -> Mid -> Base: a TRANSITIVE subtype overrides get_active, so dropping it would strand
 		// the override — the collapse is still skipped even though the direct subtype Mid is inert.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Mid extends Base {}\nclass Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}';
+		final source: String =
+			'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Mid extends Base {}\nclass Leaf extends Mid {\n\toverride function get_active():Bool return true;\n}';
 		Assert.equals(0, violations(source).length);
 	}
 
@@ -634,7 +653,8 @@ class TrivialGetterCheckTest extends Test {
 		// Sub extends Base and reads Base's PRIVATE _active directly (legal — subclass-visible). The
 		// collapse deletes _active; the cross-file fix rewrites Sub's READ `_active` -> `active` so the
 		// property is flagged AND fixed atomically (both slices land in the one source file here).
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Bool return _active;\n}';
+		final source: String =
+			'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Bool return _active;\n}';
 		Assert.equals(1, violations(source).length);
 		final fixed: String = crossFixApply([{ file: 'C.hx', source: source }])['C.hx'] ?? '';
 		Assert.isTrue(fixed.indexOf('active(default, null):Bool = false') >= 0);
@@ -646,7 +666,8 @@ class TrivialGetterCheckTest extends Test {
 	public function testSubclassReadingDifferentFieldCollapses(): Void {
 		// Sub reads a DIFFERENT inherited private field (_other), never _active, so deleting _active
 		// is safe — the field-reference gate is field-specific and the property collapses.
-		final source: String = 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate var _other:Int = 0;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Int return _other;\n}';
+		final source: String =
+			'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate var _other:Int = 0;\n\tfunction get_active():Bool return _active;\n}\nclass Sub extends Base {\n\tpublic function peek():Int return _other;\n}';
 		Assert.equals(1, violations(source).length);
 	}
 

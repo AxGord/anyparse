@@ -62,7 +62,8 @@ class PreferInlineOracleTest extends Test {
 		}
 		// Default-config canonical form (a fixture in $TMPDIR discovers no hxformat.json, so the
 		// writer-emit canonical gate measures against the compiled defaults, not the project style).
-		final src: String = 'class Main {\n\n\tstatic function main() {\n\t\ttrace(make());\n\t}\n\n\tstatic function make():Dynamic\n\t\treturn {a: 1, b: 2};\n\n}\n';
+		final src: String =
+			'class Main {\n\n\tstatic function main() {\n\t\ttrace(make());\n\t}\n\n\tstatic function make():Dynamic\n\t\treturn {a: 1, b: 2};\n\n}\n';
 		final dir: String = CliFixture.writeDir('preferinlineoracle', [
 			{ name: 'Main.hx', source: src },
 			{ name: 'check.hxml', source: '-cp .\n-main Main\n' },
@@ -87,7 +88,8 @@ class PreferInlineOracleTest extends Test {
 		// default (off) null-safety mode, but re-checked in Main's `Strict` mode once inlined, so the
 		// compiler rejects the relaxed inline and the pipeline reverts `Lib.hx` to report-only.
 		final lib: String = 'class Lib {\n\n\tpublic static function box(x:Null<Int>):{v:Int}\n\t\treturn {v: x};\n\n}\n';
-		final main: String = '@:nullSafety(Strict)\nclass Main {\n\n\tstatic function main() {\n\t\tfinal n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n\t}\n\n}\n';
+		final main: String =
+			'@:nullSafety(Strict)\nclass Main {\n\n\tstatic function main() {\n\t\tfinal n:Null<Int> = Std.random(2) == 0 ? 1 : null;\n\t\ttrace(Lib.box(n));\n\t}\n\n}\n';
 		final dir: String = CliFixture.writeDir('preferinlineoracle', [
 			{ name: 'Lib.hx', source: lib },
 			{ name: 'Main.hx', source: main },

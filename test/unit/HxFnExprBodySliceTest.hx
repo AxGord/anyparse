@@ -148,7 +148,8 @@ class HxFnExprBodySliceTest extends HxTestHelpers {
 	public function testClassMemberExprBodyNoSemiMixed(): Void {
 		// The exact issue_83 input: a `{}`-bodied member followed by a
 		// no-`;` expr-bodied member as the last member before `}`.
-		final src: String = 'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
+		final src: String =
+			'class Main {\n\tpublic static function main() {\n\t\t[1, 2, 3].map(function() trace(i));\n\t}\n\tpublic static function main2() [1, 2, 3].map(function() trace(i))\n}';
 		final ast: HxModule = HaxeModuleParser.parse(src);
 		Assert.equals(1, ast.decls.length);
 		final cls: HxClassDecl = expectClassDecl(ast.decls[0]);

@@ -139,8 +139,10 @@ class LoopGuardCheckTest extends Test {
 	}
 
 	public function testApplyFixByteExact(): Void {
-		final input: String = 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';
-		final expected: String = 'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) if (x != 0) {\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';
+		final input: String =
+			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) {\n\t\t\tif (x == 0) continue;\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';
+		final expected: String =
+			'class C {\n\tfunction f(xs:Array<Int>):Void {\n\t\tfor (x in xs) if (x != 0) {\n\t\t\ttrace(x);\n\t\t}\n\t}\n}';
 		Assert.equals(expected, applyFix(input));
 	}
 

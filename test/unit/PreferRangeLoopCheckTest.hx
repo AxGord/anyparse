@@ -71,7 +71,8 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	public function testReadAfterNotFlagged(): Void {
-		final src: String = 'class C {\n\tfunction f(n:Int):Int {\n\t\tvar i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t\treturn i;\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(n:Int):Int {\n\t\tvar i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t\treturn i;\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -126,7 +127,8 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	public function testFixParenthesisesTernaryBound(): Void {
-		final src: String = 'class C {\n\tfunction f(a:Int, to:Int):Void {\n\t\tvar i = a < 0 ? 0 : a;\n\t\twhile (i < to) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(a:Int, to:Int):Void {\n\t\tvar i = a < 0 ? 0 : a;\n\t\twhile (i < to) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		assertFixCanonical(src, 'for (i in (a < 0 ? 0 : a)...to)', 'while (');
 	}
 
@@ -141,7 +143,8 @@ class PreferRangeLoopCheckTest extends Test {
 	}
 
 	public function testFloatBoundNotFlagged(): Void {
-		final src: String = 'class C {\n\tfunction f(n:Float):Void {\n\t\tvar i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(n:Float):Void {\n\t\tvar i = 0;\n\t\twhile (i < n) {\n\t\t\twork(i);\n\t\t\ti++;\n\t\t}\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 

@@ -23,13 +23,16 @@ import anyparse.query.CachingGrammarPlugin;
  */
 class PreferFinalAbstractMethodCheckTest extends Test {
 
-	private static inline final ABSTRACT: String = 'abstract Step(Int) { public function nw(v:Int) this = v; public function next():Void this = this + 1; } ';
+	private static inline final ABSTRACT: String =
+		'abstract Step(Int) { public function nw(v:Int) this = v; public function next():Void this = this + 1; } ';
 
 	/** A ctor-only-writing abstract (openfl `ByteArray` pattern) — `read` returns `this`, only `new` writes it. Final-safe. */
-	private static inline final CTOR_ONLY: String = 'abstract Buf(Int) { public inline function new(v:Int) this = v; public function read():Int return this; } ';
+	private static inline final CTOR_ONLY: String =
+		'abstract Buf(Int) { public inline function new(v:Int) this = v; public function read():Int return this; } ';
 
 	/** An abstract that REBINDS `this` in a non-ctor member (`bump`) — a `@:forward` to it inherits the rebind. */
-	private static inline final REBIND_INNER: String = 'abstract Inner(Int) { public inline function new(v:Int) this = v; public inline function bump():Void this = this + 1; } ';
+	private static inline final REBIND_INNER: String =
+		'abstract Inner(Int) { public inline function new(v:Int) this = v; public inline function bump():Void this = this + 1; } ';
 
 	// --- Field case (prefer-final-field) ---
 

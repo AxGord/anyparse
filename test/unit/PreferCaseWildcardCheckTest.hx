@@ -41,7 +41,8 @@ class PreferCaseWildcardCheckTest extends Test {
 	}
 
 	public function testExpressionPositionSwitchFlagged(): Void {
-		final source: String = 'class C {\n\tfunction f(x:Int):String {\n\t\treturn switch x {\n\t\t\tcase 1: "a";\n\t\t\tdefault: "b";\n\t\t};\n\t}\n}';
+		final source: String =
+			'class C {\n\tfunction f(x:Int):String {\n\t\treturn switch x {\n\t\t\tcase 1: "a";\n\t\t\tdefault: "b";\n\t\t};\n\t}\n}';
 		final vs: Array<Violation> = violations(source);
 		Assert.equals(1, vs.length);
 		Assert.equals('prefer-case-wildcard', vs[0].rule);
@@ -55,7 +56,8 @@ class PreferCaseWildcardCheckTest extends Test {
 	}
 
 	public function testNestedSwitchFlagged(): Void {
-		final source: String = 'class C {\n\tfunction f(x:Int, y:Int):Void {\n\t\tswitch x {\n\t\t\tcase 1: switch y {\n\t\t\t\tcase 2: a();\n\t\t\t\tdefault: b();\n\t\t\t}\n\t\t\tdefault: c();\n\t\t}\n\t}\n}';
+		final source: String =
+			'class C {\n\tfunction f(x:Int, y:Int):Void {\n\t\tswitch x {\n\t\t\tcase 1: switch y {\n\t\t\t\tcase 2: a();\n\t\t\t\tdefault: b();\n\t\t\t}\n\t\t\tdefault: c();\n\t\t}\n\t}\n}';
 		final vs: Array<Violation> = violations(source);
 		Assert.equals(2, vs.length);
 		Assert.equals(-1, applyFix(source).indexOf('default'));

@@ -25,49 +25,58 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
 @:nullSafety(Strict)
 final class HxCallParamNestedArrayHugSliceTest extends Test {
 
-	private static final CONFIG: String = '{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
+	private static final CONFIG: String =
+		'{"indentation": {"character": "tab", "tabWidth": 4}, "wrapping": {"maxLineLength": 140, "callParameter": {"defaultWrap": "fillLineWithLeadingBreak", "rules": [{"conditions": [{"cond": "exceedsMaxLineLength", "value": 0}], "type": "noWrap"}, {"conditions": [{"cond": "itemCount <= n", "value": 1}, {"cond": "totalItemLength <= n", "value": 100}], "type": "noWrap"}]}}}';
 
 	public function new(): Void {
 		super();
 	}
 
 	public function testNestedArrayFirstArgScalarLastHugs(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(new Row([\n\t\t\tnew Label("alphaLongText", fmtFunctionOne(), null, 30),\n\t\t\tnew Label("bravoLongText", fmtFunctionTwo(), null, 30)\n\t\t], someWidthValue, null), false);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem(new Row([\n\t\t\tnew Label("alphaLongText", fmtFunctionOne(), null, 30),\n\t\t\tnew Label("bravoLongText", fmtFunctionTwo(), null, 30)\n\t\t], someWidthValue, null), false);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testNestedArrayLastArgScalarFirstHugs(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(false, new Row([\n\t\t\tnew Label("alphaLongText", fmtFunctionOne(), null, 30),\n\t\t\tnew Label("bravoLongText", fmtFunctionTwo(), null, 30)\n\t\t], someWidthValue, null));\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem(false, new Row([\n\t\t\tnew Label("alphaLongText", fmtFunctionOne(), null, 30),\n\t\t\tnew Label("bravoLongText", fmtFunctionTwo(), null, 30)\n\t\t], someWidthValue, null));\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testNestedArraySoleInnerArgHugs(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(new Row([\n\t\t\tnew Label("alpha", fmtOneFunctionCall(), null, 30),\n\t\t\tnew Label("bravo", fmtTwoFunctionCall(), null, 30)\n\t\t]), false);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem(new Row([\n\t\t\tnew Label("alpha", fmtOneFunctionCall(), null, 30),\n\t\t\tnew Label("bravo", fmtTwoFunctionCall(), null, 30)\n\t\t]), false);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testNestedArrayTailOverflowStillHugs(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(new Row([\n\t\t\tnew Label("alphaLongText", fmtFunctionOne(), null, 30),\n\t\t\tnew Label("bravoLongText", fmtFunctionTwo(), null, 30)\n\t\t], someVeryLongWidthValueExpressionGoesHereToOverflow, anotherLongTrailingArgumentValueHere), false);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem(new Row([\n\t\t\tnew Label("alphaLongText", fmtFunctionOne(), null, 30),\n\t\t\tnew Label("bravoLongText", fmtFunctionTwo(), null, 30)\n\t\t], someVeryLongWidthValueExpressionGoesHereToOverflow, anotherLongTrailingArgumentValueHere), false);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testDirectArrayArgStillHugs(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem([\n\t\t\tnew Label("alpha", fmtOneFunctionCall(), null, 30),\n\t\t\tnew Label("bravo", fmtTwoFunctionCall(), null, 30)\n\t\t], false);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem([\n\t\t\tnew Label("alpha", fmtOneFunctionCall(), null, 30),\n\t\t\tnew Label("bravo", fmtTwoFunctionCall(), null, 30)\n\t\t], false);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testNestedCallNoArrayLeadingBreaks(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(\n\t\t\tnew Row(longArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longEchoValue), false\n\t\t);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem(\n\t\t\tnew Row(longArgumentAlphaValue, longArgumentBravoValue, longArgumentCharlieValue, longArgumentDeltaValue, longEchoValue), false\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testTwoArrayBearingArgsLeadingBreak(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\tcontainer.addItem(\n\t\t\tnew Row([new Label("alpha", fmtOneFunctionValue(), null, 30)], widthOne),\n\t\t\tnew Row([new Label("bravo", fmtTwoFunctionValue(), null, 30)], widthTwo)\n\t\t);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\tcontainer.addItem(\n\t\t\tnew Row([new Label("alpha", fmtOneFunctionValue(), null, 30)], widthOne),\n\t\t\tnew Row([new Label("bravo", fmtTwoFunctionValue(), null, 30)], widthTwo)\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testChainOwnedArrayPastSoftBreakLeadingBreaks(): Void {
-		final src: String = 'class C {\n\tfunction test() {\n\t\treturn assert(\n\t\t\talphaCount == 0,\n\t\t\t\'Should not create items for the given additions, but created $${alphaCount}: \' + [for (m in moves) \'$${m.oldPath}\'].join(\', \')\n\t\t);\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction test() {\n\t\treturn assert(\n\t\t\talphaCount == 0,\n\t\t\t\'Should not create items for the given additions, but created $${alphaCount}: \' + [for (m in moves) \'$${m.oldPath}\'].join(\', \')\n\t\t);\n\t}\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 

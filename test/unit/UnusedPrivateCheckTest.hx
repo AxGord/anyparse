@@ -261,7 +261,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * must report it but never delete it (`mayImplementAbstractMethod`).
 	 */
 	public function testFixKeepsExtendsClassPrivateMethod(): Void {
-		final src: String = 'class Sub extends UnresolvableBase {\n\tprivate function needToGetSharedInternal():Bool {\n\t\treturn true;\n\t}\n}';
+		final src: String =
+			'class Sub extends UnresolvableBase {\n\tprivate function needToGetSharedInternal():Bool {\n\t\treturn true;\n\t}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'Sub.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -277,7 +278,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * Reported as unused, but `--fix` emits no edit.
 	 */
 	public function testFixKeepsExtendsClassMethodInConditional(): Void {
-		final src: String = 'class Sub extends UnresolvableBase {\n\t#if cpp\n\tprivate function abstractImpl():Bool {\n\t\treturn true;\n\t}\n\t#end\n}';
+		final src: String =
+			'class Sub extends UnresolvableBase {\n\t#if cpp\n\tprivate function abstractImpl():Bool {\n\t\treturn true;\n\t}\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'Sub.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -319,7 +321,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * KEPT — an occurrence in any branch of any indexed file keeps the whole-file veto.
 	 */
 	public function testFixKeepsConditionalFileMemberReferencedElsewhere(): Void {
-		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
+		final cSrc: String =
+			'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\t#if debug\n\tpublic function bar() { foo(); }\n\t#end\n}' }
@@ -338,7 +341,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * comment mention is a deliberate non-goal (possible future refinement).
 	 */
 	public function testFixKeepsConditionalFileMemberMentionedInComment(): Void {
-		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
+		final cSrc: String =
+			'package pkg;\nclass C {\n\tprivate function foo() {}\n\t#if debug\n\tpublic function dbg() { trace(1); }\n\t#end\n}';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/D.hx', source: 'package pkg;\nclass D {\n\t// once called foo here\n\tpublic function bar() {}\n}' }
@@ -372,7 +376,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * hand-removed) and asserts the rule deletes exactly that constructor.
 	 */
 	public function testEmptyCtorOfUtilityClassDeleted(): Void {
-		final src: String = 'class DashLineUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
+		final src: String =
+			'class DashLineUtil {\n\tpublic static var gap:Float = 4;\n\tprivate static var thickness:Float = 2;\n\tpublic static function draw() { thickness += gap; }\n\tprivate function new() {}\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'DashLineUtil.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -403,7 +408,8 @@ class UnusedPrivateCheckTest extends Test {
 	 * a referenced member so the only candidate edit is the constructor itself.
 	 */
 	public function testEmptyCtorKeptWhenFileHasConditional(): Void {
-		final src: String = 'class U {\n\tpublic static function draw() { dbg(); }\n\tprivate function new() {}\n\t#if debug\n\tstatic function dbg() { trace(1); }\n\t#end\n}';
+		final src: String =
+			'class U {\n\tpublic static function draw() { dbg(); }\n\tprivate function new() {}\n\t#if debug\n\tstatic function dbg() { trace(1); }\n\t#end\n}';
 		final check: UnusedPrivate = new UnusedPrivate();
 		final vs: Array<Violation> = check.run([{ file: 'U.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);

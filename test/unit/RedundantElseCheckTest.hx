@@ -97,7 +97,8 @@ class RedundantElseCheckTest extends Test {
 	public function testFixScopeUnsafeSkipped(): Void {
 		// The enclosing block already declares `n` (a sibling of the `if`), so de-nesting the
 		// else-body `var n` would redeclare `n` in the same scope — a real collision, skipped.
-		final src: String = 'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -105,7 +106,8 @@ class RedundantElseCheckTest extends Test {
 	public function testFixParamCollisionSkipped(): Void {
 		// The else-body `var n` collides with the function parameter `n` — de-nesting it into the
 		// function-body block would redeclare a parameter name in the same scope, so it is skipped.
-		final src: String = 'class C {\n\tfunction f(n:Int):Int {\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f(n:Int):Int {\n\t\tif (a) {\n\t\t\treturn n;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
 	}
@@ -113,7 +115,8 @@ class RedundantElseCheckTest extends Test {
 	public function testFixLocalNoCollisionDeNested(): Void {
 		// The else declares `n`, but nothing named `n` exists in the enclosing scope — de-nesting
 		// is safe (no widening collision), so the redundant else IS removed.
-		final src: String = 'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\treturn b(n);\n\t\t}\n\t}\n}';
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tvar n = 1;\n\t\t\treturn b(n);\n\t\t}\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		final es: Array<{ span: Span, text: String }> = edits(src);
 		Assert.equals(1, es.length);

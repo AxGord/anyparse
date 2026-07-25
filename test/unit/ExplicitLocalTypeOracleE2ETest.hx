@@ -27,7 +27,8 @@ import sys.io.File;
 class ExplicitLocalTypeOracleE2ETest extends Test {
 
 	#if (sys || nodejs)
-	private static final SRC: String = 'class Main {\n\n\tstatic function main() {\n\t\tvar mapped = [\'a\', \'b\'].map(function(s) return s.length);\n\t\tvar comp = [for (i in 0...3) i];\n\t\tvar empty = [];\n\t\ttrace(mapped, comp, empty);\n\t}\n\n}\n';
+	private static final SRC: String =
+		'class Main {\n\n\tstatic function main() {\n\t\tvar mapped = [\'a\', \'b\'].map(function(s) return s.length);\n\t\tvar comp = [for (i in 0...3) i];\n\t\tvar empty = [];\n\t\ttrace(mapped, comp, empty);\n\t}\n\n}\n';
 	private static final HXML: String = '-cp .\n-main Main\n';
 	#end
 

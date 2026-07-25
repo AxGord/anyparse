@@ -167,7 +167,8 @@ class CatchDynamicCheckTest extends Test {
 	public function testFixMixedConditionalAndPlainCatches(): Void {
 		// A plain unused catch takes the short `Exception` + import; a sibling inside `#if`
 		// takes qualified `haxe.Exception`. The import is added once, driven by the plain swap.
-		final src: String = 'class C {\n\tpublic function f():Void {\n\t\ttry a() catch (e:Dynamic) {}\n\t\t#if debug\n\t\ttry b() catch (e:Dynamic) {}\n\t\t#end\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function f():Void {\n\t\ttry a() catch (e:Dynamic) {}\n\t\t#if debug\n\t\ttry b() catch (e:Dynamic) {}\n\t\t#end\n\t}\n}';
 		final out: String = applyFix(src);
 		Assert.isTrue(out.indexOf('(e:haxe.Exception)') != -1, 'conditional swap should be qualified, got: $out');
 		Assert.isTrue(out.indexOf('(e:Exception)') != -1, 'plain swap should use the short name, got: $out');
@@ -209,14 +210,16 @@ class CatchDynamicCheckTest extends Test {
 		final out: String = applyFixLogging(
 			"class C { public function f():Void { try g() catch (msg:Dynamic) { trace('error creating SystemData : $msg'); } } }"
 		);
-		final expected: String = "import haxe.Exception;\nclass C { public function f():Void { try g() catch (exception:Exception) { trace('error creating SystemData : $exception'); } } }";
+		final expected: String =
+			"import haxe.Exception;\nclass C { public function f():Void { try g() catch (exception:Exception) { trace('error creating SystemData : $exception'); } } }";
 		Assert.equals(expected, out);
 	}
 
 	public function testFixLoggingTraceTrailingArgRenamed(): Void {
 		// The caught value is passed as a bare trace() argument — renamed to `exception`.
 		final out: String = applyFixLogging("class C { public function f():Void { try g() catch (e:Dynamic) { trace('boom', e); } } }");
-		final expected: String = "import haxe.Exception;\nclass C { public function f():Void { try g() catch (exception:Exception) { trace('boom', exception); } } }";
+		final expected: String =
+			"import haxe.Exception;\nclass C { public function f():Void { try g() catch (exception:Exception) { trace('boom', exception); } } }";
 		Assert.equals(expected, out);
 	}
 
@@ -226,7 +229,8 @@ class CatchDynamicCheckTest extends Test {
 		final out: String = applyFixLogging(
 			"class C { public function f():Void { try a() catch (msg:Dynamic) { trace('err: $msg'); try b() catch (e:Exception) { recover(); } } } }"
 		);
-		final expected: String = "import haxe.Exception;\nclass C { public function f():Void { try a() catch (exception:Exception) { trace('err: $exception'); try b() catch (e:Exception) { recover(); } } } }";
+		final expected: String =
+			"import haxe.Exception;\nclass C { public function f():Void { try a() catch (exception:Exception) { trace('err: $exception'); try b() catch (e:Exception) { recover(); } } } }";
 		Assert.equals(expected, out);
 	}
 
@@ -272,7 +276,8 @@ class CatchDynamicCheckTest extends Test {
 	public function testFixLoggingRenameCollisionStaysFinding(): Void {
 		// Renaming to `exception` would capture an existing `exception` referenced in the body —
 		// the rewrite is skipped to avoid shadowing it.
-		final src: String = "class C { public function f():Void { var exception = 1; try g() catch (e:Dynamic) { trace('x $e'); use(exception); } } }";
+		final src: String =
+			"class C { public function f():Void { var exception = 1; try g() catch (e:Dynamic) { trace('x $e'); use(exception); } } }";
 		Assert.equals(0, editCountLogging(src));
 	}
 

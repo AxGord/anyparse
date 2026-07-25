@@ -40,8 +40,10 @@ class AddElementSliceTest extends Test {
 
 	/** Insert a `case` into a switch (self-delimited by the next `case`). */
 	public function testInsertSwitchCaseAfter(): Void {
-		final source: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
-		final expected: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 2: c();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
+		final source: String =
+			'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 2: c();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
 		assertAdd(source, 4, 4, After, 'case 2: c();', true, expected);
 	}
 
@@ -135,7 +137,8 @@ class AddElementSliceTest extends Test {
 	/** --append: add a case to a switch by pointing at the `switch` keyword. */
 	public function testAppendCaseToSwitch(): Void {
 		final source: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t}\n\t}\n}\n';
-		final expected: String = 'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f(x:Int):Void {\n\t\tswitch x {\n\t\t\tcase 0: a();\n\t\t\tcase 1: b();\n\t\t}\n\t}\n}\n';
 		assertAppend(source, 3, 3, 'case 1: b();', true, expected);
 	}
 

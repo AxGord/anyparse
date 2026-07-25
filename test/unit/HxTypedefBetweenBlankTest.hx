@@ -68,7 +68,8 @@ class HxTypedefBetweenBlankTest extends Test {
 
 	public function testIssue301RoundTrip(): Void {
 		// End-to-end probe matching the exact corpus fixture input.
-		final src: String = 'typedef Point2D = {\n\tx:Int,\n\ty:Int\n\t};\ntypedef Point3D = {x:Int, y:Int, z:Int};\n\nclass A {\n\tvar a:{x:Int, y:Int, z:Int};\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int\n\t};\n}';
+		final src: String =
+			'typedef Point2D = {\n\tx:Int,\n\ty:Int\n\t};\ntypedef Point3D = {x:Int, y:Int, z:Int};\n\nclass A {\n\tvar a:{x:Int, y:Int, z:Int};\n\tvar a:{\n\t\tx:Int,\n\t\ty:Int,\n\t\tz:Int\n\t};\n}';
 		final out: String = writeWithLeftCurlyBoth(src);
 		Assert.isTrue(
 			out.indexOf('};\n\ntypedef Point3D =\n{') != -1, 'expected blank + Allman shape between Point2D and Point3D in:\n<$out>'

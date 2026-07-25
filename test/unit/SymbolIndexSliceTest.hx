@@ -47,7 +47,8 @@ class SymbolIndexSliceTest extends Test {
 	 * kinds, and the type declarations with the correct `isMain` flag.
 	 */
 	public function testFileInfoExtraction(): Void {
-		final source: String = 'package pkg.sub;\nimport other.Thing;\nimport other.Mod.Sub as Aliased;\nimport other.deep.*;\nusing other.Ext;\nclass A {}\ntypedef Helper = {};\n';
+		final source: String =
+			'package pkg.sub;\nimport other.Thing;\nimport other.Mod.Sub as Aliased;\nimport other.deep.*;\nusing other.Ext;\nclass A {}\ntypedef Helper = {};\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/sub/A.hx', source: source }], plugin());
 
 		final info: Null<FileInfo> = index.fileInfo('src/pkg/sub/A.hx');
@@ -306,7 +307,8 @@ class SymbolIndexSliceTest extends Test {
 	 * never reads as ambiguous.
 	 */
 	public function testConditionalDuplicateNameKeepsFirstBranch(): Void {
-		final source: String = 'package pkg;\n#if js\nclass Dup {\n\tpublic var jsOnly:Int;\n}\n#else\nclass Dup {\n\tpublic var cppOnly:Int;\n}\n#end\n';
+		final source: String =
+			'package pkg;\n#if js\nclass Dup {\n\tpublic var jsOnly:Int;\n}\n#else\nclass Dup {\n\tpublic var cppOnly:Int;\n}\n#end\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Dup.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Dup.hx');
 
@@ -320,7 +322,8 @@ class SymbolIndexSliceTest extends Test {
 
 	/** Two SIBLING regions declaring the same type collapse to one entry too. */
 	public function testSiblingConditionalRegionsDedupeByName(): Void {
-		final source: String = 'package pkg;\n#if js\nclass Twin {\n\tpublic var jsOnly:Int;\n}\n#end\n#if !js\nclass Twin {\n\tpublic var nativeOnly:Int;\n}\n#end\n';
+		final source: String =
+			'package pkg;\n#if js\nclass Twin {\n\tpublic var jsOnly:Int;\n}\n#end\n#if !js\nclass Twin {\n\tpublic var nativeOnly:Int;\n}\n#end\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Twin.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Twin.hx');
 
@@ -330,7 +333,8 @@ class SymbolIndexSliceTest extends Test {
 
 	/** Distinct names across `#if` / `#elseif` / `#else` branches are ALL indexed. */
 	public function testConditionalBranchDistinctNamesAllIndexed(): Void {
-		final source: String = 'package pkg;\n#if js\nclass MA {}\n#elseif cpp\nclass MB {}\n#else\ntypedef MC = Int;\n#end\nclass Multi {}\n';
+		final source: String =
+			'package pkg;\n#if js\nclass MA {}\n#elseif cpp\nclass MB {}\n#else\ntypedef MC = Int;\n#end\nclass Multi {}\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Multi.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Multi.hx');
 
@@ -363,7 +367,8 @@ class SymbolIndexSliceTest extends Test {
 	 * `#end` are inside it.
 	 */
 	public function testSplitHeaderDeclIndexed(): Void {
-		final source: String = 'package pkg;\n#if js\nclass Split extends Base implements Marker {\n#else\nclass Split {\n#end\n\tpublic var shared:Int;\n}\n';
+		final source: String =
+			'package pkg;\n#if js\nclass Split extends Base implements Marker {\n#else\nclass Split {\n#end\n\tpublic var shared:Int;\n}\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Split.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Split.hx');
 
@@ -385,7 +390,8 @@ class SymbolIndexSliceTest extends Test {
 
 	/** The `abstract` split-header form, with its type-parameter arity read off the head. */
 	public function testSplitHeaderAbstractTypeParamArity(): Void {
-		final source: String = 'package pkg;\n#if js\nabstract Gen<T>(Array<T>) from Array<T> {\n#else\nabstract Gen<T>(List<T>) from List<T> {\n#end\n\tpublic var g:Int;\n}\n';
+		final source: String =
+			'package pkg;\n#if js\nabstract Gen<T>(Array<T>) from Array<T> {\n#else\nabstract Gen<T>(List<T>) from List<T> {\n#end\n\tpublic var g:Int;\n}\n';
 		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Gen.hx', source: source }], plugin());
 		final fi: FileInfo = fileInfoOf(index, 'src/pkg/Gen.hx');
 

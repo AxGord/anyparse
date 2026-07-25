@@ -148,8 +148,10 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// Hosted in array comprehension so `if` parses as HxIfExpr (not
 		// HxIfStmt — the latter requires a HxStatement body, which
 		// `{a:1,...}` is not).
-		final cfg: String = '{"lineEnds":{"leftCurly":"both"},"indentation":{"indentObjectLiteral":false},"sameLine":{"expressionIf":"keep"}}';
-		final src: String = 'class C {\n\tstatic function f() {\n\t\tvar x = [\n\t\t\tfor (k in keys)\n\t\t\t\tif (cond)\n\t\t\t\t\t{a: 1, b: 2, c: 3, d: 4}\n\t\t];\n\t}\n}';
+		final cfg: String =
+			'{"lineEnds":{"leftCurly":"both"},"indentation":{"indentObjectLiteral":false},"sameLine":{"expressionIf":"keep"}}';
+		final src: String =
+			'class C {\n\tstatic function f() {\n\t\tvar x = [\n\t\t\tfor (k in keys)\n\t\t\t\tif (cond)\n\t\t\t\t\t{a: 1, b: 2, c: 3, d: 4}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, cfg);
 		Assert.isTrue(out.indexOf('if (cond)\n\t\t\t\t{\n') != -1, 'expected `if (cond)\\n\\t\\t\\t\\t{` (kw-aligned `{`) in: <$out>');
 	}
@@ -159,8 +161,10 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// `flatLength == -1` trigger → default `nextLayoutExpr` fires
 		// with the outer Nest, placing `{a: 1}` at one indent step past
 		// the `if` (5 tabs vs `if`'s 4 tabs).
-		final cfg: String = '{"lineEnds":{"leftCurly":"both"},"indentation":{"indentObjectLiteral":false},"sameLine":{"expressionIf":"keep"}}';
-		final src: String = 'class C {\n\tstatic function f() {\n\t\tvar x = [\n\t\t\tfor (k in keys)\n\t\t\t\tif (cond)\n\t\t\t\t\t{a: 1}\n\t\t];\n\t}\n}';
+		final cfg: String =
+			'{"lineEnds":{"leftCurly":"both"},"indentation":{"indentObjectLiteral":false},"sameLine":{"expressionIf":"keep"}}';
+		final src: String =
+			'class C {\n\tstatic function f() {\n\t\tvar x = [\n\t\t\tfor (k in keys)\n\t\t\t\tif (cond)\n\t\t\t\t\t{a: 1}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, cfg);
 		Assert.isTrue(
 			out.indexOf('if (cond)\n\t\t\t\t\t{a: 1}') != -1,
@@ -172,8 +176,10 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// `indentObjectLiteral=true` leaves the default Nest in place —
 		// the gate does not fire (the runtime check is `!opt.<flag>`),
 		// so multi-line obj-lit `{` lands at `if`-indent + 1.
-		final cfg: String = '{"lineEnds":{"leftCurly":"both"},"indentation":{"indentObjectLiteral":true},"sameLine":{"expressionIf":"keep"}}';
-		final src: String = 'class C {\n\tstatic function f() {\n\t\tvar x = [\n\t\t\tfor (k in keys)\n\t\t\t\tif (cond)\n\t\t\t\t\t{a: 1, b: 2, c: 3, d: 4}\n\t\t];\n\t}\n}';
+		final cfg: String =
+			'{"lineEnds":{"leftCurly":"both"},"indentation":{"indentObjectLiteral":true},"sameLine":{"expressionIf":"keep"}}';
+		final src: String =
+			'class C {\n\tstatic function f() {\n\t\tvar x = [\n\t\t\tfor (k in keys)\n\t\t\t\tif (cond)\n\t\t\t\t\t{a: 1, b: 2, c: 3, d: 4}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, cfg);
 		Assert.isTrue(
 			out.indexOf('if (cond)\n\t\t\t\t\t{\n') != -1, 'expected `if (cond)\\n\\t\\t\\t\\t\\t{` (kw+1 indent for true) in: <$out>'
@@ -197,7 +203,8 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// at 3 tabs (continuation indent inside the broken array); `{` at
 		// 4 tabs (+cols from the `for` body's Nest); fields at 5 tabs (+cols
 		// from the obj-lit's own Nest); closing `}` at 4 tabs.
-		final src: String = 'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
+		final src: String =
+			'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, '{}');
 		Assert.isTrue(
 			out.indexOf('for (usage in markedUsages)\n\t\t\t\t{\n') != -1,
@@ -228,7 +235,8 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// `indentObjectLiteral=false` defeats the gate — the override does
 		// not fire and the body emits via the policy-decided layout (Keep
 		// preserves the source's cuddled `{`).
-		final src: String = 'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
+		final src: String =
+			'class M {\n\tpublic static function main() {\n\t\tvar expectedEdits = [for (usage in markedUsages) {\n\t\t\t\trange: usage,\n\t\t\t\tnewText: newName\n\t\t\t}\n\t\t];\n\t}\n}';
 		final out: String = writeWithCfg(src, '{"indentation":{"indentObjectLiteral":false}}');
 		Assert.isTrue(
 			out.indexOf('for (usage in markedUsages) {\n') != -1, 'expected source-cuddled `{` under indentObjectLiteral=false in: <$out>'
@@ -244,7 +252,8 @@ class HxIndentObjectLiteralOptionsTest extends Test {
 		// {a: 3, b: 4};` — `shouldCollapseInExpressionIf` collapses the
 		// fitting object branch value. The earlier assertion pinned the
 		// pre-collapse behaviour; this is the fork-aligned update.
-		final src: String = 'class M {\n\tpublic static function main() {\n\t\tvar x = if (cond) {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t} else {\n\t\t\ta: 3,\n\t\t\tb: 4\n\t\t};\n\t}\n}';
+		final src: String =
+			'class M {\n\tpublic static function main() {\n\t\tvar x = if (cond) {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t} else {\n\t\t\ta: 3,\n\t\t\tb: 4\n\t\t};\n\t}\n}';
 		final out: String = writeWithCfg(src, '{}');
 		Assert.isTrue(
 			out.indexOf('var x = if (cond) {a: 1, b: 2} else {a: 3, b: 4};') != -1,

@@ -42,10 +42,12 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	private static final COMMENT: String = 'class C {\n\tfunction f() {\n\t\ta();\n\n\t\t// header\n\t\tb();\n\n\t\tc();\n\t}\n}\n';
 
 	// Outer fn body uniform (a; if; b); inner if-body mixed (p; q; blank; r).
-	private static final NESTED: String = 'class C {\n\tfunction f() {\n\t\ta();\n\n\t\tif (x) {\n\t\t\tp();\n\t\t\tq();\n\n\t\t\tr();\n\t\t}\n\n\t\tb();\n\t}\n}\n';
+	private static final NESTED: String =
+		'class C {\n\tfunction f() {\n\t\ta();\n\n\t\tif (x) {\n\t\t\tp();\n\t\t\tq();\n\n\t\t\tr();\n\t\t}\n\n\t\tb();\n\t}\n}\n';
 
 	// if-body 2-statement uniform (cleanup; blank; = null); outer fn body has one stmt.
-	private static final IF_BODY: String = 'class C {\n\tfunction f() {\n\t\tif (m != null) {\n\t\t\tm.cleanup();\n\n\t\t\tm = null;\n\t\t}\n\t}\n}\n';
+	private static final IF_BODY: String =
+		'class C {\n\tfunction f() {\n\t\tif (m != null) {\n\t\t\tm.cleanup();\n\n\t\t\tm = null;\n\t\t}\n\t}\n}\n';
 
 	public function testDefaultOptionKeepsUniformBlanks(): Void {
 		Assert.equals(UniformStatementBlanksPolicy.Keep, HaxeFormat.instance.defaultWriteOptions.uniformStatementBlanks);
@@ -91,7 +93,8 @@ class HxUniformStatementBlanksSliceTest extends Test {
 	}
 
 	public function testNestedBlocksEvaluatedIndependently(): Void {
-		final expected: String = 'class C {\n\tfunction f() {\n\t\ta();\n\t\tif (x) {\n\t\t\tp();\n\t\t\tq();\n\n\t\t\tr();\n\t\t}\n\t\tb();\n\t}\n}\n';
+		final expected: String =
+			'class C {\n\tfunction f() {\n\t\ta();\n\t\tif (x) {\n\t\t\tp();\n\t\t\tq();\n\n\t\t\tr();\n\t\t}\n\t\tb();\n\t}\n}\n';
 		Assert.equals(expected, collapse(NESTED));
 	}
 

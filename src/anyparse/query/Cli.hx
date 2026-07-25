@@ -12958,7 +12958,8 @@ final class Cli {
 					stillFails.push(r.path);
 			}
 			final nameSuffix: String = cand.declName != null ? ' ${cand.declName}' : '';
-			final label: String = '${cand.file}:${cand.line}: ${cand.declKind}$nameSuffix @:lead(\'${cand.lead}\') @:trail(\'${cand.trail}\')';
+			final label: String =
+				'${cand.file}:${cand.line}: ${cand.declKind}$nameSuffix @:lead(\'${cand.lead}\') @:trail(\'${cand.trail}\')';
 			if (unblocks.length == 0 && stillFails.length == 0) {
 				noSignalLabels.push('$label ($noMatchCount NO MATCH)');
 				continue;

@@ -69,14 +69,16 @@ final class HxObjectLitBracesOptionsTest extends Test {
 	}
 
 	public function testJsonLoaderRoutesObjectLitBracesPolicies(): Void {
-		final json: String = '{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
+		final json: String =
+			'{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesClose);
 	}
 
 	public function testJsonLoaderIgnoresUnknownBracesKey(): Void {
-		final json: String = '{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
+		final json: String =
+			'{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "after", "closingPolicy": "before", "removeInnerWhenEmpty": false } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.After, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Before, opts.objectLiteralBracesClose);
@@ -87,7 +89,8 @@ final class HxObjectLitBracesOptionsTest extends Test {
 		// literal uses objectLiteralBraces*. Setting only one pair should
 		// not affect the other — ensures the @:fmt flag dispatch picks the
 		// correct field per Star site.
-		final json: String = '{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
+		final json: String =
+			'{ "whitespace": { "bracesConfig": { "objectLiteralBraces": { "openingPolicy": "around", "closingPolicy": "around" } } } }';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(json);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesOpen);
 		Assert.equals(WhitespacePolicy.Both, opts.objectLiteralBracesClose);

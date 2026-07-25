@@ -83,7 +83,8 @@ class ImplicitStdScopeTest extends Test {
 	 */
 	public function testStaticMethodReturnsTableFallback(): Void {
 		#if (sys || nodejs)
-		final src: String = 'package proj;\n\nclass DateUse {\n\n\tpublic function new() {\n\t\tfinal d = Date.now();\n\t\ttrace(d);\n\t}\n\n}\n';
+		final src: String =
+			'package proj;\n\nclass DateUse {\n\n\tpublic function new() {\n\t\tfinal d = Date.now();\n\t\ttrace(d);\n\t}\n\n}\n';
 		final proj: String = CliFixture.writeDir('statret', [{ name: 'DateUse.hx', source: src }]);
 		Assert.equals(0, Cli.run(['lint', '--fix', '--rule', 'explicit-local-type', '$proj/DateUse.hx']), 'the fix run succeeds');
 		final after: String = File.getContent('$proj/DateUse.hx');

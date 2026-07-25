@@ -123,7 +123,8 @@ class HxTrailingCommaOptionsTest extends Test {
 
 	public function testObjectLitFlagIndependent(): Void {
 		// Flip only trailingCommaObjectLits → arrays / args / params must not emit `,`.
-		final src: String = 'class F { function f(a:Int, b:Int):Void { var o:Dynamic = {x: 1, y: 2}; var xs:Dynamic = [3, 4]; foo(p, q); } }';
+		final src: String =
+			'class F { function f(a:Int, b:Int):Void { var o:Dynamic = {x: 1, y: 2}; var xs:Dynamic = [3, 4]; foo(p, q); } }';
 		final opts: HxModuleWriteOptions = makeOpts(10, false, false, false);
 		opts.trailingCommaObjectLits = true;
 		final out: String = HxModuleWriter.write(HaxeModuleParser.parse(src), opts);

@@ -231,7 +231,8 @@ class NamingCheckTest extends Test {
 	public function testFixSkipsPrivateFieldNameCollision(): Void {
 		// Renaming `shape` to `_shape` when `_shape` is already a field of the type
 		// would duplicate the binding — skip, report-only.
-		final src: String = 'package pkg;\nclass C {\n\tprivate var _shape:Int;\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape + this._shape; }\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate var _shape:Int;\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape + this._shape; }\n}';
 		final files = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
@@ -261,7 +262,8 @@ class NamingCheckTest extends Test {
 	public function testFixRenamesLocalWithCommentedMention(): Void {
 		// A commented-out / prose mention of the old name no longer blocks the rename;
 		// the occurrence inside the comment is renamed together with the code.
-		final src: String = 'class C {\n\tpublic function f() {\n\t\t// legacy MyLocal reference\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function f() {\n\t\t// legacy MyLocal reference\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -271,7 +273,8 @@ class NamingCheckTest extends Test {
 	public function testFixSkipsLocalMentionedInStringLiteral(): Void {
 		// A plain string literal mentioning the old name may be a reflection key, so it
 		// blocks the rename (consistent with the reflection-string guards).
-		final src: String = 'class C {\n\tpublic function f():String {\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t\treturn "MyLocal";\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function f():String {\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t\treturn "MyLocal";\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -281,7 +284,8 @@ class NamingCheckTest extends Test {
 	public function testFixSkipsLocalMentionedInNoqaComment(): Void {
 		// A `noqa`-carrying comment is a machine-meaningful directive line; the rename
 		// must not rewrite inside it, so the mention blocks (unlike a plain comment).
-		final src: String = 'class C {\n\tpublic function f() {\n\t\t// noqa: naming keep MyLocal\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function f() {\n\t\t// noqa: naming keep MyLocal\n\t\tvar MyLocal = 1;\n\t\ttrace(MyLocal);\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.equals(1, vs.length);
@@ -292,7 +296,8 @@ class NamingCheckTest extends Test {
 		// An all-lowercase field name is a common word; a word-boundary match inside a comment
 		// is likely prose, so the mention blocks the rename (report-only) rather than risk
 		// corrupting the comment's prose.
-		final src: String = 'package pkg;\nclass C {\n\t// resets the shape state\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\t// resets the shape state\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final files = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
@@ -304,7 +309,8 @@ class NamingCheckTest extends Test {
 	public function testFixRenamesDistinctiveFieldMentionedInComment(): Void {
 		// A distinctive field name (carries an uppercase letter) is safe to rename inside a
 		// comment too, so a commented-out reference stays consistent with the renamed code.
-		final src: String = 'package pkg;\nclass C {\n\t// legacy xShape fallback\n\tprivate var xShape:Int;\n\tpublic function f() { return this.xShape; }\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\t// legacy xShape fallback\n\tprivate var xShape:Int;\n\tpublic function f() { return this.xShape; }\n}';
 		final files = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
@@ -353,7 +359,8 @@ class NamingCheckTest extends Test {
 	public function testFixMemoizesConfinementAcrossFindingsOnOneOwner(): Void {
 		// Two flagged private static finals in ONE class: the per-owner confinement
 		// memo runs the project-wide scan once, and both findings are still fixed.
-		final src: String = 'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n\tprivate static final _cacheSize:Int = 0;\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate static final _forceBuild:Int = 0;\n\tprivate static final _cacheSize:Int = 0;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
@@ -403,7 +410,8 @@ class NamingCheckTest extends Test {
 		// substring of a longer string ("reshaped:"), neither of which is the exact
 		// quoted name — so the cross-file guard does not trip and the rename applies.
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
-		final otherSrc: String = 'package pkg;\nclass Other {\n\tpublic function g(shape:Int):String {\n\t\treturn "reshaped:" + shape;\n\t}\n}';
+		final otherSrc: String =
+			'package pkg;\nclass Other {\n\tpublic function g(shape:Int):String {\n\t\treturn "reshaped:" + shape;\n\t}\n}';
 		final dir: String = CliFixture.writeDir('namingid', [{ name: 'C.hx', source: cSrc }, { name: 'Other.hx', source: otherSrc }]);
 		final files: Array<{ file: String, source: String }> = [
 			{ file: '$dir/C.hx', source: cSrc },
@@ -469,7 +477,8 @@ class NamingCheckTest extends Test {
 		// `get_Value` / `set_Value`, but Haxe then requires `get__value` /
 		// `set__value` - the single-decl autofix would emit non-compiling source, so
 		// it must skip the property (report-only).
-		final src: String = 'package pkg;\nclass C {\n\tprivate var Value(get, set):Int;\n\tfunction get_Value():Int return this.Value;\n\tfunction set_Value(v:Int):Int return this.Value = v;\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tprivate var Value(get, set):Int;\n\tfunction get_Value():Int return this.Value;\n\tfunction set_Value(v:Int):Int return this.Value = v;\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: src }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
@@ -508,19 +517,22 @@ class NamingCheckTest extends Test {
 
 	public function testFixSkipsLocalCollidingWithSiblingLocal(): Void {
 		// De-prefixing `_adjust` to `adjust` collides with a sibling local `adjust` - skip.
-		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar adjust = 2;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar adjust = 2;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
 		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixSkipsLocalCollidingWithParam(): Void {
 		// De-prefixing `_adjust` to `adjust` collides with a parameter `adjust` - skip.
-		final src: String = 'package pkg;\nclass C {\n\tpublic function f(adjust:Int) {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f(adjust:Int) {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
 		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixSkipsLocalCollidingWithOwnMember(): Void {
 		// De-prefixing `_adjust` to `adjust` collides with an own field `adjust` - skip.
-		final src: String = 'package pkg;\nclass C {\n\tpublic var adjust:Int = 0;\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic var adjust:Int = 0;\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
 		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
@@ -537,7 +549,8 @@ class NamingCheckTest extends Test {
 		// A reference behind a mid-expression `#if` is kept as raw trivia (a CondSpliceTail),
 		// invisible to the resolver - the rename would leave that occurrence dangling, so the
 		// completeness guard bails - skip.
-		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar x = _adjust #if cpp + _adjust #end;\n\t\ttrace(x);\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar x = _adjust #if cpp + _adjust #end;\n\t\ttrace(x);\n\t}\n}';
 		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
@@ -608,7 +621,8 @@ class NamingCheckTest extends Test {
 		// SHADOWING an inherited member is legal Haxe (verified), and the whole-file collision
 		// scan sees no bare in-file `adjust`, so the rename applies (the inheritance gate is field-only).
 		final baseSrc: String = 'package pkg;\nclass Base {\n\tpublic var adjust:Int = 0;\n}';
-		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		final cSrc: String =
+			'package pkg;\nclass C extends Base {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
 		assertLocalRenamed(
 			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc, 'var adjust', '_adjust'
 		);
@@ -619,7 +633,8 @@ class NamingCheckTest extends Test {
 		// The enclosing type extends a base absent from the index. A local cannot clash by
 		// REDEFINITION (only a field can) and shadowing is legal, so a local rename no longer
 		// depends on resolving inheritance - it applies.
-		final src: String = 'package pkg;\nclass C extends UnknownBase {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
+		final src: String =
+			'package pkg;\nclass C extends UnknownBase {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
 		assertLocalRenamed([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src, 'var adjust', '_adjust');
 	}
 
@@ -656,7 +671,8 @@ class NamingCheckTest extends Test {
 	public function testFixSkipsSnakeLocalCollidingInFile(): Void {
 		// The camelCase form already occurs in the file (a sibling local) - the collision scan
 		// skips it to avoid a duplicate/shadow the re-parse gate accepts but that would not type-check.
-		final src: String = 'class C {\n\tpublic function f() {\n\t\tvar minGap = 1;\n\t\tvar min_gap = 2;\n\t\ttrace(minGap + min_gap);\n\t}\n}';
+		final src: String =
+			'class C {\n\tpublic function f() {\n\t\tvar minGap = 1;\n\t\tvar min_gap = 2;\n\t\ttrace(minGap + min_gap);\n\t}\n}';
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 		Assert.isTrue(vs.length >= 1);
@@ -669,7 +685,8 @@ class NamingCheckTest extends Test {
 		// error ("Redefinition of variable in subclass") a local shadow does not have. The field
 		// inheritance gate skips it - report-only.
 		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate var _count:Int = 0;\n}';
-		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tprivate var count:Int = 1;\n\tpublic function f() { return this.count; }\n}';
+		final cSrc: String =
+			'package pkg;\nclass C extends Base {\n\tprivate var count:Int = 1;\n\tpublic function f() { return this.count; }\n}';
 		final files: Array<{ file: String, source: String }> =
 			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
@@ -697,7 +714,8 @@ class NamingCheckTest extends Test {
 		// A subclass extending a `@:rtti` base (without its own `@:rtti`) is still name-reflected
 		// through the base - the transitive index check skips its field.
 		final baseSrc: String = 'package pkg;\n@:rtti\nclass Base {\n\tpublic function new() {}\n}';
-		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final cSrc: String =
+			'package pkg;\nclass C extends Base {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
 		final files: Array<{ file: String, source: String }> =
 			[{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
@@ -782,7 +800,8 @@ class NamingCheckTest extends Test {
 		// A `#if...#end` occurrence of the field name in a subtype is platform-conditional and
 		// invisible to the resolver — the whole cross-file rename is refused (report-only).
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
-		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g():Int {\n\t\t#if flag\n\t\treturn shape;\n\t\t#else\n\t\treturn 0;\n\t\t#end\n\t}\n}';
+		final dSrc: String =
+			'package pkg;\nclass D extends C {\n\tpublic function g():Int {\n\t\t#if flag\n\t\treturn shape;\n\t\t#else\n\t\treturn 0;\n\t\t#end\n\t}\n}';
 		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
@@ -1098,7 +1117,8 @@ class NamingCheckTest extends Test {
 	public function testCrossFileFixIgnoresTargetNameInUnrelatedSiblingType(): Void {
 		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var __w:Int;\n\tpublic function f() { return this.__w; }\n}';
 		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate var _w:Int;\n}';
-		final hostSrc: String = 'package pkg;\nclass Host extends Base {\n\tpublic function h() { return _w; }\n}\n\nclass Sub extends C {\n\tpublic function g() { return __w; }\n}';
+		final hostSrc: String =
+			'package pkg;\nclass Host extends Base {\n\tpublic function h() { return _w; }\n}\n\nclass Sub extends C {\n\tpublic function g() { return __w; }\n}';
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'pkg/C.hx', source: cSrc },
 			{ file: 'pkg/Base.hx', source: baseSrc },
