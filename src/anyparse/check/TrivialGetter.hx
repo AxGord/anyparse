@@ -11,7 +11,6 @@ using Lambda;
 import anyparse.query.RefactorSupport;
 import anyparse.check.Check.ConfigAware;
 import anyparse.check.LintConfig;
-import anyparse.query.SymbolIndexHost;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.RefactorSupport.ClassifiedOccurrence;
@@ -130,7 +129,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		// The subtype-override gate resolves over report + resolution scope (a subtype declared
 		// in a configured resolution library reaches the index too), falling back to the report
 		// index when no resolution scope is configured.
-		final subtypeIndex: SymbolIndex = resolutionIndexOf(plugin) ?? index;
+		final subtypeIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Violation> = [];
 		for (entry in files) {
@@ -196,7 +195,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Array<Array<CrossFileEdits>> {
 		if (violations.length == 0 || index == null) return [];
 		final idx: SymbolIndex = index;
-		final subtypeIndex: SymbolIndex = resolutionIndexOf(plugin) ?? idx;
+		final subtypeIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? idx;
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
@@ -322,15 +321,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		return inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
 	}
 
-	/**
-	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
-	 * configured resolution library is indexed there too — or null when the plugin is not a
-	 * resolution host or no resolution scope is configured (the caller falls back to the report index).
-	 */
-	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
-	}
 
 	/**
 	 * The backing-field name a getter trivially returns — `_x` for a body of

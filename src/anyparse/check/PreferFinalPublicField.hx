@@ -31,7 +31,11 @@ import anyparse.runtime.Span;
  *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
  *    are attributed to the SUBTYPE rather than to this type, so the write index alone
  *    would miss them; the gate scans each subtype's body and asks the index about the
- *    subtype. Merely HAVING a subtype no longer bails. The same gate also bails when a SUPERtype declares
+ *    subtype. Merely HAVING a subtype no longer bails. The two arms have DIFFERENT reach:
+ *    the body scan runs over the resolution scope, so a subtype declared in a configured
+ *    library root counts, while the `writtenAnywhere(subtype, …)` arm reads the
+ *    report-scoped `FieldWriteIndex` — a library-side write through a library subtype is
+ *    the residual blind spot. The same gate also bails when a SUPERtype declares
  *    the same field (`SymbolIndex.supertypeDeclaresMember`): its property access is
  *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
@@ -76,7 +80,7 @@ final class PreferFinalPublicField implements Check {
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, writeIndex);
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
 		});
 		return violations;
 	}
@@ -101,7 +105,7 @@ final class PreferFinalPublicField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		writeIndex: FieldWriteIndex
+		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -119,7 +123,7 @@ final class PreferFinalPublicField implements Check {
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (writeIndex.writtenAnywhere(owner, name)) return;
 		// Cheapest gates first: the subtype walk is the only one that scans other files.
-		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex)) return;
+		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
 		out.push({
 			file: file,
 			span: span,

@@ -167,4 +167,215 @@ class ResolutionScopeCliTest extends Test {
 		#end
 	}
 
+
+	#if (sys || nodejs)
+	/** A public field with no write anywhere — `prefer-final-public-field`'s candidate. */
+	private static final OWNER: String =
+		'package proj;\n\nclass Owner {\n\n\tpublic var tag: Int = 0;\n\n\tpublic function new() {}\n\n}\n';
+
+	/** A public field written only inside its own class — `prefer-read-only-field`'s candidate. */
+	private static final BOX: String =
+		'package proj;\n\nclass Box {\n\n\tpublic var slot: Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function bump(): Void {\n\t\tthis.slot = 1;\n\t}\n\n}\n';
+
+	/** A library class unrelated to the report types — a resolution scope that vetoes nothing. */
+	private static final UNRELATED: String = 'package lib;\n\nclass Unrelated {\n\n\tpublic function new() {}\n\n}\n';
+
+	/**
+	 * A library file the grammar cannot read. Routine in a real library, and the reason the
+	 * `skippedFiles` bail must keep asking the REPORT index: asked of the resolution index it
+	 * would be permanently non-empty and every finding below would vanish.
+	 */
+	private static final BROKEN: String = 'package lib;\n\nclass Broken {\n\t@@@ not haxe at all %%%\n}\n';
+
+	/** A PRIVATE field assigned only at its declaration — `prefer-final-field`'s candidate. */
+	private static final VAULT: String =
+		'package proj;\n\nclass Vault {\n\n\tprivate var _key: Int = 0;\n\n\tpublic function new() {}\n\n\tpublic function read(): Int {\n\t\treturn _key;\n\t}\n\n}\n';
+
+	/** A library file granting itself `@:access(Sub)` and writing the inherited PRIVATE field through it. */
+	private static function grantOnSubtype(body: String): String {
+		return
+			'package lib;\n\n@:access(Sub)\nclass Poker {\n\n\tpublic function new() {}\n\n\tpublic function poke(s: Sub): Void {\n\t\t$body\n\t}\n\n}\n';
+	}
+
+	/**
+	 * `prefer-final-field` is the largest of the three conversions and has TWO call sites
+	 * (the decl-initialised path and the no-initializer constructor path); it is also the
+	 * only rule whose `@:access` gate was widened. A resolution-scope subtype writing the
+	 * inherited private field must veto it.
+	 */
+	public function testResolutionScopeSubtypeWriteBlocksPreferFinalField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			0, lintWithLib('prefer-final-field', 'Vault.hx', VAULT, [{ name: 'Sub.hx', source: subtypeOf('Vault', 'this._key = 1;') }]),
+			'a resolution-scope subtype writing the private field vetoes var -> final'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The same subtype only READING it leaves the finalization alone — a read survives `final`. */
+	public function testResolutionScopeSubtypeReadStillFlagsPreferFinalField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1, lintWithLib('prefer-final-field', 'Vault.hx', VAULT, [{ name: 'Sub.hx', source: subtypeOf('Vault', 'trace(this._key);') }]),
+			'a read-only resolution-scope subtype must not veto'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * `@:access(<subtype>)` in a library file reaches a PRIVATE field declared in the
+	 * subtype's SUPERtype — compiler-verified — and a grant scan keyed on the owner never
+	 * sees it, so the subtype gate has to carry it across the resolution scope too.
+	 */
+	public function testResolutionScopeAccessGrantOnSubtypeBlocksPreferFinalField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			0, lintWithLib('prefer-final-field', 'Vault.hx', VAULT, [
+				{ name: 'Sub.hx', source: subtypeOf('Vault', 'trace(this);') },
+				{ name: 'Poker.hx', source: grantOnSubtype('s._key = 9;') }
+			]),
+			'an @:access(Sub) grantee writing the inherited private field vetoes var -> final'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A resolution scope that vetoes nothing must still leave the finding — the `skippedFiles` guard. */
+	public function testResolutionScopeConfiguredStillFlagsPreferFinalField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(1, lintWithLib('prefer-final-field', 'Vault.hx', VAULT, [
+			{ name: 'Unrelated.hx', source: UNRELATED },
+			{ name: 'Broken.hx', source: BROKEN }
+		]), 'a library skip-parse must not silence the rule');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** A library subtype of `base` whose `touch()` body is `body` — the resolution-scope side of each gate test. */
+	private static function subtypeOf(base: String, body: String): String {
+		return
+			'package lib;\n\nimport proj.$base;\n\nclass Sub extends $base {\n\n\tpublic function new() {\n\t\tsuper();\n\t}\n\n\tpublic function touch(): Void {\n\t\t$body\n\t}\n\n}\n';
+	}
+
+	/**
+	 * Lint the single report file `name` (source `source`) under `rule`, with `libFiles` written
+	 * into a separate directory declared on `resolutionRoots`. Returns the CLI exit code — 1 when
+	 * an Info finding fires (`--fail-on info`), 0 when the rule stays silent.
+	 */
+	private static function lintWithLib(
+		rule: String, name: String, source: String, libFiles: Array<{ name: String, source: String }>
+	): Int {
+		final lib: String = CliFixture.writeDir('resfieldlib', libFiles);
+		final proj: String = CliFixture.writeDir('resfieldproj', [
+			{ name: name, source: source },
+			{ name: 'apqlint.json', source: '{"resolutionRoots":["$lib"]}' }
+		]);
+		final exit: Int = Cli.run(['lint', '--rule', rule, '--fail-on', 'info', '$proj/$name']);
+		CliFixture.removeDir(proj);
+		CliFixture.removeDir(lib);
+		return exit;
+	}
+	#end
+
+	/**
+	 * The reproduction: a subtype that WRITES the public field lives only in a `resolutionRoots`
+	 * library, so the report-scoped index cannot see it. The subtype gate must ask the resolution
+	 * index, else `var -> final` is emitted against a subtype write the compiler rejects.
+	 */
+	public function testResolutionScopeSubtypeWriteBlocksPreferFinalPublicField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			0,
+			lintWithLib('prefer-final-public-field', 'Owner.hx', OWNER, [{ name: 'Sub.hx', source: subtypeOf('Owner', 'this.tag = 1;') }]),
+			'a resolution-scope subtype writing the field vetoes var -> final'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The discriminator for the test above: the same resolution-scope subtype that only READS the
+	 * field leaves the rewrite sound, so the finding must still fire. Proves the gate asks "does it
+	 * WRITE", not the blanket "does a subtype exist".
+	 */
+	public function testResolutionScopeSubtypeReadStillFlagsPreferFinalPublicField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1,
+			lintWithLib(
+				'prefer-final-public-field', 'Owner.hx', OWNER, [{ name: 'Sub.hx', source: subtypeOf('Owner', 'trace(this.tag);') }]
+			),
+			'a resolution-scope subtype that only reads the field still allows var -> final'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * Regression guard for the `skippedFiles` bail: a configured resolution scope carrying a
+	 * skip-parsed library file (and no subtype at all) must still produce the normal finding. Point
+	 * that bail at the resolution index and the rule goes permanently silent on every project with
+	 * libraries.
+	 */
+	public function testResolutionScopeConfiguredStillFlagsPreferFinalPublicField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1, lintWithLib('prefer-final-public-field', 'Owner.hx', OWNER, [
+				{ name: 'Unrelated.hx', source: UNRELATED },
+				{ name: 'Broken.hx', source: BROKEN }
+			]),
+			'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** `prefer-read-only-field`'s half of the reproduction: a resolution-scope subtype writing the field vetoes `(default, null)`. */
+	public function testResolutionScopeSubtypeWriteBlocksPreferReadOnlyField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			0, lintWithLib('prefer-read-only-field', 'Box.hx', BOX, [{ name: 'Sub.hx', source: subtypeOf('Box', 'this.slot = 2;') }]),
+			'a resolution-scope subtype writing the field vetoes (default, null)'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The discriminator: a resolution-scope subtype that only READS the field still leaves it internally-written-only. */
+	public function testResolutionScopeSubtypeReadStillFlagsPreferReadOnlyField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1, lintWithLib('prefer-read-only-field', 'Box.hx', BOX, [{ name: 'Sub.hx', source: subtypeOf('Box', 'trace(this.slot);') }]),
+			'a resolution-scope subtype that only reads the field still allows (default, null)'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Regression guard: a resolution scope with a skip-parsed library file and no subtype still yields the normal finding. */
+	public function testResolutionScopeConfiguredStillFlagsPreferReadOnlyField(): Void {
+		#if (sys || nodejs)
+		Assert.equals(
+			1, lintWithLib('prefer-read-only-field', 'Box.hx', BOX, [
+				{ name: 'Unrelated.hx', source: UNRELATED },
+				{ name: 'Broken.hx', source: BROKEN }
+			]),
+			'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

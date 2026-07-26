@@ -27,7 +27,11 @@ import anyparse.runtime.Span;
  * 1. No subtype of it can write the field (`MemberWriteScan.subtypeWriteReaches`) — a
  *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
  *    are attributed to the SUBTYPE, so `writtenExternally` below would miss them.
- *    Merely HAVING a subtype no longer bails. `SymbolIndex.supertypeDeclaresMember`
+ *    Merely HAVING a subtype no longer bails. That gate has two arms with DIFFERENT
+ *    reach: the body scan runs over the resolution scope, so a subtype declared in a
+ *    configured library root counts, but the `writtenAnywhere(subtype, …)` arm reads the
+ *    report-scoped `FieldWriteIndex`. Residual blind spot: a library-side write through a
+ *    library subtype stays invisible until that index is widened too. `SymbolIndex.supertypeDeclaresMember`
  *    still bails when a supertype declares the same field.
  * 2. No write to the field NAME anywhere is unresolved
  *    (`FieldWriteIndex.hasUnresolvedWrite`) — an unresolved `recv.field = …` could be
@@ -68,7 +72,7 @@ final class PreferReadOnlyField implements Check {
 		final writeIndex: FieldWriteIndex = FieldWriteIndex.build(files, plugin, index);
 		final violations: Array<Violation> = [];
 		RefactorSupport.eachFieldMember(files, plugin, (owner, field, source, file, exported) -> {
-			if (exported) considerField(violations, file, source, field, owner, index, writeIndex);
+			if (exported) considerField(violations, file, source, field, owner, index, writeIndex, plugin);
 		});
 		return violations;
 	}
@@ -98,7 +102,7 @@ final class PreferReadOnlyField implements Check {
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
-		writeIndex: FieldWriteIndex
+		writeIndex: FieldWriteIndex, plugin: GrammarPlugin
 	): Void {
 		final name: Null<String> = field.name;
 		final span: Null<Span> = field.span;
@@ -115,7 +119,7 @@ final class PreferReadOnlyField implements Check {
 		if (writeIndex.hasUnresolvedWrite(name)) return;
 		// Cheap gates first: the subtype walk is the only one that scans other files.
 		if (!writeIndex.writtenAnywhere(owner, name)) return;
-		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex)) return;
+		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
 		final site: Null<{ file: String, span: Span }> = index.declarationSiteOf(owner);
 		if (site == null) return;
 		if (writeIndex.writtenExternally(owner, name, site.file, site.span)) return;
@@ -152,5 +156,4 @@ final class PreferReadOnlyField implements Check {
 	}
 
 	/** Whether `c` is an identifier character. */
-	/** Whether `c` is whitespace. */
 }

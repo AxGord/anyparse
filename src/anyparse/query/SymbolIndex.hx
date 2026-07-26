@@ -1,13 +1,8 @@
 package anyparse.query;
 
-import anyparse.query.GrammarPlugin.RefShape;
-import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 using Lambda;
-
-import anyparse.query.Refs.RefKind;
 
 /**
  * The four import-statement forms a Haxe file may carry, distinguished
@@ -185,17 +180,6 @@ private typedef ResolvedType = {
 };
 
 /**
- * A declaration / import node from `declNodes`, tagged with whether it was
- * LIFTED out of a `#if ... #end` region (`guarded`) or written at the file
- * top level. `extractFileInfo` carries the tag onto each `ImportInfo`; type
- * declarations ignore it (a guarded type is indexed exactly like a plain one).
- */
-private typedef GuardedNode = {
-	var node: QueryNode;
-	var guarded: Bool;
-};
-
-/**
  * The project-wide symbol index: a collection of per-file `FileInfo` records answering cross-file questions (which files declare a type, its import path, subtype / access-grant reachability) that a single-file parse cannot. Built once and queried by rename / move ops and type-aware checks.
  */
 @:nullSafety(Strict)
@@ -209,22 +193,19 @@ final class SymbolIndex {
 	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
 
-	/**
-	 * The bodyless declaration heads a `CondSharedBodyDecl` region can carry,
-	 * mapped to the decl kind the same declaration projects as when written
-	 * whole. `HxDeclHead` has exactly these two branches (`class` / `abstract`
-	 * are the only forms observed splitting a header across `#if`).
-	 */
-	private static final DECL_HEAD_KINDS: Map<String, String> = [
-		'ClassHead' => CLASS_DECL_KIND,
-		'AbstractHead' => 'AbstractDecl'
-	];
-
 	private final _files: Array<FileInfo>;
 	private final _skipped: Array<String>;
 
 	/** Per-file source text, retained so a subtype-ward body scan (`subtypeReferencesField`) can inspect a subtype's raw declaration span for a backing-field reference. */
 	private final _sources: Map<String, String>;
+
+	/**
+	 * Lazily-built subtype adjacency: a supertype's SIMPLE name -> every `(file, type)` pair
+	 * naming it in `supertypes`, in file / declaration order. The index is immutable after
+	 * construction, so one build per instance is safe; it replaces a full `_files` x `types`
+	 * rescan per closure level in the subtype walks.
+	 */
+	private var _subtypeAdjacency: Null<Map<String, Array<ResolvedType>>>;
 
 	private function new(files: Array<FileInfo>, skipped: Array<String>, sources: Map<String, String>) {
 		_files = files;
@@ -300,7 +281,7 @@ final class SymbolIndex {
 	 * subtype could reference the member.
 	 */
 	public function hasSubtype(typeName: String): Bool {
-		return _files.exists(f -> f.types.exists(t -> t.supertypes.contains(typeName)));
+		return subtypesOf(typeName).length > 0;
 	}
 
 	/**
@@ -678,7 +659,8 @@ final class SymbolIndex {
 		var i: Int = 0;
 		while (i < closure.length) {
 			final parent: String = closure[i++];
-			for (fi in _files) for (t in fi.types) if (t.supertypes.contains(parent)) {
+			for (sub in subtypesOf(parent)) {
+				final t: TypeDeclInfo = sub.type;
 				// A SECOND type carrying `owner`'s own simple name extending into this closure: the
 				// index keys types by simple name and cannot tell the two hierarchies apart.
 				if (t.name == owner) return true;
@@ -686,7 +668,7 @@ final class SymbolIndex {
 				// simple name, and each carries its own declaration slice. Expanding a name
 				// twice would loop; skipping the second one's slice silently drops evidence.
 				if (!closure.contains(t.name)) closure.push(t.name);
-				final src: Null<String> = _sources[fi.file];
+				final src: Null<String> = _sources[sub.file.file];
 				if (src == null || matches(t.name, src, t.span, t.members.exists(m -> m.name == field))) return true;
 			}
 		}
@@ -963,6 +945,34 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Every indexed type directly extending / implementing `parent` (matched by simple name),
+	 * paired with its declaring file — the memoised form of a full `_files` x `types` scan, in
+	 * the same order that scan visited. Empty when nothing names `parent`. The whole adjacency
+	 * is built on first use; the index is immutable after construction, so one build per
+	 * instance is sound. The returned array is the LIVE bucket, not a copy — read it, never
+	 * mutate it, or the memo is corrupted for every later caller.
+	 */
+	private function subtypesOf(parent: String): Array<ResolvedType> {
+		var adjacency: Null<Map<String, Array<ResolvedType>>> = _subtypeAdjacency;
+		if (adjacency == null) {
+			adjacency = [];
+			for (fi in _files) for (t in fi.types) {
+				// A type naming one simple name TWICE (two differently-qualified supertypes reducing to
+				// it) lands in that bucket once — `supertypes.contains` reported it once per scan too.
+				final named: Array<String> = [];
+				for (sup in t.supertypes) if (!named.contains(sup)) {
+					named.push(sup);
+					final bucket: Array<ResolvedType> = adjacency[sup] ?? [];
+					bucket.push({ file: fi, type: t });
+					adjacency[sup] = bucket;
+				}
+			}
+			_subtypeAdjacency = adjacency;
+		}
+		return adjacency[parent] ?? [];
+	}
+
+	/**
 	 * Whether `name`'s transitive supertype closure is FULLY index-resolved AND excludes
 	 * `target`. A supertype name absent or ambiguous in the index (an external type, or a
 	 * project file not in the set) makes the relation unknown → false, as does reaching
@@ -1002,43 +1012,18 @@ final class SymbolIndex {
 	 * `CrossRename`'s parse-each-file pattern.
 	 */
 	public static function build(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): SymbolIndex {
-		final infos: Array<FileInfo> = [];
-		final skipped: Array<String> = [];
-		final sources: Map<String, String> = [];
-		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
-		final shape: RefShape = plugin.refShape();
-		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
-		final overrideKind: Null<String> = shape.overrideModifierKind;
-		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
-			if (tree == null) {
-				skipped.push(entry.file);
-				continue;
-			}
-			sources[entry.file] = entry.source;
-			final accessors: Map<Int, Bool> = provider != null ? provider.propertyAccessors(entry.source) : [];
-			final writeAccessors: Map<Int, Bool> = provider != null ? provider.propertyWriteAccessors(entry.source) : [];
-			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
-			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
-			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind, shape,
-				abstractKinds
-			));
-		}
-		return new SymbolIndex(infos, skipped, sources);
+		final extracted: {
+			files: Array<FileInfo>,
+			skipped: Array<String>,
+			sources: Map<String, String>
+		} = SymbolIndexBuilder.extract(files, plugin);
+		return new SymbolIndex(extracted.files, extracted.skipped, extracted.sources);
 	}
 
 	/**
-	 * The MODULE portion of a dotted import path: the segments up to and
-	 * INCLUDING the first upper-case-initial segment (packages are
-	 * lower-case, modules / types upper-case). Any remaining segments are
-	 * sub-type access and are dropped. So `anyparse.query.Refs.RefHit` →
-	 * `anyparse.query.Refs` (module `Refs`, sub-type `RefHit`),
-	 * `anyparse.query.Rename` → `anyparse.query.Rename` (no sub-type),
-	 * `pkg.sub.Foo` → `pkg.sub.Foo`. A path with no upper-case segment
-	 * (all lower-case) is returned verbatim — there is no module segment
-	 * to anchor on.
+	 * The MODULE portion of a dotted import path — see `SymbolIndexBuilder.moduleOf`, which
+	 * owns the implementation. Kept here because the index's own callers reach it as
+	 * `SymbolIndex.moduleOf`.
 	 */
 	public static function moduleOf(path: String): String {
 		final segments: Array<String> = path.split('.');
@@ -1048,504 +1033,6 @@ final class SymbolIndex {
 			if (segment.length > 0 && RefactorSupport.isUpperInitial(segment)) return out.join('.');
 		}
 		return path;
-	}
-
-	/**
-	 * Build a `FileInfo` from a parsed `parseFile` tree: walk the
-	 * module's declarations for the `PackageDecl`, the import /
-	 * using statements, and the type declarations. The basename
-	 * drives the module path and the per-type `isMain` flag.
-	 *
-	 * The walk runs over `declNodes`, not over `tree.children`
-	 * directly, so a type declared inside a `#if ... #end` region is
-	 * indexed like a plain top-level one, and a guarded `import` /
-	 * `using` is LIFTED into the file's import scope (deduped against
-	 * the top-level imports by `declNodes`, so a guarded copy of a
-	 * top-level import does not double it).
-	 */
-	private static function extractFileInfo(
-		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
-		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>,
-		shape: RefShape, abstractKinds: Array<String>
-	): FileInfo {
-		final basename: String = RefactorSupport.baseNameOf(file);
-		var pkg: String = '';
-		final imports: Array<ImportInfo> = [];
-		final types: Array<TypeDeclInfo> = [];
-		var pendingMeta: Array<String> = [];
-
-		for (gn in declNodes(tree)) {
-			final node: QueryNode = gn.node;
-			final typeDecl: Null<TypeDeclMatch> = typeDeclAt(node);
-			if (typeDecl != null) {
-				final supersRaw: Array<String> = collectSupertypesRaw(node);
-				final isAbstract: Bool = abstractKinds.contains(typeDecl.kind);
-				types.push({
-					name: typeDecl.name,
-					kind: typeDecl.kind,
-					span: typeDecl.fullSpan,
-					isMain: typeDecl.name == basename,
-					typeParamArity: declTypeParamArity(source, typeDecl),
-					supertypes: supersRaw.map(simpleName),
-					supertypesRaw: supersRaw,
-					interfaces: collectImplementsRaw(node).map(simpleName),
-					// A `typedef X = {…}` projects an `Anon` child; its fields can
-					// never be properties, so field access on it is side-effect-free.
-					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
-					hasRtti: pendingMeta.contains('@:rtti'),
-					members: collectMembers(
-						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
-					),
-					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
-					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta) : null
-				});
-				pendingMeta = [];
-				continue;
-			}
-
-			if (isMetaNodeKind(node.kind)) {
-				final metaName: Null<String> = node.name;
-				if (metaName != null) pendingMeta.push(metaName);
-				continue;
-			}
-			// A modifier (`private` / `extern`), comment or other module node between a meta and its decl
-			// PRESERVES the pending meta run — over-attaching a meta to the wrong decl only makes the abstract
-			// gate more conservative, while dropping one is the unsound direction. Only an import / package /
-			// using statement ends the run (a meta can never legally precede one); each clears it below.
-			final nullableName: Null<String> = node.name;
-			final nullableSpan: Null<Span> = node.span;
-			if (nullableName == null || nullableSpan == null) {
-				if (node.kind == 'PackageDecl' && nullableName != null) pkg = nullableName;
-				continue;
-			}
-			final name: String = nullableName;
-			final span: Span = nullableSpan;
-			switch node.kind {
-				case 'PackageDecl':
-					pkg = name;
-					pendingMeta = [];
-				case 'ImportDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Import,
-						alias: null,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-				case 'ImportAliasDecl' | 'ImportAliasInDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Alias,
-						alias: name,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-				case 'ImportWildDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Wild,
-						alias: null,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-				case 'UsingDecl':
-					imports.push({
-						raw: name,
-						kind: ImportKind.Using,
-						alias: null,
-						span: span,
-						guarded: gn.guarded
-					});
-					pendingMeta = [];
-				case _:
-			}
-		}
-
-		final module: String = pkg == '' ? basename : '$pkg.$basename';
-		return {
-			file: file,
-			pkg: pkg,
-			module: module,
-			imports: imports,
-			types: types,
-			accessGrants: collectAccessGrants(tree)
-		};
-	}
-
-	/**
-	 * The VERBATIM written names of the `extends` / `implements` targets under
-	 * `node` — its supertypes, qualified when written qualified — by reading each
-	 * `Named` child of an `ExtendsClause` / `ImplementsClause`. The parallel
-	 * simple-name form is derived by the caller; this preserves the dotted path a
-	 * simple-name reduction loses, so a reference can be resolved to a single type.
-	 */
-	private static function collectSupertypesRaw(node: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		collectInto(node, n -> {
-			if (n.kind == 'ExtendsClause' || n.kind == 'ImplementsClause') for (c in n.children) {
-				final nm: Null<String> = c.name;
-				if (nm != null) out.push(nm);
-			}
-		});
-		return out;
-	}
-
-	/** Simple names of every type referenced in an `@:access(...)` metadata in `tree`. */
-	private static function collectAccessGrants(tree: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		collectInto(tree, n -> {
-			if (n.kind == 'MetaCall' && n.name == '@:access') for (c in n.children) {
-				final nm: Null<String> = c.name;
-				if (nm != null) out.push(simpleName(nm));
-			}
-		});
-		return out;
-	}
-
-	/** Visit `node` and every descendant, applying `visit` to each. */
-	private static function collectInto(node: QueryNode, visit: QueryNode -> Void): Void {
-		visit(node);
-		for (child in node.children) collectInto(child, visit);
-	}
-
-	/**
-	 * `collectInto` restricted to the nodes that can HOST a member declaration: it descends
-	 * through wrappers — a `#if` region puts a member one level down, a typedef puts its
-	 * fields under an `Anon` — but stops at the two places an anonymous structure can be
-	 * written as a TYPE rather than as a member list: inside a member (its annotation or
-	 * its body) and in the declaration's own header (a type-parameter constraint, a
-	 * heritage type argument). An `{ var x:Int; }` there projects the very kinds a member
-	 * does (`VarField` / `FinalField`), so descending would report its fields as members of
-	 * the enclosing type.
-	 */
-	/**
-	 * Whether `kind` declares a member — the same test `collectMembers` records on. Beyond
-	 * the shared `FIELD_MEMBER_KINDS` it names the enum constructors and the three
-	 * conditional member forms `HxClassMember` dispatches BEFORE their plain twins
-	 * (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member scope).
-	 * Each carries a signature and a body like any member, so the walk must stop at them
-	 * too — else the anonymous structures written there leak back in as members.
-	 */
-	/** The last `.`-separated segment of `path` (its simple name). */
-	private static function simpleName(path: String): String {
-		final segments: Array<String> = path.split('.');
-		final last: Null<String> = segments[segments.length - 1];
-		return last ?? path;
-	}
-
-	/**
-	 * The directly-declared members of the type rooted at `node` — every
-	 * field-member-kind descendant (a type body's own `var`/`final`/`fn` members;
-	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
-	 * with its getter-property flag from the `accessors` span map (absent = plain)
-	 * and its modifier-run visibility / override info. Modifier siblings precede
-	 * the member they attach to inside the same parent, so each visited node scans
-	 * its CHILDREN with a running modifier state, reset at every member.
-	 */
-	private static function collectMembers(
-		node: QueryNode, source: String, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
-		typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>
-	): Array<MemberInfo> {
-		final out: Array<MemberInfo> = [];
-		RefactorSupport.eachMemberHost(node, n -> {
-			var runVisibility: Null<String> = null;
-			var runOverride: Bool = false;
-			for (child in n.children) {
-				final sp: Null<Span> = child.span;
-				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
-				// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
-				// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
-				if (RefactorSupport.isMemberDeclKind(child.kind)) {
-					final nm: Null<String> = child.name;
-					if (nm != null && sp != null) {
-						// Re-bind to a non-null local — Strict null-safety takes a struct
-						// literal's field type from the declared type, not the narrowed one.
-						final memberName: String = nm;
-						out.push({
-							name: memberName,
-							hasGetter: accessors[sp.from] ?? false,
-							hasSetter: writeAccessors[sp.from] ?? false,
-							returnNominal: returnTypes[sp.from],
-							typeSource: typeSources[sp.from],
-							visibility: runVisibility,
-							isOverride: runOverride
-						});
-					}
-					runVisibility = null;
-					runOverride = false;
-				} else if (sp != null && visibilityKinds.contains(child.kind))
-					runVisibility = source.substring(sp.from, sp.to);
-				else if (overrideKind != null && child.kind == overrideKind)
-					runOverride = true;
-			}
-		});
-		return out;
-	}
-
-	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
-	private static inline function isMetaNodeKind(kind: String): Bool {
-		return kind == 'Meta' || kind == 'MetaCall';
-	}
-
-	/**
-	 * Whether the abstract rooted at `node` may rebind its underlying `this`: it carries a
-	 * `@:build` / `@:autoBuild` (any macro-generated member is invisible to the scan, so treat it as
-	 * possibly-rebinding) or writes `this` in a member other than the constructor. `pendingMeta` holds
-	 * the module-level meta names accumulated before the decl.
-	 */
-	private static function abstractRebindsThisScan(node: QueryNode, shape: RefShape, pendingMeta: Array<String>): Bool {
-		return pendingMeta.contains('@:build') || pendingMeta.contains('@:autoBuild') || memberRebindsThis(node, shape);
-	}
-
-	/**
-	 * Whether any `FnMember` under `node` other than the constructor writes `this` — a non-`new`
-	 * `this =` compiles only in an `inline` member and makes the abstract rebind on that call. The
-	 * `new` subtree is skipped whole (a constructor `this =` is compiler-legal and final-safe); every
-	 * other member is scanned with the write walker, so a write hidden in a `#if` branch counts too.
-	 */
-	private static function memberRebindsThis(node: QueryNode, shape: RefShape): Bool {
-		if (node.kind == 'FnMember') {
-			if (node.name == 'new') return false;
-			for (h in Refs.find('this', node, shape)) if (h.kind == RefKind.Write) return true;
-			return false;
-		}
-		for (c in node.children) if (memberRebindsThis(c, shape)) return true;
-		return false;
-	}
-
-	/**
-	 * The SIMPLE underlying-type name of a `@:forward` abstract `node` — its first `Named` child, last
-	 * dot-segment, type parameters stripped — or null when `pendingMeta` carries no `@:forward` or the
-	 * decl has no underlying.
-	 */
-	private static function forwardUnderlyingOf(node: QueryNode, pendingMeta: Array<String>): Null<String> {
-		if (!pendingMeta.contains('@:forward')) return null;
-		final named: Null<QueryNode> = node.children.find(c -> c.kind == 'Named');
-		if (named == null) return null;
-		final raw: Null<String> = named.name;
-		return raw == null ? null : simpleName(StringTools.trim(raw.split('<')[0]));
-	}
-
-	/**
-	 * Count the type parameters written on `decl`'s header: locate the name token
-	 * in the header text (the projection drops `<...>` params entirely, so no node's
-	 * span points AT the name), then bracket-match a following `<...>` (a `->`
-	 * return arrow's `>` is not a closer) and count the top-level commas. No `<`
-	 * after the name yields 0 (non-generic).
-	 *
-	 * The scan starts at `decl.nameNode`'s span, falling back to `fullSpan`. The
-	 * name node IS the header for every shape - the inner `ClassForm` of a `final
-	 * class`, the `*Head` of a split-header conditional region - so the scan never
-	 * has to cross a `final` keyword or a whole `#if` line to reach the name.
-	 */
-	private static function declTypeParamArity(source: String, decl: TypeDeclMatch): Int {
-		final anchor: Null<Span> = decl.nameNode.span;
-		final from: Int = anchor == null ? decl.fullSpan.from : anchor.from;
-		final bodyAt: Int = source.indexOf('{', from);
-		final nameAt: Int = source.indexOf(decl.name, from);
-		if (nameAt < 0 || (bodyAt >= 0 && nameAt > bodyAt)) return 0;
-		var i: Int = nameAt + decl.name.length;
-		while (i < source.length && StringTools.isSpace(source, i)) i++;
-		if (i >= source.length || StringTools.fastCodeAt(source, i) != '<'.code) return 0;
-		var depth: Int = 0;
-		var commas: Int = 0;
-		while (i < source.length) {
-			switch StringTools.fastCodeAt(source, i) {
-				case '<'.code:
-					depth++;
-				case '>'.code if (StringTools.fastCodeAt(source, i - 1) != '-'.code):
-					depth--;
-					if (depth == 0) return commas + 1;
-				case ','.code if (depth == 1):
-					commas++;
-				case _:
-			}
-			i++;
-		}
-		return 0;
-	}
-
-	/**
-	 * `tree`'s top-level children with every conditional-compilation region
-	 * REPLACED, in document order, by the type declarations it guards - the
-	 * input `extractFileInfo` walks, so a type declared inside `#if ... #end`
-	 * is indexed like a plain top-level one. Non-declaration children of a
-	 * region (its imports, metadata and modifiers) are DROPPED: they are the
-	 * caller's other concern and this slice does not change how they are read.
-	 *
-	 * Two grammar shapes carry a guarded declaration. A `Conditional` wrapper
-	 * holds the region's decls FLATTENED - every branch's decls are its
-	 * siblings, with no branch boundary visible in the projection (the shape
-	 * `AddImport.guardedDuplicate` reads) - and is descended into. A
-	 * `CondSharedBodyDecl` wrapper (a header split across `#if`, see
-	 * `HxCondSharedBodyDecl`) is passed through as ITSELF: it is the node its
-	 * declaration resolves from (`condSharedBodyDeclOf`).
-	 */
-	private static function declNodes(tree: QueryNode): Array<GuardedNode> {
-		final out: Array<GuardedNode> = [];
-		final guardedNames: Array<String> = [];
-		// Every top-level import's dedup key, seeded up front so a guarded import
-		// duplicating ANY top-level one is dropped regardless of document order,
-		// while a genuine top-level duplicate stays in `out` for `duplicate-import`.
-		final seenImports: Array<String> = [];
-		for (node in tree.children) {
-			final key: Null<String> = importDedupKey(node);
-			if (key != null && !seenImports.contains(key)) seenImports.push(key);
-		}
-		for (node in tree.children) switch node.kind {
-			case 'Conditional':
-				collectGuardedDecls(node, out, guardedNames, seenImports);
-			case 'CondSharedBodyDecl':
-				pushGuardedDecl(node, out, guardedNames, seenImports);
-			case _:
-				out.push({ node: node, guarded: false });
-		}
-		return out;
-	}
-
-	/**
-	 * Append every type declaration `node` - a `#if ... #end` region wrapper -
-	 * guards to `out`, recursing through nested regions.
-	 *
-	 * The projection flattens all branches into one wrapper, so an `#if js
-	 * class X {...} #else class X {...} #end` region yields TWO `ClassDecl X`
-	 * children even though no compilation ever sees more than one of them.
-	 * Indexing both would make `declaringFiles` (and `apq declares`) report an
-	 * ambiguity that does not exist, so `pushGuardedDecl` keeps the FIRST
-	 * declaration of a name and drops later same-named ones - the same
-	 * "first branch live, alternates raw" rule the grammar already applies to
-	 * split-header regions (`HxCondSharedBodyDecl`). Distinct names across
-	 * branches (`#if js class A {} #elseif cpp class B {} #else typedef C =
-	 * Int; #end`) are all kept.
-	 */
-	private static function collectGuardedDecls(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
-	): Void {
-		for (child in node.children) if (child.kind == 'Conditional')
-			collectGuardedDecls(child, out, guardedNames, seenImports);
-		else
-			pushGuardedDecl(child, out, guardedNames, seenImports);
-	}
-
-	/**
-	  * Append `node` to `out` when it is a type declaration whose name no
-	 * conditional region has contributed yet, recording the name. A guarded import / using is
-	 * lifted (deduped) into the import scope and a guarded leading `Meta` / `MetaCall` is lifted so
-	 * its abstract sees it; a lifted modifier has no place and is dropped.
-	 */
-	private static function pushGuardedDecl(
-		node: QueryNode, out: Array<GuardedNode>, guardedNames: Array<String>, seenImports: Array<String>
-	): Void {
-		final decl: Null<TypeDeclMatch> = typeDeclAt(node);
-		if (decl != null) {
-			if (guardedNames.contains(decl.name)) return;
-			guardedNames.push(decl.name);
-			out.push({ node: node, guarded: true });
-			return;
-		}
-		// A guarded leading meta: lift it so it reaches `extractFileInfo`'s meta run and attaches to
-		// the abstract it guards. An `#if`-split abstract carries its `@:forward` INSIDE the region
-		// (openfl `Vector`), and document-order preserves the meta-before-decl attachment.
-		if (isMetaNodeKind(node.kind)) {
-			out.push({ node: node, guarded: true });
-			return;
-		}
-		// A guarded import / using: lift it so it joins the per-file import scope,
-		// deduped against every import already seen (a top-level one seeded up
-		// front, or an earlier guarded branch). A non-import, non-declaration node
-		// (a lifted modifier) has no key and is dropped.
-		final key: Null<String> = importDedupKey(node);
-		if (key == null || seenImports.contains(key)) return;
-		seenImports.push(key);
-		out.push({ node: node, guarded: true });
-	}
-
-	/**
-	 * The type declaration `node` carries, across all three grammar shapes: a
-	 * plain decl, a `final`-wrapped one (both via `RefactorSupport.typeDeclOf`)
-	 * and a split-header conditional region. One resolver so the lifting done
-	 * by `declNodes` and the indexing done by `extractFileInfo` can never
-	 * disagree about what counts as a declaration.
-	 */
-	private static inline function typeDeclAt(node: QueryNode): Null<TypeDeclMatch> {
-		return RefactorSupport.typeDeclOf(node) ?? condSharedBodyDeclOf(node);
-	}
-
-	/**
-	 * The FIRST branch's type declaration of a split-header conditional region
-	 * (`CondSharedBodyDecl`), or null for any other node and for a region
-	 * carrying no recognised head. The head child holds the name, the type
-	 * parameters and the heritage; the shared members are that head's
-	 * SIBLINGS, written after `#end`.
-	 *
-	 * `fullSpan` is the WRAPPER's span, not the head's. It is the only span
-	 * that CONTAINS the members, so a span-containment lookup (the
-	 * innermost-enclosing-type scan in `RedundantBypassAccessor`) resolves
-	 * them; and it is the only one that is a complete syntactic unit - the
-	 * head stops at the `{` it opens, so a mutation addressed by the head span
-	 * would leave a dangling `#else ... #end` and an unmatched `}`. `nameNode`
-	 * is the head, which keeps the type-parameter scan anchored past the `#if`
-	 * line.
-	 */
-	private static function condSharedBodyDeclOf(node: QueryNode): Null<TypeDeclMatch> {
-		if (node.kind != 'CondSharedBodyDecl') return null;
-		final span: Null<Span> = node.span;
-		if (span == null) return null;
-		// A plain `find` would have to re-read the map for the kind, so the head is
-		// resolved and mapped in one pass.
-		for (child in node.children) {
-			final kind: Null<String> = DECL_HEAD_KINDS[child.kind];
-			final name: Null<String> = child.name;
-			if (kind != null && name != null) return {
-				name: name,
-				kind: kind,
-				nameNode: child,
-				fullSpan: span
-			};
-		}
-		return null;
-	}
-
-	/**
-	 * The `(kind, raw)` dedup key of an import-declaration `node`, or null when
-	 * `node` is not an import / using declaration. `raw` is the node's exposed
-	 * name — the dotted path for `import` / `using`, `pkg.*` for a wildcard, the
-	 * alias for an alias import (so two distinct aliases of one path stay
-	 * distinct) — which with the import kind uniquely identifies a repeat across
-	 * `#if` branches or a top-level / guarded pair. The `as` and `in` alias forms
-	 * share one key, so a cross-form alias duplicate collapses too.
-	 */
-	private static function importDedupKey(node: QueryNode): Null<String> {
-		final raw: Null<String> = node.name;
-		if (raw == null) return null;
-		return switch node.kind {
-			case 'ImportDecl': 'import|$raw';
-			case 'ImportAliasDecl' | 'ImportAliasInDecl': 'alias|$raw';
-			case 'ImportWildDecl': 'wild|$raw';
-			case 'UsingDecl': 'using|$raw';
-			case _: null;
-		};
-	}
-
-
-	/**
-	 * The RAW written names of a decl's `implements` targets only (its `ImplementsClause`
-	 * children), excluding the `extends` `ExtendsClause`. Parallel to `collectSupertypesRaw`
-	 * but interface-scoped, so a class's implemented interfaces can be enumerated apart from
-	 * its superclass.
-	 */
-	private static function collectImplementsRaw(node: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		collectInto(node, n -> {
-			if (n.kind == 'ImplementsClause') for (c in n.children) {
-				final nm: Null<String> = c.name;
-				if (nm != null) out.push(nm);
-			}
-		});
-		return out;
 	}
 
 }

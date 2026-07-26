@@ -133,7 +133,7 @@ final class PreferFinalField implements Check {
 		// <Interface>"). Applies to both the init and no-init cases below.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (RefactorSupport.isInitializedNonPropertyField(source, field)) {
-			if (!writesConfined(owner, name, source, index)) return;
+			if (!writesConfined(owner, name, source, index, plugin)) return;
 			if (writtenInFile(source, name, span)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
 			if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
@@ -155,7 +155,7 @@ final class PreferFinalField implements Check {
 		out: Array<Violation>, file: String, source: String, field: QueryNode, name: String, span: Span, owner: String, index: SymbolIndex,
 		plugin: GrammarPlugin
 	): Void {
-		if (!writesConfined(owner, name, source, index)) return;
+		if (!writesConfined(owner, name, source, index, plugin)) return;
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
 		if (tree == null) return;
 		final loc: Null<{
@@ -193,10 +193,15 @@ final class PreferFinalField implements Check {
 	 * WRITE in one breaks it. The other confinement gates stay wholesale: a skip-parsed
 	 * file, an `@:access` grant on the type and an `@:allow` in its own file can each hide
 	 * a writer no bounded scan can see.
+	 *
+	 * The two write scans take `plugin` so they can resolve the resolution scope themselves — a subtype or
+	 * grantee living in a configured library root is seen; `privateMemberScanIsSound` keeps
+	 * the report-scope `index`, whose `skippedFiles` describes the files under report and
+	 * would otherwise be permanently non-empty on any project with libraries configured.
 	 */
-	private static function writesConfined(owner: String, name: String, source: String, index: SymbolIndex): Bool {
-		return RefactorSupport.privateMemberScanIsSound(source, index) && !MemberWriteScan.accessGrantMayWrite(owner, name, index)
-			&& !MemberWriteScan.subtypeMayWrite(owner, name, index);
+	private static function writesConfined(owner: String, name: String, source: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+		return RefactorSupport.privateMemberScanIsSound(source, index) && !MemberWriteScan.accessGrantMayWrite(owner, name, index, plugin)
+			&& !MemberWriteScan.subtypeMayWrite(owner, name, index, plugin);
 	}
 
 	/**

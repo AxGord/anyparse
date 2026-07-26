@@ -261,6 +261,9 @@ A top-level `"resolutionRoots"` (array of directory paths, relative to the
 config file resolved to absolute) declares a separate RESOLUTION scope: the
 `.hx` under those roots join the cross-file `SymbolIndex` that the type /
 inheritance checks (`redundant-this`, `prefer-index-access`, `map-keys-lookup`)
+and the field-access checks (`prefer-final-field`, `prefer-final-public-field`,
+`prefer-read-only-field` — a subtype declared in a root that WRITES an inherited
+field vetoes the rewrite, exactly as a report-scope one does)
 resolve against — so a class `extends openfl.display.Sprite` is seen to inherit
 `addChild` even though OpenFL is not being linted. The resolution scope is
 never reported and never edited by `--fix`; only the files named on the command

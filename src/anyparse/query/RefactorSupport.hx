@@ -1775,6 +1775,18 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
+	 * configured resolution library is indexed there too — or null when the plugin is not a
+	 * resolution host or no resolution scope is configured (the caller falls back to the report index).
+	 * The eager counterpart of `lazySymbolIndex`, for a check that already holds a report index and
+	 * only needs to know whether a WIDER one exists: `resolutionIndexOf(plugin) ?? index`.
+	 */
+	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
+		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
+		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
+	}
+
+	/**
 	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
 	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
 	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.runtime.Span;
+import anyparse.query.GrammarPlugin;
 
 /**
  * Conservative text scan for "is this member NAME written here", and the two cross-file
@@ -42,9 +43,25 @@ final class MemberWriteScan {
 	 * an unretained source or a simple-name collision) and when a subtype REDECLARES the
 	 * name — an ambiguously-named member is exactly what a write scan cannot rule out.
 	 */
-	public static inline function subtypeMayWrite(owner: String, name: String, index: SymbolIndex): Bool {
-		return index.subtypeDeclMatches(
-			owner, name, (subtype, src, span, redeclares) -> redeclares || subtypeReach(index, subtype, name, src, span)
+	/**
+	 * The index the SUBTYPE questions run against: the resolution scope when one is
+	 * configured (`resolutionLibs` / `resolutionRoots` — a subtype declared in a library
+	 * root counts), else the report index. Resolved HERE rather than by each check so a
+	 * check never holds a resolution index: handing one to `skippedFiles` would silence the
+	 * rule on every project with libraries (they routinely contain skip-parsing files), and
+	 * that mistake is now unrepresentable. Resolving at the point of use also keeps the
+	 * build LAZY — `resolutionIndex()` memoises on the plugin, and a run whose candidates
+	 * all bail before the subtype question never pays for it.
+	 */
+	private static inline function scopeOf(index: SymbolIndex, plugin: GrammarPlugin): SymbolIndex {
+		return RefactorSupport.resolutionIndexOf(plugin) ?? index;
+	}
+
+	public static inline function subtypeMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+		return scopeOf(
+			index, plugin
+		).subtypeDeclMatches(
+			owner, name, (subtype, src, span, redeclares) -> redeclares || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
 		);
 	}
 
@@ -56,9 +73,9 @@ final class MemberWriteScan {
 	 * compile against a `p` declared in `Sub`'s SUPERtype, while a grant scan keyed on the
 	 * owner sees nothing (that file's grant list names the subtype, not the owner).
 	 */
-	private static function subtypeReach(index: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
+	private static function subtypeReach(scope: SymbolIndex, subtype: String, name: String, src: String, span: Span): Bool {
 		return mayWrite(src, name, span.from, span.to)
-			|| index.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
+			|| scope.accessGrantMatches(subtype, granted -> mayWrite(granted, name, 0, granted.length));
 	}
 
 	/**
@@ -70,11 +87,15 @@ final class MemberWriteScan {
 	 * the body scan a private one does — a private member is not reachable through an
 	 * outside receiver in the first place.
 	 */
-	public static inline function subtypeWriteReaches(owner: String, name: String, index: SymbolIndex, writeIndex: FieldWriteIndex): Bool {
-		return index.subtypeDeclMatches(
+	public static inline function subtypeWriteReaches(
+		owner: String, name: String, index: SymbolIndex, writeIndex: FieldWriteIndex, plugin: GrammarPlugin
+	): Bool {
+		return scopeOf(
+			index, plugin
+		).subtypeDeclMatches(
 			owner, name,
 			(subtype, src, span, redeclares) ->
-				redeclares || writeIndex.writtenAnywhere(subtype, name) || subtypeReach(index, subtype, name, src, span)
+				redeclares || writeIndex.writtenAnywhere(subtype, name) || subtypeReach(scopeOf(index, plugin), subtype, name, src, span)
 		);
 	}
 
@@ -83,8 +104,8 @@ final class MemberWriteScan {
 	 * file-scoped — every member of such a file reaches the type's privates — so the whole
 	 * grantee source is scanned, unlike a subtype's declaration slice.
 	 */
-	public static inline function accessGrantMayWrite(owner: String, name: String, index: SymbolIndex): Bool {
-		return index.accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length));
+	public static inline function accessGrantMayWrite(owner: String, name: String, index: SymbolIndex, plugin: GrammarPlugin): Bool {
+		return scopeOf(index, plugin).accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length));
 	}
 
 	/**

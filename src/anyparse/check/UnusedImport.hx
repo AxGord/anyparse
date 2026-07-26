@@ -6,7 +6,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.ImportInfo;
 import anyparse.query.SymbolIndex.ImportKind;
-import anyparse.query.SymbolIndexHost;
 import anyparse.runtime.Span;
 
 using Lambda;
@@ -70,7 +69,7 @@ final class UnusedImport implements Check {
 		// Named-import liveness and existence resolve against it, so an unused library
 		// import becomes a verifiable deletable Warning, while a library import kept
 		// live by a secondary type / bare enum constructor stays live.
-		final resolveIndex: SymbolIndex = resolutionIndexOf(plugin) ?? index;
+		final resolveIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		// Top-level type names per resolution-scoped module — a plain module import
 		// binds ALL of them, so the used-check must consult every name.
 		final moduleTypes: Map<String, Array<String>> = [];
@@ -276,16 +275,6 @@ final class UnusedImport implements Check {
 		return StringTools.endsWith(raw, '.*') ? raw.substr(0, raw.length - 2) : raw;
 	}
 
-	/**
-	 * The plugin's memoised resolution-scoped `SymbolIndex` (report files UNION the
-	 * configured library roots) when it carries a resolution scope, else null — the
-	 * named-import checks then fall back to the report-only index. Mirrors
-	 * `RefactorSupport.lazySymbolIndex`'s host resolution.
-	 */
-	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
-	}
 
 	/** Member names keyed by importable path (`module` for a main type, `module.Type` for a sub-module type). */
 	private static function membersByImportPath(index: SymbolIndex): Map<String, Array<String>> {

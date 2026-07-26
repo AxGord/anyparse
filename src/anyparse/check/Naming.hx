@@ -17,7 +17,6 @@ import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.NamingPolicy.NamingCategory;
 import anyparse.query.SymbolIndex;
 import anyparse.query.RefactorSupport;
-import anyparse.query.SymbolIndexHost;
 import anyparse.query.RefactorSupport.ClassifiedOccurrence;
 import anyparse.query.RefactorSupport.OccurrenceClass;
 import anyparse.check.Check.CrossFileFix;
@@ -119,7 +118,7 @@ final class Naming implements Check implements CrossFileFix {
 		// configured libraries) when present — a field of an `openfl` / `lime` subclass is then
 		// provable rather than blocked as unresolvable. The report-scope `index` still backs the
 		// confinement / reflection-string proofs (they reason about report-file reachability).
-		final resolutionIndex: Null<SymbolIndex> = resolutionIndexOf(plugin) ?? index;
+		final resolutionIndex: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (decl in support.project(tree)) {
@@ -152,7 +151,7 @@ final class Naming implements Check implements CrossFileFix {
 		if (support == null) return [];
 		final idx: SymbolIndex = index;
 		final shape: RefShape = plugin.refShape();
-		final resolutionIndex: SymbolIndex = resolutionIndexOf(plugin) ?? idx;
+		final resolutionIndex: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? idx;
 		final sourceByFile: Map<String, String> = [for (f in files) f.file => f.source];
 		final out: Array<Array<CrossFileEdits>> = [];
 		for (v in violations) {
@@ -604,18 +603,6 @@ final class Naming implements Check implements CrossFileFix {
 		final single: String = '\'$name\'';
 		final double: String = '"$name"';
 		return sources.exists(src -> src.indexOf(single) >= 0 || src.indexOf(double) >= 0);
-	}
-
-
-	/**
-	 * The plugin's memoised resolution-scoped `SymbolIndex` (report files UNION the
-	 * configured library roots) when it carries a resolution scope, else null — the
-	 * field inheritance proof then falls back to the report-only index. Mirrors
-	 * `RefactorSupport.lazySymbolIndex`'s host resolution.
-	 */
-	private static function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
-		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
 	}
 
 
