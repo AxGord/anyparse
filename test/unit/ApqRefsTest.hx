@@ -486,11 +486,76 @@ class ApqRefsTest extends Test {
 		Assert.equals(1, hits.filter(h -> h.kind == RefKind.Read).length, 'call-site read expected, got ${describe(hits)}');
 	}
 
+	/**
+	 * A qualified static call is a member access, so `find` — a value-binding walker —
+	 * classifies nothing for it. That is by design (`rename` rewrites every hit, and a
+	 * local `f` must not drag `obj.f` with it); the skip COUNT is what makes the omission
+	 * reportable instead of silent.
+	 */
+	public function testQualifiedStaticCallIsNotAReadButIsCounted(): Void {
+		final source: String = 'class B {\n\tfunction g():Int return A.f() + A.f();\n}\n';
+		Assert.equals(0, findIn(source, 'f').length, 'a member access is not a value binding');
+		Assert.equals(2, skippedIn(source, 'f'));
+	}
+
+	/**
+	 * Null-safe and force accesses are member accesses too. Counting at the point emission
+	 * is declined — rather than matching one access kind by name — is what covers them:
+	 * `?.` is the form strict null-safety pushes callers toward, so missing it would leave
+	 * the original defect in place for most of a null-safe codebase.
+	 */
+	public function testNullSafeAndForceAccessAreCounted(): Void {
+		final source: String = 'class B {\n\tfunction g(a:Null<A>):Int return a?.only() + a!.only() + A.only();\n}\n';
+		Assert.equals(0, findIn(source, 'only').length);
+		Assert.equals(3, skippedIn(source, 'only'));
+	}
+
+	/** An unqualified same-class static call DOES resolve — a hit is never also a skip. */
+	public function testUnqualifiedStaticCallResolvesAndIsNotCounted(): Void {
+		final source: String = 'class A {\n\tstatic function f():Int return 1;\n\tstatic function g():Int return f();\n}\n';
+		final found: { hits: Array<RefHit>, skipped: Int } = findWithSkippedIn(source, 'f');
+
+		Assert.equals(1, found.hits.filter(h -> h.kind == RefKind.Read).length, 'got ${describe(found.hits)}');
+		Assert.equals(0, found.skipped);
+	}
+
+	/** Hits and skips are collected in ONE walk, so a file holding both reports both. */
+	public function testHitsAndSkipsCoexistInOneWalk(): Void {
+		final source: String =
+			'class A {\n\tstatic function f():Int return 1;\n}\nclass B {\n\tfunction g():Int return A.f() + A.f();\n}\n';
+		final found: { hits: Array<RefHit>, skipped: Int } = findWithSkippedIn(source, 'f');
+
+		Assert.equals(1, found.hits.filter(h -> h.kind == RefKind.Decl).length, 'got ${describe(found.hits)}');
+		Assert.equals(2, found.skipped);
+	}
+
+	/**
+	 * A macro-reification subtree is excluded from the count exactly as it is from the
+	 * hits — the counter sits under the same `macroEmit` guard, so the two cannot diverge.
+	 */
+	public function testMacroReifiedAccessIsNotCounted(): Void {
+		Assert.equals(0, skippedIn('class M {\n\tfunction b():Void {\n\t\tvar e = macro { Foo.emitted(); };\n\t}\n}\n', 'emitted'));
+	}
+
+	/** A name that appears only as a plain identifier contributes nothing to the count. */
+	public function testPlainIdentifierIsNotCounted(): Void {
+		Assert.equals(0, skippedIn('class B {\n\tfunction g():Void {\n\t\tfinal v:Int = 1;\n\t\ttrace(v);\n\t}\n}\n', 'v'));
+	}
+
 	private static function findIn(source: String, name: String): Array<RefHit> {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final tree: QueryNode = plugin.parseFile(source);
 		final shape: RefShape = plugin.refShape();
 		return Refs.find(name, tree, shape);
+	}
+
+	private static function findWithSkippedIn(source: String, name: String): { hits: Array<RefHit>, skipped: Int } {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return Refs.findWithSkipped(name, plugin.parseFile(source), plugin.refShape());
+	}
+
+	private static function skippedIn(source: String, name: String): Int {
+		return findWithSkippedIn(source, name).skipped;
 	}
 
 	private static function describe(hits: Array<RefHit>): String {

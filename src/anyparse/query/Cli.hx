@@ -714,17 +714,22 @@ final class Cli {
 
 		final skipEntries: Array<SkipEntry> = [];
 		final candidateNames: Map<String, Bool> = [];
-		final allEntries: Null<Array<{ file: String, source: String, hits: Array<RefHit> }>> =
-			collectRefsEntries(nameStr, paths, plugin, shape, expanded.singleFile, skipEntries, candidateNames, {
-				anyFilter: anyFilter,
-				wantDecls: o.wantDecls,
-				wantReads: o.wantReads,
-				wantWrites: o.wantWrites
-			});
-		if (allEntries == null) return EXIT_RUNTIME;
+		final collected: Null<{
+			entries: Array<{ file: String, source: String, hits: Array<RefHit> }>,
+			memberAccesses: Int,
+			bindings: Int
+		}> = collectRefsEntries(nameStr, paths, plugin, shape, expanded.singleFile, skipEntries, candidateNames, {
+			anyFilter: anyFilter,
+			wantDecls: o.wantDecls,
+			wantReads: o.wantReads,
+			wantWrites: o.wantWrites
+		});
+		if (collected == null) return EXIT_RUNTIME;
+		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = collected.entries;
 
 		if (allEntries.length == 0)
 			stderr('${emptyWalkerNudge('refs', nameStr, paths.length, paths.length - skipEntries.length, skipEntries, candidateNames)}\n');
+		if (collected.memberAccesses > 0) stderr('${memberAccessNudge('refs', nameStr, collected.memberAccesses, collected.bindings)}\n');
 
 		var totalHits: Int = 0;
 		for (e in allEntries) totalHits += e.hits.length;
@@ -6023,6 +6028,24 @@ final class Cli {
 	}
 
 	/**
+	 * The warning `cmd` prints when the scope holds member-access occurrences of `name`
+	 * (`Type.name`, `expr?.name`, `expr!.name`) that the value-binding walker cannot bind.
+	 * `bindings` is the UNFILTERED count of resolved reads + writes, so the severity does
+	 * not swing with `--decls` / `--reads`: at zero the omission is the dangerous kind (an
+	 * empty result reads as "unreferenced"), otherwise the result is merely partial. The
+	 * caller only invokes this when `memberAccesses > 0`, so a name with nothing missed
+	 * never gets a line.
+	 */
+	private static function memberAccessNudge(cmd: String, name: String, memberAccesses: Int, bindings: Int): String {
+		final head: String = bindings == 0
+			? 'apq $cmd: no read/write resolved, but $memberAccesses member-access occurrence(s) of \'$name\' cannot be bound '
+				+ 'lexically — this is NOT proof \'$name\' is unreferenced'
+			: 'apq $cmd: $memberAccesses member-access occurrence(s) of \'$name\' are not shown';
+		return '$head (refs resolves value bindings; \'Type.$name\' / \'expr?.$name\' bind through the receiver type). '
+			+ 'Run: apq mentions $name <dir>';
+	}
+
+	/**
 	 * Append a hint when `name` appears to be macro-generated — scan
 	 * `src/anyparse/macro/*.hx` for a `<name>Field` Field-builder function
 	 * declaration (the canonical `Codegen.<name>Field()` shape that emits
@@ -10211,8 +10234,10 @@ final class Cli {
 			wantReads: Bool,
 			wantWrites: Bool
 		}
-	): Null<Array<{ file: String, source: String, hits: Array<RefHit> }>> {
+	): Null<{ entries: Array<{ file: String, source: String, hits: Array<RefHit> }>, memberAccesses: Int, bindings: Int }> {
 		final allEntries: Array<{ file: String, source: String, hits: Array<RefHit> }> = [];
+		var memberAccesses: Int = 0;
+		var bindings: Int = 0;
 		var scanned: Int = 0;
 		for (path in paths) {
 			final source: String = readSourceForParse(path);
@@ -10225,7 +10250,12 @@ final class Cli {
 				if (singleFile) return null;
 				continue;
 			}
-			final raw: Array<RefHit> = Refs.find(name, tree, shape);
+			final found: { hits: Array<RefHit>, skipped: Int } = Refs.findWithSkipped(name, tree, shape);
+			final raw: Array<RefHit> = found.hits;
+			// Both totals are UNFILTERED and cover every file, so what the walker could not
+			// resolve is reported the same way whatever the caller asked to be shown.
+			memberAccesses += found.skipped;
+			for (h in raw) if (h.kind != RefKind.Decl) bindings++;
 			final filtered: Array<RefHit> = filter.anyFilter
 				? raw.filter(h -> kindAllowed(h.kind, filter.wantDecls, filter.wantReads, filter.wantWrites))
 				: raw;
@@ -10235,7 +10265,7 @@ final class Cli {
 			}
 			allEntries.push({ file: path, source: source, hits: filtered });
 		}
-		return allEntries;
+		return { entries: allEntries, memberAccesses: memberAccesses, bindings: bindings };
 	}
 
 	private static inline function setCommentParseExit(code: Int): SetCommentOpts {

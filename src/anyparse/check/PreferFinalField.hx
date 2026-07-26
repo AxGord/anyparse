@@ -25,9 +25,9 @@ import haxe.Exception;
  * 1. The field has a declaration initializer (one assignment), OR is a no-initializer
  *    field assigned by exactly one unconditional top-level constructor statement (the
  *    no-initializer case below).
- * 2. It is private and its enclosing type is confined to its file
- *    (`RefactorSupport.isPrivateMemberConfined`) — so every possible write lives
- *    in this file. A non-default visibility (public) is excluded: a public field
+ * 2. It is private and every write to it is confined to this file (`writesConfined`) —
+ *    no skip-parsed file, no `@:access` grant, no `@:allow`, and no subtype writing the
+ *    inherited member. A non-default visibility (public) is excluded: a public field
  *    is writable from another file regardless of confinement.
  * 3. No other write to the field name appears in the file. The scan is a
  *    conservative, COMPLETE text scan — it treats the name followed by any
@@ -44,9 +44,11 @@ import haxe.Exception;
  * ## Whole-project scope required
  *
  * Confinement is only sound when the lint scope contains EVERY file that can
- * reference the type — `isPrivateMemberConfined` can only rule out a cross-file
- * `@:access` / subtype writer it can SEE in the index. Run over a single file in
- * isolation, an external writer is invisible and the field would be wrongly flagged.
+ * reference the type — `writesConfined` can only rule out a cross-file `@:access` /
+ * subtype writer it can SEE in the index. Run over a single file in isolation, an
+ * external writer is invisible and the field would be wrongly flagged. The subtype
+ * gate is what makes this bite in practice: a whole-project run sees subtypes a
+ * single-file run cannot, so the two scopes must not disagree on an untouched one.
  * This is the same limitation `unused-private` carries; like it, this check is
  * registered as a full-scope check in the `--fix` loop, and the sound usage is
  * linting the whole project (`lint src/`).
@@ -130,7 +132,7 @@ final class PreferFinalField implements Check {
 		// <Interface>"). Applies to both the init and no-init cases below.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (RefactorSupport.isInitializedNonPropertyField(source, field)) {
-			if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
+			if (!writesConfined(owner, name, source, index)) return;
 			if (writtenInFile(source, name, span)) return;
 			final declType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
 			if (RefactorSupport.abstractMethodMayMutate(source, name, declType, span, lazyIndex, abstractKinds)) return;
@@ -152,7 +154,7 @@ final class PreferFinalField implements Check {
 		out: Array<Violation>, file: String, source: String, field: QueryNode, name: String, span: Span, owner: String, index: SymbolIndex,
 		plugin: GrammarPlugin
 	): Void {
-		if (!RefactorSupport.isPrivateMemberConfined(owner, source, index)) return;
+		if (!writesConfined(owner, name, source, index)) return;
 		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
 		if (tree == null) return;
 		final loc: Null<{
@@ -182,26 +184,71 @@ final class PreferFinalField implements Check {
 	}
 
 	/**
+	 * Whether every write to the private field `name` of `owner` lives in `source`.
+	 * `RefactorSupport.isPrivateMemberConfined`'s subtype veto is blanket — ANY indexed
+	 * subtype keeps every private field of `owner` a `var`, even an empty `class D extends
+	 * C {}` — so it is replaced here by the precise question `final` actually asks: a
+	 * subtype may READ an inherited private field (a read survives the keyword), only a
+	 * WRITE in one breaks it. The other confinement gates stay wholesale: a skip-parsed
+	 * file, an `@:access` grant on the type and an `@:allow` in its own file can each hide
+	 * a writer no bounded scan can see.
+	 */
+	private static function writesConfined(owner: String, name: String, source: String, index: SymbolIndex): Bool {
+		return RefactorSupport.privateMemberScanIsSound(source, index)
+			&& !index.accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length))
+			&& !index.subtypeDeclMatches(owner, name, (src, span, redeclares) -> redeclares || mayWrite(src, name, span.from, span.to));
+	}
+
+	/**
+	 * Whether the offsets `from ... to` of `src` may write `name`: either a build macro can
+	 * inject a member the text scan cannot see, or the scan finds a write outright.
+	 */
+	private static inline function mayWrite(src: String, name: String, from: Int, to: Int): Bool {
+		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to);
+	}
+
+	/**
+	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the text
+	 * scan cannot see, so a subtype declared in such a file counts as a possible writer. A
+	 * mention inside a comment or string over-counts, which only ever KEEPS a `var`. The one
+	 * shape this cannot see is metadata injected by the BUILD (`--macro addMetadata(...)` in
+	 * an hxml); that is outside any source scan, and the compiler oracle is the net for it.
+	 */
+	private static inline function carriesBuildMacro(source: String): Bool {
+		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
+	}
+
+	/**
 	 * Whether `name` is written anywhere in `source` outside `exclude` (its own
 	 * declaration). A write is a word-boundary occurrence of `name` followed (past
 	 * whitespace and comments) by an assignment operator or adjacent to `++` / `--`.
 	 * Conservative and complete: it over-counts toward "written", which only keeps a
 	 * `var`.
 	 */
-	private static function writtenInFile(source: String, name: String, exclude: Span): Bool {
+	private static inline function writtenInFile(source: String, name: String, exclude: Span): Bool {
+		return writtenInRange(source, name, exclude, 0, source.length);
+	}
+
+	/**
+	 * `writtenInFile` over the offsets `from ... to` only — the form a subtype's raw
+	 * declaration slice needs. A candidate name must lie WHOLLY inside the range; the
+	 * operator scan that follows it may run past `to`, and the word-boundary tests read the
+	 * real neighbouring characters rather than the range edges.
+	 */
+	private static function writtenInRange(source: String, name: String, exclude: Null<Span>, from: Int, to: Int): Bool {
 		final n: Int = source.length;
 		final len: Int = name.length;
 		if (len == 0) return false;
-		var from: Int = 0;
+		var at: Int = from;
 		while (true) {
-			final idx: Int = source.indexOf(name, from);
-			if (idx < 0) return false;
-			from = idx + len;
+			final idx: Int = source.indexOf(name, at);
+			if (idx < 0 || idx + len > to) return false;
+			at = idx + len;
 			final boundedBefore: Bool = idx == 0 || !isWordChar(StringTools.fastCodeAt(source, idx - 1));
-			final boundedAfter: Bool = from >= n || !isWordChar(StringTools.fastCodeAt(source, from));
+			final boundedAfter: Bool = at >= n || !isWordChar(StringTools.fastCodeAt(source, at));
 			if (!boundedBefore || !boundedAfter) continue;
-			if (idx >= exclude.from && idx < exclude.to) continue;
-			if (precededByIncrDecr(source, idx) || followedByAssign(source, from)) return true;
+			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
+			if (precededByIncrDecr(source, idx) || followedByAssign(source, at)) return true;
 		}
 	}
 

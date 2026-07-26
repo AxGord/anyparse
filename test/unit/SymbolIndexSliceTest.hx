@@ -301,6 +301,83 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * `members` is the type's DIRECTLY-declared members. An anonymous-structure type
+	 * annotation writes its fields with the same grammar kinds a class member uses
+	 * (`VarField` / `FinalField`), so a member whose TYPE is such a structure must not
+	 * contribute that structure's fields as members of the enclosing type.
+	 */
+	public function testAnonStructureFieldIsNotAMember(): Void {
+		final source: String = 'package pkg;\nclass Holder {\n\tpublic var cfg:{ var inner:Int; } = { inner: 1 };\n}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Holder.hx', source: source }], plugin());
+		final holder: TypeDeclInfo = fileInfoOf(index, 'src/pkg/Holder.hx').types[0];
+
+		Assert.isTrue(holder.members.exists(m -> m.name == 'cfg'));
+		Assert.isFalse(holder.members.exists(m -> m.name == 'inner'));
+	}
+
+	/**
+	 * `CondNameFnMember` — a method whose NAME is a `#if` region — is a member like any
+	 * other, so its parameter types must not leak either. It is a distinct grammar ctor
+	 * from `FnMember`, so a member-kind list that forgets it lets the phantom back in.
+	 */
+	public function testConditionalNameMethodParamIsNotAMember(): Void {
+		final source: String = 'package pkg;\nclass Cn {\n\tfunction #if js set_a #else setA #end (b:{ var phantomA:Int; }):Void {}\n}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Cn.hx', source: source }], plugin());
+
+		Assert.isFalse(fileInfoOf(index, 'src/pkg/Cn.hx').types[0].members.exists(m -> m.name == 'phantomA'));
+	}
+
+	/**
+	 * An anonymous structure in the type declaration's own HEADER — a type-parameter
+	 * constraint or a heritage type argument — is a type expression, not a member list.
+	 * Only a typedef's `Anon` is the body whose fields ARE the members.
+	 */
+	public function testAnonStructureInTypeHeaderIsNotAMember(): Void {
+		final source: String = 'package pkg;\nclass Hdr<T:{ var z:Int; }> extends Base<{ var e:Int; }> {\n\tpublic var real:Int = 0;\n}\n';
+		final hdr: TypeDeclInfo = fileInfoOf(
+			SymbolIndex.build([{ file: 'src/pkg/Hdr.hx', source: source }], plugin()), 'src/pkg/Hdr.hx'
+		).types[0];
+
+		Assert.isTrue(hdr.members.exists(m -> m.name == 'real'));
+		Assert.isFalse(hdr.members.exists(m -> m.name == 'z'));
+		Assert.isFalse(hdr.members.exists(m -> m.name == 'e'));
+	}
+
+	/** Control for the header rule: a typedef's own `Anon` IS its member list. */
+	public function testTypedefAnonFieldsAreMembers(): Void {
+		final source: String = 'package pkg;\ntypedef Td = { var x:Int; final y:String; }\n';
+		final td: TypeDeclInfo = fileInfoOf(
+			SymbolIndex.build([{ file: 'src/pkg/Td.hx', source: source }], plugin()), 'src/pkg/Td.hx'
+		).types[0];
+
+		Assert.isTrue(td.members.exists(m -> m.name == 'x'));
+		Assert.isTrue(td.members.exists(m -> m.name == 'y'));
+	}
+
+	/**
+	 * `collectAccessGrants` must keep the UNPRUNED walk: a block-level `@:access(pkg.P)`
+	 * lives inside a method body, so pruning it away like the member walk does would drop
+	 * the grant — and `prefer-final-field` reads a missing grant as "nothing can write
+	 * this", the unsound direction. This test is the guard on that deliberate asymmetry.
+	 */
+	public function testBlockLevelAccessGrantIsIndexed(): Void {
+		final source: String = 'package pkg;\nclass G {\n\tfunction f():Void {\n\t\t@:access(pkg.P) {\n\t\t\ttrace(1);\n\t\t}\n\t}\n}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/G.hx', source: source }], plugin());
+
+		Assert.isTrue(index.hasAccessGrant('P'), 'a grant inside a method body must still be indexed');
+	}
+
+	/** The same for an anonymous structure annotating a LOCAL inside a method body. */
+	public function testAnonStructureLocalIsNotAMember(): Void {
+		final source: String = 'package pkg;\nclass Local {\n\tfunction f():Void {\n\t\tfinal o:{ var deep:Int; } = { deep: 1 };\n\t}\n}\n';
+		final index: SymbolIndex = SymbolIndex.build([{ file: 'src/pkg/Local.hx', source: source }], plugin());
+		final local: TypeDeclInfo = fileInfoOf(index, 'src/pkg/Local.hx').types[0];
+
+		Assert.isTrue(local.members.exists(m -> m.name == 'f'));
+		Assert.isFalse(local.members.exists(m -> m.name == 'deep'));
+	}
+
+	/**
 	 * Both branches of a `#if / #else` region project as siblings of one
 	 * wrapper, but no compilation sees more than one: the FIRST declaration of
 	 * a name is indexed and later same-named ones are dropped, so the name

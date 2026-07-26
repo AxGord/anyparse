@@ -204,6 +204,8 @@ final class SymbolIndex {
 	/** The grammar kind a `class` declaration projects as. */
 	private static final CLASS_DECL_KIND: String = 'ClassDecl';
 
+	/** The grammar kind a `typedef` declaration projects as — the only member host whose members sit under an `Anon`. */
+	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
 
@@ -307,6 +309,22 @@ final class SymbolIndex {
 	 */
 	public function hasAccessGrant(typeName: String): Bool {
 		return _files.exists(f -> f.accessGrants.contains(typeName));
+	}
+
+	/**
+	 * Whether `matches` holds for the WHOLE source of any indexed file granting itself
+	 * `@:access(typeName)`. The grant is file-scoped — every member of such a file reaches
+	 * the type's privates — so the scan must be too, unlike the declaration-span scan a
+	 * subtype gets. True without consulting `matches` when such a file's source was not
+	 * retained. The precise counterpart of `hasAccessGrant`, for a caller that can say what
+	 * it actually fears from a grantee rather than vetoing on the grant's existence.
+	 */
+	public function accessGrantMatches(typeName: String, matches: (source:String) -> Bool): Bool {
+		for (fi in _files) if (fi.accessGrants.contains(typeName)) {
+			final src: Null<String> = _sources[fi.file];
+			if (src == null || matches(src)) return true;
+		}
+		return false;
 	}
 
 	/**
@@ -635,21 +653,37 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
+	 * Whether any (transitive) SUBTYPE of `owner` references the private backing field `field` the trivial-getter collapse would DELETE — a subclass reading `owner`'s private `_x` directly breaks with 'Unknown identifier' once `_x` is removed, since the rename only rewrites references inside `owner`. The subtype closure is walked DOWNWARD over the index by simple-name supertype edges, so only real descendants are visited (a sibling sharing an unresolvable ancestor never false-blocks). A subtype declaring its OWN `field` is skipped (a bare reference there binds to that member, not the inherited one); a subtype whose declaration span word-boundary-references `field` blocks the collapse, and an unscannable source — or a second type carrying `owner`'s own simple name, which the index cannot tell apart from `owner` — blocks conservatively. Sound over indexed subtypes; a subtype in an unindexed file is the inherent blind spot the accessor-override gate shares.
 	 */
-	public function subtypeReferencesField(owner: String, field: String): Bool {
+	public inline function subtypeReferencesField(owner: String, field: String): Bool {
+		return subtypeDeclMatches(
+			owner, field, (src, span, redeclares) -> !redeclares && RefactorSupport.identTokenOffset(src, span, field) >= 0
+		);
+	}
+
+	/**
+	 * Whether `matches` holds for ANY (transitive) subtype of `owner`, given that subtype's
+	 * whole source, its raw declaration span, and whether it REDECLARES `field` (shadowing
+	 * the inherited member). True without consulting `matches` when the hierarchy is
+	 * unresolvable: a subtype whose source was not retained, or a second type carrying
+	 * `owner`'s own simple name. The predicate separates the callers, including what a
+	 * redeclaration means to each — `subtypeReferencesField` reads it as "this mention is
+	 * not about the inherited field", a finalization check as "an ambiguously-named member
+	 * is exactly what I cannot rule out".
+	 */
+	public function subtypeDeclMatches(owner: String, field: String, matches: (source:String, span:Span, redeclares:Bool) -> Bool): Bool {
 		final closure: Array<String> = [owner];
 		var i: Int = 0;
 		while (i < closure.length) {
 			final parent: String = closure[i++];
-			for (fi in _files) for (t in fi.types) {
-				if (t.name == owner || closure.contains(t.name) || !t.supertypes.contains(parent)) continue;
+			for (fi in _files) for (t in fi.types) if (t.supertypes.contains(parent)) {
+				// A SECOND type carrying `owner`'s own simple name extending into this closure: the
+				// index keys types by simple name and cannot tell the two hierarchies apart.
+				if (t.name == owner) return true;
+				if (closure.contains(t.name)) continue;
 				closure.push(t.name);
-				// A subtype declaring its OWN `field` binds a bare reference to that member, not to the
-				// inherited one, so its mention is not a read of the deleted field.
-				if (t.members.exists(m -> m.name == field)) continue;
 				final src: Null<String> = _sources[fi.file];
-				if (src == null || RefactorSupport.identTokenOffset(src, t.span, field) >= 0) return true;
+				if (src == null || matches(src, t.span, t.members.exists(m -> m.name == field))) return true;
 			}
 		}
 		return false;
@@ -1173,6 +1207,24 @@ final class SymbolIndex {
 		for (child in node.children) collectInto(child, visit);
 	}
 
+	/**
+	 * `collectInto` restricted to the nodes that can HOST a member declaration: it descends
+	 * through wrappers — a `#if` region puts a member one level down, a typedef puts its
+	 * fields under an `Anon` — but stops at the two places an anonymous structure can be
+	 * written as a TYPE rather than as a member list: inside a member (its annotation or
+	 * its body) and in the declaration's own header (a type-parameter constraint, a
+	 * heritage type argument). An `{ var x:Int; }` there projects the very kinds a member
+	 * does (`VarField` / `FinalField`), so descending would report its fields as members of
+	 * the enclosing type.
+	 */
+	/**
+	 * Whether `kind` declares a member — the same test `collectMembers` records on. Beyond
+	 * the shared `FIELD_MEMBER_KINDS` it names the enum constructors and the three
+	 * conditional member forms `HxClassMember` dispatches BEFORE their plain twins
+	 * (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member scope).
+	 * Each carries a signature and a body like any member, so the walk must stop at them
+	 * too — else the anonymous structures written there leak back in as members.
+	 */
 	/** The last `.`-separated segment of `path` (its simple name). */
 	private static function simpleName(path: String): String {
 		final segments: Array<String> = path.split('.');
@@ -1194,7 +1246,7 @@ final class SymbolIndex {
 		typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>
 	): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
-		collectInto(node, n -> {
+		RefactorSupport.eachMemberHost(node, n -> {
 			var runVisibility: Null<String> = null;
 			var runOverride: Bool = false;
 			for (child in n.children) {
@@ -1202,7 +1254,7 @@ final class SymbolIndex {
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
 				// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
 				// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
-				if (RefactorSupport.FIELD_MEMBER_KINDS.contains(child.kind) || child.kind == 'SimpleCtor' || child.kind == 'ParamCtor') {
+				if (RefactorSupport.isMemberDeclKind(child.kind)) {
 					final nm: Null<String> = child.name;
 					if (nm != null && sp != null) {
 						// Re-bind to a non-null local — Strict null-safety takes a struct

@@ -367,7 +367,7 @@ final class UnusedPrivate implements Check {
 				final span: Null<Span> = child.span;
 				if (span != null) out[span.from] = { node: child, parent: node, inExtends: childExtends };
 			}
-			collectMembers(child, childExtends, out);
+			if (RefactorSupport.descendsToMemberHost(node.kind, child.kind)) collectMembers(child, childExtends, out);
 		}
 	}
 

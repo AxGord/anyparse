@@ -68,10 +68,10 @@ final class RemoveMember {
 	 * matched because they carry statement kinds, not `FIELD_MEMBER_KINDS`.
 	 */
 	private static function collectMembers(node: QueryNode, memberName: String, out: Array<{ node: QueryNode, parent: QueryNode }>): Void {
-		for (child in node.children) {
-			if (RefactorSupport.isFieldMemberKind(child.kind) && child.name == memberName) out.push({ node: child, parent: node });
-			collectMembers(child, memberName, out);
-		}
+		RefactorSupport.eachMemberHost(node, host -> {
+			for (child in host.children) if (RefactorSupport.isFieldMemberKind(child.kind) && child.name == memberName)
+				out.push({ node: child, parent: host });
+		});
 	}
 
 }

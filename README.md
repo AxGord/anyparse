@@ -149,7 +149,7 @@ For the full flag set on any command: `hxq <cmd> --help`.
 |---|---|
 | `ast` | the parsed AST (S-expr or `--json`), or a subtree by `--select` / `--at` |
 | `search` | expression/statement **shapes** with `$x` metavars (`recv.add($x)`) |
-| `refs` | value bindings — `--decls` / `--reads` / `--writes`, scope-resolved |
+| `refs` | value bindings — `--decls` / `--reads` / `--writes`, scope-resolved. A member access (`Type.f()`, `obj?.f()`) is NOT a value binding, so it never appears here; when the scope holds some, `refs` says so on stderr and points at `mentions` — an empty result is never on its own proof that a name is unreferenced |
 | `uses` | type-position references (fields, params, type params) |
 | `blast` | full change-impact for a type (uses + refs + member access) |
 | `mentions` / `lit` / `cases` | every named occurrence / string-or-ident leaves / switch case-patterns |

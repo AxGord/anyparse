@@ -70,11 +70,91 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, violations('class C { var x(default, null):Int = 0; }').length);
 	}
 
-	/** A subtype can write the private field, so the type is not confined — left alone. */
-	public function testNonConfinedNotFlagged(): Void {
+	/** A subtype that WRITES the inherited private field — left alone. */
+	public function testSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C { function s():Void { _x = 5; } }' }
+		];
+		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** A subtype that merely EXTENDS without touching the field does not block the finalization. */
+	public function testEmptySubtypeStillFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
 			{ file: 'D.hx', source: 'class D extends C {}' }
+		];
+		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** A subtype that only READS the inherited private field does not block it either — a read survives `final`. */
+	public function testSubtypeReadStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C { function r():Int { return _x; } }' }
+		];
+		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** A TRANSITIVE subtype's write blocks the finalization too. */
+	public function testTransitiveSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'E.hx', source: 'class E extends D { function s():Void { _x = 5; } }' }
+		];
+		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * The index keys types by SIMPLE name, so a second `C` extending the owner's `C` makes
+	 * the two hierarchies indistinguishable — the write in it must still block.
+	 */
+	public function testSameSimpleNameSubtypeNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'a/C.hx', source: 'package a;\nclass C { private var _x:Int = 0; }' },
+			{ file: 'b/C.hx', source: 'package b;\nclass C extends a.C { function s():Void { _x = 5; } }' }
+		];
+		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * A subtype whose member table merely CARRIES the field's name — here from a nested
+	 * anonymous-structure annotation, which the index collects as a member — is ambiguous,
+	 * not proof of shadowing. Skipping such a subtype would hide the real write next to it.
+	 */
+	public function testSubtypeDeclaringSameNameNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C { public var _cfg:{ var _x:Int; } = { _x: 1 }; function s():Void { _x = 5; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/** A `@:build` macro on a subtype can inject a write no text scan can see — left alone. */
+	public function testBuildMacroSubtypeNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'D.hx', source: '@:build(M.gen()) class D extends C {}' }
+		];
+		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** The no-initializer (constructor-assigned) case gets the same precise subtype gate. */
+	public function testNoInitEmptySubtypeStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int; public function new() { _x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C {}' }
+		];
+		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** The no-initializer case is still blocked by a subtype write. */
+	public function testNoInitSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int; public function new() { _x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C { function s():Void { _x = 2; } }' }
 		];
 		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
 	}
@@ -113,6 +193,28 @@ class PreferFinalFieldCheckTest extends Test {
 			{ file: 'W.hx', source: '@:access(C) class W { public function poke(c:C):Void { c._x = 9; } }' }
 		];
 		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/**
+	 * An `@:access` grantee that only READS the private field does not block the
+	 * finalization — a read survives `final`, exactly as for a subtype. The grant is
+	 * file-scoped, so the whole grantee file is scanned, not one declaration span.
+	 */
+	public function testAccessGrantReadStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'R.hx', source: '@:access(C) class R { public function peek(c:C):Int { return c._x; } }' }
+		];
+		Assert.equals(1, ownerViolations(files).length);
+	}
+
+	/** A `@:build` macro in an `@:access` grantee can inject a write — left alone. */
+	public function testAccessGrantBuildMacroNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'R.hx', source: '@:access(C) @:build(M.gen()) class R {}' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
 	}
 
 	/** A prefix `++`/`--` separated from the field by a comment is still detected — not flagged. */
@@ -190,6 +292,11 @@ class PreferFinalFieldCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** Only the violations reported against the owner `C.hx` — a subtype fixture can carry findings of its own. */
+	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new PreferFinalField().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
 	}
 
 	private function fixedSource(src: String): String {

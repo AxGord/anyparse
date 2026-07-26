@@ -120,6 +120,12 @@ final class RefactorSupport {
 	 * the inner `HxFinalModifierMember.fn`, so it is a member like
 	 * `FnMember` for `this.<name>` purposes.
 	 */
+	/** The grammar kind a `typedef` projects as — the only member host whose members sit under an `Anon`. */
+	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
+
+	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
+	private static final ANON_KIND: String = 'Anon';
+
 	public static final FIELD_MEMBER_KINDS: Array<String> = [
 		'VarMember',
 		'FinalMember',
@@ -404,6 +410,44 @@ final class RefactorSupport {
 	/** Is `kind` a class-member declaration (field / method)? */
 	public static inline function isFieldMemberKind(kind: String): Bool {
 		return FIELD_MEMBER_KINDS.contains(kind);
+	}
+
+	/**
+	 * Whether `kind` declares a member. `isFieldMemberKind` plus the enum constructors and
+	 * the three conditional member forms `HxClassMember` dispatches BEFORE their plain
+	 * twins (`var x … #if … ;`, `function #if a f #else g #end`, a `#if` splice at member
+	 * scope). Each of those carries a signature and a body like any member, so a walk
+	 * looking for member HOSTS has to recognise them or it descends into one.
+	 */
+	public static inline function isMemberDeclKind(kind: String): Bool {
+		return isFieldMemberKind(kind) || kind == 'SimpleCtor' || kind == 'ParamCtor' || kind == 'VarSemiCondInitMember'
+			|| kind == 'CondNameFnMember' || kind == 'CondSpliceMember';
+	}
+
+	/**
+	 * Visit `node` and every descendant that can HOST a member declaration, so a caller can
+	 * scan each host's direct children. Descends through wrappers — a `#if` region puts a
+	 * member one level down, a typedef puts its fields under an `Anon` — but stops at the
+	 * two places an anonymous structure is written as a TYPE rather than as a member list:
+	 * inside a member (its annotation or its body) and in a declaration's own header (a
+	 * type-parameter constraint, a heritage type argument, an abstract's underlying). An
+	 * `{ var x:Int; }` there projects the very kinds a member does (`VarField` /
+	 * `FinalField`), so descending reports its fields as members of the enclosing type —
+	 * a phantom that has bitten the symbol index and `remove-member` alike.
+	 */
+	public static function eachMemberHost(node: QueryNode, visit: QueryNode -> Void): Void {
+		visit(node);
+		for (child in node.children) if (descendsToMemberHost(node.kind, child.kind)) eachMemberHost(child, visit);
+	}
+
+	/**
+	 * Whether a walk looking for member declarations should descend from a `parentKind`
+	 * node into a `childKind` one. Split out of `eachMemberHost` for a walk that threads
+	 * its own state down the tree (`unused-private` carries an `extends` flag) and so
+	 * cannot delegate the recursion itself — the pruning knowledge still lives here.
+	 */
+	public static inline function descendsToMemberHost(parentKind: String, childKind: String): Bool {
+		return !isMemberDeclKind(childKind) && (parentKind == TYPEDEF_DECL_KIND || childKind != ANON_KIND);
 	}
 
 	/**
@@ -1009,8 +1053,20 @@ final class RefactorSupport {
 	 * can expose its privates to another type). Conservative: any doubt is false.
 	 */
 	public static function isPrivateMemberConfined(owner: String, source: String, index: SymbolIndex): Bool {
-		return index.skippedFiles()
-			.length <= 0 && !index.hasSubtype(owner) && !index.hasAccessGrant(owner) && source.indexOf('@:allow') < 0;
+		return privateMemberScanIsSound(source, index) && !index.hasSubtype(owner) && !index.hasAccessGrant(owner);
+	}
+
+	/**
+	 * The part of `isPrivateMemberConfined` that NO precise gate can refine: no file
+	 * skip-parsed (one could hide any writer at all) and no `@:allow` in the member's own
+	 * file (which hands its privates to a type the index cannot name from here). The other
+	 * two vetoes — subtype and `@:access` grant — name a REACHABLE file each, so a caller
+	 * that can scan those files for what it actually fears pairs this with its own gates
+	 * instead: `prefer-final-field` asks only whether such a file WRITES the member, since
+	 * a read survives `final`.
+	 */
+	public static inline function privateMemberScanIsSound(source: String, index: SymbolIndex): Bool {
+		return index.skippedFiles().length <= 0 && source.indexOf('@:allow') < 0;
 	}
 
 	/**

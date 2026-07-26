@@ -86,6 +86,33 @@ final class Refs {
 		return out;
 	}
 
+	/**
+	 * `find`, plus how many occurrences of `name` the SAME walk declined to classify
+	 * because they sit in a member-access slot (`isMemberAccess` — `Type.name`,
+	 * `expr?.name`, `expr!.name`): the name there belongs to the receiver's TYPE, which a
+	 * lexical walk cannot resolve. Counted at the exact point emission is declined, so the
+	 * two numbers cannot drift apart — any access form the grammar gains is covered for
+	 * free, and an occurrence inside a macro-reification block is excluded from the count
+	 * exactly as it is from the hits. Lets a caller report what it did NOT look at instead
+	 * of letting an empty result read as "unreferenced". Bypasses `shape.refsCache` (which
+	 * memoizes hits only) — one direct walk yields both numbers.
+	 */
+	public static function findWithSkipped(name: String, tree: QueryNode, shape: RefShape): { hits: Array<RefHit>, skipped: Int } {
+		final out: Map<String, Array<RefHit>> = [name => []];
+		final skipped: Map<String, Int> = [name => 0];
+		walkMulti(tree, shape, new ScopeStack(), out, false, false, skipped);
+		return { hits: out[name] ?? [], skipped: skipped[name] ?? 0 };
+	}
+
+	/**
+	 * Whether `kind` is a member-access slot — `expr.name`, `expr?.name`, `expr!.name`.
+	 * The name there denotes a member of the RECEIVER's type, so a lexical walk has
+	 * nothing to bind it to; every one of these is an occurrence `find` cannot report.
+	 */
+	private static inline function isMemberAccess(kind: String, shape: RefShape): Bool {
+		return kind == shape.fieldAccessKind || kind == shape.nullSafeAccessKind || kind == shape.forceFieldAccessKind;
+	}
+
 	private static inline function classify(kind: String, shape: RefShape, isWriteTarget: Bool): Null<RefKind> {
 		// Decl-host takes precedence over identKind: a single grammar
 		// would normally place the decl name on a different ctor than
@@ -98,7 +125,8 @@ final class Refs {
 	}
 
 	private static function walkMulti(
-		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, isWriteTarget: Bool, macroEmit: Bool
+		node: QueryNode, shape: RefShape, scopes: ScopeStack, out: Map<String, Array<RefHit>>, isWriteTarget: Bool, macroEmit: Bool,
+		?skipped: Map<String, Int>
 	): Void {
 		// Inside a macro-reification subtree (`opaqueKinds`, e.g. `macro { … }`) a
 		// plain identifier is a runtime emit spliced into generated code — NOT a
@@ -128,7 +156,8 @@ final class Refs {
 						if (kind != null) {
 							final bindingSpan: Null<Span> = (kind == RefKind.Decl) ? span : scopes.resolveInnermost(nname);
 							hits.push(new RefHit(kind, nname, span, bindingSpan));
-						}
+						} else if (skipped != null && isMemberAccess(node.kind, shape))
+							skipped[nname] = (skipped[nname] ?? 0) + 1;
 					}
 				}
 			}
@@ -138,7 +167,7 @@ final class Refs {
 		final childMacroEmit: Bool = opaqueKinds.contains(node.kind) || (!interpolationKinds.contains(node.kind) && macroEmit);
 		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
 		final children: Array<QueryNode> = node.children;
-		for (i in 0...children.length) walkMulti(children[i], shape, scopes, out, isWriteParent && i == 0, childMacroEmit);
+		for (i in 0...children.length) walkMulti(children[i], shape, scopes, out, isWriteParent && i == 0, childMacroEmit, skipped);
 		if (isScope) scopes.pop();
 	}
 

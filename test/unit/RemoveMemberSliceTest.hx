@@ -61,6 +61,23 @@ class RemoveMemberSliceTest extends Test {
 		assertErr('class C {\n\tvar x:Int;\n}\n', 'C', 'nope');
 	}
 
+	/**
+	 * A field of an anonymous structure written as a member's TYPE is not a member of the
+	 * enclosing class. Matching it deleted the field out of the annotation and left
+	 * `cfg:{}` — a silent Ok that no longer type-checks.
+	 */
+	public function testAnonStructureFieldInMemberTypeIsRefused(): Void {
+		assertErr('class C {\n\tvar cfg:{ var inner:Int; } = { inner: 1 };\n}\n', 'C', 'inner');
+	}
+
+	/** Control: a typedef's own fields ARE its members and stay removable. */
+	public function testTypedefFieldIsRemovable(): Void {
+		final text: String = okText('typedef Td = {\n\tvar x:Int;\n\tvar y:String;\n}\n', 'Td', 'x');
+
+		Assert.isTrue(text.indexOf('x') == -1, text);
+		Assert.isTrue(text.indexOf('y') >= 0, text);
+	}
+
 	private function okText(source: String, typeName: String, memberName: String): String {
 		switch RemoveMember.removeMember(source, typeName, memberName, true, new HaxeQueryPlugin()) {
 			case Ok(text):
