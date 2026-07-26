@@ -657,7 +657,7 @@ final class SymbolIndex {
 	 */
 	public inline function subtypeReferencesField(owner: String, field: String): Bool {
 		return subtypeDeclMatches(
-			owner, field, (src, span, redeclares) -> !redeclares && RefactorSupport.identTokenOffset(src, span, field) >= 0
+			owner, field, (_, src, span, redeclares) -> !redeclares && RefactorSupport.identTokenOffset(src, span, field) >= 0
 		);
 	}
 
@@ -671,7 +671,9 @@ final class SymbolIndex {
 	 * not about the inherited field", a finalization check as "an ambiguously-named member
 	 * is exactly what I cannot rule out".
 	 */
-	public function subtypeDeclMatches(owner: String, field: String, matches: (source:String, span:Span, redeclares:Bool) -> Bool): Bool {
+	public function subtypeDeclMatches(
+		owner: String, field: String, matches: (subtype:String, source:String, span:Span, redeclares:Bool) -> Bool
+	): Bool {
 		final closure: Array<String> = [owner];
 		var i: Int = 0;
 		while (i < closure.length) {
@@ -680,10 +682,12 @@ final class SymbolIndex {
 				// A SECOND type carrying `owner`'s own simple name extending into this closure: the
 				// index keys types by simple name and cannot tell the two hierarchies apart.
 				if (t.name == owner) return true;
-				if (closure.contains(t.name)) continue;
-				closure.push(t.name);
+				// Dedupe the WALK by name, not the predicate: two distinct types can share a
+				// simple name, and each carries its own declaration slice. Expanding a name
+				// twice would loop; skipping the second one's slice silently drops evidence.
+				if (!closure.contains(t.name)) closure.push(t.name);
 				final src: Null<String> = _sources[fi.file];
-				if (src == null || matches(src, t.span, t.members.exists(m -> m.name == field))) return true;
+				if (src == null || matches(t.name, src, t.span, t.members.exists(m -> m.name == field))) return true;
 			}
 		}
 		return false;

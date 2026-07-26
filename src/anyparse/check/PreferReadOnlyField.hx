@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.FieldWriteIndex;
+import anyparse.query.MemberWriteScan;
 import anyparse.runtime.Span;
 
 /**
@@ -23,8 +24,11 @@ import anyparse.runtime.Span;
  * write site) is the dangerous direction, so the candidate must be PROVABLY
  * internal-only:
  *
- * 1. Its enclosing type has NO subtype (`SymbolIndex.hasSubtype`) — a subtype's
- *    inherited write would misattribute, so the gate (with SymbolIndex.supertypeDeclaresMember, which also bails when a supertype declares the same field) rules it out.
+ * 1. No subtype of it can write the field (`MemberWriteScan.subtypeWriteReaches`) — a
+ *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
+ *    are attributed to the SUBTYPE, so `writtenExternally` below would miss them.
+ *    Merely HAVING a subtype no longer bails. `SymbolIndex.supertypeDeclaresMember`
+ *    still bails when a supertype declares the same field.
  * 2. No write to the field NAME anywhere is unresolved
  *    (`FieldWriteIndex.hasUnresolvedWrite`) — an unresolved `recv.field = …` could be
  *    a hidden external write.
@@ -101,9 +105,17 @@ final class PreferReadOnlyField implements Check {
 		if (name == null || span == null) return;
 		final nameEnd: Int = nameEndOffset(source, span);
 		if (nameEnd < 0 || isProperty(source, nameEnd)) return;
-		if (index.hasSubtype(owner) || index.supertypeDeclaresMember(owner, name)) return;
+		// A file the grammar could not read can hold any write, so no internal-only proof
+		// survives it. The blanket subtype veto used to cover this by accident.
+		if (index.skippedFiles().length > 0) return;
+		if (index.supertypeDeclaresMember(owner, name)) return;
+		// An implemented interface that cannot be resolved may still declare `name` as a
+		// mutable member, whose property access `(default, null)` would violate.
+		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (writeIndex.hasUnresolvedWrite(name)) return;
+		// Cheap gates first: the subtype walk is the only one that scans other files.
 		if (!writeIndex.writtenAnywhere(owner, name)) return;
+		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex)) return;
 		final site: Null<{ file: String, span: Span }> = index.declarationSiteOf(owner);
 		if (site == null) return;
 		if (writeIndex.writtenExternally(owner, name, site.file, site.span)) return;
@@ -125,9 +137,9 @@ final class PreferReadOnlyField implements Check {
 		final n: Int = source.length;
 		if (span.from + keyword.length > n || source.substring(span.from, span.from + keyword.length) != keyword) return -1;
 		var i: Int = span.from + keyword.length;
-		while (i < n && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
 		final start: Int = i;
-		while (i < n && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(source, i))) i++;
 		return i > start ? i : -1;
 	}
 
@@ -135,18 +147,10 @@ final class PreferReadOnlyField implements Check {
 	private static function isProperty(source: String, nameEnd: Int): Bool {
 		final n: Int = source.length;
 		var i: Int = nameEnd;
-		while (i < n && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		while (i < n && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i++;
 		return i < n && StringTools.fastCodeAt(source, i) == '('.code;
 	}
 
 	/** Whether `c` is an identifier character. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
 	/** Whether `c` is whitespace. */
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
-	}
-
 }

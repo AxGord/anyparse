@@ -6,6 +6,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.FieldWriteIndex;
+import anyparse.query.MemberWriteScan;
 import anyparse.runtime.Span;
 
 /**
@@ -26,10 +27,11 @@ import anyparse.runtime.Span;
  * 1. The field has a declaration initializer (one assignment). A no-initializer
  *    field would need a definite-assignment-in-constructor proof this check does
  *    not attempt, and is skipped.
- * 2. Its enclosing type has NO subtype in the index (`SymbolIndex.hasSubtype`). A
- *    subtype writing the inherited field via `this.field` / a bare `field` resolves
- *    to the SUBTYPE, not this type — so an inherited write could be misattributed;
- *    the gate rules that out. The same gate also bails when a SUPERtype declares
+ * 2. No subtype of it can write the field (`MemberWriteScan.subtypeWriteReaches`). A
+ *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
+ *    are attributed to the SUBTYPE rather than to this type, so the write index alone
+ *    would miss them; the gate scans each subtype's body and asks the index about the
+ *    subtype. Merely HAVING a subtype no longer bails. The same gate also bails when a SUPERtype declares
  *    the same field (`SymbolIndex.supertypeDeclaresMember`): its property access is
  *    then fixed by that interface / superclass var, which final would violate. An interface-mutability gate extends this to an UNRESOLVABLE implemented interface (which supertypeDeclaresMember treats as absent): out of scope it may still declare a mutable member, so the rewrite is skipped conservatively.
  * 3. No unresolved write can target the field
@@ -105,7 +107,10 @@ final class PreferFinalPublicField implements Check {
 		final span: Null<Span> = field.span;
 		if (name == null || span == null) return;
 		if (!RefactorSupport.isInitializedNonPropertyField(source, field)) return;
-		if (index.hasSubtype(owner) || index.supertypeDeclaresMember(owner, name)) return;
+		// A file the grammar could not read can hold any write, so no internal-only proof
+		// survives it. The blanket subtype veto used to cover this by accident.
+		if (index.skippedFiles().length > 0) return;
+		if (index.supertypeDeclaresMember(owner, name)) return;
 		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
 		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an
 		// implemented interface that cannot be resolved may still declare a mutable
@@ -113,6 +118,8 @@ final class PreferFinalPublicField implements Check {
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
 		if (writeIndex.writtenAnywhere(owner, name)) return;
+		// Cheapest gates first: the subtype walk is the only one that scans other files.
+		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex)) return;
 		out.push({
 			file: file,
 			span: span,

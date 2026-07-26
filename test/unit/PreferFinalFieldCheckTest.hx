@@ -79,6 +79,21 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(0, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * `@:access(<subtype>)` grants a third file write access to a private field declared in
+	 * the SUPERtype — verified against the compiler: with the metadata `s.p = 5` on `s:Sub`
+	 * compiles, without it the field is inaccessible. Neither scanning the subtype's body
+	 * nor asking for grants on the OWNER sees it, so the subtype gate has to carry it.
+	 */
+	public function testAccessGrantOnSubtypeNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { private var _x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'W.hx', source: '@:access(D) class W { public function poke(d:D):Void { d._x = 9; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
 	/** A subtype that merely EXTENDS without touching the field does not block the finalization. */
 	public function testEmptySubtypeStillFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [

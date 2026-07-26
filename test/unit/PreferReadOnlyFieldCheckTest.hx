@@ -63,13 +63,78 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(0, violations('class C { public var x(default, null):Int = 0; function s():Void { x = 1; } }').length);
 	}
 
-	/** A subtype could write the inherited field externally — left alone. */
-	public function testSubtypeNotFlagged(): Void {
+	/**
+	 * A subtype WRITING the inherited field is the case the subtype gate exists for: the
+	 * write index attributes `this.x = 2` there to the SUBTYPE, so asking it about the
+	 * OWNER cannot see it, and `(default, null)` would reject it. Left alone. (A BARE
+	 * `x = 2` would NOT exercise this gate — the index resolves an unbound inherited write
+	 * back to the declaring type, so the terminal write gates already catch it.)
+	 */
+	public function testSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C { function t():Void { this.x = 2; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/** A subtype that merely EXTENDS writes nothing, so it does not block the restriction. */
+	public function testEmptySubtypeStillFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
 			{ file: 'D.hx', source: 'class D extends C {}' }
 		];
-		Assert.equals(0, new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, ownerViolations(files).length);
+	}
+
+	/** A subtype that only READS survives `(default, null)` — read access stays public. */
+	public function testSubtypeReadStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C { function r():Int { return x; } }' }
+		];
+		Assert.equals(1, ownerViolations(files).length);
+	}
+
+	/**
+	 * A write through a SUBTYPE-TYPED receiver, from a third file that never mentions the
+	 * owner: `s.x = 1` on `s:D` is resolved and recorded against `D`, so asking the write
+	 * index about `C` misses it, and scanning `D`'s own body misses it too — the write is
+	 * not there. Real-world shape: a layout base class whose padding is set on a subclass
+	 * instance by a UI builder.
+	 */
+	public function testExternalWriteViaSubtypeReceiverNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'U.hx', source: 'class U { function f(d:D):Void { d.x = 10; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/**
+	 * A file the grammar could not parse can hold ANY write, so no proof of internal-only
+	 * access survives it. The subtype gate used to cover this by accident (a subtype in
+	 * scope made it bail regardless); with the precise gate the skip has to be checked on
+	 * its own, as `prefer-final-field` already does via `privateMemberScanIsSound`.
+	 */
+	public function testSkipParsedFileNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'U.hx', source: 'class U { function f(d:D):Void { d.x = 10; } (((' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/** A TRANSITIVE subtype's write blocks it too. */
+	public function testTransitiveSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; function s():Void { x = 1; } }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'E.hx', source: 'class E extends D { function t():Void { this.x = 2; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
 	}
 
 	public function testFixInsertsDefaultNull(): Void {
@@ -127,6 +192,11 @@ class PreferReadOnlyFieldCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** Only the violations against the owner `C.hx` — a subtype fixture can carry findings of its own. */
+	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new PreferReadOnlyField().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
 	}
 
 	private function fixedSource(src: String): String {

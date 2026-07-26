@@ -9,6 +9,8 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * The `prefer-final-public-field` check: a PUBLIC `var` field assigned only at its
  * declaration and never reassigned across the project is flagged `Info` and `var`
@@ -90,13 +92,78 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		);
 	}
 
-	/** A subtype could write the inherited field, attributing to the subtype — left alone. */
-	public function testSubtypeNotFlagged(): Void {
+	/**
+	 * A subtype WRITING the inherited field is the case the subtype gate exists for: the
+	 * write index attributes `this.x = 2` there to the SUBTYPE, so asking it about the
+	 * OWNER cannot see it, and `final` would reject it. Left alone. (A BARE `x = 2` would
+	 * NOT exercise this gate — the index resolves an unbound inherited write back to the
+	 * declaring type, so the terminal write gates already catch it.)
+	 */
+	public function testSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C { function t():Void { this.x = 2; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/** A subtype that merely EXTENDS writes nothing, so it does not block the finalization. */
+	public function testEmptySubtypeStillFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [
 			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
 			{ file: 'D.hx', source: 'class D extends C {}' }
 		];
-		Assert.equals(0, new PreferFinalPublicField().run(files, new HaxeQueryPlugin()).length);
+		Assert.equals(1, ownerViolations(files).length);
+	}
+
+	/** A subtype that only READS survives `final`. */
+	public function testSubtypeReadStillFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C { function r():Int { return x; } }' }
+		];
+		Assert.equals(1, ownerViolations(files).length);
+	}
+
+	/**
+	 * A write through a SUBTYPE-TYPED receiver, from a third file that never mentions the
+	 * owner: `d.x = 10` on `d:D` is resolved and recorded against `D`, so asking the write
+	 * index about `C` misses it, and scanning `D`'s own body misses it too — the write is
+	 * not there. Real-world shape: a layout base class whose padding is set on a subclass
+	 * instance by a UI builder.
+	 */
+	public function testExternalWriteViaSubtypeReceiverNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'U.hx', source: 'class U { function f(d:D):Void { d.x = 10; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/**
+	 * A file the grammar could not parse can hold ANY write, so no proof of internal-only
+	 * access survives it. The subtype gate used to cover this by accident (a subtype in
+	 * scope made it bail regardless); with the precise gate the skip has to be checked on
+	 * its own, as `prefer-final-field` already does via `privateMemberScanIsSound`.
+	 */
+	public function testSkipParsedFileNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'U.hx', source: 'class U { function f(d:D):Void { d.x = 10; } (((' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/** A TRANSITIVE subtype's write blocks it too. */
+	public function testTransitiveSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int = 0; }' },
+			{ file: 'D.hx', source: 'class D extends C {}' },
+			{ file: 'E.hx', source: 'class E extends D { function t():Void { this.x = 2; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
 	}
 
 	public function testFixVarToFinal(): Void {
@@ -323,19 +390,23 @@ class PreferFinalPublicFieldCheckTest extends Test {
 	}
 
 	/**
-	 * T4: a `case var item:` CAPTURE binder shadows an inherited field — the
-	 * unbound-ident arm must not resolve `item` as `Base4.item`; only the truly
-	 * unwritten `sx2` is flagged.
+	 * T4: a `case var item:` CAPTURE binder shadows an inherited field — the unbound-ident
+	 * arm must not resolve `item` as `Base4.item`, which would attribute `item.sx = 5` to
+	 * `Other4` and poison the truly unwritten `sx2`. `sx` IS written and stays out;
+	 * `Base4.item` is never reassigned, so having a subtype no longer suppresses it.
 	 */
 	public function testCaptureVarShadowingInheritedFieldPoisons(): Void {
-		final vs: Array<Violation> = multi([
-			{
-				file: 'T4.hx',
-				source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 { public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void { switch v { case var item: item.sx = 5; } } }'
-			}
-		]);
-		Assert.equals(1, vs.length);
-		Assert.isTrue(vs[0].message.indexOf('sx2') >= 0);
+		final flagged: Array<String> = [
+			for (v in multi([
+				{
+					file: 'T4.hx',
+					source: 'class Other4 { public var sx2:Int = 1; } class Sprite4 { public var sx:Int = 0; } class Base4 { public var item:Other4 = new Other4(); } class D4 extends Base4 { public function pick(v:Sprite4):Void { switch v { case var item: item.sx = 5; } } }'
+				}
+			])) v.message
+		];
+
+		Assert.isTrue(flagged.exists(m -> m.indexOf('sx2') >= 0), '$flagged');
+		Assert.isFalse(flagged.exists(m -> m.indexOf('\'sx\'') >= 0), 'written field must stay out — $flagged');
 	}
 
 	/**
@@ -540,6 +611,11 @@ class PreferFinalPublicFieldCheckTest extends Test {
 
 	private function multi(files: Array<{ file: String, source: String }>): Array<Violation> {
 		return new PreferFinalPublicField().run(files, new HaxeQueryPlugin());
+	}
+
+	/** Only the violations against the owner `C.hx` — a subtype fixture can carry findings of its own. */
+	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return multi(files).filter(v -> v.file == 'C.hx');
 	}
 
 }

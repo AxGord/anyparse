@@ -301,6 +301,28 @@ class SymbolIndexSliceTest extends Test {
 	}
 
 	/**
+	 * Two DISTINCT subtypes sharing a simple name: the closure must not dedupe them away
+	 * before the predicate runs. Deduping by name is right for the WALK (each name is
+	 * expanded once) but wrong for the predicate — the second `D`'s own declaration slice
+	 * is what carries its `@:build`, and skipping it silently drops that evidence.
+	 */
+	public function testSameSimpleNameSubtypesBothVisitPredicate(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/C.hx', source: 'class C { public var x:Int = 0; }' },
+			{ file: 'src/a/D.hx', source: 'package a;\nclass D extends C {}' },
+			{ file: 'src/b/D.hx', source: 'package b;\n@:build(M.gen())\nclass D extends C {}' }
+		], plugin());
+		final seen: Array<String> = [];
+
+		index.subtypeDeclMatches('C', 'x', (subtype, src, _, _) -> {
+			seen.push(subtype + (src.indexOf('@:build') >= 0 ? ':build' : ':plain'));
+			return false;
+		});
+		Assert.isTrue(seen.contains('D:build'), 'the @:build subtype slice must reach the predicate — got $seen');
+		Assert.isTrue(seen.contains('D:plain'), 'got $seen');
+	}
+
+	/**
 	 * `members` is the type's DIRECTLY-declared members. An anonymous-structure type
 	 * annotation writes its fields with the same grammar kinds a class member uses
 	 * (`VarField` / `FinalField`), so a member whose TYPE is such a structure must not

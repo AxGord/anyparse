@@ -5,6 +5,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.MemberWriteScan;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
 import haxe.Exception;
@@ -194,128 +195,16 @@ final class PreferFinalField implements Check {
 	 * a writer no bounded scan can see.
 	 */
 	private static function writesConfined(owner: String, name: String, source: String, index: SymbolIndex): Bool {
-		return RefactorSupport.privateMemberScanIsSound(source, index)
-			&& !index.accessGrantMatches(owner, src -> mayWrite(src, name, 0, src.length))
-			&& !index.subtypeDeclMatches(owner, name, (src, span, redeclares) -> redeclares || mayWrite(src, name, span.from, span.to));
-	}
-
-	/**
-	 * Whether the offsets `from ... to` of `src` may write `name`: either a build macro can
-	 * inject a member the text scan cannot see, or the scan finds a write outright.
-	 */
-	private static inline function mayWrite(src: String, name: String, from: Int, to: Int): Bool {
-		return carriesBuildMacro(src) || writtenInRange(src, name, null, from, to);
-	}
-
-	/**
-	 * Whether `source` carries a `@:build` / `@:autoBuild` — a macro can add a member the text
-	 * scan cannot see, so a subtype declared in such a file counts as a possible writer. A
-	 * mention inside a comment or string over-counts, which only ever KEEPS a `var`. The one
-	 * shape this cannot see is metadata injected by the BUILD (`--macro addMetadata(...)` in
-	 * an hxml); that is outside any source scan, and the compiler oracle is the net for it.
-	 */
-	private static inline function carriesBuildMacro(source: String): Bool {
-		return source.indexOf('@:build') >= 0 || source.indexOf('@:autoBuild') >= 0;
+		return RefactorSupport.privateMemberScanIsSound(source, index) && !MemberWriteScan.accessGrantMayWrite(owner, name, index)
+			&& !MemberWriteScan.subtypeMayWrite(owner, name, index);
 	}
 
 	/**
 	 * Whether `name` is written anywhere in `source` outside `exclude` (its own
-	 * declaration). A write is a word-boundary occurrence of `name` followed (past
-	 * whitespace and comments) by an assignment operator or adjacent to `++` / `--`.
-	 * Conservative and complete: it over-counts toward "written", which only keeps a
-	 * `var`.
+	 * declaration) — the in-file half of the proof, over the whole file.
 	 */
 	private static inline function writtenInFile(source: String, name: String, exclude: Span): Bool {
-		return writtenInRange(source, name, exclude, 0, source.length);
-	}
-
-	/**
-	 * `writtenInFile` over the offsets `from ... to` only — the form a subtype's raw
-	 * declaration slice needs. A candidate name must lie WHOLLY inside the range; the
-	 * operator scan that follows it may run past `to`, and the word-boundary tests read the
-	 * real neighbouring characters rather than the range edges.
-	 */
-	private static function writtenInRange(source: String, name: String, exclude: Null<Span>, from: Int, to: Int): Bool {
-		final n: Int = source.length;
-		final len: Int = name.length;
-		if (len == 0) return false;
-		var at: Int = from;
-		while (true) {
-			final idx: Int = source.indexOf(name, at);
-			if (idx < 0 || idx + len > to) return false;
-			at = idx + len;
-			final boundedBefore: Bool = idx == 0 || !isWordChar(StringTools.fastCodeAt(source, idx - 1));
-			final boundedAfter: Bool = at >= n || !isWordChar(StringTools.fastCodeAt(source, at));
-			if (!boundedBefore || !boundedAfter) continue;
-			if (exclude != null && idx >= exclude.from && idx < exclude.to) continue;
-			if (precededByIncrDecr(source, idx) || followedByAssign(source, at)) return true;
-		}
-	}
-
-	/**
-	 * Whether the non-whitespace token immediately before `idx` is `++` or `--`.
-	 * Whether the non-whitespace token immediately before `idx`, skipping any
-	 * interposed block comment, is `++` or `--` (a prefix increment / decrement —
-	 * a write). Symmetric with `followedByAssign`'s comment-skipping so a write
-	 * with a comment between the operator and the name is not missed.
-	 */
-	private static function precededByIncrDecr(source: String, idx: Int): Bool {
-		var i: Int = idx - 1;
-		while (i >= 0) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (isSpace(c)) {
-				i--;
-				continue;
-			}
-			if (c == '/'.code && i >= 1 && StringTools.fastCodeAt(source, i - 1) == '*'.code) {
-				i -= 2;
-				while (i >= 1 && !(StringTools.fastCodeAt(source, i - 1) == '/'.code && StringTools.fastCodeAt(source, i) == '*'.code)) i--;
-				i -= 2;
-				continue;
-			}
-			break;
-		}
-		if (i < 1) return false;
-		final c0: Int = StringTools.fastCodeAt(source, i - 1);
-		final c1: Int = StringTools.fastCodeAt(source, i);
-		return (c0 == '+'.code && c1 == '+'.code) || (c0 == '-'.code && c1 == '-'.code);
-	}
-
-	/**
-	 * Whether the operator token starting (past whitespace and comments) at `pos` is
-	 * an assignment: `++` / `--`, or an operator run ending in `=` that is not a
-	 * comparison (`==` / `<=` / `>=` / `!=`) or the lambda arrow (`=>`).
-	 */
-	private static function followedByAssign(source: String, pos: Int): Bool {
-		final n: Int = source.length;
-		var i: Int = RefactorSupport.skipForwardTrivia(source, pos);
-		final start: Int = i;
-		while (i < n && isOperatorChar(StringTools.fastCodeAt(source, i))) i++;
-		final token: String = source.substring(start, i);
-		return token == '++' || token == '--'
-			|| (token.length != 0 && StringTools.fastCodeAt(token, token.length - 1) == '='.code && token != '==' && token != '<='
-				&& token != '>=' && token != '!=' && token != '=>');
-	}
-
-	/** Whether `c` is an identifier character (a word boundary is anything else). */
-	private static function isWordChar(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-	}
-
-	/** Whether `c` is an operator character that can form an assignment token. */
-	private static function isOperatorChar(c: Int): Bool {
-		return switch c {
-			case '='.code | '+'.code | '-'.code | '*'.code | '/'.code | '%'.code | '&'.code | '|'.code | '^'.code | '<'.code | '>'.code
-				| '?'.code
-				| '~'.code
-				| '!'.code: true;
-			case _: false;
-		};
-	}
-
-	/** Whether `c` is whitespace. */
-	private static function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+		return MemberWriteScan.writtenInRange(source, name, exclude, 0, source.length);
 	}
 
 }

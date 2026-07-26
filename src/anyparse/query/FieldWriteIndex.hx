@@ -109,8 +109,9 @@ typedef ScanCtx = {
  *
  * A write target's receiver resolves to its STATIC declared type — sound under
  * nominal typing: a write through a receiver declared `:Y` targets Y's field
- * (inheritance is the CONSUMER's job, gated by `hasSubtype` /
- * `supertypeDeclaresMember`). Four receiver shapes resolve; each step that fails
+ * (inheritance is the CONSUMER's job — a consumer that must not miss a write arriving
+ * through a subtype asks about each subtype too, see `MemberWriteScan.subtypeWriteReaches`,
+ * plus `supertypeDeclaresMember` for the other direction). Four receiver shapes resolve; each step that fails
  * falls back to the unresolved bail:
  *
  *  - `this` — the enclosing type, unless the container is an
