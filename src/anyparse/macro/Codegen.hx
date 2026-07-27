@@ -357,17 +357,25 @@ class Codegen {
 					{ name: 'lit', type: macro :String },
 				],
 				ret: macro :Bool,
+				// Allocation-free compare: this is the single hottest
+				// primitive in generated parsers (every failed Alt-branch
+				// trial lands here), and the previous
+				// `input.substring(pos, pos + len) != lit` allocated a
+				// fresh string PER TRIAL. A char loop typically exits on
+				// the first character for a miss.
 				expr: macro {
 					final len: Int = lit.length;
 					if (ctx.pos + len > ctx.input.length) {
 						ctx.recordFail(ctx.pos, lit);
 						return false;
 					}
-					if (ctx.input.substring(ctx.pos, ctx.pos + len) != lit) {
-						ctx.recordFail(ctx.pos, lit);
+					final input: anyparse.runtime.Input = ctx.input;
+					final base: Int = ctx.pos;
+					for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt(lit, i)) {
+						ctx.recordFail(base, lit);
 						return false;
 					}
-					ctx.pos += len;
+					ctx.pos = base + len;
 					return true;
 				},
 			}),
@@ -395,9 +403,14 @@ class Codegen {
 					{ name: 'lit', type: macro :String },
 				],
 				ret: macro :Bool,
+				// Allocation-free compare — see `matchLit`.
 				expr: macro {
 					final len: Int = lit.length;
-					return ctx.pos + len <= ctx.input.length && ctx.input.substring(ctx.pos, ctx.pos + len) == lit;
+					if (ctx.pos + len > ctx.input.length) return false;
+					final input: anyparse.runtime.Input = ctx.input;
+					final base: Int = ctx.pos;
+					for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt(lit, i)) return false;
+					return true;
 				},
 			}),
 			pos: Context.currentPos(),
@@ -428,12 +441,16 @@ class Codegen {
 					{ name: 'keyword', type: macro :String },
 				],
 				ret: macro :Bool,
+				// Allocation-free compare — see `matchLit` for why the
+				// substring form had to go.
 				expr: macro {
 					final len: Int = keyword.length;
 					if (ctx.pos + len > ctx.input.length) return false;
-					if (ctx.input.substring(ctx.pos, ctx.pos + len) != keyword) return false;
-					if (ctx.pos + len < ctx.input.length) {
-						final c: Int = ctx.input.charCodeAt(ctx.pos + len);
+					final input: anyparse.runtime.Input = ctx.input;
+					final base: Int = ctx.pos;
+					for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt(keyword, i)) return false;
+					if (base + len < input.length) {
+						final c: Int = input.charCodeAt(base + len);
 						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
 						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
 						if (isWord) return false;
