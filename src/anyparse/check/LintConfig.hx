@@ -205,7 +205,32 @@ final class LintConfig {
 	 */
 	public static function discover(path: String): LintConfig {
 		final found: Null<{ content: String, path: String }> = ConfigFinder.findUpFile(path, 'apqlint.json');
-		return found == null ? parse('{}') : parse(found.content, haxe.io.Path.directory(found.path));
+		if (found == null) return new LintConfig([]);
+		final config: Null<LintConfig> = parseOrNull(found.content, haxe.io.Path.directory(found.path));
+		if (config == null) {
+			// A REAL config file that the schema rejects must not degrade
+			// silently — the wholesale fallback quietly collapses the
+			// resolution scope and every rule toggle. Once per file per
+			// process: `discover` re-runs for every linted directory
+			// (the CLI memoises per directory, not per config), so an
+			// unde-duplicated line would repeat N times per run.
+			if (!_warnedConfigs.contains(found.path)) {
+				_warnedConfigs.push(found.path);
+				stderr('apq: ${found.path} failed to parse — using defaults\n');
+			}
+			return new LintConfig([]);
+		}
+		return config;
+	}
+
+	/** Config paths already reported by `discover`'s reject diagnostic — one line per file per process. */
+	private static final _warnedConfigs: Array<String> = [];
+
+	/** Guarded stderr write — mirrors `Cli.stderr` (`#if sys` alone is false on hxnodejs). */
+	private static function stderr(s: String): Void {
+		#if (sys || nodejs)
+		Sys.stderr().writeString(s);
+		#end
 	}
 
 	/**
@@ -229,19 +254,19 @@ final class LintConfig {
 	 * survives inside `rules`, whose entries stay raw JSON on purpose.
 	 */
 	public static function parse(content: String, ?baseDir: String): LintConfig {
-		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) {
-			// A DISCOVERED config (baseDir set — `discover` found a real
-			// apqlint.json; its no-file branch parses '{}', which cannot
-			// fail) must not degrade silently: the wholesale fallback
-			// quietly collapses the resolution scope and every rule
-			// toggle, so tell the user WHICH file was dropped and why.
-			// Direct `parse(content)` calls (tests, probes) keep the
-			// silent contract.
-			if (baseDir != null)
-				Sys.stderr().writeString('apq: apqlint.json in $baseDir failed to parse (${exception.message}) — using defaults\n');
-			null;
-		};
-		if (config == null) return new LintConfig([]);
+		return parseOrNull(content, baseDir) ?? new LintConfig([]);
+	}
+
+	/**
+	 * `parse`'s worker: the typed parse and mapping, or null when the
+	 * schema rejects the document. `parse` folds the null into the
+	 * silent empty config (it cannot tell a probe from a real config
+	 * file, so it never prints); `discover` turns the same null into
+	 * the user-facing diagnostic, because it knows the file path.
+	 */
+	private static function parseOrNull(content: String, ?baseDir: String): Null<LintConfig> {
+		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
+		if (config == null) return null;
 		final rules: Map<String, RuleConfig> = [];
 		final declared: Null<Map<String, JValue>> = config.rules;
 		if (declared != null) for (id => raw in declared) {

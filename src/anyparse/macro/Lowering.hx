@@ -1962,12 +1962,10 @@ class Lowering {
 		};
 		final switchExpr: Expr = { expr: ESwitch(macro _key, switchCases, defaultExpr), pos: Context.currentPos() };
 		final structLiteral: Expr = { expr: EObjectDecl(structFields), pos: Context.currentPos() };
-		// The field locals are declared ahead of the shared mapping loop
-		// (they used to sit between the open literal and the entry loop —
-		// hoisting pure `var _f_x = null` declarations above the
-		// `expectLit(open)` is observationally identical).
-		final parseSteps: Array<Expr> = [];
-		for (d in declareLocals) parseSteps.push(d);
+		// The field locals sit ahead of the shared mapping loop — pure
+		// null-init declarations, so their position relative to the open
+		// literal is unobservable.
+		final parseSteps: Array<Expr> = declareLocals;
 		parseSteps.push(byNameMappingLoopExpr('ByName struct parsing', '_key', switchExpr));
 		for (c in missingChecks) parseSteps.push(c);
 		parseSteps.push(macro return $structLiteral);

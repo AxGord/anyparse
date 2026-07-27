@@ -271,14 +271,16 @@ class ShapeBuilder {
 		// annotate pass DO walk this node on every schema build — they
 		// are harmless because every one of their marks gates on
 		// `base.meta` tags a schema field never carries, not because
-		// they skip it. The passes that would mis-handle a Map-marked
-		// Star (transform / query-walker / plain writer Star paths) are
-		// never pointed at ByName schemas today, and if one ever is,
-		// the failure is LOUD: their generated code indexes the
-		// String-keyed Map with an Int, a compile error — not silent
-		// wrong output. Only the ByName parse lowering reads the mark
-		// (key-value loop instead of a sequence loop); the ByName write
-		// lowering fatal-errors on it (parse-only).
+		// they skip it. No other pass is pointed at a ByName schema
+		// today, and their failure modes DIFFER if one ever is: the
+		// transform path fails LOUD (its `[for …]` rebuild yields an
+		// Array, unassignable to the Map field — compile error), and
+		// the ByName writer fatal-errors explicitly — but the
+		// query-walker path would COMPILE (`for (x in map)` iterates
+		// values) and silently walk values with the keys dropped. Do
+		// not point a walker at a ByName schema without teaching its
+		// Star arms about this mark. Only the ByName parse lowering
+		// reads the mark (key-value loop instead of a sequence loop).
 		final mapParams: Null<Array<Type>> = mapTypeParams(t);
 		if (mapParams != null) return shapeMap(mapParams[0], mapParams[1]);
 		// Std primitive abstracts (Bool/Int/Float/String) — inline Terminal,
@@ -353,12 +355,6 @@ class ShapeBuilder {
 		return node;
 	}
 
-	/**
-	 * The `[K, V]` type parameters when `t` is a `Map`, else null. Matches both
-	 * forms the compiler hands out: the top-level `Map` alias is a `typedef`
-	 * (`TType`) over the `haxe.ds.Map` abstract (`TAbstract`), and an unfollowed
-	 * field annotation arrives as the former.
-	 */
 	/**
 	 * The `[K, V]` type params when `t` is a DIRECT `Map<K, V>`
 	 * spelling — matched as BOTH `TType` (the top-level `Map` is a

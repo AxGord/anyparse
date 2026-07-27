@@ -207,7 +207,9 @@ class LintConfigTest extends Test {
 		final degraded: LintConfig = LintConfig.parse('{"resolutionStd":"false","resolutionLibs":["pony"]}');
 		Assert.isTrue(degraded.resolutionStd(), 'a string rejects the whole document — the default true stands');
 		Assert.equals(0, degraded.resolutionLibs().length, 'and every other key degrades with it');
-		Assert.isTrue(LintConfig.parse('{"resolutionStd":0}').resolutionStd(), 'a number rejects the document too');
+		final numeric: LintConfig = LintConfig.parse('{"resolutionStd":0,"resolutionLibs":["pony"]}');
+		Assert.isTrue(numeric.resolutionStd(), 'a number rejects the document too');
+		Assert.equals(0, numeric.resolutionLibs().length, 'discriminating: the co-declared key is wiped with it');
 	}
 
 }
