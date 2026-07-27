@@ -348,7 +348,71 @@ class Codegen {
 		}
 	}
 
+	/**
+	 * The literal-compare preamble shared by `matchLit` / `peekLit` /
+	 * `peekKw`: the fits-before-EOF bail, `ctx.input` / `ctx.pos` hoisted
+	 * into locals, then a char loop that exits on the first mismatching
+	 * character. `onTooShort` runs when the literal cannot fit before
+	 * end-of-input, `onMismatch` when a character differs — each caller
+	 * supplies its own (record-and-fail vs. a plain `return false`).
+	 *
+	 * The steps are returned FLAT so the caller can splice them with
+	 * `$b{}` as its whole function body: wrapping them in a nested block
+	 * would scope `len` / `input` / `base` away from the caller's tail
+	 * statements, which read all three.
+	 *
+	 * `litParam` names the caller's own `String` parameter, so a bail may
+	 * reference it (and the loop locals) directly.
+	 */
+	private static function litCompareSteps(litParam: String, onTooShort: Expr, onMismatch: Expr): Array<Expr> {
+		final lit: Expr = macro $i{litParam};
+		final steps: Array<Expr> = [];
+		steps.push(macro final len: Int = $lit.length);
+		steps.push(macro if (ctx.pos + len > ctx.input.length) $onTooShort);
+		steps.push(macro final input: anyparse.runtime.Input = ctx.input);
+		steps.push(macro final base: Int = ctx.pos);
+		steps.push(macro for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt($lit, i)) $onMismatch);
+		return steps;
+	}
+
+	/**
+	 * The `[A-Za-z0-9_]` test on an already-bound char-code local — the
+	 * word boundary `peekKw` / `expectKw` / `matchKw` enforce after a
+	 * keyword, and the run condition `peekWord` scans a word with.
+	 *
+	 * `code` MUST be a bare local: it is substituted seven times, so a
+	 * call or an indexed read would be evaluated seven times.
+	 */
+	private static function isWordCharExpr(code: Expr): Expr {
+		return macro ($code >= 'a'.code && $code <= 'z'.code) || ($code >= 'A'.code && $code <= 'Z'.code)
+			|| ($code >= '0'.code && $code <= '9'.code) || $code == '_'.code;
+	}
+
 	private static function matchLitField(): Field {
+		// Allocation-free compare: this is the single hottest primitive in
+		// generated parsers (every failed Alt-branch trial lands here), and
+		// the previous `input.substring(pos, pos + len) != lit` allocated a
+		// fresh string PER TRIAL. A char loop typically exits on the first
+		// character for a miss.
+		// `BytesInput` NOTE: the loop compares RAW BYTES, where the
+		// substring form compared a UTF-8 DECODE of the same range. For a
+		// literal holding a character in `0x80`-`0xFF` the byte compare can
+		// match where the decode never could. Every literal the binary
+		// grammars actually use is ASCII, so nothing observable moves — and
+		// the byte reading is the self-consistent one, since `ctx.pos` has
+		// always advanced by `lit.length` BYTES.
+		final steps: Array<Expr> = litCompareSteps(
+			'lit', macro {
+				ctx.recordFail(ctx.pos, lit);
+				return false;
+			},
+			macro {
+				ctx.recordFail(base, lit);
+				return false;
+			}
+		);
+		steps.push(macro ctx.pos = base + len);
+		steps.push(macro return true);
 		return {
 			name: 'matchLit',
 			access: [APrivate, AStatic],
@@ -358,27 +422,7 @@ class Codegen {
 					{ name: 'lit', type: macro :String },
 				],
 				ret: macro :Bool,
-				// Allocation-free compare: this is the single hottest
-				// primitive in generated parsers (every failed Alt-branch
-				// trial lands here), and the previous
-				// `input.substring(pos, pos + len) != lit` allocated a
-				// fresh string PER TRIAL. A char loop typically exits on
-				// the first character for a miss.
-				expr: macro {
-					final len: Int = lit.length;
-					if (ctx.pos + len > ctx.input.length) {
-						ctx.recordFail(ctx.pos, lit);
-						return false;
-					}
-					final input: anyparse.runtime.Input = ctx.input;
-					final base: Int = ctx.pos;
-					for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt(lit, i)) {
-						ctx.recordFail(base, lit);
-						return false;
-					}
-					ctx.pos = base + len;
-					return true;
-				},
+				expr: macro $b{steps},
 			}),
 			pos: Context.currentPos(),
 		};
@@ -395,6 +439,9 @@ class Codegen {
 	 * element content sharing the same first byte.
 	 */
 	private static function peekLitField(): Field {
+		// Allocation-free compare — see `matchLit`.
+		final steps: Array<Expr> = litCompareSteps('lit', macro return false, macro return false);
+		steps.push(macro return true);
 		return {
 			name: 'peekLit',
 			access: [APrivate, AStatic],
@@ -404,15 +451,7 @@ class Codegen {
 					{ name: 'lit', type: macro :String },
 				],
 				ret: macro :Bool,
-				// Allocation-free compare — see `matchLit`.
-				expr: macro {
-					final len: Int = lit.length;
-					if (ctx.pos + len > ctx.input.length) return false;
-					final input: anyparse.runtime.Input = ctx.input;
-					final base: Int = ctx.pos;
-					for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt(lit, i)) return false;
-					return true;
-				},
+				expr: macro $b{steps},
 			}),
 			pos: Context.currentPos(),
 		};
@@ -433,6 +472,16 @@ class Codegen {
 	 * default label respectively).
 	 */
 	private static function peekKwField(): Field {
+		// Allocation-free compare — see `matchLit` for why the substring
+		// form had to go.
+		final isWordTest: Expr = isWordCharExpr(macro c);
+		final steps: Array<Expr> = litCompareSteps('keyword', macro return false, macro return false);
+		steps.push(macro if (base + len < input.length) {
+			final c: Int = input.charCodeAt(base + len);
+			final isWord: Bool = $isWordTest;
+			if (isWord) return false;
+		});
+		steps.push(macro return true);
 		return {
 			name: 'peekKw',
 			access: [APrivate, AStatic],
@@ -442,22 +491,7 @@ class Codegen {
 					{ name: 'keyword', type: macro :String },
 				],
 				ret: macro :Bool,
-				// Allocation-free compare — see `matchLit` for why the
-				// substring form had to go.
-				expr: macro {
-					final len: Int = keyword.length;
-					if (ctx.pos + len > ctx.input.length) return false;
-					final input: anyparse.runtime.Input = ctx.input;
-					final base: Int = ctx.pos;
-					for (i in 0...len) if (input.charCodeAt(base + i) != StringTools.fastCodeAt(keyword, i)) return false;
-					if (base + len < input.length) {
-						final c: Int = input.charCodeAt(base + len);
-						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
-						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
-						if (isWord) return false;
-					}
-					return true;
-				},
+				expr: macro $b{steps},
 			}),
 			pos: Context.currentPos(),
 		};
@@ -482,6 +516,7 @@ class Codegen {
 	 * nothing.
 	 */
 	private static function peekWordField(): Field {
+		final isWordTest: Expr = isWordCharExpr(macro w);
 		return {
 			name: 'peekWord',
 			access: [APrivate, AStatic],
@@ -505,8 +540,7 @@ class Codegen {
 					final len: Int = input.length;
 					while (p < len) {
 						final w: Int = input.charCodeAt(p);
-						final isWord: Bool = (w >= 'a'.code && w <= 'z'.code) || (w >= 'A'.code && w <= 'Z'.code)
-						|| (w >= '0'.code && w <= '9'.code) || w == '_'.code;
+						final isWord: Bool = $isWordTest;
 						if (!isWord) break;
 						p++;
 					}
@@ -550,6 +584,7 @@ class Codegen {
 	 * word character, determined at macro time by `Lowering`.
 	 */
 	private static function matchKwField(): Field {
+		final isWordTest: Expr = isWordCharExpr(macro c);
 		return {
 			name: 'matchKw',
 			access: [APrivate, AStatic],
@@ -564,8 +599,7 @@ class Codegen {
 					if (!matchLit(ctx, keyword)) return false;
 					if (ctx.pos < ctx.input.length) {
 						final c: Int = ctx.input.charCodeAt(ctx.pos);
-						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
-						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+						final isWord: Bool = $isWordTest;
 						if (isWord) {
 							ctx.pos = _savedPos;
 							return false;
@@ -589,6 +623,7 @@ class Codegen {
 	 * thrown `ParseError`, which covers this case automatically.
 	 */
 	private static function expectKwField(): Field {
+		final isWordTest: Expr = isWordCharExpr(macro c);
 		return {
 			name: 'expectKw',
 			access: [APrivate, AStatic],
@@ -604,8 +639,7 @@ class Codegen {
 					}
 					if (ctx.pos < ctx.input.length) {
 						final c: Int = ctx.input.charCodeAt(ctx.pos);
-						final isWord: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code)
-						|| (c >= '0'.code && c <= '9'.code) || c == '_'.code;
+						final isWord: Bool = $isWordTest;
 						if (isWord) {
 							throw anyparse.runtime.ParseError.backtrack;
 						}

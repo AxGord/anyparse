@@ -24,6 +24,13 @@ enum BranchFirstToken {
 	 * `peekWord(ctx) == word`, which is EXACTLY `expectKw`'s
 	 * acceptance test for a word-shaped keyword: both read the word
 	 * boundary as "the maximal ident run ends here".
+	 *
+	 * What guarantees the "consumed by a word-boundary-checking"
+	 * half — the part that makes the equality exact instead of
+	 * over-strict — is the `isWordShaped` implies `endsWithWordChar`
+	 * argument spelled out on `Lowering.wordOrByteFirst`, the only
+	 * producer of this constructor. Read that before changing either
+	 * predicate.
 	 */
 	FirstKw(words: Array<String>);
 
@@ -34,6 +41,14 @@ enum BranchFirstToken {
 	 * is sound for `expectLit` / `matchLit` AND for `expectKw` /
 	 * `matchKw`, which begin with the same literal compare and can
 	 * only fail harder (word boundary) after it.
+	 *
+	 * "First iteration of the compare loop" is how `matchLit` reads
+	 * since the allocation-free rewrite that immediately precedes
+	 * these guards; before it, `matchLit` compared a whole substring
+	 * at once. The guard would be sound EITHER way — a substring
+	 * compare also fails whenever the first byte differs — so this is
+	 * a statement about which code the justification points at, not a
+	 * dependency the soundness rests on.
 	 */
 	FirstLit(codes: Array<Int>);
 
