@@ -32,7 +32,7 @@ package anyparse.grammar.haxe;
  * Per-stmt `@:trailOpt(';')` ownership remains in additive mode for
  * this session — the full BlockBody Star migration (move `;` from
  * per-stmt to BlockBody-level only) is a follow-up that deletes the
- * `stmtExprNoSemi` carve-outs in `HxExprUtil`.
+ * `stmtExprNoSemi` carve-outs in `HxAstPredLowering`.
  *
  * `@:fmt(clearExprPositionNonTail)` on `stmts` (ω-anon-fn-body-stmt-
  * position) mirrors `HxExpr.BlockExpr`: a function body is a statement

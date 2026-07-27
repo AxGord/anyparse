@@ -81,7 +81,7 @@ package anyparse.grammar.haxe;
  * unaffected. Block-body forms (`try { … } catch { … }`) carry no `;`
  * and are likewise unaffected. NOTE: the haxe-formatter reference
  * preserves the `;` for the bare-body form; re-emitting it
- * (source-presence + writer gate, cf. `HxExprUtil`) is a deferred
+ * (source-presence + writer gate, cf. `HxAstPredLowering`) is a deferred
  * follow-up — this slice closes the parse gap only.
  */
 @:peg

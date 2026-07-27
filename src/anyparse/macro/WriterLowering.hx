@@ -1332,8 +1332,8 @@ class WriterLowering {
 		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
 		// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` AND-s the
 		// runtime `_flatCase` gate with `!opt.caseBodyRefusesFlat(_arr[0].node)`,
-		// dispatching through the plugin-supplied adapter on
-		// `WriteOptions` (Haxe wires it to `HxExprUtil.refusesCaseFlat`).
+		// dispatching through the generated `caseBodyRefusesFlat`
+		// predicate of the build's AST family.
 		// Engine never references the grammar plugin by name —
 		// mirrors the `endsWithCloseBrace` adapter pattern. Null
 		// adapter falls through (no refusal). Wired on

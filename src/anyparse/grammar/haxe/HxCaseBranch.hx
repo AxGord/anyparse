@@ -102,8 +102,8 @@ package anyparse.grammar.haxe;
  *
  * `@:fmt(refuseFlatOnComplexExpr)` (ω-issue-423-mech-b) adds a body-
  * shape AND-clause to the runtime flat-gate via the plugin-supplied
- * `WriteOptions.caseBodyRefusesFlat` adapter (Haxe wires it to
- * `HxExprUtil.refusesCaseFlat`). A case body whose single statement
+ * generated `caseBodyRefusesFlat` predicate (`HxAstPredLowering`
+ * tables). A case body whose single statement
  * is `A && B` or `A || B` refuses inline regardless of the dual flat-
  * gate's verdict, so `case PRESSED: A || B;` breaks even at
  * expression-position where `expressionCase=Keep` + same-line source

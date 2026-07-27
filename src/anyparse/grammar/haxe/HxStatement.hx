@@ -313,7 +313,7 @@ package anyparse.grammar.haxe;
  *    statement, preserving multi-statement boundary detection in
  *    blocks / switch-arms (the statement Star loop relies on
  *    `expectLit` throwing) — UNLESS the parsed expr is
- *    brace-terminated (`HxExprUtil.stmtExprNoSemi` true: `macro { … }`,
+ *    brace-terminated (the generated `stmtExprNoSemi` true: `macro { … }`,
  *    `macro switch (e) { … }`, and the `endsWithCloseBrace` set), where
  *    it is optional, matching Haxe's rule that a `}`-closed statement
  *    needs no `;`. A blanket `@:trailOpt` (no gate) on this no-keyword
@@ -443,7 +443,7 @@ enum HxStatement {
 	 * `@:fmt(condSpliceCaseMarkerDedent)` flag then dedents the `#if`
 	 * marker one level to the case-list indent when the raw fragment wraps
 	 * case clauses (see `WriterLowering.kwRefParts` /
-	 * `HxExprUtil.condSpliceRawWrapsCases`), aligning it with the verbatim
+	 * the generated `condSpliceRawWrapsCases`), aligning it with the verbatim
 	 * `case` / `#else` / `#end` markers; a dangling-else splice is left at
 	 * the statement indent.
 	 */
@@ -530,7 +530,7 @@ enum HxStatement {
 	 *
 	 * The payload is a bare `HxStatement`, so `else if (...) ...` nests
 	 * as `OrphanElseStmt(IfStmt(...))` and `else { ... }` as
-	 * `OrphanElseStmt(BlockStmt(...))`. `HxExprUtil.stmtNoSemi` recurses
+	 * `OrphanElseStmt(BlockStmt(...))`. The generated `stmtNoSemi` recurses
 	 * into the payload so the `;`-elision verdict is the inner
 	 * statement's, exactly as it would be inside a real if-chain.
 	 */

@@ -3658,8 +3658,8 @@ final class Cli {
 	 *
 	 * Two recognised gate flavours:
 	 *  - `trailOptParseGate('<predicate>')` — drives the runtime gate
-	 *    on `@:trailOpt` (parser-side). Predicate lives on
-	 *    `HxExprUtil.<predicate>` (or the schema plugin's instance).
+	 *    on `@:trailOpt` (parser-side). The predicate is the generated
+	 *    `AstPreds*.<predicate>` (or the schema plugin's instance).
 	 *  - `trailOptShapeGate('<predicate>')` — drives the writer-side
 	 *    decision for `var x = …` rhs and similar.
 	 *

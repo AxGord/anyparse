@@ -24,7 +24,7 @@ import anyparse.grammar.haxe.HxStatement;
  * express. `HxMacroClassName` is a `$`-optional ident terminal (clone
  * of `HxFieldNameLit`); `members` is the separator-less close-peek
  * `HxMemberDecl` Star, parse-identical to `HxClassDecl.members`.
- * `HxExprUtil.stmtExprNoSemi` gained a `MacroClassExpr` arm so a
+ * The `stmtExprNoSemi` predicate gained a `MacroClassExpr` arm so a
  * bare-statement `macro class {}` needs no trailing `;`.
  *
  * Corpus drivers: `other/issue_33_macro_class_reification`,

@@ -1004,7 +1004,7 @@ typedef HxModuleWriteOptions = WriteOptions & {
 	// the module default of 0. Default `0` strips the source blank for those
 	// other-tailed conditionals; the import- / type-tailed cases fall
 	// through to the source-driven count (kept). See
-	// `HxExprUtil.tailLeafKeepsBlankAfterConditional` for the gate adapter.
+	// the generated `tailLeafKeepsBlankAfterConditional` for the gate walker.
 	afterConditionalBlock: Int,
 	afterFileHeaderComment: Int,
 	betweenMultilineComments: Int,

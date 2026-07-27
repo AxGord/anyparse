@@ -14,8 +14,8 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * `HxCaseBranch.body` and `HxDefaultBranch.stmts` carry
  * `@:fmt(refuseFlatOnComplexExpr)`: the runtime `_flatCase` predicate
  * AND-s `!opt.caseBodyRefusesFlat(_arr[0].node)` (plugin-supplied
- * adapter wired in `HaxeFormat.defaultWriteOptions` to
- * `HxExprUtil.refusesCaseFlat`) so a single body statement whose
+ * generated `caseBodyRefusesFlat` predicate on the
+ * `AstPreds*` marker classes) so a single body statement whose
  * outermost expression is `&&` or `||` refuses inline regardless of
  * the dual flat-gate's verdict.
  *
