@@ -333,10 +333,204 @@ class Lowering {
 				)
 					b
 		] : node.children;
-		final branchExprs: Array<Expr> = [for (branch in branches) tryBranch(branch, typePath, recurseFnName)];
-		final failExpr: Expr = macro throw anyparse.runtime.ParseError.backtrack;
-		final statements: Array<Expr> = branchExprs.concat([failExpr]);
+		// omega-alt-first-token: first-token dispatch guards. Ordered choice
+		// is untouched — branches keep their source order, nothing is
+		// reordered or grouped. Each GUARDABLE branch's `tryBranch` block is
+		// merely wrapped in a cheap test that skips the trial when the token
+		// at the current position provably cannot start that branch. This
+		// removes the dozens of failed `expectKw` probes every ident-led
+		// statement used to pay walking a long Alt.
+		// THE SOUNDNESS INVARIANT: a guard may only skip a branch whose
+		// trial would deterministically FAIL WITHOUT CONSUMING INPUT at the
+		// current position. First-token guards satisfy it — a kw-first
+		// branch's `expectKw(kw)` fails iff the word at the position is not
+		// `kw` (word-boundary semantics = maximal ident run, exactly what
+		// `peekWord` returns), and a lit-first branch's `expectLit(lit)`
+		// fails on its first compare iteration when the byte at the position
+		// is not `lit`'s first byte. A skipped branch is therefore
+		// observationally identical to a failed trial, EXCEPT for
+		// `ctx.recordFail` bookkeeping: on MALFORMED input the farthest-fail
+		// diagnostic may now name fewer / different expected tokens. That is
+		// the one accepted behaviour change.
+		final firstTokens: Array<BranchFirstToken> = branches.map(branchFirstToken);
+		final guards: Array<Null<Expr>> = firstTokens.map(branchGuardExpr);
+		var guardCount: Int = 0;
+		var needWord: Bool = false;
+		var needByte: Bool = false;
+		for (first in firstTokens) switch first {
+			case FirstKw(_):
+				guardCount++;
+				needWord = true;
+			case FirstLit(_):
+				guardCount++;
+				needByte = true;
+			case Unknown:
+		}
+		// One guardable branch cannot repay the prologue: the single trial it
+		// saves costs about what the peek itself costs.
+		final dispatch: Bool = guardCount >= 2;
+		// The peek runs ONCE per dispatch and RESTORES `ctx.pos`, so every
+		// branch body still starts from the exact original position and does
+		// its own `skipWs`. Nothing observes the transient skip: plain
+		// `skipWs` touches `ctx.pos` and nothing else (the trivia-capturing
+		// variants — `collectTrivia` / `skipWsAndStash` — live in the Star
+		// loops and the Pratt operator chain, never at an Alt branch head).
+		// In `@:raw` / binary rules the prologue's `skipWs` is erased by
+		// `stripSkipWs` exactly as the branch bodies' are, keeping the peek
+		// position aligned with what the branches see.
+		final statements: Array<Expr> = [];
+		if (dispatch) {
+			statements.push(macro final _gSaved: Int = ctx.pos);
+			statements.push(macro skipWs(ctx));
+			if (needByte) statements.push(macro final _gC0: Int = ctx.input.charCodeAt(ctx.pos));
+			if (needWord) statements.push(macro final _gW: String = peekWord(ctx));
+			statements.push(macro ctx.pos = _gSaved);
+		}
+		for (i in 0...branches.length) {
+			final trial: Expr = tryBranch(branches[i], typePath, recurseFnName);
+			final guard: Null<Expr> = dispatch ? guards[i] : null;
+			if (guard == null)
+				statements.push(trial);
+			else
+				statements.push(macro if ($guard) $trial);
+		}
+		statements.push(macro throw anyparse.runtime.ParseError.backtrack);
 		return macro $b{statements};
+	}
+
+	/**
+	 * Classify the FIRST token an Alt branch commits to. Mirrors
+	 * `lowerEnumBranch`'s case tree exactly — every arm below names the
+	 * case it shadows and the primitive that case emits first, because a
+	 * classification that disagrees with the emission is a silent parser
+	 * bug (a branch skipped although its trial would have matched).
+	 *
+	 * Returns `Unknown` for anything not provably first-token
+	 * dispatchable; `Unknown` branches stay unguarded, which is exactly
+	 * the pre-guard behaviour.
+	 */
+	private static function branchFirstToken(branch: ShapeNode): BranchFirstToken {
+		// Case 5 (`@:prefix`): `skipWs; expectLit(prefixOp)`. Symbolic by
+		// construction — `lowerPrefixBranch` fatal-errors on a word-like op.
+		final prefixOp: Null<String> = branch.annotations.get(AnnotationKeys.PREFIX_OP);
+		if (prefixOp != null) return litFirst([prefixOp]);
+
+		final litList: Null<Array<String>> = branch.annotations.get(AnnotationKeys.LIT_LIT_LIST);
+		final children: Array<ShapeNode> = branch.children;
+		final kwLead: Null<String> = branch.annotations.get(AnnotationKeys.KW_LEAD_TEXT);
+
+		// Case 0 (zero-arg `@:kw`): `skipWs; expectKw(kw)`.
+		if (kwLead != null && children.length == 0 && litList == null) return wordOrByteFirst([kwLead]);
+
+		// Case 1 (single `@:lit`): `skipWs;` then `expectKw` when the
+		// literal ends with a word character, `expectLit` otherwise.
+		if (litList != null && litList.length == 1 && children.length == 0) return wordOrByteFirst(litList);
+
+		// Case 2 (multi `@:lit`): `skipWs;` then one `matchKw` / `matchLit`
+		// attempt per literal — whichever hits first is the committed token,
+		// so the branch's first-token set is the whole literal set. The
+		// word-vs-symbolic split is `endsWithWordChar(litList[0])` with a
+		// macro-time reject for mixed sets; `wordOrByteFirst` needs no such
+		// assert, since a mixed set simply falls back to the byte guard
+		// (sound for `matchKw` and `matchLit` alike) before the reject fires.
+		if (litList != null && litList.length > 1 && children.length == 1) return wordOrByteFirst(litList);
+
+		final leadText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_LEAD_TEXT);
+		final trailText: Null<String> = branch.annotations.get(AnnotationKeys.LIT_TRAIL_TEXT);
+
+		// Case 4 (Star with `@:lead`/`@:trail`): every variant — plain,
+		// `@:sep`, `@:sepAlt`, block-ended, trivia — opens with
+		// `skipWs; expectLit(leadText)`, so the lead literal genuinely is
+		// the first consumed token. `expectLit` carries NO word boundary,
+		// hence the byte guard even for a word-shaped lead: `expectLit(ctx,
+		// 'do')` accepts the `do` of `dog`, and a word guard would wrongly
+		// skip that branch.
+		if (leadText != null && trailText != null && children.length == 1 && children[0].kind == Star) return litFirst([leadText]);
+
+		// Case 3 (`@:kw` / `@:lead` + single `Ref`): `appendKwRefLeadSteps`
+		// emits the `@:kw` keyword FIRST (word-boundary checked via
+		// `expectKw`) and only then the `@:lead` / `@:wrap` literal (via
+		// `expectLit`); either or both may be absent. A bare `Ref` — the
+		// catch-alls such as `HxStatement.ExprStmt` — commits nothing before
+		// recursing, so it stays `Unknown`.
+		if (litList == null && children.length == 1 && children[0].kind == Ref) {
+			if (kwLead != null) return wordOrByteFirst([kwLead]);
+			if (leadText != null) return litFirst([leadText]);
+		}
+		return Unknown;
+	}
+
+	/**
+	 * `FirstKw` when EVERY literal is word-shaped — only then does a
+	 * `peekWord` compare reproduce the branch's `expectKw` / `matchKw`
+	 * word-boundary test exactly. `FirstLit` otherwise, which stays sound
+	 * either way: the first-byte compare is the first iteration of the
+	 * literal compare that `expectKw` and `expectLit` both open with.
+	 */
+	private static function wordOrByteFirst(lits: Array<String>): BranchFirstToken {
+		for (lit in lits) if (!isWordShaped(lit)) return litFirst(lits);
+		return FirstKw(lits);
+	}
+
+	/**
+	 * `FirstLit` over the DISTINCT first bytes of `lits`. An empty literal
+	 * has no first byte and cannot be guarded, so the whole set degrades
+	 * to `Unknown` — the surrounding shape checks reject such a grammar
+	 * anyway, this only keeps the classifier total.
+	 */
+	private static function litFirst(lits: Array<String>): BranchFirstToken {
+		final codes: Array<Int> = [];
+		for (lit in lits) {
+			if (lit.length == 0) return Unknown;
+			final code: Int = lit.charCodeAt(0);
+			if (!codes.contains(code)) codes.push(code);
+		}
+		return FirstLit(codes);
+	}
+
+	/**
+	 * Full-match test for `#?[A-Za-z_][A-Za-z0-9_]*` — the exact shape
+	 * `peekWord` returns. A `#`-led conditional-compilation keyword
+	 * (`#if`, `#elseif`, `#else`, `#end`) IS word-shaped: `peekWord` folds
+	 * the `#` into the word whenever an ident-start follows it, so the
+	 * `_gW ==` compare holds for those too.
+	 */
+	private static function isWordShaped(lit: String): Bool {
+		final start: Int = lit.length > 0 && lit.charCodeAt(0) == '#'.code ? 1 : 0;
+		if (lit.length <= start) return false;
+		final head: Int = lit.charCodeAt(start);
+		if (!((head >= 'a'.code && head <= 'z'.code) || (head >= 'A'.code && head <= 'Z'.code) || head == '_'.code)) return false;
+		for (i in start + 1...lit.length) {
+			final c: Int = lit.charCodeAt(i);
+			if (
+				!((c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == '_'.code)
+			)
+				return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Guard condition for one classified branch, reading the per-dispatch
+	 * prologue locals `_gW` / `_gC0` that `lowerEnum` emits once. `null`
+	 * for `Unknown` — that branch is emitted unwrapped.
+	 */
+	private static function branchGuardExpr(first: BranchFirstToken): Null<Expr> {
+		return switch first {
+			case FirstKw(words): orChain([for (word in words) macro _gW == $v{word}]);
+			case FirstLit(codes): orChain([for (code in codes) macro _gC0 == $v{code}]);
+			case Unknown: null;
+		};
+	}
+
+	private static function orChain(terms: Array<Expr>): Expr {
+		if (terms.length == 0) throw 'Lowering: orChain on an empty term list';
+		var chain: Expr = terms[0];
+		for (i in 1...terms.length) {
+			final term: Expr = terms[i];
+			chain = macro $chain || $term;
+		}
+		return chain;
 	}
 
 	/**

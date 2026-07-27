@@ -48,6 +48,7 @@ class Codegen {
 		fields.push(peekLitField());
 		fields.push(matchKwField());
 		fields.push(peekKwField());
+		fields.push(peekWordField());
 		fields.push(expectLitField());
 		fields.push(expectKwField());
 		// `hasNewlineIn` moved out of the trivia gate (ω-cond-splice): the
@@ -456,6 +457,60 @@ class Codegen {
 						if (isWord) return false;
 					}
 					return true;
+				},
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Non-consuming word peek: returns the maximal word at `ctx.pos`
+	 * without advancing the cursor, or `''` when the position does not
+	 * start a word. A word is `#?[A-Za-z_][A-Za-z0-9_]*` — the optional
+	 * leading `#` counts only when an ident-start character follows it,
+	 * so a lone `#` yields `''`, while conditional-compilation keywords
+	 * (`#if`, `#elseif`, `#else`, `#end`) come back as a single word.
+	 *
+	 * Sole consumer: the Alt first-token dispatch guards emitted by
+	 * `Lowering.lowerEnum`. Those guards are sound only because this is
+	 * EXACTLY `expectKw`'s acceptance test for a word-shaped keyword:
+	 * for `w` matching `#?[A-Za-z_][A-Za-z0-9_]*`, `expectKw(ctx, w)`
+	 * succeeds iff `peekWord(ctx) == w` — both read the word boundary as
+	 * "the maximal ident run ends here".
+	 *
+	 * One `substring` allocation on a hit; the no-word path allocates
+	 * nothing.
+	 */
+	private static function peekWordField(): Field {
+		return {
+			name: 'peekWord',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [{ name: 'ctx', type: macro :anyparse.runtime.Parser }],
+				ret: macro :String,
+				// `Input.charCodeAt` returns -1 outside `[0, length)`, so
+				// the head reads below need no explicit bounds test.
+				expr: macro {
+					final input: anyparse.runtime.Input = ctx.input;
+					final start: Int = ctx.pos;
+					var p: Int = start;
+					var c: Int = input.charCodeAt(p);
+					if (c == '#'.code) {
+						p++;
+						c = input.charCodeAt(p);
+					}
+					final isIdentStart: Bool = (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code;
+					if (!isIdentStart) return '';
+					p++;
+					final len: Int = input.length;
+					while (p < len) {
+						final w: Int = input.charCodeAt(p);
+						final isWord: Bool = (w >= 'a'.code && w <= 'z'.code) || (w >= 'A'.code && w <= 'Z'.code)
+						|| (w >= '0'.code && w <= '9'.code) || w == '_'.code;
+						if (!isWord) break;
+						p++;
+					}
+					return input.substring(start, p);
 				},
 			}),
 			pos: Context.currentPos(),
