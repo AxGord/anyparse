@@ -129,12 +129,17 @@ class MemberOrderCheckTest extends Test {
 		Assert.isTrue(parses(fixed), 'rebuilt output parses through the grammar #if: $fixed');
 	}
 
-	/** A conditional with an `#else` is flagged but NOT auto-reordered (v1 cannot split then/else bodies). */
-	public function testConditionalElseBailsNotFixed(): Void {
+	/** A branched conditional travels to its section end as ONE unit - the `#else` is regenerated, not flattened away. */
+	public function testConditionalElseBlockMovesToSectionEnd(): Void {
 		final src: String =
 			'class C {\n\t#if X\n\tpublic function a():Void {}\n\t#else\n\tpublic function b():Void {}\n\t#end\n\n\tpublic var x:Int = 0;\n}';
 		Assert.isTrue(violations(src).length > 0);
-		Assert.equals(0, edits(src).length);
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var x') < fixed.indexOf('#if X'), 'the field moved ahead of the whole guarded block: $fixed');
+		Assert.isTrue(fixed.indexOf('function a') < fixed.indexOf('#else'), 'then-branch member stays in the then branch: $fixed');
+		Assert.isTrue(fixed.indexOf('#else') < fixed.indexOf('function b'), 'else-branch member stays in the else branch: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
 	}
 
 	/** An orphan comment stranded between a member and its `#end` (no member to absorb it) bails the reorder. */
@@ -346,13 +351,6 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/** A conditional block with an `#else` between member slots is exempt from the new grouping - the whole container bails, the block never moves. */
-	public function testElseBlockExemptFromGrouping(): Void {
-		final src: String =
-			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n}';
-		Assert.isTrue(violations(src).length > 0, 'field-after-method still flagged');
-		Assert.equals(0, edits(src).length, 'else block bails - no reorder');
-	}
-
 	/** A guarded method mixed among plain methods moves to the END of the methods section (unconditional methods first). */
 	public function testGuardedMethodsGoToMethodsSectionEnd(): Void {
 		final src: String =
@@ -632,6 +630,119 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(
 			'type members are not in canonical order (constants, fields, constructor, methods; public before private)', vs[0].message
 		);
+	}
+
+
+	/**
+	 * A conditional with an `#else` reorders like any other guarded block: the whole
+	 * `#if`/`#else`/`#end` travels to its section end with each branch keeping its own
+	 * members - the branch a member was declared in is part of its identity, not a
+	 * detail the projection may flatten away.
+	 */
+	public function testConditionalElseReorders(): Void {
+		final src: String =
+			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'field-after-method flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('#if X') < fixed.indexOf('function m'), 'the guarded field block moved before the method: $fixed');
+		Assert.isTrue(fixed.indexOf('var a') < fixed.indexOf('#else'), 'then-branch member stays in the then branch: $fixed');
+		Assert.isTrue(fixed.indexOf('#else') < fixed.indexOf('var b'), 'else-branch member stays in the else branch: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+	}
+
+
+	/**
+	 * The `APIRequest2` shape: one `#else` mid-class must not degrade the whole container to
+	 * spraying rank-group blank lines over the ORIGINAL order. With alternating ranks
+	 * (var, readonly-prop, var) that fallback separates every neighbour and shreds the class.
+	 */
+	public function testElseContainerGroupsAlternatingRanks(): Void {
+		final src: String = 'class C {\n\tpublic var url:String;\n\tpublic var httpMethod(default, null):String;\n'
+			+ '\tpublic var data:Dynamic;\n\n\t#if X\n\tpublic var loader:Int;\n\t#else\n\tpublic var loader:String;\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'alternating ranks flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('httpMethod') < fixed.indexOf('url'), 'the readonly property leads the field section: $fixed');
+		Assert.isTrue(fixed.indexOf('url') < fixed.indexOf('#if X'), 'plain vars grouped before the guarded block: $fixed');
+		final vars: String = fixed.substring(fixed.indexOf('url'), fixed.indexOf('data'));
+		Assert.isTrue(vars.indexOf('\n\n') < 0, 'the two plain vars are one tight group, not blank-separated: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+	}
+
+
+	/** Three branches (`#if` / `#elseif` / `#else`, the IAPStore shape) all survive the move, each directive regenerated in order. */
+	public function testElseIfBranchesReorder(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t#if ios\n\tstatic final K:String = "a";\n'
+			+ '\t#elseif android\n\tstatic final K:String = "b";\n\t#else\n\tstatic final K:String = "c";\n\t#end\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('#if ios') < fixed.indexOf('function m'), 'the const block moved ahead of the method: $fixed');
+		Assert.isTrue(fixed.indexOf('"a"') < fixed.indexOf('#elseif android'), 'first branch keeps its member: $fixed');
+		Assert.isTrue(fixed.indexOf('#elseif android') < fixed.indexOf('"b"'), 'second branch keeps its member: $fixed');
+		final tail: Int = fixed.indexOf('#else', fixed.indexOf('#elseif android') + 1);
+		Assert.isTrue(fixed.indexOf('"b"') < tail, 'the #else opens after the #elseif branch: $fixed');
+		Assert.isTrue(tail < fixed.indexOf('"c"'), 'third branch keeps its member: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/** A conditional NESTED inside a branch is not modelled - the construct is refused and the container keeps its order. */
+	public function testNestedConditionalInsideBranchBails(): Void {
+		final src: String =
+			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\t#if Y\n\tpublic var a:Int = 0;\n\t#end\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'field-after-method still flagged');
+		Assert.equals(0, edits(src).length, 'nested conditional inside a branch bails');
+	}
+
+	/**
+	 * A construct whose branches land in DIFFERENT sections is refused: moving it would have to
+	 * split one `#if` into two, or emit a branch with no members. Both stay out of scope.
+	 */
+	public function testElseSpanningTwoSectionsBails(): Void {
+		final src: String =
+			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n\tpublic function b():Void {}\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'field-after-method still flagged');
+		Assert.equals(0, edits(src).length, 'a construct straddling two sections bails');
+	}
+
+	/** A construct whose FIRST branch is empty is refused - its directive sits between an outside member and an inside one. */
+	public function testEmptyLeadingBranchBails(): Void {
+		final src: String =
+			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n\n\tpublic final x:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'the lower-ranked field after the guarded one is still flagged');
+		Assert.equals(0, edits(src).length, 'an empty leading branch bails');
+	}
+
+	/**
+	 * A member's OWN body may hold `#if` / `#else`; those lines sit inside the enclosing
+	 * construct's span but are not branch boundaries. Counting them shifts every later member
+	 * into a branch that does not exist and the rebuild emits source that no longer parses.
+	 */
+	public function testElseInMethodBodyIsNotABranch(): Void {
+		final src: String = 'class C {\n\tpublic var x:Int = 0;\n\n\t#if X\n\tpublic function a():Void {\n\t\t#if Y\n\t\ttrace(1);\n'
+			+ '\t\t#else\n\t\ttrace(2);\n\t\t#end\n\t}\n\t#else\n\tpublic function b():Void {}\n\t#end\n\n\tpublic function c():Void {}\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('function c') < fixed.indexOf('#if X'), 'the plain method moved ahead of the guarded block: $fixed');
+		final outerElse: Int = fixed.indexOf('#else', fixed.indexOf('trace(2)'));
+		Assert.isTrue(fixed.indexOf('function a') < outerElse, 'a stays in the then branch: $fixed');
+		Assert.isTrue(outerElse < fixed.indexOf('function b'), 'b stays in the else branch: $fixed');
+		Assert.isTrue(parses(fixed), 'parses - counting the body directives as branches breaks the rebuild: $fixed');
+	}
+
+
+	/**
+	 * A doc written above a BRANCHED `#if` describes the whole construct - every branch declares
+	 * the same symbol - so it stays above the regenerated `#if`. Absorbing it inside, the way an
+	 * unbranched block's lead doc travels in (`testLeadDocBeforeIfTravels`), would leave it
+	 * documenting the then-branch alone and every other branch undocumented.
+	 */
+	public function testLeadDocStaysAboveBranchedIf(): Void {
+		final src: String = 'class C {\n\tpublic function m():Void {}\n\n\t/** the pad */\n\t#if mobile\n'
+			+ '\tstatic inline final PAD:Int = 8;\n\t#else\n\tstatic inline final PAD:Int = 1;\n\t#end\n}';
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('the pad') < fixed.indexOf('#if mobile'), 'the doc stays above the #if: $fixed');
+		Assert.isTrue(fixed.indexOf('#if mobile') < fixed.indexOf('PAD:Int = 8'), 'the then-branch member is still inside: $fixed');
+		Assert.isTrue(fixed.indexOf('#if mobile') < fixed.indexOf('function m'), 'the const block moved ahead of the method: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
 	}
 
 }

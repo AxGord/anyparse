@@ -25,11 +25,27 @@ typedef OrderedMember = {
 	var initNode: Null<QueryNode>;
 
 	var condition: Null<String>;
+	var branch: Null<BranchInfo>;
 	var regionFrom: Int;
 	var regionTo: Int;
 
 	var leadTrivia: String;
 	var leadFrom: Int;
+}
+
+/**
+ * Where a member sits inside a branched `#if` / `#elseif` / `#else` / `#end` construct.
+ * The grammar flattens EVERY branch into one `Conditional` node, so the branch a member
+ * was declared in is recovered from the construct's directive lines (`assignBranches`)
+ * and carried here - it is part of the member's identity, not layout the sort may drop.
+ * `opens` is the construct's whole branch shape, shared by all its members: `opens[k - 1]`
+ * is the directive text opening branch `k` (branch 0 is opened by the `#if` itself), so
+ * two constructs merge into one block only when their shapes are equal. A negative
+ * `index` marks a construct `assignBranches` refused to model - the reorder bails on it.
+ */
+typedef BranchInfo = {
+	var index: Int;
+	var opens: Array<String>;
 }
 
 /**
@@ -51,7 +67,7 @@ typedef DirectiveGap = {
 	var endEdit: Null<{ span: Span, text: String }>;
 }
 /**
- * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A container whose field initializers make reordering unsafe keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable — reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A conditional block moves as one unit to the end of its section, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single group whose members sort within their own branch, so the construct is regenerated rather than flattened. A container whose field initializers make reordering unsafe - or which holds an `#else` shape the branch model refuses (nested, spanning two sections, or with an empty first branch) - keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable - reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
 final class MemberOrder implements Check implements ConfigAware {
@@ -74,7 +90,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	public function description(): String {
 		return
-			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block per condition at the end of their section) or rank groups and conditional blocks not separated by blank lines';
+			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block per condition and branch shape at the end of their section) or rank groups and conditional blocks not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -286,7 +302,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static function firstOutOfOrder(members: Array<OrderedMember>, source: String): Null<OrderedMember> {
 		final groupFirst: Map<String, Int> = computeGroupFirst(members);
-		final elseExempt: Bool = hasElseBranch(members, source);
+		final elseExempt: Bool = hasUnmodelledElse(members, source);
 		var prev: Null<OrderedMember> = null;
 		var prevTo: Int = -1;
 		for (m in members) {
@@ -301,15 +317,16 @@ final class MemberOrder implements Check implements ConfigAware {
 	/**
 	 * Whether reordering `members` cannot change behaviour. Reordering changes behaviour
 	 * only via FIELD initializers (they run in declaration order; statics at class-load,
-	 * instance fields in the constructor — independent phases). Bails on stranded trivia
-	 * (an `#else`, an orphan comment) or a field-init order flip a text scan cannot prove
-	 * safe. `movableArglessNew` (the opt-in option) exempts a pure argless-`new` allocation
-	 * from the side-effecting-flip bail — see `isMovableAllocation`.
+	 * instance fields in the constructor - independent phases). Bails on stranded trivia
+	 * (an `#else` the branch model could not absorb, an orphan comment) or a field-init
+	 * order flip a text scan cannot prove safe. `movableArglessNew` (the opt-in option)
+	 * exempts a pure argless-`new` allocation from the side-effecting-flip bail - see
+	 * `isMovableAllocation`.
 	 */
 	private static function reorderSafe(
 		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool
 	): Bool {
-		return !hasElseBetweenMembers(members, source, shape) && !hasOrphanComment(members, source)
+		return !hasUnmodelledElse(members, source) && !hasOrphanComment(members, source)
 			&& !hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew)
 			&& !hasSiblingReadFlip(members, sorted, source);
 	}
@@ -371,7 +388,9 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * member is recorded with the condition it is declared under. `condStack` holds the
 	 * enclosing `#if` condition conjuncts (an identical conjunct is deduped, collapsing
 	 * a redundant `#if X` nested in `#if X`); `outerCond` is the outermost enclosing
-	 * conditional's span — the rebuild-region bound for every member under it.
+	 * conditional's span - the rebuild-region bound for every member under it. On the way
+	 * out of each conditional, `assignBranches` recovers which `#elseif` / `#else` branch
+	 * each of its members sits in, since the parse tree carries no branch structure.
 	 */
 	private static function collectInto(
 		out: Array<OrderedMember>, parent: QueryNode, source: String, shape: RefShape,
@@ -391,7 +410,10 @@ final class MemberOrder implements Check implements ConfigAware {
 				final nextStack: Array<String> = cond != null && !condStack.contains(cond) ? condStack.concat([cond]) : condStack;
 				final firstIdx: Int = out.length;
 				collectInto(out, child, source, shape, comments, nextStack, outerCond ?? span, accessors);
-				if (span != null && out.length > firstIdx) absorbLeadDoc(out, firstIdx, source, comments, span.from);
+				if (span != null && out.length > firstIdx) {
+					absorbLeadDoc(out, firstIdx, source, comments, span.from);
+					assignBranches(out, firstIdx, span, source, shape);
+				}
 				isStatic = false;
 				isPublic = false;
 			} else if (members.contains(child.kind)) {
@@ -471,31 +493,53 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/**
 	 * Rebuild a container's whole member region from `sorted` (canonical order): each maximal
-	 * run of members sharing one `#if` condition is wrapped in a single `#if <cond> ... #end`,
-	 * set off by a blank line before the `#if` and after the `#end`; unconditional runs stay
-	 * bare. A member's absorbed lead-doc is emitted just before it, inside the regenerated
-	 * `#if`. The writer round-trip re-indents the rough newline joins. Returns null if the
-	 * self-check finds any member no longer under its recorded condition.
+	 * run of members sharing one `#if` condition AND branch shape is wrapped in a single
+	 * `#if <cond> ... #end`, set off by a blank line before the `#if` and after the `#end`;
+	 * unconditional runs stay bare. Inside a block, each rise in branch index re-emits the
+	 * construct's own `#elseif` / `#else` directives (every skipped one too, so an empty middle
+	 * branch survives). A member's absorbed lead-doc is emitted just before it, inside the
+	 * regenerated `#if`. The writer round-trip re-indents the rough newline joins. Returns null
+	 * if the self-check finds any member no longer under its recorded condition and branch.
 	 */
 	private static function buildConditionalRegion(sorted: Array<OrderedMember>, source: String, shape: RefShape): Null<String> {
 		final ifKw: String = shape.conditionalIfKeyword ?? '#if';
 		final parts: Array<String> = [];
 		var prevCond: Null<String> = null;
+		var prevSignature: String = '';
+		var prevBranch: Int = 0;
 		var prevMember: Null<OrderedMember> = null;
 		var blockJustClosed: Bool = false;
+		var hoisted: Null<QueryNode> = null;
 		inline function emit(text: String, blankBefore: Bool): Void parts.push(parts.length == 0 ? text : (blankBefore ? '\n' : '') + text);
 		for (m in sorted) {
-			if (!sameCondition(m.condition, prevCond)) {
+			final signature: String = branchSignatureOf(m);
+			if (!sameCondition(m.condition, prevCond) || signature != prevSignature) {
+				hoisted = null;
 				if (prevCond != null) {
 					emit('#end', false);
 					blockJustClosed = true;
 				}
 				final cond: Null<String> = m.condition;
 				if (cond != null) {
-					emit('$ifKw $cond', true);
+					if (signature != '' && StringTools.trim(m.leadTrivia) != '') {
+						emit(StringTools.rtrim(m.leadTrivia), true);
+						hoisted = m.node;
+					}
+					emit('$ifKw $cond', hoisted == null);
 					blockJustClosed = false;
 				}
 				prevCond = m.condition;
+				prevSignature = signature;
+				prevBranch = 0;
+				prevMember = null;
+			}
+			final branch: Int = branchIndexOf(m);
+			if (branch > prevBranch) {
+				final opens: Array<String> = branchOpensOf(m);
+				while (prevBranch < branch) {
+					emit(opens[prevBranch], false);
+					prevBranch++;
+				}
 				prevMember = null;
 			}
 			final blankBefore: Bool = if (prevMember != null)
@@ -504,7 +548,7 @@ final class MemberOrder implements Check implements ConfigAware {
 				false;
 			else
 				blockJustClosed;
-			emit(m.leadTrivia + source.substring(m.span.from, m.span.to), blankBefore);
+			emit((m.node == hoisted ? '' : m.leadTrivia) + source.substring(m.span.from, m.span.to), blankBefore);
 			blockJustClosed = false;
 			prevMember = m;
 		}
@@ -512,19 +556,27 @@ final class MemberOrder implements Check implements ConfigAware {
 		return verifyRegion(parts, sorted, ifKw) ? parts.join('\n') : null;
 	}
 
-	/** Re-derive each emitted member's surrounding condition from the directive stream and confirm it equals the recorded one. */
+	/** Re-derive each emitted member's surrounding condition and branch index from the directive stream and confirm both equal the recorded ones. */
 	private static function verifyRegion(parts: Array<String>, sorted: Array<OrderedMember>, ifKw: String): Bool {
 		final ifPrefix: String = '$ifKw ';
 		var current: Null<String> = null;
+		var branch: Int = 0;
 		var si: Int = 0;
 		for (p in parts) {
 			final t: String = StringTools.trim(p);
-			if (t == '#end')
+			if (t == '#end') {
 				current = null;
-			else if (StringTools.startsWith(t, ifPrefix))
+				branch = 0;
+			} else if (StringTools.startsWith(t, ifPrefix)) {
 				current = StringTools.trim(t.substring(ifPrefix.length));
+				branch = 0;
+			} else if (StringTools.startsWith(t, '#else'))
+				branch++;
+			else if (isTriviaOnly(t))
+				continue;
 			else {
-				if (si >= sorted.length || !sameCondition(current, sorted[si].condition)) return false;
+				if (si >= sorted.length || !sameCondition(current, sorted[si].condition) || branch != branchIndexOf(sorted[si]))
+					return false;
 				si++;
 			}
 		}
@@ -552,20 +604,6 @@ final class MemberOrder implements Check implements ConfigAware {
 		out[firstIdx].leadTrivia = source.substring(leadFrom, ifLineStart);
 		out[firstIdx].leadFrom = leadFrom;
 		if (leadFrom < out[firstIdx].regionFrom) out[firstIdx].regionFrom = leadFrom;
-	}
-
-	/** Whether an `#else` / `#elseif` sits between member slots — the projection flattens then-body and else-body members, so their conditions cannot be split. */
-	private static function hasElseBetweenMembers(members: Array<OrderedMember>, source: String, shape: RefShape): Bool {
-		final elseKeywords: Array<String> = shape.conditionalElseKeywords ?? [];
-		if (elseKeywords.length == 0) return false;
-		for (i in 0...members.length - 1) {
-			final gap: String = source.substring(members[i].span.to, members[i + 1].span.from);
-			for (line in gap.split('\n')) {
-				final t: String = StringTools.trim(line);
-				for (k in elseKeywords) if (StringTools.startsWith(t, k)) return true;
-			}
-		}
-		return false;
 	}
 
 	/** Whether a comment in the member region is covered by no member's slot or absorbed lead-doc — an orphan note the reorder would strand. Directives are regenerated, so need no coverage. */
@@ -643,6 +681,7 @@ final class MemberOrder implements Check implements ConfigAware {
 			isStatic: isStatic,
 			initNode: isField && child.children.length > 0 ? child.children[0] : null,
 			condition: condStack.length == 0 ? null : joinConds(condStack),
+			branch: null,
 			regionFrom: region.from,
 			regionTo: region.to,
 			leadTrivia: '',
@@ -787,16 +826,17 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * First-occurrence source index of each conditional `#if` block, keyed by section and
-	 * condition. Within a section the merged condition blocks are ordered by this index, so
-	 * a block keeps the position of its earliest member.
+	 * First-occurrence source index of each conditional `#if` block, keyed by `groupKey`
+	 * (section, condition and branch shape). Within a section the merged condition blocks are
+	 * ordered by this index, so a block keeps the position of its earliest member - and every
+	 * branch of one construct shares the key, which is what holds the branches together.
 	 */
 	private static function computeGroupFirst(members: Array<OrderedMember>): Map<String, Int> {
 		final firstOf: Map<String, Int> = [];
 		for (m in members) {
 			final cond: Null<String> = m.condition;
 			if (cond == null) continue;
-			final key: String = groupKey(sectionOf(m.rank), cond);
+			final key: String = groupKey(sectionOf(m.rank), cond, branchSignatureOf(m));
 			if (!firstOf.exists(key)) firstOf[key] = m.index;
 		}
 		return firstOf;
@@ -805,8 +845,10 @@ final class MemberOrder implements Check implements ConfigAware {
 	/**
 	 * Compare two members by the canonical order: section (fields, constructor, methods)
 	 * first; within a section unconditional members precede conditional ones; conditional
-	 * members group by `#if` block (ordered by first occurrence) then by rank; ties break on
-	 * source index. `groupFirst` is `computeGroupFirst`'s block-order map.
+	 * members group by `#if` block (ordered by first occurrence), then by branch within that
+	 * block, then by rank; ties break on source index. Branch outranks rank so a construct's
+	 * branches keep their source order and each sorts internally, instead of interleaving.
+	 * `groupFirst` is `computeGroupFirst`'s block-order map.
 	 */
 	private static function compareOrder(a: OrderedMember, b: OrderedMember, groupFirst: Map<String, Int>): Int {
 		final sa: Int = sectionOf(a.rank);
@@ -818,9 +860,12 @@ final class MemberOrder implements Check implements ConfigAware {
 		final cb: Int = condB == null ? 0 : 1;
 		if (ca != cb) return ca - cb;
 		if (condA != null && condB != null) {
-			final ga: Int = groupFirst[groupKey(sa, condA)] ?? a.index;
-			final gb: Int = groupFirst[groupKey(sb, condB)] ?? b.index;
+			final ga: Int = groupFirst[groupKey(sa, condA, branchSignatureOf(a))] ?? a.index;
+			final gb: Int = groupFirst[groupKey(sb, condB, branchSignatureOf(b))] ?? b.index;
 			if (ga != gb) return ga - gb;
+			final ba: Int = branchIndexOf(a);
+			final bb: Int = branchIndexOf(b);
+			if (ba != bb) return ba - bb;
 		}
 		return a.rank != b.rank ? a.rank - b.rank : a.index - b.index;
 	}
@@ -834,7 +879,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * gap (same condition on both sides).
 	 */
 	private static function firstDirectiveSpacingIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		if (hasElseBranch(members, source)) return null;
+		if (hasUnmodelledElse(members, source)) return null;
 		for (i in 0...members.length - 1) {
 			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
 			if (gap.ifEdit != null) return { member: members[i + 1], message: 'a member-level #if is not preceded by a blank line' };
@@ -845,24 +890,13 @@ final class MemberOrder implements Check implements ConfigAware {
 
 
 	/**
-	 * Whether an `#else` / `#elseif` sits in any inter-member gap. Such a container is exempt
-	 * from the new conditional-grouping and directive-spacing policy - the projection flattens
-	 * then-body and else-body members so they cannot be regrouped, and `reorderSafe` bails the
-	 * whole container, so the check falls back to the plain rank order (as before this policy).
+	 * The `computeGroupFirst` / `compareOrder` map key for a member's conditional block: keyed by
+	 * section so a condition shared across two sections keeps a distinct block per section, and by
+	 * branch shape (`branchSignatureOf`) so only constructs with the SAME `#elseif` / `#else` chain
+	 * merge - two `#if X` blocks still coalesce, an `#if X` and an `#if X ... #else` never do.
 	 */
-	private static function hasElseBranch(members: Array<OrderedMember>, source: String): Bool {
-		for (i in 0...members.length - 1) {
-			final from: Int = members[i].span.to;
-			final to: Int = members[i + 1].span.from;
-			if (from <= to && hasBranchDirective(source, from, to)) return true;
-		}
-		return false;
-	}
-
-
-	/** The `computeGroupFirst` / `compareOrder` map key for a member's conditional block, keyed by section so a condition shared across two sections keeps a distinct block per section. */
-	private static inline function groupKey(section: Int, cond: String): String {
-		return '$section $cond';
+	private static inline function groupKey(section: Int, cond: String, signature: String): String {
+		return '$section $cond $signature';
 	}
 
 	/**
@@ -870,12 +904,12 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * with a blank line before it and its `#end` with a blank line after it - the blanks
 	 * `directiveGapEdits` reports - so a reorder-unsafe container whose guarded block cannot
 	 * move still gets that block visually separated from its neighbours (the CheckBox shape).
-	 * Exempts an `#else`-branched container, as the check does.
+	 * Exempts a container with an unmodelled `#else`, as the check does.
 	 */
 	private static function emitDirectiveSpacing(
 		edits: Array<{ span: Span, text: String }>, members: Array<OrderedMember>, source: String
 	): Void {
-		if (hasElseBranch(members, source)) return;
+		if (hasUnmodelledElse(members, source)) return;
 		for (i in 0...members.length - 1) {
 			final gap: DirectiveGap = directiveGapEdits(members[i], members[i + 1], source);
 			final ifEdit: Null<{ span: Span, text: String }> = gap.ifEdit;
@@ -918,6 +952,126 @@ final class MemberOrder implements Check implements ConfigAware {
 		} else
 			null;
 		return { ifEdit: ifEdit, endEdit: endEdit };
+	}
+
+
+	/**
+	 * Recover the branch layout of the `#if` / `#elseif` / `#else` / `#end` construct spanning
+	 * `constructSpan` and record it on the members `collectInto` just pushed (`out[firstIdx...]`).
+	 * The grammar exposes NO branch structure - every branch's members arrive as flat children of
+	 * one `Conditional` node - so the boundaries come from the directive lines in the construct's
+	 * own source, the same textual read `extractConditionText` already does for the condition.
+	 * An unbranched construct is left alone: `branch` stays null, which is today's shape.
+	 *
+	 * Records a negative `index` (which bails the reorder) when the construct is not a flat,
+	 * single-section branch set: a nested conditional inside a branch, an already-branched nested
+	 * construct, members spread over more than one section, or a condition text that could not be
+	 * read. A rebuild would then have to split the construct across sections, emit a branch with no
+	 * members, or emit branches under no `#if` at all - none worth the risk of rewriting
+	 * conditional compilation.
+	 */
+	private static function assignBranches(
+		out: Array<OrderedMember>, firstIdx: Int, constructSpan: Span, source: String, shape: RefShape
+	): Void {
+		final opens: Array<{ at: Int, text: String }> = [
+			for (o in branchOpenings(constructSpan, source, shape)) if (!insideAnyMember(out, firstIdx, o.at)) o
+		];
+		if (opens.length == 0) return;
+		final texts: Array<String> = [for (o in opens) o.text];
+		final condition: Null<String> = out[firstIdx].condition;
+		final section: Int = sectionOf(out[firstIdx].rank);
+		if (condition == null || !isFlatSingleSection(out, firstIdx, condition, section)) {
+			final refused: BranchInfo = { index: -1, opens: texts };
+			for (i in firstIdx ... out.length) out[i].branch = refused;
+			return;
+		}
+		for (i in firstIdx ... out.length) {
+			final decl: Null<Span> = out[i].node.span;
+			final at: Int = decl != null ? decl.from : out[i].span.from;
+			var index: Int = 0;
+			for (o in opens) if (o.at < at) index++;
+			out[i].branch = { index: index, opens: texts };
+		}
+	}
+
+	/** Every `#elseif` / `#else` directive line inside `constructSpan`, in source order - each opens the next branch. */
+	private static function branchOpenings(constructSpan: Span, source: String, shape: RefShape): Array<{ at: Int, text: String }> {
+		final keywords: Array<String> = shape.conditionalElseKeywords ?? [];
+		final out: Array<{ at: Int, text: String }> = [];
+		if (keywords.length == 0) return out;
+		var pos: Int = constructSpan.from;
+		while (pos < constructSpan.to) {
+			final nl: Int = source.indexOf('\n', pos);
+			final end: Int = nl < 0 || nl > constructSpan.to ? constructSpan.to : nl;
+			final line: String = StringTools.trim(source.substring(pos, end));
+			for (k in keywords) if (StringTools.startsWith(line, k)) {
+				out.push({ at: pos, text: line });
+				break;
+			}
+			pos = end + 1;
+		}
+		return out;
+	}
+
+	/** Whether `at` falls inside one of the member slots `out[firstIdx...]` - a directive in a member's own body is not a branch boundary. */
+	private static function insideAnyMember(out: Array<OrderedMember>, firstIdx: Int, at: Int): Bool {
+		for (i in firstIdx ... out.length) if (at >= out[i].span.from && at < out[i].span.to) return true;
+		return false;
+	}
+
+	/** The branch a member sits in - 0 for an unconditional member or for the then-branch of a construct. */
+	private static inline function branchIndexOf(m: OrderedMember): Int {
+		final b: Null<BranchInfo> = m.branch;
+		return b == null ? 0 : b.index;
+	}
+
+	/** A member's construct branch shape, `''` when it is in none - part of the block key, so only same-shaped constructs merge into one block. */
+	private static inline function branchSignatureOf(m: OrderedMember): String {
+		final b: Null<BranchInfo> = m.branch;
+		return b == null ? '' : b.opens.join('\n');
+	}
+
+	/** The branch-opening directives of a member's construct, empty when it is in none: `opens[k - 1]` opens branch `k`. */
+	private static inline function branchOpensOf(m: OrderedMember): Array<String> {
+		final b: Null<BranchInfo> = m.branch;
+		return b == null ? [] : b.opens;
+	}
+
+	/**
+	 * Whether the container holds an `#else` / `#elseif` the branch model could not absorb: a
+	 * construct `assignBranches` refused, or a directive between two members that are not an
+	 * ascending branch pair of ONE construct. `opens` is compared by identity because
+	 * `assignBranches` hands every member of a construct the same array - two constructs of
+	 * equal shape are still two constructs, and a directive between them is not a branch
+	 * boundary. A construct whose FIRST branch is empty lands here too: its directive then sits
+	 * between an outside member and an inside one, which no branch pair explains.
+	 */
+	private static function hasUnmodelledElse(members: Array<OrderedMember>, source: String): Bool {
+		for (m in members) {
+			final b: Null<BranchInfo> = m.branch;
+			if (b != null && b.index < 0) return true;
+		}
+		for (i in 0...members.length - 1) if (hasBranchDirective(source, members[i].span.to, members[i + 1].span.from)) {
+			final before: Null<BranchInfo> = members[i].branch;
+			final after: Null<BranchInfo> = members[i + 1].branch;
+			if (before == null || after == null) return true;
+			if (before.opens != after.opens || after.index <= before.index) return true;
+		}
+		return false;
+	}
+
+
+	/** Whether `out[firstIdx...]` is ONE flat, single-section branch set: no member under a nested conditional, none already branched, none whose rank crosses into another section. */
+	private static function isFlatSingleSection(out: Array<OrderedMember>, firstIdx: Int, condition: Null<String>, section: Int): Bool {
+		for (i in firstIdx ... out.length) if (out[i].branch != null || out[i].condition != condition || sectionOf(out[i].rank) != section)
+			return false;
+		return true;
+	}
+
+
+	/** Whether an emitted part is comment text only - the lead doc hoisted above a branched block's `#if`, which occupies no member slot. */
+	private static function isTriviaOnly(text: String): Bool {
+		return StringTools.trim((~/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g).replace(text, '')) == '';
 	}
 
 }
