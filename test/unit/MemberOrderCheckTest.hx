@@ -696,19 +696,32 @@ class MemberOrderCheckTest extends Test {
 	 * A construct whose branches land in DIFFERENT sections is refused: moving it would have to
 	 * split one `#if` into two, or emit a branch with no members. Both stay out of scope.
 	 */
-	public function testElseSpanningTwoSectionsBails(): Void {
+	public function testElseSpanningTwoSectionsSplits(): Void {
 		final src: String =
 			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic var a:Int = 0;\n\t#else\n\tpublic function b():Void {}\n\t#end\n}';
-		Assert.isTrue(violations(src).length > 0, 'field-after-method still flagged');
-		Assert.equals(0, edits(src).length, 'a construct straddling two sections bails');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var a') < fixed.indexOf('function m'), 'the guarded FIELD leads, in its own block: $fixed');
+		Assert.isTrue(fixed.indexOf('function m') < fixed.indexOf('function b'), 'the guarded METHOD trails the plain one: $fixed');
+		final second: Int = fixed.indexOf('#if X', fixed.indexOf('#if X') + 1);
+		Assert.isTrue(second > 0, 'the construct became TWO blocks, one per section: $fixed');
+		Assert.isTrue(
+			fixed.indexOf('#else') > second, 'only the method block needs the #else - the field block has no else member: $fixed'
+		);
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
 	}
 
 	/** A construct whose FIRST branch is empty is refused - its directive sits between an outside member and an inside one. */
-	public function testEmptyLeadingBranchBails(): Void {
+	public function testEmptyLeadingBranchReorders(): Void {
 		final src: String =
 			'class C {\n\tpublic function m():Void {}\n\n\t#if X\n\t#else\n\tpublic var b:Int = 0;\n\t#end\n\n\tpublic final x:Int = 0;\n}';
-		Assert.isTrue(violations(src).length > 0, 'the lower-ranked field after the guarded one is still flagged');
-		Assert.equals(0, edits(src).length, 'an empty leading branch bails');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('final x') < fixed.indexOf('#if X'), 'the higher-ranked field leads: $fixed');
+		Assert.isTrue(
+			fixed.indexOf('#if X') < fixed.indexOf('#else'), 'the empty then-branch is re-emitted as the author wrote it: $fixed'
+		);
+		Assert.isTrue(fixed.indexOf('#else') < fixed.indexOf('var b'), 'the member stays in the else branch: $fixed');
+		Assert.isTrue(fixed.indexOf('var b') < fixed.indexOf('function m'), 'the guarded field precedes the method: $fixed');
+		Assert.isTrue(parses(fixed), 'parses: $fixed');
 	}
 
 	/**

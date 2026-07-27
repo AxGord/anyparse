@@ -979,8 +979,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		if (opens.length == 0) return;
 		final texts: Array<String> = [for (o in opens) o.text];
 		final condition: Null<String> = out[firstIdx].condition;
-		final section: Int = sectionOf(out[firstIdx].rank);
-		if (condition == null || !isFlatSingleSection(out, firstIdx, condition, section)) {
+		if (condition == null || !isFlatBranchSet(out, firstIdx, condition)) {
 			final refused: BranchInfo = { index: -1, opens: texts };
 			for (i in firstIdx ... out.length) out[i].branch = refused;
 			return;
@@ -1054,6 +1053,11 @@ final class MemberOrder implements Check implements ConfigAware {
 		for (i in 0...members.length - 1) if (hasBranchDirective(source, members[i].span.to, members[i + 1].span.from)) {
 			final before: Null<BranchInfo> = members[i].branch;
 			final after: Null<BranchInfo> = members[i + 1].branch;
+			// A construct whose FIRST branch is empty puts its own `#if` AND the
+			// openings it skips in this gap. The directives then belong to the
+			// construct `after` is in, not to a boundary between two walked members,
+			// so the gap is accounted for as long as the gap OPENS that construct.
+			if (after != null && after.index > 0 && opensConstruct(source, members[i].span.to, members[i + 1].span.from)) continue;
 			if (before == null || after == null) return true;
 			if (before.opens != after.opens || after.index <= before.index) return true;
 		}
@@ -1062,9 +1066,8 @@ final class MemberOrder implements Check implements ConfigAware {
 
 
 	/** Whether `out[firstIdx...]` is ONE flat, single-section branch set: no member under a nested conditional, none already branched, none whose rank crosses into another section. */
-	private static function isFlatSingleSection(out: Array<OrderedMember>, firstIdx: Int, condition: Null<String>, section: Int): Bool {
-		for (i in firstIdx ... out.length) if (out[i].branch != null || out[i].condition != condition || sectionOf(out[i].rank) != section)
-			return false;
+	private static function isFlatBranchSet(out: Array<OrderedMember>, firstIdx: Int, condition: Null<String>): Bool {
+		for (i in firstIdx ... out.length) if (out[i].branch != null || out[i].condition != condition) return false;
 		return true;
 	}
 
@@ -1072,6 +1075,13 @@ final class MemberOrder implements Check implements ConfigAware {
 	/** Whether an emitted part is comment text only - the lead doc hoisted above a branched block's `#if`, which occupies no member slot. */
 	private static function isTriviaOnly(text: String): Bool {
 		return StringTools.trim((~/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g).replace(text, '')) == '';
+	}
+
+
+	/** Whether a line in `source[from,to)` starts (after indentation) with the conditional-open keyword - the gap begins a new construct rather than continuing one. */
+	private static function opensConstruct(source: String, from: Int, to: Int): Bool {
+		for (line in source.substring(from, to).split('\n')) if (StringTools.startsWith(StringTools.ltrim(line), '#if')) return true;
+		return false;
 	}
 
 }
