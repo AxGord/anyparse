@@ -65,6 +65,12 @@ class WriterLowering {
 		final rules: Array<WriterRule> = [
 			for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rule
 		];
+		// Reset the mirrors so a stale root from THIS build can never
+		// leak into a later build's static helpers — the astPredCallT
+		// guard then catches any out-of-generate() read, not just the
+		// cold start.
+		_predRootStatic = '';
+		_astPredsOnStatic = false;
 		return rules;
 	}
 
@@ -2717,9 +2723,10 @@ class WriterLowering {
 		//   (a) the prior element's rendered Doc ends with `}` OR `;`
 		//       (per-stmt `@:trail/@:trailOpt(';')` baked terminator —
 		//       `DocMeasure.endsWithStmtTerminator` one-walk check), OR
-		//   (b) the format-instance predicate returns true on the prior
-		//       element's AST (Session 7 option b2 — AST-shape adapter,
-		//       e.g. `HxStatement.Conditional(#if…#end)` ends `#end`
+		//   (b) the blockEnded predicate (generated typed for astPreds
+		//       formats, schema-instance for pilots) returns true on the
+		//       prior element's AST (Session 7 option b2 — e.g.
+		//       `HxStatement.Conditional(#if…#end)` ends `#end`
 		//       byte-wise so (a) misses, but the predicate accepts the
 		//       AST shape).
 		// Mirrors the parser-side blockEnded branch in
@@ -5218,11 +5225,12 @@ class WriterLowering {
 			//       from `endsWithCloseBrace` to include `;` so per-stmt
 			//       `@:trail/@:trailOpt(';')` baked terminators suppress
 			//       sep too), OR
-			//   (b) the schema-instance predicate returns true on the prior
-			//       element's AST (Session 7 option b2 — AST-shape adapter
-			//       e.g. `Atom('end')` in the MiniBlockStrict pilot, or
-			//       `HxStatement.Conditional(#if…#end)` whose byte-end
-			//       `d` misses (a) but predicate matches the AST shape).
+			//   (b) the blockEnded predicate (generated typed for astPreds
+			//       formats; schema-instance for pilots, e.g. `Atom('end')`
+			//       in MiniBlockStrict) returns true on the prior element's
+			//       AST (Session 7 option b2 — `HxStatement.Conditional(#if…#end)`
+			//       whose byte-end `d` misses (a) but the predicate matches
+			//       the AST shape).
 			// Mirrors the struct-field plain-mode site at L3845-3880 and
 			// the parser-side blockEnded branch in `Lowering.emitStarFieldSteps`
 			// (`b == '}'.code || b == ';'.code || $predicateCall`).
@@ -7832,8 +7840,9 @@ class WriterLowering {
 				// case/default clauses parses as a CondSpliceStmt INSIDE the case body's
 				// nest, so its leading `#if` lands one level too deep vs the verbatim
 				// `case`/`#else`/`#end` (source-preserved at the case-list level). When
-				// the plugin's raw-shape adapter confirms case clauses (vs a dangling-else
-				// splice), dedent the `#if` marker one level via ConditionalMarkerDecrease.
+				// the generated `condSpliceRawWrapsCases` predicate confirms case clauses
+				// (vs a dangling-else splice), dedent the `#if` marker one level via
+				// ConditionalMarkerDecrease.
 				if (branch.fmtHasFlag('condSpliceCaseMarkerDedent')) {
 					final rawAccess: Expr = macro $i{argNames[0]}.raw;
 					final wrapsCases: Expr = AstPredLowering.predCallExpr(

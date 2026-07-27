@@ -738,9 +738,9 @@ class TriviaTypeSynth {
 	 *    while being counted as one, leaving every pattern one wildcard
 	 *    short.
 	 *  - the `hasOpenTrailing` / postfix-close groups reserve multiple
-	 *    slots at once (open-trailing brings `trailingBlankBefore` +
-	 *    `trailingLeading`, postfix-close the five call-trivia
-	 *    positionals).
+	 *    slots at once (open-trailing brings THREE — `openTrailing` +
+	 *    `trailingBlankBefore` + `trailingLeading`; postfix-close the
+	 *    five call-trivia positionals).
 	 *  - `isInfixChainBranch` / `isRhsTrailBranch` have push blocks with
 	 *    no dedicated `has*` local — they contribute directly in the
 	 *    return expression.

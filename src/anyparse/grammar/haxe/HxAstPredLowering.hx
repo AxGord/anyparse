@@ -231,10 +231,10 @@ final class HxAstPredLowering extends AstPredLowering {
 			elementIsConditionalFalseField(
 				HX_EXPR, 'e',
 				'Byte-parity: `HxExpr`\'s conditional shapes use the ctor names `ConditionalExpr` / `ConditionalArgs` / '
-				+ '`CondSpliceExpr`, never `Conditional` — so the retired ctor-NAME check was constantly false for '
-				+ 'expression elements, and a nested `#if` inside a `#if` args region never received the '
-				+ '`alignedNestedIncrease` lift. Keep the false verdict; widening to the real ctor set is a behavior '
-				+ 'change to make deliberately, against fork fixtures.'
+				+ '`CondSpliceExpr` / `CondSpliceTail`, never `Conditional` — so the retired ctor-NAME check was '
+				+ 'constantly false for expression elements, and a nested `#if` inside a `#if` args region never '
+				+ 'received the `alignedNestedIncrease` lift. Keep the false verdict; widening to the real ctor set '
+				+ 'is a behavior change to make deliberately, against fork fixtures.'
 			),
 			elementIsConditionalFalseField(
 				HX_MEMBER_DECL, 'm',

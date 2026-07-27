@@ -4377,9 +4377,11 @@ class Lowering {
 		// `matchLit` (`;` optional, brace-terminated expr); false →
 		// `expectLit` (`;` required — THROWS to terminate the
 		// statement, preserving the Star-loop boundary). `<adapter>`
-		// is a plugin predicate reached via the schema instance, the
-		// same `formatInfo.schemaTypePath` `.instance.<m>` channel the
-		// generated parser already uses for `unescapeChar`. Strictly
+		// names the generated typed predicate for astPreds formats
+		// (see `buildKwRefParseGateCall`); other formats reach it via
+		// the schema instance, the same `formatInfo.schemaTypePath`
+		// `.instance.<m>` channel the generated parser already uses
+		// for `unescapeChar`. Strictly
 		// opt-in: `parseGate == null` → the unconditional emission
 		// below is byte-identical, so every other `@:trailOpt` ctor
 		// (`VarStmt` / `FinalStmt` / `ReturnStmt` / …) is untouched.
