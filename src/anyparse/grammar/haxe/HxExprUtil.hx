@@ -52,15 +52,7 @@ final class HxExprUtil {
 	 * like statements" (switch / try / function-block) drop the
 	 * trailing `;`; literal-shaped expressions (object / block / array
 	 * / paren / if-as-expression) keep it.
-	 * HxExpr ctor names that — when wrapped in `ExprStmt(expr)` and
-	 * standing as the sole statement of a case body — refuse inline
-	 * emission. Empirical scope (probed against fork CLI): only `And`
-	 * (`&&`) and `Or` (`||`). All other binops, ternary, and
-	 * assignment variants nest hierarchically under one `dblDot` child
-	 * in fork's tokentree and are allowed inline.
 	 */
-	private static final REFUSED_CASE_BODY_CTORS: Array<String> = ['And', 'Or'];
-
 	/**
 	 * HxExpr `*Assign` ctor names — every right-associative `=` infix
 	 * (`Assign` plus the 14 compound forms `+=` / `-=` / `*=` / `/=` /
@@ -239,85 +231,6 @@ final class HxExprUtil {
 	 * `varInitEndsWithBrace`.
 	 */
 	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
-
-	/**
-	 * True when a single-statement case body should refuse inline
-	 * because its outermost expression is `&&` or `||`. Mirrors
-	 * haxe-formatter's `MarkSameLine.markExpressionCase` body-shape
-	 * heuristic. Wired on `WriteOptions.caseBodyRefusesFlat` so the
-	 * writer-side `@:fmt(refuseFlatOnComplexExpr)` flat-gate AND-clause
-	 * dispatches through the plugin without engine→plugin coupling.
-	 *
-	 * `Dynamic` argument so the same predicate fires on both Plain-mode
-	 * `HxStatement` enum values and Trivia-mode `Trivial<HxStatementT>`
-	 * struct wrappers — `Type.enumConstructor` matches against both
-	 * enums (Plain `HxStatement` and synthesised `HxStatementT`) since
-	 * they share constructor names. Returns `false` for null,
-	 * non-enum, or non-`ExprStmt` shapes.
-	 */
-	public static function refusesCaseFlat(raw: Null<Dynamic>): Bool {
-		final s: Null<Dynamic> = unwrap(raw);
-		if (s == null) return false;
-		if (Type.enumConstructor(s) != 'ExprStmt') return false;
-		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
-		if (params == null || params.length == 0) return false;
-		final inner: Null<Dynamic> = unwrap(params[0]);
-		if (inner == null) return false;
-		final ctor: Null<String> = Type.enumConstructor(inner);
-		return ctor != null && REFUSED_CASE_BODY_CTORS.contains(ctor);
-	}
-
-	/**
-	 * True iff a `#if … #end` body / elseBody Star element is itself a
-	 * nested preprocessor `Conditional`. Drives the writer-side
-	 * `alignedNestedIncrease` indent rule: the engine wraps a nested
-	 * conditional element (its `#if`/`#elseif`/`#else`/`#end` markers AND
-	 * guarded body) one indent level deeper than the surrounding region,
-	 * accumulating per conditional depth. Mirrors haxe-formatter's
-	 * `Indenter.calcConsecutiveConditionalLevel` (`AlignedNestedIncrease`
-	 * adds `+consecutive-#if-depth` to the whole region) — a top-level
-	 * conditional (depth 0) gets no shift; only conditionals enclosed in
-	 * another conditional's body increase.
-	 *
-	 * The element shape differs per Star: `HxConditionalDecl.body`
-	 * elements are `HxTopLevelDeclT` structs whose `.decl` field holds
-	 * the `HxDecl`/`HxDeclT` enum (the `Conditional` ctor lives there);
-	 * `HxConditionalStmt.body` elements are the `HxStatement`/`HxStatementT`
-	 * enum directly. `raw` is the already-unwrapped `Trivial<T>.node`
-	 * payload, so this handles both: a bare enum → match its ctor;
-	 * a struct → read `.decl` then match. Returns `false` for null,
-	 * missing `.decl`, or any non-`Conditional` ctor. Wired on
-	 * `WriteOptions.elementIsConditional` so the engine stays
-	 * format-neutral (no `HxDecl`/`HxStatement` reference in the macro).
-	 */
-	public static function elementIsConditional(raw: Null<Dynamic>): Bool {
-		if (raw == null) return false;
-		// Statement element: bare `HxStatementT` enum — `Conditional` ctor
-		// sits directly on the value.
-		if (Type.getEnum(raw) != null) return Type.enumConstructor(raw) == 'Conditional';
-		// Decl element: `HxTopLevelDeclT` struct — the `Conditional` ctor
-		// lives on the wrapped `.decl` enum.
-		final decl: Null<Dynamic> = Reflect.field(raw, 'decl');
-		return decl != null && Type.getEnum(decl) != null && Type.enumConstructor(decl) == 'Conditional';
-	}
-
-	/**
-	 * `operandIsBlockExpr(operandNode) → Bool` — true iff a `macro <operand>`
-	 * reification's operand is a block (`macro { … }`). Wired on
-	 * `WriteOptions.operandIsBlockExpr` to drive `@:fmt(clearExprPosition)` on
-	 * `HxExpr.MacroExpr`: a macro-BLOCK's statements are reified code and yield
-	 * nothing to the enclosing expression position, so the operand reverts to
-	 * statement-position body policy (the block-tail SI-2 expression frame is
-	 * dropped). A non-block operand (`macro if (1) 2 else 3`) is TRANSPARENT —
-	 * `macro` does not change expression-vs-statement position — so the clear
-	 * must NOT fire there. The operand is a bare `HxExpr`/`HxExprT` Ref (not a
-	 * `Trivial<T>`-wrapped Star element), but `unwrap` is applied defensively
-	 * to mirror the sibling adapters. Returns false for null / non-enum.
-	 */
-	public static function operandIsBlockExpr(raw: Null<Dynamic>): Bool {
-		final e: Null<Dynamic> = unwrap(raw);
-		return e != null && Type.getEnum(e) != null && Type.enumConstructor(e) == 'BlockExpr';
-	}
 
 	public static function endsWithCloseBrace(raw: Null<Dynamic>): Bool {
 		final e: Null<Dynamic> = unwrap(raw);
@@ -846,66 +759,6 @@ final class HxExprUtil {
 	}
 
 	/**
-	 * `tailStmtReadsExprPosition(stmtNode) → Bool` — true iff a block-body /
-	 * case-body TAIL statement is an `if` whose then/else body-placement
-	 * dispatches on `_inExprPosition` (`HxStatement.IfStmt`). Fork parity: an
-	 * `if` whose DIRECT parent is a block brace (fork `isExpression` is `false`
-	 * for a `BrOpen` parent) or a non-value-yielded switch-case colon is a
-	 * STATEMENT — its body uses `sameLine.ifBody`, never `sameLine.expressionIf`.
-	 * So when such an `if` is a block / case tail, the inherited expression-
-	 * position frame must be dropped (block barrier) or reduced to the case's
-	 * own incoming frame (case) instead of force-propagated. `for` / `while`
-	 * tails are intentionally excluded: the fork breaks their bodies at
-	 * expression position (no arrow / comprehension short-circuit applies), so
-	 * anyparse's existing force-propagation already matches. Returns `false`
-	 * for null / non-enum / non-`IfStmt` shapes. Wired on
-	 * `WriteOptions.tailStmtReadsExprPosition`.
-	 */
-	public static function tailStmtReadsExprPosition(raw: Null<Dynamic>): Bool {
-		final s: Null<Dynamic> = unwrap(raw);
-		if (s == null || Type.getEnum(s) == null || Type.enumConstructor(s) != 'IfStmt') return false;
-		// No-else only: an `if` WITH an `else` (or `else if` chain) keeps its
-		// inherited expression frame so the chain breaks together under
-		// `fitLineIfWithElse` — mirrors the `noSiblingFallback` no-else gate.
-		// Dropping the frame for a with-else tail would inline a trailing
-		// `else if` body that the fork breaks for chain consistency.
-		final params: Null<Array<Dynamic>> = Type.enumParameters(s);
-		if (params == null || params.length == 0) return false;
-		final ifStruct: Null<Dynamic> = params[0];
-		return ifStruct != null && Reflect.field(ifStruct, 'elseBody') == null;
-	}
-
-	/**
-	 * True iff a `#if <cond> … #end` token-splice raw fragment wraps whole
-	 * `case` / `default` clauses (a switch-case-label splice) rather than
-	 * statements or expressions (a dangling-else splice). Drives the
-	 * writer-side `@:fmt(condSpliceCaseMarkerDedent)` marker dedent: a
-	 * case-label splice's leading `#if` aligns one indent level shallower
-	 * (the case-list level, matching its verbatim `case` / `#else` / `#end`
-	 * markers) than the case body it parses inside, while a dangling-else
-	 * splice keeps its `#if` at the enclosing statement indent. Wired on
-	 * `WriteOptions.condSpliceRawWrapsCases` so the engine dispatches
-	 * through the plugin without engine to plugin coupling. Scans for a line
-	 * whose first non-whitespace token is the `case` / `default` keyword.
-	 */
-	public static function condSpliceRawWrapsCases(raw: Null<Dynamic>): Bool {
-		if (raw == null) return false;
-		final s: String = '$raw';
-		final n: Int = s.length;
-		var atLineStart: Bool = true;
-		for (i in 0...n) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c == '\n'.code)
-				atLineStart = true;
-			else if (atLineStart && c != ' '.code && c != '\t'.code) {
-				if (keywordAt(s, i, 'case') || keywordAt(s, i, 'default')) return true;
-				atLineStart = false;
-			}
-		}
-		return false;
-	}
-
-	/**
 	 * `@:meta <operand>` wrapper — recurse on the wrapped expression
 	 * (`params[0].expr`).
 	 */
@@ -1319,21 +1172,6 @@ final class HxExprUtil {
 	private static inline function unwrapTrivialStruct(raw: Null<Dynamic>): Null<Dynamic> {
 		return raw == null ? null : Reflect.hasField(raw, 'node') ? Reflect.field(raw, 'node') : raw;
 	}
-
-	/**
-	 * True iff `s` matches keyword `kw` at index `at` with a trailing word
-	 * boundary (next char is not an identifier char).
-	 */
-	private static function keywordAt(s: String, at: Int, kw: String): Bool {
-		final kl: Int = kw.length;
-		if (at + kl > s.length) return false;
-		for (k in 0...kl) if (StringTools.fastCodeAt(s, at + k) != StringTools.fastCodeAt(kw, k)) return false;
-		if (at + kl >= s.length) return true;
-		final next: Int = StringTools.fastCodeAt(s, at + kl);
-		return !((next >= 'a'.code && next <= 'z'.code) || (next >= 'A'.code && next <= 'Z'.code) || (next >= '0'.code && next <= '9'.code)
-			|| next == '_'.code);
-	}
-
 
 	/** The wrapped expression of an `@:meta <operand>` node (`params[0].expr`), or null. */
 	private static function metaInnerExpr(e: Dynamic): Null<Dynamic> {

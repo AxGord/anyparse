@@ -68,6 +68,14 @@ final class HaxeFormat implements TextFormat {
 	public var keyValueSep(default, null): String = ':';
 	public var entrySep(default, null): String = ',';
 	public var whitespace(default, null): String = ' \t\n\r';
+
+	/**
+	 * This format supplies the generated `AstPreds` / `AstPredsT` /
+	 * `AstPredsS` typed-predicate marker classes (see `HxPredBuild`).
+	 * Read at macro time by `FormatReader` into `FormatInfo.astPreds`;
+	 * gates the emission sites without a per-Star `@:fmt` opt-in.
+	 */
+	public var astPreds(default, null): Bool = true;
 	public var lineComment(default, null): Null<String> = '//';
 	public var blockComment(default, null): Null<BlockCommentDelims> = { open: '/*', close: '*/' };
 	public var keySyntax(default, null): KeySyntax = KeySyntax.Unquoted;
@@ -824,15 +832,10 @@ final class HaxeFormat implements TextFormat {
 		blockCommentAdapter: anyparse.format.comment.BlockCommentNormalizer.processCapturedBlockComment,
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
-		caseBodyRefusesFlat: HxExprUtil.refusesCaseFlat,
-		condSpliceRawWrapsCases: HxExprUtil.condSpliceRawWrapsCases,
-		operandIsBlockExpr: HxExprUtil.operandIsBlockExpr,
-		tailStmtReadsExprPosition: HxExprUtil.tailStmtReadsExprPosition,
 		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
 		betweenImportsTailLeafClassify: HxExprUtil.tailLeafClassifyImports,
 		betweenImportsHeadLeafClassify: HxExprUtil.headLeafClassifyImports,
 		tailLeafKeepsBlankAfterConditional: HxExprUtil.tailLeafKeepsBlankAfterConditional,
-		elementIsConditional: HxExprUtil.elementIsConditional,
 	};
 
 	private function new() {}

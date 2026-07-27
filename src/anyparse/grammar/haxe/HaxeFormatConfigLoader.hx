@@ -720,15 +720,10 @@ final class HaxeFormatConfigLoader {
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
-			caseBodyRefusesFlat: base.caseBodyRefusesFlat,
-			condSpliceRawWrapsCases: base.condSpliceRawWrapsCases,
-			operandIsBlockExpr: base.operandIsBlockExpr,
-			tailStmtReadsExprPosition: base.tailStmtReadsExprPosition,
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
 			betweenImportsHeadLeafClassify: base.betweenImportsHeadLeafClassify,
 			tailLeafKeepsBlankAfterConditional: base.tailLeafKeepsBlankAfterConditional,
-			elementIsConditional: base.elementIsConditional,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);

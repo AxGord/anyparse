@@ -30,6 +30,18 @@ class WriterLowering {
 	private final _formatInfo: FormatReader.FormatInfo;
 	private final _ctx: LoweringCtx;
 
+	/**
+	 * Build-scoped mirrors of `_shape.root` / `_formatInfo.astPreds` for
+	 * the STATIC trivia emit helpers (the tryparse/block builder web),
+	 * which have no instance in reach. Set at `generate()` entry; one
+	 * writer build runs at a time, so the mirrors cannot interleave.
+	 * The trivia builders address the trivia-family predicate class
+	 * (`AstPredsT`) — plain-mode paths use the instance fields directly.
+	 */
+	private static var _predRootStatic: String = '';
+
+	private static var _astPredsOnStatic: Bool = false;
+
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
 		_shape = shape;
 		_formatInfo = formatInfo;
@@ -37,10 +49,17 @@ class WriterLowering {
 	}
 
 	public function generate(): Array<WriterRule> {
+		_predRootStatic = _shape.root;
+		_astPredsOnStatic = _formatInfo.astPreds;
 		final rules: Array<WriterRule> = [
 			for (typePath => node in _shape.rules) for (rule in lowerRule(typePath, node)) rule
 		];
 		return rules;
+	}
+
+	/** `AstPredsT.<name>(<args>)` — trivia-family predicate call for the static trivia emit helpers. */
+	private static function astPredCallT(name: String, args: Array<Expr>): Expr {
+		return AstPredLowering.predCallExpr(_predRootStatic, true, false, name, args);
 	}
 
 	private function lowerRule(typePath: String, node: ShapeNode): Array<WriterRule> {
@@ -1398,6 +1417,18 @@ class WriterLowering {
 				case _: null;
 			}
 			: null;
+		// Typed nested-conditional element probe (alignedNestedIncrease
+		// span lift + blockEnded sep suppression): built HERE, where the
+		// Star's element rule is known, as the mode-family
+		// `elementIsConditional_<ElemRule>` fn-ref. Built only for the
+		// Stars whose emission paths can consult it (conditionalBodyIndent
+		// / blockEnded) — the grammar generates the per-rule variants for
+		// exactly those element rules. Formats without generated
+		// predicates pass null and both consumer sites emit their inert
+		// `false`.
+		final tryparseElemCondFn: Null<Expr> = (_formatInfo.astPreds && (tryparseCondBodyIndent || tryparseBlockEnded))
+			? AstPredLowering.predFnExpr(_shape.root, true, false, 'elementIsConditional_${simpleName(c.elemRefName)}')
+			: null;
 		parts.push(triviaTryparseStarExpr(
 			fieldAccess, elemFn, sepExpr, sameLineName != null, nestBody, tryparseTrailBB, tryparseTrailLC, tryparseTrailBA,
 			firstSepOverride, subsequentSepOverride, caseBodyFlagNames, flatChildOptPairs, tryparsePadLeading, tryparsePadTrailing,
@@ -1406,7 +1437,7 @@ class WriterLowering {
 			cascadeInfos.betweenSameCtorIfNotInfos, tryparseLineLengthAware, tryparsePriorAfterTrailExpr, tryparseForceInlineSep,
 			(tryparseBlockEnded || tryparseSepFaithful) ? tryparseSepText : null, tryparseBlockEnded, tryparseSepFaithful,
 			tryparseHeritageWrap, tryparseCondBodyIndent, tryparseOperandBreakAfterMultilineBrace, clearExprPositionNonTail,
-			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline
+			tryparseSepBeforeAccess, tryparseElemSelfTrailsNewline, tryparseElemCondFn
 		));
 	}
 
@@ -7647,7 +7678,10 @@ class WriterLowering {
 		if (propagateEnumAbstract) _o = macro _setEnumAbstract($_o);
 		if (clearExpr) {
 			final _operandAccess: Expr = macro $i{argNames[0]};
-			_o = macro (opt.operandIsBlockExpr != null && opt.operandIsBlockExpr($_operandAccess) ? _clearExprPosition($_o) : $_o);
+			final _operandIsBlock: Expr = AstPredLowering.predCallExpr(
+				_shape.root, _ctx.trivia, false, 'operandIsBlockExpr', [_operandAccess]
+			);
+			_o = macro ($_operandIsBlock ? _clearExprPosition($_o) : $_o);
 		}
 		if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
 		if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
@@ -7801,9 +7835,10 @@ class WriterLowering {
 				// splice), dedent the `#if` marker one level via ConditionalMarkerDecrease.
 				if (branch.fmtHasFlag('condSpliceCaseMarkerDedent')) {
 					final rawAccess: Expr = macro $i{argNames[0]}.raw;
-					parts.push(
-						macro opt.condSpliceRawWrapsCases != null && opt.condSpliceRawWrapsCases($rawAccess) ? _dcmd($kwDoc) : $kwDoc
+					final wrapsCases: Expr = AstPredLowering.predCallExpr(
+						_shape.root, _ctx.trivia, false, 'condSpliceRawWrapsCases', [rawAccess]
 					);
+					parts.push(macro $wrapsCases ? _dcmd($kwDoc) : $kwDoc);
 				} else
 					parts.push(kwDoc);
 			}
@@ -11733,7 +11768,16 @@ class WriterLowering {
 		// `_dhl()` (the preceding element's padTrailing already supplied it);
 		// double-emitting inserts a spurious blank that COMPOUNDS on re-format.
 		// Blank-line extras (authored blanks) are still emitted. Default false.
-		elemSelfTrailsNewline: Bool = false
+		elemSelfTrailsNewline: Bool = false,
+		// Typed nested-conditional element probe: the
+		// `<AstPredsT>.elementIsConditional_<ElemRule>` function-reference
+		// Expr, built at the instance caller (where the Star's element
+		// rule is in scope) iff the format declares `astPreds`. Applied
+		// to `_t.node` (alignedNestedIncrease span lift) and
+		// `_arr[_si - 1].node` (blockEnded sep suppression). Null → both
+		// sites emit their inert `false`, byte-identical for formats
+		// without generated predicates.
+		?elemCondFnExpr: Expr
 	): Expr {
 		// noqa: complexity
 		// ω-bug-2c-inner-star — cascade emit for the tryparse-Star path.
@@ -11802,7 +11846,7 @@ class WriterLowering {
 		// `opt.<metaLineEndOptField>` (0 = None default, byte-identical).
 		final metaPolicyExpr: Expr = metaLineEndOptField != null ? optFieldAccess(metaLineEndOptField) : macro 0;
 		final shapeRefusalExpr: Expr = triviaTryparseShapeRefusalExpr(refuseFlatOnComplex);
-		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful);
+		final tryparseBlockEndedSepEmit: Expr = triviaTryparseBlockEndedSepEmit(sepText, blockEnded, sepFaithful, elemCondFnExpr);
 		final tryparseBlockEndedTrailEmit: Expr = triviaTryparseBlockEndedTrailEmit(sepText, blockEnded, sepFaithful);
 		final c: TryparseStarCtx = {
 			fieldAccess: fieldAccess,
@@ -11839,6 +11883,7 @@ class WriterLowering {
 			finalWrapDocs: finalWrapDocs,
 			forceInlineSep: forceInlineSep,
 			elemSelfTrailsNewline: elemSelfTrailsNewline,
+			elemCondFn: elemCondFnExpr,
 		};
 		return heritageWrap ? triviaTryparseHeritageExpr(c) : triviaTryparseMainExpr(c);
 	}
@@ -13670,6 +13715,8 @@ class WriterLowering {
 		final elemOptInit: Expr = c.elemOptInit;
 		final tryparseBlockEndedSepEmit: Expr = c.tryparseBlockEndedSepEmit;
 		final sepCascade: Expr = triviaTryparseSepCascadeExpr(c);
+		final elemCondFn: Null<Expr> = c.elemCondFn;
+		final elemCondProbe: Expr = elemCondFn == null ? macro false : macro $elemCondFn(_t.node);
 		return macro {
 			var _si: Int = 0;
 			while (_si < _arr.length) {
@@ -13697,11 +13744,11 @@ class WriterLowering {
 				// separator is inside the span so the `#if` marker line (which
 				// renders at the PRECEDING hardline's indent) also shifts.
 				// Recursion through the nested conditional's own body Star
-				// accumulates the shift per depth. Adapter-null formats and
-				// non-conditional elements leave `_docs` untouched (byte-
-				// identical).
+				// accumulates the shift per depth. Formats without generated
+				// predicates (null `elemCondFn`) and non-conditional elements
+				// leave `_docs` untouched (byte-identical).
 				if (
-					_condNestedIncrease && opt.elementIsConditional != null && opt.elementIsConditional(_t.node)
+					_condNestedIncrease && $elemCondProbe
 					&& _docs.length > _condNestLen
 				) {
 					final _condNestSpan: Array<anyparse.core.Doc> = _docs.splice(_condNestLen, _docs.length - _condNestLen);
@@ -14101,10 +14148,10 @@ class WriterLowering {
 		// `ifBody:fitLine`. Mirrors fork's `isExpression`→`isReturnExpression(case)`
 		// dispatch. Non-`if` tails (nested switch for issue-423 flattening, `for` /
 		// `while` bodies the fork breaks) keep the force-propagated `_writerOpt`.
+		final caseTailBarrier: Expr = astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
 		final caseTailOptArg: Expr = clearExprPositionNonTail
 			? macro (_si == _arr.length - 1 ? {
-				final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
-				(_tailBarrierFn != null && _tailBarrierFn(_t.node) && !opt._inExprPosition && (
+				($caseTailBarrier && !opt._inExprPosition && (
 					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
 				)) ? _clearExprPosition(_writerOpt) : _writerOpt;
 			} : _clearExprPosition(_writerOpt))
@@ -14180,12 +14227,9 @@ class WriterLowering {
 	 *
 	 */
 	private static function triviaTryparseShapeRefusalExpr(refuseFlatOnComplex: Bool): Expr {
-		return refuseFlatOnComplex
-			? (macro {
-				final _refuseFn: Null<Dynamic -> Bool> = opt.caseBodyRefusesFlat;
-				_refuseFn == null || !_refuseFn(_arr[0].node);
-			})
-			: (macro true);
+		if (!refuseFlatOnComplex) return macro true;
+		final refuses: Expr = astPredCallT('caseBodyRefusesFlat', [macro _arr[0].node]);
+		return macro !$refuses;
 	}
 
 	/**
@@ -14194,12 +14238,15 @@ class WriterLowering {
 	 * statement-terminated elements. Null sepText / non-blockEnded ⇒ no-op.
 	 *
 	 */
-	private static function triviaTryparseBlockEndedSepEmit(sepText: Null<String>, blockEnded: Bool, sepFaithful: Bool = false): Expr {
+	private static function triviaTryparseBlockEndedSepEmit(
+		sepText: Null<String>, blockEnded: Bool, sepFaithful: Bool = false, ?elemCondFnExpr: Expr
+	): Expr {
 		// ω-sep-faithful: source-fidelity mode — the sep re-emits iff the
 		// parser captured one after the prior element (`sepAfter`), with no
 		// `}`/`;` shape heuristics. Used by comma-lists inside conditional
 		// element groups (`HxConditionalArgs.body`), where a `}`-ending
 		// object-literal element still needs its comma.
+		final priorCondProbe: Expr = elemCondFnExpr == null ? macro false : macro $elemCondFnExpr(_arr[_si - 1].node);
 		return sepText != null && sepFaithful
 			? macro {
 				if (_si > 0 && _arr[_si - 1].sepAfter) {
@@ -14212,7 +14259,7 @@ class WriterLowering {
 						_si > 0 && _priorElemDoc != null && (
 							_arr[_si - 1].sepAfter
 							|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
-							&& !(opt.elementIsConditional != null && opt.elementIsConditional(_arr[_si - 1].node)))
+							&& !$priorCondProbe)
 						)
 					) {
 						_docs.push(_dt($v{sepText}));
@@ -15440,10 +15487,10 @@ class WriterLowering {
 		// under `ifBody:fitLine`), regardless of the block's own expression context.
 		// Non-`if` tails (a tail switch whose cases flatten via the arrow / return
 		// walk-up, `for` / `while` bodies the fork breaks) keep the inherited frame.
+		final blockTailBarrier: Expr = astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
 		final elemCallOptArg: Expr = clearExprPositionNonTail
 			? macro (_si == _arr.length - 1 ? {
-				final _tailBarrierFn: Null<Dynamic -> Bool> = opt.tailStmtReadsExprPosition;
-				(_tailBarrierFn != null && _tailBarrierFn(_t.node) && (
+				($blockTailBarrier && (
 					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
 				)) ? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr))) : _clearArrowLambdaBody(
 					_clearValueIfBranch($elemOptExpr)
@@ -17102,6 +17149,9 @@ typedef TryparseStarCtx = {
 	final finalWrapDocs: Expr;
 	final forceInlineSep: Bool;
 	final elemSelfTrailsNewline: Bool;
+
+	/** Typed nested-conditional element probe fn-ref (`AstPredsT.elementIsConditional_<ElemRule>`), or null when the format has no generated predicates. */
+	final elemCondFn: Null<Expr>;
 };
 typedef CascadeEmit = {
 	initPrev: Expr,

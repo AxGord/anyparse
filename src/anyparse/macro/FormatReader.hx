@@ -26,6 +26,16 @@ typedef FormatInfo = {
 	/** True when the schema class has `encoding = Binary`. */
 	isBinary: Bool,
 
+	/**
+	 * True when the format supplies the generated `AstPreds` /
+	 * `AstPredsT` / `AstPredsS` marker classes (schema field
+	 * `astPreds = true`). Gates the emission sites that have no
+	 * per-Star `@:fmt` opt-in of their own (e.g. the nested-conditional
+	 * element probe): with the flag off they emit their inert fallback,
+	 * so formats without generated predicates stay byte-identical.
+	 */
+	astPreds: Bool,
+
 	/** How parser matches input entries to schema fields. ByName enables the key-dispatch struct codepath. */
 	fieldLookup: FieldLookup,
 
@@ -267,6 +277,30 @@ class FormatReader {
 		return null;
 	}
 
+	/**
+	 * Read a `Bool` field initializer declared as a literal at the
+	 * format class's declaration site. Missing field (or a non-literal
+	 * initializer) reads `false` — opt-in semantics for flags like
+	 * `astPreds`.
+	 */
+	private static function readBoolField(cl: ClassType, fieldName: String): Bool {
+		final fields: Array<ClassField> = cl.fields.get();
+		for (f in fields) if (f.name == fieldName) {
+			final texpr: Null<TypedExpr> = f.expr();
+			if (texpr != null) return extractBool(texpr);
+		}
+		return false;
+	}
+
+	private static function extractBool(texpr: TypedExpr): Bool {
+		return switch texpr.expr {
+			case TConst(TBool(b)): b;
+			case TCast(inner, _): extractBool(inner);
+			case TParenthesis(inner): extractBool(inner);
+			case _: false;
+		};
+	}
+
 	private static function extractString(texpr: TypedExpr): Null<String> {
 		return switch texpr.expr {
 			case TConst(TString(s)): s;
@@ -312,6 +346,7 @@ class FormatReader {
 			whitespace: '',
 			schemaTypePath: typePath,
 			isBinary: true,
+			astPreds: false,
 			fieldLookup: FieldLookup.ByPosition,
 			onUnknown: UnknownPolicy.Error,
 			onMissing: MissingPolicy.Error,
@@ -338,6 +373,7 @@ class FormatReader {
 			whitespace: readStringField(cl, 'whitespace'),
 			schemaTypePath: typePath,
 			isBinary: false,
+			astPreds: readBoolField(cl, 'astPreds'),
 			fieldLookup: readEnumAbstractField(cl, 'fieldLookup'),
 			onUnknown: readEnumAbstractField(cl, 'onUnknown'),
 			onMissing: readEnumAbstractField(cl, 'onMissing'),

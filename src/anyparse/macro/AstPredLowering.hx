@@ -90,8 +90,18 @@ class AstPredLowering {
 	 * `opt.<adapter>(raw)` / `schema.instance.<pred>(raw)`.
 	 */
 	public static function predCallExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String, args: Array<Expr>): Expr {
-		final callee: Expr = MacroStringTools.toFieldExpr(predClassParts(rootTypePath, trivia, spans).concat([name]));
+		final callee: Expr = predFnExpr(rootTypePath, trivia, spans, name);
 		return { expr: ECall(callee, args), pos: Context.currentPos() };
+	}
+
+	/**
+	 * `<PredClass>.<name>` function-reference expression — for emission
+	 * sites that must apply the predicate to receivers only they know
+	 * (built where the Star's element rule is in scope, applied deeper
+	 * in the static emit pipeline).
+	 */
+	public static function predFnExpr(rootTypePath: String, trivia: Bool, spans: Bool, name: String): Expr {
+		return MacroStringTools.toFieldExpr(predClassParts(rootTypePath, trivia, spans).concat([name]));
 	}
 
 	/** Simple (unqualified) name of a type path. */
@@ -209,6 +219,11 @@ class AstPredLowering {
 		return { values: [pat(rule, ctor, binds)], expr: body, guard: null };
 	}
 
+	/** `switch (<subject>) { <cases…>; case _: <dflt>; }` over a non-null enum value. */
+	private function sw(subject: Expr, cases: Array<Case>, dflt: Expr): Expr {
+		return { expr: ESwitch(subject, cases, dflt), pos: Context.currentPos() };
+	}
+
 	/**
 	 * `switch (<subject>) { case null: <onNull>; <cases…>; case _: <dflt>; }`
 	 * — the standard predicate body over a nullable enum value.
@@ -216,7 +231,7 @@ class AstPredLowering {
 	private function nullSwitch(subject: Expr, onNull: Expr, cases: Array<Case>, dflt: Expr): Expr {
 		final all: Array<Case> = [{ values: [macro null], expr: onNull, guard: null }];
 		for (c in cases) all.push(c);
-		return { expr: ESwitch(subject, all, dflt), pos: Context.currentPos() };
+		return sw(subject, all, dflt);
 	}
 
 	/**

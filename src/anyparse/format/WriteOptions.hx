@@ -207,23 +207,6 @@ typedef WriteOptions = {
 	 *    so `var x = switch (y) { ... }` round-trips without a trailing
 	 *    semicolon, matching haxe-formatter's canonical output.
 	 *
-	 *  - `caseBodyRefusesFlat(raw) → Bool` — true iff the body's first
-	 *    element should refuse inline emission regardless of the
-	 *    `bodyPolicy` flat-gate verdict. Drives `@:fmt(refuseFlatOnComplexExpr)`
-	 *    on `@:trivia @:tryparse` Star fields (case / default body):
-	 *    even when `expressionCase=Keep` + same-line source would
-	 *    flatten, an outermost shape the plugin classifies as
-	 *    "complex" (Haxe: logical `&&` / `||`) breaks. Mirrors fork's
-	 *    `MarkSameLine.markExpressionCase` body-shape heuristic.
-	 *
-	 *  - `condSpliceRawWrapsCases(raw) → Bool` — true iff a `#if … #end`
-	 *    token-splice raw fragment wraps whole `case` / `default` clauses
-	 *    (a switch-case-label splice). Drives `@:fmt(condSpliceCaseMarkerDedent)`
-	 *    on the `HxStatement.CondSpliceStmt` `#if` marker: a case-label
-	 *    splice dedents its leading `#if` one indent level (to the case-list
-	 *    level, matching the verbatim `case` / `#else` / `#end` markers),
-	 *    while a dangling-else splice keeps `#if` at the statement indent.
-	 *
 	 *  - `betweenImportsPathDiffers(prevPath, currPath, level) → Bool` —
 	 *    true iff the two paths fall into different groups at the
 	 *    configured granularity. Drives the
@@ -275,28 +258,6 @@ typedef WriteOptions = {
 	 * the unconditional non-refusal path.
 	 */
 	?endsWithCloseBrace: Null<Dynamic -> Bool>,
-	?caseBodyRefusesFlat: Null<Dynamic -> Bool>,
-	?condSpliceRawWrapsCases: Null<Dynamic -> Bool>,
-	// ω-value-yielded-if-tail-barrier (macro-block clear): `operandIsBlockExpr(
-	// operandNode) → Bool` — true iff a `macro <operand>` reification's operand
-	// is a block (`macro { … }`). Drives `@:fmt(clearExprPosition)` on
-	// `HxExpr.MacroExpr`: a macro-BLOCK's statements are reified code (none
-	// yielded to the enclosing expression position), so the operand reverts to
-	// statement-position body policy and the block-tail SI-2 frame is dropped.
-	// A `macro <expr>` (non-block operand, e.g. `macro if (1) 2 else 3`) stays
-	// TRANSPARENT — `macro` does not change expression-vs-statement position.
-	// Null (every non-opt-in format) → the clear never fires, byte-identical.
-	?operandIsBlockExpr: Null<Dynamic -> Bool>,
-	// ω-value-yielded-if-tail-barrier (if-tail fork parity): `tailStmtReadsExprPosition(
-	// stmtNode) → Bool` — true iff a block / case body TAIL statement is an `if`
-	// (`HxStatement.IfStmt`) whose body dispatches on `_inExprPosition`. A block-
-	// brace-parented `if` is a STATEMENT (fork `isExpression` false), so a lambda
-	// / block tail `if` drops the inherited expression frame; a switch-case tail
-	// `if` reads the case's OWN incoming frame (value-yielded case keeps it,
-	// statement-switch case drops it) instead of the force-propagated one. `for` /
-	// `while` tails are excluded (the fork breaks their expression-position
-	// bodies). Null (non-opt-in format) → the frame is force-propagated as before.
-	?tailStmtReadsExprPosition: Null<Dynamic -> Bool>,
 	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>,
 	?betweenImportsTailLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
 	?betweenImportsHeadLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
@@ -308,17 +269,5 @@ typedef WriteOptions = {
 	// override on `HxModule.decls`: null (e.g. `#error` tail) → force
 	// `afterConditionalBlock` (=0) blanks; non-null → source-driven count.
 	// Null adapter (every non-opt-in format) → the override never fires.
-	?tailLeafKeepsBlankAfterConditional: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
-
-	/**
-	 * `elementIsConditional(elementNode) → Bool` — true iff a cond-comp
-	 * body / elseBody Star element is itself a nested preprocessor
-	 * `Conditional`. Drives the `alignedNestedIncrease` indent rule:
-	 * under that policy the engine wraps a nested-conditional element
-	 * (markers + body) one indent step deeper than the surrounding
-	 * region, accumulating per conditional depth (top-level → no shift).
-	 * Null (every non-opt-in format) → the engine never wraps, byte-
-	 * identical to the pre-policy layout.
-	 */
-	?elementIsConditional: Null<Dynamic -> Bool>
+	?tailLeafKeepsBlankAfterConditional: Null<Dynamic -> Null<{ ctorName: String, path: String }>>
 };
