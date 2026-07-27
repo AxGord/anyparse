@@ -1815,14 +1815,17 @@ class WriterLowering {
 		final closeText: Null<String> = c.closeText;
 		final sepText: Null<String> = c.sepText;
 		final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-		final predicateCheck: Expr = if (predicateName != null) {
+		final predicateCheck: Expr = if (predicateName == null)
+			macro false;
+		else if (_formatInfo.astPreds)
+			AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [macro _arr[_si]]);
+		else {
 			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 			{
 				expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _arr[_si]]),
 				pos: Context.currentPos(),
 			};
-		} else
-			macro false;
+		}
 		// Phase G2 (Session 10) — trail-emit-on-last for plain mode.
 		// Mirror of between-element gate below, queried on the last
 		// element. Required when per-stmt `@:trailOpt(';')` is removed
@@ -1831,7 +1834,11 @@ class WriterLowering {
 		// trivia mode's `blockTrailSepEmitExpr` (L7002-7009) minus the
 		// source-fidelity `sepAfter` gate (plain mode has no per-pair
 		// state — always emit when non-block-ended).
-		final lastPredicateCheck: Expr = if (predicateName != null) {
+		final lastPredicateCheck: Expr = if (predicateName == null)
+			macro false;
+		else if (_formatInfo.astPreds)
+			AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [macro _arr[_arr.length - 1]]);
+		else {
 			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 			{
 				expr: ECall(
@@ -1839,8 +1846,7 @@ class WriterLowering {
 				),
 				pos: Context.currentPos(),
 			};
-		} else
-			macro false;
+		}
 		parts.push(macro {
 			final _arr = $fieldAccess;
 			if (_arr.length == 0) {
@@ -5219,7 +5225,11 @@ class WriterLowering {
 			// (`b == '}'.code || b == ';'.code || $predicateCall`).
 			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded[('pred'[, sepStartsElement])])`.
 			final predicateName: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-			final predicateCheckPrior: Expr = if (predicateName != null) {
+			final predicateCheckPrior: Expr = if (predicateName == null)
+				macro false;
+			else if (_formatInfo.astPreds)
+				AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [macro _args[_i - 1]]);
+			else {
 				final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 				{
 					expr: ECall(
@@ -5227,8 +5237,7 @@ class WriterLowering {
 					),
 					pos: Context.currentPos(),
 				};
-			} else
-				macro false;
+			}
 			return macro {
 				final _args = $argsAccess;
 				final _docs: Array<anyparse.core.Doc> = [_dt($v{leadText})];
@@ -16063,6 +16072,10 @@ class WriterLowering {
 		blockEndedPredicate: Null<String>, blockEndedSchemaPath: Null<String>, elemAccess: Expr
 	): Expr {
 		if (blockEndedPredicate == null || blockEndedSchemaPath == null) return macro false;
+		// astPreds formats route to the generated trivia-family predicate
+		// (callers pass the `.node`-unwrapped element); the legacy
+		// schema-instance channel remains for pilot formats.
+		if (_astPredsOnStatic) return astPredCallT(blockEndedPredicate, [elemAccess]);
 		final fmtParts: Array<String> = blockEndedSchemaPath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, blockEndedPredicate), pos: Context.currentPos() }, [elemAccess]),

@@ -262,17 +262,30 @@ class Lowering {
 	}
 
 	/**
-	 * Build the `schema.instance.<predicate>(<accum>[<accum>.length - 1])`
-	 * call expression for `@:sep('text', tailRelax, blockEnded('<predicate>'))`
-	 * (Session 6 option b2 — AST-shape adapter). Sister of `parseGateCall`
-	 * at L1553 — same schema-instance channel as `trailOptParseGate` /
-	 * `unescapeChar`. The predicate is invoked between elements to decide
-	 * whether the separator is elidable based on the prior element's
-	 * AST shape (e.g. `HxStatement.ExprStmt(ArrayExpr(_))` → `;`-elision; `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
+	 * Build the blockEnded predicate call on the accumulator's last
+	 * element, for `@:sep('text', tailRelax, blockEnded('<predicate>'))`
+	 * (Session 6 option b2 — AST-shape adapter). The predicate is
+	 * invoked between elements to decide whether the separator is
+	 * elidable based on the prior element's AST shape (e.g.
+	 * `HxStatement.ExprStmt(ArrayExpr(_))` → `;`-elision;
+	 * `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
+	 *
+	 * For an `astPreds` format the call targets the generated typed
+	 * predicate of this build's AST family; a trivia-collecting Star's
+	 * accumulator holds `Trivial<…>` wrappers, so the element is
+	 * unwrapped through `.node` (the shape's `trivia.starCollects` mark
+	 * decides — spans / plain accumulators are bare). Other formats
+	 * keep the legacy schema-instance channel, the sister of
+	 * `parseGateCall` / `unescapeChar`.
 	 */
-	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr): Expr {
-		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
+	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr, starNode: ShapeNode): Expr {
 		final lastElem: Expr = macro $accumRef[$accumRef.length - 1];
+		if (_formatInfo.astPreds) {
+			final wrapped: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+			final arg: Expr = wrapped ? macro $lastElem.node : lastElem;
+			return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, predicateName, [arg]);
+		}
+		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [lastElem]),
 			pos: Context.currentPos(),
@@ -1082,7 +1095,7 @@ class Lowering {
 			if (hasSepBeforeOpt) emitSepBeforeOptStep(localName, parseSteps, sepCharCode);
 			final sepBlockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
+			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef, starNode) : macro false;
 			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepCharCode, sepBlockEnded, predicateCall));
 			return;
 		}
@@ -3809,7 +3822,7 @@ class Lowering {
 		if (sepText != null && blockEnded) {
 			final sepCharCode: Int = sepText.charCodeAt(0);
 			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
+			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef, starNode) : macro false;
 			final sepStartsElement: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_STARTS_ELEMENT) == true;
 			parseSteps.push(buildCloseBlockEndedBody(
 				elemCall, accumRef, closeNotNextExpr, sepCharCode, sepText, predicateCall, sepStartsElement
@@ -4031,7 +4044,10 @@ class Lowering {
 	): Expr {
 		final predicateName: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 		final accumRefForPred: Expr = macro _items;
-		final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRefForPred) : macro false;
+		// The Trivial-wrap mark lives on the branch's single Star child.
+		final predicateCall: Expr = predicateName != null
+			? buildBlockEndedPredicateCall(predicateName, accumRefForPred, branch.children[0])
+			: macro false;
 		// sepStartsElement (Session 9 BlockBody Star) — when block-ended is
 		// TRUE, the sep byte at pos belongs to the NEXT element, never a
 		// separator. Required for grammars where the sep char can ALSO be a
@@ -4698,12 +4714,18 @@ expectLit(ctx, $v{trailText}));
 
 	/**
 	 * Build the optional parse-gate predicate call (`@:fmt(trailOptParseGate(
-	 * '<adapter>'))`) reached via the schema instance, or `null` when the
-	 * branch carries no gate.
+	 * '<adapter>'))`), or `null` when the branch carries no gate. For an
+	 * `astPreds` format the gate is the generated typed predicate of this
+	 * build's AST family (`AstPreds` / `AstPredsT` / `AstPredsS` — the
+	 * parse fns return bare mode values, so `_raw` needs no unwrap);
+	 * other formats keep the legacy schema-instance channel (same
+	 * `formatInfo.schemaTypePath` `.instance.<m>` path as `unescapeChar`).
 	 */
 	private function buildKwRefParseGateCall(branch: ShapeNode): Null<Expr> {
 		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
 		if (parseGate == null || parseGate.length != 1) return null;
+		if (_formatInfo.astPreds)
+			return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, parseGate[0], [macro _raw]);
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),

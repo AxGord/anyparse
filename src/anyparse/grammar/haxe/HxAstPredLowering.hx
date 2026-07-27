@@ -40,6 +40,128 @@ final class HxAstPredLowering extends AstPredLowering {
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
 
 	/**
+	 * `HxExpr` `*Assign` ctor names — every right-associative `=` infix
+	 * (`Assign` plus the 14 compound forms). `stmtExprNoSemi` walks
+	 * through an assignment-statement's right operand: the last token
+	 * of `x = if (…) {…} else {…}` is the else block's `}`, so the
+	 * trailing `;` is optional just like for the bare statement.
+	 */
+	private static final ASSIGN_CTORS: Array<String> = [
+		'Assign',
+		'AddAssign',
+		'SubAssign',
+		'MulAssign',
+		'DivAssign',
+		'ModAssign',
+		'ShlAssign',
+		'UShrAssign',
+		'ShrAssign',
+		'BitOrAssign',
+		'BitAndAssign',
+		'BitXorAssign',
+		'NullCoalAssign',
+		'BoolAndAssign',
+		'BoolOrAssign',
+	];
+
+	/**
+	 * `HxExpr` ctor names for every NON-assign binary infix operator
+	 * whose right operand is an `HxExpr`. Same right-operand walk as
+	 * `ASSIGN_CTORS`: Haxe's own rule is purely lexical —
+	 * `Parser.semicolon` makes the `;` optional whenever the previously
+	 * consumed token was `}`, regardless of which operator produced it.
+	 * `Is` is deliberately absent (its right operand is an `HxType` and
+	 * `a is T` carries its own statement-position entry in the
+	 * brace/bracket-terminal set); `Ternary` is not binary — it has its
+	 * own arm walking `elseExpr` (declared index 2, not 1).
+	 */
+	private static final BINOP_RHS_CTORS: Array<String> = [
+		'Mul',
+		'Div',
+		'Mod',
+		'Add',
+		'Sub',
+		'Shl',
+		'UShr',
+		'Shr',
+		'BitOr',
+		'BitAnd',
+		'BitXor',
+		'Eq',
+		'NotEq',
+		'LtEq',
+		'GtEq',
+		'Lt',
+		'Gt',
+		'Interval',
+		'And',
+		'Or',
+		'NullCoal',
+		'In',
+		'ThinArrow',
+		'Arrow',
+	];
+
+	/**
+	 * `HxExpr` constructors that, at statement-expression position,
+	 * leave the statement `}`/`]`/literal-terminated so no trailing `;`
+	 * is needed: `{ … }` block, `{ k: v }` object literal, `[ … ]`
+	 * array, `${expr}` interpolation block, `$b{exprs}` reification
+	 * splice, and `a is T` (permissive last-stmt-in-block semantics
+	 * pinned by `whitespace/issue_605_operator_is`). Recursion targets
+	 * reached through the Assign / If / Meta / Return arms.
+	 */
+	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
+		'BlockExpr',
+		'ObjectLit',
+		'ArrayExpr',
+		'DollarBlockExpr',
+		'DollarReifExpr',
+		'Is',
+	];
+
+	/**
+	 * `HxStatement` constructors whose prior occurrence in a BlockBody
+	 * Star needs no `;` before the next statement: the brace-terminated
+	 * family (closing `}` is the last token — including the two
+	 * cond-splice open forms whose own `@:trail('}')` is the last
+	 * token), the sep-terminated family (their `@:trail(';')` /
+	 * `@:lit(';')` already consumed the separator), and the shapes the
+	 * byte-check misses (`Conditional` ends `#end`, `EllipsisStmt` ends
+	 * `.`, `CondSpliceBlockClose`).
+	 */
+	private static final NO_SEMI_STMT_CTORS: Array<String> = [
+		'BlockStmt',
+		'IfStmt',
+		'WhileStmt',
+		'ForStmt',
+		'SwitchStmt',
+		'SwitchStmtBare',
+		'TryCatchStmt',
+		'LocalFnStmt',
+		'LocalInlineFnStmt',
+		'UntypedBlockStmt',
+		'CondSpliceBlockOpen',
+		'CondSpliceSwitchOpen',
+		'VoidReturnStmt',
+		'ThrowStmt',
+		'DoWhileStmt',
+		'ErrorStmt',
+		'EmptyStmt',
+		'TryCatchStmtBare',
+		'Conditional',
+		'EllipsisStmt',
+		'CondSpliceBlockClose',
+	];
+
+	/**
+	 * `var` / `final` (and static variants) statement constructors whose
+	 * brace-termination depends on the init expression — all four wrap
+	 * the same `HxVarDecl`, so one or-pattern case walks `.init`.
+	 */
+	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
+
+	/**
 	 * Import / using family ctors of `HxDecl` whose leaf carries a
 	 * plain path String as its single positional arg — recognised by
 	 * the between-imports leaf classifiers.
@@ -100,6 +222,11 @@ final class HxAstPredLowering extends AstPredLowering {
 				+ 'Keep the false verdict; widening to `.member` → `HxClassMember.Conditional` is a behavior '
 				+ 'change to make deliberately, against fork fixtures.'),
 			condSpliceRawWrapsCasesField(),
+			stmtExprNoSemiField(),
+			stmtExprNoSemiAtField(),
+			binopRhsNoSemiField(),
+			condSpliceTailElseLedField(),
+			stmtNoSemiField(),
 			condLeafWalkerField('betweenImportsTailLeafClassify', true, '_classifyImportLeafTail'),
 			condLeafWalkerField('betweenImportsHeadLeafClassify', false, '_classifyImportLeafHead'),
 			condLeafWalkerField('tailLeafKeepsBlankAfterConditional', true, '_classifyKeepsBlankLeaf'),
@@ -263,6 +390,238 @@ final class HxAstPredLowering extends AstPredLowering {
 	/** Constant-false member of the `elementIsConditional_*` family — see `doc` for why the shape can never match. */
 	private function elementIsConditionalFalseField(rule: String, argName: String, doc: String): Field {
 		return predField('elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro : Bool, macro false, doc);
+	}
+
+	/**
+	 * `stmtExprNoSemi(e) → Bool` — true iff `e`, standing as a
+	 * statement (`HxStatement.ExprStmt`), is `}`-terminated so Haxe
+	 * needs no trailing `;`. Drives the parser-side
+	 * `@:fmt(trailOptParseGate('stmtExprNoSemi'))` gate on `ExprStmt`:
+	 * gate true → `;` optional (consumed if present); false → `;`
+	 * required (the parser throws to terminate the statement,
+	 * preserving multi-statement boundary detection — the property a
+	 * blanket `@:trailOpt` would destroy on the catch-all).
+	 *
+	 * Note (ω-slice-X3): this predicate is no longer the sole authority
+	 * on `ExprStmt`'s trail-`;` elision — the parse-time gate is a
+	 * 3-disjunct OR with `peekKw(ctx, "else")` and `peekLit(ctx, "}")`.
+	 * The intrinsic arms here remain load-bearing for the recursive
+	 * paths (Assign / Meta / Return / If recursing into an RHS or
+	 * branch) where the lookahead is checked at the OUTER `ExprStmt`,
+	 * not at the inner recursion.
+	 */
+	private function stmtExprNoSemiField(): Field {
+		final body: Expr = { expr: ECall(ident('_stmtExprNoSemiAt'), [ident('e'), macro false]), pos: Context.currentPos() };
+		return predField('stmtExprNoSemi', [valueArg('e', HX_EXPR)], macro : Bool, body,
+			'True iff the expression at the top of an `ExprStmt` needs no trailing `;` (see `_stmtExprNoSemiAt`).');
+	}
+
+	/**
+	 * `stmtExprNoSemi`'s worker, carrying the one bit the public entry
+	 * cannot: whether `e` sits at the TOP of an `ExprStmt` (`nested`
+	 * false) or was reached by walking into an operand of it (`nested`
+	 * true).
+	 *
+	 * The bit exists for the ctors whose grammar node owns an inner
+	 * `@:trailOpt(';')` — `IfExpr` (`HxIfExpr.thenBranch`), `ForExpr`
+	 * (`HxForExpr.body`) and `FnExpr` (`HxFnExprBody.ExprBody`). Those
+	 * slots consume the statement's `;` before the `ExprStmt` gate ever
+	 * runs, so a NESTED occurrence must not `expectLit` a second one
+	 * (`a << if (e) f(m); x();` failed at `x` while
+	 * `a << if (e) f(m);; x();` parsed — that pair exposed the
+	 * swallow). At the TOP of an `ExprStmt` the same relaxation is
+	 * WRONG: a statement that starts with `if` / `for` / `function`
+	 * dispatches to its statement production first and only
+	 * fail-rewinds into the `ExprStmt` catch-all when that production
+	 * could NOT parse it — precisely because the body's `;` is missing
+	 * — so the top-level walk keeps the strict answer
+	 * (`HxControlFlowSliceTest.testElsePeekScopedToElseOnly` pins the
+	 * regression). Transparent wrappers (`MacroExpr` / `MetaExpr`)
+	 * propagate `nested` unchanged; every genuine operand descent
+	 * (binop RHS, ternary else, return value, lambda body) passes
+	 * `true`. `WhileExpr` deliberately has NO arm — `HxWhileExpr.body`
+	 * owns no trail slot, so its `;` survives to the enclosing gate and
+	 * the body walk in `endsWithCloseBrace` (default arm) stays the
+	 * right answer.
+	 */
+	private function stmtExprNoSemiAtField(): Field {
+		inline function at(e: Expr, nested: Expr): Expr
+			return { expr: ECall(ident('_stmtExprNoSemiAt'), [e, nested]), pos: Context.currentPos() };
+		final fnBodySwitch: Expr = nullSwitch(field(ident('_f'), 'body'), macro false, [
+			caseOf(HX_FN_EXPR_BODY, ['BlockBody'], macro true),
+			caseBind(HX_FN_EXPR_BODY, 'ExprBody', [0 => '_e'], macro nested || ${at(ident('_e'), macro true)}),
+		], macro false);
+		final ifArm: Expr = {
+			final recElse: Expr = at(ident('_el'), macro true);
+			final recThen: Expr = at(field(ident('_s'), 'thenBranch'), macro true);
+			macro {
+				final _el = _s.elseBranch;
+				_el != null ? $recElse : (nested ? true : $recThen);
+			};
+		}
+		final body: Expr = nullSwitch(ident('e'), macro false, [
+			// Any binary infix at statement position — the right operand
+			// owns the statement's last token in both families.
+			caseBindMulti(HX_EXPR, ASSIGN_CTORS.concat(BINOP_RHS_CTORS), [1 => '_r'], macro _binopRhsNoSemi(_r)),
+			// `macro class … { members }` always ends with the members `}`.
+			caseOf(HX_EXPR, ['MacroClassExpr'], macro true),
+			// `macro <operand>` — `}`-terminated iff the operand is a
+			// BlockExpr or itself statement-brace-terminated (transparent
+			// wrapper: `nested` propagates).
+			caseBind(HX_EXPR, 'MacroExpr', [0 => '_o'], macro operandIsBlockExpr(_o) || ${at(ident('_o'), ident('nested'))}),
+			// `@:meta expr` — the statement's last token is the inner
+			// expr's last token (transparent wrapper).
+			caseBind(HX_EXPR, 'MetaExpr', [0 => '_m'], at(field(ident('_m'), 'expr'), ident('nested'))),
+			// `return expr` — reaches ExprStmt only via MetaExpr.
+			caseBind(HX_EXPR, 'ReturnExpr', [0 => '_v'], at(ident('_v'), macro true)),
+			// `if (c) then else else'` — see the worker doc for the
+			// nested-vs-top asymmetry.
+			caseBind(HX_EXPR, 'IfExpr', [0 => '_s'], ifArm),
+			// `c ? a : b` — the else branch owns the statement's last
+			// token; re-entering HERE (not endsWithCloseBrace) keeps the
+			// binop / lambda tails visible below the ternary.
+			caseBind(HX_EXPR, 'Ternary', [2 => '_e2'], at(ident('_e2'), macro true)),
+			// `function (…) body` — HxFnExprBody dispatch incl. the
+			// ExprBody `@:trailOpt(';')` swallow.
+			caseBind(HX_EXPR, 'FnExpr', [0 => '_f'], fnBodySwitch),
+			// `for (…) body` — HxForExpr.body carries `@:trailOpt(';')`,
+			// same swallow as HxIfExpr.thenBranch.
+			caseBind(HX_EXPR, 'ForExpr', [0 => '_s'], macro nested || ${at(field(ident('_s'), 'body'), macro true)}),
+			// `(…) -> body` / `(…) => body` — the lambda structs own no
+			// terminator slot, so the answer is the body's. Two cases:
+			// or-pattern captures must agree in type and the two lambda
+			// structs differ.
+			caseBind(HX_EXPR, 'ThinParenLambdaExpr', [0 => '_l'], at(field(ident('_l'), 'body'), macro true)),
+			caseBind(HX_EXPR, 'ParenLambdaExpr', [0 => '_l'], at(field(ident('_l'), 'body'), macro true)),
+			// `untyped <expr>` — transparent keyword wrapper with no
+			// terminator slot; whatever swallowed the `;` sits inside the
+			// operand, so ask as NESTED.
+			caseBind(HX_EXPR, 'UntypedExpr', [0 => '_o'], at(ident('_o'), macro true)),
+			// `<operand> #if … #end` — only an `else`-led fragment elides
+			// the terminator (see `_condSpliceTailElseLed`).
+			caseBind(HX_EXPR, 'CondSpliceTail', [1 => '_raw'], macro _condSpliceTailElseLed(_raw)),
+			// Recursion targets (reached through Assign / IfExpr / … —
+			// standalone `{…}` at statement position is BlockStmt).
+			caseOf(HX_EXPR, STMT_BRACE_TERMINAL_CTORS, macro true),
+		], macro endsWithCloseBrace(e));
+		return predField('_stmtExprNoSemiAt', [valueArg('e', HX_EXPR), { name: 'nested', type: macro : Bool }], macro : Bool, body,
+			'Worker for `stmtExprNoSemi` — `nested` marks an operand descent (inner `@:trailOpt` already claimed the `;`).');
+	}
+
+	/**
+	 * Any binary infix's right operand at statement position. Carve-out:
+	 * `x = {a: 1}` / `x = [1, 2]` / `x = ${expr}` / `x = a is Int` keep
+	 * `;` strict (the corpus contract — distinct from the bare forms at
+	 * stmt position). The carve-out lives here, not in the
+	 * brace-terminal set, so the Meta / Return / If arms still see them
+	 * as brace-terminated; it applies to the non-assign family too, so
+	 * the two stay indistinguishable to the corpus.
+	 */
+	private function binopRhsNoSemiField(): Field {
+		final recurse: Expr = { expr: ECall(ident('_stmtExprNoSemiAt'), [ident('r'), macro true]), pos: Context.currentPos() };
+		final body: Expr = nullSwitch(ident('r'), macro false, [
+			caseOf(HX_EXPR, ['ObjectLit', 'ArrayExpr', 'DollarBlockExpr', 'Is'], macro false),
+		], recurse);
+		return predField('_binopRhsNoSemi', [valueArg('r', HX_EXPR)], macro : Bool, body,
+			'Right-operand walk for the binop arms of `_stmtExprNoSemiAt`, with the assign-RHS literal carve-out.');
+	}
+
+	/**
+	 * True iff a `HxExpr.CondSpliceTail` fragment is an if-chain
+	 * CONTINUATION — its raw text, past the condition atom, starts with
+	 * the `else` keyword. Such a region cannot begin a statement on its
+	 * own: the governing `if` head's `@:trailOpt(';')` already
+	 * swallowed the statement's `;` BEFORE the region opened, so
+	 * demanding a second `;` after the `#end` terminates the enclosing
+	 * block Star one statement early (openfl
+	 * `TextEngine.hx:1183`). Every OTHER fragment shape is an
+	 * independent guarded statement and the mandatory `;` is what makes
+	 * the Trivia-mode parser reject the postfix reading and re-read the
+	 * region as a statement-scope `Conditional` (TM
+	 * `GpuDirectPipeline.hx:48` — a blanket true glued the two into one
+	 * postfix expression and rewrote the file). The condition atom is
+	 * skipped with a paren-depth scan, not a regex: `!(js && html5)`
+	 * carries spaces INSIDE its parens, so only a depth-0 space ends
+	 * the atom; an unbalanced fragment drives the depth negative, the
+	 * scan runs to the end, no keyword is read and the answer is the
+	 * safe `false`.
+	 */
+	private function condSpliceTailElseLedField(): Field {
+		final body: Expr = macro {
+			function isWs(c: Int): Bool return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+			final n: Int = raw.length;
+			var i: Int = 0;
+			while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
+			var depth: Int = 0;
+			while (i < n) {
+				final c: Int = StringTools.fastCodeAt(raw, i);
+				if (c == '('.code)
+					depth++;
+				else if (c == ')'.code)
+					depth--;
+				else if (depth == 0 && isWs(c))
+					break;
+				i++;
+			}
+			while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
+			final after: Int = i + 4;
+			if (raw.substr(i, 4) != 'else')
+				false;
+			else if (after >= n)
+				true;
+			else {
+				final nc: Int = StringTools.fastCodeAt(raw, after);
+				!((nc >= 'a'.code && nc <= 'z'.code) || (nc >= 'A'.code && nc <= 'Z'.code) || (nc >= '0'.code && nc <= '9'.code)
+					|| nc == '_'.code);
+			}
+		};
+		return predField('_condSpliceTailElseLed', [{ name: 'raw', type: macro : String }], macro : Bool, body,
+			'True iff a token-splice fragment is an `else`-led if-chain continuation (paren-depth-aware atom skip).');
+	}
+
+	/**
+	 * `stmtNoSemi(s) → Bool` — HxStatement-level twin of
+	 * `stmtExprNoSemi`: true iff a prior statement of shape `s` needs
+	 * no trailing `;` before the next statement in a BlockBody Star.
+	 * Consumed by the `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))`
+	 * parse gate AND the writer's between-element sep re-emission
+	 * (both sides read the meta-named predicate).
+	 *
+	 *  - `ExprStmt(expr)` → `stmtExprNoSemi(expr)` (carve-out
+	 *    semantics included). The Var-family ctors are NOT in the
+	 *    unconditional set: their per-stmt `@:trailOpt(';')` is gone,
+	 *    the BlockBody Star owns the trailing `;`, and answering FALSE
+	 *    for a non-brace init is the signal that the Star must claim
+	 *    the byte — the init walk delegates to `endsWithCloseBrace` OR
+	 *    the wider parser-side worker (see `HxVarDecl` motivating
+	 *    sources: `final isNegative = hasIndex(index) && { … }`,
+	 *    `var wrappedCallB = () -> { … }`).
+	 *  - `CondSpliceStmt` → recurse into the splice's shared `tail`
+	 *    statement (the raw region contributes no terminator);
+	 *    `OrphanElseStmt` → recurse into the payload (`else` adds no
+	 *    terminator).
+	 *  - The brace- / sep- / non-byte-terminated families
+	 *    (`NO_SEMI_STMT_CTORS`) → true unconditionally.
+	 */
+	private function stmtNoSemiField(): Field {
+		final varArm: Expr = {
+			final ewcb: Expr = { expr: ECall(ident('endsWithCloseBrace'), [ident('_init')]), pos: Context.currentPos() };
+			final wide: Expr = { expr: ECall(ident('_stmtExprNoSemiAt'), [ident('_init'), macro true]), pos: Context.currentPos() };
+			macro {
+				final _init = _d.init;
+				_init != null && ($ewcb || $wide);
+			};
+		}
+		final spliceTail: Expr = { expr: ECall(ident('stmtNoSemi'), [field(ident('_i'), 'tail')]), pos: Context.currentPos() };
+		final body: Expr = nullSwitch(ident('s'), macro false, [
+			caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], macro stmtExprNoSemi(_e)),
+			caseBind(HX_STATEMENT, 'CondSpliceStmt', [0 => '_i'], spliceTail),
+			caseBind(HX_STATEMENT, 'OrphanElseStmt', [0 => '_s'], macro stmtNoSemi(_s)),
+			caseOf(HX_STATEMENT, NO_SEMI_STMT_CTORS, macro true),
+			caseBindMulti(HX_STATEMENT, VAR_INIT_STMT_CTORS, [0 => '_d'], varArm),
+		], macro false);
+		return predField('stmtNoSemi', [valueArg('s', HX_STATEMENT)], macro : Bool, body,
+			'True iff a prior BlockBody statement needs no `;` before the next one.');
 	}
 
 	/**

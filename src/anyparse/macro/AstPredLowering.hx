@@ -219,6 +219,16 @@ class AstPredLowering {
 		return { values: [pat(rule, ctor, binds)], expr: body, guard: null };
 	}
 
+	/**
+	 * One switch Case or-matching several ctors with the SAME operand
+	 * bindings (same declared index, same name — Haxe requires or-pattern
+	 * captures to agree in name and type, so the bound operands must be
+	 * the same type across all `ctors`).
+	 */
+	private function caseBindMulti(rule: String, ctors: Array<String>, binds: Map<Int, String>, body: Expr): Case {
+		return { values: [for (c in ctors) pat(rule, c, binds)], expr: body, guard: null };
+	}
+
 	/** `switch (<subject>) { <cases…>; case _: <dflt>; }` over a non-null enum value. */
 	private function sw(subject: Expr, cases: Array<Case>, dflt: Expr): Expr {
 		return { expr: ESwitch(subject, cases, dflt), pos: Context.currentPos() };

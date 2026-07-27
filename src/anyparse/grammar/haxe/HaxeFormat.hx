@@ -902,29 +902,6 @@ final class HaxeFormat implements TextFormat {
 	}
 
 	/**
-	 * Parser-side statement-terminator gate for
-	 * `@:fmt(trailOptParseGate('stmtExprNoSemi'))` on
-	 * `HxStatement.ExprStmt`. Reached from the generated parser via
-	 * `schema.instance.stmtExprNoSemi(_raw)` (the same channel as
-	 * `unescapeChar`); delegates to the AST predicate in `HxExprUtil`
-	 * so the grammar-AST logic stays beside `endsWithCloseBrace`.
-	 */
-	public inline function stmtExprNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtExprNoSemi(raw);
-
-	/**
-	 * HxStatement-level sister of `stmtExprNoSemi`. Wired through
-	 * `@:sep(';', tailRelax, blockEnded('stmtNoSemi'))` on BlockBody
-	 * Star containers (AST-shape adapter). The
-	 * generated parser calls
-	 * `schema.instance.stmtNoSemi(_arr[_arr.length - 1])` after each
-	 * pushed element to decide whether the next-element gate may skip
-	 * the `;` separator. Delegates to the AST predicate in `HxExprUtil`
-	 * so all the per-ctor logic (including recursive `ExprStmt(expr)` →
-	 * `stmtExprNoSemi(expr)`) stays beside `endsWithCloseBrace`.
-	 */
-	public inline function stmtNoSemi(raw: Null<Dynamic>): Bool return HxExprUtil.stmtNoSemi(raw);
-
-	/**
 	 * Default `WrapRules` cascade for `HxObjectLit.fields` — ported
 	 * verbatim from haxe-formatter's `wrapping.objectLiteral` rule set
 	 * in `resources/default-hxformat.json` (AxGord fork). Returned as a
