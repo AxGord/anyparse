@@ -9,11 +9,15 @@ import anyparse.query.SpanTypeInfoProvider.SpanTypeInfo;
 using Lambda;
 
 /**
- * Pins the batched `spanTypeInfo` bundle to the six individual `TypeInfoProvider`
- * accessors it replaces: `HaxeQueryPlugin.spanTypeInfo` computes all six span maps
- * in one parse, and `CachingGrammarPlugin` memoizes it and slices the accessors from
- * it. Both must stay byte-for-byte the pre-batching per-accessor results, so this
- * guards the (necessarily duplicated) combined visitor against drift.
+ * Pins the six span-indexed maps the generated span-info walk produces.
+ *
+ * The six `TypeInfoProvider` accessors are now SLICES of the one bundle, so
+ * comparing them against it can no longer catch drift - there is only one
+ * implementation left to drift from. `testBundleValuesArePinned` is what makes
+ * this suite a net: it asserts the actual contents, captured from the reflective
+ * walk the generated one replaced and verified equal to it on all five fixtures.
+ * The accessor tests keep their own job - that the plugin and the caching
+ * decorator both hand back the SAME bundle instead of recomputing it.
  */
 class SpanTypeInfoPinTest extends Test {
 
@@ -25,13 +29,15 @@ class SpanTypeInfoPinTest extends Test {
 		'enum E {\n\tA(x: Int);\n\tB(y: String);\n}\nabstract Ab(Int) from Int to Int {\n\tpublic function new(v: Int) this = v;\n}'
 	];
 
-	public function testBatchedEqualsIndividualOnHaxeQueryPlugin(): Void {
+	public function testAccessorsSliceTheBundle(): Void {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		for (src in sources)
+		for (src in sources) {
+			final bundle: SpanTypeInfo = plugin.spanTypeInfo(src);
 			assertBundleMatches(
-				plugin.spanTypeInfo(src), plugin.declaredTypes(src), plugin.returnTypes(src), plugin.propertyAccessors(src),
+				bundle, plugin.declaredTypes(src), plugin.returnTypes(src), plugin.propertyAccessors(src),
 				plugin.propertyWriteAccessors(src), plugin.declaredTypeSources(src), plugin.castTargetSources(src), src
 			);
+		}
 	}
 
 	public function testCachingPluginSlicesAndReuses(): Void {
@@ -81,6 +87,76 @@ class SpanTypeInfoPinTest extends Test {
 		Assert.equals(a.count(), b.count(), '$label size for <$src>');
 		for (k => value in a) Assert.equals(b[k], value, '$label key $k for <$src>');
 		for (k in b.keys()) Assert.isTrue(a.exists(k), '$label missing key $k for <$src>');
+	}
+
+
+	/**
+	 * The bundle CONTENTS, fixture by fixture. Captured from the reflective walk the
+	 * generated one replaced, after confirming the two agreed on every one of these
+	 * five sources - so a change to the emitted walk that alters what a check sees
+	 * fails here instead of silently moving findings across the corpus.
+	 */
+	public function testBundleValuesArePinned(): Void {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final expected: Array<Array<String>> = [
+			[
+				'[11=>Ctx, 39=>Foo, 47=>Bar, 56=>Int, 71=>Ctx, 92=>Foo]',
+				'[28=>Array]',
+				'[]',
+				'[]',
+				'[11=>Ctx, 39=>Foo, 47=>Bar, 56=>Int, 71=>Ctx, 92=>Foo]',
+				'[]'
+			],
+			[
+				'[18=>Int, 50=>String, 81=>Int]',
+				'[98=>Int]',
+				'[18=>true, 50=>false]',
+				'[18=>false, 50=>false]',
+				'[18=>Int, 50=>String, 81=>Int]',
+				'[]'
+			],
+			[
+				'[42=>Array, 50=>Int, 65=>Int, 78=>String, 94=>Map, 101=>Int]',
+				'[11=>Void]',
+				'[]',
+				'[]',
+				'[42=>Array<Int>, 50=>Int, 65=>Int, 78=>String, 94=>Map<String, Int>, 101=>Int]',
+				'[42=>Array<Int>, 78=>String]'
+			],
+			[
+				'[20=>Int, 100=>Ctx]',
+				'[49=>Ctx, 89=>Void]',
+				'[]',
+				'[]',
+				'[0=>{ var f: Int; }, 20=>Int, 100=>Ctx]',
+				'[]'
+			],
+			[
+				'[12=>Int, 24=>String, 94=>Int]',
+				'[]',
+				'[]',
+				'[]',
+				'[12=>Int, 24=>String, 94=>Int]',
+				'[]'
+			]
+		];
+		for (i in 0...sources.length) {
+			final b: SpanTypeInfo = plugin.spanTypeInfo(sources[i]);
+			final e: Array<String> = expected[i];
+			Assert.equals(e[0], render(b.declaredTypes), 'declaredTypes for fixture $i');
+			Assert.equals(e[1], render(b.returnTypes), 'returnTypes for fixture $i');
+			Assert.equals(e[2], render(b.propertyAccessors), 'propertyAccessors for fixture $i');
+			Assert.equals(e[3], render(b.propertyWriteAccessors), 'propertyWriteAccessors for fixture $i');
+			Assert.equals(e[4], render(b.declaredTypeSources), 'declaredTypeSources for fixture $i');
+			Assert.equals(e[5], render(b.castTargetSources), 'castTargetSources for fixture $i');
+		}
+	}
+
+	/** A span map as a key-ordered `[from=>value, ...]` string, so a mismatch reads as a diff rather than a count. */
+	private static function render<V>(m: Map<Int, V>): String {
+		final keys: Array<Int> = [for (k in m.keys()) k];
+		keys.sort((a, b) -> a - b);
+		return '[' + keys.map(k -> '$k=>' + Std.string(m[k])).join(', ') + ']';
 	}
 
 }

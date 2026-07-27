@@ -866,21 +866,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * payload struct, and a spanned struct's `_span` with its own `type`.
 	 */
 	public function declaredTypes(source: String): Map<Int, String> {
-		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
-			if (Reflect.hasField(node, 'type')) {
-				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'type'));
-				if (nm != null) out[span.from] = nm;
-			}
-		});
+		return spanTypeInfo(source).declaredTypes;
 	}
 
 	public function returnTypes(source: String): Map<Int, String> {
-		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
-			if (Reflect.hasField(node, 'returnType')) {
-				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'returnType'));
-				if (nm != null) out[span.from] = nm;
-			}
-		});
+		return spanTypeInfo(source).returnTypes;
 	}
 
 	/**
@@ -892,12 +882,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * keyed on `HxVarDecl.access` (dropped from the QueryNode projection).
 	 */
 	public function propertyAccessors(source: String): Map<Int, Bool> {
-		return walkSpanMap(source, (node, span, out: Map<Int, Bool>) -> {
-			if (Reflect.hasField(node, 'access')) {
-				final access: Dynamic = Reflect.field(node, 'access');
-				if (access != null) out[span.from] = isGetterAccess(access);
-			}
-		});
+		return spanTypeInfo(source).propertyAccessors;
 	}
 
 	/**
@@ -909,12 +894,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * consumer treats absence as no set-accessor.
 	 */
 	public function propertyWriteAccessors(source: String): Map<Int, Bool> {
-		return walkSpanMap(source, (node, span, out: Map<Int, Bool>) -> {
-			if (Reflect.hasField(node, 'access')) {
-				final access: Dynamic = Reflect.field(node, 'access');
-				if (access != null) out[span.from] = isSetterAccess(access);
-			}
-		});
+		return spanTypeInfo(source).propertyWriteAccessors;
 	}
 
 	/**
@@ -924,12 +904,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * the written form rather than the package-stripped simple name.
 	 */
 	public function declaredTypeSources(source: String): Map<Int, String> {
-		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
-			if (Reflect.hasField(node, 'type')) {
-				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
-				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
-			}
-		});
+		return spanTypeInfo(source).declaredTypeSources;
 	}
 
 	/**
@@ -939,15 +914,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * operand `target` / `expr`, no `name`), but the value is the written type source.
 	 */
 	public function castTargetSources(source: String): Map<Int, String> {
-		return walkSpanMap(source, (node, span, out: Map<Int, String>) -> {
-			if (
-				Reflect.hasField(node, 'type') && !Reflect.hasField(node, 'name')
-				&& (Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr'))
-			) {
-				final ts: Null<Span> = typeFieldSpan(Reflect.field(node, 'type'));
-				if (ts != null) out[span.from] = source.substring(ts.from, ts.to);
-			}
-		});
+		return spanTypeInfo(source).castTargetSources;
 	}
 
 	/**
@@ -960,48 +927,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * (pinned by `SpanTypeInfoPinTest`).
 	 */
 	public function spanTypeInfo(source: String): SpanTypeInfo {
-		final declaredTypes: Map<Int, String> = [];
-		final returnTypes: Map<Int, String> = [];
-		final propertyAccessors: Map<Int, Bool> = [];
-		final propertyWriteAccessors: Map<Int, Bool> = [];
-		final declaredTypeSources: Map<Int, String> = [];
-		final castTargetSources: Map<Int, String> = [];
-		final bundle: SpanTypeInfo = {
-			declaredTypes: declaredTypes,
-			returnTypes: returnTypes,
-			propertyAccessors: propertyAccessors,
-			propertyWriteAccessors: propertyWriteAccessors,
-			declaredTypeSources: declaredTypeSources,
-			castTargetSources: castTargetSources
-		};
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return bundle;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span == null) return;
-			if (Reflect.hasField(node, 'type')) {
-				final typeVal: Dynamic = Reflect.field(node, 'type');
-				final nm: Null<String> = nominalTypeName(typeVal);
-				if (nm != null) declaredTypes[span.from] = nm;
-				final ts: Null<Span> = typeFieldSpan(typeVal);
-				if (ts != null) {
-					declaredTypeSources[span.from] = source.substring(ts.from, ts.to);
-					if (!Reflect.hasField(node, 'name') && (Reflect.hasField(node, 'target') || Reflect.hasField(node, 'expr')))
-						castTargetSources[span.from] = source.substring(ts.from, ts.to);
-				}
-			}
-			if (Reflect.hasField(node, 'returnType')) {
-				final nm: Null<String> = nominalTypeName(Reflect.field(node, 'returnType'));
-				if (nm != null) returnTypes[span.from] = nm;
-			}
-			if (Reflect.hasField(node, 'access')) {
-				final access: Dynamic = Reflect.field(node, 'access');
-				if (access != null) {
-					propertyAccessors[span.from] = isGetterAccess(access);
-					propertyWriteAccessors[span.from] = isSetterAccess(access);
-				}
-			}
-		});
-		return bundle;
+		// The parser's return type is a synth sub-module type that cannot be NAMED
+		// from another file, so this local is left to inference.
+		final root = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		return root == null ? emptySpanTypeInfo() : HaxeQueryWalker.spanInfo(root, source);
 	}
 
 	/**
@@ -1050,16 +979,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/** Every declare-site type-parameter name in the file (`class C<T>`, `function f<U>`, …). */
 	private function typeParamNames(source: String): Array<String> {
-		final names: Array<String> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return names;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, _span) -> {
-			if (Reflect.hasField(node, 'constraintMore') && Reflect.hasField(node, 'name')) {
-				final nm: Null<String> = extractName(Reflect.field(node, 'name'));
-				if (nm != null && !names.contains(nm)) names.push(nm);
-			}
-		});
-		return names;
+		final root = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
+		return root == null ? [] : HaxeQueryWalker.typeParamNames(root, source);
 	}
 
 	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
@@ -1069,160 +990,6 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return new QueryNode('module', null, HaxeQueryWalker.walk(HaxeModuleSpanParser.parse(source), withTypeRefs));
 	}
 
-	private function extractName(value: Dynamic): Null<String> {
-		if (value == null) return null;
-		if (value is String) return value;
-		final t: Type.ValueType = Type.typeof(value);
-		switch t {
-			case TObject:
-				// Try canonical name slots in priority order. `name` is the
-				// common case (HxClassDecl, HxFnDecl, ...); `type` covers
-				// `new T(...)` (HxNewExpr) and similar nominally-typed
-				// nodes; `varName` covers for-loop iterators (HxForStmt /
-				// HxForExpr); `node` unwraps Trivial<T> envelopes for the
-				// future Trivia + span composition.
-				for (field in ['name', 'type', 'varName']) if (Reflect.hasField(value, field)) {
-					final n: Dynamic = Reflect.field(value, field);
-					if (n is String) return n;
-				}
-				// `param` unwraps HxCatchClause / HxCatchClauseStmtBare /
-				// HxCatchClauseExpr — the catch-param shape (name + optional
-				// `:Type`) lives in `param:HxCatchParam`, lifted there to
-				// support the bare `catch (name)` form (e.g. `catch (_)`).
-				// Mirror of the `node` unwrap for Trivial<T> envelopes.
-				if (Reflect.hasField(value, 'param')) return extractName(Reflect.field(value, 'param'));
-				if (Reflect.hasField(value, 'node')) return extractName(Reflect.field(value, 'node'));
-				// `fn` unwraps `HxFinalModifierMember` — the
-				// `{ modifiers, fn:HxFnDecl }` body of a `final` METHOD
-				// (`HxClassMember.FinalModifiedMember`). The method name lives
-				// on the inner `HxFnDecl`, so surface it onto the
-				// `FinalModifiedMember` node — parity with the plain `FnMember`,
-				// whose `HxFnDecl` is the ctor's direct param. Self-guarding: a
-				// non-name-bearing `fn` value (lambda `HxFnExpr` / arrow
-				// `HxArrowFnType`) yields null, and those are reached as `fn`
-				// VALUES of an enum ctor, never as a struct CARRYING an `fn`
-				// field — so no other node is affected.
-				if (Reflect.hasField(value, 'fn')) return extractName(Reflect.field(value, 'fn'));
-			case TEnum(_):
-				// Slice 27 — transparent unwrap for the single-Ref wrapper
-				// enum `HxAnonVarBody` (`Optional(decl)` / `Plain(decl)`):
-				// `HxAnonField.VarField` / `FinalField` now carries a post-
-				// keyword-`?` Alt-enum wrapper, so the name slot lives one
-				// level deeper than before. Scoped by ctor name to avoid
-				// surfacing names from arbitrary enum ctor payloads (the
-				// general TEnum recurse broke pattern-matcher
-				// `extractFirstExpr` / etc., which rely on name being null
-				// for non-decl enum nodes).
-				final ctor: String = Type.enumConstructor(value);
-				if (ctor == 'Optional' || ctor == 'Plain') {
-					final params: Array<Dynamic> = Type.enumParameters(value);
-					for (p in params) if (!Std.isOfType(p, Span)) {
-						final n: Null<String> = extractName(p);
-						if (n != null) return n;
-					}
-				}
-			case _:
-		}
-		return null;
-	}
-
-	/** Simple name of a nominal `HxType.Named(payload)` (the name lives on the payload struct), else null. */
-	private function nominalTypeName(typeVal: Dynamic): Null<String> {
-		if (typeVal == null || !Type.typeof(typeVal).match(TEnum(_))) return null;
-		if (Type.enumConstructor(typeVal) != 'Named') return null;
-		for (p in Type.enumParameters(typeVal)) if (!Std.isOfType(p, Span)) {
-			final nm: Null<String> = extractName(p);
-			if (nm != null) {
-				final dot: Int = nm.lastIndexOf('.');
-				return dot == -1 ? nm : nm.substring(dot + 1);
-			}
-		}
-		return null;
-	}
-
-	/** The span of an `HxType` value — the `Named` ctor's `Span` param — or null when absent. */
-	private function typeFieldSpan(typeVal: Dynamic): Null<Span> {
-		if (typeVal == null || !Type.typeof(typeVal).match(TEnum(_))) return null;
-		for (p in Type.enumParameters(typeVal)) if (Std.isOfType(p, Span)) return cast p;
-		return null;
-	}
-
-	/**
-	 * Whether an `HxAccessClause` accessor at `slot` (0 = READ, 1 = WRITE) runs code -
-	 * a getter / setter. Only the three stored-field accessors `default` / `null` /
-	 * `never` are side-effect-free; everything else (`get` / `set`, `dynamic`, or a
-	 * custom method-name accessor) runs code. A missing slot or non-string id defaults
-	 * to true, so a member is never wrongly classed as having a plain stored accessor.
-	 */
-	private function isSideEffectingAccess(access: Dynamic, slot: Int): Bool {
-		final ids: Dynamic = Reflect.field(access, 'ids');
-		if (!Std.isOfType(ids, Array)) return true;
-		final arr: Array<Dynamic> = cast ids;
-		if (arr.length <= slot) return true;
-		final id: Dynamic = arr[slot];
-		if (!(id is String)) return true;
-		final s: String = id;
-		return !(s == 'default' || s == 'null' || s == 'never');
-	}
-
-	/** Whether the property's READ accessor (`ids[0]`) runs code - a getter. */
-	private inline function isGetterAccess(access: Dynamic): Bool return isSideEffectingAccess(access, 0);
-
-	/** Whether the property's WRITE accessor (`ids[1]`) runs code - a setter. */
-	private inline function isSetterAccess(access: Dynamic): Bool return isSideEffectingAccess(access, 1);
-
-	/**
-	 * Walk the raw grammar AST (which the QueryNode projection drops type/accessor
-	 * detail from), invoking `visit(node, span)` for every spanned struct node with
-	 * the nearest enclosing binding span threaded down — an enum decl ctor carries
-	 * the span as a `Span` param, its payload struct carries `type`/`access` with no
-	 * own `_span`. The shared traversal for `declaredTypes` / `propertyAccessors`.
-	 */
-	private function walkGrammarSpans(value: Dynamic, currentSpan: Null<Span>, visit: (Dynamic, Null<Span>) -> Void): Void {
-		if (value == null || (value is String) || Std.isOfType(value, Span)) return;
-		final t: Type.ValueType = Type.typeof(value);
-		switch t {
-			case TEnum(_):
-				final params: Array<Dynamic> = Type.enumParameters(value);
-				var span: Null<Span> = currentSpan;
-				for (p in params) if (Std.isOfType(p, Span)) span = cast p;
-				for (p in params) if (!Std.isOfType(p, Span))
-					walkGrammarSpans(p, span, visit);
-			case TObject:
-				final spanField: Dynamic = Reflect.hasField(value, '_span') ? Reflect.field(value, '_span') : null;
-				final span: Null<Span> = Std.isOfType(spanField, Span) ? cast spanField : currentSpan;
-				visit(value, span);
-				for (field in Reflect.fields(value)) walkGrammarSpans(Reflect.field(value, field), span, visit);
-			case TClass(_):
-				if (Std.isOfType(value, Array)) {
-					final arr: Array<Dynamic> = cast value;
-					for (e in arr) walkGrammarSpans(e, currentSpan, visit);
-				}
-			case _:
-		}
-	}
-
-	/**
-	 * Parse `source` and fold every grammar-span-bearing node into a
-	 * `Map<Int, V>` keyed on the node's `span.from`. `visit` writes the
-	 * value(s) for a node into `out` (see `declaredTypes` et al.); it runs
-	 * only for nodes carrying a non-null span. An unparseable source yields
-	 * an empty map.
-	 */
-	private function walkSpanMap<V>(source: String, visit: (node:Dynamic, span:Span, out:Map<Int, V>) -> Void): Map<Int, V> {
-		final out: Map<Int, V> = [];
-		final root: Null<Dynamic> = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		if (root == null) return out;
-		walkGrammarSpans(Reflect.field(root, 'decls'), null, (node, span) -> {
-			if (span != null) visit(node, span, out);
-		});
-		return out;
-	}
-
-	/** A non-structural leaf the grammar walkers skip: null, a `String`, or a `Span`. */
-	private inline function isLeafValue(value: Dynamic): Bool {
-		return value == null || value is String || Std.isOfType(value, Span);
-	}
 
 	/** Read `<dir>/<modulePath-as-path>.hx`, or null when it does not exist / is unreadable (a non-std module then falls back to the table). */
 	private static function readStdModule(dir: String, modulePath: String): Null<String> {
@@ -1283,6 +1050,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	private static function hasParam(fn: QueryNode): Bool {
 		for (c in fn.children) if (c.kind == 'Required' || c.kind == 'Optional' || c.kind == 'Rest') return true;
 		return false;
+	}
+
+
+	/** The all-empty bundle returned when the source does not parse - the six maps are simply unpopulated, never null. */
+	private static function emptySpanTypeInfo(): SpanTypeInfo {
+		return {
+			declaredTypes: [],
+			returnTypes: [],
+			propertyAccessors: [],
+			propertyWriteAccessors: [],
+			declaredTypeSources: [],
+			castTargetSources: []
+		};
 	}
 
 }

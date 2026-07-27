@@ -89,11 +89,7 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	 * and the public entry rooted on `shape.root`.
 	 */
 	public function generate(): QueryWalkerResult {
-		final ruleNames: Array<String> = [for (name in _shape.rules.keys()) name];
-		// Deterministic order - keep generated field order stable across
-		// compiles regardless of Map iteration order.
-		ruleNames.sort((a: String, b: String) -> a < b ? -1 : (a > b ? 1 : 0));
-
+		final ruleNames: Array<String> = sortedRuleNames();
 		final walks: Array<WalkerFn> = [];
 		final names: Array<WalkerFn> = [];
 		final typeRefs: Array<WalkerFn> = [];

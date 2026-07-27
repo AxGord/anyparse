@@ -380,6 +380,9 @@ class Build {
 
 		final result: QueryWalkerLowering.QueryWalkerResult = new QueryWalkerLowering(shape).generate();
 		final fields: Array<Field> = QueryWalkerCodegen.emit(result);
+		// Both passes emit onto the SAME marker class on purpose: the span-info
+		// walk reuses the walker's generated `_nameOf` helpers.
+		for (f in SpanInfoCodegen.emit(new SpanInfoLowering(shape).generate())) fields.push(f);
 
 		#if anyparse_dump
 		final printer: haxe.macro.Printer = new haxe.macro.Printer();
