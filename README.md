@@ -268,8 +268,7 @@ resolve against — so a class `extends openfl.display.Sprite` is seen to inheri
 `addChild` even though OpenFL is not being linted. The resolution scope is
 never reported and never edited by `--fix`; only the files named on the command
 line are. The roots are read lazily — a run whose checks demand no cross-file
-resolution never touches them — so this is byte-inert for any project without
-the key.
+resolution never touches them.
 
 A top-level `"resolutionLibs"` (array of haxelib NAMES) is the preferred form
 for a library that is installed through haxelib: each name is resolved to that
@@ -286,8 +285,28 @@ skipped with a stderr note while the lint proceeds. `resolutionLibs` and
 `resolutionRoots` when the library is a sibling checkout not registered with
 haxelib, and `resolutionLibs` otherwise.
 
+The installed Haxe **std** joins that same scope IMPLICITLY, with no key at all
+— discovered through `HAXE_STD_PATH`, the `which haxe` sibling, or a known
+install prefix, and contributed as its target-agnostic core (toplevel `*.hx`
+plus `haxe/` and `sys/`). Whether `haxe.io.Bytes` resolves must not depend on
+the project happening to declare an unrelated library, so a project with
+NEITHER resolution key still gets it. That makes the resolution scope no longer
+opt-in: a config-less run is inert only in the sense that it spawns no
+`haxelib` and pays at most one memoised `which haxe` probe per process.
+
+Decline the std with a top-level `"resolutionStd": false` (per project) or the
+`APQ_NO_STD` environment variable, any value but empty or `0` (per process, and
+it also cuts the std-derived inference tables). Reach for one of them when the
+sources target a different Haxe version than the machine's — otherwise there is
+no way to refuse, since discovery falls through to the known install prefixes
+however `HAXE_STD_PATH` and `PATH` are set.
+
 ```json
 { "resolutionLibs": ["openfl"] }
+```
+
+```json
+{ "resolutionStd": false }
 ```
 
 ```json

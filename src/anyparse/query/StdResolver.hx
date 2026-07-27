@@ -14,10 +14,16 @@ import sys.FileSystem;
  *  2. the `../std` sibling of the real `haxe` binary (`which haxe`, symlinks resolved);
  *  3. the known install locations (`/usr/local/lib/haxe/std`, `/opt/homebrew/lib/haxe/std`).
  *
- * The result is CACHED per run (`stdDir` computes once) and null when nothing is
- * found — every consumer then degrades to its pre-existing behaviour: the resolution
- * scope stays byte-inert, and the derivable tables fall back to their hardcoded
- * constants.
+ * `APQ_NO_STD` (any value but empty or `0`) DECLINES the whole channel before any of
+ * that runs — the process-wide opt-out for a project targeting a different Haxe
+ * version, mirrored per-project by the `apqlint.json` `resolutionStd: false` key.
+ * Without one of the two there is NO way to refuse: step 3 finds a std on any
+ * Haxe-equipped machine however `HAXE_STD_PATH` and `PATH` are set.
+ *
+ * The result is CACHED per process (`stdDir` computes once; `resetCache` is the
+ * test-only seam) and null when nothing is found or the std was declined — every
+ * consumer then degrades to its pre-existing behaviour: the resolution scope stays
+ * inert, and the derivable tables fall back to their hardcoded constants.
  *
  * The impure edges (env read, `which haxe` spawn, symlink + existence checks) live in
  * `stdDir`; the priority logic is the PURE `discover`, unit-tested with a fixture
@@ -38,17 +44,48 @@ final class StdResolver {
 	private static var _computed: Bool = false;
 
 	/**
-	 * The absolute Haxe `std` directory, discovered ONCE and cached, or null when it
-	 * cannot be found (every consumer then keeps its pre-existing behaviour). Reads
-	 * `HAXE_STD_PATH`, the `which haxe` sibling and the known locations through the real
-	 * filesystem, then defers the priority decision to the pure `discover`.
+	 * The absolute Haxe `std` directory, discovered ONCE and cached, or null when it cannot
+	 * be found OR this process DECLINED it via `APQ_NO_STD` — every consumer then keeps its
+	 * pre-existing behaviour. Reads `HAXE_STD_PATH`, the `which haxe` sibling and the known
+	 * locations through the real filesystem, then defers the priority decision to the pure
+	 * `discover`.
 	 */
 	public static function stdDir(): Null<String> {
 		if (_computed) return _cached;
 		_computed = true;
 		discoveries++;
-		_cached = discover(envStd(), whichHaxeSiblingStd(), KNOWN_LOCATIONS, dirExists);
+		_cached = declined() ? null : discover(envStd(), whichHaxeSiblingStd(), KNOWN_LOCATIONS, dirExists);
 		return _cached;
+	}
+
+	/**
+	 * TEST-ONLY seam: drop the memoised `stdDir` result so the next call re-discovers. The
+	 * process-wide memo is what would otherwise make `APQ_NO_STD` untestable in a
+	 * single-process suite — a test that toggles it must reset on both sides, so the rest of
+	 * the suite keeps the real std.
+	 */
+	public static function resetCache(): Void {
+		_cached = null;
+		_computed = false;
+	}
+
+	/**
+	 * Whether `APQ_NO_STD` DECLINES the auto-discovered std: set to anything other than the
+	 * empty string or `0`. The env twin of the `apqlint.json` `resolutionStd: false` key, and
+	 * the only way to refuse the std on a machine where `KNOWN_LOCATIONS` finds one whatever
+	 * `HAXE_STD_PATH` and `PATH` say. It cuts the WHOLE channel — the implicit resolution
+	 * scope and the std-derived tables alike — so `Cli.resolutionThunk`'s null branch and the
+	 * table-only fallbacks stay reachable on a Haxe-equipped box instead of being dead in CI.
+	 */
+	private static function declined(): Bool {
+		#if (sys || nodejs)
+		final raw: Null<String> = Sys.getEnv('APQ_NO_STD');
+		if (raw == null) return false;
+		final trimmed: String = StringTools.trim(raw);
+		return trimmed != '' && trimmed != '0';
+		#else
+		return false;
+		#end
 	}
 
 	/**

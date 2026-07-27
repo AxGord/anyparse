@@ -47,15 +47,19 @@ final class LintConfig {
 	/** The declared haxelib library names (`resolutionLibs`) — verbatim strings; the CLI resolves each to a source dir lazily via `haxelib libpath`. An empty array when the key is absent. */
 	private final _resolutionLibs: Array<String>;
 
+	/** Whether the auto-discovered Haxe std may join the resolution scope (`resolutionStd`); true unless the key explicitly declines it. */
+	private final _resolutionStd: Bool;
+
 	public function new(
 		rules: Map<String, RuleConfig>, ?compilerOracle: String, ?compilerOracleDir: String, ?resolutionRoots: Array<String>,
-		?resolutionLibs: Array<String>
+		?resolutionLibs: Array<String>, ?resolutionStd: Bool
 	) {
 		_rules = rules;
 		_compilerOracle = compilerOracle;
 		_compilerOracleDir = compilerOracleDir;
 		_resolutionRoots = resolutionRoots ?? [];
 		_resolutionLibs = resolutionLibs ?? [];
+		_resolutionStd = resolutionStd ?? true;
 	}
 
 	/**
@@ -93,6 +97,20 @@ final class LintConfig {
 	 */
 	public function resolutionLibs(): Array<String> {
 		return _resolutionLibs;
+	}
+
+	/**
+	 * Whether the auto-discovered Haxe std joins the resolution scope — true unless the config
+	 * declares `"resolutionStd": false`. The opt-OUT for a project whose sources target a
+	 * different Haxe version than the one installed on the machine: without it, `StdResolver`
+	 * falls through to its known install locations, so clearing `HAXE_STD_PATH` and stripping
+	 * `haxe` from `PATH` still yields a std and the project silently resolves against it. Only
+	 * the std channel is declined; declared `resolutionRoots` / `resolutionLibs` are unaffected.
+	 * The process-wide twin is the `APQ_NO_STD` env var (`StdResolver`), which also cuts the
+	 * std-derived tables.
+	 */
+	public function resolutionStd(): Bool {
+		return _resolutionStd;
 	}
 
 	/**
@@ -181,6 +199,7 @@ final class LintConfig {
 		var oracle: Null<String> = null;
 		final roots: Array<String> = [];
 		final libs: Array<String> = [];
+		var std: Bool = true;
 		final root: Null<Dynamic> = try haxe.Json.parse(content) catch (exception: Exception) null;
 		if (root != null && Reflect.isObject(root)) {
 			final rulesField: Null<Dynamic> = Reflect.field(root, 'rules');
@@ -190,14 +209,12 @@ final class LintConfig {
 			}
 			final oracleField: Null<Dynamic> = Reflect.field(root, 'compilerOracle');
 			if (oracleField != null && oracleField is String) oracle = (oracleField: String);
-			final rootsField: Null<Dynamic> = Reflect.field(root, 'resolutionRoots');
-			if (rootsField != null && rootsField is Array) for (entry in (rootsField: Array<Dynamic>)) if (entry is String)
-				roots.push(resolveRoot(baseDir, (entry: String)));
-			final libsField: Null<Dynamic> = Reflect.field(root, 'resolutionLibs');
-			if (libsField != null && libsField is Array) for (entry in (libsField: Array<Dynamic>)) if (entry is String)
-				libs.push((entry: String));
+			for (entry in stringArrayField(root, 'resolutionRoots')) roots.push(resolveRoot(baseDir, entry));
+			for (entry in stringArrayField(root, 'resolutionLibs')) libs.push(entry);
+			final stdField: Null<Dynamic> = Reflect.field(root, 'resolutionStd');
+			if (stdField != null && stdField is Bool) std = (stdField: Bool);
 		}
-		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, libs);
+		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, libs, std);
 	}
 
 	private static function parseRule(raw: Dynamic): RuleConfig {
@@ -212,6 +229,17 @@ final class LintConfig {
 	/** Resolve a `resolutionRoots` entry to absolute against the config directory; a verbatim absolute path (or one parsed without a base) is kept as-is. */
 	private static function resolveRoot(baseDir: Null<String>, root: String): String {
 		return baseDir == null || haxe.io.Path.isAbsolute(root) ? root : haxe.io.Path.normalize(haxe.io.Path.join([baseDir, root]));
+	}
+
+
+	/**
+	 * Every STRING element of the root-level array key `name` — an empty array when the key is
+	 * absent, is not an array, or holds no strings. A non-string element is dropped, never coerced.
+	 */
+	private static function stringArrayField(root: Dynamic, name: String): Array<String> {
+		final field: Null<Dynamic> = Reflect.field(root, name);
+		if (field == null || !(field is Array)) return [];
+		return [for (entry in (field: Array<Dynamic>)) if (entry is String) (entry: String)];
 	}
 
 }

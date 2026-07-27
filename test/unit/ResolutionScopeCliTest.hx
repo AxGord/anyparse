@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.query.Cli;
 import anyparse.query.HaxelibResolver;
+import anyparse.query.StdResolver;
 #if (sys || nodejs)
 import sys.io.File;
 #end
@@ -281,6 +282,22 @@ class ResolutionScopeCliTest extends Test {
 		CliFixture.removeDir(lib);
 		return exit;
 	}
+
+	/**
+	 * Lint the single report file `name` (source `source`) under `rule` in a project whose
+	 * `apqlint.json` declares NO resolution key at all. Returns the CLI exit code — 1 when an Info
+	 * finding fires (`--fail-on info`), 0 when the rule stays silent. The config-less sibling of
+	 * `lintWithLib`: whatever resolves here comes from the auto-discovered std alone.
+	 */
+	private static function lintConfigLess(rule: String, name: String, source: String): Int {
+		final proj: String = CliFixture.writeDir('resnocfg', [
+			{ name: name, source: source },
+			{ name: 'apqlint.json', source: '{"rules":{}}' }
+		]);
+		final exit: Int = Cli.run(['lint', '--rule', rule, '--fail-on', 'info', '$proj/$name']);
+		CliFixture.removeDir(proj);
+		return exit;
+	}
 	#end
 
 	/**
@@ -373,6 +390,80 @@ class ResolutionScopeCliTest extends Test {
 			]),
 			'a resolution scope with no offending subtype — skip-parsed library file included — still yields the finding'
 		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The reproduction: with `apqlint.json` declaring NEITHER `resolutionRoots` nor
+	 * `resolutionLibs`, a field typed by a std class must still resolve. `haxe.io.BytesOutput` is
+	 * not an abstract, so a method call on the binding rebinds no `this` and `prefer-final-field`
+	 * fires. Before std joined the scope unconditionally the answer depended on the project
+	 * happening to declare an unrelated library — which is the defect this pins.
+	 */
+	public function testConfigLessProjectResolvesStdTypedField(): Void {
+		#if (sys || nodejs)
+		if (StdResolver.stdDir() == null) {
+			Assert.pass('no installed Haxe std — implicit-scope resolution skipped');
+			return;
+		}
+		final source: String = 'package proj;\n\nclass Sink {\n\n\tprivate var _out: haxe.io.BytesOutput = new haxe.io.BytesOutput();\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function f(): Void {\n\t\t_out.writeByte(1);\n\t}\n\n}\n';
+		Assert.equals(
+			1, lintConfigLess('prefer-final-field', 'Sink.hx', source),
+			'a std-typed field is final-able with no resolution key declared — std joins the scope on its own'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The control for the test above: a field type resolvable NOWHERE — std included — stays a
+	 * conservative miss in the very same config-less project. So the std-typed finding is
+	 * attributable to std actually resolving, not to the mutation gate having been loosened for
+	 * every unknown type.
+	 */
+	public function testConfigLessProjectStaysConservativeOnUnresolvableType(): Void {
+		#if (sys || nodejs)
+		final source: String = 'package proj;\n\nclass Holder {\n\n\tprivate var _thing: acme.Widget = new acme.Widget();\n\n'
+			+ '\tpublic function new() {}\n\n\tpublic function f(): Void {\n\t\t_thing.poke();\n\t}\n\n}\n';
+		Assert.equals(
+			0, lintConfigLess('prefer-final-field', 'Holder.hx', source), 'a type nothing in the scope declares still blocks var -> final'
+		);
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/**
+	 * The NARROWED inertness guarantee for a project declaring neither resolution key: the
+	 * null-decision now probes for a std, so "spawns nothing" no longer holds — but "spawns no
+	 * haxelib, and one `which haxe` at most for the whole process" must. `StdResolver.stdDir`
+	 * memoises, so two config-less runs of a check that builds no index move neither counter by
+	 * more than that.
+	 */
+	public function testConfigLessRunSpawnsNoHaxelibAndProbesStdAtMostOnce(): Void {
+		#if (sys || nodejs)
+		final source: String =
+			'package q;\n\nclass Z {\n\n\tpublic function new() {}\n\n\tpublic function s(): String {\n\t\treturn "plain";\n\t}\n\n}\n';
+		final proj: String = CliFixture.writeDir('resstdquotes', [
+			{ name: 'Z.hx', source: source },
+			{ name: 'apqlint.json', source: '{"rules":{}}' }
+		]);
+		final haxelibBefore: Int = HaxelibResolver.invocations;
+		final stdBefore: Int = StdResolver.discoveries;
+		// Both exit codes asserted: an ERRORED run spawns nothing either, so without this the
+		// counter assertions below would be satisfied by a run that never got off the ground —
+		// fatal for a test whose whole claim is "the run PROCEEDS without spawning".
+		Assert.equals(0, Cli.run(['lint', '--rule', 'prefer-single-quotes', '$proj/Z.hx']), 'the first run succeeds');
+		Assert.equals(0, Cli.run(['lint', '--rule', 'prefer-single-quotes', '$proj/Z.hx']), 'the second run succeeds');
+		Assert.equals(haxelibBefore, HaxelibResolver.invocations, 'a config-less run never spawns haxelib');
+		Assert.isTrue(
+			StdResolver.discoveries - stdBefore <= 1, 'the std probe is memoised — one `which haxe` at most for the whole process'
+		);
+		CliFixture.removeDir(proj);
 		#else
 		Assert.pass('non-sys target');
 		#end

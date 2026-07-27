@@ -7,6 +7,7 @@ import anyparse.check.PreferFinal;
 import anyparse.check.PreferFinalField;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * A `var` of an `abstract` type mutated through a method that reassigns `this`
@@ -162,9 +163,15 @@ class PreferFinalAbstractMethodCheckTest extends Test {
 			}
 		];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionFiles(report.concat.bind([
-			{ file: 'Window.hx', source: 'class Window { public function move(x:Int, y:Int):Void {} }' }
-		]));
+		scoped.setResolutionScope({
+			declared: true,
+			sources: () -> {
+				report: report,
+				library: new LibrarySources([
+					{ file: 'Window.hx', source: 'class Window { public function move(x:Int, y:Int):Void {} }' }
+				])
+			}
+		});
 		Assert.equals(1, new PreferFinal().run(report, scoped).length);
 		Assert.equals(0, new PreferFinal().run(report, new HaxeQueryPlugin()).length);
 	}

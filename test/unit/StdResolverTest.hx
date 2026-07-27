@@ -123,4 +123,52 @@ class StdResolverTest extends Test {
 		Assert.equals(after, StdResolver.discoveries, 'the cached second call does not increment the discovery counter');
 	}
 
+	/**
+	 * `APQ_NO_STD` DECLINES the std outright — the only opt-out that works on a machine where
+	 * `KNOWN_LOCATIONS` finds `/usr/local/lib/haxe/std` or `/opt/homebrew/lib/haxe/std` no
+	 * matter what `HAXE_STD_PATH` and `PATH` say. Without it every "no std" branch —
+	 * `Cli.resolutionThunk`'s `return null`, `wrapResolution`'s passthrough, the std-derived
+	 * tables' fallbacks — is unreachable on any Haxe-equipped box, i.e. dead in CI.
+	 *
+	 * Uses the `resetCache` seam on BOTH sides, since `stdDir` memoises per process.
+	 */
+	public function testEnvOptOutDeclinesTheStd(): Void {
+		#if (sys || nodejs)
+		final live: Null<String> = StdResolver.stdDir();
+		if (live == null) {
+			Assert.pass('no installed Haxe std on this machine — the opt-out has nothing to decline');
+			return;
+		}
+		StdResolver.resetCache();
+		Sys.putEnv('APQ_NO_STD', '1');
+		final declined: Null<String> = StdResolver.stdDir();
+		Sys.putEnv('APQ_NO_STD', '');
+		StdResolver.resetCache();
+		Assert.isNull(declined, 'APQ_NO_STD=1 declines the std even though the known locations hold one');
+		Assert.equals(live, StdResolver.stdDir(), 'clearing it restores the real std for the rest of the suite');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** Only a non-empty, non-`0` value declines — so a stray empty export cannot silently disable the whole std channel. */
+	public function testEnvOptOutIgnoresEmptyAndZero(): Void {
+		#if (sys || nodejs)
+		final live: Null<String> = StdResolver.stdDir();
+		if (live == null) {
+			Assert.pass('no installed Haxe std on this machine — the opt-out has nothing to decline');
+			return;
+		}
+		StdResolver.resetCache();
+		Sys.putEnv('APQ_NO_STD', '0');
+		final withZero: Null<String> = StdResolver.stdDir();
+		Sys.putEnv('APQ_NO_STD', '');
+		StdResolver.resetCache();
+		Assert.equals(live, StdResolver.stdDir(), 'the memo is re-primed, so no later test sees an unexpected discovery');
+		Assert.equals(live, withZero, 'APQ_NO_STD=0 keeps the std');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 }

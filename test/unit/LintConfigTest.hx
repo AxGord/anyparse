@@ -93,7 +93,12 @@ class LintConfigTest extends Test {
 		Assert.isNull(viaDiscover.intOption('complexity', 'max'), 'a null resolver falls back to discover (empty when no file on disk)');
 	}
 
-	/** The `resolutionRoots` key: absent yields an empty scope, so no-key projects are byte-inert. */
+	/**
+	 * The `resolutionRoots` key: absent yields no declared roots. NOT an inertness claim any
+	 * more — the CLI joins the auto-discovered Haxe std whatever this returns, so "no key" means
+	 * "nothing DECLARED", not "no scope". What the empty array still buys is that the
+	 * null-decision short-circuits before any `haxelib` spawn.
+	 */
 	public function testResolutionRootsAbsentIsEmpty(): Void {
 		Assert.equals(0, LintConfig.parse('{}').resolutionRoots().length, 'no key yields an empty resolution scope');
 	}
@@ -119,7 +124,11 @@ class LintConfigTest extends Test {
 	}
 
 
-	/** The `resolutionLibs` key: absent yields an empty list, so no-key projects are byte-inert. */
+	/**
+	 * The `resolutionLibs` key: absent yields no declared libs — again a statement about what the
+	 * project DECLARED, not about the run being inert (the implicit std scope is independent of
+	 * this key). Its live consequence is that nothing is passed to `haxelib libpath`.
+	 */
 	public function testResolutionLibsAbsentIsEmpty(): Void {
 		Assert.equals(0, LintConfig.parse('{}').resolutionLibs().length, 'no key yields no resolution libs');
 	}
@@ -140,6 +149,23 @@ class LintConfigTest extends Test {
 		final mixed: Array<String> = LintConfig.parse('{"resolutionLibs":["ok",5,null,true]}', '/p').resolutionLibs();
 		Assert.equals(1, mixed.length, 'non-string elements are dropped');
 		Assert.equals('ok', mixed[0]);
+	}
+
+	/** The `resolutionStd` opt-out defaults to ON — absent, the auto-discovered std joins the scope, which is the whole point of it being implicit. */
+	public function testResolutionStdDefaultsOn(): Void {
+		Assert.isTrue(LintConfig.parse('{}').resolutionStd(), 'no key keeps the implicit std scope');
+	}
+
+	/** `"resolutionStd": false` declines it — the per-project opt-out for a source tree targeting a different Haxe version than the installed one. */
+	public function testResolutionStdFalseDeclines(): Void {
+		Assert.isFalse(LintConfig.parse('{"resolutionStd":false}').resolutionStd(), 'an explicit false declines the std');
+		Assert.isTrue(LintConfig.parse('{"resolutionStd":true}').resolutionStd(), 'an explicit true is the default, spelled out');
+	}
+
+	/** A non-boolean `resolutionStd` is treated as unset — never coerced, so a typo cannot silently disable resolution. */
+	public function testResolutionStdMalformedIgnored(): Void {
+		Assert.isTrue(LintConfig.parse('{"resolutionStd":"false"}').resolutionStd(), 'a string is not a boolean false');
+		Assert.isTrue(LintConfig.parse('{"resolutionStd":0}').resolutionStd(), 'a number is not a boolean false');
 	}
 
 }

@@ -20,6 +20,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.RefactorSupport.EditResult;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `naming` check: declarations are tested against the first applicable
@@ -899,7 +900,7 @@ class NamingCheckTest extends Test {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionFiles(report.concat.bind(lib));
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
 		final reportIndex: SymbolIndex = SymbolIndex.build(report, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(report, scoped).filter(v -> v.file == 'pkg/Sub.hx');

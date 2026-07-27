@@ -198,15 +198,25 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * The widest source scope available for the zero-occurrence proof: the host's
-	 * resolution-scoped index (report UNION configured library roots) when `plugin` is a
-	 * `SymbolIndexHost` carrying one, else the report-scoped `index` the caller passed,
-	 * else null (a direct `fix` call with no index — the caller falls back to the single
-	 * file it was handed). Mirrors `RefactorSupport.lazySymbolIndex`'s host preference.
+	 * The widest source scope available for the zero-occurrence proof: the host's resolution-scoped
+	 * index (report UNION the DECLARED library roots) when `plugin` is a `SymbolIndexHost` carrying a
+	 * declared scope, else the report-scoped `index` the caller passed, else null (a direct `fix` call
+	 * with no index — the caller falls back to the single file it was handed).
+	 *
+	 * Deliberately gated on `hasDeclaredResolutionScope`, NOT on `hasAnyResolutionScope` the way
+	 * `RefactorSupport.lazySymbolIndex` is. The proof this index feeds is `referencedElsewhere`, a
+	 * TEXTUAL occurrence scan used to lift a `#if`-carrying file's whole-file veto — and a private
+	 * member of this project can never legitimately be referenced from the Haxe std. Admitting the
+	 * implicit std scope would therefore add only false positives: a private member named `write` or
+	 * `get` occurs all over std, the veto stands, and `unused-private --fix` silently stops deleting
+	 * it. Conservative either way (more occurrences means fewer deletions, never a wrong one), so the
+	 * cost is usefulness rather than correctness — which is exactly why it must not happen by
+	 * accident. A DECLARED library is a different matter: the project chose it, and a file the run
+	 * does not lint can legitimately be where the reference lives.
 	 */
 	private static function widestScopeIndex(plugin: GrammarPlugin, index: Null<SymbolIndex>): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		if (host != null && host.hasResolutionScope()) {
+		if (host != null && host.hasDeclaredResolutionScope()) {
 			final res: Null<SymbolIndex> = host.resolutionIndex();
 			if (res != null) return res;
 		}

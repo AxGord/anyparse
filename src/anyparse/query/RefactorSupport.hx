@@ -1776,33 +1776,45 @@ final class RefactorSupport {
 
 	/**
 	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
-	 * configured resolution library is indexed there too — or null when the plugin is not a
-	 * resolution host or no resolution scope is configured (the caller falls back to the report index).
-	 * The eager counterpart of `lazySymbolIndex`, for a check that already holds a report index and
-	 * only needs to know whether a WIDER one exists: `resolutionIndexOf(plugin) ?? index`.
+	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
+	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls
+	 * back to the report index). The eager counterpart of `lazySymbolIndex`, for a check that already
+	 * holds a report index and only needs to know whether a WIDER one exists:
+	 * `resolutionIndexOf(plugin) ?? index`.
+	 *
+	 * The null return is now the RARE case rather than the default. A `Cli` run reaches it only when
+	 * the project declares no resolution key AND no Haxe std is discoverable — a machine without Haxe,
+	 * or one that declined the std via `APQ_NO_STD` / `"resolutionStd": false`. It is still the plain
+	 * answer for a direct `check.run` with a bare plugin, which is what the unit tests that pin the
+	 * report-only behaviour use.
 	 */
 	public static inline function resolutionIndexOf(plugin: GrammarPlugin): Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		return (host != null && host.hasResolutionScope()) ? host.resolutionIndex() : null;
+		return (host != null && host.hasAnyResolutionScope()) ? host.resolutionIndex() : null;
 	}
 
 	/**
 	 * A memoized `SymbolIndex` builder — built at most once, on first call, over `files`. Shared by
 	 * checks whose path-receiver type gate needs cross-file resolution only after cheaper structural
 	 * gates pass, so most runs never trigger the build. When `plugin` is a `SymbolIndexHost` carrying
-	 * a resolution scope (report files UNION configured library roots), that host's memoised
-	 * resolution index is preferred instead, so the check resolves against libraries too; absent a
-	 * scope it falls back to the report-only `files` build — byte-identical to the pre-scope path.
-	 * `prebuilt`, when supplied, is an already-built report-scope index the fallback returns as-is
-	 * instead of building a second one (a caller that already keeps an eager report index — e.g.
-	 * `prefer-final-field` — passes it to avoid a duplicate build); it is ignored when a resolution
-	 * scope is present, since the library-aware index must win.
+	 * ANY resolution scope — a declared one (report files UNION the configured library roots) or the
+	 * implicit std-only one — that host's memoised resolution index is preferred, so the check resolves
+	 * against libraries and std too.
+	 *
+	 * The report-only fallback below it is therefore no longer the ordinary path: on a Haxe-equipped
+	 * machine a `Cli` run always takes the host branch, and the fallback answers only for a direct
+	 * `check.run` with a bare plugin (every unit test that pins report-scope behaviour) or a machine
+	 * with no discoverable std. `prebuilt`, when supplied, is an already-built report-scope index that
+	 * fallback returns as-is instead of building a second one — `prefer-final-field` passes the eager
+	 * index it already holds. It is ignored when a resolution scope is present, since the wider index
+	 * must win; that is not a lost optimisation, because the host's index is a DIFFERENT (wider) index
+	 * than `prebuilt`, so there is no duplicate build to avoid on that path.
 	 */
 	public static function lazySymbolIndex(
 		files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, ?prebuilt: SymbolIndex
 	): () -> Null<SymbolIndex> {
 		final host: Null<SymbolIndexHost> = (plugin is SymbolIndexHost) ? cast plugin : null;
-		if (host != null && host.hasResolutionScope()) {
+		if (host != null && host.hasAnyResolutionScope()) {
 			final resolver: SymbolIndexHost = host;
 			return () -> resolver.resolutionIndex();
 		}

@@ -70,6 +70,9 @@ import anyparse.check.CompilerDisplayOracle;
 import anyparse.check.Check.OracleRelaxable;
 import anyparse.check.Check.CrossFileFix;
 import anyparse.check.Check.CrossFileEdits;
+import anyparse.query.CachingGrammarPlugin.ResolutionSources;
+import anyparse.query.CachingGrammarPlugin.ResolutionScope;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -1219,15 +1222,22 @@ final class Cli {
 			for (c in checks) if (Lambda.exists(files, f -> resolveConfig(f.file).enabledFor(c.id(), !(c is DefaultOff)))) c
 		] : checks;
 
-		// Resolution scope (opt-in via apqlint.json `resolutionRoots` = explicit dirs and/or
-		// `resolutionLibs` = haxelib names): the UNION of both across every discovered config. Their
-		// `.hx` sources join the SymbolIndex the cross-file checks resolve against — never reported,
-		// never edited — read lazily on first demand, and the lib names are resolved to dirs via
-		// `haxelib libpath` only then. Null when no config declares either, so a project without
-		// both keys is byte-inert (the null-decision never runs haxelib).
-		final resolution: Null<() -> Array<{ file: String, source: String }>> = resolutionThunk(
-			files, unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots()),
-			unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs())
+		// Resolution scope: the UNION of `resolutionRoots` (explicit dirs) and `resolutionLibs`
+		// (haxelib names) across every discovered config, PLUS the auto-discovered Haxe std, which
+		// joins unconditionally so that whether a std type resolves never depends on the project
+		// happening to declare an unrelated library. Their `.hx` sources join the SymbolIndex the
+		// cross-file checks resolve against — never reported, never edited — read lazily on first
+		// demand, and the lib names are resolved to dirs via `haxelib libpath` only then.
+		// So the scope is NOT opt-in any more: it is null only when the project declares neither key
+		// AND no std is discoverable — a machine without Haxe, or one that declined the std via
+		// `APQ_NO_STD` / a config `"resolutionStd": false`. A project with neither key still spawns
+		// no haxelib; it pays one memoised `which haxe` probe for the whole process, which is what
+		// its inertness guarantee now amounts to. `declared` records which of the two ways the scope
+		// came to exist, for the consumers that must tell them apart.
+		final resolutionRoots: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionRoots());
+		final resolutionLibs: Array<String> = unionConfigStrings(paths, resolveConfig, c -> c.resolutionLibs());
+		final resolution: Null<ResolutionScope> = resolutionThunk(
+			files, resolutionRoots, resolutionLibs, Lambda.foreach(paths, p -> resolveConfig(p).resolutionStd())
 		);
 		// Compiler oracle (opt-in via apqlint.json `compilerOracle`): a project-level
 		// setting, so the config resolved for the first linted file carries it for the
@@ -1239,8 +1249,9 @@ final class Cli {
 		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
-		// --fix run. The resolution scope (if any) joins the checks' SymbolIndex; findings stay in the
-		// report files (wrapResolution returns the plugin untouched when no scope is configured).
+		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
+		// files (wrapResolution returns the plugin untouched only when no scope reached this run at
+		// all — no declared key and no discoverable std).
 		final all: Array<Violation> = Linter.run(files, wrapResolution(plugin, resolution), activeChecks, resolveConfig, applyEnablement);
 
 		final shown: Array<Violation> = o.includeInfo ? all : all.filter(v -> v.severity != Severity.Info);
@@ -1294,78 +1305,116 @@ final class Cli {
 	}
 
 	/**
-	 * The UNION of `resolutionLibs` (haxelib NAMES) across the configs discovered for `paths`.
-	 * A pure string union — no `haxelib` shell-out here; the names are resolved to source dirs
-	 * lazily inside `resolutionThunk` so the eager null-decision never pays the haxelib cost.
-	 */
-	/**
-	 * The resolution file-set thunk for `roots` (explicit dirs) plus `libNames` (haxelib names,
-	 * resolved to source dirs on first demand via `haxelib libpath`): on first call it resolves the
-	 * lib names, globs every root's `.hx`, reads their sources once (memoised) and returns the LIVE
-	 * report `files` UNION those library entries, deduped against the report paths. Null when BOTH
-	 * `roots` and `libNames` are empty — that decision NEVER shells out — so a project with neither
-	 * `resolutionRoots` nor `resolutionLibs` stays byte-inert. Reading the `files` array live keeps
-	 * the report portion current across `--fix` passes; the library portion is immutable.
+	 * The resolution-scope thunk for `roots` (explicit dirs) plus `libNames` (haxelib names, resolved
+	 * to source dirs on first demand via `haxelib libpath`): on first call it resolves the lib names,
+	 * globs every root's `.hx` and reads their sources once (memoised), returning the LIVE report
+	 * `files` and those library entries as the two SEPARATE halves of a `ResolutionSources` — separate
+	 * because only the library half may enter `CachingGrammarPlugin`'s process-scoped parse tier.
+	 * Library entries are deduped against the report paths, so a file the run lints is never also
+	 * indexed as library. When `stdEnabled`, the auto-discovered Haxe std joins that SAME scope
+	 * unconditionally, so whether a std type resolves never depends on the project happening to declare
+	 * an unrelated library.
+	 *
+	 * The result carries `declared` — true when `roots` or `libNames` is non-empty — so a consumer can
+	 * tell a project-declared scope from one that exists only because a std was found.
+	 *
+	 * Null only when `roots` and `libNames` are BOTH empty AND no std joins: either `stdEnabled` is
+	 * false (an `apqlint.json` `"resolutionStd": false`) or `StdResolver.stdDir()` finds none (no Haxe
+	 * on the machine, or `APQ_NO_STD` declining it). The short-circuit order matters: with either key
+	 * declared, `StdResolver.stdDir()` is never reached, so those projects stay byte-identical. A
+	 * project declaring NEITHER key pays one memoised `which haxe` probe (`StdResolver.stdDir` computes
+	 * once per process) — so its inertness guarantee is "spawns no haxelib; one `which haxe` at most",
+	 * not "spawns nothing".
+	 *
+	 * Reading the `files` array live keeps the report portion current across `--fix` passes; the
+	 * library portion is immutable.
 	 */
 	private static function resolutionThunk(
-		files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>
-	): Null<() -> Array<{ file: String, source: String }>> {
-		if (roots.length == 0 && libNames.length == 0) return null;
+		files: Array<{ file: String, source: String }>, roots: Array<String>, libNames: Array<String>, stdEnabled: Bool
+	): Null<ResolutionScope> {
+		final declared: Bool = roots.length > 0 || libNames.length > 0;
+		if (!declared && !(stdEnabled && StdResolver.stdDir() != null)) return null;
 		// Dedup by ABSOLUTE path: a library glob path is always absolute, a report path keeps the
 		// CLI-arg spelling (often relative), so a raw-string compare misses an overlap and indexes
 		// the shared file TWICE — duplicate declarations that trip the resolver's ambiguity gate and
 		// silently suppress the cross-file finding. Normalise both sides; the report file keeps its
 		// original spelling in `files` (report/edit scope), the overlapping library copy is dropped.
-		final reportPaths: Array<String> = [for (f in files) FileSystem.absolutePath(f.file)];
+		// A MAP, not an array: the library always carries the ~200 std files, so a linear `contains`
+		// over the report would be one string compare per (report x library) pair — ~160k on an
+		// 800-file project, for a lookup that is answered in one hash.
+		final reportPaths: Map<String, Bool> = [for (f in files) FileSystem.absolutePath(f.file) => true];
 		var library: Null<Array<{ file: String, source: String }>> = null;
-		return () -> {
-			final built: Null<Array<{ file: String, source: String }>> = library;
-			if (built != null) return files.concat(built);
-			// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
-			// `haxelib libpath` spawn lives here, inside the thunk, never in the null-decision
-			// above, so a run whose checks never build the index (e.g. `--rule prefer-single-quotes`)
-			// pays no haxelib cost. A name that does not resolve (typo / uninstalled) is dropped
-			// with a stderr note so the run proceeds exactly as if the lib were absent.
-			final scanRoots: Array<String> = roots.copy();
-			for (name in libNames) {
-				final dir: Null<String> = HaxelibResolver.libSourceDir(name);
-				if (dir == null)
-					stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
-				else if (!scanRoots.contains(dir))
-					scanRoots.push(dir);
+		return {
+			declared: declared,
+			sources: () -> {
+				final memoised: Null<Array<{ file: String, source: String }>> = library;
+				final libFiles: Array<{ file: String, source: String }> = memoised ?? readResolutionLibrary(
+					roots, libNames, stdEnabled, reportPaths
+				);
+				library = libFiles;
+				return { report: files, library: new LibrarySources(libFiles) };
 			}
-			// The auto-discovered Haxe std joins the SAME scope as the declared roots / libs
-			// (StdResolver — ONE channel, no hardcoded machine-specific paths): its
-			// target-agnostic core (toplevel *.hx + haxe/ + sys/) as expandInputs specs,
-			// deduped against any explicit std root. Reached ONLY when the scope is already
-			// active (this thunk is null otherwise), so a config-less run never discovers std
-			// — byte-inert. Lazy like the libs: the `which haxe` probe fires only on first
-			// index demand. Null (no std on the machine) leaves the scope exactly as declared.
-			final stdDir: Null<String> = StdResolver.stdDir();
-			if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
-			final libFiles: Array<{ file: String, source: String }> = [];
-			for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.contains(FileSystem.absolutePath(path))) {
-				final src: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
-				if (src != null) libFiles.push({ file: path, source: src });
-			}
-			library = libFiles;
-			return files.concat(libFiles);
 		};
 	}
 
-	/** Wrap `plugin` in a resolution-scope-carrying `CachingGrammarPlugin` when `resolution` is set; else return it untouched (byte-inert). */
-	private static function wrapResolution(
-		plugin: GrammarPlugin, resolution: Null<() -> Array<{ file: String, source: String }>>
-	): GrammarPlugin {
+	/**
+	 * Read every `.hx` under the resolution scope's roots — `roots` verbatim, `libNames` resolved
+	 * to haxelib source dirs, plus the auto-discovered Haxe std — excluding the run's own report
+	 * files (`reportPaths`, absolute). The whole of `resolutionThunk`'s FIRST-DEMAND work, split
+	 * out so the thunk itself is the memo and nothing else.
+	 */
+	private static function readResolutionLibrary(
+		roots: Array<String>, libNames: Array<String>, stdEnabled: Bool, reportPaths: Map<String, Bool>
+	): Array<{ file: String, source: String }> {
+		// Resolve the declared haxelib NAMES to source dirs ON FIRST DEMAND ONLY — the
+		// `haxelib libpath` spawn lives here, reached only through the thunk, never in its
+		// null-decision, so a run whose checks never build the index (e.g. `--rule
+		// prefer-single-quotes`) pays no haxelib cost. A name that does not resolve (typo /
+		// uninstalled) is dropped with a stderr note so the run proceeds as if the lib were absent.
+		final scanRoots: Array<String> = roots.copy();
+		for (name in libNames) {
+			final dir: Null<String> = HaxelibResolver.libSourceDir(name);
+			if (dir == null)
+				stderr('apq lint: resolutionLibs: could not resolve haxelib "$name" (not installed?); skipping\n');
+			else if (!scanRoots.contains(dir))
+				scanRoots.push(dir);
+		}
+		// The auto-discovered Haxe std joins the SAME scope as the declared roots / libs
+		// (StdResolver — ONE channel, no hardcoded machine-specific paths): its target-agnostic
+		// core (toplevel *.hx + haxe/ + sys/) as expandInputs specs, deduped against any explicit
+		// std root. Unconditional apart from the explicit opt-out — whether a std type resolves must
+		// not depend on the project happening to declare a library, so `resolutionThunk`'s
+		// null-decision admits a std-only scope. `stdEnabled` false is the project declining it
+		// (`"resolutionStd": false`); a null `stdDir` is no std on the machine, or `APQ_NO_STD`
+		// declining it process-wide. Either way the scope stays exactly as declared.
+		// `StdResolver.stdDir` memoises, so the `which haxe` probe runs at most once per process
+		// whichever side reaches it first.
+		final stdDir: Null<String> = stdEnabled ? StdResolver.stdDir() : null;
+		if (stdDir != null) for (spec in StdResolver.resolutionSpecs(stdDir)) if (!scanRoots.contains(spec)) scanRoots.push(spec);
+		final libFiles: Array<{ file: String, source: String }> = [];
+		for (path in expandInputs(scanRoots, '.hx').paths) if (!reportPaths.exists(FileSystem.absolutePath(path))) {
+			final src: Null<String> = try readSourceForParse(path) catch (exception: Exception) null;
+			if (src != null) libFiles.push({ file: path, source: src });
+		}
+		return libFiles;
+	}
+
+	/**
+	 * Wrap `plugin` in a resolution-scope-carrying `CachingGrammarPlugin` when `resolution` is set;
+	 * else return it untouched. The untouched path is reached only when NO scope exists — the project
+	 * declares neither resolution key and no Haxe std is discoverable (no Haxe on the machine, or the
+	 * std declined via `APQ_NO_STD` / `"resolutionStd": false`) — not merely when none is configured.
+	 */
+	private static function wrapResolution(plugin: GrammarPlugin, resolution: Null<ResolutionScope>): GrammarPlugin {
 		if (resolution == null) return plugin;
 		final host: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
-		host.setResolutionFiles(resolution);
+		host.setResolutionScope(resolution);
 		return host;
 	}
 
 	private static function applyLintFixes(
 		files: Array<{ file: String, source: String }>, checks: Array<Check>, plugin: GrammarPlugin, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, ?resolution: () -> Array<{ file: String, source: String }>, ?oracleHxml: String, ?oracleDir: String
+		applyEnablement: Bool, ?resolution: ResolutionScope, ?oracleHxml: String, ?oracleDir: String
 	): Int {
 		// A RiskyFix check is verified against the compiler oracle (below) and is EXCLUDED
 		// from the unverified safe loop. prefer-inline is the exception: as an
@@ -1386,7 +1435,7 @@ final class Cli {
 		// check, and every fix — keyed by source content, so an unchanged file is
 		// reused across passes and only a rewritten one re-parses on its new content.
 		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(plugin);
-		if (resolution != null) cached.setResolutionFiles(resolution);
+		if (resolution != null) cached.setResolutionScope(resolution);
 		// hxformat.json is on disk and source-independent — discover once per file.
 		final optsByFile: Map<String, Null<String>> = [];
 		for (entry in files) optsByFile[entry.file] = discoverFormatConfig(entry.file);
@@ -1441,7 +1490,7 @@ final class Cli {
 			passes++;
 			final pass: LintPassResult = applyLintPass(
 				active, files, cached, activeScopeChecks, fullScopeChecks, safeChecks, resolveConfig, applyEnablement, optsByFile, passes,
-				noted, changedFiles, resolution
+				noted, changedFiles
 			);
 			fixedCount += pass.fixedDelta;
 			active = pass.nextActive;
@@ -9052,8 +9101,7 @@ final class Cli {
 	private static function applyLintPass(
 		active: Array<{ file: String, source: String }>, files: Array<{ file: String, source: String }>, cached: CachingGrammarPlugin,
 		activeScopeChecks: Array<Check>, fullScopeChecks: Array<Check>, checks: Array<Check>, resolveConfig: (String) -> LintConfig,
-		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>,
-		?resolution: () -> Array<{ file: String, source: String }>
+		applyEnablement: Bool, optsByFile: Map<String, Null<String>>, passes: Int, noted: Array<String>, changedFiles: Array<String>
 	): LintPassResult {
 		// The `index` PASSED to each check's `fix` is REPORT-scoped (the mutated report sources
 		// only): a fix's report-scope gates — naming's confinement / reflection-string / rtti proofs,
@@ -9063,7 +9111,8 @@ final class Cli {
 		// resolution gate (naming's inherited-member proof) resolves a library supertype through
 		// `SymbolIndexHost.resolutionIndex()`. Both rebuild per pass over this pass's sources.
 		final index: SymbolIndex = SymbolIndex.build(files, cached);
-		if (resolution != null) cached.setResolutionIndex(SymbolIndex.build(resolution(), cached));
+		final resolutionFiles: Null<Array<{ file: String, source: String }>> = cached.resolutionFiles();
+		if (resolutionFiles != null) cached.setResolutionIndex(SymbolIndex.build(resolutionFiles, cached));
 		final violations: Array<Violation> = Linter.run(active, cached, activeScopeChecks, resolveConfig, applyEnablement);
 		for (v in Linter.run(files, cached, fullScopeChecks, resolveConfig, applyEnablement)) violations.push(v);
 		final nextActive: Array<{ file: String, source: String }> = [];

@@ -10,6 +10,8 @@ import anyparse.query.CachingGrammarPlugin;
 
 using StringTools;
 
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
+
 /**
  * `unused-import` widened via the RESOLUTION SCOPE. When the plugin carries a
  * resolution scope (report files UNION configured library roots — openfl / lime),
@@ -92,7 +94,7 @@ class LintUnusedImportResolutionScopeTest extends Test {
 	private function runScoped(useSource: String, lib: Array<{ file: String, source: String }>): Array<Violation> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: useSource }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
-		scoped.setResolutionFiles(report.concat.bind(lib));
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
 		return new UnusedImport().run(report, scoped);
 	}
 
