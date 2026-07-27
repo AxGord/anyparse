@@ -271,20 +271,19 @@ class Lowering {
 	 * `HxStatement.BlockStmt(_)` → trivially `;`-elidable).
 	 *
 	 * For an `astPreds` format the call targets the generated typed
-	 * predicate of this build's AST family; a trivia-collecting Star's
-	 * accumulator holds `Trivial<…>` wrappers, so the element is
-	 * unwrapped through `.node` (the shape's `trivia.starCollects` mark
-	 * decides — spans / plain accumulators are bare). Other formats
-	 * keep the legacy schema-instance channel, the sister of
-	 * `parseGateCall` / `unescapeChar`.
+	 * predicate of this build's AST family. The element is passed bare:
+	 * every reachable caller sits on a NON-trivia-collecting path (the
+	 * trivia-collecting Stars branch off earlier into
+	 * `emitTriviaStarFieldSteps` / `lowerTriviaStarBranch`), so the
+	 * accumulator never holds `Trivial<…>` wrappers here — if a future
+	 * trivia-collecting caller appears, it must unwrap `.node` itself
+	 * (the typed predicate makes forgetting that a compile error, not a
+	 * silent null). Other formats keep the legacy schema-instance
+	 * channel, the sister of `parseGateCall` / `unescapeChar`.
 	 */
-	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr, starNode: ShapeNode): Expr {
+	private function buildBlockEndedPredicateCall(predicateName: String, accumRef: Expr): Expr {
 		final lastElem: Expr = macro $accumRef[$accumRef.length - 1];
-		if (_formatInfo.astPreds) {
-			final wrapped: Bool = _ctx.trivia && starNode.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
-			final arg: Expr = wrapped ? macro $lastElem.node : lastElem;
-			return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, predicateName, [arg]);
-		}
+		if (_formatInfo.astPreds) return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, predicateName, [lastElem]);
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [lastElem]),
@@ -1095,7 +1094,7 @@ class Lowering {
 			if (hasSepBeforeOpt) emitSepBeforeOptStep(localName, parseSteps, sepCharCode);
 			final sepBlockEnded: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED) == true;
 			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef, starNode) : macro false;
+			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
 			parseSteps.push(buildTryparseSepLoop(elemCall, accumRef, sepCharCode, sepBlockEnded, predicateCall));
 			return;
 		}
@@ -3822,7 +3821,7 @@ class Lowering {
 		if (sepText != null && blockEnded) {
 			final sepCharCode: Int = sepText.charCodeAt(0);
 			final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef, starNode) : macro false;
+			final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRef) : macro false;
 			final sepStartsElement: Bool = starNode.annotations.get(AnnotationKeys.LIT_SEP_STARTS_ELEMENT) == true;
 			parseSteps.push(buildCloseBlockEndedBody(
 				elemCall, accumRef, closeNotNextExpr, sepCharCode, sepText, predicateCall, sepStartsElement
@@ -4044,10 +4043,7 @@ class Lowering {
 	): Expr {
 		final predicateName: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
 		final accumRefForPred: Expr = macro _items;
-		// The Trivial-wrap mark lives on the branch's single Star child.
-		final predicateCall: Expr = predicateName != null
-			? buildBlockEndedPredicateCall(predicateName, accumRefForPred, branch.children[0])
-			: macro false;
+		final predicateCall: Expr = predicateName != null ? buildBlockEndedPredicateCall(predicateName, accumRefForPred) : macro false;
 		// sepStartsElement (Session 9 BlockBody Star) — when block-ended is
 		// TRUE, the sep byte at pos belongs to the NEXT element, never a
 		// separator. Required for grammars where the sep char can ALSO be a
@@ -4724,8 +4720,7 @@ expectLit(ctx, $v{trailText}));
 	private function buildKwRefParseGateCall(branch: ShapeNode): Null<Expr> {
 		final parseGate: Null<Array<String>> = branch.fmtReadStringArgs('trailOptParseGate');
 		if (parseGate == null || parseGate.length != 1) return null;
-		if (_formatInfo.astPreds)
-			return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, parseGate[0], [macro _raw]);
+		if (_formatInfo.astPreds) return AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, _ctx.spans, parseGate[0], [macro _raw]);
 		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
 		return {
 			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, parseGate[0]), pos: Context.currentPos() }, [macro _raw]),

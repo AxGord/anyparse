@@ -34,12 +34,23 @@ class WriterLowering {
 	 * Build-scoped mirrors of `_shape.root` / `_formatInfo.astPreds` for
 	 * the STATIC trivia emit helpers (the tryparse/block builder web),
 	 * which have no instance in reach. Set at `generate()` entry; one
-	 * writer build runs at a time, so the mirrors cannot interleave.
-	 * The trivia builders address the trivia-family predicate class
+	 * writer build runs at a time, so the mirrors cannot interleave
+	 * (`astPredCallT` fatal-errors if read before initialisation). The
+	 * trivia builders address the trivia-family predicate class
 	 * (`AstPredsT`) — plain-mode paths use the instance fields directly.
+	 *
+	 * Gating contract: `_astPredsOnStatic` is consulted ONLY at sites
+	 * that have a legacy `schema.instance` channel to fall back to
+	 * (`triviaBlockPredCallExpr`). The other trivia-web predicate sites
+	 * are Haxe-only `@:fmt` features that never had a runtime fallback —
+	 * they reference the marker class unconditionally, and a grammar
+	 * that opts into such a meta without providing the classes fails
+	 * loudly at typing. Do NOT add the gate to a new site unless it has
+	 * a legacy channel to preserve.
 	 */
 	private static var _predRootStatic: String = '';
 
+	/** See `_predRootStatic` — the second half of the same build-scoped mirror pair. */
 	private static var _astPredsOnStatic: Bool = false;
 
 	public function new(shape: ShapeBuilder.ShapeResult, formatInfo: FormatReader.FormatInfo, ctx: LoweringCtx) {
@@ -59,7 +70,27 @@ class WriterLowering {
 
 	/** `AstPredsT.<name>(<args>)` — trivia-family predicate call for the static trivia emit helpers. */
 	private static function astPredCallT(name: String, args: Array<Expr>): Expr {
+		if (_predRootStatic == '')
+			Context.fatalError('WriterLowering: predicate mirrors not initialised (astPredCallT before generate())', Context.currentPos());
 		return AstPredLowering.predCallExpr(_predRootStatic, true, false, name, args);
+	}
+
+	/**
+	 * The three-way blockEnded predicate channel, shared by the plain
+	 * writer's sep-elision sites: no predicate → inert `false`; an
+	 * `astPreds` format → the generated typed predicate of the build's
+	 * AST family; otherwise the legacy `<schema>.instance.<predicate>`
+	 * channel (the pilot formats' path — byte-identical to the
+	 * pre-campaign emission).
+	 */
+	private function blockEndedPredCheck(predicateName: Null<String>, elemAccess: Expr): Expr {
+		if (predicateName == null) return macro false;
+		if (_formatInfo.astPreds) return AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [elemAccess]);
+		final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
+		return {
+			expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [elemAccess]),
+			pos: Context.currentPos(),
+		};
 	}
 
 	private function lowerRule(typePath: String, node: ShapeNode): Array<WriterRule> {
@@ -1331,14 +1362,13 @@ class WriterLowering {
 		// identical (every other tryparse-Star consumer is untouched).
 		final clearExprPositionNonTail: Bool = starNode.fmtHasFlag('clearExprPositionNonTail');
 		// ω-issue-423-mech-b: `@:fmt(refuseFlatOnComplexExpr)` AND-s the
-		// runtime `_flatCase` gate with `!opt.caseBodyRefusesFlat(_arr[0].node)`,
-		// dispatching through the generated `caseBodyRefusesFlat`
-		// predicate of the build's AST family.
-		// Engine never references the grammar plugin by name —
-		// mirrors the `endsWithCloseBrace` adapter pattern. Null
-		// adapter falls through (no refusal). Wired on
-		// `HxCaseBranch.body` / `HxDefaultBranch.stmts` to mirror
-		// fork's `MarkSameLine.markExpressionCase` body-shape check.
+		// runtime `_flatCase` gate with the generated typed
+		// `caseBodyRefusesFlat` predicate of the build's AST family
+		// (addressed by naming convention — the engine never references
+		// the grammar plugin by name; a grammar carrying the meta must
+		// provide the marker classes). Wired on `HxCaseBranch.body` /
+		// `HxDefaultBranch.stmts` to mirror fork's
+		// `MarkSameLine.markExpressionCase` body-shape check.
 		final refuseFlatOnComplex: Bool = starNode.fmtHasFlag('refuseFlatOnComplexExpr');
 		// ω-metadata-line-end-function: `@:fmt(metaLineEndPolicy('<optField>'))`
 		// on a `@:trivia @:tryparse` Star wires inter-element + post-Star
@@ -1815,17 +1845,7 @@ class WriterLowering {
 		final closeText: Null<String> = c.closeText;
 		final sepText: Null<String> = c.sepText;
 		final predicateName: Null<String> = starNode.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-		final predicateCheck: Expr = if (predicateName == null)
-			macro false;
-		else if (_formatInfo.astPreds)
-			AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [macro _arr[_si]]);
-		else {
-			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
-			{
-				expr: ECall({ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _arr[_si]]),
-				pos: Context.currentPos(),
-			};
-		}
+		final predicateCheck: Expr = blockEndedPredCheck(predicateName, macro _arr[_si]);
 		// Phase G2 (Session 10) — trail-emit-on-last for plain mode.
 		// Mirror of between-element gate below, queried on the last
 		// element. Required when per-stmt `@:trailOpt(';')` is removed
@@ -1834,19 +1854,7 @@ class WriterLowering {
 		// trivia mode's `blockTrailSepEmitExpr` (L7002-7009) minus the
 		// source-fidelity `sepAfter` gate (plain mode has no per-pair
 		// state — always emit when non-block-ended).
-		final lastPredicateCheck: Expr = if (predicateName == null)
-			macro false;
-		else if (_formatInfo.astPreds)
-			AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [macro _arr[_arr.length - 1]]);
-		else {
-			final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
-			{
-				expr: ECall(
-					{ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _arr[_arr.length - 1]]
-				),
-				pos: Context.currentPos(),
-			};
-		}
+		final lastPredicateCheck: Expr = blockEndedPredCheck(predicateName, macro _arr[_arr.length - 1]);
 		parts.push(macro {
 			final _arr = $fieldAccess;
 			if (_arr.length == 0) {
@@ -4936,14 +4944,6 @@ class WriterLowering {
 	}
 
 	/**
-	 * Per-branch synth-arg-arity count. In trivia mode a ctor's synth pattern
-	 * grows positional args beyond its ShapeNode children (closeTrailing /
-	 * trailPresent / capture-source / bodyPolicy / wrap-open / kw / chain
-	 * newline flags, …) that the parser pushes and `lowerEnumBranch` /
-	 * `lowerEnumStar` read by index. Returns the extra-arg count for `branch`
-	 * (0 outside trivia mode — every predicate below is trivia-gated).
-	 */
-	/**
 	 * Trivia-mode extra positional args a paired Alt ctor carries beyond
 	 * its declared children. The per-slot inventory and push-order
 	 * documentation live with the formula in
@@ -4987,8 +4987,11 @@ class WriterLowering {
 		// supersedes the static `anonTypeBraces*` path — the inside-space
 		// depends on the first element's bracket kind, decided at runtime
 		// by the generated typed classifier. Both override Docs reference
-		// `_arr[0].node`, which is safe everywhere they are spliced: the
-		// empty-`[]` form short-circuits before any emit that uses them
+		// `_arr[0].node` — an identifier BOUND by the block that
+		// `triviaSepStarExpr` emits (unhygienic cross-function coupling,
+		// same as every other `_arr`/`_docs` splice fed to it) — which is
+		// safe everywhere they are spliced: the empty-`[]` form
+		// short-circuits before any emit that uses them
 		// (`_arr.length == 0` guard near the `triviaSepStarExpr` tail and
 		// `WrapList.emit`'s own `items.length == 0` guard).
 		final bracketKindPadAlt: Bool = branch.fmtHasFlag('bracketKindPad');
@@ -5225,19 +5228,7 @@ class WriterLowering {
 			// (`b == '}'.code || b == ';'.code || $predicateCall`).
 			// Strictly opt-in via `@:sep('text', tailRelax, blockEnded[('pred'[, sepStartsElement])])`.
 			final predicateName: Null<String> = branch.annotations.get(AnnotationKeys.LIT_SEP_BLOCK_ENDED_PREDICATE);
-			final predicateCheckPrior: Expr = if (predicateName == null)
-				macro false;
-			else if (_formatInfo.astPreds)
-				AstPredLowering.predCallExpr(_shape.root, false, false, predicateName, [macro _args[_i - 1]]);
-			else {
-				final fmtParts: Array<String> = _formatInfo.schemaTypePath.split('.');
-				{
-					expr: ECall(
-						{ expr: EField(macro $p{fmtParts}.instance, predicateName), pos: Context.currentPos() }, [macro _args[_i - 1]]
-					),
-					pos: Context.currentPos(),
-				};
-			}
+			final predicateCheckPrior: Expr = blockEndedPredCheck(predicateName, macro _args[_i - 1]);
 			return macro {
 				final _args = $argsAccess;
 				final _docs: Array<anyparse.core.Doc> = [_dt($v{leadText})];
@@ -5282,8 +5273,8 @@ class WriterLowering {
 			// inside-space with a runtime dispatch on the first element's
 			// bracket kind. Reads `_args[0]` (the plain `HxExpr` element,
 			// bound just below at the `final _args = $argsAccess` site).
-			// `opt.arrayBracketKind` null-guards an empty list, so `_args[0]`
-			// on `[]` resolves to the default `ArrayLiteral` → `_de()`,
+			// The generated classifier's own `case null` arm answers the
+			// default `ArrayLiteral` for an empty `[]`'s `_args[0]` → `_de()`,
 			// keeping empty brackets tight.
 			final bracketKindPad: Bool = branch.fmtHasFlag('bracketKindPad');
 			final openInsideExpr: Expr = bracketKindPad
@@ -7232,12 +7223,13 @@ class WriterLowering {
 		// Ref ctor carries `@:fmt(clearExprPosition)` (HxExpr.MacroExpr), the
 		// sub-call's opt arg is wrapped in `_clearExprPosition` ONLY when the
 		// operand is a block (`macro { … }`) — gated at runtime via the
-		// plugin-supplied `opt.operandIsBlockExpr` adapter so a non-block
+		// generated typed `operandIsBlockExpr` predicate, so a non-block
 		// `macro <expr>` (e.g. `macro if (1) 2 else 3`) stays transparent and
 		// keeps its inherited expression-position frame. The block's reified
 		// statements revert to statement-position body policy (dropping the
-		// SI-2 block-tail frame). Null adapter (non-opt-in formats) → never
-		// fires. Idempotent helper; allocation-free when already cleared.
+		// SI-2 block-tail frame). A grammar carrying the meta must provide
+		// the marker classes. Idempotent helper; allocation-free when
+		// already cleared.
 		// ω-string-interp-noformat-flat: the interpolation `${expr}` body
 		// (`@:fmt(captureSource(...))` ctor — `HxStringSegment.Block`)
 		// threads `_setChainModeOverride(opt, NoWrap)` into the sub-call
@@ -7686,11 +7678,11 @@ class WriterLowering {
 		if (propagateExpr) _o = macro _setExprPosition($_o);
 		if (propagateEnumAbstract) _o = macro _setEnumAbstract($_o);
 		if (clearExpr) {
-			final _operandAccess: Expr = macro $i{argNames[0]};
-			final _operandIsBlock: Expr = AstPredLowering.predCallExpr(
-				_shape.root, _ctx.trivia, false, 'operandIsBlockExpr', [_operandAccess]
+			final operandAccess: Expr = macro $i{argNames[0]};
+			final operandIsBlock: Expr = AstPredLowering.predCallExpr(
+				_shape.root, _ctx.trivia, false, 'operandIsBlockExpr', [operandAccess]
 			);
-			_o = macro ($_operandIsBlock ? _clearExprPosition($_o) : $_o);
+			_o = macro ($operandIsBlock ? _clearExprPosition($_o) : $_o);
 		}
 		if (propagateFieldLevelVar) _o = macro _setFieldLevelVar($_o);
 		if (interpFlat) _o = macro _setChainModeOverride($_o, anyparse.format.wrap.WrapMode.NoWrap);
@@ -10742,7 +10734,7 @@ class WriterLowering {
 	 * `delimInsidePolicySpace` for the `HxExpr.ArrayExpr` `[…]` Star,
 	 * whose ONE ctor covers three fork bracket kinds (array-literal /
 	 * map-literal / comprehension). The kind is decided at write time by
-	 * `opt.arrayBracketKind(<first element>)` (the plugin classifier on
+	 * the generated `arrayBracketKind(<first element>)` classifier (on
 	 * the first element's enum ctor: `Arrow`→map, `ForExpr`/`WhileExpr`→
 	 * comprehension, else array-literal). The resolved kind selects one of
 	 * the three `{arrayLiteral|mapLiteral|comprehension}Brackets<Open|
@@ -11995,25 +11987,28 @@ class WriterLowering {
 
 	/**
 	 * Wraps the trail-literal emission for a `@:trailOpt(...)` ctor in a
-	 * runtime-conditional `_de() / _dt(trail)` switch driven by a plugin-
-	 * supplied AST shape predicate. Activates only when the branch carries
-	 * both `lit.trailOptional=true` and `@:fmt(trailOptShapeGate('<adapter>',
-	 * '<argFieldPath>'))`. Returns `null` when either condition is absent
-	 * so the caller falls back to the unconditional `_dt(trail)` emission.
+	 * runtime-conditional `_de() / _dt(trail)` switch driven by the
+	 * generated typed shape predicate. Activates only when the branch
+	 * carries both `lit.trailOptional=true` and
+	 * `@:fmt(trailOptShapeGate('<predicate>', '<argFieldPath>'))`.
+	 * Returns `null` when either condition is absent so the caller
+	 * falls back to the unconditional `_dt(trail)` emission.
 	 *
-	 * `argFieldPath` is a dot-separated chain rooted at `argNames[0]` (the
-	 * single Ref-arg name in Case 3). For Haxe's `VarStmt(decl:HxVarDecl)`
-	 * the path is `init` — the optional initializer field on `HxVarDecl`.
-	 * Plain mode reads `_v0.init:Null<HxExpr>`; trivia mode reads
-	 * `_v0.init:Null<Trivial<HxExpr>>` — same field name, the plugin
-	 * adapter unwraps the wrapper internally.
+	 * `argFieldPath` is a dot-separated chain rooted at `argNames[0]`
+	 * (the single Ref-arg name in Case 3). For Haxe's
+	 * `VarStmt(decl:HxVarDecl)` the path is `init` — the optional
+	 * initializer field on `HxVarDecl`. The predicate receives the
+	 * BARE (possibly paired) node — plain mode `Null<HxExpr>`, trivia
+	 * mode `Null<HxExprT>`; Ref fields are never `Trivial<…>`-wrapped
+	 * (that wrapping is Star-element-only), so a future Star-element
+	 * path through this gate would have to pass `.node` itself.
 	 */
 	private function trailOptShapeGateWrap(branch: ShapeNode, trailText: String, rootArg: String): Null<Expr> {
 		final trailOptional: Bool = branch.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true;
 		if (!trailOptional) return null;
 		final args: Null<Array<String>> = branch.fmtReadStringArgs('trailOptShapeGate');
 		if (args == null || args.length != 2) return null;
-		final adapterName: String = args[0];
+		final predName: String = args[0];
 		final argPath: String = args[1];
 		var pathExpr: Expr = macro $i{rootArg};
 		for (segment in argPath.split('.')) pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
@@ -12021,7 +12016,7 @@ class WriterLowering {
 		// family (a grammar carrying `trailOptShapeGate` must provide the
 		// marker classes); a null field value answers the predicate's own
 		// false → the unconditional `_dt(trail)` branch, same as before.
-		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, adapterName, [pathExpr]);
+		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, predName, [pathExpr]);
 		return macro ($gateCall ? _de() : _dt($v{trailText}));
 	}
 
@@ -13687,9 +13682,9 @@ class WriterLowering {
 				// ω-cond-indent-policy AlignedNestedIncrease: per-element gate.
 				// True only on the cond-comp body Stars under that policy; each
 				// element that is a nested `Conditional` (recognised via the
-				// plugin-supplied `opt.elementIsConditional` adapter) is wrapped
-				// `+1` at the splice below. Adapter null (non-opt-in formats)
-				// ⇒ no wrap.
+				// generated `elementIsConditional_<ElemRule>` probe threaded
+				// through `elemCondFn`) is wrapped `+1` at the splice below.
+				// Null probe (formats without generated predicates) ⇒ no wrap.
 				final _condNestedIncrease: Bool = $condNestedIncreaseGateExpr;
 				var _condTrailPad: Null<anyparse.core.Doc> = null;
 				$cascadeInitPrev;
@@ -13754,10 +13749,7 @@ class WriterLowering {
 				// accumulates the shift per depth. Formats without generated
 				// predicates (null `elemCondFn`) and non-conditional elements
 				// leave `_docs` untouched (byte-identical).
-				if (
-					_condNestedIncrease && $elemCondProbe
-					&& _docs.length > _condNestLen
-				) {
+				if (_condNestedIncrease && $elemCondProbe && _docs.length > _condNestLen) {
 					final _condNestSpan: Array<anyparse.core.Doc> = _docs.splice(_condNestLen, _docs.length - _condNestLen);
 					_docs.push(_dn(_cols, _dc(_condNestSpan)));
 				}
@@ -14155,14 +14147,19 @@ class WriterLowering {
 		// `ifBody:fitLine`. Mirrors fork's `isExpression`→`isReturnExpression(case)`
 		// dispatch. Non-`if` tails (nested switch for issue-423 flattening, `for` /
 		// `while` bodies the fork breaks) keep the force-propagated `_writerOpt`.
-		final caseTailBarrier: Expr = astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
-		final caseTailOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1 ? {
-				($caseTailBarrier && !opt._inExprPosition && (
-					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
-				)) ? _clearExprPosition(_writerOpt) : _writerOpt;
-			} : _clearExprPosition(_writerOpt))
-			: macro _writerOpt;
+		final caseTailOptArg: Expr = if (clearExprPositionNonTail) {
+			final caseTailBarrier: Expr = astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
+			macro (
+				_si == _arr.length - 1 ? (
+					($caseTailBarrier && !opt._inExprPosition
+						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
+							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine))
+						? _clearExprPosition(_writerOpt)
+						: _writerOpt
+				) : _clearExprPosition(_writerOpt)
+			);
+		} else
+			macro _writerOpt;
 		final triviaElemCall: Expr = {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, caseTailOptArg]),
 			pos: Context.currentPos(),
@@ -14229,9 +14226,8 @@ class WriterLowering {
 
 	/**
 	 * Tryparse-Star `shapeRefusalExpr` builder (ω-issue-423-mech-b): the
-	 * extra `_flatCase` AND-clause deferring to the plugin-supplied
-	 * `caseBodyRefusesFlat` adapter. Default `false` ⇒ `macro true`.
-	 *
+	 * extra `_flatCase` AND-clause deferring to the generated typed
+	 * `caseBodyRefusesFlat` predicate. Flag off ⇒ `macro true`.
 	 */
 	private static function triviaTryparseShapeRefusalExpr(refuseFlatOnComplex: Bool): Expr {
 		if (!refuseFlatOnComplex) return macro true;
@@ -14263,11 +14259,8 @@ class WriterLowering {
 			: (sepText != null && blockEnded)
 				? macro {
 					if (
-						_si > 0 && _priorElemDoc != null && (
-							_arr[_si - 1].sepAfter
-							|| (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc)
-							&& !$priorCondProbe)
-						)
+						_si > 0 && _priorElemDoc != null
+						&& (_arr[_si - 1].sepAfter || (!anyparse.core.DocMeasure.endsWithStmtTerminator(_priorElemDoc) && !$priorCondProbe))
 					) {
 						_docs.push(_dt($v{sepText}));
 					}
@@ -15494,16 +15487,19 @@ class WriterLowering {
 		// under `ifBody:fitLine`), regardless of the block's own expression context.
 		// Non-`if` tails (a tail switch whose cases flatten via the arrow / return
 		// walk-up, `for` / `while` bodies the fork breaks) keep the inherited frame.
-		final blockTailBarrier: Expr = astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
-		final elemCallOptArg: Expr = clearExprPositionNonTail
-			? macro (_si == _arr.length - 1 ? {
-				($blockTailBarrier && (
-					opt.expressionIfBody == anyparse.format.BodyPolicy.Next || opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine
-				)) ? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr))) : _clearArrowLambdaBody(
-					_clearValueIfBranch($elemOptExpr)
-				);
-			} : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr))))
-			: elemOptExpr;
+		final elemCallOptArg: Expr = if (clearExprPositionNonTail) {
+			final blockTailBarrier: Expr = astPredCallT('tailStmtReadsExprPosition', [macro _t.node]);
+			macro (
+				_si == _arr.length - 1 ? (
+					($blockTailBarrier
+						&& (opt.expressionIfBody == anyparse.format.BodyPolicy.Next
+							|| opt.expressionIfBody == anyparse.format.BodyPolicy.FitLine))
+						? _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+						: _clearArrowLambdaBody(_clearValueIfBranch($elemOptExpr))
+				) : _clearArrowLambdaBody(_clearValueIfBranch(_clearExprPosition($elemOptExpr)))
+			);
+		} else
+			elemOptExpr;
 		return {
 			expr: ECall(macro $i{elemFn}, [macro _t.node, elemCallOptArg]),
 			pos: Context.currentPos(),
@@ -16758,16 +16754,21 @@ typedef AfterCtorBlankInfo = {
 	optField: String,
 	// ω-after-conditional-block — when non-null, the after-ctor override is
 	// ADDITIONALLY gated on the previous element's tail-leaf classify
-	// returning null. `tailAdapterOptField` names a `WriteOptions`
-	// `Dynamic -> Null<{ctorName, path}>` adapter (e.g.
-	// `betweenImportsTailLeafClassify`) run on the matched ctor's first
-	// positional arg (`_v0`); a null result means the wrapper's tail leaf is
-	// NOT one of the recognised ctors (import / using), so the override
-	// fires. Non-null (tail IS an import / using) suppresses the override and
-	// the cascade falls through to the source-driven blank count. The
-	// matched classify case binds `_v0` so the adapter has the payload to
-	// walk. Null for every plain `blankLinesAfterCtor{,If}` — those keep the
-	// original bare `_prevKind == 1` gate, byte-identical.
+	// returning null. The string names a generated typed
+	// `<payload> -> Null<{ctorName, path}>` leaf walker on the trivia
+	// predicate class (e.g. `AstPredsT.tailLeafKeepsBlankAfterConditional`
+	// — the meta arg is the function name), run on the matched ctor's
+	// first positional arg (`_v0`); a null result means the wrapper's
+	// tail leaf is NOT one of the recognised ctors (import / using), so
+	// the override fires. Non-null (tail IS an import / using) suppresses
+	// the override and the cascade falls through to the source-driven
+	// blank count. The matched classify case binds `_v0` so the walker
+	// has the payload. Null for every plain `blankLinesAfterCtor{,If}` —
+	// those keep the original bare `_prevKind == 1` gate, byte-identical.
+	// (The field name keeps its historical `OptField` suffix from the
+	// retired `WriteOptions` adapter era for diff locality; unlike
+	// `BetweenCtorBlankInfo.adapterOptField`, it no longer names an opt
+	// field.)
 	?tailAdapterOptField: Null<String>
 };
 
@@ -17258,23 +17259,26 @@ typedef BeforeCtorBlankInfo = {
  * before-ctor entries > source-driven `blankBefore`.
  *
  * `tailAdapterOptField` (ω-cond-comp-tail-transparency) and
- * `headAdapterOptField` (ω-imports-using-transition) name
- * optional function-typed fields on `WriteOptions`
- * (e.g. `betweenImportsTailLeafClassify` /
+ * `headAdapterOptField` (ω-imports-using-transition) name generated
+ * typed leaf walkers on the trivia predicate class
+ * (e.g. `AstPredsT.betweenImportsTailLeafClassify` /
  * `betweenImportsHeadLeafClassify`, each
- * `Null<Dynamic -> Null<{ctorName, path}>>`). When non-null, ctors
+ * `<payload> -> Null<{ctorName, path}>` — the meta arg is the
+ * function name; the `OptField` suffix survives from the retired
+ * `WriteOptions` adapter era, unlike the sibling `adapterOptField`
+ * which still names a real opt field). When non-null, ctors
  * named in `transparentCtorNames` are routed through the matching
- * direction's adapter at runtime: tail walks the wrapper payload (e.g.
+ * direction's walker at runtime: tail walks the wrapper payload (e.g.
  * `HxConditionalDecl`) to its LAST-branch / LAST-element leaf decl,
- * head walks to FIRST-branch / FIRST-element. Each adapter returns
+ * head walks to FIRST-branch / FIRST-element. Each walker returns
  * `{ctorName, path}`; the engine runs a runtime
  * `_r.ctorName == 'CtorA' || _r.ctorName == 'CtorB'` filter against
- * the per-info `matchedCtorNames` list — so a single shared adapter
+ * the per-info `matchedCtorNames` list — so a single shared walker
  * pair can feed multiple between infos on the same Star (one walker
  * pair drives both Imports and Usings infos on `HxModule.decls`).
  * Tail feeds the next iteration's prev-side via the track-step;
  * head feeds THIS iteration's curr-side at cascade fire. Either or
- * both adapter fields may be null: the absent direction zeros out
+ * both walker fields may be null: the absent direction zeros out
  * its kind/path for transparent ctors (same as the unmatched bucket)
  * while the wired direction's classification still drives the
  * cascade. With both null, transparent ctors fall fully into the

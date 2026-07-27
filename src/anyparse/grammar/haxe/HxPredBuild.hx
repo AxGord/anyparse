@@ -23,13 +23,14 @@ using Lambda;
  * `AstPredLowering` for the naming convention and `HxAstPredLowering`
  * for the predicate tables).
  *
- * Mirrors `Build.buildQueryWalker`'s prologue: resolve the grammar
- * root and its `@:schema` format, build the same `ShapeTree` the
- * parser/writer builds see, run `TriviaAnalysis` (bearing marks), arm
- * the mode's type synth (idempotent — the parser build arms the same
- * batch), then hand the shape to the domain lowering. No strategy
- * annotate pass: the predicate generator reads only base shape and
- * raw metas.
+ * The schema-resolution prologue mirrors `Build.buildQueryWalker`;
+ * the shape pass mirrors `Build.buildParser`'s
+ * `buildShapeWithTrivia` + spans arm: build the same `ShapeTree` the
+ * parser/writer builds see, run `TriviaAnalysis` always (bearing
+ * marks), arm the mode's type synth (idempotent — the parser build
+ * arms the same batch), then hand the shape to the domain lowering.
+ * No strategy annotate pass: the predicate generator reads only base
+ * shape and raw metas.
  */
 class HxPredBuild {
 
@@ -48,14 +49,15 @@ class HxPredBuild {
 				Context.fatalError('HxPredBuild: unsupported root type $ROOT', Context.currentPos());
 				throw 'unreachable';
 		};
-		var schemaTypePath: Null<String> = null;
-		for (entry in rootMeta) if (entry.name == ':schema' && entry.params.length == 1)
-			schemaTypePath = ExprTools.toString(entry.params[0]);
-		if (schemaTypePath == null) {
+		// First-match + explicit arity error, same semantics as
+		// `Build.readSchemaMeta` (private there, so re-stated here).
+		final schemaEntry: Null<MetadataEntry> = rootMeta.find(e -> e.name == ':schema');
+		if (schemaEntry == null) {
 			Context.fatalError('HxPredBuild: $ROOT is missing @:schema(Format)', Context.currentPos());
 			throw 'unreachable';
 		}
-		final formatInfo: FormatInfo = FormatReader.resolve(schemaTypePath);
+		if (schemaEntry.params.length != 1) Context.fatalError('@:schema expects exactly one argument', schemaEntry.pos);
+		final formatInfo: FormatInfo = FormatReader.resolve(ExprTools.toString(schemaEntry.params[0]));
 		final shape: ShapeResult = new ShapeBuilder(formatInfo).build(rootType);
 		TriviaAnalysis.run(shape);
 		if (trivia) TriviaTypeSynth.arm(shape);

@@ -7,7 +7,6 @@ import haxe.macro.MacroStringTools;
 import anyparse.core.ShapeTree;
 
 using Lambda;
-using anyparse.macro.MetaInspect;
 
 /**
  * Which AST family a generated predicate class is typed against. One
@@ -52,10 +51,16 @@ enum AstPredMode {
  * an `Array<Dynamic>` read) is what enforces it.
  *
  * Naming convention: the marker classes live in the grammar root's
- * package as `<pack>.AstPreds` / `AstPredsT` / `AstPredsS` — the same
- * root-derived convention as the `spans.Pairs` / `trivia.Pairs` synth
- * modules, so macro-neutral emission sites can address them without
- * referencing any grammar type by name.
+ * package as `<pack>.AstPreds` / `AstPredsT` / `AstPredsS`, so
+ * macro-neutral emission sites can address them without referencing
+ * any grammar type by name. Synth-module pack derivation deliberately
+ * MIRRORS the writer's existing per-mode conventions rather than the
+ * synth passes' own definition sites: the spans arm uses
+ * `packOf(root)` (as `PairedShapeLowering` does), the trivia arm uses
+ * `packOf(rule)` (as `WriterLowering.ruleValueCT` / `ruleCtorPath`
+ * do) — equivalent while every rule shares the root's package, and
+ * kept in lockstep with the writer so the two generators cannot
+ * diverge on the same value.
  */
 class AstPredLowering {
 
@@ -80,6 +85,10 @@ class AstPredLowering {
 	 * typed plain), so the choice depends only on the build mode.
 	 */
 	public static function predClassParts(rootTypePath: String, trivia: Bool, spans: Bool): Array<String> {
+		// The two flags describe mutually exclusive pipelines; a caller
+		// passing both has confused its build context — fail at macro
+		// time instead of silently preferring one family.
+		if (trivia && spans) Context.fatalError('AstPredLowering: a build cannot be both trivia and spans', Context.currentPos());
 		final suffix: String = spans ? 'S' : trivia ? 'T' : '';
 		return packOf(rootTypePath).concat(['$CLASS_BASE_NAME$suffix']);
 	}
@@ -105,15 +114,13 @@ class AstPredLowering {
 	}
 
 	/** Simple (unqualified) name of a type path. */
-	public static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
+	public static inline function simpleName(typePath: String): String {
+		return PairedShapeLowering.simpleName(typePath);
 	}
 
 	/** Package parts of a type path, empty for a root-package type. */
-	public static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
+	public static inline function packOf(typePath: String): Array<String> {
+		return PairedShapeLowering.packOf(typePath);
 	}
 
 	/** Whether `rule` is trivia-bearing AND this lowering targets the trivia family. */
@@ -132,9 +139,19 @@ class AstPredLowering {
 		final simple: String = simpleName(rule);
 		return switch _mode {
 			case PredSpans if (!isTerminalRule(rule)):
-				TPath({ pack: packOf(_shape.root).concat(['spans']), name: 'Pairs', sub: '${simple}S', params: [] });
+				TPath({
+					pack: packOf(_shape.root).concat(['spans']),
+					name: 'Pairs',
+					sub: '${simple}S',
+					params: []
+				});
 			case PredTrivia if (isTriviaBearing(rule)):
-				TPath({ pack: packOf(rule).concat(['trivia']), name: 'Pairs', sub: '${simple}T', params: [] });
+				TPath({
+					pack: packOf(rule).concat(['trivia']),
+					name: 'Pairs',
+					sub: '${simple}T',
+					params: []
+				});
 			case _:
 				TPath({ pack: packOf(rule), name: simple, params: [] });
 		};
@@ -158,9 +175,7 @@ class AstPredLowering {
 			Context.fatalError('AstPredLowering: $rule is not an Alt rule', Context.currentPos());
 			throw 'unreachable';
 		}
-		final branch: Null<ShapeNode> = node.children.find(
-			b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor
-		);
+		final branch: Null<ShapeNode> = node.children.find(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
 		if (branch == null) {
 			Context.fatalError('AstPredLowering: $rule has no ctor $ctor', Context.currentPos());
 			throw 'unreachable';
@@ -175,10 +190,11 @@ class AstPredLowering {
 	 * see `TriviaTypeSynth.extraAltArgs`.
 	 */
 	private function ctorArity(rule: String, ctor: String): Int {
-		final declared: Int = branchOf(rule, ctor).children.length;
+		final branch: ShapeNode = branchOf(rule, ctor);
+		final declared: Int = branch.children.length;
 		return switch _mode {
 			case PredSpans: declared + 1;
-			case PredTrivia if (isTriviaBearing(rule)): declared + TriviaTypeSynth.extraAltArgs(branchOf(rule, ctor));
+			case PredTrivia if (isTriviaBearing(rule)): declared + TriviaTypeSynth.extraAltArgs(branch);
 			case _: declared;
 		};
 	}
@@ -202,6 +218,12 @@ class AstPredLowering {
 	private function pat(rule: String, ctor: String, ?binds: Map<Int, String>): Expr {
 		final ctorRef: Expr = MacroStringTools.toFieldExpr(ctorPathParts(rule, ctor));
 		final arity: Int = ctorArity(rule, ctor);
+		// A bind index past the arity would silently degrade to an
+		// all-wildcard pattern and surface later as an unresolved
+		// identifier inside the generated class — validate here so the
+		// error names the table entry.
+		if (binds != null) for (i in binds.keys()) if (i >= arity)
+			Context.fatalError('AstPredLowering: $rule.$ctor has no operand $i (arity $arity)', Context.currentPos());
 		if (arity == 0) return ctorRef;
 		final args: Array<Expr> = [
 			for (i in 0...arity) ident(binds != null && binds.exists(i) ? (binds[i]: String) : '_')
@@ -239,9 +261,7 @@ class AstPredLowering {
 	 * — the standard predicate body over a nullable enum value.
 	 */
 	private function nullSwitch(subject: Expr, onNull: Expr, cases: Array<Case>, dflt: Expr): Expr {
-		final all: Array<Case> = [{ values: [macro null], expr: onNull, guard: null }];
-		for (c in cases) all.push(c);
-		return sw(subject, all, dflt);
+		return sw(subject, [({ values: [macro null], expr: onNull, guard: null }: Case)].concat(cases), dflt);
 	}
 
 	/**
@@ -270,13 +290,20 @@ class AstPredLowering {
 	 * elements are always bare.
 	 */
 	private function starElemWrapped(ownerRule: String, fieldName: String): Bool {
-		if (!isTriviaBearing(ownerRule)) return false;
+		if (_mode != PredTrivia) return false;
+		// Unknown rule / field would silently disable the `.node` unwrap
+		// — an author error in the predicate table, not a mode question.
 		final node: Null<ShapeNode> = _shape.rules.get(ownerRule);
-		if (node == null || node.kind != Seq) return false;
-		final child: Null<ShapeNode> = node.children.find(
-			c -> (c.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String) == fieldName
-		);
-		return child != null && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+		if (node == null || node.kind != Seq) {
+			Context.fatalError('AstPredLowering: $ownerRule is not a Seq rule', Context.currentPos());
+			throw 'unreachable';
+		}
+		final child: Null<ShapeNode> = node.children.find(c -> (c.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String) == fieldName);
+		if (child == null) {
+			Context.fatalError('AstPredLowering: $ownerRule has no field $fieldName', Context.currentPos());
+			throw 'unreachable';
+		}
+		return isTriviaBearing(ownerRule) && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
 	}
 
 	/** `<elemExpr>.node` when this family wraps the Star's elements in `Trivial<…>`, else the element unchanged. */

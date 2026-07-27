@@ -110,6 +110,14 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * splice, and `a is T` (permissive last-stmt-in-block semantics
 	 * pinned by `whitespace/issue_605_operator_is`). Recursion targets
 	 * reached through the Assign / If / Meta / Return arms.
+	 *
+	 * `DollarReifExpr` is DELIBERATELY absent from `_binopRhsNoSemi`'s
+	 * carve-out while present here: the carve-out encodes a corpus
+	 * contract for `x = ${expr}` / `x = {a: 1}` / `x = [1, 2]`, and no
+	 * fixture covers a reification splice as an assignment RHS
+	 * (motivating source for the bare-statement entry: Pony
+	 * `DIBuilder.hx` `$b{loadBody}` inside a `macro class` body). The
+	 * asymmetry is intentional, not an oversight.
 	 */
 	private static final STMT_BRACE_TERMINAL_CTORS: Array<String> = [
 		'BlockExpr',
@@ -160,6 +168,13 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * the same `HxVarDecl`, so one or-pattern case walks `.init`.
 	 */
 	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
+
+	/**
+	 * The keyword a `HxExpr.CondSpliceTail` fragment starts with when it
+	 * is an if-chain continuation rather than a standalone guarded
+	 * statement. See `condSpliceTailElseLedField`.
+	 */
+	private static inline final ELSE_KEYWORD: String = 'else';
 
 	/**
 	 * Import / using family ctors of `HxDecl` whose leaf carries a
@@ -213,14 +228,21 @@ final class HxAstPredLowering extends AstPredLowering {
 			elementIsConditionalEnumField(HX_SWITCH_CASE, 'c'),
 			elementIsConditionalEnumField(HX_OBJECT_FIELD, 'f'),
 			elementIsConditionalDeclField(),
-			elementIsConditionalFalseField(HX_EXPR, 'e',
-				'`HxExpr` carries no `Conditional` ctor (a nested `#if` in an args list never parses as a bare '
-				+ 'expression element), so the probe is constantly false — same verdict the ctor-name check gave.'),
-			elementIsConditionalFalseField(HX_MEMBER_DECL, 'm',
+			elementIsConditionalFalseField(
+				HX_EXPR, 'e',
+				'Byte-parity: `HxExpr`\'s conditional shapes use the ctor names `ConditionalExpr` / `ConditionalArgs` / '
+				+ '`CondSpliceExpr`, never `Conditional` — so the retired ctor-NAME check was constantly false for '
+				+ 'expression elements, and a nested `#if` inside a `#if` args region never received the '
+				+ '`alignedNestedIncrease` lift. Keep the false verdict; widening to the real ctor set is a behavior '
+				+ 'change to make deliberately, against fork fixtures.'
+			),
+			elementIsConditionalFalseField(
+				HX_MEMBER_DECL, 'm',
 				'Byte-parity: the retired Dynamic adapter probed the struct\'s `.decl` field, which `HxMemberDecl` '
 				+ 'does not have (its wrapper field is `.member`), so a nested conditional MEMBER never lifted. '
 				+ 'Keep the false verdict; widening to `.member` → `HxClassMember.Conditional` is a behavior '
-				+ 'change to make deliberately, against fork fixtures.'),
+				+ 'change to make deliberately, against fork fixtures.'
+			),
 			condSpliceRawWrapsCasesField(),
 			stmtExprNoSemiField(),
 			stmtExprNoSemiAtField(),
@@ -272,18 +294,24 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseBind(HX_EXPR, 'Ternary', [2 => '_e2'], rec(ident('_e2'))),
 			caseBind(HX_EXPR, 'ForExpr', [0 => '_s'], rec(field(ident('_s'), 'body'))),
 			caseBind(HX_EXPR, 'WhileExpr', [0 => '_s'], rec(field(ident('_s'), 'body'))),
-			caseBind(HX_EXPR, 'IfExpr', [0 => '_s'], macro {
-				final _el = _s.elseBranch;
-				_el != null ? $recEl : $recThen;
-			}),
+			caseBind(
+				HX_EXPR, 'IfExpr', [0 => '_s'], macro {
+					final _el = _s.elseBranch;
+					_el != null ? $recEl : $recThen;
+				}
+			),
 			caseBind(HX_EXPR, 'FnExpr', [0 => '_f'], fnBodySwitch),
-			caseBind(HX_EXPR, 'TryExpr', [0 => '_t'], macro {
-				final _cs = _t.catches;
-				_cs.length == 0 ? $recTryBody : $recLastCatch;
-			}),
+			caseBind(
+				HX_EXPR, 'TryExpr', [0 => '_t'], macro {
+					final _cs = _t.catches;
+					_cs.length == 0 ? $recTryBody : $recLastCatch;
+				}
+			),
 		], macro false);
-		return predField('endsWithCloseBrace', [valueArg('e', HX_EXPR)], macro : Bool, body,
-			'True iff the expression\'s surface form ends with `}` for the var/final-rhs `;` gate (recursive).');
+		return predField(
+			'endsWithCloseBrace', [valueArg('e', HX_EXPR)], macro :Bool, body,
+			'True iff the expression\'s surface form ends with `}` for the var/final-rhs `;` gate (recursive).'
+		);
 	}
 
 	/**
@@ -299,8 +327,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function operandIsBlockExprField(): Field {
 		final body: Expr = nullSwitch(ident('e'), macro false, [caseOf(HX_EXPR, ['BlockExpr'], macro true)], macro false);
-		return predField('operandIsBlockExpr', [valueArg('e', HX_EXPR)], macro : Bool, body,
-			'True iff a `macro <operand>` reification operand is a `{ … }` block.');
+		return predField(
+			'operandIsBlockExpr', [valueArg('e', HX_EXPR)], macro :Bool, body,
+			'True iff a `macro <operand>` reification operand is a `{ … }` block.'
+		);
 	}
 
 	/**
@@ -317,8 +347,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	private function caseBodyRefusesFlatField(): Field {
 		final inner: Expr = sw(ident('_e'), [caseOf(HX_EXPR, ['And', 'Or'], macro true)], macro false);
 		final body: Expr = nullSwitch(ident('s'), macro false, [caseBind(HX_STATEMENT, 'ExprStmt', [0 => '_e'], inner)], macro false);
-		return predField('caseBodyRefusesFlat', [valueArg('s', HX_STATEMENT)], macro : Bool, body,
-			'True iff an `ExprStmt` case body has an outermost `&&` / `||` and must refuse inline emission.');
+		return predField(
+			'caseBodyRefusesFlat', [valueArg('s', HX_STATEMENT)], macro :Bool, body,
+			'True iff an `ExprStmt` case body has an outermost `&&` / `||` and must refuse inline emission.'
+		);
 	}
 
 	/**
@@ -342,8 +374,10 @@ final class HxAstPredLowering extends AstPredLowering {
 		final body: Expr = nullSwitch(
 			ident('s'), macro false, [caseBind(HX_STATEMENT, 'IfStmt', [0 => '_i'], macro $elseAccess == null)], macro false
 		);
-		return predField('tailStmtReadsExprPosition', [valueArg('s', HX_STATEMENT)], macro : Bool, body,
-			'True iff a body-tail statement is a no-else `if` (drops the inherited expression-position frame).');
+		return predField(
+			'tailStmtReadsExprPosition', [valueArg('s', HX_STATEMENT)], macro :Bool, body,
+			'True iff a body-tail statement is a no-else `if` (drops the inherited expression-position frame).'
+		);
 	}
 
 	/**
@@ -369,8 +403,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function elementIsConditionalEnumField(rule: String, argName: String): Field {
 		final body: Expr = nullSwitch(ident(argName), macro false, [caseOf(rule, ['Conditional'], macro true)], macro false);
-		return predField('elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro : Bool, body,
-			'True iff a cond-comp body Star element is itself a nested `Conditional`.');
+		return predField(
+			'elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro :Bool, body,
+			'True iff a cond-comp body Star element is itself a nested `Conditional`.'
+		);
 	}
 
 	/**
@@ -383,13 +419,17 @@ final class HxAstPredLowering extends AstPredLowering {
 		final declAccess: Expr = field(ident('d'), 'decl');
 		final inner: Expr = sw(declAccess, [caseOf(HX_DECL, ['Conditional'], macro true)], macro false);
 		final body: Expr = macro d == null ? false : $inner;
-		return predField('elementIsConditional_HxTopLevelDecl', [valueArg('d', HX_TOP_LEVEL_DECL)], macro : Bool, body,
-			'True iff a cond-comp body Star decl element wraps a nested `Conditional` in its `.decl`.');
+		return predField(
+			'elementIsConditional_HxTopLevelDecl', [valueArg('d', HX_TOP_LEVEL_DECL)], macro :Bool, body,
+			'True iff a cond-comp body Star decl element wraps a nested `Conditional` in its `.decl`.'
+		);
 	}
 
 	/** Constant-false member of the `elementIsConditional_*` family — see `doc` for why the shape can never match. */
 	private function elementIsConditionalFalseField(rule: String, argName: String, doc: String): Field {
-		return predField('elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro : Bool, macro false, doc);
+		return predField(
+			'elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro :Bool, macro false, doc
+		);
 	}
 
 	/**
@@ -412,8 +452,10 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function stmtExprNoSemiField(): Field {
 		final body: Expr = { expr: ECall(ident('_stmtExprNoSemiAt'), [ident('e'), macro false]), pos: Context.currentPos() };
-		return predField('stmtExprNoSemi', [valueArg('e', HX_EXPR)], macro : Bool, body,
-			'True iff the expression at the top of an `ExprStmt` needs no trailing `;` (see `_stmtExprNoSemiAt`).');
+		return predField(
+			'stmtExprNoSemi', [valueArg('e', HX_EXPR)], macro :Bool, body,
+			'True iff the expression at the top of an `ExprStmt` needs no trailing `;` (see `_stmtExprNoSemiAt`).'
+		);
 	}
 
 	/**
@@ -423,13 +465,19 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * true).
 	 *
 	 * The bit exists for the ctors whose grammar node owns an inner
-	 * `@:trailOpt(';')` — `IfExpr` (`HxIfExpr.thenBranch`), `ForExpr`
-	 * (`HxForExpr.body`) and `FnExpr` (`HxFnExprBody.ExprBody`). Those
-	 * slots consume the statement's `;` before the `ExprStmt` gate ever
-	 * runs, so a NESTED occurrence must not `expectLit` a second one
-	 * (`a << if (e) f(m); x();` failed at `x` while
-	 * `a << if (e) f(m);; x();` parsed — that pair exposed the
-	 * swallow). At the TOP of an `ExprStmt` the same relaxation is
+	 * `@:trailOpt(';')` — `IfExpr` (`HxIfExpr.thenBranch`) and `ForExpr`
+	 * (`HxForExpr.body`). Those slots consume the statement's `;`
+	 * before the `ExprStmt` gate ever runs, so a NESTED occurrence must
+	 * not `expectLit` a second one (`a << if (e) f(m); x();` failed at
+	 * `x` while `a << if (e) f(m);; x();` parsed — that pair exposed
+	 * the swallow). `FnExpr`'s `ExprBody` arm carries the same
+	 * `nested ||` relaxation for BYTE-PARITY with the retired worker,
+	 * although `HxFnExprBody.ExprBody` owns NO trail slot (that slot
+	 * lives on the member-level `HxFnBody.ExprBody`; the retired doc
+	 * cited the wrong enum) — its motivating source
+	 * (`t.onClick << function () if (enabled) …`) reaches `true`
+	 * through the `IfExpr` arm regardless. At the TOP of an `ExprStmt`
+	 * the same relaxation is
 	 * WRONG: a statement that starts with `if` / `for` / `function`
 	 * dispatches to its statement production first and only
 	 * fail-rewinds into the `ExprStmt` catch-all when that production
@@ -504,8 +552,10 @@ final class HxAstPredLowering extends AstPredLowering {
 			// standalone `{…}` at statement position is BlockStmt).
 			caseOf(HX_EXPR, STMT_BRACE_TERMINAL_CTORS, macro true),
 		], macro endsWithCloseBrace(e));
-		return predField('_stmtExprNoSemiAt', [valueArg('e', HX_EXPR), { name: 'nested', type: macro : Bool }], macro : Bool, body,
-			'Worker for `stmtExprNoSemi` — `nested` marks an operand descent (inner `@:trailOpt` already claimed the `;`).');
+		return predField(
+			'_stmtExprNoSemiAt', [valueArg('e', HX_EXPR), { name: 'nested', type: macro :Bool }], macro :Bool, body,
+			'Worker for `stmtExprNoSemi` — `nested` marks an operand descent (inner `@:trailOpt` already claimed the `;`).'
+		);
 	}
 
 	/**
@@ -522,8 +572,10 @@ final class HxAstPredLowering extends AstPredLowering {
 		final body: Expr = nullSwitch(ident('r'), macro false, [
 			caseOf(HX_EXPR, ['ObjectLit', 'ArrayExpr', 'DollarBlockExpr', 'Is'], macro false),
 		], recurse);
-		return predField('_binopRhsNoSemi', [valueArg('r', HX_EXPR)], macro : Bool, body,
-			'Right-operand walk for the binop arms of `_stmtExprNoSemiAt`, with the assign-RHS literal carve-out.');
+		return predField(
+			'_binopRhsNoSemi', [valueArg('r', HX_EXPR)], macro :Bool, body,
+			'Right-operand walk for the binop arms of `_stmtExprNoSemiAt`, with the assign-RHS literal carve-out.'
+		);
 	}
 
 	/**
@@ -547,8 +599,9 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * safe `false`.
 	 */
 	private function condSpliceTailElseLedField(): Field {
+		final verdict: Expr = condSpliceElseVerdictExpr();
 		final body: Expr = macro {
-			function isWs(c: Int): Bool return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+			inline function isWs(c: Int): Bool return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
 			final n: Int = raw.length;
 			var i: Int = 0;
 			while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
@@ -564,8 +617,25 @@ final class HxAstPredLowering extends AstPredLowering {
 				i++;
 			}
 			while (i < n && isWs(StringTools.fastCodeAt(raw, i))) i++;
-			final after: Int = i + 4;
-			if (raw.substr(i, 4) != 'else')
+			$verdict;
+		};
+		return predField(
+			'_condSpliceTailElseLed', [{ name: 'raw', type: macro :String }], macro :Bool, body,
+			'True iff a token-splice fragment is an `else`-led if-chain continuation (paren-depth-aware atom skip).'
+		);
+	}
+
+	/**
+	 * The keyword-and-word-boundary verdict spliced at the tail of
+	 * `_condSpliceTailElseLed`'s scan (`i` / `n` bound by the enclosing
+	 * emitted block): `else` at `i` with a non-ident-char (or EOF)
+	 * after it.
+	 */
+	private function condSpliceElseVerdictExpr(): Expr {
+		final kwLen: Int = ELSE_KEYWORD.length;
+		return macro {
+			final after: Int = i + $v{kwLen};
+			if (raw.substr(i, $v{kwLen}) != $v{ELSE_KEYWORD})
 				false;
 			else if (after >= n)
 				true;
@@ -575,8 +645,6 @@ final class HxAstPredLowering extends AstPredLowering {
 					|| nc == '_'.code);
 			}
 		};
-		return predField('_condSpliceTailElseLed', [{ name: 'raw', type: macro : String }], macro : Bool, body,
-			'True iff a token-splice fragment is an `else`-led if-chain continuation (paren-depth-aware atom skip).');
 	}
 
 	/**
@@ -620,8 +688,10 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseOf(HX_STATEMENT, NO_SEMI_STMT_CTORS, macro true),
 			caseBindMulti(HX_STATEMENT, VAR_INIT_STMT_CTORS, [0 => '_d'], varArm),
 		], macro false);
-		return predField('stmtNoSemi', [valueArg('s', HX_STATEMENT)], macro : Bool, body,
-			'True iff a prior BlockBody statement needs no `;` before the next one.');
+		return predField(
+			'stmtNoSemi', [valueArg('s', HX_STATEMENT)], macro :Bool, body,
+			'True iff a prior BlockBody statement needs no `;` before the next one.'
+		);
 	}
 
 	/**
@@ -684,8 +754,10 @@ final class HxAstPredLowering extends AstPredLowering {
 				_eb != null && _eb.length > 0 ? $clsElse : null;
 			};
 		}
-		return predField(name, [valueArg('p', HX_COND_DECL)], macro : Null<{ ctorName: String, path: String }>, body,
-			(tail ? 'Tail' : 'Head') + '-leaf classification of a module-level conditional for the between/after cascades.');
+		return predField(
+			name, [valueArg('p', HX_COND_DECL)], macro :Null<{ ctorName: String, path: String }>, body,
+			(tail ? 'Tail' : 'Head') + '-leaf classification of a module-level conditional for the between/after cascades.'
+		);
 	}
 
 	/**
@@ -698,15 +770,19 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * conditional as opaque).
 	 */
 	private function importLeafClassifierField(name: String, walker: String): Field {
-		final cases: Array<Case> = [caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
-			expr: ECall(ident(walker), [ident('_c')]),
-			pos: Context.currentPos(),
-		})];
+		final cases: Array<Case> = [
+			caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
+				expr: ECall(ident(walker), [ident('_c')]),
+				pos: Context.currentPos(),
+			})
+		];
 		for (c in IMPORT_PATH_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_p'], macro { ctorName: $v{c}, path: _p }));
 		for (c in IMPORT_ALIAS_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_a'], macro { ctorName: $v{c}, path: _a.path }));
 		final body: Expr = sw(field(ident('e'), 'decl'), cases, macro null);
-		return predField(name, [bareArg('e', HX_TOP_LEVEL_DECL)], macro : Null<{ ctorName: String, path: String }>, body,
-			'Import/using leaf classification of one conditional body element (null = opaque).');
+		return predField(
+			name, [bareArg('e', HX_TOP_LEVEL_DECL)], macro :Null<{ ctorName: String, path: String }>, body,
+			'Import/using leaf classification of one conditional body element (null = opaque).'
+		);
 	}
 
 	/**
@@ -717,15 +793,18 @@ final class HxAstPredLowering extends AstPredLowering {
 	 * informational). Recurses tail-first into a nested `Conditional`.
 	 */
 	private function keepsBlankLeafClassifierField(): Field {
-		final cases: Array<Case> = [caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
-			expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]),
-			pos: Context.currentPos(),
-		})];
+		final cases: Array<Case> = [
+			caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
+				expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]),
+				pos: Context.currentPos(),
+			})
+		];
 		for (c in KEEPS_BLANK_CTORS) cases.push(caseOf(HX_DECL, [c], macro { ctorName: $v{c}, path: '' }));
 		final body: Expr = sw(field(ident('e'), 'decl'), cases, macro null);
-		return predField('_classifyKeepsBlankLeaf', [bareArg('e', HX_TOP_LEVEL_DECL)],
-			macro : Null<{ ctorName: String, path: String }>, body,
-			'Keep-blank leaf classification of one conditional body element (non-null = fork keeps a blank).');
+		return predField(
+			'_classifyKeepsBlankLeaf', [bareArg('e', HX_TOP_LEVEL_DECL)], macro :Null<{ ctorName: String, path: String }>, body,
+			'Keep-blank leaf classification of one conditional body element (non-null = fork keeps a blank).'
+		);
 	}
 
 	/** Non-null single-value predicate argument (Star elements are never null). */
@@ -750,6 +829,8 @@ final class HxAstPredLowering extends AstPredLowering {
 	 */
 	private function condSpliceRawWrapsCasesField(): Field {
 		final body: Expr = macro {
+			// NOT `inline`: the early returns make it un-inlinable
+			// ("Cannot inline a not final return").
 			function kwAt(s: String, at: Int, kw: String): Bool {
 				final kl: Int = kw.length;
 				if (at + kl > s.length) return false;
@@ -757,8 +838,7 @@ final class HxAstPredLowering extends AstPredLowering {
 				if (at + kl >= s.length) return true;
 				final next: Int = StringTools.fastCodeAt(s, at + kl);
 				return !((next >= 'a'.code && next <= 'z'.code) || (next >= 'A'.code && next <= 'Z'.code)
-					|| (next >= '0'.code && next <= '9'.code)
-					|| next == '_'.code);
+					|| (next >= '0'.code && next <= '9'.code) || next == '_'.code);
 			}
 			final n: Int = raw.length;
 			var atLineStart: Bool = true;
@@ -776,8 +856,10 @@ final class HxAstPredLowering extends AstPredLowering {
 			}
 			hit;
 		};
-		return predField('condSpliceRawWrapsCases', [{ name: 'raw', type: macro : String }], macro : Bool, body,
-			'True iff a token-splice raw fragment has a line starting with the `case` / `default` keyword.');
+		return predField(
+			'condSpliceRawWrapsCases', [{ name: 'raw', type: macro :String }], macro :Bool, body,
+			'True iff a token-splice raw fragment has a line starting with the `case` / `default` keyword.'
+		);
 	}
 
 	/**
@@ -804,8 +886,10 @@ final class HxAstPredLowering extends AstPredLowering {
 			caseOf(HX_EXPR, ['Arrow'], macro 1),
 			caseOf(HX_EXPR, ['ForExpr', 'WhileExpr'], macro 2),
 		], macro 0);
-		return predField('arrayBracketKind', [valueArg('e', HX_EXPR)], macro : Int, body,
-			'Bracket kind of an array-`[…]` ctor by its first element: 1 map literal, 2 comprehension, 0 array literal.');
+		return predField(
+			'arrayBracketKind', [valueArg('e', HX_EXPR)], macro :Int, body,
+			'Bracket kind of an array-`[…]` ctor by its first element: 1 map literal, 2 comprehension, 0 array literal.'
+		);
 	}
 
 }

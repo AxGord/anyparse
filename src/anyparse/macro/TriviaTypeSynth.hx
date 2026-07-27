@@ -724,12 +724,26 @@ class TriviaTypeSynth {
 	 * Alt ctor beyond its declared children — the single source of truth
 	 * for the trivia-mode ctor arity every pattern-building consumer
 	 * (`WriterLowering.branchExtraArgs`, `AstPredLowering`) must agree
-	 * on with the synth side. Each `has*` predicate mirrors one push
-	 * block in `buildEnumCtor`; see the per-slot ω-comments there for
-	 * what each slot captures. The `hasOpenTrailing` / postfix groups
-	 * reserve multiple slots at once (open-trailing brings
-	 * `trailingBlankBefore` + `trailingLeading`, postfix-close brings
-	 * the five call-trivia positionals).
+	 * on with the synth side. See the per-slot ω-comments in
+	 * `buildEnumCtor` for what each slot captures. The term↔push-block
+	 * mapping is NOT one-to-one:
+	 *
+	 *  - the `(hasCloseTrailing || hasTrailOptFlag || hasCaptureSource)`
+	 *    OR-collapse counts THREE push blocks as at most one slot. That
+	 *    rests on an exclusivity ASSUMPTION: close-trailing is
+	 *    structurally disjoint from the other two (Star vs single-Ref
+	 *    child), but trailOpt and captureSource are both single-Ref
+	 *    predicates excluded only by convention — no current ctor
+	 *    carries both metas. A ctor combining them would push two slots
+	 *    while being counted as one, leaving every pattern one wildcard
+	 *    short.
+	 *  - the `hasOpenTrailing` / postfix-close groups reserve multiple
+	 *    slots at once (open-trailing brings `trailingBlankBefore` +
+	 *    `trailingLeading`, postfix-close the five call-trivia
+	 *    positionals).
+	 *  - `isInfixChainBranch` / `isRhsTrailBranch` have push blocks with
+	 *    no dedicated `has*` local — they contribute directly in the
+	 *    return expression.
 	 */
 	public static function extraAltArgs(branch: ShapeNode): Int {
 		final hasCloseTrailing: Bool = isAltCloseTrailingBranch(branch);
@@ -739,6 +753,11 @@ class TriviaTypeSynth {
 		final hasWrapOpenNewline: Bool = isAltWrapOpenNewlineBranch(branch);
 		final hasKwNewline: Bool = isAltKwNewlineBranch(branch);
 		final hasChainNewline: Bool = isAltChainNewlineBranch(branch);
+		// Deliberately the SAME predicate as `hasChainNewline`, not a
+		// copy-paste bug: `buildEnumCtor` pushes the `chainLeadComment`
+		// slot under the same gate as `chainNewline`, so the arity
+		// reserves both (the writer's FieldAccess pattern destructures
+		// them separately).
 		final hasChainLeadComment: Bool = isAltChainNewlineBranch(branch);
 		final hasPostfixOpSpace: Bool = isPostfixOpSpaceBranch(branch);
 		final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');

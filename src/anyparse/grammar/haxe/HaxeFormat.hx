@@ -76,6 +76,7 @@ final class HaxeFormat implements TextFormat {
 	 * gates the emission sites without a per-Star `@:fmt` opt-in.
 	 */
 	public var astPreds(default, null): Bool = true;
+
 	public var lineComment(default, null): Null<String> = '//';
 	public var blockComment(default, null): Null<BlockCommentDelims> = { open: '/*', close: '*/' };
 	public var keySyntax(default, null): KeySyntax = KeySyntax.Unquoted;
@@ -607,8 +608,8 @@ final class HaxeFormat implements TextFormat {
 	 * `HxConditionalDecl.body` / `elseBody`, and `HxElseifDecl.body`
 	 * (mirrored cluster), consumed by the trivia-mode EOF Star path in
 	 * `WriterLowering.triviaEofStarExpr`. Conditional transparency
-	 * from the existing `betweenImportsTailLeafClassify` /
-	 * `betweenImportsHeadLeafClassify` adapters extends to this
+	 * from the generated `betweenImportsTailLeafClassify` /
+	 * `betweenImportsHeadLeafClassify` typed predicates extends to this
 	 * transition automatically — both share the `'decl'` classifier.
 	 *
 	 * `afterMultilineDecl` / `beforeMultilineDecl` defaults
