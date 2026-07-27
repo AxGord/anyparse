@@ -219,55 +219,10 @@ typedef WriteOptions = {
 	 *    via the underlying-Int representation of its level enum
 	 *    (e.g. `enum abstract HxBetweenImportsLevel(Int) from Int to Int`).
 	 *
-	 *  - `betweenImportsTailLeafClassify(payload) → Null<{ctorName,path}>` —
-	 *    classifies the tail leaf decl of a "transparent" wrapper ctor
-	 *    (e.g. `HxDecl.Conditional(inner:HxConditionalDecl)`). Drives
-	 *    the `@:fmt(blankLinesBetweenSameCtorTailTransparent(...))`
-	 *    extension to the between-cascade in
-	 *    `WriterLowering.triviaEofStarExpr`: when the current element
-	 *    matches the transparent ctor name, the engine emits a runtime
-	 *    `opt.<adapterField>(payload)` call instead of resetting
-	 *    `_currTailKindBetween/_currTailPathBetween` to (0,''). The plugin
-	 *    walks the wrapper's body Stars (last non-empty branch's last
-	 *    decl, recursively unwrapping nested wrappers) and returns the
-	 *    leaf's ctor name + first-positional-arg path String, or
-	 *    `null` when no leaf is recognised. The engine does the per-
-	 *    info ctor-name match at runtime — `_r.ctorName == 'CtorA' ||
-	 *    _r.ctorName == 'CtorB'` derived from each between info's own
-	 *    ctorNames list — so the same adapter feeds multiple between
-	 *    infos on the same Star (e.g. one walker shared by Imports +
-	 *    Usings infos). Mirrors `betweenImportsPathDiffers` pattern:
-	 *    format-neutral engine, primitive return shape, plugin handles
-	 *    the AST traversal.
-	 *
-	 *  - `betweenImportsHeadLeafClassify(payload) → Null<{ctorName,path}>` —
-	 *    head-side mirror of `betweenImportsTailLeafClassify`. Drives
-	 *    `@:fmt(blankLinesBetweenSameCtorHeadTransparent(...))` and the
-	 *    cross-subset transition cascade
-	 *    (`@:fmt(blankLinesOnTransitionAcross(...))`) by classifying the
-	 *    HEAD leaf decl of a transparent wrapper (first non-empty branch's
-	 *    first element, recursing into nested wrappers head-first). Used
-	 *    at curr-side classification — what the wrapper "starts with" for
-	 *    the prev→curr boundary decision in this iteration. Tail-walker
-	 *    feeds the next iteration's prev side; head-walker feeds this
-	 *    iteration's curr side. Together they cover bidirectional
-	 *    transparency for a `Conditional` containing imports/usings.
-	 *
 	 * Formats that don't opt into a gate leave the field null; the
 	 * writer helper checks `null` before invoking and falls back to
 	 * the unconditional non-refusal path.
 	 */
 	?endsWithCloseBrace: Null<Dynamic -> Bool>,
-	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>,
-	?betweenImportsTailLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
-	?betweenImportsHeadLeafClassify: Null<Dynamic -> Null<{ ctorName: String, path: String }>>,
-	// ω-after-conditional-block — `tailLeafKeepsBlankAfterConditional(payload)
-	// → Null<{ctorName, path}>`. Non-null iff a module-level `#if … #end`
-	// (`HxDecl.Conditional`) tail leaf is a decl after which fork keeps /
-	// re-adds a blank before the next decl (import / using OR type-level
-	// decl). Drives the `@:fmt(blankLinesAfterCtorIfTailLeafNull(...))`
-	// override on `HxModule.decls`: null (e.g. `#error` tail) → force
-	// `afterConditionalBlock` (=0) blanks; non-null → source-driven count.
-	// Null adapter (every non-opt-in format) → the override never fires.
-	?tailLeafKeepsBlankAfterConditional: Null<Dynamic -> Null<{ ctorName: String, path: String }>>
+	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>
 };

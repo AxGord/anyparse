@@ -833,9 +833,6 @@ final class HaxeFormat implements TextFormat {
 		lineCommentAdapter: anyparse.format.comment.LineCommentNormalizer.normalizeLineComment,
 		endsWithCloseBrace: HxExprUtil.endsWithCloseBrace,
 		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
-		betweenImportsTailLeafClassify: HxExprUtil.tailLeafClassifyImports,
-		betweenImportsHeadLeafClassify: HxExprUtil.headLeafClassifyImports,
-		tailLeafKeepsBlankAfterConditional: HxExprUtil.tailLeafKeepsBlankAfterConditional,
 	};
 
 	private function new() {}

@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 #if macro
+import haxe.macro.Context;
 import haxe.macro.Expr;
 import anyparse.macro.AstPredLowering;
 
@@ -30,6 +31,50 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
 
+	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
+
+	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
+
+	/**
+	 * Import / using family ctors of `HxDecl` whose leaf carries a
+	 * plain path String as its single positional arg — recognised by
+	 * the between-imports leaf classifiers.
+	 */
+	private static final IMPORT_PATH_CTORS: Array<String> = ['ImportDecl', 'ImportWildDecl', 'UsingDecl', 'UsingWildDecl'];
+
+	/**
+	 * Import alias ctors of `HxDecl` — the path lives in the wrapped
+	 * struct's `path` field instead of being a positional sibling (the
+	 * lowering rejects multi-arg enum branches).
+	 */
+	private static final IMPORT_ALIAS_CTORS: Array<String> = ['ImportAliasDecl', 'ImportAliasInDecl'];
+
+	/**
+	 * `HxDecl` ctors after whose `#end` the fork keeps / re-adds a
+	 * blank line before the following decl — the union of fork's
+	 * `markImports` (import / using family) and `betweenTypes`
+	 * (type-level decls) passes. Consumed by
+	 * `tailLeafKeepsBlankAfterConditional`.
+	 */
+	private static final KEEPS_BLANK_CTORS: Array<String> = [
+		'ImportDecl',
+		'ImportWildDecl',
+		'UsingDecl',
+		'UsingWildDecl',
+		'ImportAliasDecl',
+		'ImportAliasInDecl',
+		'ClassDecl',
+		'InterfaceDecl',
+		'AbstractClassDecl',
+		'AbstractDecl',
+		'EnumDecl',
+		'EnumAbstractDecl',
+		'TypedefDecl',
+		'FnDecl',
+		'VarDecl',
+		'FinalDecl',
+	];
+
 	/** All generated predicate fields for this lowering's mode. */
 	public function generate(): Array<Field> {
 		return [
@@ -50,6 +95,12 @@ final class HxAstPredLowering extends AstPredLowering {
 				+ 'Keep the false verdict; widening to `.member` → `HxClassMember.Conditional` is a behavior '
 				+ 'change to make deliberately, against fork fixtures.'),
 			condSpliceRawWrapsCasesField(),
+			condLeafWalkerField('betweenImportsTailLeafClassify', true, '_classifyImportLeafTail'),
+			condLeafWalkerField('betweenImportsHeadLeafClassify', false, '_classifyImportLeafHead'),
+			condLeafWalkerField('tailLeafKeepsBlankAfterConditional', true, '_classifyKeepsBlankLeaf'),
+			importLeafClassifierField('_classifyImportLeafTail', 'betweenImportsTailLeafClassify'),
+			importLeafClassifierField('_classifyImportLeafHead', 'betweenImportsHeadLeafClassify'),
+			keepsBlankLeafClassifierField(),
 		];
 	}
 
@@ -157,6 +208,115 @@ final class HxAstPredLowering extends AstPredLowering {
 	/** Constant-false member of the `elementIsConditional_*` family — see `doc` for why the shape can never match. */
 	private function elementIsConditionalFalseField(rule: String, argName: String, doc: String): Field {
 		return predField('elementIsConditional_${AstPredLowering.simpleName(rule)}', [valueArg(argName, rule)], macro : Bool, macro false, doc);
+	}
+
+	/**
+	 * The `#if … #end` leaf-walker family over `HxConditionalDecl` —
+	 * `betweenImportsTailLeafClassify` / `betweenImportsHeadLeafClassify`
+	 * / `tailLeafKeepsBlankAfterConditional`, consumed by the
+	 * between-cascade and after-conditional-block emissions in
+	 * `WriterLowering.triviaEofStarExpr` (the meta arg names the
+	 * generated function). Each walks the conditional's branches to its
+	 * TAIL leaf decl (`elseBody` → `elseifs[last..0].body` → `body`,
+	 * last element of the FIRST non-empty branch in that priority) or
+	 * its HEAD leaf (`body` → `elseifs[0..].body` → `elseBody`, first
+	 * element), classifies the leaf via the direction's element
+	 * classifier, and propagates `null` up for unrecognised leaves so
+	 * the cascade treats the conditional as opaque. The strict
+	 * "last/first branch wins" semantic matches what a positional
+	 * trailing/leading-element walker owes the cascade: a conditional
+	 * whose tail branch ends in a non-import must NOT classify as an
+	 * import even when an earlier branch does.
+	 */
+	private function condLeafWalkerField(name: String, tail: Bool, classifier: String): Field {
+		inline function cls(elem: Expr): Expr return { expr: ECall(ident(classifier), [elem]), pos: elem.pos };
+		final clauseBody: Expr = field(starElem(HX_COND_DECL, 'elseifs', ident('_cl')), 'body');
+		final body: Expr = if (tail) {
+			final clsElse: Expr = cls(starElem(HX_COND_DECL, 'elseBody', macro _eb[_eb.length - 1]));
+			final clsClause: Expr = cls(starElem(HX_ELSEIF_DECL, 'body', macro _cb[_cb.length - 1]));
+			final clsBody: Expr = cls(starElem(HX_COND_DECL, 'body', macro _b[_b.length - 1]));
+			macro {
+				if (p == null) return null;
+				final _eb = p.elseBody;
+				if (_eb != null && _eb.length > 0) return $clsElse;
+				final _els = p.elseifs;
+				var _i: Int = _els.length - 1;
+				while (_i >= 0) {
+					final _cl = _els[_i];
+					final _cb = $clauseBody;
+					if (_cb.length > 0) return $clsClause;
+					_i--;
+				}
+				final _b = p.body;
+				_b.length > 0 ? $clsBody : null;
+			};
+		} else {
+			final clsBody: Expr = cls(starElem(HX_COND_DECL, 'body', macro _b[0]));
+			final clsClause: Expr = cls(starElem(HX_ELSEIF_DECL, 'body', macro _cb[0]));
+			final clsElse: Expr = cls(starElem(HX_COND_DECL, 'elseBody', macro _eb[0]));
+			macro {
+				if (p == null) return null;
+				final _b = p.body;
+				if (_b.length > 0) return $clsBody;
+				final _els = p.elseifs;
+				var _i: Int = 0;
+				while (_i < _els.length) {
+					final _cl = _els[_i];
+					final _cb = $clauseBody;
+					if (_cb.length > 0) return $clsClause;
+					_i++;
+				}
+				final _eb = p.elseBody;
+				_eb != null && _eb.length > 0 ? $clsElse : null;
+			};
+		}
+		return predField(name, [valueArg('p', HX_COND_DECL)], macro : Null<{ ctorName: String, path: String }>, body,
+			(tail ? 'Tail' : 'Head') + '-leaf classification of a module-level conditional for the between/after cascades.');
+	}
+
+	/**
+	 * Element classifier for the between-imports walkers: unwraps one
+	 * body-Star element's `.decl` and answers `{ctorName, path}` for
+	 * the import / using family (positional-path ctors read arg 0, the
+	 * alias ctors read the wrapped struct's `path` field), recurses
+	 * into a nested `Conditional` via the SAME-direction walker, and
+	 * answers `null` for everything else (cascade treats the
+	 * conditional as opaque).
+	 */
+	private function importLeafClassifierField(name: String, walker: String): Field {
+		final cases: Array<Case> = [caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
+			expr: ECall(ident(walker), [ident('_c')]),
+			pos: Context.currentPos(),
+		})];
+		for (c in IMPORT_PATH_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_p'], macro { ctorName: $v{c}, path: _p }));
+		for (c in IMPORT_ALIAS_CTORS) cases.push(caseBind(HX_DECL, c, [0 => '_a'], macro { ctorName: $v{c}, path: _a.path }));
+		final body: Expr = sw(field(ident('e'), 'decl'), cases, macro null);
+		return predField(name, [bareArg('e', HX_TOP_LEVEL_DECL)], macro : Null<{ ctorName: String, path: String }>, body,
+			'Import/using leaf classification of one conditional body element (null = opaque).');
+	}
+
+	/**
+	 * Leaf classifier for `tailLeafKeepsBlankAfterConditional` — same
+	 * element-unwrap path as the import classifiers but the broader
+	 * `KEEPS_BLANK_CTORS` set (import / using family AND type-level
+	 * decls; the consumer gate only reads nullness, the ctor name is
+	 * informational). Recurses tail-first into a nested `Conditional`.
+	 */
+	private function keepsBlankLeafClassifierField(): Field {
+		final cases: Array<Case> = [caseBind(HX_DECL, 'Conditional', [0 => '_c'], {
+			expr: ECall(ident('tailLeafKeepsBlankAfterConditional'), [ident('_c')]),
+			pos: Context.currentPos(),
+		})];
+		for (c in KEEPS_BLANK_CTORS) cases.push(caseOf(HX_DECL, [c], macro { ctorName: $v{c}, path: '' }));
+		final body: Expr = sw(field(ident('e'), 'decl'), cases, macro null);
+		return predField('_classifyKeepsBlankLeaf', [bareArg('e', HX_TOP_LEVEL_DECL)],
+			macro : Null<{ ctorName: String, path: String }>, body,
+			'Keep-blank leaf classification of one conditional body element (non-null = fork keeps a blank).');
+	}
+
+	/** Non-null single-value predicate argument (Star elements are never null). */
+	private function bareArg(name: String, rule: String): FunctionArg {
+		return { name: name, type: ruleCT(rule) };
 	}
 
 	/**

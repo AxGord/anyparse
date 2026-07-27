@@ -253,6 +253,27 @@ class AstPredLowering {
 		return { name: name, type: ruleNullCT(rule) };
 	}
 
+	/**
+	 * Whether elements of the `Seq` rule's Star field are
+	 * `Trivial<…>`-wrapped in this lowering's family — trivia mode,
+	 * bearing owner, `trivia.starCollects` on the field. Plain / spans
+	 * elements are always bare.
+	 */
+	private function starElemWrapped(ownerRule: String, fieldName: String): Bool {
+		if (!isTriviaBearing(ownerRule)) return false;
+		final node: Null<ShapeNode> = _shape.rules.get(ownerRule);
+		if (node == null || node.kind != Seq) return false;
+		final child: Null<ShapeNode> = node.children.find(
+			c -> (c.annotations.get(AnnotationKeys.BASE_FIELD_NAME): String) == fieldName
+		);
+		return child != null && child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+	}
+
+	/** `<elemExpr>.node` when this family wraps the Star's elements in `Trivial<…>`, else the element unchanged. */
+	private function starElem(ownerRule: String, fieldName: String, elemExpr: Expr): Expr {
+		return starElemWrapped(ownerRule, fieldName) ? field(elemExpr, 'node') : elemExpr;
+	}
+
 	private function ident(name: String): Expr {
 		return { expr: EConst(CIdent(name)), pos: Context.currentPos() };
 	}

@@ -12932,7 +12932,7 @@ class WriterLowering {
 				acc.currVars.push({ name: '_currTailNullAfter$i', type: macro :Int, expr: macro 0 });
 				acc.prevVars.push({ name: '_prevTailNullAfter$i', type: macro :Int, expr: macro 0 });
 				final tailNullIdent: Expr = { expr: EConst(CIdent('_currTailNullAfter$i')), pos: pos };
-				final adapterAccess: Expr = { expr: EField(macro opt, info.tailAdapterOptField), pos: pos };
+				final adapterCall: Expr = astPredCallT(info.tailAdapterOptField, [macro _v0]);
 				final dualCases: Array<Case> = [
 					for (c in info.classifyCases) {
 						// The builder marks the single matched (`_v0`-binding) case
@@ -12947,7 +12947,7 @@ class WriterLowering {
 							expr: isMatchCase
 								? macro {
 									$kindIdent = 1;
-									$tailNullIdent = ($adapterAccess == null || $adapterAccess(_v0) == null) ? 1 : 0;
+									$tailNullIdent = $adapterCall == null ? 1 : 0;
 								}
 								: macro {
 									$kindIdent = 0;
@@ -13038,9 +13038,9 @@ class WriterLowering {
 					$tailPathIdent = '';
 				}
 			else {
-				final adapterAccess: Expr = { expr: EField(macro opt, info.tailAdapterOptField), pos: pos };
+				final adapterCall: Expr = astPredCallT(info.tailAdapterOptField, [macro _v0]);
 				macro {
-					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+					final _r = $adapterCall;
 					if (_r != null && $ctorNameMatch) {
 						$tailKindIdent = 1;
 						$tailPathIdent = _r.path;
@@ -13056,9 +13056,9 @@ class WriterLowering {
 					$headPathIdent = '';
 				}
 			else {
-				final adapterAccess: Expr = { expr: EField(macro opt, info.headAdapterOptField), pos: pos };
+				final adapterCall: Expr = astPredCallT(info.headAdapterOptField, [macro _v0]);
 				macro {
-					final _r = $adapterAccess != null ? $adapterAccess(_v0) : null;
+					final _r = $adapterCall;
 					if (_r != null && $ctorNameMatch) {
 						$headKindIdent = 1;
 						$headPathIdent = _r.path;
@@ -13173,36 +13173,34 @@ class WriterLowering {
 			final tkbIdent: Expr = { expr: EConst(CIdent('_currTailKindAcrossB$i')), pos: pos };
 			final hkaIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossA$i')), pos: pos };
 			final hkbIdent: Expr = { expr: EConst(CIdent('_currHeadKindAcrossB$i')), pos: pos };
-			final tailAdapterAccess: Null<Expr> = info.tailAdapterOptField == null ? null : {
-				expr: EField(macro opt, info.tailAdapterOptField),
-				pos: pos
-			};
-			final headAdapterAccess: Null<Expr> = info.headAdapterOptField == null ? null : {
-				expr: EField(macro opt, info.headAdapterOptField),
-				pos: pos
-			};
+			final tailAdapterCall: Null<Expr> = info.tailAdapterOptField == null
+				? null
+				: astPredCallT(info.tailAdapterOptField, [macro _v0]);
+			final headAdapterCall: Null<Expr> = info.headAdapterOptField == null
+				? null
+				: astPredCallT(info.headAdapterOptField, [macro _v0]);
 			final tailMatchA: Expr = transitionAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesA, pos);
 			final tailMatchB: Expr = transitionAdapterMatchExpr(info.tailAdapterOptField, info.matchedCtorNamesB, pos);
 			final headMatchA: Expr = transitionAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesA, pos);
 			final headMatchB: Expr = transitionAdapterMatchExpr(info.headAdapterOptField, info.matchedCtorNamesB, pos);
-			final transparentBody: Expr = if (tailAdapterAccess == null && headAdapterAccess == null)
+			final transparentBody: Expr = if (tailAdapterCall == null && headAdapterCall == null)
 				macro {
 					$tkaIdent = 0;
 					$tkbIdent = 0;
 					$hkaIdent = 0;
 					$hkbIdent = 0;
 				}
-			else if (headAdapterAccess == null)
+			else if (headAdapterCall == null)
 				macro {
-					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+					final _r = $tailAdapterCall;
 					$tkaIdent = $tailMatchA;
 					$tkbIdent = $tailMatchB;
 					$hkaIdent = 0;
 					$hkbIdent = 0;
 				}
-			else if (tailAdapterAccess == null)
+			else if (tailAdapterCall == null)
 				macro {
-					final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+					final _r = $headAdapterCall;
 					$hkaIdent = $headMatchA;
 					$hkbIdent = $headMatchB;
 					$tkaIdent = 0;
@@ -13210,11 +13208,11 @@ class WriterLowering {
 				}
 			else
 				macro {
-					final _r = $tailAdapterAccess != null ? $tailAdapterAccess(_v0) : null;
+					final _r = $tailAdapterCall;
 					$tkaIdent = $tailMatchA;
 					$tkbIdent = $tailMatchB;
 					{
-						final _r = $headAdapterAccess != null ? $headAdapterAccess(_v0) : null;
+						final _r = $headAdapterCall;
 						$hkaIdent = $headMatchA;
 						$hkbIdent = $headMatchB;
 					}

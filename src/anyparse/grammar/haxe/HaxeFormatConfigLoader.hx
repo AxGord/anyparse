@@ -721,9 +721,6 @@ final class HaxeFormatConfigLoader {
 			lineCommentAdapter: base.lineCommentAdapter,
 			endsWithCloseBrace: base.endsWithCloseBrace,
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
-			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
-			betweenImportsHeadLeafClassify: base.betweenImportsHeadLeafClassify,
-			tailLeafKeepsBlankAfterConditional: base.tailLeafKeepsBlankAfterConditional,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
 		if (cfg.wrapping != null) applyWrapping(cfg.wrapping, result);
