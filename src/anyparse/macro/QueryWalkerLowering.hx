@@ -42,23 +42,7 @@ using anyparse.macro.MetaInspect;
  * trigger macro-time type checking); patterns are built with `ECall` over a
  * `MacroStringTools.toFieldExpr` ctor reference, matching `TransformLowering`.
  */
-class QueryWalkerLowering {
-
-	/** Field name `SpanTypeSynth` gives the trailing span arg of every paired enum ctor and every `@:spanned` struct. */
-	private static inline final SPAN_FIELD: String = '_span';
-
-	/** Field name `SpanTypeSynth` gives the kind discriminator of a `@:spanned` struct. */
-	/** Suffix `SpanTypeSynth` appends to a paired type's simple name. */
-	private static inline final PAIRED_SUFFIX: String = 'S';
-
-	/** Sub-package `SpanTypeSynth` defines the paired module in. */
-	private static inline final SYNTH_SUBPACK: String = 'spans';
-
-	/** Module leaf `SpanTypeSynth` defines the paired types in. */
-	private static inline final SYNTH_MODULE: String = 'Pairs';
-
-	/** Struct field whose presence makes a `Seq` a transparent envelope - the walk descends it and ignores the rest. */
-	private static inline final ENVELOPE_FIELD: String = 'node';
+class QueryWalkerLowering extends PairedShapeLowering {
 
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
@@ -75,56 +59,29 @@ class QueryWalkerLowering {
 	/** `HxType` ctors whose first operand names a nominal type - the `TypeRef` emit sites. */
 	private static final TYPE_REF_NAME_CTORS: Array<String> = ['Named', 'DollarType'];
 
-	private final _shape: ShapeBuilder.ShapeResult;
-
 	/** Rule names reachable from a `type` field - the rules that need a `_typeRefs` function. */
 	private final _typeRefRules: Array<String> = [];
 
 	public function new(shape: ShapeBuilder.ShapeResult) {
-		_shape = shape;
+		super(shape);
 		collectTypeRefRules();
 	}
 
 	/** Generated walk-function name for a rule type path (`anyparse.grammar.haxe.HxExpr` to `_walkHxExprS`). */
 	public static inline function walkFnName(typePath: String): String {
-		return '_walk${simpleName(typePath)}$PAIRED_SUFFIX';
+		return '_walk${PairedShapeLowering.simpleName(typePath)}S';
 	}
 
 	/** Generated name-resolution function name for a rule type path. */
 	public static inline function nameFnName(typePath: String): String {
-		return '_nameOf${simpleName(typePath)}$PAIRED_SUFFIX';
+		return '_nameOf${PairedShapeLowering.simpleName(typePath)}S';
 	}
 
 	/** Generated type-ref projection function name for a rule type path. */
 	public static inline function typeRefsFnName(typePath: String): String {
-		return '_typeRefs${simpleName(typePath)}$PAIRED_SUFFIX';
+		return '_typeRefs${PairedShapeLowering.simpleName(typePath)}S';
 	}
 
-	private static function simpleName(typePath: String): String {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? typePath : typePath.substring(idx + 1);
-	}
-
-	private static function packOf(typePath: String): Array<String> {
-		final idx: Int = typePath.lastIndexOf('.');
-		return idx == -1 ? [] : typePath.substring(0, idx).split('.');
-	}
-
-	private static function field(target: Expr, name: String): Expr {
-		return { expr: EField(target, name), pos: Context.currentPos() };
-	}
-
-	private static function ident(name: String): Expr {
-		return { expr: EConst(CIdent(name)), pos: Context.currentPos() };
-	}
-
-	private static function call(fnName: String, args: Array<Expr>): Expr {
-		return { expr: ECall(ident(fnName), args), pos: Context.currentPos() };
-	}
-
-	private static function block(exprs: Array<Expr>): Expr {
-		return { expr: EBlock(exprs), pos: Context.currentPos() };
-	}
 
 	/**
 	 * Build every generated function: one `_walk` and one `_nameOf` per
@@ -175,68 +132,8 @@ class QueryWalkerLowering {
 	}
 
 	// ---------------- paired-type resolution (mirrors SpanTypeSynth) ----------------
-
-	/** The paired `*S` type of a rule, or its raw type when the rule is a Terminal (Terminals are not paired). */
-	private function pairedComplexType(rule: String): ComplexType {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
-		return node != null && node.kind != Terminal
-			? TPath({
-				pack: packOf(_shape.root).concat([SYNTH_SUBPACK]),
-				name: SYNTH_MODULE,
-				sub: simpleName(rule) + PAIRED_SUFFIX,
-				params: []
-			})
-			: TPath({ pack: packOf(rule), name: simpleName(rule), params: [] });
-	}
-
-	/** Whether a rule name resolves to a Terminal (a primitive leaf with no paired type and no generated functions). */
-	private function isTerminalRule(rule: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
-		return node == null || node.kind == Terminal;
-	}
-
 	/** Whether a Terminal rule's underlying primitive is `String` - the only shape the name resolution can read directly. */
-	private function isStringTerminal(rule: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
-		return node != null && node.kind == Terminal && isStringShape(node);
-	}
-
 	// ---------------- shape helpers ----------------
-
-	/** A `Seq` field / `Alt` ctor arg's declared name. */
-	private static inline function fieldNameOf(child: ShapeNode): String {
-		return child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
-	}
-
-	/** Whether a field node is `Null<...>` and so needs a null guard before descent. */
-	private static inline function isOptional(child: ShapeNode): Bool {
-		return child.annotations.get(AnnotationKeys.BASE_OPTIONAL) == true;
-	}
-
-	/** The rule a field node references, unwrapping a `Star` element, or null when it is not a Ref to a named rule. */
-	private static function refOf(child: ShapeNode): Null<String> {
-		return switch child.kind {
-			case Ref: child.annotations.get(AnnotationKeys.BASE_REF);
-			case _: null;
-		};
-	}
-
-	/** Whether an `Alt` rule declares a ctor of this name. */
-	private function altHasCtor(rule: String, ctor: String): Bool {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
-		if (node == null || node.kind != Alt) return false;
-		return node.children.exists(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
-	}
-
-	/** Whether a `Seq` rule declares a field of this name. */
-	private function seqField(node: ShapeNode, name: String): Null<ShapeNode> {
-		return node.kind != Seq ? null : node.children.find(c -> fieldNameOf(c) == name);
-	}
-
-	/** Whether a `Seq` rule opted out of transparency with `@:spanned('<Kind>')`, gaining `_kind` + `_span`. */
-	private inline function isSpanned(node: ShapeNode): Bool {
-		return node.kind == Seq && node.readMetaString(':spanned') != null;
-	}
 
 	/**
 	 * Seed `_typeRefRules` from every `type` field in the grammar and close over
@@ -307,24 +204,6 @@ class QueryWalkerLowering {
 	}
 
 	/**
-	 * `Ctor(_a0, ..., _span)` as a pattern expression over the PAIRED enum. The
-	 * ctor is addressed through its fully qualified paired path so the pattern
-	 * never depends on what the generated module happens to have imported.
-	 */
-	private function ctorPattern(rule: String, ctor: String, argNames: Array<String>): Expr {
-		final path: Array<String> = packOf(_shape.root).concat([
-			SYNTH_SUBPACK,
-			SYNTH_MODULE,
-			simpleName(rule) + PAIRED_SUFFIX,
-			ctor
-		]);
-		final ctorRef: Expr = haxe.macro.MacroStringTools.toFieldExpr(path);
-		final args: Array<Expr> = [for (n in argNames) ident(n)];
-		args.push(ident(SPAN_FIELD));
-		return { expr: ECall(ctorRef, args), pos: Context.currentPos() };
-	}
-
-	/**
 	 * Body of `_walk<Leaf>S` for a `Seq` rule, in the order the reflective walk
 	 * tested these cases: an envelope `node` field makes the struct transparent
 	 * on that one field; `@:spanned` makes it an addressable node of its own
@@ -332,8 +211,8 @@ class QueryWalkerLowering {
 	 * accumulator.
 	 */
 	private function lowerWalkSeq(rule: String, node: ShapeNode): Expr {
-		final envelope: Null<ShapeNode> = seqField(node, ENVELOPE_FIELD);
-		if (envelope != null) return block(descend(envelope, field(ident('v'), ENVELOPE_FIELD), 'into', 0));
+		final envelope: Null<ShapeNode> = seqField(node, PairedShapeLowering.ENVELOPE_FIELD);
+		if (envelope != null) return block(descend(envelope, field(ident('v'), PairedShapeLowering.ENVELOPE_FIELD), 'into', 0));
 
 		if (!isSpanned(node)) {
 			final out: Array<Expr> = [for (child in node.children) for (e in seqFieldDescent(child, 'into', null)) e];
@@ -341,7 +220,8 @@ class QueryWalkerLowering {
 		}
 
 		final body: Array<Expr> = [macro final _children: Array<anyparse.query.QueryNode> = []];
-		for (child in node.children) for (e in seqFieldDescent(child, '_children', field(ident('v'), SPAN_FIELD))) body.push(e);
+		for (child in node.children) for (e in seqFieldDescent(child, '_children', field(ident('v'), PairedShapeLowering.SPAN_FIELD)))
+			body.push(e);
 		final nameExpr: Expr = call(nameFnName(rule), [ident('v')]);
 		body.push(macro into.push(new anyparse.query.QueryNode(
 			v._kind, $nameExpr, anyparse.query.QueryWalkSupport.orderBySpan(_children), v._span
@@ -394,14 +274,6 @@ class QueryWalkerLowering {
 		];
 	}
 
-	/** Declared arg count of an `Alt` ctor, excluding the synthesised trailing `_span`. */
-	private function ctorArity(rule: String, ctor: String): Int {
-		final node: Null<ShapeNode> = _shape.rules.get(rule);
-		if (node == null || node.kind != Alt) return 0;
-		final branch: Null<ShapeNode> = node.children.find(b -> (b.annotations.get(AnnotationKeys.BASE_CTOR): String) == ctor);
-		return branch == null ? 0 : branch.children.length;
-	}
-
 	/**
 	 * Descend one value into `intoName`, guarding an optional field and looping
 	 * a `Star`. A Terminal contributes nothing - it is a primitive leaf.
@@ -452,7 +324,7 @@ class QueryWalkerLowering {
 	}
 
 	/** Fold candidate name expressions into `a ?? b ?? ... ?? null`, dropping the ones that can never yield a name. */
-	private static function firstNonNullName(candidates: Array<Null<Expr>>): Expr {
+	private function firstNonNullName(candidates: Array<Null<Expr>>): Expr {
 		var out: Expr = macro null;
 		var i: Int = candidates.length - 1;
 		while (i >= 0) {
@@ -533,13 +405,6 @@ class QueryWalkerLowering {
 	}
 
 	/** Whether an inline (unnamed) Terminal field's primitive is `String`. */
-	private static function isStringShape(node: ShapeNode): Bool {
-		final under: Null<String> = node.annotations.get('base.underlying');
-		if (under == 'String') return true;
-		final tp: Null<String> = node.annotations.get(AnnotationKeys.BASE_TYPE_PATH);
-		return tp != null && simpleName(tp) == 'String';
-	}
-
 	// ---------------- _typeRefs lowering ----------------
 
 	/**
@@ -556,8 +421,9 @@ class QueryWalkerLowering {
 				// `_s` is the span the recursion passes down; outside an Alt ctor
 				// there is no own span, so the caller's fallback carries through.
 				final bind: Expr = macro final _s: Null<anyparse.runtime.Span> = fallbackSpan;
-				final envelope: Null<ShapeNode> = seqField(node, ENVELOPE_FIELD);
-				if (envelope != null) return block([bind].concat(typeRefsDescend(envelope, field(ident('v'), ENVELOPE_FIELD), 0)));
+				final envelope: Null<ShapeNode> = seqField(node, PairedShapeLowering.ENVELOPE_FIELD);
+				if (envelope != null)
+					return block([bind].concat(typeRefsDescend(envelope, field(ident('v'), PairedShapeLowering.ENVELOPE_FIELD), 0)));
 				final out: Array<Expr> = [bind];
 				for (child in node.children) if (fieldNameOf(child) != 'name')
 					for (e in typeRefsDescend(child, field(ident('v'), fieldNameOf(child)), 0)) out.push(e);
