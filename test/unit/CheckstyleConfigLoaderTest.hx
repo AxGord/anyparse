@@ -4,6 +4,7 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.CheckstyleConfigLoader;
 import anyparse.query.GrammarPlugin.CheckOverrides;
+import anyparse.runtime.ParseError;
 
 /**
  * `CheckstyleConfigLoader.loadOverrides` — maps a `checkstyle.json` onto the
@@ -12,6 +13,10 @@ import anyparse.query.GrammarPlugin.CheckOverrides;
  * unset case when the check is absent are pinned; the lenient enum-string
  * matching (`policy` / `option`) and the `ModifierOrder.modifiers` kind mapping
  * are covered too.
+ *
+ * Since the loader reads the config through the declared `CheckstyleConfig`
+ * schema, a modelled key carrying a wrong-typed value is a parse error rather
+ * than a silently-dropped prop — `testRejectsWrongShape` pins that boundary.
  */
 class CheckstyleConfigLoaderTest extends Test {
 
@@ -114,16 +119,15 @@ class CheckstyleConfigLoaderTest extends Test {
 		Assert.isNull(ov.modifierOrder);
 	}
 
-	public function testToleratesWrongShape(): Void {
-		// Valid JSON, wrong structure — tolerant, never throws (only Json.parse can).
-		Assert.isNull(CheckstyleConfigLoader.loadOverrides('{"checks":"nope"}').magicNumberIgnore);
-		Assert.isNull(CheckstyleConfigLoader.loadOverrides('{"checks":[7,"x"]}').magicNumberIgnore);
-		// MagicNumber present but ignoreNumbers is not an array -> checkstyle default base.
-		Assert.same(
-			[-1.0, 0, 1, 2],
-			CheckstyleConfigLoader.loadOverrides('{"checks":[{"type":"MagicNumber","props":{"ignoreNumbers":"notarray"}}]}')
-				.magicNumberIgnore
-		);
+	public function testRejectsWrongShape(): Void {
+		// Valid JSON, wrong structure — the typed schema refuses it, and the caller
+		// (HaxeQueryPlugin.checkOverrides) falls back to no overrides wholesale.
+		final load: String -> CheckOverrides = CheckstyleConfigLoader.loadOverrides;
+		Assert.raises(load.bind('{"checks":"nope"}'), ParseError);
+		Assert.raises(load.bind('{"checks":[7,"x"]}'), ParseError);
+		// MagicNumber present but ignoreNumbers is not an array: a modelled key with
+		// a wrong-typed value is a parse error, not a silently-dropped prop.
+		Assert.raises(load.bind('{"checks":[{"type":"MagicNumber","props":{"ignoreNumbers":"notarray"}}]}'), ParseError);
 	}
 
 	public function testPolicyWithBothKeywordsDisables(): Void {
