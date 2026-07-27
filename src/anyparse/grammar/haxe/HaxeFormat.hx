@@ -828,7 +828,6 @@ final class HaxeFormat implements TextFormat {
 		condSpliceRawWrapsCases: HxExprUtil.condSpliceRawWrapsCases,
 		operandIsBlockExpr: HxExprUtil.operandIsBlockExpr,
 		tailStmtReadsExprPosition: HxExprUtil.tailStmtReadsExprPosition,
-		arrayBracketKind: HxExprUtil.arrayBracketKind,
 		betweenImportsPathDiffers: HxBetweenImportsLevel.pathDiffers,
 		betweenImportsTailLeafClassify: HxExprUtil.tailLeafClassifyImports,
 		betweenImportsHeadLeafClassify: HxExprUtil.headLeafClassifyImports,

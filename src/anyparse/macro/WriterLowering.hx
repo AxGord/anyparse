@@ -1734,7 +1734,7 @@ class WriterLowering {
 				fieldAccess, trailBBAccess, trailLCAccess, trailCloseAccess, trailOpenAccess, elemFn, openText ?? '', closeText, sepText,
 				wrapRulesField, leftCurlyOwnedBySep ? knobLeftCurly : null, knobRightCurly, trailPresentAccess, trailingCommaField,
 				openInsideStar, closeInsideStar, false, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-				reflowSourceMultilineStar, false, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar
+				reflowSourceMultilineStar, matrixWrapStar, trailNLAccess, false, false, reflowInExprBranchStar
 			));
 			return;
 		}
@@ -4906,120 +4906,17 @@ class WriterLowering {
 	 * `lowerEnumStar` read by index. Returns the extra-arg count for `branch`
 	 * (0 outside trivia mode — every predicate below is trivia-gated).
 	 */
+	/**
+	 * Trivia-mode extra positional args a paired Alt ctor carries beyond
+	 * its declared children. The per-slot inventory and push-order
+	 * documentation live with the formula in
+	 * `TriviaTypeSynth.extraAltArgs`, next to the `buildEnumCtor` blocks
+	 * it mirrors; the writer reads specific slots via `argNames[<i>]` /
+	 * `altSlotAccess` (see the per-slot ω-comments there). Plain mode
+	 * keeps the declared arity.
+	 */
 	private function branchExtraArgs(branch: ShapeNode): Int {
-		if (!_ctx.trivia) return 0;
-		// ω-close-trailing-alt: in trivia mode, close-peek `@:trivia`
-		// Alt branches grow a positional `closeTrailing:Null<String>`
-		// arg in the synth ctor (`HxStatementT.BlockStmt(stmts, closeTrailing)`).
-		// The ShapeNode tree is unchanged — gate by reading the same
-		// raw `@:trail` meta `TriviaTypeSynth` consults — so the
-		// pattern grows by one binding consumed by `lowerEnumStar`.
-		//
-		// ω-trailopt-source-track: in trivia mode, single-Ref Alt
-		// branches carrying `@:trailOpt(...)` likewise grow a positional
-		// `trailPresent:Bool` arg captured by the parser's `matchLit`.
-		// Disjoint from `isAltCloseTrailingBranch` (Star vs Ref child),
-		// so at most one extra arg per branch — the writer reads the
-		// flag via `argNames[1]` in `lowerEnumBranch`'s Case 3.
-		// ω-string-interp-noformat: in trivia mode, ctors with
-		// `@:fmt(captureSource)` grow a positional `sourceText:String`
-		// arg holding the parser-captured byte slice between the
-		// ctor's `@:lead` and `@:trail`. Disjoint from the above two
-		// (different shape predicates) — at most one extra arg per
-		// branch. Read inside Case 3 via `argNames[1]` to gate verbatim
-		// emission on `opt.formatStringInterpolation`.
-		final hasCloseTrailing: Bool = TriviaTypeSynth.isAltCloseTrailingBranch(branch);
-		final hasTrailOptFlag: Bool = TriviaTypeSynth.isAltTrailOptBranch(branch);
-		final hasCaptureSource: Bool = TriviaTypeSynth.isCaptureSourceBranch(branch);
-		// ω-issue-257-firstline: single-Ref kw-led ctors carrying
-		// `@:fmt(bodyPolicy(...))` grow a positional `bodyOnSameLine:Bool`
-		// arg captured by the parser. Read inside Case 3 via the index
-		// computed below to forward as `bodyPolicyWrap`'s
-		// `bodyOnSameLineExpr` parameter so `Keep` policy dispatches
-		// source-shape-aware. Disjoint from the four predicates above
-		// (single-Ref + `:kw` + `bodyPolicy` is structurally distinct)
-		// so the predicate composes additively in `extraArgs`.
-		final hasBodyPolicyKw: Bool = TriviaTypeSynth.isAltBodyPolicyKwBranch(branch);
-		// omega-paren-wrap-source-newline: single-Ref @:wrap branches with
-		// `@:fmt(captureWrapOpenNewline)` grow a positional `wrapOpenNewline:Bool`
-		// arg captured by the parser (post-lead skipWs gap newline). Read
-		// inside the wrap-shape block below via `wrapOpenNewlineExpr` to
-		// route between the open-broken and glue break shapes. Disjoint
-		// from the kw-bearing predicates (no kw on @:wrap ctors); composes
-		// additively in `extraArgs`.
-		final hasWrapOpenNewline: Bool = TriviaTypeSynth.isAltWrapOpenNewlineBranch(branch);
-		// ω-keep-kw-newline (increment 1b): mandatory-`@:kw` VarStmt-family
-		// ctors with `@:fmt(captureKwNewline)` grow a positional
-		// `kwNewline:Bool` arg captured by the parser (gap newline between
-		// the last keyword / lead literal and the inner `decl` Ref). Read
-		// via `altSlotAccess(..., KwNewline)` to thread `_setVarKwNewline`
-		// into the inner writeCall. Disjoint from the wrap/bodyPolicy kw
-		// predicates; composes additively in `extraArgs`.
-		final hasKwNewline: Bool = TriviaTypeSynth.isAltKwNewlineBranch(branch);
-		// ω-keep-chain (increment 2): Pratt/infix ctors with
-		// `@:fmt(captureChainNewline)` (the chain ctors Add/Sub/And/Or)
-		// grow a positional `chainNewline:Bool` arg captured by the parser
-		// (gap newline before the ctor's right operand). Read via
-		// `altSlotAccess(..., ChainNewline)` to feed the chain `_gather`'s
-		// `_breaks` array. Disjoint from every Alt/postfix predicate (chain
-		// ctors are bare infix); composes additively in `extraArgs`.
-		final hasChainNewline: Bool = TriviaTypeSynth.isAltChainNewlineBranch(branch);
-		// ω-keep-chain-receiver-comment: the `@:postfix('.')` FieldAccess ctor
-		// grows a `chainLeadComment:Null<String>` slot after its `chainNewline`
-		// slot (operand's dot-gap trailing comment). Reserve it in `extraArgs`
-		// so the general FieldAccess pattern destructures the right arity; the
-		// keep-mode chain dispatch reads it directly off its hand-written
-		// `FieldAccess(_prev, _fld, _nl, _opTrail)` pattern. Postfix-only.
-		final hasChainLeadComment: Bool = TriviaTypeSynth.isAltChainNewlineBranch(branch);
-		// ω-postfix-op-space: word-op postfix ctors with
-		// `@:fmt(capturePostfixOpSpace)` grow a positional `opSpaceBefore:Bool`
-		// arg (source had whitespace between operand and operator). Read via
-		// `altSlotAccess(..., PostfixOpSpace)` in the word-postfix pad emit.
-		final hasPostfixOpSpace: Bool = TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
-		// ω-open-trailing-alt: same-line trailing comment after the
-		// open lit grows a parallel positional arg next to closeTrailing.
-		// Synth gate is `isAltCloseTrailingBranch && @:lead present`,
-		// mirrored here so `argNames[2]` names the openTrailing slot.
-		final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
-		// ω-postfix-call-trailing: postfix Star-suffix ctors with
-		// auto-marked `trivia.starCollects=true` Stars (currently
-		// `HxExpr.Call`) grow a positional `closeTrailing:Null<String>`
-		// slot for the trailing comment between the close `)` and the
-		// next postfix iteration. Disjoint from the four Alt-side
-		// predicates (different ctor shapes), so the predicates compose
-		// additively in `extraArgs` without collision.
-		// ω-keep-callclose-newline: the synth grows FIVE positionals on these
-		// branches — closeTrailing (argNames[2]), argsOpenNewline (argNames[3]),
-		// argsCloseNewline (argNames[4]), argsInnerComment (argNames[5]),
-		// callLeadingComment (argNames[6]); `extraArgs` below reserves all five
-		// so the writer-side arg names stay aligned with the parser-pushed ctor
-		// arity.
-		final hasPostfixCloseTrailing: Bool = TriviaTypeSynth.isPostfixCloseTrailingBranch(branch);
-		// ω-orphan-trivia-alt: when the branch grows openTrailing it
-		// also grows trailingBlankBefore (`argNames[3]`) and
-		// trailingLeading (`argNames[4]`). Same `isAltCloseTrailingBranch
-		// && @:lead && !@:tryparse` gate as `hasOpenTrailing` — the
-		// synth and parser sides both emit conditionally on it.
-		// ω-arraylit-source-trail-comma: enum-Alt sep+trail+lead+@:trivia
-		// branches (HxExpr.ArrayExpr, HxType.Anon) grow a positional
-		// `trailPresent:Bool` arg holding whether the source had a trailing
-		// separator before the close literal. Same gate as the synth side
-		// (`branch.readMetaString(':sep') != null` inside the
-		// `isAltCloseTrailingBranch + @:lead + !@:tryparse` block in
-		// `TriviaTypeSynth.buildEnumCtor`) so positions stay deterministic.
-		// Writer reads via `argNames[5]` in `lowerEnumStar`. Sister to
-		// struct-Star `<field>TrailPresent` synth slot.
-		// ω-blockended-trivia-meta-arity (Session 3): hasMeta over
-		// readMetaString — multi-arg `@:sep('text', tailRelax, blockEnded)`
-		// gates the same as 1-arg `@:sep(',')`. Sister to TriviaTypeSynth
-		// L1076 fix; positions stay deterministic between synth + writer.
-		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
-		// CHECKSTYLE:OFF
-		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
-			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
-			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
-			+ (TriviaTypeSynth.isInfixChainBranch(branch) ? 1 : 0) + (TriviaTypeSynth.isRhsTrailBranch(branch) ? 1 : 0);
-		// CHECKSTYLE:ON
+		return _ctx.trivia ? TriviaTypeSynth.extraAltArgs(branch) : 0;
 	}
 
 	private function triviaSepStarBuild(c: EnumStarCtx, slots: TriviaAltSlots): Expr {
@@ -5049,8 +4946,21 @@ class WriterLowering {
 		// inside-brace whitespace exactly like the non-trivia
 		// branch (line ~1257). Branches without the flag get null
 		// → helper falls back to `_de()` (no spaces inside).
-		final openInsideExpr: Null<Expr> = delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false);
-		final closeInsideExpr: Null<Expr> = delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true);
+		// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`)
+		// supersedes the static `anonTypeBraces*` path — the inside-space
+		// depends on the first element's bracket kind, decided at runtime
+		// by the generated typed classifier. Both override Docs reference
+		// `_arr[0].node`, which is safe everywhere they are spliced: the
+		// empty-`[]` form short-circuits before any emit that uses them
+		// (`_arr.length == 0` guard near the `triviaSepStarExpr` tail and
+		// `WrapList.emit`'s own `items.length == 0` guard).
+		final bracketKindPadAlt: Bool = branch.fmtHasFlag('bracketKindPad');
+		final openInsideExpr: Null<Expr> = bracketKindPadAlt
+			? arrayBracketInsidePolicySpace(macro _arr[0].node, false)
+			: delimInsidePolicySpace(branch, ['anonTypeBracesOpen'], false);
+		final closeInsideExpr: Null<Expr> = bracketKindPadAlt
+			? arrayBracketInsidePolicySpace(macro _arr[0].node, true)
+			: delimInsidePolicySpace(branch, ['anonTypeBracesClose'], true);
 		// ω-trivia-sep-doc-comment-cascade (Phase B2): forward the
 		// `beforeDocCommentEmptyLines` flag so sep-Stars opt into
 		// the cascade (currently only `HxType.Anon.fields`).
@@ -5113,13 +5023,6 @@ class WriterLowering {
 		// by the wrap cascade instead of forced one-per-line.
 		// Threads into `triviaSepStarExpr`'s `_smlKeep` gate.
 		final reflowSourceMultilineAlt: Bool = branch.fmtHasFlag('reflowSourceMultiline');
-		// ω-bracket-config: enum-Alt branch reader for
-		// `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`). When set,
-		// `triviaSepStarExpr` overrides the static open/close
-		// inside-space Docs with a runtime dispatch on the first
-		// element's bracket kind (array-literal / map / comprehension
-		// → the matching `*BracketsOpen`/`*BracketsClose` policy).
-		final bracketKindPadAlt: Bool = branch.fmtHasFlag('bracketKindPad');
 		// ω-arraymatrix-wrap: enum-Alt branch reader for
 		// `@:fmt(arrayMatrixWrap)` (`HxExpr.ArrayExpr`). Marks the
 		// Star as matrix-eligible so `triviaSepStarExpr` attempts a
@@ -5134,7 +5037,7 @@ class WriterLowering {
 			c.argsAccess, slots.trailBBAccess, slots.trailLCAccess, slots.trailCloseAccess, slots.trailOpenAccess, c.elemFn, c.leadText,
 			c.trailText, c.sepText, wrapRulesField, knobLeftCurly, knobRightCurly, slots.sepTrailPresentAccess, trailingCommaField,
 			openInsideExpr, closeInsideExpr, beforeDocComments, forceMultiTypedef, bodyAware, groupRestProbe, ignoreSourceNewlines,
-			reflowSourceMultilineAlt, bracketKindPadAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt
+			reflowSourceMultilineAlt, matrixWrapAlt, null, typedefBodyBlanksAlt, propagateExprPositionAlt
 		);
 	}
 
@@ -10804,14 +10707,14 @@ class WriterLowering {
 	 * inside-space Doc.
 	 *
 	 * `firstAccess` is the runtime Expr reading the first Star element
-	 * (`_arr[0].node` in trivia mode, `_args[0]` in plain mode — both
-	 * normalised by the plugin's `unwrap`). Emitted as a block so the
+	 * (`_arr[0].node` in trivia mode, `_args[0]` in plain mode — the
+	 * bare element enum either way). Emitted as a block so the
 	 * classifier runs once per side. Default `None` on every kind keeps
 	 * the tight `[1]` / `[1 => "a"]` / `[for …]` byte-identical to the
 	 * pre-slice layout. Empty `[]` never reaches this helper — both emit
 	 * paths short-circuit `items.length == 0` before padding.
 	 */
-	private static function arrayBracketInsidePolicySpace(firstAccess: Expr, isClose: Bool): Expr {
+	private function arrayBracketInsidePolicySpace(firstAccess: Expr, isClose: Bool): Expr {
 		final suffix: String = isClose ? 'Close' : 'Open';
 		final mapField: Expr = optFieldAccess('mapLiteralBrackets$suffix');
 		final comprField: Expr = optFieldAccess('comprehensionBrackets$suffix');
@@ -10824,14 +10727,16 @@ class WriterLowering {
 		final spaceSwitch: Expr = buildPolicySwitch(['anyparse', 'format', 'WhitespacePolicy'], macro _abp, [
 			{ values: isClose ? ['Before', 'Both'] : ['After', 'Both'], expr: macro _dt(' ') }
 		], macro _de());
-		// `arrayBracketKind` is `Null<Dynamic -> Int>` (an opt-in adapter);
-		// capture into a local + null-check before calling, mirroring the
-		// `caseBodyRefusesFlat` pattern. Null (format didn't wire it) → kind
-		// 0 (ArrayLiteral) so the default `arrayLiteralBrackets` policy
-		// applies — its `None` default keeps the tight `[1]` form.
+		// The classifier is the generated typed predicate of this build's
+		// AST family (`AstPreds.arrayBracketKind` plain, `AstPredsT.…`
+		// trivia — see `AstPredLowering.predClassParts`); a grammar that
+		// opts into `bracketKindPad` must provide the marker classes.
+		// Kind 0 (ArrayLiteral) is the predicate's own null/other default,
+		// so the `arrayLiteralBrackets` policy applies — its `None`
+		// default keeps the tight `[1]` form.
+		final predCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, 'arrayBracketKind', [firstAccess]);
 		return macro {
-			final _abkFn: Null<Dynamic -> Int> = opt.arrayBracketKind;
-			final _abk: Int = _abkFn == null ? 0 : _abkFn($firstAccess);
+			final _abk: Int = $predCall;
 			final _abp: anyparse.format.WhitespacePolicy = $policyExpr;
 			$spaceSwitch;
 		};
@@ -11321,7 +11226,7 @@ class WriterLowering {
 		?rightCurlyKnob: String, ?trailPresentAccess: Expr, ?trailingCommaField: String, ?openInsideExpr: Expr, ?closeInsideExpr: Expr,
 		beforeDocCommentEmptyLines: Bool = false, forceMultiInTypedef: Bool = false, bodyAwareCompactIndent: Bool = false,
 		groupRestProbe: Bool = false, ignoreSourceNewlinesForWrap: Bool = false, reflowSourceMultiline: Bool = false,
-		bracketKindPad: Bool = false, matrixWrap: Bool = false,
+		matrixWrap: Bool = false,
 		// ω-keep-fnsig-newline: accessor for the close-newline slot
 		// (`value.<field>TrailingNewlineBefore`). Threaded only by callers that
 		// pass it; null for every other call site → the keep close placement
@@ -11359,21 +11264,11 @@ class WriterLowering {
 		// `WrapList.emit` (parity with the non-trivia path's
 		// `delimInsidePolicySpace` plumbing). Null fall-through keeps
 		// `_de()` — backward-compatible for callers that don't have the
-		// knobs (e.g. `HxExpr.ArrayExpr.elems`).
-		//
-		// ω-bracket-config: `@:fmt(bracketKindPad)` (`HxExpr.ArrayExpr`)
-		// supersedes the static path — the inside-space depends on the
-		// first element's bracket kind, decided at runtime. Both override
-		// Docs reference `_arr[0].node`, which is safe everywhere they are
-		// spliced: the empty-`[]` form short-circuits before any emit that
-		// uses them (`_arr.length == 0` guard near the function tail and
-		// `WrapList.emit`'s own `items.length == 0` guard).
-		final openInsideDoc: Expr = bracketKindPad
-			? arrayBracketInsidePolicySpace(macro _arr[0].node, false)
-			: (openInsideExpr ?? macro _de());
-		final closeInsideDoc: Expr = bracketKindPad
-			? arrayBracketInsidePolicySpace(macro _arr[0].node, true)
-			: (closeInsideExpr ?? macro _de());
+		// knobs. The ω-bracket-config `@:fmt(bracketKindPad)` runtime
+		// dispatch (`HxExpr.ArrayExpr`) arrives pre-built through the
+		// same two parameters — see `triviaSepStarBuild`.
+		final openInsideDoc: Expr = openInsideExpr ?? macro _de();
+		final closeInsideDoc: Expr = closeInsideExpr ?? macro _de();
 		// ω-bropen-keep-sep / ω-typedef-between-fields / ω-trivia-sep-doc-comment-cascade:
 		// the typedef-blank + doc-comment-cascade Expr builders that the force-multi loop
 		// and `_sepCtx` consume. Extracted to `triviaSepTypedefBlanksExprs` so the

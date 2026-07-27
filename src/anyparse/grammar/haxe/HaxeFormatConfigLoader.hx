@@ -724,7 +724,6 @@ final class HaxeFormatConfigLoader {
 			condSpliceRawWrapsCases: base.condSpliceRawWrapsCases,
 			operandIsBlockExpr: base.operandIsBlockExpr,
 			tailStmtReadsExprPosition: base.tailStmtReadsExprPosition,
-			arrayBracketKind: base.arrayBracketKind,
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 			betweenImportsTailLeafClassify: base.betweenImportsTailLeafClassify,
 			betweenImportsHeadLeafClassify: base.betweenImportsHeadLeafClassify,

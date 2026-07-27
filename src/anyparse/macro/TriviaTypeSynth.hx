@@ -720,6 +720,39 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * Number of positional synth args `buildEnumCtor` appends to a paired
+	 * Alt ctor beyond its declared children — the single source of truth
+	 * for the trivia-mode ctor arity every pattern-building consumer
+	 * (`WriterLowering.branchExtraArgs`, `AstPredLowering`) must agree
+	 * on with the synth side. Each `has*` predicate mirrors one push
+	 * block in `buildEnumCtor`; see the per-slot ω-comments there for
+	 * what each slot captures. The `hasOpenTrailing` / postfix groups
+	 * reserve multiple slots at once (open-trailing brings
+	 * `trailingBlankBefore` + `trailingLeading`, postfix-close brings
+	 * the five call-trivia positionals).
+	 */
+	public static function extraAltArgs(branch: ShapeNode): Int {
+		final hasCloseTrailing: Bool = isAltCloseTrailingBranch(branch);
+		final hasTrailOptFlag: Bool = isAltTrailOptBranch(branch);
+		final hasCaptureSource: Bool = isCaptureSourceBranch(branch);
+		final hasBodyPolicyKw: Bool = isAltBodyPolicyKwBranch(branch);
+		final hasWrapOpenNewline: Bool = isAltWrapOpenNewlineBranch(branch);
+		final hasKwNewline: Bool = isAltKwNewlineBranch(branch);
+		final hasChainNewline: Bool = isAltChainNewlineBranch(branch);
+		final hasChainLeadComment: Bool = isAltChainNewlineBranch(branch);
+		final hasPostfixOpSpace: Bool = isPostfixOpSpaceBranch(branch);
+		final hasOpenTrailing: Bool = hasCloseTrailing && branch.readMetaString(':lead') != null && !branch.hasMeta(':tryparse');
+		final hasPostfixCloseTrailing: Bool = isPostfixCloseTrailingBranch(branch);
+		final hasArrayLitTrailPresent: Bool = hasOpenTrailing && branch.hasMeta(':sep');
+		// CHECKSTYLE:OFF
+		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
+			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
+			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
+			+ (isInfixChainBranch(branch) ? 1 : 0) + (isRhsTrailBranch(branch) ? 1 : 0);
+		// CHECKSTYLE:ON
+	}
+
+	/**
 	 * ω-paired-converters (Phase A1) — emit a `Converters` class with
 	 * `pairedToRaw_<T>` static helpers for every paired type in the
 	 * batch. Phase A2 appends `rawToPaired_<T>` siblings.

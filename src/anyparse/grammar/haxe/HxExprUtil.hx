@@ -319,38 +319,6 @@ final class HxExprUtil {
 		return e != null && Type.getEnum(e) != null && Type.enumConstructor(e) == 'BlockExpr';
 	}
 
-	/**
-	 * Classify a `HxExpr.ArrayExpr` by its first element so the writer can
-	 * pick the matching `whitespace.bracketConfig.*` inner-padding policy.
-	 * One grammar ctor (`ArrayExpr`) covers three fork bracket kinds; the
-	 * distinction lives in the element shape (mirrors the fork's
-	 * token-based `TokenTreeCheckUtils.getBkOpenType`):
-	 *
-	 *  - first element `Arrow` (`k => v`) → `MapLiteral` (1).
-	 *  - first element `ForExpr` / `WhileExpr` (`[for …]` / `[while …]`) →
-	 *    `Comprehension` (2).
-	 *  - anything else (or empty list) → `ArrayLiteral` (0).
-	 *
-	 * `raw` is the FIRST element of the `elems` Star — a Plain-mode
-	 * `HxExpr` enum value or a Trivia-mode `Trivial<HxExprT>` wrapper;
-	 * `unwrap` normalises both. Wired on `WriteOptions.arrayBracketKind`
-	 * (returns the underlying `Int` of `HxArrayBracketKind`) so the writer
-	 * stays format-neutral. Returns `ArrayLiteral` for null / non-enum
-	 * shapes — the default tight bracket has no padding either way.
-	 */
-	public static function arrayBracketKind(raw: Null<Dynamic>): Int {
-		final e: Null<Dynamic> = unwrap(raw);
-		if (e == null) return HxArrayBracketKind.ArrayLiteral;
-		final ctor: Null<String> = Type.enumConstructor(e);
-		return ctor == null
-			? HxArrayBracketKind.ArrayLiteral
-			: switch ctor {
-				case 'Arrow': HxArrayBracketKind.MapLiteral;
-				case 'ForExpr', 'WhileExpr': HxArrayBracketKind.Comprehension;
-				case _: HxArrayBracketKind.ArrayLiteral;
-			};
-	}
-
 	public static function endsWithCloseBrace(raw: Null<Dynamic>): Bool {
 		final e: Null<Dynamic> = unwrap(raw);
 		if (e == null) return false;
@@ -1387,23 +1355,5 @@ private enum abstract LeafDirection(Int) {
 
 	final Head = 0;
 	final Tail = 1;
-
-}
-
-/**
- * The three `[…]` bracket kinds that share the `HxExpr.ArrayExpr` ctor,
- * distinguished at write time by `HxExprUtil.arrayBracketKind` so each
- * maps to its own `whitespace.bracketConfig` policy pair. Underlying
- * `Int` so the value crosses the format-neutral `WriteOptions.
- * arrayBracketKind` adapter boundary (`Dynamic -> Int`) and the writer's
- * runtime switch reads plain ints.
- */
-enum abstract HxArrayBracketKind(Int) from Int to Int {
-
-	final ArrayLiteral = 0;
-
-	final MapLiteral = 1;
-
-	final Comprehension = 2;
 
 }
