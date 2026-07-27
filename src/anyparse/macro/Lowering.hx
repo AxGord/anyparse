@@ -1961,41 +1961,14 @@ class Lowering {
 				throw 'unreachable';
 		};
 		final switchExpr: Expr = { expr: ESwitch(macro _key, switchCases, defaultExpr), pos: Context.currentPos() };
-		final stringType: Null<String> = _formatInfo.stringType;
-		if (stringType == null) {
-			Context.fatalError(
-				'Lowering: ByName struct parsing requires the format ${_formatInfo.schemaTypePath} to declare stringType (the grammar type used to parse mapping keys)',
-				Context.currentPos()
-			);
-			throw 'unreachable';
-		}
-		final keyFn: String = 'parse${simpleName(stringType)}';
-		final keyCall: Expr = { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() };
-		final closeCharCode: Int = _formatInfo.mappingClose.charCodeAt(0);
-		final mappingOpen: String = _formatInfo.mappingOpen;
-		final mappingClose: String = _formatInfo.mappingClose;
-		final keyValueSep: String = _formatInfo.keyValueSep;
-		final entrySep: String = _formatInfo.entrySep;
 		final structLiteral: Expr = { expr: EObjectDecl(structFields), pos: Context.currentPos() };
-		final parseSteps: Array<Expr> = [macro skipWs(ctx), macro expectLit(ctx, $v{mappingOpen})];
+		// The field locals are declared ahead of the shared mapping loop
+		// (they used to sit between the open literal and the entry loop —
+		// hoisting pure `var _f_x = null` declarations above the
+		// `expectLit(open)` is observationally identical).
+		final parseSteps: Array<Expr> = [];
 		for (d in declareLocals) parseSteps.push(d);
-		parseSteps.push(macro {
-			skipWs(ctx);
-			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
-				while (true) {
-					skipWs(ctx);
-					final _key: String = $keyCall;
-					skipWs(ctx);
-					expectLit(ctx, $v{keyValueSep});
-					skipWs(ctx);
-					$switchExpr;
-					skipWs(ctx);
-					if (!matchLit(ctx, $v{entrySep})) break;
-				}
-			}
-			skipWs(ctx);
-			expectLit(ctx, $v{mappingClose});
-		});
+		parseSteps.push(byNameMappingLoopExpr('ByName struct parsing', '_key', switchExpr));
 		for (c in missingChecks) parseSteps.push(c);
 		parseSteps.push(macro return $structLiteral);
 		return macro $b{parseSteps};
@@ -2095,55 +2068,100 @@ class Lowering {
 
 	/**
 	 * Parse expression for a ByName `Map<String, V>` field — the
-	 * arbitrary-key counterpart of `byNameStarParseExpr`. Mirrors the
-	 * key / separator / close handling of `lowerStructByName`'s own loop
-	 * (including its empty-mapping short-circuit), but instead of
-	 * dispatching on a declared field name it stores every entry under the
-	 * key it just parsed.
+	 * arbitrary-key counterpart of `byNameStarParseExpr`. Emits the
+	 * SHARED `byNameMappingLoopExpr` skeleton (the same one
+	 * `lowerStructByName` uses, so the two mapping dialects cannot
+	 * drift), storing every entry under the key it just parsed instead
+	 * of dispatching on a declared field name. The value rule comes
+	 * from the Star's single Ref child, exactly like the Array twin;
+	 * the accumulator is typed against the schema-DECLARED value type
+	 * when extractable (paired-type symmetry with
+	 * `extractArrayElementCT`). Parse-only: the ByName WRITER path
+	 * fatal-errors on a Map field (see `byNameFieldWriteExpr`).
 	 */
 	private function byNameMapParseExpr(child: ShapeNode, fieldName: String): Expr {
-		final refName: Null<String> = child.annotations.get(AnnotationKeys.BASE_MAP_VALUE);
-		if (refName == null) {
-			Context.fatalError('Lowering: ByName Map field "$fieldName" is missing ${AnnotationKeys.BASE_MAP_VALUE}', Context.currentPos());
+		final inner: ShapeNode = child.children[0];
+		if (inner.kind != Ref) {
+			Context.fatalError(
+				'Lowering: ByName Map<String, V> field "$fieldName" value kind ${inner.kind} is not supported '
+				+ '— only Map<String, RefType> (a single named value type) is implemented',
+				Context.currentPos()
+			);
 			throw 'unreachable';
 		}
+		final refName: String = inner.annotations.get(AnnotationKeys.BASE_REF);
+		final valueFn: String = parseFnName(refName);
+		final fieldCT: Null<ComplexType> = child.annotations.get(AnnotationKeys.BASE_FIELD_TYPE);
+		final valueCT: ComplexType = extractMapValueCT(fieldCT) ?? ruleReturnCT(refName);
+		final loop: Expr = byNameMappingLoopExpr(
+			'ByName Map<String, V> field "$fieldName"', '_mapKey', macro {
+				_map[_mapKey] = $i{valueFn}(ctx);
+			}
+		);
+		return macro {
+			final _map: Map<String, $valueCT> = [];
+			$loop;
+			_map;
+		};
+	}
+
+	/**
+	 * The one ByName mapping-loop skeleton: `skipWs; expectLit(open);
+	 * [empty-mapping short-circuit; loop: key via the format's
+	 * `stringType` parser bound to `<keyLocal>`, expectLit(keyValueSep),
+	 * <perEntry>, matchLit(entrySep) or break]; skipWs;
+	 * expectLit(close)`. Both ByName consumers — the fixed-field struct
+	 * dispatch (`lowerStructByName`) and the arbitrary-key Map field
+	 * (`byNameMapParseExpr`) — splice THIS skeleton with only the
+	 * per-entry statement differing, so key / separator / close /
+	 * trailing-sep semantics cannot drift between the two dialects.
+	 * `site` names the caller for the stringType diagnostic.
+	 */
+	private function byNameMappingLoopExpr(site: String, keyLocal: String, perEntry: Expr): Expr {
 		final stringType: Null<String> = _formatInfo.stringType;
 		if (stringType == null) {
 			Context.fatalError(
-				'Lowering: ByName Map<String, V> field "$fieldName" requires the format ${_formatInfo.schemaTypePath} '
+				'Lowering: $site requires the format ${_formatInfo.schemaTypePath} '
 				+ 'to declare stringType (the grammar type used to parse mapping keys)',
 				Context.currentPos()
 			);
 			throw 'unreachable';
 		}
 		final keyFn: String = 'parse${simpleName(stringType)}';
-		final valueFn: String = parseFnName(refName);
-		final valueCT: ComplexType = ruleReturnCT(refName);
+		final keyDecl: Expr = {
+			expr: EVars([
+				{
+					name: keyLocal,
+					type: macro :String,
+					expr: { expr: ECall(macro $i{keyFn}, [macro ctx]), pos: Context.currentPos() },
+					isFinal: true,
+				}
+			]),
+			pos: Context.currentPos(),
+		};
 		final mappingOpen: String = _formatInfo.mappingOpen;
 		final mappingClose: String = _formatInfo.mappingClose;
 		final keyValueSep: String = _formatInfo.keyValueSep;
 		final entrySep: String = _formatInfo.entrySep;
 		final closeCharCode: Int = mappingClose.charCodeAt(0);
 		return macro {
-			final _map: Map<String, $valueCT> = [];
 			skipWs(ctx);
 			expectLit(ctx, $v{mappingOpen});
 			skipWs(ctx);
 			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
 				while (true) {
 					skipWs(ctx);
-					final _mapKey: String = $i{keyFn}(ctx);
+					$keyDecl;
 					skipWs(ctx);
 					expectLit(ctx, $v{keyValueSep});
 					skipWs(ctx);
-					_map[_mapKey] = $i{valueFn}(ctx);
+					$perEntry;
 					skipWs(ctx);
 					if (!matchLit(ctx, $v{entrySep})) break;
 				}
 			}
 			skipWs(ctx);
 			expectLit(ctx, $v{mappingClose});
-			_map;
 		};
 	}
 
@@ -5720,6 +5738,25 @@ expectLit(ctx, $v{trailText}));
 			: switch ct {
 				case TPath({ pack: [], name: 'Array', params: [TPType(inner)] }): inner;
 				case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractArrayElementCT(inner);
+				case _: null;
+			};
+	}
+
+	/**
+	 * The schema-declared VALUE type of a `Map<String, V>` field's
+	 * ComplexType — the map twin of `extractArrayElementCT`, with the
+	 * same purpose: type the accumulator local against the declared type
+	 * so a paired (`*T` / `*S`) parse-fn return type cannot diverge from
+	 * the field. Only the direct `Map<K, V>` spelling is recognised
+	 * (mirroring `ShapeBuilder.mapTypeParams`); `null` falls back to
+	 * `ruleReturnCT(refName)` at the caller.
+	 */
+	private static function extractMapValueCT(ct: Null<ComplexType>): Null<ComplexType> {
+		return ct == null
+			? null
+			: switch ct {
+				case TPath({ name: 'Map', params: [TPType(_), TPType(value)] }): value;
+				case TPath({ pack: [], name: 'Null', params: [TPType(inner)] }): extractMapValueCT(inner);
 				case _: null;
 			};
 	}

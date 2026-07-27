@@ -229,7 +229,18 @@ final class LintConfig {
 	 * survives inside `rules`, whose entries stay raw JSON on purpose.
 	 */
 	public static function parse(content: String, ?baseDir: String): LintConfig {
-		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
+		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) {
+			// A DISCOVERED config (baseDir set — `discover` found a real
+			// apqlint.json; its no-file branch parses '{}', which cannot
+			// fail) must not degrade silently: the wholesale fallback
+			// quietly collapses the resolution scope and every rule
+			// toggle, so tell the user WHICH file was dropped and why.
+			// Direct `parse(content)` calls (tests, probes) keep the
+			// silent contract.
+			if (baseDir != null)
+				Sys.stderr().writeString('apq: apqlint.json in $baseDir failed to parse (${exception.message}) — using defaults\n');
+			null;
+		};
 		if (config == null) return new LintConfig([]);
 		final rules: Map<String, RuleConfig> = [];
 		final declared: Null<Map<String, JValue>> = config.rules;
@@ -238,7 +249,7 @@ final class LintConfig {
 			if (rule != null) rules[id] = rule;
 		}
 		final oracle: Null<String> = config.compilerOracle;
-		final roots: Array<String> = [for (root in config.resolutionRoots ?? []) resolveRoot(baseDir, root)];
+		final roots: Array<String> = (config.resolutionRoots ?? []).map(resolveRoot.bind(baseDir));
 		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, config.resolutionLibs, config.resolutionStd);
 	}
 

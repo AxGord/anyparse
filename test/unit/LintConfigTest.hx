@@ -196,10 +196,18 @@ class LintConfigTest extends Test {
 		Assert.isTrue(LintConfig.parse('{"resolutionStd":true}').resolutionStd(), 'an explicit true is the default, spelled out');
 	}
 
-	/** A non-boolean `resolutionStd` is treated as unset — never coerced, so a typo cannot silently disable resolution. */
-	public function testResolutionStdMalformedIgnored(): Void {
-		Assert.isTrue(LintConfig.parse('{"resolutionStd":"false"}').resolutionStd(), 'a string is not a boolean false');
-		Assert.isTrue(LintConfig.parse('{"resolutionStd":0}').resolutionStd(), 'a number is not a boolean false');
+	/**
+	 * A non-boolean `resolutionStd` rejects the WHOLE document (the typed
+	 * parser throws, `parse` degrades to defaults) — the same wholesale
+	 * contract the roots / libs siblings pin. The default `true` still
+	 * stands, and a co-declared key is wiped with it; a discovered
+	 * config additionally reports the drop on stderr.
+	 */
+	public function testResolutionStdMalformedDegradesWholesale(): Void {
+		final degraded: LintConfig = LintConfig.parse('{"resolutionStd":"false","resolutionLibs":["pony"]}');
+		Assert.isTrue(degraded.resolutionStd(), 'a string rejects the whole document — the default true stands');
+		Assert.equals(0, degraded.resolutionLibs().length, 'and every other key degrades with it');
+		Assert.isTrue(LintConfig.parse('{"resolutionStd":0}').resolutionStd(), 'a number rejects the document too');
 	}
 
 }

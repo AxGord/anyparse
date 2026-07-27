@@ -265,12 +265,20 @@ class ShapeBuilder {
 				}
 			case _:
 		}
-		// Map<String, V> → Star + `base.mapValue`. Modelled as a Star so
-		// every pass that already walks an `Array<V>` (trivia analysis, the
-		// strategies, the transform / query-walker lowerings) keeps seeing a
-		// shape it understands; only the ByName parse and write lowerings
-		// read the annotation and emit a key-value loop instead of a
-		// sequence loop.
+		// Map<String, V> → Star + `base.mapValue`. Modelled as a Star
+		// (no new ShapeKind) so the exhaustive `case Star` sites across
+		// the passes need no new arms. TriviaAnalysis and the strategy
+		// annotate pass DO walk this node on every schema build — they
+		// are harmless because every one of their marks gates on
+		// `base.meta` tags a schema field never carries, not because
+		// they skip it. The passes that would mis-handle a Map-marked
+		// Star (transform / query-walker / plain writer Star paths) are
+		// never pointed at ByName schemas today, and if one ever is,
+		// the failure is LOUD: their generated code indexes the
+		// String-keyed Map with an Int, a compile error — not silent
+		// wrong output. Only the ByName parse lowering reads the mark
+		// (key-value loop instead of a sequence loop); the ByName write
+		// lowering fatal-errors on it (parse-only).
 		final mapParams: Null<Array<Type>> = mapTypeParams(t);
 		if (mapParams != null) return shapeMap(mapParams[0], mapParams[1]);
 		// Std primitive abstracts (Bool/Int/Float/String) — inline Terminal,
@@ -323,6 +331,7 @@ class ShapeBuilder {
 	private function shapeMap(keyType: Type, valueType: Type): ShapeNode {
 		if (primitiveNameOrNull(keyType) != 'String') {
 			Context.fatalError('ShapeBuilder: Map key type must be String, got ${typeToString(keyType)}', Context.currentPos());
+			throw 'unreachable';
 		}
 		final value: ShapeNode = shapeFieldType(valueType);
 		final ref: Null<String> = value.kind == ShapeKind.Ref ? value.annotations.get(AnnotationKeys.BASE_REF) : null;
@@ -330,9 +339,16 @@ class ShapeBuilder {
 			Context.fatalError(
 				'ShapeBuilder: Map value type must be a named grammar rule, got ${typeToString(valueType)}', Context.currentPos()
 			);
+			throw 'unreachable';
 		}
+		// The marker is a plain Bool — the value rule is single-sourced
+		// from the Star's Ref child (`base.ref`), exactly where the
+		// Array flavour reads its element. Parse-only for now: the
+		// ByName WRITER path fatal-errors on a Map field, so declaring
+		// one in a schema forecloses generating a writer for it until
+		// that lands.
 		final node: ShapeNode = new ShapeNode(Star);
-		node.annotations.set(AnnotationKeys.BASE_MAP_VALUE, ref);
+		node.annotations.set(AnnotationKeys.BASE_MAP_VALUE, true);
 		node.children.push(value);
 		return node;
 	}
@@ -342,6 +358,16 @@ class ShapeBuilder {
 	 * forms the compiler hands out: the top-level `Map` alias is a `typedef`
 	 * (`TType`) over the `haxe.ds.Map` abstract (`TAbstract`), and an unfollowed
 	 * field annotation arrives as the former.
+	 */
+	/**
+	 * The `[K, V]` type params when `t` is a DIRECT `Map<K, V>`
+	 * spelling — matched as BOTH `TType` (the top-level `Map` is a
+	 * typedef alias over `haxe.ds.Map`, so a field annotation arrives
+	 * that way) and `TAbstract` (`haxe.ds.Map` itself). A user typedef
+	 * over Map (`typedef Bag = Map<String, JValue>`) has no params at
+	 * the field and is NOT recognised — it falls through to the Ref
+	 * path and fails on `haxe.ds.Map` there, same latent class as a
+	 * typedef over `Array<T>`.
 	 */
 	private static function mapTypeParams(t: Type): Null<Array<Type>> {
 		return switch t {
