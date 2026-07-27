@@ -11999,7 +11999,7 @@ class WriterLowering {
 	 * `_v0.init:Null<Trivial<HxExpr>>` — same field name, the plugin
 	 * adapter unwraps the wrapper internally.
 	 */
-	private static function trailOptShapeGateWrap(branch: ShapeNode, trailText: String, rootArg: String): Null<Expr> {
+	private function trailOptShapeGateWrap(branch: ShapeNode, trailText: String, rootArg: String): Null<Expr> {
 		final trailOptional: Bool = branch.annotations.get(AnnotationKeys.LIT_TRAIL_OPTIONAL) == true;
 		if (!trailOptional) return null;
 		final args: Null<Array<String>> = branch.fmtReadStringArgs('trailOptShapeGate');
@@ -12008,12 +12008,12 @@ class WriterLowering {
 		final argPath: String = args[1];
 		var pathExpr: Expr = macro $i{rootArg};
 		for (segment in argPath.split('.')) pathExpr = { expr: EField(pathExpr, segment), pos: Context.currentPos() };
-		final adapterExpr: Expr = optFieldAccess(adapterName);
-		return macro {
-			final _gateRaw: Null<Dynamic> = $pathExpr;
-			final _gateFn: Null<Dynamic -> Bool> = $adapterExpr;
-			(_gateFn != null && _gateRaw != null && _gateFn(_gateRaw)) ? _de() : _dt($v{trailText});
-		};
+		// The gate is the generated typed predicate of this build's AST
+		// family (a grammar carrying `trailOptShapeGate` must provide the
+		// marker classes); a null field value answers the predicate's own
+		// false → the unconditional `_dt(trail)` branch, same as before.
+		final gateCall: Expr = AstPredLowering.predCallExpr(_shape.root, _ctx.trivia, false, adapterName, [pathExpr]);
+		return macro ($gateCall ? _de() : _dt($v{trailText}));
 	}
 
 	private static function simpleName(typePath: String): String {

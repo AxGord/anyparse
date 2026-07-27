@@ -232,7 +232,7 @@ final class HxExprUtil {
 	 */
 	private static final VAR_INIT_STMT_CTORS: Array<String> = ['VarStmt', 'FinalStmt', 'StaticVarStmt', 'StaticFinalStmt'];
 
-	public static function endsWithCloseBrace(raw: Null<Dynamic>): Bool {
+	private static function endsWithCloseBrace(raw: Null<Dynamic>): Bool {
 		final e: Null<Dynamic> = unwrap(raw);
 		if (e == null) return false;
 		final ctor: Null<String> = Type.enumConstructor(e);

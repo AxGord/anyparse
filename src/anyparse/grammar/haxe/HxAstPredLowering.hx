@@ -31,6 +31,10 @@ final class HxAstPredLowering extends AstPredLowering {
 
 	private static inline final HX_MEMBER_DECL: String = 'anyparse.grammar.haxe.HxMemberDecl';
 
+	private static inline final HX_FN_EXPR_BODY: String = 'anyparse.grammar.haxe.HxFnExprBody';
+
+	private static inline final HX_TRY_CATCH_EXPR: String = 'anyparse.grammar.haxe.HxTryCatchExpr';
+
 	private static inline final HX_COND_DECL: String = 'anyparse.grammar.haxe.HxConditionalDecl';
 
 	private static inline final HX_ELSEIF_DECL: String = 'anyparse.grammar.haxe.HxElseifDecl';
@@ -79,6 +83,7 @@ final class HxAstPredLowering extends AstPredLowering {
 	public function generate(): Array<Field> {
 		return [
 			arrayBracketKindField(),
+			endsWithCloseBraceField(),
 			operandIsBlockExprField(),
 			caseBodyRefusesFlatField(),
 			tailStmtReadsExprPositionField(),
@@ -102,6 +107,56 @@ final class HxAstPredLowering extends AstPredLowering {
 			importLeafClassifierField('_classifyImportLeafHead', 'betweenImportsHeadLeafClassify'),
 			keepsBlankLeafClassifierField(),
 		];
+	}
+
+	/**
+	 * `endsWithCloseBrace(e) → Bool` — true iff `e` is a control-flow
+	 * expression whose `}` may serve as a statement terminator on the
+	 * rhs of `var x = …` / `final x = …`. Drives the writer-side
+	 * `@:fmt(trailOptShapeGate('endsWithCloseBrace', 'init'))` gate on
+	 * `HxClassMember.VarMember` / `FinalMember` (drop the `;` iff true).
+	 *
+	 * True (brace-terminated): `SwitchExpr` / `SwitchExprBare` /
+	 * `BlockExpr` / `ObjectLit` / `MacroClassExpr` outright; `FnExpr`
+	 * with a `BlockBody`; and recursion through the value-position
+	 * wrappers — `MacroExpr` / `MetaExpr` operands, `Ternary`'s else
+	 * branch, `for` / `while` bodies, `IfExpr`'s last evaluated branch
+	 * (`elseBranch` when present, else `thenBranch`), `TryExpr`'s last
+	 * catch body (or the try body with no catches). Everything else —
+	 * bare literals, calls, non-wrapped binops — is false. The corpus
+	 * behaviour is pinned by the fork fixtures
+	 * (`issue_119_expression_case`, `inline_calls`,
+	 * `issue_254_case_colon*`); `stmtExprNoSemi` reuses the predicate
+	 * read-only for its non-recursive tail cases.
+	 */
+	private function endsWithCloseBraceField(): Field {
+		inline function rec(e: Expr): Expr return { expr: ECall(ident('endsWithCloseBrace'), [e]), pos: Context.currentPos() };
+		final recEl: Expr = rec(macro _el);
+		final recThen: Expr = rec(field(ident('_s'), 'thenBranch'));
+		final recTryBody: Expr = rec(field(ident('_t'), 'body'));
+		final recLastCatch: Expr = rec(field(starElem(HX_TRY_CATCH_EXPR, 'catches', macro _cs[_cs.length - 1]), 'body'));
+		final fnBodySwitch: Expr = nullSwitch(
+			field(ident('_f'), 'body'), macro false, [caseOf(HX_FN_EXPR_BODY, ['BlockBody'], macro true)], macro false
+		);
+		final body: Expr = nullSwitch(ident('e'), macro false, [
+			caseOf(HX_EXPR, ['SwitchExpr', 'SwitchExprBare', 'BlockExpr', 'ObjectLit', 'MacroClassExpr'], macro true),
+			caseBind(HX_EXPR, 'MacroExpr', [0 => '_o'], rec(ident('_o'))),
+			caseBind(HX_EXPR, 'MetaExpr', [0 => '_m'], rec(field(ident('_m'), 'expr'))),
+			caseBind(HX_EXPR, 'Ternary', [2 => '_e2'], rec(ident('_e2'))),
+			caseBind(HX_EXPR, 'ForExpr', [0 => '_s'], rec(field(ident('_s'), 'body'))),
+			caseBind(HX_EXPR, 'WhileExpr', [0 => '_s'], rec(field(ident('_s'), 'body'))),
+			caseBind(HX_EXPR, 'IfExpr', [0 => '_s'], macro {
+				final _el = _s.elseBranch;
+				_el != null ? $recEl : $recThen;
+			}),
+			caseBind(HX_EXPR, 'FnExpr', [0 => '_f'], fnBodySwitch),
+			caseBind(HX_EXPR, 'TryExpr', [0 => '_t'], macro {
+				final _cs = _t.catches;
+				_cs.length == 0 ? $recTryBody : $recLastCatch;
+			}),
+		], macro false);
+		return predField('endsWithCloseBrace', [valueArg('e', HX_EXPR)], macro : Bool, body,
+			'True iff the expression\'s surface form ends with `}` for the var/final-rhs `;` gate (recursive).');
 	}
 
 	/**

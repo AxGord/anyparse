@@ -194,35 +194,20 @@ typedef WriteOptions = {
 	?lineCommentAdapter: Null<(String, Bool) -> String>,
 
 	/**
-	 * Plugin-supplied AST shape predicates bound at runtime. Read by
-	 * conditionally-emitted writer helpers — currently only the
-	 * `@:fmt(trailOptShapeGate(...))` knob on `@:trailOpt(...)` ctors.
-	 * `Dynamic` argument because the same adapter must accept both
-	 * Plain-mode AST nodes (raw enum values) and Trivia-mode nodes
-	 * (`Trivial<...>` struct wrappers around paired-enum values); the
-	 * plugin implementation pattern-matches the runtime form.
-	 *
-	 *  - `endsWithCloseBrace(raw) → Bool` — true iff the writer output
-	 *    for `raw` ends with a `}`. Drives the var/final-rhs `;` gate
-	 *    so `var x = switch (y) { ... }` round-trips without a trailing
-	 *    semicolon, matching haxe-formatter's canonical output.
-	 *
-	 *  - `betweenImportsPathDiffers(prevPath, currPath, level) → Bool` —
-	 *    true iff the two paths fall into different groups at the
-	 *    configured granularity. Drives the
-	 *    `@:fmt(blankLinesBetweenSameCtorByLevel(...))` cascade in
-	 *    `WriterLowering.triviaEofStarExpr`: the meta's last arg names
-	 *    this opt field, the engine emits a pure
-	 *    `opt.betweenImportsPathDiffers(prev, curr, level)` call. Args
-	 *    are primitive (`String` paths + `Int` level) so the engine
-	 *    stays format-neutral; the plugin's typed-enum helper plugs in
-	 *    via the underlying-Int representation of its level enum
-	 *    (e.g. `enum abstract HxBetweenImportsLevel(Int) from Int to Int`).
-	 *
-	 * Formats that don't opt into a gate leave the field null; the
-	 * writer helper checks `null` before invoking and falls back to
-	 * the unconditional non-refusal path.
+	 * Plugin-supplied path-grouping predicate bound at runtime.
+	 * `betweenImportsPathDiffers(prevPath, currPath, level) → Bool` —
+	 * true iff the two paths fall into different groups at the
+	 * configured granularity. Drives the
+	 * `@:fmt(blankLinesBetweenSameCtorByLevel(...))` cascade in
+	 * `WriterLowering.triviaEofStarExpr`: the meta's last arg names
+	 * this opt field, the engine emits a pure
+	 * `opt.betweenImportsPathDiffers(prev, curr, level)` call. Args
+	 * are primitive (`String` paths + `Int` level) so the engine
+	 * stays format-neutral; the plugin's typed-enum helper plugs in
+	 * via the underlying-Int representation of its level enum
+	 * (e.g. `enum abstract HxBetweenImportsLevel(Int) from Int to Int`).
+	 * Formats that don't opt in leave the field null; the emission
+	 * short-circuits on the null check.
 	 */
-	?endsWithCloseBrace: Null<Dynamic -> Bool>,
 	?betweenImportsPathDiffers: Null<(String, String, Int) -> Bool>
 };

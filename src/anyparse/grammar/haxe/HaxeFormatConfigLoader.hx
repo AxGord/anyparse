@@ -719,7 +719,6 @@ final class HaxeFormatConfigLoader {
 			_intersectionOperandBreak: base._intersectionOperandBreak,
 			blockCommentAdapter: base.blockCommentAdapter,
 			lineCommentAdapter: base.lineCommentAdapter,
-			endsWithCloseBrace: base.endsWithCloseBrace,
 			betweenImportsPathDiffers: base.betweenImportsPathDiffers,
 		};
 		if (cfg.indentation != null) applyIndentation(cfg.indentation, result);
