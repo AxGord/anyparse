@@ -255,7 +255,10 @@ rule it can disable the rule (`"enabled": false`, dropped from the default set â
 explicit `--rule` still runs it), override its reported severity (`"severity":
 "error|warning|info"`, applied before `--fail-on` and the report), or set a
 rule-specific option (e.g. complexity's `"max"`, which takes precedence over a
-`checkstyle.json` threshold). A missing or malformed file is a no-op.
+`checkstyle.json` threshold). A missing file is a no-op; a malformed one (invalid
+JSON, or a wrong-typed top-level key â€” the file is read through a declared typed
+schema) degrades to defaults wholesale and reports one stderr line naming the
+file. Wrong-typed values INSIDE a rule's own options stay per-field lenient.
 
 A top-level `"resolutionRoots"` (array of directory paths, relative to the
 config file resolved to absolute) declares a separate RESOLUTION scope: the
