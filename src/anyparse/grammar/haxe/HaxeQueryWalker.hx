@@ -22,6 +22,6 @@ package anyparse.grammar.haxe;
  * generated switch is exhaustive: adding a grammar ctor without teaching the
  * walker about it is now a compile error rather than a silently missing node.
  */
-@:build(anyparse.macro.Build.buildQueryWalker(anyparse.grammar.haxe.HxModule))
+@:build(anyparse.macro.Build.buildQueryWalker(anyparse.grammar.haxe.HxModule, anyparse.grammar.haxe.HaxeModuleSpanParser))
 @:nullSafety(Strict)
 class HaxeQueryWalker {}

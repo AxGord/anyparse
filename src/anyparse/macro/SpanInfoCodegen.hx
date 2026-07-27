@@ -118,7 +118,7 @@ class SpanInfoCodegen {
 		final rootCall: Expr = {
 			expr: ECall(
 				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
-				[macro root, macro null, macro b, macro source, macro tp]
+				[macro _r, macro null, macro b, macro source, macro tp]
 			),
 			pos: Context.currentPos(),
 		};
@@ -132,7 +132,8 @@ class SpanInfoCodegen {
 				declaredTypeSources: [],
 				castTargetSources: []
 			};
-			$rootCall;
+			final _r = _root(source);
+			if (_r != null) $rootCall;
 			return b;
 		};
 		return {
@@ -140,10 +141,7 @@ class SpanInfoCodegen {
 			access: [APublic, AStatic],
 			doc: 'The six span-indexed type/accessor maps of a parsed `${result.rootTypePath}`, in one walk.',
 			kind: FFun({
-				args: [
-					{ name: 'root', type: result.rootCT },
-					{ name: 'source', type: STRING_CT },
-				],
+				args: [{ name: 'source', type: STRING_CT }],
 				ret: BUNDLE_CT,
 				expr: body
 			}),
@@ -161,7 +159,7 @@ class SpanInfoCodegen {
 		final rootCall: Expr = {
 			expr: ECall(
 				{ expr: EConst(CIdent(result.rootFnName)), pos: Context.currentPos() },
-				[macro root, macro null, macro b, macro source, macro tp]
+				[macro _r, macro null, macro b, macro source, macro tp]
 			),
 			pos: Context.currentPos(),
 		};
@@ -175,7 +173,8 @@ class SpanInfoCodegen {
 				declaredTypeSources: [],
 				castTargetSources: []
 			};
-			$rootCall;
+			final _r = _root(source);
+			if (_r != null) $rootCall;
 			return tp;
 		};
 		return {
@@ -183,10 +182,7 @@ class SpanInfoCodegen {
 			access: [APublic, AStatic],
 			doc: 'Every type-parameter name declared anywhere in a parsed `${result.rootTypePath}`, in first-occurrence order.',
 			kind: FFun({
-				args: [
-					{ name: 'root', type: result.rootCT },
-					{ name: 'source', type: STRING_CT },
-				],
+				args: [{ name: 'source', type: STRING_CT }],
 				ret: TPath({ pack: [], name: 'Array', params: [TPType(STRING_CT)] }),
 				expr: body
 			}),

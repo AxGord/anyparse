@@ -357,7 +357,7 @@ class Build {
 	 * `_nameOf` / `_typeRefs` trio plus the public `walk` entry, and
 	 * `QueryWalkerCodegen` turns them into fields.
 	 */
-	public static macro function buildQueryWalker(target: Expr): Array<Field> {
+	public static macro function buildQueryWalker(target: Expr, parser: Expr): Array<Field> {
 		final targetTypePath: String = ExprTools.toString(target);
 		final rootType: Type = Context.getType(targetTypePath);
 
@@ -379,7 +379,7 @@ class Build {
 		SpanTypeSynth.arm(shape);
 
 		final result: QueryWalkerLowering.QueryWalkerResult = new QueryWalkerLowering(shape).generate();
-		final fields: Array<Field> = QueryWalkerCodegen.emit(result);
+		final fields: Array<Field> = QueryWalkerCodegen.emit(result, ExprTools.toString(parser));
 		// Both passes emit onto the SAME marker class on purpose: the span-info
 		// walk reuses the walker's generated `_nameOf` helpers.
 		for (f in SpanInfoCodegen.emit(new SpanInfoLowering(shape).generate())) fields.push(f);

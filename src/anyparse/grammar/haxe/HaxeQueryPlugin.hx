@@ -927,10 +927,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * (pinned by `SpanTypeInfoPinTest`).
 	 */
 	public function spanTypeInfo(source: String): SpanTypeInfo {
-		// The parser's return type is a synth sub-module type that cannot be NAMED
-		// from another file, so this local is left to inference.
-		final root = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		return root == null ? emptySpanTypeInfo() : HaxeQueryWalker.spanInfo(root, source);
+		return HaxeQueryWalker.spanInfo(source);
 	}
 
 	/**
@@ -979,15 +976,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	/** Every declare-site type-parameter name in the file (`class C<T>`, `function f<U>`, …). */
 	private function typeParamNames(source: String): Array<String> {
-		final root = try HaxeModuleSpanParser.parse(source) catch (exception: Exception) null;
-		return root == null ? [] : HaxeQueryWalker.typeParamNames(root, source);
+		return HaxeQueryWalker.typeParamNames(source);
 	}
 
 	private function buildTree(source: String, withTypeRefs: Bool): QueryNode {
-		// The parser's return type is a `Context.defineModule` synth sub-module
-		// type, which cannot be NAMED from another file - so it is threaded
-		// straight through instead of being bound to an annotated local.
-		return new QueryNode('module', null, HaxeQueryWalker.walk(HaxeModuleSpanParser.parse(source), withTypeRefs));
+		return new QueryNode('module', null, HaxeQueryWalker.walk(source, withTypeRefs));
 	}
 
 
