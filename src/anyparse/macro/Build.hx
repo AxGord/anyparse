@@ -335,5 +335,59 @@ class Build {
 		registry.runAnnotate(shape, ctx);
 	}
 
+
+	/**
+	 * `@:build` entry point for the query walker - the translation from the
+	 * span-paired typed AST into the engine's `QueryNode` tree. Applied to a
+	 * marker class with the grammar root as its single argument:
+	 *
+	 * ```haxe
+	 * @:build(anyparse.macro.Build.buildQueryWalker(anyparse.grammar.haxe.HxModule))
+	 * class HaxeQueryWalker {}
+	 * ```
+	 *
+	 * Like `buildTransform` it needs only the BASE shape (`Alt` / `Seq` / `Star`
+	 * / `Ref` / `Terminal` with `base.*` annotations), so the strategy-annotate
+	 * and trivia passes the parser and writer run are skipped. It does arm
+	 * `SpanTypeSynth`, because the walker is typed against the paired `*S` types
+	 * that pass defines - arming is guarded by name, so doing it here as well as
+	 * in `buildParser` defines nothing twice.
+	 *
+	 * `QueryWalkerLowering` then emits, per non-Terminal rule, the `_walk` /
+	 * `_nameOf` / `_typeRefs` trio plus the public `walk` entry, and
+	 * `QueryWalkerCodegen` turns them into fields.
+	 */
+	public static macro function buildQueryWalker(target: Expr): Array<Field> {
+		final targetTypePath: String = ExprTools.toString(target);
+		final rootType: Type = Context.getType(targetTypePath);
+
+		final rootMeta: Metadata = switch rootType {
+			case TEnum(ref, _): ref.get().meta.get();
+			case TType(ref, _): ref.get().meta.get();
+			case TAbstract(ref, _): ref.get().meta.get();
+			case TInst(ref, _): ref.get().meta.get();
+			case _:
+				Context.fatalError('Build.buildQueryWalker: unsupported target type $targetTypePath', Context.currentPos());
+				throw 'unreachable';
+		};
+
+		final schemaTypePath: String = readSchemaMeta(rootMeta, targetTypePath);
+		final formatInfo: FormatReader.FormatInfo = FormatReader.resolve(schemaTypePath);
+
+		final shapeBuilder: ShapeBuilder = new ShapeBuilder(formatInfo);
+		final shape: ShapeBuilder.ShapeResult = shapeBuilder.build(rootType);
+		SpanTypeSynth.arm(shape);
+
+		final result: QueryWalkerLowering.QueryWalkerResult = new QueryWalkerLowering(shape).generate();
+		final fields: Array<Field> = QueryWalkerCodegen.emit(result);
+
+		#if anyparse_dump
+		final printer: haxe.macro.Printer = new haxe.macro.Printer();
+		for (f in fields) Sys.println('// query-walker field: ${printer.printField(f)}');
+		#end
+
+		return fields;
+	}
+
 }
 #end
