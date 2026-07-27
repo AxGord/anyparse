@@ -28,6 +28,7 @@ final class AnnotationKeys {
 	public static final LIT_SEP_TEXT: String = 'lit.sepText';
 	public static final LIT_TRAIL_TEXT: String = 'lit.trailText';
 	public static final LIT_LEAD_TEXT: String = 'lit.leadText';
+	public static final BASE_MAP_VALUE: String = 'base.mapValue';
 	public static final BASE_FIELD_TYPE: String = 'base.fieldType';
 	public static final BASE_TYPE_PATH: String = 'base.typePath';
 	public static final BASE_META: String = 'base.meta';

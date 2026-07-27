@@ -1,19 +1,23 @@
 package anyparse.check;
 
+import anyparse.check.config.ApqLintConfig;
+import anyparse.check.config.ApqLintConfigParser;
+import anyparse.grammar.json.JValue;
 import anyparse.query.ConfigFinder;
-import haxe.DynamicAccess;
 import haxe.Exception;
 
 /**
  * Config for a single rule: an optional `enabled` toggle, an optional
  * `severity` override, and `props` carrying every other key verbatim for
  * rule-specific options (e.g. complexity `max`). Severity is parsed eagerly
- * via `Severity.fromName`; unknown labels become null (no override).
+ * via `Severity.fromName`; unknown labels become null (no override). A prop value
+ * stays a raw `JValue` — the bag is rule-specific, so the typed accessors on
+ * `LintConfig` narrow each one per read.
  */
 typedef RuleConfig = {
 	var ?enabled: Bool;
 	var ?severity: Severity;
-	var props: DynamicAccess<Dynamic>;
+	var props: Map<String, JValue>;
 }
 
 /**
@@ -29,6 +33,10 @@ typedef RuleConfig = {
  * `enabled`/`severity` are applied by the framework (`Cli.runLint` /
  * `Linter.run`); options are pulled by the check itself (`Complexity`). A
  * missing or malformed file yields an empty config, so absence is a no-op.
+ *
+ * The JSON is read through the declared `ApqLintConfig` schema and its
+ * macro-generated `ApqLintConfigParser` — the same typed route `hxformat.json`
+ * and `checkstyle.json` take.
  */
 @:nullSafety(Strict)
 final class LintConfig {
@@ -129,16 +137,20 @@ final class LintConfig {
 		return rc == null ? null : rc.severity;
 	}
 
-	/** A rule-specific integer option (e.g. complexity `max`), or null when unset. */
+	/** A rule-specific integer option (e.g. complexity `max`), or null when unset or non-numeric. A fractional value truncates, as it always has. */
 	public function intOption(id: String, key: String): Null<Int> {
-		final v: Null<Dynamic> = propOf(id, key);
-		return v == null || !(v is Int || v is Float) ? null : Std.int(v);
+		return switch propOf(id, key) {
+			case JNumber(v): Std.int(v);
+			case null, _: null;
+		};
 	}
 
 	/** A rule-specific boolean option (e.g. `doc-coverage` `requireTypeDoc`), or null when unset or non-boolean. */
 	public function boolOption(id: String, key: String): Null<Bool> {
-		final v: Null<Dynamic> = propOf(id, key);
-		return v == null || !(v is Bool) ? null : (v: Bool);
+		return switch propOf(id, key) {
+			case JBool(v): v;
+			case null, _: null;
+		};
 	}
 
 	/**
@@ -146,8 +158,15 @@ final class LintConfig {
 	 * or null when unset; a non-array value or non-numeric elements are dropped.
 	 */
 	public function numberListOption(id: String, key: String): Null<Array<Float>> {
-		final raw: Null<Array<Dynamic>> = arrayOption(id, key);
-		return raw == null ? null : [for (e in raw) if (e is Int || e is Float) (e: Float)];
+		final raw: Null<Array<JValue>> = arrayOption(id, key);
+		if (raw == null) return null;
+		final out: Array<Float> = [];
+		for (item in raw) switch item {
+			case JNumber(v):
+				out.push(v);
+			case _:
+		}
+		return out;
 	}
 
 	/**
@@ -155,20 +174,29 @@ final class LintConfig {
 	 * or null when unset; a non-array value or non-string elements are dropped.
 	 */
 	public function stringListOption(id: String, key: String): Null<Array<String>> {
-		final raw: Null<Array<Dynamic>> = arrayOption(id, key);
-		return raw == null ? null : [for (e in raw) if (e is String) (e: String)];
+		final raw: Null<Array<JValue>> = arrayOption(id, key);
+		if (raw == null) return null;
+		final out: Array<String> = [];
+		for (item in raw) switch item {
+			case JString(v):
+				out.push(v);
+			case _:
+		}
+		return out;
 	}
 
 	/** The raw prop `key` of rule `id`, or null when the rule is unconfigured or lacks the key — the base for the typed option accessors. */
-	private function propOf(id: String, key: String): Null<Dynamic> {
+	private function propOf(id: String, key: String): Null<JValue> {
 		final rc: Null<RuleConfig> = _rules[id];
-		return rc == null ? null : rc.props.get(key);
+		return rc == null ? null : rc.props[key];
 	}
 
 	/** The raw array prop `key` of rule `id`, or null when it is unset or not an array — the array base for the list accessors. */
-	private function arrayOption(id: String, key: String): Null<Array<Dynamic>> {
-		final v: Null<Dynamic> = propOf(id, key);
-		return v == null || !(v is Array) ? null : (v: Array<Dynamic>);
+	private function arrayOption(id: String, key: String): Null<Array<JValue>> {
+		return switch propOf(id, key) {
+			case JArray(items): items;
+			case null, _: null;
+		};
 	}
 
 	/**
@@ -190,56 +218,64 @@ final class LintConfig {
 	}
 
 	/**
-	 * Parse `apqlint.json` content. Tolerant: malformed JSON, a non-object root,
-	 * or a missing `rules` object all yield an empty config — never throws, so a
-	 * broken config degrades to default behaviour rather than failing the lint.
+	 * Parse `apqlint.json` content through the declared `ApqLintConfig` schema.
+	 * Tolerant: malformed JSON, a non-object root, or a value contradicting the
+	 * schema all yield an empty config — never throws, so a broken config
+	 * degrades to default behaviour rather than failing the lint.
+	 *
+	 * A wrong-TYPED value now degrades the WHOLE config rather than just its own
+	 * key (the schema rejects the document, and the catch below swallows it) —
+	 * the same boundary `CheckstyleConfigLoader` moved to. Per-VALUE leniency
+	 * survives inside `rules`, whose entries stay raw JSON on purpose.
 	 */
 	public static function parse(content: String, ?baseDir: String): LintConfig {
+		final config: Null<ApqLintConfig> = try ApqLintConfigParser.parse(content) catch (exception: Exception) null;
+		if (config == null) return new LintConfig([]);
 		final rules: Map<String, RuleConfig> = [];
-		var oracle: Null<String> = null;
-		final roots: Array<String> = [];
-		final libs: Array<String> = [];
-		var std: Bool = true;
-		final root: Null<Dynamic> = try haxe.Json.parse(content) catch (exception: Exception) null;
-		if (root != null && Reflect.isObject(root)) {
-			final rulesField: Null<Dynamic> = Reflect.field(root, 'rules');
-			if (rulesField != null && Reflect.isObject(rulesField)) {
-				final access: DynamicAccess<Dynamic> = rulesField;
-				for (id => raw in access) if (raw != null && Reflect.isObject(raw)) rules[id] = parseRule(raw);
-			}
-			final oracleField: Null<Dynamic> = Reflect.field(root, 'compilerOracle');
-			if (oracleField != null && oracleField is String) oracle = (oracleField: String);
-			for (entry in stringArrayField(root, 'resolutionRoots')) roots.push(resolveRoot(baseDir, entry));
-			for (entry in stringArrayField(root, 'resolutionLibs')) libs.push(entry);
-			final stdField: Null<Dynamic> = Reflect.field(root, 'resolutionStd');
-			if (stdField != null && stdField is Bool) std = (stdField: Bool);
+		final declared: Null<Map<String, JValue>> = config.rules;
+		if (declared != null) for (id => raw in declared) {
+			final rule: Null<RuleConfig> = parseRule(raw);
+			if (rule != null) rules[id] = rule;
 		}
-		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, libs, std);
+		final oracle: Null<String> = config.compilerOracle;
+		final roots: Array<String> = [for (root in config.resolutionRoots ?? []) resolveRoot(baseDir, root)];
+		return new LintConfig(rules, oracle, oracle == null ? null : baseDir, roots, config.resolutionLibs, config.resolutionStd);
 	}
 
-	private static function parseRule(raw: Dynamic): RuleConfig {
-		final props: DynamicAccess<Dynamic> = raw;
-		final enabledRaw: Null<Dynamic> = props.get('enabled');
-		final severityRaw: Null<Dynamic> = props.get('severity');
-		final enabled: Null<Bool> = enabledRaw is Bool ? enabledRaw : null;
-		final severity: Null<Severity> = severityRaw != null && severityRaw is String ? Severity.fromName(severityRaw) : null;
-		return { enabled: enabled, severity: severity, props: props };
+	/**
+	 * One `rules` entry → its `RuleConfig`. `enabled` (a JSON boolean) and
+	 * `severity` (a JSON string resolved through `Severity.fromName`, an
+	 * unknown label yielding no override) are lifted out; every other key stays
+	 * in `props` verbatim for the owning check to read. A value that is not a
+	 * JSON object is not a rule config at all — null, and the caller drops the
+	 * entry, exactly as the untyped reader skipped a non-object.
+	 */
+	private static function parseRule(raw: JValue): Null<RuleConfig> {
+		return switch raw {
+			case JObject(entries):
+				var enabled: Null<Bool> = null;
+				var severity: Null<Severity> = null;
+				final props: Map<String, JValue> = [];
+				for (entry in entries) {
+					final key: String = entry.key;
+					final value: JValue = entry.value;
+					switch [key, value] {
+						case ['enabled', JBool(v)]:
+							enabled = v;
+						case ['severity', JString(v)]:
+							severity = Severity.fromName(v);
+						case _:
+							props[key] = value;
+					}
+				}
+				{ enabled: enabled, severity: severity, props: props };
+			case _: null;
+		};
 	}
 
 	/** Resolve a `resolutionRoots` entry to absolute against the config directory; a verbatim absolute path (or one parsed without a base) is kept as-is. */
 	private static function resolveRoot(baseDir: Null<String>, root: String): String {
 		return baseDir == null || haxe.io.Path.isAbsolute(root) ? root : haxe.io.Path.normalize(haxe.io.Path.join([baseDir, root]));
-	}
-
-
-	/**
-	 * Every STRING element of the root-level array key `name` — an empty array when the key is
-	 * absent, is not an array, or holds no strings. A non-string element is dropped, never coerced.
-	 */
-	private static function stringArrayField(root: Dynamic, name: String): Array<String> {
-		final field: Null<Dynamic> = Reflect.field(root, name);
-		if (field == null || !(field is Array)) return [];
-		return [for (entry in (field: Array<Dynamic>)) if (entry is String) (entry: String)];
 	}
 
 }

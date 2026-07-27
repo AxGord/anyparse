@@ -73,6 +73,9 @@ import anyparse.check.Check.CrossFileEdits;
 import anyparse.query.CachingGrammarPlugin.ResolutionSources;
 import anyparse.query.CachingGrammarPlugin.ResolutionScope;
 import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.format.json.SweepSnapshot;
+import anyparse.query.format.json.SweepSnapshotParser;
+import anyparse.query.format.json.SweepFixture;
 #if (sys || nodejs)
 import sys.io.File;
 import sys.FileSystem;
@@ -13293,25 +13296,26 @@ final class Cli {
 
 	/**
 	 * Read `bin/.last-sweep.json`'s `fixtures` array (written by
-	 * `HxFormatterCorpusTest.printSweepDelta`) into a `path → status`
-	 * map. Returns an empty map on any parse / shape failure so the
-	 * caller can fail-soft with a "no baseline" diagnostic instead of
-	 * crashing on a malformed snapshot.
+	 * `HxFormatterCorpusTest.printSweepDelta`) into a `path → status` map, via the
+	 * declared `SweepSnapshot` schema. Returns an empty map on any parse / shape
+	 * failure — malformed JSON, a missing `fixtures` array, OR any one entry
+	 * carrying a wrong-typed `path`/`status` (the ByName parser throws rather than
+	 * skipping just that entry) — so the caller can fail-soft with a "no baseline"
+	 * diagnostic instead of crashing on a malformed snapshot. An entry MISSING
+	 * `path` or `status` (present but absent, both `@:optional`) still degrades
+	 * per-entry, unchanged from the pre-schema reader.
 	 */
 	private static function loadSweepFixtureStatus(path: String): Map<String, String> {
 		final out: Map<String, String> = [];
 		try {
 			final raw: String = sys.io.File.getContent(path);
-			final obj: Dynamic = haxe.Json.parse(raw);
-			if (!Reflect.hasField(obj, 'fixtures')) return out;
-			final fixtures: Dynamic = Reflect.field(obj, 'fixtures');
-			if (!Std.isOfType(fixtures, Array)) return out;
-			final arr: Array<Dynamic> = (fixtures: Array<Dynamic>);
-			for (entry in arr) {
-				final entryPath: Null<Dynamic> = Reflect.field(entry, 'path');
-				final entryStatus: Null<Dynamic> = Reflect.field(entry, 'status');
-				if (!(entryPath != null && entryStatus != null && Std.isOfType(entryPath, String) && Std.isOfType(entryStatus, String)))
-					continue;
+			final snapshot: SweepSnapshot = SweepSnapshotParser.parse(raw);
+			final fixtures: Null<Array<SweepFixture>> = snapshot.fixtures;
+			if (fixtures == null) return out;
+			for (entry in fixtures) {
+				final entryPath: Null<String> = entry.path;
+				final entryStatus: Null<String> = entry.status;
+				if (entryPath == null || entryStatus == null) continue;
 				// Normalise snapshot path to match what
 				// `stripRootPrefix` emits for the recon walker. The
 				// corpus harness records paths as
@@ -13320,13 +13324,18 @@ final class Cli {
 				// stripped paths are `<subdir>/<name>`. Trim the leading
 				// `test/testcases/` here so the diff lookup is keyed
 				// the same way on both sides.
-				final raw: String = (entryPath: String);
 				final corpusPrefix: String = 'test/testcases/';
-				final normalised: String = StringTools.startsWith(raw, corpusPrefix) ? raw.substr(corpusPrefix.length) : raw;
-				out[normalised] = (entryStatus: String);
+				final normalised: String = StringTools.startsWith(entryPath, corpusPrefix)
+					? entryPath.substr(corpusPrefix.length)
+					: entryPath;
+				out[normalised] = entryStatus;
 			}
 		} catch (_: Exception) {
-			// best-effort: a scan failure leaves the partial status map
+			// best-effort: a scan failure leaves the partial status map (or the
+			// whole array — a wrong-typed `path`/`status` in ANY entry now
+			// throws and fails the read soft here, rather than skipping just
+			// that entry; an entry MISSING `path`/`status` still degrades
+			// per-entry via the null checks above, unchanged)
 		}
 		return out;
 	}
@@ -14221,26 +14230,33 @@ final class Cli {
 		return EXIT_OK;
 	}
 
+	/**
+	 * Read `path` (`bin/.last-sweep.json` / a `--prev`/`--diff` snapshot) into
+	 * the six-int `SweepTotals`, via the declared `SweepSnapshot` schema.
+	 * Returns null when the file is missing, the JSON is malformed, OR a
+	 * modelled key holds a value of the wrong type (the ByName parser throws
+	 * rather than degrading that field alone) — every case reads as "no usable
+	 * snapshot" to the caller. Requires `pass`/`fail`/`skipParse` to be present
+	 * (the historical "trio" contract); the other three ints default to 0 when
+	 * absent, matching the pre-schema Reflect-based reader.
+	 */
 	private static function loadSweepJson(path: String): Null<SweepTotals> {
 		return !sys.FileSystem.exists(path)
 			? null
 			: try {
 				final raw: String = sys.io.File.getContent(path);
-				final obj: Dynamic = haxe.Json.parse(raw);
-				final pass: Null<Int> = Reflect.hasField(obj, 'pass') ? Reflect.field(obj, 'pass') : null;
-				final fail: Null<Int> = Reflect.hasField(obj, 'fail') ? Reflect.field(obj, 'fail') : null;
-				final skipParse: Null<Int> = Reflect.hasField(obj, 'skipParse') ? Reflect.field(obj, 'skipParse') : null;
-				final skipWrite: Null<Int> = Reflect.hasField(obj, 'skipWrite') ? Reflect.field(obj, 'skipWrite') : null;
-				final skipConfig: Null<Int> = Reflect.hasField(obj, 'skipConfig') ? Reflect.field(obj, 'skipConfig') : null;
-				final skipMalformed: Null<Int> = Reflect.hasField(obj, 'skipMalformed') ? Reflect.field(obj, 'skipMalformed') : null;
+				final snapshot: SweepSnapshot = SweepSnapshotParser.parse(raw);
+				final pass: Null<Int> = snapshot.pass;
+				final fail: Null<Int> = snapshot.fail;
+				final skipParse: Null<Int> = snapshot.skipParse;
 				if (pass == null || fail == null || skipParse == null) return null;
 				{
 					pass: pass,
 					fail: fail,
 					skipParse: skipParse,
-					skipWrite: skipWrite ?? 0,
-					skipConfig: skipConfig ?? 0,
-					skipMalformed: skipMalformed ?? 0,
+					skipWrite: snapshot.skipWrite ?? 0,
+					skipConfig: snapshot.skipConfig ?? 0,
+					skipMalformed: snapshot.skipMalformed ?? 0,
 				};
 			} catch (_: Exception) null;
 	}

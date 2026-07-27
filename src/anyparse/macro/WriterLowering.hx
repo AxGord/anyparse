@@ -759,6 +759,14 @@ class WriterLowering {
 				final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 				makeWriteCall(writeFnFor(refName), valueAccess, false, -1);
 			case Star:
+				if (child.annotations.exists(AnnotationKeys.BASE_MAP_VALUE)) {
+					Context.fatalError(
+						'WriterLowering: ByName Map<String, V> field "$fieldName" is parse-only — no writer lowering is implemented '
+						+ 'for arbitrary-key mappings, so a schema declaring one cannot carry a writer marker',
+						Context.currentPos()
+					);
+					throw 'unreachable';
+				}
 				byNameStarWriteExpr(child, fieldName, valueAccess);
 			case _:
 				Context.fatalError(

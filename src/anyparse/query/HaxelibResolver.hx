@@ -1,6 +1,8 @@
 package anyparse.query;
 
 import haxe.Exception;
+import anyparse.query.format.json.HaxelibJson;
+import anyparse.query.format.json.HaxelibJsonParser;
 
 /**
  * Resolves a haxelib library NAME to its on-disk source directory, so an
@@ -42,18 +44,23 @@ final class HaxelibResolver {
 	 * `haxelib.json` content, return the normalised absolute source directory, or
 	 * null. The root is the trimmed `libpathOutput`; the source dir is
 	 * `root/classPath`, where `classPath` defaults to the empty string (the root
-	 * itself) when the key is absent, empty, or non-string. A null or malformed
-	 * `haxelibJson` yields null — the lib is skipped rather than indexing an
-	 * unknown tree from its root. No I/O, so it is unit-testable without a real
-	 * haxelib.
+	 * itself) when the key is absent or empty. `haxelibJson` is read through the
+	 * declared `HaxelibJson` schema (macro-generated `HaxelibJsonParser`) —
+	 * malformed JSON, a non-object root, or a `classPath` of the WRONG type (not
+	 * a string) all throw and are caught here, degrading to null exactly like a
+	 * null `haxelibJson`: the lib is skipped rather than indexing an unknown tree
+	 * from its root. ACCEPTED behaviour change from the pre-schema Reflect-based
+	 * reader: a non-string `classPath` used to fall back to the root; it now
+	 * yields null (see `HaxelibResolverTest.testNonStringClassPathIsNull`). No
+	 * I/O, so it is unit-testable without a real haxelib.
 	 */
 	public static function sourceDirFrom(libpathOutput: String, haxelibJson: Null<String>): Null<String> {
 		final root: Null<String> = rootFrom(libpathOutput);
 		if (root == null || haxelibJson == null) return null;
-		final parsed: Null<Dynamic> = try haxe.Json.parse(haxelibJson) catch (exception: Exception) null;
-		if (parsed == null || !Reflect.isObject(parsed)) return null;
-		final classPathRaw: Null<Dynamic> = Reflect.field(parsed, 'classPath');
-		final classPath: String = classPathRaw != null && classPathRaw is String ? StringTools.trim(classPathRaw) : '';
+		final parsed: Null<HaxelibJson> = try HaxelibJsonParser.parse(haxelibJson) catch (exception: Exception) null;
+		if (parsed == null) return null;
+		final classPathRaw: Null<String> = parsed.classPath;
+		final classPath: String = classPathRaw != null ? StringTools.trim(classPathRaw) : '';
 		return haxe.io.Path.normalize(classPath == '' ? root : haxe.io.Path.join([root, classPath]));
 	}
 

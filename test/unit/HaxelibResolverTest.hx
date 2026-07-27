@@ -34,9 +34,14 @@ class HaxelibResolverTest extends Test {
 		Assert.equals('/a/b', HaxelibResolver.sourceDirFrom('/a/b', '{"name":"foo","version":"1.0.0"}'));
 	}
 
-	/** A non-string `classPath` is ignored — falls back to the root. */
-	public function testNonStringClassPathIsRoot(): Void {
-		Assert.equals('/a/b', HaxelibResolver.sourceDirFrom('/a/b', '{"classPath":42}'));
+	/**
+	 * A non-string `classPath` is a schema violation the typed parser cannot
+	 * coerce past — it throws, and `sourceDirFrom` degrades to null exactly
+	 * like malformed JSON (ACCEPTED behaviour change: the pre-schema
+	 * Reflect-based reader fell back to the root instead).
+	 */
+	public function testNonStringClassPathIsNull(): Void {
+		Assert.isNull(HaxelibResolver.sourceDirFrom('/a/b', '{"classPath":42}'));
 	}
 
 	/** The joined path is normalised — a `./` segment in `classPath` collapses. */

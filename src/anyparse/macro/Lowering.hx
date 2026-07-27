@@ -2008,7 +2008,9 @@ class Lowering {
 				final fnName: String = parseFnName(refName);
 				{ expr: ECall(macro $i{fnName}, [macro ctx]), pos: Context.currentPos() };
 			case Star:
-				byNameStarParseExpr(child, fieldName);
+				child.annotations.exists(AnnotationKeys.BASE_MAP_VALUE)
+					? byNameMapParseExpr(child, fieldName)
+					: byNameStarParseExpr(child, fieldName);
 			case _:
 				Context.fatalError(
 					'Lowering: ByName struct field "$fieldName" has unsupported kind ${child.kind}'
@@ -2088,6 +2090,60 @@ class Lowering {
 			skipWs(ctx);
 			expectLit(ctx, $v{seqClose});
 			_arr;
+		};
+	}
+
+	/**
+	 * Parse expression for a ByName `Map<String, V>` field — the
+	 * arbitrary-key counterpart of `byNameStarParseExpr`. Mirrors the
+	 * key / separator / close handling of `lowerStructByName`'s own loop
+	 * (including its empty-mapping short-circuit), but instead of
+	 * dispatching on a declared field name it stores every entry under the
+	 * key it just parsed.
+	 */
+	private function byNameMapParseExpr(child: ShapeNode, fieldName: String): Expr {
+		final refName: Null<String> = child.annotations.get(AnnotationKeys.BASE_MAP_VALUE);
+		if (refName == null) {
+			Context.fatalError('Lowering: ByName Map field "$fieldName" is missing ${AnnotationKeys.BASE_MAP_VALUE}', Context.currentPos());
+			throw 'unreachable';
+		}
+		final stringType: Null<String> = _formatInfo.stringType;
+		if (stringType == null) {
+			Context.fatalError(
+				'Lowering: ByName Map<String, V> field "$fieldName" requires the format ${_formatInfo.schemaTypePath} '
+				+ 'to declare stringType (the grammar type used to parse mapping keys)',
+				Context.currentPos()
+			);
+			throw 'unreachable';
+		}
+		final keyFn: String = 'parse${simpleName(stringType)}';
+		final valueFn: String = parseFnName(refName);
+		final valueCT: ComplexType = ruleReturnCT(refName);
+		final mappingOpen: String = _formatInfo.mappingOpen;
+		final mappingClose: String = _formatInfo.mappingClose;
+		final keyValueSep: String = _formatInfo.keyValueSep;
+		final entrySep: String = _formatInfo.entrySep;
+		final closeCharCode: Int = mappingClose.charCodeAt(0);
+		return macro {
+			final _map: Map<String, $valueCT> = [];
+			skipWs(ctx);
+			expectLit(ctx, $v{mappingOpen});
+			skipWs(ctx);
+			if (ctx.pos < ctx.input.length && ctx.input.charCodeAt(ctx.pos) != $v{closeCharCode}) {
+				while (true) {
+					skipWs(ctx);
+					final _mapKey: String = $i{keyFn}(ctx);
+					skipWs(ctx);
+					expectLit(ctx, $v{keyValueSep});
+					skipWs(ctx);
+					_map[_mapKey] = $i{valueFn}(ctx);
+					skipWs(ctx);
+					if (!matchLit(ctx, $v{entrySep})) break;
+				}
+			}
+			skipWs(ctx);
+			expectLit(ctx, $v{mappingClose});
+			_map;
 		};
 	}
 

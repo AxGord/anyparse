@@ -48,6 +48,34 @@ class LintConfigTest extends Test {
 		Assert.isNull(cfg.intOption('naming', 'max'), 'unlisted rule yields null');
 	}
 
+	/**
+	 * The `rules` section is an OPEN map — an arbitrary rule id is a key, and a rule's option
+	 * bag keeps every key other than `enabled` / `severity` verbatim. This is the
+	 * `Map<String, JValue>` ByName schema field the config is the first consumer of, so the
+	 * empty map and the empty entry object are pinned here too.
+	 */
+	public function testRulesMapArbitraryKeys(): Void {
+		final cfg: LintConfig = LintConfig.parse(
+			'{"rules":{"a-rule":{"enabled":false,"severity":"info","max":3,"names":["x","y"]},"b-rule":{},"c-rule":{"flag":true}}}'
+		);
+		Assert.isFalse(cfg.enabledFor('a-rule'));
+		Assert.equals(Severity.Info, cfg.severityFor('a-rule'));
+		Assert.equals(3, cfg.intOption('a-rule', 'max'), 'a rule-specific option survives next to the framework keys');
+		Assert.same(['x', 'y'], cfg.stringListOption('a-rule', 'names'));
+		Assert.isTrue(cfg.enabledFor('b-rule'), 'an empty rule object parses and declares nothing');
+		Assert.isTrue(cfg.boolOption('c-rule', 'flag'));
+		Assert.isTrue(cfg.enabledFor('unlisted'), 'an id absent from the map keeps the default');
+		Assert.isTrue(LintConfig.parse('{"rules":{}}').enabledFor('naming'), 'an empty rules map is valid — the loop short-circuits');
+	}
+
+	/** A `rules` entry whose value is not a JSON object is not a rule config — dropped, exactly as the untyped reader skipped a non-object. */
+	public function testRulesNonObjectEntryDropped(): Void {
+		final cfg: LintConfig = LintConfig.parse('{"rules":{"a-rule":5,"b-rule":{"severity":"error"}}}');
+		Assert.isNull(cfg.severityFor('a-rule'));
+		Assert.isTrue(cfg.enabledFor('a-rule'));
+		Assert.equals(Severity.Error, cfg.severityFor('b-rule'), 'a sibling object entry is unaffected');
+	}
+
 	public function testMalformedJsonIsEmpty(): Void {
 		final cfg: LintConfig = LintConfig.parse('not json at all');
 		Assert.isTrue(cfg.enabledFor('naming'), 'garbage degrades to an empty (no-op) config');
@@ -113,14 +141,20 @@ class LintConfigTest extends Test {
 		Assert.equals('/abs/root', roots[2], 'an absolute root is kept verbatim');
 	}
 
-	/** A non-array `resolutionRoots`, or non-string elements, are dropped — never coerced. */
-	public function testResolutionRootsMalformedFiltered(): Void {
+	/**
+	 * A `resolutionRoots` value contradicting the schema — a non-array, or an array holding a
+	 * non-string element — degrades the WHOLE config, not just that key: the typed
+	 * `ApqLintConfigParser` rejects the document and `parse` falls back to an empty config, the
+	 * same boundary `CheckstyleConfigLoader` moved to. The previous untyped reader dropped the
+	 * offending elements and kept the rest.
+	 */
+	public function testResolutionRootsMalformedDegradesWholesale(): Void {
 		Assert.equals(0, LintConfig.parse('{"resolutionRoots":"lib"}', '/p')
 			.resolutionRoots()
 			.length, 'a non-array value yields no roots');
-		final mixed: Array<String> = LintConfig.parse('{"resolutionRoots":["ok",5,null,true]}', '/p').resolutionRoots();
-		Assert.equals(1, mixed.length, 'non-string elements are dropped');
-		Assert.equals('/p/ok', mixed[0]);
+		final mixed: LintConfig = LintConfig.parse('{"resolutionRoots":["ok",5,null,true],"resolutionStd":false}', '/p');
+		Assert.equals(0, mixed.resolutionRoots().length, 'a non-string element rejects the whole array — no partial list');
+		Assert.isTrue(mixed.resolutionStd(), 'and every other key degrades with it, back to the default');
 	}
 
 
@@ -141,14 +175,14 @@ class LintConfigTest extends Test {
 		Assert.equals('lime', libs[1]);
 	}
 
-	/** A non-array `resolutionLibs`, or non-string elements, are dropped — never coerced. */
-	public function testResolutionLibsMalformedFiltered(): Void {
+	/** The `resolutionLibs` twin of `testResolutionRootsMalformedDegradesWholesale` — same typed-schema boundary. */
+	public function testResolutionLibsMalformedDegradesWholesale(): Void {
 		Assert.equals(0, LintConfig.parse('{"resolutionLibs":"openfl"}', '/p')
 			.resolutionLibs()
 			.length, 'a non-array value yields no libs');
-		final mixed: Array<String> = LintConfig.parse('{"resolutionLibs":["ok",5,null,true]}', '/p').resolutionLibs();
-		Assert.equals(1, mixed.length, 'non-string elements are dropped');
-		Assert.equals('ok', mixed[0]);
+		final mixed: LintConfig = LintConfig.parse('{"resolutionLibs":["ok",5,null,true],"resolutionStd":false}', '/p');
+		Assert.equals(0, mixed.resolutionLibs().length, 'a non-string element rejects the whole array — no partial list');
+		Assert.isTrue(mixed.resolutionStd(), 'and every other key degrades with it, back to the default');
 	}
 
 	/** The `resolutionStd` opt-out defaults to ON — absent, the auto-discovered std joins the scope, which is the whole point of it being implicit. */

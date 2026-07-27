@@ -28,6 +28,7 @@ using Lambda;
  *  | `abstract` with `@:re`     | `Terminal`| underlying primitive in meta     |
  *  | primitive (`Bool`/`Int`/…) | `Terminal`| type name in `base.underlying`   |
  *  | `Array<T>`                 | `Star`    | one child = shape of `T`         |
+ *  | `Map<String, V>`           | `Star`    | value rule in `base.mapValue`    |
  *  | reference to named type    | `Ref`     | name in `base.ref`               |
  *
  * Annotations produced on nodes (always under the `base.*` namespace):
@@ -38,6 +39,7 @@ using Lambda;
  *  - `base.fieldType`   — the `ComplexType` of the field, for code-
  *                         generation of return-struct literals
  *  - `base.ref`         — referenced rule name on `Ref` nodes
+ *  - `base.mapValue`    — value rule name on a `Map<String, V>` Star
  *  - `base.underlying`  — underlying type name on `Terminal` nodes
  *                         (`"String"`, `"Float"`, `"Bool"`, …)
  *  - `base.meta`        — raw `Metadata` array attached to the enclosing
@@ -263,6 +265,14 @@ class ShapeBuilder {
 				}
 			case _:
 		}
+		// Map<String, V> → Star + `base.mapValue`. Modelled as a Star so
+		// every pass that already walks an `Array<V>` (trivia analysis, the
+		// strategies, the transform / query-walker lowerings) keeps seeing a
+		// shape it understands; only the ByName parse and write lowerings
+		// read the annotation and emit a key-value loop instead of a
+		// sequence loop.
+		final mapParams: Null<Array<Type>> = mapTypeParams(t);
+		if (mapParams != null) return shapeMap(mapParams[0], mapParams[1]);
 		// Std primitive abstracts (Bool/Int/Float/String) — inline Terminal,
 		// do not try to shape them as stand-alone rules. BUT: if the
 		// resolved format declares a grammar type for this primitive
@@ -296,6 +306,53 @@ class ShapeBuilder {
 		}
 		Context.fatalError('ShapeBuilder: unsupported field type: ${typeToString(t)}', Context.currentPos());
 		throw 'unreachable';
+	}
+
+	/**
+	 * `Map<String, V>` → a `Star` node carrying `base.mapValue` (the value
+	 * rule's path) with the value's shape as its single child — the
+	 * arbitrary-key counterpart of the `Array<T>` Star, consumed by the
+	 * ByName lowering.
+	 *
+	 * String keys only: the mapping key is decoded by the format's
+	 * `stringType` terminal, so a key of any other type has no decoder. The
+	 * value must resolve to a named rule (`Ref`) for the same reason a
+	 * ByName `Array<T>` element must — the loop body is a call to that
+	 * rule's generated parse function.
+	 */
+	private function shapeMap(keyType: Type, valueType: Type): ShapeNode {
+		if (primitiveNameOrNull(keyType) != 'String') {
+			Context.fatalError('ShapeBuilder: Map key type must be String, got ${typeToString(keyType)}', Context.currentPos());
+		}
+		final value: ShapeNode = shapeFieldType(valueType);
+		final ref: Null<String> = value.kind == ShapeKind.Ref ? value.annotations.get(AnnotationKeys.BASE_REF) : null;
+		if (ref == null) {
+			Context.fatalError(
+				'ShapeBuilder: Map value type must be a named grammar rule, got ${typeToString(valueType)}', Context.currentPos()
+			);
+		}
+		final node: ShapeNode = new ShapeNode(Star);
+		node.annotations.set(AnnotationKeys.BASE_MAP_VALUE, ref);
+		node.children.push(value);
+		return node;
+	}
+
+	/**
+	 * The `[K, V]` type parameters when `t` is a `Map`, else null. Matches both
+	 * forms the compiler hands out: the top-level `Map` alias is a `typedef`
+	 * (`TType`) over the `haxe.ds.Map` abstract (`TAbstract`), and an unfollowed
+	 * field annotation arrives as the former.
+	 */
+	private static function mapTypeParams(t: Type): Null<Array<Type>> {
+		return switch t {
+			case TType(ref, params) if (params.length == 2 && isMapPath(joinPack(ref.get().pack, ref.get().name))): params;
+			case TAbstract(ref, params) if (params.length == 2 && isMapPath(joinPack(ref.get().pack, ref.get().name))): params;
+			case _: null;
+		};
+	}
+
+	private static inline function isMapPath(path: String): Bool {
+		return path == 'Map' || path == 'haxe.ds.Map';
 	}
 
 	/**
