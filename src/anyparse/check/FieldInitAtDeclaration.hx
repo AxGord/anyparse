@@ -36,10 +36,11 @@ import haxe.Exception;
  *
  * ## Fixpoint chain
  *
- * This rule moves the init to the declaration; the EXISTING decl-assigned case of
- * `prefer-final-field` then catches the now decl-initialized private `var` and
- * rewrites it to `final`. Both rules also independently handle `var` and `final`
- * fields, so any pass ordering converges to the same fixpoint.
+ * This rule moves the init to the declaration; the EXISTING decl-assigned cases
+ * of `prefer-final-field` (private) and `prefer-final-public-field` (public) then
+ * catch the now decl-initialized `var` and rewrite it to `final`. Both rules also
+ * independently handle `var` and `final` fields, so any pass ordering converges
+ * to the same fixpoint.
  *
  * ## Scope
  *

@@ -2115,7 +2115,6 @@ final class RefactorSupport {
 		return n - 1;
 	}
 
-
 	/**
 	 * Classify every word-boundary occurrence of `name` in `source[from...end)`
 	 * (offsets inside `excluded` skipped) by lexical context, built on top of the
@@ -2252,6 +2251,48 @@ final class RefactorSupport {
 			if (lower == 'noqa' || StringTools.startsWith(lower, 'noqa:')) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether the field declared by `field` can become `final` off its CONSTRUCTOR
+	 * assignment: it has no declaration initializer (a `final` with one cannot be
+	 * reassigned in the constructor) and no `(` in its declaration head (which covers
+	 * properties and parenthesised function types), its sole write is exactly one
+	 * unconditional top-level constructor statement (`x = expr` / `this.x = expr` via
+	 * `constructorFieldInitAt` — a shadowing local or parameter that owns the
+	 * assignment leaves it a `var`), it is not static (`static final` requires a
+	 * declaration initializer), and no other write to its name appears anywhere in
+	 * `source` — a conservative text scan (`MemberWriteScan.writtenInRange`) that also
+	 * sees `#if` bodies the structural walkers cannot. A `@:build` macro injecting a
+	 * writer is the residual blind spot, shared with every other arm of the three
+	 * consumers and surfacing as a loud compile error at the injected write.
+	 *
+	 * The shared core of the constructor arms of `prefer-final-field` /
+	 * `prefer-final-public-field` AND of `prefer-read-only-field`'s cession of the same
+	 * candidates — all three MUST agree on it, or a ctor-assigned field either gets two
+	 * conflicting fixes or none. A new single-file soundness gate for the arm therefore
+	 * belongs INSIDE this predicate, never in one consumer — and mind its cost:
+	 * predicate-false routes the field to `prefer-read-only-field`'s `(default, null)`.
+	 * Each check wraps it in its own cross-file write gates; this predicate is
+	 * single-file only.
+	 */
+	public static function ctorSoleAssignmentFinalizable(source: String, field: QueryNode, plugin: GrammarPlugin): Bool {
+		final name: Null<String> = field.name;
+		final span: Null<Span> = field.span;
+		if (name == null || span == null) return false;
+		if (field.children.length >= 1) return false;
+		if (source.substring(span.from, span.to).indexOf('(') >= 0) return false;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return false;
+		final loc: Null<{
+			container: QueryNode,
+			field: QueryNode,
+			stmt: QueryNode,
+			rhs: QueryNode,
+			target: Span
+		}> = constructorFieldInitAt(tree, span.from, plugin.refShape());
+		return loc != null && !staticMemberFroms(loc.container, plugin.refShape()).contains(span.from)
+			&& !MemberWriteScan.writtenInRange(source, name, loc.target, 0, source.length);
 	}
 
 }

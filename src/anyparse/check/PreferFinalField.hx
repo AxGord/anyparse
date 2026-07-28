@@ -8,7 +8,6 @@ import anyparse.query.SymbolIndex;
 import anyparse.query.MemberWriteScan;
 import anyparse.query.TypeInfoProvider;
 import anyparse.runtime.Span;
-import haxe.Exception;
 
 /**
  * Flags a private `var` field that the immutable `final` should replace, and rewrites
@@ -83,7 +82,8 @@ final class PreferFinalField implements Check {
 	}
 
 	public function description(): String {
-		return 'a private var field assigned only at its declaration that can be final';
+		return
+			'a private var field never reassigned — assigned only at its declaration or by a sole constructor statement — that can be final';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -117,8 +117,9 @@ final class PreferFinalField implements Check {
 	 * Flag `field` for `var → final` in either case: a field WITH an initializer that is
 	 * not a property, confined, not written elsewhere, and not an abstract's mutable
 	 * underlying (`abstractMethodMayMutate`); OR a no-initializer field whose sole write
-	 * is exactly one unconditional top-level constructor statement, delegated to
-	 * `considerNoInitField`.
+	 * is exactly one unconditional top-level constructor statement — the shared
+	 * `RefactorSupport.ctorSoleAssignmentFinalizable` predicate, wrapped in this check's
+	 * `writesConfined` gate.
 	 */
 	private static function considerField(
 		out: Array<Violation>, file: String, source: String, field: QueryNode, owner: String, index: SymbolIndex,
@@ -140,36 +141,8 @@ final class PreferFinalField implements Check {
 			flag(out, file, span, name, 'is assigned only at its declaration');
 			return;
 		}
-		if (field.children.length >= 1) return;
-		if (source.substring(span.from, span.to).indexOf('(') >= 0) return;
-		considerNoInitField(out, file, source, field, name, span, owner, index, plugin);
-	}
-
-	/**
-	 * Flag a no-initializer private confined `var` whose sole write is exactly one
-	 * unconditional top-level constructor statement — `final`-izable in place (the
-	 * constructor keeps the single assignment). Any other write to the field name, or a
-	 * shadowing local / parameter that owns the constructor assignment, leaves it a `var`.
-	 */
-	private static function considerNoInitField(
-		out: Array<Violation>, file: String, source: String, field: QueryNode, name: String, span: Span, owner: String, index: SymbolIndex,
-		plugin: GrammarPlugin
-	): Void {
+		if (!RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (!writesConfined(owner, name, source, index, plugin)) return;
-		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
-		if (tree == null) return;
-		final loc: Null<{
-			container: QueryNode,
-			field: QueryNode,
-			stmt: QueryNode,
-			rhs: QueryNode,
-			target: Span
-		}> = RefactorSupport.constructorFieldInitAt(tree, span.from, plugin.refShape());
-		if (loc == null) return;
-		// A STATIC field cannot become final off a ctor assignment - `static final`
-		// requires a declaration initializer, so the no-init case skips statics.
-		if (RefactorSupport.staticMemberFroms(loc.container, plugin.refShape()).contains(span.from)) return;
-		if (writtenInFile(source, name, loc.target)) return;
 		flag(out, file, span, name, 'is assigned only in the constructor');
 	}
 

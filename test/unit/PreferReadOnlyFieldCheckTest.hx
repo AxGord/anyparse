@@ -35,6 +35,26 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(0, violations('class C { public var x:Int = 0; }').length);
 	}
 
+	/**
+	 * A no-init field whose sole write is one unconditional top-level constructor
+	 * statement is `final` territory (`prefer-final-public-field`'s constructor arm) — ceded.
+	 */
+	public function testCtorSoleAssignmentCeded(): Void {
+		Assert.equals(0, violations('class C { public var x:Int; public function new(x:Int) { this.x = x; } }').length);
+	}
+
+	/** A ctor write PLUS a method write cannot be final — still this rule's candidate. */
+	public function testCtorPlusMethodWriteStillFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { public var x:Int; public function new(a:Int) { x = a; } function s():Void { x = 1; } }').length
+		);
+	}
+
+	/** An initializer plus a constructor write cannot be final (double init) — still claimed here. */
+	public function testInitPlusCtorWriteStillFlagged(): Void {
+		Assert.equals(1, violations('class C { public var x:Int = 0; public function new() { x = 1; } }').length);
+	}
+
 	/** A typed external write (`c.x = 9` where `c:C`) forbids making it read-only. */
 	public function testExternalWriteNotFlagged(): Void {
 		final files: Array<{ file: String, source: String }> = [
@@ -149,6 +169,19 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		Assert.equals(0, new PreferFinalPublicField().run(files, plugin).length);
 		Assert.equals(1, new PreferReadOnlyField().run(files, plugin).length);
+	}
+
+	/**
+	 * Ctor-arm twin of `testDisjointFromFinalPublic`: over the SAME fixture exactly one
+	 * of the two rules fires — the constructor-sole candidate goes to
+	 * `prefer-final-public-field`, and this rule's cession leaves it alone.
+	 */
+	public function testCtorArmDisjointFromFinalPublic(): Void {
+		final src: String = 'class C { public var x:Int; public function new(x:Int) { this.x = x; } }';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals(1, new PreferFinalPublicField().run(files, plugin).length);
+		Assert.equals(0, new PreferReadOnlyField().run(files, plugin).length);
 	}
 
 	public function testRegisteredInBuiltins(): Void {

@@ -45,8 +45,15 @@ import anyparse.runtime.Span;
  *
  * A candidate must be written somewhere (`FieldWriteIndex.writtenAnywhere`) — a field
  * with NO write is `prefer-final-public-field`'s territory (it can become `final`),
- * not this one. The two checks therefore never emit conflicting fixes for the same
- * field.
+ * not this one. A WRITTEN no-init field whose sole write is one unconditional
+ * top-level constructor statement is ALSO that check's territory (its constructor
+ * arm makes it `final` outright), so it is ceded through the same shared
+ * `RefactorSupport.ctorSoleAssignmentFinalizable` predicate — both checks must agree
+ * on it, or such a field would get two conflicting fixes (or none). The two checks
+ * therefore never emit conflicting fixes for the same field. NOTE: the cession is
+ * unconditional — it does not check whether `prefer-final-public-field` is enabled,
+ * so a config that disables that rule silently drops these findings instead of
+ * reporting `(default, null)` for them.
  *
  * ## Whole-project scope required
  *
@@ -120,9 +127,11 @@ final class PreferReadOnlyField implements Check {
 		// Cheap gates first: the subtype walk is the only one that scans other files.
 		if (!writeIndex.writtenAnywhere(owner, name)) return;
 		if (MemberWriteScan.subtypeWriteReaches(owner, name, index, writeIndex, plugin)) return;
-		final site: Null<{ file: String, span: Span }> = index.declarationSiteOf(owner);
-		if (site == null) return;
-		if (writeIndex.writtenExternally(owner, name, site.file, site.span)) return;
+		if (writeIndex.writtenOutsideDeclaration(owner, name)) return;
+		// A no-init field whose sole write is one unconditional top-level constructor
+		// statement is `final`-izable — `prefer-final-public-field`'s constructor arm
+		// claims it (same shared predicate), so it is ceded to keep the fixes disjoint.
+		if (RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		out.push({
 			file: file,
 			span: span,

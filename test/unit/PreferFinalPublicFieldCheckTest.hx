@@ -13,11 +13,13 @@ using Lambda;
 
 /**
  * The `prefer-final-public-field` check: a PUBLIC `var` field assigned only at its
- * declaration and never reassigned across the project is flagged `Info` and `var`
- * rewritten to `final`. A private field (that is `prefer-final-field`'s job), a
- * field written internally (`x =` / `this.x =` / `++`) or externally (`c.x =`), an
- * unresolved-receiver write, a no-init field, a property, and a field whose type
- * has a subtype are all left alone.
+ * declaration — or, with no initializer, by exactly one unconditional top-level
+ * constructor statement — and never reassigned across the project is flagged `Info`
+ * and `var` rewritten to `final`. A private field (that is `prefer-final-field`'s
+ * job), a field written internally (`x =` / `this.x =` / `++`) or externally
+ * (`c.x =`), an unresolved-receiver write, a multi- or conditional-write
+ * constructor, a property, and a field whose type has a writing subtype are all
+ * left alone.
  */
 class PreferFinalPublicFieldCheckTest extends Test {
 
@@ -50,8 +52,93 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		Assert.equals(0, violations('class C { public var x:Int = 0; function i():Void { x++; } }').length);
 	}
 
-	public function testNoInitNotFlagged(): Void {
-		Assert.equals(0, violations('class C { public var x:Int; public function new() { x = 1; } }').length);
+	/**
+	 * A no-initializer field whose sole write is exactly one unconditional top-level
+	 * constructor statement can be `final` — the arm `prefer-final-field` already has.
+	 */
+	public function testCtorBareAssignmentFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { public var x:Int; public function new() { x = 1; } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-final-public-field', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.indexOf('assigned only in the constructor') >= 0);
+	}
+
+	/** The canonical idiom: a shadowing ctor param assigned through `this.x = x`. */
+	public function testCtorSoleThisAssignmentFlagged(): Void {
+		Assert.equals(1, violations('class C { public var x:Int; public function new(x:Int) { this.x = x; } }').length);
+	}
+
+	/** The fix swaps only the keyword; the constructor keeps the single assignment. */
+	public function testCtorSoleAssignmentFixed(): Void {
+		final fixed: String = fixedSource('class C { public var x:Int; public function new(x:Int) { this.x = x; } }');
+		Assert.isTrue(fixed.indexOf('public final x:Int;') >= 0);
+		Assert.equals(-1, fixed.indexOf('var x'));
+		Assert.isTrue(fixed.indexOf('this.x = x') >= 0);
+	}
+
+	/** TWO constructor writes are not a single init — left to prefer-read-only-field. */
+	public function testCtorDoubleWriteNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var x:Int; public function new(a:Int) { x = a; x = a + 1; } }').length);
+	}
+
+	/**
+	 * A CONDITIONAL constructor write is left alone: the proof demands one
+	 * unconditional top-level statement (policy — Haxe's final-field init check is
+	 * not flow-sensitive and would accept this, but the conservatism is deliberate).
+	 */
+	public function testCtorConditionalWriteNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var x:Int; public function new(a:Int) { if (a > 0) x = a; } }').length);
+	}
+
+	/** A constructor write plus a method write is not single-assignment — prefer-read-only-field's case. */
+	public function testCtorPlusMethodWriteNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var x:Int; public function new(a:Int) { x = a; } function s():Void { x = 1; } }').length
+		);
+	}
+
+	/** `static final` requires a declaration initializer — a ctor-assigned STATIC stays a var. */
+	public function testCtorAssignedStaticNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public static var x:Int; public function new() { x = 1; } }').length);
+	}
+
+	/** An initializer PLUS a constructor write cannot be final (double init) — read-only territory. */
+	public function testInitPlusCtorWriteNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var x:Int = 0; public function new() { x = 1; } }').length);
+	}
+
+	/**
+	 * A subtype writing the inherited field via `this.x` is attributed to the SUBTYPE, so the
+	 * owner-keyed write gates cannot see it — only the subtype gate rejects this candidate.
+	 */
+	public function testCtorCandidateSubtypeWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int; public function new(x:Int) { this.x = x; } }' },
+			{ file: 'D.hx', source: 'class D extends C { public function w():Void { this.x = 2; } }' }
+		];
+		Assert.equals(0, ownerViolations(files).length);
+	}
+
+	/**
+	 * The constructor arm's terminal write gate is `writtenExternally`: a typed external
+	 * write (`c.x = 9` where `c:C`) is the shape only that gate rejects — `final` would
+	 * make it a compile error.
+	 */
+	public function testCtorCandidateExternalWriteNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: 'class C { public var x:Int; public function new() { x = 1; } }' },
+			{ file: 'W.hx', source: 'class W { public function poke(c:C):Void { c.x = 9; } }' }
+		];
+		Assert.equals(0, multi(files).length);
+	}
+
+	/**
+	 * A second write hidden in an `#if` body is invisible to the structural walkers; the
+	 * predicate's raw TEXT scan is what sees it — this pins why the scan is textual.
+	 */
+	public function testCtorConditionalCompilationWriteNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var x:Int; public function new() { x = 1; #if debug x = 2; #end } }').length);
 	}
 
 	/** A read (`return x`) and a comparison (`x == 1`) are not writes — still flagged. */

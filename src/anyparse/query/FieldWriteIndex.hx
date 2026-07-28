@@ -223,6 +223,19 @@ final class FieldWriteIndex {
 	}
 
 	/**
+	 * Whether any resolved write to `type`'s `field` lies outside the type's own
+	 * declaration range — or that range cannot be pinned at all
+	 * (`SymbolIndex.declarationSiteOf` yields nothing for an ambiguous or unretained
+	 * simple name), which must count as possibly-external. The shared terminal write
+	 * gate of `prefer-read-only-field` and of `prefer-final-public-field`'s
+	 * constructor arm; both bail when it is true.
+	 */
+	public function writtenOutsideDeclaration(type: String, field: String): Bool {
+		final site: Null<{ file: String, span: Span }> = _index.declarationSiteOf(type);
+		return site == null || writtenExternally(type, field, site.file, site.span);
+	}
+
+	/**
 	 * Whether any write to a field named `field` could not be attributed to a concrete
 	 * receiver type — the soundness bail: such a write might be a hidden write to the
 	 * candidate, so a consumer must not rewrite a field whose name appears here.
