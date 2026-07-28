@@ -36,9 +36,11 @@ final class SourceSlice {
 	}
 
 	/**
-	 * Verbatim leading doc-comment block for the declaration whose
-	 * `span.from` is given, or `null` when none is adjacent. Indentation
-	 * of the original source is preserved.
+	 * Verbatim leading doc-comment block for the declaration whose `span.from` is given, or
+	 * `null` when none is adjacent. Indentation of the original source is preserved. The
+	 * comment's extent comes from `RefactorSupport.commentBlockAt` (the lexer's tokens), so an
+	 * opener sequence inside the doc's own text is content rather than a false start, and a
+	 * run of full-line line comments is returned as one block.
 	 */
 	public static function leadingDoc(source: String, span: Null<Span>): Null<String> {
 		if (span == null) return null;
@@ -62,17 +64,15 @@ final class SourceSlice {
 		if (i < 0) return null;
 
 		final endLineTrim: String = source.substring(lineStart[i], lineEnd[i]).trim();
-		if (endLineTrim.endsWith('*/')) {
-			var j: Int = i;
-			while (j >= 0 && source.substring(lineStart[j], lineEnd[j]).indexOf('/*') < 0) j--;
-			return j < 0 ? null : source.substring(lineStart[j], lineEnd[i]);
-		}
-		if (endLineTrim.startsWith('//')) {
-			var k: Int = i;
-			while (k - 1 >= 0 && source.substring(lineStart[k - 1], lineEnd[k - 1]).trim().startsWith('//')) k--;
-			return source.substring(lineStart[k], lineEnd[i]);
-		}
-		return null;
+		if (!endLineTrim.endsWith('*/') && !endLineTrim.startsWith('//')) return null;
+		// Ask the lexer where the comment BEGINS instead of scanning lines for an opener:
+		// a `/*` written inside the doc's own text is content, not a boundary. The same
+		// call merges a contiguous run of full-line line comments into one block, which
+		// is what the hand-rolled `//` walk did.
+		var cursor: Int = lineEnd[i] - 1;
+		while (cursor > lineStart[i] && isBlank(StringTools.fastCodeAt(source, cursor))) cursor--;
+		final block: Null<Span> = RefactorSupport.commentBlockAt(source, cursor);
+		return block == null ? null : source.substring(lineStart[lineOfOffset(lineStart, lineEnd, block.from)], lineEnd[i]);
 	}
 
 	/**
@@ -96,6 +96,12 @@ final class SourceSlice {
 	private static function lineOfOffset(starts: Array<Int>, ends: Array<Int>, offset: Int): Int {
 		for (n in 0...starts.length) if (offset <= ends[n]) return n;
 		return starts.length - 1;
+	}
+
+
+	/** Whether `code` is a space, tab or carriage return — the trailing bytes a line may carry past its last real character. */
+	private static inline function isBlank(code: Int): Bool {
+		return code == ' '.code || code == '\t'.code || code == '\r'.code;
 	}
 
 }

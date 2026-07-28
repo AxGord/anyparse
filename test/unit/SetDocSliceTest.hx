@@ -164,6 +164,57 @@ class SetDocSliceTest extends Test {
 		Assert.isTrue(isErr(SetDoc.setDoc(src, 4, 12, 'Doc for y.', true, new HaxeQueryPlugin())));
 	}
 
+	/**
+	 * A doc whose TEXT contains a backticked block-comment opener is ONE comment token, so
+	 * the WHOLE doc is replaced. The lexical scan this used to do spliced the new text after
+	 * that literal, leaving the old prefix in place.
+	 */
+	public function testReplacesDocContainingBlockOpener(): Void {
+		final text: String = okText(SetDoc.setDoc(openerDocSource(), 6, 2, 'Replaced one-liner.', true, new HaxeQueryPlugin()));
+		Assert.isTrue(text.contains('Replaced one-liner.'), text);
+		Assert.isFalse(text.contains('Whether the gap'), text);
+		Assert.equals(1, occurrences(text, '/**'), text);
+	}
+
+	/** Replacing the same doc twice converges — the first pass leaves nothing for the second to re-splice. */
+	public function testReplaceDocContainingBlockOpenerIsIdempotent(): Void {
+		final once: String = okText(SetDoc.setDoc(openerDocSource(), 6, 2, 'Replaced one-liner.', true, new HaxeQueryPlugin()));
+		// Canonicalisation may reflow the header, so re-locate the member rather than
+		// reusing the first pass's coordinates.
+		final res: EditResult = SetDoc.setDoc(
+			once, lineOf(once, 'public function f'), 2, 'Replaced one-liner.', true, new HaxeQueryPlugin()
+		);
+		// A byte-identical result is reported as a no-op `Err` by design; either way the
+		// source must not grow a second doc.
+		final twice: String = isErr(res) ? once : okText(res);
+		Assert.equals(once, twice);
+		Assert.equals(1, occurrences(twice, '/**'), twice);
+	}
+
+	/** A doc'd member whose doc text carries a backticked block-comment opener. */
+	private function openerDocSource(): String {
+		return 'package p;\nclass C {\n\t/**\n\t * Whether the gap holds a `//` or `/*` opener.\n\t */\n'
+			+ '\tpublic function f(): Int return 1;\n}';
+	}
+
+	/** The 1-based line number of the first line containing `needle`. */
+	private function lineOf(text: String, needle: String): Int {
+		final lines: Array<String> = text.split('\n');
+		for (i in 0...lines.length) if (lines[i].indexOf(needle) >= 0) return i + 1;
+		return 1;
+	}
+
+	/** Count non-overlapping occurrences of `needle` in `text`. */
+	private function occurrences(text: String, needle: String): Int {
+		var count: Int = 0;
+		var at: Int = text.indexOf(needle);
+		while (at >= 0) {
+			count++;
+			at = text.indexOf(needle, at + needle.length);
+		}
+		return count;
+	}
+
 	private function okText(res: EditResult): String {
 		return switch res {
 			case Ok(text): text;

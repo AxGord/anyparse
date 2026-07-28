@@ -42,6 +42,17 @@ class ApqDocSourceTest extends Test {
 		Assert.equals('\t/** field doc */', SourceSlice.leadingDoc(src, span));
 	}
 
+	/**
+	 * A doc whose TEXT contains a backticked block-comment opener is ONE comment token,
+	 * so the WHOLE block is returned. The line scan this used to do started at the line
+	 * carrying that literal and dropped the real opener line.
+	 */
+	public function testLeadingDocWithBlockOpenerInText(): Void {
+		final src: String = 'class C {\n\t/**\n\t * Holds a `//` or `/*` opener.\n\t */\n\tvar count:Int = 0;\n}';
+		final span: Span = spanAt(src, 'var count');
+		Assert.equals('\t/**\n\t * Holds a `//` or `/*` opener.\n\t */', SourceSlice.leadingDoc(src, span));
+	}
+
 	public function testLeadingDocSkipsAnnotationLines(): Void {
 		final src: String = '/**\n * Widget doc.\n */\n@:keep\nclass Widget {}';
 		final span: Span = spanAt(src, 'class Widget');
