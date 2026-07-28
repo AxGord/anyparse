@@ -7,6 +7,8 @@ import anyparse.query.QueryNode;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a zero-parameter arrow lambda whose whole body is a single call —
  * `() -> f(a, b)` — and rewrites it to a partial application, `f.bind(a, b)`.
@@ -22,9 +24,13 @@ import anyparse.runtime.Span;
  * collapse to a bare `f`, a different rewrite.
  *
  * Note the timing shift: `.bind` evaluates the callee and arguments at bind time,
- * whereas the lambda evaluates them at call time. For the common case (a stable
- * callee and value arguments) this is equivalent; the `Info` severity reflects that
- * it is a cleanup, not a guaranteed-identical transform.
+ * whereas the lambda evaluates them at call time. The check therefore fires only
+ * when every argument is a STABLE VALUE (a literal, a non-interpolated string, an
+ * identifier / dotted identifier chain, a negated numeric literal) — an argument
+ * that computes or allocates (`new X()`, a call, `'id-$x'`, `a + 1`) keeps the
+ * lambda, whose deferred evaluation is load-bearing there. The `Info` severity
+ * reflects that even the gated rewrite is a cleanup, not a guaranteed-identical
+ * transform (a mutable identifier still reads at bind time).
  *
  * ## Grammar-agnostic
  *
@@ -52,7 +58,7 @@ final class PreferBind implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, seams.lambdaKind, seams.callKind);
+			if (tree != null) walk(violations, entry.file, tree, seams);
 		}
 		return violations;
 	}
@@ -65,13 +71,13 @@ final class PreferBind implements Check {
 		return seams == null
 			? []
 			: CheckScan.applyBySpan(plugin, source, violations, [seams.lambdaKind], (node, span) -> {
-				final replacement: Null<String> = rewrite(node, source, seams.lambdaKind, seams.callKind);
+				final replacement: Null<String> = rewrite(node, source, seams);
 				return replacement == null ? null : { span: span, text: replacement };
 			});
 	}
 
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, lambdaKind: String, callKind: String): Void {
-		if (bindableCall(node, lambdaKind, callKind) != null) {
+	private static function walk(out: Array<Violation>, file: String, node: QueryNode, seams: Seams): Void {
+		if (bindableCall(node, seams) != null) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
@@ -84,21 +90,51 @@ final class PreferBind implements Check {
 				return;
 			}
 		}
-		for (c in node.children) walk(out, file, c, lambdaKind, callKind);
+		for (c in node.children) walk(out, file, c, seams);
 	}
 
 	/** The wrapped call when `node` is a bindable `() -> callee(arg, …)` lambda; else null. */
-	private static function bindableCall(node: QueryNode, lambdaKind: String, callKind: String): Null<QueryNode> {
-		if (node.kind != lambdaKind || node.children.length != 1) return null;
+	private static function bindableCall(node: QueryNode, seams: Seams): Null<QueryNode> {
+		if (node.kind != seams.lambdaKind || node.children.length != 1) return null;
 		final call: QueryNode = node.children[0];
 		// callee + at least one argument; a parameter-bearing lambda has Required/Optional
 		// children, so children.length != 1 excludes it.
-		return call.kind == callKind && call.children.length >= 2 ? call : null;
+		if (call.kind != seams.callKind || call.children.length < 2) return null;
+		for (i in 1...call.children.length) if (!stableArg(call.children[i], seams.shape)) return null;
+		return call;
+	}
+
+	/**
+	 * Whether `arg` is a STABLE VALUE at bind time — `.bind` evaluates arguments when the
+	 * callback is created, so an argument that computes or allocates (`new X()`, a call, an
+	 * interpolated string, an operator expression) would shift its evaluation from call time
+	 * to creation time: an eager allocation and a semantic change the rewrite must not make.
+	 * Stable: literals (a single-quoted string only without interpolation), a bare
+	 * identifier, a dotted identifier chain (`MouseEvent.CLICK`), a negated numeric literal.
+	 */
+	private static function stableArg(arg: QueryNode, shape: RefShape): Bool {
+		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
+		if (numeric.contains(arg.kind) || arg.kind == shape.boolLitKind || arg.kind == shape.nullLiteralKind) return true;
+		final strings: Array<String> = shape.stringLiteralKinds ?? [];
+		if (strings.contains(arg.kind)) return stringWithoutInterpolation(arg, shape);
+		if (arg.kind == shape.identKind) return true;
+		if (arg.kind == shape.fieldAccessKind) {
+			final recv: Null<QueryNode> = arg.children[0];
+			return recv != null && stableArg(recv, shape);
+		}
+		if (arg.kind == shape.negationKind && arg.children.length == 1) return numeric.contains(arg.children[0].kind);
+		return false;
+	}
+
+	/** Whether a string-literal node carries no interpolation (every child, if any, is plain literal text). */
+	private static function stringWithoutInterpolation(arg: QueryNode, shape: RefShape): Bool {
+		final interp: Array<String> = shape.interpolationKinds ?? [];
+		return !arg.children.exists(c -> c.kind == shape.stringInterpIdentKind || interp.contains(c.kind));
 	}
 
 	/** `callee.bind(arg, …)` built from the lambda's wrapped call, or null if it is not bindable. */
-	private static function rewrite(node: QueryNode, source: String, lambdaKind: String, callKind: String): Null<String> {
-		final call: Null<QueryNode> = bindableCall(node, lambdaKind, callKind);
+	private static function rewrite(node: QueryNode, source: String, seams: Seams): Null<String> {
+		final call: Null<QueryNode> = bindableCall(node, seams);
 		if (call == null) return null;
 		final calleeSpan: Null<Span> = call.children[0].span;
 		if (calleeSpan == null) return null;
@@ -119,7 +155,7 @@ final class PreferBind implements Check {
 		final lambdaKind: Null<String> = shape.parenLambdaKind;
 		if (lambdaKind == null) return null;
 		final callKind: Null<String> = shape.callKind;
-		return callKind == null ? null : { lambdaKind: lambdaKind, callKind: callKind };
+		return callKind == null ? null : { lambdaKind: lambdaKind, callKind: callKind, shape: shape };
 	}
 
 }
@@ -128,4 +164,5 @@ final class PreferBind implements Check {
 private typedef Seams = {
 	final lambdaKind: String;
 	final callKind: String;
+	final shape: RefShape;
 };

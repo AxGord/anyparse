@@ -39,6 +39,37 @@ class PreferBindCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> h();\n\t}\n}').length);
 	}
 
+	/** A `new X()` argument allocates — `.bind` would move the allocation to creation time; not flagged. */
+	public function testAllocationArgNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> h(new StringBuf());\n\t}\n}').length);
+	}
+
+	/** A call argument computes — `.bind` would evaluate it eagerly; not flagged. */
+	public function testCallArgNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar g = () -> h(compute());\n\t}\n}').length);
+	}
+
+	/** An interpolated single-quoted string evaluates at bind time; not flagged. */
+	public function testInterpolatedStringArgNotFlagged(): Void {
+		Assert.equals(0, violations("class C {\n\tfunction f(x:Int):Void {\n\t\tvar g = () -> h('id-$x');\n\t}\n}").length);
+	}
+
+	/** An operator expression computes; not flagged. */
+	public function testOperatorArgNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(a:Int):Void {\n\t\tvar g = () -> h(a + 1);\n\t}\n}').length);
+	}
+
+	/** Stable values — a plain string, a dotted constant chain, a negated literal — still convert. */
+	public function testStableArgsFixed(): Void {
+		final src: String = "class C {\n\tfunction f(i:Int):Void {\n\t\tvar g = () -> h(i, MouseEvent.CLICK, -1, 'plain');\n\t}\n}";
+		final check: PreferBind = new PreferBind();
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
+		);
+		Assert.equals(1, edits.length);
+		Assert.equals("h.bind(i, MouseEvent.CLICK, -1, 'plain')", edits[0].text);
+	}
+
 	public function testFixToBind(): Void {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tvar g = () -> h(a, b);\n\t}\n}';
 		final check: PreferBind = new PreferBind();
