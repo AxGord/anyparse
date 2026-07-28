@@ -304,7 +304,7 @@ final class CallSites {
 	 */
 	private static function bareBindsElsewhere(identSpan: Span, hits: Array<RefHit>): Bool {
 		final hit: Null<RefHit> = hits.find(h -> h.span.from == identSpan.from);
-		return hit != null && hit.bindingSpan != null;
+		return hit?.bindingSpan != null;
 	}
 
 	/** Count declarations named `name` anywhere in the tree. */

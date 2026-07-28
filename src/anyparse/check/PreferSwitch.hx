@@ -221,7 +221,7 @@ final class PreferSwitch implements Check {
 	private static function isConstLiteral(
 		node: QueryNode, litKinds: Array<String>, stringFold: Null<StringFoldSupport>, source: String
 	): Bool {
-		if (stringFold != null && stringFold.literalOf(node, source) != null) return true;
+		if (stringFold?.literalOf(node, source) != null) return true;
 		return litKinds.contains(node.kind);
 	}
 

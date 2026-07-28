@@ -1587,20 +1587,19 @@ final class HaxeFormatConfigLoader {
 		// global lineEnd seeds every per-construct knob, sub-keys override.
 		if (section.rightCurly != null) {
 			final placement: RightCurlyPlacement = rightCurlyToRuntime(section.rightCurly);
-			if (section.blockCurly == null || section.blockCurly.rightCurly == null) opt.blockRightCurly = placement;
+			if (section.blockCurly?.rightCurly == null) opt.blockRightCurly = placement;
 			// ω-anonfunction-right-curly: cascade global lineEnd into
 			// `anonFunctionRightCurly` unless the
 			// `anonFunctionCurly.rightCurly` sub-key already set it.
-			if (section.anonFunctionCurly == null || section.anonFunctionCurly.rightCurly == null) opt.anonFunctionRightCurly = placement;
+			if (section.anonFunctionCurly?.rightCurly == null) opt.anonFunctionRightCurly = placement;
 			// ω-anontype-right-curly: cascade global lineEnd into
 			// `anonTypeRightCurly` unless the `anonTypeCurly.rightCurly`
 			// sub-key already set it.
-			if (section.anonTypeCurly == null || section.anonTypeCurly.rightCurly == null) opt.anonTypeRightCurly = placement;
+			if (section.anonTypeCurly?.rightCurly == null) opt.anonTypeRightCurly = placement;
 			// ω-objectlit-right-curly: cascade global lineEnd into
 			// `objectLiteralRightCurly` unless the
 			// `objectLiteralCurly.rightCurly` sub-key already set it.
-			if (section.objectLiteralCurly == null || section.objectLiteralCurly.rightCurly == null)
-				opt.objectLiteralRightCurly = placement;
+			if (section.objectLiteralCurly?.rightCurly == null) opt.objectLiteralRightCurly = placement;
 		}
 	}
 
