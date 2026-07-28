@@ -535,15 +535,9 @@ final class PreferFind implements Check {
 	 * their spans are excluded; refusing here keeps such a loop a report-only finding.
 	 */
 	private static function droppedRegionHasComment(source: String, forSpan: Span, iterSpan: Span, condSpan: Span, retSpan: Span): Bool {
-		return hasCommentMarker(source, forSpan.from, iterSpan.from) || hasCommentMarker(source, iterSpan.to, condSpan.from)
-			|| hasCommentMarker(source, condSpan.to, forSpan.to) || hasCommentMarker(source, forSpan.to, retSpan.from);
-	}
-
-	/** Whether `[from, to)` of `source` holds a `//` or `/*` comment opener. */
-	private static function hasCommentMarker(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final region: String = source.substring(from, to);
-		return region.indexOf('//') != -1 || region.indexOf('/*') != -1;
+		return CheckScan.hasCommentMarker(source, forSpan.from, iterSpan.from)
+			|| CheckScan.hasCommentMarker(source, iterSpan.to, condSpan.from)
+			|| CheckScan.hasCommentMarker(source, condSpan.to, forSpan.to) || CheckScan.hasCommentMarker(source, forSpan.to, retSpan.from);
 	}
 
 }

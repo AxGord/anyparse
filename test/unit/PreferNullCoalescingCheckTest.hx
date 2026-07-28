@@ -42,6 +42,10 @@ class PreferNullCoalescingCheckTest extends Test {
 		Assert.equals(0, violations(wrap('f() != null ? f() : g()')).length);
 	}
 
+	public function testNewExprGuardedNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('new B() != null ? new B() : g()')).length);
+	}
+
 	public function testWrongSideBranchNotFlagged(): Void {
 		Assert.equals(0, violations(wrap('a != null ? b : a')).length);
 	}

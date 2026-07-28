@@ -169,6 +169,23 @@ final class CheckScan {
 	}
 
 	/**
+	 * The node kinds whose presence in a subtree makes a once-vs-twice evaluation
+	 * rewrite unsafe: every binding-write (`writeParentKinds`), plus `callKind` and
+	 * `newExprKind` when the grammar exposes them. Shared by the checks that collapse a
+	 * repeated operand (`prefer-null-coalescing`, `prefer-safe-nav-comparison`) — the
+	 * gate is SYNTACTIC, so it sees a call or a construction but not an implicit
+	 * property getter behind a plain field read.
+	 */
+	public static function mutationKinds(shape: RefShape): Array<String> {
+		final kinds: Array<String> = shape.writeParentKinds.copy();
+		final callKind: Null<String> = shape.callKind;
+		if (callKind != null) kinds.push(callKind);
+		final newExprKind: Null<String> = shape.newExprKind;
+		if (newExprKind != null) kinds.push(newExprKind);
+		return kinds;
+	}
+
+	/**
 	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
 	 * shared by `applyBySpan` and `simplifyConditionFixes`.

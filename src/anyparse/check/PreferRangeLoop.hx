@@ -454,9 +454,9 @@ final class PreferRangeLoop implements Check {
 		final initSpan: Null<Span> = m.initNode.span;
 		final boundSpan: Null<Span> = m.boundNode.span;
 		if (bodySpan == null || incrSpan == null || whileSpan == null || initSpan == null || boundSpan == null) return null;
-		if (gapHasComment(source, incrSpan.to, bodySpan.to - 1)) return null;
-		if (gapHasComment(source, m.declSpan.from, initSpan.from)) return null;
-		if (gapHasComment(source, initSpan.to, bodySpan.from)) return null;
+		if (CheckScan.hasCommentMarker(source, incrSpan.to, bodySpan.to - 1)) return null;
+		if (CheckScan.hasCommentMarker(source, m.declSpan.from, initSpan.from)) return null;
+		if (CheckScan.hasCommentMarker(source, initSpan.to, bodySpan.from)) return null;
 		final interior: String = source.substring(bodySpan.from + 1, incrSpan.from);
 		final rawStart: String = source.substring(initSpan.from, initSpan.to);
 		final start: String = s.atomicKinds.contains(m.initNode.kind) ? rawStart : '($rawStart)';
@@ -464,14 +464,6 @@ final class PreferRangeLoop implements Check {
 		final text: String = 'for (${m.loopVar} in $start...$boundText) {' + interior + '}';
 		return { span: new Span(m.declSpan.from, whileSpan.to), text: text };
 	}
-
-	/** Whether the `[from, to)` gap holds a `//` or `/*` comment opener (a region the rewrite would drop). */
-	private static function gapHasComment(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final gap: String = source.substring(from, to);
-		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
-	}
-
 
 	/** Whether the declaration binding at `from` carries an explicit non-`Int` nominal type annotation (per `declaredTypes`). */
 	private static function declaredNonInt(from: Int, dt: Null<Map<Int, String>>): Bool {

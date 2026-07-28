@@ -185,7 +185,7 @@ final class PreferComprehension implements Check {
 		final scopeSpan: Null<Span> = scope.span;
 		if (declName == null || declSpan == null || initSpan == null || forSpan == null || scopeSpan == null) return null;
 		if (!isEmptyArrayLiteral(source.substring(initSpan.from, initSpan.to))) return null;
-		if (gapHasComment(source, declSpan.to, forSpan.from)) return null;
+		if (CheckScan.hasCommentMarker(source, declSpan.to, forSpan.from)) return null;
 		final checkNodes: Array<QueryNode> = [];
 		final inner: Null<String> = buildInner(forNode, declName, source, s, checkNodes);
 		if (inner == null) return null;
@@ -273,13 +273,6 @@ final class PreferComprehension implements Check {
 			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code) buf.addChar(c);
 		}
 		return buf.toString() == '[]';
-	}
-
-	/** Whether the `[from, to)` gap holds a `//` or `/*` comment opener (which the merge would drop). */
-	private static function gapHasComment(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final gap: String = source.substring(from, to);
-		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
 	}
 
 }

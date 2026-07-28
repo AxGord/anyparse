@@ -435,6 +435,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			],
 			functionKinds: ['FnMember', 'FinalModifiedMember', 'FnDecl', 'LocalFnStmt'],
 			localFunctionKinds: ['LocalFnStmt'],
+			inlineFunctionKinds: ['LocalInlineFnStmt'],
 			lambdaKinds: ['ThinArrow', 'ThinParenLambdaExpr', 'ParenLambdaExpr', 'FnExpr'],
 			comparisonKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'And', 'Or'],
 			assignKind: 'Assign',

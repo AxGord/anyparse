@@ -194,7 +194,7 @@ final class LoopGuard implements Check {
 		final gs: Null<Span> = guard.span;
 		final bs: Null<Span> = body.span;
 		if (gs == null || bs == null) return null;
-		final hasComment: Bool = gapHasComment(source, bs.from, gs.to);
+		final hasComment: Bool = CheckScan.hasCommentMarker(source, bs.from, gs.to);
 		return hasComment ? null : { guard: guard, body: body, cond: cond };
 	}
 
@@ -220,13 +220,6 @@ final class LoopGuard implements Check {
 			notEqKind: s.notEqKind,
 			atomicKinds: s.atomicKinds
 		}, s.support);
-	}
-
-	/** Whether the `[from, to)` gap holds a `//` or `/*` comment opener (a region the rewrite would drop). */
-	private static function gapHasComment(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final gap: String = source.substring(from, to);
-		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
 	}
 
 }

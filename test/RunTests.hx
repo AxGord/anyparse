@@ -494,6 +494,7 @@ import unit.ExtensionMethodsExtractionTest;
 import unit.StdResolverReturnTypeTest;
 import unit.HxVarInitBreakAfterEqOverflowTest;
 import unit.ResolutionLibraryCacheTest;
+import unit.PreferSafeNavComparisonCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -874,6 +875,7 @@ class RunTests {
 		addCase(new OptionalParamShorthandCheckTest());
 		addCase(new PreferFinalClassCheckTest());
 		addCase(new PreferSafeNavCheckTest());
+		addCase(new PreferSafeNavComparisonCheckTest());
 		addCase(new EnglishCommentsCheckTest());
 		addCase(new PreferComprehensionCheckTest());
 		addCase(new PreferFindCheckTest());

@@ -219,10 +219,10 @@ final class PreferSafeNav implements Check {
 		final restSpan: Null<Span> = rest != null ? rest.span : null;
 		if (rest != null && restSpan == null) return null;
 		final headHasComment: Bool = if (restSpan != null)
-			gapHasComment(source, ifSpan.from, restSpan.from) || gapHasComment(source, restSpan.to, stmtSpan.from);
+			CheckScan.hasCommentMarker(source, ifSpan.from, restSpan.from) || CheckScan.hasCommentMarker(source, restSpan.to, stmtSpan.from);
 		else
-			gapHasComment(source, ifSpan.from, stmtSpan.from);
-		final hasComment: Bool = headHasComment || gapHasComment(source, stmtSpan.to, ifSpan.to);
+			CheckScan.hasCommentMarker(source, ifSpan.from, stmtSpan.from);
+		final hasComment: Bool = headHasComment || CheckScan.hasCommentMarker(source, stmtSpan.to, ifSpan.to);
 		return hasComment ? null : {
 			condIdent: condIdent,
 			stmt: stmt,
@@ -273,14 +273,6 @@ final class PreferSafeNav implements Check {
 		final childScope: Null<QueryNode> = s.scopeKinds.contains(node.kind) ? node : enclosingScope;
 		for (c in node.children) collectBindings(c, childScope, s, out);
 	}
-
-	/** Whether the `[from, to)` gap holds a `//` or `/*` comment opener (the guard region we would drop). */
-	private static function gapHasComment(source: String, from: Int, to: Int): Bool {
-		if (from >= to) return false;
-		final gap: String = source.substring(from, to);
-		return gap.indexOf('//') != -1 || gap.indexOf('/*') != -1;
-	}
-
 
 	/** The plain-identifier operand of a `x != null` / `null != x` guard condition, or null when `cond` is not that shape. */
 	private static function guardOperand(cond: QueryNode, s: Seams): Null<QueryNode> {

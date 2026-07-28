@@ -114,6 +114,7 @@ final class Linter {
 			new OptionalParamShorthand(),
 			new PreferFinalClass(),
 			new PreferSafeNav(),
+			new PreferSafeNavComparison(),
 			new EnglishComments(),
 			new PreferComprehension(),
 			new PreferFind(),

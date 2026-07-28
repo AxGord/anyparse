@@ -18,9 +18,12 @@ import anyparse.query.TypeResolver;
  * Two safety constraints:
  *
  * - The guarded value is evaluated TWICE by the ternary but only ONCE by `??`, so a
- *   guarded value whose subtree mutates a binding — a call (`RefShape.callKind`) or an
- *   assignment / increment (`RefShape.writeParentKinds`) — is left alone; collapsing the
- *   two evaluations to one could be observable (`f() ?? y`, `i++ ?? y`).
+ *   guarded value whose subtree mutates a binding — a call (`RefShape.callKind`), a
+ *   construction (`RefShape.newExprKind`) or an assignment / increment
+ *   (`RefShape.writeParentKinds`) — is left alone; collapsing the two evaluations to one
+ *   could be observable (`f() ?? y`, `new B() ?? y`, `i++ ?? y`). The gate is shared with
+ *   `prefer-safe-nav-comparison` as `CheckScan.mutationKinds`, and is SYNTACTIC: it sees
+ *   an explicit call or `new`, not a property getter behind a plain field read.
  * - `??` binds tighter than `?:`, so a fallback that is itself a bare ternary
  *   (`RefShape.ternaryKind`) is parenthesized in the rewrite; every other operand binds
  *   tighter than `??` and needs no parens.
@@ -29,11 +32,11 @@ import anyparse.query.TypeResolver;
  *
  * Driven by four optional `RefShape` kinds — `ternaryKind`, `nullLiteralKind`, `eqKind`,
  * `notEqKind` (any unset → no-op) — plus the always-present `writeParentKinds` and optional
- * `callKind` for the mutation guard. The operator must be known exactly (`==` vs `!=`) to
- * tell which branch holds the guarded value, so the equality kinds are read individually
- * rather than as the `equalityKinds` set. The outermost matching ternary is flagged and not
- * descended into; a nested one is caught on the next `--fix` pass (which iterates to a fixed
- * point).
+ * `callKind` / `newExprKind` for the mutation guard. The operator must be known exactly
+ * (`==` vs `!=`) to tell which branch holds the guarded value, so the equality kinds are read
+ * individually rather than as the `equalityKinds` set. The outermost matching ternary is
+ * flagged and not descended into; a nested one is caught on the next `--fix` pass (which
+ * iterates to a fixed point).
  */
 @:nullSafety(Strict)
 final class PreferNullCoalescing implements Check {
@@ -91,13 +94,6 @@ final class PreferNullCoalescing implements Check {
 		});
 	}
 
-	/** The node kinds whose presence in a guarded value makes the once-vs-twice rewrite unsafe: every binding-write plus the call kind. */
-	private static function mutationKinds(shape: RefShape): Array<String> {
-		final kinds: Array<String> = shape.writeParentKinds.copy();
-		final callKind: Null<String> = shape.callKind;
-		if (callKind != null) kinds.push(callKind);
-		return kinds;
-	}
 
 	/**
 	 * Walk `node`; flag the outermost null-guard ternary and STOP — a nested one inside it
@@ -189,7 +185,7 @@ final class PreferNullCoalescing implements Check {
 		if (notEqKind == null) return null;
 		final nullKind: Null<String> = shape.nullLiteralKind;
 		if (nullKind == null) return null;
-		final unsafeKinds: Array<String> = mutationKinds(shape);
+		final unsafeKinds: Array<String> = CheckScan.mutationKinds(shape);
 		return {
 			ternaryKind: ternaryKind,
 			eqKind: eqKind,

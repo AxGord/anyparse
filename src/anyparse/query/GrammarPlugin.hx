@@ -780,6 +780,17 @@ typedef RefShape = {
 	@:optional var localFunctionKinds: Array<String>;
 
 	/**
+	 * Function-declaration kinds that are `inline` BY KIND rather than by a modifier
+	 * sibling — Haxe's local `inline function` (`LocalInlineFnStmt`), which the grammar
+	 * gives its own ctor instead of a `Inline` + `LocalFnStmt` pair. A check that must
+	 * know whether a body is spliced into its call sites (`prefer-safe-nav-comparison`,
+	 * whose rewrite would drop the narrowing an inlined boolean guard grants its
+	 * callers) reads this alongside `inlineModifierKind`. Optional — a grammar whose
+	 * inline-ness is always a modifier leaves it unset.
+	 */
+	@:optional var inlineFunctionKinds: Array<String>;
+
+	/**
 	 * Lambda / anonymous-function kinds — expression-position function values
 	 * (`x -> …`, `(a, b) -> …`, `function(…) { … }`). The call-graph layer
 	 * registers each as an anonymous function node (a `Contains` edge from its
