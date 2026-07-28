@@ -510,6 +510,22 @@ typedef RefShape = {
 	@:optional var fieldAccessKind: String;
 
 	/**
+	 * The anonymous function-literal expression kind (`function(args) { … }`) —
+	 * `prefer-arrow-callback` flags one in call-argument position and rewrites it
+	 * to an arrow lambda. Optional; unset makes the check a no-op.
+	 */
+	@:optional var fnExprKind: String;
+
+	/**
+	 * Node kinds that are TYPE annotations, never argument expressions — a `new T<…>`
+	 * type argument, a function literal's return-type hint (`Named` / `Anon` /
+	 * function-type forms). `prefer-arrow-callback` excludes them when indexing call
+	 * arguments and uses them to spot a literal's return hint. Optional; unset makes
+	 * that check a no-op.
+	 */
+	@:optional var typeAnnotationKinds: Array<String>;
+
+	/**
 	 * The force-unwrap field-access node kind (`a!.b`) — same child shape as
 	 * `fieldAccessKind` (the receiver is `children[0]`); `null-dereference` flags
 	 * one whose receiver is provably null by flow. Optional.

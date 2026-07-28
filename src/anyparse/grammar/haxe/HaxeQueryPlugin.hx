@@ -510,6 +510,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			conditionFirstChildKinds: ['IfStmt', 'IfExpr', 'WhileStmt', 'WhileExpr'],
 			conditionLastChildKinds: ['DoWhileStmt'],
 			parenLambdaKind: 'ThinParenLambdaExpr',
+			fnExprKind: 'FnExpr',
+			typeAnnotationKinds: ['Named', 'Anon', 'Arrow', 'ArrowFn'],
 			forStmtKind: 'ForStmt',
 			paramKinds: ['Required', 'Optional', 'Rest'],
 			supertypeClauseKinds: ['ExtendsClause', 'ImplementsClause'],

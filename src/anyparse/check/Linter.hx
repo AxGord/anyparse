@@ -71,6 +71,7 @@ final class Linter {
 			new AssignmentInCondition(),
 			new DuplicateTernaryBranches(),
 			new PreferBind(),
+			new PreferArrowCallback(),
 			new RedundantMapIterKey(),
 			new UnusedParameter(),
 			new SwallowedException(),

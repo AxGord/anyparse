@@ -698,6 +698,29 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * The retained raw source text of an indexed `file`, or null when the file is
+	 * not in this index's scope. Lets a consumer parse a declaring file it located
+	 * via `declaringFiles` / `resolveTypeRef` (e.g. `prefer-arrow-callback`
+	 * extracting a callee's parameter signature) without re-reading the disk.
+	 */
+	public function sourceOf(file: String): Null<String> {
+		return _sources[file];
+	}
+
+	/**
+	 * EVERY declaration a WRITTEN type reference resolves to against `fromFile`'s
+	 * import scope — the multi-candidate counterpart of `resolveTypeRefFrom` for a
+	 * consumer that can tolerate ambiguity by AGREEMENT (e.g. `prefer-arrow-callback`
+	 * accepting two same-module declarations — a vendored std fork next to the real
+	 * std — when every candidate yields the same verdict). Empty when `fromFile` is
+	 * not indexed or nothing matches.
+	 */
+	public function resolveTypeRefsFrom(raw: String, fromFile: String): Array<{ file: FileInfo, type: TypeDeclInfo }> {
+		final fi: Null<FileInfo> = fileInfo(fromFile);
+		return fi == null ? [] : resolveTypeRefAll(raw, fi);
+	}
+
+	/**
 	 * `abstractRebindsThis`'s recursion, cycle-guarded by `seen` (a cycle is treated as
 	 * possibly-rebinding — conservative). A non-abstract match contributes "found" without rebinding; an
 	 * abstract with `abstractSelfRebind` rebinds; a `@:forward` abstract defers to its underlying (an
@@ -821,6 +844,12 @@ final class SymbolIndex {
 	 * wildcard, or declared in `fromFile`'s own package.
 	 */
 	private function resolveTypeRef(raw: String, fromFile: FileInfo): Null<ResolvedType> {
+		final matches: Array<ResolvedType> = resolveTypeRefAll(raw, fromFile);
+		return matches.length == 1 ? matches[0] : null;
+	}
+
+	/** Every in-scope declaration `raw` resolves to from `fromFile` (see `resolveTypeRef`), deduped by declaring file. */
+	private function resolveTypeRefAll(raw: String, fromFile: FileInfo): Array<ResolvedType> {
 		final dot: Int = raw.lastIndexOf('.');
 		final simple: String = dot < 0 ? raw : raw.substr(dot + 1);
 		final matches: Array<ResolvedType> = [];
@@ -833,7 +862,7 @@ final class SymbolIndex {
 				matches.push({ file: fi, type: t });
 			}
 		}
-		return matches.length == 1 ? matches[0] : null;
+		return matches;
 	}
 
 	/**
