@@ -529,7 +529,7 @@ final class Naming implements Check implements CrossFileFix {
 		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>
 	): Void {
 		if (RefactorSupport.isConditionalKind(node.kind)) return;
-		final cls: Null<String> = (node.kind == 'ClassDecl' && node.name != null) ? node.name : currentClass;
+		final cls: Null<String> = (CheckScan.isClassBodyKind(node.kind) && node.name != null) ? node.name : currentClass;
 		if (node.kind == 'IdentExpr' && node.name == name) {
 			final s: Null<Span> = node.span;
 			final off: Int = s == null ? -1 : RefactorSupport.identTokenOffset(source, s, name);

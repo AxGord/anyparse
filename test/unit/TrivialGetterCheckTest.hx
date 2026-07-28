@@ -843,4 +843,64 @@ class TrivialGetterCheckTest extends Test {
 		return out;
 	}
 
+	public function testAbstractClassTrivialGetterFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'abstract class C {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tprivate function get_active():Bool { return _active; }\n}'
+			).length,
+			'an abstract class body is inspected like a plain class'
+		);
+	}
+
+	public function testAbstractOwnerCrossFileSubtypeReadCollapses(): Void {
+		// The OWNER is an abstract class; a subtype in another file reads its private backing field.
+		// Exercises subtypeRefWalk's owner-span exclusion / cls attribution for AbstractClassDecl:
+		// the property collapses AND the subtype's read is renamed `_active` -> `active`.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'abstract class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Sub.hx', source: 'class Sub extends Base {\n\tpublic function peek():Bool return _active;\n}' }
+		];
+		Assert.equals(1, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+		final out: Map<String, String> = crossFixApply(files);
+		final base: String = out['Base.hx'] ?? '';
+		final sub: String = out['Sub.hx'] ?? '';
+		Assert.isTrue(base.indexOf('active(default, null):Bool = false') >= 0);
+		Assert.isTrue(base.indexOf('get_active') == -1);
+		Assert.isTrue(sub.indexOf('return active;') >= 0);
+		Assert.isTrue(sub.indexOf('_active') == -1);
+	}
+
+	public function testAbstractSubtypeWriteBlocked(): Void {
+		// The subtype is itself an abstract class and WRITES the inherited backing
+		// field — the collapse must stay blocked. Integration guard: the block is
+		// carried by SymbolIndex's subtype machinery seeing the abstract subtype.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'Base.hx',
+				source: 'class Base {\n\tpublic var active(get, never):Bool;\n\tprivate var _active:Bool = false;\n\tfunction get_active():Bool return _active;\n}'
+			},
+			{ file: 'Mid.hx', source: 'abstract class Mid extends Base {\n\tpublic function reset():Void _active = false;\n}' }
+		];
+		Assert.equals(0, new TrivialGetter().run(files, new HaxeQueryPlugin()).length);
+	}
+
+
+	public function testBackingTypeDiffersFromPropertyTypeNotFlagged(): Void {
+		// The getter performs an implicit upcast (Array -> ReadOnlyArray): collapsing
+		// to one (default, null) slot would retype the storage and break every
+		// mutating use of the backing field (`resize`, assignment to an Array slot).
+		Assert.equals(
+			0,
+			violations(
+				cls(
+					'public var headers(get, never):ReadOnlyArray<Header>;\n\tprivate final _headers:Array<Header> = [];\n\tprivate inline function get_headers():ReadOnlyArray<Header> return _headers;'
+				)
+			).length
+		);
+	}
+
 }

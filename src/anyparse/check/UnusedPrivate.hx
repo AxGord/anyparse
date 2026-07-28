@@ -48,18 +48,19 @@ import anyparse.query.StringFold.StringLiteral;
  *
  * ## Members that are public despite no `public` keyword
  *
- * Two shapes carry no visibility keyword yet are not private, so they are exempt
+ * Three shapes carry no visibility keyword yet are not private, so they are exempt
  * from the reference scan (`violationFor`): an `override` member inherits the
  * base's visibility and is invoked polymorphically from unseen code; an
  * `extern class` member is PUBLIC by the extern rule and reached from outside
- * the file (`collectExternTypes` names its enclosing type).
+ * the file (`collectExternTypes` names its enclosing type); an `abstract` member is a contract implemented by
+ * subclasses, reachable through every implementor.
  *
  * ## Autofix
  *
  * Deletion is CONSERVATIVE: the report stays broad (a member is flagged as soon as
  * it is unreferenced and confined), but `fix` removes one only when every doubt is
  * ruled out, so it never breaks another platform's build. A member is deleted only
- * when its initializer is side-effect-free (a method always qualifies,
+ * when its initializer is side-effect-free (a body-bearing method always qualifies, a body-less declaration never —
  * `RefactorSupport.isSideEffectFree`), it is not an abstract-method impl of an
  * `extends` class (`mayImplementAbstractMethod`: Haxe impls carry no `override` and
  * the base's call is invisible to a single-file scan), its enclosing type carries no
@@ -144,8 +145,8 @@ final class UnusedPrivate implements Check {
 	/**
 	 * Delete the auto-fixable subset of `violations` under conservative gates: a
 	 * doubtful case stays report-only, so `--fix` never breaks another platform's
-	 * build. A flagged MEMBER is removed only when its initializer is side-effect-free
-	 * (a method always qualifies), it is not an abstract-method impl of an `extends`
+	 * build. A flagged MEMBER is removed only when its initializer is side-effect-free (a body-bearing method always
+	 * qualifies, a body-less declaration never), it is not an abstract-method impl of an `extends`
 	 * class (`mayImplementAbstractMethod`), its enclosing type carries no `@:rtti`
 	 * (drill-Node field-name serialization, via the index), `@:keep`, or `@:build`, and
 	 * its name appears in no string literal in scope (a possible `Reflect.field` target).
@@ -257,7 +258,8 @@ final class UnusedPrivate implements Check {
 	 * RETAINS the skip-parse veto (a skip-parsed report file could hide a reference the
 	 * scan cannot see, so any skip-parse in report scope keeps structural confinement).
 	 *
-	 * Two visibility carve-outs never reach the reference scan: an `override`
+	 * Three visibility carve-outs never reach the reference scan: an `abstract` member is a contract implemented by
+	 * subclasses, reachable through every implementor; an `override`
 	 * member inherits the base's visibility (not private) and is invoked
 	 * polymorphically from code a single-file scan cannot see; an `extern class`
 	 * member carries no visibility keyword yet is PUBLIC by the extern rule, and
@@ -269,9 +271,11 @@ final class UnusedPrivate implements Check {
 	): Null<Violation> {
 		final category: NamingCategory = decl.category;
 		if (category != NamingCategory.Field && category != NamingCategory.Method && category != NamingCategory.Constant) return null;
+		// An `abstract` member is a contract implemented by subclasses — reachable
+		// through every implementor, so never dead from the declaring class alone.
 		if (
-			decl.mods.contains('public') || decl.mods.contains('override') || decl.implicitlyReachable == true
-			|| support.frameworkReachable(decl, index)
+			decl.mods.contains('public') || decl.mods.contains('override') || decl.mods.contains('abstract')
+			|| decl.implicitlyReachable == true || support.frameworkReachable(decl, index)
 		)
 			return null;
 		final owner: Null<String> = decl.enclosingType;
@@ -311,12 +315,17 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * Whether removing `member`'s declaration drops no behaviour: a method
-	 * declaration never executes at its site (always deletable); a field is
+	 * Whether removing `member`'s declaration drops no behaviour: a body-bearing
+	 * method never executes at its site (deletable); a body-less declaration is a
+	 * contract whose implementation lives elsewhere (never deletable); a field is
 	 * deletable only when it has no initializer or a side-effect-free one (its
 	 * first child is the initializer expression).
 	 */
 	private static function deletableMember(member: QueryNode): Bool {
+		// A body-less declaration has no dead code to remove — its implementation
+		// lives elsewhere (an `extern`'s in native code; an `abstract`'s in
+		// subclasses, though those are already exempt in `violationFor`).
+		for (c in member.children) if (c.kind == 'NoBody') return false;
 		if (member.kind == 'VarMember' || member.kind == 'FinalMember') {
 			final init: Null<QueryNode> = member.children.length > 0 ? member.children[0] : null;
 			return init == null || RefactorSupport.isSideEffectFree(init);
@@ -342,11 +351,10 @@ final class UnusedPrivate implements Check {
 
 	/**
 	 * Whether `node` is a class body whose direct children carry the members and any
-	 * `extends` clause — `ClassDecl` (a plain class) or `ClassForm` (the inner form
-	 * of a `final` / modified class under a `FinalDecl` wrapper).
+	 * `extends` clause — `CheckScan.isClassBodyKind`: a plain, `final` / modified, or `abstract class`.
 	 */
 	private static inline function isClassScopeNode(kind: String): Bool {
-		return kind == 'ClassDecl' || kind == 'ClassForm';
+		return CheckScan.isClassBodyKind(kind);
 	}
 
 	/**
@@ -365,8 +373,8 @@ final class UnusedPrivate implements Check {
 	 * an `extends` clause. The extends flag is threaded top-down through transparent
 	 * wrappers: a member-level `#if … #end` region projects its members as children
 	 * of a `Conditional` node, so the enclosing class's `ExtendsClause` is a sibling
-	 * of that wrapper, NOT of the member — only a class-scope node (`ClassDecl` /
-	 * `ClassForm`) recomputes the flag from its own `extends` clause.
+	 * of that wrapper, NOT of the member — only a class-scope node
+	 * (`isClassScopeNode`) recomputes the flag from its own `extends` clause.
 	 */
 	private static function collectMembers(
 		node: QueryNode, inExtends: Bool, out: Map<Int, { node: QueryNode, parent: QueryNode, inExtends: Bool }>
@@ -394,7 +402,7 @@ final class UnusedPrivate implements Check {
 		for (i in 0...siblings.length) {
 			final child: QueryNode = siblings[i];
 			final name: Null<String> = child.name;
-			if (name != null && (child.kind == 'ClassDecl' || child.kind == 'ClassForm') && precededByExtern(siblings, i)) out.push(name);
+			if (name != null && isClassScopeNode(child.kind) && precededByExtern(siblings, i)) out.push(name);
 			collectExternTypes(child, out);
 		}
 	}
@@ -468,8 +476,9 @@ final class UnusedPrivate implements Check {
 	}
 
 	/**
-	 * The class-scope node a decl child represents: itself for a plain `class`, the
-	 * inner `ClassForm` for a `final class` (`FinalDecl` wrapper), else null.
+	 * The class-scope node a decl child represents: itself for a plain `class` /
+	 * `abstract class`, the inner `ClassForm` for a `final class` (`FinalDecl`
+	 * wrapper), else null.
 	 */
 	private static function classFormOf(child: QueryNode): Null<QueryNode> {
 		if (isClassScopeNode(child.kind)) return child;
@@ -518,6 +527,9 @@ final class UnusedPrivate implements Check {
 		tree: QueryNode, file: String, out: Array<{ file: String, className: String, span: Span }>
 	): Void {
 		forEachClassDecl(tree, (classNode, name, siblings, index) -> {
+			// An abstract class is never instantiated by definition and its private
+			// empty ctor is the subclass-only idiom — `new` stays for `super()`.
+			if (classNode.kind == 'AbstractClassDecl') return;
 			if (metaPrecedesClass(siblings, index, '@:build')) return;
 			final ctor: Null<QueryNode> = privateEmptyCtorOf(classNode);
 			final cspan: Null<Span> = ctor == null ? null : ctor.span;

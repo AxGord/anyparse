@@ -503,4 +503,38 @@ class UnusedPrivateCheckTest extends Test {
 		Assert.equals(0, one('class C {\n\tprivate static function __init__():Void {\n\t\ttrace(1);\n\t}\n}').length);
 	}
 
+	public function testAbstractClassDeadPrivateFlagged(): Void {
+		Assert.equals(
+			1, one('abstract class C {\n\tprivate function dead() {}\n}').length, 'an abstract class body is inspected like a plain class'
+		);
+	}
+
+	public function testAbstractMethodDeclarationNotFlagged(): Void {
+		Assert.equals(
+			0, one('abstract class B {\n\tprivate abstract function tag():String;\n}').length,
+			'an abstract member is a subclass contract, never dead in its declaring class'
+		);
+	}
+
+	public function testPublicAbstractMethodNotFlagged(): Void {
+		Assert.equals(
+			0, one('abstract class B {\n\tpublic abstract function area():Float;\n}').length,
+			'the Abstract modifier sibling must not break the public-modifier scan'
+		);
+	}
+
+	public function testAbstractClassPrivateCtorNotFlagged(): Void {
+		Assert.equals(
+			0, one('abstract class B {\n\tpublic static var shared:Int = 0;\n\tprivate function new() {}\n}').length,
+			'an abstract class is never instantiated by definition — its private empty ctor is the subclass-only idiom'
+		);
+	}
+
+
+	public function testFixSkipsBodylessDeclaration(): Void {
+		// A body-less declaration is reported (extern privates are not exempt) but
+		// never deleted — its implementation lives outside the scanned source.
+		Assert.equals(0, fixEdits('class C {\n\tprivate extern function ext():Void;\n}').length);
+	}
+
 }

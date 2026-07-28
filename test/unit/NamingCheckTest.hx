@@ -1192,4 +1192,28 @@ class NamingCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'__width'"));
 	}
 
+	public function testCrossFileFixRenamesFinalAndAbstractSubtypeField(): Void {
+		// The subtype reads live inside a `final class` (ClassForm) and an `abstract class`
+		// (AbstractClassDecl) — receiver attribution must recognise both class shapes, else
+		// the completeness gate fails closed and the cross-file rename silently no-ops.
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final dSrc: String = 'package pkg;\nfinal class D extends C {\n\tpublic function g() { return shape; }\n}';
+		final eSrc: String = 'package pkg;\nabstract class E extends C {\n\tpublic function h() { return shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: dSrc },
+			{ file: 'pkg/E.hx', source: eSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		final rename: Array<CrossFileEdits> = renames[0];
+		Assert.equals(3, rename.length);
+		assertRenameSlice(rename, 'pkg/C.hx', cSrc, '_shape', 'var shape');
+		assertRenameSlice(rename, 'pkg/D.hx', dSrc, '_shape', 'return shape');
+		assertRenameSlice(rename, 'pkg/E.hx', eSrc, '_shape', 'return shape');
+	}
+
 }

@@ -186,6 +186,28 @@ final class CheckScan {
 	}
 
 	/**
+	 * Whether `kind` is a class-body node whose direct children carry the members —
+	 * `ClassDecl` (a plain class), `ClassForm` (the inner form of a `final` class
+	 * under a `FinalDecl` wrapper), or `AbstractClassDecl` (an `abstract class`).
+	 * Shared by the class-walking checks (PreferInline / TrivialGetter / UnusedPrivate / Naming) so their walkers agree on
+	 * the set; note PreferInline and TrivialGetter REWRITE members of whatever this admits — widen it only with their fix
+	 * gates in mind.
+	 */
+	public static inline function isClassBodyKind(kind: String): Bool {
+		return kind == 'ClassDecl' || kind == 'ClassForm' || kind == 'AbstractClassDecl';
+	}
+
+	/**
+	 * Every class-body node in `root`'s subtree (`isClassBodyKind`), pre-order —
+	 * the collector shared by PreferInline and TrivialGetter (Naming / UnusedPrivate run their own stateful walks over the same predicate).
+	 */
+	public static function classBodies(root: QueryNode): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		collectClassBodies(root, out);
+		return out;
+	}
+
+	/**
 	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
 	 * shared by `applyBySpan` and `simplifyConditionFixes`.
@@ -318,7 +340,6 @@ final class CheckScan {
 		return kept;
 	}
 
-
 	/**
 	 * The `!e` → `e` STRIP arm of `negateConditionText`: unwraps a leading logical-not
 	 * (and one redundant paren under it), returning the inner source verbatim.
@@ -333,7 +354,6 @@ final class CheckScan {
 		final innerSpan: Null<Span> = inner.span;
 		return innerSpan == null ? null : source.substring(innerSpan.from, innerSpan.to);
 	}
-
 
 	/**
 	 * The `==` / `!=` FLIP arm of `negateConditionText`: rewrites a binary (in)equality
@@ -353,6 +373,11 @@ final class CheckScan {
 			return source.substring(l.from, l.to) + op + source.substring(r.from, r.to);
 		}
 		return null;
+	}
+
+	private static function collectClassBodies(node: QueryNode, out: Array<QueryNode>): Void {
+		if (isClassBodyKind(node.kind)) out.push(node);
+		for (child in node.children) collectClassBodies(child, out);
 	}
 
 }

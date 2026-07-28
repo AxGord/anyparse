@@ -1476,6 +1476,11 @@ final class Cli {
 			// reads as absent, so an overridden or value-referenced method is wrongly inlined ("Field X is
 			// inlined and cannot be overridden").
 			'prefer-inline',
+			// trivial-getter's collapse gates are whole-project too: subtypeBlocks /
+			// subtypeFieldBlocks resolve the owner's subtypes through the index. On the
+			// active SUBSET a subtype declared elsewhere reads as absent, so a later
+			// pass can collapse a property whose backing field a subtype still uses.
+			'trivial-getter',
 			// naming's cross-file field rename (crossFileFix) resolves an owner's subtype /
 			// @:access-grant files through the whole-project index; on the active SUBSET a subtype
 			// declared elsewhere reads as absent. Full-scope also re-reports the declaring file's

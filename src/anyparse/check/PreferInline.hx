@@ -12,15 +12,15 @@ import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.OracleRelaxable;
 
 /**
- * Flags a SIMPLE method — one whose body is a single expression — that can be marked
- * `inline`, per the user's rule: use `inline` on single-expression methods (trivial
- * getters / setters and thin delegation wrappers). `Severity.Info`; `--fix` inserts
+ * Flags a SIMPLE method — one whose body is a single expression or empty — that can be marked `inline`, per the user's
+ * rule: use `inline` on single-expression methods (trivial getters / setters, thin delegation wrappers, no-op stubs).
+ * `Severity.Info`; `--fix` inserts
  * `inline ` before the `function` keyword.
  *
- * A method qualifies when its body is exactly one expression — an arrow body
- * (`function f():T EXPR;`) or a block with a single `return` / expression statement
- * (`{ return EXPR; }` / `{ EXPR; }`). Everything else (empty / multi-statement bodies,
- * bodyless interface / abstract declarations) is not a candidate.
+ * A method qualifies when its body is exactly one expression — an arrow body (`function f():T EXPR;`) or a block with a
+ * single `return` / expression statement — or an EMPTY block: inlining a no-op compiles the call away, and a FUTURE
+ * override of an inlined method fails loudly at the overriding site (the same subtype-gate evidence non-empty candidates
+ * rely on). Everything else (multi-statement bodies, bodyless interface / abstract declarations) is not a candidate.
  *
  * ## Must-skip set (soundness — a miss over a wrong flag)
  *
@@ -30,7 +30,7 @@ import anyparse.check.Check.OracleRelaxable;
  *   Detected by a conservative name scan over every file: a name in value position (not a
  *   call callee) via `IdentExpr` / `FieldAccess` / `SafeFieldAccess` / `ForceFieldAccess`.
  * - An `override` method, and a method OVERRIDDEN by a subtype (`SymbolIndex.hasSubtype`
- *   plus a member-name lookup across strict subtypes) — inlining would break the override.
+ *   plus a member-name lookup across strict subtypes) — inlining would break the override; and a method FILLING an abstract-superclass slot (`SymbolIndex.supertypeDeclaresMember` — Haxe requires no `override` on such an implementation).
  * - A method an implemented interface declares (`SymbolIndex.typeProvablyLacksMember`, which
  *   also refuses when the interface is unresolvable) — the interface requires a real method.
  * - A `dynamic` method (re-bindable at runtime), a constructor (`new`), a `macro` method, a
@@ -48,7 +48,7 @@ import anyparse.check.Check.OracleRelaxable;
  *   over-skips a safe object-literal / null-value body (the sound direction; a precise split would
  *   need null-flow typing).
  *
- * Only `ClassDecl` / `final class` (`ClassForm`) bodies are inspected; already-`inline`
+ * Every class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected; already-`inline`
  * methods are skipped (nothing to do). The gates mirror `trivial-getter`'s soundness model.
  */
 @:nullSafety(Strict)
@@ -76,7 +76,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 
 	public function description(): String {
 		return
-			'a single-expression method (trivial getter/setter or thin delegation wrapper) markable inline; Info, --fix inserts inline. Skips methods referenced as a value, override / subtype-overridden, interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods';
+			'a single-expression or empty-bodied method (trivial getter/setter, thin delegation wrapper, no-op) markable inline; Info, --fix inserts inline. Skips methods referenced as a value, override / subtype-overridden, interface-declared, dynamic / macro / constructor / @:keep / Reflect-accessed methods';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -86,11 +86,11 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) trees.push({ file: entry.file, tree: tree });
 		}
-		// Pass A: the names of every LOCALLY-eligible method (single-expression, and not
+		// Pass A: the names of every LOCALLY-eligible method (single-expression / empty, and not
 		// inline / dynamic / macro / override / @:keep / constructor / self-recursive) — the only
 		// names the reference-kind scan below must resolve, keeping its blocked sets small.
 		final candidateNames: Array<String> = [];
-		for (t in trees) for (cls in classes(t.tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
+		for (t in trees) for (cls in CheckScan.classBodies(t.tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
 			if (isCandidateMethod(name, fn, mods, metas, _oracleRelaxed) && !candidateNames.contains(name)) candidateNames.push(name);
 		});
 		// Pass B: the reference-kind gate over the whole scope — a candidate name used as a VALUE
@@ -103,7 +103,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		}
 		// Pass C: emit a finding for each candidate the cross-file gates leave standing.
 		final out: Array<Violation> = [];
-		for (t in trees) for (cls in classes(t.tree)) considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed);
+		for (t in trees) for (cls in CheckScan.classBodies(t.tree))
+			considerClass(out, cls, t.file, index, valueBlocked, reflectBlocked, _oracleRelaxed);
 		return out;
 	}
 
@@ -124,7 +125,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 			if (s != null) wanted.push('${s.from}:${s.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in classes(tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
+		for (cls in CheckScan.classBodies(tree)) forEachMethod(cls, (name, fn, mods, metas) -> {
 			final span: Null<Span> = fn.span;
 			if (span == null || mods.contains('Inline') || !wanted.contains('${span.from}:${span.to}')) return;
 			edits.push({ span: new Span(span.from, span.from), text: 'inline ' });
@@ -132,22 +133,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return edits;
 	}
 
-	/** Every class-body node in the tree — `ClassDecl` and `final class`'s `ClassForm`. */
-	private static function classes(root: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		collectClasses(root, out);
-		return out;
-	}
-
-	private static function collectClasses(node: QueryNode, out: Array<QueryNode>): Void {
-		if (node.kind == 'ClassDecl' || node.kind == 'ClassForm') out.push(node);
-		for (child in node.children) collectClasses(child, out);
-	}
-
 	/**
-	 * Flag each candidate single-expression method of `cls` that passes every soundness gate: not
-	 * value-referenced / reflection-named anywhere, not overridden by a subtype, not required by an
-	 * implemented interface, and (per `isCandidateMethod`) not a constructor / override / dynamic /
+	 * Flag each candidate method of `cls` (single-expression or empty body) that passes every soundness gate: not value-referenced / reflection-named anywhere, not overridden by a subtype, not implementing an abstract-superclass slot, not required by an implemented interface, and (per `isCandidateMethod`) not a constructor / override / dynamic /
 	 * macro / @:keep / already-inline / self-recursive method.
 	 */
 	private static function considerClass(
@@ -161,6 +148,12 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		forEachMethod(cls, (name, fn, mods, metas) -> {
 			if (!isCandidateMethod(name, fn, mods, metas, relaxed)) return;
 			if (valueBlocked.contains(name) || reflectBlocked.contains(name) || subtypeMembers.contains(name)) return;
+			// An abstract-superclass implementation carries no `override` (Haxe does
+			// not require it), so the modifier gate misses it — a resolvable
+			// supertype declaring the member means this method fills a base slot and
+			// must stay physical. An unresolvable supertype stays optimistic, like
+			// the extends chain always was for this rule.
+			if (index.supertypeDeclaresMember(className, name)) return;
 			if (interfaceRequires(index, ifaces, name)) return;
 			final span: Null<Span> = fn.span;
 			if (span == null) return;
@@ -169,7 +162,9 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 				span: span,
 				rule: 'prefer-inline',
 				severity: Severity.Info,
-				message: 'method \'$name\' is a single-expression method with no value references; mark it inline'
+				message: isEmptyBody(fn)
+					? 'method \'$name\' has an empty body and no value references; mark it inline — the call compiles away'
+					: 'method \'$name\' is a single-expression method with no value references; mark it inline'
 			});
 		});
 	}
@@ -201,8 +196,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
-	 * Whether `name` / `fn` is an inline candidate: a non-constructor method with a single-expression
-	 * body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, and not
+	 * Whether `name` / `fn` is an inline candidate: a non-constructor method with an inlinable (single-expression or empty) body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, and not
 	 * self-recursive (a bare `name` / `this.name` in its body).
 	 */
 	private static function isCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>, relaxed: Bool): Bool {
@@ -210,25 +204,48 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	}
 
 	/**
-	 * The candidate gates EXCEPT the context-sensitive null-safety one: a non-constructor method with a single-expression body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, and not self-recursive. `isCandidateMethod` layers the null-safety gate on top, unless `relaxed` (the oracle path) drops it so an object-literal / null-value / block-lambda body also qualifies.
+	 * The candidate gates EXCEPT the context-sensitive null-safety one: a non-constructor method with an inlinable (single-expression or empty) body, not already `inline` / `dynamic` / `macro` / `override`, not `@:keep`, and not self-recursive.
+	 * `isCandidateMethod` layers the null-safety gate on top, unless `relaxed` (the oracle path) drops it so an
+	 * object-literal / null-value / block-lambda body also qualifies.
 	 */
 	private static function isBaseCandidateMethod(name: String, fn: QueryNode, mods: Array<String>, metas: Array<String>): Bool {
 		if (name == 'new') return false;
 		if (mods.contains('Inline') || mods.contains('Dynamic') || mods.contains('Macro') || mods.contains('Override')) return false;
 		if (metas.contains('@:keep')) return false;
-		return isSingleExpressionBody(fn) && !referencesSelf(fn, name);
+		return isInlinableBody(fn) && !referencesSelf(fn, name);
 	}
 
-	/** Whether `fn`'s body is a single expression — an `ExprBody`, or a `BlockBody` with one `return` / expression statement. */
-	private static function isSingleExpressionBody(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = fn.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+	/**
+	 * Whether `fn`'s body is inlinable: a single expression (an `ExprBody`, or a
+	 * `BlockBody` with one `return` / expression statement) or an EMPTY block —
+	 * inlining a no-op compiles the call away (on hxcpp it removes a virtual
+	 * call). A comment-only body counts as empty (comments are trivia).
+	 */
+	private static function isInlinableBody(fn: QueryNode): Bool {
+		final body: Null<QueryNode> = bodyOf(fn);
 		if (body == null) return false;
 		return switch body.kind {
 			case 'ExprBody': body.children.length == 1;
 			case 'BlockBody':
-				body.children.length == 1 && (body.children[0].kind == 'ReturnStmt' || body.children[0].kind == 'ExprStmt');
+				switch body.children.length {
+					case 0: true;
+					case 1:
+						body.children[0].kind == 'ReturnStmt' || body.children[0].kind == 'ExprStmt';
+					case _: false;
+				}
 			case _: false;
 		}
+	}
+
+	/** Whether `fn`'s body is an empty `BlockBody` (the no-op arm's message discriminator). */
+	private static inline function isEmptyBody(fn: QueryNode): Bool {
+		final body: Null<QueryNode> = bodyOf(fn);
+		return body != null && body.kind == 'BlockBody' && body.children.length == 0;
+	}
+
+	/** `fn`'s body child — its `ExprBody` or `BlockBody`, else null (a bodyless declaration). */
+	private static function bodyOf(fn: QueryNode): Null<QueryNode> {
+		return fn.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
 	}
 
 	/** Whether `node`'s subtree references `name` as a bare `IdentExpr` or a `this.<name>` `FieldAccess` — a self / recursive reference. */
@@ -267,7 +284,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return kind == 'IdentExpr' || kind == 'FieldAccess' || kind == 'SafeFieldAccess' || kind == 'ForceFieldAccess';
 	}
 
-	/** Record into `out` each name in `candidateNames` passed to a `Reflect.<m>(...)` call as a string literal — a method reached by reflection is not safe to inline. */
+	/* Record into `out` each name in `candidateNames` passed to a `Reflect.<m>(...)` call as a string literal — a method
+		/* reached by reflection is not safe to inline. */
 	private static function collectReflectNames(node: QueryNode, candidateNames: Array<String>, out: Array<String>): Void {
 		if (node.kind == 'Call' && node.children.length >= 1) {
 			final callee: QueryNode = node.children[0];
@@ -318,7 +336,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return false;
 	}
 
-	/** The member names declared by every STRICT subtype of `className` across the index — a method whose name appears here is overridden. */
+	/* The member names declared by every STRICT subtype of `className` across the index — a method whose name appears here
+		/* is overridden. */
 	private static function subtypeMemberNames(index: SymbolIndex, className: String): Array<String> {
 		final out: Array<String> = [];
 		for (fi in index.allFiles()) for (t in fi.types) if (t.name != className && index.isSubtype(t.name, className)) for (m in t.members)
@@ -341,7 +360,7 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 	 * distinguishing a safe from a risky slot would require null-flow typing.
 	 */
 	private static function bodyHasNullSafetyRisk(fn: QueryNode): Bool {
-		final body: Null<QueryNode> = fn.children.find(c -> c.kind == 'ExprBody' || c.kind == 'BlockBody');
+		final body: Null<QueryNode> = bodyOf(fn);
 		return body != null && subtreeHasNullSafetyRisk(body, body.kind);
 	}
 
@@ -352,7 +371,8 @@ final class PreferInline implements Check implements RiskyFix implements OracleR
 		return false;
 	}
 
-	/** Whether `kind` is a construct whose null-safety validity depends on the surrounding context (a null / anonymous-object / function literal). */
+	/* Whether `kind` is a construct whose null-safety validity depends on the surrounding context (a null / anonymous-object
+		/* / function literal). */
 	private static function isRiskyHere(node: QueryNode, parentKind: String): Bool {
 		return switch node.kind {
 			case 'NullLit':

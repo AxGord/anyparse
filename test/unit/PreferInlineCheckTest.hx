@@ -9,8 +9,7 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 
 /**
- * The `prefer-inline` check: a single-expression method (an arrow body or a block with one
- * `return` / expression statement) markable `inline`, per the user's rule. `Severity.Info`,
+ * The `prefer-inline` check: a single-expression method (an arrow body or a block with one `return` / expression statement) or an empty-bodied no-op markable `inline`, per the user's rule. `Severity.Info`,
  * `--fix` inserts `inline ` before the `function` keyword. Soundness misses: a method
  * referenced as a value anywhere (bare / `.bind` / argument), an `override` / subtype-overridden
  * method, an interface-declared method, a `dynamic` / `macro` / constructor / `@:keep` /
@@ -45,8 +44,8 @@ class PreferInlineCheckTest extends Test {
 		Assert.equals(0, violations(cls('function two():Int { step(); return 3; }')).length);
 	}
 
-	public function testEmptyBodyNotFlagged(): Void {
-		Assert.equals(0, violations(cls('function noop():Void {}')).length);
+	public function testEmptyBodyFlagged(): Void {
+		Assert.equals(1, violations(cls('function noop():Void {}')).length, 'inlining an empty method compiles the call away');
 	}
 
 	public function testAlreadyInlineNotFlagged(): Void {
@@ -142,7 +141,7 @@ class PreferInlineCheckTest extends Test {
 
 	public function testNullLiteralArgBodySkipped(): Void {
 		Assert.equals(
-			0, violations(cls('public function clear():Void down(null);\n\tfunction down(p:Int):Void {}')).length,
+			0, violations(cls('public function clear():Void down(null);\n\tfunction down(p:Int):Void { keep(p); log(p); }')).length,
 			'null-literal body not inlinable (re-checked in caller Strict context)'
 		);
 	}
@@ -174,6 +173,70 @@ class PreferInlineCheckTest extends Test {
 			1, violations(cls('public function isNull(x:Dynamic):Bool return x == null;')).length,
 			'a null-CHECK (== null) is context-neutral — not gated'
 		);
+	}
+
+	public function testAbstractClassDelegationFlagged(): Void {
+		Assert.equals(
+			1, violations('abstract class C {\n\tpublic function upd():Void _other.upd();\n}').length,
+			'an abstract class body is inspected like a plain class'
+		);
+	}
+
+	public function testAbstractClassSubtypeOverrideSkips(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'B.hx', source: 'abstract class B {\n\tpublic function step():Void _other.step();\n}' },
+			{
+				file: 'S.hx',
+				source: 'class S extends B {\n\toverride public function step():Void {\n\t\tlog();\n\t\t_other.step();\n\t}\n}'
+			}
+		];
+		Assert.equals(
+			0, new PreferInline().run(files, new HaxeQueryPlugin()).length, 'a subtype override forbids inlining the abstract base method'
+		);
+	}
+
+	public function testAbstractMethodNoBodyNotFlagged(): Void {
+		Assert.equals(
+			0, violations('abstract class C {\n\tpublic abstract function h():Int;\n}').length,
+			'a body-less abstract method is not a candidate'
+		);
+	}
+
+	public function testEmptyBodySubtypeOverrideSkips(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'B.hx', source: 'class B {\n\tpublic function hook():Void {}\n}' },
+			{ file: 'S.hx', source: 'class S extends B {\n\toverride public function hook():Void doStuff();\n}' }
+		];
+		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length, 'an overridden empty hook must stay a real method');
+	}
+
+	public function testAbstractClassEmptyBodyFlagged(): Void {
+		Assert.equals(
+			1, violations('abstract class C {\n\tpublic function noop(index:Int):Void {\n\t\t//TODO: later\n\t}\n}').length,
+			'an empty stub in an abstract class is a candidate'
+		);
+	}
+
+	public function testAbstractSuperclassImplSkips(): Void {
+		// An abstract-superclass implementation carries no `override` (Haxe does not
+		// require it) — the method fills a base slot and must stay physical.
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'B.hx',
+				source: 'abstract class B {\n\tprivate abstract function hook():Void;\n\tprivate abstract function calc():Int;\n}'
+			},
+			{
+				file: 'S.hx',
+				source: 'class S extends B {\n\tprivate function hook():Void {}\n\tprivate function calc():Int return 1;\n}'
+			}
+		];
+		Assert.equals(0, new PreferInline().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	public function testEmptyBodyMessageNamesTheNoOp(): Void {
+		final vs: Array<Violation> = violations(cls('function noop():Void {}'));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('empty body') >= 0, vs[0].message);
 	}
 
 }

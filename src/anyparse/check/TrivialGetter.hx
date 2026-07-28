@@ -45,8 +45,8 @@ import anyparse.query.RefactorSupport.OccurrenceClass;
  * 1. The read accessor is exactly `get`; the write is `never` / `null` / `set`. A custom-named
  *    accessor or a plain stored slot is skipped — only the standard `get_` / `set_` resolve.
  * 2. Neither accessor is `dynamic` (re-bindable at runtime — real behaviour).
- * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor
- *    bodies) are skipped wholesale: only `ClassDecl` / `ClassForm` bodies are inspected.
+ * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor bodies) are skipped wholesale:
+ * every class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected.
  * 4. No (transitive) subtype overrides the property accessor or redeclares it
  *    (`SymbolIndex.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SymbolIndex.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an unresolvable subtype hierarchy is kept conservatively.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
@@ -137,7 +137,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (tree == null) continue;
 			final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, entry.file)
 				.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-			for (cls in classes(tree))
+			for (cls in CheckScan.classBodies(tree))
 				considerClass(out, cls, entry.source, entry.file, index, subtypeIndex, maxBypass, sourceByFile, plugin);
 		}
 		return out;
@@ -175,7 +175,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (span != null) wanted.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		for (cls in classes(tree)) collectClassFixEdits(cls, source, wanted, index, edits, maxBypass);
+		for (cls in CheckScan.classBodies(tree)) collectClassFixEdits(cls, source, wanted, index, edits, maxBypass);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
@@ -225,7 +225,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (tree == null) return null;
 		final maxBypass: Int = LintConfig.resolveWith(_resolveConfig, v.file)
 			.intOption('trivial-getter', 'maxBypassWrites') ?? DEFAULT_MAX_BYPASS_WRITES;
-		for (cls in classes(tree)) {
+		for (cls in CheckScan.classBodies(tree)) {
 			final className: Null<String> = cls.name;
 			if (className == null) continue;
 			final owner: String = className;
@@ -248,18 +248,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			}
 		}
 		return null;
-	}
-
-	/** Every class-body node in the tree — `ClassDecl` and `final class`'s `ClassForm`. */
-	private static function classes(root: QueryNode): Array<QueryNode> {
-		final out: Array<QueryNode> = [];
-		collectClasses(root, out);
-		return out;
-	}
-
-	private static function collectClasses(node: QueryNode, out: Array<QueryNode>): Void {
-		if (node.kind == 'ClassDecl' || node.kind == 'ClassForm') out.push(node);
-		for (child in node.children) collectClasses(child, out);
 	}
 
 	/**
@@ -320,7 +308,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Bool {
 		return inlineGetter == null && index != null && className != null && index.subtypeReferencesField(className, field);
 	}
-
 
 	/**
 	 * The backing-field name a getter trivially returns — `_x` for a body of
@@ -897,6 +884,11 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		if (!privateFieldNodes.exists(raw.field)) return null;
 		final fieldNode: Null<QueryNode> = privateFieldNodes[raw.field];
 		if (fieldNode == null) return null;
+		// A collapsing arm merges the property and its backing field into ONE slot, so
+		// their declared types must match — a getter performing an implicit conversion
+		// (e.g. Array -> ReadOnlyArray) would otherwise retype the storage and break
+		// every mutating use of the old field. The inline arm keeps both slots.
+		if (raw.inlineGetter == null && !declaredTypesMatch(source, prop.node, fieldNode)) return null;
 		// The interface-conformance gate applies only to a COLLAPSING shape (the getter is dropped);
 		// the inline arm keeps the getter, so a required interface accessor is never removed.
 		if (raw.inlineGetter == null && interfaceRequiresGetter(cls, prop.name, prop.isPublic, index)) return null;
@@ -1459,7 +1451,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		cls: Null<String>, writePos: Bool, shadowsProp: Bool, renameEdits: Array<{ span: Span, text: String }>, excludeSpans: Array<Span>
 	): Bool {
 		if (RefactorSupport.isConditionalKind(node.kind)) return true;
-		final isClass: Bool = node.kind == 'ClassDecl' || node.kind == 'ClassForm';
+		final isClass: Bool = CheckScan.isClassBodyKind(node.kind);
 		// The owner's own class is rewritten wholesale by `buildFix`; exclude its whole span from the
 		// completeness scan and stop descending, so a same-file sibling subtype is still walked.
 		if (ownerFileScan && isClass && node.name == owner) {
@@ -1549,6 +1541,59 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			if (edits.length > 0) slices.push({ file: file, edits: edits });
 		}
 		return slices;
+	}
+
+
+	/**
+	 * Whether the property's declared type byte-equals (whitespace-insensitive) the
+	 * backing field's declared type. A missing annotation on either side refuses
+	 * conservatively — the collapse may not silently retype the merged slot.
+	 */
+	private static function declaredTypesMatch(source: String, propNode: QueryNode, fieldNode: QueryNode): Bool {
+		final propType: Null<String> = declaredTypeText(source, propNode);
+		final fieldType: Null<String> = declaredTypeText(source, fieldNode);
+		return propType != null && propType == fieldType;
+	}
+
+	/**
+	 * The declared type annotation of a `var` / `final` member, whitespace-stripped:
+	 * the text between the first top-level `:` (past the accessor clause, tracked by
+	 * bracket depth) and the first top-level `=` / span end, without the trailing
+	 * `;`. Null when the member carries no annotation (a top-level `=` or the span
+	 * end arrives first). A `->` return arrow's `>` is not a closing bracket.
+	 */
+	private static function declaredTypeText(source: String, node: QueryNode): Null<String> {
+		final span: Null<Span> = node.span;
+		if (span == null) return null;
+		var depth: Int = 0;
+		var colon: Int = -1;
+		var i: Int = span.from;
+		while (i < span.to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == '('.code || c == '<'.code || c == '{'.code || c == '['.code)
+				depth++;
+			else if (c == ')'.code || c == '}'.code || c == ']'.code)
+				depth--;
+			else if (c == '>'.code && (i == span.from || StringTools.fastCodeAt(source, i - 1) != '-'.code))
+				depth--;
+			else if (c == ':'.code && depth == 0 && colon < 0)
+				colon = i;
+			else if (c == '='.code && depth == 0)
+				return colon < 0 ? null : normalizedSlice(source, colon + 1, i);
+			i++;
+		}
+		return colon < 0 ? null : normalizedSlice(source, colon + 1, span.to);
+	}
+
+	/** The `[from, to)` slice of `source` with every whitespace char and one trailing `;` removed. */
+	private static function normalizedSlice(source: String, from: Int, to: Int): String {
+		final out: StringBuf = new StringBuf();
+		for (i in from ... to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code || c == ';'.code) continue;
+			out.addChar(c);
+		}
+		return out.toString();
 	}
 
 }

@@ -90,8 +90,15 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * `@:tag`) is part of the modifier run but contributes no modifier.
 	 */
 	private static final MOD_KIND_TO_NAME: Map<String, String> = [
-		    'Public' => 'public', 'Private' => 'private', 'Static' => 'static',   'Inline' => 'inline',
-		'Override' => 'override',     'Macro' => 'macro', 'Extern' => 'extern', 'Dynamic' => 'dynamic'
+		'Public' => 'public',
+		'Private' => 'private',
+		'Static' => 'static',
+		'Inline' => 'inline',
+		'Override' => 'override',
+		'Macro' => 'macro',
+		'Extern' => 'extern',
+		'Dynamic' => 'dynamic',
+		'Abstract' => 'abstract'
 	];
 
 	public function new() {}
@@ -233,7 +240,8 @@ final class HaxeNamingSupport implements NamingSupport {
 			});
 		}
 		// A type decl becomes the enclosing type of its descendants — its name is
-		// on the node carrying category Type (the inner ClassForm for a final class).
+		// on the node carrying category Type (the inner ClassForm for a final
+		// class, the flattened AbstractClassDecl for an abstract class).
 		final childEnclosing: Null<String> = category == NamingCategory.Type && name != null ? name : enclosingType;
 		// A `@:rtti` type serializes by reflecting on its field NAMES, so its member
 		// fields are rename-unsafe. Once true it stays true for every descendant.
@@ -265,7 +273,8 @@ final class HaxeNamingSupport implements NamingSupport {
 	/** The naming category of a declaration node, or null if its kind is not name-checked. */
 	private static function categoryOf(node: QueryNode, mods: Array<String>): Null<NamingCategory> {
 		return switch node.kind {
-			case 'ClassDecl' | 'ClassForm' | 'InterfaceDecl' | 'EnumDecl' | 'AbstractDecl' | 'EnumAbstractDecl' | 'TypedefDecl': NamingCategory.Type;
+			case 'ClassDecl' | 'ClassForm' | 'AbstractClassDecl' | 'InterfaceDecl' | 'EnumDecl' | 'AbstractDecl' | 'EnumAbstractDecl'
+				| 'TypedefDecl': NamingCategory.Type;
 			case 'FnMember' | 'FinalModifiedMember': NamingCategory.Method;
 			case 'VarMember': mods.contains('static') && mods.contains('inline') ? NamingCategory.Constant : NamingCategory.Field;
 			case 'FinalMember': mods.contains('static') ? NamingCategory.Constant : NamingCategory.Field;
