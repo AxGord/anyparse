@@ -164,19 +164,6 @@ final class GuardContinue implements Check {
 		final loopKinds: Array<String> = shape.loopStatementKinds ?? [];
 		final doWhileKinds: Array<String> = shape.doWhileLoopKinds ?? [];
 		if (loopKinds.length == 0 && doWhileKinds.length == 0) return null;
-		final atomicKinds: Array<String> = [
-			for (k in [
-				(shape.identKind: Null<String>),
-				shape.callKind,
-				shape.fieldAccessKind,
-				shape.forceFieldAccessKind,
-				shape.nullSafeAccessKind,
-				shape.indexAccessKind,
-				shape.newExprKind,
-				shape.parenKind,
-				shape.boolLitKind
-			]) if (k != null) k
-		];
 		return {
 			loopKinds: loopKinds,
 			doWhileKinds: doWhileKinds,
@@ -187,16 +174,7 @@ final class GuardContinue implements Check {
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			hoist: hoistSeams(shape),
-			negation: {
-				notKind: shape.notKind,
-				parenKind: shape.parenKind,
-				eqKind: shape.eqKind,
-				notEqKind: shape.notEqKind,
-				atomicKinds: atomicKinds,
-				andKind: shape.logicalAndKind,
-				orKind: shape.logicalOrKind,
-				identKind: shape.identKind
-			},
+			negation: CheckScan.negationSeams(shape),
 			support: plugin.booleanLogicSupport()
 		};
 	}

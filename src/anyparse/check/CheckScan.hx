@@ -166,6 +166,39 @@ final class CheckScan {
 	}
 
 	/**
+	 * The `NegationSeams` `shape` exposes: the kinds `negateConditionText` strips, unwraps
+	 * and flips, the atomic-expression kinds that take a bare `!` rather than `!(…)`, and the
+	 * logical / identifier kinds the stranded-narrowing gate walks. Built here rather than at
+	 * each call site because the three inverting checks (`guard-return`, `guard-continue`,
+	 * `loop-guard`) read exactly the same seams, and a field added to `NegationSeams` must not
+	 * have to be threaded through three identical literals.
+	 */
+	public static function negationSeams(shape: RefShape): NegationSeams {
+		return {
+			notKind: shape.notKind,
+			parenKind: shape.parenKind,
+			eqKind: shape.eqKind,
+			notEqKind: shape.notEqKind,
+			atomicKinds: [
+				for (k in [
+					(shape.identKind: Null<String>),
+					shape.callKind,
+					shape.fieldAccessKind,
+					shape.forceFieldAccessKind,
+					shape.nullSafeAccessKind,
+					shape.indexAccessKind,
+					shape.newExprKind,
+					shape.parenKind,
+					shape.boolLitKind
+				]) if (k != null) k
+			],
+			andKind: shape.logicalAndKind,
+			orKind: shape.logicalOrKind,
+			identKind: shape.identKind
+		};
+	}
+
+	/**
 	 * Whether De-Morganing `cond` would strand a Haxe null-safety narrowing — the gate every
 	 * consumer of `negateConditionText` needs, and which that engine applies itself; exposed
 	 * because a check may want to know BEFORE it decides to flag at all (`guard-return` refuses

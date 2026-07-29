@@ -173,19 +173,6 @@ final class GuardReturn implements Check {
 		]) if (k != null && !returnKinds.contains(k)) returnKinds.push(k);
 		for (k in shape.valueReturnKinds ?? []) if (!returnKinds.contains(k)) returnKinds.push(k);
 		if (returnKinds.length == 0) return null;
-		final atomicKinds: Array<String> = [
-			for (k in [
-				(shape.identKind: Null<String>),
-				shape.callKind,
-				shape.fieldAccessKind,
-				shape.forceFieldAccessKind,
-				shape.nullSafeAccessKind,
-				shape.indexAccessKind,
-				shape.newExprKind,
-				shape.parenKind,
-				shape.boolLitKind
-			]) if (k != null) k
-		];
 		return {
 			ifKinds: ifKinds,
 			returnKinds: returnKinds,
@@ -195,16 +182,7 @@ final class GuardReturn implements Check {
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			negation: {
-				notKind: shape.notKind,
-				parenKind: shape.parenKind,
-				eqKind: shape.eqKind,
-				notEqKind: shape.notEqKind,
-				atomicKinds: atomicKinds,
-				andKind: shape.logicalAndKind,
-				orKind: shape.logicalOrKind,
-				identKind: shape.identKind
-			},
+			negation: CheckScan.negationSeams(shape),
 			logic: plugin.booleanLogicSupport()
 		};
 	}

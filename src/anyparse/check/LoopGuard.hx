@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -118,32 +119,12 @@ final class LoopGuard implements Check {
 		if (ifKinds == null || ifKinds.length == 0) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		if (blockStmtKind == null) return null;
-		final atomicKinds: Array<String> = [
-			for (k in [
-				(shape.identKind: Null<String>),
-				shape.callKind,
-				shape.fieldAccessKind,
-				shape.forceFieldAccessKind,
-				shape.nullSafeAccessKind,
-				shape.indexAccessKind,
-				shape.newExprKind,
-				shape.parenKind,
-				shape.boolLitKind
-			]) if (k != null) k
-		];
 		return {
 			loopKinds: loopKinds,
 			continueKind: continueKind,
 			ifKinds: ifKinds,
 			blockStmtKind: blockStmtKind,
-			notKind: shape.notKind,
-			eqKind: shape.eqKind,
-			notEqKind: shape.notEqKind,
-			parenKind: shape.parenKind,
-			atomicKinds: atomicKinds,
-			andKind: shape.logicalAndKind,
-			orKind: shape.logicalOrKind,
-			identKind: shape.identKind,
+			negation: CheckScan.negationSeams(shape),
 			opaqueKinds: shape.opaqueKinds ?? [],
 			support: plugin.booleanLogicSupport()
 		};
@@ -217,16 +198,7 @@ final class LoopGuard implements Check {
 
 	/** The inverted source of guard condition `cond` — the negation the lifted `if` header tests. */
 	private static function invert(cond: QueryNode, source: String, s: Seams): String {
-		return CheckScan.negateConditionText(cond, source, {
-			notKind: s.notKind,
-			parenKind: s.parenKind,
-			eqKind: s.eqKind,
-			notEqKind: s.notEqKind,
-			atomicKinds: s.atomicKinds,
-			andKind: s.andKind,
-			orKind: s.orKind,
-			identKind: s.identKind
-		}, s.support);
+		return CheckScan.negateConditionText(cond, source, s.negation, s.support);
 	}
 
 }
@@ -237,14 +209,7 @@ private typedef Seams = {
 	var continueKind: String;
 	var ifKinds: Array<String>;
 	var blockStmtKind: String;
-	var notKind: Null<String>;
-	var eqKind: Null<String>;
-	var notEqKind: Null<String>;
-	var parenKind: Null<String>;
-	var atomicKinds: Array<String>;
-	var andKind: Null<String>;
-	var orKind: Null<String>;
-	var identKind: String;
+	var negation: NegationSeams;
 	var opaqueKinds: Array<String>;
 	var support: Null<BooleanLogicSupport>;
 }
