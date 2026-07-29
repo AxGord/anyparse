@@ -2210,7 +2210,28 @@ class WrapList {
 		// outside the marker — they're construct metadata, not body content.
 		// Nested cascades inside `inner` reset force-flat via the
 		// `WrapBoundary` wraps Slice C placed around their `emit()` returns.
-		return Concat([Text(open), openInside, Flatten(Concat(inner)), closeInside, Text(close)]);
+		// nowrap-optbreak-escape: EXCEPT when the body carries an
+		// `OptHardline*` atom. Force-flat drops those unconditionally
+		// (`Renderer.emitOptHardline` / `emitOptSpaceVariants`, `f.forceFlat`
+		// arms), and the renderer's own `fitsFlat` refuses to flatten a body
+		// holding one - so wrapping it here asks for a layout the renderer
+		// would never pick on its own, and silently deletes a break its
+		// emitter required. The live case is `trailingCommentDocGuarded`: a
+		// captured LINE comment on the last item followed by this shape's
+		// `close`. A dropped guard glues `close` onto the comment, and the
+		// emitted source no longer parses. Skipping the marker leaves the
+		// guard to break before `close`, which is the same recovery shape the
+		// break-mode cascade already produces (`Group`'s `fitsFlat` commits to
+		// `MBreak` for exactly this content). Bodies with no such atom - every
+		// comment-free list - keep the marker and stay byte-identical.
+		final body: Doc = Concat(inner);
+		return Concat([
+			Text(open),
+			openInside,
+			DocMeasure.hasOptHardline(body) ? body : Flatten(body),
+			closeInside,
+			Text(close),
+		]);
 	}
 
 	private static function shapeOnePerLine(

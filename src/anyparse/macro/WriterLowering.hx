@@ -359,8 +359,11 @@ class WriterLowering {
 					// seam (mirror of `lowerPostfixPushElem`): the segment call's `)`
 					// follows the last argument on the same Doc line, and a LINE
 					// comment there swallows it plus the whole `.next()` tail. The
-					// guard forces the arg list to break and drops before an
-					// existing hardline, so sound seams stay byte-identical.
+					// guard moves the `)` off the comment's line and drops before
+					// an existing hardline; inside a force-flat region the renderer
+					// drops it instead, which is why `WrapList.shapeNoWrap` skips
+					// its `Flatten` marker for a guard-bearing body. Sound seams
+					// stay byte-identical.
 					_argDocs.push(_aTc != null ? _dc([_aDoc, trailingCommentDocGuarded(_aTc, opt)]) : _aDoc);
 				}
 				_argDocs;
@@ -12763,10 +12766,13 @@ class WriterLowering {
 				// newline), which is why `g(\n\ta // c\n);` used to re-emit as
 				// `g(a // c);` - a file that no longer parses. The guarded
 				// emitter appends an `OptHardlineSkipBeforeHardline`, which both
-				// refuses the flat fit (so the arg list breaks and the `)` lands
-				// on its own line) and drops when the next emit is already a
-				// hardline - every sound seam stays byte-identical, and a block
-				// comment keeps its legal glue.
+				// refuses the flat fit (so the `)` lands on its own line) and
+				// drops when the next emit is already a hardline. Inside a
+				// force-flat region the renderer DROPS it instead, so
+				// `WrapList.shapeNoWrap` skips its `Flatten` marker for a
+				// guard-bearing body - the two halves together keep the `)` off
+				// the comment's line under ANY wrap cascade. Every sound seam
+				// stays byte-identical, and a block comment keeps its legal glue.
 				var _elemDoc: anyparse.core.Doc = _tc != null ? _dc([_elem, trailingCommentDocGuarded(_tc, opt)]) : _elem;
 				// ω-callarg-leading-comment: glue a captured inline block leading
 				// comment before the argument (`/* c */ arg`). Only block comments
