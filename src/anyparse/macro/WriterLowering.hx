@@ -1040,7 +1040,7 @@ class WriterLowering {
 					thisPadTrailing = emitOptionalRefField(
 						child, parts, node, typePath, fieldName, fieldAccess, kwLead, leadText, trailText, trailOptText, bodyPolicyFlag,
 						bodyPolicyExprFlag, hasElseIf, elseFieldName, prevBodyField, prevPadTrailing, hasStructFieldTrailOptSlot,
-						structTrailOptAccess
+						structTrailOptAccess, prevTrailFieldName
 					);
 
 				case Ref:
@@ -1695,6 +1695,24 @@ class WriterLowering {
 		// without wrap-rules).
 		final wrapRulesField: Null<String> = starNode.fmtReadString('wrapRules');
 		final leftCurlyOwnedBySep: Bool = hasKnobLeftCurly && wrapRulesField != null;
+		// Head -> body seam: a close-peek Star opens the construct's body
+		// (`HxSwitchStmt.cases`), and when the preceding sibling is a Ref
+		// with `@:trail` its `<field>AfterTrail` slot holds the same-line
+		// comment cuddled to that closer (`switch (v) // c` + newline `{`).
+		// Only the tryparse-Star path consumed that slot, so here the
+		// comment was captured and then dropped. Emitting it guarded turns
+		// the following `leftCurlySeparator` default (`_dossh`, drops after
+		// a hardline) into the Allman `{` placement the comment forces.
+		if (c.prevTrailFieldName != null) {
+			final afterTrailAccess: Expr = {
+				expr: EField(macro value, c.prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+				pos: Context.currentPos()
+			};
+			parts.push(macro {
+				final _atSeam: Null<String> = $afterTrailAccess;
+				_atSeam != null ? trailingCommentDocGuarded(_atSeam, opt) : _de();
+			});
+		}
 		if (!leftCurlyOwnedBySep && (!isFirstField || hasKnobLeftCurly) && isSpacedLead(openText))
 			parts.push(leftCurlySeparator(starNode, isFirstField && hasKnobLeftCurly));
 		// ω-trivia-sep: sep-Star with @:trivia routes to a
@@ -3631,7 +3649,7 @@ class WriterLowering {
 			: null;
 		final keepLayoutExpr: Expr = buildBodyKeepLayout(opts, layouts, blockSplit, ifStmtPattern);
 		final coreWrapExpr: Expr = buildBodyCoreWrap(opts, optFlag, layouts, keepLayoutExpr, blockSplit, ifStmtPattern);
-		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall);
+		final wrapExpr: Expr = wrapBodyAfterTrail(opts, coreWrapExpr, writeCall, blockSplit);
 		final finalWrapExpr: Expr = wrapBodyAllman(opts, wrapExpr, writeCall);
 		final mbgWrapExpr: Expr = wrapBodyMetaBlockGlue(opts, finalWrapExpr, sameLayoutExpr);
 		return macro {
@@ -6400,8 +6418,18 @@ class WriterLowering {
 	 * forced-Next-layout (ω-issue-316-then-trail / ω-556-then-body-leading-
 	 * comment). Returns `coreWrapExpr` unchanged when neither slot was
 	 * forwarded.
+	 *
+	 * The forced-Next layout nests the body one level in - right for a BARE
+	 * body (`if (c) // n` + newline + `resize(1);`), wrong for a BLOCK body,
+	 * which already owns its interior indent through its own `{ }` Nest and
+	 * so would be pushed a whole level right. `blockSplit` carries the body
+	 * enum's block-ctor patterns (the same ones `bodyPolicyWrap` routes to
+	 * `blockLayoutExpr`), which selects the un-nested arm - the shape the
+	 * fork emits for `} else // comment` + newline `{`.
 	 */
-	private function wrapBodyAfterTrail(opts: WrapBodyOpts, coreWrapExpr: Expr, writeCall: Expr): Expr {
+	private function wrapBodyAfterTrail(
+		opts: WrapBodyOpts, coreWrapExpr: Expr, writeCall: Expr, blockSplit: { tagged: Array<Expr>, untagged: Array<Expr> }
+	): Expr {
 		final afterTrailExpr: Null<Expr> = opts.afterTrailExpr;
 		final beforeLeadingExpr: Null<Expr> = opts.beforeLeadingExpr;
 		if (afterTrailExpr == null && beforeLeadingExpr == null) return coreWrapExpr;
@@ -6409,6 +6437,11 @@ class WriterLowering {
 		// after-trail comment OR at least one own-line leading comment.
 		final afterTrailRt: Expr = afterTrailExpr ?? macro null;
 		final beforeLeadingRt: Expr = beforeLeadingExpr ?? macro ([]: Array<String>);
+		final blockPatterns: Array<Expr> = blockSplit.tagged.concat(blockSplit.untagged);
+		final isBlockBodyExpr: Expr = blockPatterns.length == 0 ? macro false : {
+			expr: ESwitch(opts.bodyValueExpr, [{ values: blockPatterns, expr: macro true, guard: null }], macro false),
+			pos: Context.currentPos(),
+		};
 		return macro {
 			final _at556: Null<String> = $afterTrailRt;
 			final _bl556: Array<String> = $beforeLeadingRt;
@@ -6423,7 +6456,8 @@ class WriterLowering {
 					_inner556.push(_dhl());
 				}
 				_inner556.push($writeCall);
-				_outer556.push(_dn(_cols, _dc(_inner556)));
+				final _body556: anyparse.core.Doc = _dc(_inner556);
+				_outer556.push($isBlockBodyExpr ? _body556 : _dn(_cols, _body556));
 				_dc(_outer556);
 			}
 		};
@@ -9198,9 +9232,20 @@ class WriterLowering {
 	 */
 	private function emitOptionalBodyPolicyOnly(
 		child: ShapeNode, optParts: Array<Expr>, bodyPolicyFlag: String, bodyPolicyExprFlag: Null<String>, writeCall: Expr,
-		refName: String, hasElseIf: Bool, elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>
+		refName: String, hasElseIf: Bool, elseFieldName: Null<String>, indentObjArgs: Null<Array<String>>, prevTrailFieldName: Null<String>
 	): Void {
 		final inlineBlockBodyArgs: Null<Array<String>> = child.fmtReadStringArgs('inlineBlockBodyIfFlag');
+		// Head -> body seam, mirror of the mandatory-Ref path in
+		// `emitBodyPolicyBareRef`: when the preceding sibling is a Ref with
+		// `@:trail` in trivia mode, its `<field>AfterTrail` slot holds the
+		// same-line comment cuddled to that closer. `HxCatchClause.body` is
+		// the `@:optional` twin of `HxIfStmt.thenBody`, so without this the
+		// comment in `} catch (e:T) // c` + newline `{` was captured and
+		// then silently dropped.
+		final afterTrailExpr: Null<Expr> = prevTrailFieldName == null ? null : {
+			expr: EField(macro value, prevTrailFieldName + TriviaTypeSynth.AFTER_TRAIL_SUFFIX),
+			pos: Context.currentPos()
+		};
 		optParts.push(bodyPolicyWrap({
 			flagName: bodyPolicyFlag,
 			exprFlagName: bodyPolicyExprFlag,
@@ -9209,6 +9254,7 @@ class WriterLowering {
 			bodyTypePath: refName,
 			hasElseIf: hasElseIf,
 			elseFieldName: elseFieldName,
+			afterTrailExpr: afterTrailExpr,
 			indentObjArgs: indentObjArgs,
 			inlineBlockBodyArgs: inlineBlockBodyArgs,
 		}));
@@ -9748,7 +9794,7 @@ class WriterLowering {
 		child: ShapeNode, parts: Array<Expr>, node: ShapeNode, typePath: String, fieldName: String, fieldAccess: Expr,
 		kwLead: Null<String>, leadText: Null<String>, trailText: Null<String>, trailOptText: Null<String>, bodyPolicyFlag: Null<String>,
 		bodyPolicyExprFlag: Null<String>, hasElseIf: Bool, elseFieldName: Null<String>, prevBodyField: Null<PrevBodyInfo>,
-		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>
+		prevPadTrailing: Null<Expr>, hasStructFieldTrailOptSlot: Bool, structTrailOptAccess: Null<Expr>, prevTrailFieldName: Null<String>
 	): Null<Expr> {
 		final refName: String = child.annotations.get(AnnotationKeys.BASE_REF);
 		final writeFn: String = writeFnFor(refName);
@@ -9837,7 +9883,8 @@ class WriterLowering {
 			);
 		else if (bodyPolicyFlag != null)
 			emitOptionalBodyPolicyOnly(
-				child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs
+				child, optParts, bodyPolicyFlag, bodyPolicyExprFlag, writeCall, refName, hasElseIf, elseFieldName, indentObjArgs,
+				prevTrailFieldName
 			);
 		else
 			emitOptionalAbsentOnBody(child, optParts, refName, writeCall);
@@ -11163,9 +11210,12 @@ class WriterLowering {
 		// the next-line catch placement). See target fixtures
 		// `lineends/issue_445_curly_with_comment{,_both}`.
 		final trailFollowExpr: Expr = appendHardlineAfterTrail ? macro _parts.push(_dohsbh()) : macro {};
+		// Head -> body seam: without the explicit `_dhl()` the block-Star's
+		// close-trailing comment is followed by whatever the parent struct
+		// emits next, so a LINE comment needs the forward-looking guard.
 		final emptyTrailExpr: Expr = appendHardlineAfterTrail
 			? macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt), _dhl()])
-			: macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+			: macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
 		// ω-C-empty-lines-doc / ω-C-empty-lines-between-fields /
 		// ω-C-empty-lines-before-doc: when the grammar field carries any
 		// of the empty-line flags
@@ -11392,7 +11442,12 @@ class WriterLowering {
 		final trailLC: Expr = trailLCAccess ?? macro ([]: Array<String>);
 		final trailClose: Expr = trailCloseAccess ?? macro (null: Null<String>);
 		final trailOpen: Expr = trailOpenAccess ?? macro (null: Null<String>);
-		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocVerbatim(_trailClose, opt)]);
+		// Head -> body seam: an EMPTY sep-Star renders as `()` with the
+		// close-trailing comment cuddled to it, and the struct's remaining
+		// fields (`HxFnDecl.returnType` / `body`) still follow on the same
+		// Doc line. A line comment there swallows the body's `{`, so route
+		// through the guarded emitter.
+		final emptyTrailExpr: Expr = macro _dc([_dt($v{emptyText}), trailingCommentDocGuarded(_trailClose, opt)]);
 		// ω-keep-objectlit / ω-cascade-emits-comments / ω-nowrap-flat /
 		// ω-objectlit-leftCurly-cascade / ω-anontype-right-curly: the keep/ignore/
 		// noWrap runtime checks + leftCurly/rightCurly placement Docs the sep-Star
@@ -13703,7 +13758,11 @@ class WriterLowering {
 				// comment to the `:` token before the empty-body base Doc.
 				final _patEmpty: Null<String> = $priorAfterTrailRaw;
 				final _baseEmpty: anyparse.core.Doc = (_padLeading && _padTrailing) ? _dhl() : _de();
-				_patEmpty != null ? _dc([trailingCommentDocVerbatim(_patEmpty, opt), _baseEmpty]) : _baseEmpty;
+				// Head -> body seam: an EMPTY tryparse Star contributes no
+				// break of its own (`abstract A(Int) // c` with no from/to
+				// clauses), so the next struct field's `{` would glue onto
+				// the comment line. Guarded emit breaks instead.
+				_patEmpty != null ? _dc([trailingCommentDocGuarded(_patEmpty, opt), _baseEmpty]) : _baseEmpty;
 			} else {
 				final _cols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
 				final _docs: Array<anyparse.core.Doc> = [];
@@ -14238,7 +14297,10 @@ class WriterLowering {
 			? macro {}
 			: macro {
 				final _pat: Null<String> = $priorAfterTrailExpr;
-				if (_pat != null) _docs.push(trailingCommentDocVerbatim(_pat, opt));
+				// Head -> body seam: the Star's own padLeading may be a
+				// SPACE (single-line source), so a line comment here would
+				// swallow the first element. Guarded emit breaks instead.
+				if (_pat != null) _docs.push(trailingCommentDocGuarded(_pat, opt));
 			};
 	}
 
