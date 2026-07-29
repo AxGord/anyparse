@@ -66,6 +66,51 @@ class ExtractInterfaceSliceTest extends Test {
 		Assert.isTrue(StringTools.contains(newSrc, 'class S extends Base implements IS {'), 'extends preserved, implements added');
 	}
 
+	/**
+	 * A `{` inside a header comment is NOT the class body brace — the op must
+	 * anchor past the comment instead of splicing `implements` into it.
+	 */
+	public function testCommentBraceInHeader(): Void {
+		final src: String =
+			'package pkg;\n\nclass Holder /* body { starts */ {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'IHolder', 'pkg/IHolder.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(
+			StringTools.contains(newSrc, 'class Holder implements IHolder /* body { starts */ {'), 'implements lands outside the comment'
+		);
+		Assert.isFalse(StringTools.contains(newSrc, 'body implements'), 'nothing spliced inside the comment');
+	}
+
+	/** A `{` inside a header LINE comment is not the body brace either. */
+	public function testLineCommentBraceInHeader(): Void {
+		final src: String =
+			'package pkg;\n\nclass Holder // note {\n{\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'IHolder', 'pkg/IHolder.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(
+			StringTools.contains(newSrc, 'class Holder implements IHolder // note {'), 'implements lands before the line comment'
+		);
+	}
+
+	/** A structural type-parameter constraint brace is not the body brace. */
+	public function testTypeParamConstraintBrace(): Void {
+		final src: String =
+			'package pkg;\n\nclass Holder<T:{ x:Int }> {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'IHolder', 'pkg/IHolder.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(
+			StringTools.contains(newSrc, 'class Holder<T:{ x:Int }> implements IHolder {'), 'implements lands after the type params'
+		);
+	}
+
+	/** An existing `implements` clause is preserved; the new one is appended after it. */
+	public function testExistingImplementsPreserved(): Void {
+		final src: String = 'package pkg;\n\nclass S implements IThing {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/S.hx', 'S', 'IS', 'pkg/IS.hx', null, src);
+		final newSrc: String = changeFor(changes, 'pkg/S.hx').newSource;
+		Assert.isTrue(StringTools.contains(newSrc, 'class S implements IThing implements IS {'), 'both implements clauses present');
+	}
+
 	/** A `final class` gets the `implements` clause too. */
 	public function testFinalClass(): Void {
 		final src: String = 'package pkg;\n\nfinal class S {\n\tpublic function new() {}\n\tpublic function a():Void {}\n}';

@@ -101,7 +101,8 @@ final class ExtractInterface {
 		};
 
 		final srcEdit: Null<{ span: Span, text: String }> = implementsEdit(srcSource, decl, srcTypeName, ifaceName);
-		if (srcEdit == null) return Err('could not locate the class body of "$srcTypeName" to add implements');
+		if (srcEdit == null)
+			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add implements (nothing written)');
 		final edit: { span: Span, text: String } = srcEdit;
 		final newSrc: String = srcSource.substring(0, edit.span.from) + edit.text + srcSource.substring(edit.span.to);
 
@@ -287,25 +288,18 @@ final class ExtractInterface {
 
 	/**
 	 * The span-splice that adds `implements <Iface>` to the class header —
-	 * inserted right after the last header token, before the body `{`, so
-	 * the existing spacing and any `extends` / `implements` clauses are
-	 * preserved. Null when the body brace cannot be located.
+	 * inserted just past the last header token, before the body `{`, so the
+	 * existing spacing and any `extends` / `implements` clauses are
+	 * preserved. Null when the body brace cannot be verified, which aborts
+	 * the extraction before anything is written.
 	 */
 	private static function implementsEdit(
 		source: String, decl: TypeDeclMatch, typeName: String, ifaceName: String
 	): Null<{ span: Span, text: String }> {
-		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		final nameFrom: Int = RefactorSupport.identTokenOffset(source, nameSpan, typeName);
-		final searchFrom: Int = nameFrom < 0 ? nameSpan.from : nameFrom + typeName.length;
-		final brace: Int = source.indexOf('{', searchFrom);
-		if (brace < 0) return null;
-		var headerEnd: Int = brace;
-		while (headerEnd > searchFrom && isSpace(StringTools.fastCodeAt(source, headerEnd - 1))) headerEnd--;
-		return { span: new Span(headerEnd, headerEnd), text: ' implements $ifaceName' };
-	}
-
-	private static inline function isSpace(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code || code == '\n'.code || code == '\r'.code;
+		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName);
+		if (at == null) return null;
+		final atNN: Int = at;
+		return { span: new Span(atNN, atNN), text: ' implements $ifaceName' };
 	}
 
 }
