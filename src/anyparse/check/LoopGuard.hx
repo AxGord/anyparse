@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan.NegationSeams;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -22,8 +23,9 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * `INV` negates the guard condition `c` so the surviving iterations are the ones the
  * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `c` is
  * comment-free, `CheckScan.negateConditionText` pushes De Morgan inward; otherwise (a
- * seam-less grammar, or a comment inside `c`) it falls back to the verbatim text engine.
- * Both agree on the leaf rules:
+ * seam-less grammar, a comment inside `c`, or a condition whose flattened `||` chain would
+ * STRAND a null-safety narrowing — `CheckScan.narrowingStranded`) it falls back to the
+ * verbatim text engine. Both agree on the leaf rules:
  *
  * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
  * - `a == b` → `a != b`, `a != b` → `a == b` (NaN-safe: IEEE `NaN == x` is false and
@@ -117,29 +119,12 @@ final class LoopGuard implements Check {
 		if (ifKinds == null || ifKinds.length == 0) return null;
 		final blockStmtKind: Null<String> = shape.blockStmtKind;
 		if (blockStmtKind == null) return null;
-		final atomicKinds: Array<String> = [
-			for (k in [
-				(shape.identKind: Null<String>),
-				shape.callKind,
-				shape.fieldAccessKind,
-				shape.forceFieldAccessKind,
-				shape.nullSafeAccessKind,
-				shape.indexAccessKind,
-				shape.newExprKind,
-				shape.parenKind,
-				shape.boolLitKind
-			]) if (k != null) k
-		];
 		return {
 			loopKinds: loopKinds,
 			continueKind: continueKind,
 			ifKinds: ifKinds,
 			blockStmtKind: blockStmtKind,
-			notKind: shape.notKind,
-			eqKind: shape.eqKind,
-			notEqKind: shape.notEqKind,
-			parenKind: shape.parenKind,
-			atomicKinds: atomicKinds,
+			negation: CheckScan.negationSeams(shape),
 			opaqueKinds: shape.opaqueKinds ?? [],
 			support: plugin.booleanLogicSupport()
 		};
@@ -213,13 +198,7 @@ final class LoopGuard implements Check {
 
 	/** The inverted source of guard condition `cond` — the negation the lifted `if` header tests. */
 	private static function invert(cond: QueryNode, source: String, s: Seams): String {
-		return CheckScan.negateConditionText(cond, source, {
-			notKind: s.notKind,
-			parenKind: s.parenKind,
-			eqKind: s.eqKind,
-			notEqKind: s.notEqKind,
-			atomicKinds: s.atomicKinds
-		}, s.support);
+		return CheckScan.negateConditionText(cond, source, s.negation, s.support);
 	}
 
 }
@@ -230,11 +209,7 @@ private typedef Seams = {
 	var continueKind: String;
 	var ifKinds: Array<String>;
 	var blockStmtKind: String;
-	var notKind: Null<String>;
-	var eqKind: Null<String>;
-	var notEqKind: Null<String>;
-	var parenKind: Null<String>;
-	var atomicKinds: Array<String>;
+	var negation: NegationSeams;
 	var opaqueKinds: Array<String>;
 	var support: Null<BooleanLogicSupport>;
 }

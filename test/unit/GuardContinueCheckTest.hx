@@ -18,7 +18,8 @@ import anyparse.runtime.Span;
  * inversion pushes De Morgan inward through the shared `CheckScan.negateConditionText`
  * (backed by the grammar's `BooleanLogicSupport`): `a && b` → `!a || !b`, `==` / `!=`
  * flipped, but an ordered comparison (`< <= > >=`) kept wrapped `!(…)` (NaN-safe — `!(a <
- * b)` and `a >= b` differ under NaN), and a comment inside the condition falls back to the
+ * b)` and `a >= b` differ under NaN), and a comment inside the condition — or a condition
+ * whose flattened `||` chain would strand a null-safety narrowing — falls back to the
  * verbatim `!(cond)` wrap. A de-nested local whose name clashes with a preceding sibling or
  * the iterator is AUTO-RENAMED to a fresh `<name>2` (binder, plain reads and `$name`
  * interpolation reads together); a deeper redeclaration of that name, an inner lambda
@@ -183,6 +184,38 @@ class GuardContinueCheckTest extends Test {
 
 	public function testDeMorganIsOperatorAsCompoundOperand(): Void {
 		Assert.isTrue(fx(cond('ok && x is String')).indexOf('if (!ok || !(x is String)) continue;') != -1);
+	}
+
+	// --- the stranded-narrowing gate on the De Morgan path -------------------------
+
+	public function testSafeNullChainKeepsDeMorgan(): Void {
+		// No operand consumes a narrowing from a non-first operand, so De Morgan stands.
+		Assert.isTrue(fx(cond('a != null && b != null && c != null')).indexOf('if (a == null || b == null || c == null) continue;') != -1);
+	}
+
+	public function testStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// `b`'s narrowing comes from operand 2 and would not reach operand 3 of the
+		// negated `||` chain, so the whole condition is wrapped instead.
+		Assert.isTrue(
+			fx(cond('a != null && b != null && p(a.length, b.length)')).indexOf(
+				'if (!(a != null && b != null && p(a.length, b.length))) continue;'
+			) != -1
+		);
+	}
+
+	public function testStrandedNarrowingFirstOperandStillDeMorgans(): Void {
+		// The FIRST operand's fact does survive the `||` chain, so this one is safe.
+		Assert.isTrue(fx(cond('a != null && q() && p(a.length, 0)')).indexOf('if (a == null || !q() || !p(a.length, 0)) continue;') != -1);
+	}
+
+	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
+		// `||` as the unparenthesised shape — the gate must see through the parens too.
+		Assert.isTrue(
+			fx(cond('a != null && (b != null && p(a.length, b.length))')).indexOf(
+				'if (!(a != null && (b != null && p(a.length, b.length)))) continue;'
+			) != -1
+		);
 	}
 
 	// --- negatives: never flagged --------------------------------------------------

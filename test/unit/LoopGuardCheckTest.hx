@@ -15,7 +15,8 @@ import anyparse.runtime.Span;
  * header with an inverted condition (`for (x in xs) if (INV) { REST }`). The inversion
  * pushes De Morgan inward (`a && b` → `!a || !b`), flips `==` / `!=` (NaN-safe), and keeps
  * an ordered comparison (`< <= > >=`) wrapped `!(…)` (unflipped, since `!(a < b)` and
- * `a >= b` differ under NaN); a comment inside the condition falls back to the verbatim
+ * `a >= b` differ under NaN); a comment inside the condition — or a condition whose
+ * flattened `||` chain would strand a null-safety narrowing — falls back to the verbatim
  * `!(cond)` wrap. A cascade of guards, a guard-only body, an unbraced body, an `else`
  * branch and a comment inside the guard are safe misses; a later `continue` deeper in the
  * body is preserved.
@@ -98,6 +99,34 @@ class LoopGuardCheckTest extends Test {
 		final src: String = wrap('while (xs.length > 0) {\n\t\t\tif (xs.length == 3) continue;\n\t\t\ttrace(xs);\n\t\t}');
 		Assert.equals(1, violations(src).length);
 		Assert.equals(wrap('while (xs.length > 0) if (xs.length != 3) {\n\t\t\ttrace(xs);\n\t\t}'), applyFix(src));
+	}
+
+	public function testSafeNullChainKeepsDeMorgan(): Void {
+		// No operand consumes a narrowing from a non-first operand, so De Morgan stands.
+		Assert.equals(
+			wrap('for (x in xs) if (a == null || b == null || c == null) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) {\n\t\t\tif (a != null && b != null && c != null) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// `b`'s narrowing comes from operand 2 and would not reach operand 3 of the negated
+		// `||` chain, so the lifted header wraps the whole condition verbatim instead.
+		Assert.equals(
+			wrap('for (x in xs) if (!(a != null && b != null && p(a.length, b.length))) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(wrap('for (x in xs) {\n\t\t\tif (a != null && b != null && p(a.length, b.length)) continue;\n\t\t\ttrace(x);\n\t\t}'))
+		);
+	}
+
+	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
+		// `||` as the unparenthesised shape — the gate must see through the parens too.
+		Assert.equals(
+			wrap('for (x in xs) if (!(a != null && (b != null && p(a.length, b.length)))) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(
+				wrap('for (x in xs) {\n\t\t\tif (a != null && (b != null && p(a.length, b.length))) continue;\n\t\t\ttrace(x);\n\t\t}')
+			)
+		);
 	}
 
 	public function testCascadeNotFlagged(): Void {

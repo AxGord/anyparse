@@ -121,6 +121,7 @@ final class Linter {
 			new PreferFind(),
 			new LoopGuard(),
 			new GuardContinue(),
+			new GuardReturn(),
 			new MapKeysLookup(),
 			new PreferRangeLoop(),
 			new TrivialGetter(),

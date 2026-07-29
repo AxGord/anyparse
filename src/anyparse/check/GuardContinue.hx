@@ -27,8 +27,12 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * a `BooleanLogicSupport` and the condition span is comment-free, the negation is pushed
  * inward by De Morgan (`a && b` → `!a || !b`, `!(a || b)` → `a && b`, `==` / `!=` flipped),
  * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` (never
- * flipped — `!(a < b)` and `a >= b` differ under NaN). Falling back — a seam-less grammar, or
- * a comment in the condition the De Morgan rewrite would drop — the old text engine wraps
+ * flipped — `!(a < b)` and `a >= b` differ under NaN). Falling back — a seam-less grammar, a
+ * comment in the condition the De Morgan rewrite would drop, or a condition whose flattened
+ * `||` chain would STRAND a null-safety narrowing (`CheckScan.narrowingStranded`: Haxe
+ * carries a narrowing fact into a later `||` operand from the FIRST operand only, so
+ * `a != null && b != null && p(a.length, b.length)` must not become
+ * `a == null || b == null || p(a.length, b.length)`) — the old text engine wraps
  * `!(cond)` VERBATIM (`!` strip, NaN-safe `==` / `!=` flip, everything else
  * parenthesised-wrapped), preserving the comment. Either tier is sound and compiles.
  *
@@ -160,19 +164,6 @@ final class GuardContinue implements Check {
 		final loopKinds: Array<String> = shape.loopStatementKinds ?? [];
 		final doWhileKinds: Array<String> = shape.doWhileLoopKinds ?? [];
 		if (loopKinds.length == 0 && doWhileKinds.length == 0) return null;
-		final atomicKinds: Array<String> = [
-			for (k in [
-				(shape.identKind: Null<String>),
-				shape.callKind,
-				shape.fieldAccessKind,
-				shape.forceFieldAccessKind,
-				shape.nullSafeAccessKind,
-				shape.indexAccessKind,
-				shape.newExprKind,
-				shape.parenKind,
-				shape.boolLitKind
-			]) if (k != null) k
-		];
 		return {
 			loopKinds: loopKinds,
 			doWhileKinds: doWhileKinds,
@@ -183,13 +174,7 @@ final class GuardContinue implements Check {
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			hoist: hoistSeams(shape),
-			negation: {
-				notKind: shape.notKind,
-				parenKind: shape.parenKind,
-				eqKind: shape.eqKind,
-				notEqKind: shape.notEqKind,
-				atomicKinds: atomicKinds
-			},
+			negation: CheckScan.negationSeams(shape),
 			support: plugin.booleanLogicSupport()
 		};
 	}
