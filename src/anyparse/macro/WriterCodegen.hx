@@ -2237,9 +2237,12 @@ class WriterCodegen {
 	 * conservative). Idempotent: returns `o` unchanged when
 	 * `_ssbSuppress` is already `true`. Applied by
 	 * `WriterLowering.buildMandatoryRefWriteCall` to the then-body
-	 * writeCall of an `if` statement whose `else` sibling is present,
-	 * so every `dropSingleStmtBraces` unwrap nested inside that
-	 * then-body no-ops (`SingleStmtBraces.unwrapStmt` reads the flag).
+	 * writeCall of an `if` statement whose `else` sibling is present AND
+	 * whose then-body renders WITHOUT braces (a brace-bearing then-body
+	 * seals its subtree with its own `}`), so every
+	 * `dropSingleStmtBraces` unwrap nested inside that then-body is put
+	 * through the trailing-spine dangling-else test rather than allowed
+	 * unconditionally (`SingleStmtBraces.unwrapStmt` reads the flag).
 	 * Gated on `_ssbSuppress:Bool` field presence on the opt typedef.
 	 */
 	private static function setSsbSuppressField(optionsCT: ComplexType): Field {
