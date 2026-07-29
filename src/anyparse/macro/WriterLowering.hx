@@ -355,8 +355,13 @@ class WriterLowering {
 				for (_a in _args) {
 					final _aDoc: anyparse.core.Doc = $writeIdent(_a.node, _segArgOpt, -1);
 					final _aTc: Null<String> = _a.trailingComment;
-					// `trailingCommentDocVerbatim` already prepends ' '.
-					_argDocs.push(_aTc != null ? _dc([_aDoc, trailingCommentDocVerbatim(_aTc, opt)]) : _aDoc);
+					// `trailingCommentDocGuarded` already prepends ' '. Group-closer
+					// seam (mirror of `lowerPostfixPushElem`): the segment call's `)`
+					// follows the last argument on the same Doc line, and a LINE
+					// comment there swallows it plus the whole `.next()` tail. The
+					// guard forces the arg list to break and drops before an
+					// existing hardline, so sound seams stay byte-identical.
+					_argDocs.push(_aTc != null ? _dc([_aDoc, trailingCommentDocGuarded(_aTc, opt)]) : _aDoc);
 				}
 				_argDocs;
 			}
@@ -12748,10 +12753,21 @@ class WriterLowering {
 			? macro {
 				final _elem: anyparse.core.Doc = $elemCall;
 				final _tc: Null<String> = _args[_i].trailingComment;
-				// `trailingCommentDocVerbatim` already prepends ' ' to
+				// `trailingCommentDocGuarded` already prepends ' ' to
 				// the captured content, so the per-arg Doc is just
 				// `_elem ++ trailingDoc` — no extra `_dt(' ')`.
-				var _elemDoc: anyparse.core.Doc = _tc != null ? _dc([_elem, trailingCommentDocVerbatim(_tc, opt)]) : _elem;
+				// Group-closer seam: this Star owns the whole `(args)` postfix,
+				// so its close paren is emitted on the SAME Doc line as the last
+				// argument. A LINE comment cuddled there terminates at `\n` and
+				// swallows the `)` (and every token after it up to the source
+				// newline), which is why `g(\n\ta // c\n);` used to re-emit as
+				// `g(a // c);` - a file that no longer parses. The guarded
+				// emitter appends an `OptHardlineSkipBeforeHardline`, which both
+				// refuses the flat fit (so the arg list breaks and the `)` lands
+				// on its own line) and drops when the next emit is already a
+				// hardline - every sound seam stays byte-identical, and a block
+				// comment keeps its legal glue.
+				var _elemDoc: anyparse.core.Doc = _tc != null ? _dc([_elem, trailingCommentDocGuarded(_tc, opt)]) : _elem;
 				// ω-callarg-leading-comment: glue a captured inline block leading
 				// comment before the argument (`/* c */ arg`). Only block comments
 				// with no internal newline are emitted inline; line comments and
@@ -12784,7 +12800,7 @@ class WriterLowering {
 		// ω-postfix-call-trailing: when the synth pair grew a
 		// `closeTrailing:Null<String>` slot (gated by `isTriviaStar`,
 		// which is the same predicate as `isPostfixCloseTrailingBranch`
-		// at this site), append `trailingCommentDocVerbatim(_trailClose,
+		// at this site), append `trailingCommentDocGuarded(_trailClose,
 		// opt)` after the call's emitted Doc when non-null. The slot
 		// holds a same-line trailing `// c` / `/* c */` between `)` and
 		// the next expression boundary — captured by Lowering's
@@ -12792,6 +12808,14 @@ class WriterLowering {
 		// the chain extractor (`wrapWithChainDispatch`) handles the same
 		// slot per segment via its own dispatch; this default-path
 		// emission covers non-chain single Calls.
+		//
+		// Group-closer seam: whatever follows the call on the same Doc line
+		// - the statement `;`, an infix tail (`+ 2`), an enclosing call's
+		// `)` - is swallowed by a LINE comment emitted here. `return g(1) //
+		// c` + newline + `+ 2;` re-emitted as `return g(1) // c + 2;`, which
+		// still PARSES and silently drops the `+ 2`. The guarded emitter
+		// forces the break; it drops before an already-hardline next emit
+		// (the chain-segment `.n()` case), so sound seams stay byte-identical.
 		if (!c.isTriviaStar) return dcExpr;
 		final closeTrailRef: Expr = {
 			expr: EConst(CIdent(c.argNames[2])),
@@ -12800,7 +12824,7 @@ class WriterLowering {
 		return macro {
 			final _dcResult: anyparse.core.Doc = $dcExpr;
 			final _trailClose: Null<String> = $closeTrailRef;
-			_trailClose != null ? _dc([_dcResult, trailingCommentDocVerbatim(_trailClose, opt)]) : _dcResult;
+			_trailClose != null ? _dc([_dcResult, trailingCommentDocGuarded(_trailClose, opt)]) : _dcResult;
 		};
 	}
 
@@ -16497,7 +16521,18 @@ class WriterLowering {
 			_parts.push($beforeCloseHardlineExpr);
 			_parts.push(_dt($v{closeText}));
 			if (_trailClose != null) {
-				_parts.push(trailingCommentDocVerbatim(_trailClose, opt));
+				// Group-closer seam: `$trailFollowExpr` supplies the break only
+				// for the Alt-branch arm; the Seq-struct arm assumes the parent
+				// Star emits the next hardline, which holds for a STATEMENT-list
+				// parent but not for a block that is itself an element of an
+				// inline group - `g(function() {\n\th();\n} // c\n)` puts the
+				// call's `)` right after the comment on the same Doc line and it
+				// is swallowed. The guarded emitter carries its own forward-
+				// looking hardline for LINE style; when the Alt arm pushes one
+				// too the second simply overwrites the un-committed slot, so
+				// that arm stays byte-identical, and a block comment keeps its
+				// legal glue in both.
+				_parts.push(trailingCommentDocGuarded(_trailClose, opt));
 				$trailFollowExpr;
 			}
 			// ω-break-group / ω-force-flat-engine sister-coverage: wrap the block

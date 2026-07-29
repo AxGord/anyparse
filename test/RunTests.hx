@@ -507,6 +507,7 @@ import unit.TypeRefPrinterTest;
 import unit.ExplicitLocalTypePrinterTest;
 import unit.HxLineCommentIndentSliceTest;
 import unit.ShortenTypeRefCheckTest;
+import unit.HxGroupTrailCommentWriteTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -792,6 +793,7 @@ class RunTests {
 		addCase(new HxCondElseifChainBlankTest());
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HxHeadCommentSeamWriteTest());
+		addCase(new HxGroupTrailCommentWriteTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new HaxeWriterRoundTripTest());
 		addCase(new HxFormatterCorpusTest());
