@@ -25,12 +25,32 @@ import anyparse.runtime.Span;
  * `children[0]`); either unset makes the check a no-op. Loops are deliberately
  * NOT among the branch kinds: `while (true)` is an idiomatic infinite loop, not
  * a smell.
+ *
+ * ## Non-trivial dead branch: report-only
+ *
+ * The autofix deletes the NOT-taken branch's source along with the `if` —
+ * safe only when that branch is genuinely empty (an empty block or a bare
+ * `;`). A dead branch can otherwise encode unimplemented intent: a real
+ * regression had `final hasSelection:Bool = true;` immediately followed by
+ * `if (hasSelection) ... else <real logic>` — the dead `else` was the ONLY
+ * trace of a feature whose flag got hardcoded before the feature landed.
+ * Deleting it on sight would have destroyed that trace. So whenever the
+ * eliminated branch contains any statement beyond an empty block / bare `;`,
+ * `fix` withholds the edit for that site — the violation still reports (same
+ * severity), with a human-review note appended to the message. Only the
+ * empty/trivial case keeps the automatic rewrite. (This check still only
+ * fires on a LITERAL `if (true)` / `if (false)`; it does not trace a
+ * `final`-bound boolean like `hasSelection` back to its literal — that
+ * const-propagation shape is a separate, not-yet-built detector.)
  */
 @:nullSafety(Strict)
 final class ConstantCondition implements Check {
 
 	/** An if node with an else branch has children [cond, then, else]. */
 	private static inline final IF_WITH_ELSE_CHILD_COUNT: Int = 3;
+
+	/** ASCII-only note appended when a non-trivial dead branch withholds the autofix. */
+	private static inline final DEAD_BRANCH_NOTE: String = ' (dead branch - verify intent before deleting)';
 
 	public function new() {}
 
@@ -48,7 +68,10 @@ final class ConstantCondition implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, seams.boolLitKind, seams.branchKinds);
+			if (tree != null)
+				walk(
+					violations, entry.file, entry.source, tree, seams.boolLitKind, seams.branchKinds, seams.blockKinds, seams.emptyStmtKind
+				);
 		}
 		return violations;
 	}
@@ -62,7 +85,9 @@ final class ConstantCondition implements Check {
 	 * lone report-only case is a no-else `if (false)` in EXPRESSION position
 	 * (`var x = if (false) 1;`), whose value slot cannot be emptied. A block
 	 * branch keeps its braces (a valid bare block), preserving `var` scoping;
-	 * nested flagged ifs are de-overlapped via `dropContainedEdits`.
+	 * nested flagged ifs are de-overlapped via `dropContainedEdits`. A site whose
+	 * eliminated (not-taken) branch is non-trivial — see the class doc — collects
+	 * no edit at all; only the empty/trivial case is auto-rewritten.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -80,45 +105,48 @@ final class ConstantCondition implements Check {
 			if (span != null) flagged.push('${span.from}:${span.to}');
 		}
 		final edits: Array<{ span: Span, text: String }> = [];
-		collectBranchEdits(tree, null, source, seams.boolLitKind, seams.branchKinds, seams.blockKinds, flagged, edits);
+		collectBranchEdits(tree, null, source, seams.boolLitKind, seams.branchKinds, seams.blockKinds, seams.emptyStmtKind, flagged, edits);
 		return RefactorSupport.dropContainedEdits(edits);
 	}
 
 	/** Walk `node`, flagging every branch whose condition is a boolean literal. */
 	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, boolLitKind: String, branchKinds: Array<String>
+		out: Array<Violation>, file: String, source: String, node: QueryNode, boolLitKind: String, branchKinds: Array<String>,
+		blockKinds: Array<String>, emptyStmtKind: Null<String>
 	): Void {
 		if (branchKinds.contains(node.kind) && node.children.length > 0 && node.children[0].kind == boolLitKind) {
 			final cond: QueryNode = node.children[0];
 			final span: Null<Span> = cond.span;
 			if (span != null) {
-				final always: String = source.substring(span.from, span.to) == 'false' ? 'false' : 'true';
+				final isFalse: Bool = source.substring(span.from, span.to) == 'false';
+				final always: String = isFalse ? 'false' : 'true';
+				final trivial: Bool = isTrivialEliminated(eliminatedBranch(node, isFalse), blockKinds, emptyStmtKind);
 				out.push({
 					file: file,
 					span: span,
 					rule: 'constant-condition',
 					severity: Severity.Warning,
-					message: 'condition is always $always'
+					message: trivial ? 'condition is always $always' : 'condition is always $always$DEAD_BRANCH_NOTE'
 				});
 			}
 		}
-		for (c in node.children) walk(out, file, source, c, boolLitKind, branchKinds);
+		for (c in node.children) walk(out, file, source, c, boolLitKind, branchKinds, blockKinds, emptyStmtKind);
 	}
 
 	/** Walk `node` with its `parent`, collecting a fix edit for each flagged branch. */
 	private static function collectBranchEdits(
 		node: QueryNode, parent: Null<QueryNode>, source: String, boolLitKind: String, branchKinds: Array<String>,
-		blockKinds: Array<String>, flagged: Array<String>, edits: Array<{ span: Span, text: String }>
+		blockKinds: Array<String>, emptyStmtKind: Null<String>, flagged: Array<String>, edits: Array<{ span: Span, text: String }>
 	): Void {
 		if (branchKinds.contains(node.kind) && node.children.length > 0 && node.children[0].kind == boolLitKind) {
 			final cond: QueryNode = node.children[0];
 			final cspan: Null<Span> = cond.span;
 			if (cspan != null && flagged.contains('${cspan.from}:${cspan.to}')) {
-				final edit: Null<{ span: Span, text: String }> = branchEdit(node, parent, source, cspan, blockKinds);
+				final edit: Null<{ span: Span, text: String }> = branchEdit(node, parent, source, cspan, blockKinds, emptyStmtKind);
 				if (edit != null) edits.push(edit);
 			}
 		}
-		for (c in node.children) collectBranchEdits(c, node, source, boolLitKind, branchKinds, blockKinds, flagged, edits);
+		for (c in node.children) collectBranchEdits(c, node, source, boolLitKind, branchKinds, blockKinds, emptyStmtKind, flagged, edits);
 	}
 
 	/**
@@ -126,15 +154,17 @@ final class ConstantCondition implements Check {
 	 * boolean literal: replace the whole `if` with the always-taken branch's
 	 * source; a no-else `if (false)` statement is deleted when it sits in a
 	 * statement list (`parent` ∈ `blockKinds`) or replaced with `{}` when it is a
-	 * branch body; null when no safe edit applies (a no-else `if (false)` in
-	 * expression position).
+	 * branch body; null when no safe edit applies — a no-else `if (false)` in
+	 * expression position, or a NON-TRIVIAL eliminated branch (see the class doc:
+	 * the violation still reports, just without an edit here).
 	 */
 	private static function branchEdit(
-		node: QueryNode, parent: Null<QueryNode>, source: String, cspan: Span, blockKinds: Array<String>
+		node: QueryNode, parent: Null<QueryNode>, source: String, cspan: Span, blockKinds: Array<String>, emptyStmtKind: Null<String>
 	): Null<{ span: Span, text: String }> {
 		final nspan: Null<Span> = node.span;
 		if (nspan == null) return null;
 		final isFalse: Bool = source.substring(cspan.from, cspan.to) == 'false';
+		if (!isTrivialEliminated(eliminatedBranch(node, isFalse), blockKinds, emptyStmtKind)) return null;
 		final hasElse: Bool = node.children.length >= IF_WITH_ELSE_CHILD_COUNT;
 		// Taken branch: then (children[1]) when true, else (children[2]) when false.
 		final taken: Null<QueryNode> = isFalse ? (hasElse ? node.children[2] : null) : node.children[1];
@@ -157,6 +187,32 @@ final class ConstantCondition implements Check {
 		return tspan == null ? null : { span: nspan, text: source.substring(tspan.from, tspan.to) };
 	}
 
+	/**
+	 * The branch NEVER taken by `node` (an `if` whose condition is the boolean
+	 * literal `isFalse` selects) — the else branch (`children[2]`) when the
+	 * condition is `true` and one exists, the then branch (`children[1]`) when
+	 * it is `false`, or null when the condition is `true` and there is no else
+	 * (nothing is eliminated: the `if` is unwrapped to its then branch, no code
+	 * is lost).
+	 */
+	private static function eliminatedBranch(node: QueryNode, isFalse: Bool): Null<QueryNode> {
+		if (isFalse) return node.children.length > 1 ? node.children[1] : null;
+		return node.children.length >= IF_WITH_ELSE_CHILD_COUNT ? node.children[2] : null;
+	}
+
+	/**
+	 * Whether the code an autofix would ELIMINATE — `eliminated`, or nothing — is
+	 * safe to delete silently: empty (`eliminated == null`), an empty block
+	 * (`blockKinds`, zero children), or a bare `;` (`emptyStmtKind`). Anything
+	 * else — a real statement, or a non-block expression value — may encode
+	 * unimplemented intent (see the class doc) and must not be auto-deleted; the
+	 * check still reports it, with a human-review note.
+	 */
+	private static function isTrivialEliminated(eliminated: Null<QueryNode>, blockKinds: Array<String>, emptyStmtKind: Null<String>): Bool {
+		if (eliminated == null) return true;
+		if (emptyStmtKind != null && eliminated.kind == emptyStmtKind) return true;
+		return blockKinds.contains(eliminated.kind) && eliminated.children.length == 0;
+	}
 
 	/**
 	 * Resolve the boolean-literal / branch-condition seam kinds plus the statement-list
@@ -174,7 +230,12 @@ final class ConstantCondition implements Check {
 		// must be replaced with `{}` instead. Absent seam → never delete.
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		final blockKinds: Array<String> = support != null ? support.blockKinds() : [];
-		return { boolLitKind: boolLitKind, branchKinds: branchKinds, blockKinds: blockKinds };
+		return {
+			boolLitKind: boolLitKind,
+			branchKinds: branchKinds,
+			blockKinds: blockKinds,
+			emptyStmtKind: shape.emptyStmtKind
+		};
 	}
 
 }
@@ -184,4 +245,5 @@ private typedef Seams = {
 	final boolLitKind: String;
 	final branchKinds: Array<String>;
 	final blockKinds: Array<String>;
+	final emptyStmtKind: Null<String>;
 };

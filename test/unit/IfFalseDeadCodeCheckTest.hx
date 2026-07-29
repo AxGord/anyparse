@@ -13,7 +13,10 @@ import anyparse.runtime.Span;
  * dead on all compilation targets — is flagged `Warning` at any scope
  * (member run, statement, case group, expression, list element). `fix`
  * deletes the region, or replaces it with the `#else` branch when one
- * exists; `#elseif` chains are report-only.
+ * exists — but ONLY when the ELIMINATED branch is trivial (empty, or a
+ * bare `;`); a non-trivial eliminated branch (real code) is left
+ * report-only, with a human-review note appended to the message.
+ * `#elseif` chains are always report-only.
  */
 class IfFalseDeadCodeCheckTest extends Test {
 
@@ -55,23 +58,39 @@ class IfFalseDeadCodeCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\t#if falsePositive\n\t\tlive();\n\t\t#end\n\t}\n}').length);
 	}
 
-	public function testFixDeletesElselessRegion(): Void {
-		final out: String = applyFix('class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\tdead();\n\t\t#end\n\t\tb();\n\t}\n}');
-		Assert.isTrue(out.indexOf('dead()') == -1, 'dead body removed, got: <$out>');
+	public function testFixDeletesTrivialElselessRegion(): Void {
+		// The dead body is a bare `;` — trivial, so the whole region still
+		// auto-deletes.
+		final out: String = applyFix('class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t;\n\t\t#end\n\t\tb();\n\t}\n}');
 		Assert.isTrue(out.indexOf('#if') == -1, 'markers removed, got: <$out>');
 		Assert.isTrue(out.indexOf('a();') != -1 && out.indexOf('b();') != -1, 'live code kept, got: <$out>');
 	}
 
-	public function testFixKeepsElseBranch(): Void {
-		final out: String = applyFix('class C {\n\tfunction f() {\n\t\t#if false\n\t\tx();\n\t\t#else\n\t\ty();\n\t\t#end\n\t}\n}');
-		Assert.isTrue(out.indexOf('x()') == -1, 'dead branch removed, got: <$out>');
-		Assert.isTrue(out.indexOf('y();') != -1, 'else branch kept, got: <$out>');
-		Assert.isTrue(out.indexOf('#else') == -1, 'markers removed, got: <$out>');
+	public function testFixElselessRegionNonTrivialLeftUntouched(): Void {
+		// The dead body `dead();` is a real statement: the site is still
+		// reported (see testStmtRegionFlagged) but collects no edit.
+		final src: String = 'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\tdead();\n\t\t#end\n\t\tb();\n\t}\n}';
+		Assert.equals(src, applyFix(src));
 	}
 
-	public function testFixExprElse(): Void {
-		final out: String = applyFix('class C {\n\tvar v = #if false 1 #else 2 #end;\n}');
-		Assert.isTrue(out.indexOf('var v = 2;') != -1, 'else value kept inline, got: <$out>');
+	public function testFixTrivialThenKeepsElseBranch(): Void {
+		// The eliminated `#if false` body is a bare `;` — trivial, so the
+		// autofix still replaces the whole region with the `#else` branch.
+		final out: String = applyFix('class C {\n\tfunction f() {\n\t\t#if false\n\t\t;\n\t\t#else\n\t\ty();\n\t\t#end\n\t}\n}');
+		Assert.isTrue(out.indexOf('y();') != -1, 'else branch kept, got: <$out>');
+		Assert.isTrue(out.indexOf('#else') == -1 && out.indexOf('#if') == -1, 'markers removed, got: <$out>');
+	}
+
+	public function testFixKeepsElseBranchNonTrivialLeftUntouched(): Void {
+		// The eliminated `#if false` body `x();` is a real statement.
+		final src: String = 'class C {\n\tfunction f() {\n\t\t#if false\n\t\tx();\n\t\t#else\n\t\ty();\n\t\t#end\n\t}\n}';
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testFixExprElseNonTrivialLeftUntouched(): Void {
+		// The eliminated value `1` is real (non-empty) content.
+		final src: String = 'class C {\n\tvar v = #if false 1 #else 2 #end;\n}';
+		Assert.equals(src, applyFix(src));
 	}
 
 	public function testElseifChainReportOnly(): Void {
@@ -82,12 +101,33 @@ class IfFalseDeadCodeCheckTest extends Test {
 
 	public function testNestedIfInsideDeadRegionSingleFlag(): Void {
 		// The nested `#if mobile` lives inside the dead region — one flag
-		// for the OUTER region only, and the elseless delete removes the
-		// nested markers with it.
+		// for the OUTER region only. Its body holds the real statement
+		// `m();`, so it is non-trivial and left untouched by `fix`.
 		final src: String = 'class C {\n\tfunction f() {\n\t\t#if false\n\t\t#if mobile\n\t\tm();\n\t\t#end\n\t\t#end\n\t\tb();\n\t}\n}';
 		Assert.equals(1, violations(src).length);
-		final out: String = applyFix(src);
-		Assert.isTrue(out.indexOf('m()') == -1 && out.indexOf('#if') == -1, 'whole region removed, got: <$out>');
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testFixMixedTrivialAndNonTrivialSites(): Void {
+		// Two regions in one file: an elseless region whose body is a bare
+		// `;` (trivial) auto-deletes; one whose body is the real statement
+		// `c();` (non-trivial) is reported but left untouched — the
+		// fix-count must reflect exactly the one edit actually produced,
+		// not the two violations reported.
+		final src: String =
+			'class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t;\n\t\t#end\n\t\tb();\n\t\t#if false\n\t\tc();\n\t\t#end\n\t\td();\n\t}\n}';
+		final check: IfFalseDeadCode = new IfFalseDeadCode();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+		Assert.equals(2, vs.length);
+		Assert.isFalse(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
+		Assert.isTrue(vs[1].message.indexOf('dead branch - verify intent before deleting') != -1);
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
+		Assert.equals(1, edits.length);
+		edits.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		Assert.isTrue(out.indexOf('c();') != -1 && out.indexOf('#if false') != -1, 'non-trivial region kept, got: <$out>');
+		Assert.isTrue(out.indexOf('a();') != -1 && out.indexOf('b();') != -1 && out.indexOf('d();') != -1, 'live code kept, got: <$out>');
 	}
 
 	private function violations(src: String): Array<Violation> {
