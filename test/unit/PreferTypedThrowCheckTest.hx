@@ -8,6 +8,9 @@ import anyparse.check.Linter;
 import anyparse.check.PreferTypedThrow;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
+import anyparse.query.StdResolver;
 import anyparse.runtime.Span;
 
 /**
@@ -15,7 +18,8 @@ import anyparse.runtime.Span;
  * catch-clause gate passes — boxed into `throw new Exception('<string>')` with the exception
  * reference spelled by `TypeRefPrinter`. Covers fix mode, the degraded report-only mode a
  * `String` / `Dynamic` / `Any` catch anywhere in scope forces, the short-name collision
- * fallback to the qualified path, and the import insertion position.
+ * fallback to the qualified path, the import insertion position, and the std-exclusion of
+ * the catch-clause gate (a std-only catch does not degrade, a project one still does).
  */
 class PreferTypedThrowCheckTest extends Test {
 
@@ -172,6 +176,86 @@ class PreferTypedThrowCheckTest extends Test {
 		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'not degraded, got: ${vs[0].message}');
 	}
 
+	// --- std exclusion ---
+
+	/**
+	 * A `String` catch that lives ONLY in the auto-discovered std does NOT degrade the rule.
+	 * The clause guards std-internal throws, which boxing a project throw cannot reach — and
+	 * before the exclusion the std's own ~31 such clauses made the fix arm unreachable on every
+	 * Haxe-equipped machine.
+	 */
+	public function testStdOnlyCatchDoesNotDegrade(): Void {
+		final std: Null<String> = StdResolver.stdDir();
+		if (std == null) {
+			Assert.pass('no installed Haxe std on this machine');
+			return;
+		}
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
+			{ file: haxe.io.Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
+		]);
+		final check: PreferTypedThrow = new PreferTypedThrow();
+		final vs: Array<Violation> = check.run(report, scoped);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('report-only') == -1, 'a std-only catch does not degrade, got: ${vs[0].message}');
+		Assert.isTrue(check.fix(THROWER, vs, scoped).length > 0, 'the fix arm is open');
+	}
+
+	/** A `String` catch in a PROJECT library root — not std — still degrades the whole rule. */
+	public function testProjectLibraryCatchDegrades(): Void {
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }]);
+		final check: PreferTypedThrow = new PreferTypedThrow();
+		final vs: Array<Violation> = check.run(report, scoped);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'a project catch degrades, got: ${vs[0].message}');
+		Assert.equals(0, check.fix(THROWER, vs, scoped).length, 'a degraded finding yields no edit');
+	}
+
+	/** Excluding std must not MASK a project clause sitting in the same scope alongside it. */
+	public function testStdExclusionDoesNotMaskAProjectCatch(): Void {
+		final std: Null<String> = StdResolver.stdDir();
+		if (std == null) {
+			Assert.pass('no installed Haxe std on this machine');
+			return;
+		}
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
+			{ file: haxe.io.Path.join([std, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH },
+			{ file: 'vendor/crashdumper/CrashDumper.hx', source: STRING_CATCH }
+		]);
+		final vs: Array<Violation> = new PreferTypedThrow().run(report, scoped);
+		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'the project clause still degrades, got: ${vs[0].message}');
+	}
+
+	/**
+	 * With the std channel DECLINED (`APQ_NO_STD`) there is no root to attribute a file to, so
+	 * the exclusion excludes NOTHING and a std-path source degrades exactly as any other would.
+	 * Uses the `resetCache` seam on BOTH sides, since `stdDir` memoises per process.
+	 */
+	public function testDeclinedStdExcludesNothing(): Void {
+		#if (sys || nodejs)
+		final live: Null<String> = StdResolver.stdDir();
+		if (live == null) {
+			Assert.pass('no installed Haxe std on this machine');
+			return;
+		}
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: THROWER }];
+		final scoped: CachingGrammarPlugin = scopedPlugin(report, [
+			{ file: haxe.io.Path.join([live, 'haxe', 'ds', 'BalancedTree.hx']), source: STRING_CATCH }
+		]);
+		StdResolver.resetCache();
+		Sys.putEnv('APQ_NO_STD', '1');
+		final vs: Array<Violation> = new PreferTypedThrow().run(report, scoped);
+		Sys.putEnv('APQ_NO_STD', '');
+		StdResolver.resetCache();
+		Assert.equals(live, StdResolver.stdDir(), 'the memo is re-primed for the rest of the suite');
+		Assert.isTrue(vs[0].message.indexOf('report-only') != -1, 'a declined std excludes nothing, got: ${vs[0].message}');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	// --- collision mode ---
 
 	public function testCollidingExceptionNameUsesQualifiedPath(): Void {
@@ -231,6 +315,21 @@ class PreferTypedThrowCheckTest extends Test {
 	}
 
 	// --- helpers -------------------------------------------------------------------
+
+	/** The thrower every scoped test reports on. */
+	private static inline final THROWER: String = 'class C {\n\n\tpublic function f():Void {\n\t\tthrow \'boom\';\n\t}\n\n}\n';
+
+	/** A source carrying one blocking `catch (e:String)` clause — the gate's trigger shape. */
+	private static inline final STRING_CATCH: String =
+		'class H {\n\n\tpublic function g():Void {\n\t\ttry h() catch (e:String) {}\n\t}\n\n}\n';
+
+	private function scopedPlugin(
+		report: Array<{ file: String, source: String }>, library: Array<{ file: String, source: String }>
+	): CachingGrammarPlugin {
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(library) } });
+		return scoped;
+	}
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferTypedThrow().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());

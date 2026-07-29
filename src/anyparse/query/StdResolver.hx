@@ -25,6 +25,12 @@ import sys.FileSystem;
  * consumer then degrades to its pre-existing behaviour: the resolution scope stays
  * inert, and the derivable tables fall back to their hardcoded constants.
  *
+ * Beyond discovery, `isStdFile` answers the ORIGIN question for an already-indexed path
+ * ("did the std contribute this file?") off the same cached root, so a consumer that must
+ * treat std sources differently keys off this channel instead of inspecting path strings.
+ * It is STRICTER than `stdDir` by one check (`isStdRoot`): attribution is the only direction
+ * in which a wrongly discovered root could shrink a consumer's scan rather than widen it.
+ *
  * The impure edges (env read, `which haxe` spawn, symlink + existence checks) live in
  * `stdDir`; the priority logic is the PURE `discover`, unit-tested with a fixture
  * `exists` predicate and no real std. Mirrors `HaxelibResolver`'s pure-assembly split.
@@ -38,10 +44,21 @@ final class StdResolver {
 	/** Impure discoveries that actually ran the lookup — a cached hit leaves this untouched (the caching-invariant tests read it). */
 	public static var discoveries(default, null): Int = 0;
 
+	/**
+	 * The toplevel file every Haxe std ships — the marker `isStdFile` checks before ATTRIBUTING a
+	 * path to std, so a `HAXE_STD_PATH` aimed at something else cannot lend its name to a tree.
+	 */
+	private static inline final STD_MARKER: String = 'Std.hx';
+
 	/** The memoised `stdDir` result; `_computed` distinguishes a cached null from "not yet computed". */
 	private static var _cached: Null<String> = null;
 
 	private static var _computed: Bool = false;
+
+	/** The root `isStdRoot` last answered for, and its verdict — one existence check per root per process. */
+	private static var _markerRoot: Null<String> = null;
+
+	private static var _markerVerdict: Bool = false;
 
 	/**
 	 * The absolute Haxe `std` directory, discovered ONCE and cached, or null when it cannot
@@ -67,6 +84,8 @@ final class StdResolver {
 	public static function resetCache(): Void {
 		_cached = null;
 		_computed = false;
+		_markerRoot = null;
+		_markerVerdict = false;
 	}
 
 	/**
@@ -119,6 +138,60 @@ final class StdResolver {
 			haxe.io.Path.join([stdDir, 'haxe']),
 			haxe.io.Path.join([stdDir, 'sys'])
 		];
+	}
+
+	/**
+	 * Whether `path` names a file the auto-discovered std contributed to the resolution scope
+	 * — the ORIGIN marker for a consumer whose proof holds inside std but not outside it.
+	 * Answered against the SAME memoised `stdDir` the scope was built from, so there is one
+	 * notion of "this came from std" and no guessing at a `/std/` path segment.
+	 *
+	 * False whenever the channel is declined or absent (`APQ_NO_STD`, `"resolutionStd": false`,
+	 * no Haxe on the machine): with no std root there is nothing to attribute, and a consumer
+	 * that excludes std files then excludes none. That is the fail-closed direction — the only
+	 * answer that could WEAKEN such a consumer's proof is a project file misread as std, which
+	 * is what `isStdRoot` exists to prevent.
+	 */
+	public static function isStdFile(path: String): Bool {
+		final dir: Null<String> = stdDir();
+		return dir != null && isStdRoot(dir) && isUnder(dir, path);
+	}
+
+	/**
+	 * Whether `dir` really IS a Haxe std — it carries the toplevel `Std.hx` every std ships —
+	 * rather than merely whatever `HAXE_STD_PATH` happened to name. Memoised per root, so the
+	 * existence check runs once per process for the one root `stdDir` ever returns.
+	 *
+	 * `stdDir` itself accepts any existing directory on purpose: for its other consumers a wrong
+	 * root only WIDENS the resolution scope or falls back to a hardcoded table, both harmless.
+	 * The origin question inverts that. A `HAXE_STD_PATH` pointed at a project tree would let
+	 * that project's own files be attributed to std, and a consumer that EXCLUDES std files
+	 * would then skip real project code — the one direction in which this channel can weaken a
+	 * proof. So the stricter question gets its own gate here instead of tightening `stdDir`,
+	 * whose laxity is load-bearing elsewhere.
+	 */
+	private static function isStdRoot(dir: String): Bool {
+		if (_markerRoot == dir) return _markerVerdict;
+		_markerRoot = dir;
+		#if (sys || nodejs)
+		_markerVerdict = FileSystem.exists(haxe.io.Path.join([dir, STD_MARKER]));
+		#else
+		_markerVerdict = false;
+		#end
+		return _markerVerdict;
+	}
+
+	/**
+	 * PURE containment test: whether `path` lies strictly inside directory `dir`, both
+	 * normalised (backslashes folded, `.` / `..` resolved). The separator after `dir` is
+	 * required, so a sibling whose name merely starts with it (`/a/std-old/x.hx` against
+	 * `/a/std`) is outside. A RELATIVE `path` can never be inside an absolute `dir` and answers
+	 * false — which is what report files, spelled the way the CLI received them, get, and the
+	 * direction that keeps them inside a std-excluding consumer's scan.
+	 */
+	public static function isUnder(dir: String, path: String): Bool {
+		final root: String = haxe.io.Path.removeTrailingSlashes(haxe.io.Path.normalize(dir));
+		return root != '' && StringTools.startsWith(haxe.io.Path.normalize(path), '$root/');
 	}
 
 	/** The `HAXE_STD_PATH` environment variable, trimmed, or null when unset/blank. */

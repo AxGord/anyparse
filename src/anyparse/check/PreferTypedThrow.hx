@@ -6,6 +6,7 @@ import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
+import anyparse.query.StdResolver;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
@@ -35,38 +36,50 @@ import anyparse.runtime.Span;
  * is provably a raw String at the throw site, and only a literal can be moved into the
  * constructor with no evaluation-order question.
  *
- * ## The catch-clause gate — fail closed, whole resolution scope
+ * ## The catch-clause gate — fail closed over the PROJECT scope
  *
  * Boxing changes what a handler sees. A `catch (e:String)` clause STOPS MATCHING a boxed
  * throw altogether; so does a `catch (e:ValueException)` (the runtime wraps a RAW throw in
  * that, never a boxed one); a `catch (e:Dynamic)` / `catch (e:Any)` still matches but now binds
  * the wrapper object instead of the raw string, so a body reading the raw value's API changes
  * behaviour. None is decidable per-file — the handler can live anywhere the thrower's call
- * reaches. So the gate scans the WHOLE resolution scope (the report files UNION the configured
- * library roots and the implicitly discovered std, via `RefactorSupport.resolutionIndexOf`): if
- * ANY `catch` clause there is typed one of those names, the rule DEGRADES WHOLESALE to
- * report-only — every finding keeps its diagnostic, no finding gets an edit. A source the index
- * could not PARSE is unreadable rather than absent, so a non-empty `skippedFiles` degrades too,
- * and the `Cli` fixed-point loop lists this rule in `fullScopeIds` so a later pass sees every
- * file rather than the changed subset. With NO resolution scope at all (a direct `check.run`, or
- * `APQ_NO_STD` with no `resolutionRoots`) the gate can only answer for the files it is handed —
- * that is the configuration in which the fix arm is reachable, and its proof is only as wide as
- * the run.
+ * reaches. So the gate scans the report files UNION the configured library roots (via
+ * `RefactorSupport.resolutionIndexOf`): if ANY `catch` clause there is typed one of those
+ * names, the rule DEGRADES WHOLESALE to report-only — every finding keeps its diagnostic, no
+ * finding gets an edit. A source the index could not PARSE is unreadable rather than absent, so
+ * a skipped project file degrades too, and the `Cli` fixed-point loop lists this rule in
+ * `fullScopeIds` so a later pass sees every file rather than the changed subset. With NO
+ * resolution scope at all (a direct `check.run`) the gate can only answer for the files it is
+ * handed — its proof is only as wide as the run.
+ *
+ * ## Why the auto-discovered std is excluded from that scan
+ *
+ * Every file the implicitly discovered std contributed is skipped, recognised by
+ * `StdResolver.isStdFile` — the SAME memoised `stdDir` the scope itself was built from, never
+ * a guess at a `/std/` path segment. The argument is reachability, not volume: a `String` /
+ * `Dynamic` catch inside std guards std-internal throws within std's own call boundaries, and a
+ * PROJECT throw converted to `haxe.Exception` cannot change which std-internal throws those
+ * clauses see. Scanning them only imports a verdict about code the rewrite can never reach.
+ *
+ * Left in, that verdict was not fail-closed but permanently closed: the std ships ~31 such
+ * clauses across 10 files (`haxe.ds.BalancedTree` catches `String`; `haxe.io.Bytes`,
+ * `haxe.io.BytesInput`, `haxe.Template`, `sys.Http` and friends catch `Dynamic`), so on any
+ * Haxe-equipped machine the implicit std joined the scope and degraded EVERY run — the fix arm
+ * opened only under `APQ_NO_STD` / `"resolutionStd": false`, which is to say never.
+ *
+ * The PROJECT half keeps the full fail-closed treatment, and that half is the point: a
+ * project's own `catch (msg:String)` — a vendored crash reporter, say — does sit on a path a
+ * project throw reaches, so ONE such clause anywhere in report or library scope still degrades
+ * the whole rule. The edge the exclusion knowingly buys is a project callback handed INTO std
+ * and invoked inside a std `try`; a rule that can never act is the worse trade.
  *
  * The scan is TEXTUAL (a `catch` token, its parenthesised parameter, the nominal after the
- * `:`), not a parse: it must visit every indexed source, a parse of each would dominate the
- * run, and for the shapes that matter (`catch (e:String)`, `catch(e : Dynamic)`, a line-broken
- * parameter) it decodes, while its over-matches (the token inside a comment or a string) only
- * degrade the rule further. It does NOT resolve names: a clause typed through a `typedef Raw =
- * String` alias reads as `Raw` and does not degrade — the one KNOWN unsound miss, since the
- * project's own alias would still be catching a raw String.
- *
- * PRACTICAL NOTE: the Haxe std ships such clauses (`haxe.ds.BalancedTree` catches `String`,
- * `haxe.io.Bytes` and friends catch `Dynamic`), so on a machine where the implicit std joins
- * the resolution scope this gate degrades the rule to report-only by default. That is the
- * fail-closed contract working as specified, not a defect: the fix arm opens for a run whose
- * resolution scope is narrower (`APQ_NO_STD`, `"resolutionStd": false`, or a direct
- * `check.run` over report files that carry no catch-all).
+ * `:`), not a parse: it must visit every indexed project source, a parse of each would dominate
+ * the run, and for the shapes that matter (`catch (e:String)`, `catch(e : Dynamic)`, a
+ * line-broken parameter) it decodes, while its over-matches (the token inside a comment or a
+ * string) only degrade the rule further. It does NOT resolve names: a clause typed through a
+ * `typedef Raw = String` alias reads as `Raw` and does not degrade — a KNOWN unsound miss,
+ * since the project's own alias would still be catching a raw String.
  *
  * ## Autofix
  *
@@ -182,22 +195,23 @@ final class PreferTypedThrow implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Whether ANY source in the resolution scope carries a `catch` clause typed `String` or a
-	 * catch-all name. The report `files` are scanned first (they are already in memory and are
-	 * the likeliest hit); the resolution index — report files UNION the configured library
-	 * roots and the implicit std — is scanned after, skipping the sources already seen. True
-	 * degrades the whole rule to report-only.
+	 * Whether ANY source in the PROJECT half of the resolution scope carries a `catch` clause
+	 * typed `String` or a catch-all name. The report `files` are scanned first (they are already
+	 * in memory and are the likeliest hit); the resolution index — report files UNION the
+	 * configured library roots — is scanned after, skipping the sources already seen AND every
+	 * file the auto-discovered std contributed (`StdResolver.isStdFile`; the class doc has the
+	 * reachability argument). True degrades the whole rule to report-only.
 	 */
 	private static function catchAllInScope(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin, seams: Seams): Bool {
 		for (entry in files) if (sourceHasBlockingCatch(entry.source, seams.blockingCatchTypes)) return true;
 		final index: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin);
 		if (index == null) return false;
 		// A source the index could not PARSE never enters `allFiles`, so its clauses are
-		// unreadable here. Unreadable is not absent: degrade rather than assume.
-		if (index.skippedFiles().length > 0) return true;
+		// unreadable here. Unreadable is not absent: degrade rather than assume — except for a
+		// std source, whose clauses this gate would not have read even had it parsed.
+		for (skipped in index.skippedFiles()) if (!StdResolver.isStdFile(skipped)) return true;
 		final scanned: Map<String, Bool> = [for (entry in files) entry.file => true];
-		for (info in index.allFiles()) {
-			if (scanned.exists(info.file)) continue;
+		for (info in index.allFiles()) if (!scanned.exists(info.file) && !StdResolver.isStdFile(info.file)) {
 			final src: Null<String> = index.sourceOf(info.file);
 			if (src != null && sourceHasBlockingCatch(src, seams.blockingCatchTypes)) return true;
 		}
