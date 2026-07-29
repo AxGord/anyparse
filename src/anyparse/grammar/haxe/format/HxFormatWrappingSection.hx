@@ -123,6 +123,16 @@ package anyparse.grammar.haxe.format;
  * `lineLength >= n` predicate are silently dropped at load time so the
  * cascade falls through to the next rule).
  *
+ *  - `comprehensionCuddledOpen`: bool → `comprehensionCuddledOpen` (slice
+ *    ω-comprehension-cuddled-open). Not a `WrapRules` cascade — a Bool
+ *    layout policy on the array/map `[…]` whose SOLE element is an
+ *    expression-bodied comprehension: when the list lays out multi-line
+ *    and the segment through the comprehension head's closing `)` still
+ *    fits, the head rides the `[` line (`[ for (x in xs)`) and only the
+ *    body wraps, one indent below. Default `false` (config absent) keeps
+ *    the pre-slice leading-break layout byte-identical. Block-bodied and
+ *    nested comprehensions are deliberately excluded — see
+ *    `WriteOptions.comprehensionCuddledOpen`.
  *  - `arrayMatrixWrap`: string → `arrayMatrixWrap` (slice
  *    ω-arraymatrix-wrap). Not a `WrapRules` cascade — a three-way enum
  *    policy (`noMatrixWrap` / `matrixWrapNoAlign` / `matrixWrapWithAlign`)
@@ -137,6 +147,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var maxLineLength: Int;
 
 	@:optional var arrayMatrixWrap: String;
+
+	@:optional var comprehensionCuddledOpen: Bool;
 
 	@:optional var arrayWrap: HxFormatWrapRules;
 

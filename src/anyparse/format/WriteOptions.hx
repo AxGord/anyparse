@@ -149,6 +149,32 @@ typedef WriteOptions = {
 	alignInlineSwitchCaseBody: Bool,
 
 	/**
+	 * When `true`, a delimited list whose SOLE element is an expression-
+	 * bodied comprehension (`[for (x in xs) body]` / `[while (c) body]`,
+	 * filter-`if` and `k => v` map forms included) keeps the comprehension
+	 * HEAD on the opening-delimiter line — `[ for (x in xs)` — instead of
+	 * breaking the delimiter onto its own line, whenever the segment
+	 * through the head's closing `)` still fits the line. The body (and any
+	 * filter `if`) wraps one indent level below the open-delimiter line and
+	 * the close delimiter lands on its own line at container indent. A head
+	 * that does not fit falls back to the delimiter-on-its-own-line layout.
+	 *
+	 * BLOCK-bodied comprehensions (`[for (x in xs) { … }]`) are NOT covered
+	 * — they already head-hug unconditionally under padded comprehension
+	 * brackets — and neither are NESTED comprehensions (a `for` / `while`
+	 * inside the body): both stay on their pre-knob layout, deliberately
+	 * conservative. The inner-delimiter padding follows the construct's own
+	 * bracket-spacing policy, so under tight brackets the head cuddles as
+	 * `[for (x in xs)`.
+	 *
+	 * Default `false` — absent from config means byte-identical output to
+	 * the pre-knob writer. Fed by `wrapping.comprehensionCuddledOpen`
+	 * through `HaxeFormatConfigLoader`; format-neutral so any grammar with
+	 * a comprehension-shaped list element can reuse the policy.
+	 */
+	comprehensionCuddledOpen: Bool,
+
+	/**
 	 * Cap on consecutive line-end runs in the rendered output. Read once
 	 * by `Renderer.render` as the final post-pass: any run of `N+1` or
 	 * more consecutive `lineEnd` sequences is truncated to exactly

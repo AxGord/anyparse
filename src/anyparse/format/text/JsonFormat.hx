@@ -109,6 +109,7 @@ final class JsonFormat implements TextFormat {
 		arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
+		comprehensionCuddledOpen: false,
 		addLineCommentSpace: true,
 		compressSuccessiveParenthesis: true,
 	};
