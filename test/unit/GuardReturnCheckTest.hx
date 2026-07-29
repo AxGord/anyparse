@@ -123,6 +123,17 @@ class GuardReturnCheckTest extends Test {
 		Assert.isTrue(fixed.indexOf('if (!(a != null && b != null && p(a.length, b.length))) return false;') != -1);
 	}
 
+	public function testStrandedNarrowingMultiLineConditionNotFlagged(): Void {
+		// The verbatim wrap of an ALREADY multi-line condition reads worse than the
+		// branch it would replace, so the site is left alone.
+		Assert.equals(0, v(cond('a != null\n\t\t\t&& b != null\n\t\t\t&& p(a.length, b.length)')).length);
+	}
+
+	public function testDeMorganedMultiLineConditionStillFlagged(): Void {
+		// The same multi-line shape WITHOUT a stranded narrowing keeps its de-nest.
+		Assert.equals(1, v(cond('a != null\n\t\t\t&& b != null\n\t\t\t&& c != null')).length);
+	}
+
 	public function testStrandedNarrowingFirstOperandStillDeMorgans(): Void {
 		// The FIRST operand's fact does survive the `||` chain, so this one is safe.
 		Assert.isTrue(

@@ -46,7 +46,9 @@ import anyparse.runtime.Span;
  * de-nested body still narrows after the wrapped guard). The gate is syntactic and
  * conservative - no type information: a negated `&&` chain is flagged when an operand at
  * index 3 or later shares a plain identifier with an operand at index 2 or later that
- * precedes it. `loop-guard` negates in the opposite direction (a skip condition into a keep
+ * precedes it. A condition that ALREADY spans lines takes NO fix on this path at all: the
+ * verbatim wrap re-emits it as-is, so a nested multi-line `!( … )` would read worse than
+ * the branch it replaces (a De-Morganed multi-line condition still de-nests). `loop-guard` negates in the opposite direction (a skip condition into a keep
  * condition) and `guard-continue` shares the hazard; the gate lives HERE rather than in
  * `CheckScan` so the shared engine's other consumers keep their exact output.
  *
@@ -260,6 +262,11 @@ final class GuardReturn implements Check {
 		if (!s.blockKinds.contains(thenBlock.kind) || thenBlock.children.length < MIN_THEN_STATEMENTS) return null;
 		if (!s.flow.isTerminal(thenBlock.children[thenBlock.children.length - 1])) return null;
 		if (hasConditionalRegion(ifNode) || hasConditionalRegion(tail)) return null;
+		// The stranded-narrowing fallback re-emits `cond` VERBATIM, so a condition that
+		// already spans lines becomes a nested multi-line `!( … )` wrap — worse to read
+		// than the branch it would replace. Only that path is affected; a De-Morganed
+		// multi-line condition still de-nests.
+		if (narrowingStranded(cond, s) && spansLines(source, cond)) return null;
 		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail) || redeclaresSibling(block, ifNode, thenBlock, s);
 		return blocked ? null : {
 			ifNode: ifNode,
@@ -396,6 +403,13 @@ final class GuardReturn implements Check {
 		if (node.kind == s.identKind && name != null && name != '' && !out.contains(name)) out.push(name);
 		for (child in node.children) identNames(child, s, out);
 		return out;
+	}
+
+
+	/** Whether `node`'s source spans more than one line. */
+	private static function spansLines(source: String, node: QueryNode): Bool {
+		final span: Null<Span> = node.span;
+		return span != null && source.substring(span.from, span.to).indexOf('\n') != -1;
 	}
 
 }
