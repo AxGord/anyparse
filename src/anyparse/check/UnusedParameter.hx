@@ -217,7 +217,16 @@ final class UnusedParameter implements Check implements ConfigAware {
 	private function renameSilenceEnabled(violations: Array<Violation>): Bool {
 		return violations.length == 0
 			? DEFAULT_RENAME_SILENCE
-			: (LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption(RULE_ID, 'renameSilence') ?? DEFAULT_RENAME_SILENCE);
+			: renameSilenceLive(LintConfig.resolveWith(_resolveConfig, violations[0].file));
+	}
+
+	/**
+	 * Whether `config` opts the `_<name>` silence-rename in — the ONE seat for the option
+	 * key and its default, so a cross-rule guard cannot drift from the rule it guards
+	 * (`NoUnderscorePrefix` reads it to decide whether the rename it must not fight is live).
+	 */
+	private static function renameSilenceLive(config: LintConfig): Bool {
+		return config.boolOption(RULE_ID, 'renameSilence') ?? DEFAULT_RENAME_SILENCE;
 	}
 
 	/**

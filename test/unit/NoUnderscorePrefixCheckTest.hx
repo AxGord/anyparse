@@ -24,8 +24,11 @@ using StringTools;
  */
 class NoUnderscorePrefixCheckTest extends Test {
 
-	/** A config that turns `unused-parameter`'s silencing rename OFF, lifting the cross-rule loop guard. */
+	/** A config that turns `unused-parameter`'s silencing rename off EXPLICITLY — the `false` value, as distinct from the absent option. */
 	private static inline final NO_SILENCE: String = '{"rules":{"unused-parameter":{"renameSilence":false}}}';
+
+	/** A config that opts the silencing rename in but disables the rule carrying it — the only shape where the guard's enablement conjunct decides. */
+	private static inline final SILENCE_BUT_DISABLED: String = '{"rules":{"unused-parameter":{"enabled":false,"renameSilence":true}}}';
 
 	public function testHandlerParameterFlagged(): Void {
 		final vs: Array<Violation> = violations(handlerSource());
@@ -139,7 +142,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	public function testUnreferencedParameterFlaggedWhenUnusedParameterDisabled(): Void {
-		Assert.equals(1, violations(unusedParamSource(), '{"rules":{"unused-parameter":{"enabled":false}}}').length);
+		// `renameSilence` is opted IN here on purpose: with it absent the knob arm alone would
+		// lift the guard, and the test would pass without the enablement conjunct doing anything.
+		Assert.equals(1, violations(unusedParamSource(), SILENCE_BUT_DISABLED).length);
 	}
 
 	public function testStringInterpolationReadRenamesAlong(): Void {
