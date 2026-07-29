@@ -2154,6 +2154,75 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The offset at which an `extends` / `implements` clause can be spliced into
+	 * the header of `decl` (named `typeName`): just past its last header token,
+	 * before the body `{`. AST-anchored — each header child node (a type-parameter
+	 * constraint, an `extends` / `implements` clause, a conditional block) bounds
+	 * the search, and the search itself steps over comments and string literals,
+	 * so a `{` written inside a header comment or inside a structural type
+	 * constraint is never mistaken for the body brace. Null when no body brace can
+	 * be verified before the first body member; a caller that gets null must
+	 * refuse the whole operation rather than splice at an unverified offset.
+	 */
+	public static function typeHeaderInsertOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
+		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
+		final nameAt: Int = identTokenOffset(source, nameSpan, typeName);
+		final headerFrom: Int = nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
+		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
+		var from: Int = headerFrom;
+		var brace: Int = -1;
+		// Children are in document order: the first one that starts after a located
+		// brace belongs to the body, every earlier one is part of the header.
+		for (child in decl.nameNode.children) {
+			final s: Null<Span> = child.span;
+			if (s == null) continue;
+			brace = headerScan(source, from, s.from < limit ? s.from : limit).brace;
+			if (brace >= 0) break;
+			if (s.to > from) from = s.to;
+		}
+		if (brace < 0) brace = headerScan(source, from, limit).brace;
+		return brace < 0 || StringTools.fastCodeAt(source, brace) != '{'.code ? null : headerScan(source, headerFrom, brace).tokenEnd;
+	}
+
+	/**
+	 * The first `{` and the end of the last non-whitespace token in
+	 * `source[from...to)`, both computed with comments and string literals treated
+	 * as invisible. `brace` is -1 when the range holds no brace outside them;
+	 * `tokenEnd` falls back to `from` when the range is all trivia.
+	 */
+	private static function headerScan(source: String, from: Int, to: Int): { brace: Int, tokenEnd: Int } {
+		final end: Int = to <= source.length ? to : source.length;
+		var brace: Int = -1;
+		var tokenEnd: Int = from;
+		var i: Int = from;
+		while (i < end) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == '/'.code && i + 1 < end) {
+				final next: Int = StringTools.fastCodeAt(source, i + 1);
+				if (next == '/'.code) {
+					final nl: Int = source.indexOf('\n', i + 2);
+					i = nl < 0 ? end : nl + 1;
+					continue;
+				}
+				if (next == '*'.code) {
+					final close: Int = source.indexOf('*/', i + 2);
+					i = close < 0 ? end : close + 2;
+					continue;
+				}
+			}
+			if (c == '"'.code || c == "'".code) {
+				i = skipStringLiteral(source, i, c) + 1;
+				tokenEnd = i;
+				continue;
+			}
+			if (c == '{'.code && brace < 0) brace = i;
+			if (!isSpace(c)) tokenEnd = i + 1;
+			i++;
+		}
+		return { brace: brace, tokenEnd: tokenEnd };
+	}
+
+	/**
 	 * Index of the closing `quote` of the string opened at `open`, honouring
 	 * `\`-escapes; the source length minus one if unterminated (the caller's `i++`
 	 * then ends the scan).

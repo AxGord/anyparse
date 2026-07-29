@@ -58,6 +58,45 @@ class ExtractSuperclassSliceTest extends Test {
 		);
 	}
 
+	/**
+	 * A `{` inside a header comment is NOT the class body brace — the op must
+	 * anchor past the comment instead of splicing `extends` into it.
+	 */
+	public function testCommentBraceInHeader(): Void {
+		final src: String =
+			'package pkg;\n\nclass Holder /* body { starts */ {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'BaseHolder', 'pkg/BaseHolder.hx', ['ping'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(
+			StringTools.contains(newSrc, 'class Holder extends BaseHolder /* body { starts */ {'), 'extends lands outside the comment'
+		);
+		Assert.isFalse(StringTools.contains(newSrc, 'body extends'), 'nothing spliced inside the comment');
+		Assert.isFalse(StringTools.contains(newSrc, 'function ping'), 'the pulled member left the source');
+		Assert.isTrue(
+			StringTools.contains(changeFor(changes, 'pkg/BaseHolder.hx').newSource, 'function ping'), 'and landed on the superclass'
+		);
+	}
+
+	/** A `{` inside a header LINE comment is not the body brace either. */
+	public function testLineCommentBraceInHeader(): Void {
+		final src: String =
+			'package pkg;\n\nclass Holder // note {\n{\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'BaseHolder', 'pkg/BaseHolder.hx', ['ping'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(StringTools.contains(newSrc, 'class Holder extends BaseHolder // note {'), 'extends lands before the line comment');
+	}
+
+	/** A structural type-parameter constraint brace is not the body brace. */
+	public function testTypeParamConstraintBrace(): Void {
+		final src: String =
+			'package pkg;\n\nclass Holder<T:{ x:Int }> {\n\tpublic function new() {}\n\n\tpublic function ping():Void {}\n}\n';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'BaseHolder', 'pkg/BaseHolder.hx', ['ping'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(
+			StringTools.contains(newSrc, 'class Holder<T:{ x:Int }> extends BaseHolder {'), 'extends lands after the type params'
+		);
+	}
+
 	/** A class that already extends a class is refused (single inheritance). */
 	public function testAlreadyExtendsRefused(): Void {
 		final src: String =

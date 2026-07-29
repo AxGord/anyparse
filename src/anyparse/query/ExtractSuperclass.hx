@@ -109,7 +109,8 @@ final class ExtractSuperclass {
 		};
 
 		final headerEdit: Null<{ span: Span, text: String }> = extendsEdit(srcSource, declNN, srcTypeName, superName);
-		if (headerEdit == null) return Err('could not locate the class body of "$srcTypeName" to add extends');
+		if (headerEdit == null)
+			return Err('could not verify the body brace of class "$srcTypeName" — refusing to add extends (nothing written)');
 		final edits: Array<{ span: Span, text: String }> = [for (m in moved) { span: m.cut, text: '' }];
 		edits.push(headerEdit);
 		final newSrc: String = collapseBlankRuns(RefactorSupport.applyEdits(srcSource, edits));
@@ -279,8 +280,9 @@ final class ExtractSuperclass {
 
 	/**
 	 * The header edit that inserts `extends <Super>` — before an existing
-	 * `implements` clause, else before the body `{`. Null when the brace
-	 * cannot be found.
+	 * `implements` clause, else just past the last header token. Null when
+	 * the body brace cannot be verified, which aborts the whole extraction
+	 * before any member is cut.
 	 */
 	private static function extendsEdit(
 		source: String, decl: TypeDeclMatch, typeName: String, superName: String
@@ -289,18 +291,10 @@ final class ExtractSuperclass {
 			final s: Null<Span> = child.span;
 			if (s != null) return { span: new Span(s.from, s.from), text: 'extends $superName ' };
 		}
-		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		final nameFrom: Int = RefactorSupport.identTokenOffset(source, nameSpan, typeName);
-		final searchFrom: Int = nameFrom < 0 ? nameSpan.from : nameFrom + typeName.length;
-		final brace: Int = source.indexOf('{', searchFrom);
-		if (brace < 0) return null;
-		var headerEnd: Int = brace;
-		while (headerEnd > searchFrom && isSpace(StringTools.fastCodeAt(source, headerEnd - 1))) headerEnd--;
-		return { span: new Span(headerEnd, headerEnd), text: ' extends $superName' };
-	}
-
-	private static inline function isSpace(code: Int): Bool {
-		return code == ' '.code || code == '\t'.code || code == '\n'.code || code == '\r'.code;
+		final at: Null<Int> = RefactorSupport.typeHeaderInsertOffset(source, decl, typeName);
+		if (at == null) return null;
+		final atNN: Int = at;
+		return { span: new Span(atNN, atNN), text: ' extends $superName' };
 	}
 
 	/** The cut span of a member group: decl + leading doc + whole line(s). */
