@@ -4,7 +4,9 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
+import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import anyparse.query.TypeInfoProvider;
@@ -20,8 +22,10 @@ import anyparse.check.Check.ConfigAware;
  *
  * `fix` swaps `Dynamic` / `Any` to `Exception` whenever the caught variable is never mentioned
  * in the catch body — an unused catch-all swaps with zero behaviour change (Haxe 4.1 unified
- * exceptions), adding `import haxe.Exception;` when the name is free (fully-qualified
- * `haxe.Exception` on a name collision). A swap inside a conditional-compilation region
+ * exceptions). How the type is SPELLED is the shared `TypeRefPrinter`'s decision (short name when
+ * already visible, short name plus an inserted `import haxe.Exception;` when the name is free,
+ * fully-qualified on any collision — an import, an alias, a module-local or same-package type).
+ * The path itself comes from `RefShape.exceptionTypePath`. A swap inside a conditional-compilation region
  * (`#if … #end`) emits fully-qualified `haxe.Exception` and adds no import — a top-level import
  * would be unused in a build where that branch is compiled out. Arm (a) keeps the original
  * variable name; only the type changes.
@@ -111,12 +115,18 @@ final class CatchDynamic implements Check implements ConfigAware {
 		final fixLogging: Bool = LintConfig.resolveWith(_resolveConfig, file).boolOption('catch-dynamic', 'fixLoggingUses') ?? false;
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
-		final ex = resolveExceptionType(root, importMap);
+		// The shared printer owns the short-name / add-import / fully-qualified decision (imports,
+		// aliases, module-local and same-package bindings, sorted insert) — this rule used to
+		// hand-roll a weaker version of it.
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, root, importMap, RefactorSupport.resolutionIndexOf(plugin));
+		final exceptionPath: String = seams.exceptionPath;
 		final edits: Array<{ span: Span, text: String }> = [];
 		var rewroteNonConditional: Bool = false;
 		function walk(node: QueryNode, insideConditional: Bool): Void {
 			if (node.kind == kind) {
-				final exText: String = insideConditional ? 'haxe.Exception' : ex.text;
+				// A conditional region gets the qualified path and no import: a top-level import
+				// would be unused in a build where the branch is compiled out.
+				final exText: String = insideConditional ? exceptionPath : printer.print(exceptionPath).text;
 				final catchEdits: Array<{ span: Span, text: String }> = catchRewriteEdits(
 					node, source, catchAll, exText, flagged, fixLogging, callKind, fieldKind, identKind
 				);
@@ -129,7 +139,10 @@ final class CatchDynamic implements Check implements ConfigAware {
 			for (c in node.children) walk(c, childCond);
 		}
 		walk(root, false);
-		if (rewroteNonConditional && ex.needImport) edits.push(importInsertEdit(root));
+		// The printer records a promise per `print` call, including for clauses that turned out
+		// unrewritable; the promises are only MATERIALISED when a non-conditional rewrite actually
+		// landed and needs the short name.
+		if (rewroteNonConditional) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;
 	}
 
@@ -221,74 +234,20 @@ final class CatchDynamic implements Check implements ConfigAware {
 		return false;
 	}
 
-	/**
-	 * How to spell `Exception` in the rewrite, and whether an import must be added. Uses
-	 * the short `Exception` + `import haxe.Exception;` when the name is free; falls back to
-	 * fully-qualified `haxe.Exception` (no import) when the simple name is already bound to a
-	 * different import or a local type — so the swap never silently retargets a wrong type.
-	 */
-	private static function resolveExceptionType(root: QueryNode, importMap: Map<String, String>): { text: String, needImport: Bool } {
-		final resolved: Null<String> = importMap['Exception'];
-		return resolved == 'haxe.Exception'
-			? {
-				text: 'Exception',
-				needImport: false
-			}
-			: resolved != null || hasLocalType(root, 'Exception') ? { text: 'haxe.Exception', needImport: false } : {
-				text: 'Exception',
-				needImport: true
-			};
-	}
-
-	/**
-	 * Whether a top-level declaration binds the simple name `name` — a same-file type, or an
-	 * `import`/`using`/alias whose bound simple name (last dotted segment) is `name`. Such a
-	 * binding would shadow a bare `Exception`, so the swap must qualify instead of importing.
-	 */
-	private static function hasLocalType(root: QueryNode, name: String): Bool {
-		for (c in root.children) {
-			final n: Null<String> = c.name;
-			if (n != null && StringTools.endsWith(c.kind, 'Decl') && lastSegment(n) == name) return true;
-		}
-		return false;
-	}
-
-	/** The last dotted segment of `dotted` (`baz.Exception` -> `Exception`), or the whole string when unqualified. */
-	private static inline function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot == -1 ? dotted : dotted.substring(dot + 1);
-	}
-
-	/** The edit inserting `import haxe.Exception;` — after the last import / using, else after `package`, else at file start (mirrors `AddImport`). */
-	private static function importInsertEdit(root: QueryNode): { span: Span, text: String } {
-		var lastImport: Null<QueryNode> = null;
-		var packageDecl: Null<QueryNode> = null;
-		for (c in root.children) switch c.kind {
-			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
-				lastImport = c;
-			case 'PackageDecl':
-				packageDecl = c;
-			case _:
-		}
-		final stmt: String = 'import haxe.Exception;';
-		final anchor: Null<QueryNode> = lastImport ?? packageDecl;
-		final aspan: Null<Span> = anchor?.span;
-		return aspan == null ? { span: new Span(0, 0), text: '$stmt\n' } : { span: new Span(aspan.to, aspan.to), text: '\n$stmt' };
-	}
-
-
-	/** The catch-clause kind and catch-all type names, or null when the grammar sets neither (the check is then a no-op). */
+	/** The catch-clause kind, catch-all type names and canonical exception path, or null when the grammar sets none of them (the check is then a no-op). */
 	private static function readKinds(plugin: GrammarPlugin): Null<{
 		kind: String,
 		catchAll: Array<String>,
 		condKind: Null<String>,
 		callKind: String,
 		fieldKind: String,
-		identKind: String
+		identKind: String,
+		exceptionPath: String
 	}> {
 		final shape: RefShape = plugin.refShape();
 		final catchKind: Null<String> = shape.catchClauseKind;
-		if (catchKind == null) return null;
+		final exceptionPath: Null<String> = shape.exceptionTypePath;
+		if (catchKind == null || exceptionPath == null) return null;
 		final catchAll: Array<String> = shape.catchAllTypeNames ?? [];
 		return catchAll.length == 0 ? null : {
 			kind: catchKind,
@@ -296,7 +255,8 @@ final class CatchDynamic implements Check implements ConfigAware {
 			condKind: shape.conditionalMemberKind,
 			callKind: shape.callKind ?? '',
 			fieldKind: shape.fieldAccessKind ?? '',
-			identKind: shape.identKind
+			identKind: shape.identKind,
+			exceptionPath: exceptionPath
 		};
 	}
 

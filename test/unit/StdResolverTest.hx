@@ -73,6 +73,84 @@ class StdResolverTest extends Test {
 		Assert.same(['/a/std/*.hx', '/a/std/haxe', '/a/std/sys'], StdResolver.resolutionSpecs('/a/std'));
 	}
 
+	/** A file under the root is inside it. */
+	public function testIsUnderInside(): Void {
+		Assert.isTrue(StdResolver.isUnder('/opt/haxe/std', '/opt/haxe/std/haxe/ds/BalancedTree.hx'));
+	}
+
+	/** The root itself is not strictly inside the root. */
+	public function testIsUnderRootItself(): Void {
+		Assert.isFalse(StdResolver.isUnder('/opt/haxe/std', '/opt/haxe/std'));
+	}
+
+	/** A sibling whose name merely STARTS with the root is outside it — the separator is required. */
+	public function testIsUnderSiblingPrefixIsOutside(): Void {
+		Assert.isFalse(StdResolver.isUnder('/opt/haxe/std', '/opt/haxe/std-old/haxe/X.hx'));
+	}
+
+	/** A trailing slash on the root changes nothing. */
+	public function testIsUnderTrailingSlashRoot(): Void {
+		Assert.isTrue(StdResolver.isUnder('/opt/haxe/std/', '/opt/haxe/std/haxe/X.hx'));
+	}
+
+	/** `.` / `..` segments are resolved before the compare, so a detour through the parent still counts. */
+	public function testIsUnderNormalisesDotSegments(): Void {
+		Assert.isTrue(StdResolver.isUnder('/opt/haxe/std', '/opt/haxe/std/haxe/../haxe/X.hx'));
+	}
+
+	/** Backslashes are folded, so a Windows-spelled path compares against a Windows-spelled root. */
+	public function testIsUnderFoldsBackslashes(): Void {
+		Assert.isTrue(StdResolver.isUnder('C:\\haxe\\std', 'C:\\haxe\\std\\haxe\\X.hx'));
+	}
+
+	/** A RELATIVE path can never be inside an absolute root — the answer that keeps report files in a std-excluding scan. */
+	public function testIsUnderRelativePathIsOutside(): Void {
+		Assert.isFalse(StdResolver.isUnder('/opt/haxe/std', 'src/A.hx'));
+	}
+
+	/** `isStdFile` answers off the discovered root: a project path is never std. */
+	public function testIsStdFileRejectsAProjectPath(): Void {
+		Assert.isFalse(StdResolver.isStdFile('/some/project/src/A.hx'));
+	}
+
+	/** `isStdFile` accepts a path under the real discovered std (skipped when the machine has none). */
+	public function testIsStdFileAcceptsADiscoveredStdPath(): Void {
+		final std: Null<String> = StdResolver.stdDir();
+		if (std == null) {
+			Assert.pass();
+			return;
+		}
+		Assert.isTrue(StdResolver.isStdFile(haxe.io.Path.join([std, 'haxe', 'ds', 'BalancedTree.hx'])));
+	}
+
+	/**
+	 * A `HAXE_STD_PATH` aimed at a tree that is NOT a std (no toplevel `Std.hx`) attributes
+	 * nothing to std. `stdDir` still answers with it — its other consumers only over-scan — but
+	 * a consumer that EXCLUDES std files must not be tricked into skipping a project tree.
+	 */
+	public function testIsStdFileRejectsANonStdRoot(): Void {
+		#if (sys || nodejs)
+		final fixture: String = CliFixture.writeDir('notstd', [{ name: 'CrashDumper.hx', source: 'class CrashDumper {}' }]);
+		final answer: Bool = stdFileUnder(fixture, 'CrashDumper.hx');
+		CliFixture.removeDir(fixture);
+		Assert.isFalse(answer, 'a root without the std marker attributes nothing');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
+	/** The same fixture WITH the toplevel `Std.hx` marker is accepted — the gate tests the marker, not the fixture. */
+	public function testIsStdFileAcceptsAMarkedRoot(): Void {
+		#if (sys || nodejs)
+		final fixture: String = CliFixture.writeDir('markedstd', [{ name: 'Std.hx', source: 'class Std {}' }]);
+		final answer: Bool = stdFileUnder(fixture, 'haxe/ds/BalancedTree.hx');
+		CliFixture.removeDir(fixture);
+		Assert.isTrue(answer, 'a root carrying the std marker attributes its files');
+		#else
+		Assert.pass('non-sys target');
+		#end
+	}
+
 	/**
 	 * LIVE smoke: on a machine with an installed std, `stdDir` returns an absolute,
 	 * existing directory whose `Std.hx` is present. Skips when no std is found.
@@ -170,5 +248,26 @@ class StdResolverTest extends Test {
 		Assert.pass('non-sys target');
 		#end
 	}
+
+	#if (sys || nodejs)
+	/**
+	 * `isStdFile` for `relative` under `root`, with `HAXE_STD_PATH` pointed at `root` for the
+	 * duration. Brackets the env write and the `stdDir` memo on BOTH sides — the memo is
+	 * process-wide, so the rest of the suite must come back to the real std.
+	 *
+	 * The restore passes the ORIGINAL value back, null included: `putEnv` with null REMOVES the
+	 * variable, and an unset `HAXE_STD_PATH` is not the same as an empty one — the `haxe`
+	 * subprocess the compiler-oracle tests spawn reads it and fails outright on an empty value.
+	 */
+	private function stdFileUnder(root: String, relative: String): Bool {
+		final original: Null<String> = Sys.getEnv('HAXE_STD_PATH');
+		StdResolver.resetCache();
+		Sys.putEnv('HAXE_STD_PATH', root);
+		final answer: Bool = StdResolver.isStdFile(haxe.io.Path.join([root, relative]));
+		Sys.putEnv('HAXE_STD_PATH', original);
+		StdResolver.resetCache();
+		return answer;
+	}
+	#end
 
 }

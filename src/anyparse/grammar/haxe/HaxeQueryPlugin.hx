@@ -518,6 +518,8 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			noBodyKind: 'NoBody',
 			catchClauseKind: 'CatchClause',
 			catchAllTypeNames: ['Dynamic', 'Any'],
+			exceptionTypePath: 'haxe.Exception',
+			rawThrowWrapperTypePath: 'haxe.ValueException',
 			controlExitKinds: [
 				'ThrowStmt',
 				'ThrowExpr',

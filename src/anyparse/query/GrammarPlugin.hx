@@ -1007,6 +1007,25 @@ typedef RefShape = {
 	@:optional var catchAllTypeNames: Array<String>;
 
 	/**
+	 * The fully-qualified path of the language's canonical exception TYPE — the wrapper a raw
+	 * thrown value should be boxed in (Haxe `haxe.Exception`). The `prefer-typed-throw` check
+	 * rewrites `throw <string literal>` to `throw new <this type>(<literal>)`, spelling the
+	 * reference through `TypeRefPrinter` (short name plus an import when free, else the
+	 * fully-qualified path). Optional; unset makes that check a no-op — a grammar without a
+	 * canonical exception type has nothing to box into.
+	 */
+	@:optional var exceptionTypePath: String;
+
+	/**
+	 * The fully-qualified path of the type a raw (unboxed) thrown value is WRAPPED in by the
+	 * runtime — Haxe's `haxe.ValueException`, the `Exception` subclass its unified-exception
+	 * model builds for `throw 'boom'`. A `catch` clause typed this way matches a raw throw but
+	 * NOT a boxed one, so `prefer-typed-throw` adds its simple name to the clause types that
+	 * degrade the rule to report-only. Optional; unset just drops that one name from the gate.
+	 */
+	@:optional var rawThrowWrapperTypePath: String;
+
+	/**
 	 * The runtime-CHECKED cast node kind (Haxe `cast(x, T)` — `TypedCastExpr`), which does a
 	 * runtime type test and throws on mismatch — distinct from the compile-time `(x : T)`
 	 * ascription. The `impossible-cast` check reads it. Optional; unset makes the check a no-op.

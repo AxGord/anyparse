@@ -225,12 +225,15 @@ class CatchDynamicCheckTest extends Test {
 
 	public function testFixLoggingNestedInnerCatchUntouched(): Void {
 		// The outer catch-all uses its value only for logging; a nested inner catch (Exception)
-		// is not a catch-all and must be left byte-for-byte untouched.
+		// is not a catch-all and must be left byte-for-byte untouched. The rewrite QUALIFIES
+		// rather than importing: the file already carries a bare `Exception` token that no import
+		// here binds, so it resolves through something this rule cannot see (an `import.hx`, a
+		// same-package type) — adding `import haxe.Exception;` would silently retarget it.
 		final out: String = applyFixLogging(
 			"class C { public function f():Void { try a() catch (msg:Dynamic) { trace('err: $msg'); try b() catch (e:Exception) { recover(); } } } }"
 		);
 		final expected: String =
-			"import haxe.Exception;\nclass C { public function f():Void { try a() catch (exception:Exception) { trace('err: $exception'); try b() catch (e:Exception) { recover(); } } } }";
+			"class C { public function f():Void { try a() catch (exception:haxe.Exception) { trace('err: $exception'); try b() catch (e:Exception) { recover(); } } } }";
 		Assert.equals(expected, out);
 	}
 
