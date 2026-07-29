@@ -34,18 +34,32 @@ package anyparse.format;
  *     (`var` / `final` / local functions) are excluded outright: the
  *     braces scope the binding, dropping them would widen it.
  *  4. Dangling else: when the enclosing construct has a trailing
- *     `else` (`elseFollows`), any `if` anywhere inside the candidate
- *     statement (`IfStmt` / `IfExpr`, plus `Cond*` raw
- *     conditional-compilation regions treated opaquely) keeps the
- *     braces — a braceless trailing `if` without its own `else` would
- *     capture the outer `else` (Haxe absorbs even a `;` before
- *     `else`). The whole-subtree scan over-approximates the trailing
- *     spine; over-keeping is always safe.
- *  5. `suppress` (`opt._ssbSuppress`) — set for the whole then-body
- *     write of an `if` that has an `else` — blocks every nested
- *     unwrap: `if (a) while (c) { if (b) x; } else y` must keep the
- *     loop-body braces even though the loop itself carries no
- *     `elseFollows` signal.
+ *     `else` (`elseFollows`), the candidate keeps its braces iff its
+ *     de-braced rendering would END on an `if` that can still absorb
+ *     that `else`. The test is the TRAILING SPINE (`tailDanglingIf`),
+ *     not a whole-subtree scan: an inner `if` is dangerous only when
+ *     nothing seals it before the statement ends — a closing `)` /
+ *     `]` / `}` of an enclosing call, index, array, block, switch or
+ *     brace-bearing body makes it harmless, while the statement's own
+ *     trailing `;` does NOT (Haxe absorbs a `;` before `else`).
+ *     A trailing `if` that HAS its own `else` consumes the following
+ *     `else` itself, so the spine walk continues into that `else`
+ *     branch — for an `else if` chain the question is whether the
+ *     FINAL arm lacks an `else`. `Cond*` raw conditional-compilation
+ *     regions are opaque: dangerous whenever they sit on the spine.
+ *     Every ctor the spine walk does not model falls back to the
+ *     whole-subtree `containsIf` scan, i.e. to the pre-slice
+ *     over-approximation — unknown shapes fail closed.
+ *  5. `suppress` (`opt._ssbSuppress`) — set for the then-body write of
+ *     an `if` that has an `else` whose then-body does NOT render with
+ *     braces — blocks a nested unwrap under the SAME trailing-spine
+ *     test as gate 4: `if (a) while (c) { if (b) x; } else y` must
+ *     keep the loop-body braces even though the loop itself carries no
+ *     `elseFollows` signal, while `if (a) while (c) { g(); } else y`
+ *     de-braces (the loop body ends on a sealed call). Position inside
+ *     the then-body is over-approximated to "on the spine"; a
+ *     brace-bearing then-body is sealed by its own `}` and so never
+ *     arms the frame at all (`WriterLowering.deBraceBodyAccess`).
  *  6. `hasTrailingSemi` — a redundant trailing `;` on the enclosing
  *     statement (the `@:trailOpt(';')` slot, e.g. `for (c) { x; };`).
  *     UNREACHABLE since omega-ssb-trailopt-drop: the writer no longer re-emits
@@ -55,7 +69,10 @@ package anyparse.format;
  *     emit `for (c) x;;`, which anyparse parses but
  *     the Haxe compiler rejects ("Expected }"), so the braces stay.
  *  7. `siblingKeepsBraces` - if/else brace symmetry: an if/else must
- *     de-brace BOTH branches or NEITHER. Each splice probes the OTHER
+ *     de-brace BOTH branches or NEITHER. The probe answers THROUGH
+ *     `unwrapStmt`, so it inherits gate 4's trailing-spine precision
+ *     verbatim - there is no second copy of the dangling-else test that
+ *     could drift from it. Each splice probes the OTHER
  *     branch (via `keepsBraces`) and passes `true` here when that
  *     sibling keeps its braces, so `if (b) { one; } else { a; b; }`
  *     stays fully braced instead of the asymmetric
@@ -90,7 +107,10 @@ class SingleStmtBraces {
 		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return wrapInBlock(block);
 		// Gate 7 repair direction (omega-ssb-symmetry-wrap) - see `needsSymmetryWrap`.
 		if (needsSymmetryWrap(block, siblingKeepsBraces)) return wrapInBlock(block);
-		if (suppress) return body;
+		// The do-body is the ONE brace-droppable field a suppress frame cannot reach: its
+		// rendering is always followed by the `while (...)` keyword+paren, so no de-braced
+		// do-body can ever sit on the trailing spine of an enclosing then-body. Gate 5's
+		// span-precision therefore lets it through unconditionally.
 		if (Type.enumConstructor(block) == 'BlockBody') return unwrapDoBody(block);
 		if (Type.enumConstructor(block) != 'BlockStmt') return body;
 		// Gate 7 - if/else brace symmetry: when the SIBLING branch keeps its braces, this
@@ -141,6 +161,8 @@ class SingleStmtBraces {
 		// as brace-keeping.
 		// `unwrapStmt` (symmetry forced off) returns the body UNCHANGED only when it would NOT
 		// de-brace it on its own merits (gates 1-6, 8) - i.e. the block renders WITH its braces.
+		// Gate 4's trailing-spine test is reached through that call, so this probe and the real
+		// splice can never disagree about a dangling `else`.
 		return isIfThenBody && Type.enumConstructor(cast body) == 'IfStmt'
 			? drop
 			: Type.enumConstructor(cast body) == 'BlockStmt'
@@ -162,15 +184,14 @@ class SingleStmtBraces {
 	 * TERMINAL branch (no further `else`) can carry a redundant trailing `;`
 	 * (gate 6) — missing it would leave that branch braced while earlier branches
 	 * de-brace. Byte-inert when `drop` is off. `suppress` is THREADED into every
-	 * `keepsBraces` probe rather than short-circuiting the scan: inside a suppress
-	 * frame a `BlockStmt` renders braced whatever its own merits say, and the
-	 * immediate-pair probe at each splice already reads it that way — a scan that
-	 * ignored it would answer `false` for a chain whose links visibly keep their
-	 * braces, leaving the head branch bare while its siblings gained braces from the
-	 * pair probe. That mixed state is the one thing the chain gate exists to prevent.
-	 * Suppress can only ever ADD braces here: `unwrapStmt` returns on its own
-	 * `suppress` guard before gate 7's de-brace arm is reached, so the widened
-	 * answer feeds the wrap direction alone.
+	 * `keepsBraces` probe rather than short-circuiting the scan: a suppressed frame
+	 * holds braces on exactly the branches whose de-braced tail could capture the
+	 * enclosing `else` (gate 5), and the immediate-pair probe at each splice already
+	 * reads it that way - a scan that ignored it would answer `false` for a chain
+	 * whose links visibly keep their braces, leaving the head branch bare while its
+	 * siblings gained braces from the pair probe. That mixed state is the one thing
+	 * the chain gate exists to prevent. Suppress can only ever ADD braces here: it
+	 * is a keep-arm of `deBracedElem`, never a de-brace one.
 	 */
 	public static function chainForcesBraces(thenBody: Dynamic, elseBody: Dynamic, drop: Bool, suppress: Bool): Bool {
 		if (!drop) return false;
@@ -247,6 +268,187 @@ class SingleStmtBraces {
 			case 'BlockStmt' | 'BlockBody': false;
 			case _: false;
 		};
+	}
+
+	/**
+	 * Gates 4 and 5: would a bare `else` written directly after `v`'s rendering
+	 * (modulo the statement's own trailing `;` and trivia) bind INSIDE `v`
+	 * instead of to the `if` that owns it?
+	 *
+	 * The walk follows the TRAILING SPINE - at each node, only the child whose
+	 * rendering ends the node's own rendering. Everything else is unreachable by
+	 * a following `else`, so `f(x -> if (c) y)` is safe (the call's `)` seals the
+	 * arrow body) while `x = () -> if (c) y` is not (nothing follows the arrow
+	 * body). An `if` on the spine is dangerous only when it has NO `else` of its
+	 * own; when it has one, that `else` is already taken and the walk continues
+	 * into its branch, which is what makes `while (c) if (b) p(); else q();`
+	 * safe in front of an outer `else` (verified against the Haxe compiler).
+	 *
+	 * Three-way classification, all of it fail-closed:
+	 *  - `Cond*` (raw conditional-compilation regions) are opaque - the `#end`
+	 *    marker is not a token the parser sees, so anything can be at the tail:
+	 *    dangerous whenever reached.
+	 *  - `tailSealed` ctors end on `)` / `]` / `}` / an operator / an identifier,
+	 *    so nothing inside them can reach the `else`: safe without recursing.
+	 *  - `tailOperandIndex` ctors end on one designated child: recurse into it.
+	 * Any ctor in NONE of those falls back to `containsIf`, the whole-subtree
+	 * over-approximation this gate used before the spine walk existed - an
+	 * unmodelled shape can only over-KEEP braces, never over-remove them.
+	 *
+	 * MAINTENANCE: adding a grammar ctor needs an entry here only to gain
+	 * precision. A WRONG entry is the one hazard - a ctor listed as sealed that
+	 * actually ends on a child, or a tail index pointing at a child that is not
+	 * rendered last, silently drops a brace pair that carries meaning.
+	 */
+	private static function tailDanglingIf(v: Dynamic): Bool {
+		if (v == null) return false;
+		if (!Reflect.isEnumValue(v)) return containsIf(v);
+		final e: EnumValue = cast v;
+		final ctor: String = Type.enumConstructor(e);
+		if (StringTools.startsWith(ctor, 'Cond')) return true;
+		if (tailSealed(ctor)) return false;
+		final operand: Int = tailOperandIndex(ctor);
+		if (operand >= 0) return tailDanglingIf(paramAt(e, operand));
+		final head: Dynamic = paramAt(e, 0);
+		return switch ctor {
+			case 'IfStmt': elseTailDanglingIf(head, 'elseBody');
+			case 'IfExpr':
+				elseTailDanglingIf(head, 'elseBranch');
+			// Loop / lambda / function typedefs whose LAST field is the body.
+			case 'WhileStmt' | 'WhileExpr' | 'ForStmt' | 'ForExpr' | 'ForReifExpr':
+				fieldTailDanglingIf(head, 'body');
+			case 'ThinParenLambdaExpr' | 'ParenLambdaExpr' | 'FnExpr' | 'NamedFnExpr' | 'LocalFnStmt' | 'LocalInlineFnStmt':
+				fieldTailDanglingIf(head, 'body');
+			case 'TryCatchStmt' | 'TryCatchStmtBare' | 'TryExpr': tailCatchDanglingIf(head);
+			case 'MetaExpr': fieldTailDanglingIf(head, 'expr');
+			case 'MetaStmt': fieldTailDanglingIf(head, 'stmt');
+			case _: containsIf(e);
+		};
+	}
+
+	/**
+	 * The `if` / `if`-expression arm of `tailDanglingIf`: an else-less `if` at the
+	 * tail captures the following `else`, so it is dangerous whatever its then-body
+	 * looks like (a braced then-body seals nothing - the `if` itself is still open).
+	 * With an `else` present that `else` is already bound, and the spine continues
+	 * into its branch, so an `else if` chain is decided by its FINAL arm.
+	 */
+	private static function elseTailDanglingIf(head: Dynamic, elseField: String): Bool {
+		if (!hasStructField(head, elseField)) return true;
+		final elseBody: Dynamic = Reflect.field(head, elseField);
+		return elseBody == null || tailDanglingIf(elseBody);
+	}
+
+	/**
+	 * The try/catch arm: the rendering ends on the LAST catch clause's body, or on
+	 * the try body when there are no catches. Covers the block-bodied `TryCatchStmt`
+	 * too, whose last catch body may itself be bare.
+	 */
+	private static function tailCatchDanglingIf(head: Dynamic): Bool {
+		if (!hasStructField(head, 'catches')) return true;
+		final catches: Null<Array<Dynamic>> = Reflect.field(head, 'catches');
+		return catches == null || catches.length == 0
+			? fieldTailDanglingIf(head, 'body')
+			: fieldTailDanglingIf(triviaNode(catches[catches.length - 1]), 'body');
+	}
+
+	/**
+	 * The trailing spine through a NAMED field of a trivia typedef struct. A field the
+	 * struct does not declare at all answers DANGEROUS: that is what a grammar rename
+	 * looks like from a name-keyed walk, and reading it as "absent, therefore nothing
+	 * is rendered, therefore safe" would silently start dropping braces the walk can no
+	 * longer reason about. A DECLARED field holding `null` stays safe - an omitted
+	 * `@:optional` body (a body-less `catch (e:T)`, a signature-only `function()`)
+	 * renders nothing after the token that precedes it.
+	 */
+	private static function fieldTailDanglingIf(head: Dynamic, name: String): Bool {
+		return hasStructField(head, name) ? tailDanglingIf(Reflect.field(head, name)) : true;
+	}
+
+	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
+	private static inline function hasStructField(o: Dynamic, name: String): Bool {
+		return o != null && !Reflect.isEnumValue(o) && Reflect.hasField(o, name);
+	}
+
+	/**
+	 * Ctors whose rendering ends on a token no `else` can attach to: a closing
+	 * `)` / `]` / `}`, a postfix operator, or an identifier. Nothing inside them
+	 * is on the trailing spine, so `tailDanglingIf` stops without recursing.
+	 * `BlockBody` / `ExprBody` are shared ctor names across `HxDoWhileBody`,
+	 * `HxFnBody` and `HxFnExprBody`; all three `BlockBody` variants are
+	 * brace-bearing and all three `ExprBody` variants are single-operand, so the
+	 * name-keyed classification is unambiguous for both.
+	 */
+	private static function tailSealed(ctor: String): Bool {
+		return switch ctor {
+			// Statements closed by `}` (block / switch / untyped block).
+			case 'BlockStmt' | 'SwitchStmt' | 'SwitchStmtBare' | 'UntypedBlockStmt':
+				true;
+			// Keyword statements closed by their own `;` or by the do-while `)`.
+			case 'DoWhileStmt' | 'BreakStmt' | 'ContinueStmt' | 'VoidReturnStmt' | 'EmptyStmt' | 'EllipsisStmt' | 'ErrorStmt':
+				true;
+			// Function / do-while body wrappers that carry their own braces or `;`.
+			case 'BlockBody' | 'UntypedBlockBody' | 'NoBody':
+				true;
+			// Expressions closed by a brace or a paren.
+			case 'ArrayExpr' | 'ObjectLit' | 'BlockExpr' | 'ParenExpr' | 'ECheckTypeExpr' | 'NewExpr' | 'TypedCastExpr':
+				true;
+			case 'SwitchExpr' | 'SwitchExprBare' | 'DollarBlockExpr' | 'DollarReifExpr':
+				true;
+			// Postfix operators and member access - the last token is a bracket, an
+			// operator or a name.
+			case 'IndexAccess' | 'Call' | 'FieldAccess' | 'SafeFieldAccess' | 'ForceFieldAccess' | 'PostIncr' | 'PostDecr':
+				true;
+			case _: false;
+		};
+	}
+
+	/**
+	 * The positional child that ends this ctor's rendering, or `-1` when the ctor
+	 * is not modelled that way (sealed, struct-shaped, or unknown). Trivia
+	 * synthesis APPENDS its slots after the grammar parameters - verified against
+	 * the live parser (`Add` is `[left, right, Bool, null, null]`,
+	 * `Ternary` is `[cond, then, else]`, `ExprStmt` is `[expr, Bool]`) - so the
+	 * grammar-order indices below are stable in trivia mode.
+	 */
+	private static function tailOperandIndex(ctor: String): Int {
+		return switch ctor {
+			case 'Ternary':
+				2;
+			// Every binary infix operator, incl. the arrows: the right operand is last.
+			// `Is` / `HxType.Arrow` put a type there, which the walk treats conservatively.
+			case 'Mul' | 'Div' | 'Mod' | 'Add' | 'Sub' | 'Shl' | 'UShr' | 'Shr' | 'BitOr' | 'BitAnd' | 'BitXor':
+				1;
+			case 'Eq' | 'NotEq' | 'LtEq' | 'GtEq' | 'Lt' | 'Gt' | 'Interval' | 'Is' | 'And' | 'Or' | 'NullCoal' | 'In':
+				1;
+			case 'Assign' | 'AddAssign' | 'SubAssign' | 'MulAssign' | 'DivAssign' | 'ModAssign' | 'ShlAssign':
+				1;
+			case 'UShrAssign' | 'ShrAssign' | 'BitOrAssign' | 'BitAndAssign' | 'BitXorAssign' | 'NullCoalAssign':
+				1;
+			case 'BoolAndAssign' | 'BoolOrAssign' | 'ThinArrow' | 'Arrow':
+				1;
+			// Single-operand statements, prefix operators and keyword-atom expressions.
+			case 'ReturnStmt' | 'ExprStmt' | 'ThrowStmt' | 'ExprBody' | 'ReturnExpr' | 'ThrowExpr' | 'UntypedExpr':
+				0;
+			case 'CastExpr' | 'InlineExpr' | 'MacroExpr' | 'Neg' | 'Not' | 'BitNot' | 'PreIncr' | 'PreDecr' | 'Spread':
+				0;
+			case _: -1;
+		};
+	}
+
+	/** The `i`-th enum parameter, or `null` when the ctor carries fewer. */
+	private static inline function paramAt(e: EnumValue, i: Int): Dynamic {
+		final ps: Array<Dynamic> = Type.enumParameters(e);
+		return i < ps.length ? ps[i] : null;
+	}
+
+	/**
+	 * The payload of an `anyparse.runtime.Trivial` element wrapper, or the value
+	 * itself when it is not wrapped. Star-field elements arrive wrapped; a plain
+	 * Ref field does not, and no grammar typedef declares a field named `node`.
+	 */
+	private static inline function triviaNode(v: Dynamic): Dynamic {
+		return hasStructField(v, 'node') ? Reflect.field(v, 'node') : v;
 	}
 
 	private static function containsIf(v: Dynamic): Bool {
@@ -380,7 +582,6 @@ class SingleStmtBraces {
 		final block: EnumValue = cast body;
 		if (isIfThenBody && Type.enumConstructor(block) == 'IfStmt') return null; // gate 8 wrap - no de-brace
 		if (needsSymmetryWrap(block, siblingKeepsBraces)) return null; // gate 7 wrap - no de-brace
-		if (suppress) return null;
 		if (Type.enumConstructor(block) != 'BlockStmt') return null; // do-body / non-block - no plain de-brace
 		if (siblingKeepsBraces) return null; // gate 7 keep
 		if (hasTrailingSemi) return null; // gate 6 keep
@@ -390,7 +591,12 @@ class SingleStmtBraces {
 		if (inner == null || !Reflect.isEnumValue(inner)) return null;
 		if (isIfThenBody && Type.enumConstructor(cast inner) == 'IfStmt') return null; // gate 8 keep
 		if (!innerSelfTerminates(cast inner)) return null; // gate 3 terminator
-		if (elseFollows && containsIf(inner)) return null; // gate 4 dangling-else
+		// Gates 4 + 5 share ONE test. `elseFollows` means an `else` is written directly
+		// after this body; `suppress` means one is written after the enclosing then-body,
+		// with this candidate's position inside it over-approximated to "on the spine".
+		// Either way the question is the same: would that `else` bind inside the de-braced
+		// statement instead of to its own `if`?
+		if ((elseFollows || suppress) && tailDanglingIf(inner)) return null;
 		return elem;
 	}
 

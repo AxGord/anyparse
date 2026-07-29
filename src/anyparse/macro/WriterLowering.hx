@@ -9476,10 +9476,13 @@ class WriterLowering {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
 			// ω-single-stmt-braces: dangling-else suppress frame — when the
-			// enclosing `if` has an `else` at runtime, the whole then-body write
-			// runs with `_ssbSuppress` so nested `dropSingleStmtBraces` unwraps
-			// no-op (they could otherwise expose a trailing braceless `if` that
-			// captures the outer `else`). Null cond (no meta / no else sibling /
+			// enclosing `if` has an `else` at runtime AND its then-body renders
+			// WITHOUT braces, the whole then-body write runs with `_ssbSuppress` so
+			// nested `dropSingleStmtBraces` unwraps are gated by the same
+			// trailing-spine test as the direct dangling-else gate (they could
+			// otherwise expose a trailing braceless `if` that captures the outer
+			// `else`). A brace-bearing then-body seals its subtree with its own `}`
+			// and never arms the frame. Null cond (no meta / no else sibling /
 			// plain mode) is byte-inert.
 			if (ssbSuppressCond != null) e = macro ($ssbSuppressCond ? _setSsbSuppress($e) : $e);
 			// ω-single-stmt-braces CHAIN symmetry: a body's OWN content must NOT
@@ -10189,9 +10192,10 @@ class WriterLowering {
 		// sibling's shape-aware `else` separator and the `semicolonNextLineElse`
 		// re-render (both consume the substituted access via `prevBareRefBody`).
 		// `elseFollows` (an `else` sibling is present at runtime) arms the
-		// dangling-else gate inside the helper; the same condition wraps the
-		// writeCall's opt in `_setSsbSuppress` so unwraps nested deeper in the
-		// then-body (e.g. `if (a) while (c) { if (b) x; } else y`) no-op too.
+		// dangling-else gate inside the helper; the same condition (narrowed to a
+		// then-body that renders WITHOUT braces) wraps the writeCall's opt in
+		// `_setSsbSuppress` so unwraps nested deeper in the then-body
+		// (e.g. `if (a) while (c) { if (b) x; } else y`) are gated too.
 		// `elseFieldName` is non-null only for `HxIfStmt.thenBody` (via
 		// `fitLineIfWithElse`'s optionalBodyFieldName channel); for / while bodies
 		// pass `false`. Off-path (`dropSingleStmtBraces` absent or plain mode) the
@@ -10247,7 +10251,19 @@ class WriterLowering {
 		// The runtime gate includes `opt.dropSingleStmtBraces` so the default-off
 		// path never allocates a suppress-frame opt copy (byte-inert AND
 		// allocation-inert).
-		final ssbSuppressCond: Null<Expr> = elseAccess == null ? null : macro ($elseAccess != null && opt.dropSingleStmtBraces);
+		// omega-ssb-span-precision: the frame is armed ONLY when the then-body renders
+		// WITHOUT braces. A brace-bearing then-body ends on its own `}`, which seals the
+		// whole subtree from the trailing `else` - nothing inside it can be on the
+		// then-body's trailing spine, so suppressing there is pure over-keeping.
+		// `keepsBraces` mirrors the then splice's own arguments; it answers `false` for a
+		// branch that gate 7 would WRAP, which arms the frame needlessly but never
+		// disarms it wrongly (fail closed).
+		final ssbSuppressCond: Null<Expr> = elseAccess == null
+			? null
+			: macro ($elseAccess != null && opt.dropSingleStmtBraces
+				&& !anyparse.format.SingleStmtBraces.keepsBraces(
+					$fieldAccess, opt.dropSingleStmtBraces, opt._ssbSuppress, true, $trailSemiExpr, true
+				));
 		// ω-single-stmt-braces trailing-comment hoist: when the de-brace fires AND the
 		// single statement carries a same-line trailing comment, `hoistTrailingComment`
 		// returns it (else null) so `buildBodyWriteCall` folds it after the bare
