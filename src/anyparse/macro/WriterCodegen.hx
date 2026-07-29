@@ -64,6 +64,10 @@ class WriterCodegen {
 			fields.push(leadingCommentDocField());
 			fields.push(trailingCommentDocField());
 			fields.push(trailingCommentDocVerbatimField());
+			// Head -> body seam guard: verbatim emission plus a forward-
+			// looking hardline for LINE-style comments, so the next token
+			// cannot be swallowed by the comment.
+			fields.push(trailingCommentDocGuardedField());
 			// ω₆c: BodyGroup trailing-comment folder. Used by
 			// `triviaBlockStarExpr` / `triviaEofStarExpr` to splice
 			// a trailing comment into the body's FitLine measure.
@@ -1692,6 +1696,44 @@ class WriterCodegen {
 		};
 		return {
 			name: 'trailingCommentDocVerbatim',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'content', type: macro :String },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+				],
+				ret: macro :anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Render a captured trailing comment like `trailingCommentDocVerbatim`
+	 * and, for LINE style only, append an `OptHardlineSkipBeforeHardline`
+	 * so whatever the caller emits next cannot land on the comment's line.
+	 *
+	 * A `//` comment terminates at `\n` by definition: any token glued
+	 * after it is swallowed. At a head -> body seam
+	 * (`function f() // c` + newline `{`) the glued token is the body's
+	 * opening brace, so the emitted source stops parsing - data loss with
+	 * a broken file on top. Sites that emit a captured trailing comment
+	 * with sibling content still to come use this variant.
+	 *
+	 * The guard is forward-looking (`_dohsbh`), so it DROPS when the next
+	 * emit is already a hardline - every site where the seam was sound
+	 * stays byte-identical. Block style (`/* c *\/`) never gets the guard:
+	 * it does not terminate at a newline, so the glue is legal and the
+	 * fork keeps it.
+	 */
+	private static function trailingCommentDocGuardedField(): Field {
+		final body: Expr = macro {
+			final _doc: anyparse.core.Doc = trailingCommentDocVerbatim(content, opt);
+			return StringTools.startsWith(content, '//') ? _dc([_doc, _dohsbh()]) : _doc;
+		};
+		return {
+			name: 'trailingCommentDocGuarded',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [

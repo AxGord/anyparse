@@ -376,6 +376,7 @@ import unit.HxCallArgCommentWriteTest;
 import unit.HxParamCommentWriteTest;
 import unit.HxInfixCommentWriteTest;
 import unit.HxCaseCommentWriteTest;
+import unit.HxHeadCommentSeamWriteTest;
 import unit.HxRhsCommentWriteTest;
 import unit.HxCondCommentWriteTest;
 import unit.HxSourceBlankPreserveSliceTest;
@@ -777,6 +778,7 @@ class RunTests {
 		addCase(new HxCondCommentWriteTest());
 		addCase(new HxCondElseifChainBlankTest());
 		addCase(new HxCaseCommentWriteTest());
+		addCase(new HxHeadCommentSeamWriteTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new HaxeWriterRoundTripTest());
 		addCase(new HxFormatterCorpusTest());
