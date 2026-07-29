@@ -398,14 +398,15 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
-	public function testSuppressedFrameSingleStmtBlockLinkBracesChain(): Void {
-		// Same shape with a SINGLE-statement block as the keeper: on its own merits that
-		// block de-braces, and it only renders braced because of the suppress frame. The
-		// scan must ask the suppressed question, not the on-merits one, or the head and
-		// the terminal else drift apart from it.
+	public function testBracedThenBodyDisarmsSuppressFrameForNestedChain(): Void {
+		// Same shape with a SINGLE-statement block as the keeper. Since the span-precision
+		// fix the OUTER then-body renders braced, and its own `}` seals the whole subtree
+		// from the trailing `else` - so the frame is never armed and the inner chain
+		// de-braces on its own merits, symmetrically. Verified against the compiler:
+		// braced and de-braced forms behave identically over all 8 input combinations.
 		assertFmt(
 			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a)\n\t\t\t\tx();\n\t\t\telse if (b) {\n\t\t\t\tm1();\n\t\t\t} else\n\t\t\t\tz();\n\t\t} else\n\t\t\ts();\n\t}\n}',
-			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a) {\n\t\t\t\tx();\n\t\t\t} else if (b) {\n\t\t\t\tm1();\n\t\t\t} else {\n\t\t\t\tz();\n\t\t\t}\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
+			'class F {\n\tfunction f(o:Bool, a:Bool, b:Bool):Void {\n\t\tif (o) {\n\t\t\tif (a)\n\t\t\t\tx();\n\t\t\telse if (b)\n\t\t\t\tm1();\n\t\t\telse\n\t\t\t\tz();\n\t\t} else {\n\t\t\ts();\n\t\t}\n\t}\n}'
 		);
 	}
 
@@ -534,6 +535,78 @@ class HxSingleStmtBracesSliceTest extends Test {
 		assertFmt(
 			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x(); // tc\n\t\t} else y();\n\t}\n}',
 			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\tif (b) x(); // tc\n\t\t} else {\n\t\t\ty();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSealedInnerIfDeBracesUnderTrailingElse(): Void {
+		// TRAILING-SPINE gate 4: the inner `if` lives in an arrow body inside a call, so the
+		// call's `)` seals it - a following `else` can never reach it and the braces go.
+		// The whole-subtree scan this replaced kept them. Compiler-verified: the braced and
+		// bare forms both run the `else` branch when the condition is false.
+		assertFmt(
+			'class F {\n\tfunction f(c1:Bool, xs:Array<Int>):Void {\n\t\tif (c1) {\n\t\t\teach(xs, item -> if (g(item)) r = true);\n\t\t} else {\n\t\t\tr = true;\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(c1:Bool, xs:Array<Int>):Void {\n\t\tif (c1)\n\t\t\teach(xs, item -> if (g(item)) r = true);\n\t\telse\n\t\t\tr = true;\n\t}\n}'
+		);
+	}
+
+	public function testSealedInnerIfDeBracesInLoneIf(): Void {
+		// Same then-body with no `else` at all: gate 4 is disarmed either way, so this pins
+		// that the spine walk did not turn a previously de-bracing shape into a keeper.
+		assertFmt(
+			'class F {\n\tfunction f(c1:Bool, xs:Array<Int>):Void {\n\t\tif (c1) {\n\t\t\teach(xs, item -> if (g(item)) r = true);\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(c1:Bool, xs:Array<Int>):Void {\n\t\tif (c1) each(xs, item -> if (g(item)) r = true);\n\t}\n}'
+		);
+	}
+
+	public function testUnsealedArrowBodyIfKeepsBraces(): Void {
+		// The counterweight: an arrow body is the LAST thing in the statement, so its `if`
+		// reaches the statement end (Haxe absorbs the `;` before `else`) and the trailing
+		// `else` would rebind into it. Compiler-verified hazard: the de-braced form silently
+		// stops running the `else` branch. Braces stay - and the sibling keeps its own.
+		roundTrip(
+			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a) {\n\t\t\tx = () -> if (c) d;\n\t\t} else {\n\t\t\ty();\n\t\t}\n\t}\n}'
+		);
+	}
+
+	public function testSwitchSealedInnerIfDeBraces(): Void {
+		// A `switch` ends on `}`, so an `if` in its last case is sealed from the trailing
+		// `else` - the whole-subtree scan kept these braced for nothing.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, v:Int, b:Bool):Void {\n\t\tif (a) {\n\t\t\tswitch (v) {\n\t\t\t\tcase 1: if (b) p();\n\t\t\t\tcase _: q();\n\t\t\t}\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, v:Int, b:Bool):Void {\n\t\tif (a)\n\t\t\tswitch (v) {\n\t\t\t\tcase 1:\n\t\t\t\t\tif (b) p();\n\t\t\t\tcase _:\n\t\t\t\t\tq();\n\t\t\t}\n\t\telse\n\t\t\tr();\n\t}\n}'
+		);
+	}
+
+	public function testTrailingIfWithOwnElseDeBraces(): Void {
+		// The else-consuming refinement: the trailing `if` already HAS an `else`, so it
+		// cannot take a second one and the spine walk continues into that else branch,
+		// which ends on a sealed call. Compiler-verified: `if (a) while (c) if (b) p();
+		// else q(); else r();` binds the last `else` to `if (a)`, same as the braced form.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool, c:Bool):Void {\n\t\tif (a) {\n\t\t\twhile (c) if (b) p(); else q();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool, c:Bool):Void {\n\t\tif (a)\n\t\t\twhile (c) if (b)\n\t\t\t\tp();\n\t\t\telse\n\t\t\t\tq();\n\t\telse\n\t\t\tr();\n\t}\n}'
+		);
+	}
+
+	public function testSuppressFrameSealedLoopBodyDeBraces(): Void {
+		// Gate 5 span-precision, the positive half of
+		// `testDanglingElseThroughLoopBodyKeepsBraces`: the then-body still renders bare, so
+		// the frame IS armed - but this loop body ends on a sealed call, not on an open
+		// `if`, so it de-braces. The blanket frame kept every nested body braced here.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a) while (c) {\n\t\t\tg();\n\t\t} else y();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a)\n\t\t\twhile (c) g();\n\t\telse\n\t\t\ty();\n\t}\n}'
+		);
+	}
+
+	public function testBracedThenBodySealsNestedGuardLoop(): Void {
+		// Gate 5 span-precision, frame-arming half: the then-body is multi-statement and
+		// keeps its braces, whose `}` seals the subtree - so the nested `for` body de-braces
+		// into the guard-loop form even though its single statement IS an else-less `if`.
+		// Compiler-verified equivalent.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a) {\n\t\t\tpre();\n\t\t\tfor (x in xs) {\n\t\t\t\tif (b) p();\n\t\t\t}\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a) {\n\t\t\tpre();\n\t\t\tfor (x in xs) if (b) p();\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}'
 		);
 	}
 
