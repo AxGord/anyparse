@@ -79,9 +79,11 @@ import anyparse.runtime.Span;
  * `unused-parameter` silences a parameter it cannot remove by renaming it to
  * `_<name>`. Left alone, the two fixes would ping-pong `_event` <-> `event` forever.
  * So a parameter that is UNREFERENCED in its function is not reported at all while
- * that silencing rename is live — `unused-parameter` enabled in the same config and
- * its `renameSilence` option not explicitly `false` (absent means on: that is the
- * behaviour the knob was carved out of).
+ * that silencing rename is live — `unused-parameter` enabled in the same config AND its
+ * `renameSilence` option resolving TRUE. The knob's own default is FALSE
+ * (`UnusedParameter.DEFAULT_RENAME_SILENCE`), so an ABSENT option means the rename is
+ * dead and there is nothing to ping-pong with: an unreferenced `_event` is flagged and
+ * de-underscored like any other parameter.
  */
 @:nullSafety(Strict)
 @:access(anyparse.check.Naming)
@@ -123,6 +125,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		return 'a parameter or local binding whose name carries a leading underscore';
 	}
 
+	@:access(anyparse.check.UnusedParameter)
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final support: Null<NamingSupport> = plugin.namingSupport();
 		if (support == null) return [];
@@ -135,9 +138,10 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			final options: Options = {
 				params: config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS,
 				locals: config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS,
-				// The silencing rename is live unless the config turns it off: absent means ON,
-				// which is what `unused-parameter` did before the knob existed.
-				silenceGuard: config.enabledFor(UNUSED_PARAMETER_ID) && (config.boolOption(UNUSED_PARAMETER_ID, 'renameSilence') ?? true)
+				// The silencing rename is live only when the config opts into it — the knob
+				// defaults FALSE, so an absent option leaves nothing to ping-pong with.
+				silenceGuard: config.enabledFor(UNUSED_PARAMETER_ID)
+					&& (config.boolOption(UNUSED_PARAMETER_ID, 'renameSilence') ?? UnusedParameter.DEFAULT_RENAME_SILENCE)
 			};
 			for (decl in support.project(tree)) checkDecl(violations, entry.file, entry.source, tree, decl, shape, options);
 		}

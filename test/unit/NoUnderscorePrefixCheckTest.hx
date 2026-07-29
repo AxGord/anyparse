@@ -120,10 +120,18 @@ class NoUnderscorePrefixCheckTest extends Test {
 
 	public function testUnreferencedParameterSkippedWhileSilencingRenameLive(): Void {
 		// `unused-parameter` silences an unremovable parameter by renaming it to `_<name>`;
-		// de-prefixing the same parameter here would ping-pong the two fixes forever.
+		// de-prefixing the same parameter here would ping-pong the two fixes forever. The
+		// guard is live only while that rename is opted IN.
+		Assert.equals(0, violations(unusedParamSource(), '{"rules":{"unused-parameter":{"renameSilence":true}}}').length);
+	}
+
+	public function testUnreferencedParameterFlaggedAndFixedWhenSilencingRenameAbsent(): Void {
+		// `renameSilence` defaults FALSE, so an absent option leaves no silencing rename to
+		// fight: the unreferenced `_event` is flagged AND de-underscored like any other
+		// parameter. This is what makes the rule reach a real project's handler signatures.
 		final src: String = unusedParamSource();
-		Assert.equals(0, violations(src).length);
-		Assert.equals(0, violations(src, '{"rules":{"unused-parameter":{"renameSilence":true}}}').length);
+		Assert.equals(1, violations(src).length);
+		assertFixed(src, ['f(event:Int)'], ['_event']);
 	}
 
 	public function testUnreferencedParameterFlaggedWhenSilencingRenameOff(): Void {
