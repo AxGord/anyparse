@@ -1356,4 +1356,39 @@ class NamingCheckTest extends Test {
 		assertRenameSlice(rename, 'pkg/E.hx', eSrc, '_shape', 'return shape');
 	}
 
+
+	/**
+	 * A COMMENT in an affected file that spells the rename TARGET is not a binding of
+	 * it, so it must not refuse the cross-file rename. The collision gate asked a raw
+	 * word-boundary text scan, which counted the comment and turned the whole rename
+	 * report-only; it now asks `RefactorSupport.nameBoundInRange`.
+	 */
+	public function testCrossFileFixIgnoresTargetNameInComment(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final dSrc: String =
+			'package pkg;\nclass D extends C {\n\t// _shape is inherited from C\n\tpublic function g() { return shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		assertRenameSlice(renames[0], 'pkg/D.hx', dSrc, '_shape', 'return shape');
+	}
+
+	/**
+	 * GUARD: a REAL binding of the target name in an affected file still refuses the
+	 * whole cross-file rename.
+	 */
+	public function testCrossFileFixBlocksOnRealTargetBinding(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var shape:Int;\n\tpublic function f() { return this.shape; }\n}';
+		final dSrc: String =
+			'package pkg;\nclass D extends C {\n\tprivate var _shape:Int;\n\tpublic function g() { return shape + _shape; }\n}';
+		final files: Array<{ file: String, source: String }> = [{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
 }

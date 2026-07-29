@@ -362,4 +362,53 @@ class NoUnderscorePrefixCheckTest extends Test {
 		return check.fix(subSrc, vs, scoped, SymbolIndex.build(report, new HaxeQueryPlugin()));
 	}
 
+
+	/**
+	 * A STRING LITERAL that happens to spell the target name is not a binding, so it
+	 * must not veto the rename. `collidesInScope` asked a raw word-boundary text scan,
+	 * which counted `': items: '` as an occurrence of `items` and declined.
+	 */
+	public function testStringLiteralDoesNotBlockRename(): Void {
+		final src: String = 'class C {\n\tpublic function f():Void {\n\t\tvar _items:Int = 1;\n\t\ttrace(\': items: \', _items);\n\t}\n}';
+		assertFixed(src, ['var items:Int = 1;', 'trace(\': items: \', items);'], ['_items']);
+	}
+
+	/**
+	 * A DOTTED member access on an unrelated receiver is not a binding either:
+	 * `o.scaleX` cannot conflict with a local named `scaleX`.
+	 */
+	public function testDottedMemberAccessDoesNotBlockRename(): Void {
+		final src: String =
+			'class C {\n\tpublic function g(o:Other):Void {\n\t\tvar __scaleX:Float = 1;\n\t\ttrace(o.scaleX, __scaleX);\n\t}\n}';
+		assertFixed(src, ['var scaleX:Float = 1;', 'trace(o.scaleX, scaleX);'], ['__scaleX']);
+	}
+
+	/** A comment mentioning the target name is not a binding. */
+	public function testCommentMentionDoesNotBlockRename(): Void {
+		final src: String =
+			'class C {\n\t// items are counted here\n\tpublic function f():Void {\n\t\tvar _items:Int = 1;\n\t\ttrace(_items);\n\t}\n}';
+		assertFixed(src, ['var items:Int = 1;'], ['_items']);
+	}
+
+	/** GUARD: a real BARE binding of the target name still vetoes the rename. */
+	public function testBareBindingStillBlocksRename(): Void {
+		final src: String =
+			'class C {\n\tpublic function f():Void {\n\t\tvar items:Int = 0;\n\t\tvar _items:Int = 1;\n\t\ttrace(items, _items);\n\t}\n}';
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** GUARD: an occurrence inside a `#if` body is real code and still vetoes it. */
+	public function testConditionalBodyStillBlocksRename(): Void {
+		final src: String =
+			'class C {\n\tpublic function f():Void {\n\t\tvar _items:Int = 1;\n\t\t#if debug\n\t\tvar items:Int = 2;\n\t\ttrace(items);\n\t\t#end\n\t\ttrace(_items);\n\t}\n}';
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** GUARD: a `$name` interpolation read is a real reference and still vetoes it. */
+	public function testInterpolationReadStillBlocksRename(): Void {
+		final src: String =
+			'class C {\n\tpublic function f(items:Int):Void {\n\t\tvar _items:Int = 1;\n\t\ttrace(\'$$items\', _items);\n\t}\n}';
+		Assert.equals(0, edits(src).length);
+	}
+
 }

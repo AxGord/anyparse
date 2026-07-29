@@ -262,7 +262,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	): Null<Array<Span>> {
 		final span: Null<Span> = decl.span;
 		if (span == null) return null;
-		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex)) return null;
+		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin)) return null;
 		if (collidesWithProjectSymbol(decl, target, resolutionIndex)) return null;
 		return Naming.declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
