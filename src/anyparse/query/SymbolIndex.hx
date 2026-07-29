@@ -654,7 +654,7 @@ final class SymbolIndex {
 			final matches: Array<MemberInfo> = t.members.filter(m -> names.contains(m.name));
 			if (matches.length == 0) continue;
 			if (isSubtype(t.name, owner)) return true;
-			if (!closureExcludes(t.name, owner, [t.name]) && matches.exists(m -> m.isOverride)) return true;
+			if (!provablyNotSubtype(t.name, owner) && matches.exists(m -> m.isOverride)) return true;
 		}
 		return false;
 	}
