@@ -1192,6 +1192,73 @@ class NamingCheckTest extends Test {
 		Assert.isTrue(vs[0].message.contains("'__width'"));
 	}
 
+	/**
+	 * HALF-APPLIED HAZARD: the subtype's simple name is AMBIGUOUS in the scope (a secondary type
+	 * elsewhere in the set shares it), so the positive `isSubtype` proof MISSES - it needs a unique
+	 * decl at every closure step. The occurrence must then stay UNCOVERED so the completeness gate
+	 * blocks; attributing it to the "different owner" ignore bucket instead drops it silently and the
+	 * rename commits the declaring file ALONE, leaving the subtype reading a name that no longer
+	 * exists (`Unknown identifier`). Observed live on a 798-file tree where the subtype's simple name
+	 * collided with a secondary type in another module.
+	 */
+	public function testCrossFileFixBlocksWhenSubtypeNameIsAmbiguous(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { return size; }\n}';
+		// A SECONDARY type also named `D`, in an unrelated module - makes `declsNamed('D')` ambiguous.
+		final twinSrc: String = 'package pkg;\nclass Twin {}\n\nclass D {\n\tpublic var other:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: dSrc },
+			{ file: 'pkg/Twin.hx', source: twinSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		// Either a COMPLETE rename (both files) or none - never the declaring file alone.
+		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
+		Assert.equals(0, renames.length);
+	}
+
+	/**
+	 * The typed-receiver twin of the ambiguous-subtype hazard: `d.size` where `d:D` and `D`'s simple
+	 * name is ambiguous. `isSubtype('D', 'C')` misses, and the old `else` arm swept EVERY resolvable
+	 * non-subtype receiver into the ignore bucket, so the access was dropped and the rename
+	 * half-applied. A receiver type that is not PROVABLY unrelated must block instead.
+	 */
+	public function testCrossFileFixBlocksOnAmbiguousReceiverType(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}';
+		final twinSrc: String = 'package pkg;\nclass Twin {}\n\nclass D {\n\tpublic var other:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/D.hx', source: dSrc },
+			{ file: 'pkg/Twin.hx', source: twinSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
+		Assert.equals(0, renames.length);
+	}
+
+	/**
+	 * A cross-file rename touching `declFile` must also carry `subFile`: committing the declaring
+	 * file alone orphans the subtype's inherited read and breaks the build.
+	 */
+	private function assertNotHalfApplied(renames: Array<Array<CrossFileEdits>>, declFile: String, subFile: String): Void {
+		for (rename in renames) {
+			var hasDecl: Bool = false;
+			var hasSub: Bool = false;
+			for (slice in rename) {
+				if (slice.file == declFile) hasDecl = true;
+				if (slice.file == subFile) hasSub = true;
+			}
+			if (hasDecl) Assert.isTrue(hasSub, 'half-applied: $declFile renamed without $subFile');
+		}
+	}
+
 	public function testCrossFileFixRenamesFinalAndAbstractSubtypeField(): Void {
 		// The subtype reads live inside a `final class` (ClassForm) and an `abstract class`
 		// (AbstractClassDecl) — receiver attribution must recognise both class shapes, else

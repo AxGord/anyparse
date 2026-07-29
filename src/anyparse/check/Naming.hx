@@ -505,17 +505,22 @@ final class Naming implements Check implements CrossFileFix {
 		final recvNames: Array<String> = [];
 		collectAttributedRefs(tree, name, source, null, bare, typed, recvNames);
 		// Bare `IdentExpr` / `this.` / `super.` occurrences: attributed by their enclosing class — the
-		// owner or a subtype of it binds to the inherited field (owner-bound); a class inheriting `name`
-		// from a NON-owner supertype binds to that different owner (ignored). Any other class is left
-		// uncovered so the completeness gate blocks (fail-closed) — including one declaring its own
-		// same-named `name`, whose declaration token the gate flags on its own.
+		// owner or a subtype of it binds to the inherited field (owner-bound); a class PROVABLY unrelated
+		// to the owner that inherits `name` from elsewhere binds to that different owner (ignored). Any
+		// other class is left uncovered so the completeness gate blocks (fail-closed) — including one
+		// declaring its own same-named `name`, whose declaration token the gate flags on its own.
+		// The ignore arm needs `provablyNotSubtype`, NOT merely a false `isSubtype`: that proof ends its
+		// branch on an ambiguous simple name (two modules declaring `c`), while `supertypeDeclaresMember`
+		// resolves straight through the ambiguity and answers for the OWNER's own member — so the pair
+		// alone attributes a genuine inherited read to a "different owner" and silently drops it, leaving
+		// the declaring file renamed and the subtype reading a name that no longer exists.
 		for (occ in bare) {
 			final cls: Null<String> = occ.cls;
 			if (cls == null) continue;
 			final c: String = cls;
 			if (c == ownerName || resolutionIndex.isSubtype(c, ownerName))
 				RefactorSupport.pushUniqueSpan(ownerBound, seenOwner, occ.off, name.length);
-			else if (resolutionIndex.supertypeDeclaresMember(c, name))
+			else if (resolutionIndex.provablyNotSubtype(c, ownerName) && resolutionIndex.supertypeDeclaresMember(c, name))
 				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, occ.off, name.length);
 		}
 		if (typed.length > 0)
@@ -657,9 +662,10 @@ final class Naming implements Check implements CrossFileFix {
 
 	/**
 	 * Attribute every `recv.name` access in `typed` by the receiver's declared type: owner-bound when
-	 * the type is `ownerName` or a subtype of it (pushed to `ownerBound`), a provably DIFFERENT owner
-	 * for any other resolvable type (pushed to `ignore`); an access whose receiver binding or type
-	 * cannot be resolved is left in NEITHER (uncovered — block).
+	 * the type is `ownerName` or a subtype of it (pushed to `ownerBound`), a DIFFERENT owner when the
+	 * type is PROVABLY not a subtype of the owner (pushed to `ignore`); an access whose receiver
+	 * binding or type cannot be resolved — or whose type is merely not PROVEN a subtype, as an
+	 * ambiguous simple name always is — is left in NEITHER (uncovered — block).
 	 */
 	private static function attributeTypedRefs(
 		typed: Array<{ recv: QueryNode, fa: QueryNode }>, recvNames: Array<String>, tree: QueryNode, source: String, name: String,
@@ -682,7 +688,7 @@ final class Naming implements Check implements CrossFileFix {
 			if (off < 0) continue;
 			if (recvType == ownerName || resolutionIndex.isSubtype(recvType, ownerName))
 				RefactorSupport.pushUniqueSpan(ownerBound, seenOwner, off, name.length);
-			else
+			else if (resolutionIndex.provablyNotSubtype(recvType, ownerName))
 				RefactorSupport.pushUniqueSpan(ignore, seenIgnore, off, name.length);
 		}
 	}

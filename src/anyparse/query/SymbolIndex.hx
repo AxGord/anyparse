@@ -524,6 +524,21 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether `sub` is provably NOT a (transitive) subtype of `sup` — the POSITIVE proof of the
+	 * negative, which a false `isSubtype` does NOT supply: `isSubtype` ends a branch on any
+	 * unindexed or AMBIGUOUS supertype link (a simple name with 0 or >1 indexed decls), so its
+	 * `false` unions "provably unrelated" with "unprovable". True only when `sub` resolves to a
+	 * single decl, its ENTIRE supertype closure likewise resolves, and `sup` appears nowhere in
+	 * it. Reflexivity is not unrelatedness (`sub == sup` → false). For a caller that must act on
+	 * "different owner" rather than merely skip on "not proven the same" — attributing an
+	 * occurrence away from a rename on an unprovable negative drops a real reference and
+	 * half-applies the edit.
+	 */
+	public function provablyNotSubtype(sub: String, sup: String): Bool {
+		return sub != sup && closureExcludes(sub, sup, [sub]);
+	}
+
+	/**
 	 * Whether the type `typeName` — together with its ENTIRE supertype closure —
 	 * provably declares no member named `member`. True only when `typeName` resolves
 	 * to exactly one indexed decl, every transitive supertype likewise resolves, and
