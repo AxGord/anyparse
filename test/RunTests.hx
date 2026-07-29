@@ -502,6 +502,7 @@ import unit.NoUnderscorePrefixCheckTest;
 import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
 import unit.ExplicitLocalTypePrinterTest;
+import unit.HxLineCommentIndentSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -776,6 +777,7 @@ class RunTests {
 		addCase(new HxTriviaTypesTest());
 		addCase(new HxTriviaParseTest());
 		addCase(new HxTriviaWriteTest());
+		addCase(new HxLineCommentIndentSliceTest());
 		addCase(new HxCallArgCommentWriteTest());
 		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());

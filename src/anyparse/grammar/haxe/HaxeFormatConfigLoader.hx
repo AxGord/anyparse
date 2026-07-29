@@ -670,6 +670,7 @@ final class HaxeFormatConfigLoader {
 			conditionalPolicy: base.conditionalPolicy,
 			alignInlineSwitchCaseBody: base.alignInlineSwitchCaseBody,
 			addLineCommentSpace: base.addLineCommentSpace,
+			normalizeLineCommentIndent: base.normalizeLineCommentIndent,
 			compressSuccessiveParenthesis: base.compressSuccessiveParenthesis,
 			expressionTry: base.expressionTry,
 			indentCaseLabels: base.indentCaseLabels,
@@ -1691,6 +1692,7 @@ final class HaxeFormatConfigLoader {
 		}
 		if (section.tryPolicy != null) opt.tryPolicy = whitespaceToRuntime(section.tryPolicy);
 		if (section.addLineCommentSpace != null) opt.addLineCommentSpace = section.addLineCommentSpace;
+		if (section.normalizeLineCommentIndent != null) opt.normalizeLineCommentIndent = section.normalizeLineCommentIndent;
 		if (section.compressSuccessiveParenthesis != null) opt.compressSuccessiveParenthesis = section.compressSuccessiveParenthesis;
 		if (section.formatStringInterpolation != null) opt.formatStringInterpolation = section.formatStringInterpolation;
 	}

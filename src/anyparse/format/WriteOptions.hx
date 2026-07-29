@@ -93,6 +93,35 @@ typedef WriteOptions = {
 	addLineCommentSpace: Bool,
 
 	/**
+	 * When `true`, the leading whitespace of a `//` line-comment body is
+	 * normalised to exactly one space and, across a contiguous run of
+	 * `//` entries, the run's COMMON post-`//` indent is stripped first —
+	 * so `//foo` becomes `// foo`, and a block of commented-out code
+	 * keeps its relative indentation while losing the shared over-indent.
+	 * A lone over-indented comment therefore collapses to a single space.
+	 * When a run shares no common indent — a member sits flush against
+	 * `//`, or members disagree on tab-vs-space — the pass never adds
+	 * width: an already-indented body is re-emitted as authored and only a
+	 * flush body gains the separating space.
+	 * Tabs after `//` count as whitespace and normalise the same way.
+	 *
+	 * Only a body whose first non-whitespace character is an ASCII letter or
+	 * digit feeds the run's common-indent fold. Every other body — an empty
+	 * `//`, a divider (`//====`, `//----`, `//***`), a marker (`//!`), a
+	 * `///`-style triple slash, a `}` closer, a string continuation —
+	 * neither contributes to nor breaks its run, but still rides the run's
+	 * shift when its own indent opens with that common prefix, so a
+	 * commented-out block keeps its shape. One that does not share the
+	 * prefix is left to the `addLineCommentSpace` path. A block-comment
+	 * entry DOES break the run.
+	 *
+	 * While `true`, a body the pass rewrites gets exactly one space
+	 * after `//` regardless of `addLineCommentSpace`. Default `false`
+	 * leaves the writer byte-identical to the pre-knob output.
+	 */
+	normalizeLineCommentIndent: Bool,
+
+	/**
 	 * When `true` (default), whitespace between two successive opening
 	 * brackets is compressed away: a call-arg open `(` immediately
 	 * followed by a bracket-opening argument (`{` object literal) glues
@@ -186,12 +215,13 @@ typedef WriteOptions = {
 	 *
 	 *  - `blockCommentAdapter(content, opt) → Doc` — full pipeline for
 	 *    a captured `/*…*\/` body: parse → canonicalise → emit Doc.
-	 *  - `lineCommentAdapter(content, addSpace) → String` — string-level
-	 *    normalisation of a captured `//` body (decoration-aware
-	 *    `//foo` → `// foo` rewrite when `addSpace == true`).
+	 *  - `lineCommentAdapter(run, index, opt) → String` — string-level
+	 *    normalisation of `run[index]`; `run` is the captured contiguous
+	 *    comment array so the adapter can compute a run-wide common
+	 *    indent, and single-comment slots pass a 1-element array.
 	 */
 	?blockCommentAdapter: Null<(String, WriteOptions) -> Doc>,
-	?lineCommentAdapter: Null<(String, Bool) -> String>,
+	?lineCommentAdapter: Null<(Array<String>, Int, WriteOptions) -> String>,
 
 	/**
 	 * Plugin-supplied path-grouping predicate bound at runtime.

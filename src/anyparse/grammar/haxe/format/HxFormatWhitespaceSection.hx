@@ -58,6 +58,28 @@ package anyparse.grammar.haxe.format;
  *    knob is consumed by `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`
  *    inside the writer's leading / trailing line-comment helpers.
  *
+ * ω-line-comment-indent:
+ *  - `normalizeLineCommentIndent` feeds `opt.normalizeLineCommentIndent`.
+ *    Bool, default `false` (absent = byte-inert). When `true` the leading
+ *    whitespace of a `//` body is normalised to exactly one space, and
+ *    across a CONTIGUOUS run of `//` entries the run's common post-`//`
+ *    indent is stripped first — `//foo` becomes `// foo`, while a block of
+ *    commented-out code keeps its relative indentation and loses only the
+ *    shared over-indent. A lone over-indented comment collapses to a
+ *    single space; tabs after `//` count as whitespace and normalise the
+ *    same way. When a run shares no common indent — a member sits flush
+ *    against `//`, or members disagree on tab-vs-space — the pass never
+ *    adds width: an already-indented body is re-emitted as authored and
+ *    only a flush body gains the separating space.
+ *    Only an ASCII-letter/digit-headed body feeds the fold; every other
+ *    body — an empty `//`, a divider (`//====`, `//----`, `//***`), a marker
+ *    (`//!`), a `///`-style triple slash, a `}` closer — neither
+ *    contributes to nor breaks its run, but rides the run's shift when
+ *    its own indent opens with that common prefix, and is otherwise left
+ *    to the `addLineCommentSpace` path. A block-comment entry DOES break
+ *    the run. Consumed alongside that knob by
+ *    `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`.
+ *
  * ω-arrow-fn-type:
  *  - `functionTypeHaxe4Policy` feeds `opt.functionTypeHaxe4` (the `->`
  *    separator inside a new-form arrow function type, `HxArrowFnType.
@@ -173,6 +195,8 @@ package anyparse.grammar.haxe.format;
 	@:optional var tryPolicy: HxFormatWhitespacePolicy;
 
 	@:optional var addLineCommentSpace: Bool;
+
+	@:optional var normalizeLineCommentIndent: Bool;
 
 	@:optional var compressSuccessiveParenthesis: Bool;
 
