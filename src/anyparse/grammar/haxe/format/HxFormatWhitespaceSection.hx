@@ -71,12 +71,13 @@ package anyparse.grammar.haxe.format;
  *    against `//`, or members disagree on tab-vs-space — the pass never
  *    adds width: an already-indented body is re-emitted as authored and
  *    only a flush body gains the separating space.
- *    Skipped: an empty body (`//`) and a body whose first
- *    non-whitespace character is not an ASCII letter or digit — dividers
- *    (`//====`, `//----`, `//***`), markers (`//!`) and `///`-style triple
- *    slashes; a skipped entry neither contributes to nor breaks its run
- *    and falls through to the `addLineCommentSpace` path. Consumed
- *    alongside that knob by
+ *    Only an ASCII-letter/digit-headed body feeds the fold; every other
+ *    body — an empty `//`, a divider (`//====`, `//----`, `//***`), a marker
+ *    (`//!`), a `///`-style triple slash, a `}` closer — neither
+ *    contributes to nor breaks its run, but rides the run's shift when
+ *    its own indent opens with that common prefix, and is otherwise left
+ *    to the `addLineCommentSpace` path. A block-comment entry DOES break
+ *    the run. Consumed alongside that knob by
  *    `anyparse.format.comment.LineCommentNormalizer.normalizeLineComment`.
  *
  * ω-arrow-fn-type:

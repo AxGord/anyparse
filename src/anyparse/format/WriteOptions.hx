@@ -105,12 +105,15 @@ typedef WriteOptions = {
 	 * flush body gains the separating space.
 	 * Tabs after `//` count as whitespace and normalise the same way.
 	 *
-	 * Skipped (the body falls through to the `addLineCommentSpace` path
-	 * untouched): an empty body (`//`), and a body whose first non-
-	 * whitespace character is not an ASCII letter or digit — dividers
-	 * (`//====`, `//----`, `//***`), markers (`//!`) and `///`-style
-	 * triple slashes. A skipped entry neither contributes to nor breaks
-	 * its run; a block-comment entry does break it.
+	 * Only a body whose first non-whitespace character is an ASCII letter or
+	 * digit feeds the run's common-indent fold. Every other body — an empty
+	 * `//`, a divider (`//====`, `//----`, `//***`), a marker (`//!`), a
+	 * `///`-style triple slash, a `}` closer, a string continuation —
+	 * neither contributes to nor breaks its run, but still rides the run's
+	 * shift when its own indent opens with that common prefix, so a
+	 * commented-out block keeps its shape. One that does not share the
+	 * prefix is left to the `addLineCommentSpace` path. A block-comment
+	 * entry DOES break the run.
 	 *
 	 * While `true`, a body the pass rewrites gets exactly one space
 	 * after `//` regardless of `addLineCommentSpace`. Default `false`

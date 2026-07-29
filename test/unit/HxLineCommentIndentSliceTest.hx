@@ -48,6 +48,12 @@ class HxLineCommentIndentSliceTest extends Test {
 	private static final RELATIVE_RUN: String =
 		'class Roster {\n\tfunction sweep() {\n\t\t//    alpha();\n\t\t//        beta();\n\t\t//    gamma();\n\t\trender();\n\t}\n}';
 
+	/** A run with no common prefix because one member sits flush against the slashes. */
+	private static final FLUSH_MIX: String = 'class Roster {\n\t// alpha detail line\n\t//beta();\n\tvar x:Int;\n}';
+
+	/** A run with no common prefix because its members disagree on tab-vs-space. */
+	private static final TAB_MIX: String = 'class Roster {\n\t// prose head line\n\t//\tcontinuation line\n\tvar x:Int;\n}';
+
 	/**
 	 * The knob is absent from the config, so the writer must emit exactly the
 	 * pre-knob bytes: an over-indented `//` body starts with whitespace, hits
@@ -82,16 +88,16 @@ class HxLineCommentIndentSliceTest extends Test {
 	}
 
 	/**
-	 * Same mechanism on a commented-out loop — with the closing `//    }`
-	 * left alone, because `}` is neither a letter nor a digit. A skipped
-	 * line does not contribute to the run's common indent either, so the
-	 * two code lines still see the 4-space prefix they share.
+	 * The `}` closer heads a non-alnum body, so it never feeds the run's
+	 * common-indent fold — but it shares that prefix, so it rides the same
+	 * shift and stays aligned with the `for` it closes. Leaving it at the
+	 * original indent would make every commented-out block ragged.
 	 */
-	public function testClosingBraceLineIsSkippedInsideRun(): Void {
+	public function testClosingBraceLineRidesTheRunShift(): Void {
 		final source: String =
 			'class Roster {\n\tfunction sweep() {\n\t\t//    for (i in items) {\n\t\t//        step(i);\n\t\t//    }\n\t\trender();\n\t}\n}';
 		Assert.equals(
-			'class Roster {\n\tfunction sweep() {\n\t\t// for (i in items) {\n\t\t//     step(i);\n\t\t//    }\n\t\trender();\n\t}\n}\n',
+			'class Roster {\n\tfunction sweep() {\n\t\t// for (i in items) {\n\t\t//     step(i);\n\t\t// }\n\t\trender();\n\t}\n}\n',
 			formatted(source, KNOB_ON)
 		);
 	}
@@ -192,7 +198,7 @@ class HxLineCommentIndentSliceTest extends Test {
 	 * for both the uniform run and the relative-indent run.
 	 */
 	public function testFormattingIsIdempotent(): Void {
-		for (source in [UNIFORM_RUN, RELATIVE_RUN]) {
+		for (source in [UNIFORM_RUN, RELATIVE_RUN, FLUSH_MIX, TAB_MIX]) {
 			final pass1: String = formatted(source, KNOB_ON);
 			Assert.equals(pass1, formatted(pass1, KNOB_ON));
 		}
@@ -205,11 +211,35 @@ class HxLineCommentIndentSliceTest extends Test {
 	 * as authored and only the flush one picks up its separating space.
 	 */
 	public function testNoCommonIndentNeverAddsWidth(): Void {
-		final flushMix: String = 'class Roster {\n\t// alpha detail line\n\t//beta();\n\tvar x:Int;\n}';
-		Assert.equals('class Roster {\n\t// alpha detail line\n\t// beta();\n\tvar x:Int;\n}\n', formatted(flushMix, KNOB_ON));
-		final tabMix: String = 'class Roster {\n\t// prose head line\n\t//\tcontinuation line\n\tvar x:Int;\n}';
-		Assert.equals('$tabMix\n', formatted(tabMix, KNOB_ON));
-		Assert.equals(formatted(tabMix, KNOB_ABSENT), formatted(tabMix, KNOB_ON));
+		Assert.equals('class Roster {\n\t// alpha detail line\n\t// beta();\n\tvar x:Int;\n}\n', formatted(FLUSH_MIX, KNOB_ON));
+		Assert.equals('$TAB_MIX\n', formatted(TAB_MIX, KNOB_ON));
+		Assert.equals(formatted(TAB_MIX, KNOB_ABSENT), formatted(TAB_MIX, KNOB_ON));
+	}
+
+	/**
+	 * A block-comment entry BREAKS the run: the two groups fold their own
+	 * common indent instead of one shared prefix. Without the break the
+	 * 8-space line would keep 4 of them (the 4-space group's prefix would
+	 * win the fold), so this pins the boundary walk in `runCommonIndent`.
+	 */
+	public function testBlockCommentEntryBreaksTheRun(): Void {
+		final source: String = 'class Roster {\n\t//        alpha();\n\t/* block */\n\t//    beta();\n\t//    gamma();\n\tvar x:Int;\n}';
+		Assert.equals(
+			'class Roster {\n\t// alpha();\n\t/* block */\n\t// beta();\n\t// gamma();\n\tvar x:Int;\n}\n', formatted(source, KNOB_ON)
+		);
+	}
+
+	/**
+	 * The keyword-gap slot (`} else //...`) historically bypassed the comment
+	 * adapter altogether, so it is routed only while the knob is on. Knob off
+	 * must therefore stay byte-identical; knob on hands the body to the same
+	 * chokepoint as every other slot, `addLineCommentSpace` included.
+	 */
+	public function testKeywordGapCommentSlotIsKnobGated(): Void {
+		final source: String =
+			'class Roster {\n\tfunction sweep() {\n\t\tif (cond) {\n\t\t\ta();\n\t\t} else //====\n\t\t{\n\t\t\tb();\n\t\t}\n\t}\n}';
+		Assert.equals('$source\n', formatted(source, KNOB_ABSENT));
+		Assert.stringContains('} else // ====\n', formatted(source, KNOB_ON));
 	}
 
 	private static function formatted(source: String, configJson: String): String {

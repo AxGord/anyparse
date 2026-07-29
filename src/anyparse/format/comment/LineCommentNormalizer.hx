@@ -26,9 +26,12 @@ import anyparse.format.WriteOptions;
  * space. Tabs count as whitespace. Entries that are not normalisable
  * (empty body, dividers like `//====` / `//----` / `//***`, markers
  * like `//!`, `///`-style triple slashes — the third `/` is neither
- * letter nor digit) neither contribute to nor break the run, and fall
- * through to the legacy path below. A non-`//` entry (a block comment)
- * DOES break the run.
+ * letter nor digit) neither contribute to nor break the run — but one
+ * whose own indent opens with the run's common prefix still rides the
+ * same shift, so a `}` closer or a string-continuation line stays aligned
+ * with the block it belongs to. One that does not share the prefix — a
+ * divider sitting flush against the slashes — falls through to the legacy
+ * path below. A non-`//` entry (a block comment) DOES break the run.
  *
  * The common prefix is computed character-wise and literally, so a run
  * mixing tabs and spaces yields a short or empty prefix — the
@@ -39,11 +42,13 @@ import anyparse.format.WriteOptions;
  * sitting flush against the slashes picks up the single separating
  * space.
  *
- * The pass is idempotent. After one pass every normalised body reads
- * `' ' + rest`; on the next pass the run's common prefix is
+ * The pass is idempotent. After one pass every body the pass rewrote
+ * reads `' ' + rest`; on the next pass the run's common prefix is
  * `' ' + commonPrefix(rest-whitespace)`, and stripping it before
  * re-emitting one space reproduces the same string, so formatting twice
- * is a fixed point.
+ * is a fixed point. A body left to the legacy path is stable for the same
+ * reason: it did not move, and the members that did move only ever land
+ * on that single space.
  *
  * `addLineCommentSpace` — the legacy path, mirroring haxe-formatter's
  * `MarkTokenText.printCommentLine`, used whenever the indent pass does
@@ -66,6 +71,7 @@ import anyparse.format.WriteOptions;
  * route every captured trivia string through here without a type-
  * tag dispatch.
  */
+@:nullSafety(Strict)
 class LineCommentNormalizer {
 
 	public static function normalizeLineComment(run: Array<String>, index: Int, opt: WriteOptions): String {
@@ -73,14 +79,22 @@ class LineCommentNormalizer {
 		if (!StringTools.startsWith(verbatim, '//')) return verbatim;
 		final body: String = verbatim.substr(2);
 		if (body.length == 0) return '//';
-		if (opt.normalizeLineCommentIndent && isNormalizable(body)) {
+		if (opt.normalizeLineCommentIndent) {
 			final common: String = runCommonIndent(run, index);
-			// An empty common prefix means the run has no shared indent to
-			// strip: some member sits flush against `//`, or members disagree
-			// on tab-vs-space. Only a flush body then picks up the separating
-			// space; an already-indented one falls through to the legacy path
-			// and is re-emitted as authored rather than GAINING a column.
-			if (common.length > 0 || firstNonWhitespaceIndex(body) == 0) return '// ${StringTools.rtrim(body.substr(common.length))}';
+			// Every member whose own indent opens with the run's common prefix
+			// is re-based on one space. Only ALNUM-headed bodies feed the fold,
+			// but a skipped member sharing that prefix rides the same shift, so
+			// a commented-out block keeps its shape instead of leaving its `}`
+			// closers and continuation lines behind at the original indent.
+			// An empty common prefix means there is no shared indent to strip (a
+			// member sits flush against the slashes, or members disagree on
+			// tab-vs-space): only a flush alnum body then picks up the
+			// separating space, so the pass never GAINS a column.
+			final rebase: Bool = common.length > 0 ? StringTools.startsWith(body, common) : isAlnum(StringTools.fastCodeAt(body, 0));
+			if (rebase) {
+				final rest: String = StringTools.rtrim(body.substr(common.length));
+				return rest.length == 0 ? '//' : '// $rest';
+			}
 		}
 		if (isDecorationPrefix(body)) return '//${StringTools.rtrim(body)}';
 		final trimmed: String = StringTools.trim(body);
