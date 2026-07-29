@@ -222,6 +222,70 @@ class AddElementSliceTest extends Test {
 		assertAppendRefused(source, 3, 3, 'bar();', true);
 	}
 
+	/**
+	 * --append past a trailing LINE comment: the separator stays glued to the
+	 * last element and the new element lands on its own line PAST the comment.
+	 * The splice used to land on the comment's last byte, so `, 2` became part
+	 * of `// one` — the array kept ONE element, the file still parsed and
+	 * stayed byte-canonical, so no downstream gate could see the loss.
+	 */
+	public function testAppendArrayPastTrailingLineComment(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t1 // one\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t1, // one\n\t\t\t2\n\t\t];\n\t}\n}\n';
+		assertAppend(source, 3, 11, '2', false, expected);
+	}
+
+	/** --append past a trailing BLOCK comment: same rule — the `,` stays with the last element. */
+	public function testAppendArrayPastTrailingBlockComment(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t1 /* one */\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t1, /* one */\n\t\t\t2\n\t\t];\n\t}\n}\n';
+		assertAppend(source, 3, 11, '2', false, expected);
+	}
+
+	/**
+	 * A container holding ONLY a line comment is EMPTY — no separator. The
+	 * whitespace-only back-scan read the comment text as content, so the
+	 * element was spliced into `// none` behind a `,`.
+	 */
+	public function testAppendToLineCommentOnlyArray(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t// none\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t// none\n\t\t\t2\n\t\t];\n\t}\n}\n';
+		assertAppend(source, 3, 11, '2', false, expected);
+	}
+
+	/** A container holding ONLY a block comment is EMPTY too — the stray `,` used to make the result unparseable. */
+	public function testAppendToBlockCommentOnlyArray(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t/* none */\n\t\t];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [\n\t\t\t/* none */\n\t\t\t2\n\t\t];\n\t}\n}\n';
+		assertAppend(source, 3, 11, '2', false, expected);
+	}
+
+	/** A self-terminated statement list already splices past a trailing comment — locked so the comma fix keeps it. */
+	public function testAppendStatementPastTrailingLineComment(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\ta(); // one\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\ta(); // one\n\t\tb();\n\t}\n}\n';
+		assertAppend(source, 2, 20, 'b();', false, expected);
+	}
+
+	/** A block holding only a line comment: the statement lands on its own line below it. */
+	public function testAppendToLineCommentOnlyBlock(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\t// none\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\t// none\n\t\tb();\n\t}\n}\n';
+		assertAppend(source, 2, 20, 'b();', false, expected);
+	}
+
+	/**
+	 * An escaped `\/\/` inside a regex literal reads as a line comment to a plain
+	 * lexical scan, and that false comment runs PAST the container's `]`. Only a
+	 * comment token lying entirely inside the container is trusted, so this
+	 * appends normally instead of splicing into the regex.
+	 */
+	public function testAppendAfterRegexWithEscapedSlashes(): Void {
+		final source: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [~/^https?:\\/\\//];\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f():Void {\n\t\tvar a = [~/^https?:\\/\\//, ~/b/];\n\t}\n}\n';
+		assertAppend(source, 3, 11, '~/b/', false, expected);
+	}
+
 	private function assertAppend(source: String, line: Int, col: Int, code: String, reformat: Bool, expected: String): Void {
 		final result: EditResult = appendOf(source, line, col, code, reformat);
 		switch result {

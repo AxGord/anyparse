@@ -168,12 +168,16 @@ final class AddElement {
 	 * The insertion point is found by scanning whitespace back from the
 	 * container's `span.to` to its closing delimiter (the same trick
 	 * `AddMember` uses — robust against a decl span that swallows trailing
-	 * trivia past the brace), then back again over whitespace to the last
-	 * content byte. If that byte is an opening delimiter the container is
-	 * empty and the element is spliced bare; otherwise it is joined with the
-	 * slot separator (`,` for `COMMA_CONTAINER_KINDS`, a newline otherwise).
-	 * The whole-file re-emit formats + re-parse-validates exactly as the
-	 * sibling form does; the source is canonical-gated unless `reformat`.
+	 * trivia past the brace), then back again over whitespace AND whole
+	 * comment tokens to the last content byte. If that byte is an opening
+	 * delimiter the container is empty and the element is spliced bare;
+	 * otherwise it is joined with the slot separator (`,` for
+	 * `COMMA_CONTAINER_KINDS`, a newline otherwise). When trailing comments
+	 * were skipped the separator stays glued to the last element and the new
+	 * element is spliced on its own line PAST them, so nothing is ever written
+	 * into comment text. The whole-file re-emit formats + re-parse-validates
+	 * exactly as the sibling form does; the source is canonical-gated unless
+	 * `reformat`.
 	 */
 	public static function appendElement(
 		source: String, line: Int, col: Int, code: String, reformat: Bool, plugin: GrammarPlugin, ?optsJson: String
@@ -233,15 +237,60 @@ final class AddElement {
 	}
 
 	/**
+	 * Index of the comment token whose `[from, to)` range covers `at`, or -1 when
+	 * `at` is outside every comment. The back-scan calls it once per comment it
+	 * skips, not once per byte, so the linear walk is not a hot path.
+	 */
+	private static function commentIndexAt(comments: Array<{ from: Int, to: Int, isLine: Bool }>, at: Int): Int {
+		for (i in 0...comments.length) if (at >= comments[i].from && at < comments[i].to) return i;
+		return -1;
+	}
+
+	/**
+	 * Walk back through a container's interior `[lo, hi)` over whitespace and
+	 * whole comment TOKENS, and report the last CODE byte (`lastContent`, `lo - 1`
+	 * when the interior holds no code) together with the end of the LAST comment
+	 * skipped on the way (`afterComments`, -1 when none was).
+	 *
+	 * Only a comment lying entirely inside `[lo, hi)` is trusted: one reaching past
+	 * `hi` means the lexical scan and the parser disagree there — an escaped double
+	 * slash inside a regex literal reads as a line comment running to end of line —
+	 * so its bytes count as code and the walk stops, leaving the pre-existing splice
+	 * point intact.
+	 */
+	private static function scanBackOverTrivia(source: String, lo: Int, hi: Int): { lastContent: Int, afterComments: Int } {
+		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
+		var at: Int = hi - 1;
+		var afterComments: Int = -1;
+		while (at >= lo) {
+			if (isSpace(StringTools.fastCodeAt(source, at))) {
+				at--;
+				continue;
+			}
+			final ci: Int = commentIndexAt(comments, at);
+			if (ci < 0 || comments[ci].from < lo || comments[ci].to > hi) break;
+			if (afterComments < 0) afterComments = comments[ci].to;
+			at = comments[ci].from - 1;
+		}
+		return { lastContent: at, afterComments: afterComments };
+	}
+
+	/**
 	 * Resolve the splice point and separator for `appendElement` once the
 	 * target container has been located, then canonicalise. Scans whitespace
 	 * back from the container's `span.to` to its closing delimiter (robust
 	 * against a decl span that swallows trailing trivia past the brace), then
-	 * back over whitespace to the last content byte: an opening delimiter
-	 * there means the container is empty and the element is spliced bare;
-	 * otherwise it is joined with the slot separator (`,` for a comma
-	 * container kind, a newline otherwise). `line` / `col` are only used for
-	 * the diagnostic messages.
+	 * back over whitespace AND whole comment tokens to the last content byte:
+	 * an opening delimiter there means the container is empty and the element
+	 * is spliced bare; otherwise it is joined with the slot separator (`,` for
+	 * a comma container kind, a newline otherwise). Comments are skipped by
+	 * TOKEN (`RefactorSupport.collectCommentTokens`), never by scanning the
+	 * text for an opener — a whitespace-only scan took a trailing comment's
+	 * last character for the last content byte and spliced separator + element
+	 * INSIDE the comment, so the element vanished while the file still parsed
+	 * and stayed byte-canonical. When comments WERE skipped the separator is
+	 * spliced right after the last element and the new element on its own line
+	 * past the last comment. `line` / `col` are only used for the diagnostics.
 	 */
 	private static function computeAppendEdit(
 		source: String, line: Int, col: Int, containerSpan: Span, containerKind: String, trimmed: String, reformat: Bool,
@@ -255,11 +304,13 @@ final class AddElement {
 		if (closeCode != '}'.code && closeCode != ']'.code && closeCode != ')'.code)
 			return Err('the node at $line:$col is not a brace / bracket / parenthesis container');
 
-		// Last content byte: scan back over whitespace from just inside the
-		// closing delimiter. If it is an opening delimiter, the container is
-		// empty and the element is spliced without a separator.
-		var lastContent: Int = close - 1;
-		while (lastContent >= containerSpan.from && isSpace(StringTools.fastCodeAt(source, lastContent))) lastContent--;
+		// Last content byte: scan back from just inside the closing delimiter over
+		// whitespace AND whole comment tokens. Skipping comments by TOKEN is what
+		// keeps the splice out of comment TEXT: a trailing `// x` otherwise passes
+		// for content, and the separator spliced behind it lands inside the comment.
+		final scan: { lastContent: Int, afterComments: Int } = scanBackOverTrivia(source, containerSpan.from, close);
+		final lastContent: Int = scan.lastContent;
+		final afterComments: Int = scan.afterComments;
 		final lastCode: Int = lastContent >= containerSpan.from ? StringTools.fastCodeAt(source, lastContent) : -1;
 		final empty: Bool = lastCode == '{'.code || lastCode == '['.code || lastCode == '('.code || lastContent < containerSpan.from;
 
@@ -272,10 +323,20 @@ final class AddElement {
 				+ 'to append a STATEMENT to the enclosing block, point --append at the block, not the call'
 			);
 		final at: Int = lastContent + 1;
-		final text: String = empty ? trimmed : (isComma ? ', $trimmed' : '\n$trimmed');
+		if (afterComments < 0) {
+			final text: String = empty ? trimmed : (isComma ? ', $trimmed' : '\n$trimmed');
+			final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
+			return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		}
 
-		final edit: { span: Span, text: String } = { span: new Span(at, at), text: text };
-		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+		// Trailing comments sit between the last element and the closing delimiter.
+		// The separator has to stay attached to that element — a `,` written after a
+		// LINE comment would be swallowed by it — and the new element goes on its own
+		// line past the last comment, so neither splice lands in comment text.
+		final edits: Array<{ span: Span, text: String }> = [];
+		if (!empty && isComma) edits.push({ span: new Span(at, at), text: ',' });
+		edits.push({ span: new Span(afterComments, afterComments), text: '\n$trimmed' });
+		return RefactorSupport.canonicalize(source, edits, reformat, plugin, optsJson);
 	}
 
 	/** Whether `cursor` falls within the first token of a node starting at `from` (its start through the token's trailing boundary, inclusive). */
