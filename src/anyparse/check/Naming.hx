@@ -407,22 +407,29 @@ final class Naming implements Check implements CrossFileFix {
 	 * resolver missed) or a `ConditionalRaw` / `StringLiteral` / `DirectiveComment` bails
 	 * (null); a distinctive-name `CommentTrivia` mention renames along. Null on a parse failure
 	 * when the fail-closed raw scan finds an uncovered mention.
+	 *
+	 * `extraSpans` carries occurrences of the SAME binding that the reference walker does not
+	 * index and the CALLER resolved instead - a simple `$name` string-interpolation read, which
+	 * `no-underscore-prefix` collects through the grammar's `stringInterpIdentKind`. They join
+	 * the rewritten set and stop blocking the gate; absent, the behaviour is unchanged.
 	 */
 	private static function declaringFileRenameSpans(
-		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool
+		source: String, tree: QueryNode, declFrom: Int, name: String, shape: RefShape, plugin: GrammarPlugin, distinctive: Bool,
+		?extraSpans: Array<Span>
 	): Null<Array<Span>> {
 		final resolved: Array<Span> = Rename.renameOccurrences(source, tree, declFrom, shape);
 		if (resolved.length == 0) return null;
+		final covered: Array<Span> = extraSpans == null ? resolved : resolved.concat(extraSpans);
 		// Attribute every OTHER same-name occurrence to its binding: one provably bound to a DIFFERENT
 		// binding (a param / loop var / sibling local sharing the name) is neither a rename target nor a
 		// blocker for THIS binding, so it joins the resolved set as an excluded span. An occurrence whose
 		// binding is unresolved is left uncovered so the completeness gate below blocks (fail-closed).
-		final excluded: Array<Span> = resolved.concat(otherBindingSpans(source, tree, name, declFrom, shape));
+		final excluded: Array<Span> = covered.concat(otherBindingSpans(source, tree, name, declFrom, shape));
 		final classified: Null<Array<ClassifiedOccurrence>> = RefactorSupport.classifyOccurrences(
 			source, name, plugin, 0, source.length, excluded
 		);
-		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : resolved;
-		final spans: Array<Span> = resolved.copy();
+		if (classified == null) return RefactorSupport.referencedInRange(source, name, 0, source.length, excluded) ? null : covered;
+		final spans: Array<Span> = covered.copy();
 		// A distinctive comment mention renames along, but only within the binding's own lexical container:
 		// the same distinctive name can name an UNRELATED binding elsewhere in the file, and a comment about
 		// THAT one must not be rewritten (nor block this rename). A field's container is its type, so its

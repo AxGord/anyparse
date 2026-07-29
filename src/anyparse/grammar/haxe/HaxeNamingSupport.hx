@@ -33,8 +33,10 @@ final class HaxeNamingSupport implements NamingSupport {
 	/**
 	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
 	 * these is not a usable identifier, so its rename is skipped (report-only).
+	 * Published through `RefShape.reservedWords` for the checks that DERIVE an
+	 * identifier without going through a policy normalizer.
 	 */
-	private static final HAXE_KEYWORDS: Array<String> = [
+	public static final KEYWORDS: Array<String> = [
 		'abstract',
 		'break',
 		'case',
@@ -462,7 +464,7 @@ final class HaxeNamingSupport implements NamingSupport {
 		}
 		final joined: String = buf.toString();
 		final lowered: String = joined.charAt(0).toLowerCase() + joined.substr(1);
-		return HAXE_KEYWORDS.contains(lowered) ? null : lowered;
+		return KEYWORDS.contains(lowered) ? null : lowered;
 	}
 
 

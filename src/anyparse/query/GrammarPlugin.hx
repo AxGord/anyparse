@@ -1031,6 +1031,16 @@ typedef RefShape = {
 	@:optional var stringInterpIdentKind: String;
 
 	/**
+	 * The language's reserved words — identifiers no binding may be named. A check that
+	 * DERIVES a new identifier (`no-underscore-prefix` strips a leading `_`) must refuse a
+	 * result that lands on one, or it emits source the parser rejects. A naming policy cannot
+	 * stand in for this: a policy adapted from a project config carries no normalizer, and
+	 * every camelCase format matches `dynamic` / `is` / `macro` just as it matches `event`.
+	 * Optional; unset means a deriving check has no reserved-word veto.
+	 */
+	@:optional var reservedWords: Array<String>;
+
+	/**
 	 * Node kinds a local declaration projects for its TYPE ANNOTATION (Haxe `Anon`
 	 * — only a top-level anonymous-struct annotation survives projection; nominal
 	 * and function types are dropped) — a decl's initializer is its last child
