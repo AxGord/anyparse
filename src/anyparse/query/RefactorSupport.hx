@@ -1121,6 +1121,23 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Recursive kind / name / arity equality over two subtrees — the shared SHAPE-identity
+	 * predicate. Spans and source formatting are ignored, so two nodes compare equal when
+	 * they project the same tree regardless of where they sit or how they are laid out.
+	 * `Matcher` uses it to enforce a reused metavariable (`$x` twice in one pattern must
+	 * capture the same shape); `tail-merge` uses it as one half of its tail-identity test
+	 * (paired with a whitespace-normalized source comparison, since shape equality alone
+	 * cannot see a comment sitting INSIDE a statement's span).
+	 */
+	public static function structurallyEqual(a: QueryNode, b: QueryNode): Bool {
+		if (a.kind != b.kind) return false;
+		if (a.name != b.name) return false;
+		if (a.children.length != b.children.length) return false;
+		for (k in 0...a.children.length) if (!structurallyEqual(a.children[k], b.children[k])) return false;
+		return true;
+	}
+
+	/**
 	 * Does `source` reference `name` as a member access — a `.name` with a `.`
 	 * immediately before and a word boundary after? This is the form a `using`'s
 	 * extension method takes whether it is called (`s.trim()`) or captured as a

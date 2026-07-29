@@ -294,6 +294,7 @@ import unit.RedundantParensCheckTest;
 import unit.ConstantConditionCheckTest;
 import unit.EmptyStatementCheckTest;
 import unit.RedundantElseCheckTest;
+import unit.TailMergeCheckTest;
 import unit.ComparisonToBooleanCheckTest;
 import unit.CollapsibleIfCheckTest;
 import unit.DoubleNegationCheckTest;
@@ -946,6 +947,7 @@ class RunTests {
 		addCase(new EmptyStatementCheckTest());
 		addCase(new EmptyCommentCheckTest());
 		addCase(new RedundantElseCheckTest());
+		addCase(new TailMergeCheckTest());
 		addCase(new ComparisonToBooleanCheckTest());
 		addCase(new CollapsibleIfCheckTest());
 		addCase(new CollapsibleElseIfCheckTest());

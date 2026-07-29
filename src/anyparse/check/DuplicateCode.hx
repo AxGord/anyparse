@@ -1,6 +1,7 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.CheckScan.NormalizedSpan;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.QueryNode;
@@ -162,24 +163,14 @@ final class DuplicateCode implements Check {
 	/**
 	 * Whitespace-normalized view of the statement at `span`: every run of spaces /
 	 * tabs / newlines collapsed to a single space with the ends trimmed, plus the
-	 * count of non-whitespace characters (the content-gate metric).
+	 * count of non-whitespace characters (the content-gate metric). The normalization
+	 * itself is `CheckScan.normalizeSpan`, shared with `extract-repeated-expression` and
+	 * `tail-merge`; this only pins it
+	 * to a statement span.
 	 */
 	private static function normalizeStmt(source: String, span: Span): DupStmt {
-		final buf: StringBuf = new StringBuf();
-		var nonWs: Int = 0;
-		var pendingSpace: Bool = false;
-		for (i in span.from ... span.to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
-				pendingSpace = true;
-			} else {
-				if (pendingSpace && nonWs > 0) buf.addChar(' '.code);
-				pendingSpace = false;
-				buf.addChar(c);
-				nonWs++;
-			}
-		}
-		return { norm: buf.toString(), span: span, nonWs: nonWs };
+		final normalized: NormalizedSpan = CheckScan.normalizeSpan(source, span.from, span.to);
+		return { norm: normalized.norm, span: span, nonWs: normalized.nonWs };
 	}
 
 	/**

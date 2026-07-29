@@ -75,7 +75,7 @@ final class Matcher {
 				bindings[n] = input;
 				return true;
 			}
-			return structurallyEqual(prior, input);
+			return RefactorSupport.structurallyEqual(prior, input);
 		}
 		// Kind must match for non-metavar patterns. A plugin may supply
 		// a search-only equivalence so position-variant kinds of one
@@ -111,16 +111,6 @@ final class Matcher {
 		if (pChildren.length != iChildren.length) return false;
 		for (k in 0...pChildren.length) {
 			if (!unify(pChildren[k], iChildren[k], eq, bindings)) return false;
-		}
-		return true;
-	}
-
-	private static function structurallyEqual(a: QueryNode, b: QueryNode): Bool {
-		if (a.kind != b.kind) return false;
-		if (a.name != b.name) return false;
-		if (a.children.length != b.children.length) return false;
-		for (k in 0...a.children.length) {
-			if (!structurallyEqual(a.children[k], b.children[k])) return false;
 		}
 		return true;
 	}

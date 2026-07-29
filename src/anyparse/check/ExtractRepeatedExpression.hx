@@ -344,23 +344,13 @@ final class ExtractRepeatedExpression implements Check {
 			'the expression `${text}` is repeated ${g.occ.length} times in one function body — extract into a `final` local (report-only)';
 	}
 
-	/** `source[span]` with every run of whitespace collapsed to a single space and the ends trimmed. */
+	/**
+	 * `source[span]` with every run of whitespace collapsed to a single space and the ends
+	 * trimmed — `CheckScan.normalizeSpan`'s text half, shared with `duplicate-code` and
+	 * `tail-merge`; this check has no use for its non-whitespace count.
+	 */
 	private static function normalize(source: String, span: Span): String {
-		final buf: StringBuf = new StringBuf();
-		var nonWs: Int = 0;
-		var pendingSpace: Bool = false;
-		for (i in span.from ... span.to) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
-				pendingSpace = true;
-			} else {
-				if (pendingSpace && nonWs > 0) buf.addChar(' '.code);
-				pendingSpace = false;
-				buf.addChar(c);
-				nonWs++;
-			}
-		}
-		return buf.toString();
+		return CheckScan.normalizeSpan(source, span.from, span.to).norm;
 	}
 
 }

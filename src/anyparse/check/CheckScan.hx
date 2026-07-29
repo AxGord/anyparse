@@ -208,6 +208,34 @@ final class CheckScan {
 	}
 
 	/**
+	 * The whitespace-normalized view of `[from, to)`: every run of spaces / tabs /
+	 * newlines collapsed to a single space with the ends trimmed, plus the count of
+	 * non-whitespace characters. The shared text-identity metric of `duplicate-code`
+	 * (which hashes statement norms to find clones and gates a run on its non-whitespace
+	 * size), `extract-repeated-expression` (which buckets equal expressions) and
+	 * `tail-merge` (which compares a branch tail against the shared fall-through run). Deliberately NOT string-literal-aware: whitespace INSIDE a literal collapses
+	 * too, so `f("a  b")` and `f("a b")` normalize equal — a consumer needing exact token
+	 * identity pairs this with a structural comparison rather than relying on it alone.
+	 */
+	public static function normalizeSpan(source: String, from: Int, to: Int): NormalizedSpan {
+		final buf: StringBuf = new StringBuf();
+		var nonWs: Int = 0;
+		var pendingSpace: Bool = false;
+		for (i in from ... to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code) {
+				pendingSpace = true;
+			} else {
+				if (pendingSpace && nonWs > 0) buf.addChar(' '.code);
+				pendingSpace = false;
+				buf.addChar(c);
+				nonWs++;
+			}
+		}
+		return { norm: buf.toString(), nonWs: nonWs };
+	}
+
+	/**
 	 * Iterate `violations`, recover each flagged node from `byKey` by its `from:to`
 	 * span, and collect the non-null edits `produce` builds — the span-lookup loop
 	 * shared by `applyBySpan` and `simplifyConditionFixes`.
@@ -381,6 +409,15 @@ final class CheckScan {
 	}
 
 }
+
+/**
+ * The result of `CheckScan.normalizeSpan`: the whitespace-collapsed text of a source
+ * range (`norm`) and its non-whitespace character count (`nonWs`, the content-gate metric).
+ */
+typedef NormalizedSpan = {
+	final norm: String;
+	final nonWs: Int;
+};
 
 /** The condition / logical / block seam kinds `simplifyConditionFixes` reads from the grammar. */
 private typedef CondSimplifySeams = {
