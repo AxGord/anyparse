@@ -8,18 +8,21 @@ import anyparse.check.Severity;
 import anyparse.check.UnusedParameter;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.check.LintConfig;
 
 /**
  * The `unused-parameter` check: a function parameter never referenced in its
  * body is flagged. Used parameters, `_`-prefixed parameters, body-less
- * (interface / abstract) method declarations, and methods of a type carrying a
- * supertype clause (`extends` / `implements`, a contract candidate) are not
- * flagged. A named local function or a confined private method whose call set is
- * provably complete within the file is `Warning`, and `fix` removes the
- * parameter plus its in-file call arguments. Every other flagged parameter (a
- * public / unconfined method, or a function captured as a value) stays `Info`,
- * and `fix` renames it to `_<name>` — a decl-site-only silencing — unless a
- * `_<name>` collision blocks the rename.
+ * (interface / abstract) method declarations, methods of a type carrying a
+ * supertype clause (`extends` / `implements`, a contract candidate), and
+ * functions captured as a VALUE (passed as an argument, assigned, returned —
+ * their signature is fixed from outside) are not flagged. A named local
+ * function or a confined private method whose call set is provably complete
+ * within the file is `Warning`, and `fix` removes the parameter plus its
+ * in-file call arguments. Every other flagged parameter (a public / unconfined
+ * method) stays `Info` and is report-only by default; a project that opts into
+ * `renameSilence` also gets the `_<name>` silence-rename, unless a `_<name>`
+ * collision blocks it.
  */
 class UnusedParameterCheckTest extends Test {
 
@@ -97,28 +100,85 @@ class UnusedParameterCheckTest extends Test {
 
 	public function testPublicMethodParameterRenamed(): Void {
 		// A public method's callers may live in other files, so removal cannot be
-		// proven safe — the finding stays `Info`, but `fix` renames the parameter to
-		// `_<name>` (a decl-site-only, cross-file-safe silencing), not removing it.
+		// proven safe — the finding stays `Info`, and with `renameSilence` opted in
+		// `fix` renames the parameter to `_<name>` (a decl-site-only, cross-file-safe
+		// silencing) instead of removing it.
 		final src: String = 'class C {\n\tpublic function f(x:Int, unused:Int):Int {\n\t\treturn x;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals('class C {\n\tpublic function f(x:Int, _unused:Int):Int {\n\t\treturn x;\n\t}\n}', applyFix(src));
+		Assert.equals('class C {\n\tpublic function f(x:Int, _unused:Int):Int {\n\t\treturn x;\n\t}\n}', applyFix(src, true));
 	}
 
-	public function testLocalFunctionPassedByValueRenamed(): Void {
-		// `inner` is captured as a value (passed to `take`), so its call set cannot be
-		// proven complete — removal is unsafe, so the parameter stays `Info` and `fix`
-		// renames it to `_value` instead of removing it.
-		final src: String =
-			'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\ttake(inner);\n\t}\n}';
+	public function testRenameSilenceOffProducesNoEdits(): Void {
+		// The default: the `Info` finding is still reported, but `fix` offers NO edit —
+		// the silence-rename is opt-in via `renameSilence`.
+		final src: String = 'class C {\n\tpublic function f(x:Int, unused:Int):Int {\n\t\treturn x;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals(
-			'class C {\n\tpublic function m():Void {\n\t\tfunction inner(_value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\ttake(inner);\n\t}\n}',
-			applyFix(src)
-		);
+		Assert.equals(src, applyFix(src));
+	}
+
+	public function testLocalFunctionPassedByValueNotFlagged(): Void {
+		// `inner` is captured as a value (passed to `take`), so whatever consumes the
+		// reference fixes its signature — the ignored parameter is mandated, not dead,
+		// so nothing is reported and nothing is fixed.
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\tfunction inner(value:Int):Void {\n\t\t\tg();\n\t\t}\n\t\ttake(inner);\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src, true));
+	}
+
+	public function testMethodPassedAsCallbackNotFlagged(): Void {
+		// The `addEventListener` shape: a private method registered as a listener. Its
+		// signature is fixed by the dispatcher, so an unread parameter is not actionable.
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\taddEventListener(E, onFoo);\n\t}\n\n\tprivate function onFoo(event:Int):Void {\n\t\tg();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testMethodCapturedViaThisNotFlagged(): Void {
+		// `this.cb` assigned to a local is the same capture through a field access.
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\tvar f = this.cb;\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testMethodReturnedAsValueNotFlagged(): Void {
+		// Returning the method hands its signature to the caller.
+		final src: String =
+			'class C {\n\tpublic function m():Dynamic {\n\t\treturn cb;\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testDirectlyCalledPublicMethodStillFlagged(): Void {
+		// The capture gate is about a VALUE reference: a method only ever CALLED keeps
+		// its `Info` finding.
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\tcb(1);\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testParenthesizedCalleeStillFlagged(): Void {
+		// Callee position propagates through a `ParenExpr`: `(cb)(1)` is a direct call,
+		// not a capture, so the finding survives.
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\t(cb)(1);\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testComputedCalleeNotFlagged(): Void {
+		// A callee the call site COMPUTES rather than names hands both functions to an
+		// expression that selects between them as VALUES — a capture, so neither is
+		// flagged.
+		final src: String =
+			'class C {\n\tpublic function m(cond:Bool):Void {\n\t\t(cond ? cb : alt)(1);\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n\n\tpublic function alt(other:Int):Void {\n\t\tg();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
 	}
 
 	public function testDynamicFunctionParameterNotFlagged(): Void {
@@ -133,12 +193,13 @@ class UnusedParameterCheckTest extends Test {
 
 	public function testRenameConflictSkipped(): Void {
 		// `_dup` already exists, so renaming the unused `dup` to `_dup` would collide —
-		// the rename is skipped and the finding is left as a manual-review `Info`.
+		// the rename is skipped even with `renameSilence` opted in, and the finding is
+		// left as a manual-review `Info`.
 		final src: String = 'class C {\n\tpublic function f(_dup:Int, dup:Int):Int {\n\t\treturn _dup;\n\t}\n}';
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals(src, applyFix(src));
+		Assert.equals(src, applyFix(src, true));
 	}
 
 	public function testOptionalParameterRenamed(): Void {
@@ -147,15 +208,17 @@ class UnusedParameterCheckTest extends Test {
 		final vs: Array<Violation> = violations(src);
 		Assert.equals(1, vs.length);
 		Assert.equals(Severity.Info, vs[0].severity);
-		Assert.equals('class C {\n\tpublic function f(?_value:String):Void {}\n}', applyFix(src));
+		Assert.equals('class C {\n\tpublic function f(?_value:String):Void {}\n}', applyFix(src, true));
 	}
 
 	private function violations(src: String): Array<Violation> {
 		return new UnusedParameter().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
-	private function applyFix(src: String): String {
+	/** Apply the check's own fix edits to `src`; `renameSilence` opts the `Info` silence-rename in, as an `apqlint.json` would. */
+	private function applyFix(src: String, renameSilence: Bool = false): String {
 		final check: UnusedParameter = new UnusedParameter();
+		if (renameSilence) check.setConfigResolver(_ -> LintConfig.parse('{"rules": {"unused-parameter": {"renameSilence": true}}}'));
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
