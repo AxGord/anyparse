@@ -46,6 +46,7 @@ class WriteOptionsTest extends Test {
 			conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 			alignInlineSwitchCaseBody: false,
 			addLineCommentSpace: true,
+			normalizeLineCommentIndent: false,
 			compressSuccessiveParenthesis: true,
 		};
 		final out: String = JValueWriter.write(ast, opts);

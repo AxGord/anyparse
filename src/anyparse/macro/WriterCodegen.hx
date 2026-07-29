@@ -64,6 +64,13 @@ class WriterCodegen {
 			fields.push(leadingCommentDocField());
 			fields.push(trailingCommentDocField());
 			fields.push(trailingCommentDocVerbatimField());
+			// ω-line-comment-indent: run-aware line-comment core. Every
+			// array-indexed leading-comment site routes through
+			// `leadingCommentDocRun` so the adapter sees the entry's
+			// neighbours; `lineCommentStr` centralises the null-adapter
+			// fallback the three helpers above used to inline.
+			fields.push(lineCommentStrField());
+			fields.push(leadingCommentDocRunField());
 			// ω₆c: BodyGroup trailing-comment folder. Used by
 			// `triviaBlockStarExpr` / `triviaEofStarExpr` to splice
 			// a trailing comment into the body's FitLine measure.
@@ -1611,22 +1618,76 @@ class WriterCodegen {
 	 * helper unchanged.
 	 */
 	private static function leadingCommentDocField(): Field {
-		final body: Expr = macro {
-			if (StringTools.startsWith(content, '//')) {
-				final _line = opt.lineCommentAdapter;
-				return _dt(_line == null ? content : _line(content, opt.addLineCommentSpace));
-			}
-			if (!StringTools.startsWith(content, '/*')) return _dt(content);
-			if (content.indexOf('\n') < 0) return _dt(content);
-			final _block = opt.blockCommentAdapter;
-			return _block == null ? _dt(content) : _block(content, opt);
-		};
+		final body: Expr = macro return leadingCommentDocRun([content], 0, opt);
 		return {
 			name: 'leadingCommentDoc',
 			access: [APrivate, AStatic],
 			kind: FFun({
 				args: [
 					{ name: 'content', type: macro :String },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+				],
+				ret: macro :anyparse.core.Doc,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Route one captured line-comment entry through the plugin-supplied
+	 * `opt.lineCommentAdapter`, or pass it through verbatim when no adapter
+	 * is bound. `run` is the whole captured contiguous comment array and
+	 * `index` names the entry to render, so a run-aware adapter (see
+	 * `anyparse.format.comment.LineCommentNormalizer`) can compute a
+	 * run-wide common indent; single-comment slots pass a 1-element array.
+	 * Centralises the null-adapter fallback all three comment helpers used
+	 * to inline.
+	 */
+	private static function lineCommentStrField(): Field {
+		final body: Expr = macro {
+			final _line = opt.lineCommentAdapter;
+			return _line == null ? run[index] : _line(run, index, opt);
+		};
+		return {
+			name: 'lineCommentStr',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'run', type: macro :Array<String> },
+					{ name: 'index', type: macro :Int },
+					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
+				],
+				ret: macro :String,
+				expr: body,
+			}),
+			pos: Context.currentPos(),
+		};
+	}
+
+	/**
+	 * Run-aware core of `leadingCommentDoc`: renders `run[index]` with the
+	 * whole captured array in hand so the line-comment adapter can see the
+	 * entry's neighbours. `leadingCommentDoc` is the 1-element wrapper; every
+	 * array-indexed call site passes its own array so a contiguous `//` run
+	 * shares one common-indent computation.
+	 */
+	private static function leadingCommentDocRunField(): Field {
+		final body: Expr = macro {
+			final content: String = run[index];
+			if (StringTools.startsWith(content, '//')) return _dt(lineCommentStr(run, index, opt));
+			if (!StringTools.startsWith(content, '/*')) return _dt(content);
+			if (content.indexOf('\n') < 0) return _dt(content);
+			final _block = opt.blockCommentAdapter;
+			return _block == null ? _dt(content) : _block(content, opt);
+		};
+		return {
+			name: 'leadingCommentDocRun',
+			access: [APrivate, AStatic],
+			kind: FFun({
+				args: [
+					{ name: 'run', type: macro :Array<String> },
+					{ name: 'index', type: macro :Int },
 					{ name: 'opt', type: macro :anyparse.format.WriteOptions },
 				],
 				ret: macro :anyparse.core.Doc,
@@ -1649,10 +1710,7 @@ class WriterCodegen {
 	 * rewrite the leading and verbatim variants apply.
 	 */
 	private static function trailingCommentDocField(): Field {
-		final body: Expr = macro {
-			final _line = opt.lineCommentAdapter;
-			return _dt(' ' + (_line == null ? '//' + content : _line('//' + content, opt.addLineCommentSpace)));
-		};
+		final body: Expr = macro return _dt(' ' + lineCommentStr(['//' + content], 0, opt));
 		return {
 			name: 'trailingCommentDoc',
 			access: [APrivate, AStatic],
@@ -1686,10 +1744,7 @@ class WriterCodegen {
 	 * style trailing (`/* foo *\/`) passes through unchanged.
 	 */
 	private static function trailingCommentDocVerbatimField(): Field {
-		final body: Expr = macro {
-			final _line = opt.lineCommentAdapter;
-			return _dt(' ' + (_line == null ? content : _line(content, opt.addLineCommentSpace)));
-		};
+		final body: Expr = macro return _dt(' ' + lineCommentStr([content], 0, opt));
 		return {
 			name: 'trailingCommentDocVerbatim',
 			access: [APrivate, AStatic],
@@ -1855,9 +1910,9 @@ class WriterCodegen {
 			// before each comment, plus a final hardline so the kw lands on
 			// its own line at the parent indent.
 			final _parts: Array<anyparse.core.Doc> = [];
-			for (_c in beforeKwLeading) {
+			for (_ci in 0...beforeKwLeading.length) {
 				_parts.push(_dhl());
-				_parts.push(leadingCommentDoc(_c, opt));
+				_parts.push(leadingCommentDocRun(beforeKwLeading, _ci, opt));
 			}
 			_parts.push(_dhl());
 			return _dc(_parts);
@@ -1914,13 +1969,16 @@ class WriterCodegen {
 			final _parts: Array<anyparse.core.Doc> = [];
 			if (afterKw != null) {
 				_parts.push(_dt(' '));
-				_parts.push(_dt('//' + afterKw));
+				// ω-line-comment-indent: this slot historically bypassed the
+				// adapter entirely. Only the new knob routes it, so with the
+				// knob off the emitted bytes stay exactly as before.
+				_parts.push(_dt(opt.normalizeLineCommentIndent ? lineCommentStr(['//' + afterKw], 0, opt) : '//' + afterKw));
 			}
 			if (kwLeading.length > 0) {
 				final _nested: Array<anyparse.core.Doc> = [];
-				for (_c in kwLeading) {
+				for (_ci in 0...kwLeading.length) {
 					_nested.push(_dhl());
-					_nested.push(leadingCommentDoc(_c, opt));
+					_nested.push(leadingCommentDocRun(kwLeading, _ci, opt));
 				}
 				_parts.push(_dn(cols, _dc(_nested)));
 			}
@@ -1967,8 +2025,8 @@ class WriterCodegen {
 	private static function nextLayoutKwGapDocField(): Field {
 		final body: Expr = macro {
 			final _innerParts: Array<anyparse.core.Doc> = [_dhl()];
-			for (_c in kwLeading) {
-				_innerParts.push(leadingCommentDoc(_c, opt));
+			for (_ci in 0...kwLeading.length) {
+				_innerParts.push(leadingCommentDocRun(kwLeading, _ci, opt));
 				_innerParts.push(_dhl());
 			}
 			_innerParts.push(bodyDoc);

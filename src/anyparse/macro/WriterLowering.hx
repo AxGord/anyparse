@@ -6418,8 +6418,8 @@ class WriterLowering {
 				final _outer556: Array<anyparse.core.Doc> = [];
 				if (_at556 != null) _outer556.push(trailingCommentDocVerbatim(_at556, opt));
 				final _inner556: Array<anyparse.core.Doc> = [_dhl()];
-				for (_c556 in _bl556) {
-					_inner556.push(leadingCommentDoc(_c556, opt));
+				for (_ci556 in 0..._bl556.length) {
+					_inner556.push(leadingCommentDocRun(_bl556, _ci556, opt));
 					_inner556.push(_dhl());
 				}
 				_inner556.push($writeCall);
@@ -8204,8 +8204,8 @@ class WriterLowering {
 					_sep598;
 				else {
 					final _p598: Array<anyparse.core.Doc> = [_sep598];
-					for (_c598 in _leadCm598) {
-						_p598.push(leadingCommentDoc(_c598, opt));
+					for (_ci598 in 0..._leadCm598.length) {
+						_p598.push(leadingCommentDocRun(_leadCm598, _ci598, opt));
 						_p598.push(_dhl());
 					}
 					_dc(_p598);
@@ -12163,7 +12163,7 @@ class WriterLowering {
 		whileBodyParts.push(macro {
 			var _ci: Int = 0;
 			while (_ci < _t.leadingComments.length) {
-				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+				_docs.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
 				_docs.push(_dhl());
 				$fileheaderCommentBlanksExpr;
 				_ci++;
@@ -12214,7 +12214,7 @@ class WriterLowering {
 			if ($extraTrailBlankExpr) _docs.push(_dhl());
 			var _ti: Int = 0;
 			while (_ti < _trailLC.length) {
-				_docs.push(leadingCommentDoc(_trailLC[_ti], opt));
+				_docs.push(leadingCommentDocRun(_trailLC, _ti, opt));
 				if (_ti < _trailLC.length - 1) _docs.push(_dhl());
 				$eofTrailBetweenExpr;
 				_ti++;
@@ -13911,7 +13911,7 @@ class WriterLowering {
 			}
 			var _ci: Int = 0;
 			while (_ci < _t.leadingComments.length) {
-				_docs.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+				_docs.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
 				_docs.push(_dhl());
 				_ci++;
 			}
@@ -13987,7 +13987,7 @@ class WriterLowering {
 				while (_ti < _trailLC.length) {
 					_trailDocs.push(_dhl());
 					if (_trailBB && _ti == 0 && _arr.length > 0) _trailDocs.push(_dhl());
-					_trailDocs.push(leadingCommentDoc(_trailLC[_ti], opt));
+					_trailDocs.push(leadingCommentDocRun(_trailLC, _ti, opt));
 					_ti++;
 				}
 				// ω-trail-blank-after: source had a blank line between this
@@ -14497,7 +14497,7 @@ class WriterLowering {
 				$typedefBetweenExpr;
 				var _ci: Int = 0;
 				while (_ci < _t.leadingComments.length) {
-					_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+					_inner.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
 					// ω-643-leading-block-glue: the LAST leading comment
 					// keeps the element on its line (single space, no
 					// break) when the source glued a block-style comment
@@ -14524,7 +14524,7 @@ class WriterLowering {
 				if (_trailBB && _arr.length > 0) _inner.push(_dhl());
 				var _tii: Int = 0;
 				while (_tii < _trailLC.length) {
-					_inner.push(leadingCommentDoc(_trailLC[_tii], opt));
+					_inner.push(leadingCommentDocRun(_trailLC, _tii, opt));
 					if (_tii < _trailLC.length - 1) _inner.push(_dhl());
 					_tii++;
 				}
@@ -14951,7 +14951,7 @@ class WriterLowering {
 					}
 					var _ci2: Int = 0;
 					while (_ci2 < _t.leadingComments.length) {
-						_parts.push(leadingCommentDoc(_t.leadingComments[_ci2], opt));
+						_parts.push(leadingCommentDocRun(_t.leadingComments, _ci2, opt));
 						_parts.push(_dhl());
 						_ci2++;
 					}
@@ -16217,7 +16217,7 @@ class WriterLowering {
 				var _ci: Int = 0;
 				while (_ci < _t.leadingComments.length) {
 					$leadingSplitGateExpr;
-					_inner.push(leadingCommentDoc(_t.leadingComments[_ci], opt));
+					_inner.push(leadingCommentDocRun(_t.leadingComments, _ci, opt));
 					_inner.push(_dhl());
 					$blockLeadingBetweenExpr;
 					_ci++;
@@ -16278,7 +16278,7 @@ class WriterLowering {
 				if ($extraInnerTrailBlankExpr) _inner.push(_dhl());
 				var _ti: Int = 0;
 				while (_ti < _trailLC.length) {
-					_inner.push(leadingCommentDoc(_trailLC[_ti], opt));
+					_inner.push(leadingCommentDocRun(_trailLC, _ti, opt));
 					if (_ti < _trailLC.length - 1) _inner.push(_dhl());
 					$blockTrailBetweenExpr;
 					_ti++;

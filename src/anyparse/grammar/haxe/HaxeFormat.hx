@@ -783,6 +783,7 @@ final class HaxeFormat implements TextFormat {
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		addLineCommentSpace: true,
+		normalizeLineCommentIndent: false,
 		compressSuccessiveParenthesis: true,
 		expressionTry: SameLinePolicy.Same,
 		indentCaseLabels: true,

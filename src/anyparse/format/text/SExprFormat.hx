@@ -77,6 +77,7 @@ final class SExprFormat implements TextFormat {
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
 		addLineCommentSpace: true,
+		normalizeLineCommentIndent: false,
 		compressSuccessiveParenthesis: true,
 	};
 

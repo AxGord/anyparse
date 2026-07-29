@@ -496,6 +496,7 @@ import unit.HxVarInitBreakAfterEqOverflowTest;
 import unit.ResolutionLibraryCacheTest;
 import unit.PreferSafeNavComparisonCheckTest;
 import unit.PreferArrowCallbackCheckTest;
+import unit.HxLineCommentIndentSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -770,6 +771,7 @@ class RunTests {
 		addCase(new HxTriviaTypesTest());
 		addCase(new HxTriviaParseTest());
 		addCase(new HxTriviaWriteTest());
+		addCase(new HxLineCommentIndentSliceTest());
 		addCase(new HxCallArgCommentWriteTest());
 		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
