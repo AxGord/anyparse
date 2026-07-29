@@ -189,7 +189,7 @@ final class CheckScan {
 		if (cond.kind == seams.notKind) return false;
 		if (cond.kind != andKind && cond.kind != seams.orKind) return false;
 		final operands: Array<QueryNode> = [];
-		flattenChain(cond, cond.kind, operands);
+		flattenChain(cond, cond.kind, seams.parenKind, operands);
 		if (cond.kind == andKind && chainStrands(operands, seams)) return true;
 		for (operand in operands) if (narrowingStranded(operand, seams)) return true;
 		return false;
@@ -413,14 +413,25 @@ final class CheckScan {
 		return null;
 	}
 
-	/** Append the left-associative `kind` chain under `node` as a flat operand list. */
-	private static function flattenChain(node: QueryNode, kind: String, out: Array<QueryNode>): Void {
+	/**
+	 * Append the left-associative `kind` chain under `node` as a flat operand list.
+	 * Parentheses are TRANSPARENT: the negation drops them and re-adds them only where
+	 * precedence demands, so `a && (b && c)` emits the same flat `!a || !b || !c` as
+	 * `a && b && c` and must flatten to the same three operands. Descending through a
+	 * paren that wraps a DIFFERENT operator changes nothing — the inner node is pushed
+	 * as the one operand the paren stood for, carrying the same identifiers.
+	 */
+	private static function flattenChain(node: QueryNode, kind: String, parenKind: Null<String>, out: Array<QueryNode>): Void {
+		if (node.kind == parenKind && node.children.length == 1) {
+			flattenChain(node.children[0], kind, parenKind, out);
+			return;
+		}
 		if (node.kind != kind || node.children.length != BINARY_CHILD_COUNT) {
 			out.push(node);
 			return;
 		}
-		flattenChain(node.children[0], kind, out);
-		flattenChain(node.children[1], kind, out);
+		flattenChain(node.children[0], kind, parenKind, out);
+		flattenChain(node.children[1], kind, parenKind, out);
 	}
 
 	/**

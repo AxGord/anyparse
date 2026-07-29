@@ -134,6 +134,13 @@ class GuardReturnCheckTest extends Test {
 		Assert.equals(1, v(cond('a != null\n\t\t\t&& b != null\n\t\t\t&& c != null')).length);
 	}
 
+	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
+		// `||` as the unparenthesised shape — the gate must see through the parens too.
+		final fixed: String = fx(cond('a != null && (b != null && p(a.length, b.length))'));
+		Assert.isTrue(fixed.indexOf('if (!(a != null && (b != null && p(a.length, b.length)))) return false;') != -1);
+	}
+
 	public function testStrandedNarrowingFirstOperandStillDeMorgans(): Void {
 		// The FIRST operand's fact does survive the `||` chain, so this one is safe.
 		Assert.isTrue(

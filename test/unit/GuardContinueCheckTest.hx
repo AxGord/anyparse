@@ -208,6 +208,16 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('a != null && q() && p(a.length, 0)')).indexOf('if (a == null || !q() || !p(a.length, 0)) continue;') != -1);
 	}
 
+	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
+		// `||` as the unparenthesised shape — the gate must see through the parens too.
+		Assert.isTrue(
+			fx(cond('a != null && (b != null && p(a.length, b.length))')).indexOf(
+				'if (!(a != null && (b != null && p(a.length, b.length)))) continue;'
+			) != -1
+		);
+	}
+
 	// --- negatives: never flagged --------------------------------------------------
 
 	public function testCodeAfterIfNotFlagged(): Void {

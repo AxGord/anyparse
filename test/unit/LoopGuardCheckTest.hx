@@ -118,6 +118,17 @@ class LoopGuardCheckTest extends Test {
 		);
 	}
 
+	public function testParenNestedStrandedNarrowingFallsBackToVerbatimWrap(): Void {
+		// The negation DROPS the parens, so the emitted chain is the same flat three-operand
+		// `||` as the unparenthesised shape — the gate must see through the parens too.
+		Assert.equals(
+			wrap('for (x in xs) if (!(a != null && (b != null && p(a.length, b.length)))) {\n\t\t\ttrace(x);\n\t\t}'),
+			applyFix(
+				wrap('for (x in xs) {\n\t\t\tif (a != null && (b != null && p(a.length, b.length))) continue;\n\t\t\ttrace(x);\n\t\t}')
+			)
+		);
+	}
+
 	public function testCascadeNotFlagged(): Void {
 		Assert.equals(
 			0, violations(wrap('for (x in xs) {\n\t\t\tif (x == 0) continue;\n\t\t\tif (x == 1) continue;\n\t\t\ttrace(x);\n\t\t}')).length
