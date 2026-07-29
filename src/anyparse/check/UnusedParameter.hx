@@ -9,6 +9,7 @@ import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import anyparse.query.CallSites;
 import anyparse.query.RemoveParam;
+import anyparse.check.Check.ConfigAware;
 
 /**
  * Flags a function parameter whose name is never referenced in the function —
@@ -19,13 +20,19 @@ import anyparse.query.RemoveParam;
  * function, or a confined private method (`isPrivateMemberConfined`) — whose
  * call set can be proven complete WITHIN one file by the shared
  * `RemoveParam.paramSlotEdits` core; `fix` removes the parameter and its
- * argument at every in-file call site (one per function per pass). Every other
- * flagged parameter — a public / unconfined method, or a function captured as a
- * value — stays `Info`, because removal cannot be proven safe (a `remove-param`
- * op with a cross-file advisory is the manual route); `fix` still silences it by
- * renaming it to `_<name>`, a decl-site-only edit that is cross-file-safe (a
- * parameter name is never part of a caller's syntax — Haxe has no named
- * arguments) and skipped on a `_<name>` collision.
+ * argument at every in-file call site (one per function per pass). A public or
+ * otherwise unconfined method whose call set cannot be proven complete stays
+ * `Info` — removal is a cross-file signature change, performed manually through
+ * the `remove-param` op and its advisory.
+ *
+ * An `Info` finding is REPORT-ONLY by default. A project that sets the
+ * `renameSilence` option (`apqlint.json`, default false) additionally gets the
+ * conservative `_<name>` silence-rename: a decl-site-only edit that is
+ * cross-file-safe (a parameter name is never part of a caller's syntax — Haxe
+ * has no named arguments) and skipped on a `_<name>` collision. It is opt-in
+ * because it only HIDES the finding — it removes no dead weight and changes no
+ * behaviour — so a blanket `--fix` must not rewrite every signature the removal
+ * proof could not complete.
  *
  * ## Why a scope-bounded text scan
  *
@@ -67,19 +74,48 @@ import anyparse.query.RemoveParam;
  *    An unreferenced parameter there is by design (the default body may
  *    legitimately ignore it while a reassigned closure elsewhere uses it), so
  *    the whole function is skipped — not merely downgraded to `Info`.
+ *  - A function CAPTURED AS A VALUE in the same file (`valueCapturedNames`) —
+ *    its name referenced outside callee position: passed as an argument
+ *    (`addEventListener(E, onFoo)`), assigned to a var / field, returned, or
+ *    `.bind`-partialled. Whatever consumes the reference fixes the signature, so
+ *    an ignored parameter there is mandated, not dead, and the finding is not
+ *    actionable — it is dropped entirely rather than reported as `Info`. The
+ *    `Warning` arm is untouched: `CallSites` already refuses a value-captured
+ *    function, so such a parameter was never autofixable, and the gate is applied
+ *    only to what would otherwise be `Info`.
  *
- * The residual false positive a structural check cannot rule out is a function
- * passed as a fixed-signature callback (an event handler) that ignores a
- * parameter; `Info` flags it, and `fix` renames the parameter to `_<name>` —
- * the conventional "intentionally unused" marker — leaving the signature intact.
+ * The residual false positive a structural, file-scoped check cannot rule out is
+ * a method captured as a fixed-signature callback in ANOTHER file — the
+ * in-file capture scan cannot see it, so its unread parameter is still reported
+ * as `Info`. A public method only ever called directly, the case the rule is for,
+ * is reported for the same reason.
  */
 @:nullSafety(Strict)
-final class UnusedParameter implements Check {
+final class UnusedParameter implements Check implements ConfigAware {
+
+	/** The rule id — also the `apqlint.json` key its options are read under. */
+	private static inline final RULE_ID: String = 'unused-parameter';
+
+	/**
+	 * Whether an `Info` finding carries the conservative `_<name>` silence-rename fix,
+	 * unless an `apqlint.json` sets `renameSilence`. Default FALSE: the rename only
+	 * HIDES the finding — it removes no dead weight and changes no behaviour — so a
+	 * blanket `--fix` must not rewrite every signature the removal proof cannot
+	 * complete; a project opts into that edit deliberately.
+	 */
+	private static inline final DEFAULT_RENAME_SILENCE: Bool = false;
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {}
 
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
 	public function id(): String {
-		return 'unused-parameter';
+		return RULE_ID;
 	}
 
 	public function description(): String {
@@ -107,9 +143,11 @@ final class UnusedParameter implements Check {
 			if (tree == null) continue;
 			final candidates: Array<{ fn: QueryNode, parent: QueryNode }> = [];
 			walk(candidates, tree, null, functionKinds, opaqueKinds, supertypeClauseKinds, noBodyKind);
+			final captured: Array<String> = valueCapturedNames(tree);
 			for (c in candidates)
 				checkFunction(
-					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index
+					violations, entry.file, entry.source, c.fn, c.parent, tree, visibilityKinds, modifierKinds, dynamicKind, shape, index,
+					captured
 				);
 		}
 		return violations;
@@ -122,11 +160,12 @@ final class UnusedParameter implements Check {
 	 * along with its positional argument at every call site via
 	 * `RemoveParam.paramSlotEdits` — only ONE per function per call, since removing
 	 * one shifts the remaining indices and arity, so the fixed-point loop re-runs the
-	 * proof and removes the next. An `Info` unused parameter (a public / unconfined
-	 * method, or a function captured as a value — a signature the removal proof
-	 * cannot complete) is instead RENAMED to `_<name>`: a decl-site-only,
-	 * cross-file-safe silencing, skipped on a `_<name>` name collision. The two edit
-	 * sets are disjoint (a function's flagged parameters share its removability).
+	 * proof and removes the next. An `Info` unused parameter (a signature the removal
+	 * proof cannot complete) is instead RENAMED to `_<name>` — a decl-site-only,
+	 * cross-file-safe silencing, skipped on a `_<name>` name collision — but ONLY when
+	 * the file's `apqlint.json` opts in via `renameSilence`; the default is no edit at
+	 * all for the `Info` bucket. The two edit sets are disjoint (a function's flagged
+	 * parameters share its removability).
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -136,11 +175,11 @@ final class UnusedParameter implements Check {
 		if (tree == null) return [];
 		// A finding's severity IS the fix dispatch: `Warning` = a provably-removable
 		// parameter (an eligible local / confined-private method with a complete in-file
-		// call set), removed by `collectFixEdits`; `Info` = every other flagged parameter
-		// (a public / unconfined method, or a function captured as a value), silenced by
-		// the conservative `_`-prefix rename in `collectRenameEdits`. The two sets never
-		// overlap within one function — a function's flagged parameters share its
-		// removability — so their edits are disjoint.
+		// call set), removed by `collectFixEdits`; `Info` = a public / unconfined method,
+		// silenced by the conservative `_`-prefix rename in `collectRenameEdits` when
+		// `renameSilence` is opted in. The two sets never overlap within one function —
+		// a function's flagged parameters share its removability — so their edits are
+		// disjoint.
 		final removeFlagged: Array<String> = [];
 		final renameFlagged: Array<String> = [];
 		for (v in violations) {
@@ -157,12 +196,25 @@ final class UnusedParameter implements Check {
 			final handled: Array<Int> = [];
 			collectFixEdits(tree, tree, source, shape, removeFlagged, handled, edits);
 		}
-		if (renameFlagged.length > 0) {
+		if (renameFlagged.length > 0 && renameSilenceEnabled(violations)) {
 			final functionKinds: Array<String> = shape.functionKinds ?? [];
 			final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 			if (functionKinds.length > 0) collectRenameEdits(tree, null, source, functionKinds, opaqueKinds, renameFlagged, index, edits);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
+	}
+
+	/**
+	 * Whether the `_<name>` silence-rename is enabled for the file these `violations`
+	 * belong to — the rule's `apqlint.json` `renameSilence` option, defaulting to
+	 * `DEFAULT_RENAME_SILENCE`. `fix` is called with ONE file's findings, so the first
+	 * one names the file whose config governs the batch; an empty batch cannot produce
+	 * a rename edit anyway and takes the default.
+	 */
+	private function renameSilenceEnabled(violations: Array<Violation>): Bool {
+		return violations.length == 0
+			? DEFAULT_RENAME_SILENCE
+			: (LintConfig.resolveWith(_resolveConfig, violations[0].file).boolOption(RULE_ID, 'renameSilence') ?? DEFAULT_RENAME_SILENCE);
 	}
 
 	/**
@@ -208,11 +260,16 @@ final class UnusedParameter implements Check {
 	 * `RemoveParam.paramSlotEdits` proof succeeds (complete, arity-matched call
 	 * sites). Everything else — a public method, an unconfined or otherwise
 	 * unprovable signature — stays `Info`, resolved via the `remove-param` op
-	 * with its cross-file advisory.
+	 * with its cross-file advisory, EXCEPT a function whose name is in `captured`
+	 * (referenced as a value somewhere in the file): its signature is fixed from
+	 * outside, so the `Info` finding would not be actionable and is dropped. The
+	 * `Warning` arm ignores `captured` — a value-captured function never passes the
+	 * removal proof anyway.
 	 */
 	private static function checkFunction(
 		out: Array<Violation>, file: String, source: String, fn: QueryNode, parent: QueryNode, tree: QueryNode,
-		visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>, shape: RefShape, index: SymbolIndex
+		visibilityKinds: Array<String>, modifierKinds: Array<String>, dynamicKind: Null<String>, shape: RefShape, index: SymbolIndex,
+		captured: Array<String>
 	): Void {
 		final fnSpan: Null<Span> = fn.span;
 		if (fnSpan == null) return;
@@ -223,6 +280,7 @@ final class UnusedParameter implements Check {
 		final eligible: Bool = isLocal
 			|| (ownerName != null && !isPublicDecl(fn, parent, source, visibilityKinds, modifierKinds)
 				&& RefactorSupport.isPrivateMemberConfined(ownerName, source, index));
+		final capturedAsValue: Bool = fnName != null && captured.contains(fnName);
 		final params: Array<QueryNode> = CallSites.leadingParams(fn);
 		for (pi in 0...params.length) {
 			final p: QueryNode = params[pi];
@@ -233,14 +291,53 @@ final class UnusedParameter implements Check {
 			if (RefactorSupport.referencedInRange(source, name, fnSpan.from, fnSpan.to, [pspan])) continue;
 			final autofixable: Bool = eligible && fnName != null
 				&& RemoveParam.paramSlotEdits(source, tree, fn, pi, fnName, fnSpan.from, shape).error == null;
+			if (!autofixable && capturedAsValue) continue;
 			out.push({
 				file: file,
 				span: pspan,
-				rule: 'unused-parameter',
+				rule: RULE_ID,
 				severity: autofixable ? Severity.Warning : Severity.Info,
 				message: 'unused parameter \'$name\''
 			});
 		}
+	}
+
+	/**
+	 * Every name the module references in VALUE position — a bare `IdentExpr`, or a
+	 * `this.<name>` field access, that is NOT the callee of a call. A function whose
+	 * name is in this set is captured as a value somewhere in the file (passed as an
+	 * argument to `addEventListener` and friends, assigned to a var / field, returned,
+	 * `.bind`-partialled), which fixes its signature from OUTSIDE: the parameter its
+	 * body ignores is mandated by whatever consumes the reference, so the finding is
+	 * not actionable and is dropped rather than reported.
+	 *
+	 * The scan is by NAME only — no binding resolution — so an unrelated identifier
+	 * that merely shares a function's name silences it too. That is the conservative
+	 * direction: it only ever drops a finding, never invents one. It is also
+	 * FILE-scoped, so a capture living in another file is invisible; a public method
+	 * only ever CALLED in its own file keeps its `Info` finding, as intended.
+	 *
+	 * A `<other>.<name>` field access is deliberately NOT counted — a member of an
+	 * unrelated receiver shares nothing with the function but its spelling.
+	 */
+	private static function valueCapturedNames(tree: QueryNode): Array<String> {
+		final out: Array<String> = [];
+		function scan(node: QueryNode, parent: Null<QueryNode>, indexInParent: Int): Void {
+			final isCallee: Bool = parent != null && parent.kind == 'Call' && indexInParent == 0;
+			final name: Null<String> = node.name;
+			if (!isCallee && name != null && !out.contains(name) && isValueReference(node)) out.push(name);
+			for (i in 0...node.children.length) scan(node.children[i], node, i);
+		}
+		scan(tree, null, -1);
+		return out;
+	}
+
+	/** Whether `node` is one of the two reference forms a value capture takes: a bare identifier, or a `this.<name>` field access. */
+	private static function isValueReference(node: QueryNode): Bool {
+		if (node.kind == 'IdentExpr') return true;
+		if (node.kind != 'FieldAccess' || node.children.length == 0) return false;
+		final receiver: QueryNode = node.children[0];
+		return receiver.kind == 'IdentExpr' && receiver.name == 'this';
 	}
 
 	/**
@@ -333,9 +430,10 @@ final class UnusedParameter implements Check {
 
 	/**
 	 * Rename every `Info` (non-removable) unused parameter to `_<name>` — the
-	 * conservative silencing fix for a parameter that cannot be safely removed
-	 * (a public / unconfined method whose call set is not provably complete, or a
-	 * function captured as a value). Only the DECLARATION site is edited: an unused
+	 * conservative silencing fix, reached only when the file opts into
+	 * `renameSilence`, for a parameter that cannot be safely removed (a public /
+	 * unconfined method whose call set is not provably complete). Only the
+	 * DECLARATION site is edited: an unused
 	 * parameter has no body reference by definition, and a parameter name is never
 	 * part of a caller's syntax (Haxe has no named arguments), so the rename is
 	 * cross-file-safe and needs no call-site edit. Walks the same function kinds `run`
