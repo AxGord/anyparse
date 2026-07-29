@@ -120,7 +120,7 @@ final class ConstantCondition implements Check {
 			if (span != null) {
 				final isFalse: Bool = source.substring(span.from, span.to) == 'false';
 				final always: String = isFalse ? 'false' : 'true';
-				final trivial: Bool = isTrivialEliminated(eliminatedBranch(node, isFalse), blockKinds, emptyStmtKind);
+				final trivial: Bool = isTrivialEliminated(eliminatedBranch(node, isFalse), source, blockKinds, emptyStmtKind);
 				out.push({
 					file: file,
 					span: span,
@@ -164,7 +164,7 @@ final class ConstantCondition implements Check {
 		final nspan: Null<Span> = node.span;
 		if (nspan == null) return null;
 		final isFalse: Bool = source.substring(cspan.from, cspan.to) == 'false';
-		if (!isTrivialEliminated(eliminatedBranch(node, isFalse), blockKinds, emptyStmtKind)) return null;
+		if (!isTrivialEliminated(eliminatedBranch(node, isFalse), source, blockKinds, emptyStmtKind)) return null;
 		final hasElse: Bool = node.children.length >= IF_WITH_ELSE_CHILD_COUNT;
 		// Taken branch: then (children[1]) when true, else (children[2]) when false.
 		final taken: Null<QueryNode> = isFalse ? (hasElse ? node.children[2] : null) : node.children[1];
@@ -196,22 +196,31 @@ final class ConstantCondition implements Check {
 	 * is lost).
 	 */
 	private static function eliminatedBranch(node: QueryNode, isFalse: Bool): Null<QueryNode> {
-		if (isFalse) return node.children.length > 1 ? node.children[1] : null;
-		return node.children.length >= IF_WITH_ELSE_CHILD_COUNT ? node.children[2] : null;
+		return isFalse
+			? (node.children.length > 1 ? node.children[1] : null)
+			: (node.children.length >= IF_WITH_ELSE_CHILD_COUNT ? node.children[2] : null);
 	}
 
 	/**
 	 * Whether the code an autofix would ELIMINATE — `eliminated`, or nothing — is
-	 * safe to delete silently: empty (`eliminated == null`), an empty block
-	 * (`blockKinds`, zero children), or a bare `;` (`emptyStmtKind`). Anything
-	 * else — a real statement, or a non-block expression value — may encode
-	 * unimplemented intent (see the class doc) and must not be auto-deleted; the
-	 * check still reports it, with a human-review note.
+	 * safe to delete silently: empty (`eliminated == null`), a bare `;`
+	 * (`emptyStmtKind`), or an empty block (`blockKinds`, zero STATEMENT
+	 * children AND — via the shared `RefactorSupport.isBlankSpan`, the same
+	 * check `empty-block` uses — no comment sitting between the braces either:
+	 * a comment is not a statement, but it is source a fix must not silently
+	 * discard). Anything else — a real statement, a comment, or a non-block
+	 * expression value — may encode unimplemented intent (see the class doc)
+	 * and must not be auto-deleted; the check still reports it, with a
+	 * human-review note.
 	 */
-	private static function isTrivialEliminated(eliminated: Null<QueryNode>, blockKinds: Array<String>, emptyStmtKind: Null<String>): Bool {
+	private static function isTrivialEliminated(
+		eliminated: Null<QueryNode>, source: String, blockKinds: Array<String>, emptyStmtKind: Null<String>
+	): Bool {
 		if (eliminated == null) return true;
 		if (emptyStmtKind != null && eliminated.kind == emptyStmtKind) return true;
-		return blockKinds.contains(eliminated.kind) && eliminated.children.length == 0;
+		if (!blockKinds.contains(eliminated.kind) || eliminated.children.length != 0) return false;
+		final espan: Null<Span> = eliminated.span;
+		return espan != null && RefactorSupport.isBlankSpan(espan, source);
 	}
 
 	/**

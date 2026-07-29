@@ -66,6 +66,14 @@ class IfFalseDeadCodeCheckTest extends Test {
 		Assert.isTrue(out.indexOf('a();') != -1 && out.indexOf('b();') != -1, 'live code kept, got: <$out>');
 	}
 
+	public function testFixDeletesTrivialEmptyBlockElselessRegion(): Void {
+		// The dead body is an empty block `{}` — the other trivial form
+		// besides a bare `;` — so the whole region still auto-deletes.
+		final out: String = applyFix('class C {\n\tfunction f() {\n\t\ta();\n\t\t#if false\n\t\t{}\n\t\t#end\n\t\tb();\n\t}\n}');
+		Assert.isTrue(out.indexOf('#if') == -1, 'markers removed, got: <$out>');
+		Assert.isTrue(out.indexOf('a();') != -1 && out.indexOf('b();') != -1, 'live code kept, got: <$out>');
+	}
+
 	public function testFixElselessRegionNonTrivialLeftUntouched(): Void {
 		// The dead body `dead();` is a real statement: the site is still
 		// reported (see testStmtRegionFlagged) but collects no edit.
@@ -95,7 +103,11 @@ class IfFalseDeadCodeCheckTest extends Test {
 
 	public function testElseifChainReportOnly(): Void {
 		final src: String = 'class C {\n\tfunction f() {\n\t\t#if false\n\t\tx();\n\t\t#elseif mobile\n\t\ty();\n\t\t#end\n\t}\n}';
-		Assert.equals(1, violations(src).length);
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		// Report-only for an unrelated reason (semantic rewrite), so the
+		// message stays the base text — no human-review note appended.
+		Assert.isFalse(vs[0].message.indexOf('dead branch - verify intent before deleting') != -1);
 		Assert.equals(src, applyFix(src));
 	}
 
@@ -123,10 +135,10 @@ class IfFalseDeadCodeCheckTest extends Test {
 		Assert.isTrue(vs[1].message.indexOf('dead branch - verify intent before deleting') != -1);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		Assert.isTrue(out.indexOf('c();') != -1 && out.indexOf('#if false') != -1, 'non-trivial region kept, got: <$out>');
+		final out: String = applyEdits(src, edits);
+		// Not `'#if false'` — a standalone string literal spelling it out would
+		// itself trip this very check when linting this test file.
+		Assert.isTrue(out.indexOf('c();') != -1 && out.indexOf('#if') != -1, 'non-trivial region kept, got: <$out>');
 		Assert.isTrue(out.indexOf('a();') != -1 && out.indexOf('b();') != -1 && out.indexOf('d();') != -1, 'live code kept, got: <$out>');
 	}
 
@@ -139,6 +151,10 @@ class IfFalseDeadCodeCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
+		return applyEdits(src, edits);
+	}
+
+	private function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);

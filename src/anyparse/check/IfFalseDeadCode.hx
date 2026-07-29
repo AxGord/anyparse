@@ -83,19 +83,9 @@ final class IfFalseDeadCode implements Check {
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
-			final slice: String = source.substring(span.from, span.to);
-			if (findTopLevelMarker(slice, '#elseif') != -1) continue;
-			final elsePos: Int = findTopLevelMarker(slice, '#else');
-			final endPos: Int = slice.lastIndexOf('#end');
-			if (elsePos == -1) {
-				if (!isTrivialBody(slice.substring(bodyStart(slice), endPos))) continue;
-				edits.push({ span: span, text: '' });
-				continue;
-			}
-			if (endPos <= elsePos) continue;
-			if (!isTrivialBody(slice.substring(bodyStart(slice), elsePos))) continue;
-			final kept: String = slice.substring(elsePos + '#else'.length, endPos).trim();
-			edits.push({ span: span, text: kept });
+			final region: Null<EliminatedRegion> = eliminatedRegion(source.substring(span.from, span.to));
+			if (region == null || !isTrivialBody(region.body)) continue;
+			edits.push({ span: span, text: region.elsePos == -1 ? '' : region.kept });
 		}
 		return edits;
 	}
@@ -118,16 +108,35 @@ final class IfFalseDeadCode implements Check {
 	 * The violation message for a flagged region's `slice`: the base detection
 	 * message, extended with an ASCII human-review note when the branch a fix
 	 * would eliminate is non-trivial (see the class doc). An `#elseif` chain
-	 * keeps the base message — it is report-only for an unrelated reason (the
+	 * (or a malformed region `eliminatedRegion` cannot resolve) keeps the base
+	 * message — an `#elseif` chain is report-only for an unrelated reason (the
 	 * rewrite is a semantic transform, not a triviality question).
 	 */
 	private static function deadRegionMessage(slice: String): String {
 		final base: String = 'dead `#if false` region — no compilation target ever includes it';
-		if (findTopLevelMarker(slice, '#elseif') != -1) return base;
+		final region: Null<EliminatedRegion> = eliminatedRegion(slice);
+		return region == null || isTrivialBody(region.body) ? base : base + DEAD_BRANCH_NOTE;
+	}
+
+	/**
+	 * Resolve a flagged region's `slice` into its eliminated `body` (the branch
+	 * a fix would erase) plus the raw marker offsets `fix` needs to build its
+	 * edit — the SINGLE source of truth `fix` and `deadRegionMessage` both read,
+	 * so the two can never disagree about the same violation. Null for an
+	 * `#elseif` chain (`fix` stays report-only; `deadRegionMessage` keeps the
+	 * base message) or a malformed region (`#else` with no matching `#end`).
+	 */
+	private static function eliminatedRegion(slice: String): Null<EliminatedRegion> {
+		if (findTopLevelMarker(slice, '#elseif') != -1) return null;
 		final elsePos: Int = findTopLevelMarker(slice, '#else');
-		final bodyEnd: Int = elsePos == -1 ? slice.lastIndexOf('#end') : elsePos;
-		final body: String = slice.substring(bodyStart(slice), bodyEnd);
-		return isTrivialBody(body) ? base : base + DEAD_BRANCH_NOTE;
+		final endPos: Int = slice.lastIndexOf('#end');
+		if (elsePos != -1 && endPos <= elsePos) return null;
+		final bodyEnd: Int = elsePos == -1 ? endPos : elsePos;
+		return {
+			body: slice.substring(bodyStart(slice), bodyEnd),
+			elsePos: elsePos,
+			kept: elsePos == -1 ? '' : slice.substring(elsePos + '#else'.length, endPos).trim()
+		};
 	}
 
 	/** `true` iff the source at `from` opens with `#if false` / `#if (false)` (word-bounded). */
@@ -180,10 +189,9 @@ final class IfFalseDeadCode implements Check {
 	 */
 	private static function isTrivialBody(body: String): Bool {
 		final trimmed: String = body.trim();
-		if (trimmed == '' || trimmed == ';') return true;
-		if (trimmed.length >= 2 && trimmed.charAt(0) == '{' && trimmed.charAt(trimmed.length - 1) == '}')
-			return trimmed.substring(1, trimmed.length - 1).trim() == '';
-		return false;
+		return trimmed == '' || trimmed == ';'
+			|| (trimmed.length >= 2 && trimmed.charAt(0) == '{' && trimmed.charAt(trimmed.length - 1) == '}'
+				&& trimmed.substring(1, trimmed.length - 1).trim() == '');
 	}
 
 	/**
@@ -225,3 +233,10 @@ final class IfFalseDeadCode implements Check {
 	}
 
 }
+
+/** The resolved region `eliminatedRegion` reads in both `fix` and `deadRegionMessage`. */
+private typedef EliminatedRegion = {
+	final body: String;
+	final elsePos: Int;
+	final kept: String;
+};

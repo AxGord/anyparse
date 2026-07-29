@@ -83,6 +83,16 @@ class ConstantConditionCheckTest extends Test {
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\ta();\n\t}\n}', applyFix(src));
 	}
 
+	public function testFixIfTrueCommentOnlyElseLeftUntouched(): Void {
+		// The eliminated else-branch is a block whose ONLY content is a
+		// comment — zero STATEMENT children (comments are trivia to the
+		// parser), but the comment text may be the only trace of unfinished
+		// intent, so it must not be silently deleted.
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (true) a(); else { /* keep this */ }\n\t}\n}';
+		Assert.equals('condition is always true (dead branch - verify intent before deleting)', violations(src)[0].message);
+		Assert.equals(src, applyFix(src));
+	}
+
 	public function testFixIfFalseElseNonTrivialLeftUntouched(): Void {
 		// The eliminated then-branch `a();` is a real statement.
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\tif (false) a(); else b();\n\t}\n}';
@@ -148,10 +158,7 @@ class ConstantConditionCheckTest extends Test {
 		Assert.equals('condition is always false (dead branch - verify intent before deleting)', vs[1].message);
 		final edits: Array<{ span: Span, text: String }> = check.fix(src, vs, new HaxeQueryPlugin());
 		Assert.equals(1, edits.length);
-		edits.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t\tif (false) h();\n\t}\n}', out);
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\tg();\n\t\tif (false) h();\n\t}\n}', applyEdits(src, edits));
 	}
 
 	public function testRegisteredInBuiltins(): Void {
@@ -173,6 +180,10 @@ class ConstantConditionCheckTest extends Test {
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
+		return applyEdits(src, edits);
+	}
+
+	private function applyEdits(src: String, edits: Array<{ span: Span, text: String }>): String {
 		edits.sort((a, b) -> b.span.from - a.span.from);
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
