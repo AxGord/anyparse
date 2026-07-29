@@ -2928,14 +2928,22 @@ class WrapList {
 	}
 
 	/**
-	 * ω-comprehension-cuddled-open: `true` iff `item` is a `for` / `while`
-	 * comprehension element with a NON-block body that already renders
-	 * multi-line — the shape the cuddled-open knob re-lays-out.
+	 * ω-comprehension-cuddled-open: `true` iff `item` is a `for` comprehension
+	 * element with a NON-block body that already renders multi-line — the shape
+	 * the cuddled-open knob re-lays-out.
+	 *
+	 * `while` comprehensions are EXCLUDED even though they are the sister
+	 * generator form: `HxWhileExpr.body` carries no `@:fmt(bodyPolicy(...))`
+	 * (unlike `HxForExpr.body`), so its body has no policy `Nest` to shift out
+	 * of — cuddling the head leaves the body at CONTAINER indent, level with
+	 * the closing `]`, violating this shape's own one-level contract
+	 * (`testWhileComprehensionNotCuddled`). Wire a body policy on `HxWhileExpr`
+	 * first if `while` comprehensions ever need this.
 	 *
 	 * Three gates, all cheap left-spine / flat walks already used by the
 	 * sibling predicates:
-	 *  - first visible Text is the reserved `for` / `while` keyword (exact
-	 *    match — unambiguous, as in `isBlockBodyComprehensionItem`);
+	 *  - first visible Text is the reserved `for` keyword (exact match —
+	 *    unambiguous, as in `isBlockBodyComprehensionItem`);
 	 *  - last visible Text is NOT `}` — a BLOCK body head-hugs through
 	 *    `shapeComprehensionBlockHug`, which runs first and glues `} ]`.
 	 *    That intercept only fires on PADDED brackets, so under tight
@@ -2950,7 +2958,7 @@ class WrapList {
 	 *    probe cannot catch that, since the item genuinely fits
 	 *    (`testInlineBodyComprehensionNotCuddled`).
 	 *
-	 * NESTED comprehensions are excluded on purpose: a second `for` / `while`
+	 * NESTED generators are excluded on purpose: a second `for` / `while`
 	 * keyword anywhere inside the item means the body is itself a generator
 	 * (or contains one), where "the head" is no longer a single well-defined
 	 * segment and the fork's own layout is unverified. Conservative bail —
@@ -2958,19 +2966,20 @@ class WrapList {
 	 * (`testNestedComprehensionNotCuddled`).
 	 */
 	private static function isCuddleableComprehensionItem(item: Doc): Bool {
-		final t: Null<String> = firstVisibleText(item);
-		return
-			(t == 'for' || t == 'while') && lastVisibleText(item) != '}' && flatLength(item) < 0 && countComprehensionKeywords(item) == 1;
+		return firstVisibleText(item) == 'for' && lastVisibleText(item) != '}' && flatLength(item) < 0 && countGeneratorKeywords(item) == 1;
 	}
 
 	/**
 	 * Number of `for` / `while` keyword Text leaves in `d`, capped at 2 (the
 	 * only distinction any caller needs: exactly one generator vs nested).
 	 * Full flat walk reusing `flatPushChildren`'s child order, so it sees the
-	 * same tree `flatLength` measured. A keyword inside a string literal never
-	 * matches — the literal's Text leaf carries its quotes.
+	 * same tree `flatLength` measured — i.e. the FLAT projection: a keyword
+	 * reachable only through the break side of an `IfBreak` / `If*Exceeds` is
+	 * not counted, matching `flatLength`'s own blindness. A keyword inside a
+	 * string literal never matches — the literal's Text leaf carries its
+	 * quotes.
 	 */
-	private static function countComprehensionKeywords(d: Doc): Int {
+	private static function countGeneratorKeywords(d: Doc): Int {
 		final stack: Array<Doc> = [d];
 		var n: Int = 0;
 		while (stack.length > 0 && n < 2) {
@@ -2988,7 +2997,7 @@ class WrapList {
 
 	/**
 	 * ω-comprehension-cuddled-open: under `wrapping.comprehensionCuddledOpen`,
-	 * a one-element list whose element is an expression-bodied `for` / `while`
+	 * a one-element list whose element is an expression-bodied `for`
 	 * comprehension keeps the comprehension HEAD glued to the open delimiter
 	 * (`[ for (x in xs)`) and lets only the body — plus any filter `if` — wrap
 	 * one indent below, with the close delimiter on its own line at container
@@ -3010,26 +3019,41 @@ class WrapList {
 	 * already keeps the head on the open line or belongs to a cascade this knob
 	 * makes no claim about.
 	 *
-	 * FIT PROBE — `IfFirstLineExceeds(lineWidth + 1, openShape, glueShape)`:
+	 * FIT PROBE — `IfFirstLineExceeds(lineWidth, openShape, glueShape)`:
 	 * `flatTokenWidthFirstLine` walks the glued shape flat but DEFERS the body
 	 * `BodyGroup` and aborts at the first hardline, so what it measures is
-	 * exactly `open + inner-pad + <head through its closing `)`>`. The `+ 1`
-	 * is the repo's fits-probe convention (the primitive fires on `>= n`, so a
-	 * head landing exactly ON `maxLineLength` still cuddles). A head that does
-	 * not fit falls back to `shapeOnePerLine` — the pre-knob layout.
+	 * exactly `open + inner-pad + <head through its closing `)`>`. The
+	 * threshold is bare `lineWidth`, NOT the `lineWidth + 1` of the cond-paren
+	 * probes: the primitive fires on `>= n`, and the running `col` here trails
+	 * the rendered column by the pending `OptSpace` that assignment /
+	 * object-field prefixes hold back, so the two offsets already cancel — a
+	 * head landing exactly ON `maxLineLength` cuddles and one column past it
+	 * does not (`testHeadAtLimitCuddles` / `testHeadPastLimitFallsBack`). A
+	 * head that does not fit falls back to `shapeOnePerLine` — the pre-knob
+	 * layout.
 	 *
-	 * The inner padding follows the construct's own bracket-spacing policy
+	 * The tail mirrors `shapeOnePerLine` exactly — the source / knob trailing
+	 * separator on `appendTrailingComma`, then the per-construct `trailBreak`
+	 * — so switching the head placement never adds or drops a token. The inner
+	 * padding follows the construct's own bracket-spacing policy
 	 * (`openInside`); `closeInside` is dropped because the close delimiter no
 	 * longer shares a line with the body.
 	 */
 	private static function shapeComprehensionCuddledOpen(
-		on: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,
+		enabled: Bool, mode: WrapMode, open: String, close: String, sep: String, items: Array<Doc>, openInside: Doc, cols: Int,
 		appendTrailingComma: Bool, trailBreak: Doc, sepBeforeFlags: Null<Array<Bool>>, lineWidth: Int
 	): Null<Doc> {
-		if (!on || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
-		final glueShape: Doc = Concat([Text(open), openInside, items[0], Line('\n'), Text(close)]);
+		if (!enabled || mode != OnePerLine || items.length != 1 || !isCuddleableComprehensionItem(items[0])) return null;
+		final glueShape: Doc = Concat([
+			Text(open),
+			openInside,
+			items[0],
+			appendTrailingComma ? Text(sep) : Empty,
+			trailBreak,
+			Text(close),
+		]);
 		final openShape: Doc = shapeOnePerLine(open, close, sep, items, cols, appendTrailingComma, trailBreak, sepBeforeFlags);
-		return IfFirstLineExceeds(lineWidth + 1, openShape, glueShape);
+		return IfFirstLineExceeds(lineWidth, openShape, glueShape);
 	}
 
 	/**

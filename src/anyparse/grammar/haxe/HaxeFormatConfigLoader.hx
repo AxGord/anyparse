@@ -100,7 +100,7 @@ import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
  *   in the grammar (currently `HxVarDecl.init`).
  * - `wrapping.maxLineLength`: int → `lineWidth`.
  * - `wrapping.comprehensionCuddledOpen` (ω-comprehension-cuddled-open):
- *   bool → `comprehensionCuddledOpen`. Keeps an expression-bodied
+ *   bool → `comprehensionCuddledOpen`. Keeps an expression-bodied `for`
  *   comprehension's head on the `[` line (`[ for (x in xs)`) when the
  *   head fits and the comprehension lays out multi-line. Default `false`
  *   (absent) is byte-inert.
