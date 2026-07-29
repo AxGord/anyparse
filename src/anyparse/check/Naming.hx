@@ -449,8 +449,9 @@ final class Naming implements Check implements CrossFileFix {
 	 * attribution: each occurrence of the old name provably binding to `ownerName`'s inherited field
 	 * (a bare reference / `this.` / `super.` inside a subtype, or a receiver typed to the owner or a
 	 * subtype) is a rename target; one provably binding to a DIFFERENT owner (a sibling class's
-	 * same-named field, reached through a differently-typed receiver or a self-declaring class) is
-	 * IGNORED — neither renamed nor a blocker; an occurrence whose binding cannot be proven is left
+	 * same-named field, reached through a differently-typed receiver) is IGNORED — neither renamed nor
+	 * a blocker; a class declaring its OWN `name` is NOT such a case (the ignore arm is supertype-only,
+	 * so it stays uncovered and blocks); an occurrence whose binding cannot be proven is left
 	 * uncovered so the completeness gate blocks the whole rename (fail-closed). A distinctive-name
 	 * `CommentTrivia` still renames along. Null on a parse failure or an unattributable active-code
 	 * occurrence. This replaces the old blanket bail on any same-named sibling field.
@@ -805,7 +806,11 @@ final class Naming implements Check implements CrossFileFix {
 	 * next to a class of another hierarchy that already uses the same conventional name, so the
 	 * blunt scan blocked most `__x -> _x` field renames. A type whose name or span is unresolvable,
 	 * or one nested behind a `#if` (not a direct child), is NOT excluded - it keeps blocking
-	 * (fail-closed).
+	 * (fail-closed). Unrelatedness must be PROVEN (`provablyNotSubtype`), never inferred from a false
+	 * `isSubtype`: that proof ends its branch on an ambiguous simple name, so reading its `false` as
+	 * "unrelated" excluded a REAL subtype's span, hid the collision the scan exists to find, and let
+	 * the rename emit `Redefinition of variable in subclass` (verified). This exclusion set is the
+	 * fail-OPEN direction - what it drops, nothing else re-checks.
 	 */
 	private static function unrelatedTypeSpans(
 		tree: QueryNode, ownerName: String, shape: RefShape, resolutionIndex: SymbolIndex
@@ -818,7 +823,7 @@ final class Naming implements Check implements CrossFileFix {
 			final span: Null<Span> = child.span;
 			if (!kinds.contains(child.kind) || name == null || span == null) continue;
 			final n: String = name;
-			if (n != ownerName && !resolutionIndex.isSubtype(n, ownerName)) out.push(span);
+			if (resolutionIndex.provablyNotSubtype(n, ownerName)) out.push(span);
 		}
 		return out;
 	}

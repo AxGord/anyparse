@@ -193,6 +193,17 @@ final class SymbolIndex {
 	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
 
+	/**
+	 * The decl kinds whose `supertypes` is NOT their complete set of inheritance edges: a `typedef`
+	 * ALIAS (`typedef A = C`) and an abstract (`abstract W(C)` with `@:forward` / `@:from` / `@:to`)
+	 * each reach another type through a link no `extends` / `implements` clause records, and both
+	 * are legal in an `extends` position. Their closure therefore looks EMPTY, which a
+	 * negative-reachability proof would read as "excludes everything" — so `closureExcludes` refuses
+	 * them outright. A POSITIVE proof (`closureContains`) needs no such guard: an unseen edge only
+	 * makes it miss, which is its safe direction.
+	 */
+	private static final ALIASING_DECL_KINDS: Array<String> = ['TypedefDecl', 'AbstractDecl'];
+
 	private final _files: Array<FileInfo>;
 	private final _skipped: Array<String>;
 
@@ -1020,11 +1031,13 @@ final class SymbolIndex {
 	 * Whether `name`'s transitive supertype closure is FULLY index-resolved AND excludes
 	 * `target`. A supertype name absent or ambiguous in the index (an external type, or a
 	 * project file not in the set) makes the relation unknown → false, as does reaching
-	 * `target` itself. `seen` guards cycles.
+	 * `target` itself, as does an ALIASING decl anywhere in the walk (see
+	 * `ALIASING_DECL_KINDS` — its empty `supertypes` would "exclude" the target vacuously).
+	 * `seen` guards cycles. Read only as a NEGATIVE proof: every doubt yields false.
 	 */
 	private function closureExcludes(name: String, target: String, seen: Array<String>): Bool {
 		final ds: Array<TypeDeclInfo> = declsNamed(name);
-		if (ds.length != 1) return false;
+		if (ds.length != 1 || ALIASING_DECL_KINDS.contains(ds[0].kind)) return false;
 		for (sup in ds[0].supertypes) {
 			if (sup == target) return false;
 			if (seen.contains(sup)) continue;

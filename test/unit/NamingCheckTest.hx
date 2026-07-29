@@ -1202,22 +1202,8 @@ class NamingCheckTest extends Test {
 	 * collided with a secondary type in another module.
 	 */
 	public function testCrossFileFixBlocksWhenSubtypeNameIsAmbiguous(): Void {
-		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
-		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { return size; }\n}';
-		// A SECONDARY type also named `D`, in an unrelated module - makes `declsNamed('D')` ambiguous.
-		final twinSrc: String = 'package pkg;\nclass Twin {}\n\nclass D {\n\tpublic var other:Int;\n}';
-		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
-			{ file: 'pkg/D.hx', source: dSrc },
-			{ file: 'pkg/Twin.hx', source: twinSrc }
-		];
-		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
-		final check: Naming = new Naming();
-		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
-		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
-		// Either a COMPLETE rename (both files) or none - never the declaring file alone.
-		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
-		Assert.equals(0, renames.length);
+		// A bare inherited read in the subtype, attributed by its ENCLOSING class.
+		assertAmbiguousSubtypeBlocks('package pkg;\nclass D extends C {\n\tpublic function g() { return size; }\n}');
 	}
 
 	/**
@@ -1227,18 +1213,105 @@ class NamingCheckTest extends Test {
 	 * half-applied. A receiver type that is not PROVABLY unrelated must block instead.
 	 */
 	public function testCrossFileFixBlocksOnAmbiguousReceiverType(): Void {
-		final cSrc: String = 'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
-		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}';
+		assertAmbiguousSubtypeBlocks('package pkg;\nclass D extends C {\n\tpublic function g(d:D) { return d.size; }\n}');
+	}
+
+	/**
+	 * The POSITIVE control for both blockers: the identical fixture WITHOUT the ambiguity-creating
+	 * twin module renames completely, across both files. It pins the AMBIGUITY as the reason the two
+	 * tests above see zero renames — without it they would stay green if anything upstream (the
+	 * policy, `crossFileCandidate`, the rename-safety gate) stopped producing the candidate at all.
+	 */
+	public function testCrossFileFixRenamesUnambiguousSubtypeControl(): Void {
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { return size; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
+			{ file: 'pkg/D.hx', source: dSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		Assert.equals(1, renames.length);
+		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
+		assertRenameSlice(renames[0], 'pkg/C.hx', AMBIGUITY_OWNER_SRC, '_size', 'var size');
+		assertRenameSlice(renames[0], 'pkg/D.hx', dSrc, '_size', 'return size');
+	}
+
+	/**
+	 * An ALIASING decl reaches its target through a link no `extends` / `implements` clause records,
+	 * so its indexed `supertypes` is EMPTY — and an empty closure "excludes" everything. Here the
+	 * subtype reads the inherited field through a receiver typed `Alias`, a `typedef` for the owner
+	 * itself: reading that vacuous closure as a proof of unrelatedness filed a genuine owner-bound
+	 * access under "different owner" and half-applied the rename. The proof must refuse an aliasing
+	 * decl outright, leaving the access uncovered so the completeness gate blocks.
+	 */
+	public function testCrossFileFixBlocksOnTypedefAliasedReceiver(): Void {
+		final aliasSrc: String = 'package pkg;\ntypedef Alias = C;';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g(a:Alias) { return a.size; }\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
+			{ file: 'pkg/Alias.hx', source: aliasSrc },
+			{ file: 'pkg/D.hx', source: dSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
+		Assert.equals(0, renames.length);
+	}
+
+	/**
+	 * The collision-scan face of the same non-proof. The subtype already declares the TARGET name
+	 * (`_size`), which is exactly the clash the target-name scan exists to catch — but that scan
+	 * subtracts the spans of types deemed "unrelated" to the owner, and deeming them so from a false
+	 * `isSubtype` excluded the REAL subtype's whole body under an ambiguous simple name. The clash
+	 * went unseen and the rename emitted `Redefinition of variable _size in subclass` (verified).
+	 * Unlike the ignore-bucket arms, nothing downstream re-checks what this set drops.
+	 */
+	public function testCrossFileFixBlocksOnTargetNameInAmbiguouslyNamedSubtype(): Void {
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tprivate var _size:Int;\n\tpublic function g() { return _size; }\n}';
 		final twinSrc: String = 'package pkg;\nclass Twin {}\n\nclass D {\n\tpublic var other:Int;\n}';
 		final files: Array<{ file: String, source: String }> = [
-			{ file: 'pkg/C.hx', source: cSrc },
+			{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
 			{ file: 'pkg/D.hx', source: dSrc },
 			{ file: 'pkg/Twin.hx', source: twinSrc }
 		];
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
 		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
+		Assert.equals(0, renames.length);
+	}
+
+	/** The owner of the ambiguity fixtures: a non-confined private `size` read through `this.`. */
+	private static final AMBIGUITY_OWNER_SRC: String =
+		'package pkg;\nclass C {\n\tprivate var size:Int;\n\tpublic function f() { return this.size; }\n}';
+
+	/**
+	 * Run the cross-file rename over `dSrc` (a subtype of `C` reading the inherited `size`) alongside
+	 * a module declaring a SECOND type named `D`, and assert the rename is refused outright. The twin
+	 * makes `declsNamed('D')` ambiguous, which is what defeats the positive `isSubtype` proof.
+	 */
+	private function assertAmbiguousSubtypeBlocks(dSrc: String): Void {
+		final twinSrc: String = 'package pkg;\nclass Twin {}\n\nclass D {\n\tpublic var other:Int;\n}';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/C.hx', source: AMBIGUITY_OWNER_SRC },
+			{ file: 'pkg/D.hx', source: dSrc },
+			{ file: 'pkg/Twin.hx', source: twinSrc }
+		];
+		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
+		final check: Naming = new Naming();
+		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
+		// The candidate MUST exist, or the zero below would prove nothing.
+		Assert.equals(1, vs.length);
+		final renames: Array<Array<CrossFileEdits>> = check.crossFileFix(files, vs, new HaxeQueryPlugin(), index);
+		// Either a COMPLETE rename (both files) or none - never the declaring file alone.
 		assertNotHalfApplied(renames, 'pkg/C.hx', 'pkg/D.hx');
 		Assert.equals(0, renames.length);
 	}
