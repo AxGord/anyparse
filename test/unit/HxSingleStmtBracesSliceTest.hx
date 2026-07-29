@@ -610,6 +610,39 @@ class HxSingleStmtBracesSliceTest extends Test {
 		);
 	}
 
+	public function testSuppressFrameDoBodyStillUnwraps(): Void {
+		// ORDER pin for the `BlockBody` arm sitting ABOVE the suppress-gated path: a do-body
+		// is always followed by `while (...)`, so it can never sit on the trailing spine of
+		// an enclosing then-body and gate 5 must not touch it. Insert a suppress guard above
+		// that arm and this is the only test that flips. Compiler-verified equivalent.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a) do {\n\t\t\tg();\n\t\t} while (c); else y();\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, c:Bool):Void {\n\t\tif (a)\n\t\t\tdo g() while (c);\n\t\telse\n\t\t\ty();\n\t}\n}'
+		);
+	}
+
+	public function testForBodyBlockSealsThenBodyAndKeepsItsOwnBraces(): Void {
+		// Both halves of the spine walk in one shape. The then-body's single `for` ends on a
+		// brace-bearing body, so the THEN-body de-braces (the `HxForStmt.body` field arm -
+		// rename that field and this half fails closed). The `for` body itself then renders
+		// on the trailing spine and its single statement IS an else-less `if`, so gate 5
+		// keeps ITS braces. Compiler-verified equivalent.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a) {\n\t\t\tfor (x in xs) {\n\t\t\t\tif (b) p();\n\t\t\t}\n\t\t} else {\n\t\t\tq();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool, xs:Array<Int>):Void {\n\t\tif (a)\n\t\t\tfor (x in xs) {\n\t\t\t\tif (b) p();\n\t\t\t}\n\t\telse\n\t\t\tq();\n\t}\n}'
+		);
+	}
+
+	public function testBracedCatchBodySealsTryCatchBeforeElse(): Void {
+		// The block-bodied `TryCatchStmt` arm: the spine ends on the LAST catch clause's
+		// body, which is brace-bearing here, so the trailing `else` cannot reach the `if`
+		// inside it. Reaching the catch list through the wrong field name fails closed.
+		assertFmt(
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a) {\n\t\t\ttry {\n\t\t\t\tp();\n\t\t\t} catch (e:Dynamic) {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\t} else {\n\t\t\tr();\n\t\t}\n\t}\n}',
+			'class F {\n\tfunction f(a:Bool, b:Bool):Void {\n\t\tif (a)\n\t\t\ttry {\n\t\t\t\tp();\n\t\t\t} catch (e:Dynamic) {\n\t\t\t\tif (b) q();\n\t\t\t}\n\t\telse\n\t\t\tr();\n\t}\n}'
+		);
+	}
+
 	public function testTrailingCommentDeBraceIdempotent(): Void {
 		final source: String = 'class F {\n\tfunction f(a:Bool):Void {\n\t\tif (a) {\n\t\t\tx(); // trailing\n\t\t}\n\t}\n}';
 		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson(removeConfig);

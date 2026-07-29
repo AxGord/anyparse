@@ -9476,10 +9476,13 @@ class WriterLowering {
 			var e: Expr = macro opt;
 			if (propagateExpr) e = macro _setExprPosition($e);
 			// ω-single-stmt-braces: dangling-else suppress frame — when the
-			// enclosing `if` has an `else` at runtime, the whole then-body write
-			// runs with `_ssbSuppress` so nested `dropSingleStmtBraces` unwraps
-			// no-op (they could otherwise expose a trailing braceless `if` that
-			// captures the outer `else`). Null cond (no meta / no else sibling /
+			// enclosing `if` has an `else` at runtime AND its then-body renders
+			// WITHOUT braces, the whole then-body write runs with `_ssbSuppress` so
+			// nested `dropSingleStmtBraces` unwraps are gated by the same
+			// trailing-spine test as the direct dangling-else gate (they could
+			// otherwise expose a trailing braceless `if` that captures the outer
+			// `else`). A brace-bearing then-body seals its subtree with its own `}`
+			// and never arms the frame. Null cond (no meta / no else sibling /
 			// plain mode) is byte-inert.
 			if (ssbSuppressCond != null) e = macro ($ssbSuppressCond ? _setSsbSuppress($e) : $e);
 			// ω-single-stmt-braces CHAIN symmetry: a body's OWN content must NOT

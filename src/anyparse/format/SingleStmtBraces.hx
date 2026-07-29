@@ -316,12 +316,12 @@ class SingleStmtBraces {
 				elseTailDanglingIf(head, 'elseBranch');
 			// Loop / lambda / function typedefs whose LAST field is the body.
 			case 'WhileStmt' | 'WhileExpr' | 'ForStmt' | 'ForExpr' | 'ForReifExpr':
-				tailDanglingIf(fieldOf(head, 'body'));
+				fieldTailDanglingIf(head, 'body');
 			case 'ThinParenLambdaExpr' | 'ParenLambdaExpr' | 'FnExpr' | 'NamedFnExpr' | 'LocalFnStmt' | 'LocalInlineFnStmt':
-				tailDanglingIf(fieldOf(head, 'body'));
+				fieldTailDanglingIf(head, 'body');
 			case 'TryCatchStmt' | 'TryCatchStmtBare' | 'TryExpr': tailCatchDanglingIf(head);
-			case 'MetaExpr': tailDanglingIf(fieldOf(head, 'expr'));
-			case 'MetaStmt': tailDanglingIf(fieldOf(head, 'stmt'));
+			case 'MetaExpr': fieldTailDanglingIf(head, 'expr');
+			case 'MetaStmt': fieldTailDanglingIf(head, 'stmt');
 			case _: containsIf(e);
 		};
 	}
@@ -334,20 +334,40 @@ class SingleStmtBraces {
 	 * into its branch, so an `else if` chain is decided by its FINAL arm.
 	 */
 	private static function elseTailDanglingIf(head: Dynamic, elseField: String): Bool {
-		final elseBody: Dynamic = fieldOf(head, elseField);
+		if (!hasStructField(head, elseField)) return true;
+		final elseBody: Dynamic = Reflect.field(head, elseField);
 		return elseBody == null || tailDanglingIf(elseBody);
 	}
 
 	/**
 	 * The try/catch arm: the rendering ends on the LAST catch clause's body, or on
-	 * the try body when there are no catches. A body-less `catch (e:T)` ends on the
-	 * param's `)` and is sealed (`tailDanglingIf(null)` is `false`). Covers the
-	 * block-bodied `TryCatchStmt` too, whose last catch body may itself be bare.
+	 * the try body when there are no catches. Covers the block-bodied `TryCatchStmt`
+	 * too, whose last catch body may itself be bare.
 	 */
 	private static function tailCatchDanglingIf(head: Dynamic): Bool {
-		final catches: Null<Array<Dynamic>> = fieldOf(head, 'catches');
-		if (catches == null || catches.length == 0) return tailDanglingIf(fieldOf(head, 'body'));
-		return tailDanglingIf(fieldOf(triviaNode(catches[catches.length - 1]), 'body'));
+		if (!hasStructField(head, 'catches')) return true;
+		final catches: Null<Array<Dynamic>> = Reflect.field(head, 'catches');
+		return catches == null || catches.length == 0
+			? fieldTailDanglingIf(head, 'body')
+			: fieldTailDanglingIf(triviaNode(catches[catches.length - 1]), 'body');
+	}
+
+	/**
+	 * The trailing spine through a NAMED field of a trivia typedef struct. A field the
+	 * struct does not declare at all answers DANGEROUS: that is what a grammar rename
+	 * looks like from a name-keyed walk, and reading it as "absent, therefore nothing
+	 * is rendered, therefore safe" would silently start dropping braces the walk can no
+	 * longer reason about. A DECLARED field holding `null` stays safe - an omitted
+	 * `@:optional` body (a body-less `catch (e:T)`, a signature-only `function()`)
+	 * renders nothing after the token that precedes it.
+	 */
+	private static function fieldTailDanglingIf(head: Dynamic, name: String): Bool {
+		return hasStructField(head, name) ? tailDanglingIf(Reflect.field(head, name)) : true;
+	}
+
+	/** Is `o` a trivia typedef struct that declares `name`? Enum values and `null` are not. */
+	private static inline function hasStructField(o: Dynamic, name: String): Bool {
+		return o != null && !Reflect.isEnumValue(o) && Reflect.hasField(o, name);
 	}
 
 	/**
@@ -422,19 +442,13 @@ class SingleStmtBraces {
 		return i < ps.length ? ps[i] : null;
 	}
 
-	/** A named field of a trivia typedef struct; `null` for anything that is not one. */
-	private static inline function fieldOf(o: Dynamic, name: String): Dynamic {
-		return o == null || Reflect.isEnumValue(o) ? null : Reflect.field(o, name);
-	}
-
 	/**
 	 * The payload of an `anyparse.runtime.Trivial` element wrapper, or the value
 	 * itself when it is not wrapped. Star-field elements arrive wrapped; a plain
 	 * Ref field does not, and no grammar typedef declares a field named `node`.
 	 */
 	private static inline function triviaNode(v: Dynamic): Dynamic {
-		final node: Dynamic = fieldOf(v, 'node');
-		return node == null ? v : node;
+		return hasStructField(v, 'node') ? Reflect.field(v, 'node') : v;
 	}
 
 	private static function containsIf(v: Dynamic): Bool {
