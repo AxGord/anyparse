@@ -94,7 +94,10 @@ final class EmptyBlock implements Check {
 	/** Walk `node`, flagging every empty control-flow block reached. */
 	private static function walk(out: Array<Violation>, file: String, source: String, node: QueryNode, support: ControlFlowSupport): Void {
 		final span: Null<Span> = node.span;
-		if (span != null && node.children.length == 0 && support.emptyFlagKinds().contains(node.kind) && isBlank(span, source)) out.push({
+		if (
+			span != null && node.children.length == 0 && support.emptyFlagKinds().contains(node.kind)
+			&& RefactorSupport.isBlankSpan(span, source)
+		) out.push({
 			file: file,
 			span: span,
 			rule: 'empty-block',
@@ -102,16 +105,6 @@ final class EmptyBlock implements Check {
 			message: 'empty block'
 		});
 		for (c in node.children) walk(out, file, source, c, support);
-	}
-
-	/**
-	 * Whether the source `span` covers an empty pair of braces — the span runs
-	 * from the opening to the closing brace, so the inner slice (braces dropped)
-	 * is whitespace-only. A block containing a comment is non-blank.
-	 */
-	private static function isBlank(span: Span, source: String): Bool {
-		final inner: String = source.substring(span.from + 1, span.to - 1);
-		return StringTools.trim(inner) == '';
 	}
 
 	/** Walk `node` with its `parent` and `grandparent`, collecting safe deletions for flagged empty blocks. */

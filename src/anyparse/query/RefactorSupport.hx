@@ -935,6 +935,20 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Is the source spanned by `span` — with its first and last byte stripped
+	 * (a brace-delimited block's `{` / `}`) — whitespace-only? A block holding
+	 * only a comment is non-blank: a comment carries no statement, but it is
+	 * source a fix must not silently discard (it may be the only trace of
+	 * intent behind an otherwise-empty block). Shared by `empty-block` (an
+	 * empty `{}` control-flow body) and `constant-condition` (a dead branch a
+	 * fix would eliminate).
+	 */
+	public static function isBlankSpan(span: Span, source: String): Bool {
+		final inner: String = source.substring(span.from + 1, span.to - 1);
+		return StringTools.trim(inner) == '';
+	}
+
+	/**
 	 * Does `name` occur as a word-boundary identifier token within
 	 * `source[from, end)` at an offset that lies inside none of `excluded`?
 	 * The conservative "is this name referenced" primitive shared by the
