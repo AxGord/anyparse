@@ -90,6 +90,57 @@ final class DocMeasure {
 	}
 
 	/**
+	 * True iff `d` contains an `OptHardline` / `OptHardlineSkipAtOpenDelim` /
+	 * `OptHardlineSkipBeforeHardline` atom - the three ctors
+	 * `Renderer.fitsFlat` classifies as "hardlines by intent" that can never
+	 * flatten. Sister of `hasForcedBreak`, which deliberately answers `false`
+	 * for all three: they are OPTIONAL breaks (each drops when the next emit
+	 * is already a hardline), so on their own they must not push an enclosing
+	 * cascade into break mode.
+	 *
+	 * The distinction a caller needs: dropping is legal only where a real
+	 * hardline follows. Inside a force-flat region (`Flatten` / `HardFlatten`)
+	 * `Renderer.emitOptHardline` / `emitOptSpaceVariants` drop them
+	 * UNCONDITIONALLY, which deletes breaks their emitter required - notably
+	 * the `trailingCommentDocGuarded` break that keeps a group's closing
+	 * delimiter off a captured `//` comment's line. A caller about to build a
+	 * force-flat region checks here first.
+	 *
+	 * Walks the flat side of every `If*` probe and DESCENDS into `BodyGroup`
+	 * and the force-flat markers themselves - both mirror `hasForcedBreak`,
+	 * and a nested marker is no proof the atom is dead (an inner
+	 * `WrapBoundary` resets force-flat). Over-reporting only costs a caller
+	 * its flat layout; under-reporting costs a dropped break.
+	 */
+	public static function hasOptHardline(d: Doc): Bool {
+		final stack: Array<Doc> = [d];
+		while (stack.length > 0) {
+			final node: Doc = (cast stack.pop(): Doc);
+			switch (node) {
+				case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
+					return true;
+				case Empty | Text(_) | Line(_) | OptSpace(_) | OptSpaceSkipAfterHardline:
+				case Concat(items):
+					for (item in items) stack.push(item);
+				case Fill(items, sep, _) | FillWithRestProbe(items, sep, _) | FillBreakAfterWrap(items, sep, _):
+					stack.push(sep);
+					for (item in items) stack.push(item);
+				case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | BodyGroup(inner) | IfBreak(_, inner) | IfWidthExceeds(
+					_, _, inner
+				) | IfFirstLineExceeds(_, _, inner) | IfLineExceeds(_, _, inner) | IfResidualLineExceeds(_, _, inner) | IfFullLineExceeds(
+					_, _, inner
+				) | IfNaturalFirstLineExceeds(_, _, inner) | IfNaturalFirstLineFitsOpenDelim(_, _, inner) | IfArrowContinuationFits(
+					_, _, _, _, inner
+				) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(inner) | CollapseAddProbe(inner) | CollapseBoolProbe(
+					inner
+				) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(inner):
+					stack.push(inner);
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Concatenates the visible flat text of `d` left-to-right (forced
 	 * hardlines contribute nothing). Stack-based walk mirroring
 	 * `flatTokenWidth` but accumulating the characters rather than just the
