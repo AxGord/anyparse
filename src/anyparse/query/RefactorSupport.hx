@@ -573,6 +573,40 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Offset of the first word-boundary occurrence of `name` within
+	 * `[span.from, span.to)` that lives in code the compiler sees, or -1
+	 * when the window holds none. Identical to `identTokenOffset` except
+	 * that a match inside COMMENT trivia is skipped, so a comment sitting
+	 * between a receiver and its member never wins the race for the member
+	 * token (the window a caller derives from two AST spans also contains
+	 * every byte of trivia between them).
+	 *
+	 * String literals and `#if` bodies are deliberately NOT skipped: a
+	 * `${obj.member}` interpolation and a conditionally compiled access are
+	 * both live references a rename has to reach.
+	 */
+	public static function activeCodeIdentTokenOffset(source: String, span: Span, name: String): Int {
+		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		var from: Int = span.from;
+		while (from < span.to) {
+			final at: Int = identTokenOffset(source, new Span(from, span.to), name);
+			if (at < 0 || !offsetWithinComment(at, regions)) return at;
+			from = at + 1;
+		}
+		return -1;
+	}
+
+	/**
+	 * Is `offset` inside a COMMENT region? The first lexical region that
+	 * contains it decides; a string literal is not a comment, so code
+	 * interpolated inside one stays eligible.
+	 */
+	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
+		for (region in regions) if (offset >= region.from && offset < region.to) return region.kind != LexRegionKind.StringLit;
+		return false;
+	}
+
+	/**
 	 * Apply a set of source edits, end-to-start. Edits are sorted
 	 * descending by `span.from` and spliced from the highest offset down,
 	 * so each splice leaves all lower offsets valid. The caller guarantees

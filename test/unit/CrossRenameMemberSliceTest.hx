@@ -228,6 +228,80 @@ class CrossRenameMemberSliceTest extends Test {
 		assertErr(run('a.hx', a, 'keep', '1bad', [{ file: 'a.hx', source: a },]));
 	}
 
+	/**
+	 * A multi-line receiver with an INTERIOR comment that mentions the
+	 * member: the comment text must NOT win the race for the member token.
+	 * The real `.value` access renames; the comment and a nearby string
+	 * literal of the same text stay byte-for-byte.
+	 */
+	public function testInteriorCommentNotMistakenForMemberToken(): Void {
+		final a: String = 'class Src {\n\tpublic var value:Int = 0;\n}';
+		final b: String =
+			'class Use {\n\tpublic function new() {}\n\tpublic function go(s:Src):Void {\n\t\ts\n\t\t\t// reset value\n\t\t\t.value = 1;\n\t\ttrace(s.value);\n\t\ttrace(\'value\');\n\t}\n}';
+		final expectedB: String =
+			'class Use {\n\tpublic function new() {}\n\tpublic function go(s:Src):Void {\n\t\ts\n\t\t\t// reset value\n\t\t\t.total = 1;\n\t\ttrace(s.total);\n\t\ttrace(\'value\');\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'value', 'total', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(2, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * The same interior-comment shape on the STATIC path (`Src.member` with
+	 * the type used as a namespace): the comment is left alone and the real
+	 * `.value` token renames.
+	 */
+	public function testStaticInteriorCommentNotMistakenForMemberToken(): Void {
+		final a: String = 'class Src {\n\tpublic static var value:Int = 0;\n}';
+		final b: String = 'class Use {\n\tfunction go():Void {\n\t\tSrc\n\t\t\t// reset value\n\t\t\t.value = 1;\n\t}\n}';
+		final expectedB: String = 'class Use {\n\tfunction go():Void {\n\t\tSrc\n\t\t\t// reset value\n\t\t\t.total = 1;\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'value', 'total', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * A `#if`-guarded access is CONDITIONAL code, not comment trivia — it
+	 * still renames.
+	 */
+	public function testConditionalGuardedAccessRenames(): Void {
+		final a: String = 'class Src {\n\tpublic var value:Int = 0;\n}';
+		final b: String = 'class Use {\n\tfunction go(s:Src):Void {\n\t\t#if debug\n\t\ttrace(s.value);\n\t\t#end\n\t}\n}';
+		final expectedB: String = 'class Use {\n\tfunction go(s:Src):Void {\n\t\t#if debug\n\t\ttrace(s.total);\n\t\t#end\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'value', 'total', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
+	/**
+	 * An access written inside a `${ }` string interpolation is live code —
+	 * it renames like any other access (double-quoted fixtures so the test
+	 * source itself does not interpolate).
+	 */
+	public function testInterpolatedAccessRenames(): Void {
+		final a: String = 'class Src {\n\tpublic var value:Int = 0;\n}';
+		final b: String = "class Use {\n\tfunction go(s:Src):Void trace('${s.value}');\n}";
+		final expectedB: String = "class Use {\n\tfunction go(s:Src):Void trace('${s.total}');\n}";
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'value', 'total', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		Assert.equals(2, changes.length);
+		Assert.equals(expectedB, changeFor(changes, 'b.hx').newSource);
+		Assert.equals(1, changeFor(changes, 'b.hx').count);
+	}
+
 	/** A scope file that does not parse refuses the whole rename. */
 	public function testSkipParseScopeFileRefused(): Void {
 		final a: String = 'class Foo {\n\tpublic function keep():Void {}\n}';

@@ -82,6 +82,40 @@ class ClassifyOccurrencesTest extends Test {
 		Assert.equals(src, new HaxeQueryPlugin().writeRoundTrip(src));
 	}
 
+	/**
+	 * `activeCodeIdentTokenOffset` skips a comment mention of the name, so a
+	 * comment between a receiver and its member never wins the race for the
+	 * member token.
+	 */
+	public function testActiveCodeOffsetSkipsCommentMention(): Void {
+		final src: String = 's\n\t// reset value\n\t.value = 1;';
+		Assert.equals(src.lastIndexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(1, src.indexOf(' =')), 'value'));
+	}
+
+	/** A block comment between the two spans is skipped the same way. */
+	public function testActiveCodeOffsetSkipsBlockCommentMention(): Void {
+		final src: String = 's /* value */ .value;';
+		Assert.equals(src.lastIndexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(1, src.length), 'value'));
+	}
+
+	/** Code interpolated into a string literal stays eligible. */
+	public function testActiveCodeOffsetKeepsInterpolatedCode(): Void {
+		final src: String = "trace('${s.value}');";
+		Assert.equals(src.indexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+	}
+
+	/** A `#if` body is conditional CODE, not trivia — it stays eligible. */
+	public function testActiveCodeOffsetKeepsConditionalCode(): Void {
+		final src: String = '#if debug\ntrace(s.value);\n#end';
+		Assert.equals(src.indexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+	}
+
+	/** A window whose only mention is a comment reports NOT FOUND. */
+	public function testActiveCodeOffsetCommentOnlyIsNotFound(): Void {
+		final src: String = 's\n\t// reset value\n\t.other;';
+		Assert.equals(-1, RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+	}
+
 	private function classify(src: String, name: String, ?excluded: Array<Span>): Null<Array<ClassifiedOccurrence>> {
 		return RefactorSupport.classifyOccurrences(src, name, new HaxeQueryPlugin(), 0, src.length, excluded == null ? [] : excluded);
 	}

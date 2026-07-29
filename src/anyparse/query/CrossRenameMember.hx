@@ -35,6 +35,16 @@ private typedef ParsedFile = {
 };
 
 /**
+ * The located member-token offsets for ONE file plus the diagnostic of the
+ * first PROVEN access whose token could not be located. A non-null `error`
+ * refuses the whole rename, so a rewrite is never half-applied.
+ */
+private typedef LocatedOffsets = {
+	final offsets: Array<Int>;
+	final error: Null<String>;
+};
+
+/**
  * Scope-correct, format-preserving cross-file rename of a METHOD or
  * FIELD — the value/method counterpart of `CrossRename` (which renames a
  * TYPE). Both are reached through `apq rename --scope`: the CLI resolves
@@ -77,6 +87,14 @@ private typedef ParsedFile = {
  *  - The destination name already declared on the type, a constructor
  *    (`new`), an unparseable scope file, or a post-rewrite parse failure
  *    are all refused; the write is atomic (all files or none).
+ *  - A PROVEN access whose member token cannot be located in code is
+ *    refused rather than skipped. That token is searched in the window
+ *    between the receiver span and the field-access span, which also
+ *    holds every byte of trivia between them, so the search runs through
+ *    `RefactorSupport.activeCodeIdentTokenOffset` and a comment that
+ *    mentions the member never wins the race for it. Refusing on a miss
+ *    is what keeps the reported occurrence count equal to what was
+ *    actually rewritten.
  *
  * ## Documented residual (loud-fail, not silent)
  *
@@ -302,7 +320,9 @@ final class CrossRenameMember {
 				? Rename.renameOccurrences(entry.source, entry.tree, cursor, refShape)
 				: [];
 			for (occ in resolved) addOff(occ.from);
-			for (off in qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape)) addOff(off);
+			final qualified: LocatedOffsets = qualifiedMemberOffsets(entry.source, entry.tree, target, plugin, refShape);
+			if (qualified.error != null) return Err('${entry.file}: ${qualified.error}');
+			for (off in qualified.offsets) addOff(off);
 			if (offsets.length == 0) continue;
 
 			final edits: Array<{ span: Span, text: String }> = [
@@ -328,11 +348,13 @@ final class CrossRenameMember {
 	/**
 	 * The member-name-token offsets of every QUALIFIED access of `target`
 	 * in one file: `Src.member` for a static member, `obj.member` (with
-	 * `obj` typed as the source type) for an instance member.
+	 * `obj` typed as the source type) for an instance member. A PROVEN
+	 * access whose member token cannot be located refuses the whole rename
+	 * through the returned `error`.
 	 */
 	private static function qualifiedMemberOffsets(
 		source: String, tree: QueryNode, target: MemberTarget, plugin: GrammarPlugin, refShape: RefShape
-	): Array<Int> {
+	): LocatedOffsets {
 		return target.isStatic
 			? staticMemberOffsets(source, tree, target.typeName, target.memberName, refShape)
 			: instanceMemberOffsets(source, tree, target.typeName, target.memberName, plugin, refShape);
@@ -343,20 +365,22 @@ final class CrossRenameMember {
 	 * `pkg.Src.member` whose receiver is the type used as a namespace. A
 	 * receiver ident shadowed by an in-file value binding is excluded
 	 * (mirrors `MoveMember.qualifiedReceiverOffsets`). The member token is
-	 * located AFTER the receiver span so a receiver that contains the
-	 * member name as a substring is never mistaken for it.
+	 * located AFTER the receiver span, and only in code, so neither a
+	 * receiver containing the member name as a substring nor a comment
+	 * sitting between the two is ever mistaken for it.
 	 */
 	private static function staticMemberOffsets(
 		source: String, tree: QueryNode, typeName: String, memberName: String, refShape: RefShape
-	): Array<Int> {
+	): LocatedOffsets {
 		final valueResolved: Array<Int> = [
 			for (h in Refs.find(typeName, tree, refShape))
 				if ((h.kind == RefKind.Read || h.kind == RefKind.Write) && h.bindingSpan != null) h.span.from
 		];
 		final out: Array<Int> = [];
+		var error: Null<String> = null;
 		function walk(node: QueryNode): Void {
 			final children: Array<QueryNode> = node.children;
-			if (node.kind == 'FieldAccess' && node.name == memberName && children.length > 0) {
+			if (error == null && node.kind == 'FieldAccess' && node.name == memberName && children.length > 0) {
 				final recv: QueryNode = children[0];
 				final recvSpan: Null<Span> = recv.span;
 				final faSpan: Null<Span> = node.span;
@@ -364,15 +388,18 @@ final class CrossRenameMember {
 					final isNamespace: Bool = (recv.kind == 'IdentExpr' && recv.name == typeName && !valueResolved.contains(recvSpan.from))
 						|| (recv.kind == 'FieldAccess' && recv.name == typeName);
 					if (isNamespace) {
-						final off: Int = RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
-						if (off >= 0 && !out.contains(off)) out.push(off);
+						final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
+						if (off < 0)
+							error = unlocatableAccess(source, faSpan, memberName);
+						else if (!out.contains(off))
+							out.push(off);
 					}
 				}
 			}
 			for (c in children) walk(c);
 		}
 		walk(tree);
-		return out;
+		return error == null ? { offsets: out, error: null } : { offsets: [], error: error };
 	}
 
 	/**
@@ -382,15 +409,16 @@ final class CrossRenameMember {
 	 * type. `this` / `super` receivers are skipped — the declaring-file
 	 * `Rename.renameOccurrences` pass covers `this.member`, and `super`
 	 * targets a base member. A receiver whose type does not resolve is
-	 * left alone (advisory / loud-fail).
+	 * left alone (advisory / loud-fail); a receiver that DOES resolve but
+	 * whose member token cannot be located refuses the whole rename.
 	 */
 	private static function instanceMemberOffsets(
 		source: String, tree: QueryNode, typeName: String, memberName: String, plugin: GrammarPlugin, refShape: RefShape
-	): Array<Int> {
+	): LocatedOffsets {
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final declared: Map<Int, String> = provider != null ? provider.declaredTypes(source) : [];
 		final candidates: Array<{ recv: QueryNode, fa: QueryNode }> = memberAccessCandidates(tree, memberName);
-		if (candidates.length == 0) return [];
+		if (candidates.length == 0) return { offsets: [], error: null };
 
 		final recvNames: Array<String> = [];
 		for (cand in candidates) {
@@ -400,10 +428,14 @@ final class CrossRenameMember {
 		final hitsByName: Map<String, Array<RefHit>> = Refs.findMulti(recvNames, tree, refShape);
 		final out: Array<Int> = [];
 		for (cand in candidates) {
-			final off: Int = resolvedMemberOffset(source, cand, typeName, memberName, declared, hitsByName);
-			if (off >= 0 && !out.contains(off)) out.push(off);
+			final recvSpan: Null<Span> = cand.recv.span;
+			final faSpan: Null<Span> = cand.fa.span;
+			if (recvSpan == null || faSpan == null || !receiverIsSourceType(cand.recv, typeName, declared, hitsByName)) continue;
+			final off: Int = RefactorSupport.activeCodeIdentTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
+			if (off < 0) return { offsets: [], error: unlocatableAccess(source, faSpan, memberName) };
+			if (!out.contains(off)) out.push(off);
 		}
-		return out;
+		return { offsets: out, error: null };
 	}
 
 	/**
@@ -439,23 +471,32 @@ final class CrossRenameMember {
 	}
 
 	/**
-	 * The `member`-token offset of one candidate `obj.member` when `obj`
-	 * resolves (scope binding + `declared` types) to the source type, else
-	 * -1. The token is located AFTER the receiver span so a receiver that
-	 * contains the member name as a substring is never mistaken for it.
+	 * Does `recv` resolve (scope binding + `declared` types) to a
+	 * declaration of the source type? Only a receiver this proves is
+	 * rewritten; an unresolved one is left alone (advisory / loud-fail).
 	 */
-	private static function resolvedMemberOffset(
-		source: String, cand: { recv: QueryNode, fa: QueryNode }, typeName: String, memberName: String, declared: Map<Int, String>,
-		hitsByName: Map<String, Array<RefHit>>
-	): Int {
-		final recv: QueryNode = cand.recv;
+	private static function receiverIsSourceType(
+		recv: QueryNode, typeName: String, declared: Map<Int, String>, hitsByName: Map<String, Array<RefHit>>
+	): Bool {
 		final rn: Null<String> = recv.name;
 		final recvSpan: Null<Span> = recv.span;
-		final faSpan: Null<Span> = cand.fa.span;
-		if (rn == null || recvSpan == null || faSpan == null) return -1;
+		if (rn == null || recvSpan == null) return false;
 		final bindingFrom: Null<Int> = receiverBinding(hitsByName[rn] ?? [], recvSpan.from);
-		if (bindingFrom == null || declared[bindingFrom] != typeName) return -1;
-		return RefactorSupport.identTokenOffset(source, new Span(recvSpan.to, faSpan.to), memberName);
+		if (bindingFrom == null) return false;
+		final from: Int = bindingFrom;
+		return declared[from] == typeName;
+	}
+
+	/**
+	 * The refusal diagnostic for a PROVEN access whose member token could
+	 * not be located in code — a comment occupied the window instead.
+	 * Refusing keeps the rename COMPLETE: renaming the rest would leave the
+	 * project uncompilable while the op reported success.
+	 */
+	private static function unlocatableAccess(source: String, faSpan: Span, memberName: String): String {
+		final at: Position = faSpan.lineCol(source);
+		return 'cannot locate the "$memberName" token of the proven access at ${at.line}:${at.col}'
+			+ ' - refusing rather than renaming part of the scope';
 	}
 
 }
