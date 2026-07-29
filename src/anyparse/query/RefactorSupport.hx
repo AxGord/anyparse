@@ -92,12 +92,15 @@ typedef ClassifiedOccurrence = {
 	final kind: OccurrenceClass;
 };
 
-/** Kind of a lexically-scanned non-code source region (comment or string). */
+/**
+ * Kind of a lexically-scanned non-code source region (comment, string or regex literal).
+ */
 private enum abstract LexRegionKind(Int) {
 
 	final LineComment = 0;
 	final BlockComment = 1;
 	final StringLit = 2;
+	final RegexLit = 3;
 
 }
 
@@ -602,7 +605,10 @@ final class RefactorSupport {
 	 * interpolated inside one stays eligible.
 	 */
 	private static function offsetWithinComment(offset: Int, regions: Array<LexRegion>): Bool {
-		for (region in regions) if (offset >= region.from && offset < region.to) return region.kind != LexRegionKind.StringLit;
+		for (region in regions) if (offset >= region.from && offset < region.to) return switch region.kind {
+			case LineComment | BlockComment: true;
+			case StringLit | RegexLit: false;
+		};
 		return false;
 	}
 
@@ -1067,7 +1073,7 @@ final class RefactorSupport {
 				out.push({ from: region.from, to: region.to, isLine: true });
 			case BlockComment:
 				out.push({ from: region.from, to: region.to, isLine: false });
-			case StringLit:
+			case StringLit | RegexLit:
 		}
 		return out;
 	}
@@ -2156,17 +2162,24 @@ final class RefactorSupport {
 	/**
 	 * The offset at which an `extends` / `implements` clause can be spliced into
 	 * the header of `decl` (named `typeName`): just past its last header token,
-	 * before the body `{`. AST-anchored — each header child node (a type-parameter
+	 * before the body `{`. AST-anchored - each header child node (a type-parameter
 	 * constraint, an `extends` / `implements` clause, a conditional block) bounds
 	 * the search, and the search itself steps over comments and string literals,
 	 * so a `{` written inside a header comment or inside a structural type
 	 * constraint is never mistaken for the body brace. Null when no body brace can
 	 * be verified before the first body member; a caller that gets null must
 	 * refuse the whole operation rather than splice at an unverified offset.
+	 *
+	 * The name token is located with `activeCodeIdentTokenOffset`, not the raw
+	 * scan: a leading block comment that repeats the type name would otherwise
+	 * win the race for it, and the whole header search would then run inside that
+	 * comment - splicing the clause into comment text. The result still PARSES, so
+	 * no downstream reparse gate catches it, while the caller has already staged
+	 * the member cut: the members move out and nothing inherits them.
 	 */
 	public static function typeHeaderInsertOffset(source: String, decl: TypeDeclMatch, typeName: String): Null<Int> {
 		final nameSpan: Span = decl.nameNode.span ?? decl.fullSpan;
-		final nameAt: Int = identTokenOffset(source, nameSpan, typeName);
+		final nameAt: Int = activeCodeIdentTokenOffset(source, nameSpan, typeName);
 		final headerFrom: Int = nameAt < 0 ? nameSpan.from : nameAt + typeName.length;
 		final limit: Int = nameSpan.to <= source.length ? nameSpan.to : source.length;
 		var from: Int = headerFrom;
@@ -2275,9 +2288,14 @@ final class RefactorSupport {
 	}
 
 	/**
-	 * Single-pass lexer emitting every non-code region (line/block comment,
-	 * string literal) with byte offsets. Strings are skipped with `\`-escape
-	 * handling; `collectCommentTokens` filters this to its comment tokens.
+	 * Single-pass lexer emitting every non-code region (line/block comment, string
+	 * literal, regex literal) with byte offsets. Strings are skipped with
+	 * `\`-escape handling, regex literals through `scanRegexLiteral`;
+	 * `collectCommentTokens` filters this to its comment tokens.
+	 *
+	 * The regex arm exists because a regex body may legally contain a comment
+	 * opener (`~/[\/*]/`), and without it that opener started a phantom block
+	 * comment running to EOF - see `scanRegexLiteral` for what that broke.
 	 */
 	private static function scanLexicalRegions(source: String): Array<LexRegion> {
 		final out: Array<LexRegion> = [];
@@ -2303,6 +2321,14 @@ final class RefactorSupport {
 				}
 				out.push({ from: start, to: i, kind: StringLit });
 				continue;
+			}
+			if (c == '~'.code && i + 1 < n && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
+				final regexEnd: Int = scanRegexLiteral(source, i, n);
+				if (regexEnd > 0) {
+					out.push({ from: i, to: regexEnd, kind: RegexLit });
+					i = regexEnd;
+					continue;
+				}
 			}
 			if (c == '/'.code && i + 1 < n) {
 				final next: Int = StringTools.fastCodeAt(source, i + 1);
@@ -2358,7 +2384,9 @@ final class RefactorSupport {
 	private static function classifyAt(source: String, at: Int, condSpans: Array<Span>, regions: Array<LexRegion>): OccurrenceClass {
 		if (offsetWithinAny(at, condSpans)) return ConditionalRaw;
 		for (region in regions) if (at >= region.from && at < region.to) return switch region.kind {
-			case StringLit: StringLiteral;
+			// A regex body is inert literal text like a string's, and
+			// `OccurrenceClass` has no finer class - both block the rename.
+			case StringLit | RegexLit: StringLiteral;
 			case LineComment | BlockComment: isNoqaComment(source, region) ? DirectiveComment : CommentTrivia;
 		};
 		return ActiveCode;
@@ -2431,6 +2459,47 @@ final class RefactorSupport {
 	private static function blockCommentEndingAt(tokens: Array<{ from: Int, to: Int, isLine: Bool }>, end: Int): Int {
 		for (t in tokens) if (!t.isLine && t.to == end) return t.from;
 		return -1;
+	}
+
+
+	/**
+	 * End offset (exclusive) of the Haxe regex literal opened by `~/` at `open`,
+	 * flags included; -1 when it is not terminated on its own line. Matches the
+	 * compiler's own lexer: the body runs to the first unescaped `/`, and a
+	 * comment OPENER inside it is body text - `haxe` lexes a block-comment
+	 * opener right after `~/` as part of the regex too, not as `~` applied to a
+	 * comment (verified against the compiler).
+	 *
+	 * Without this arm the shared region scan opened a phantom block comment at
+	 * the comment opener hiding in `~/[\/*]/`: unterminated, so every byte to
+	 * EOF counted as comment trivia and real code after the literal became
+	 * invisible - a cross-file member rename refused the whole scope, and every
+	 * consumer of `collectCommentTokens` saw a comment token that is not there.
+	 */
+	private static function scanRegexLiteral(source: String, open: Int, n: Int): Int {
+		final nl: Int = source.indexOf('\n', open + 2);
+		final lineEnd: Int = nl < 0 ? n : nl;
+		var i: Int = open + 2;
+		while (i < lineEnd) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c == '\\'.code) {
+				i += 2;
+				continue;
+			}
+			if (c == '/'.code) {
+				i++;
+				while (i < lineEnd && isRegexFlag(StringTools.fastCodeAt(source, i))) i++;
+				return i;
+			}
+			i++;
+		}
+		return -1;
+	}
+
+
+	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
+	private static inline function isRegexFlag(c: Int): Bool {
+		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
 	}
 
 }

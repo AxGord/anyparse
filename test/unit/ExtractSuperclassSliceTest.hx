@@ -175,4 +175,21 @@ class ExtractSuperclassSliceTest extends Test {
 		return new HaxeQueryPlugin();
 	}
 
+
+	/**
+	 * A leading header comment repeating the type name must not win the race for
+	 * the name token: the `extends` clause has to land on real code. It did land
+	 * inside the comment before the anchor moved to
+	 * `RefactorSupport.activeCodeIdentTokenOffset` - and because the result
+	 * still PARSED, nothing downstream caught it while the members had already
+	 * left the source.
+	 */
+	public function testExtendsSkipsNameRepeatingHeaderComment(): Void {
+		final src: String = 'package pkg;\n\nclass /* Holder { */ Holder {\n\tpublic function new() {}\n\tpublic function m():Void {}\n}';
+		final changes: Array<MoveChange> = okChanges('pkg/Holder.hx', 'Holder', 'Base', 'pkg/Base.hx', ['m'], src);
+		final newSrc: String = changeFor(changes, 'pkg/Holder.hx').newSource;
+		Assert.isTrue(StringTools.contains(newSrc, 'Holder extends Base {'), 'extends lands after the real name: <$newSrc>');
+		Assert.isTrue(StringTools.contains(newSrc, '/* Holder { */'), 'the comment is left verbatim: <$newSrc>');
+	}
+
 }
