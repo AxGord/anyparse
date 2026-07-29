@@ -2311,7 +2311,7 @@ final class RefactorSupport {
 			}
 			if (c == '~'.code && i + 1 < n && StringTools.fastCodeAt(source, i + 1) == '/'.code) {
 				final regexEnd: Int = scanRegexLiteral(source, i, n);
-				if (regexEnd > 0) {
+				if (regexEnd >= 0) {
 					out.push({ from: i, to: regexEnd, kind: RegexLit });
 					i = regexEnd;
 					continue;
@@ -2482,7 +2482,6 @@ final class RefactorSupport {
 		}
 		return -1;
 	}
-
 
 	/** One of the flag letters Haxe accepts after a regex literal's closing `/`. */
 	private static inline function isRegexFlag(c: Int): Bool {
