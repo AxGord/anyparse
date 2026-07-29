@@ -20,13 +20,27 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  *     line and became part of the comment (`function g() // c {`). The
  *     output no longer parses. Worse than loss.
  *
- * A line comment terminates at `\n` by definition, so every writer site
- * that emits one verbatim must guarantee a following break. The guard is
- * an `OptHardlineSkipBeforeHardline`, which drops when the next emit is
+ * A line comment terminates at `\n` by definition, so a writer site that
+ * emits one verbatim while sibling content can still follow on the same
+ * Doc line must guarantee a break. The guard is an
+ * `OptHardlineSkipBeforeHardline`, which drops when the next emit is
  * already a hardline - byte-inert everywhere the seam was not broken.
  *
  * Block-style head comments (`/* c *\/`) keep their existing glue: they
  * do not terminate at a newline, so `head /* c *\/ {` is legal.
+ *
+ * SCOPE. Both fixes are writer-side and reach only the seams whose comment
+ * the PARSER captures into a slot. These heads still lose it because no
+ * slot exists for them, and closing that needs parser work, not a writer
+ * guard:
+ *  - `do // c` + newline `{` (body is the first field of `HxDoWhileStmt`,
+ *    with no `beforeNewlineSlotFirst` opt-in);
+ *  - `class` / `interface` / `enum` / `typedef` heads, whose last token is
+ *    not a `@:trail`-bearing Ref, so no `AfterTrail` slot is synthesised;
+ *  - `function g(a:Int) // c` and `function g():Void // c` - the NON-empty
+ *    param Star has no close-trailing capture (a block comment is lost
+ *    there too, which is how the gap reads as parse-side), and an optional
+ *    `@:lead(':')` Ref grows no `AfterTrail`.
  */
 class HxHeadCommentSeamWriteTest extends Test {
 
