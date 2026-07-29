@@ -9,8 +9,8 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.TypeRefPrinter;
-import anyparse.query.TypeRefPrinter.PrintedTypeRef;
 import anyparse.runtime.Span;
+import anyparse.check.Check.RiskyFix;
 
 /**
  * One local annotation this rule would rewrite: the annotation's OWN span (the `:` payload,
@@ -48,7 +48,8 @@ private typedef Candidate = {
  * a type declared in this module, the MAIN type of a same-package module, or an always-in-scope
  * builtin. `TypeRefPrinter` owns that judgement, `shadowedLocally` included — so a path kept
  * long BECAUSE the short name is taken (`api.model.folders.FolderContent` in a file whose bare
- * `FolderContent` means `api.namespace.FolderContent`) is left exactly as written.
+ * `FolderContent` means `api.namespace.FolderContent`, or any name a wildcard / `using` binds)
+ * is left exactly as written.
  *
  * The printer's third route — ADD an import, then use the short name — is unreachable from
  * here, and the rule refuses it explicitly rather than relying on that. Route 3 requires the
@@ -65,22 +66,36 @@ private typedef Candidate = {
  *    (that is its contract), and `resolvePath` answers the same canonical path for the original,
  *    so an equal, non-null answer IS "same module + name". No index, or no indexed declaration
  *    at that path, means unproven — the finding stays, the edit does not.
- *  - **Type parameters.** The annotation is reprinted run by run, exactly as
- *    `TypeRefPrinter.printTypeExpr` does, and EVERY run the reprint changes must pass the proof
- *    on its own. One unproven component makes the WHOLE annotation report-only, so an
- *    `Array<pkg.Mod.Sub>` is never half-rewritten.
- *  - **Conditional compilation.** A declaration inside a `#if … #end` region
- *    (`RefShape.conditionalMemberKind`) is skipped wholesale: what is in scope there depends on
- *    the build, which neither the import map nor the index models. An annotation whose own text
- *    carries a `#` is skipped for the same reason.
+ *  - **Type parameters.** The annotation is reprinted through the printer's OWN run walk
+ *    (`walkTypeExpr`), and EVERY run the reprint changes must pass the proof on its own. One
+ *    unproven component makes the WHOLE annotation report-only, so an `Array<pkg.Mod.Sub>` is
+ *    never half-rewritten.
+ *  - **Conditional compilation.** A declaration inside a `#if … #end` region is skipped
+ *    wholesale: what is in scope there depends on the build, which neither the import map nor
+ *    the index models. The test is the DIRECTIVE, not a node kind — every conditional region
+ *    opens with `#if` whichever of the grammar's dozen positional conditional ctors projects it
+ *    (`opensConditionalRegion`). An annotation whose own text carries a `#` is skipped too.
  *  - **Imports.** Never touched (see route 3 above).
  *  - **Shape.** The annotation region is extracted textually — between the declaration's first
  *    `:` and the initializer's `=` (or, with no initializer, the closing `;`). A region carrying
  *    a DEPTH-0 comma is refused: the grammar projects `var a:Int, b = null;` as ONE node whose
  *    name slot holds only `a`, so that comma is a second declarator, not a generic argument, and
  *    the slice would span two of them. A `/` (a comment) or a `;` inside the region is refused
- *    too. A multi-declarator statement therefore only ever exposes its FIRST declarator's
- *    annotation — later ones are a KNOWN miss, not a hazard.
+ *    too, as is a top-level anonymous-structure annotation (`final u:{x:T} = …`), whose `Anon`
+ *    the grammar makes child 0 — the `=`-after-`:` requirement turns that into a refusal rather
+ *    than a bad slice. A multi-declarator statement therefore only ever exposes its FIRST
+ *    declarator's annotation — later ones are a KNOWN miss, not a hazard.
+ *
+ * ## Verified, not trusted — `RiskyFix`
+ *
+ * The proof above is `canonicalize`'s, so it inherits `canonicalize`'s precondition: a
+ * `pack.SubType` is read as a hybrid only when the index declares no type AT that path, and a
+ * module the index never saw (outside the lint scope, or one it could not parse) removes that
+ * veto — a REAL `pack.SubType` main type would then be repaired onto an imported sub-type of the
+ * same simple name. No index can detect its own incompleteness, so the rule is a `RiskyFix`:
+ * `apq lint --fix` applies its edits speculatively, typechecks, and reverts any file the edit
+ * breaks, and with no `compilerOracle` configured the rule stays report-only wholesale. This is
+ * also what makes true the claim `TypeRefPrinter` makes about all of its callers.
  *
  * ## Scope — locals only
  *
@@ -102,8 +117,9 @@ private typedef Candidate = {
  * style decision; only the hybrid arm is universal, and it is not separable from the print.
  */
 @:nullSafety(Strict)
-final class ShortenTypeRef implements Check implements DefaultOff {
+final class ShortenTypeRef implements Check implements DefaultOff implements RiskyFix {
 
+	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
 
 	/** The finding message when every changed reference is index-proven — the rewrite is available. */
@@ -161,15 +177,16 @@ final class ShortenTypeRef implements Check implements DefaultOff {
 			}
 		}
 		if (!anyFixable) return [];
-		// The resolution index (report UNION libraries) is the wider proof; the report-scoped one
-		// the caller threads is the fallback for a run with no resolution scope at all.
+		// The resolution index (report UNION libraries) is the wider proof. The `?? index` fallback
+		// is defensive only: through `run` a null resolution index makes EVERY finding unproven, so
+		// `anyFixable` has already returned above — it exists for a caller that hands in violations
+		// it built itself.
 		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
-		final edits: Array<{ span: Span, text: String }> = [];
-		for (candidate in candidatesOf(source, tree, plugin, scope)) if (
-			candidate.proven && wanted.exists('${candidate.span.from}:${candidate.span.to}')
-		)
-			edits.push({ span: candidate.span, text: candidate.text });
-		return edits;
+		return [
+			for (candidate in candidatesOf(source, tree, plugin, scope))
+				if (candidate.proven && wanted.exists('${candidate.span.from}:${candidate.span.to}'))
+					{ span: candidate.span, text: candidate.text }
+		];
 	}
 
 	/**
@@ -188,7 +205,7 @@ final class ShortenTypeRef implements Check implements DefaultOff {
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
 		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, index);
 		final out: Array<Candidate> = [];
-		walkLocals(tree, locals, shape.opaqueKinds ?? [], shape.conditionalMemberKind, node -> {
+		walkLocals(tree, source, locals, shape.opaqueKinds ?? [], shape.conditionalIfKeyword, node -> {
 			final region: Null<Span> = annotationSpan(node, source);
 			if (region == null) return;
 			final candidate: Null<Candidate> = reprint(source, region, printer);
@@ -200,90 +217,100 @@ final class ShortenTypeRef implements Check implements DefaultOff {
 	/**
 	 * Visit every local declaration in `node`'s subtree, skipping two subtrees wholesale: a
 	 * reification (`opaqueKinds`), whose spliced locals are not literal source, and a
-	 * conditional-compilation region (`condKind`), whose scope depends on the build.
+	 * conditional-compilation region (`opensConditionalRegion`), whose scope depends on the build.
 	 */
 	private static function walkLocals(
-		node: QueryNode, locals: Array<String>, opaque: Array<String>, condKind: Null<String>, found: (QueryNode) -> Void
+		node: QueryNode, source: String, locals: Array<String>, opaque: Array<String>, condIf: Null<String>, found: (QueryNode) -> Void
 	): Void {
-		if (opaque.contains(node.kind) || node.kind == condKind) return;
+		if (opaque.contains(node.kind) || opensConditionalRegion(node, source, condIf)) return;
 		if (locals.contains(node.kind)) found(node);
-		for (c in node.children) walkLocals(c, locals, opaque, condKind, found);
+		for (c in node.children) walkLocals(c, source, locals, opaque, condIf, found);
+	}
+
+	/**
+	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
+	 * conditional-compilation region, whatever kind the grammar happens to project it as.
+	 *
+	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
+	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
+	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
+	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
+	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
+	 * because every region opens with it by definition. The `#` first-char test keeps it to one
+	 * comparison per node before any substring is taken.
+	 */
+	private static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
+		final span: Null<Span> = node.span;
+		if (condIf == null || span == null) return false;
+		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
+		// a later `||` operand only from the chain's FIRST operand.
+		final from: Int = span.from;
+		if (from >= source.length || StringTools.fastCodeAt(source, from) != '#'.code) return false;
+		return source.substring(from, from + condIf.length) == condIf;
 	}
 
 	/**
 	 * The span of a local declaration's `:Type` payload — after the `:`, before the initializer's
 	 * `=` (or, with no initializer, before the trailing `;`), whitespace trimmed off both ends —
-	 * or null when the declaration carries no annotation, or its bounds cannot be located. The
-	 * type sits between the name and the first child, and neither the keyword nor the name
-	 * contains a `:`, so the first `:` in that prefix opens the annotation.
+	 * or null when the declaration carries no annotation, or its bounds cannot be located. Neither
+	 * the keyword nor the name contains a `:`, so the first `:` before child 0 opens the annotation.
+	 *
+	 * Child 0 is USUALLY the initializer, but not always: `RefShape.declTypeChildKinds` makes an
+	 * `Anon` structure ANNOTATION a child too, and the `=`-after-`:` requirement is what turns that
+	 * case into a refusal rather than a bad slice.
 	 */
 	private static function annotationSpan(node: QueryNode, source: String): Null<Span> {
 		final span: Null<Span> = node.span;
 		if (span == null) return null;
-		final hasInit: Bool = node.children.length > 0;
+		final hasChildren: Bool = node.children.length > 0;
 		var cutoff: Int = span.to;
-		if (hasInit) {
-			final initSpan: Null<Span> = node.children[0].span;
-			if (initSpan == null) return null;
-			cutoff = initSpan.from;
+		if (hasChildren) {
+			final firstSpan: Null<Span> = node.children[0].span;
+			if (firstSpan == null) return null;
+			cutoff = firstSpan.from;
 		}
 		final prefix: String = source.substring(span.from, cutoff);
 		final colon: Int = prefix.indexOf(':');
 		if (colon < 0) return null;
 		var from: Int = span.from + colon + 1;
 		var to: Int = cutoff;
-		if (hasInit) {
+		if (hasChildren) {
+			// The `=` must follow the `:`. It does not when child 0 is the ANNOTATION rather than the
+			// initializer (`RefShape.declTypeChildKinds` — an `Anon` structure type), which is what
+			// refuses a top-level anonymous-structure annotation. See the class doc's Shape section.
 			final eq: Int = prefix.lastIndexOf('=');
 			if (eq < colon) return null;
 			to = span.from + eq;
 		}
 		while (to > from && StringTools.isSpace(source, to - 1)) to--;
-		// An initializer-less declaration ends on its own `;`, which its span carries.
-		if (!hasInit && to > from && StringTools.fastCodeAt(source, to - 1) == ';'.code) to--;
+		// A declaration with no initializer ends on its own `;`, which its span carries.
+		if (!hasChildren && to > from && StringTools.fastCodeAt(source, to - 1) == ';'.code) to--;
 		while (to > from && StringTools.isSpace(source, to - 1)) to--;
 		while (from < to && StringTools.isSpace(source, from)) from++;
 		return to > from ? new Span(from, to) : null;
 	}
 
 	/**
-	 * The annotation at `region` reprinted through `printer`, or null when nothing changes (or
-	 * the region is not a plain single type). Every maximal qualified-nominal run goes through
-	 * `print`, punctuation and structural field names are copied verbatim — the same walk
-	 * `TypeRefPrinter.printTypeExpr` performs, opened up so each CHANGED run can be proven
-	 * individually. One unproven run marks the whole candidate unproven.
+	 * The annotation at `region` reprinted through `printer`, or null when nothing changes (or the
+	 * region is not a plain single type). The walk is the printer's OWN (`walkTypeExpr`), with the
+	 * per-run callback used to prove each CHANGED run against the resolution index — so what this
+	 * rule writes can never drift from what the plain `printTypeExpr` would emit. One unproven run
+	 * marks the whole candidate unproven.
 	 */
 	private static function reprint(source: String, region: Span, printer: TypeRefPrinter): Null<Candidate> {
 		final text: String = source.substring(region.from, region.to);
 		if (text.indexOf('.') == -1 || !isPlainTypeRegion(text)) return null;
-		final buf: StringBuf = new StringBuf();
-		final n: Int = text.length;
-		var i: Int = 0;
 		var changed: Bool = false;
 		var proven: Bool = true;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
-				buf.addChar(c);
-				i++;
-				continue;
-			}
-			final start: Int = i;
-			while (i < n) {
-				final cc: Int = StringTools.fastCodeAt(text, i);
-				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
-				i++;
-			}
-			final run: String = text.substring(start, i);
-			final printed: PrintedTypeRef = printer.print(run);
-			buf.add(printed.text);
-			if (printed.text == run) continue;
+		final printed: String = printer.walkTypeExpr(text, (run, ref) -> {
+			if (ref.text == run) return;
 			changed = true;
 			// An import-backed short form resolves only once that import lands, and this rule adds
 			// none; an unproven original leaves the declaration it names unknown. Either way the
 			// annotation stays report-only.
-			if (printed.importPath != null || printer.resolvePath(run) == null) proven = false;
-		}
-		return changed ? { span: region, text: buf.toString(), proven: proven } : null;
+			if (ref.importPath != null || printer.resolvePath(run) == null) proven = false;
+		});
+		return changed ? { span: region, text: printed, proven: proven } : null;
 	}
 
 	/**
@@ -295,24 +322,19 @@ final class ShortenTypeRef implements Check implements DefaultOff {
 	 * `-` is the function-type arrow, not an angle close.
 	 */
 	private static function isPlainTypeRegion(text: String): Bool {
-		final n: Int = text.length;
 		var depth: Int = 0;
-		var i: Int = 0;
-		while (i < n) {
-			switch StringTools.fastCodeAt(text, i) {
-				case '<'.code | '('.code | '['.code | '{'.code:
-					depth++;
-				case ')'.code | ']'.code | '}'.code:
-					depth--;
-				case '>'.code if (i == 0 || StringTools.fastCodeAt(text, i - 1) != '-'.code):
-					depth--;
-				case ','.code if (depth == 0):
-					return false;
-				case '#'.code | ';'.code | '/'.code:
-					return false;
-				case _:
-			}
-			i++;
+		for (i in 0...text.length) switch StringTools.fastCodeAt(text, i) {
+			case '<'.code | '('.code | '['.code | '{'.code:
+				depth++;
+			case ')'.code | ']'.code | '}'.code:
+				depth--;
+			case '>'.code if (i == 0 || StringTools.fastCodeAt(text, i - 1) != '-'.code):
+				depth--;
+			case ','.code if (depth == 0):
+				return false;
+			case '#'.code | ';'.code | '/'.code:
+				return false;
+			case _:
 		}
 		return depth == 0;
 	}

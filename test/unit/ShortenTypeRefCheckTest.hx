@@ -51,7 +51,7 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testHybridWithoutTheImportBecomesModuleQualified(): Void {
 		final out: String = applyFix(consumer('', 'pkg.deep.Sub'));
 		Assert.equals('\t\tfinal v:pkg.deep.Mod.Sub = g();', annotationLine(out));
-		Assert.equals(0, occurrences(out, 'import '), 'the rule never adds an import');
+		Assert.equals(-1, out.indexOf('import '), 'the rule never adds an import');
 	}
 
 	// --- ARM 2: plain over-qualification ---
@@ -122,6 +122,50 @@ class ShortenTypeRefCheckTest extends Test {
 	public function testConditionalRegionIsSkipped(): Void {
 		final src: String =
 			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\t#if debug\n\t\tfinal v:pkg.deep.Sub = g();\n\t\t#end\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	/**
+	 * An EXPRESSION-position `#if` projects as `ConditionalExpr`, not the `Conditional` that
+	 * `RefShape.conditionalMemberKind` names — which is why the skip tests the `#if` DIRECTIVE
+	 * rather than a kind.
+	 */
+	public function testConditionalExpressionRegionIsSkipped(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Mod.Sub;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal x = #if debug { final v:pkg.deep.Sub = g(); v; } #else 0 #end;\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testMacroReificationIsSkipped(): Void {
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tmacro static function m() {\n\t\treturn macro { final v:pkg.deep.Foo = g(); };\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testCommentInsideTheAnnotationIsRefused(): Void {
+		// The comment is trivia, so it sits INSIDE the sliced region; reprinting would walk it as
+		// if it were type text.
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal v:/* c */ pkg.deep.Foo = g();\n\t}\n\n}\n';
+		Assert.equals(0, violations(src).length);
+	}
+
+	public function testTopLevelAnonymousStructureAnnotationIsRefused(): Void {
+		// The grammar makes the `Anon` child 0, so the `=`-after-`:` requirement refuses the slice.
+		// Nested one level down the same structure IS rewritten, which is the discriminating half.
+		final anon: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal u:{x:pkg.deep.Foo} = g();\n\t}\n\n}\n';
+		Assert.equals(0, violations(anon).length);
+		Assert.equals(
+			'\t\tfinal v:Array<{x:Foo}> = g();', annotationLine(applyFix(consumer('import pkg.deep.Foo;\n\n', 'Array<{x:pkg.deep.Foo}>')))
+		);
+	}
+
+	public function testFieldAndReturnAnnotationsAreOutOfScope(): Void {
+		// The rule is locals-only by design (see the class doc's Scope section); this pins that
+		// boundary so a future widening is a deliberate change, not a silent one.
+		final src: String =
+			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic var field:pkg.deep.Foo;\n\n\tpublic function f(p:pkg.deep.Foo):pkg.deep.Foo {\n\t\treturn p;\n\t}\n\n}\n';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -235,16 +279,6 @@ class ShortenTypeRefCheckTest extends Test {
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
-	}
-
-	private function occurrences(haystack: String, needle: String): Int {
-		var count: Int = 0;
-		var i: Int = haystack.indexOf(needle);
-		while (i >= 0) {
-			count++;
-			i = haystack.indexOf(needle, i + needle.length);
-		}
-		return count;
 	}
 
 }

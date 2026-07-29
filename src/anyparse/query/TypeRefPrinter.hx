@@ -146,6 +146,12 @@ final class TypeRefPrinter {
 		'ImportAliasInDecl'
 	];
 
+	/** The wildcard import kind — the one bulk form whose binding set depends on the package it names. */
+	private static inline final WILDCARD_IMPORT_KIND: String = 'ImportWildDecl';
+
+	/** The BULK import kinds — the two statements that bind names they do not spell out (`shadowedByBulkImport`). */
+	private static final BULK_IMPORT_KINDS: Array<String> = [WILDCARD_IMPORT_KIND, 'UsingDecl'];
+
 	/**
 	 * A printer over a file's FULL scope: its parsed `root` (top-level decls and import
 	 * statements), raw `source` (the alias-target recovery and the short-name freeness scan),
@@ -202,6 +208,17 @@ final class TypeRefPrinter {
 	 * whole-annotation entry point; `print` is the single-nominal one.
 	 */
 	public function printTypeExpr(t: String): String {
+		return walkTypeExpr(t, (_, _) -> {});
+	}
+
+	/**
+	 * `printTypeExpr` with the per-run decision exposed: the rewritten expression is returned as
+	 * usual, and `onRun` additionally sees each maximal qualified-nominal run's ORIGINAL text
+	 * beside its `print` result. The single walk both entry points share, so a caller that must
+	 * judge each run (`shorten-type-ref` proves every CHANGED one against the resolution index)
+	 * cannot drift from what the plain rewrite emits.
+	 */
+	public function walkTypeExpr(t: String, onRun: (String, PrintedTypeRef) -> Void): String {
 		final buf: StringBuf = new StringBuf();
 		final n: Int = t.length;
 		var i: Int = 0;
@@ -218,7 +235,10 @@ final class TypeRefPrinter {
 				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
 				i++;
 			}
-			buf.add(print(t.substring(start, i)).text);
+			final run: String = t.substring(start, i);
+			final printed: PrintedTypeRef = print(run);
+			buf.add(printed.text);
+			onRun(run, printed);
 		}
 		return buf.toString();
 	}
@@ -230,14 +250,26 @@ final class TypeRefPrinter {
 	 * module-qualified spelling answer the SAME path — which is what lets a caller prove a
 	 * rewrite between the two forms keeps the same declaration.
 	 *
-	 * Null when nothing PROVES a path: a dotless name (whose binding is a scope question, not an
-	 * index one — `print` answers that side by construction), a path no indexed declaration sits
-	 * at, or a run with no index at all. Fail-closed on purpose: a caller gating an edit on this
-	 * must treat "unproven" as "leave the source alone", never as "assume it resolves".
+	 * Null when nothing PROVES a path: a dotless or lower-initial run (whose binding is a scope
+	 * question, not an index one — `print` answers that side by construction), a path no indexed
+	 * declaration sits at, or a run with no index at all. Fail-closed on purpose: a caller gating
+	 * an edit on this must treat "unproven" as "leave the source alone", never as "assume it
+	 * resolves".
+	 *
+	 * PRECONDITION — index COMPLETENESS, the class-level hybrid LIMIT reaching this entry point.
+	 * The answer is `canonicalize`'s, so it inherits `canonicalize`'s veto: a `pack.SubType` is
+	 * read as a hybrid only when the index declares no type AT that path. A module the index never
+	 * saw — outside the lint scope, or one `SymbolIndex` could not parse — removes that veto, and a
+	 * REAL `pack.SubType` main type is then repaired onto the imported sub-type instead. Nothing
+	 * here can detect that, so a caller that MUTATES on this answer belongs behind the
+	 * typecheck-and-revert verification pass (`RiskyFix`), not in front of it.
 	 */
 	public function resolvePath(ref: String): Null<String> {
 		final trimmed: String = StringTools.trim(ref);
-		if (trimmed.indexOf('.') == -1) return null;
+		// The same two rejections `print` opens with, so both entry points read one input class:
+		// a dotless run carries no derivable module path, and a lower-initial final segment is a
+		// package path or a structural field name, never a type.
+		if (trimmed.indexOf('.') == -1 || !RefactorSupport.isUpperInitial(lastSegment(trimmed))) return null;
 		final canonical: String = canonicalize(trimmed);
 		return declaredAtPath(canonical, lastSegment(canonical)) ? canonical : null;
 	}
@@ -447,11 +479,10 @@ final class TypeRefPrinter {
 	 * root-package one. Such a binding shadows the bare name, so neither the builtin
 	 * short-circuit nor a fresh import may use it.
 	 *
-	 * `shadowedLocally` gates the WHOLE set, not just the builtin arm: Haxe's own resolution
-	 * order (module type, then import / alias, then same package, then top level) means a
-	 * lower-priority route can be OVERRULED by a higher-priority binding — a same-package
-	 * `pkg.Widget` is not what a bare `Widget` means in a file that also carries
-	 * `import other.Widget;`. The alias route reads its own binding, so it is exempt.
+	 * The gate covers the WHOLE route set for the reason `visibleNameFor` documents, and its
+	 * internal ORDER is Haxe's own: the bulk arm runs last and is short-circuited by an explicit
+	 * import or a module-local declaration that already binds `simple` to `canonical`, because the
+	 * compiler ranks both of those above a wildcard.
 	 */
 	private function shadowedLocally(canonical: String, simple: String): Bool {
 		final bound: Null<String> = _importMap[simple];
@@ -464,20 +495,37 @@ final class TypeRefPrinter {
 		if (pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
 		final index: Null<SymbolIndex> = _index;
 		if (index != null && index.declaringFiles(simple).exists(f -> f.pkg == '' && pathOfTypeIn(f, simple) != canonical)) return true;
+		// An EXPLICIT import or a module-local declaration that binds `simple` to `canonical`
+		// OUTRANKS a bulk import in Haxe's own resolution order (verified against the compiler:
+		// `import q.*;` + `import p.Foo;` resolves a bare `Foo` to `p.Foo`, and a module-local
+		// `Foo` wins over both). The bulk arm may only veto what a wildcard genuinely outranks —
+		// the same-package, builtin and root-package routes below it.
+		if (_importMap[simple] == canonical) return false;
+		if (root != null && declaresTypeNamed(root, simple) && moduleLocalPathOf(simple) == canonical) return false;
 		return shadowedByBulkImport(canonical, simple);
 	}
 
 	/**
-	 * Whether a BULK import — `import pkg.*;` / `import pkg.Module.*;` or a `using pkg.Module;` —
-	 * could bind `simple` to a type other than `canonical`. Neither form NAMES what it brings in,
-	 * so `_importMap` (built from plain imports) is blind to both, and the bare name they bind
-	 * outranks the same-package / top-level routes `shadowedLocally` guards.
+	 * Whether a BULK import — `import pkg.*;` or a `using pkg.Module;` — could bind `simple` to a
+	 * type other than `canonical`. Neither form NAMES what it brings in, so `_importMap` (built
+	 * from plain imports) is blind to both.
 	 *
-	 * With an index the question is decided rather than guessed: a wildcard binds every type
-	 * declared in the package (or, for the `pkg.Module.*` form, in that module) its prefix names,
-	 * a `using` every type of its module. WITHOUT an index a wildcard is simply unanswerable and
-	 * shadows unconditionally; a `using` is read textually — only its module's own main-type name
-	 * is derivable, so a sub-module type it also binds is a KNOWN miss on that path.
+	 * The two forms bind different things, verified against the compiler rather than assumed. A
+	 * package wildcard `import pkg.*;` binds the MAIN type of each module in that package and
+	 * NOTHING else — a secondary type of `pkg.Mod` stays unreachable, so the arm matches only a
+	 * main-type declaration. A module wildcard `import pkg.Mod.*;` binds no type name at all (it
+	 * imports statics and enum constructors), so it can never shadow and is not tested for. A
+	 * `using pkg.Mod;` is an `import pkg.Mod;` plus static extension, so it binds that module's
+	 * types.
+	 *
+	 * WITHOUT an index a wildcard is unanswerable and shadows unconditionally; a `using` is read
+	 * textually — only its module's own main-type name is derivable, so a sub-module type it also
+	 * binds is a KNOWN miss on that path.
+	 *
+	 * This arm sits BELOW the explicit-import and module-local routes on purpose (see
+	 * `shadowedLocally`): Haxe ranks both above a wildcard, so vetoing them here would refuse a
+	 * short name the compiler resolves exactly as intended. It gates the same-package, builtin and
+	 * root-package routes, which a wildcard genuinely outranks.
 	 *
 	 * The conservative direction is the same for every caller: a true here only ever costs the
 	 * short form and falls back to the fully-qualified path, which always resolves.
@@ -486,28 +534,52 @@ final class TypeRefPrinter {
 		final root: Null<QueryNode> = _root;
 		if (root == null) return false;
 		final index: Null<SymbolIndex> = _index;
-		for (c in root.children) {
+		// One index scan per question, not one per bulk statement: `declaringFiles` filters EVERY
+		// indexed file (the std is in the default resolution scope), and the argument is loop-invariant.
+		final declarers: Array<FileInfo> = index == null ? [] : index.declaringFiles(simple);
+		if (index != null && declarers.length == 0) return false;
+		for (c in bulkImportDecls(root)) {
 			final path: Null<String> = c.name;
 			if (path == null) continue;
-			if (c.kind == 'ImportWildDecl') {
-				// `pkg.*` / `pkg.Module.*` -> the prefix before the star. Which of the two forms it
-				// is depends on the index, so both readings are tested.
+			if (c.kind == WILDCARD_IMPORT_KIND) {
+				// An unindexed wildcard is unanswerable — nothing can enumerate what it brings in.
 				if (index == null) return true;
 				final dot: Int = path.lastIndexOf('.');
 				final prefix: String = dot < 0 ? '' : path.substring(0, dot);
-				if (
-					index.declaringFiles(simple)
-						.exists(f -> (f.pkg == prefix || f.module == prefix) && pathOfTypeIn(f, simple) != canonical)
-				)
-					return true;
-			} else if (c.kind == 'UsingDecl') {
-				if (index == null) {
-					if (lastSegment(path) == simple) return true;
-				} else if (index.declaringFiles(simple).exists(f -> f.module == path && pathOfTypeIn(f, simple) != canonical))
-					return true;
-			}
+				if (declarers.exists(f -> f.pkg == prefix && isMainTypeIn(f, simple) && pathOfTypeIn(f, simple) != canonical)) return true;
+			} else if (index == null) {
+				if (lastSegment(path) == simple) return true;
+			} else if (declarers.exists(f -> f.module == path && pathOfTypeIn(f, simple) != canonical))
+				return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The file's BULK import statements — `ImportWildDecl` and `UsingDecl` — including the ones
+	 * LIFTED out of a `#if … #end` region, which the grammar nests under a `Conditional` rather
+	 * than leaving at the top level. A guarded bulk import genuinely binds its names under its
+	 * own guard, and this predicate only ever refuses a short form, so counting it is the
+	 * conservative reading; ignoring it was a FALSE NEGATIVE — the direction that emits a short
+	 * name binding a different type in one build configuration.
+	 */
+	private static function bulkImportDecls(root: QueryNode): Array<QueryNode> {
+		final out: Array<QueryNode> = [];
+		for (c in root.children) {
+			if (BULK_IMPORT_KINDS.contains(c.kind))
+				out.push(c);
+			// One level of nesting is the whole shape: the grammar lifts a guarded declaration into
+			// the region node's own children, it does not re-nest per directive branch.
+			else if (c.kind == 'Conditional' || c.kind == 'CondSharedBodyDecl')
+				for (inner in c.children) if (BULK_IMPORT_KINDS.contains(inner.kind)) out.push(inner);
+		}
+		return out;
+	}
+
+	/** Whether the type named `name` in `file` is that module's MAIN type — the only kind a package wildcard binds. */
+	private static function isMainTypeIn(file: FileInfo, name: String): Bool {
+		final decl: Null<TypeDeclInfo> = file.types.find(t -> t.name == name);
+		return decl != null && decl.isMain;
 	}
 
 	/** The import path a type named `name` declared in `file` carries: the module itself for the main type, else `module.name`. */
