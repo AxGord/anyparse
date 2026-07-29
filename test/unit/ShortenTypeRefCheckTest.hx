@@ -151,8 +151,10 @@ class ShortenTypeRefCheckTest extends Test {
 	}
 
 	public function testTopLevelAnonymousStructureAnnotationIsRefused(): Void {
-		// The grammar makes the `Anon` child 0, so the `=`-after-`:` requirement refuses the slice.
-		// Nested one level down the same structure IS rewritten, which is the discriminating half.
+		// The grammar makes the `Anon` child 0, so the prefix holds no `=` and the region comes out
+		// empty. A BEHAVIOUR pin rather than a gate test: two checks refuse it independently, so
+		// neither flips this on its own. The second assertion is what keeps the refusal narrow —
+		// the same structure nested one level down IS rewritten.
 		final anon: String =
 			'package app;\n\nimport pkg.deep.Foo;\n\nclass C {\n\n\tpublic function f():Void {\n\t\tfinal u:{x:pkg.deep.Foo} = g();\n\t}\n\n}\n';
 		Assert.equals(0, violations(anon).length);

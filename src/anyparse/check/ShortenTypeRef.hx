@@ -276,8 +276,10 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		var to: Int = cutoff;
 		if (hasChildren) {
 			// The `=` must follow the `:`. It does not when child 0 is the ANNOTATION rather than the
-			// initializer (`RefShape.declTypeChildKinds` — an `Anon` structure type), which is what
-			// refuses a top-level anonymous-structure annotation. See the class doc's Shape section.
+			// initializer (`RefShape.declTypeChildKinds` — an `Anon` structure type): the prefix then
+			// stops at the annotation's own `{`, so it holds no `=` at all. Both halves of that —
+			// this guard and the empty-region check below — refuse it; see the class doc's Shape
+			// section.
 			final eq: Int = prefix.lastIndexOf('=');
 			if (eq < colon) return null;
 			to = span.from + eq;
