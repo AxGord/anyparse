@@ -8,6 +8,7 @@ import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.query.TypeInfoProvider;
+import anyparse.query.TypeRefPrinter;
 import anyparse.query.TypeResolver;
 import anyparse.runtime.Span;
 import anyparse.check.Check.OracleAssisted;
@@ -105,6 +106,22 @@ import anyparse.check.LintConfig;
  * report-only. The conservative skip is deliberate: coverage never trumps soundness,
  * so an uninferable local keeps its finding and no edit.
  *
+ * ## Spelling the type — the shared `TypeRefPrinter`
+ *
+ * The compiler-oracle tail names a type in the compiler's own FULLY-QUALIFIED vocabulary,
+ * which is not what belongs in the file. `TypeRefPrinter` owns that translation: the short
+ * name when the type is already visible (import — including the `import pack.Module.SubType`
+ * secondary form and aliases — same module, the MAIN type of a same-package module, or an
+ * always-in-scope builtin), else the short name PLUS an inserted `import` when that name is
+ * provably free in the file, else the correct fully-qualified form. For a secondary type that
+ * last form is the module-qualified `pack.Module.SubType`, never the `pack.SubType` hybrid the
+ * compiler prints — which resolves only while a matching import happens to exist — EXCEPT when
+ * neither the file's imports nor the resolution index know the simple name, the limit documented
+ * on `TypeRefPrinter`; the oracle pipeline's typecheck-and-revert pass is what covers that case.
+ * The import edits the printer accumulates are appended to the annotation edits, so the batched
+ * `canonicalize` applies them together — sound because every `normalizeWith` rejection precedes
+ * the print, so a consulted printer always yields an edit.
+ *
  * ## Grammar-agnostic
  *
  * `RefShape.localDeclKinds` are the hosts, `opaqueKinds` the reification subtrees to
@@ -128,12 +145,14 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	private static inline final RULE_ID: String = 'explicit-local-type';
 
 	/**
-	 * Builtin type names available in EVERY Haxe file without an import — the only types a
-	 * cross-file static-field source may be copied verbatim as (a non-builtin name might not
-	 * resolve in, or could bind differently in, the consumer's import scope). Drives
-	 * `allComponentsAlwaysInScope`.
+	 * Builtin type names a cross-file type SOURCE may be copied verbatim as: the source is
+	 * spelled in the DECLARING file, so every component must resolve identically in ANY
+	 * consumer with no import. Deliberately NARROWER than `TypeRefPrinter.ALWAYS_IN_SCOPE` —
+	 * that list answers "may the printer shorten TO this name here", a question it re-checks
+	 * against the resolution index, while this one is an unindexed verbatim copy and can only
+	 * trust names no project realistically redeclares.
 	 */
-	private static final ALWAYS_IN_SCOPE: Array<String> = [
+	private static final COPYABLE_BUILTINS: Array<String> = [
 		'Int',
 		'UInt',
 		'Float',
@@ -360,9 +379,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	}
 
 	/**
-	 * Whether every nominal (identifier) component of the type source `typeSrc` is an
-	 * `ALWAYS_IN_SCOPE` builtin — so the source resolves in ANY file without an import.
-	 * Scans maximal identifier runs (splitting on `<`, `>`, `,`, `.`, whitespace); a
+	 * Whether every nominal (identifier) component of the type source `typeSrc` is a
+	 * `COPYABLE_BUILTINS` name — so the source resolves in ANY file without an
+	 * import. Scans maximal identifier runs (splitting on `<`, `>`, `,`, `.`, whitespace); a
 	 * dotted / generic component whose every segment is builtin still passes, while any
 	 * user-type segment (an unqualified `Foo`, a package segment) fails.
 	 */
@@ -376,7 +395,7 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			}
 			final start: Int = i;
 			while (i < n && RefactorSupport.isIdentChar(StringTools.fastCodeAt(typeSrc, i))) i++;
-			if (!ALWAYS_IN_SCOPE.contains(typeSrc.substring(start, i))) return false;
+			if (!COPYABLE_BUILTINS.contains(typeSrc.substring(start, i))) return false;
 		}
 		return true;
 	}
@@ -545,6 +564,9 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		RefactorSupport.indexNodesByKind(tree, locals, byKey);
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final importMap: Map<String, String> = provider != null ? provider.importMap(source) : [];
+		// The printer owns the short-name / add-import / fully-qualified decision for every
+		// nominal the oracle names, and accumulates the imports its short forms rely on.
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(source, tree, importMap, RefactorSupport.resolutionIndexOf(plugin));
 		final maxAnon: Int = maxAnonLen(violations);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -556,9 +578,10 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (at <= 0) continue;
 			final raw: Null<String> = oracle.typeAt(v.file, at - 1);
 			if (raw == null) continue;
-			final norm: Null<String> = normalizeInferredType(raw, importMap, maxAnon);
+			final norm: Null<String> = normalizeWith(raw, printer, maxAnon);
 			if (norm != null) edits.push({ span: new Span(at, at), text: ':$norm' });
 		}
+		if (edits.length > 0) for (importEdit in printer.pendingImportEdits()) edits.push(importEdit);
 		return edits;
 	}
 
@@ -580,22 +603,32 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 	}
 
 	/**
-	 * Normalise a compiler-inferred type text to a sound, short annotation, or null when
-	 * no annotation should be written. REJECTS: a monomorph / inference hole (`Unknown<`
-	 * — the compiler could not pin it either), an anonymous structure longer than
-	 * `maxAnonLen` (annotatable but noisy), and a bare `_` type-param placeholder (not a
-	 * nameable type; a clean function type or a small anon struct is kept). Otherwise
-	 * shortens qualified nominals to the file's short form where provably in scope
-	 * (`shortenType`), leaving anything else fully qualified (which always resolves).
-	 * PURE: unit-testable with a plain `importMap` and no compiler.
+	 * `normalizeWith` against an IMPORT-MAP-ONLY printer: the compiler-free entry point for a
+	 * caller holding nothing but a file's plain imports. It shortens what that map (or the
+	 * builtin top-level set) already puts in scope and leaves everything else fully qualified;
+	 * it never adds an import, having no file to anchor one in. PURE and unit-testable.
 	 */
 	public static function normalizeInferredType(raw: String, importMap: Map<String, String>, maxAnonLen: Int): Null<String> {
+		return normalizeWith(raw, TypeRefPrinter.importsOnly(importMap), maxAnonLen);
+	}
+
+	/**
+	 * Normalise a compiler-inferred type text to a sound annotation, or null when no
+	 * annotation should be written. REJECTS: a monomorph / inference hole (`Unknown<` — the
+	 * compiler could not pin it either), an anonymous structure longer than `maxAnonLen`
+	 * (annotatable but noisy), and a bare `_` type-param placeholder (not a nameable type; a
+	 * clean function type or a small anon struct is kept). Otherwise every nominal run is
+	 * spelled by `printer` — short where already visible, short WITH a recorded import where
+	 * the name is free, else the correct fully-qualified (module-qualified for a sub-type)
+	 * form, which always resolves.
+	 */
+	public static function normalizeWith(raw: String, printer: TypeRefPrinter, maxAnonLen: Int): Null<String> {
 		final t: String = StringTools.trim(raw);
 		if (t == '') return null;
 		if (t.indexOf('Unknown<') != -1) return null;
 		if (t.indexOf('{') != -1 && t.length > maxAnonLen) return null;
 		if (hasBareUnderscore(t)) return null;
-		return shortenType(t, importMap);
+		return printer.printTypeExpr(t);
 	}
 
 	/** Whether `t` contains a standalone `_` identifier run — an unnameable type-param placeholder. */
@@ -612,46 +645,6 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 			if (t.substring(start, i) == '_') return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Rewrite every maximal qualified-nominal run (`[A-Za-z0-9_.]+`) of `t` to its short
-	 * form where that is provably in scope, copying generic punctuation / spaces / field
-	 * names verbatim. A dotted run shortens to its simple name when the simple name is an
-	 * always-in-scope builtin (`haxe.ds.Map` -> `Map`) or the file imports EXACTLY that
-	 * FQN (`importMap[simple] == run`); otherwise the run stays fully qualified — which
-	 * resolves in any file — so the result never fails to compile for want of an import.
-	 */
-	private static function shortenType(t: String, importMap: Map<String, String>): String {
-		final buf: StringBuf = new StringBuf();
-		final n: Int = t.length;
-		var i: Int = 0;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(t, i);
-			if (!RefactorSupport.isIdentChar(c) && c != '.'.code) {
-				buf.addChar(c);
-				i++;
-				continue;
-			}
-			final start: Int = i;
-			while (i < n) {
-				final cc: Int = StringTools.fastCodeAt(t, i);
-				if (!RefactorSupport.isIdentChar(cc) && cc != '.'.code) break;
-				i++;
-			}
-			buf.add(shortenComponent(t.substring(start, i), importMap));
-		}
-		return buf.toString();
-	}
-
-	/** Short form of ONE nominal run when provably in scope (builtin or exact-FQN import), else the run verbatim (fully qualified always resolves). */
-	private static function shortenComponent(run: String, importMap: Map<String, String>): String {
-		final dot: Int = run.lastIndexOf('.');
-		if (dot < 0) return run;
-		final simple: String = run.substring(dot + 1);
-		if (ALWAYS_IN_SCOPE.contains(simple)) return simple;
-		final imported: Null<String> = importMap.get(simple);
-		return imported != null && imported == run ? simple : run;
 	}
 
 	/** The per-file config resolver injected by the linter (`ConfigAware`), or null to fall back to `LintConfig.discover`. */

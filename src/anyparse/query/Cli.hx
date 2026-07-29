@@ -1485,7 +1485,12 @@ final class Cli {
 			// @:access-grant files through the whole-project index; on the active SUBSET a subtype
 			// declared elsewhere reads as absent. Full-scope also re-reports the declaring file's
 			// violation every pass, so a rename deferred by a same-file conflict re-fires until it lands.
-			'naming'
+			'naming',
+			// prefer-typed-throw's verdict is whole-scope: a `catch (e:String)` ANYWHERE degrades the
+			// rule to report-only. When no resolution scope exists the gate falls back to the file set
+			// it is handed, so on the active SUBSET a catch declared elsewhere reads as absent and a
+			// throw a first pass correctly refused would be boxed by a later one.
+			'prefer-typed-throw'
 		];
 		final activeScopeChecks: Array<Check> = [for (c in safeChecks) if (!fullScopeIds.contains(c.id())) c];
 		final fullScopeChecks: Array<Check> = [for (c in safeChecks) if (fullScopeIds.contains(c.id())) c];

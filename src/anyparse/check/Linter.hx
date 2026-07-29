@@ -132,6 +132,7 @@ final class Linter {
 			new UnusedReturnValue(),
 			new DocCoverage(),
 			new ExplicitLocalType(),
+			new PreferTypedThrow(),
 			new RedundantBypassAccessor(),
 			new FieldInitAtDeclaration(),
 			new PreferInline(),
