@@ -496,6 +496,7 @@ import unit.HxVarInitBreakAfterEqOverflowTest;
 import unit.ResolutionLibraryCacheTest;
 import unit.PreferSafeNavComparisonCheckTest;
 import unit.PreferArrowCallbackCheckTest;
+import unit.GuardReturnCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -882,6 +883,7 @@ class RunTests {
 		addCase(new PreferFindCheckTest());
 		addCase(new LoopGuardCheckTest());
 		addCase(new GuardContinueCheckTest());
+		addCase(new GuardReturnCheckTest());
 		addCase(new MapKeysLookupCheckTest());
 		addCase(new PreferRangeLoopCheckTest());
 		addCase(new TrivialGetterCheckTest());
