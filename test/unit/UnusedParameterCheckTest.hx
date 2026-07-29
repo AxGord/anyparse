@@ -162,6 +162,25 @@ class UnusedParameterCheckTest extends Test {
 		Assert.equals(Severity.Info, vs[0].severity);
 	}
 
+	public function testParenthesizedCalleeStillFlagged(): Void {
+		// Callee position propagates through a `ParenExpr`: `(cb)(1)` is a direct call,
+		// not a capture, so the finding survives.
+		final src: String =
+			'class C {\n\tpublic function m():Void {\n\t\t(cb)(1);\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.equals(Severity.Info, vs[0].severity);
+	}
+
+	public function testComputedCalleeNotFlagged(): Void {
+		// A callee the call site COMPUTES rather than names hands both functions to an
+		// expression that selects between them as VALUES — a capture, so neither is
+		// flagged.
+		final src: String =
+			'class C {\n\tpublic function m(cond:Bool):Void {\n\t\t(cond ? cb : alt)(1);\n\t}\n\n\tpublic function cb(value:Int):Void {\n\t\tg();\n\t}\n\n\tpublic function alt(other:Int):Void {\n\t\tg();\n\t}\n}';
+		Assert.equals(0, violations(src).length);
+	}
+
 	public function testDynamicFunctionParameterNotFlagged(): Void {
 		// `dynamic` marks a reassignable callback slot — an assigner elsewhere relies
 		// on the signature, so an unreferenced param in the default body is by

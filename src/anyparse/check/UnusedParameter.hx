@@ -79,10 +79,13 @@ import anyparse.check.Check.ConfigAware;
  *    (`addEventListener(E, onFoo)`), assigned to a var / field, returned, or
  *    `.bind`-partialled. Whatever consumes the reference fixes the signature, so
  *    an ignored parameter there is mandated, not dead, and the finding is not
- *    actionable — it is dropped entirely rather than reported as `Info`. The
- *    `Warning` arm is untouched: `CallSites` already refuses a value-captured
- *    function, so such a parameter was never autofixable, and the gate is applied
- *    only to what would otherwise be `Info`.
+ *    actionable — it is dropped entirely rather than reported as `Info`. A callee
+ *    the call site COMPUTES rather than names (`(cond ? f : g)(x)`, a cast) is a
+ *    capture too — the functions are selected between as values; a merely
+ *    parenthesised callee (`(f)(x)`) is not. The `Warning` arm is untouched:
+ *    `CallSites` already refuses a value-captured function, so such a parameter
+ *    was never autofixable, and the gate is applied only to what would otherwise
+ *    be `Info`.
  *
  * The residual false positive a structural, file-scoped check cannot rule out is
  * a method captured as a fixed-signature callback in ANOTHER file — the
@@ -319,16 +322,23 @@ final class UnusedParameter implements Check implements ConfigAware {
 	 *
 	 * A `<other>.<name>` field access is deliberately NOT counted — a member of an
 	 * unrelated receiver shares nothing with the function but its spelling.
+	 *
+	 * Callee position propagates through a `ParenExpr` — `(foo)(x)` is a direct call,
+	 * not a capture. It deliberately does NOT propagate through any construct that
+	 * COMPUTES the callee (a ternary, a cast, an index access): `(cond ? f : g)(x)`
+	 * hands both functions to an expression that selects between them as values, which
+	 * is a capture in every sense that matters here.
 	 */
 	private static function valueCapturedNames(tree: QueryNode): Array<String> {
 		final out: Array<String> = [];
-		function scan(node: QueryNode, parent: Null<QueryNode>, indexInParent: Int): Void {
-			final isCallee: Bool = parent != null && parent.kind == 'Call' && indexInParent == 0;
+		function scan(node: QueryNode, calleePosition: Bool): Void {
 			final name: Null<String> = node.name;
-			if (!isCallee && name != null && !out.contains(name) && isValueReference(node)) out.push(name);
-			for (i in 0...node.children.length) scan(node.children[i], node, i);
+			if (!calleePosition && name != null && !out.contains(name) && isValueReference(node)) out.push(name);
+			final isCall: Bool = node.kind == 'Call';
+			final parenthesizedCallee: Bool = calleePosition && node.kind == 'ParenExpr';
+			for (i in 0...node.children.length) scan(node.children[i], parenthesizedCallee || (isCall && i == 0));
 		}
-		scan(tree, null, -1);
+		scan(tree, false);
 		return out;
 	}
 
