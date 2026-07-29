@@ -2448,7 +2448,6 @@ final class RefactorSupport {
 		return -1;
 	}
 
-
 	/**
 	 * End offset (exclusive) of the Haxe regex literal opened by `~/` at `open`,
 	 * flags included; -1 when it is not terminated on its own line. Matches the
@@ -2488,7 +2487,6 @@ final class RefactorSupport {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
 	}
 
-
 	/**
 	 * Whether `name` is BOUND as an identifier anywhere in `source[from...end)`
 	 * outside `excluded` - the precise form of the question a COLLISION gate asks:
@@ -2527,7 +2525,6 @@ final class RefactorSupport {
 		return false;
 	}
 
-
 	/**
 	 * Whether the string literal containing `at` can interpolate: single-quoted and
 	 * carrying a `$` that is not the escaped `$$`. Decided per LITERAL rather than
@@ -2553,7 +2550,6 @@ final class RefactorSupport {
 		return false;
 	}
 
-
 	/**
 	 * Whether the identifier at `at` sits in the member-name slot of a dotted access
 	 * (`o.name`, `o?.name`, `Type.name`) - never a binding of `name` in the
@@ -2565,7 +2561,21 @@ final class RefactorSupport {
 		var i: Int = at - 1;
 		while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
 		if (i < 0 || StringTools.fastCodeAt(source, i) != '.'.code) return false;
-		return i == 0 || StringTools.fastCodeAt(source, i - 1) != '.'.code;
+		if (i > 0 && StringTools.fastCodeAt(source, i - 1) == '.'.code) return false;
+		return !onImportLine(source, at);
+	}
+
+	/**
+	 * Whether `at` sits on a line whose first token is `import` or `using`. The last
+	 * segment of such a path DOES bind a name in the file's scope, so it is the one
+	 * dotted position `isMemberNamePosition` must not wave through - a rename onto it
+	 * would shadow the imported type. Line-based on purpose: the region scan the
+	 * caller already holds says nothing about statement kind, and an `import` never
+	 * shares its line with other code.
+	 */
+	private static function onImportLine(source: String, at: Int): Bool {
+		final head: String = StringTools.ltrim(source.substring(lineStartOf(source, at), at));
+		return StringTools.startsWith(head, 'import ') || StringTools.startsWith(head, 'using ');
 	}
 
 }

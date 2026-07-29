@@ -166,4 +166,52 @@ class ClassifyOccurrencesTest extends Test {
 		Assert.equals(OccurrenceClass.CommentTrivia, soleClass('class C {\n\tfunction m() {\n\t\t// ~/ foo\n\t}\n}', 'foo'));
 	}
 
+
+	/**
+	 * `nameBoundInRange` is the COLLISION-gate query: it asks whether the name is
+	 * bound as an identifier, so the three things a raw word-boundary scan
+	 * miscounts - comment text, inert literal text, and the member-name slot of a
+	 * dotted access - are none of them a binding.
+	 */
+	public function testNameBoundIgnoresNonBindings(): Void {
+		Assert.isFalse(nameBound('class C {\n\t// items here\n\tfunction m() {}\n}', 'items'), 'comment');
+		Assert.isFalse(
+			nameBound('class C {\n\tfunction m() {\n\t\ttrace(\': items: \');\n\t}\n}', 'items'), 'single-quoted, no interpolation'
+		);
+		Assert.isFalse(nameBound('class C {\n\tfunction m() {\n\t\ttrace("items");\n\t}\n}', 'items'), 'double-quoted');
+		Assert.isFalse(nameBound('class C {\n\tfunction m(o:D) {\n\t\to.items = 1;\n\t}\n}', 'items'), 'dotted access');
+		Assert.isFalse(nameBound('class C {\n\tfunction m() {\n\t\tvar re = ~/items/;\n\t}\n}', 'items'), 'regex body');
+	}
+
+	/** A real binding, a `#if` body and an interpolation read all still count. */
+	public function testNameBoundCountsRealReferences(): Void {
+		Assert.isTrue(nameBound('class C {\n\tfunction m() {\n\t\tvar items:Int = 1;\n\t}\n}', 'items'), 'declaration');
+		Assert.isTrue(nameBound('class C {\n\tfunction m() {\n\t\t#if debug\n\t\tvar items:Int = 1;\n\t\t#end\n\t}\n}', 'items'), 'in #if');
+		Assert.isTrue(nameBound('class C {\n\tfunction m() {\n\t\ttrace(\'$$items\');\n\t}\n}', 'items'), 'interpolation read');
+		Assert.isTrue(
+			nameBound('class C {\n\tfunction m(n:Int) {\n\t\tfor (i in 0...items) {}\n\t}\n}', 'items'), 'after the range operator'
+		);
+	}
+
+	/**
+	 * The LAST segment of an `import` / `using` path binds a name in the file's
+	 * scope, so it is the one dotted position that must still count - a rename onto
+	 * it would shadow the imported type.
+	 */
+	public function testNameBoundCountsImportedTypeName(): Void {
+		Assert.isTrue(nameBound('import pkg.Items;\n\nclass C {\n\tfunction m() {}\n}', 'Items'), 'import');
+		Assert.isTrue(nameBound('using pkg.Items;\n\nclass C {\n\tfunction m() {}\n}', 'Items'), 'using');
+		Assert.isFalse(nameBound('class C {\n\tfunction m(o:D) {\n\t\to.Items;\n\t}\n}', 'Items'), 'a plain dotted access still does not');
+	}
+
+	/** An unparseable source falls back to the raw scan - fail-closed. */
+	public function testNameBoundFallsBackOnParseFailure(): Void {
+		Assert.isTrue(nameBound('class C { function m() { // items', 'items'), 'raw fallback counts even a comment');
+	}
+
+
+	private function nameBound(src: String, name: String): Bool {
+		return RefactorSupport.nameBoundInRange(src, name, 0, src.length, [], new HaxeQueryPlugin());
+	}
+
 }
