@@ -9045,16 +9045,57 @@ class WriterLowering {
 	 * ω-pad-trailing-ref / ω-metadata-line-end-function: compute the
 	 * non-optional Star field's `thisPadTrailing` runtime expr (or `null`
 	 * when the field fires no trailing pad). A `@:fmt(padTrailing)` Star
-	 * pads when `_arr.length > 0`; a `@:fmt(metaLineEndPolicy('<optField>'))`
+	 * pads when `_arr.length > 0` OR (ω-line-comment-directive-break) when it
+	 * is EMPTY but its orphan trail ends in a `//` comment, since the Star then
+	 * emits a break of its own; a `@:fmt(metaLineEndPolicy('<optField>'))`
 	 * Star pads when the array is non-empty AND the runtime knob is non-None.
 	 *
+	 * The empty-arm disjunct is gated on `@:tryparse`: the break it stands for
+	 * is emitted by `triviaTryparseStarExpr`, so a `@:fmt(padTrailing)` Star
+	 * outside that path would drop its parent's separator with nothing in its
+	 * place. Every `padTrailing` Star in the grammar is `@:tryparse` today.
 	 */
-	private function starPadTrailing(child: ShapeNode, fieldAccess: Expr): Null<Expr> {
-		if (child.fmtHasFlag('padTrailing')) return macro $fieldAccess.length > 0;
+	private function starPadTrailing(child: ShapeNode, fieldAccess: Expr, typePath: String): Null<Expr> {
+		if (child.fmtHasFlag('padTrailing')) {
+			final lineTrail: Null<Expr> = child.hasMeta(':tryparse') ? starTrailEndsLineExpr(child, typePath) : null;
+			return lineTrail == null ? (macro $fieldAccess.length > 0) : (macro $fieldAccess.length > 0 || $lineTrail);
+		}
 		final metaLineEndField: Null<String> = child.fmtReadString('metaLineEndPolicy');
 		if (metaLineEndField == null) return null;
 		final optAccess: Expr = optFieldAccess(metaLineEndField);
 		return macro $fieldAccess.length > 0 && $optAccess != 0;
+	}
+
+	/**
+	 * ω-line-comment-directive-break: runtime "this trivia Star's orphan trail
+	 * ends in a `//` comment", or `null` when the `<field>TrailingLeading` slot
+	 * does not exist (plain mode, non-trivia-bearing rule, or a Star that does
+	 * not collect trivia). The gate keys on `TRIVIA_STAR_COLLECTS`, the same
+	 * annotation `TriviaTypeSynth.isTriviaStarField` synthesises the slot from -
+	 * a bare `:trivia` meta check would miss the Stars that inherit it from an
+	 * enclosing enum branch or from `@:postfix`.
+	 *
+	 * An EMPTY arm carrying only comments emits no `padTrailing` pad, so the
+	 * parent used to follow it with the leading separator of the next field -
+	 * a space. Once the Star terminates its own line comment (it must; a `#`
+	 * directive glued after `//` becomes comment text) that space lands AFTER
+	 * the break and indents the directive by one column. Folding this into the
+	 * field's `padTrailing` signal drops the separator through the existing
+	 * `withPadTrailingDrop` path. Block-comment trails leave the signal false,
+	 * so their same-line separator is untouched.
+	 */
+	private function starTrailEndsLineExpr(child: ShapeNode, typePath: String): Null<Expr> {
+		final fieldName: Null<String> = child.annotations.get(AnnotationKeys.BASE_FIELD_NAME);
+		final collectsTrivia: Bool = child.annotations.get(AnnotationKeys.TRIVIA_STAR_COLLECTS) == true;
+		if (fieldName == null || !_ctx.trivia || !isTriviaBearing(typePath) || !collectsTrivia) return null;
+		final access: Expr = {
+			expr: EField(macro value, fieldName + TriviaTypeSynth.TRAILING_LEADING_SUFFIX),
+			pos: Context.currentPos()
+		};
+		return macro {
+			final _tlc: Array<String> = $access;
+			_tlc.length > 0 && StringTools.startsWith(_tlc[_tlc.length - 1], '//');
+		};
 	}
 
 	/**
@@ -9737,6 +9778,12 @@ class WriterLowering {
 			// ω-pad-trailing-ref: optional Star with @:fmt(padTrailing) fires
 			// its trailing-pad ONLY when both `_optVal != null` AND
 			// `_optVal.length > 0`; it is transparent when absent OR empty.
+			// ω-line-comment-directive-break: no empty-arm disjunct here (unlike
+			// the non-optional path below). The only consumers are the cond-comp
+			// `elseBody` fields, and `elseBody` is the LAST field of every
+			// conditional rule - no sibling separator follows it, so an empty
+			// comment-only `#else` arm has nothing to suppress. Add the disjunct
+			// if a kw-led optional padTrailing Star ever gains a follower.
 			final thisPadTrailing: Null<Expr> = child.fmtHasFlag('padTrailing')
 				? (macro $fieldAccess != null && $fieldAccess.length > 0)
 				: null;
@@ -9765,7 +9812,7 @@ class WriterLowering {
 		// ω-pad-trailing-ref / ω-metadata-line-end-function: non-optional Star
 		// pad fires when non-empty (and, for metaLineEndPolicy, the knob is
 		// non-None); the Star is transparent when empty.
-		final thisPadTrailing: Null<Expr> = starPadTrailing(child, fieldAccess);
+		final thisPadTrailing: Null<Expr> = starPadTrailing(child, fieldAccess, typePath);
 		final thisTransparent: Expr = macro $fieldAccess.length == 0;
 		// ω-metastmt-sep: a bare-tryparse Star right after a mandatory Ref
 		// seeds the cumulative signal with `true` — the Ref's content is
@@ -13724,6 +13771,7 @@ class WriterLowering {
 		final padLeadingSpaceDoc: Expr = c.padLeadingSpaceDoc;
 		final whileExpr: Expr = triviaTryparseWhileExpr(c);
 		final assemblyExpr: Expr = triviaTryparseAssemblyExpr(c);
+		final trailEndsLineDecl: Expr = triviaTryparseTrailEndsLineDecl();
 		return macro {
 			final _arr = $fieldAccess;
 			final _trailLC: Array<String> = $trailLC;
@@ -13743,6 +13791,7 @@ class WriterLowering {
 			final _padLeading: Bool = $padLeadingExpr;
 			final _padTrailing: Bool = $padTrailingExpr;
 			final _padHardline: Bool = (_padLeading || _padTrailing) && _arr.length > 0 && _arr[0].newlineBefore;
+			$trailEndsLineDecl;
 			final _metaPolicy: Int = $metaPolicyExpr;
 			// ω-condcomp-empty-body-newline (Stage A): an EMPTY cond-comp body
 			// / elseBody Star (`HxConditionalStmt`/`Decl`/… `body` carries BOTH
@@ -13779,6 +13828,10 @@ class WriterLowering {
 				// Null probe (formats without generated predicates) ⇒ no wrap.
 				final _condNestedIncrease: Bool = $condNestedIncreaseGateExpr;
 				var _condTrailPad: Null<anyparse.core.Doc> = null;
+				// ω-line-comment-directive-break: set once a pad hardline has
+				// already terminated the Star's last line comment, so the tail
+				// guard below does not stack a second break on top of it.
+				var _lineTrailBroken: Bool = false;
 				$cascadeInitPrev;
 				$cascadeHeadEmit;
 				$priorAfterTrailEmit;
@@ -13791,6 +13844,48 @@ class WriterLowering {
 				$whileExpr;
 				$assemblyExpr;
 			}
+		};
+	}
+
+	/**
+	 * ω-line-comment-directive-break: declare the tryparse-Star's
+	 * `_lastTrailComment` / `_trailEndsLine` runtime locals.
+	 *
+	 * A `//` comment runs to the next PHYSICAL newline, so whatever the parent
+	 * emits after this Star on the same Doc line becomes comment TEXT. On a
+	 * cond-comp arm the swallowed token is the `#end` / `#else` / `#elseif`
+	 * marker: the region never closes and the emitted file stops parsing -
+	 * corruption, worse than losing the comment. `_trailEndsLine` is true when
+	 * the LAST comment this Star emits is line-style: the orphan trail when
+	 * there is one, else the last element's cuddled trailing comment. Block
+	 * comments do not terminate at a newline, so their same-line glue is legal
+	 * and stays.
+	 *
+	 * Emitted as a single `EVars` (NOT an `EBlock`) so both locals land in the
+	 * caller's scope, and extracted so `triviaTryparseMainExpr` stays under the
+	 * complexity gate.
+	 */
+	private static function triviaTryparseTrailEndsLineDecl(): Expr {
+		final lastComment: Expr = macro _arr.length > 0 ? _arr[_arr.length - 1].trailingComment : null;
+		final endsLine: Expr = macro _trailLC.length > 0
+			? StringTools.startsWith(_trailLC[_trailLC.length - 1], '//')
+			: (_lastTrailComment != null && StringTools.startsWith(_lastTrailComment, '//'));
+		return {
+			expr: EVars([
+				{
+					name: '_lastTrailComment',
+					type: macro :Null<String>,
+					expr: lastComment,
+					isFinal: true
+				},
+				{
+					name: '_trailEndsLine',
+					type: macro :Bool,
+					expr: endsLine,
+					isFinal: true
+				},
+			]),
+			pos: Context.currentPos(),
 		};
 	}
 
@@ -14018,12 +14113,21 @@ class WriterLowering {
 			// placement (outside the `_dn`) changes. Other policies /
 			// non-cond Stars keep the inline push (`_condIncrease` false →
 			// byte-identical).
-			if (_condIncrease && _padTrailing && _arr.length > 0)
-				_condTrailPad = _padHardline ? _dhl() : _dt(' ');
-			else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0)
-				_docs.push(_padHardline ? _dhl() : _dt(' '));
-			else if (_metaPolicy != 0 && _arr.length > 0)
+			// ω-line-comment-directive-break: `_trailEndsLine` upgrades the pad
+			// from a space to a hardline. A space is right after code and wrong
+			// after a `//` comment - it leaves the close marker on the comment's
+			// line, which is exactly the single-line arm shape
+			// (`#if a var q:Int; // t` + newline `#end`).
+			if (_condIncrease && _padTrailing && _arr.length > 0) {
+				_lineTrailBroken = _padHardline || _trailEndsLine;
+				_condTrailPad = _lineTrailBroken ? _dhl() : _dt(' ');
+			} else if (_padTrailing && _arr.length > 0 && _trailLC.length == 0) {
+				_lineTrailBroken = _padHardline || _trailEndsLine;
+				_docs.push(_lineTrailBroken ? _dhl() : _dt(' '));
+			} else if (_metaPolicy != 0 && _arr.length > 0) {
+				_lineTrailBroken = true;
 				_docs.push(_dhl());
+			}
 			// ω-trivia-tryparse-linelength: when the LAST element carries
 			// a same-line `// trail`, a `//` line comment runs until the
 			// next physical newline, so an inline ` ` separator before
@@ -14083,6 +14187,12 @@ class WriterLowering {
 	 * runtime `_docs`/`_trailDocs`/`_flatCase`/`_nestBody`/`_condIncrease`/
 	 * `_cols`/`opt` locals. Extracted so `triviaTryparseAssemblyExpr` stays
 	 * under the complexity gate.
+	 *
+	 * ω-line-comment-directive-break: only the `_condIncrease` and default arms
+	 * carry the line-comment break guard. `_flatCase` requires an empty orphan
+	 * trail and a single element, and no `nestBody` Star carries `padTrailing`
+	 * (case / default bodies are always followed by a hardline-led sibling), so
+	 * neither can glue a follower onto a `//` comment.
 	 */
 	private static function triviaTryparseWrapDispatchExpr(finalWrapDocs: Expr): Expr {
 		return macro {
@@ -14132,6 +14242,14 @@ class WriterLowering {
 				// is empty for cond-comp bodies but appended defensively
 				// inside the nest to preserve the pre-policy ordering.
 				for (_d in _trailDocs) _docs.push(_d);
+				// ω-line-comment-directive-break: under AlignedIncrease the close
+				// marker's pad is held OUT of `_docs` so the marker renders at the
+				// surrounding indent. The break a line comment forces must ride the
+				// same channel - pushed into `_docs` it would capture the body's
+				// `_dn` and land `#end` one level too deep. `_condTrailPad` is
+				// provably null here: the only site that sets it also sets
+				// `_lineTrailBroken` whenever `_trailEndsLine` holds.
+				if (_trailEndsLine && !_lineTrailBroken) _condTrailPad = _dohsbh();
 				final _nested: anyparse.core.Doc = _dn(_cols, _dc(_docs));
 				_dwb(_condTrailPad != null ? _dc([_nested, _condTrailPad]) : _nested);
 			} else {
@@ -14140,7 +14258,15 @@ class WriterLowering {
 				// the `#end`/`#else` close marker) was deferred past the orphan
 				// trail comments so the marker lands on its own line instead of
 				// being commented out by a trailing `//` line comment.
-				if (_padTrailing && _trailLC.length > 0 && _arr.length > 0) _docs.push(_padHardline ? _dhl() : _dt(' '));
+				if (_padTrailing && _trailLC.length > 0 && _arr.length > 0) {
+					_lineTrailBroken = _padHardline || _trailEndsLine;
+					_docs.push(_lineTrailBroken ? _dhl() : _dt(' '));
+				}
+				// ω-line-comment-directive-break: an arm that emits NO pad at all
+				// (an EMPTY body holding only comments) still owes the break. The
+				// guard is forward-looking, so it DROPS when the parent's next
+				// emit is already a hardline - every sound seam stays byte-inert.
+				if (_trailEndsLine && !_lineTrailBroken) _docs.push(_dohsbh());
 				_dwb($finalWrapDocs);
 			}
 		};
