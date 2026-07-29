@@ -72,9 +72,13 @@ final class CompilerOracle {
 		#elseif sys
 		try {
 			final process: sys.io.Process = new sys.io.Process('haxe', [hxml, '--no-output']);
-			final code: Int = process.exitCode();
+			// `exitCode()` is `Null<Int>` — null only in the non-blocking form, which this
+			// call is not; a null is still "haxe produced no status", the same Unavailable
+			// the nodejs branch reports for a missing `status`.
+			final code: Null<Int> = process.exitCode();
 			final errText: String = StringTools.trim(process.stderr.readAll().toString() + process.stdout.readAll().toString());
 			process.close();
+			if (code == null) return Unavailable('haxe exited without a status code');
 			return code == 0 ? Confirmed : Rejected(errText);
 		} catch (exception: haxe.Exception) {
 			return Unavailable('could not launch haxe (${exception.message})');

@@ -235,7 +235,10 @@ final class StdResolver {
 		try {
 			final process: sys.io.Process = new sys.io.Process('which', ['haxe']);
 			final out: String = process.stdout.readAll().toString();
-			final code: Int = process.exitCode();
+			// `exitCode()` is `Null<Int>` — null only in the non-blocking form, which this
+			// call is not; a null still means "no status", so it falls through to null like
+			// the nodejs branch's `status == null` arm.
+			final code: Null<Int> = process.exitCode();
 			process.close();
 			final s: String = StringTools.trim(out);
 			return code == 0 && s != '' ? s : null;

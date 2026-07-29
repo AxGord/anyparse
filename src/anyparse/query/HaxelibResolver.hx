@@ -84,7 +84,10 @@ final class HaxelibResolver {
 		try {
 			final process: sys.io.Process = new sys.io.Process('haxelib', ['libpath', name]);
 			final out: String = process.stdout.readAll().toString();
-			final code: Int = process.exitCode();
+			// `exitCode()` is `Null<Int>` — null only in the non-blocking form, which this
+			// call is not; a null still means "no status", so it falls through to null like
+			// the nodejs branch's `status == null` arm.
+			final code: Null<Int> = process.exitCode();
 			process.close();
 			return code == 0 ? out : null;
 		} catch (exception: haxe.Exception) {

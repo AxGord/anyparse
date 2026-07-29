@@ -367,7 +367,11 @@ final class ExplicitLocalType implements Check implements DefaultOff implements 
 		final recv: QueryNode = init.children[0];
 		final typeName: Null<String> = recv.name;
 		final span: Null<Span> = recv.span;
-		if (recv.kind != identKind || typeName == null || span == null || !RefactorSupport.isUpperInitial(typeName)) return null;
+		// The null checks stay in their own guard: strict null-safety carries a narrowing
+		// fact into a later `||` operand only from the chain's FIRST operand, so a
+		// `typeName`-consuming call in the tail would see it nullable again.
+		if (recv.kind != identKind || typeName == null || span == null) return null;
+		if (!RefactorSupport.isUpperInitial(typeName)) return null;
 		// A receiver that resolves to a local / parameter / field binding is a value — an
 		// INSTANCE field access, a distinct (cross-type instance) case not handled here.
 		// A genuine type reference resolves to no value binding.
