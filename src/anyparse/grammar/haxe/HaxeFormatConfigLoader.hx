@@ -99,6 +99,11 @@ import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
  *   `@:fmt(indentValueIfCtor('IfExpr', 'indentComplexValueExpressions'))`
  *   in the grammar (currently `HxVarDecl.init`).
  * - `wrapping.maxLineLength`: int → `lineWidth`.
+ * - `wrapping.comprehensionCuddledOpen` (ω-comprehension-cuddled-open):
+ *   bool → `comprehensionCuddledOpen`. Keeps an expression-bodied `for`
+ *   comprehension's head on the `[` line (`[ for (x in xs)`) when the
+ *   head fits and the comprehension lays out multi-line. Default `false`
+ *   (absent) is byte-inert.
  * - `wrapping.arrayWrap` (ω-arraylit-wraprules + ω-peg-byname-array):
  *   `WrapRules` cascade → `arrayLiteralWrap`. `defaultWrap:String` sets
  *   the cascade's `defaultMode`; `rules:Array<HxFormatWrapRule>` is
@@ -667,6 +672,7 @@ final class HaxeFormatConfigLoader {
 			expressionWrappingWrap: base.expressionWrappingWrap,
 			implementsExtendsWrap: base.implementsExtendsWrap,
 			arrayMatrixWrap: base.arrayMatrixWrap,
+			comprehensionCuddledOpen: base.comprehensionCuddledOpen,
 			conditionalPolicy: base.conditionalPolicy,
 			alignInlineSwitchCaseBody: base.alignInlineSwitchCaseBody,
 			addLineCommentSpace: base.addLineCommentSpace,
@@ -1320,6 +1326,7 @@ final class HaxeFormatConfigLoader {
 			final resolved: Null<ArrayMatrixWrap> = ArrayMatrixWrap.resolve(section.arrayMatrixWrap);
 			if (resolved != null) opt.arrayMatrixWrap = resolved;
 		}
+		if (section.comprehensionCuddledOpen != null) opt.comprehensionCuddledOpen = section.comprehensionCuddledOpen;
 	}
 
 	private static function applyWrappingRulesA(section: HxFormatWrappingSection, opt: HxModuleWriteOptions): Void {

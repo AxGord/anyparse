@@ -782,6 +782,7 @@ final class HaxeFormat implements TextFormat {
 		arrayMatrixWrap: ArrayMatrixWrap.MatrixWrapWithAlign,
 		conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 		alignInlineSwitchCaseBody: false,
+		comprehensionCuddledOpen: false,
 		addLineCommentSpace: true,
 		normalizeLineCommentIndent: false,
 		compressSuccessiveParenthesis: true,

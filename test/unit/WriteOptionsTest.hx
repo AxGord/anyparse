@@ -45,6 +45,7 @@ class WriteOptionsTest extends Test {
 			arrayMatrixWrap: ArrayMatrixWrap.NoMatrixWrap,
 			conditionalPolicy: ConditionalIndentationPolicy.Aligned,
 			alignInlineSwitchCaseBody: false,
+			comprehensionCuddledOpen: false,
 			addLineCommentSpace: true,
 			normalizeLineCommentIndent: false,
 			compressSuccessiveParenthesis: true,

@@ -131,12 +131,24 @@ package anyparse.grammar.haxe.format;
  *    is `matrixWrapWithAlign`, matching haxe-formatter. Resolved via
  *    `ArrayMatrixWrap.resolve`; unknown strings fall back to the format
  *    default.
+ *  - `comprehensionCuddledOpen`: bool → `comprehensionCuddledOpen` (slice
+ *    ω-comprehension-cuddled-open). Also not a cascade — a Bool layout
+ *    policy on the array/map `[…]` whose SOLE element is an expression-
+ *    bodied `for` comprehension: when the list lays out multi-line and the
+ *    segment through the comprehension head's closing `)` still fits, the
+ *    head rides the `[` line (`[ for (x in xs)`) and only the body wraps,
+ *    one indent below. Default `false` (config absent) keeps the pre-slice
+ *    leading-break layout byte-identical. Block-bodied, nested and `while`
+ *    comprehensions are deliberately excluded — see
+ *    `WriteOptions.comprehensionCuddledOpen`.
  */
 @:peg typedef HxFormatWrappingSection = {
 
 	@:optional var maxLineLength: Int;
 
 	@:optional var arrayMatrixWrap: String;
+
+	@:optional var comprehensionCuddledOpen: Bool;
 
 	@:optional var arrayWrap: HxFormatWrapRules;
 
