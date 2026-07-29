@@ -156,7 +156,7 @@ final class IfFalseDeadCode implements Check {
 	 * the same skip `isIfFalseAt` performs, restarted at `slice[0]`.
 	 */
 	private static function bodyStart(slice: String): Int {
-		var i: Int = 3; // after '#if'
+		var i: Int = 3; // noqa: magic-number
 		while (i < slice.length && isWs(slice.charCodeAt(i) ?? 0)) i++;
 		var parens: Bool = false;
 		if (i < slice.length && slice.charCodeAt(i) == '('.code) {
@@ -164,7 +164,7 @@ final class IfFalseDeadCode implements Check {
 			i++;
 			while (i < slice.length && isWs(slice.charCodeAt(i) ?? 0)) i++;
 		}
-		i += 'false'.length; // noqa: magic-number
+		i += 'false'.length;
 		if (parens) {
 			while (i < slice.length && isWs(slice.charCodeAt(i) ?? 0)) i++;
 			if (i < slice.length && slice.charCodeAt(i) == ')'.code) i++;
