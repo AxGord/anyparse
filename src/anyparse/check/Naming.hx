@@ -284,7 +284,7 @@ final class Naming implements Check implements CrossFileFix {
 		// (the re-parse gate accepts it but it does not type-check), so skip. Scope-aware for a local /
 		// param / catch var - an occurrence in an UNRELATED function does not conflict; a field / constant
 		// stays whole-file (see `collidesInScope`).
-		if (collidesInScope(decl, source, tree, newName, shape, resolutionIndex)) return null;
+		if (collidesInScope(decl, source, tree, newName, shape, resolutionIndex, plugin)) return null;
 		// Completeness + comment-along: the SAME scope-correct occurrence resolution + classifyOccurrences
 		// gate the cross-file path applies to its declaring file — a `#if` / string / `noqa` / resolver-missed
 		// active-code occurrence bails, a distinctive comment mention renames along (see `declaringFileRenameSpans`).
@@ -394,7 +394,7 @@ final class Naming implements Check implements CrossFileFix {
 			// across the OWNER's own hierarchy in this file only, since a sibling hierarchy's same-named
 			// member is not reachable from it (see `unrelatedTypeSpans`).
 			final unrelated: Array<Span> = unrelatedTypeSpans(fileTree, c.ownerName, shape, resolutionIndex);
-			if (RefactorSupport.referencedInRange(fsrc, c.targetName, 0, fsrc.length, unrelated)) return null;
+			if (RefactorSupport.nameBoundInRange(fsrc, c.targetName, 0, fsrc.length, unrelated, plugin)) return null;
 			if (spans.length > 0) slices.push({ file: file, edits: [for (s in spans) { span: s, text: c.targetName }] });
 		}
 		return slices.length == 0 ? null : slices;
@@ -739,7 +739,8 @@ final class Naming implements Check implements CrossFileFix {
 	 * shadowing one still renames.
 	 */
 	private static function collidesInScope(
-		decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape, resolutionIndex: Null<SymbolIndex>
+		decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape, resolutionIndex: Null<SymbolIndex>,
+		plugin: GrammarPlugin
 	): Bool {
 		final span: Null<Span> = decl.span;
 		if (span == null) return true;
@@ -751,7 +752,7 @@ final class Naming implements Check implements CrossFileFix {
 			final unrelated: Array<Span> = (owner == null || resolutionIndex == null)
 				? []
 				: unrelatedTypeSpans(tree, owner, shape, resolutionIndex);
-			return RefactorSupport.referencedInRange(source, newName, 0, source.length, unrelated);
+			return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, unrelated, plugin);
 		}
 		final funcKinds: Array<String> = shape.functionKinds ?? [];
 		// The binding is visible throughout its innermost enclosing function - INCLUDING the nested closures
@@ -761,7 +762,7 @@ final class Naming implements Check implements CrossFileFix {
 		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from);
 		final excluded: Array<Span> = [];
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
-		return RefactorSupport.referencedInRange(source, newName, 0, source.length, excluded);
+		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
 	}
 
 	/**

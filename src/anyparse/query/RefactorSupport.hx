@@ -2488,4 +2488,84 @@ final class RefactorSupport {
 		return c == 'g'.code || c == 'i'.code || c == 'm'.code || c == 's'.code || c == 'u'.code;
 	}
 
+
+	/**
+	 * Whether `name` is BOUND as an identifier anywhere in `source[from...end)`
+	 * outside `excluded` - the precise form of the question a COLLISION gate asks:
+	 * "is the target name already taken where this rename lands?". Answered from
+	 * the parse (`classifyOccurrences`) instead of raw text, so a comment mention,
+	 * an inert string literal and the member-name slot of a dotted access
+	 * (`o.name`) are correctly none of them bindings.
+	 *
+	 * NOT a replacement for `referencedInRange`, whose imprecision is
+	 * LOAD-BEARING for its other callers: the `unused-*` family reads a `false`
+	 * as "nothing uses this, delete it", and the occurrences skipped here - a
+	 * dotted `obj.member` above all - are exactly its real uses. The conservative
+	 * direction of the question belongs to the CALL SITE, so the two queries
+	 * coexist and only a veto-side caller may use this one.
+	 *
+	 * Deliberately conservative wherever a precise answer would cost another
+	 * scan: a `#if` body counts (it hosts real declarations), a single-quoted
+	 * literal that can interpolate counts wholesale rather than resolving which
+	 * of its parts are code, a comment between the dot and the name leaves the
+	 * dotted test false, and a parse failure falls back to `referencedInRange`.
+	 * Each of those over-reports, which for a veto gate is a missed fix - never a
+	 * wrong one.
+	 */
+	public static function nameBoundInRange(
+		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, plugin: GrammarPlugin
+	): Bool {
+		final classified: Null<Array<ClassifiedOccurrence>> = classifyOccurrences(source, name, plugin, from, end, excluded);
+		if (classified == null) return referencedInRange(source, name, from, end, excluded);
+		final regions: Array<LexRegion> = scanLexicalRegions(source);
+		for (occ in classified) switch occ.kind {
+			case CommentTrivia | DirectiveComment:
+			case StringLiteral if (!interpolatingLiteralAt(source, occ.span.from, regions)):
+			case _:
+				if (!isMemberNamePosition(source, occ.span.from)) return true;
+		}
+		return false;
+	}
+
+
+	/**
+	 * Whether the string literal containing `at` can interpolate: single-quoted and
+	 * carrying a `$` that is not the escaped `$$`. Decided per LITERAL rather than
+	 * per occurrence - working out which `${...}` region an occurrence falls in
+	 * costs another scan, and the coarse answer only ever vetoes a rename. A
+	 * double-quoted literal never interpolates in Haxe, so it is always inert.
+	 */
+	private static function interpolatingLiteralAt(source: String, at: Int, regions: Array<LexRegion>): Bool {
+		for (region in regions) {
+			if (region.kind != StringLit || at < region.from || at >= region.to) continue;
+			if (StringTools.fastCodeAt(source, region.from) != "'".code) return false;
+			var i: Int = region.from + 1;
+			while (i < region.to) {
+				if (StringTools.fastCodeAt(source, i) != '$'.code) {
+					i++;
+					continue;
+				}
+				if (i + 1 >= region.to || StringTools.fastCodeAt(source, i + 1) != '$'.code) return true;
+				i += 2;
+			}
+			return false;
+		}
+		return false;
+	}
+
+
+	/**
+	 * Whether the identifier at `at` sits in the member-name slot of a dotted access
+	 * (`o.name`, `o?.name`, `Type.name`) - never a binding of `name` in the
+	 * surrounding scope. The range operator is excluded: in `0...name` the name is a
+	 * real read. Only whitespace is stepped over, so a comment between the dot and
+	 * the name answers false and vetoes - the safe side.
+	 */
+	private static function isMemberNamePosition(source: String, at: Int): Bool {
+		var i: Int = at - 1;
+		while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
+		if (i < 0 || StringTools.fastCodeAt(source, i) != '.'.code) return false;
+		return i == 0 || StringTools.fastCodeAt(source, i - 1) != '.'.code;
+	}
+
 }
