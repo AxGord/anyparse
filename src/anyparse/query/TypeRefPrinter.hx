@@ -51,7 +51,9 @@ private typedef ImportAnchor = {
  *     `shadowedLocally`: Haxe's resolution order is module type, then import / alias, then same
  *     package, then top level, so a lower-priority route can be overruled by a higher-priority
  *     binding. A bare `Widget` does not mean the same-package `pkg.Widget` in a file that also
- *     carries `import other.Widget;`.
+ *     carries `import other.Widget;` — nor in one carrying a BULK import (`import other.*;`,
+ *     `using other.Widget;`) that binds the name, which `shadowedByBulkImport` decides against
+ *     the index.
  *
  *  2. Else **add an import** and use the short name — but ONLY when the short name is FREE
  *     in that file: nothing visible here binds it (`shadowedLocally`), no EARLIER pending
@@ -75,6 +77,11 @@ private typedef ImportAnchor = {
  * A run with NO dot is returned verbatim and never triggers an import: a bare name carries
  * no derivable module path, and `printTypeExpr` walks structural field names (`{ name :
  * String }`) through the same entry point.
+ *
+ * `resolvePath` exposes the other half of that machinery — the DECLARATION a written
+ * reference denotes, proven against the index — so a caller rewriting an EXISTING reference
+ * (`shorten-type-ref`) can require that its replacement names the same declaration rather
+ * than trusting the print alone.
  *
  * LIMIT — an UNRESOLVABLE hybrid. `pack.Module` (a main type) and `pack.SubType` (a hybrid)
  * are textually identical shapes; only the file's imports or the `SymbolIndex` tell them
@@ -214,6 +221,25 @@ final class TypeRefPrinter {
 			buf.add(print(t.substring(start, i)).text);
 		}
 		return buf.toString();
+	}
+
+	/**
+	 * The declaration path the written reference `ref` denotes IN THIS FILE, PROVEN against the
+	 * resolution index: `pack.Module` for a module's main type, `pack.Module.SubType` for a
+	 * secondary one. A `pack.SubType` HYBRID canonicalises first, so a hybrid and its
+	 * module-qualified spelling answer the SAME path — which is what lets a caller prove a
+	 * rewrite between the two forms keeps the same declaration.
+	 *
+	 * Null when nothing PROVES a path: a dotless name (whose binding is a scope question, not an
+	 * index one — `print` answers that side by construction), a path no indexed declaration sits
+	 * at, or a run with no index at all. Fail-closed on purpose: a caller gating an edit on this
+	 * must treat "unproven" as "leave the source alone", never as "assume it resolves".
+	 */
+	public function resolvePath(ref: String): Null<String> {
+		final trimmed: String = StringTools.trim(ref);
+		if (trimmed.indexOf('.') == -1) return null;
+		final canonical: String = canonicalize(trimmed);
+		return declaredAtPath(canonical, lastSegment(canonical)) ? canonical : null;
 	}
 
 	/**
@@ -416,9 +442,16 @@ final class TypeRefPrinter {
 
 	/**
 	 * Whether something IN THIS FILE'S SCOPE binds `simple` to a type other than `canonical` —
-	 * an import or alias, a module-local declaration, a same-package type, or (globally) a
+	 * an import or alias, a module-local declaration, a same-package type, a BULK import
+	 * (`import pkg.*;` / `using pkg.Module;`, via `shadowedByBulkImport`), or (globally) a
 	 * root-package one. Such a binding shadows the bare name, so neither the builtin
 	 * short-circuit nor a fresh import may use it.
+	 *
+	 * `shadowedLocally` gates the WHOLE set, not just the builtin arm: Haxe's own resolution
+	 * order (module type, then import / alias, then same package, then top level) means a
+	 * lower-priority route can be OVERRULED by a higher-priority binding — a same-package
+	 * `pkg.Widget` is not what a bare `Widget` means in a file that also carries
+	 * `import other.Widget;`. The alias route reads its own binding, so it is exempt.
 	 */
 	private function shadowedLocally(canonical: String, simple: String): Bool {
 		final bound: Null<String> = _importMap[simple];
@@ -430,7 +463,51 @@ final class TypeRefPrinter {
 		final pkg: Null<String> = _pkg;
 		if (pkg != null && packageDeclaresOtherType(canonical, simple)) return true;
 		final index: Null<SymbolIndex> = _index;
-		return index != null && index.declaringFiles(simple).exists(f -> f.pkg == '' && pathOfTypeIn(f, simple) != canonical);
+		if (index != null && index.declaringFiles(simple).exists(f -> f.pkg == '' && pathOfTypeIn(f, simple) != canonical)) return true;
+		return shadowedByBulkImport(canonical, simple);
+	}
+
+	/**
+	 * Whether a BULK import — `import pkg.*;` / `import pkg.Module.*;` or a `using pkg.Module;` —
+	 * could bind `simple` to a type other than `canonical`. Neither form NAMES what it brings in,
+	 * so `_importMap` (built from plain imports) is blind to both, and the bare name they bind
+	 * outranks the same-package / top-level routes `shadowedLocally` guards.
+	 *
+	 * With an index the question is decided rather than guessed: a wildcard binds every type
+	 * declared in the package (or, for the `pkg.Module.*` form, in that module) its prefix names,
+	 * a `using` every type of its module. WITHOUT an index a wildcard is simply unanswerable and
+	 * shadows unconditionally; a `using` is read textually — only its module's own main-type name
+	 * is derivable, so a sub-module type it also binds is a KNOWN miss on that path.
+	 *
+	 * The conservative direction is the same for every caller: a true here only ever costs the
+	 * short form and falls back to the fully-qualified path, which always resolves.
+	 */
+	private function shadowedByBulkImport(canonical: String, simple: String): Bool {
+		final root: Null<QueryNode> = _root;
+		if (root == null) return false;
+		final index: Null<SymbolIndex> = _index;
+		for (c in root.children) {
+			final path: Null<String> = c.name;
+			if (path == null) continue;
+			if (c.kind == 'ImportWildDecl') {
+				// `pkg.*` / `pkg.Module.*` -> the prefix before the star. Which of the two forms it
+				// is depends on the index, so both readings are tested.
+				if (index == null) return true;
+				final dot: Int = path.lastIndexOf('.');
+				final prefix: String = dot < 0 ? '' : path.substring(0, dot);
+				if (
+					index.declaringFiles(simple)
+						.exists(f -> (f.pkg == prefix || f.module == prefix) && pathOfTypeIn(f, simple) != canonical)
+				)
+					return true;
+			} else if (c.kind == 'UsingDecl') {
+				if (index == null) {
+					if (lastSegment(path) == simple) return true;
+				} else if (index.declaringFiles(simple).exists(f -> f.module == path && pathOfTypeIn(f, simple) != canonical))
+					return true;
+			}
+		}
+		return false;
 	}
 
 	/** The import path a type named `name` declared in `file` carries: the module itself for the main type, else `module.name`. */

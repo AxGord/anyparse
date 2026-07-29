@@ -140,7 +140,8 @@ final class Linter {
 			new InlineConstant(),
 			new ExtractRepeatedExpression(),
 			new TailMerge(),
-			new NoUnderscorePrefix()
+			new NoUnderscorePrefix(),
+			new ShortenTypeRef()
 		];
 	}
 

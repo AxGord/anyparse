@@ -506,6 +506,7 @@ import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
 import unit.ExplicitLocalTypePrinterTest;
 import unit.HxLineCommentIndentSliceTest;
+import unit.ShortenTypeRefCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -973,6 +974,7 @@ class RunTests {
 		addCase(new PreferArrowCallbackCheckTest());
 		addCase(new NoUnderscorePrefixCheckTest());
 		addCase(new PreferTypedThrowCheckTest());
+		addCase(new ShortenTypeRefCheckTest());
 		addCase(new TypeRefPrinterTest());
 		addCase(new ExplicitLocalTypePrinterTest());
 		addCase(new PreferMapLiteralCheckTest());

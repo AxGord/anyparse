@@ -293,6 +293,85 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals(0, p.pendingImportEdits().length);
 	}
 
+	// --- bulk imports: a name source neither the import map nor the package routes model ---
+
+	public function testWildcardImportShadowsASameNamedType(): Void {
+		// `import other.*;` binds `Foo` to `other.Foo`; a bare `Foo` here would rebind the
+		// reference, and the wildcard names nothing the import map can see.
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' },
+			{ file: 'other/Foo.hx', source: 'package other;\n\nclass Foo {}\n' }
+		]);
+		final src: String = 'package app;\n\nimport other.*;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printerWith(src, index);
+		Assert.equals('pkg.deep.Foo', p.print('pkg.deep.Foo').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	public function testWildcardImportOfAnUnrelatedPackageDoesNotShadow(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' },
+			{ file: 'other/Bar.hx', source: 'package other;\n\nclass Bar {}\n' }
+		]);
+		final src: String = 'package app;\n\nimport other.*;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printerWith(src, index);
+		Assert.equals('Foo', p.print('pkg.deep.Foo').text);
+		Assert.equals('import pkg.deep.Foo;', importText(p));
+	}
+
+	public function testUsingBringsItsModuleTypeIntoScopeAndShadows(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' },
+			{ file: 'other/Foo.hx', source: 'package other;\n\nclass Foo {}\n' }
+		]);
+		final src: String = 'package app;\n\nusing other.Foo;\n\nclass C {}\n';
+		Assert.equals('pkg.deep.Foo', printerWith(src, index).print('pkg.deep.Foo').text);
+	}
+
+	public function testWildcardImportWithNoIndexShadowsUnconditionally(): Void {
+		// Nothing can enumerate what `other.*` brings in without an index, so the short name is
+		// refused rather than guessed — the conservative direction for every caller.
+		final src: String = 'package app;\n\nimport other.*;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		Assert.equals('pkg.deep.Foo', p.print('pkg.deep.Foo').text);
+		Assert.isFalse(p.hasPendingImports());
+	}
+
+	public function testUsingWithNoIndexShadowsItsOwnMainTypeName(): Void {
+		final src: String = 'package app;\n\nusing other.Foo;\n\nclass C {}\n';
+		Assert.equals('pkg.deep.Foo', printer(src).print('pkg.deep.Foo').text);
+	}
+
+	public function testUnrelatedUsingWithNoIndexDoesNotShadow(): Void {
+		final src: String = 'package app;\n\nusing Lambda;\n\nclass C {}\n';
+		Assert.equals('Foo', printer(src).print('pkg.deep.Foo').text);
+	}
+
+	// --- resolvePath: which DECLARATION a written reference names ---
+
+	public function testResolvePathAnswersTheSamePathForBothSpellings(): Void {
+		final index: SymbolIndex = indexOf([
+			{ file: 'pkg/deep/Mod.hx', source: 'package pkg.deep;\n\nclass Mod {}\n\ntypedef Sub = Int;\n' }
+		]);
+		final p: TypeRefPrinter = printerWith('package app;\n\nclass C {}\n', index);
+		Assert.equals('pkg.deep.Mod.Sub', p.resolvePath('pkg.deep.Mod.Sub'));
+		Assert.equals('pkg.deep.Mod.Sub', p.resolvePath('pkg.deep.Sub'), 'the hybrid canonicalises onto the same declaration');
+	}
+
+	public function testResolvePathIsNullWithoutAnIndex(): Void {
+		Assert.isNull(printer('package app;\n\nclass C {}\n').resolvePath('pkg.deep.Foo'));
+	}
+
+	public function testResolvePathIsNullForADotlessName(): Void {
+		final index: SymbolIndex = indexOf([{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' }]);
+		Assert.isNull(printerWith('package app;\n\nimport pkg.deep.Foo;\n\nclass C {}\n', index).resolvePath('Foo'));
+	}
+
+	public function testResolvePathIsNullForAnUndeclaredPath(): Void {
+		final index: SymbolIndex = indexOf([{ file: 'pkg/deep/Foo.hx', source: 'package pkg.deep;\n\nclass Foo {}\n' }]);
+		Assert.isNull(printerWith('package app;\n\nclass C {}\n', index).resolvePath('pkg.deep.Missing'));
+	}
+
 	// --- helpers -------------------------------------------------------------------
 
 	private function printer(source: String): TypeRefPrinter {
