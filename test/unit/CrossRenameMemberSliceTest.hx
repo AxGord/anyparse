@@ -389,4 +389,24 @@ class CrossRenameMemberSliceTest extends Test {
 		return new HaxeQueryPlugin().refShape();
 	}
 
+
+	/**
+	 * A regex literal whose body legally contains a comment opener used to open
+	 * a phantom block comment running to EOF, so every access after it looked
+	 * like comment trivia and `activeCodeIdentTokenOffset` reported NOT FOUND -
+	 * refusing the whole scope. Fail-safe, but the rename was impossible in any
+	 * file holding such a literal.
+	 */
+	public function testRegexCommentOpenerDoesNotRefuseScope(): Void {
+		final a: String = 'class Foo {\n\tpublic static var name:Int = 1;\n}';
+		final b: String = 'class Bar {\n\tpublic function f():Void {\n\t\tvar re = ~/[\\/*]/;\n\t\tFoo.name = 2;\n\t\ttrace(re);\n\t}\n}';
+		final changes: Array<FileChange> = okChanges('a.hx', a, 'name', 'title', [
+			{ file: 'a.hx', source: a },
+			{ file: 'b.hx', source: b },
+		]);
+		final newB: String = changeFor(changes, 'b.hx').newSource;
+		Assert.isTrue(StringTools.contains(newB, 'Foo.title = 2;'), 'the access is renamed: <$newB>');
+		Assert.isTrue(StringTools.contains(newB, '~/[\\/*]/'), 'the regex is left verbatim: <$newB>');
+	}
+
 }

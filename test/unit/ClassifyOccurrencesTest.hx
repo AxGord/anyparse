@@ -130,4 +130,40 @@ class ClassifyOccurrencesTest extends Test {
 		return list[0].kind;
 	}
 
+
+	/**
+	 * A regex literal is its own lexical region, so a comment OPENER legally
+	 * living in its body no longer starts a phantom block comment that runs to
+	 * EOF and swallows the rest of the file as trivia.
+	 */
+	public function testRegexLiteralDoesNotOpenPhantomComment(): Void {
+		final src: String = 'class C {\n\tfunction m() {\n\t\tvar re = ~/[\\/*]/;\n\t\treturn foo;\n\t}\n}';
+		Assert.equals(OccurrenceClass.ActiveCode, soleClass(src, 'foo'));
+	}
+
+	/** The regex BODY itself is inert literal text, classified like a string. */
+	public function testClassifiesRegexBody(): Void {
+		Assert.equals(OccurrenceClass.StringLiteral, soleClass('class C {\n\tfunction m() {\n\t\tvar re = ~/foo/;\n\t}\n}', 'foo'));
+	}
+
+	/** Trailing flag letters belong to the literal, not to the code after it. */
+	public function testRegexFlagsAreInsideTheRegion(): Void {
+		final src: String = 'class C {\n\tfunction m() {\n\t\tvar re = ~/[\\/*]/gi;\n\t\treturn foo;\n\t}\n}';
+		Assert.equals(OccurrenceClass.ActiveCode, soleClass(src, 'foo'));
+	}
+
+	/** `activeCodeIdentTokenOffset` reaches a member token sitting after such a regex. */
+	public function testActiveCodeOffsetSurvivesRegexCommentOpener(): Void {
+		final src: String = 'var re = ~/[\\/*]/;\ns.value = 1;';
+		Assert.equals(src.indexOf('value'), RefactorSupport.activeCodeIdentTokenOffset(src, new Span(0, src.length), 'value'));
+	}
+
+	/**
+	 * An unterminated `~/` is not a regex literal: the scan falls through, so a
+	 * genuine line comment on the same line still registers as trivia.
+	 */
+	public function testUnterminatedRegexFallsThrough(): Void {
+		Assert.equals(OccurrenceClass.CommentTrivia, soleClass('class C {\n\tfunction m() {\n\t\t// ~/ foo\n\t}\n}', 'foo'));
+	}
+
 }
