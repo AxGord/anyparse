@@ -2304,21 +2304,8 @@ final class RefactorSupport {
 		while (i < n) {
 			final c: Int = StringTools.fastCodeAt(source, i);
 			if (c == '"'.code || c == "'".code) {
-				final quote: Int = c;
 				final start: Int = i;
-				i++;
-				while (i < n) {
-					final ch: Int = StringTools.fastCodeAt(source, i);
-					if (ch == '\\'.code) {
-						i += 2;
-						continue;
-					}
-					if (ch == quote) {
-						i++;
-						break;
-					}
-					i++;
-				}
+				i = skipStringLiteral(source, i, c) + 1;
 				out.push({ from: start, to: i, kind: StringLit });
 				continue;
 			}
