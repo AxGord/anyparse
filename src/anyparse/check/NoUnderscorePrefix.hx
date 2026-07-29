@@ -56,6 +56,17 @@ import anyparse.runtime.Span;
  * (`supertypeDeclaresMember`), and a target name that is itself a declared top-level
  * type is refused as well.
  *
+ * Two flagged bindings differing only in underscore count (`_a` / `__a`) strip to the
+ * SAME name, and neither is visible to the other's collision proof - that scans the
+ * PRE-fix source, where each occurrence still carries its own prefix. Renaming both would
+ * merge two bindings into one, silently and compilably. So every target is derived first,
+ * and a target claimed twice from overlapping scopes refuses both (`claimedByAnother`).
+ *
+ * A derived name landing on a RESERVED WORD (`_new` -> `new`) is refused through the
+ * grammar's `RefShape.reservedWords`, unconditionally - a naming policy cannot stand in
+ * for that gate, since one adapted from a project config carries no normalizer and every
+ * camelCase format matches `dynamic` just as it matches `event`.
+ *
  * A simple `$name` string-interpolation read is NOT in the reference walker's index,
  * so it is resolved here (`stringInterpIdentKind`, restricted to the binding's own
  * function and only when the file declares the name once) and handed to
@@ -121,14 +132,14 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree == null) continue;
 			final config: LintConfig = LintConfig.resolveWith(_resolveConfig, entry.file);
-			final params: Bool = config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS;
-			final locals: Bool = config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS;
-			// The silencing rename is live unless the config turns it off: absent means ON,
-			// which is what `unused-parameter` did before the knob existed.
-			final silenceGuard: Bool = config.enabledFor(UNUSED_PARAMETER_ID)
-				&& (config.boolOption(UNUSED_PARAMETER_ID, 'renameSilence') ?? true);
-			for (decl in support.project(tree))
-				checkDecl(violations, entry.file, entry.source, tree, decl, shape, params, locals, silenceGuard);
+			final options: Options = {
+				params: config.boolOption(RULE_ID, 'params') ?? DEFAULT_PARAMS,
+				locals: config.boolOption(RULE_ID, 'locals') ?? DEFAULT_LOCALS,
+				// The silencing rename is live unless the config turns it off: absent means ON,
+				// which is what `unused-parameter` did before the knob existed.
+				silenceGuard: config.enabledFor(UNUSED_PARAMETER_ID) && (config.boolOption(UNUSED_PARAMETER_ID, 'renameSilence') ?? true)
+			};
+			for (decl in support.project(tree)) checkDecl(violations, entry.file, entry.source, tree, decl, shape, options);
 		}
 		return violations;
 	}
@@ -157,14 +168,46 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 			final s: Null<Span> = v.span;
 			if (s != null) flaggedFroms.push(s.from);
 		}
-		final edits: Array<{ span: Span, text: String }> = [];
+		// Every flagged binding's derived target, resolved BEFORE any rename is emitted: two
+		// bindings differing only in underscore count (`_a` / `__a`) strip to the same name, and
+		// neither can see the other through `collidesInScope` - that scans the PRE-fix source,
+		// where each occurrence still carries its own prefix. Renaming both would merge two
+		// bindings into one, silently and compilably (Haxe permits the shadowing).
+		final candidates: Array<Candidate> = [];
 		for (decl in support.project(tree)) {
 			final span: Null<Span> = decl.span;
 			if (span == null || !flaggedFroms.contains(span.from)) continue;
-			final rename: Null<RenameEdits> = renameFor(decl, source, tree, policy, shape, plugin, resolutionIndex);
-			if (rename != null) for (occ in rename.occurrences) edits.push({ span: occ, text: rename.name });
+			final target: Null<String> = strippedName(decl, policy, shape);
+			if (target == null) continue;
+			// Re-bind to a non-null final: strict null-safety does not narrow inside a struct literal.
+			final name: String = target;
+			candidates.push({ decl: decl, target: name, scope: Naming.innermostSpanOfKinds(tree, functionScopeKinds(shape), span.from) });
+		}
+		final edits: Array<{ span: Span, text: String }> = [];
+		for (i in 0...candidates.length) {
+			final c: Candidate = candidates[i];
+			if (claimedByAnother(candidates, i)) continue;
+			final rename: Null<Array<Span>> = renameSpansFor(c.decl, c.target, source, tree, shape, plugin, resolutionIndex);
+			if (rename != null) for (occ in rename) edits.push({ span: occ, text: c.target });
 		}
 		return edits;
+	}
+
+	/**
+	 * Whether another candidate claims the same target name from an OVERLAPPING scope, making
+	 * both renames unsafe (see `fix`). Scopes overlap when either is unresolvable (fail-closed)
+	 * or their spans intersect - a nested closure's scope lies inside its enclosing function's,
+	 * so the two conflict; two disjoint bodies do not.
+	 */
+	private static function claimedByAnother(candidates: Array<Candidate>, index: Int): Bool {
+		final own: Candidate = candidates[index];
+		final mine: Null<Span> = own.scope;
+		for (i in 0...candidates.length) if (i != index && candidates[i].target == own.target) {
+			final other: Null<Span> = candidates[i].scope;
+			if (other == null || mine == null) return true;
+			if (mine.from < other.to && other.from < mine.to) return true;
+		}
+		return false;
 	}
 
 	/**
@@ -176,8 +219,7 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 * is live (`silenceGuard`), or the two fixes would ping-pong.
 	 */
 	private static function checkDecl(
-		out: Array<Violation>, file: String, source: String, tree: QueryNode, decl: NamedDecl, shape: RefShape, params: Bool, locals: Bool,
-		silenceGuard: Bool
+		out: Array<Violation>, file: String, source: String, tree: QueryNode, decl: NamedDecl, shape: RefShape, options: Options
 	): Void {
 		final span: Null<Span> = decl.span;
 		// `renameUnsafe` on a Param means the grammar projected an anon-STRUCTURE field, not a
@@ -185,9 +227,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		// finding of this rule nor renameable.
 		if (span == null || decl.reservedName == true || decl.renameUnsafe == true) return;
 		final isParam: Bool = decl.category == NamingCategory.Param;
-		final inScope: Bool = isParam ? params : decl.category == NamingCategory.Local && locals;
+		final inScope: Bool = isParam ? options.params : decl.category == NamingCategory.Local && options.locals;
 		if (!inScope || !UNDERSCORE_PREFIX.match(decl.name)) return;
-		if (isParam && silenceGuard && isUnreferenced(source, tree, decl.name, span, shape)) return;
+		if (isParam && options.silenceGuard && isUnreferenced(source, tree, decl.name, span, shape)) return;
 		out.push({
 			file: file,
 			span: span,
@@ -198,55 +240,40 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	}
 
 	/**
-	 * The rename to apply to one flagged binding, or null when a gate refuses it: the
-	 * grammar marked the declaration rename-unsafe, the stripped name is not usable
-	 * (`strippedName`), it collides with something reachable from the binding's scope
-	 * (`Naming.collidesInScope` — a sibling parameter, an overlapping local, an own member,
-	 * a static, an import), it names a member INHERITED from a supertype, it names a
-	 * declared top-level type, or the occurrence set cannot be proven complete
-	 * (`Naming.declaringFileRenameSpans`).
+	 * The spans to rewrite to `target` for one flagged binding, or null when a gate refuses the rename: `target` collides with something reachable from the binding's scope (`Naming.collidesInScope` - a sibling parameter, an overlapping local, an own member, a static, an import), it names a member INHERITED from a supertype, it names a declared top-level type, or the occurrence set cannot be proven complete (`Naming.declaringFileRenameSpans`). The same-target conflict between two flagged bindings is settled by the caller (`claimedByAnother`); the derived `target` itself comes from `strippedName`.
 	 */
-	private static function renameFor(
-		decl: NamedDecl, source: String, tree: QueryNode, policy: NamingPolicy, shape: RefShape, plugin: GrammarPlugin,
+	private static function renameSpansFor(
+		decl: NamedDecl, target: String, source: String, tree: QueryNode, shape: RefShape, plugin: GrammarPlugin,
 		resolutionIndex: Null<SymbolIndex>
-	): Null<RenameEdits> {
+	): Null<Array<Span>> {
 		final span: Null<Span> = decl.span;
-		if (span == null || decl.renameUnsafe == true) return null;
-		final target: Null<String> = strippedName(decl, policy);
-		if (target == null) return null;
-		final name: String = target;
-		if (Naming.collidesInScope(decl, source, tree, name, shape, resolutionIndex)) return null;
-		if (collidesWithProjectSymbol(decl, name, resolutionIndex)) return null;
-		final spans: Null<Array<Span>> = Naming.declaringFileRenameSpans(
+		if (span == null) return null;
+		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex)) return null;
+		if (collidesWithProjectSymbol(decl, target, resolutionIndex)) return null;
+		return Naming.declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
 			interpolationReadSpans(tree, source, decl.name, span.from, shape)
 		);
-		return spans == null ? null : {
-			occurrences: spans,
-			name: name
-		};
 	}
 
 	/**
-	 * `decl`'s name with every leading underscore stripped, or null when the result must
-	 * not be written: nothing was stripped, the remainder is not a valid identifier
-	 * (`_1` -> `1`), the applicable naming rule's own normalizer rejects the name (how a
-	 * grammar reports "the stripped form is a keyword" — `_new` -> `new`), or the
-	 * remainder violates that rule's format, which would trade this finding for a `naming`
-	 * one. With no applicable rule (a `checkstyle.json` policy that governs neither
-	 * category) the bare strip stands, keyword-unchecked.
+	 * `decl`'s name with every leading underscore stripped, or null when the result must not be written: nothing was stripped, the remainder is not a valid identifier (`_1` -> `1`), it is a reserved word of the grammar (`_new` -> `new`), or it violates the applicable naming rule's format, which would trade this finding for a `naming` one. With no applicable rule (a project policy governing neither category) the bare strip stands - still keyword-checked, since that gate is the grammar's, not the policy's.
 	 */
-	private static function strippedName(decl: NamedDecl, policy: NamingPolicy): Null<String> {
+	private static function strippedName(decl: NamedDecl, policy: NamingPolicy, shape: RefShape): Null<String> {
 		final name: String = decl.name;
 		var i: Int = 0;
 		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
 		if (!RefactorSupport.isIdentifier(stripped)) return null;
+		// Reserved words are a GRAMMAR fact, checked unconditionally: a policy cannot stand in
+		// for it. One adapted from a project config carries no `normalize`, and every camelCase
+		// format matches `dynamic` / `macro` / `new` exactly as it matches `event` - so gating the
+		// keyword veto on the policy would emit source the parser rejects.
+		final reserved: Array<String> = shape.reservedWords ?? [];
+		if (reserved.contains(stripped)) return null;
 		final rule: Null<NamingRule> = Naming.applicableRule(decl, policy);
 		if (rule == null) return stripped;
-		final normalize: Null<String -> Null<String>> = rule.normalize;
-		if (normalize != null && normalize(name) == null) return null;
 		return rule.format.match(stripped) ? stripped : null;
 	}
 
@@ -270,10 +297,11 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 * The identifier-token spans of every simple `$name` string-interpolation read of the
 	 * binding declared at `declFrom` — occurrences the reference walker does not index, so
 	 * `Rename.renameOccurrences` misses them and the completeness gate would refuse the
-	 * whole rename. Restricted to the binding's own innermost function so a same-named
-	 * binding in a sibling body is untouched, and returned EMPTY (leaving any such read
-	 * uncovered, hence blocking) unless the file declares the name exactly once — with two
-	 * declarations the reads cannot be attributed without re-implementing scope resolution.
+	  * whole rename. Restricted to the binding's own innermost function, and returned EMPTY
+	 * (leaving any such read uncovered, hence blocking) unless the file declares the name
+	 * exactly ONCE: at zero the read binds to something the file does not declare (an
+	 * inherited field), at two or more it cannot be attributed without re-implementing scope
+	 * resolution. Both are refused rather than guessed.
 	 */
 	private static function interpolationReadSpans(
 		tree: QueryNode, source: String, name: String, declFrom: Int, shape: RefShape
@@ -314,18 +342,32 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		return fn != null && !RefactorSupport.referencedInRange(source, name, fn.from, fn.to, [declSpan]);
 	}
 
-	/** Every node kind that bounds a binding's visibility to one body: a function declaration, a local function, a lambda. */
+	/** Every node kind that bounds a binding's visibility to one body: a function declaration, a local (or local inline) function, a lambda. */
 	private static function functionScopeKinds(shape: RefShape): Array<String> {
-		return (shape.functionKinds ?? []).concat(shape.localFunctionKinds ?? []).concat(shape.lambdaKinds ?? []);
+		return (shape.functionKinds ?? []).concat(shape.localFunctionKinds ?? [])
+			.concat(shape.inlineFunctionKinds ?? [])
+			.concat(shape.lambdaKinds ?? []);
 	}
 
 }
 
 /**
- * A computed rename for one binding: every span to rewrite and the identifier to write
- * at each.
+ * The per-file option set of one `run`: whether parameters / locals are in scope, and
+ * whether `unused-parameter`'s silencing `_<name>` rename is live (see the class doc).
  */
-private typedef RenameEdits = {
-	final occurrences: Array<Span>;
-	final name: String;
+private typedef Options = {
+	final params: Bool;
+	final locals: Bool;
+	final silenceGuard: Bool;
+};
+
+/**
+ * One flagged binding whose derived target name passed `strippedName`: the declaration, that target, and the scope the target must be unique within. The set of these decides the same-target conflict between two flagged bindings before any rename is emitted.
+ */
+private typedef Candidate = {
+	final decl: NamedDecl;
+	final target: String;
+
+	/** The binding's innermost enclosing function span, or null when none resolves (treated as conflicting with everything). */
+	final scope: Null<Span>;
 };

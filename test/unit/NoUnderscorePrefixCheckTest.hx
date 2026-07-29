@@ -90,8 +90,11 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	public function testDiscardAndDunderNamesNeverFlagged(): Void {
+		// `_` / `__` fail the prefix regex on their own; a DUNDER matches it and is stopped only
+		// by the projection's `reservedName` — renaming `__init__` silently disables the runtime hook.
 		final src: String = 'package pkg;\n'
-			+ 'class C {\n\tpublic function f(xs:Array<Int>):Void {\n\t\tfor (_ in xs) trace(1);\n\t\tfor (__ in xs) trace(2);\n\t}\n}';
+			+ 'class C {\n\tpublic function f(xs:Array<Int>):Void {\n\t\tfor (_ in xs) trace(1);\n\t\tfor (__ in xs) trace(2);\n'
+			+ '\t\tfinal __init__:Int = 1;\n\t\ttrace(__init__);\n\t}\n}';
 		Assert.equals(0, violations(src).length);
 	}
 
@@ -163,10 +166,55 @@ class NoUnderscorePrefixCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	public function testKeywordTargetSkippedUnderPolicyWithoutNormalizer(): Void {
+		// The reserved-word veto is the GRAMMAR's, not the policy's: a `checkstyle.json`-adapted
+		// rule carries no normalizer and its camelCase format matches `dynamic` exactly as it
+		// matches `event`, so gating the veto on the policy would emit source the parser rejects.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_dynamic:Int):Void {\n\t\ttrace(_dynamic);\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, editsUnderPolicy(src, '{"checks":[{"type":"ParameterName","props":{"format":"^[a-z][a-zA-Z0-9]*$"}}]}').length);
+	}
+
+	public function testKeywordTargetSkippedUnderPolicyGoverningNeitherCategory(): Void {
+		// No applicable rule at all: the bare strip stands, but it is STILL keyword-checked.
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_new:Int):Void {\n\t\ttrace(_new);\n\t}\n}';
+		Assert.equals(0, editsUnderPolicy(src, '{"checks":[{"type":"TypeName","props":{"format":"^[A-Z][a-zA-Z0-9]*$"}}]}').length);
+	}
+
+	public function testTwoBindingsStrippingToTheSameNameBothSkipped(): Void {
+		// `_a` and `__a` both strip to `a`, and neither is visible to the other's collision proof
+		// (that scans the PRE-fix source, where each still carries its own prefix). Renaming both
+		// would merge two bindings into one — and Haxe permits the shadowing, so it would compile.
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function f(_a:Int):Void {\n\t\tfinal __a:Int = 2;\n\t\ttrace(_a + __a);\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	public function testSameTargetInDisjointFunctionsStillRenames(): Void {
+		// The conflict is scope-bounded: two bodies that cannot see each other both rename.
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function f(_a:Int):Void {\n\t\ttrace(_a);\n\t}\n\n\tpublic function g(__a:Int):Void {\n\t\ttrace(__a);\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		assertFixed(src, ['f(a:Int)', 'g(a:Int)'], ['_a', '__a']);
+	}
+
+	public function testNestedClosureClaimingTheSameTargetSkipped(): Void {
+		// The closure's scope lies INSIDE the enclosing function's, so the two conflict.
+		final src: String = 'package pkg;\n'
+			+ 'class C {\n\tpublic function f(_x:Int):Void {\n\t\tfinal g:Int -> Int = function(__x:Int) return __x + _x;\n'
+			+ '\t\ttrace(g(1));\n\t}\n}';
+		Assert.equals(2, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
 	public function testNonIdentifierTargetSkipped(): Void {
+		// Under a policy governing NEITHER category the format gate is absent, so the identifier
+		// check is the only thing standing between `_1` and an emitted `1`.
 		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_1:Int):Void {\n\t\ttrace(_1);\n\t}\n}';
 		Assert.equals(1, violations(src).length);
 		Assert.equals(0, edits(src).length);
+		Assert.equals(0, editsUnderPolicy(src, '{"checks":[{"type":"TypeName","props":{"format":"^[A-Z][a-zA-Z0-9]*$"}}]}').length);
 	}
 
 	public function testStrippedNameViolatingPolicyFormatSkipped(): Void {
@@ -178,8 +226,11 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	public function testAnonStructureFieldNeverFlagged(): Void {
-		final src: String = 'package pkg;\ntypedef Payload = {\n\tvar _key:String;\n}';
-		Assert.equals(0, violations(src).length);
+		// The SHORT anon form projects its members as `Required` — category Param, marked
+		// `renameUnsafe` because the identifier is a wire contract. That is the gate under test;
+		// the `var _key:String;` long form projects as `VarField`, which carries no category at all.
+		Assert.equals(0, violations('package pkg;\ntypedef Payload = { _key:String };').length);
+		Assert.equals(0, violations('package pkg;\ntypedef Payload = {\n\tvar _key:String;\n}').length);
 	}
 
 	public function testInheritedMemberBlocksRename(): Void {
@@ -240,6 +291,27 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final check: NoUnderscorePrefix = configured(config);
 		return check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+	}
+
+	/**
+	 * The check's autofix edits for `src` under a NAMING policy adapted from `checkstyle` content, discovered the way a real run discovers it - a `checkstyle.json` written next to the linted file. That is the shape whose rules carry no `normalize`, so the reserved-word veto cannot lean on the policy.
+	 */
+	private function editsUnderPolicy(src: String, checkstyle: String): Array<{ span: Span, text: String }> {
+		final tmp: Null<String> = Sys.getEnv('TMPDIR');
+		final base: String = (tmp != null && tmp.length > 0) ? tmp : '/tmp';
+		final dir: String = '$base/anyparse_nup_cfg_${Sys.time()}';
+		sys.FileSystem.createDirectory(dir);
+		sys.io.File.saveContent('$dir/checkstyle.json', checkstyle);
+		final path: String = '$dir/C.hx';
+		sys.io.File.saveContent(path, src);
+		final files: Array<{ file: String, source: String }> = [{ file: path, source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
+		final out: Array<{ span: Span, text: String }> = check.fix(src, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin));
+		sys.FileSystem.deleteFile(path);
+		sys.FileSystem.deleteFile('$dir/checkstyle.json');
+		sys.FileSystem.deleteDirectory(dir);
+		return out;
 	}
 
 	/** A check carrying `config` (raw `apqlint.json` text) as its per-file resolver, or the default one. */
