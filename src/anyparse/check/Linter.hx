@@ -136,7 +136,8 @@ final class Linter {
 			new FieldInitAtDeclaration(),
 			new PreferInline(),
 			new InlineConstant(),
-			new ExtractRepeatedExpression()
+			new ExtractRepeatedExpression(),
+			new NoUnderscorePrefix()
 		];
 	}
 
