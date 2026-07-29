@@ -22,8 +22,9 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * `INV` negates the guard condition `c` so the surviving iterations are the ones the
  * `continue` skipped. When the grammar exposes a `BooleanLogicSupport` and `c` is
  * comment-free, `CheckScan.negateConditionText` pushes De Morgan inward; otherwise (a
- * seam-less grammar, or a comment inside `c`) it falls back to the verbatim text engine.
- * Both agree on the leaf rules:
+ * seam-less grammar, a comment inside `c`, or a condition whose flattened `||` chain would
+ * STRAND a null-safety narrowing — `CheckScan.narrowingStranded`) it falls back to the
+ * verbatim text engine. Both agree on the leaf rules:
  *
  * - `!e` → `e` (strip the `!`, unwrapping a redundant paren so `!(a && b)` → `a && b`);
  * - `a == b` → `a != b`, `a != b` → `a == b` (NaN-safe: IEEE `NaN == x` is false and
@@ -140,6 +141,9 @@ final class LoopGuard implements Check {
 			notEqKind: shape.notEqKind,
 			parenKind: shape.parenKind,
 			atomicKinds: atomicKinds,
+			andKind: shape.logicalAndKind,
+			orKind: shape.logicalOrKind,
+			identKind: shape.identKind,
 			opaqueKinds: shape.opaqueKinds ?? [],
 			support: plugin.booleanLogicSupport()
 		};
@@ -218,7 +222,10 @@ final class LoopGuard implements Check {
 			parenKind: s.parenKind,
 			eqKind: s.eqKind,
 			notEqKind: s.notEqKind,
-			atomicKinds: s.atomicKinds
+			atomicKinds: s.atomicKinds,
+			andKind: s.andKind,
+			orKind: s.orKind,
+			identKind: s.identKind
 		}, s.support);
 	}
 
@@ -235,6 +242,9 @@ private typedef Seams = {
 	var notEqKind: Null<String>;
 	var parenKind: Null<String>;
 	var atomicKinds: Array<String>;
+	var andKind: Null<String>;
+	var orKind: Null<String>;
+	var identKind: String;
 	var opaqueKinds: Array<String>;
 	var support: Null<BooleanLogicSupport>;
 }

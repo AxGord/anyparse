@@ -40,17 +40,19 @@ import anyparse.runtime.Span;
  * `a == null || b == null || p(a.length, b.length)` (which does NOT - `b` is no longer
  * narrowed). Measured on the compiler: the fact of operand 1 reaches operand 3, the fact of
  * operand 2 does not; a two-operand chain is always safe, and a right-nested
- * `x || (y || z)` is safe. Rather than emit a right-nested disjunction, this check DECLINES
- * the De Morgan tier for such a condition and falls back to the verbatim `!(cond)` wrap,
- * whose interior is the original `&&` chain and so narrows exactly as before (verified: the
- * de-nested body still narrows after the wrapped guard). The gate is syntactic and
- * conservative - no type information: a negated `&&` chain is flagged when an operand at
- * index 3 or later shares a plain identifier with an operand at index 2 or later that
- * precedes it. A condition that ALREADY spans lines takes NO fix on this path at all: the
- * verbatim wrap re-emits it as-is, so a nested multi-line `!( … )` would read worse than
- * the branch it replaces (a De-Morganed multi-line condition still de-nests). `loop-guard` negates in the opposite direction (a skip condition into a keep
- * condition) and `guard-continue` shares the hazard; the gate lives HERE rather than in
- * `CheckScan` so the shared engine's other consumers keep their exact output.
+ * `x || (y || z)` is safe. Rather than emit a right-nested disjunction, the shared engine
+ * DECLINES the De Morgan tier for such a condition and falls back to the verbatim `!(cond)`
+ * wrap, whose interior is the original `&&` chain and so narrows exactly as before
+ * (verified: the de-nested body still narrows after the wrapped guard). The gate is
+ * syntactic and conservative - no type information: a negated `&&` chain is flagged when an
+ * operand at index 3 or later shares a plain identifier with an operand at index 2 or later
+ * that precedes it. It lives in `CheckScan.narrowingStranded`, applied by
+ * `negateConditionText` itself, so `loop-guard` (which negates in the opposite direction, a
+ * skip condition into a keep condition) and `guard-continue` are covered by the same seat.
+ * This check reads the predicate directly for one EXTRA gate of its own: a condition that
+ * ALREADY spans lines takes NO fix on this path at all, since the verbatim wrap re-emits it
+ * as-is and a nested multi-line `!( … )` would read worse than the branch it replaces (a
+ * De-Morganed multi-line condition still de-nests).
  *
  * ## Gates
  *
@@ -113,12 +115,6 @@ final class GuardReturn implements Check {
 
 	/** The enclosing block must hold at least the flagged `if` and the trailing `return`. */
 	private static inline final MIN_BLOCK_STATEMENTS: Int = 2;
-
-	/** A binary logical node has exactly [left, right] children. */
-	private static inline final BINARY_CHILD_COUNT: Int = 2;
-
-	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
-	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
 
 	public function new() {}
 
@@ -199,15 +195,15 @@ final class GuardReturn implements Check {
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
-			andKind: shape.logicalAndKind,
-			orKind: shape.logicalOrKind,
-			identKind: shape.identKind,
 			negation: {
 				notKind: shape.notKind,
 				parenKind: shape.parenKind,
 				eqKind: shape.eqKind,
 				notEqKind: shape.notEqKind,
-				atomicKinds: atomicKinds
+				atomicKinds: atomicKinds,
+				andKind: shape.logicalAndKind,
+				orKind: shape.logicalOrKind,
+				identKind: shape.identKind
 			},
 			logic: plugin.booleanLogicSupport()
 		};
@@ -266,7 +262,7 @@ final class GuardReturn implements Check {
 		// already spans lines becomes a nested multi-line `!( … )` wrap — worse to read
 		// than the branch it would replace. Only that path is affected; a De-Morganed
 		// multi-line condition still de-nests.
-		if (narrowingStranded(cond, s) && spansLines(source, cond)) return null;
+		if (CheckScan.narrowingStranded(cond, s.negation) && spansLines(source, cond)) return null;
 		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail) || redeclaresSibling(block, ifNode, thenBlock, s);
 		return blocked ? null : {
 			ifNode: ifNode,
@@ -341,70 +337,11 @@ final class GuardReturn implements Check {
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		final tailSpan: Null<Span> = m.tail.span;
 		if (ifSpan == null || thenSpan == null || tailSpan == null) return null;
-		// De Morgan strands a null-safety narrowing established in a NON-FIRST operand of the
-		// resulting `||` chain, so such a condition takes the verbatim `!( … )` wrap instead.
-		final logic: Null<BooleanLogicSupport> = narrowingStranded(m.cond, s) ? null : s.logic;
-		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, logic);
+		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.logic);
 		final inner: String = StringTools.rtrim(source.substring(thenSpan.from + 1, thenSpan.to - 1));
 		final tailSource: String = source.substring(tailSpan.from, tailSpan.to);
 		return { span: new Span(ifSpan.from, tailSpan.to), text: 'if ($neg) $tailSource$inner' };
 	}
-
-
-	/**
-	 * Whether De-Morganing `cond` would strand a Haxe null-safety narrowing. An `&&`
-	 * chain negates into a flat left-associative `||` chain, and Haxe carries a
-	 * narrowing fact into a later `||` operand from the chain's FIRST operand ONLY
-	 * (measured on the compiler: in `a == null || b == null || p(a.length, b.length)`
-	 * the `b` narrowing does not reach operand 3, while the `a` one does). The scan is
-	 * syntactic and conservative - no type information: a negated `&&` chain strands
-	 * when an operand at index 2 or later (0-based) shares a plain identifier with a
-	 * preceding operand OTHER than the first. A `!` node is not descended: negating it
-	 * STRIPS the `!` and re-emits its operand verbatim, restructuring nothing.
-	 */
-	private static function narrowingStranded(cond: QueryNode, s: Seams): Bool {
-		final andKind: Null<String> = s.andKind;
-		if (andKind == null) return false;
-		if (cond.kind == s.negation.parenKind) return cond.children.length == 1 && narrowingStranded(cond.children[0], s);
-		if (cond.kind == s.negation.notKind) return false;
-		if (cond.kind != andKind && cond.kind != s.orKind) return false;
-		final operands: Array<QueryNode> = [];
-		flattenChain(cond, cond.kind, operands);
-		if (cond.kind == andKind && chainStrands(operands, s)) return true;
-		for (operand in operands) if (narrowingStranded(operand, s)) return true;
-		return false;
-	}
-
-	/** Append the left-associative `kind` chain under `node` as a flat operand list. */
-	private static function flattenChain(node: QueryNode, kind: String, out: Array<QueryNode>): Void {
-		if (node.kind != kind || node.children.length != BINARY_CHILD_COUNT) {
-			out.push(node);
-			return;
-		}
-		flattenChain(node.children[0], kind, out);
-		flattenChain(node.children[1], kind, out);
-	}
-
-	/**
-	 * Whether the disjunction `operands` negates into would strand a narrowing: some
-	 * operand at index 2 or later shares an identifier with a preceding operand that is
-	 * not the first (whose fact alone survives the `||` chain).
-	 */
-	private static function chainStrands(operands: Array<QueryNode>, s: Seams): Bool {
-		if (operands.length < STRANDABLE_CHAIN_LENGTH) return false;
-		final names: Array<Array<String>> = [for (operand in operands) identNames(operand, s, [])];
-		for (i in 2...operands.length) for (j in 1...i) for (name in names[i]) if (names[j].contains(name)) return true;
-		return false;
-	}
-
-	/** Append every plain-identifier name in `node`'s subtree to `out` and return it. */
-	private static function identNames(node: QueryNode, s: Seams, out: Array<String>): Array<String> {
-		final name: Null<String> = node.name;
-		if (node.kind == s.identKind && name != null && name != '' && !out.contains(name)) out.push(name);
-		for (child in node.children) identNames(child, s, out);
-		return out;
-	}
-
 
 	/** Whether `node`'s source spans more than one line. */
 	private static function spansLines(source: String, node: QueryNode): Bool {
@@ -424,9 +361,6 @@ private typedef Seams = {
 	var localDeclExprKinds: Array<String>;
 	var metaKinds: Array<String>;
 	var opaqueKinds: Array<String>;
-	var andKind: Null<String>;
-	var orKind: Null<String>;
-	var identKind: String;
 	var negation: NegationSeams;
 	var logic: Null<BooleanLogicSupport>;
 }

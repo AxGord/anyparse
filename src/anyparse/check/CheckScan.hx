@@ -23,6 +23,12 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
 @:nullSafety(Strict)
 final class CheckScan {
 
+	/** A binary logical node has exactly [left, right] children. */
+	private static inline final BINARY_CHILD_COUNT: Int = 2;
+
+	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
+	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
+
 	private function new() {}
 
 	/**
@@ -116,15 +122,16 @@ final class CheckScan {
 
 	/**
 	 * The source text of a negation of `cond`, comment-preserving — the shared
-	 * condition-inverting engine of `loop-guard` and `guard-continue`.
+	 * condition-inverting engine of `loop-guard`, `guard-continue` and `guard-return`.
 	 *
-	 * When a grammar `support` is passed AND the condition span holds no comment marker, the
-	 * negation is delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
+	 * When a grammar `support` is passed AND the condition span holds no comment marker AND the
+	 * condition does not strand a null-safety narrowing (`narrowingStranded`), the negation is
+	 * delegated to `BooleanLogicSupport.negateCondition`: De Morgan pushed inward
 	 * (`a && b` → `!a || !b`) NaN-safely — ordered comparisons stay wrapped `!(a < b)`, never
 	 * flipped. The comment scan is STRING-LITERAL-BLIND: a `//` or `/*` inside a string operand
 	 * conservatively forces the fallback (a verbatim `!(cond)` wrap — correct output, just not
-	 * De-Morganed). With no `support`, or a comment in the condition span, the text engine below
-	 * is used, in three shapes, in order:
+	 * De-Morganed). With no `support`, a comment in the condition span, or a stranded narrowing,
+	 * the text engine below is used, in three shapes, in order:
 	 *
 	 *  - a leading logical-not is STRIPPED (`!e` → `e`), unwrapping one redundant paren
 	 *    (`!(a && b)` → `a && b`, `!!x` → `!x`) — the inner source verbatim;
@@ -148,13 +155,44 @@ final class CheckScan {
 	): String {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
-		if (support != null && !hasCommentMarker(source, cs.from, cs.to)) return support.negateCondition(cond, source);
+		if (support != null && !hasCommentMarker(source, cs.from, cs.to) && !narrowingStranded(cond, seams))
+			return support.negateCondition(cond, source);
 		final unwrapped: Null<String> = notUnwrapText(cond, source, seams);
 		if (unwrapped != null) return unwrapped;
 		final flipped: Null<String> = eqFlipText(cond, source, seams);
 		if (flipped != null) return flipped;
 		final src: String = source.substring(cs.from, cs.to);
 		return seams.atomicKinds.contains(cond.kind) ? '!$src' : '!($src)';
+	}
+
+	/**
+	 * Whether De-Morganing `cond` would strand a Haxe null-safety narrowing — the gate every
+	 * consumer of `negateConditionText` needs, and which that engine applies itself; exposed
+	 * because a check may want to know BEFORE it decides to flag at all (`guard-return` refuses
+	 * an already multi-line condition on this path, whose verbatim wrap would read worse than
+	 * the branch it replaces).
+	 *
+	 * An `&&` chain negates into a flat left-associative `||` chain, and Haxe carries a
+	 * narrowing fact into a later `||` operand from the chain's FIRST operand ONLY
+	 * (measured on the compiler: in `a == null || b == null || p(a.length, b.length)`
+	 * the `b` narrowing does not reach operand 3, while the `a` one does). The scan is
+	 * syntactic and conservative - no type information: a negated `&&` chain strands
+	 * when an operand at index 2 or later (0-based) shares a plain identifier with a
+	 * preceding operand OTHER than the first. A `!` node is not descended: negating it
+	 * STRIPS the `!` and re-emits its operand verbatim, restructuring nothing. A grammar
+	 * with no `andKind` seam never strands.
+	 */
+	public static function narrowingStranded(cond: QueryNode, seams: NegationSeams): Bool {
+		final andKind: Null<String> = seams.andKind;
+		if (andKind == null) return false;
+		if (cond.kind == seams.parenKind) return cond.children.length == 1 && narrowingStranded(cond.children[0], seams);
+		if (cond.kind == seams.notKind) return false;
+		if (cond.kind != andKind && cond.kind != seams.orKind) return false;
+		final operands: Array<QueryNode> = [];
+		flattenChain(cond, cond.kind, operands);
+		if (cond.kind == andKind && chainStrands(operands, seams)) return true;
+		for (operand in operands) if (narrowingStranded(operand, seams)) return true;
+		return false;
 	}
 
 	/**
@@ -375,6 +413,36 @@ final class CheckScan {
 		return null;
 	}
 
+	/** Append the left-associative `kind` chain under `node` as a flat operand list. */
+	private static function flattenChain(node: QueryNode, kind: String, out: Array<QueryNode>): Void {
+		if (node.kind != kind || node.children.length != BINARY_CHILD_COUNT) {
+			out.push(node);
+			return;
+		}
+		flattenChain(node.children[0], kind, out);
+		flattenChain(node.children[1], kind, out);
+	}
+
+	/**
+	 * Whether the disjunction `operands` negates into would strand a narrowing: some
+	 * operand at index 2 or later shares an identifier with a preceding operand that is
+	 * not the first (whose fact alone survives the `||` chain).
+	 */
+	private static function chainStrands(operands: Array<QueryNode>, seams: NegationSeams): Bool {
+		if (operands.length < STRANDABLE_CHAIN_LENGTH) return false;
+		final names: Array<Array<String>> = [for (operand in operands) identNames(operand, seams, [])];
+		for (i in 2...operands.length) for (j in 1...i) for (name in names[i]) if (names[j].contains(name)) return true;
+		return false;
+	}
+
+	/** Append every plain-identifier name in `node`'s subtree to `out` and return it. */
+	private static function identNames(node: QueryNode, seams: NegationSeams, out: Array<String>): Array<String> {
+		final name: Null<String> = node.name;
+		if (node.kind == seams.identKind && name != null && name != '' && !out.contains(name)) out.push(name);
+		for (child in node.children) identNames(child, seams, out);
+		return out;
+	}
+
 	private static function collectClassBodies(node: QueryNode, out: Array<QueryNode>): Void {
 		if (isClassBodyKind(node.kind)) out.push(node);
 		for (child in node.children) collectClassBodies(child, out);
@@ -394,8 +462,10 @@ private typedef CondSimplifySeams = {
 /**
  * The condition-kind seams `CheckScan.negateConditionText` reads to invert a condition:
  * the logical-not (`notKind`) it strips, the paren (`parenKind`) it unwraps, the
- * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, and the atomic-expression kinds
- * (`atomicKinds`) that take a bare `!` rather than `!(…)`.
+ * `==` / `!=` kinds (`eqKind` / `notEqKind`) it flips, the atomic-expression kinds
+ * (`atomicKinds`) that take a bare `!` rather than `!(…)`, and the logical
+ * (`andKind` / `orKind`) plus plain-identifier (`identKind`) kinds the
+ * stranded-narrowing gate walks.
  */
 typedef NegationSeams = {
 	final notKind: Null<String>;
@@ -403,4 +473,7 @@ typedef NegationSeams = {
 	final eqKind: Null<String>;
 	final notEqKind: Null<String>;
 	final atomicKinds: Array<String>;
+	final andKind: Null<String>;
+	final orKind: Null<String>;
+	final identKind: String;
 };

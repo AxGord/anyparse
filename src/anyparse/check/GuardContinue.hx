@@ -27,8 +27,12 @@ import anyparse.query.BooleanLogic.BooleanLogicSupport;
  * a `BooleanLogicSupport` and the condition span is comment-free, the negation is pushed
  * inward by De Morgan (`a && b` → `!a || !b`, `!(a || b)` → `a && b`, `==` / `!=` flipped),
  * with the ordered comparisons `< <= > >=` deliberately KEPT wrapped `!(a < b)` (never
- * flipped — `!(a < b)` and `a >= b` differ under NaN). Falling back — a seam-less grammar, or
- * a comment in the condition the De Morgan rewrite would drop — the old text engine wraps
+ * flipped — `!(a < b)` and `a >= b` differ under NaN). Falling back — a seam-less grammar, a
+ * comment in the condition the De Morgan rewrite would drop, or a condition whose flattened
+ * `||` chain would STRAND a null-safety narrowing (`CheckScan.narrowingStranded`: Haxe
+ * carries a narrowing fact into a later `||` operand from the FIRST operand only, so
+ * `a != null && b != null && p(a.length, b.length)` must not become
+ * `a == null || b == null || p(a.length, b.length)`) — the old text engine wraps
  * `!(cond)` VERBATIM (`!` strip, NaN-safe `==` / `!=` flip, everything else
  * parenthesised-wrapped), preserving the comment. Either tier is sound and compiles.
  *
@@ -188,7 +192,10 @@ final class GuardContinue implements Check {
 				parenKind: shape.parenKind,
 				eqKind: shape.eqKind,
 				notEqKind: shape.notEqKind,
-				atomicKinds: atomicKinds
+				atomicKinds: atomicKinds,
+				andKind: shape.logicalAndKind,
+				orKind: shape.logicalOrKind,
+				identKind: shape.identKind
 			},
 			support: plugin.booleanLogicSupport()
 		};
