@@ -69,6 +69,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * binding surface — the bare `name:Type` forms reuse the
 	 * `Required` / `Optional` entries above. Reached only once
 	 * `appendNodes` descends the anon `type` (see `isAnonType`).
+	 * `VarMore` is the `@:spanned('VarMore')` struct carrying every binding
+	 * AFTER the first in `var a = 1, b = 2;` — without it those bindings had
+	 * no declaration node at all, so `Refs` could not resolve their uses and
+	 * every declaration-walking check was blind to them.
 	 */
 	private static final DECL_HOST_KINDS: Array<String> = [
 		'VarDecl',
@@ -87,6 +91,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		'FinalStmt',
 		'StaticVarStmt',
 		'StaticFinalStmt',
+		'VarMore',
 		'VarExpr',
 		'FinalExpr',
 		'Required',
@@ -448,13 +453,20 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',
 			emptyMemberKind: 'EmptySemiMember',
-			localDeclKinds: ['VarStmt', 'FinalStmt'],
+			// `VarMore` IS a local declaration — the binding after the comma in
+			// `var a = 1, b = 2;`. Listed here so every declaration-walking check reaches it
+			// with its existing logic. NOT in `mutableLocalDeclKinds`: the kind alone cannot
+			// say whether the list it continues is `var` or `final`, and Haxe has no way to
+			// mark ONE binding of a multi-var `final` anyway.
+			localDeclKinds: ['VarStmt', 'FinalStmt', 'VarMore'],
+			localDeclContinuationKinds: ['VarMore'],
 			localDeclExprKinds: ['VarExpr', 'FinalExpr'],
 			mutableLocalDeclKinds: ['VarStmt'],
 			ifStatementKinds: ['IfStmt'],
 			equalityKinds: ['Eq', 'NotEq'],
 			optionalParamKind: 'Optional',
 			restParamKind: 'Rest',
+			structureFieldHostKinds: ['Anon', 'ObjectLit'],
 			nullableWrapperTypeNames: ['Null', 'Dynamic', 'Any'],
 			nullSafetyDisableArg: 'Off',
 			nonNullableTypeNames: ['Int', 'Float', 'Bool', 'UInt'],

@@ -737,6 +737,13 @@ final class Naming implements Check implements CrossFileFix {
 	 * static, or import). Only a function DISJOINT from that enclosing one (a sibling / unrelated body)
 	 * is out of scope. An inherited member in another file never appears in-file, so a local legally
 	 * shadowing one still renames.
+	 *
+	 * The Local / Param / CatchVar arm also subtracts every STRUCTURE-FIELD name
+	 * (`RefactorSupport.structureFieldNameSpans`) — the counterpart of the `unrelatedTypeSpans`
+	 * subtraction the class-level arm makes. A field of an anon structure binds nothing in any
+	 * lexical scope, and it is never a `@:structInit` hazard here because a LOCAL is not a class
+	 * member; without the subtraction a module-level `typedef Zoom = { x:Float, y:Float }` vetoed
+	 * every `__x -> x` in its file.
 	 */
 	private static function collidesInScope(
 		decl: NamedDecl, source: String, tree: QueryNode, newName: String, shape: RefShape, resolutionIndex: Null<SymbolIndex>,
@@ -760,7 +767,7 @@ final class Naming implements Check implements CrossFileFix {
 		// Only a function DISJOINT from it (a sibling / unrelated body) is out of scope. Fall back to a
 		// whole-file scan when no enclosing function is found (defensive; a local / param always has one).
 		final enclosing: Null<Span> = innermostSpanOfKinds(tree, funcKinds, span.from);
-		final excluded: Array<Span> = [];
+		final excluded: Array<Span> = RefactorSupport.structureFieldNameSpans(tree, source, shape);
 		if (enclosing != null) collectDisjointFunctionSpans(tree, funcKinds, enclosing, excluded);
 		return RefactorSupport.nameBoundInRange(source, newName, 0, source.length, excluded, plugin);
 	}
