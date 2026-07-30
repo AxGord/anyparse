@@ -96,6 +96,7 @@ final class UnusedLocal implements Check {
 		final shape: RefShape = plugin.refShape();
 		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final continuationKinds: Array<String> = shape.localDeclContinuationKinds ?? [];
 		final declByFrom: Map<Int, QueryNode> = [];
 		collectLocalDecls(tree, declByFrom, opaqueKinds, localDeclKinds);
 
@@ -121,6 +122,14 @@ final class UnusedLocal implements Check {
 					: RefactorSupport.isSideEffectFree(init)
 			);
 			if (!deletable) continue;
+			// A binding that SHARES its line with another one is reported but never cut: the deletion
+			// below takes the whole LINE. That is both a continuation (`b` in `var a = 1, b = 2;`) and
+			// a head that still carries one — deleting `a` there dropped the live `b` with it and left
+			// the code uncompilable. Removing a single binding is a different edit per position — a
+			// middle one is its span MINUS the continuation nested inside it (the chain is
+			// right-recursive), and a head needs its first continuation promoted into its place — so it
+			// is refused rather than approximated.
+			if (continuationKinds.contains(decl.kind) || Lambda.exists(decl.children, k -> continuationKinds.contains(k.kind))) continue;
 			edits.push({ span: RefactorSupport.lineExtendedSpan(source, span), text: '' });
 		}
 		return edits;

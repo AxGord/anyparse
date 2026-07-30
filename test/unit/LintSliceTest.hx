@@ -286,6 +286,43 @@ class LintSliceTest extends Test {
 		Assert.equals(0, edits.length);
 	}
 
+	/**
+	 * A binding declared after the comma in `var a = 1, b = 2;` is a local like any other,
+	 * and `unused-local`'s own logic handles it — it was simply not in the kind list the
+	 * walk matches on (`RefShape.localDeclKinds`), so the check never reached it.
+	 */
+	public function testUnusedLocalFlagsMultiVarContinuation(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar used:Int = 1, unusedTail:Int = 2;\n\t\ttrace(used);\n\t}\n}';
+		final vs: Array<Violation> = new UnusedLocal().run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'unusedTail'"));
+	}
+
+	/**
+	 * The DELETION stays refused there: the fix removes the whole line, which on a shared
+	 * declaration would take the live sibling with it. Reported, never cut.
+	 */
+	public function testUnusedLocalFixSkipsMultiVarContinuation(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar used:Int = 1, unusedTail:Int = 2;\n\t\ttrace(used);\n\t}\n}';
+		final check: UnusedLocal = new UnusedLocal();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(0, check.fix(src, vs, plugin()).length);
+	}
+
+	/**
+	 * The mirror case, and a data-loss bug that predates the continuation node: an unused HEAD
+	 * binding still carrying a live continuation. The deletion takes the whole LINE, so cutting
+	 * `unusedHead` dropped `used` with it and left the body referencing an undeclared name.
+	 */
+	public function testUnusedLocalFixSkipsHeadSharingItsLine(): Void {
+		final src: String = 'class C {\n\tfunction f() {\n\t\tvar unusedHead:Int = 1, used:Int = 2;\n\t\ttrace(used);\n\t}\n}';
+		final check: UnusedLocal = new UnusedLocal();
+		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'unusedHead'"));
+		Assert.equals(0, check.fix(src, vs, plugin()).length);
+	}
+
 	/** `unused-local` is registered in the default check set alongside `unused-import`. */
 	public function testUnusedLocalRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('unused-local'));

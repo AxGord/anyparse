@@ -453,7 +453,12 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			branchConditionKinds: ['IfStmt', 'IfExpr'],
 			emptyStmtKind: 'EmptyStmt',
 			emptyMemberKind: 'EmptySemiMember',
-			localDeclKinds: ['VarStmt', 'FinalStmt'],
+			// `VarMore` IS a local declaration — the binding after the comma in
+			// `var a = 1, b = 2;`. Listed here so every declaration-walking check reaches it
+			// with its existing logic. NOT in `mutableLocalDeclKinds`: the kind alone cannot
+			// say whether the list it continues is `var` or `final`, and Haxe has no way to
+			// mark ONE binding of a multi-var `final` anyway.
+			localDeclKinds: ['VarStmt', 'FinalStmt', 'VarMore'],
 			localDeclContinuationKinds: ['VarMore'],
 			localDeclExprKinds: ['VarExpr', 'FinalExpr'],
 			mutableLocalDeclKinds: ['VarStmt'],
