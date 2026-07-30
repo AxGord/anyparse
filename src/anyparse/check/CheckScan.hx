@@ -11,6 +11,8 @@ import haxe.ds.ObjectMap;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
+import anyparse.query.SymbolIndex;
+import anyparse.query.TypeInfoProvider;
 
 /**
  * Shared scan helpers for the `run` / `fix` paths of the analysis checks.
@@ -151,18 +153,63 @@ final class CheckScan {
 	 * always-parenthesised wrap is the sound form there. This edge is shared with `loop-guard`.
 	 */
 	public static function negateConditionText(
-		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport
+		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
 	): String {
 		final cs: Null<Span> = cond.span;
 		if (cs == null) return '';
 		if (support != null && !hasCommentMarker(source, cs.from, cs.to) && !narrowingStranded(cond, seams))
-			return support.negateCondition(cond, source);
+			return support.negateCondition(cond, source, typeNominalOf);
 		final unwrapped: Null<String> = notUnwrapText(cond, source, seams);
 		if (unwrapped != null) return unwrapped;
 		final flipped: Null<String> = eqFlipText(cond, source, seams);
 		if (flipped != null) return flipped;
 		final src: String = source.substring(cs.from, cs.to);
 		return seams.atomicKinds.contains(cond.kind) ? '!$src' : '!($src)';
+	}
+
+	/**
+	 * Whether inverting `cond` is worth doing at all — true unless the negation engine had to
+	 * DECLINE a rewrite it knows how to perform. The three inverting checks gate on this BEFORE
+	 * they flag: their purpose is to make a block read better by shedding a nesting level, and an
+	 * inversion that has to keep `!(a < b)` wrapped — because the flip could not be proven
+	 * NaN-free — trades that nesting for a negation the positive form did not need.
+	 *
+	 * A wrap the engine could never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline: that IS
+	 * the canonical negation, and such a site still inverts. The text fallback tier (no grammar
+	 * `support`, a comment in the condition, or a stranded null-safety narrowing) has no flip to
+	 * decline, so it keeps emitting exactly what it always did.
+	 */
+	public static function negationIsClean(
+		cond: QueryNode, source: String, seams: NegationSeams, ?support: BooleanLogicSupport, ?typeNominalOf: (QueryNode) -> Null<String>
+	): Bool {
+		final cs: Null<Span> = cond.span;
+		if (cs == null) return false;
+		// Only the De Morgan tier can decline anything — the text fallback has no flip to refuse,
+		// so its verbatim wrap is the shape it always emitted and the site still inverts.
+		return support == null || hasCommentMarker(source, cs.from, cs.to) || narrowingStranded(cond, seams)
+			|| !support.negateConditionDeclinesFlip(cond, source, typeNominalOf);
+	}
+
+	/**
+	 * The operand-type probe `negateConditionText` hands to a `BooleanLogicSupport` so it may
+	 * flip an ordered comparison instead of wrapping it `!(…)` — see
+	 * `BooleanLogicSupport.negateCondition`. Answers a node's declared type nominal through the
+	 * run's resolution scope, or null for anything it cannot pin, which keeps the wrap.
+	 *
+	 * Null when the grammar carries no type information at all: the caller then passes nothing
+	 * and every ordered comparison stays wrapped, exactly as before this seam existed.
+	 */
+	public static function typeNominalResolver(
+		source: String, plugin: GrammarPlugin, tree: QueryNode, file: String, ?index: SymbolIndex
+	): Null<(QueryNode) -> Null<String>> {
+		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
+		if (provider == null) return null;
+		final declaredTypes: Map<Int, String> = provider.declaredTypes(source);
+		final shape: RefShape = plugin.refShape();
+		// The resolution index sees the std + configured libraries, so a member type such as
+		// `Array.length` resolves; the report index alone would stop at the project boundary.
+		final resolved: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		return node -> RefactorSupport.valueTypeNominal(node, tree, shape, declaredTypes, resolved, file);
 	}
 
 	/**

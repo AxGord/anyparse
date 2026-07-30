@@ -714,4 +714,43 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.typeProvablyLacksMember('Sub', '_taken'));
 	}
 
+	/**
+	 * A `typedef T = { > Base, … }` structural extension is a SUPERTYPE link, so a member
+	 * declared on `Base` resolves through `T` — and the shorthand `name:Type` / `?name:Type`
+	 * fields of an anonymous structure are indexed as members at all (the class-notation
+	 * `var name:Type;` form is not the only one a typedef body may use).
+	 */
+	public function testAnonStructuralExtensionResolvesInheritedField(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/pkg/Base.hx', source: 'package pkg;\ntypedef Base = {\n\tcount:Int,\n\t?label:String\n}\n' },
+			{
+				file: 'src/pkg/Res.hx',
+				source: 'package pkg;\ntypedef Res = {\n\t> Base,\n\tname:String\n}\n'
+			}
+		], plugin());
+		Assert.equals('String', index.resolvePathFinalMemberTypeSource('src/pkg/Res.hx', 'Res', ['name']));
+		Assert.equals('Int', index.resolvePathFinalMemberTypeSource('src/pkg/Res.hx', 'Res', ['count']));
+		Assert.equals('String', index.resolvePathFinalMemberTypeSource('src/pkg/Res.hx', 'Res', ['label']));
+	}
+
+	/**
+	 * A MODULE import carries every type the module declares into simple-name scope, not only
+	 * its main one, and a ROOT-package type is in scope everywhere with no import at all — the
+	 * two rules that let `import pkg.Mod;` reach `pkg.Mod.Sub` and any file reach `Array`.
+	 */
+	public function testModuleImportAndRootPackageInScope(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/Array.hx', source: 'extern class Array<T> {\n\tpublic var length(default, null):Int;\n}\n' },
+			{
+				file: 'src/pkg/Mod.hx',
+				source: 'package pkg;\ntypedef Sub = {\n\titems:Array<String>\n}\n\ntypedef Mod = {\n\tflag:Bool\n}\n'
+			},
+			{ file: 'src/app/Use.hx', source: 'package app;\nimport pkg.Mod;\nclass Use {}\n' }
+		], plugin());
+		// The sub-module type `Sub` resolves from `Use.hx` through the module import alone.
+		Assert.equals('Array<String>', index.resolvePathFinalMemberTypeSource('src/app/Use.hx', 'Sub', ['items']));
+		// … and the root-package `Array` it names resolves from `Mod.hx`'s scope with no import.
+		Assert.equals('Int', index.resolvePathFinalMemberTypeSource('src/app/Use.hx', 'Sub', ['items', 'length']));
+	}
+
 }

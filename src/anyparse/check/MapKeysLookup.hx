@@ -450,16 +450,9 @@ final class MapKeysLookup implements Check {
 	private static function receiverTypeName(
 		recv: QueryNode, root: QueryNode, declaredTypes: Map<Int, String>, cfg: Cfg, symbols: () -> Null<SymbolIndex>, file: String
 	): Null<String> {
-		final path: Null<Array<String>> = RefactorSupport.pathOf(recv, cfg.identKind, cfg.fieldKind);
-		if (path == null) return null;
-		final rootType: Null<String> = RefactorSupport.pathRootTypeName(recv, root, declaredTypes, cfg.shape);
-		if (path.length == 1) return rootType;
-		final index: Null<SymbolIndex> = symbols();
-		if (index == null) return null;
 		// A value / this root walks the simple-name segments; a static TYPE-name root (no value
 		// binding) resolves import-aware from the reference file's scope.
-		final src: Null<String> = RefactorSupport.pathReceiverMemberTypeSource(path, rootType, index, file);
-		return src == null ? null : RefactorSupport.outerNominalOf(src);
+		return RefactorSupport.valueTypeNominal(recv, root, cfg.shape, declaredTypes, symbols(), file);
 	}
 
 

@@ -108,20 +108,22 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('!(a || b)')).indexOf('if (a || b) continue;') != -1);
 	}
 
-	public function testLessThanWrappedNotFlipped(): Void {
-		Assert.isTrue(fx(cond('x < 10')).indexOf('if (!(x < 10)) continue;') != -1);
+	public function testLessThanNotFlagged(): Void {
+		// `x` has no resolvable type, so the flip is not licensed; the guard would have to wrap
+		// `!(x < 10)`, which reads worse than the nesting it removes — the site is left alone.
+		Assert.equals(0, v(cond('x < 10')).length);
 	}
 
-	public function testLessEqWrappedNotFlipped(): Void {
-		Assert.isTrue(fx(cond('x <= 10')).indexOf('if (!(x <= 10)) continue;') != -1);
+	public function testLessEqNotFlagged(): Void {
+		Assert.equals(0, v(cond('x <= 10')).length);
 	}
 
-	public function testGreaterThanWrappedNotFlipped(): Void {
-		Assert.isTrue(fx(cond('x > 10')).indexOf('if (!(x > 10)) continue;') != -1);
+	public function testGreaterThanNotFlagged(): Void {
+		Assert.equals(0, v(cond('x > 10')).length);
 	}
 
-	public function testGreaterEqWrappedNotFlipped(): Void {
-		Assert.isTrue(fx(cond('x >= 10')).indexOf('if (!(x >= 10)) continue;') != -1);
+	public function testGreaterEqNotFlagged(): Void {
+		Assert.equals(0, v(cond('x >= 10')).length);
 	}
 
 	public function testEqFlipped(): Void {
@@ -144,8 +146,9 @@ class GuardContinueCheckTest extends Test {
 		Assert.isTrue(fx(cond('s != null && s.ok')).indexOf('if (s == null || !s.ok) continue;') != -1);
 	}
 
-	public function testDeMorganKeepsOrderedWrapped(): Void {
-		Assert.isTrue(fx(cond('x < 10 && ok')).indexOf('if (!(x < 10) || !ok) continue;') != -1);
+	public function testDeMorganOrderedOperandNotFlagged(): Void {
+		// One declined operand poisons the whole conjunction: `!(x < 10) || !ok` still wraps.
+		Assert.equals(0, v(cond('x < 10 && ok')).length);
 	}
 
 	public function testDeMorganDoubleNegationOperands(): Void {

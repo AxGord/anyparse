@@ -9,6 +9,9 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import anyparse.query.SymbolIndex;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `guard-return` check: a block whose LAST TWO statements are a bare
@@ -17,7 +20,8 @@ import anyparse.runtime.Span;
  * an early-return guard — `if (!cond) return TAIL; <BLOCK de-nested>`. The inversion
  * runs through the shared `CheckScan.negateConditionText`, so `==` / `!=` flip
  * (NaN-safe), `!e` strips, `a && b` De Morgans to `!a || !b`, and an ordered
- * comparison stays wrapped `!(a < b)`. Gates: a ONE-statement then-branch is
+ * comparison stays wrapped `!(a < b)` unless BOTH its operands resolve to a
+ * NaN-free type, which flips it (`a <= b`). Gates: a ONE-statement then-branch is
  * `prefer-ternary-return`'s shape and is skipped, a non-terminal then-branch, an
  * `else`, an unbraced then-branch, a statement between the `if` and the tail, a
  * conditional-compilation region, a dropped-glue comment, a comment on the tail
@@ -59,7 +63,7 @@ class GuardReturnCheckTest extends Test {
 	public function testVoidReturnTailFixed(): Void {
 		final source: String =
 			'class C {\n\tfunction f(a:Int):Void {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n\t\t\treturn;\n\t\t}\n\t\treturn;\n\t}\n}\n';
-		final expected: String = 'class C {\n\tfunction f(a:Int):Void {\n\t\tif (!(a > 0)) return;\n\t\tlog(a);\n\t\treturn;\n\t}\n}\n';
+		final expected: String = 'class C {\n\tfunction f(a:Int):Void {\n\t\tif (a <= 0) return;\n\t\tlog(a);\n\t\treturn;\n\t}\n}\n';
 		Assert.equals(canon(expected), fxSource(source));
 	}
 
@@ -93,8 +97,38 @@ class GuardReturnCheckTest extends Test {
 		Assert.isTrue(fx(cond('!(p || q)')).indexOf('if (p || q) return false;') != -1);
 	}
 
-	public function testLessThanWrappedNotFlipped(): Void {
-		Assert.isTrue(fx(cond('x < 10')).indexOf('if (!(x < 10)) return false;') != -1);
+	public function testUnprovableOrderedNotFlagged(): Void {
+		// `x` has no resolvable type, so the flip is not licensed and the inversion would have
+		// to wrap `!(x < 10)` — worse than the positive branch it replaces.
+		Assert.equals(0, v(cond('x < 10')).length);
+	}
+
+	public function testOrderedFlippedWhenBothOperandsInt(): Void {
+		Assert.isTrue(fx(cond('a > 0')).indexOf('if (a <= 0) return false;') != -1);
+	}
+
+	public function testOrderedFloatOperandNotFlagged(): Void {
+		final source: String =
+			'class C {\n\tfunction f(a:Float):Bool {\n\t\tif (a > 0) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+		Assert.equals(0, new GuardReturn().run([{ file: 'C.hx', source: source }], new HaxeQueryPlugin()).length);
+	}
+
+	public function testOrderedFloatLiteralOperandNotFlagged(): Void {
+		Assert.equals(0, v(cond('a > 0.5')).length);
+	}
+
+	public function testOrderedFlippedThroughMemberPath(): Void {
+		Assert.isTrue(fixedWith(memberPathSource(), 'typedef Res = {\n\tcount:Int\n};\n').indexOf('if (res.count <= 0) return false;')
+			!= -1);
+	}
+
+	public function testOrderedFlippedThroughStructuralExtension(): Void {
+		final model: String = 'typedef Base = {\n\tcount:Int\n};\n\ntypedef Res = {\n\t> Base,\n\tname:String\n};\n';
+		Assert.isTrue(fixedWith(memberPathSource(), model).indexOf('if (res.count <= 0) return false;') != -1);
+	}
+
+	public function testOrderedFloatMemberPathNotFlagged(): Void {
+		Assert.equals(0, scopedViolations(memberPathSource(), 'typedef Res = {\n\tcount:Float\n};\n').length);
 	}
 
 	public function testAndDeMorganed(): Void {
@@ -327,6 +361,44 @@ class GuardReturnCheckTest extends Test {
 			if (next == cur) return cur;
 			cur = next;
 		}
+	}
+
+	/** The member-path fixture the resolution tests share: `res.count > 0` wrapping a two-statement branch. */
+	private function memberPathSource(): String {
+		return
+			'class C {\n\tfunction f(res:Res):Bool {\n\t\tif (res.count > 0) {\n\t\t\tlog(res);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t}\n}\n';
+	}
+
+	/**
+	 * The check's violations for `source` with `model` in a RESOLUTION SCOPE — `run` reads the
+	 * operand types off the plugin host, not off the index `fix` receives, so a member-path
+	 * fixture must declare the scope or the gate refuses it for want of types rather than for
+	 * the reason under test.
+	 */
+	private function scopedViolations(source: String, model: String): Array<Violation> {
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({
+			declared: true,
+			sources: () -> {report: report, library: new LibrarySources([{ file: 'Res.hx', source: model }]) }
+		});
+		return new GuardReturn().run(report, scoped);
+	}
+
+	/**
+	 * `source` fixed once with `model` in the resolution scope — the member-path arm of the
+	 * operand-type probe needs a scope in `run` AND an index in `fix`.
+	 */
+	private function fixedWith(source: String, model: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: GuardReturn = new GuardReturn();
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }, { file: 'Res.hx', source: model }];
+		final index: SymbolIndex = SymbolIndex.build(files, plugin);
+		final es: Array<{ span: Span, text: String }> = check.fix(source, scopedViolations(source, model), plugin, index);
+		return switch RefactorSupport.canonicalize(source, es, false, plugin) {
+			case Ok(text): text;
+			case Err(message): throw message;
+		};
 	}
 
 	private function applyFixOnce(source: String): String {

@@ -18,12 +18,17 @@ import anyparse.runtime.Span;
  * preserved; the re-parse gate in the fix pipeline rejects anything malformed.
  *
  * `negateCondition` exposes that same engine to `guard-continue` / `loop-guard`,
- * but NaN-safe: an ordered comparison (`< <= > >=`) is kept wrapped `!(a < b)`,
- * never flipped to `a >= b` (they differ under NaN), while `==` / `!=` still flip
- * (NaN-equivalent). The ternary / guard-chain reductions above flip ordered
- * comparisons as before; their only other visible effect is that a `!(compound)`
- * condition sheds redundant parens (the `Not` case unwraps a single `ParenExpr`),
- * a meaning-preserving change since `wrap` re-adds every precedence-required paren.
+ * but NaN-safe: an ordered comparison (`< <= > >=`) is kept wrapped `!(a < b)`
+ * rather than flipped to `a >= b`, since the two differ under NaN — UNLESS the
+ * caller passes a type resolver that proves BOTH operands non-floating-point,
+ * which removes the one case they differ in and lets the flip through. `==` /
+ * `!=` flip either way (NaN-equivalent).
+ *
+ * The ternary / guard-chain reductions above flip ordered comparisons
+ * unconditionally, as before; their only other visible effect is that a
+ * `!(compound)` condition sheds redundant parens (the `Not` case unwraps a single
+ * `ParenExpr`), a meaning-preserving change since `wrap` re-adds every
+ * precedence-required paren.
  *
  * `cond ? X : X` with the same literal both sides is left alone: collapsing it
  * would drop `cond`, discarding any side effect of evaluating it.
@@ -32,6 +37,21 @@ import anyparse.runtime.Span;
 final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	private static final BOOL_OP_KINDS: Array<String> = ['Or', 'And', 'Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq', 'Not'];
+
+	/**
+	 * Literal kinds whose value can never be a floating-point NaN. A `FloatLit` is
+	 * deliberately absent: `1e3` is a `Float`, and comparing against one is exactly the
+	 * case the wrap protects.
+	 */
+	private static final NAN_FREE_LITERAL_KINDS: Array<String> = ['IntLit', 'HexLit', 'SingleStringExpr', 'DoubleStringExpr'];
+
+	/**
+	 * Declared type nominals with no NaN in their value set, so `!(a < b)` and `a >= b`
+	 * agree for them. `Null<Int>` resolves to the nominal `Null` and is deliberately NOT
+	 * here: on a dynamic target a null operand compares `false` both ways, which the flip
+	 * would not preserve.
+	 */
+	private static final NAN_FREE_TYPES: Array<String> = ['Int', 'UInt', 'String'];
 
 	public function new() {}
 
@@ -87,7 +107,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 					accSrc = p.src;
 					accPrec = p.prec;
 				} else {
-					accSrc = joinOr(plain(cond, source), { src: accSrc, prec: accPrec });
+					accSrc = joinOr(plain(cond, source), { src: accSrc, prec: accPrec, declined: false });
 					accPrec = PREC_OR;
 				}
 			} else {
@@ -97,7 +117,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 					accSrc = n.src;
 					accPrec = n.prec;
 				} else {
-					accSrc = joinAnd(n, { src: accSrc, prec: accPrec });
+					accSrc = joinAnd(n, { src: accSrc, prec: accPrec, declined: false });
 					accPrec = PREC_AND;
 				}
 			}
@@ -115,8 +135,19 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 * NaN). Operands carry precedence-safe parentheses; a comment in the operator
 	 * glue between operands is dropped, so the caller gates on a comment-free span.
 	 */
-	public function negateCondition(cond: QueryNode, source: String): String {
-		return negate(cond, source, false).src;
+	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String {
+		return negate(cond, source, false, typeNominalOf).src;
+	}
+
+	/**
+	 * Whether `negateCondition` had to DECLINE a rewrite it knows how to perform — an ordered
+	 * comparison `typeNominalOf` could not prove NaN-free, kept as `!(a < b)` instead of flipped.
+	 * A caller that inverts a condition purely so a block reads better refuses such a site: the
+	 * negation buys nothing over the positive form it would replace. A wrap the engine could
+	 * never avoid (`!(a is B)`, `!(a ?? b)`) is NOT a decline — that IS the canonical negation.
+	 */
+	public function negateConditionDeclinesFlip(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Bool {
+		return negate(cond, source, false, typeNominalOf).declined;
 	}
 
 	/** `node`'s boolean-literal value, or null when it is not a `true` / `false` literal. */
@@ -138,7 +169,7 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 
 	/** A node carried verbatim: its source plus its precedence. */
 	private static function plain(node: QueryNode, source: String): Operand {
-		return { src: src(node, source), prec: precedence(node.kind) };
+		return { src: src(node, source), prec: precedence(node.kind), declined: false };
 	}
 
 	/** Parenthesise `o`'s source iff it binds strictly looser than `targetPrec`. */
@@ -153,43 +184,52 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	 *
 	 * `flipOrdered` governs the ordered comparisons `< <= > >=`: `true` flips them
 	 * (`!(a < b)` -> `a >= b`), sound over the reals and the behaviour the ternary /
-	 * guard-chain callers keep; `false` wraps them `!(a < b)` verbatim — the only
-	 * NaN-safe negation, since `!(a < b)` and `a >= b` differ when an operand is NaN.
+	 * guard-chain callers keep; `false` wraps them `!(a < b)` verbatim UNLESS `types`
+	 * proves the comparison NaN-free (`nanFree`) — the wrap is the only sound negation
+	 * for an operand that may be NaN, since `!(a < b)` and `a >= b` then differ.
 	 * `==` / `!=` flip either way (a flip is NaN-equivalent to the wrap for them).
 	 */
-	private static function negate(node: QueryNode, source: String, flipOrdered: Bool): Operand {
+	private static function negate(node: QueryNode, source: String, flipOrdered: Bool, ?types: (QueryNode) -> Null<String>): Operand {
 		switch node.kind {
 			case 'Or':
-				final l: Operand = negate(node.children[0], source, flipOrdered);
-				final r: Operand = negate(node.children[1], source, flipOrdered);
-				return { src: '${wrap(l, PREC_AND)} && ${wrap(r, PREC_AND)}', prec: PREC_AND };
+				final l: Operand = negate(node.children[0], source, flipOrdered, types);
+				final r: Operand = negate(node.children[1], source, flipOrdered, types);
+				return {
+					src: '${wrap(l, PREC_AND)} && ${wrap(r, PREC_AND)}',
+					prec: PREC_AND,
+					declined: l.declined || r.declined
+				};
 			case 'And':
-				final l: Operand = negate(node.children[0], source, flipOrdered);
-				final r: Operand = negate(node.children[1], source, flipOrdered);
-				return { src: '${wrap(l, PREC_OR)} || ${wrap(r, PREC_OR)}', prec: PREC_OR };
+				final l: Operand = negate(node.children[0], source, flipOrdered, types);
+				final r: Operand = negate(node.children[1], source, flipOrdered, types);
+				return {
+					src: '${wrap(l, PREC_OR)} || ${wrap(r, PREC_OR)}',
+					prec: PREC_OR,
+					declined: l.declined || r.declined
+				};
 			case 'Eq':
 				return flip(node, source, '!=');
 			case 'NotEq':
 				return flip(node, source, '==');
 			case 'Lt':
-				return flipOrdered ? flip(node, source, '>=') : wrapNot(node, source);
+				return flipOrdered || nanFree(node, types) ? flip(node, source, '>=') : declinedFlip(node, source);
 			case 'LtEq':
-				return flipOrdered ? flip(node, source, '>') : wrapNot(node, source);
+				return flipOrdered || nanFree(node, types) ? flip(node, source, '>') : declinedFlip(node, source);
 			case 'Gt':
-				return flipOrdered ? flip(node, source, '<=') : wrapNot(node, source);
+				return flipOrdered || nanFree(node, types) ? flip(node, source, '<=') : declinedFlip(node, source);
 			case 'GtEq':
-				return flipOrdered ? flip(node, source, '<') : wrapNot(node, source);
+				return flipOrdered || nanFree(node, types) ? flip(node, source, '<') : declinedFlip(node, source);
 			case 'Not':
 				// !!x -> x : strip the existing negation, unwrapping one redundant paren
 				// (`!(a && b)` -> `a && b`); wrap() re-adds parens where precedence demands.
 				var inner: QueryNode = node.children[0];
 				if (inner.kind == 'ParenExpr' && inner.children.length == 1) inner = inner.children[0];
-				return { src: src(inner, source), prec: precedence(inner.kind) };
+				return { src: src(inner, source), prec: precedence(inner.kind), declined: false };
 			case 'BoolLit':
-				return { src: boolValue(node, source) == false ? 'true' : 'false', prec: PREC_ATOM };
+				return { src: boolValue(node, source) == false ? 'true' : 'false', prec: PREC_ATOM, declined: false };
 			case 'ParenExpr':
 				// Drop the parens, negate the inner; wrap() re-adds parens where needed.
-				return node.children.length == 1 ? negate(node.children[0], source, flipOrdered) : wrapNot(node, source);
+				return node.children.length == 1 ? negate(node.children[0], source, flipOrdered, types) : wrapNot(node, source);
 			case _:
 				return wrapNot(node, source);
 		}
@@ -198,15 +238,51 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 	/** Negate an opaque operand: `!x` for an atom, `!(x)` otherwise. */
 	private static function wrapNot(node: QueryNode, source: String): Operand {
 		final s: String = src(node, source);
-		return { src: precedence(node.kind) >= PREC_ATOM ? '!$s' : '!($s)', prec: PREC_NOT };
+		return { src: precedence(node.kind) >= PREC_ATOM ? '!$s' : '!($s)', prec: PREC_NOT, declined: false };
+	}
+
+	/**
+	 * The wrap an ordered comparison falls back to when its flip is not licensed — identical
+	 * source to `wrapNot`, but marked `declined` so a caller inverting for readability can tell
+	 * this apart from an operand the engine simply cannot decompose (`a is B`, `a ?? b`), whose
+	 * wrap IS its canonical negation.
+	 */
+	private static function declinedFlip(node: QueryNode, source: String): Operand {
+		final wrapped: Operand = wrapNot(node, source);
+		return { src: wrapped.src, prec: wrapped.prec, declined: true };
 	}
 
 	/** A comparison `a <op> b` rewritten with `newOp`, its boolean negation. */
 	private static function flip(node: QueryNode, source: String, newOp: String): Operand {
 		return node.children.length == 2 ? {
 			src: '${src(node.children[0], source)} $newOp ${src(node.children[1], source)}',
-			prec: PREC_CMP
+			prec: PREC_CMP,
+			declined: false
 		} : wrapNot(node, source);
+	}
+
+	/**
+	 * Whether an ordered comparison's operands are BOTH provably non-floating-point, so
+	 * flipping its operator preserves meaning. NaN is the only value for which `!(a < b)`
+	 * and `a >= b` disagree, and it inhabits `Float` alone — proving neither side is a
+	 * `Float` therefore licenses the flip. One unresolved operand is enough to refuse.
+	 */
+	private static function nanFree(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
+		return node.children.length == 2 && nanFreeOperand(node.children[0], types) && nanFreeOperand(node.children[1], types);
+	}
+
+	/**
+	 * Whether one comparison operand provably holds no NaN: a non-float literal, or a value
+	 * whose declared type `types` resolves to a nominal with no NaN in its value set.
+	 * Parentheses and a unary minus are transparent — `-(x)` is a `Float` exactly when `x` is.
+	 */
+	private static function nanFreeOperand(node: QueryNode, types: Null<(QueryNode) -> Null<String>>): Bool {
+		var n: QueryNode = node;
+		while ((n.kind == 'ParenExpr' || n.kind == 'Neg') && n.children.length == 1) n = n.children[0];
+		if (NAN_FREE_LITERAL_KINDS.contains(n.kind)) return true;
+		if (types == null) return false;
+		final nominal: Null<String> = types(n);
+		return nominal != null && NAN_FREE_TYPES.contains(nominal);
 	}
 
 	/** Operator-precedence rank of a node kind — higher binds tighter. */
@@ -250,6 +326,14 @@ final class HaxeBooleanLogicSupport implements BooleanLogicSupport {
 private typedef Operand = {
 	var src: String;
 	var prec: Precedence;
+
+	/**
+	 * Whether this operand — or anything folded into it — is a rewrite the engine KNOWS how to
+	 * perform but declined (an ordered comparison whose flip is not licensed, see `declinedFlip`).
+	 * Read by `negateConditionDeclinesFlip`, so a caller inverting a condition only to make it
+	 * read better can refuse the site. A wrap the engine could never avoid does not set it.
+	 */
+	var declined: Bool;
 };
 
 /**

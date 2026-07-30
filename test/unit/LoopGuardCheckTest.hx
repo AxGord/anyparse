@@ -59,11 +59,10 @@ class LoopGuardCheckTest extends Test {
 		);
 	}
 
-	public function testLessThanWrappedNotFlipped(): Void {
-		Assert.equals(
-			wrap('for (x in xs) if (!(x < 10)) {\n\t\t\ttrace(x);\n\t\t}'),
-			applyFix(wrap('for (x in xs) {\n\t\t\tif (x < 10) continue;\n\t\t\ttrace(x);\n\t\t}'))
-		);
+	public function testLessThanNotFlagged(): Void {
+		// The lifted header would read `if (!(x < 10))` — `x`'s type does not license the flip,
+		// so the header buys nothing over the `continue` guard and the site is left alone.
+		Assert.equals(0, violations(wrap('for (x in xs) {\n\t\t\tif (x < 10) continue;\n\t\t\ttrace(x);\n\t\t}')).length);
 	}
 
 	public function testComplexCondDeMorgan(): Void {

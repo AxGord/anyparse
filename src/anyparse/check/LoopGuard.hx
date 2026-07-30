@@ -78,7 +78,11 @@ final class LoopGuard implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(tree, violations, entry.file, entry.source, seams);
+			if (tree != null)
+				walk(
+					tree, violations, entry.file, entry.source, seams,
+					CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
+				);
 		}
 		return violations;
 	}
@@ -93,6 +97,9 @@ final class LoopGuard implements Check {
 		if (tree == null) return [];
 		final byGuard: Map<String, Candidate> = [];
 		indexCandidates(tree, source, seams, byGuard);
+		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
+			? null
+			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
@@ -103,7 +110,7 @@ final class LoopGuard implements Check {
 			final guardSpan: Null<Span> = m.guard.span;
 			if (bodySpan == null || guardSpan == null) continue;
 			final rest: String = source.substring(guardSpan.to, bodySpan.to - 1);
-			edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams)}) {$rest}' });
+			edits.push({ span: bodySpan, text: 'if (${invert(m.cond, source, seams, types)}) {$rest}' });
 		}
 		return RefactorSupport.dropContainedEdits(edits);
 	}
@@ -131,11 +138,15 @@ final class LoopGuard implements Check {
 	}
 
 	/** Walk `node`, flagging each loop whose body opens with a liftable `if`-continue guard. */
-	private static function walk(node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams): Void {
+	private static function walk(
+		node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.loopKinds.contains(node.kind)) {
 			final m: Null<Candidate> = match(node, source, s);
-			if (m != null) {
+			// The lifted header tests the INVERTED guard condition; if that inversion cannot
+			// shed its `!( … )` wrap, the header reads worse than the `continue` it replaces.
+			if (m != null && CheckScan.negationIsClean(m.cond, source, s.negation, s.support, types)) {
 				final span: Null<Span> = m.guard.span;
 				if (span != null) out.push({
 					file: file,
@@ -146,7 +157,7 @@ final class LoopGuard implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(c, out, file, source, s);
+		for (c in node.children) walk(c, out, file, source, s, types);
 	}
 
 	/** Index every liftable loop's candidate by its guard's `from:to` span key (for `fix` to re-find it). */
@@ -197,8 +208,8 @@ final class LoopGuard implements Check {
 	}
 
 	/** The inverted source of guard condition `cond` — the negation the lifted `if` header tests. */
-	private static function invert(cond: QueryNode, source: String, s: Seams): String {
-		return CheckScan.negateConditionText(cond, source, s.negation, s.support);
+	private static function invert(cond: QueryNode, source: String, s: Seams, ?types: (QueryNode) -> Null<String>): String {
+		return CheckScan.negateConditionText(cond, source, s.negation, s.support, types);
 	}
 
 }
