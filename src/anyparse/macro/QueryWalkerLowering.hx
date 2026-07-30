@@ -47,8 +47,15 @@ class QueryWalkerLowering extends PairedShapeLowering {
 	/** Struct fields consulted, in order, for a String-valued display name. */
 	private static final NAME_STRING_SLOTS: Array<String> = ['name', 'type', 'varName'];
 
-	/** Struct fields consulted, in order, for a name that lives one level deeper; the FIRST present one decides, even if it yields null. */
-	private static final NAME_UNWRAP_SLOTS: Array<String> = ['param', 'node', 'fn'];
+	/**
+	 * Struct fields consulted, in order, for a name that lives one level deeper; the FIRST present one decides, even if it yields null.
+	 *
+	 * `decl` serves `HxVarMore` (`@:spanned('VarMore')`), whose single field holds the binding
+	 * after a comma in `var a = 1, b = 2;`. It is inert on the only other `decl`-bearing struct,
+	 * the TRANSPARENT `HxTopLevelDecl` — a Seq with no `@:spanned` tag materialises no node, so
+	 * nothing ever asks it for a name.
+	 */
+	private static final NAME_UNWRAP_SLOTS: Array<String> = ['param', 'node', 'fn', 'decl'];
 
 	/** Ctors of a single-Ref wrapper enum whose payload carries the name (`HxAnonVarBody`). */
 	private static final NAME_UNWRAP_CTORS: Array<String> = ['Optional', 'Plain'];

@@ -1,6 +1,7 @@
 package anyparse.grammar.haxe;
 
 /**
+ * /**
  * One additional binding inside a multi-variable declaration
  * (`var a = 1, b = 2;` — `b = 2` is an `HxVarMore`). Mirror of
  * `HxElseifStmt` / `HxElseifDecl` at the var-list scope: the `,`
@@ -27,10 +28,12 @@ package anyparse.grammar.haxe;
  * under the permissive-parser stance. A flat list would require
  * hoisting `more` onto the non-recursive `VarStmt`/`FinalStmt` ctor
  * via a ctor-wraps-typedef reshape — out of scope for this
- * parse-completeness slice. Consumers that need every binding walk
- * `decl.more[0].decl` recursively until `more` is empty.
+ * parse-completeness slice. Consumers that need every binding walk `decl.more[0].decl` recursively until `more` is empty.
+ *
+ * `@:spanned('VarMore')` makes each continuation an ADDRESSABLE `QueryNode` carrying its own name, so `apq refs` resolves the binding and every declaration-walking check sees it. Without it the projection surfaced only the continuation's INITIALIZER, as a bare extra child of the head declaration: `var a = 0, _b = 0;` read as `(VarStmt a (IntLit 0) (IntLit 0))`, `_b` existed nowhere, and the naming rules were silently blind to it. The kind is published as `RefShape.localDeclContinuationKinds` for consumers enumerating a statement's bound names (`TailMerge.localDeclNames`); the name is lifted off the `decl` field through `QueryWalkerLowering.NAME_UNWRAP_SLOTS`.
  */
 @:peg
+@:spanned('VarMore')
 typedef HxVarMore = {
 	@:lead(',') @:fmt(spaceAfterLead) var decl: HxVarDecl;
 };

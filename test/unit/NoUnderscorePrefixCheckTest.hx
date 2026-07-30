@@ -30,6 +30,9 @@ class NoUnderscorePrefixCheckTest extends Test {
 	/** A config that opts the silencing rename in but disables the rule carrying it — the only shape where the guard's enablement conjunct decides. */
 	private static inline final SILENCE_BUT_DISABLED: String = '{"rules":{"unused-parameter":{"enabled":false,"renameSilence":true}}}';
 
+	/** A config that cedes the supertype-shadow veto for locals / parameters. */
+	private static inline final ALLOW_SHADOW: String = '{"rules":{"no-underscore-prefix":{"allowInheritedShadow":true}}}';
+
 	public function testHandlerParameterFlagged(): Void {
 		final vs: Array<Violation> = violations(handlerSource());
 		Assert.equals(1, vs.length);
@@ -351,12 +354,12 @@ class NoUnderscorePrefixCheckTest extends Test {
 	}
 
 	/** The check's edits for `subSrc` with `libSrc` joined as a RESOLUTION-scope library (never reported, never edited). */
-	private function fixWithResolutionScope(subSrc: String, libSrc: String): Array<{ span: Span, text: String }> {
+	private function fixWithResolutionScope(subSrc: String, libSrc: String, ?config: String): Array<{ span: Span, text: String }> {
 		final report: Array<{ file: String, source: String }> = [{ file: 'pkg/Sub.hx', source: subSrc }];
 		final lib: Array<{ file: String, source: String }> = [{ file: 'ext/Base.hx', source: libSrc }];
 		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
 		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(lib) } });
-		final check: NoUnderscorePrefix = new NoUnderscorePrefix();
+		final check: NoUnderscorePrefix = configured(config);
 		final vs: Array<Violation> = check.run(report, scoped);
 		Assert.equals(1, vs.length);
 		return check.fix(subSrc, vs, scoped, SymbolIndex.build(report, new HaxeQueryPlugin()));
@@ -409,6 +412,97 @@ class NoUnderscorePrefixCheckTest extends Test {
 		final src: String =
 			'class C {\n\tpublic function f(items:Int):Void {\n\t\tvar _items:Int = 1;\n\t\ttrace(\'$$items\', _items);\n\t}\n}';
 		Assert.equals(0, edits(src).length);
+	}
+
+
+	/**
+	 * `allowInheritedShadow` cedes the supertype veto for a local / parameter: shadowing an
+	 * inherited member is legal Haxe, and in a UI codebase almost every class inherits a
+	 * display-object member (`x`, `y`, `width`), so the veto silences the rule wholesale.
+	 */
+	public function testInheritedShadowAllowedWhenOptionOn(): Void {
+		final subSrc: String = 'package pkg;\nclass Sub extends Base {\n\tpublic function f(_value:Int):Void {\n\t\ttrace(_value);\n\t}\n}';
+		final libSrc: String = 'package ext;\nclass Base {\n\tpublic var value:Int;\n}';
+		Assert.equals(2, fixWithResolutionScope(subSrc, libSrc, ALLOW_SHADOW).length);
+	}
+
+
+	/**
+	 * The option cedes only the STYLE stance, never the correctness gate: a bare read of the
+	 * inherited member inside the same function would be silently recaptured by the renamed
+	 * binding, and `collidesInScope` still refuses that — with the option ON.
+	 */
+	public function testInheritedShadowStillBlockedByBareReadWhenOptionOn(): Void {
+		final subSrc: String =
+			'package pkg;\nclass Sub extends Base {\n\tpublic function f(_value:Int):Void {\n\t\ttrace(_value);\n\t\ttrace(value);\n\t}\n}';
+		final libSrc: String = 'package ext;\nclass Base {\n\tpublic var value:Int;\n}';
+		Assert.equals(0, fixWithResolutionScope(subSrc, libSrc, ALLOW_SHADOW).length);
+	}
+
+
+	/**
+	 * A COMMENT mention inside a `#if` region is inert text, not a reference the resolver
+	 * missed — so it must not veto a rename whose binding lives in another function entirely.
+	 * The conditional class was decided before the lexical one, turning every commented-out
+	 * line inside a `#if` into a file-wide blocker for that name.
+	 */
+	public function testCommentInConditionalRegionDoesNotBlockRename(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_value:Int):Void {\n\t\ttrace(_value);\n\t}\n'
+			+ '\t#if debug\n\tpublic function g():Void {\n\t\t// _value moved out\n\t\ttrace(1);\n\t}\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(2, edits(src).length);
+	}
+
+	/** The same, with the binding ITSELF inside the `#if` region: its own comment mention renames along. */
+	public function testConditionalRegionBindingWithCommentRenamed(): Void {
+		final src: String = 'package pkg;\nclass C {\n\t#if debug\n\tpublic function f(_value:Int):Int {\n'
+			+ '\t\t// _value doubled\n\t\treturn _value * 2;\n\t}\n\t#end\n}';
+		Assert.equals(1, violations(src).length);
+		assertFixed(src, ['f(value:Int)', '// value doubled', 'return value * 2;'], ['_value']);
+	}
+
+	/**
+	 * A typedef STRUCTURE field is a wire contract, never a binding in any lexical scope, so
+	 * it must not veto a local / parameter rename to the same name. The local/param arm of
+	 * `collidesInScope` subtracted only disjoint FUNCTION spans, so a module-level `{ x:Float }`
+	 * silenced every `_x` in the file.
+	 */
+	public function testTypedefStructureFieldDoesNotBlockRename(): Void {
+		final src: String = 'package pkg;\ntypedef Zoom = {\n\tx:Float,\n\ty:Float\n}\n\n'
+			+ 'class C {\n\tpublic function f(_x:Float):Float {\n\t\treturn _x;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(2, edits(src).length);
+	}
+
+	/** An OBJECT-LITERAL field name is not a binding either — same rename, same reasoning. */
+	public function testObjectLiteralFieldDoesNotBlockRename(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f(_x:Float):Dynamic {\n\t\treturn { x: _x };\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(2, edits(src).length);
+	}
+
+	/**
+	 * A binding declared SECOND in a multi-variable statement (`var a = 0, _b = 0;`) is a local
+	 * like any other. `HxVarDecl.more` carried it as a `@:trivia` field, so the projection surfaced
+	 * no declaration node for it and every declaration-walking rule was blind: no finding, no fix,
+	 * and `Refs` could not resolve its uses back to a decl.
+	 */
+	public function testSecondBindingOfMultiVarFlagged(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f():Void {\n\t\tvar dirX:Float = 0, _dirY:Float = 0;\n'
+			+ '\t\ttrace(dirX + _dirY);\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'_dirY'"));
+		assertFixed(src, ['var dirX:Float = 0, dirY:Float = 0;', 'trace(dirX + dirY);'], ['_dirY']);
+	}
+
+	/** The THIRD binding too — `more` is right-recursive, so a consumer must walk the whole chain. */
+	public function testThirdBindingOfMultiVarFlagged(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function f():Void {\n\t\tvar a:Int = 0, b:Int = 1, _c:Int = 2;\n'
+			+ '\t\ttrace(a + b + _c);\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'_c'"));
 	}
 
 }

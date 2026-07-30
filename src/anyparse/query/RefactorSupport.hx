@@ -2367,16 +2367,24 @@ final class RefactorSupport {
 		return kind == 'Conditional' || kind == 'ConditionalExpr' || StringTools.startsWith(kind, 'CondSplice');
 	}
 
-	/** The lexical class of the occurrence at `at`; see `OccurrenceClass`. */
+	/**
+	 * The lexical class of the occurrence at `at`; see `OccurrenceClass`.
+	 *
+	 * The LEXICAL class is decided first, and a `#if...#end` region only classifies what
+	 * is left: `ConditionalRaw` means "code the resolver could not bind", and a comment or
+	 * string inside a conditional region is neither - the lexer reads it the same whichever
+	 * branch is live. Asking the conditional first made one commented-out line inside a
+	 * `#if` block every rename of that name in the whole FILE (the class scans `0...length`),
+	 * including bindings whose scope lay nowhere near the region.
+	 */
 	private static function classifyAt(source: String, at: Int, condSpans: Array<Span>, regions: Array<LexRegion>): OccurrenceClass {
-		if (offsetWithinAny(at, condSpans)) return ConditionalRaw;
 		for (region in regions) if (at >= region.from && at < region.to) return switch region.kind {
 			// A regex body is inert literal text like a string's, and
 			// `OccurrenceClass` has no finer class - both block the rename.
 			case StringLit | RegexLit: StringLiteral;
 			case LineComment | BlockComment: isNoqaComment(source, region) ? DirectiveComment : CommentTrivia;
 		};
-		return ActiveCode;
+		return offsetWithinAny(at, condSpans) ? ConditionalRaw : ActiveCode;
 	}
 
 	/**
@@ -2503,12 +2511,17 @@ final class RefactorSupport {
 	 * coexist and only a veto-side caller may use this one.
 	 *
 	 * Deliberately conservative wherever a precise answer would cost another
-	 * scan: a `#if` body counts (it hosts real declarations), a single-quoted
-	 * literal that can interpolate counts wholesale rather than resolving which
-	 * of its parts are code, a comment between the dot and the name leaves the
-	 * dotted test false, and a parse failure falls back to `referencedInRange`.
-	 * Each of those over-reports, which for a veto gate is a missed fix - never a
-	 * wrong one.
+	 * scan: CODE inside a `#if` body counts (it hosts real declarations), a
+	 * single-quoted literal that can interpolate counts wholesale rather than
+	 * resolving which of its parts are code, a comment between the dot and the name
+	 * leaves the dotted test false, and a parse failure falls back to
+	 * `referencedInRange`. Each of those over-reports, which for a veto gate is a
+	 * missed fix - never a wrong one.
+	 *
+	 * A STRUCTURE-FIELD name is not excluded here: it needs the parse tree, which
+	 * this signature does not carry, and its safety is caller-dependent (a
+	 * `@:structInit` object literal DOES name the class's own fields). The caller
+	 * that can cede it passes `structureFieldNameSpans` in `excluded`.
 	 */
 	public static function nameBoundInRange(
 		source: String, name: String, from: Int, end: Int, excluded: Array<Span>, plugin: GrammarPlugin
@@ -2523,6 +2536,39 @@ final class RefactorSupport {
 				if (!isMemberNamePosition(source, occ.span.from)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * The identifier-token span of every STRUCTURE-FIELD name in `tree` — a member of an
+	 * anonymous-structure type (`{ x:Float }`), of an object literal (`{ x: 1 }`) or of a
+	 * structure PATTERN (`case { x: n }`), per `shape.structureFieldHostKinds`. Such a name
+	 * is reachable only through a receiver, so it binds nothing in the surrounding scope and
+	 * a collision gate over a LOCAL / PARAMETER rename may subtract it: a module-level
+	 * `typedef Zoom = { x:Float }` otherwise vetoes every `_x -> x` in the file.
+	 *
+	 * Only the NAME token is returned, never the whole field node — an object literal's VALUE
+	 * is ordinary code that may well bind the name. Empty for a grammar leaving the slot unset.
+	 *
+	 * Not for a FIELD rename: under `@:structInit` an object literal's keys ARE the class's
+	 * own field names, so subtracting them would silently break the construction site.
+	 */
+	public static function structureFieldNameSpans(tree: QueryNode, source: String, shape: RefShape): Array<Span> {
+		final out: Array<Span> = [];
+		final hosts: Array<String> = shape.structureFieldHostKinds ?? [];
+		if (hosts.length > 0) collectStructureFieldNames(tree, source, hosts, out);
+		return out;
+	}
+
+	/** Walk `node`, appending the name-token span of every direct child of a `hosts` node. */
+	private static function collectStructureFieldNames(node: QueryNode, source: String, hosts: Array<String>, out: Array<Span>): Void {
+		if (hosts.contains(node.kind)) for (field in node.children) {
+			final name: Null<String> = field.name;
+			final span: Null<Span> = field.span;
+			if (name == null || span == null) continue;
+			final at: Int = identTokenOffset(source, span, name);
+			if (at >= 0) out.push(new Span(at, at + name.length));
+		}
+		for (child in node.children) collectStructureFieldNames(child, source, hosts, out);
 	}
 
 	/**

@@ -981,6 +981,26 @@ typedef RefShape = {
 	@:optional var restParamKind: String;
 
 	/**
+	 * Node kinds whose direct children name a STRUCTURE FIELD rather than a lexical
+	 * binding — an anonymous-structure type body and an object literal (Haxe `Anon` /
+	 * `ObjectLit`, the latter covering a structure PATTERN `case { x: n }` too). Such a
+	 * name is a member of the type / value, reachable only through a receiver, so a
+	 * scope-collision proof must not read it as a binding of that name — the same
+	 * exclusion `isMemberNamePosition` makes for the dotted `o.x` slot. Optional; unset
+	 * leaves the exclusion off.
+	 */
+	@:optional var structureFieldHostKinds: Array<String>;
+
+	/**
+	 * Node kinds that CONTINUE a variable declaration — every binding after the first in
+	 * `var a = 1, b = 2;` (Haxe `VarMore`). Each is a declaration node in its own right,
+	 * nested right-recursively inside the head declaration, so a consumer enumerating a
+	 * statement's bound names must walk the chain rather than read the head's name alone.
+	 * Optional; unset means the grammar has no such continuation form.
+	 */
+	@:optional var localDeclContinuationKinds: Array<String>;
+
+	/**
 	 * The null-coalescing operator node kind (`a ?? b`, Haxe `NullCoal`) — the
 	 * `redundant-null-coalescing` check flags one whose left operand is provably
 	 * non-null (`TypeResolver.isProvablyNonNull`), making the right operand dead.

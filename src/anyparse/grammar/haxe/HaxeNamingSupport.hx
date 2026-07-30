@@ -30,6 +30,9 @@ final class HaxeNamingSupport implements NamingSupport {
 	/** A magic dunder name (`__init__`) - a language / framework contract, not a style choice. */
 	private static final DUNDER_NAME_PATTERN: EReg = new EReg("^__.+__$", '');
 
+	/** The node kind of a binding declared after the comma in `var a = 1, b = 2;` — see `VarHost`. */
+	private static inline final VAR_MORE_KIND: String = 'VarMore';
+
 	/**
 	 * Haxe reserved keywords. A de-prefixed local whose bare name lands on one of
 	 * these is not a usable identifier, so its rename is skipped (report-only).
@@ -107,7 +110,7 @@ final class HaxeNamingSupport implements NamingSupport {
 
 	public function project(tree: QueryNode): Array<NamedDecl> {
 		final out: Array<NamedDecl> = [];
-		walk(tree, null, null, false, out);
+		walk(tree, null, null, false, null, out);
 		return out;
 	}
 
@@ -210,14 +213,21 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * (a compile-time constant - a write to it is a compile error).
 	 */
 	private static function walk(
-		node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, out: Array<NamedDecl>
+		node: QueryNode, parent: Null<QueryNode>, enclosingType: Null<String>, enclosingRtti: Bool, host: Null<VarHost>,
+		out: Array<NamedDecl>
 	): Void {
 		// Macro reification (`macro { … }`) is opaque: its identifiers are splice
 		// templates (`$name`), not real declarations — skip the whole subtree, as
 		// `unused-local` does with the plugin's `opaqueKinds`.
 		if (node.kind == 'MacroExpr') return;
-		final mods: Array<String> = modsOf(node, parent);
-		var category: Null<NamingCategory> = categoryOf(node, mods);
+		// A `VarMore` is a binding after the comma in `var a = 1, b = 2;` — the same kind whatever
+		// declaration it continues, so it has no category of its own and inherits the head binding's
+		// whole context: category, the modifier run that precedes the HEAD (`static var a = 1, b = 2`
+		// makes both Constants), and its structural-field status.
+		final inherited: Null<VarHost> = node.kind == VAR_MORE_KIND ? host : null;
+		final mods: Array<String> = inherited == null ? modsOf(node, parent) : inherited.mods;
+		final structural: Bool = inherited == null ? isStructuralField(parent) : inherited.structural;
+		var category: Null<NamingCategory> = inherited == null ? categoryOf(node, mods) : inherited.category;
 		if (parent != null && parent.kind == 'EnumAbstractDecl' && (node.kind == 'FinalMember' || node.kind == 'VarMember'))
 			category = NamingCategory.EnumValue;
 		final name: Null<String> = node.name;
@@ -236,7 +246,7 @@ final class HaxeNamingSupport implements NamingSupport {
 				mods: declMods,
 				enclosingType: enclosingType,
 				implicitlyReachable: isImplicitlyReachable(categoryValue, declName, node, parent, mods),
-				renameUnsafe: isStructuralField(parent) || hasPhysicalAccessors(node, parent, declName)
+				renameUnsafe: structural || hasPhysicalAccessors(node, parent, declName)
 				|| (enclosingRtti && isMemberCategory(categoryValue)),
 				reservedName: isReservedName(declName)
 			});
@@ -248,7 +258,11 @@ final class HaxeNamingSupport implements NamingSupport {
 		// A `@:rtti` type serializes by reflecting on its field NAMES, so its member
 		// fields are rename-unsafe. Once true it stays true for every descendant.
 		final childEnclosingRtti: Bool = category == NamingCategory.Type ? enclosingRtti || carriesRtti(node, parent) : enclosingRtti;
-		for (child in node.children) walk(child, node, childEnclosing, childEnclosingRtti, out);
+		// The head binding's context, handed to the `VarMore` chain hanging off it. A `VarMore` passes
+		// its own inherited context straight on, since the chain is right-recursive (`a{more:[b{more:[c]}]}`).
+		final resolved: Null<NamingCategory> = category;
+		final childHost: Null<VarHost> = resolved == null ? null : { category: resolved, mods: mods, structural: structural };
+		for (child in node.children) walk(child, node, childEnclosing, childEnclosingRtti, childHost, out);
 	}
 
 	/**
@@ -507,3 +521,19 @@ final class HaxeNamingSupport implements NamingSupport {
 	}
 
 }
+
+/**
+ * The head binding's context, handed down to the `VarMore` chain that continues it
+ * (`var a = 1, b = 2;`). A `VarMore` is one kind whatever declaration it continues — a local
+ * statement, a class member, a structure field — so it carries no category of its own and no
+ * modifier run of its own (`static var a = 1, b = 2` writes `static` once, before the head).
+ */
+private typedef VarHost = {
+	final category: NamingCategory;
+
+	/** The modifier run preceding the HEAD binding, which governs every binding in the list. */
+	final mods: Array<String>;
+
+	/** Whether the head binding is an anon-structure field, whose name is a wire contract. */
+	final structural: Bool;
+};

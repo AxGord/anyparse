@@ -112,6 +112,12 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	private static inline final DEFAULT_LOCALS: Bool = true;
 
 	/**
+	 * Whether the supertype-shadow veto stands for a local / parameter / catch variable,
+	 * unless an `apqlint.json` sets `allowInheritedShadow`. Default keeps the veto.
+	 */
+	private static inline final DEFAULT_ALLOW_INHERITED_SHADOW: Bool = false;
+
+	/**
 	 * A flagged name: one or more leading underscores followed by an alphanumeric. An
 	 * all-underscore name has no character after the run and is not matched (it is also
 	 * `reservedName` in the projection), and `_1` is matched but its stripped form fails
@@ -173,6 +179,10 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		if (tree == null) return [];
 		final policy: NamingPolicy = support.policyFor(violations[0].file);
 		final shape: RefShape = plugin.refShape();
+		// Resolved per fix() call from the findings' own file, exactly as `run` resolves `params` /
+		// `locals`: the option governs a GATE inside the rename, so it belongs to the fix path.
+		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, violations[0].file);
+		final allowInheritedShadow: Bool = config.boolOption(RULE_ID, 'allowInheritedShadow') ?? DEFAULT_ALLOW_INHERITED_SHADOW;
 		// The inherited-member proof walks the FULL supertype closure, so it resolves through the
 		// plugin's resolution scope (report files UNION the configured libraries) when present,
 		// exactly as the `naming` field rename does; the report-scoped index is the fallback.
@@ -201,7 +211,9 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 		for (i in 0...candidates.length) {
 			final c: Candidate = candidates[i];
 			if (claimedByAnother(candidates, i)) continue;
-			final rename: Null<Array<Span>> = renameSpansFor(c.decl, c.target, source, tree, shape, plugin, resolutionIndex);
+			final rename: Null<Array<Span>> = renameSpansFor(
+				c.decl, c.target, source, tree, shape, plugin, resolutionIndex, allowInheritedShadow
+			);
 			if (rename != null) for (occ in rename) edits.push({ span: occ, text: c.target });
 		}
 		return edits;
@@ -258,12 +270,12 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 */
 	private static function renameSpansFor(
 		decl: NamedDecl, target: String, source: String, tree: QueryNode, shape: RefShape, plugin: GrammarPlugin,
-		resolutionIndex: Null<SymbolIndex>
+		resolutionIndex: Null<SymbolIndex>, allowInheritedShadow: Bool
 	): Null<Array<Span>> {
 		final span: Null<Span> = decl.span;
 		if (span == null) return null;
 		if (Naming.collidesInScope(decl, source, tree, target, shape, resolutionIndex, plugin)) return null;
-		if (collidesWithProjectSymbol(decl, target, resolutionIndex)) return null;
+		if (collidesWithProjectSymbol(decl, target, resolutionIndex, allowInheritedShadow)) return null;
 		return Naming.declaringFileRenameSpans(
 			source, tree, span.from, decl.name, shape, plugin, Naming.isDistinctiveName(decl.name),
 			interpolationReadSpans(tree, source, decl.name, span.from, shape)
@@ -299,10 +311,22 @@ final class NoUnderscorePrefix implements Check implements DefaultOff implements
 	 * Both are proven, never assumed: an unresolvable hierarchy or a missing index answers
 	 * "no collision", and the in-file scan stays the primary proof.
 	 */
-	private static function collidesWithProjectSymbol(decl: NamedDecl, target: String, index: Null<SymbolIndex>): Bool {
+	private static function collidesWithProjectSymbol(
+		decl: NamedDecl, target: String, index: Null<SymbolIndex>, allowInheritedShadow: Bool
+	): Bool {
 		if (index == null) return false;
 		final idx: SymbolIndex = index;
 		if (idx.declaringFiles(target).length > 0) return true;
+		// A local / parameter / catch variable LEGALLY shadows an inherited member, so this veto
+		// is a STYLE stance, not a correctness gate — the correctness gate is `collidesInScope`,
+		// which refuses when the enclosing function already reads that member through a bare
+		// identifier the renamed binding would recapture. A UI codebase where nearly every type
+		// inherits a display-object member (`x`, `y`, `width`) has the stance silence the rule
+		// wholesale, so a project can cede it for exactly these three categories.
+		final category: NamingCategory = decl.category;
+		final shadowsBinding: Bool = category == NamingCategory.Local || category == NamingCategory.Param
+			|| category == NamingCategory.CatchVar;
+		if (allowInheritedShadow && shadowsBinding) return false;
 		final owner: Null<String> = decl.enclosingType;
 		return owner == null ? false : idx.supertypeDeclaresMember(owner, target);
 	}

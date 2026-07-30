@@ -352,9 +352,16 @@ final class TailMerge implements Check {
 	private static function localDeclNames(stmts: Array<QueryNode>, seams: Seams): Array<String> {
 		final names: Array<String> = [];
 		for (c in stmts) {
-			final decl: Null<QueryNode> = declaredNode(c, seams);
-			final nm: Null<String> = decl == null ? null : decl.name;
-			if (nm != null) names.push(nm);
+			var decl: Null<QueryNode> = declaredNode(c, seams);
+			// Walk the CONTINUATION chain: `var a = 1, b = 2;` binds `b` as well, on a node nested
+			// right-recursively inside the head declaration. Reading the head's name alone left the
+			// shadowing gate blind to every binding after the first.
+			while (decl != null) {
+				final node: QueryNode = decl;
+				final nm: Null<String> = node.name;
+				if (nm != null) names.push(nm);
+				decl = Lambda.find(node.children, k -> seams.localDeclContinuationKinds.contains(k.kind));
+			}
 		}
 		return names;
 	}
@@ -371,18 +378,11 @@ final class TailMerge implements Check {
 	}
 
 	/**
-	 * Whether `stmts` holds a variable declaration whose bound names `localDeclNames` cannot
-	 * fully enumerate — a MULTI-DECLARATOR (`var a = 1, t = 2;`), of which the projection
-	 * names only the first. Such a statement makes the shadowing gate blind, so its mere
-	 * presence refuses the candidate.
+	 * Whether `stmts` holds a variable declaration whose bound names `localDeclNames` cannot fully enumerate. Such a statement makes the shadowing gate blind, so its mere presence refuses the candidate.
 	 *
-	 * The projection's children are the INITIALIZERS, one per initialized declarator (a type
-	 * annotation is NOT a child), so a second child is already a second declarator. The
-	 * remaining shapes declare without initializing (`var a, b;`, `var a:Int, b = 1;`,
-	 * `var a = 1, b;`) and are found as a declarator-separating comma in the text outside the
-	 * initializers — at bracket depth 0, so a generic type parameter list
-	 * (`var m:Map<String, Int> = …`) does not count. That text holds no expression, which is
-	 * what makes counting `<` / `>` as brackets safe there.
+	 * A MULTI-DECLARATOR (`var a = 1, t = 2;`) is no longer one of them: every binding after the first surfaces as its own continuation node (`RefShape.localDeclContinuationKinds`) and `localDeclNames` walks the chain, so the precise shadowing gate decides it. The arms below stay as the fail-closed net for a declaration whose span or head initializer the projection does not resolve — and the comma scan still catches a form no continuation node covers.
+	 *
+	 * The projection children are the INITIALIZERS, one per initialized declarator (a type annotation is NOT a child). The remaining shapes declare without initializing and are found as a declarator-separating comma in the text outside the initializers — at bracket depth 0, so a generic type parameter list (`var m:Map<String, Int> = …`) does not count. That text holds no expression, which is what makes counting `<` / `>` as brackets safe there.
 	 */
 	private static function hasOpaqueDecl(stmts: Array<QueryNode>, source: String, seams: Seams): Bool {
 		for (c in stmts) {
@@ -533,6 +533,7 @@ final class TailMerge implements Check {
 		final shape: RefShape = plugin.refShape();
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
+		final localDeclContinuationKinds: Array<String> = shape.localDeclContinuationKinds ?? [];
 		if (ifKinds.length == 0 || localDeclKinds.length == 0) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return null;
@@ -550,6 +551,7 @@ final class TailMerge implements Check {
 			terminalKinds: terminalKinds,
 			identKinds: identKinds,
 			localDeclKinds: localDeclKinds,
+			localDeclContinuationKinds: localDeclContinuationKinds,
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
 			fnDeclKinds: (shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []),
 			metaKinds: plugin.metaShape().metaKinds
@@ -600,6 +602,7 @@ private typedef Seams = {
 	final terminalKinds: Array<String>;
 	final identKinds: Array<String>;
 	final localDeclKinds: Array<String>;
+	final localDeclContinuationKinds: Array<String>;
 	final localDeclExprKinds: Array<String>;
 	final fnDeclKinds: Array<String>;
 	final metaKinds: Array<String>;
