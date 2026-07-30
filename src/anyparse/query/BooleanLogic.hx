@@ -45,12 +45,27 @@ interface BooleanLogicSupport {
 	/**
 	 * The NaN-safe logical negation of condition `cond`, pushed inward by De
 	 * Morgan: `!` stripped, `&&` / `||` distributed, `==` / `!=` flipped; an
-	 * ordered comparison (`<` `<=` `>` `>=`) is wrapped `!(…)` verbatim, never
+	 * ordered comparison (`<` `<=` `>` `>=`) is wrapped `!(…)` verbatim rather than
 	 * flipped — `!(a < b)` and `a >= b` differ under NaN. Operands carry
 	 * precedence-safe parentheses. Comments in the operator glue between
 	 * operands are dropped, so the caller must gate: `CheckScan.negateConditionText`
 	 * falls back to a verbatim wrap when the condition span holds a comment marker.
+	 *
+	 * `typeNominalOf` lifts that wrap where NaN cannot arise: it answers an operand
+	 * node's declared type nominal (null = unknown), and an ordered comparison whose
+	 * BOTH operands are provably not floating-point flips like `==` / `!=` does. Omit
+	 * it — or return null — and every ordered comparison keeps the verbatim wrap.
 	 */
-	public function negateCondition(cond: QueryNode, source: String): String;
+	public function negateCondition(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): String;
+
+	/**
+	 * Whether `negateCondition` had to DECLINE a rewrite it knows how to perform — in the Haxe
+	 * engine, an ordered comparison `typeNominalOf` could not prove NaN-free, so it stayed
+	 * `!(a < b)` instead of flipping. A caller that inverts a condition purely so a block reads
+	 * better asks this FIRST and refuses the site when it answers true: the wrapped negation is
+	 * sound, but it reads worse than the positive condition it would replace. A wrap the engine
+	 * could never avoid (`!(a is B)`) is NOT a decline — that IS the canonical negation.
+	 */
+	public function negateConditionDeclinesFlip(cond: QueryNode, source: String, ?typeNominalOf: (QueryNode) -> Null<String>): Bool;
 
 }

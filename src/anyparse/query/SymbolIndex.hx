@@ -899,11 +899,18 @@ final class SymbolIndex {
 	 */
 	private function simpleRefInScope(fromFile: FileInfo, fi: FileInfo, t: TypeDeclInfo): Bool {
 		if (fi.pkg == fromFile.pkg) return true;
+		// A ROOT-package type (`Array`, `Math`, a package-less project module) is visible by
+		// simple name from every file, with no import — the rule that puts the std top level in
+		// scope, so a member type such as `Array<T>.length` resolves from any package.
+		if (fi.pkg == '') return true;
 		final path: String = importPathFor(fi, t);
 		final wild: String = '${fi.pkg}.*';
 		for (imp in fromFile.imports) switch imp.kind {
 			case ImportKind.Import | ImportKind.Using:
-				if (imp.raw == path) return true;
+				// A module import carries EVERY type the module declares into simple-name scope,
+				// not just its main one — `import pkg.Mod;` makes a sub-module `pkg.Mod.Sub`
+				// referable as `Sub`, which is how a response typedef beside its main type is used.
+				if (imp.raw == path || (!t.isMain && imp.raw == fi.module)) return true;
 			case ImportKind.Wild:
 				if (imp.raw == wild) return true;
 			case ImportKind.Alias:

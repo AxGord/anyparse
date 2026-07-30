@@ -1839,6 +1839,28 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The simple nominal of the type a VALUE expression carries — a bare identifier resolved
+	 * through its binding annotation, a `recv.field` path walked by `pathReceiverMemberTypeSource`
+	 * — or null when the expression is not a plain identifier / field path, or any link in it is
+	 * unresolved. A read-only probe for an analysis gate that must know an operand's type before
+	 * it may rewrite: null means "unknown", so a caller keeps its conservative branch.
+	 */
+	public static function valueTypeNominal(
+		node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Map<Int, String>, index: Null<SymbolIndex>, file: String
+	): Null<String> {
+		final identKind: Null<String> = shape.identKind;
+		final fieldKind: Null<String> = shape.fieldAccessKind;
+		if (identKind == null || fieldKind == null) return null;
+		final path: Null<Array<String>> = pathOf(node, identKind, fieldKind);
+		if (path == null) return null;
+		final rootType: Null<String> = pathRootTypeName(node, root, declaredTypes, shape);
+		if (path.length == 1) return rootType;
+		if (index == null) return null;
+		final typeSource: Null<String> = pathReceiverMemberTypeSource(path, rootType, index, file);
+		return typeSource == null ? null : outerNominalOf(typeSource);
+	}
+
+	/**
 	 * The report + resolution-scope `SymbolIndex` the plugin host carries — a subtype declared in a
 	 * configured resolution library, or in the implicitly-scoped Haxe std, is indexed there too — or
 	 * null when the plugin is not a resolution host or no scope reached it at all (the caller falls

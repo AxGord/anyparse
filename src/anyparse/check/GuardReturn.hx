@@ -132,7 +132,11 @@ final class GuardReturn implements Check {
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(tree, violations, entry.file, entry.source, seams);
+			if (tree != null)
+				walk(
+					tree, violations, entry.file, entry.source, seams,
+					CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
+				);
 		}
 		return violations;
 	}
@@ -147,13 +151,16 @@ final class GuardReturn implements Check {
 		if (tree == null) return [];
 		final byIf: Map<String, Candidate> = [];
 		indexCandidates(tree, source, seams, byIf);
+		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
+			? null
+			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
 			final span: Null<Span> = v.span;
 			if (span == null) continue;
 			final m: Null<Candidate> = byIf['${span.from}:${span.to}'];
 			if (m == null) continue;
-			final edit: Null<{ span: Span, text: String }> = editFor(m, source, seams);
+			final edit: Null<{ span: Span, text: String }> = editFor(m, source, seams, types);
 			if (edit != null) edits.push(edit);
 		}
 		return RefactorSupport.dropContainedEdits(edits);
@@ -188,11 +195,15 @@ final class GuardReturn implements Check {
 	}
 
 	/** Walk `node`, flagging each block whose trailing `if` + `return` pair inverts into a guard. */
-	private static function walk(node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams): Void {
+	private static function walk(
+		node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
 		if (s.blockKinds.contains(node.kind)) {
 			final m: Null<Candidate> = match(node, source, s);
-			if (m != null) {
+			// An inversion that cannot shed its `!( … )` wrap reads worse than the positive
+			// branch it replaces — the whole point of the guard form is lost, so skip the site.
+			if (m != null && CheckScan.negationIsClean(m.cond, source, s.negation, s.logic, types)) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out.push({
 					file: file,
@@ -203,7 +214,7 @@ final class GuardReturn implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(c, out, file, source, s);
+		for (c in node.children) walk(c, out, file, source, s, types);
 	}
 
 	/** Index every invertible block's candidate by its `if`'s `from:to` span key (for `fix` to re-find it). */
@@ -310,12 +321,14 @@ final class GuardReturn implements Check {
 	 * guard followed by the then-branch's inner statements (the writer re-indents the
 	 * de-nested run).
 	 */
-	private static function editFor(m: Candidate, source: String, s: Seams): Null<{ span: Span, text: String }> {
+	private static function editFor(
+		m: Candidate, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
+	): Null<{ span: Span, text: String }> {
 		final ifSpan: Null<Span> = m.ifNode.span;
 		final thenSpan: Null<Span> = m.thenBlock.span;
 		final tailSpan: Null<Span> = m.tail.span;
 		if (ifSpan == null || thenSpan == null || tailSpan == null) return null;
-		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.logic);
+		final neg: String = CheckScan.negateConditionText(m.cond, source, s.negation, s.logic, types);
 		final inner: String = StringTools.rtrim(source.substring(thenSpan.from + 1, thenSpan.to - 1));
 		final tailSource: String = source.substring(tailSpan.from, tailSpan.to);
 		return { span: new Span(ifSpan.from, tailSpan.to), text: 'if ($neg) $tailSource$inner' };

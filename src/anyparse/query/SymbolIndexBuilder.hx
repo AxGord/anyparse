@@ -46,6 +46,19 @@ final class SymbolIndexBuilder {
 		'AbstractHead' => 'AbstractDecl'
 	];
 
+	/** The anonymous-structure node a `typedef T = {…}` projects as its body. */
+	private static inline final ANON_KIND: String = 'Anon';
+
+	/** A `> Base,` structural extension written inside an anonymous structure. */
+	private static inline final EXTENDS_FIELD_KIND: String = 'ExtendsField';
+
+	/**
+	 * The shorthand anon-structure field forms `name:T` / `?name:T`. Counted as members ONLY
+	 * directly under an `Anon` — the same two kinds project a FUNCTION PARAMETER elsewhere, and
+	 * a parameter is not a member of anything.
+	 */
+	private static final ANON_SHORT_FIELD_KINDS: Array<String> = ['Required', 'Optional'];
+
 	/**
 	 * Parse every entry with `plugin` and extract its `FileInfo`. Entries whose source does not
 	 * parse are collected into `skipped` and excluded; every parsed entry's source is retained in
@@ -134,7 +147,7 @@ final class SymbolIndexBuilder {
 					interfaces: collectImplementsRaw(node).map(simpleName),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
-					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == 'Anon'),
+					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == ANON_KIND),
 					hasRtti: pendingMeta.contains('@:rtti'),
 					members: collectMembers(
 						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
@@ -233,6 +246,14 @@ final class SymbolIndexBuilder {
 				if (nm != null) out.push(nm);
 			}
 		});
+		// A structural extension (`typedef T = { > Base, … }`) IS a supertype link, but it is
+		// written INSIDE the anonymous structure rather than as an `extends` clause. Read only
+		// the declaration's OWN top-level `Anon` — a nested anonymous structure in a member's
+		// type annotation may carry its own `> Base` that belongs to that type, not to this one.
+		for (c in node.children) if (c.kind == ANON_KIND) for (f in c.children) if (f.kind == EXTENDS_FIELD_KIND) {
+			final nm: Null<String> = f.name;
+			if (nm != null && !out.contains(nm)) out.push(nm);
+		}
 		return out;
 	}
 
@@ -301,7 +322,7 @@ final class SymbolIndexBuilder {
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
 				// `import pkg.Enum;` whose constructors are used as bare identifiers is not judged unused.
 				// Enum-abstract values are already `FIELD_MEMBER_KINDS`.
-				if (RefactorSupport.isMemberDeclKind(child.kind)) {
+				if (RefactorSupport.isMemberDeclKind(child.kind) || (n.kind == ANON_KIND && ANON_SHORT_FIELD_KINDS.contains(child.kind))) {
 					final nm: Null<String> = child.name;
 					if (nm != null && sp != null) {
 						// Re-bind to a non-null local — Strict null-safety takes a struct
