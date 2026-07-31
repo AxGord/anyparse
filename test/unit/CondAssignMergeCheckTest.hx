@@ -143,14 +143,68 @@ class CondAssignMergeCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
+	/** A block comment inside a branch is trivia too — same report-only outcome as a line comment. */
+	public function testBlockCommentInRegionReportOnly(): Void {
+		final src: String = wrap('#if mobile\n\t\tscale = 2; /* why */\n\t\t#else\n\t\tscale = 1.2;\n\t\t#end');
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.stringContains('comment', vs[0].message);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A comment must not turn a header the SHAPE gate refuses into a report: the header is read
+	 * with its comments removed, so the multi-line condition still refuses the whole region.
+	 */
+	public function testCommentWithMultiLineConditionNotFlagged(): Void {
+		Assert.equals(
+			0, violations(wrap('#if (mobile\n\t\t\t|| air)\n\t\t// note\n\t\tscale = 2;\n\t\t#else\n\t\tscale = 3;\n\t\t#end')).length
+		);
+	}
+
 	/** A member-scope `#if` region wraps declarations, not statements — out of scope. */
 	public function testMemberScopeRegionNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\t#if mobile\n\tvar a: Int = 1;\n\t#else\n\tvar a: Int = 2;\n\t#end\n}').length);
 	}
 
-	/** A directive marker inside a string literal must never split the region into arms. */
+	/** A `#`-carrying statement is refused outright — here a string that reads like a branch marker. */
 	public function testDirectiveInStringLiteralNotFlagged(): Void {
 		Assert.equals(0, violations(wrap("#if mobile\n\t\ta = '#else';\n\t\t#else\n\t\ta = 'x';\n\t\t#end")).length);
+	}
+
+	/**
+	 * A marker inside the CONDITION diverts the scan before it can register the real `#else`,
+	 * so the chain never ends in one and the region fails closed — verified to be the gate that
+	 * fires first for this shape, not a later net.
+	 */
+	public function testMarkerInConditionNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if (v == "#if")\n\t\tx = 1;\n\t\t#else\n\t\tx = 2;\n\t\t#end')).length);
+	}
+
+	/**
+	 * A `#if` in a COMMENT past the `#else` unbalances the scan, which then never reaches the
+	 * region's own `#end` at depth 0 — the scan-termination gate, and the first one to fire
+	 * here (no statement carries a `#`, and the comment gate would only have made it
+	 * report-only).
+	 */
+	public function testUnbalancedMarkerInCommentNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\t// #if looks nested\n\t\tx = 2;\n\t\t#end')).length);
+	}
+
+	/**
+	 * A `#end` in a COMMENT is the first one the scan meets at depth 0, and the region text past
+	 * it is more than that keyword — the terminator-identity gate, first to fire here.
+	 */
+	public function testEarlyEndMarkerInCommentNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\tx = 1;\n\t\t#else\n\t\t// #end looks final\n\t\tx = 2;\n\t\t#end')).length);
+	}
+
+	/**
+	 * Two statements in one branch and an empty one BALANCE the arm count, so only the per-arm
+	 * bounds check can reject this — the gate that pins each child to its own branch.
+	 */
+	public function testStatementOutsideItsBranchNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if a\n\t\tx = 1;\n\t\tx = 2;\n\t\t#elseif b\n\t\t#else\n\t\tx = 3;\n\t\t#end')).length);
 	}
 
 	/** A condition holding a STRING must survive verbatim — the header slice is never whitespace-normalised. */

@@ -52,15 +52,19 @@ import anyparse.runtime.Span;
  *    (`a = b = c` would leave the inner one inside the merged r-value), or a single-declarator
  *    local declaration WITH an initializer;
  *  - the text before the r-value is IDENTICAL in every branch — the l-value for the
- *    assignment shape, the `<keyword> <name>[:<type>] =` prefix for the declaration one.
- *    Compared verbatim (whitespace included), so a branch spelling its target differently is
- *    a safe miss rather than a guess about which spelling to keep;
+ *    assignment shape, the `<keyword> <name>[:<type>] =` prefix for the declaration one. Both
+ *    are verbatim source slices (only the assignment shape's `=` is re-spelled, since the
+ *    l-value slice stops short of it), so a branch spelling its target differently — down to
+ *    the whitespace inside it — is a safe miss rather than a guess about which spelling to keep;
  *  - no branch statement contains a `#`. That rejects the r-value that already carries
  *    directives (`a = #if air 1 #else 2 #end;`, which the merge would nest) and, with it,
  *    every string literal whose text could have been mistaken for a branch marker by the
  *    directive scan below;
- *  - each branch header (`#if <cond>` / `#elseif <cond>` / `#else`) is single-line — a
- *    condition broken across lines cannot go inline verbatim.
+ *  - each branch header (`#if <cond>` / `#elseif <cond>` / `#else`), read with its comments
+ *    removed, is single-line — a condition broken across lines cannot go inline verbatim. The
+ *    comment removal is what keeps this SHAPE verdict independent of the comment gate below:
+ *    a commented branch is reported, not silently refused, and a multi-line condition is
+ *    refused whether or not a comment shares its region.
  *
  * Branch boundaries come from the region's own DIRECTIVE LINES, not from the tree: a
  * conditional region projects its branches as FLAT children with no boundary node, so the
@@ -80,6 +84,13 @@ import anyparse.runtime.Span;
  * come from `RefShape.exprStatementKind` / `assignKind` / `localDeclKinds`, and the position
  * gate from `GrammarPlugin.controlFlowSupport`. Any of them unset makes the check a no-op,
  * report and fix alike.
+ *
+ * The branch and terminator spellings (`#elseif` / `#else` / `#end`) are NOT read from a seam
+ * and are the Haxe ones. `RefShape.conditionalElseKeywords` carries the first two as an
+ * unordered set, which is not enough here: the scan must know WHICH keyword ends the chain
+ * (only a final `#else` makes the merge sound) and must try `#elseif` before its `#else`
+ * prefix, and there is no `#end` field at all. A grammar spelling them differently needs those
+ * seams introduced before this check can follow it.
  *
  * ## Autofix
  *
@@ -213,12 +224,12 @@ final class CondAssignMerge implements Check implements DefaultOff {
 		if (arms == null) return null;
 		final parts: Null<Array<Parts>> = agreedParts(source, arms, seams);
 		if (parts == null) return null;
-		// The comment gate runs BEFORE the merged text is built: a comment sits between a
-		// branch's directive and its statement, which is exactly the region the header slice
-		// covers, so building first would reject the site instead of reporting it.
-		if (hasComment(comments, span)) return { span: span, text: null };
-		final merged: Null<String> = mergedText(source, arms, parts);
-		return merged == null ? null : { span: span, text: merged };
+		// Every SHAPE gate, the headers included, runs BEFORE the comment gate: a region the
+		// headers refuse is not reportable at all, and reporting it would advise a hand-merge
+		// of something the rule itself cannot express.
+		final headers: Null<Array<String>> = branchHeaders(source, comments, arms);
+		if (headers == null) return null;
+		return { span: span, text: hasComment(comments, span) ? null : assemble(headers, parts) };
 	}
 
 	/**
@@ -297,18 +308,40 @@ final class CondAssignMerge implements Check implements DefaultOff {
 	}
 
 	/**
-	 * The merged statement — the shared prefix, then each branch's header and r-value, then
-	 * `#end;` — or null when a header is multi-line (a condition broken across lines cannot go
-	 * inline verbatim).
+	 * Each branch's own directive text (`#if <cond>` / `#elseif <cond>` / `#else`), or null when
+	 * one of them cannot go inline — the second SHAPE gate.
+	 *
+	 * A header is the slice from its directive to its statement with the COMMENT tokens removed:
+	 * a comment between the two is trivia the merge drops anyway (the comment gate reports that
+	 * separately), and leaving it in would make every commented branch look multi-line. What is
+	 * left must be single-line — a condition broken across lines cannot be emitted verbatim
+	 * inside a one-statement merge, and that verdict must not depend on whether a comment
+	 * happens to sit in the same region.
 	 */
-	private static function mergedText(source: String, arms: Array<Arm>, parts: Array<Parts>): Null<String> {
+	private static function branchHeaders(
+		source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, arms: Array<Arm>
+	): Null<Array<String>> {
+		final out: Array<String> = [];
+		for (arm in arms) {
+			final buf: StringBuf = new StringBuf();
+			var at: Int = arm.headerFrom;
+			for (token in comments) if (token.from >= at && token.to <= arm.stmtSpan.from) {
+				buf.add(source.substring(at, token.from));
+				at = token.to;
+			}
+			buf.add(source.substring(at, arm.stmtSpan.from));
+			final header: String = StringTools.trim(buf.toString());
+			if (header == '' || header.indexOf('\n') != -1 || header.indexOf('\r') != -1) return null;
+			out.push(header);
+		}
+		return out;
+	}
+
+	/** The merged statement: the shared prefix, then each branch's header and r-value, then `#end;`. */
+	private static function assemble(headers: Array<String>, parts: Array<Parts>): String {
 		final buf: StringBuf = new StringBuf();
 		buf.add(parts[0].prefix);
-		for (a in 0...arms.length) {
-			final header: String = StringTools.trim(source.substring(arms[a].headerFrom, arms[a].stmtSpan.from));
-			if (header == '' || header.indexOf('\n') != -1 || header.indexOf('\r') != -1) return null;
-			buf.add(' $header ${parts[a].value}');
-		}
+		for (a in 0...headers.length) buf.add(' ${headers[a]} ${parts[a].value}');
 		buf.add(' $END_KEYWORD;');
 		return buf.toString();
 	}
