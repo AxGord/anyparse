@@ -153,7 +153,8 @@ final class Linter {
 			new ShortenTypeRef(),
 			new CondAssignMerge(),
 			new RedundantPropertyAccess(),
-			new ImportBlockOrder()
+			new ImportBlockOrder(),
+			new PreferLineComment()
 		];
 	}
 
