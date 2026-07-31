@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.ImportOrder.ImportSlot;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
@@ -369,19 +370,19 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * The `import <path>;` line for `path` plus the offset to splice it at. Priority: the SORTED
-	 * position inside the existing plain-import block when that block is already sorted (the
-	 * file's own ordering is preserved), else after the last plain `import` (so a fresh import
-	 * never lands past the file's `using` group), else after the last `using` / wildcard / alias,
-	 * else after the `package` declaration, else the file start. The statement carries a leading
-	 * `\n` when it follows a statement, a trailing one when it leads the file.
+	 * The `import <path>;` line for `path` plus the offset to splice it at. Priority: the ORDERED
+	 * position inside the existing plain-import block when that block already carries an order
+	 * `ImportOrder` recognises (the file's own ordering is preserved), else after the last plain
+	 * `import` (so a fresh import never lands past the file's `using` group), else after the last
+	 * `using` / wildcard / alias, else after the `package` declaration, else the file start. The
+	 * statement carries a leading `\n` when it follows a statement, a trailing one when it leads
+	 * the file.
 	 */
 	private function anchorFor(path: String): ImportAnchor {
 		final stmt: String = 'import $path;';
 		final root: Null<QueryNode> = _root;
 		if (root == null) return { offset: 0, text: '$stmt\n' };
-		final plain: Array<QueryNode> = [for (c in root.children) if (c.kind == 'ImportDecl' && c.name != null) c];
-		final sortedSlot: Int = sortedInsertOffset(plain, path);
+		final sortedSlot: Int = ImportOrder.insertOffset(plainImportSlots(root), path);
 		if (sortedSlot >= 0) return { offset: sortedSlot, text: '$stmt\n' };
 		var lastPlain: Null<Span> = null;
 		var lastAny: Null<Span> = null;
@@ -396,20 +397,18 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * The offset at which `path` keeps an ALREADY-SORTED plain-import block sorted — the
-	 * `span.from` of the first import that sorts after it — or -1 when the block is unsorted,
-	 * empty, or `path` belongs at its end (both of which the caller's append handles). A
-	 * one-import block counts as sorted, so a second import still lands in order.
+	 * The file's PLAIN import statements as `ImportOrder` slots, in source order. A statement the
+	 * grammar recorded no span for keeps its place in the ORDER scan (dropping it would read a
+	 * block as ordered on the strength of a line it cannot see) and carries a negative offset, so
+	 * `ImportOrder` refuses to anchor on it.
 	 */
-	private static function sortedInsertOffset(plain: Array<QueryNode>, path: String): Int {
-		if (plain.length == 0) return -1;
-		final names: Array<String> = [for (n in plain) n.name ?? ''];
-		for (i in 1...names.length) if (names[i - 1] > names[i]) return -1;
-		for (i => name in names) if (path < name) {
-			final span: Null<Span> = plain[i].span;
-			return span == null ? -1 : span.from;
-		}
-		return -1;
+	private static function plainImportSlots(root: QueryNode): Array<ImportSlot> {
+		return [
+			for (c in root.children) if (c.kind == 'ImportDecl' && c.name != null) {
+				final span: Null<Span> = c.span;
+				{ path: c.name ?? '', from: span == null ? -1 : span.from };
+			}
+		];
 	}
 
 	/**

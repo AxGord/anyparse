@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.ImportOrder.ImportSlot;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -11,9 +12,10 @@ import haxe.Exception;
  *
  * Given a dotted module path, the operation collects the existing
  * top-level `import` / `using` / `package` nodes, refuses a duplicate of
- * the same kind, splices the raw new statement on its own line (after the
- * last import / using, else after `package`, else at file start), and
- * finalizes through `RefactorSupport.canonicalize` — so the result is
+ * the same kind, splices the raw new statement on its own line (in the
+ * plain-import block's own ORDER when it carries one — see `ImportOrder`;
+ * else after the last import / using, else after `package`, else at file
+ * start), and finalizes through `RefactorSupport.canonicalize` — so the result is
  * WRITER-FORMATTED and re-parse-validated, the source canonical-gated
  * unless `reformat` is set.
  *
@@ -43,9 +45,17 @@ final class AddImport {
 		final targetKind: String = isUsing ? 'UsingDecl' : 'ImportDecl';
 		var lastImport: Null<QueryNode> = null;
 		var packageDecl: Null<QueryNode> = null;
+		final block: Array<ImportSlot> = [];
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
 				lastImport = c;
+				final path: Null<String> = c.name;
+				final span: Null<Span> = c.span;
+				// Re-bind: a null-check does not narrow into an anonymous-structure literal.
+				if (c.kind == 'ImportDecl' && path != null) {
+					final named: String = path;
+					block.push({ path: named, from: span == null ? -1 : span.from });
+				}
 				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
 			case 'PackageDecl':
 				packageDecl = c;
@@ -57,11 +67,18 @@ final class AddImport {
 
 		final stmt: String = '${(isUsing ? 'using ' : 'import ') + trimmed};';
 
-		// Insertion site, in priority order: after the last existing
+		// Insertion site, in priority order: the ORDERED slot inside the
+		// existing plain-import block when that block already carries an
+		// order (`ImportOrder` — a `using` is never ordered, its position
+		// ranks static-extension resolution), else after the last existing
 		// import / using (extend the block), else after the package
 		// declaration, else at the very start of the file. Exact
 		// whitespace is the writer's concern — the canonicalize finalize
 		// re-emits the whole file.
+		final orderedSlot: Int = isUsing ? -1 : ImportOrder.insertOffset(block, trimmed);
+		if (orderedSlot >= 0) return RefactorSupport.canonicalize(
+			source, [{ span: new Span(orderedSlot, orderedSlot), text: '$stmt\n' }], reformat, plugin, optsJson
+		);
 		final lastImportTo: Int = spanTo(lastImport);
 		final packageTo: Int = spanTo(packageDecl);
 		final edit: { span: Span, text: String } = if (lastImportTo >= 0)

@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.GrammarPlugin.TypeRefShape;
+import anyparse.query.ImportOrder.ImportSlot;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.ImportInfo;
@@ -256,17 +257,31 @@ final class MoveSymbol {
 		// top-level import is still added.
 		final already: Bool = info.imports.exists(imp -> !imp.guarded && imp.kind == ImportKind.Import && imp.raw == path);
 		if (already) return null;
-		final insertAt: Int = importInsertionOffset(source, info);
+		final insertAt: Int = importInsertionOffset(source, info, path);
 		return { span: new Span(insertAt, insertAt), text: 'import $path;\n' };
 	}
 
 	/**
-	 * Offset at which a fresh import line should be inserted: the start of
-	 * the line AFTER the last existing import statement, else after the
-	 * package declaration, else the very start of the file. The returned
-	 * offset is always a line start, so the caller appends `text + '\n'`.
+	 * Offset at which a fresh import line of `path` should be inserted: the ORDERED slot inside
+	 * the existing plain-import block when that block already carries an order `ImportOrder`
+	 * recognises, else the start of the line AFTER the last existing import statement, else after
+	 * the package declaration, else the very start of the file. The returned offset is always a
+	 * line start, so the caller appends `text + '\n'`.
+	 *
+	 * `path` is optional only for a caller with nothing to place (a plain "where does the import
+	 * block end" question); without it the ordered slot cannot be computed and the append offset
+	 * is returned, which is what every caller got before ordering existed.
 	 */
-	public static function importInsertionOffset(source: String, info: FileInfo): Int {
+	public static function importInsertionOffset(source: String, info: FileInfo, ?path: String): Int {
+		if (path != null) {
+			// TOP-LEVEL plain imports only, in source order — the block whose order is preserved.
+			final block: Array<ImportSlot> = [
+				for (imp in info.imports)
+					if (!imp.guarded && imp.kind == ImportKind.Import) { path: imp.raw, from: imp.span.from }
+			];
+			final slot: Int = ImportOrder.insertOffset(block, path);
+			if (slot >= 0) return slot;
+		}
 		var anchorEnd: Int = -1;
 		// TOP-LEVEL imports only: a guarded import's span sits inside a `#if`
 		// region, so anchoring on it would place the fresh line inside that region.
