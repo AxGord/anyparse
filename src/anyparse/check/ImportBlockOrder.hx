@@ -6,6 +6,7 @@ import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.ImportOrder;
 import anyparse.query.QueryNode;
+import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import haxe.ds.ArraySort;
@@ -306,10 +307,8 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	}
 
 	/** The offset of the start of the line `at` sits on. */
-	private static function startOfLine(source: String, at: Int): Int {
-		var from: Int = at;
-		while (from > 0 && StringTools.fastCodeAt(source, from - 1) != '\n'.code) from--;
-		return from;
+	private static inline function startOfLine(source: String, at: Int): Int {
+		return RefactorSupport.startOfLine(source, at);
 	}
 
 	/** The last dotted segment of `dotted` — the simple name an import binds. */

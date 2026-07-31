@@ -77,17 +77,8 @@ final class EmptyComment implements Check {
 	 * is never treated as empty.
 	 */
 	private static function isEmpty(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
-		if (tok.isLine) {
-			for (i in tok.from + 2...tok.to) if (!isWs(StringTools.fastCodeAt(source, i))) return false;
-			return true;
-		}
-		final closed: Bool = tok.from + 2 <= tok.to - 2 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code
-			&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
-		if (!closed) return false;
-		for (i in tok.from + 2...tok.to - 2) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (!isWs(c) && c != '*'.code) return false;
-		}
+		if (!tok.isLine) return RefactorSupport.blockCommentIsBlank(source, tok);
+		for (i in tok.from + 2...tok.to) if (!isWs(StringTools.fastCodeAt(source, i))) return false;
 		return true;
 	}
 

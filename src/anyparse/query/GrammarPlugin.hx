@@ -1542,6 +1542,15 @@ typedef RefShape = {
 	@:optional var typeDeclKinds: Array<String>;
 
 	/**
+	 * The module's own package / namespace declaration kind (Haxe `PackageDecl`) — the
+	 * ONE top-level child that names the module rather than importing into it, and always
+	 * its first. `misplaced-type-doc` uses it to tell a FILE header (a block above the
+	 * package statement, which belongs to the file) from a doc written for the module's
+	 * type but stranded above the imports. Optional; unset makes that check a no-op.
+	 */
+	@:optional var packageDeclKind: String;
+
+	/**
 	 * Member-host container kinds whose members are IMPLICITLY public (Haxe
 	 * `InterfaceDecl`) — as opposed to `visibilityContainerKinds`, where a member is
 	 * public only with an explicit `public` modifier. The `doc-coverage` check treats
