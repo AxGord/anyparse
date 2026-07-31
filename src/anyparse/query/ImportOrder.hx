@@ -94,7 +94,7 @@ final class ImportOrder {
 	}
 
 	/** The id of the order NAMED `name` (an `import-order` `order` option value), or -1 when it names none. */
-	public static function orderNamed(name: String): Int {
+	public static inline function orderNamed(name: String): Int {
 		return ORDER_NAMES.indexOf(name);
 	}
 
