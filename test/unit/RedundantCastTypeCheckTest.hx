@@ -106,7 +106,65 @@ class RedundantCastTypeCheckTest extends Test {
 	}
 
 	public function testReturnWithoutAnnotationNotFlagged(): Void {
-		Assert.equals(0, violations('class Foo {} class C { function f(v:Dynamic) { return cast(v, Foo); } }').length);
+		// The operand is written `Foo` too, so `sameTypeSource` cannot be what rejects this — only
+		// the missing return annotation can.
+		Assert.equals(0, violations('class Foo {} class C { function f(v:Foo) { return cast(v, Foo); } }').length);
+	}
+
+	public function testTypeParameterConstraintNotFlagged(): Void {
+		// `function f<T:Foo>()` projects the CONSTRAINT as the same `Named` node a return type
+		// takes; only its position BEFORE the parameter list separates them.
+		Assert.equals(
+			0,
+			violations('class Foo {} class C { function f<T:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }').length
+		);
+	}
+
+	public function testTypeParameterConstraintWithParamsNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class Foo {} class C { function f<T:Foo>(p:Int) { return cast(mk(), Foo); } function mk():Dynamic return null; }').length
+		);
+	}
+
+	public function testConstraintPlusReturnAnnotationFlagged(): Void {
+		// Both a constraint and a return type: the annotation AFTER the parameter list is the one.
+		Assert.equals(
+			1,
+			violations(
+				'class Foo {} class C { function f<T:Foo>(p:Int):Foo { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testNestedInlineFunctionUsesItsOwnAnnotation(): Void {
+		// `LocalInlineFnStmt` is in no `RefShape` function seam; without the body-child boundary its
+		// unannotated return inherited the OUTER `:Foo` and fired.
+		Assert.equals(
+			0,
+			violations(
+				'class Foo {} class C { function f():Foo { inline function h() { return cast(mk(), Foo); } return h(); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testNestedNamedFunctionExpressionNotFlagged(): Void {
+		// Same leak through `NamedFnExpr` — a `function h2() {…}` bound to a local.
+		Assert.equals(
+			0,
+			violations(
+				'class Foo {} class C { function f():Foo { final g = function h2() { return cast(mk(), Foo); }; return g(); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testRequiredSlotBehindOptionalNotFlagged(): Void {
+		// The cast lands on the REQUIRED `b:Foo`, so a gate reading only the matched parameter lets it
+		// through. Haxe nevertheless lets a call SKIP a non-trailing optional argument, so an optional
+		// AHEAD of the slot destroys the positional mapping this whole arm rests on.
+		Assert.equals(
+			0, violations('class Foo {} class C { function g(?a:Int, b:Foo) {} function f(v:Dynamic) { g(1, cast(v, Foo)); } }').length
+		);
 	}
 
 	public function testReturnInsideAnnotatedLambdaNotFlagged(): Void {

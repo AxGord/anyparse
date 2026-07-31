@@ -27,12 +27,15 @@ import anyparse.runtime.Span;
  *  - (a) a declaration initializer with its OWN written annotation — `localDeclKinds`
  *    (`VarStmt` / `FinalStmt` / `VarMore`) or `fieldDeclKinds` (`VarMember` / `FinalMember`);
  *  - (b) a `return` (`valueReturnKinds`) under a function carrying an explicit return
- *    annotation. The enclosing function is threaded down the walk: a `functionKinds` node sets
- *    it, a `lambdaKinds` node CLEARS it, so a lambda return always bails;
+ *    annotation. The enclosing function is threaded down the walk: a node that OWNS a function
+ *    body sets it (`ownsFunctionBody` — kind-derived, so the nested forms no seam names are
+ *    covered), a `lambdaKinds` node CLEARS it, so a lambda return always bails. The annotation
+ *    itself is located by POSITION, past the parameter list, since a type-parameter constraint
+ *    projects the same node in the same slot (`returnAnnotation`);
  *  - (c) a call-argument slot whose parameter is written `T`, and only when the callee is a
- *    bare identifier resolving to a function DECLARED in this file, the slot maps to a
- *    `Required` parameter, and the parameter's type is a plain nominal DECLARED in the
- *    `SymbolIndex`.
+ *    bare identifier resolving to a function DECLARED in this file, EVERY parameter up to and
+ *    including the slot is plain required, and the parameter's type is a plain nominal DECLARED
+ *    in the `SymbolIndex`.
  *
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are never descended into.
  *
@@ -79,14 +82,6 @@ final class RedundantCastType implements Check implements DefaultOff {
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'redundant-cast-type';
 
-	/**
-	 * The one `RefShape.paramKinds` entry whose declared type IS the parameter's body type. The
-	 * seam exposes the whole set (`Required` / `Optional` / `Rest`) with no way to tell them apart,
-	 * and the other two are unusable here: an optional parameter's body type is `Null<T>`, and a
-	 * rest parameter absorbs every remaining slot, breaking the argument-to-parameter mapping.
-	 */
-	private static inline final REQUIRED_PARAM_KIND: String = 'Required';
-
 	public function new() {}
 
 	public function id(): String {
@@ -105,52 +100,18 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		if (provider == null) return [];
 		final typed: TypeInfoProvider = provider;
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final functionKinds: Array<String> = shape.functionKinds ?? [];
-		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
-		// Built on the FIRST (c) candidate only — the argument slot is the sole position needing it.
+		// Built on the FIRST (c) candidate only — the argument slot is the sole position needing it,
+		// and the whole run shares one index, so a file of pure (a) findings never pays for it.
 		var index: Null<SymbolIndex> = null;
-		final violations: Array<Violation> = [];
-		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree == null) continue;
-			final root: QueryNode = tree;
-			final source: String = entry.source;
-			final types: FileTypes = {
-				shape: shape,
-				source: source,
-				declaredTypeSources: typed.declaredTypeSources(source),
-				castTargets: typed.castTargetSources(source),
-				importMap: typed.importMap(source),
-				wrapperNames: shape.nullableWrapperTypeNames ?? []
-			};
-			function resolutionIndex(): SymbolIndex {
-				final cached: Null<SymbolIndex> = index;
-				if (cached != null) return cached;
-				final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
-				index = built;
-				return built;
-			}
-			function walk(node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>): Void {
-				if (opaqueKinds.contains(node.kind)) return;
-				final nextFn: Null<QueryNode> = lambdaKinds.contains(node.kind)
-					? null
-					: functionKinds.contains(node.kind) ? node : enclosingFn;
-				final span: Null<Span> = node.span;
-				if (node.kind == castKind && span != null && parent != null) {
-					final targetSource: Null<String> = redundantTargetSource(node, span, parent, enclosingFn, root, types, resolutionIndex);
-					if (targetSource != null) violations.push({
-						file: entry.file,
-						span: span,
-						rule: RULE_ID,
-						severity: Severity.Info,
-						message: 'redundant cast type - the position is already typed $targetSource'
-					});
-				}
-				for (c in node.children) walk(c, node, nextFn);
-			}
-			walk(root, null, null);
+		function resolutionIndex(): SymbolIndex {
+			final cached: Null<SymbolIndex> = index;
+			if (cached != null) return cached;
+			final built: SymbolIndex = RefactorSupport.resolutionIndexOf(plugin) ?? SymbolIndex.build(files, plugin);
+			index = built;
+			return built;
 		}
+		final violations: Array<Violation> = [];
+		for (entry in files) scanFile(entry, plugin, shape, typed, castKind, violations, resolutionIndex);
 		return violations;
 	}
 
@@ -168,6 +129,54 @@ final class RedundantCastType implements Check implements DefaultOff {
 					text: 'cast ${source.substring(operandSpan.from, operandSpan.to)}'
 				};
 			});
+	}
+
+	/**
+	 * Append every finding in ONE file to `violations`. Split out of `run` so the tree walk's
+	 * branching is its own unit and `run` owns only the seam resolution plus the shared lazy index.
+	 * The walk threads the cast's PARENT and its enclosing function down instead of building a parent
+	 * map: both position gates need exactly one step of context, and a lambda has to CLEAR the
+	 * enclosing function rather than be looked up through.
+	 */
+	private static function scanFile(
+		entry: { file: String, source: String }, plugin: GrammarPlugin, shape: RefShape, typed: TypeInfoProvider, castKind: String,
+		violations: Array<Violation>, resolutionIndex: () -> SymbolIndex
+	): Void {
+		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+		if (tree == null) return;
+		final root: QueryNode = tree;
+		final source: String = entry.source;
+		final types: FileTypes = {
+			shape: shape,
+			source: source,
+			declaredTypeSources: typed.declaredTypeSources(source),
+			castTargets: typed.castTargetSources(source),
+			importMap: typed.importMap(source),
+			wrapperNames: shape.nullableWrapperTypeNames ?? []
+		};
+		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
+		final functionKinds: Array<String> = shape.functionKinds ?? [];
+		final lambdaKinds: Array<String> = shape.lambdaKinds ?? [];
+		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
+		function walk(node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>): Void {
+			if (opaqueKinds.contains(node.kind)) return;
+			final nextFn: Null<QueryNode> = lambdaKinds.contains(node.kind)
+				? null
+				: ownsFunctionBody(node, functionKinds, bodyKinds) ? node : enclosingFn;
+			final span: Null<Span> = node.span;
+			if (node.kind == castKind && span != null && parent != null) {
+				final targetSource: Null<String> = redundantTargetSource(node, span, parent, enclosingFn, root, types, resolutionIndex);
+				if (targetSource != null) violations.push({
+					file: entry.file,
+					span: span,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: 'redundant cast type - the position is already typed $targetSource'
+				});
+			}
+			for (c in node.children) walk(c, node, nextFn);
+		}
+		walk(root, null, null);
 	}
 
 	/**
@@ -229,20 +238,37 @@ final class RedundantCastType implements Check implements DefaultOff {
 	}
 
 	/**
-	 * Position (b): the enclosing function's return annotation — its DIRECT child whose kind is
-	 * in `RefShape.typeAnnotationKinds`, required to be EXACTLY ONE (else bail). A parameter's
-	 * own annotation nests UNDER the parameter node, never as a direct child of the function, so
-	 * the single direct annotation child IS the return type.
+	 * Position (b): the enclosing function's RETURN annotation — the SOLE `typeAnnotationKinds`
+	 * direct child that starts AFTER the parameter list's closing `)`. Position is the whole gate:
+	 * a type-parameter CONSTRAINT (`function f<T:Foo>()`) projects the very same `Named` node in
+	 * the very same child slot, always BEFORE the parameter list, so trusting "exactly one
+	 * annotation child" made a constrained function with NO return type read as annotated `Foo`.
+	 * The `)` is searched from the last parameter's end (or the function's start when it declares
+	 * none), which puts a default value's parentheses behind the cursor; metadata projects as a
+	 * sibling node outside the function span. A parameter's own annotation nests UNDER the
+	 * parameter node, never as a direct child of the function, so it is never a candidate.
 	 */
 	private static function returnAnnotation(fn: QueryNode, shape: RefShape, source: String): Null<String> {
-		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
-		var found: Null<QueryNode> = null;
-		for (child in fn.children) if (annotationKinds.contains(child.kind)) {
-			if (found != null) return null;
-			found = child;
+		final fnSpan: Null<Span> = fn.span;
+		if (fnSpan == null) return null;
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		var scanFrom: Int = fnSpan.from;
+		for (child in fn.children) if (paramKinds.contains(child.kind)) {
+			final paramSpan: Null<Span> = child.span;
+			if (paramSpan != null && paramSpan.to > scanFrom) scanFrom = paramSpan.to;
 		}
-		if (found == null) return null;
-		final annotationSpan: Null<Span> = found.span;
+		final paramListEnd: Int = source.indexOf(')', scanFrom);
+		if (paramListEnd == -1 || paramListEnd >= fnSpan.to) return null;
+		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		var found: Null<Span> = null;
+		for (child in fn.children) if (annotationKinds.contains(child.kind)) {
+			final childSpan: Null<Span> = child.span;
+			if (childSpan != null && childSpan.from > paramListEnd) {
+				if (found != null) return null;
+				found = childSpan;
+			}
+		}
+		final annotationSpan: Null<Span> = found;
 		return annotationSpan == null ? null : source.substring(annotationSpan.from, annotationSpan.to);
 	}
 
@@ -250,9 +276,15 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * Position (c): the written type of the parameter `cast` fills, or null at the first gate
 	 * that fails. The callee (`call.children[0]`) must be a bare identifier resolving to a
 	 * `functionKinds` declaration in this file (the INNERMOST one of that name covering the
-	 * binding, so a nested local function wins over its host); the slot must map to a `Required`
-	 * parameter (an optional param's body type is `Null<T>`, a rest param breaks slot mapping);
-	 * and the parameter's type must be a plain nominal the index DECLARES (the generics veto).
+	 * binding, so a nested local function wins over its host); EVERY parameter up to and including
+	 * the slot must be a plain required one (`RefShape.optionalParamKind` / `restParamKind`); and
+	 * the parameter's type must be a plain nominal the index DECLARES (the generics veto).
+	 *
+	 * The gate covers every EARLIER parameter, not just the matched one, because Haxe lets a call
+	 * SKIP a non-trailing optional argument when the types disambiguate — `f(?a:Foo, b:Int)` accepts
+	 * `f(1)` — so one optional ahead of the slot destroys positional argument-to-parameter mapping.
+	 * A rest parameter absorbs every remaining slot and breaks it the same way; an optional
+	 * parameter's body type is `Null<T>` rather than its written form.
 	 */
 	private static function paramAnnotation(
 		castNode: QueryNode, call: QueryNode, root: QueryNode, types: FileTypes, resolutionIndex: () -> SymbolIndex
@@ -268,8 +300,8 @@ final class RedundantCastType implements Check implements DefaultOff {
 		if (bindingFrom == null) return null;
 		final fn: Null<QueryNode> = innermostFunctionNamed(root, shape.functionKinds ?? [], calleeName, bindingFrom);
 		if (fn == null) return null;
-		final param: Null<QueryNode> = nthParam(fn, shape.paramKinds ?? [], slot - 1);
-		if (param == null || param.kind != REQUIRED_PARAM_KIND) return null;
+		final param: Null<QueryNode> = plainRequiredParam(fn, shape, slot - 1);
+		if (param == null) return null;
 		final paramType: Null<String> = earliestTypeSourceWithin(param, types.declaredTypeSources);
 		final simple: Null<String> = TypeResolver.simpleNominalName(paramType);
 		return simple != null && resolutionIndex().declaringFiles(simple).length > 0 ? paramType : null;
@@ -299,14 +331,40 @@ final class RedundantCastType implements Check implements DefaultOff {
 		return best;
 	}
 
-	/** The `slot`-th (0-based) direct child of `fn` whose kind is in `paramKinds`, or null when there are fewer. */
-	private static function nthParam(fn: QueryNode, paramKinds: Array<String>, slot: Int): Null<QueryNode> {
+	/**
+	 * The `slot`-th (0-based) parameter of `fn`, or null when `fn` declares fewer, when either
+	 * `RefShape` parameter seam is missing, or when ANY parameter up to and including `slot` is
+	 * optional or rest — each of which breaks the positional argument-to-parameter mapping (see
+	 * `paramAnnotation`). Answering null on a missing seam keeps the gate fail-closed for a grammar
+	 * that cannot name its own optional / rest forms.
+	 */
+	private static function plainRequiredParam(fn: QueryNode, shape: RefShape, slot: Int): Null<QueryNode> {
+		final optionalKind: Null<String> = shape.optionalParamKind;
+		final restKind: Null<String> = shape.restParamKind;
+		if (optionalKind == null || restKind == null) return null;
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		var seen: Int = 0;
 		for (child in fn.children) if (paramKinds.contains(child.kind)) {
+			if (child.kind == optionalKind || child.kind == restKind) return null;
 			if (seen == slot) return child;
 			seen++;
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `node` OWNS a function body — a `functionKinds` declaration, or ANY node carrying a
+	 * direct `functionBodyKinds` child. The second arm is what reaches the nested function forms no
+	 * seam names (Haxe `LocalInlineFnStmt` — the `inline function h():T {}` local-helper idiom — and
+	 * `NamedFnExpr`): each carries its OWN return annotation in the same child slot a `FnMember`
+	 * does, so a `return` inside one must resolve against IT, never against the outer function.
+	 * Deriving the boundary from the body child rather than enumerating kind literals is what keeps
+	 * a form the seam set does not list from silently inheriting the enclosing annotation.
+	 */
+	private static function ownsFunctionBody(node: QueryNode, functionKinds: Array<String>, bodyKinds: Array<String>): Bool {
+		if (functionKinds.contains(node.kind)) return true;
+		for (child in node.children) if (bodyKinds.contains(child.kind)) return true;
+		return false;
 	}
 
 	/**
