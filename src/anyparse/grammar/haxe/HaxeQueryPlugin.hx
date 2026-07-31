@@ -682,6 +682,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'TypedefDecl'
 			],
 			interfaceDeclKinds: ['InterfaceDecl'],
+			packageDeclKind: 'PackageDecl',
 			publicModifierKind: 'Public',
 			classDeclKinds: ['ClassDecl', 'AbstractClassDecl'],
 			indexedElementTypeParams: ['Map' => 1, 'Array' => 0, 'Vector' => 0],

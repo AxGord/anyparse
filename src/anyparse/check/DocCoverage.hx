@@ -73,12 +73,6 @@ final class DocCoverage implements Check implements ConfigAware {
 	/** Whether the constructor is subject to the member requirement, unless an `apqlint.json` sets `includeConstructor`. */
 	private static inline final DEFAULT_INCLUDE_CONSTRUCTOR: Bool = false;
 
-	/** The `/**` doc-block opener. */
-	private static inline final DOC_OPEN: String = '/**';
-
-	/** The byte length of the empty `/**` `/` block — a real doc block exceeds it. */
-	private static inline final EMPTY_DOC_BLOCK_LENGTH: Int = 4;
-
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
@@ -109,7 +103,7 @@ final class DocCoverage implements Check implements ConfigAware {
 				requireMemberDoc: config.boolOption(RULE_ID, 'requireMemberDoc') ?? DEFAULT_REQUIRE_MEMBER_DOC,
 				includeConstructor: config.boolOption(RULE_ID, 'includeConstructor') ?? DEFAULT_INCLUDE_CONSTRUCTOR
 			};
-			scanModule(violations, entry.file, entry.source, tree, seams, cfg, docBlockEnds(entry.source));
+			scanModule(violations, entry.file, entry.source, tree, seams, cfg, CheckScan.docBlockEnds(entry.source));
 		}
 		return violations;
 	}
@@ -139,7 +133,7 @@ final class DocCoverage implements Check implements ConfigAware {
 				final span: Null<Span> = child.span;
 				if (span != null && !sawPrivate) {
 					final anchor: Int = runStart >= 0 ? runStart : span.from;
-					if (cfg.requireTypeDoc && !hasDocBefore(source, docEnds, anchor))
+					if (cfg.requireTypeDoc && !CheckScan.hasDocBefore(source, docEnds, anchor))
 						out.push(finding(file, source, span, 'public type \'${typeName(child, seams)}\' has no doc comment'));
 					if (cfg.requireMemberDoc) {
 						final container: Null<QueryNode> = memberContainerOf(child, seams);
@@ -185,7 +179,7 @@ final class DocCoverage implements Check implements ConfigAware {
 					final name: String = child.name ?? '';
 					final isCtor: Bool = seams.constructorName != null && name == seams.constructorName;
 					final anchor: Int = runStart >= 0 ? runStart : span.from;
-					if (isPublic && (includeConstructor || !isCtor) && !hasDocBefore(source, docEnds, anchor))
+					if (isPublic && (includeConstructor || !isCtor) && !CheckScan.hasDocBefore(source, docEnds, anchor))
 						out.push(finding(file, source, span, 'public member \'$name\' has no doc comment'));
 				}
 			} else if (isLeadingAnnotation(child, seams)) {
@@ -211,51 +205,13 @@ final class DocCoverage implements Check implements ConfigAware {
 	}
 
 	/** The declared name of a type node — its own, or its container child's for a `final class` (whose name sits on the inner `ClassForm`). */
-	private static function typeName(node: QueryNode, seams: Seams): String {
-		final own: Null<String> = node.name;
-		if (own != null) return own;
-		for (c in node.children) {
-			final nm: Null<String> = c.name;
-			if (nm != null && (seams.containers.contains(c.kind) || seams.interfaceDecls.contains(c.kind))) return nm;
-		}
-		return '<anonymous>';
+	private static inline function typeName(node: QueryNode, seams: Seams): String {
+		return CheckScan.typeDeclName(node, seams.containers.concat(seams.interfaceDecls));
 	}
 
 	/** Whether `node` is a leading modifier / `@:meta` annotation (part of a decl's preceding run), not a member or clause. */
-	private static function isLeadingAnnotation(node: QueryNode, seams: Seams): Bool {
-		final nm: Null<String> = node.name;
-		if (nm != null && nm.length > 0 && StringTools.fastCodeAt(nm, 0) == '@'.code) return true;
-		return seams.modifiers.contains(node.kind);
-	}
-
-	/**
-	 * Whether a `/**` doc block's close sits at the last non-whitespace byte before `pos`
-	 * — one immediately precedes the declaration. `docEnds` holds every doc block's end
-	 * offset; a line comment or a plain `/*` block is absent, so neither reads as a doc.
-	 */
-	private static function hasDocBefore(source: String, docEnds: Map<Int, Bool>, pos: Int): Bool {
-		var i: Int = pos - 1;
-		while (i >= 0 && isSpace(StringTools.fastCodeAt(source, i))) i--;
-		return i >= 0 && docEnds.exists(i + 1);
-	}
-
-	/**
-	 * The end offsets of every `/**` doc block in `source`, built once per file. Comment
-	 * boundaries come from the parser's own tokenizer, so a `/*` sequence inside a doc body
-	 * (an escaped example) never fools the anchor — the trap a naive `lastIndexOf('/*')` hits.
-	 */
-	private static function docBlockEnds(source: String): Map<Int, Bool> {
-		return [for (tok in RefactorSupport.collectCommentTokens(source)) if (isDocBlock(source, tok)) tok.to => true];
-	}
-
-	/** Whether `tok` is a non-empty `/**` doc block (not a line comment, a plain `/*`, or the empty form). */
-	private static function isDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
-		return !tok.isLine && tok.to - tok.from > EMPTY_DOC_BLOCK_LENGTH
-			&& source.substring(tok.from, tok.from + DOC_OPEN.length) == DOC_OPEN;
-	}
-
-	private static inline function isSpace(c: Int): Bool {
-		return c == ' '.code || c == '\t'.code || c == '\n'.code || c == '\r'.code;
+	private static inline function isLeadingAnnotation(node: QueryNode, seams: Seams): Bool {
+		return CheckScan.isLeadingAnnotation(node, seams.modifiers);
 	}
 
 	/** Build one `Info` finding on the declaration's HEADER line (so an inline `// noqa` on that line suppresses it). */

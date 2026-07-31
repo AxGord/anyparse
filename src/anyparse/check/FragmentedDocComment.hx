@@ -97,8 +97,8 @@ final class FragmentedDocComment implements Check {
 	 * NOT a doc and so never joins a fragmented-doc run, matching the doc-vs-plain
 	 * discrimination `RefactorSupport.docExtendedSpan` already makes.
 	 */
-	private static function isDocBlock(source: String, tok: CommentTok): Bool {
-		return !tok.isLine && tok.to - tok.from > 4 && source.substring(tok.from, tok.from + 3) == '/**'; // noqa: magic-number
+	private static inline function isDocBlock(source: String, tok: CommentTok): Bool {
+		return RefactorSupport.isDocBlock(source, tok);
 	}
 
 	/** Whether only whitespace with at most one newline separates `a` and `b` (consecutive lines, no blank line). */

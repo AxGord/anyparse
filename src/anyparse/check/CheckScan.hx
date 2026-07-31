@@ -567,6 +567,56 @@ final class CheckScan {
 		for (child in node.children) collectClassBodies(child, out);
 	}
 
+	/**
+	 * The end offsets of every doc block in `source` — the lookup a doc-anchor test needs,
+	 * built ONCE per file. Comment boundaries come from the parser's own tokenizer, so a
+	 * `/*` sequence inside a doc body (an escaped example) never fools the anchor — the trap
+	 * a naive `lastIndexOf('/*')` hits.
+	 */
+	public static function docBlockEnds(source: String): Map<Int, Bool> {
+		return [for (tok in RefactorSupport.collectCommentTokens(source)) if (RefactorSupport.isDocBlock(source, tok)) tok.to => true];
+	}
+
+	/**
+	 * Whether a doc block's close sits at the last non-whitespace byte before `pos` — one
+	 * immediately precedes the declaration anchored there. `docEnds` comes from
+	 * `docBlockEnds`; a line comment or a plain `/* … *\/` block is absent from it, so
+	 * neither reads as documentation.
+	 */
+	public static function hasDocBefore(source: String, docEnds: Map<Int, Bool>, pos: Int): Bool {
+		var i: Int = pos - 1;
+		while (i >= 0 && RefactorSupport.isSpace(StringTools.fastCodeAt(source, i))) i--;
+		return i >= 0 && docEnds.exists(i + 1);
+	}
+
+	/**
+	 * Whether `node` is a leading modifier / `@:meta` annotation — part of the sibling run
+	 * that PRECEDES a declaration in the projection, rather than a declaration itself. The
+	 * run's start is where a doc comment sits in source, so every doc-anchor walk needs it.
+	 * `modifierKinds` is the grammar's modifier-kind set; a metadata node is recognised by
+	 * its `@`-prefixed name, which no grammar spells differently.
+	 */
+	public static function isLeadingAnnotation(node: QueryNode, modifierKinds: Array<String>): Bool {
+		final nm: Null<String> = node.name;
+		if (nm != null && nm.length > 0 && StringTools.fastCodeAt(nm, 0) == '@'.code) return true;
+		return modifierKinds.contains(node.kind);
+	}
+
+	/**
+	 * The declared name of a type node — its own, or the name of the `containerKinds` child
+	 * that carries it for a wrapped shape (a Haxe `final class`, whose name sits on the inner
+	 * `ClassForm`). `'<anonymous>'` when neither has one.
+	 */
+	public static function typeDeclName(node: QueryNode, containerKinds: Array<String>): String {
+		final own: Null<String> = node.name;
+		if (own != null) return own;
+		for (c in node.children) {
+			final nm: Null<String> = c.name;
+			if (nm != null && containerKinds.contains(c.kind)) return nm;
+		}
+		return '<anonymous>';
+	}
+
 }
 
 /**

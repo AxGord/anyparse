@@ -3413,6 +3413,23 @@ class WriterLowering {
 	 * width path) by calling `_dinfle` (natural-first-line probe) instead
 	 * of `_difle` (flat first-line probe): the flat probe cannot tell a
 	 * wrappable RHS bracket from a NoWrap-pinned one and over-breaks.
+	 *
+	 * Un-armed fields take the DECL-HEADER arm (ω-N-break-after-eq,
+	 * decl-header increment) — a strictly weaker, last-resort break for the
+	 * shape the natural probe is blind to: the RHS's call args ALREADY wrap
+	 * past `(`, yet the remaining HEADER line (up to that open paren) still
+	 * exceeds `maxLineLength`. The natural probe cannot see it because it
+	 * resolves such a RHS flat and reports the one-line width, which reaches
+	 * the limit for every declaration whose args wrap. This arm measures the
+	 * head statically instead (`DocMeasure.breakableHead`) and drives the
+	 * plain `_diwe` column probe with a shifted threshold, so the break
+	 * fires exactly when no amount of RHS-internal wrapping can bring the
+	 * header back under the limit. `endsAtOpenDelim` keeps it off a head
+	 * that ends at an OPERAND — an operator chain led by a literal or an
+	 * identifier, the shape whose double-break motivated the narrow gates
+	 * above. A chain led by a bracketed construct DOES arm: its head is a
+	 * genuinely over-wide line and the chain's own break points are all
+	 * past it.
 	 */
 	private function breakAfterLeadOnOverflowWrap(leadText: String, writeCall: Expr, typeFieldName: String): Expr {
 		final typeAccess: Expr = { expr: EField(macro value, typeFieldName), pos: Context.currentPos() };
@@ -3430,8 +3447,35 @@ class WriterLowering {
 					_dt($v{leadText}),
 					_dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _rhs])), _dc([_dop(' '), _rhs]))
 				]);
-			else
-				_dc([_dt($v{leadText}), _dop(' '), _rhs]);
+			else {
+				// Decl-header arm (last resort). `_head.width` is what the
+				// glued shape keeps on THIS line once the RHS's own wrap
+				// fires — `= new Foo(` for a call whose args leading-break.
+				// Armed only when that head ENDS at the open delimiter: a
+				// head ending at an OPERAND belongs to an operator chain
+				// that carries its wrap on its own LATER lines, and breaking
+				// the `=` there double-breaks it (fork breaks the chain).
+				final _eqGlued: anyparse.core.Doc = _dc([_dop(' '), _rhs]);
+				final _head: { width: Int, endsAtOpenDelim: Bool } = anyparse.core.DocMeasure.breakableHead(_eqGlued);
+				// `_diwe` probes `col + flatTokenWidth(flatDoc) >= n` at
+				// RENDER time over the very Doc passed as `flatDoc`, so
+				// shifting the threshold by that same flat width makes the
+				// effective test `col + _head.width > opt.lineWidth` — a
+				// header EXACTLY on the limit stays glued (the width+1
+				// convention the other fits-probes share). The cancellation
+				// assumes `_eqGlued`'s flat width is the same at build and at
+				// render: `CollapsePass` descends `IfWidthExceeds`'s flat
+				// side, so a future collapse rule that RESIZES a decl RHS
+				// would skew this threshold by the delta.
+				final _flatW: Int = anyparse.core.DocMeasure.flatTokenWidth(_eqGlued);
+				if (_head.endsAtOpenDelim)
+					_dc([
+						_dt($v{leadText}),
+						_diwe(opt.lineWidth + 1 - _head.width + _flatW, _dn(_cols, _dc([_dhl(), _rhs])), _eqGlued)
+					]);
+				else
+					_dc([_dt($v{leadText}), _dop(' '), _rhs]);
+			}
 		};
 	}
 
@@ -6909,13 +6953,7 @@ class WriterLowering {
 				_dc([_leftIv, $ivOpExpr, $rightCall]);
 			}
 			: isAssign && !isTight
-				? macro _dc([
-					$leftCall,
-					_dt(' '),
-					_dt($v{opText}),
-					_dop(' '),
-					$rightEmit,
-				])
+				? assignEmitExpr(c, opText, isAsymmetric, leftCtx, rightCtx, leftCall, rightOptExpr, rightEmit)
 				: macro _dc([
 					$leftCall,
 					$opEmitExpr,
@@ -6927,6 +6965,91 @@ class WriterLowering {
 				_dc([_dt('('), _inner, _dt(')')])
 			else
 				_inner;
+		};
+	}
+
+	/**
+	 * Assignment-class emit (`prec == 0`, non-tight): the flat per-level
+	 * `left = right` shape, plus — for a plain `=` — the runtime dispatch that
+	 * routes a genuine CHAIN through `BinaryChainEmit.emitAssignChain`.
+	 *
+	 * ω-assign-chain-fill: `=` is right-assoc, so `a = b = c = v` nests as
+	 * `Assign(a, Assign(b, Assign(c, v)))` and the per-level `Concat` hands the
+	 * whole chain NO break opportunity -- an overflowing chain rendered on one
+	 * over-long line and the writer still reported the file canonical.
+	 *
+	 * The gate is the operator TEXT, not `prec == 0`: that precedence also
+	 * carries `in` / `->` / `=>` / `+=` / `??=` and friends, none of which may
+	 * change shape here. `isAsymmetric` is excluded because the flatten is not
+	 * merely pointless there but ill-typed: a `case Assign(_, _)` pattern does
+	 * not match a right operand of a DIFFERENT rule type, and the tail write
+	 * would have to go through `writeFnFor(rightRef)` rather than
+	 * `c.writeFnName`. (Inert for every grammar in the repo -- Haxe's `Assign`
+	 * is self-symmetric.)
+	 *
+	 * A NON-chain assignment falls back to `plainExpr`, the verbatim per-level
+	 * emit. That fallback is the whole blast-radius argument: `a = b` produces
+	 * the exact expression it produced before the slice, with no array, no
+	 * closure and no probe; only chains, which had no wrap point at all, take
+	 * the new path.
+	 *
+	 * Only the RIGHT spine recurses, and every left operand is written as a
+	 * LEAF at `leftCtx` (`prec + 1`) while only the terminal right operand uses
+	 * `rightCtx` (`prec`) -- which is what reproduces the nested emit's
+	 * precedence-parenthesisation exactly. (Descending into `_l` could not
+	 * match anyway: an explicit `(a = b) = c` keeps its own `ParenExpr` node,
+	 * and a right-assoc parse never nests an `Assign` on the left.)
+	 *
+	 * `_optR` is the SAME opt expression the plain path threads into its right
+	 * operand (`rightOptExpr`, derived from the branch's `propagateExprPosition`
+	 * meta), bound ONCE and reused for every right-spine operand. It is
+	 * `_setExprPosition(opt)`, which returns its argument unchanged once the
+	 * expression-position flag is set and the narrow flags are clear
+	 * (`WriterCodegen.setExprPositionField`), so a single binding is equivalent
+	 * to the per-level application the nested emit performed. `_items[0]` --
+	 * the OUTERMOST left operand -- keeps the unmodified `opt`, exactly as the
+	 * plain path does.
+	 *
+	 * The hardcoded `Assign` ctor name follows `infixChainGatherSwitch`,
+	 * which hardcodes `Or` / `And` / `Add` / `Sub` / `NullCoal` the same way;
+	 * the switch subject's type (`ruleValueCT(typePath)`) resolves it against
+	 * the plain enum or its trivia twin. `Assign` carries no capture metas,
+	 * so its arity is 2 in BOTH modes -- unlike the chain ctors, which grow
+	 * three trivia synth slots and need a `_ctx.trivia` fork here.
+	 */
+	private function assignEmitExpr(
+		c: LowerBranchCtx, opText: String, isAsymmetric: Bool, leftCtx: Int, rightCtx: Int, leftCall: Expr, rightOptExpr: Null<Expr>,
+		rightEmit: Expr
+	): Expr {
+		final plainExpr: Expr = macro _dc([
+			$leftCall,
+			_dt(' '),
+			_dt($v{opText}),
+			_dop(' '),
+			$rightEmit,
+		]);
+		if (opText != '=' || isAsymmetric) return plainExpr;
+		final argTypeCT: ComplexType = ruleValueCT(c.typePath);
+		final rightArg: Expr = macro $i{c.argNames[1]};
+		final rightOpt: Expr = rightOptExpr ?? macro opt;
+		final leftItemCall: Expr = makeWriteCall(c.writeFnName, macro _l, c.hasPratt, leftCtx, macro _optR);
+		final tailItemCall: Expr = makeWriteCall(c.writeFnName, macro _e, c.hasPratt, rightCtx, macro _optR);
+		// The subject needs parens: bare `switch $rightArg {` parses the
+		// following block as a `$name{...}` reification form, not as the
+		// switch body.
+		return macro switch ($rightArg) {
+			case Assign(_, _):
+				final _items: Array<anyparse.core.Doc> = [$leftCall];
+				final _optR = $rightOpt;
+				function _gatherAssign(_e: $argTypeCT): Void switch _e {
+					case Assign(_l, _r):
+						_items.push($leftItemCall);
+						_gatherAssign(_r);
+					case _: _items.push($tailItemCall);
+				}
+				_gatherAssign($rightArg);
+				anyparse.format.wrap.BinaryChainEmit.emitAssignChain(_items, opt);
+			case _: $plainExpr;
 		};
 	}
 

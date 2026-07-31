@@ -331,6 +331,7 @@ import unit.PreferFinalPublicFieldCheckTest;
 import unit.PreferReadOnlyFieldCheckTest;
 import unit.MemberOrderCheckTest;
 import unit.FragmentedDocCommentCheckTest;
+import unit.PreferLineCommentCheckTest;
 import unit.UnnecessaryNullCheckCheckTest;
 import unit.RedundantCastCheckTest;
 import unit.RedundantNullCoalescingCheckTest;
@@ -409,6 +410,7 @@ import unit.HxFnSigFillLastParamBoundaryTest;
 import unit.HxChainFillBoundaryCallOperandTest;
 import unit.HxCallGroupRestProbeNestedArgTest;
 import unit.HxTernaryCallArgRestAwareTest;
+import unit.HxTernaryDeclInitRestAwareTest;
 import unit.HxExprParenDivOpenBoundaryTest;
 import unit.HxOpAddParenInnerBreakTest;
 import unit.HxCondSpliceChainWrapSliceTest;
@@ -503,19 +505,23 @@ import unit.ImplicitStdScopeTest;
 import unit.ExtensionMethodsExtractionTest;
 import unit.StdResolverReturnTypeTest;
 import unit.HxVarInitBreakAfterEqOverflowTest;
+import unit.HxDeclHeaderEqBreakOverflowTest;
 import unit.ResolutionLibraryCacheTest;
 import unit.PreferSafeNavComparisonCheckTest;
 import unit.PreferArrowCallbackCheckTest;
 import unit.GuardReturnCheckTest;
 import unit.NoUnderscorePrefixCheckTest;
 import unit.ImportBlockOrderCheckTest;
+import unit.MisplacedTypeDocCheckTest;
 import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
 import unit.ExplicitLocalTypePrinterTest;
 import unit.HxLineCommentIndentSliceTest;
 import unit.ShortenTypeRefCheckTest;
 import unit.CondAssignMergeCheckTest;
+import unit.RedundantPropertyAccessCheckTest;
 import unit.HxGroupTrailCommentWriteTest;
+import unit.HxAssignChainWrapSliceTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -655,6 +661,7 @@ class RunTests {
 		addCase(new HxParenWrapSourceNewlineSliceTest());
 		addCase(new HxParenTernaryOpenWrapSliceTest());
 		addCase(new HxTernaryCallArgRestAwareTest());
+		addCase(new HxTernaryDeclInitRestAwareTest());
 		addCase(new HxExprParenDivOpenBoundaryTest());
 		addCase(new HxOpAddParenInnerBreakTest());
 		addCase(new HxOpAddTrailingParenGlueSliceTest());
@@ -732,6 +739,7 @@ class RunTests {
 		addCase(new HxCondPlainCallLeadingBreakSliceTest());
 		addCase(new HxCompareOperandBreakSliceTest());
 		addCase(new HxVarInitBreakAfterEqOverflowTest());
+		addCase(new HxDeclHeaderEqBreakOverflowTest());
 		addCase(new HxCallGroupRestProbeCasePatternTest());
 		addCase(new HxCallGroupRestProbeChainOperandTest());
 		addCase(new HxCallGroupRestProbeNestedArgTest());
@@ -805,6 +813,7 @@ class RunTests {
 		addCase(new HxCaseCommentWriteTest());
 		addCase(new HxHeadCommentSeamWriteTest());
 		addCase(new HxGroupTrailCommentWriteTest());
+		addCase(new HxAssignChainWrapSliceTest());
 		addCase(new HaxeFormatConfigLoaderTest());
 		addCase(new HaxeWriterRoundTripTest());
 		addCase(new HxFormatterCorpusTest());
@@ -931,6 +940,7 @@ class RunTests {
 		addCase(new ModifierOrderCheckTest());
 		addCase(new MemberOrderCheckTest());
 		addCase(new FragmentedDocCommentCheckTest());
+		addCase(new PreferLineCommentCheckTest());
 		addCase(new ExplicitTypeCheckTest());
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());
@@ -989,9 +999,11 @@ class RunTests {
 		addCase(new PreferArrowCallbackCheckTest());
 		addCase(new NoUnderscorePrefixCheckTest());
 		addCase(new ImportBlockOrderCheckTest());
+		addCase(new MisplacedTypeDocCheckTest());
 		addCase(new PreferTypedThrowCheckTest());
 		addCase(new ShortenTypeRefCheckTest());
 		addCase(new CondAssignMergeCheckTest());
+		addCase(new RedundantPropertyAccessCheckTest());
 		addCase(new TypeRefPrinterTest());
 		addCase(new ExplicitLocalTypePrinterTest());
 		addCase(new PreferMapLiteralCheckTest());
