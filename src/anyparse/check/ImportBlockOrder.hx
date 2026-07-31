@@ -14,10 +14,10 @@ using Lambda;
 
 /** One plain `import` line of a block: the path it names, its declaration start, and the WHOLE-LINE region that moves with it. */
 private typedef ImportLine = {
-	var path: String;
-	var declFrom: Int;
-	var chunkFrom: Int;
-	var chunkTo: Int;
+	final path: String;
+	final declFrom: Int;
+	final chunkFrom: Int;
+	final chunkTo: Int;
 }
 
 /**
@@ -47,19 +47,26 @@ private typedef ImportLine = {
  * ## Autofix
  *
  * A pure REORDER of complete lines: each import moves as its own whole line, together with the
- * whole-line `//` comments directly above it and any trailing `// …` on its own line. Nothing
+ * whole-line `//` comments directly above it and any trailing `// …` on the same line. Nothing
  * is reflowed, rewritten, added or deleted — the fix's output is a permutation of the block's
  * own lines, so it cannot change what the file means beyond the order of the imports.
  *
- * The reorder is REFUSED (finding stays report-only) when order is load-bearing or the lines
- * are not cleanly separable:
+ * An import sharing its source line with anything but a trailing `//` comment is not separable
+ * as a line, so it ends a run too (and a run of one is never reported).
+ *
+ * The reorder is REFUSED (finding stays report-only) when order is load-bearing or a comment
+ * cannot be attributed:
  *
  *  - two imports in the run bind the same SIMPLE name (`a.Widget` + `b.Widget`): Haxe accepts
  *    both and lets the LAST one win, so their relative order decides which type the short name
- *    means;
- *  - two imports name the same path (a duplicate — `duplicate-import`'s finding, not this
- *    rule's, and deleting is its call);
- *  - an import shares its source line with anything but a trailing `//` comment.
+ *    means. A plain module import binds EVERY type its module declares, so the name set is read
+ *    from the resolution index — this is what catches two modules that each declare a same-named
+ *    SECONDARY type, which the module paths alone do not reveal. A duplicated path is the same
+ *    refusal by construction (deleting it is `duplicate-import`'s call, not a reorder's);
+ *  - the run's FIRST import carries a whole-line comment above it — that comment belongs to the
+ *    block, not to one import (a header, a license banner, a `CHECKSTYLE:OFF` marker, a group
+ *    label), and a reorder can neither move it nor leave it behind without saying something
+ *    false.
  *
  * ## Options
  *
@@ -130,10 +137,11 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 			final span: Null<Span> = v.span;
 			if (span != null) flagged.push(span.from);
 		}
+		final moduleTypes: Map<String, Array<String>> = moduleTypesOf(index);
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (block in blocksOf(source, tree)) {
 			if (!block.exists(line -> flagged.contains(line.declFrom))) continue;
-			if (!reorderable(block)) continue;
+			if (!reorderable(block, source, moduleTypes)) continue;
 			final order: Int = fixOrder(requested, [for (line in block) line.path]);
 			final sorted: Array<ImportLine> = block.copy();
 			ArraySort.sort(sorted, (a, b) -> ImportOrder.compare(order, a.path, b.path));
@@ -166,29 +174,58 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		return requested < 0 ? ImportOrder.orderOf(paths) >= 0 : ImportOrder.sortedUnder(paths, requested);
 	}
 
-	/** The first block member that sorts BEFORE its predecessor under `order` — the line the finding points at. */
+	/**
+	 * The first block member that sorts BEFORE its predecessor under `order` — the line the
+	 * finding points at. A reported block always has one (`acceptable` and `fixOrder` read the
+	 * same order), and the block's own first line is the fallback coordinate should that ever
+	 * stop holding: a finding with a slightly-off column beats a linter that throws mid-run.
+	 */
 	private static function firstOutOfPlace(block: Array<ImportLine>, order: Int): ImportLine {
 		for (i in 1...block.length) if (ImportOrder.compare(order, block[i - 1].path, block[i].path) > 0) return block[i];
-		// Unreachable for a reported block (it is out of order under the fix order too, since the
-		// requested order is what judged it); the first member is the safe coordinate regardless.
 		return block[0];
 	}
 
 	/**
-	 * Whether the block's lines may be permuted at all — see the class doc's refusal list. Order
-	 * is load-bearing when two imports bind one simple name (Haxe lets the LAST win) and a
-	 * duplicated path belongs to `duplicate-import`, not to a reorder.
+	 * Whether the block's lines may be permuted at all — see the class doc's refusal list.
+	 *
+	 * Two refusals. ORDER IS LOAD-BEARING when two imports bind one simple NAME: Haxe accepts
+	 * both and lets the LAST win, so permuting them silently rebinds that name (a duplicated
+	 * path is the same refusal by construction — it binds the same names twice — and deleting
+	 * it is `duplicate-import`'s call, not a reorder's). The name set of a plain module import
+	 * is EVERY type that module declares, not just its main one, so it is read from the
+	 * resolution index; a module the index does not know contributes only its own last segment,
+	 * which is the pre-index reading and the residual limit of this gate.
+	 *
+	 * The block's FIRST member must carry no absorbed leading comment. Such a comment sits above
+	 * the whole block — a file header, a license banner, a `CHECKSTYLE:OFF` marker, a group label
+	 * — and travelling with an import that sorts later would relocate it into the block's middle,
+	 * while leaving it behind would strand it above a different import. Neither is a permutation
+	 * of the block's meaning, so the block stays report-only.
 	 */
-	private static function reorderable(block: Array<ImportLine>): Bool {
-		final names: Array<String> = [];
-		final paths: Array<String> = [];
-		for (line in block) {
-			final simple: String = lastSegment(line.path);
-			if (names.contains(simple) || paths.contains(line.path)) return false;
-			names.push(simple);
-			paths.push(line.path);
+	private static function reorderable(block: Array<ImportLine>, source: String, moduleTypes: Map<String, Array<String>>): Bool {
+		if (block[0].chunkFrom != startOfLine(source, block[0].declFrom)) return false;
+		final bound: Array<String> = [];
+		for (line in block) for (name in boundNames(line.path, moduleTypes)) {
+			if (bound.contains(name)) return false;
+			bound.push(name);
 		}
 		return true;
+	}
+
+	/** Module path -> the simple names it declares, from the resolution index; empty without one. */
+	private static function moduleTypesOf(index: Null<SymbolIndex>): Map<String, Array<String>> {
+		final out: Map<String, Array<String>> = [];
+		if (index != null) for (info in index.allFiles()) out[info.module] = [for (t in info.types) t.name];
+		return out;
+	}
+
+	/**
+	 * The simple names `import <path>;` binds: every type of the MODULE it names, or — for a
+	 * sub-module path (`pkg.Mod.Sub`) and for a module the index never saw — its own last segment.
+	 */
+	private static function boundNames(path: String, moduleTypes: Map<String, Array<String>>): Array<String> {
+		final types: Null<Array<String>> = moduleTypes[path];
+		return types == null || types.length == 0 ? [lastSegment(path)] : types;
 	}
 
 	/**
@@ -220,10 +257,12 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 
 	/**
 	 * The whole-line region that moves with the import `node`, or null when the statement is not
-	 * cleanly separable: its line carries code before it, or something other than a `//` comment
-	 * after it. The region extends BACKWARD over the whole-line `//` comments directly above the
-	 * statement (a comment written for an import travels with it) and FORWARD over the rest of
-	 * the statement's own line, its newline included.
+	 * cleanly separable: its line carries code before it, something other than a `//` comment
+	 * after it, or NO terminating newline at all (a chunk without one would glue the next import
+	 * onto its line the moment it stops being last). The region extends BACKWARD over the
+	 * whole-line `//` comments directly above the statement (a comment written for an import
+	 * travels with it) and FORWARD over the rest of the statement's own line, its newline
+	 * included.
 	 */
 	private static function importLineOf(source: String, node: QueryNode): Null<ImportLine> {
 		final path: Null<String> = node.name;
@@ -232,16 +271,21 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 		final lineStart: Int = startOfLine(source, span.from);
 		if (StringTools.trim(source.substring(lineStart, span.from)) != '') return null;
 		final newline: Int = source.indexOf('\n', span.to);
-		final tail: String = StringTools.trim(newline < 0 ? source.substring(span.to) : source.substring(span.to, newline));
-		if (tail != '' && !StringTools.startsWith(tail, '//')) return null;
-		// Re-bind: strict null-safety does not narrow a field read inside a structure literal.
+		if (newline < 0) return null;
+		if (!isPureTail(StringTools.trim(source.substring(span.to, newline)))) return null;
+		// Re-bind: narrowing does not propagate into an anonymous-structure literal.
 		final named: String = path;
 		return {
 			path: named,
 			declFrom: span.from,
 			chunkFrom: withLeadingComments(source, lineStart),
-			chunkTo: newline < 0 ? source.length : newline + 1
+			chunkTo: newline + 1
 		};
+	}
+
+	/** Whether what follows the statement on its own line is nothing, or a `//` comment — the only two shapes a whole-line move may carry. */
+	private static inline function isPureTail(tail: String): Bool {
+		return tail == '' || StringTools.startsWith(tail, '//');
 	}
 
 	/**

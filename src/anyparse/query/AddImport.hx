@@ -1,6 +1,5 @@
 package anyparse.query;
 
-import anyparse.query.ImportOrder.ImportSlot;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -45,17 +44,9 @@ final class AddImport {
 		final targetKind: String = isUsing ? 'UsingDecl' : 'ImportDecl';
 		var lastImport: Null<QueryNode> = null;
 		var packageDecl: Null<QueryNode> = null;
-		final block: Array<ImportSlot> = [];
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
 				lastImport = c;
-				final declPath: Null<String> = c.name;
-				final span: Null<Span> = c.span;
-				// Re-bind: a null-check does not narrow into an anonymous-structure literal.
-				if (c.kind == 'ImportDecl' && declPath != null) {
-					final named: String = declPath;
-					block.push({ path: named, from: span == null ? -1 : span.from });
-				}
 				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
 			case 'PackageDecl':
 				packageDecl = c;
@@ -69,20 +60,17 @@ final class AddImport {
 
 		// Insertion site, in priority order: the ORDERED slot inside the
 		// existing plain-import block when that block already carries an
-		// order (`ImportOrder` — a `using` is never ordered, its position
-		// ranks static-extension resolution), else after the last existing
-		// import / using (extend the block), else after the package
-		// declaration, else at the very start of the file. Exact
-		// whitespace is the writer's concern — the canonicalize finalize
-		// re-emits the whole file.
-		final orderedSlot: Int = isUsing ? -1 : ImportOrder.insertOffset(block, trimmed);
-		if (orderedSlot >= 0)
-			return RefactorSupport.canonicalize(
-				source, [{ span: new Span(orderedSlot, orderedSlot), text: '$stmt\n' }], reformat, plugin, optsJson
-			);
+		// order (`ImportOrder`), else after the last existing import /
+		// using (extend the block), else after the package declaration,
+		// else at the very start of the file. Exact whitespace is the
+		// writer's concern — the canonicalize finalize re-emits the whole
+		// file.
+		final orderedSlot: Int = orderable(trimmed, isUsing) ? ImportOrder.insertOffset(ImportOrder.slotsOf(tree), trimmed) : -1;
 		final lastImportTo: Int = spanTo(lastImport);
 		final packageTo: Int = spanTo(packageDecl);
-		final edit: { span: Span, text: String } = if (lastImportTo >= 0)
+		final edit: { span: Span, text: String } = if (orderedSlot >= 0)
+			{ span: new Span(orderedSlot, orderedSlot), text: '$stmt\n' };
+		else if (lastImportTo >= 0)
 			{ span: new Span(lastImportTo, lastImportTo), text: '\n$stmt' };
 		else if (packageTo >= 0)
 			{ span: new Span(packageTo, packageTo), text: '\n$stmt' };
@@ -90,6 +78,16 @@ final class AddImport {
 			{ span: new Span(0, 0), text: '$stmt\n' };
 
 		return RefactorSupport.canonicalize(source, [edit], reformat, plugin, optsJson);
+	}
+
+	/**
+	 * Whether the statement being added may take the ORDERED slot inside the plain-import block.
+	 * Only a plain module path may: a `using`'s position ranks static-extension resolution, and a
+	 * wildcard (`pkg.*`) or an aliased payload (`pkg.T as U`) binds names the plain-import
+	 * ordering cannot see, so both keep the append that has always placed them.
+	 */
+	private static inline function orderable(path: String, isUsing: Bool): Bool {
+		return !isUsing && path.indexOf('*') < 0 && path.indexOf(' ') < 0;
 	}
 
 	/** `node`'s span end, or -1 when the node or its span is null. */

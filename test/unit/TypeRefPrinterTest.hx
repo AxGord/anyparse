@@ -316,6 +316,30 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('package app;\n\nimport a.Mid;\nimport a.Zeta;\nimport a.alpha.Beta;\n\nclass C {}\n', applyImports(p, src));
 	}
 
+	public function testCoAnchoredImportsAreSortedUnderTheBlockOwnOrder(): Void {
+		// Two fresh imports merged into ONE edit at the same anchor must be written in the order the
+		// FILE carries, not a fixed codepoint one: `pkg.Widget` before `pkg.data.Model` would leave
+		// the block explained by NEITHER order, and every later insert would fall back to appending.
+		final src: String = 'package app;\n\nimport a.events.A;\nimport a.SetB;\nimport zz.Z;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('pkg.Widget');
+		p.print('pkg.data.Model');
+		Assert.equals(1, p.pendingImportEdits().length, 'both anchor at the same slot');
+		Assert.equals(
+			'package app;\n\nimport a.events.A;\nimport a.SetB;\nimport pkg.data.Model;\nimport pkg.Widget;\nimport zz.Z;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testOneImportBlockStillPlacesInOrder(): Void {
+		// A one-import block counts as ordered, so a second import lands in a defensible slot
+		// instead of being appended by definition.
+		final src: String = 'package pkg;\n\nimport z.Zeta;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('a.Alpha');
+		Assert.equals('package pkg;\n\nimport a.Alpha;\nimport z.Zeta;\n\nclass C {}\n', applyImports(p, src));
+	}
+
 	public function testBlockUnsortedUnderEveryOrderStillAppends(): Void {
 		// The documented fallback: a block no supported order explains is appended to, never
 		// resorted — the printer's insert must not rewrite import lines it did not add.

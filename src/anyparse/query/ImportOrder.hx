@@ -1,13 +1,17 @@
 package anyparse.query;
 
+import anyparse.runtime.Span;
+
+using Lambda;
+
 /**
  * One existing import line as the ordering machinery reads it: the module path the statement
  * names, and the byte offset the statement STARTS at (negative when the grammar recorded no
  * span — the slot still counts for the order scan, it just cannot be anchored on).
  */
 typedef ImportSlot = {
-	var path: String;
-	var from: Int;
+	final path: String;
+	final from: Int;
 }
 
 /**
@@ -36,11 +40,23 @@ typedef ImportSlot = {
  * block's end. Guessing a slot inside a chaotic block buys nothing and moving its lines to
  * create one is out of scope for an insert.
  *
+ * A path whose SIMPLE NAME an existing import already binds is the second fallback, for the same
+ * reason `using` is exempt below: Haxe accepts two imports of one simple name and lets the LAST
+ * one win, so an ordered slot AHEAD of the incumbent would leave the fresh import bound to
+ * nothing while the caller writes the short name for it. Appending keeps the pre-order guarantee
+ * — a caller that adds an import gets the name it asked for.
+ *
  * `using` is deliberately NOT ordered here. Haxe resolves a static extension through the `using`
  * statements in REVERSE declaration order, so a `using`'s POSITION is semantics, not layout:
  * sliding a fresh one into the middle of a sorted `using` group would silently rank it below
  * extensions declared after it. Every caller therefore appends a `using` after the last one, and
  * the `import-order` rule never reorders the group.
+ *
+ * LIMIT — the block is the file's WHOLE plain-import list, while the `import-order` rule judges
+ * each contiguous RUN on its own. A file whose runs are individually ordered but whose
+ * concatenation is not reads as unordered here and is appended to; the rule may then flag the
+ * appended line. The conservative direction (append) is the one that never rewrites what the
+ * caller did not add.
  */
 @:nullSafety(Strict)
 final class ImportOrder {
@@ -116,19 +132,49 @@ final class ImportOrder {
 	/**
 	 * The offset at which `path` keeps `block` in the order `block` already carries — the start
 	 * of the first import that sorts AFTER it — or -1 when the caller must append: an empty or
-	 * unexplained block, a `path` belonging at the block's end, or an anchor slot the grammar
-	 * gave no span for.
+	 * unexplained block, a simple name an existing import already binds (see the class doc), a
+	 * `path` belonging at the block's end, or an anchor slot the grammar gave no span for.
 	 *
 	 * `block` is the file's PLAIN import statements in source order. A blank line splitting the
 	 * block into visual groups needs no special handling: the anchor is an existing statement's
 	 * own start, so a path sorting into a group lands inside it, and one sorting between two
 	 * groups opens the later one.
+	 *
+	 * The anchor is the existing statement's OWN start, so a fresh line landing between a
+	 * whole-line comment and the import that comment was written for splits the two. Callers
+	 * whose blocks carry such comments should expect it; the alternative — anchoring on the
+	 * comment — strands the comment above the fresh import instead.
 	 */
 	public static function insertOffset(block: Array<ImportSlot>, path: String): Int {
 		final order: Int = orderOf([for (slot in block) slot.path]);
 		if (order < 0) return -1;
+		final simple: String = lastSegment(path);
+		if (block.exists(slot -> lastSegment(slot.path) == simple)) return -1;
 		for (slot in block) if (compare(order, path, slot.path) < 0) return slot.from;
 		return -1;
+	}
+
+	/**
+	 * Every PLAIN `import` statement of `root`'s top level as a slot, in source order — the block
+	 * shape `insertOffset` reads. A statement the grammar recorded no span for keeps its place in
+	 * the ORDER scan (dropping it would read a block as ordered on the strength of a line it
+	 * cannot see) and carries a negative offset, so it is never anchored on.
+	 */
+	public static function slotsOf(root: QueryNode): Array<ImportSlot> {
+		return [
+			for (c in root.children) if (c.kind == 'ImportDecl' && c.name != null) {
+				// Re-bind: narrowing does not propagate into an anonymous-structure literal.
+				final path: String = c.name ?? '';
+				final span: Null<Span> = c.span;
+				{ path: path, from: span == null ? -1 : span.from };
+			}
+		];
+	}
+
+	/** The last dotted segment of `dotted` — the simple name a plain import binds. */
+	private static inline function lastSegment(dotted: String): String {
+		final dot: Int = dotted.lastIndexOf('.');
+		return dot == -1 ? dotted : dotted.substring(dot + 1);
 	}
 
 }

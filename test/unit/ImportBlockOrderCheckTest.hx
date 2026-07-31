@@ -1,5 +1,6 @@
 package unit;
 
+import anyparse.check.Check;
 import anyparse.check.Check.DefaultOff;
 import anyparse.check.Check.Violation;
 import anyparse.check.ImportBlockOrder;
@@ -8,6 +9,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
+import anyparse.query.TypeRefPrinter;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 import utest.Assert;
@@ -146,9 +148,61 @@ class ImportBlockOrderCheckTest extends Test {
 		Assert.equals(0, edits(src).length);
 	}
 
-	public function testTwoImportsOnOneLineAreNotReordered(): Void {
-		final src: String = 'package app;\n\nimport z.Zeta; import a.Alpha;\nimport a.Beta;\n\nclass C {}\n';
+	public function testTwoImportsOnOneLineEndTheBlock(): Void {
+		// Neither shared-line import is separable as a line, so the run ends at them and what
+		// remains is a run of one — nothing to report, nothing to permute. Without the two
+		// separability guards the shared line joins a block and the reorder DUPLICATES it.
+		final src: String = 'package app;\n\nimport m.Mid; import q.Q;\nimport a.Alpha;\n\nclass C {}\n';
+		Assert.equals(0, violations(src).length);
 		Assert.equals(0, edits(src).length);
+	}
+
+	public function testFirstImportWithALeadingCommentIsReportOnly(): Void {
+		// A comment above the block's FIRST import belongs to the block, not to that import — a
+		// header, a license banner, a `CHECKSTYLE:OFF` marker, a group label. Moving it into the
+		// block's middle and stranding it above a different import are both wrong, so the finding
+		// stays report-only.
+		final src: String = 'package app;\n\n// group two\nimport z.Zeta;\nimport a.Alpha;\n\nclass C {}\n';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	public function testCommentTextInsideABlockCommentIsNotAbsorbed(): Void {
+		// A `//`-looking line INSIDE a `/* … */` region is comment TEXT. Absorbing it into the
+		// first import's movable chunk would both tear the region apart and trip the
+		// leading-comment refusal, leaving the block unfixed.
+		final src: String = 'package app;\n\nimport z.Zeta;\n/* note\n// still inside */\nimport a.Beta;\nimport a.Alpha;\n\nclass C {}\n';
+		Assert.equals(
+			'package app;\n\nimport z.Zeta;\n/* note\n// still inside */\nimport a.Alpha;\nimport a.Beta;\n\nclass C {}\n', fixed(src)
+		);
+	}
+
+	public function testSameSecondaryTypeNameIsReportOnly(): Void {
+		// Two MODULE imports whose modules each declare a same-named secondary type bind that name
+		// twice, and Haxe lets the last win — the module paths alone do not reveal it, so the
+		// refusal has to read the resolution index.
+		final src: String = 'package app;\n\nimport two.ModB;\nimport one.ModA;\n\nclass C {}\n';
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'app/C.hx', source: src },
+			{ file: 'one/ModA.hx', source: 'package one;\n\nclass ModA {}\n\nclass Shared {}\n' },
+			{ file: 'two/ModB.hx', source: 'package two;\n\nclass ModB {}\n\nclass Shared {}\n' }
+		];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: ImportBlockOrder = new ImportBlockOrder();
+		final vs: Array<Violation> = check.run(files, plugin).filter(v -> v.file == 'app/C.hx');
+		Assert.equals(1, vs.length);
+		Assert.equals(0, check.fix(src, vs, plugin, SymbolIndex.build(files, plugin)).length);
+	}
+
+	public function testAnInsertedImportSatisfiesTheRule(): Void {
+		// The two halves of the feature must read a block the same way: an import the shared
+		// `ImportOrder` seat places must not be a finding for the rule built on that same seat.
+		final src: String = 'package app;\n\nimport app.base.Host;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\n\nclass C {}\n';
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final printer: TypeRefPrinter = TypeRefPrinter.forFile(src, plugin.parseFile(src), plugin.importMap(src));
+		printer.print('app.deep.Mod.Widget');
+		final inserted: String = RefactorSupport.applyEdits(src, printer.pendingImportEdits());
+		Assert.equals(0, violations(inserted).length, 'the insert seat and the rule agree:\n$inserted');
 	}
 
 	// --- comment pinning ---
@@ -166,7 +220,7 @@ class ImportBlockOrderCheckTest extends Test {
 	// --- registration ---
 
 	public function testRegisteredAndDefaultOff(): Void {
-		final check: Null<anyparse.check.Check> = Linter.byId('import-order');
+		final check: Null<Check> = Linter.byId('import-order');
 		Assert.notNull(check);
 		Assert.isTrue(Std.isOfType(check, DefaultOff), 'import-order is opt-in');
 		Assert.equals(113, Linter.builtins().length);
