@@ -40,6 +40,24 @@ class RedundantThisCheckTest extends Test {
 		Assert.equals(0, violations('class C { var helper:Int; function m() { function helper() {}; trace(this.helper); } }').length);
 	}
 
+	public function testLoopVarShadowNotFlagged(): Void {
+		Assert.equals(0, violations('class C { var f:Int; function m(xs:Array<Int>) { for (f in xs) trace(f + this.f); } }').length);
+	}
+
+	public function testCasePatternCaptureShadowNotFlagged(): Void {
+		// `case f:` binds a capture variable for the branch body, so `this.` is load-bearing —
+		// dropping it would silently re-bind the read to the capture.
+		Assert.equals(
+			0, violations('class C { var f:Int; function m(v:Any) { switch v { case f: trace(Std.string(f) + this.f); } } }').length
+		);
+	}
+
+	public function testThinArrowParamShadowNotFlagged(): Void {
+		// A single-parameter thin arrow projects its parameter as a bare identifier, not a
+		// `Required` node — it binds the name all the same.
+		Assert.equals(0, violations('class C { var f:Int; function m() { var g = f -> f + this.f; trace(g(1)); } }').length);
+	}
+
 	public function testMethodCallThisFlagged(): Void {
 		Assert.equals(1, violations('class C { function go() {} function m() { this.go(); } }').length);
 		final out: String = applyFix('class C { function go() {} function m() { this.go(); } }');

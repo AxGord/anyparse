@@ -32,8 +32,11 @@ import anyparse.query.RefactorSupport;
  * The self-qualifier text comes from `RefShape.selfReferenceText` (`this` /
  * `self`; unset → no-op), the access node from `fieldAccessKind`, the receiver
  * ident from `identKind`. Shadowing names are collected from `paramKinds`,
- * `localDeclKinds`, `selfScopeDeclKinds` (loop iterator / catch var) and
- * `localFunctionKinds`, scoped to each enclosing member function. Member names
+ * `localDeclKinds`, `localDeclExprKinds`, `selfScopeDeclKinds` (loop iterator /
+ * catch var) and `localFunctionKinds`, plus the two shapes that bind without a named
+ * declaration node — the captures of a `plainCasePatternKind` pattern and the bare
+ * single parameter of a `lambdaKinds` lambda — scoped to each enclosing member
+ * function. Member names
  * come from `memberDeclKinds` hosts inside a `visibilityContainerKinds` type; a
  * grammar supplying neither leaves the membership gate inert (shadow-only test).
  * A compile-time abstract's `this.field` (where `this` is the underlying value
@@ -92,14 +95,18 @@ final class RedundantThis implements Check {
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		if (self == null || fieldAccessKind == null || identKind == null || functionKinds.length == 0) return null;
 		final bindingKinds: Array<String> = (shape.paramKinds ?? []).concat(shape.localDeclKinds ?? [])
+			.concat(shape.localDeclExprKinds ?? [])
 			.concat(shape.selfScopeDeclKinds ?? [])
 			.concat(shape.localFunctionKinds ?? []);
+		final patternKind: Null<String> = shape.plainCasePatternKind;
 		return {
 			self: self,
 			fieldAccessKind: fieldAccessKind,
 			identKind: identKind,
 			functionKinds: functionKinds,
 			bindingKinds: bindingKinds,
+			patternKinds: patternKind == null ? [] : [patternKind],
+			lambdaKinds: shape.lambdaKinds ?? [],
 			underlyingThisKinds: shape.underlyingThisTypeKinds ?? [],
 			containerKinds: shape.visibilityContainerKinds ?? [],
 			memberDeclKinds: shape.memberDeclKinds ?? [],
@@ -168,13 +175,34 @@ final class RedundantThis implements Check {
 		}
 	}
 
-	/** Collect every shadowing binding name in `node`'s subtree. */
+	/**
+	 * Collect every shadowing binding name in `node`'s subtree. Beyond the named binding
+	 * nodes (`bindingKinds`) two shapes bind WITHOUT carrying the name on a declaration
+	 * node, and missing either strips a load-bearing `this.`: a case PATTERN
+	 * (`patternKinds`) projects its captures as bare identifiers, so every identifier
+	 * inside one counts (a constructor name that happens to match only costs a missed
+	 * report); and a single-parameter lambda (`lambdaKinds`) carries its parameter as the
+	 * child-0 identifier rather than a parameter node.
+	 */
 	private static function collectBindingNames(node: QueryNode, c: Ctx, names: Array<String>): Void {
 		if (c.bindingKinds.contains(node.kind)) {
 			final name: Null<String> = node.name;
 			if (name != null) names.push(name);
 		}
+		if (c.patternKinds.contains(node.kind)) collectIdentNames(node, c, names);
+		if (c.lambdaKinds.contains(node.kind) && node.children.length > 0) {
+			final first: QueryNode = node.children[0];
+			final param: Null<String> = first.name;
+			if (first.kind == c.identKind && param != null) names.push(param);
+		}
 		for (child in node.children) collectBindingNames(child, c, names);
+	}
+
+	/** Append the name of every identifier in `node`'s subtree — the capture names of a case pattern. */
+	private static function collectIdentNames(node: QueryNode, c: Ctx, names: Array<String>): Void {
+		final name: Null<String> = node.name;
+		if (node.kind == c.identKind && name != null) names.push(name);
+		for (child in node.children) collectIdentNames(child, c, names);
 	}
 
 	/**
@@ -245,6 +273,8 @@ private typedef Ctx = {
 	identKind: String,
 	functionKinds: Array<String>,
 	bindingKinds: Array<String>,
+	patternKinds: Array<String>,
+	lambdaKinds: Array<String>,
 	underlyingThisKinds: Array<String>,
 	containerKinds: Array<String>,
 	memberDeclKinds: Array<String>,
