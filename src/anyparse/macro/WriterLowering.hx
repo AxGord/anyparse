@@ -6909,13 +6909,7 @@ class WriterLowering {
 				_dc([_leftIv, $ivOpExpr, $rightCall]);
 			}
 			: isAssign && !isTight
-				? macro _dc([
-					$leftCall,
-					_dt(' '),
-					_dt($v{opText}),
-					_dop(' '),
-					$rightEmit,
-				])
+				? assignEmitExpr(c, opText, isAsymmetric, leftCtx, rightCtx, leftCall, rightOptExpr, rightEmit)
 				: macro _dc([
 					$leftCall,
 					$opEmitExpr,
@@ -6927,6 +6921,91 @@ class WriterLowering {
 				_dc([_dt('('), _inner, _dt(')')])
 			else
 				_inner;
+		};
+	}
+
+	/**
+	 * Assignment-class emit (`prec == 0`, non-tight): the flat per-level
+	 * `left = right` shape, plus — for a plain `=` — the runtime dispatch that
+	 * routes a genuine CHAIN through `BinaryChainEmit.emitAssignChain`.
+	 *
+	 * ω-assign-chain-fill: `=` is right-assoc, so `a = b = c = v` nests as
+	 * `Assign(a, Assign(b, Assign(c, v)))` and the per-level `Concat` hands the
+	 * whole chain NO break opportunity -- an overflowing chain rendered on one
+	 * over-long line and the writer still reported the file canonical.
+	 *
+	 * The gate is the operator TEXT, not `prec == 0`: that precedence also
+	 * carries `in` / `->` / `=>` / `+=` / `??=` and friends, none of which may
+	 * change shape here. `isAsymmetric` is excluded because the flatten is not
+	 * merely pointless there but ill-typed: a `case Assign(_, _)` pattern does
+	 * not match a right operand of a DIFFERENT rule type, and the tail write
+	 * would have to go through `writeFnFor(rightRef)` rather than
+	 * `c.writeFnName`. (Inert for every grammar in the repo -- Haxe's `Assign`
+	 * is self-symmetric.)
+	 *
+	 * A NON-chain assignment falls back to `plainExpr`, the verbatim per-level
+	 * emit. That fallback is the whole blast-radius argument: `a = b` produces
+	 * the exact expression it produced before the slice, with no array, no
+	 * closure and no probe; only chains, which had no wrap point at all, take
+	 * the new path.
+	 *
+	 * Only the RIGHT spine recurses, and every left operand is written as a
+	 * LEAF at `leftCtx` (`prec + 1`) while only the terminal right operand uses
+	 * `rightCtx` (`prec`) -- which is what reproduces the nested emit's
+	 * precedence-parenthesisation exactly. (Descending into `_l` could not
+	 * match anyway: an explicit `(a = b) = c` keeps its own `ParenExpr` node,
+	 * and a right-assoc parse never nests an `Assign` on the left.)
+	 *
+	 * `_optR` is the SAME opt expression the plain path threads into its right
+	 * operand (`rightOptExpr`, derived from the branch's `propagateExprPosition`
+	 * meta), bound ONCE and reused for every right-spine operand. It is
+	 * `_setExprPosition(opt)`, which returns its argument unchanged once the
+	 * expression-position flag is set and the narrow flags are clear
+	 * (`WriterCodegen.setExprPositionField`), so a single binding is equivalent
+	 * to the per-level application the nested emit performed. `_items[0]` --
+	 * the OUTERMOST left operand -- keeps the unmodified `opt`, exactly as the
+	 * plain path does.
+	 *
+	 * The hardcoded `Assign` ctor name follows `infixChainGatherSwitch`,
+	 * which hardcodes `Or` / `And` / `Add` / `Sub` / `NullCoal` the same way;
+	 * the switch subject's type (`ruleValueCT(typePath)`) resolves it against
+	 * the plain enum or its trivia twin. `Assign` carries no capture metas,
+	 * so its arity is 2 in BOTH modes -- unlike the chain ctors, which grow
+	 * three trivia synth slots and need a `_ctx.trivia` fork here.
+	 */
+	private function assignEmitExpr(
+		c: LowerBranchCtx, opText: String, isAsymmetric: Bool, leftCtx: Int, rightCtx: Int, leftCall: Expr, rightOptExpr: Null<Expr>,
+		rightEmit: Expr
+	): Expr {
+		final plainExpr: Expr = macro _dc([
+			$leftCall,
+			_dt(' '),
+			_dt($v{opText}),
+			_dop(' '),
+			$rightEmit,
+		]);
+		if (opText != '=' || isAsymmetric) return plainExpr;
+		final argTypeCT: ComplexType = ruleValueCT(c.typePath);
+		final rightArg: Expr = macro $i{c.argNames[1]};
+		final rightOpt: Expr = rightOptExpr ?? macro opt;
+		final leftItemCall: Expr = makeWriteCall(c.writeFnName, macro _l, c.hasPratt, leftCtx, macro _optR);
+		final tailItemCall: Expr = makeWriteCall(c.writeFnName, macro _e, c.hasPratt, rightCtx, macro _optR);
+		// The subject needs parens: bare `switch $rightArg {` parses the
+		// following block as a `$name{...}` reification form, not as the
+		// switch body.
+		return macro switch ($rightArg) {
+			case Assign(_, _):
+				final _items: Array<anyparse.core.Doc> = [$leftCall];
+				final _optR = $rightOpt;
+				function _gatherAssign(_e: $argTypeCT): Void switch _e {
+					case Assign(_l, _r):
+						_items.push($leftItemCall);
+						_gatherAssign(_r);
+					case _: _items.push($tailItemCall);
+				}
+				_gatherAssign($rightArg);
+				anyparse.format.wrap.BinaryChainEmit.emitAssignChain(_items, opt);
+			case _: $plainExpr;
 		};
 	}
 
