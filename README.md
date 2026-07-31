@@ -492,6 +492,15 @@ haxe test-js.hxml       # js/node — then: node bin/test.js
 haxe test-interp.hxml   # Haxe macro interpreter (no compile step)
 ```
 
+`test.hxml` and `test-interp.hxml` are self-contained: no compile-server
+dependency, so they build correctly whether or not a server happens to be
+running. `test-server.hxml` / `test-interp-server.hxml` are opt-in
+`--connect 7822` variants for a faster edit loop with a dedicated compile
+server (`haxe --wait 7822`, once) — only use them when you know a
+compatible server (started from this checkout) is listening; a stray or
+mismatched one on that port answers `--connect` without error and skips
+the build silently (exit 0, no artifact, no output).
+
 The corpus round-trip layer runs only when `ANYPARSE_HXFORMAT_FORK` points at a
 haxe-formatter fixtures checkout.
 

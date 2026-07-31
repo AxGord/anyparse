@@ -201,6 +201,14 @@ haxe test-js.hxml       # js/node, for cross-platform validation
 haxe test-interp.hxml   # Haxe macro interpreter, no compile step
 ```
 
+`test.hxml` and `test-interp.hxml` are self-contained (no compile-server
+dependency). `test-server.hxml` / `test-interp-server.hxml` add
+`--connect 7822` as an opt-in speed path for a dedicated compile server
+(`haxe --wait 7822`, once) — only use them when a compatible server
+from this checkout is actually listening, since a stray or mismatched
+server on that port answers `--connect` without error and silently
+skips the build (exit 0, no artifact produced, no output).
+
 When Phase 2 adds hxcpp as a target:
 
 ```sh
