@@ -151,7 +151,7 @@ final class SymbolIndexBuilder {
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
-					aliasTargetNominal: aliasTargetOf(source, typeDecl, node),
+					aliasTargetNominal: aliasTargetOf(source, typeDecl, node, gn.guarded),
 					hasRtti: pendingMeta.contains('@:rtti'),
 					members: collectMembers(
 						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
@@ -622,19 +622,27 @@ final class SymbolIndexBuilder {
 	 * type has no children at all — so the target is read from the declaration's own source: the
 	 * text after the first `=`, stripped of a trailing `;`, accepted only when
 	 * `RefactorSupport.outerNominalOf` recognises it as a nominal path (`Widget`, `pkg.Deep.Thing`,
-	 * `Array<Int>`). A function type, a structural body or anything else unparseable as a nominal
-	 * yields null, which every consumer must read as "the alias is not resolvable", never as
-	 * "it aliases nothing". An anon-struct typedef is excluded: its fields ARE its members and the
-	 * index already models them.
+	 * `Array<Int>`). Null must be read by every consumer as "the alias is not resolvable", never
+	 * as "it aliases nothing". Four shapes yield it:
+	 *
+	 *  - an anon-struct typedef — its fields ARE its members and the index already models them;
+	 *  - a FUNCTION type (`Holder<Int> -> String`), whose head `outerNominalOf` would otherwise
+	 *    read as the nominal `Holder` and prove absence against a type the alias never denotes;
+	 *  - anything else `outerNominalOf` does not recognise as a nominal path;
+	 *  - a `#if`-GUARDED declaration. Every branch projects under one `Conditional` and the
+	 *    index keeps the FIRST decl of a name, so a followed alias would silently commit to
+	 *    whichever branch happened to be indexed and be wrong for the other compilation.
 	 */
-	private static function aliasTargetOf(source: String, decl: TypeDeclMatch, node: QueryNode): Null<String> {
-		if (decl.kind != TYPEDEF_DECL_KIND || node.children.exists(c -> c.kind == ANON_KIND)) return null;
+	private static function aliasTargetOf(source: String, decl: TypeDeclMatch, node: QueryNode, guarded: Bool): Null<String> {
+		if (guarded || decl.kind != TYPEDEF_DECL_KIND || node.children.exists(c -> c.kind == ANON_KIND)) return null;
 		final text: String = source.substring(decl.fullSpan.from, decl.fullSpan.to);
 		final eq: Int = text.indexOf('=');
 		if (eq == -1) return null;
 		final tail: String = StringTools.trim(text.substring(eq + 1));
 		final body: String = StringTools.endsWith(tail, ';') ? tail.substring(0, tail.length - 1) : tail;
-		return RefactorSupport.outerNominalOf(StringTools.trim(body));
+		// A `->` anywhere makes the alias a function type: its head is not the type the alias
+		// denotes. Over-refusing a `Holder<Int -> Void>` argument the same way is harmless.
+		return body.indexOf('->') != -1 ? null : RefactorSupport.outerNominalOf(StringTools.trim(body));
 	}
 
 }

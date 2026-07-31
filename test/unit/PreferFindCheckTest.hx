@@ -9,6 +9,7 @@ import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import anyparse.query.SymbolIndex;
 
 /**
  * The `prefer-find` check: a manual first-match `for` loop — Form A
@@ -136,11 +137,23 @@ class PreferFindCheckTest extends Test {
 		// Haxe resolves static extensions in REVERSE declaration order, so the inserted `using`
 		// must sit ABOVE the existing run or it would outrank — and silently re-target — the
 		// extension calls the file already makes through `using Other;`.
-		final source: String =
-			'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}';
-		final out: String = fixResult(source);
+		final out: String = fixResultWith(
+			usingOtherSource(), 'class Other {\n\tpublic static function tag(xs:Array<Int>):Int return 0;\n}\n'
+		);
 		Assert.isTrue(out.indexOf('using Lambda;') != -1, out);
 		Assert.isTrue(out.indexOf('using Lambda;') < out.indexOf('using Other;'), out);
+		Assert.isTrue(out.indexOf('return xs.find(x -> x > 2);') != -1, out);
+	}
+
+	public function testFixRefusedWhenAnotherUsingSuppliesFind(): Void {
+		// The inserted `using Lambda;` sits BELOW `using Other;`, so a `find` declared there would
+		// win the new `xs.find(...)` call — the rewrite must not be emitted at all.
+		final out: String = fixResultWith(
+			usingOtherSource(), 'class Other {\n\tpublic static function find(xs:Array<Int>, f:Int -> Bool):Int return -999;\n}\n'
+		);
+		Assert.isTrue(out.indexOf('.find(') == -1, out);
+		Assert.isTrue(out.indexOf('for (') != -1, out);
+		Assert.isTrue(out.indexOf('using Lambda;') == -1, out);
 	}
 
 	public function testFixAlreadyUsingNoDuplicate(): Void {
@@ -212,6 +225,32 @@ class PreferFindCheckTest extends Test {
 		Assert.isTrue(out.indexOf('.find(') == -1);
 		Assert.isTrue(out.indexOf('for (') != -1);
 		Assert.isTrue(out.indexOf('// keep me') != -1);
+	}
+
+	/** A `p.C` with a `using Other;` and one Form-A first-match loop — the conflicting-`using` fixture. */
+	private function usingOtherSource(): String {
+		return
+			'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}';
+	}
+
+	/** `source` fixed with `other` (an `Other.hx` module) in the index the conflict gate consults. */
+	private function fixResultWith(source: String, other: String): String {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final check: PreferFind = new PreferFind();
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'C.hx', source: source },
+			{ file: 'Other.hx', source: other }
+		];
+		final edits: Array<{ span: Span, text: String }> = check.fix(
+			source, check.run(files, plugin), plugin, SymbolIndex.build(files, plugin)
+		);
+		switch RefactorSupport.canonicalize(source, edits, true, plugin) {
+			case Ok(text):
+				return text;
+			case Err(message):
+				Assert.fail('canonicalize Err: $message');
+		}
+		return '';
 	}
 
 	private function fn(body: String, ret: String): String {

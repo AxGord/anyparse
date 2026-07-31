@@ -111,7 +111,10 @@ import anyparse.runtime.Span;
  *   worst case an inserted `using` that was already implied, or a conservative miss of a
  *   conflicting module. Neither breaks a build.
  * - `#if` bodies project as one opaque node, so a call inside conditional compilation is never
- *   found — the standard walker limitation.
+ *   found — the standard walker limitation. A `#if`-SPLIT type is a subtler one: the index
+ *   keeps the first branch's declaration of a name, so the shadow gate reads that branch's
+ *   member list only. The alias arm refuses such a decl outright; a split CLASS could still
+ *   hide a member the other branch declares.
  * - The `using` declaration kind is spelled literally (`CheckScan.USING_DECL_KIND`, shared with
  *   `prefer-find`): the grammar exposes no seam for it, so a grammar naming it differently gets
  *   no `using`-awareness.
@@ -255,15 +258,9 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final modules: Array<String> = config.stringListOption(RULE_ID, 'types') ?? ['Lambda', 'StringTools'];
 		return {
 			modules: modules,
-			simpleNames: [for (module in modules) simpleNameOf(module)],
+			simpleNames: [for (module in modules) CheckScan.simpleModuleName(module)],
 			addUsing: config.boolOption(RULE_ID, 'addUsing') ?? true
 		};
-	}
-
-	/** The last dot-segment of `path` — the name a call site spells (`utils.TextUtil` -> `TextUtil`). */
-	private static inline function simpleNameOf(path: String): String {
-		final dot: Int = path.lastIndexOf('.');
-		return dot == -1 ? path : path.substring(dot + 1);
 	}
 
 	/** Every call in `tree` that cleared the structural + conflict gates, each carrying its receiver verdict and message. */
@@ -322,7 +319,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final callSpan: Null<Span> = call.span;
 		final recv: QueryNode = call.children[1];
 		if (callSpan == null || recv.span == null) return null;
-		if (conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
+		if (CheckScan.conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
@@ -370,42 +367,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final nominal: Null<String> = RefactorSupport.valueTypeNominal(recv, root, s.shape, declaredTypes, symbols(), file);
 		if (nominal == null || nominal == s.dynamicTypeName) return nominal;
 		return s.nullableWrappers.contains(nominal) ? null : nominal;
-	}
-
-	/**
-	 * Whether another top-level `using` in the file could also supply `method`, making the
-	 * explicit static call deliberate disambiguation the rewrite would silently undo. A module
-	 * naming the same type as `module` is skipped; for the rest a known extension table decides,
-	 * and without one the index must PROVE the module declares no such member. Every doubt —
-	 * an unknown module with no index, or an unresolvable one — counts as a conflict.
-	 */
-	private static function conflictingUsing(
-		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>,
-		conflicts: Map<String, Bool>
-	): Bool {
-		final key: String = '$module:$method';
-		final memo: Null<Bool> = conflicts[key];
-		if (memo != null) return memo;
-		final verdict: Bool = conflictScan(usings, module, method, plugin, symbols);
-		conflicts[key] = verdict;
-		return verdict;
-	}
-
-	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
-	private static function conflictScan(
-		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
-	): Bool {
-		final simple: String = simpleNameOf(module);
-		for (path in usings) if (path != module && simpleNameOf(path) != simple) {
-			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
-			if (known != null) {
-				if (known.contains(method)) return true;
-				continue;
-			}
-			final index: Null<SymbolIndex> = symbols();
-			if (index == null || !index.typeProvablyLacksMember(simpleNameOf(path), method)) return true;
-		}
-		return false;
 	}
 
 	/** The `recv.method(rest)` form the message shows, excerpt-normalized, or null when a span is unavailable. */

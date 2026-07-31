@@ -347,6 +347,58 @@ final class CheckScan {
 		};
 	}
 
+	/**
+	 * Whether a `using` OTHER than `module` in the same file could also supply `method` — the
+	 * gate every extension-method rewrite needs before it emits a `<recv>.<method>(…)` call.
+	 *
+	 * Haxe resolves static extensions in REVERSE declaration order, so a second module declaring
+	 * the same name decides where the rewritten call lands. Two rules depend on that: writing an
+	 * explicit `Module.m(x)` in such a file may be deliberate disambiguation the rewrite would
+	 * undo, and a `using` INSERTED below an existing run (see `usingInsertEdit`) loses to it. A
+	 * module naming the same type as `module` is skipped; for the rest a known extension table
+	 * decides, and without one `symbols` must PROVE the module declares no such member. Every
+	 * doubt — an unknown module with no index, or one the index cannot resolve — counts as a
+	 * conflict, so the caller refuses rather than emits a silently retargeted call.
+	 *
+	 * The verdict depends only on the `(module, method)` pair while a file repeats it across
+	 * every site, and each miss costs a whole-index member-closure query, so `memo` carries it
+	 * for the caller's run. Pass a fresh map per file — a `using` set is per-file state.
+	 */
+	public static function conflictingUsing(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>,
+		memo: Map<String, Bool>
+	): Bool {
+		final key: String = '$module:$method';
+		final cached: Null<Bool> = memo[key];
+		if (cached != null) return cached;
+		final verdict: Bool = conflictScan(usings, module, method, plugin, symbols);
+		memo[key] = verdict;
+		return verdict;
+	}
+
+	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
+	private static function conflictScan(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
+	): Bool {
+		final simple: String = simpleModuleName(module);
+		for (path in usings) if (path != module && simpleModuleName(path) != simple) {
+			final known: Null<Array<String>> = plugin.knownExtensionMethods(path);
+			if (known != null) {
+				if (known.contains(method)) return true;
+				continue;
+			}
+			final index: Null<SymbolIndex> = symbols();
+			if (index == null || !index.typeProvablyLacksMember(simpleModuleName(path), method)) return true;
+		}
+		return false;
+	}
+
+	/** The last dot-segment of a module path — the name a call site spells (`utils.TextUtil` -> `TextUtil`). */
+	public static inline function simpleModuleName(path: String): String {
+		final dot: Int = path.lastIndexOf('.');
+		return dot == -1 ? path : path.substring(dot + 1);
+	}
+
 	/** The module paths of every top-level `using` declaration in `tree` — the read side of `hasUsingModule`. */
 	public static function usingModules(tree: QueryNode): Array<String> {
 		final out: Array<String> = [];

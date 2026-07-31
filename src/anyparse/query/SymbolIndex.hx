@@ -832,7 +832,9 @@ final class SymbolIndex {
 		// name the index cannot enumerate here) are not provable at all.
 		if (t.kind == TYPEDEF_DECL_KIND && !t.isAnonStruct) {
 			final target: Null<String> = t.aliasTargetNominal;
-			return target == null ? false : lacksMemberClosure(target, member, seen);
+			// An alias CYCLE proves nothing — unlike a supertype cycle, whose closure is still
+			// fully enumerated, a chain that re-enters itself never reaches a member host at all.
+			return target == null || seen.contains(target) ? false : lacksMemberClosure(target, member, seen);
 		}
 		if (t.abstractForwardUnderlying != null) return false;
 		for (sup in t.supertypes) if (!lacksMemberClosure(sup, member, seen)) return false;

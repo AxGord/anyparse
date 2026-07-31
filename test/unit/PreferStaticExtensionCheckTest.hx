@@ -219,6 +219,52 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(fixResultOf(files).indexOf('a.deco(1);') != -1);
 	}
 
+	public function testConditionalAliasNotFixableEitherBranchOrder(): Void {
+		// Both `#if` branches project under ONE `Conditional`, and the index keeps the FIRST
+		// declaration of a name — so an alias followed from one branch would commit to whichever
+		// branch happened to be indexed, and silently retarget the other compilation.
+		for (order in [
+			'#if js\ntypedef X = Widget;\n#else\ntypedef X = Plain;\n#end\n',
+			'#if js\ntypedef X = Plain;\n#else\ntypedef X = Widget;\n#end\n'
+		]) {
+			final source: String = 'using Ext;\n\nclass C {\n\tfunction f(a:X):Void {\n\t\tExt.deco(a, 1);\n\t}\n}\n';
+			final files: Array<{ file: String, source: String }> =
+				fileSet(source, 'class Widget {\n\tpublic function deco(n: Int): Widget return this;\n}\n', [
+					{ file: 'X.hx', source: order },
+					{ file: 'Plain.hx', source: 'class Plain {}\n' }
+				]);
+			Assert.equals(0, editsOf(files).length, order);
+		}
+	}
+
+	public function testSelfAliasCycleNotFixable(): Void {
+		// An alias CYCLE never reaches a member host, so it proves nothing — unlike a supertype
+		// cycle, whose closure is still fully enumerated.
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(a:SelfAlias):Void {\n\t\tExt.deco(a, 1);\n\t}\n}\n';
+		Assert.equals(
+			0, editsOf(fileSet(source, WIDGET_SOURCE, [{ file: 'SelfAlias.hx', source: 'typedef SelfAlias = SelfAlias;\n' }])).length
+		);
+	}
+
+	public function testFunctionTypeAliasNotFixable(): Void {
+		// `typedef F = Holder<Int> -> String` is a FUNCTION type; reading its head as the nominal
+		// `Holder` would prove absence against the wrong type entirely.
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(a:F):Void {\n\t\tExt.deco(a, 1);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
+			{ file: 'F.hx', source: 'typedef F = Holder<Int> -> String;\n' },
+			{ file: 'Holder.hx', source: 'class Holder {}\n' }
+		]);
+		Assert.equals(0, editsOf(files).length);
+	}
+
+	public function testFixFallsBackToPassedIndexWithoutResolutionScope(): Void {
+		// The `?? index` arm: a bare plugin hosts no resolution scope, so the index the caller
+		// passes is the only one — and must still drive the gates to a real edit.
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.isNull(RefactorSupport.resolutionIndexOf(plugin));
+		Assert.equals(2, editsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);'))).length);
+	}
+
 	public function testForwardAbstractShadowNotFixable(): Void {
 		// A `@:forward` abstract exposes its UNDERLYING's members through a link no `extends`
 		// clause records, so its own empty member list proves nothing.

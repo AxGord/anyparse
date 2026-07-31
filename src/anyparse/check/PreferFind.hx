@@ -82,6 +82,9 @@ final class PreferFind implements Check {
 	/** The module whose `find` the rewrite calls — the `using` the fix inserts when the file lacks it. */
 	private static inline final LAMBDA_MODULE: String = 'Lambda';
 
+	/** The extension method the rewrite emits — the name a second `using` must be proven not to supply. */
+	private static inline final FIND_METHOD: String = 'find';
+
 	public function new() {}
 
 	public function id(): String {
@@ -126,6 +129,13 @@ final class PreferFind implements Check {
 		if (s == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
+		// The emitted `xs.find(...)` must reach `Lambda.find`. Haxe resolves static extensions in
+		// REVERSE declaration order and the inserted `using Lambda;` goes ABOVE any existing run,
+		// so a second `using` declaring `find` would win the new call — refuse the whole file
+		// rather than emit a silently retargeted one. The gates run on the plugin's resolution
+		// index when it has one, the caller's otherwise.
+		final symbols: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
+		if (CheckScan.conflictingUsing(CheckScan.usingModules(tree), LAMBDA_MODULE, FIND_METHOD, plugin, () -> symbols, [])) return [];
 		final byKey: Map<String, FixCandidate> = [];
 		collectFixCandidates(tree, source, s, byKey);
 		final edits: Array<{ span: Span, text: String }> = [];
