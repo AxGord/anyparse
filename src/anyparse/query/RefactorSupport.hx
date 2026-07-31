@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.format.comment.CommentLossException;
 import anyparse.query.Refs.RefHit;
 import anyparse.query.Refs.RefKind;
 import anyparse.runtime.ParseError;
@@ -686,6 +687,9 @@ final class RefactorSupport {
 				try plugin.writeRoundTrip(
 					source, optsJson
 				) catch (exception: ParseError) return Err('source does not parse: ${exception.toString()}')
+				catch (exception: CommentLossException) return Err(
+					'this file cannot be rewritten without losing the comment `${exception.comment}`'
+				)
 				catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 			if (canon == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
 			if (canon != source)
@@ -697,6 +701,9 @@ final class RefactorSupport {
 			try plugin.writeRoundTrip(
 				spliced, optsJson
 			) catch (exception: ParseError) return Err('result does not parse: ${exception.toString()}')
+			catch (exception: CommentLossException) return Err(
+				'the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)'
+			)
 			catch (exception: Exception) return Err('result does not parse: ${exception.message}');
 		return result == null ? Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result') : Ok(result);
 	}

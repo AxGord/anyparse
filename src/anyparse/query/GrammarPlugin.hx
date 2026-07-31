@@ -122,6 +122,15 @@ interface GrammarPlugin {
 	 * settings without manually rebuilding options).
 	 *
 	 * Plugins may throw on parse failure; callers handle the exception.
+	 *
+	 * A plugin whose writer cannot round-trip every comment MUST throw
+	 * `anyparse.format.comment.CommentLossException` rather than return
+	 * output with a comment missing — `apq fmt` and every op that
+	 * canonicalises through `RefactorSupport` treat that as the signal to
+	 * leave the file's bytes alone. Returning lossy output instead makes
+	 * those callers delete an author's comment with no diagnostic; there is
+	 * no way for them to detect it after the fact.
+	 * `CommentInventory.firstMissing` implements the check.
 	 */
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String>;
 

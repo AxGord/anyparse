@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.format.comment.CommentLossException;
 import anyparse.query.RefactorSupport.EditResult;
 import anyparse.runtime.ParseError;
 import anyparse.runtime.Span;
@@ -127,6 +128,8 @@ final class NewFile {
 		final source: String = assemble(spec, kind, extendsSimple, abstractClause, members, dedup(imports), classDoc);
 		final canonical: Null<String> = try plugin.writeRoundTrip(source, optsJson) catch (exception: ParseError) {
 			return err('assembled source does not parse: ${exception.message}');
+		} catch (exception: CommentLossException) {
+			return err('the assembled source cannot be written without losing the comment `${exception.comment}`');
 		} catch (exception: Exception) {
 			return err('assembled source does not parse: ${exception.message}');
 		};
@@ -142,6 +145,11 @@ final class NewFile {
 	public static function createRaw(content: String, plugin: GrammarPlugin, ?optsJson: String): EditResult {
 		final canonical: Null<String> = try plugin.writeRoundTrip(content, optsJson) catch (exception: ParseError) {
 			return EditResult.Err('source does not parse: ${exception.message}');
+		} catch (exception: CommentLossException) {
+			return EditResult.Err(
+				'the writer cannot re-emit this content without losing the comment `${exception.comment}` — '
+				+ 'move it where the parser captures it, then create the file'
+			);
 		} catch (exception: Exception) {
 			return EditResult.Err('source does not parse: ${exception.message}');
 		};

@@ -230,6 +230,27 @@ guarantees: it parses or is rejected, comes out byte-canonical, and is written a
 Because raw text editing has no such guarantee, `new` is the way to create a file and
 `fmt` the way to bring one back to canonical form.
 
+**The round trip is fail-closed on COMMENT LOSS — this governs every rewrite in the tool,
+not just `fmt`.** The Trivia parser captures a comment only where a capture slot exists, so
+an inline comment in a slot-less seam — `if (/* c */ x)`, `return /* r */ x;`, a type
+annotation, a class header — never reaches the AST and would be deleted by the re-emission.
+Rather than hand back those bytes, `writeRoundTrip` refuses, and each caller keeps the
+original bytes:
+
+- `fmt` names the file and the comment on stderr, leaves the file byte-identical and exits
+  non-zero (`--write` / `--list` also count it in their `N failed` tally; note a refused
+  file never appears on `--list`'s stdout, so check the exit code, not just the list);
+- every op that canonicalises through `RefactorSupport` — `add-member`, `rename`,
+  `set-doc`, … and `lint --fix` — refuses its edit rather than writing the file without the
+  comment. One slot-less comment therefore makes a whole file un-editable by the ops until
+  the comment moves; that is the trade, and the message names the comment;
+- `new` / `new --raw` reject the content instead of creating a file that lost part of it.
+
+Freezing a file's formatting is recoverable; deleting an author's comment is not. Set
+`APQ_ALLOW_COMMENT_LOSS=1` to decline the guard while developing the writer itself — it is
+process-wide and re-arms the deletion on the write paths too, so `fmt` and `lint --fix`
+print a warning when they run under it.
+
 ### Analysis (lint)
 
 `lint <scope> [--rule <id>] [--fix]` runs grammar-agnostic checks and reports violations

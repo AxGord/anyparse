@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.Check;
+import anyparse.format.comment.CommentInventory;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
@@ -1249,7 +1250,10 @@ final class Cli {
 		final oracleHxml: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracle();
 		final oracleDir: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracleDir();
 
-		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
+		if (o.fix) {
+			warnCommentGuardDeclined();
+			return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
+		}
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
@@ -6327,11 +6331,14 @@ final class Cli {
 	 * formatted source goes to stdout; on multiple files / a directory `--list`
 	 * mode is implied (gofmt `-l`: print the paths whose output differs). A
 	 * file that fails to parse is reported and skipped; the exit code is
-	 * non-zero if any file failed.
+	 * non-zero if any file failed. A file whose re-emission would drop a
+	 * comment is reported the same way and left byte-identical — see the
+	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip`.
 	 */
 	private static function runFmt(args: Array<String>): Int {
 		final o: FmtOpts = parseFmtArgs(args);
 		if (o.errExit != null) return o.errExit;
+		warnCommentGuardDeclined();
 		if (o.inputSpecs.length == 0) {
 			stderr('apq fmt: expected <file/dir/glob>...\n');
 			printFmtUsage();
@@ -6363,8 +6370,23 @@ final class Cli {
 		if (o.write)
 			stderr('apq fmt: formatted $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
 		else if (listMode && failed > 0)
-			stderr('apq fmt: $failed file(s) failed to parse\n');
+			// Not always a parse failure any more — a file whose re-emission
+			// would drop a comment is refused too (each one already printed
+			// its own reason above).
+			stderr('apq fmt: $failed file(s) failed\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Warn once per run when the comment guard's escape hatch is set. It
+	 * exists for writer development on the read-only probes, but it is
+	 * process-wide: left in a shell profile or a CI environment it silently
+	 * re-arms comment DELETION on every write path. A rewrite command that
+	 * runs under it says so.
+	 */
+	private static function warnCommentGuardDeclined(): Void {
+		if (CommentInventory.guardDeclined())
+			stderr('apq: ${CommentInventory.DECLINE_ENV} is set — the comment-loss guard is OFF; a rewrite may DELETE comments\n');
 	}
 
 	private static function printFmtUsage(): Void {
@@ -6380,6 +6402,10 @@ final class Cli {
 		sysPrint('no flags on a single file the formatted source goes to stdout; on multiple\n');
 		sysPrint('files or a directory, --list mode is implied. A file that fails to parse is\n');
 		sysPrint('reported and skipped; the exit code is non-zero if any file failed.\n');
+		sysPrint('\n');
+		sysPrint('A file whose re-emission would DROP a comment (an inline comment in a seam\n');
+		sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
+		sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
 	}
 
 	/**
