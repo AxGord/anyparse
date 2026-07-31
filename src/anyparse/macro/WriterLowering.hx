@@ -6903,19 +6903,33 @@ class WriterLowering {
 			}
 			: rightCall;
 		final ivOpExpr: Expr = intervalPolicyOp(opText);
+		// ω-assign-chain-fill: a plain `=` is right-assoc at prec 0, so
+		// `a = b = c = v` nests as `Assign(a, Assign(b, Assign(c, v)))` and
+		// the per-level `Concat` below hands the whole chain NO break
+		// opportunity -- an overflowing chain rendered on one over-long line
+		// and the writer still reported the file canonical. Route a genuine
+		// chain through `BinaryChainEmit.emitAssignChain` instead.
+		// Gate on the operator TEXT, not on `prec == 0`: that precedence also
+		// carries `in` / `->` / `=>` / `+=` / `??=` and friends, none of which
+		// may change shape here. `isAsymmetric` is excluded too -- its right
+		// operand belongs to a different rule type, so the right spine can
+		// hold no same-ctor `Assign` node and the flatten would be a no-op.
+		final isAssignChainOp: Bool = isAssign && !isTight && opText == '=' && !isAsymmetric;
+		final plainAssignExpr: Expr = macro _dc([
+			$leftCall,
+			_dt(' '),
+			_dt($v{opText}),
+			_dop(' '),
+			$rightEmit,
+		]);
+		final assignExpr: Expr = isAssignChainOp ? assignChainSwitch(c, leftCtx, rightCtx, leftCall, plainAssignExpr) : plainAssignExpr;
 		final innerExpr: Expr = infixPolicyFlag == 'intervalPolicy'
 			? macro {
 				final _leftIv: anyparse.core.Doc = $leftCall;
 				_dc([_leftIv, $ivOpExpr, $rightCall]);
 			}
 			: isAssign && !isTight
-				? macro _dc([
-					$leftCall,
-					_dt(' '),
-					_dt($v{opText}),
-					_dop(' '),
-					$rightEmit,
-				])
+				? assignExpr
 				: macro _dc([
 					$leftCall,
 					$opEmitExpr,
@@ -6927,6 +6941,61 @@ class WriterLowering {
 				_dc([_dt('('), _inner, _dt(')')])
 			else
 				_inner;
+		};
+	}
+
+	/**
+	 * ω-assign-chain-fill: build the runtime dispatch that flattens a plain
+	 * `=` chain's RIGHT spine into an operand list for
+	 * `BinaryChainEmit.emitAssignChain`, and falls back to `plainExpr` -- the
+	 * verbatim per-level emit -- for a NON-chain assignment. That fallback is
+	 * the whole blast-radius argument: `a = b` produces the exact expression
+	 * it produced before the slice, with no array, no closure and no probe;
+	 * only chains, which had no wrap point at all, take the new path.
+	 *
+	 * Only the RIGHT spine recurses. For a right-assoc operator every level's
+	 * left operand is a leaf written at `leftCtx` (`prec + 1`) and only the
+	 * terminal right operand is written at `rightCtx` (`prec`), which
+	 * reproduces the nested emit's precedence-parenthesisation exactly --
+	 * descending into `_l` would drop the parens a left-nested `(a = b) = c`
+	 * needs.
+	 *
+	 * `_optR` is `_setExprPosition(opt)` bound ONCE and reused for every
+	 * right-spine operand. `_setExprPosition` returns its argument unchanged
+	 * once the expression-position flag is set and the narrow flags are clear
+	 * (`WriterCodegen.setExprPositionField`), so a single binding is
+	 * equivalent to the per-level application the nested emit performed.
+	 * `_items[0]` -- the OUTERMOST left operand -- keeps the unmodified `opt`,
+	 * exactly as the plain path does.
+	 *
+	 * The hardcoded `Assign` ctor name follows `infixChainGatherSwitch`,
+	 * which hardcodes `Or` / `And` / `Add` / `Sub` / `NullCoal` the same way;
+	 * the switch subject's type (`ruleValueCT(typePath)`) resolves it against
+	 * the plain enum or its trivia twin. `Assign` carries no capture metas,
+	 * so its arity is 2 in BOTH modes -- unlike the chain ctors, which grow
+	 * three trivia synth slots and need a `_ctx.trivia` fork here.
+	 */
+	private function assignChainSwitch(c: LowerBranchCtx, leftCtx: Int, rightCtx: Int, leftCall: Expr, plainExpr: Expr): Expr {
+		final argTypeCT: ComplexType = ruleValueCT(c.typePath);
+		final rightArg: Expr = macro $i{c.argNames[1]};
+		final leftItemCall: Expr = makeWriteCall(c.writeFnName, macro _l, c.hasPratt, leftCtx, macro _optR);
+		final tailItemCall: Expr = makeWriteCall(c.writeFnName, macro _e, c.hasPratt, rightCtx, macro _optR);
+		// The subject needs parens: bare `switch $rightArg {` parses the
+		// following block as a `$name{...}` reification form, not as the
+		// switch body.
+		return macro switch ($rightArg) {
+			case Assign(_, _):
+				final _items: Array<anyparse.core.Doc> = [$leftCall];
+				final _optR = _setExprPosition(opt);
+				function _gatherAssign(_e: $argTypeCT): Void switch _e {
+					case Assign(_l, _r):
+						_items.push($leftItemCall);
+						_gatherAssign(_r);
+					case _: _items.push($tailItemCall);
+				}
+				_gatherAssign($rightArg);
+				anyparse.format.wrap.BinaryChainEmit.emitAssignChain(_items, opt);
+			case _: $plainExpr;
 		};
 	}
 

@@ -183,6 +183,67 @@ final class BinaryChainEmit {
 	}
 
 	/**
+	 * ω-assign-chain-fill: OVERFLOW-ONLY wrap for a right-associative `=`
+	 * chain (`a = b = c = value`), whose nested `Assign(l, Assign(l, …))`
+	 * spine the caller has already flattened into `items` (n operands, n-1
+	 * implicit `=` gaps). Unlike the cascade-driven `emit`, an assign chain
+	 * has NO `WrapRules` class of its own — the fork never wraps one until
+	 * the line overflows — so the decision is a single probe rather than a
+	 * rule enumeration.
+	 *
+	 * FLAT SHAPE is built right-nested from the tail so it is byte- AND
+	 * tree-identical to the per-level `Concat([left, ' ', '=', OptSpace(' '),
+	 * right])` the plain lowering emits. The `OptSpace(' ')` is load-bearing:
+	 * it drops the trailing space when the RHS opens with a hardline (a
+	 * break-mode chain / collection on the right of the last `=`), so it must
+	 * NOT be folded into a `Text(' =')` on this side.
+	 *
+	 * BREAK SHAPE reuses `shapeFillLine(…, AfterLast)` — the established
+	 * binop-chain fill convention. `AfterLast` suffixes the operator to the
+	 * previous operand (`a =\n\tb = value`), which is the only placement that
+	 * reads for an assignment: a continuation line led by `= b` would look
+	 * like a fresh statement. Packing (rather than one-operand-per-line) comes
+	 * for free from the shared `Fill(enriched, Line(' '), 1)` with its
+	 * fork-`>=` tail reserve, and the shared `Nest` puts the continuation at
+	 * one indent level.
+	 *
+	 * GATE is `IfNaturalFirstLineExceeds`, NOT `Group` / `IfLineExceeds`:
+	 * the natural probe resolves inner `Group`s by their OWN `fitsFlat`, so
+	 * `x = call(reallyLongArgs…)` — whose call folds its own arguments —
+	 * has a SHORT natural first line (it ends at the call's open paren), the
+	 * probe does not fire, and the output stays byte-identical to today's.
+	 * A flat-width pivot would measure the un-wrapped RHS and break the `=`
+	 * on every such site. The probe's render arm already honours
+	 * `Frame.forceFlat`, so a chain inside a force-flat region (string
+	 * interpolation) collapses to the flat shape without a `WrapBoundary`
+	 * wrapper — adding one would defeat that.
+	 *
+	 * Threshold is `opt.lineWidth + 1` per the project's width convention:
+	 * every exceeds-maxLineLength probe (including the natural / fits-probe
+	 * family) compares against `lineWidth + 1`, because the render arm fires
+	 * on `>=` while the config predicate means "strictly past the limit".
+	 * On a chain of PLAIN operands the constant is byte-inert (measured): the
+	 * break shape's own `Group` re-runs `fitsFlat`, which is Wadler-inclusive,
+	 * at the same column — so a chain that merely REACHES the limit renders
+	 * flat whichever threshold the probe carries. The constant only becomes
+	 * observable where the two gates disagree, i.e. an operand whose inner
+	 * `Group` wraps — exactly the case the natural probe exists to keep glued.
+	 */
+	public static function emitAssignChain(items: Array<Doc>, opt: WriteOptions): Doc {
+		final last: Int = items.length - 1;
+		var flat: Doc = items[last];
+		var i: Int = last - 1;
+		while (i >= 0) {
+			flat = Concat([items[i], Text(' '), Text('='), OptSpace(' '), flat]);
+			i--;
+		}
+		if (items.length < 3) return flat;
+		final ops: Array<String> = [for (_ in 1...items.length) '='];
+		final indentUnit: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		return IfNaturalFirstLineExceeds(opt.lineWidth + 1, shapeFillLine(items, ops, indentUnit, indentUnit, AfterLast), flat);
+	}
+
+	/**
 	 * Recursive helper that builds the `IfWidthExceeds + IfBreak` tree
 	 * for chain-emit's cascade-with-thresholds layout. Sister of
 	 * `WrapList.buildThresholdTree` but emits chain shapes
