@@ -61,6 +61,7 @@ final class Linter {
 			new SimplifyBooleanReturnChain(),
 			new PreferTernaryReturn(),
 			new PreferTernaryAssignment(),
+			new ReturnReassignTernary(),
 			new PreferIfExpressionReturn(),
 			new PreferIfExpressionAssignment(),
 			new PreferSwitchExpressionAssignment(),
