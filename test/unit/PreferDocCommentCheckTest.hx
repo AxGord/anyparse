@@ -83,14 +83,126 @@ class PreferDocCommentCheckTest extends Test {
 	}
 
 	/**
-	 * A trailing comment after code is a remark about that line, not a doc. NOT a
-	 * discriminating test of gate 1: with whole-line ownership removed this fixture is
-	 * still rejected, by the indent gate — the code before the comment becomes its
-	 * "indent" and cannot match the declaration's. `testTrailingCommentOnDeclLineDoesNotJoinRun`
-	 * is the gate's own fixture.
+	 * A trailing comment belongs to the declaration it SHARES A LINE WITH, never to the one
+	 * below it — that is what gate 1 keeps out of the above-line run mechanism, and what the
+	 * trailing mechanism then picks up for the right owner. NOT a discriminating test of
+	 * gate 1: with whole-line ownership removed the run mechanism still rejects this, by the
+	 * indent gate (the code before the comment becomes its "indent").
+	 * `testTrailingCommentOnDeclLineDoesNotJoinRun` is the gate's own fixture.
 	 */
-	public function testTrailingCommentAfterCodeKept(): Void {
-		Assert.equals(0, violations('class C {\n\tvar a:Int; // note\n\tvar x:Int;\n}').length);
+	public function testTrailingCommentAfterCodeDocumentsItsOwnDecl(): Void {
+		Assert.equals(
+			'class C {\n\t/** note */\n\tvar a:Int;\n\tvar x:Int;\n}', applyFix('class C {\n\tvar a:Int; // note\n\tvar x:Int;\n}')
+		);
+	}
+
+	/** TRAILING — the user's shape: a field's own remark becomes that field's doc. */
+	public function testTrailingFieldCommentHoisted(): Void {
+		Assert.equals(
+			'class C {\n\t/** when this session started */\n\tpublic final startTime:Date = Date.now();\n}',
+			applyFix('class C {\n\tpublic final startTime:Date = Date.now(); // when this session started\n}')
+		);
+	}
+
+	/** TRAILING — a function's OPENING line qualifies: its header closes with `{` on that line. */
+	public function testTrailingCommentOnFunctionOpeningLineHoisted(): Void {
+		Assert.equals(
+			'class C {\n\t/** legacy sort */\n\toverride private function f(x:Int):Int {\n\t\treturn x;\n\t}\n}',
+			applyFix('class C {\n\toverride private function f(x:Int):Int { // legacy sort\n\t\treturn x;\n\t}\n}')
+		);
+	}
+
+	/** TRAILING — a type declaration's opening line qualifies the same way. */
+	public function testTrailingCommentOnTypeOpeningLineHoisted(): Void {
+		Assert.equals('/** the model */\nclass C {\n\tvar x:Int;\n}', applyFix('class C { // the model\n\tvar x:Int;\n}'));
+	}
+
+	/** TRAILING — the doc lands at the ANCHOR, above the `@:meta` / modifier run, where the compiler reads it. */
+	public function testTrailingCommentHoistsAboveMetaRun(): Void {
+		Assert.equals(
+			'class C {\n\t/** how many so far */\n\t@:allow(D)\n\tpublic var count:Int = 0;\n}',
+			applyFix('class C {\n\t@:allow(D)\n\tpublic var count:Int = 0; // how many so far\n}')
+		);
+	}
+
+	/**
+	 * TRAILING — a declaration at column 0 hoists with an EMPTY indent before it. Also pins
+	 * that a one-line `class C {} // note` does NOT qualify: its code ends with the closing
+	 * `}`, and a closing brace is not a declaration line.
+	 */
+	public function testTrailingCommentAtModuleLevelHoisted(): Void {
+		Assert.equals('/** the kinds */\nenum E {\n\tA;\n}', applyFix('enum E { // the kinds\n\tA;\n}'));
+		Assert.equals(0, violations('class C {} // the model').length);
+	}
+
+	/** TRAILING — a line declaring TWO members has no single owner. */
+	public function testTrailingCommentOnMultiDeclLineKept(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic var a:Int; public var b:Int; // ambiguous\n}').length);
+	}
+
+	/** TRAILING — a closing brace is not a declaration line. */
+	public function testTrailingCommentOnClosingBraceKept(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg();\n\t} // done\n}').length);
+	}
+
+	/** TRAILING — a statement inside a body is not a declaration. */
+	public function testTrailingCommentOnStatementKept(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tg(); // why\n\t}\n}').length);
+	}
+
+	/** TRAILING — a `case` arm is not a declaration. */
+	public function testTrailingCommentOnCaseKept(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f(v:Int):Void {\n\t\tswitch v {\n\t\t\tcase 1: // first\n\t\t}\n\t}\n}').length);
+	}
+
+	/** TRAILING — a CONTINUATION line of a wrapped declaration carries no anchor, so it never qualifies. */
+	public function testTrailingCommentOnContinuationLineKept(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic function f(\n\t\ta:Int\n\t):Void {} // wrapped\n}').length);
+	}
+
+	/** TRAILING — the content gates are the run's own: a task marker is still not documentation. */
+	public function testTrailingTaskMarkerKept(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic var d:Int = 0; // TODO: Date\n}').length);
+	}
+
+	/** TRAILING — commented-out code as a tail is still code. */
+	public function testTrailingCommentedOutCodeKept(): Void {
+		Assert.equals(0, violations("class C {\n\tpublic var d:Int = 0; // tmsMessages.getMessageById('59');\n}").length);
+	}
+
+	/** TRAILING — a declaration that already has a doc is never given a second one. */
+	public function testTrailingCommentOnDocumentedDeclKept(): Void {
+		Assert.equals(0, violations('class C {\n\t/** Documented. */\n\tpublic var d:Int = 0; // extra\n}').length);
+	}
+
+	/** TRAILING — decoration is a divider wherever it sits. */
+	public function testTrailingSeparatorKept(): Void {
+		Assert.equals(0, violations('class C {\n\tpublic var d:Int = 0; // ----\n}').length);
+	}
+
+	/**
+	 * TRAILING — a `//` inside a STRING is not a comment. The token scan is string-aware, so
+	 * the initializer's URL never reaches the mechanism; the real tail on the same line does.
+	 */
+	public function testCommentMarkerInsideStringIsNotATrailingComment(): Void {
+		Assert.equals(0, violations("class C {\n\tpublic var s:String = 'https://x/y';\n}").length);
+		Assert.equals(
+			"class C {\n\t/** a url */\n\tpublic var s:String = 'https://x/y';\n}",
+			applyFix("class C {\n\tpublic var s:String = 'https://x/y'; // a url\n}")
+		);
+	}
+
+	/** TRAILING — a `//` run directly above the declaration owns it; the two mechanisms never stack two docs. */
+	public function testTrailingCommentBelowRunKept(): Void {
+		Assert.equals(
+			'class C {\n\t/** The count. */\n\tvar x:Int; // in units\n}',
+			applyFix('class C {\n\t// The count.\n\tvar x:Int; // in units\n}')
+		);
+	}
+
+	/** TRAILING — a CRLF file keeps its terminator on both the cut line and the inserted doc. */
+	public function testTrailingCommentCrlfPreserved(): Void {
+		Assert.equals('class C {\r\n\t/** note */\r\n\tvar x:Int;\r\n}', applyFix('class C {\r\n\tvar x:Int; // note\r\n}'));
 	}
 
 	/**

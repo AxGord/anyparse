@@ -10,12 +10,25 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
- * Flags a run of `//` line comments written directly above a TYPE or MEMBER
- * declaration — prose that documents the declaration, in the one comment form no doc
- * extractor reads. `Info`; `--fix` rewrites the run to a doc comment at the
- * declaration's indent. A pure trivia edit: a comment never affects compilation, and
- * the rewrite preserves every line's own text.
+ * Flags a `//` comment that documents a TYPE or MEMBER declaration — prose in the one
+ * comment form no doc extractor reads. `Info`; `--fix` turns it into a doc comment at the
+ * declaration's doc anchor. A pure trivia edit: a comment never affects compilation, and
+ * the rewrite preserves the text.
+ *
+ * TWO COMMENT SOURCES, and a comment qualifies as either:
+ *
+ *  - an ABOVE-LINE RUN — consecutive whole-line `//` comments immediately above the
+ *    declaration. Rewritten in place. Most of the gates below exist for this source,
+ *    because a run above a declaration may equally well be labelling the SECTION that
+ *    starts there;
+ *  - a TRAILING DECL COMMENT — a `//` at the end of the declaration's own line
+ *    (`public final startTime:Date = Date.now(); // when this session started`).
+ *    RELOCATED: the tail is cut, the doc inserted above the declaration. Ownership is
+ *    positional and unambiguous, so the label gates do not apply to it — see
+ *    `trailingRewriteOf` for its own position gates.
  *
  * The inverse direction of `prefer-line-comment`, and its complement: that rule pulls a
  * block comment OUT of a statement position, this one lifts a line comment INTO the doc
@@ -31,7 +44,10 @@ import anyparse.runtime.Span;
  * projects as siblings BEFORE the declaration node and is where the compiler reads a doc
  * from — the same anchor `doc-coverage` and `misplaced-type-doc` compute.
  *
- * ## Gates — a run is documentation only when every one of these holds
+ * ## Gates — an ABOVE-LINE RUN is documentation only when every one of these holds
+ *
+ * (A trailing decl comment is subject to 4-9 and to its own position gates; 1-3, 10 and
+ * 11 answer questions a trailing comment does not raise.)
  *
  *  1. WHOLE-LINE OWNERSHIP. A trailing `// note` after code is a remark about that line,
  *     not about the declaration below, and could not move to the doc slot anyway.
@@ -88,8 +104,8 @@ import anyparse.runtime.Span;
  * ## Fix
  *
  * A multi-line run becomes `/**` + one `<indent> * <text>` line per comment line (an empty
- * comment line becomes a bare `<indent> *`) + `<indent> *\/`; a single-line run becomes
- * `<indent>/** <text> *\/`. The text is the comment body with the `//` and ONE following
+ * comment line becomes a bare `<indent> *`) + `<indent> *\/`; a single-line run and every
+ * trailing comment become `<indent>/** <text> *\/`. The text is the comment body with the `//` and ONE following
  * space stripped, so relative indentation inside the run survives. The file's own line
  * terminator is preserved (`\r\n` stays `\r\n`).
  *
@@ -224,16 +240,15 @@ final class PreferDocComment implements Check implements DefaultOff {
 			if (span != null) flagged.push(span.from);
 		}
 		return [
-			for (rewrite in rewrites(source, plugin, seams)) if (flagged.contains(rewrite.comment.from))
-				{ span: rewrite.edit, text: rewrite.text }
+			for (rewrite in rewrites(source, plugin, seams)) if (flagged.contains(rewrite.comment.from)) for (edit in rewrite.edits) edit
 		];
 	}
 
 	/** Every convertible run in `source`, in source order. */
 	private static function rewrites(source: String, plugin: GrammarPlugin, seams: Seams): Array<DocCommentRewrite> {
 		final comments: Array<CommentTok> = RefactorSupport.collectCommentTokens(source);
+		if (comments.length == 0) return [];
 		final owned: Array<CommentTok> = [for (tok in comments) if (ownsItsLine(source, tok)) tok];
-		if (owned.length == 0) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final anchors: Map<Int, Anchor> = [];
@@ -249,7 +264,73 @@ final class PreferDocComment implements Check implements DefaultOff {
 			final rewrite: Null<DocCommentRewrite> = rewriteOf(source, run, anchors, docEnds, stops, headings);
 			if (rewrite != null) out.push(rewrite);
 		}
+		final byDeclLine: Map<Int, Anchor> = declLineIndex(source, anchors);
+		for (tok in comments) if (tok.isLine && !ownsItsLine(source, tok)) {
+			final rewrite: Null<DocCommentRewrite> = trailingRewriteOf(source, tok, byDeclLine, docEnds, owned);
+			if (rewrite != null) out.push(rewrite);
+		}
+		out.sort((a, b) -> a.comment.from - b.comment.from);
 		return out;
+	}
+
+	/**
+	 * The rewrite for a TRAILING `//` comment on a declaration's own line, or null when a gate declines. The rule's
+	 * second comment source: an above-line run describes the declaration below it, a trailing comment describes the
+	 * declaration it shares a line with, and both belong in the doc slot.
+	 *
+	 * Ownership here is POSITIONAL and stronger than a run's — the comment is on the declaration's own line — so the
+	 * label gates (group, section, heading convention) do not apply: nothing about a trailing comment can describe a
+	 * span of siblings. What does apply is the qualifying POSITION and the content gates:
+	 *
+	 *  - the declaration must be ANCHORED on this line (a continuation line of a wrapped declaration carries no
+	 *    anchor, so it never qualifies) and be the ONLY one there (`var a; var b; // note` has no single owner);
+	 *  - the code before the comment must END the declaration with `;` — a field whose statement closes on this line
+	 *    — or OPEN its body with `{` — a function or type whose header closes on this line. A closing `}`, a `case`
+	 *    colon, a statement inside a body: none of those reaches here, because none of those lines carries an anchor;
+	 *  - the declaration must carry no doc already, and no `//` run directly above it — that run is the other
+	 *    mechanism's, and stacking the two would emit two docs;
+	 *  - the content gates are the run's own (`///`, `*\/`, directives, task markers, decoration and `readsAsProse`),
+	 *    applied to the single line.
+	 *
+	 * The fix RELOCATES rather than rewrites in place: the tail is cut back to the code's last token and the doc is
+	 * inserted at the declaration's anchor, above any `@:meta` / modifier run. A single content line, so it takes the
+	 * one-line doc form, which the writer's collapse keeps stable.
+	 */
+	private static function trailingRewriteOf(
+		source: String, tok: CommentTok, byDeclLine: Map<Int, Anchor>, docEnds: Map<Int, Bool>, owned: Array<CommentTok>
+	): Null<DocCommentRewrite> {
+		final lineStart: Int = RefactorSupport.startOfLine(source, tok.from);
+		final anchor: Null<Anchor> = byDeclLine[lineStart];
+		if (anchor == null || anchor.count > 1) return null;
+		final codeEnd: Int = trimmedEnd(source, lineStart, tok.from);
+		final closer: Int = StringTools.fastCodeAt(source, codeEnd - 1);
+		if (closer != ';'.code && closer != '{'.code) return null;
+		if (CheckScan.hasDocBefore(source, docEnds, anchor.from)) return null;
+		for (run in owned) if (run.to + 1 == lineStart) return null;
+		final text: Null<String> = gatedText(source, tok);
+		if (text == null) return null;
+		final lines: Array<String> = [text];
+		if (carriesNoDocumentation(lines)) return null;
+		final editEnd: Int = editEndOf(source, tok);
+		final newline: String = editEnd == tok.to ? '\n' : '\r\n';
+		return {
+			comment: new Span(tok.from, tok.to),
+			edits: [
+				{ span: new Span(anchor.from, anchor.from), text: '/** $text */$newline${indentOf(source, anchor.from)}' },
+				{ span: new Span(codeEnd, editEnd), text: '' }
+			]
+		};
+	}
+
+	/** The offset just past the last non-whitespace character of `[from, to)`. */
+	private static function trimmedEnd(source: String, from: Int, to: Int): Int {
+		var at: Int = to;
+		while (at > from) {
+			final c: Int = StringTools.fastCodeAt(source, at - 1);
+			if (c != ' '.code && c != '\t'.code) break;
+			at--;
+		}
+		return at;
 	}
 
 	/**
@@ -332,20 +413,17 @@ final class PreferDocComment implements Check implements DefaultOff {
 		if (CheckScan.hasDocBefore(source, docEnds, first.from)) return null;
 		final lines: Array<String> = [];
 		for (tok in run) {
-			if (source.substring(tok.from, tok.from + LABEL_MARKER.length) == LABEL_MARKER) return null;
-			final text: String = commentText(source, tok);
-			// A body carrying the block-comment closer cannot be wrapped in one: the doc
-			// would end mid-text and the tail would be code. Nothing to convert here.
-			if (text.indexOf(BLOCK_CLOSE) >= 0) return null;
-			if (declines(StringTools.trim(text))) return null;
+			final text: Null<String> = gatedText(source, tok);
+			if (text == null) return null;
 			lines.push(text);
 		}
-		if (contentFree(lines) || separatorOnly(lines)) return null;
-		final newline: String = source.substring(first.from, last.to).indexOf('\r\n') >= 0 ? '\r\n' : '\n';
+		if (carriesNoDocumentation(lines)) return null;
+		final newline: String = editEndOf(source, last) == last.to ? '\n' : '\r\n';
 		return {
 			comment: new Span(first.from, last.to),
-			edit: new Span(first.from, editEndOf(source, last)),
-			text: docText(lines, indent, newline)
+			edits: [
+				{ span: new Span(first.from, editEndOf(source, last)), text: docText(lines, indent, newline) }
+			]
 		};
 	}
 
@@ -460,7 +538,21 @@ final class PreferDocComment implements Check implements DefaultOff {
 	}
 
 	/**
-	 * GATE 9 — whether the run is SECTION DECORATION rather than a description. Two shapes:
+	 * A comment token's text — the body past `//`, one following space removed — or null
+	 * when a per-line content gate declines it: a `///` section label (gate 8), a body
+	 * carrying the block-comment closer (which would end the doc mid-text and leave the
+	 * tail as code), or anything `declines` rejects (gates 5-7). Shared by the two comment
+	 * sources, which apply the same per-line gates to a run's lines and to a trailing tail.
+	 */
+	private static function gatedText(source: String, tok: CommentTok): Null<String> {
+		if (source.substring(tok.from, tok.from + LABEL_MARKER.length) == LABEL_MARKER) return null;
+		final text: String = commentText(source, tok);
+		return text.indexOf(BLOCK_CLOSE) >= 0 || declines(StringTools.trim(text)) ? null : text;
+	}
+
+	/**
+	 * GATES 9 and the content-free cession — whether the run carries no documentation at
+	 * all. Three shapes: nothing but whitespace after the `//`, and two decorations:
 	 *
 	 *  - a pure rule (`//----`, `// === `): nothing but `SEPARATOR_CHARS` and whitespace;
 	 *  - a DECORATED LABEL (`// --- Mobile touch ---`): rule characters on both ends around a
@@ -468,8 +560,11 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 *    (`// Mobile touch`) are judged by the label gates like any other run, and a sentence
 	 *    long enough to be documentation is not turned into one by a leading dash.
 	 */
-	private static function separatorOnly(lines: Array<String>): Bool {
+	private static function carriesNoDocumentation(lines: Array<String>): Bool {
 		if (ruleCharsOnly(lines)) return true;
+		// Every line empty after the `//` — `empty-comment`'s shape, not this rule's; its
+		// fix DELETES the run, where converting would emit an empty doc block.
+		if (!lines.exists(line -> line != '')) return true;
 		if (lines.length != 1) return false;
 		final text: String = StringTools.trim(lines[0]);
 		return text.length > 0 && isRuleChar(StringTools.fastCodeAt(text, 0)) && isRuleChar(StringTools.fastCodeAt(text, text.length - 1))
@@ -621,12 +716,6 @@ final class PreferDocComment implements Check implements DefaultOff {
 		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
 	}
 
-	/** Whether every line is empty — `empty-comment`'s shape, not this rule's. */
-	private static function contentFree(lines: Array<String>): Bool {
-		for (line in lines) if (line != '') return false;
-		return true;
-	}
-
 	/**
 	 * The doc block replacing a run. A multi-line run gets the ` * ` marker column and a
 	 * star-aligned ` *\/` close — byte-identical to `BlockCommentNormalizer.canonicalDoc`
@@ -665,7 +754,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		for (child in node.children) {
 			final span: Null<Span> = child.span;
 			if (seams.decls.contains(child.kind) && span != null) {
-				record(source, runStart >= 0 ? runStart : span.from, span.to, child.kind, owner, out);
+				record(source, runStart >= 0 ? runStart : span.from, span.from, span.to, child.kind, owner, out);
 				runStart = -1;
 				collectAnchors(source, child, seams, span, out);
 				continue;
@@ -679,17 +768,50 @@ final class PreferDocComment implements Check implements DefaultOff {
 		}
 	}
 
-	/** Keep the declaration under its line start, unless a further-left anchor on that line is already indexed. */
-	private static function record(source: String, from: Int, to: Int, kind: String, owner: Span, out: Map<Int, Anchor>): Void {
+	/**
+	 * Keep the declaration under its line start, unless a further-left anchor on that line is already indexed, and
+	 * tally how many declarations start on that line — a trailing comment on a line holding two has no single owner.
+	 */
+	private static function record(
+		source: String, from: Int, declFrom: Int, to: Int, kind: String, owner: Span, out: Map<Int, Anchor>
+	): Void {
 		final line: Int = RefactorSupport.startOfLine(source, from);
 		final known: Null<Anchor> = out[line];
-		if (known == null || known.from > from) out[line] = {
-			from: from,
-			to: to,
-			kind: kind,
-			owner: owner.from,
-			ownerEnd: owner.to
-		};
+		if (known == null) {
+			out[line] = {
+				from: from,
+				declFrom: declFrom,
+				to: to,
+				kind: kind,
+				owner: owner.from,
+				ownerEnd: owner.to,
+				count: 1
+			};
+			return;
+		}
+		known.count++;
+		if (known.from <= from) return;
+		known.from = from;
+		known.declFrom = declFrom;
+		known.to = to;
+		known.kind = kind;
+		known.owner = owner.from;
+		known.ownerEnd = owner.to;
+	}
+
+	/**
+	 * The anchors re-keyed by the DECLARATION's own line rather than the anchor's. The two part when an `@:meta` /
+	 * modifier run precedes the declaration on earlier lines: a trailing comment sits on the declaration's line, while
+	 * the doc still belongs at the anchor, above the run. Keeps the leftmost declaration per line, as `record` does.
+	 */
+	private static function declLineIndex(source: String, anchors: Map<Int, Anchor>): Map<Int, Anchor> {
+		final out: Map<Int, Anchor> = [];
+		for (anchor in anchors) {
+			final line: Int = RefactorSupport.startOfLine(source, anchor.declFrom);
+			final known: Null<Anchor> = out[line];
+			if (known == null || known.declFrom > anchor.declFrom) out[line] = anchor;
+		}
+		return out;
 	}
 
 	/**
@@ -709,20 +831,28 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 }
 
-/** One convertible run: the span to REPORT, the span to REPLACE, and the doc comment that replaces it. */
-private typedef DocCommentRewrite = { comment: Span, edit: Span, text: String };
+/**
+ * One convertible comment: the span to REPORT, and the edits that convert it. An above-line run rewrites in place
+ * (one edit); a trailing decl comment RELOCATES (two — the tail is cut, the doc is inserted at the decl's anchor).
+ */
+private typedef DocCommentRewrite = { comment: Span, edits: Array<{ span: Span, text: String }> };
 
 /**
  * A declaration's doc anchor (the start of its leading `@:meta` / modifier run), the declaration's own end, its node
  * kind, and the span of the declaration ENCLOSING it — `owner` is `-1` at module level. The owner is what makes two
- * anchors siblings; indent cannot, because two types in one module hold their members at the same depth.
+ * anchors siblings; indent cannot, because two types in one module hold their members at the same depth. `count` is
+ * how many declarations start on the anchor's line: above one, a trailing comment there has no single owner.
+ * `declFrom` is the declaration's OWN start, which parts from `from` exactly when an `@:meta` / modifier run precedes
+ * it — the trailing mechanism keys on the declaration's line, the above-run mechanism on the anchor's.
  */
 private typedef Anchor = {
 	from: Int,
+	declFrom: Int,
 	to: Int,
 	kind: String,
 	owner: Int,
-	ownerEnd: Int
+	ownerEnd: Int,
+	count: Int
 };
 
 /** Resolved kind-sets the anchor walk threads through its recursion. */
