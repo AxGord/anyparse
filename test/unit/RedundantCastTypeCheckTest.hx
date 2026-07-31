@@ -15,9 +15,13 @@ import anyparse.runtime.Span;
  * annotated exactly `T` — an annotated declaration initializer, a `return` under an explicit
  * return annotation, or a call-argument slot whose parameter is written `T`. Everything else
  * fails closed: no annotation, a differing type, a non-token-identical generic, the unchecked
- * `cast e` / the `(e : T)` ascription, a sub-expression position, a lambda return, a
- * field-access callee, an optional param, a generic callee, a `Dynamic` target, and a comment
- * in either deleted region.
+ * `cast e` / the `(e : T)` ascription, a sub-expression position, a `Dynamic` target, and a
+ * comment in either deleted region. Three families of near-miss carry their own fixtures, each
+ * proven to fail when its gate is removed: a type-parameter CONSTRAINT read as a return type
+ * (plain, structural, and behind a header comment); a nested function form resolving against the
+ * OUTER annotation (lambda, `inline function`, `NamedFnExpr`, `untyped` body); and a call slot
+ * whose positional mapping is unproven (a field-access callee, a generic callee, an optional or
+ * defaulted parameter AHEAD of the slot — while one behind it still fires).
  */
 class RedundantCastTypeCheckTest extends Test {
 
@@ -109,6 +113,70 @@ class RedundantCastTypeCheckTest extends Test {
 		// The operand is written `Foo` too, so `sameTypeSource` cannot be what rejects this — only
 		// the missing return annotation can.
 		Assert.equals(0, violations('class Foo {} class C { function f(v:Foo) { return cast(v, Foo); } }').length);
+	}
+
+	public function testStructuralConstraintNotFlagged(): Void {
+		// A structural constraint's own `)` must not stand in for the parameter list's: the second
+		// constraint would otherwise read as the return type of a function that declares none.
+		Assert.equals(
+			0,
+			violations(
+				'class Foo {} class C { function f<A:{ function n():Void; }, B:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testStructuralConstraintWithReturnFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class Foo {} class C { function f<A:{ function n():Void; }, B:Foo>():Foo { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testCommentedParenInHeaderNotFlagged(): Void {
+		// A `)` inside a header comment is not the parameter list either — the window refuses.
+		Assert.equals(
+			0,
+			violations(
+				'class Foo {} class C { function f /* ) */ <T:Foo>() { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testCommentInsideParameterListStillFlagged(): Void {
+		// With a parameter present the test is purely structural, so a comment cannot suppress it.
+		Assert.equals(
+			1,
+			violations(
+				'class Foo {} class C { function f(a:Int /* c */):Foo { return cast(mk(), Foo); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testUntypedNestedBodyNotFlagged(): Void {
+		// `UntypedBlockBody` is a function body too — the nested helper must own its own annotation.
+		Assert.equals(
+			0,
+			violations(
+				'class Foo {} class C { function f():Foo { inline function h() untyped { return cast(mk(), Foo); } return h(); } function mk():Dynamic return null; }'
+			).length
+		);
+	}
+
+	public function testDefaultValuedParamAheadOfSlotNotFlagged(): Void {
+		// `a:Int = 1` projects as a plain required parameter yet Haxe skips it exactly like `?a`.
+		Assert.equals(
+			0, violations('class Foo {} class C { function g(a:Int = 1, b:Foo) {} function f(v:Dynamic) { g(1, cast(v, Foo)); } }').length
+		);
+	}
+
+	public function testTrailingOptionalAfterSlotFlagged(): Void {
+		// An optional BEHIND the slot cannot shift it, so the mapping still holds.
+		Assert.equals(
+			1, violations('class Foo {} class C { function g(a:Foo, ?b:Int) {} function f(v:Dynamic) { g(cast(v, Foo)); } }').length
+		);
 	}
 
 	public function testTypeParameterConstraintNotFlagged(): Void {

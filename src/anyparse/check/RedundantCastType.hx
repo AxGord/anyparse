@@ -28,14 +28,15 @@ import anyparse.runtime.Span;
  *    (`VarStmt` / `FinalStmt` / `VarMore`) or `fieldDeclKinds` (`VarMember` / `FinalMember`);
  *  - (b) a `return` (`valueReturnKinds`) under a function carrying an explicit return
  *    annotation. The enclosing function is threaded down the walk: a node that OWNS a function
- *    body sets it (`ownsFunctionBody` — kind-derived, so the nested forms no seam names are
- *    covered), a `lambdaKinds` node CLEARS it, so a lambda return always bails. The annotation
- *    itself is located by POSITION, past the parameter list, since a type-parameter constraint
- *    projects the same node in the same slot (`returnAnnotation`);
+ *    body sets it (`ownsFunctionBody`, derived from a direct `functionBodyKinds` child, so the
+ *    nested forms no seam names — `LocalInlineFnStmt`, `NamedFnExpr` — resolve against their own
+ *    annotation), a `lambdaKinds` node CLEARS it, so a lambda return always bails. The annotation
+ *    itself is told from a type-parameter CONSTRAINT — same node kind, same child slot — by
+ *    position relative to the parameter list (`afterParamList`);
  *  - (c) a call-argument slot whose parameter is written `T`, and only when the callee is a
  *    bare identifier resolving to a function DECLARED in this file, EVERY parameter up to and
- *    including the slot is plain required, and the parameter's type is a plain nominal DECLARED
- *    in the `SymbolIndex`.
+ *    including the slot is plain required with no default value, and the parameter's type is a
+ *    plain nominal DECLARED in the `SymbolIndex`.
  *
  * Macro-reification subtrees (`RefShape.opaqueKinds`) are never descended into.
  *
@@ -251,25 +252,52 @@ final class RedundantCastType implements Check implements DefaultOff {
 	private static function returnAnnotation(fn: QueryNode, shape: RefShape, source: String): Null<String> {
 		final fnSpan: Null<Span> = fn.span;
 		if (fnSpan == null) return null;
-		final paramKinds: Array<String> = shape.paramKinds ?? [];
-		var scanFrom: Int = fnSpan.from;
-		for (child in fn.children) if (paramKinds.contains(child.kind)) {
-			final paramSpan: Null<Span> = child.span;
-			if (paramSpan != null && paramSpan.to > scanFrom) scanFrom = paramSpan.to;
-		}
-		final paramListEnd: Int = source.indexOf(')', scanFrom);
-		if (paramListEnd == -1 || paramListEnd >= fnSpan.to) return null;
+		final paramsEnd: Int = lastParamEnd(fn, shape.paramKinds ?? []);
 		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		var found: Null<Span> = null;
-		for (child in fn.children) if (annotationKinds.contains(child.kind)) {
+		var prevEnd: Int = fnSpan.from;
+		for (child in fn.children) {
 			final childSpan: Null<Span> = child.span;
-			if (childSpan != null && childSpan.from > paramListEnd) {
+			if (childSpan == null) return null;
+			if (annotationKinds.contains(child.kind) && afterParamList(childSpan, prevEnd, paramsEnd, source)) {
 				if (found != null) return null;
 				found = childSpan;
 			}
+			prevEnd = childSpan.to;
 		}
-		final annotationSpan: Null<Span> = found;
-		return annotationSpan == null ? null : source.substring(annotationSpan.from, annotationSpan.to);
+		return found == null ? null : source.substring(found.from, found.to);
+	}
+
+	/**
+	 * The end offset of `fn`'s LAST declared parameter, or -1 when it declares none.
+	 */
+	private static function lastParamEnd(fn: QueryNode, paramKinds: Array<String>): Int {
+		var end: Int = -1;
+		for (child in fn.children) if (paramKinds.contains(child.kind)) {
+			final paramSpan: Null<Span> = child.span;
+			if (paramSpan != null && paramSpan.to > end) end = paramSpan.to;
+		}
+		return end;
+	}
+
+	/**
+	 * Whether the annotation at `annotationSpan` sits AFTER the parameter list — the test that tells a
+	 * RETURN type from a type-parameter CONSTRAINT, which projects the same node kind in the same child
+	 * slot but always precedes the parameter list.
+	 *
+	 * With at least one declared parameter the answer is purely structural: every constraint precedes
+	 * the first parameter, so starting after the LAST one settles it, whatever the header contains.
+	 * A parameterless function has no such landmark, so the empty list's `)` is located in the text
+	 * between the preceding sibling and the annotation. That window is guarded: a `)` may also sit
+	 * inside a structural constraint (`<A:{ function n():Void; }, B:Foo>`), which is why the search
+	 * starts at `prevEnd` rather than at the function's start, and a comment in the window refuses
+	 * outright rather than letting a `)` inside it stand in for the parameter list.
+	 */
+	private static function afterParamList(annotationSpan: Span, prevEnd: Int, lastParamEnd: Int, source: String): Bool {
+		if (lastParamEnd >= 0) return annotationSpan.from > lastParamEnd;
+		if (CheckScan.hasCommentMarker(source, prevEnd, annotationSpan.from)) return false;
+		final close: Int = source.indexOf(')', prevEnd);
+		return close != -1 && close < annotationSpan.from;
 	}
 
 	/**
@@ -344,12 +372,25 @@ final class RedundantCastType implements Check implements DefaultOff {
 		if (optionalKind == null || restKind == null) return null;
 		final paramKinds: Array<String> = shape.paramKinds ?? [];
 		var seen: Int = 0;
+		final annotationKinds: Array<String> = shape.typeAnnotationKinds ?? [];
 		for (child in fn.children) if (paramKinds.contains(child.kind)) {
-			if (child.kind == optionalKind || child.kind == restKind) return null;
+			if (child.kind == optionalKind || child.kind == restKind || hasDefaultValue(child, annotationKinds)) return null;
 			if (seen == slot) return child;
 			seen++;
 		}
 		return null;
+	}
+
+	/**
+	 * Whether `param` carries a DEFAULT VALUE — a direct child that is not its type annotation. Haxe
+	 * makes `a:Int = 1` skippable at a call site exactly as `?a:Int` is, yet it projects as a plain
+	 * required parameter, so the optional / rest kind test alone does not establish the positional
+	 * mapping. The type annotation is the only other child a parameter can carry (an anonymous-struct
+	 * type is the one that survives projection), so anything else is the default.
+	 */
+	private static function hasDefaultValue(param: QueryNode, annotationKinds: Array<String>): Bool {
+		for (child in param.children) if (!annotationKinds.contains(child.kind)) return true;
+		return false;
 	}
 
 	/**
