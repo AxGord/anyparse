@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.query.ImportOrder.ImportSlot;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
 import anyparse.query.SymbolIndex.FileInfo;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
@@ -276,25 +277,36 @@ final class TypeRefPrinter {
 
 	/**
 	 * The `import <path>;` insert edits for every path `print` promised, or an empty array
-	 * when none was. Paths landing on the SAME anchor offset are merged into ONE edit (sorted
-	 * by path, for a deterministic result) — two zero-width edits at one offset would be an
-	 * overlapping pair the batching splice cannot order. Call once, after every `print` for
-	 * the file.
+	 * when none was. Paths landing on the SAME anchor offset are merged into ONE edit — two
+	 * zero-width edits at one offset would be an overlapping pair the batching splice cannot
+	 * order. Call once, after every `print` for the file.
+	 *
+	 * A merged bucket is sorted under the order the FILE's own import block carries, not under a
+	 * fixed codepoint one: several fresh lines written in codepoint order into a case-folded
+	 * block would leave that block explained by NEITHER order, and every later insert would then
+	 * fall back to appending — a one-way degradation of exactly what the ordered insert protects.
+	 * With no block to read (`orderOf` -1) the codepoint reading is the deterministic default.
 	 */
 	public function pendingImportEdits(): Array<{ span: Span, text: String }> {
-		final buckets: Array<{ offset: Int, lines: Array<String> }> = [];
+		final root: Null<QueryNode> = _root;
+		final slots: Array<ImportSlot> = root == null ? [] : ImportOrder.slotsOf(root);
+		final order: Int = ImportOrder.orderOf([for (slot in slots) slot.path]);
+		final buckets: Array<{ offset: Int, lines: Array<{ path: String, text: String }> }> = [];
 		for (path in _pendingImports) {
 			final anchor: ImportAnchor = anchorFor(path);
-			final existing: Null<{ offset: Int, lines: Array<String> }> = buckets.find(b -> b.offset == anchor.offset);
+			final line: { path: String, text: String } = { path: path, text: anchor.text };
+			final existing: Null<{ offset: Int, lines: Array<{ path: String, text: String }> }> = buckets.find(b ->
+				b.offset == anchor.offset
+			);
 			if (existing == null)
-				buckets.push({ offset: anchor.offset, lines: [anchor.text] });
+				buckets.push({ offset: anchor.offset, lines: [line] });
 			else
-				existing.lines.push(anchor.text);
+				existing.lines.push(line);
 		}
 		return [
 			for (bucket in buckets) {
-				bucket.lines.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);
-				{ span: new Span(bucket.offset, bucket.offset), text: bucket.lines.join('') };
+				bucket.lines.sort((a, b) -> ImportOrder.compare(order, a.path, b.path));
+				{ span: new Span(bucket.offset, bucket.offset), text: [for (line in bucket.lines) line.text].join('') };
 			}
 		];
 	}
@@ -369,20 +381,20 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * The `import <path>;` line for `path` plus the offset to splice it at. Priority: the SORTED
-	 * position inside the existing plain-import block when that block is already sorted (the
-	 * file's own ordering is preserved), else after the last plain `import` (so a fresh import
-	 * never lands past the file's `using` group), else after the last `using` / wildcard / alias,
-	 * else after the `package` declaration, else the file start. The statement carries a leading
-	 * `\n` when it follows a statement, a trailing one when it leads the file.
+	 * The `import <path>;` line for `path` plus the offset to splice it at. Priority: the ORDERED
+	 * position inside the existing plain-import block when that block already carries an order
+	 * `ImportOrder` recognises (the file's own ordering is preserved), else after the last plain
+	 * `import` (so a fresh import never lands past the file's `using` group), else after the last
+	 * `using` / wildcard / alias, else after the `package` declaration, else the file start. The
+	 * statement carries a TRAILING `\n` when the offset is a line start (an ordered slot, or a
+	 * file with nothing to anchor on), a LEADING one when it splices after a statement's end.
 	 */
 	private function anchorFor(path: String): ImportAnchor {
 		final stmt: String = 'import $path;';
 		final root: Null<QueryNode> = _root;
 		if (root == null) return { offset: 0, text: '$stmt\n' };
-		final plain: Array<QueryNode> = [for (c in root.children) if (c.kind == 'ImportDecl' && c.name != null) c];
-		final sortedSlot: Int = sortedInsertOffset(plain, path);
-		if (sortedSlot >= 0) return { offset: sortedSlot, text: '$stmt\n' };
+		final orderedSlot: Int = ImportOrder.insertOffset(ImportOrder.slotsOf(root), path);
+		if (orderedSlot >= 0) return { offset: orderedSlot, text: '$stmt\n' };
 		var lastPlain: Null<Span> = null;
 		var lastAny: Null<Span> = null;
 		var packageSpan: Null<Span> = null;
@@ -393,23 +405,6 @@ final class TypeRefPrinter {
 		}
 		final span: Null<Span> = lastPlain ?? lastAny ?? packageSpan;
 		return span == null ? { offset: 0, text: '$stmt\n' } : { offset: span.to, text: '\n$stmt' };
-	}
-
-	/**
-	 * The offset at which `path` keeps an ALREADY-SORTED plain-import block sorted — the
-	 * `span.from` of the first import that sorts after it — or -1 when the block is unsorted,
-	 * empty, or `path` belongs at its end (both of which the caller's append handles). A
-	 * one-import block counts as sorted, so a second import still lands in order.
-	 */
-	private static function sortedInsertOffset(plain: Array<QueryNode>, path: String): Int {
-		if (plain.length == 0) return -1;
-		final names: Array<String> = [for (n in plain) n.name ?? ''];
-		for (i in 1...names.length) if (names[i - 1] > names[i]) return -1;
-		for (i => name in names) if (path < name) {
-			final span: Null<Span> = plain[i].span;
-			return span == null ? -1 : span.from;
-		}
-		return -1;
 	}
 
 	/**

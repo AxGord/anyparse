@@ -142,7 +142,8 @@ final class Linter {
 			new TailMerge(),
 			new NoUnderscorePrefix(),
 			new ShortenTypeRef(),
-			new CondAssignMerge()
+			new CondAssignMerge(),
+			new ImportBlockOrder()
 		];
 	}
 

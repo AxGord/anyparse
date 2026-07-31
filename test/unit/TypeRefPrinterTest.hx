@@ -257,6 +257,100 @@ class TypeRefPrinterTest extends Test {
 		Assert.equals('package pkg;\n\nimport z.Zeta;\nimport a.Alpha;\nimport m.Middle;\n\nclass C {}\n', applyImports(p, src));
 	}
 
+	public function testCaseFoldedSortedBlockKeepsItsSort(): Void {
+		// The reported incident. A block an IDE sorted CASE-INSENSITIVELY is NOT ASCII-sorted:
+		// `pkg.mid.events.Alpha` precedes `pkg.mid.SetBeta` only with case folded ('e' > 'S' in
+		// ASCII). Reading the block as unsorted appended the fresh import LAST, past every
+		// existing one, which is what put a `components.editor.*` import at the bottom of an
+		// otherwise ordered block in the wild.
+		final src: String =
+			'package app;\n\nimport app.base.Host;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\nimport util.Valid;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('app.deep.Mod.Widget');
+		Assert.equals(
+			'package app;\n\nimport app.base.Host;\nimport app.deep.Mod.Widget;\nimport pkg.mid.events.Alpha;\nimport pkg.mid.SetBeta;\nimport util.Valid;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testSecondaryTypeImportSortsByItsWholePath(): Void {
+		// A `Module.SubType` import sorts as the WHOLE string it is written as — `a.Mod.Sub`
+		// belongs between `a.Mod` and `a.Other`, not wherever its module alone would land.
+		final src: String = 'package app;\n\nimport a.Mod;\nimport a.Other;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('a.Mod.Sub');
+		Assert.equals('package app;\n\nimport a.Mod;\nimport a.Mod.Sub;\nimport a.Other;\n\nclass C {}\n', applyImports(p, src));
+	}
+
+	public function testBlankSeparatedGroupsKeepTheirSort(): Void {
+		// Blank lines split an import block into visual groups. The order across the whole block
+		// still holds, so the insert lands in the group it sorts into and the blank lines survive.
+		final src: String =
+			'package app;\n\nimport app.base.Host;\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\nimport z.Zeta;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('app.deep.Mod.Widget');
+		Assert.equals(
+			'package app;\n\nimport app.base.Host;\nimport app.deep.Mod.Widget;\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\nimport z.Zeta;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testInsertBetweenTwoGroupsOpensTheLaterGroup(): Void {
+		// A path sorting past every member of the first group and before the second's opens THAT
+		// group: the anchor is the first later import's own start, which sits after the blank line.
+		final src: String = 'package app;\n\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\nimport z.Zeta;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('m.Mod.Middle');
+		Assert.equals(
+			'package app;\n\nimport app.mid.events.Alpha;\nimport app.mid.SetBeta;\n\nimport m.Mod.Middle;\nimport z.Zeta;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testAsciiSortedBlockIsNotResortedByCaseFolding(): Void {
+		// `a.Zeta` before `a.alpha.Beta` is ASCII-sorted and case-folded UNsorted. The ASCII
+		// reading must win, so the insert keeps that order rather than the folded one.
+		final src: String = 'package app;\n\nimport a.Zeta;\nimport a.alpha.Beta;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('a.Mid');
+		Assert.equals('package app;\n\nimport a.Mid;\nimport a.Zeta;\nimport a.alpha.Beta;\n\nclass C {}\n', applyImports(p, src));
+	}
+
+	public function testCoAnchoredImportsAreSortedUnderTheBlockOwnOrder(): Void {
+		// Two fresh imports merged into ONE edit at the same anchor must be written in the order the
+		// FILE carries, not a fixed codepoint one: `pkg.Widget` before `pkg.data.Model` would leave
+		// the block explained by NEITHER order, and every later insert would fall back to appending.
+		final src: String = 'package app;\n\nimport a.events.A;\nimport a.SetB;\nimport zz.Z;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('pkg.Widget');
+		p.print('pkg.data.Model');
+		Assert.equals(1, p.pendingImportEdits().length, 'both anchor at the same slot');
+		Assert.equals(
+			'package app;\n\nimport a.events.A;\nimport a.SetB;\nimport pkg.data.Model;\nimport pkg.Widget;\nimport zz.Z;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testOneImportBlockStillPlacesInOrder(): Void {
+		// A one-import block counts as ordered, so a second import lands in a defensible slot
+		// instead of being appended by definition.
+		final src: String = 'package pkg;\n\nimport z.Zeta;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('a.Alpha');
+		Assert.equals('package pkg;\n\nimport a.Alpha;\nimport z.Zeta;\n\nclass C {}\n', applyImports(p, src));
+	}
+
+	public function testBlockUnsortedUnderEveryOrderStillAppends(): Void {
+		// The documented fallback: a block no supported order explains is appended to, never
+		// resorted — the printer's insert must not rewrite import lines it did not add.
+		final src: String = 'package app;\n\nimport m.Mid;\nimport z.Zeta;\nimport a.Alpha;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('b.Beta');
+		Assert.equals(
+			'package app;\n\nimport m.Mid;\nimport z.Zeta;\nimport a.Alpha;\nimport b.Beta;\n\nclass C {}\n', applyImports(p, src)
+		);
+	}
+
 	public function testPackageOnlyFileInsertsAfterPackage(): Void {
 		final src: String = 'package pkg;\n\nclass C {}\n';
 		final p: TypeRefPrinter = printer(src);

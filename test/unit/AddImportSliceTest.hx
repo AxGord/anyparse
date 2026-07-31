@@ -26,6 +26,38 @@ class AddImportSliceTest extends Test {
 		assertAdd(source, 'c.D', false, expected);
 	}
 
+	/** An ordered block keeps its order — the fresh import takes its slot, not the block's end. */
+	public function testAddTakesTheOrderedSlot(): Void {
+		final source: String = 'package foo;\n\nimport a.B;\nimport m.N;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\nimport c.D;\nimport m.N;\n\nclass C {}\n';
+		assertAdd(source, 'c.D', false, expected);
+	}
+
+	/** A block carrying no recognisable order is appended to, never resorted. */
+	public function testUnorderedBlockStillAppends(): Void {
+		final source: String = 'package foo;\n\nimport z.Zed;\nimport a.Al;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport z.Zed;\nimport a.Al;\nimport m.Mid;\n\nclass C {}\n';
+		assertAdd(source, 'm.Mid', false, expected);
+	}
+
+	/**
+	 * A path whose SIMPLE NAME an existing import already binds appends. Haxe lets the LAST import
+	 * of a name win, so an ordered slot ahead of the incumbent would add an import that binds
+	 * nothing — the op must still deliver the name the caller asked for.
+	 */
+	public function testSameSimpleNameAppendsSoTheFreshImportWins(): Void {
+		final source: String = 'package foo;\n\nimport m.Mid;\nimport z.Foo;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport m.Mid;\nimport z.Foo;\nimport a.Foo;\n\nclass C {}\n';
+		assertAdd(source, 'a.Foo', false, expected);
+	}
+
+	/** A WILDCARD binds names the plain-import ordering cannot see, so it appends like a `using`. */
+	public function testWildcardAppendsRatherThanTakingASlot(): Void {
+		final source: String = 'package foo;\n\nimport a.B;\nimport z.Y;\n\nclass C {}\n';
+		final expected: String = 'package foo;\n\nimport a.B;\nimport z.Y;\nimport m.*;\n\nclass C {}\n';
+		assertAdd(source, 'm.*', false, expected);
+	}
+
 	/** With no imports but a `package`, the import opens a block after it. */
 	public function testAddAfterPackageOnly(): Void {
 		final source: String = 'package foo;\n\nclass C {}\n';
