@@ -79,6 +79,9 @@ final class PreferFind implements Check {
 	/** Cap on the condition (and fallback) excerpt length in the suggestion message. */
 	private static inline final EXCERPT_MAX: Int = 40;
 
+	/** The module whose `find` the rewrite calls — the `using` the fix inserts when the file lacks it. */
+	private static inline final LAMBDA_MODULE: String = 'Lambda';
+
 	public function new() {}
 
 	public function id(): String {
@@ -137,9 +140,9 @@ final class PreferFind implements Check {
 			for (e in candEdits) edits.push(e);
 			rewrote = true;
 		}
-		if (rewrote && !hasUsingLambda(tree)) {
-			final usingEdit: Null<{ span: Span, text: String }> = usingLambdaInsert(tree);
-			if (usingEdit != null && !RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
+		if (rewrote && !CheckScan.hasUsingModule(tree, LAMBDA_MODULE)) {
+			final usingEdit: { span: Span, text: String } = CheckScan.usingInsertEdit(tree, LAMBDA_MODULE);
+			if (!RefactorSupport.editsOverlapAny([usingEdit], edits)) edits.push(usingEdit);
 		}
 		return edits;
 	}
@@ -485,35 +488,6 @@ final class PreferFind implements Check {
 		if (colon == -1) return true;
 		final eq: Int = prefix.lastIndexOf('=');
 		return StringTools.startsWith(StringTools.trim(prefix.substring(colon + 1, eq == -1 ? prefix.length : eq)), 'Null');
-	}
-
-	/** Whether a top-level `using Lambda;` (or `using pkg.Lambda;`) is already present — then `.find` resolves without inserting one. */
-	private static function hasUsingLambda(tree: QueryNode): Bool {
-		return tree.children.exists(c -> {
-			final nm: Null<String> = c.name;
-			return c.kind == 'UsingDecl' && nm != null && (nm == 'Lambda' || StringTools.endsWith(nm, '.Lambda'));
-		});
-	}
-
-	/** A zero-width edit inserting `using Lambda;` after the last package / import / using line (or at the file head when there is none). */
-	private static function usingLambdaInsert(tree: QueryNode): Null<{ span: Span, text: String }> {
-		final anchorKinds: Array<String> = [
-			'PackageDecl',
-			'ImportDecl',
-			'ImportAliasDecl',
-			'ImportAliasInDecl',
-			'ImportWildDecl',
-			'UsingDecl'
-		];
-		var anchor: Null<Span> = null;
-		for (c in tree.children) if (anchorKinds.contains(c.kind)) {
-			final sp: Null<Span> = c.span;
-			if (sp != null) anchor = sp;
-		}
-		return anchor == null ? { span: new Span(0, 0), text: 'using Lambda;\n\n' } : {
-			span: new Span(anchor.to, anchor.to),
-			text: '\nusing Lambda;'
-		};
 	}
 
 

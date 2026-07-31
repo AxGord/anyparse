@@ -31,6 +31,19 @@ final class CheckScan {
 	/** The shortest disjunction that can strand a narrowing: with two operands the first operand's fact always reaches the second. */
 	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
 
+	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
+	private static inline final USING_DECL_KIND: String = 'UsingDecl';
+
+	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
+	private static final USING_ANCHOR_KINDS: Array<String> = [
+		'PackageDecl',
+		'ImportDecl',
+		'ImportAliasDecl',
+		'ImportAliasInDecl',
+		'ImportWildDecl',
+		USING_DECL_KIND
+	];
+
 	private function new() {}
 
 	/**
@@ -273,6 +286,46 @@ final class CheckScan {
 		if (cond.kind == andKind && chainStrands(operands, seams)) return true;
 		for (operand in operands) if (narrowingStranded(operand, seams)) return true;
 		return false;
+	}
+
+	/**
+	 * Whether a top-level `using <module>;` is already present — then the module's
+	 * extension methods resolve without inserting one. `module` may be QUALIFIED
+	 * (`pkg.Lambda`), in which case only an exact match counts; a SIMPLE `module`
+	 * (`Lambda`) also matches a qualified declaration ending in it (`pkg.Lambda`),
+	 * since both bring the same module into scope. Shared by `prefer-find` and
+	 * `prefer-static-extension`.
+	 *
+	 * The declaration kind is spelled literally (`UsingDecl`): `RefShape` exposes no
+	 * using-declaration seam, so a grammar naming it differently reads as having no
+	 * `using` at all — which only ever causes a redundant insert, never a wrong one.
+	 */
+	public static function hasUsingModule(tree: QueryNode, module: String): Bool {
+		final simple: Bool = module.indexOf('.') == -1;
+		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
+			final name: Null<String> = child.name;
+			if (name != null && (name == module || (simple && StringTools.endsWith(name, '.$module')))) return true;
+		}
+		return false;
+	}
+
+	/**
+	 * A ZERO-WIDTH edit inserting `using <module>;` after the last package / import /
+	 * using declaration, or at the file head (with a trailing blank line) when the file
+	 * has none. The insert companion of `hasUsingModule`; the caller applies it only
+	 * after it has decided at least one rewrite needs the module in scope.
+	 */
+	public static function usingInsertEdit(tree: QueryNode, module: String): { span: Span, text: String } {
+		var anchor: Null<Span> = null;
+		for (child in tree.children) if (USING_ANCHOR_KINDS.contains(child.kind)) {
+			final span: Null<Span> = child.span;
+			if (span != null) anchor = span;
+		}
+		final at: Null<Span> = anchor;
+		return at == null ? { span: new Span(0, 0), text: 'using $module;\n\n' } : {
+			span: new Span(at.to, at.to),
+			text: '\nusing $module;'
+		};
 	}
 
 	/**

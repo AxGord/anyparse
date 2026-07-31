@@ -564,6 +564,22 @@ final class SymbolIndex {
 	}
 
 	/**
+	 * Whether ANY indexed type named `typeName` DIRECTLY declares a member named
+	 * `member` — methods included, supertypes NOT consulted. The SHADOW companion of
+	 * `typeProvablyLacksMember` (which proves absence across the whole closure) and of
+	 * `supertypeDeclaresMember` (which asks the same question of the INHERITED half):
+	 * this one answers the direct half, and the two together decide whether an
+	 * instance member would take precedence over a static extension of the same name.
+	 * Unioned across same-simple-name decls, so a positive answer is a conservative
+	 * "some type by that name has it" — the safe direction for a caller that treats a
+	 * hit as "do not rewrite".
+	 */
+	public function typeDeclaresMember(typeName: String, member: String): Bool {
+		for (fi in _files) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == member)) return true;
+		return false;
+	}
+
+	/**
 	 * Whether `typeName` IMPLEMENTS an interface that declares a member named `field` —
 	 * or implements an interface that cannot be resolved in the current scope. Such a
 	 * field is pinned to the interface's declared property access, so a `var → final`
@@ -800,17 +816,12 @@ final class SymbolIndex {
 		if (seen.contains(typeName)) return false;
 		seen.push(typeName);
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) for (sup in t.supertypes) if (
-			declaresMember(sup, field) || supertypeDeclares(sup, field, seen)
+			typeDeclaresMember(sup, field) || supertypeDeclares(sup, field, seen)
 		)
 			return true;
 		return false;
 	}
 
-	/** Whether any indexed type named `typeName` directly declares a member named `field`. */
-	private function declaresMember(typeName: String, field: String): Bool {
-		for (fi in _files) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == field)) return true;
-		return false;
-	}
 
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
 	private function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {

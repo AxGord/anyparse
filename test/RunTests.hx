@@ -523,6 +523,7 @@ import unit.RedundantPropertyAccessCheckTest;
 import unit.HxGroupTrailCommentWriteTest;
 import unit.HxAssignChainWrapSliceTest;
 import unit.PreferDocCommentCheckTest;
+import unit.PreferStaticExtensionCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -918,6 +919,7 @@ class RunTests {
 		addCase(new EnglishCommentsCheckTest());
 		addCase(new PreferComprehensionCheckTest());
 		addCase(new PreferFindCheckTest());
+		addCase(new PreferStaticExtensionCheckTest());
 		addCase(new LoopGuardCheckTest());
 		addCase(new GuardContinueCheckTest());
 		addCase(new GuardReturnCheckTest());

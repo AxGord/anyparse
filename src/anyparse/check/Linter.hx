@@ -128,6 +128,7 @@ final class Linter {
 			new EnglishComments(),
 			new PreferComprehension(),
 			new PreferFind(),
+			new PreferStaticExtension(),
 			new LoopGuard(),
 			new GuardContinue(),
 			new GuardReturn(),
