@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.format.comment.CommentLossException;
 import anyparse.query.MoveSymbol.MoveChange;
 import anyparse.query.MoveSymbol.MoveResult;
 import anyparse.query.RefactorSupport.TypeDeclMatch;
@@ -280,6 +281,8 @@ final class ExtractInterface {
 		sb.add('}\n');
 		final canonical: Null<String> = try plugin.writeRoundTrip(sb.toString(), null) catch (exception: ParseError) {
 			return Left('assembled interface does not parse: ${exception.toString()}');
+		} catch (exception: CommentLossException) {
+			return Left('the assembled interface cannot be written without losing the comment `${exception.comment}`');
 		} catch (exception: Exception) {
 			return Left('assembled interface does not parse: ${exception.message}');
 		};

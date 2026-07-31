@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.check.Check;
+import anyparse.format.comment.CommentInventory;
 import anyparse.check.Check.Violation;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
@@ -1249,7 +1250,10 @@ final class Cli {
 		final oracleHxml: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracle();
 		final oracleDir: Null<String> = oracleConfig == null ? null : oracleConfig.compilerOracleDir();
 
-		if (o.fix) return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
+		if (o.fix) {
+			warnCommentGuardDeclined();
+			return applyLintFixes(files, activeChecks, plugin, resolveConfig, applyEnablement, resolution, oracleHxml, oracleDir);
+		}
 
 		// Report mode only — the fix path returned above, so this pass never runs redundantly in a
 		// --fix run. The resolution scope joins the checks' SymbolIndex; findings stay in the report
@@ -6329,11 +6333,12 @@ final class Cli {
 	 * file that fails to parse is reported and skipped; the exit code is
 	 * non-zero if any file failed. A file whose re-emission would drop a
 	 * comment is reported the same way and left byte-identical — see the
-	 * fail-closed guard on `HaxeQueryPlugin.writeRoundTrip`.
+	 * comment-loss obligation on `GrammarPlugin.writeRoundTrip`.
 	 */
 	private static function runFmt(args: Array<String>): Int {
 		final o: FmtOpts = parseFmtArgs(args);
 		if (o.errExit != null) return o.errExit;
+		warnCommentGuardDeclined();
 		if (o.inputSpecs.length == 0) {
 			stderr('apq fmt: expected <file/dir/glob>...\n');
 			printFmtUsage();
@@ -6370,6 +6375,18 @@ final class Cli {
 			// its own reason above).
 			stderr('apq fmt: $failed file(s) failed\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
+	}
+
+	/**
+	 * Warn once per run when the comment guard's escape hatch is set. It
+	 * exists for writer development on the read-only probes, but it is
+	 * process-wide: left in a shell profile or a CI environment it silently
+	 * re-arms comment DELETION on every write path. A rewrite command that
+	 * runs under it says so.
+	 */
+	private static function warnCommentGuardDeclined(): Void {
+		if (CommentInventory.guardDeclined())
+			stderr('apq: ${CommentInventory.DECLINE_ENV} is set — the comment-loss guard is OFF; a rewrite may DELETE comments\n');
 	}
 
 	private static function printFmtUsage(): Void {

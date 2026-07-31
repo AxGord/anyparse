@@ -1,5 +1,8 @@
 package anyparse.format.comment;
 
+import anyparse.core.EnvFlag;
+import haxe.Exception;
+
 /**
  * Comment-preservation audit over a writer round trip.
  *
@@ -30,9 +33,22 @@ package anyparse.format.comment;
  * single-quoted string's `${…}` interpolation as CODE — a nested same-quote
  * literal there would otherwise desynchronise the scan for the rest of the
  * file, which is the one way a real loss could hide from this check.
+ *
+ * The scan is HAXE-lexed (`'…'` interpolation, `$$`, `~/…/`) even though the
+ * package is otherwise grammar-agnostic: the Haxe writer is the only consumer
+ * so far. A second grammar needs a per-grammar lexer hook here, not this one
+ * inherited — its string and regex syntax is not Haxe's.
  */
 @:nullSafety(Strict)
 final class CommentInventory {
+
+	/**
+	 * Environment switch that declines the guard for the whole process.
+	 * Public so the CLI can WARN when it is set: it re-arms comment deletion
+	 * on the write paths, not just in the read-only writer probes it exists
+	 * for.
+	 */
+	public static inline final DECLINE_ENV: String = 'APQ_ALLOW_COMMENT_LOSS';
 
 	/** Longest comment head an error message quotes before eliding. */
 	private static inline final MESSAGE_WIDTH: Int = 60;
@@ -40,7 +56,13 @@ final class CommentInventory {
 	/** The quote that opens an INTERPOLATING string literal in Haxe. */
 	private static inline final SINGLE_QUOTE: Int = "'".code;
 
+	/** Shortest block comment that carries BOTH delimiters (`/**\/`). */
+	private static inline final MIN_CLOSED_BLOCK: Int = 4;
+
 	private function new() {}
+
+	/** Whether `DECLINE_ENV` declines the comment guard in this process. */
+	public static inline function guardDeclined(): Bool return EnvFlag.isSet(DECLINE_ENV);
 
 	/**
 	 * The first comment of `source` that `output` does not carry, verbatim
@@ -65,13 +87,6 @@ final class CommentInventory {
 		return null;
 	}
 
-	/** One-line rendering of a comment for an error message. */
-	private static function summarize(comment: String): String {
-		final firstLine: Int = comment.indexOf('\n');
-		final head: String = firstLine < 0 ? comment : comment.substring(0, firstLine) + ' ...';
-		return head.length > MESSAGE_WIDTH ? head.substr(0, MESSAGE_WIDTH) + ' ...' : head;
-	}
-
 	/**
 	 * Every `//` and `/* *\/` comment in `src`, verbatim and in source
 	 * order, with string and regex literals skipped.
@@ -82,6 +97,10 @@ final class CommentInventory {
 	 * any other. `$$` is the escaped dollar and opens nothing.
 	 */
 	public static function collect(src: String): Array<String> {
+		// noqa: complexity
+		// One cohesive lexer state machine — every branch mutates the shared
+		// `quote` / interpolation-frame state, so splitting it would thread
+		// that state back out through a per-character return value.
 		final out: Array<String> = [];
 		final len: Int = src.length;
 		// One entry per open `${` interpolation, holding the `{` nesting depth
@@ -154,6 +173,7 @@ final class CommentInventory {
 		return out;
 	}
 
+	/** Index just past a `~/…/` regex literal opened at `from` (its body start). */
 	private static function skipRegex(src: String, from: Int): Int {
 		final len: Int = src.length;
 		var i: Int = from;
@@ -169,36 +189,38 @@ final class CommentInventory {
 		return i;
 	}
 
-	/**
-	 * Comment text stripped to what the writer may NOT change: delimiters,
-	 * the per-line `*` gutter and all whitespace removed.
-	 */
-	private static function normalize(comment: String): String {
-		final buf: StringBuf = new StringBuf();
-		final len: Int = comment.length;
-		var i: Int = 0;
-		var atLineStart: Bool = true;
-		if (StringTools.startsWith(comment, '//'))
-			i = 2;
-		else if (StringTools.startsWith(comment, '/*')) {
-			i = 2;
-			// A trailing `*/` (and the `*` of a `**/` close) carries no text.
-			var end: Int = len;
-			if (StringTools.endsWith(comment, '*/')) end -= 2;
-			while (end > i && StringTools.fastCodeAt(comment, end - 1) == '*'.code) end--;
-			return normalizeBody(comment.substring(i, end));
-		}
-		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(comment, i);
-			i++;
-			if (c == ' '.code || c == '\t'.code || c == '\r'.code || c == '\n'.code) continue;
-			if (atLineStart && c == '*'.code) continue;
-			atLineStart = false;
-			buf.addChar(c);
-		}
-		return buf.toString();
+	/** One-line rendering of a comment for an error message. */
+	private static function summarize(comment: String): String {
+		final newlineIndex: Int = comment.indexOf('\n');
+		final head: String = StringTools.rtrim(newlineIndex < 0 ? comment : comment.substring(0, newlineIndex));
+		final clipped: String = head.length > MESSAGE_WIDTH ? head.substring(0, MESSAGE_WIDTH) : head;
+		return clipped == comment ? clipped : '$clipped ...';
 	}
 
+	/**
+	 * Comment text stripped to what the writer may NOT change: delimiters,
+	 * the per-line `*` gutter and all whitespace removed. Both comment styles
+	 * route through the same body pass so the two sides of a comparison can
+	 * never drift apart on a normalisation rule.
+	 */
+	private static function normalize(comment: String): String {
+		if (StringTools.startsWith(comment, '//')) return normalizeBody(comment.substring(2));
+		// `collect` emits nothing else, so a third shape means the scanner and
+		// this function disagree about what a comment token is.
+		if (!StringTools.startsWith(comment, '/*')) throw new Exception('not a comment token: `$comment`');
+		var end: Int = comment.length;
+		// A trailing `*/` (and the `*` of a `**/` close) carries no text. An
+		// unterminated `/*/` is shorter than both delimiters together — leave
+		// it whole rather than cut past the open.
+		if (end >= MIN_CLOSED_BLOCK && StringTools.endsWith(comment, '*/')) end -= 2;
+		while (end > 2 && StringTools.fastCodeAt(comment, end - 1) == '*'.code) end--;
+		return normalizeBody(comment.substring(2, end));
+	}
+
+	/**
+	 * The shared body pass: drop every whitespace character, and the `*` that
+	 * opens a continuation line (the javadoc gutter the writer re-indents).
+	 */
 	private static function normalizeBody(body: String): String {
 		final buf: StringBuf = new StringBuf();
 		final len: Int = body.length;

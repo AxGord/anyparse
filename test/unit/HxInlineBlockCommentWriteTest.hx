@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.comment.CommentInventory;
 import anyparse.format.comment.CommentLossException;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 
@@ -23,12 +24,26 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
  */
 class HxInlineBlockCommentWriteTest extends Test {
 
+	/**
+	 * The guard's escape hatch is process-wide, so a developer running the
+	 * suite with `APQ_ALLOW_COMMENT_LOSS` set would otherwise see every
+	 * refusal assertion fail. Neutralised per test, restored after.
+	 */
+	private var _savedDecline: Null<String> = null;
+
+	public function setup(): Void {
+		_savedDecline = Sys.getEnv(CommentInventory.DECLINE_ENV);
+		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
+	}
+
+	public function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
+
 	public function testIfConditionLeadingBlockComment(): Void {
-		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\tif (/* c */ x) {\n\t\t\trun();\n\t\t}\n\t}\n}\n');
+		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\tif (/* c */ x) {\n\t\t\trun();\n\t\t}\n\t}\n}\n', '/* c */');
 	}
 
 	public function testReturnLeadingBlockComment(): Void {
-		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */ x;\n\t}\n}\n');
+		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */ x;\n\t}\n}\n', '/* r */');
 	}
 
 	public function testAssignmentTrailingBlockComment(): Void {
@@ -41,9 +56,26 @@ class HxInlineBlockCommentWriteTest extends Test {
 
 	public function testGuardLeavesCapturedCommentsAlone(): Void {
 		// A comment in a slot the parser DOES capture must still round-trip —
-		// the guard must not freeze every file that holds a block comment.
-		final source: String = 'class Foo {\n\n\t/* head */\n\tfunction bar() {\n\t\tf(x /* a */);\n\t}\n\n}\n';
-		Assert.equals('class Foo {\n\n\t/* head */\n\tfunction bar() {\n\t\tf(x /* a */);\n\t}\n\n}\n', roundTrip(source));
+		// the guard must not freeze every file that holds a block comment. The
+		// `: Int` annotation makes the source a NON fixed point, so the check
+		// really runs instead of short-circuiting on `written == source`.
+		final source: String = 'class Foo {\n\n\t/* head */\n\tvar n: Int = 1;\n\n\tfunction bar() {\n\t\tf(x /* a */);\n\t}\n\n}\n';
+		Assert.equals(
+			'class Foo {\n\n\t/* head */\n\tvar n:Int = 1;\n\n\tfunction bar() {\n\t\tf(x /* a */);\n\t}\n\n}\n', roundTrip(source)
+		);
+	}
+
+	public function testElseSeamKeepsTheTextAsALineComment(): Void {
+		// Pinned as an artifact, not an endorsement: the `} else /* e */ {` seam
+		// re-emits the block comment as `// e ` (trailing space) on its own line.
+		// No byte of the TEXT is lost, so the guard allows it — but the shape
+		// change is invisible to an inventory check and belongs on the record.
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tif (c) {\n\t\t\trun();\n\t\t} else /* e */ {\n\t\t\trun();\n\t\t}\n\t}\n}\n';
+		Assert.equals(
+			'class Foo {\n\tfunction bar() {\n\t\tif (c) {\n\t\t\trun();\n\t\t} else // e \n\t\t{\n\t\t\trun();\n\t\t}\n\t}\n}\n',
+			roundTrip(source)
+		);
 	}
 
 	public function testGuardDoesNotFireOnCommentFreeSource(): Void {
@@ -52,16 +84,15 @@ class HxInlineBlockCommentWriteTest extends Test {
 	}
 
 	/**
-	 * The round trip refuses `source` with a `CommentLossException` naming the
-	 * comment it would have dropped.
+	 * The round trip refuses `source` with a `CommentLossException` naming
+	 * `expected` as the comment it would have dropped.
 	 */
-	private function assertRefusesLoss(source: String): Void {
+	private function assertRefusesLoss(source: String, expected: String): Void {
 		try {
 			final written: Null<String> = roundTrip(source);
 			Assert.fail('expected a comment-loss refusal, got: $written');
-		} catch (exception: CommentLossException) {
-			Assert.stringContains('/*', exception.comment);
-		}
+		} catch (exception: CommentLossException)
+			Assert.equals(expected, exception.comment);
 	}
 
 	private function roundTrip(source: String): Null<String> return new HaxeQueryPlugin().writeRoundTrip(source);

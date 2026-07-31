@@ -68,4 +68,17 @@ class CommentInventoryTest extends Test {
 		Assert.isNull(CommentInventory.firstMissing('} else /* e */ {\n', '} else // e\n{\n'));
 	}
 
+	public function testGuardDeclinedReadsTheEnvironmentSwitch(): Void {
+		final saved: Null<String> = Sys.getEnv(CommentInventory.DECLINE_ENV);
+		Sys.putEnv(CommentInventory.DECLINE_ENV, '1');
+		Assert.isTrue(CommentInventory.guardDeclined());
+		// `0` and the empty string read as UNSET, so a shell exporting a
+		// computed value (`APQ_ALLOW_COMMENT_LOSS=$DEBUG`) keeps the guard on.
+		Sys.putEnv(CommentInventory.DECLINE_ENV, '0');
+		Assert.isFalse(CommentInventory.guardDeclined());
+		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
+		Assert.isFalse(CommentInventory.guardDeclined());
+		Sys.putEnv(CommentInventory.DECLINE_ENV, saved);
+	}
+
 }

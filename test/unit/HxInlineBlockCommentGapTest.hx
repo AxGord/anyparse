@@ -99,6 +99,20 @@ class HxInlineBlockCommentGapTest extends Test {
 		['anon_field', 'typedef T = {\n\ta: /* a */ Int,\n}\n'],
 	];
 
+	/**
+	 * The guard's escape hatch is process-wide, so a developer running the
+	 * suite with `APQ_ALLOW_COMMENT_LOSS` set would otherwise see every
+	 * refusal assertion fail. Neutralised per test, restored after.
+	 */
+	private var _savedDecline: Null<String> = null;
+
+	public function setup(): Void {
+		_savedDecline = Sys.getEnv(CommentInventory.DECLINE_ENV);
+		Sys.putEnv(CommentInventory.DECLINE_ENV, '');
+	}
+
+	public function teardown(): Void Sys.putEnv(CommentInventory.DECLINE_ENV, _savedDecline);
+
 	public function testCapturedSeamsRoundTripWithTheirComment(): Void {
 		for (entry in CAPTURED) {
 			final source: String = inBody(entry[1]);
@@ -107,6 +121,12 @@ class HxInlineBlockCommentGapTest extends Test {
 				continue;
 			}
 			Assert.isNull(CommentInventory.firstMissing(source, written ?? ''), '${entry[0]}: comment missing from output');
+			// Second, INDEPENDENT oracle: the comment's own text has to be in
+			// the emitted bytes. `firstMissing` is the guard's own check, so on
+			// its own this loop would pass if that check ever regressed to
+			// always-null. Body text (not the delimiters) because one seam
+			// legally re-emits its block comment as a line comment.
+			Assert.stringContains(commentBody(entry[1]), written ?? '', '${entry[0]}: comment text missing from output');
 		}
 	}
 
@@ -127,5 +147,12 @@ class HxInlineBlockCommentGapTest extends Test {
 	}
 
 	private function inBody(statements: String): String return 'class Foo {\n\tfunction bar() {\n\t\t$statements\n\t}\n}\n';
+
+	/** The text between a fixture's `/*` and `*\/`, trimmed. */
+	private function commentBody(fixture: String): String {
+		final open: Int = fixture.indexOf('/*');
+		final close: Int = fixture.indexOf('*/', open);
+		return StringTools.trim(fixture.substring(open + 2, close));
+	}
 
 }

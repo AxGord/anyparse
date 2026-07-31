@@ -1,5 +1,6 @@
 package anyparse.query;
 
+import anyparse.core.EnvFlag;
 import haxe.Exception;
 #if (sys || nodejs)
 import sys.FileSystem;
@@ -96,16 +97,7 @@ final class StdResolver {
 	 * scope and the std-derived tables alike — so `Cli.resolutionThunk`'s null branch and the
 	 * table-only fallbacks stay reachable on a Haxe-equipped box instead of being dead in CI.
 	 */
-	private static function declined(): Bool {
-		#if (sys || nodejs)
-		final raw: Null<String> = Sys.getEnv('APQ_NO_STD');
-		if (raw == null) return false;
-		final trimmed: String = StringTools.trim(raw);
-		return trimmed != '' && trimmed != '0';
-		#else
-		return false;
-		#end
-	}
+	private static function declined(): Bool return EnvFlag.isSet('APQ_NO_STD');
 
 	/**
 	 * PURE priority resolution: the first of `env`, `whichSiblingStd`, then each `known`

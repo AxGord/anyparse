@@ -688,7 +688,7 @@ final class RefactorSupport {
 					source, optsJson
 				) catch (exception: ParseError) return Err('source does not parse: ${exception.toString()}')
 				catch (exception: CommentLossException) return Err(
-					'source cannot be rewritten without losing a comment: ${exception.message}'
+					'this file cannot be rewritten without losing the comment `${exception.comment}`'
 				)
 				catch (exception: Exception) return Err('source does not parse: ${exception.message}');
 			if (canon == null) return Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result');
@@ -701,7 +701,9 @@ final class RefactorSupport {
 			try plugin.writeRoundTrip(
 				spliced, optsJson
 			) catch (exception: ParseError) return Err('result does not parse: ${exception.toString()}')
-			catch (exception: CommentLossException) return Err('result cannot be rewritten without losing a comment: ${exception.message}')
+			catch (exception: CommentLossException) return Err(
+				'the edit cannot be applied without losing the comment `${exception.comment}` (it may sit anywhere in the file)'
+			)
 			catch (exception: Exception) return Err('result does not parse: ${exception.message}');
 		return result == null ? Err('the "${plugin.langName()}" grammar has no writer — cannot writer-format the result') : Ok(result);
 	}

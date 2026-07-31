@@ -271,10 +271,14 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * that silently deletes an author's bytes, such a round trip throws
 	 * `CommentLossException`: `fmt` names the file and leaves it byte-
 	 * identical, and the ops' `RefactorSupport.canonicalize` refuses the
-	 * edit instead of writing an unformatted splice. Every whole-file
-	 * consumer inherits the guard from this one seat.
-	 * `APQ_ALLOW_COMMENT_LOSS` (any value but empty / `0`) declines it, so
-	 * writer development can still see the raw emission.
+	 * edit instead of writing a file without the comment. Every whole-file
+	 * consumer inherits the guard from this one seat — including the
+	 * read-only probes (`ast --writer-output`, `writer-probe`,
+	 * `writer-equals`, `recon --writer-equals`), which report the refusal
+	 * on stderr and emit nothing. `APQ_ALLOW_COMMENT_LOSS` (any value but
+	 * empty / `0`) declines the guard for the whole process, so writer
+	 * development can see the raw emission; the CLI warns when it is set,
+	 * because it re-arms the data loss on the WRITE paths too.
 	 */
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
 		final tree: Dynamic = HaxeModuleTriviaParser.parse(source);
@@ -282,27 +286,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			? HaxeFormat.instance.defaultWriteOptions
 			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
 		final written: Null<String> = HaxeModuleTriviaWriter.write(tree, opts);
-		if (written == null || written == source || commentGuardDeclined()) return written;
+		if (written == null || written == source || CommentInventory.guardDeclined()) return written;
 		final lost: Null<String> = CommentInventory.firstMissing(source, written);
 		if (lost != null) throw new CommentLossException(lost);
 		return written;
-	}
-
-	/**
-	 * Whether `APQ_ALLOW_COMMENT_LOSS` declines the comment guard: set to
-	 * anything other than the empty string or `0`. Writer-development
-	 * escape hatch — with the guard on, a probe of a lossy construct
-	 * shows the input back instead of the emission being debugged.
-	 */
-	private static function commentGuardDeclined(): Bool {
-		#if (sys || nodejs)
-		final raw: Null<String> = Sys.getEnv('APQ_ALLOW_COMMENT_LOSS');
-		if (raw == null) return false;
-		final trimmed: String = StringTools.trim(raw);
-		return trimmed != '' && trimmed != '0';
-		#else
-		return false;
-		#end
 	}
 
 	/**
