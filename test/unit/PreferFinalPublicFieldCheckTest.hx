@@ -844,6 +844,17 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * Only the assignment TARGET survives the statement rewrite verbatim, so a comment
+	 * between the `=` and the assigned value would vanish too — the gate is anchored on
+	 * the target, not on the assignment.
+	 */
+	public function testCtorConditionalDefaultCommentInsideAssignNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var n:Int = 1; public function new(?p:Int) { if (p != null) n = /* why */ p; } }').length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

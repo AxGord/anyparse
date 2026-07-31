@@ -2894,19 +2894,15 @@ final class RefactorSupport {
 		final target: QueryNode = assign.children[0];
 		final targetSpan: Null<Span> = target.span;
 		final value: QueryNode = assign.children[1];
-		// The rewrite regenerates everything outside the assignment, so a comment anywhere
-		// in the statement would be dropped silently — the same fail-closed rule the
-		// declaration side applies in `initializerDropSpan`.
-		return targetSpan == null || value.kind != shape.identKind || value.name != param
-			? null
-			: commentInRange(source, stmtSpan.from, assignSpan.from) || commentInRange(source, assignSpan.to, stmtSpan.to)
-				? null
-				: ctorTargetIsField(target, fieldFrom, fieldName, container, shape) ? {
-					stmt: stmtSpan,
-					target: targetSpan,
-					param: param,
-					terminator: source.substring(assignSpan.to, branchSpan.to)
-				} : null;
+		if (targetSpan == null || value.kind != shape.identKind || value.name != param) return null;
+		if (!statementCommentFree(source, stmtSpan, targetSpan)) return null;
+		if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) return null;
+		return {
+			stmt: stmtSpan,
+			target: targetSpan,
+			param: param,
+			terminator: source.substring(assignSpan.to, branchSpan.to)
+		};
 	}
 
 	/**
@@ -3007,20 +3003,38 @@ final class RefactorSupport {
 	private static function guardReachedIntact(source: String, ctor: QueryNode, name: String, guardFrom: Int, shape: RefShape): Bool {
 		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
 		final bodySpan: Null<Span> = body == null ? null : body.span;
-		if (body == null || bodySpan == null) return false;
-		return !referencedInRange(source, name, bodySpan.from, guardFrom, [])
-			&& !kindStartsBefore(body, shape.controlExitKinds ?? [], guardFrom);
+		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
+		// An unset exit-kind set would turn the scan below into a no-op and silently accept
+		// every early return, so its completeness is load-bearing here — refuse without it.
+		if (body == null || bodySpan == null || exitKinds.length == 0) return false;
+		return !referencedInRange(source, name, bodySpan.from, guardFrom, []) && !kindStartsBefore(body, exitKinds, guardFrom);
 	}
 
 	/** Whether `node`'s subtree holds a node of one of `kinds` that STARTS before `boundary`. */
 	private static function kindStartsBefore(node: QueryNode, kinds: Array<String>, boundary: Int): Bool {
 		final span: Null<Span> = node.span;
-		if (span != null && span.from < boundary && kinds.contains(node.kind)) return true;
+		// Spans are monotone, so a subtree starting past the boundary holds no match.
+		if (span != null && span.from >= boundary) return false;
+		if (span != null && kinds.contains(node.kind)) return true;
 		for (child in node.children) if (kindStartsBefore(child, kinds, boundary)) return true;
 		return false;
 	}
 
-	/** Whether `[from, to)` of `source` opens a comment — bytes a statement rewrite would drop. */
+	/**
+	 * Whether the guarded statement carries no comment the rewrite would drop. Only the
+	 * assignment TARGET is copied verbatim; every other byte of the statement — the guard,
+	 * the braces, the operator, the assigned value — is regenerated, so a comment outside
+	 * the target's span disappears silently. Checking around the target rather than around
+	 * the whole assignment is what makes this the same fail-closed rule the declaration
+	 * side applies in `initializerDropSpan`. No false positive is possible: by the time
+	 * this runs the condition is proven to be exactly `<ident> != null` and the tail is the
+	 * statement terminator, so no string literal can occupy either region.
+	 */
+	private static function statementCommentFree(source: String, stmt: Span, target: Span): Bool {
+		return !commentInRange(source, stmt.from, target.from) && !commentInRange(source, target.to, stmt.to);
+	}
+
+	/** Whether `[from, to)` of `source` opens a comment. */
 	private static inline function commentInRange(source: String, from: Int, to: Int): Bool {
 		final text: String = source.substring(from, to);
 		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
