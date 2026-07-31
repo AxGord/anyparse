@@ -22,8 +22,9 @@ import anyparse.query.format.Text;
  * `sameOperatorLeft` — a pair around the LEFT operand of a binary operator whose
  * content is a binary operator of the SAME left-associative precedence family
  * (`*` `/`, or `+` `-`). Left-associativity already groups that way, so the drop
- * re-parses to the identical tree. The RIGHT operand is never touched, and the
- * families never mix.
+ * re-parses to the identical tree. The RIGHT operand is never touched, the families
+ * never mix, and a pair on the right VETOES the left one — both together are a
+ * symmetry, and dropping only the removable half reads worse than either extreme.
  *
  * Every drop asserted here is checked against a TREE-EQUIVALENCE oracle: both the
  * before and after source are parsed, every paren node is spliced out of each, and
@@ -31,13 +32,16 @@ import anyparse.query.format.Text;
  */
 class RedundantParensOperandArmsTest extends Test {
 
+	/** Pass budget for `converged` — generous; the deepest fixture here settles in two. */
+	private static inline final MAX_PASSES: Int = 8;
+
 	public function testAtomArmIsOffByDefault(): Void {
-		Assert.equals(0, violations(inFn('var b = (a) + c;')).length);
-		Assert.equals(0, violations(inFn('var b = arr[(i)];')).length);
+		Assert.equals(0, violations(inFn('var b = (a) + c;'), none()).length);
+		Assert.equals(0, violations(inFn('var b = arr[(i)];'), none()).length);
 	}
 
 	public function testSameOperatorLeftArmIsOffByDefault(): Void {
-		Assert.equals(0, violations(inFn('var b = (p * q) / r;')).length);
+		Assert.equals(0, violations(inFn('var b = (p * q) / r;'), none()).length);
 	}
 
 	public function testAtomIdentifierOperandDropsBothWays(): Void {
@@ -179,12 +183,12 @@ class RedundantParensOperandArmsTest extends Test {
 
 	/** A comment between the parens and their content would be deleted by the drop. */
 	public function testParensCarryingACommentAreSkipped(): Void {
-		Assert.equals(0, violations(inFn('var z = (/* c */ a);')).length);
-		Assert.equals(0, violations(inFn('var z = (a /* c */);')).length);
-		Assert.equals(0, violations(inFn('var z = ((/* c */ a));')).length);
+		Assert.equals(0, violations(inFn('var z = (/* c */ a);'), none()).length);
+		Assert.equals(0, violations(inFn('var z = (a /* c */);'), none()).length);
+		Assert.equals(0, violations(inFn('var z = ((/* c */ a));'), none()).length);
 		// A comment OUTSIDE the pair is not between the parens and their content, so it
 		// does not gate the drop.
-		Assert.equals(1, violations(inFn('var z = (a); // c')).length);
+		Assert.equals(1, violations(inFn('var z = (a); // c'), none()).length);
 	}
 
 	public function testSameOperatorLeftMultiplicativeDrops(): Void {
@@ -204,6 +208,28 @@ class RedundantParensOperandArmsTest extends Test {
 		Assert.equals(0, violations(inFn('var v = p / (q * r);'), sameOperatorLeft()).length);
 		Assert.equals(0, violations(inFn('var v = p - (q + r);'), sameOperatorLeft()).length);
 		Assert.equals(0, violations(inFn('var v = p * (q * r);'), sameOperatorLeft()).length);
+	}
+
+	/**
+	 * Both operands parenthesized is a SYMMETRY the author wrote, and only the left pair
+	 * is ever removable — firing would leave the expression lopsided. The bare fixtures
+	 * pin that the sibling pair is what rejects these: drop it and the left one goes.
+	 */
+	public function testSymmetricOperandPairIsLeftIntact(): Void {
+		Assert.equals(0, violations(inFn('var v = (p * q) / (r * s);'), sameOperatorLeft()).length);
+		Assert.equals(1, violations(inFn('var v = (p * q) / r;'), sameOperatorLeft()).length);
+		Assert.equals(0, violations(inFn('var v = (p + q) - (r + s);'), sameOperatorLeft()).length);
+		Assert.equals(1, violations(inFn('var v = (p + q) - r;'), sameOperatorLeft()).length);
+		// The sibling need not be same-family — any pair on the right is the symmetry.
+		Assert.equals(0, violations(inFn('var v = (p + q) - (r);'), sameOperatorLeft()).length);
+	}
+
+	/**
+	 * The `atoms` arm is not symmetry-vetoed: the reference shape it was built for has a
+	 * parenthesized non-atom on the left and the removable atom on the right.
+	 */
+	public function testAtomArmIgnoresASiblingPair(): Void {
+		assertDrop(inFn('var b = (p - q) / (r.w);'), inFn('var b = (p - q) / r.w;'), atoms());
 	}
 
 	public function testMixedFamiliesAreNeverDropped(): Void {
@@ -231,14 +257,29 @@ class RedundantParensOperandArmsTest extends Test {
 	}
 
 	public function testFixIsIdempotent(): Void {
-		final once: String = fixed(inFn('var b = (a) + (p * q) / (r.w);'), both());
-		Assert.equals(once, fixed(once, both()));
+		final stable: String = converged(inFn('var b = (a) + (p * q) / (r.w);'), both());
+		Assert.equals(stable, fixed(stable, both()));
 	}
 
-	public function testFixOutputReparses(): Void {
-		final out: String = fixed(inFn('var b = (a) + (p * q) / (r.w);'), both());
+	/**
+	 * One pass drops the atom `(r.w)`, which un-symmetrises the division and only then
+	 * frees `(p * q)` — so the arms converge over passes, as `lint --fix` runs them.
+	 */
+	public function testFixConvergesOverPasses(): Void {
+		Assert.equals(inFn('var b = a + (p * q) / r.w;'), fixed(inFn('var b = (a) + (p * q) / (r.w);'), both()));
+		final out: String = converged(inFn('var b = (a) + (p * q) / (r.w);'), both());
 		Assert.equals(inFn('var b = a + p * q / r.w;'), out);
 		Assert.notNull(new HaxeQueryPlugin().parseFile(out));
+	}
+
+	/**
+	 * A drop must not weld its content onto a neighbouring word token. `return(a)` is
+	 * the leading case the shipped arms already handle; `(s)is String` is the trailing
+	 * one the operand arms reach first.
+	 */
+	public function testDropKeepsASeparatorAgainstAWordToken(): Void {
+		assertDrop(inFn('var b = (s)is String;'), inFn('var b = s is String;'), atoms());
+		assertDrop(inFn('var b = a + (s)is String;'), inFn('var b = a + s is String;'), atoms());
 	}
 
 	/**
@@ -262,13 +303,25 @@ class RedundantParensOperandArmsTest extends Test {
 		return check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
-	/** `src` with every edit the check's own `fix` produces applied. */
+	/** `src` with every edit ONE pass of the check's own `fix` produces applied. */
 	private function fixed(src: String, ?resolve: (String) -> LintConfig): String {
 		final check: RedundantParens = new RedundantParens();
 		if (resolve != null) check.setConfigResolver(resolve);
 		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final vs: Array<Violation> = check.run([{ file: 'C.hx', source: src }], plugin);
 		return RefactorSupport.applyEdits(src, check.fix(src, vs, plugin));
+	}
+
+	/** `src` fixed repeatedly until it stops changing — what `lint --fix` does over passes. */
+	private function converged(src: String, resolve: (String) -> LintConfig): String {
+		var out: String = src;
+		for (_ in 0...MAX_PASSES) {
+			final next: String = fixed(out, resolve);
+			if (next == out) return out;
+			out = next;
+		}
+		Assert.fail('fix did not converge within $MAX_PASSES passes');
+		return out;
 	}
 
 	/** `src` parsed with every parenthesis node spliced out — the shape a redundant pair must not change. */
@@ -287,6 +340,11 @@ class RedundantParensOperandArmsTest extends Test {
 
 	private static inline function sameOperatorLeft(): (String) -> LintConfig {
 		return configured('{"rules": {"redundant-parens": {"sameOperatorLeft": true}}}');
+	}
+
+	/** An explicit EMPTY project config — hermetic, unlike falling through to a discovered `apqlint.json`. */
+	private static inline function none(): (String) -> LintConfig {
+		return configured('{}');
 	}
 
 	private static inline function both(): (String) -> LintConfig {

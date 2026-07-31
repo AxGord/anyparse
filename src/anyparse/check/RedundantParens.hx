@@ -113,7 +113,13 @@ import anyparse.runtime.Span;
  *   prove the re-association either way.
  *
  * Readability parens on a MIXED-operator expression are a human choice, so
- * `sameOperatorLeft` is restricted to the same-family left operand and nothing else.
+ * `sameOperatorLeft` is restricted to the same-family left operand and nothing else —
+ * and it declines even that when the RIGHT operand carries a pair of its own
+ * (`Math.abs((px - x) + (py - y - h))`). Both pairs are one symmetry the author wrote,
+ * only the left is ever removable, and firing there leaves the expression lopsided:
+ * worse to read than either keeping or dropping both. Measured on a 798-file corpus,
+ * that veto is what separates the clean drops from the disfiguring ones.
+ *
  * Both arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
  * `macro` quotation, where a pair reifies as data; a case pattern, matched
  * structurally) and at a direct child of `RefShape.parenRequiredHostKinds` (a `case`
@@ -146,14 +152,16 @@ final class RedundantParens implements Check implements ConfigAware {
 	}
 
 	public function description(): String {
-		return 'parentheses that cannot affect the parse — ((e)), or a lone (e) in a delimited position';
+		return
+			'parentheses that cannot affect the parse — ((e)), a lone (e) in a delimited position, or (opt-in) one around an inert operand';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
+		final shape: RefShape = plugin.refShape();
+		if (shape.parenKind == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final slots: Null<ParenSlots> = slotsOf(plugin, entry.file);
-			if (slots == null) return [];
+			final slots: ParenSlots = slotsOf(shape, entry.file);
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, entry.source, tree, slots, SlotKind.Plain, false);
 		}
@@ -168,8 +176,9 @@ final class RedundantParens implements Check implements ConfigAware {
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
 		if (violations.length == 0) return [];
-		final slots: Null<ParenSlots> = slotsOf(plugin, violations[0].file);
-		if (slots == null) return [];
+		final shape: RefShape = plugin.refShape();
+		if (shape.parenKind == null) return [];
+		final slots: ParenSlots = slotsOf(shape, violations[0].file);
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
@@ -189,28 +198,35 @@ final class RedundantParens implements Check implements ConfigAware {
 				edits.push({ span: span, text: '($text)' });
 				continue;
 			}
-			// The `(` was the only thing separating the content from a preceding
-			// keyword (`return(a);`) — dropping it bare would weld them into one
-			// identifier, which still PARSES and so survives the caller's re-parse.
-			edits.push({ span: span, text: weldsWithPreviousToken(source, span.from) ? ' $text' : text });
+			// A parenthesis can be the ONLY thing separating its content from a
+			// neighbouring word token — `return(a);` before it, `(s)is String` after —
+			// and dropping it bare would weld the two into one identifier, which still
+			// PARSES and so survives the caller's re-parse. Re-separate either side.
+			final lead: String = isWordCharAt(source, span.from - 1) ? ' ' : '';
+			final trail: String = isWordCharAt(source, span.to) ? ' ' : '';
+			edits.push({ span: span, text: '$lead$text$trail' });
 		}
 		return edits;
 	}
 
 	/**
 	 * The grammar's paren kind plus its delimited-slot vocabulary and this project's
-	 * operand-arm opt-ins, or null when the grammar declares no paren kind. Resolved
-	 * once per file: both arms are `apqlint.json` options on this rule, default false.
+	 * operand-arm opt-ins. `shape.parenKind` must be non-null — the caller bails on a
+	 * grammar that declares none, once per run rather than once per file.
+	 *
+	 * EVERY vocabulary the operand arms read is emptied when neither arm is on, the
+	 * suppression lists (`requiredHost` / `opaqueSubtree`) included: those two answer
+	 * only for the operand arms, and leaving them populated would let a future grammar
+	 * that lists a host BOTH as required and as delimited change the shipped arms'
+	 * answer with nothing opted in.
 	 */
-	private function slotsOf(plugin: GrammarPlugin, file: String): Null<ParenSlots> {
-		final shape: RefShape = plugin.refShape();
-		final parenKind: Null<String> = shape.parenKind;
-		if (parenKind == null) return null;
+	private function slotsOf(shape: RefShape, file: String): ParenSlots {
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
 		final atomArm: Bool = config.boolOption(ID, 'atoms') == true;
 		final familyArm: Bool = config.boolOption(ID, 'sameOperatorLeft') == true;
+		final operandArm: Bool = atomArm || familyArm;
 		return {
-			parenKind: parenKind,
+			parenKind: shape.parenKind ?? '',
 			ternaryKind: shape.ternaryKind,
 			ternaryUnwrap: shape.ternaryConditionUnwrapKinds ?? [],
 			allChild: shape.delimitedAllChildKinds ?? [],
@@ -220,18 +236,27 @@ final class RedundantParens implements Check implements ConfigAware {
 			greedy: shape.separatorGreedyExprKinds ?? [],
 			splice: shape.spliceSensitiveExprKinds ?? [],
 			spliceHost: [for (k in [shape.callKind, shape.arrayLiteralKind, shape.newExprKind]) if (k != null) k],
-			atoms: atomArm ? shape.atomExprKinds ?? [] : [],
-			atomChains: atomArm ? shape.atomChainKinds ?? [] : [],
-			families: familyArm ? shape.leftAssociativeBinaryFamilies ?? [] : [],
-			requiredHost: shape.parenRequiredHostKinds ?? [],
-			opaqueSubtree: shape.parenOpaqueSubtreeKinds ?? []
+			atoms: armVocabulary(shape.atomExprKinds, atomArm),
+			atomChains: armVocabulary(shape.atomChainKinds, atomArm),
+			families: armVocabulary(shape.leftAssociativeBinaryFamilies, familyArm),
+			requiredHost: armVocabulary(shape.parenRequiredHostKinds, operandArm),
+			opaqueSubtree: armVocabulary(shape.parenOpaqueSubtreeKinds, operandArm)
 		};
 	}
 
-	/** Whether the character before `from` would merge with the unwrapped content into one token. */
-	private static function weldsWithPreviousToken(source: String, from: Int): Bool {
-		if (from == 0) return false;
-		final c: Int = source.charCodeAt(from - 1) ?? 0;
+	/** A grammar vocabulary an arm reads, or an EMPTY list when the arm is off or the grammar declares none. */
+	private static function armVocabulary<T>(declared: Null<Array<T>>, on: Bool): Array<T> {
+		return on ? declared ?? [] : [];
+	}
+
+	/**
+	 * Whether `source` holds an identifier / number character at `at` — a neighbour the
+	 * unwrapped content could lex into one token with, once the parenthesis between them
+	 * is gone. Out of range answers false: nothing there to weld with.
+	 */
+	private static function isWordCharAt(source: String, at: Int): Bool {
+		if (at < 0 || at >= source.length) return false;
+		final c: Int = source.charCodeAt(at) ?? 0;
 		return c == '_'.code || c >= 'a'.code && c <= 'z'.code || c >= 'A'.code && c <= 'Z'.code || c >= '0'.code && c <= '9'.code;
 	}
 
@@ -363,6 +388,10 @@ final class RedundantParens implements Check implements ConfigAware {
 	private static function slotOf(parent: QueryNode, i: Int, slots: ParenSlots): SlotKind {
 		if (slots.requiredHost.contains(parent.kind)) return SlotKind.Required;
 		if (parent.kind == slots.ternaryKind && i == 0) return SlotKind.TernaryCondition;
+		// `i == 0` is defensive, in the manner of the `children.length == 1` guards
+		// below: the symmetry veto in `sameFamilyLeftOperand` already refuses a
+		// parenthesized child 1, and a child that is not a paren never reaches
+		// `dropsParens`. It pins the slot as the LEFT operand's for a reader.
 		if (i == 0 && sameFamilyLeftOperand(parent, slots)) return SlotKind.SameFamilyLeft;
 		return !childDelimited(parent, i, slots)
 			? SlotKind.Plain
@@ -374,9 +403,16 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * child is a parenthesized member of the SAME family — the shape left-associativity
 	 * already groups, so the pair re-parses away. Only child 0 is asked; the right
 	 * operand of the same operators is a different computation.
+	 *
+	 * A parenthesized RIGHT operand vetoes it. Both pairs together are a SYMMETRY the
+	 * author wrote deliberately (`Math.abs((px - x) + (py - y - h))`), and only the left
+	 * one is ever removable — so firing would leave the expression lopsided, which reads
+	 * worse than either keeping or dropping both. Measured on a 798-file corpus: the
+	 * veto is what separates the clean drops from the disfiguring ones.
 	 */
 	private static function sameFamilyLeftOperand(parent: QueryNode, slots: ParenSlots): Bool {
-		if (parent.children.length == 0 || parent.children[0].kind != slots.parenKind) return false;
+		if (parent.children.length != 2 || parent.children[0].kind != slots.parenKind) return false;
+		if (parent.children[1].kind == slots.parenKind) return false;
 		final bare: String = RefactorSupport.unwrapParens(parent.children[0], slots.parenKind).kind;
 		for (family in slots.families) if (family.contains(parent.kind) && family.contains(bare)) return true;
 		return false;
@@ -424,11 +460,12 @@ final class RedundantParens implements Check implements ConfigAware {
  * `condFirstChild` / `condLastChild` (the bracketed condition of a conditional) — and
  * `greedy`, the interior kinds whose parens stay even in a delimited slot.
  *
- * `atoms` and `families` carry the two OPERAND arms: each holds the grammar's
- * vocabulary when this project opted the arm in and an EMPTY array otherwise, so a
- * default run answers the arm's questions uniformly false with no second flag to read.
- * `requiredHost` / `opaqueSubtree` bound them. Resolved once per file so the walk
- * never re-reads the shape or the config.
+ * `atoms` (self-delimiting kinds), `atomChains` (transparent links, atomic only when
+ * every child is) and `families` carry the two OPERAND arms, with `requiredHost` /
+ * `opaqueSubtree` bounding them. Each holds the grammar's vocabulary when this project
+ * opted the owning arm in and an EMPTY array otherwise, so a default run answers every
+ * operand question uniformly false with no second flag to read. Resolved once per file
+ * so the walk never re-reads the shape or the config.
  */
 private typedef ParenSlots = {
 	var parenKind: String;
