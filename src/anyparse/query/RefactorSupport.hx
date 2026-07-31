@@ -110,6 +110,29 @@ private typedef LexRegion = {
 	final to: Int;
 	final kind: LexRegionKind;
 };
+/**
+ * The declaration side of a null-guarded constructor-default fold: the field name and
+ * its declaration span, the `(default, null)` property head to drop (null for a plain
+ * `var`), the default expression, and the ` = <default>` region the fold deletes.
+ */
+private typedef FoldableDecl = {
+	final name: String;
+	final span: Span;
+	final dropped: Null<Span>;
+	final initSpan: Span;
+	final initDrop: Span;
+};
+/**
+ * The constructor side of a null-guarded constructor-default fold: the whole
+ * `if (p != null) x = p;` statement to replace, the assignment target and the guarded
+ * parameter to rebuild it from, and the bytes the assignment ended with.
+ */
+private typedef GuardedCtorInit = {
+	final stmt: Span;
+	final target: Span;
+	final param: String;
+	final terminator: String;
+};
 @:nullSafety(Strict)
 final class RefactorSupport {
 
@@ -2644,6 +2667,400 @@ final class RefactorSupport {
 	private static function onImportLine(source: String, at: Int): Bool {
 		final head: String = StringTools.ltrim(source.substring(lineStartOf(source, at), at));
 		return StringTools.startsWith(head, 'import ') || StringTools.startsWith(head, 'using ');
+	}
+
+	/**
+	 * The two-edit fold of a NULL-GUARDED constructor default: a field declared WITH a
+	 * default (`var x:T = D;`, plain or `(default, null)`) whose only write beyond that
+	 * initializer is exactly one top-level constructor statement of the shape
+	 * `if (p != null) x = p;` (`this.x = p` alike) becomes `final x:T;` plus
+	 * `x = p ?? D;`. Returns the edits when the fold applies, `null` otherwise — the
+	 * non-null result IS the fix, so a rule's `run` and `fix` can never disagree about a
+	 * candidate, and the two edits are one unit that lands together or not at all.
+	 *
+	 * Fails closed on every doubt. All single-file gates live HERE, never in one
+	 * consumer, so the rules claiming these candidates (`prefer-final-field`,
+	 * `prefer-final-public-field`) and the one ceding them (`prefer-read-only-field`)
+	 * cannot drift apart:
+	 *
+	 *  - the declaration carries an initializer, is not `static`, and its head is either
+	 *    plain or exactly the `(default, null)` accessor pair — `final` reproduces that
+	 *    access exactly (readable anywhere, writable nowhere outside the declaration),
+	 *    while any other pair (`get, set`, `default, never`, …) it does not;
+	 *  - the default expression is MOVE-SAFE (`moveSafeDefault`): a numeric / boolean /
+	 *    non-interpolated string literal, a negated numeric literal, or a dotted access
+	 *    rooted at a capitalised identifier (a type-qualified constant or enum value).
+	 *    An allocation (`new T()`, `[]`), a call, `this`, and a bare identifier — which
+	 *    could be another instance field, not yet initialized at constructor position —
+	 *    are rejected: moving them would change allocation identity or evaluation order;
+	 *  - the enclosing type has exactly one constructor, holding exactly one top-level
+	 *    guarded statement of the shape above, whose parameter is optional, `Null<…>`
+	 *    wrapped, or `= null`-defaulted (a non-nullable parameter cannot be
+	 *    `??`-defaulted);
+	 *  - no other write to the field name appears ANYWHERE in the file — the same
+	 *    conservative raw-text scan `ctorSoleAssignmentFinalizable` uses, which sees
+	 *    `#if` bodies — with the declaration and that one constructor target excluded.
+	 *
+	 * Cross-file soundness (an external, subtype, or unresolved write; an `@:access`
+	 * grantee) stays the CONSUMER's job, exactly as for `ctorSoleAssignmentFinalizable`.
+	 * Residual: a mutable static read by the default and written from ANOTHER file could
+	 * still differ between declaration and constructor position; the in-file leg of that
+	 * check lives in `moveSafeDefault`.
+	 */
+	public static function ctorConditionalDefaultFinalEdits(
+		source: String, declSpan: Span, plugin: GrammarPlugin
+	): Null<Array<{ span: Span, text: String }>> {
+		final shape: RefShape = plugin.refShape();
+		final coalesce: Null<String> = shape.nullCoalesceOperatorText;
+		if (coalesce == null || source.substring(declSpan.from, declSpan.to).indexOf('=') < 0) return null;
+		final spans: Array<Null<Span>> = [declSpan];
+		final edits: Array<{ span: Span, text: String }> = varKeywordToFinalEdits(source, spans);
+		if (edits.length != 1) return null;
+		final tree: Null<QueryNode> = try plugin.parseFile(source) catch (_: Exception) null;
+		if (tree == null) return null;
+		final loc: Null<{ container: QueryNode, field: QueryNode }> = classLikeFieldAt(tree, declSpan.from, shape);
+		if (loc == null) return null;
+		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
+		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
+		if (decl == null || ctor == null) return null;
+		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
+		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
+		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
+		if (
+			MemberWriteScan.writtenInRange(source, decl.name, guarded.target, 0, decl.span.from)
+			|| MemberWriteScan.writtenInRange(source, decl.name, guarded.target, decl.span.to, source.length)
+		)
+			return null;
+		final dropped: Null<Span> = decl.dropped;
+		if (dropped != null) edits.push({ span: dropped, text: '' });
+		edits.push({ span: decl.initDrop, text: '' });
+		final targetText: String = source.substring(guarded.target.from, guarded.target.to);
+		final defaultText: String = source.substring(decl.initSpan.from, decl.initSpan.to);
+		edits.push({ span: guarded.stmt, text: '$targetText = ${guarded.param} $coalesce $defaultText${guarded.terminator}' });
+		return edits;
+	}
+
+	/**
+	 * The declaration head just past the field NAME: `end` is where the type annotation
+	 * (or the `=`) begins, and `dropped` the span of a `(default, null)` property head to
+	 * delete — null for a plain `var`. Returns null when the head cannot be read, or
+	 * carries any OTHER accessor pair, whose access `final` does not reproduce.
+	 */
+	private static function declHeadAfterName(source: String, declSpan: Span): Null<{ dropped: Null<Span>, end: Int }> {
+		final limit: Int = declSpan.to;
+		var i: Int = declSpan.from + 'var'.length;
+		while (i < limit && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		final nameStart: Int = i;
+		while (i < limit && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+		if (i == nameStart) return null;
+		final nameEnd: Int = i;
+		while (i < limit && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		if (i >= limit || StringTools.fastCodeAt(source, i) != '('.code) return { dropped: null, end: nameEnd };
+		final close: Int = source.indexOf(')', i);
+		if (close < 0 || close >= limit) return null;
+		final accessors: Array<String> = [for (a in source.substring(i + 1, close).split(',')) StringTools.trim(a)];
+		return accessors.length != 2 || accessors[0] != 'default' || accessors[1] != 'null' ? null : {
+			dropped: new Span(nameEnd, close + 1),
+			end: close + 1
+		};
+	}
+
+	/**
+	 * The declaration's initializer expression node, or null when the field has none.
+	 * The LAST child is the initializer unless it is a type annotation
+	 * (`typeAnnotationKinds`) — an anonymous structure type projects as a child of the
+	 * declaration too.
+	 */
+	private static function declInitializer(field: QueryNode, shape: RefShape): Null<QueryNode> {
+		final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
+		if (field.children.length == 0) return null;
+		final last: QueryNode = field.children[field.children.length - 1];
+		return typeKinds.contains(last.kind) ? null : last;
+	}
+
+	/**
+	 * The span to delete so the declaration keeps its type but loses ` = <default>`:
+	 * from the whitespace before the `=` through the end of the default expression.
+	 * Null when the bytes between head and default are not exactly whitespace + `=` (a
+	 * comment there would be silently dropped), or when anything but the statement
+	 * terminator follows the default.
+	 */
+	private static function initializerDropSpan(source: String, declSpan: Span, initSpan: Span, headEnd: Int): Null<Span> {
+		final tail: String = StringTools.trim(source.substring(initSpan.to, declSpan.to));
+		if (tail != ';' && tail != '') return null;
+		var i: Int = initSpan.from - 1;
+		while (i >= headEnd && isSpace(StringTools.fastCodeAt(source, i))) i--;
+		if (i < headEnd || StringTools.fastCodeAt(source, i) != '='.code) return null;
+		var start: Int = i - 1;
+		while (start >= headEnd && isSpace(StringTools.fastCodeAt(source, start))) start--;
+		return start < headEnd ? null : new Span(start + 1, initSpan.to);
+	}
+
+	/**
+	 * Whether the declaration default `node` can be MOVED into constructor position
+	 * unchanged. A positive whitelist, not a list of rejected shapes: a numeric or
+	 * boolean literal, a plain string literal, a negated numeric literal, or a dotted
+	 * constant chain (`constantChain`). Everything else — an allocation, a call, a bare
+	 * identifier, `this` — fails by construction. A string qualifies only when it carries
+	 * no interpolation at all: `containsInterpolation` catches the shorthand `$name` form,
+	 * and the childless-fragments test catches the `${expr}` form, whose hole projects as
+	 * a nested expression node rather than an interpolation kind.
+	 */
+	private static function defaultIsMoveSafe(source: String, node: QueryNode, shape: RefShape): Bool {
+		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
+		if (numeric.contains(node.kind)) return true;
+		if (node.kind == shape.boolLitKind) return true;
+		return (shape.stringLiteralKinds ?? []).contains(node.kind)
+			? !containsInterpolation(node, shape) && node.children.foreach(c -> c.children.length == 0)
+			: node.kind == shape.negationKind
+				? node.children.length == 1 && numeric.contains(node.children[0].kind)
+				: node.kind == shape.fieldAccessKind && constantChain(source, node, shape);
+	}
+
+	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
+	private static function containsInterpolation(node: QueryNode, shape: RefShape): Bool {
+		if (node.kind == shape.stringInterpIdentKind || (shape.interpolationKinds ?? []).contains(node.kind)) return true;
+		for (child in node.children) if (containsInterpolation(child, shape)) return true;
+		return false;
+	}
+
+	/**
+	 * Whether `node` is a dotted access rooted at a CAPITALISED identifier — a
+	 * type-qualified constant or enum value (`Defaults.MODE`, `Direction.LEFT`), the one
+	 * non-literal default safe to evaluate later. A lower-case root could be an instance
+	 * field, unset at constructor position. Every segment name must also be unwritten in
+	 * the file, so the value cannot change between the declaration and the constructor.
+	 */
+	private static function constantChain(source: String, node: QueryNode, shape: RefShape): Bool {
+		final segments: Array<String> = [];
+		var current: QueryNode = node;
+		while (current.kind == shape.fieldAccessKind) {
+			final segment: Null<String> = current.name;
+			if (segment == null || current.children.length != 1) return false;
+			segments.push(segment);
+			current = current.children[0];
+		}
+		final root: Null<String> = current.name;
+		if (current.kind != shape.identKind || root == null || root.length == 0 || root == shape.selfReferenceText) return false;
+		final head: String = root.charAt(0);
+		if (head == head.toLowerCase()) return false;
+		segments.push(root);
+		for (segment in segments) if (MemberWriteScan.writtenInRange(source, segment, null, 0, source.length)) return false;
+		return true;
+	}
+
+	/**
+	 * The ONE top-level `if (<param> != null) <field> = <param>;` constructor statement
+	 * writing `field`, or null when the constructor holds none, more than one, or one
+	 * whose shape differs in any way. A statement that writes the field through some
+	 * OTHER shape is not matched here — the caller's whole-file write scan rejects it.
+	 */
+	private static function soleGuardedCtorFieldInit(
+		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
+	): Null<GuardedCtorInit> {
+		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
+		final fieldSpan: Null<Span> = field.span;
+		final fieldName: Null<String> = field.name;
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
+		if (fieldSpan == null || fieldName == null || body == null) return null;
+		var match: Null<GuardedCtorInit> = null;
+		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
+			final found: Null<GuardedCtorInit> = guardedFieldAssign(source, stmt, fieldSpan.from, fieldName, container, shape);
+			if (found == null) continue;
+			if (match != null) return null;
+			match = found;
+		}
+		return match;
+	}
+
+	/**
+	 * `stmt` read as `if (<param> != null) <field> = <param>;` — the guard must be a bare
+	 * `!= null` test of the very identifier assigned, the branch a single assignment
+	 * statement (braced or not), and there must be no `else`. `terminator` carries the
+	 * bytes the assignment ends with, so the rewritten statement keeps them verbatim.
+	 */
+	private static function guardedFieldAssign(
+		source: String, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
+	): Null<GuardedCtorInit> {
+		final stmtSpan: Null<Span> = stmt.span;
+		final param: Null<String> = nullGuardParamName(stmt, shape);
+		final branch: Null<QueryNode> = guardedSoleStatement(stmt, shape);
+		if (stmtSpan == null || param == null || branch == null) return null;
+		final branchSpan: Null<Span> = branch.span;
+		if (branch.kind != shape.exprStatementKind || branch.children.length != 1 || branchSpan == null) return null;
+		final assign: QueryNode = branch.children[0];
+		final assignSpan: Null<Span> = assign.span;
+		if (assign.kind != shape.assignKind || assign.children.length != 2 || assignSpan == null) return null;
+		final target: QueryNode = assign.children[0];
+		final targetSpan: Null<Span> = target.span;
+		final value: QueryNode = assign.children[1];
+		if (targetSpan == null || value.kind != shape.identKind || value.name != param) return null;
+		if (!statementCommentFree(source, stmtSpan, targetSpan)) return null;
+		if (!ctorTargetIsField(target, fieldFrom, fieldName, container, shape)) return null;
+		return {
+			stmt: stmtSpan,
+			target: targetSpan,
+			param: param,
+			terminator: source.substring(assignSpan.to, branchSpan.to)
+		};
+	}
+
+	/**
+	 * Whether the constructor parameter `paramName` is nullable — declared optional
+	 * (`?p:T`), wrapped in a nullable type (`Null<T>`), or defaulted to `null`. A
+	 * non-nullable parameter's `!= null` guard is vestigial and `p ?? d` would not fold
+	 * the same way, so the rewrite refuses it.
+	 */
+	private static function ctorParamIsNullable(source: String, ctor: QueryNode, paramName: String, shape: RefShape): Bool {
+		final paramKinds: Array<String> = shape.paramKinds ?? [];
+		final wrappers: Array<String> = shape.nullableWrapperTypeNames ?? [];
+		for (child in ctor.children) if (paramKinds.contains(child.kind) && child.name == paramName) {
+			if (child.kind == shape.optionalParamKind) return true;
+			if (child.children.exists(c -> c.kind == shape.nullLiteralKind)) return true;
+			final span: Null<Span> = child.span;
+			if (span == null) return false;
+			final text: String = source.substring(span.from, span.to);
+			final colon: Int = text.indexOf(':');
+			if (colon < 0) return false;
+			final declared: String = StringTools.trim(text.substring(colon + 1));
+			for (wrapper in wrappers) if (declared == wrapper || StringTools.startsWith(declared, '$wrapper<')) return true;
+			return false;
+		}
+		return false;
+	}
+
+	/**
+	 * The edits finalizing a set of flagged field declarations: the two-edit
+	 * conditional-default fold (`ctorConditionalDefaultFinalEdits`) where it applies, a
+	 * bare `var` -> `final` keyword swap everywhere else. The shared back end of
+	 * `prefer-final-field` / `prefer-final-public-field`'s `fix`, so both rules emit the
+	 * same shape for the same candidate, and each fold's edits travel as one unit through
+	 * the caller's single per-file canonicalize (all of them apply, or the file reverts).
+	 */
+	public static function finalizeFieldEdits(
+		source: String, spans: Array<Null<Span>>, plugin: GrammarPlugin
+	): Array<{ span: Span, text: String }> {
+		final edits: Array<{ span: Span, text: String }> = [];
+		final plain: Array<Null<Span>> = [];
+		for (span in spans) if (span != null) {
+			final fold: Null<Array<{ span: Span, text: String }>> = ctorConditionalDefaultFinalEdits(source, span, plugin);
+			if (fold == null)
+				plain.push(span);
+			else
+				for (edit in fold) edits.push(edit);
+		}
+		for (edit in varKeywordToFinalEdits(source, plain)) edits.push(edit);
+		return edits;
+	}
+
+	/**
+	 * The declaration geometry `ctorConditionalDefaultFinalEdits` needs, or null when the
+	 * declaration cannot host the fold: it must be a NON-STATIC field whose head is plain
+	 * or exactly `(default, null)`, carrying a MOVE-SAFE initializer reachable by a bare
+	 * ` = ` (a comment between head and default, or anything but a terminator after it,
+	 * bails). `dropped` is the property head to delete, `initDrop` the ` = <default>`
+	 * region, `initSpan` the default expression the constructor assignment inherits.
+	 */
+	private static function foldableDeclaration(
+		source: String, loc: { container: QueryNode, field: QueryNode }, declSpan: Span, shape: RefShape
+	): Null<FoldableDecl> {
+		final field: QueryNode = loc.field;
+		final name: Null<String> = field.name;
+		final fieldSpan: Null<Span> = field.span;
+		if (name == null || fieldSpan == null) return null;
+		if (fieldSpan.from != declSpan.from) return null;
+		if (staticMemberFroms(loc.container, shape).contains(fieldSpan.from)) return null;
+		final head: Null<{ dropped: Null<Span>, end: Int }> = declHeadAfterName(source, fieldSpan);
+		final init: Null<QueryNode> = declInitializer(field, shape);
+		final initSpan: Null<Span> = init == null ? null : init.span;
+		if (head == null || init == null || initSpan == null) return null;
+		if (initSpan.from < head.end || !defaultIsMoveSafe(source, init, shape)) return null;
+		final initDrop: Null<Span> = initializerDropSpan(source, fieldSpan, initSpan, head.end);
+		return initDrop == null ? null : {
+			name: name,
+			span: fieldSpan,
+			dropped: head.dropped,
+			initSpan: initSpan,
+			initDrop: initDrop
+		};
+	}
+
+	/**
+	 * Whether the constructor reaches the guarded statement with the field still in the
+	 * state the declaration default put it in. A declaration initializer runs at
+	 * constructor ENTRY on EVERY path, so moving it down to the guard's position is
+	 * behaviour-preserving only when nothing before the guard can leave the constructor
+	 * (the field would then never be assigned at all — Haxe's definite-assignment check
+	 * for a `final` field is not flow-sensitive, so that compiles) and nothing before the
+	 * guard mentions the field (a read there sees the default today and an unset field
+	 * after the fold). Both scans are deliberately coarse: a `return` inside a lambda, or
+	 * the field name in a comment or an unrelated local, refuses the candidate.
+	 *
+	 * Residual: a read reached through a helper CALLED from the constructor before the
+	 * guard is invisible here, the same blind spot `field-init-at-declaration` carries for
+	 * the inverse move.
+	 */
+	private static function guardReachedIntact(source: String, ctor: QueryNode, name: String, guardFrom: Int, shape: RefShape): Bool {
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
+		final bodySpan: Null<Span> = body == null ? null : body.span;
+		final exitKinds: Array<String> = shape.controlExitKinds ?? [];
+		// An unset exit-kind set would turn the scan below into a no-op and silently accept
+		// every early return, so its completeness is load-bearing here — refuse without it.
+		if (body == null || bodySpan == null || exitKinds.length == 0) return false;
+		return !referencedInRange(source, name, bodySpan.from, guardFrom, []) && !kindStartsBefore(body, exitKinds, guardFrom);
+	}
+
+	/** Whether `node`'s subtree holds a node of one of `kinds` that STARTS before `boundary`. */
+	private static function kindStartsBefore(node: QueryNode, kinds: Array<String>, boundary: Int): Bool {
+		final span: Null<Span> = node.span;
+		// Spans are monotone, so a subtree starting past the boundary holds no match.
+		if (span != null && span.from >= boundary) return false;
+		if (span != null && kinds.contains(node.kind)) return true;
+		for (child in node.children) if (kindStartsBefore(child, kinds, boundary)) return true;
+		return false;
+	}
+
+	/**
+	 * Whether the guarded statement carries no comment the rewrite would drop. Only the
+	 * assignment TARGET is copied verbatim; every other byte of the statement — the guard,
+	 * the braces, the operator, the assigned value — is regenerated, so a comment outside
+	 * the target's span disappears silently. Checking around the target rather than around
+	 * the whole assignment is what makes this the same fail-closed rule the declaration
+	 * side applies in `initializerDropSpan`. No false positive is possible: by the time
+	 * this runs the condition is proven to be exactly `<ident> != null` and the tail is the
+	 * statement terminator, so no string literal can occupy either region.
+	 */
+	private static function statementCommentFree(source: String, stmt: Span, target: Span): Bool {
+		return !commentInRange(source, stmt.from, target.from) && !commentInRange(source, target.to, stmt.to);
+	}
+
+	/** Whether `[from, to)` of `source` opens a comment. */
+	private static inline function commentInRange(source: String, from: Int, to: Int): Bool {
+		final text: String = source.substring(from, to);
+		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+	}
+
+	/**
+	 * The parameter name of a bare `<name> != null` guard on `stmt`, or null when the
+	 * condition has any other shape or an `else` branch follows (a second assignment path
+	 * the `??` rewrite cannot express).
+	 */
+	private static function nullGuardParamName(stmt: QueryNode, shape: RefShape): Null<String> {
+		if (stmt.children.length != 2) return null;
+		final cond: QueryNode = stmt.children[0];
+		if (cond.kind != shape.notEqKind || cond.children.length != 2 || cond.children[1].kind != shape.nullLiteralKind) return null;
+		final guard: QueryNode = cond.children[0];
+		return guard.kind == shape.identKind ? guard.name : null;
+	}
+
+	/**
+	 * `stmt`'s then-branch reduced to its SOLE statement, unwrapping one brace level, or
+	 * null when the branch holds anything but exactly one statement.
+	 */
+	private static function guardedSoleStatement(stmt: QueryNode, shape: RefShape): Null<QueryNode> {
+		if (stmt.children.length != 2) return null;
+		final branch: QueryNode = stmt.children[1];
+		return branch.kind != shape.blockStmtKind ? branch : branch.children.length == 1 ? branch.children[0] : null;
 	}
 
 }

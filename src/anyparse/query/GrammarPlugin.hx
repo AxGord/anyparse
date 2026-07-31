@@ -627,9 +627,7 @@ typedef RefShape = {
 	/**
 	 * Deliberate control-exit node kinds (Haxe `ThrowStmt` / `ThrowExpr` /
 	 * `ReturnStmt` / `VoidReturnStmt`) — the `swallowed-exception` check treats a
-	 * catch body containing one as deliberate escalation / recovery (a rethrow or a
-	 * fallback return), not a silent swallow, and skips it. Optional; unset disables
-	 * the exemption.
+	 * catch body containing one as deliberate escalation / recovery (a rethrow or a fallback return), not a silent swallow, and skips it. A SECOND consumer, `RefactorSupport.guardReachedIntact`, asks whether a constructor can exit before a statement it is about to move code past, so completeness of this set is load-bearing for a soundness gate, not only for an exemption: that consumer refuses outright when the set is unset, since an empty set would silently accept every early return. Optional; unset disables the swallowed-exception exemption.
 	 */
 	@:optional var controlExitKinds: Array<String>;
 
@@ -1007,6 +1005,17 @@ typedef RefShape = {
 	 * Optional; unset makes the check a no-op.
 	 */
 	@:optional var nullCoalesceKind: String;
+
+	/**
+	 * The null-coalescing operator TEXT (`??`) — the emitter counterpart of
+	 * `nullCoalesceKind`, used by `RefactorSupport.ctorConditionalDefaultFinalEdits`
+	 * to build the `<param> ?? <default>` assignment that folds a null-guarded
+	 * constructor default into a `final` field. Optional; unset makes that fold a
+	 * no-op (and with it the `prefer-final-field` / `prefer-final-public-field`
+	 * conditional-default arm), so a grammar without a coalescing operator is
+	 * byte-inert.
+	 */
+	@:optional var nullCoalesceOperatorText: String;
 
 	/**
 	 * The `is` type-check expression kind (`x is T`) — the `redundant-is-check`

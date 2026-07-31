@@ -223,6 +223,18 @@ class PreferReadOnlyFieldCheckTest extends Test {
 		Assert.equals(1, violations('class C { public var v:Int = 0; var next:C; function s():Void { next.next.v = 3; } }').length);
 	}
 
+	/**
+	 * Conditional-default twin of `testCtorArmDisjointFromFinalPublic`: the fold candidate
+	 * goes to `prefer-final-public-field` and this rule cedes it, so exactly one fires.
+	 */
+	public function testConditionalDefaultArmDisjointFromFinalPublic(): Void {
+		final src: String = 'class C { public var mode:Int = 7; public function new(?other:Int) { if (other != null) mode = other; } }';
+		final files: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: src }];
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		Assert.equals(1, new PreferFinalPublicField().run(files, plugin).length);
+		Assert.equals(0, new PreferReadOnlyField().run(files, plugin).length);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferReadOnlyField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

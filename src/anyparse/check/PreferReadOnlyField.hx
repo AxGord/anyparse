@@ -49,8 +49,12 @@ import anyparse.runtime.Span;
  * top-level constructor statement is ALSO that check's territory (its constructor
  * arm makes it `final` outright), so it is ceded through the same shared
  * `RefactorSupport.ctorSoleAssignmentFinalizable` predicate — both checks must agree
- * on it, or such a field would get two conflicting fixes (or none). The two checks
- * therefore never emit conflicting fixes for the same field. NOTE: the cession is
+ * on it, or such a field would get two conflicting fixes (or none). An INITIALIZED
+ * field whose only other write is one `if (p != null) x = p;` constructor statement
+ * is that check's as well — its conditional-default arm folds the default into the
+ * constructor — and is ceded through `RefactorSupport.ctorConditionalDefaultFinalEdits`
+ * for the same reason. The two checks therefore never emit conflicting fixes for the
+ * same field. NOTE: the cession is
  * unconditional — it does not check whether `prefer-final-public-field` is enabled,
  * so a config that disables that rule silently drops these findings instead of
  * reporting `(default, null)` for them.
@@ -132,6 +136,11 @@ final class PreferReadOnlyField implements Check {
 		// statement is `final`-izable — `prefer-final-public-field`'s constructor arm
 		// claims it (same shared predicate), so it is ceded to keep the fixes disjoint.
 		if (RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		// Same cession for the conditional-default fold: an initialized field whose only
+		// other write is one `if (p != null) x = p;` constructor statement becomes `final`
+		// there, so claiming it here would produce two conflicting fixes. The gate chain
+		// above stays a SUPERSET of that check's, so a ceded candidate is always claimed.
+		if (RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null) return;
 		out.push({
 			file: file,
 			span: span,
