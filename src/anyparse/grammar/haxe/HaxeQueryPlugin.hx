@@ -1,5 +1,7 @@
 package anyparse.grammar.haxe;
 
+import anyparse.format.comment.CommentInventory;
+import anyparse.format.comment.CommentLossException;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.Pattern;
 import anyparse.query.Pattern.KindEquivalence;
@@ -260,13 +262,47 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * to the defaults, so an empty config is a true no-op. Used by `apq ast
 	 * --writer-output` for writer-bug probes without going through the full
 	 * test runner.
+	 *
+	 * FAIL-CLOSED on comment loss: the Trivia parser only captures a
+	 * comment where a capture slot exists, so an inline comment in a
+	 * slot-less seam (`if (/* c *\/ x)`, `return /* r *\/ x;`, a type
+	 * annotation, a class header) never reaches the AST and the writer
+	 * re-emits the construct without it. Rather than hand back output
+	 * that silently deletes an author's bytes, such a round trip throws
+	 * `CommentLossException`: `fmt` names the file and leaves it byte-
+	 * identical, and the ops' `RefactorSupport.canonicalize` refuses the
+	 * edit instead of writing an unformatted splice. Every whole-file
+	 * consumer inherits the guard from this one seat.
+	 * `APQ_ALLOW_COMMENT_LOSS` (any value but empty / `0`) declines it, so
+	 * writer development can still see the raw emission.
 	 */
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
 		final tree: Dynamic = HaxeModuleTriviaParser.parse(source);
 		final opts: HxModuleWriteOptions = optsJson == null
 			? HaxeFormat.instance.defaultWriteOptions
 			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
-		return HaxeModuleTriviaWriter.write(tree, opts);
+		final written: Null<String> = HaxeModuleTriviaWriter.write(tree, opts);
+		if (written == null || written == source || commentGuardDeclined()) return written;
+		final lost: Null<String> = CommentInventory.firstMissing(source, written);
+		if (lost != null) throw new CommentLossException(lost);
+		return written;
+	}
+
+	/**
+	 * Whether `APQ_ALLOW_COMMENT_LOSS` declines the comment guard: set to
+	 * anything other than the empty string or `0`. Writer-development
+	 * escape hatch — with the guard on, a probe of a lossy construct
+	 * shows the input back instead of the emission being debugged.
+	 */
+	private static function commentGuardDeclined(): Bool {
+		#if (sys || nodejs)
+		final raw: Null<String> = Sys.getEnv('APQ_ALLOW_COMMENT_LOSS');
+		if (raw == null) return false;
+		final trimmed: String = StringTools.trim(raw);
+		return trimmed != '' && trimmed != '0';
+		#else
+		return false;
+		#end
 	}
 
 	/**

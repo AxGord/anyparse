@@ -381,6 +381,8 @@ import unit.HxInfixCommentWriteTest;
 import unit.HxCaseCommentWriteTest;
 import unit.HxHeadCommentSeamWriteTest;
 import unit.HxRhsCommentWriteTest;
+import unit.HxInlineBlockCommentWriteTest;
+import unit.HxInlineBlockCommentGapTest;
 import unit.HxCondCommentWriteTest;
 import unit.HxCondCommentDirectiveSeamTest;
 import unit.HxSourceBlankPreserveSliceTest;
@@ -793,6 +795,8 @@ class RunTests {
 		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
+		addCase(new HxInlineBlockCommentWriteTest());
+		addCase(new HxInlineBlockCommentGapTest());
 		addCase(new HxCondCommentWriteTest());
 		addCase(new HxCondCommentDirectiveSeamTest());
 		addCase(new HxCondElseifChainBlankTest());

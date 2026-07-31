@@ -6327,7 +6327,9 @@ final class Cli {
 	 * formatted source goes to stdout; on multiple files / a directory `--list`
 	 * mode is implied (gofmt `-l`: print the paths whose output differs). A
 	 * file that fails to parse is reported and skipped; the exit code is
-	 * non-zero if any file failed.
+	 * non-zero if any file failed. A file whose re-emission would drop a
+	 * comment is reported the same way and left byte-identical — see the
+	 * fail-closed guard on `HaxeQueryPlugin.writeRoundTrip`.
 	 */
 	private static function runFmt(args: Array<String>): Int {
 		final o: FmtOpts = parseFmtArgs(args);
@@ -6380,6 +6382,10 @@ final class Cli {
 		sysPrint('no flags on a single file the formatted source goes to stdout; on multiple\n');
 		sysPrint('files or a directory, --list mode is implied. A file that fails to parse is\n');
 		sysPrint('reported and skipped; the exit code is non-zero if any file failed.\n');
+		sysPrint('\n');
+		sysPrint('A file whose re-emission would DROP a comment (an inline comment in a seam\n');
+		sysPrint('the parser has no capture slot for, e.g. `if (/* c */ x)`) is reported with\n');
+		sysPrint('the comment and left byte-identical rather than rewritten without it.\n');
 	}
 
 	/**

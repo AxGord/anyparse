@@ -230,6 +230,16 @@ guarantees: it parses or is rejected, comes out byte-canonical, and is written a
 Because raw text editing has no such guarantee, `new` is the way to create a file and
 `fmt` the way to bring one back to canonical form.
 
+The round trip is fail-closed on COMMENT LOSS. The Trivia parser captures a comment only
+where a capture slot exists, so an inline comment in a slot-less seam — `if (/* c */ x)`,
+`return /* r */ x;`, a type annotation, a class header — never reaches the AST and would
+be deleted by the re-emission. Rather than hand back those bytes, `writeRoundTrip` refuses:
+`fmt` names the file and the comment and leaves the file byte-identical (counted under
+`N failed`), and every op that canonicalises through `RefactorSupport` — including
+`lint --fix` — refuses its edit instead of writing a file with the comment gone. Freezing a
+file's formatting is recoverable; deleting an author's comment is not. Set
+`APQ_ALLOW_COMMENT_LOSS=1` to decline the guard while developing the writer itself.
+
 ### Analysis (lint)
 
 `lint <scope> [--rule <id>] [--fix]` runs grammar-agnostic checks and reports violations

@@ -1,0 +1,69 @@
+package unit;
+
+import utest.Assert;
+import utest.Test;
+import anyparse.format.comment.CommentLossException;
+import anyparse.grammar.haxe.HaxeQueryPlugin;
+
+/**
+ * `writeRoundTrip` must never hand back source whose comments it dropped.
+ *
+ * The Trivia parser captures a comment only where a capture slot exists
+ * (statement / member / call-argument boundaries, the Pratt operand stash,
+ * the per-construct sidecar slots). An inline block comment in a slot-less
+ * expression seam — `if (/* c *\/ x)`, `return /* r *\/ x;`, a type
+ * annotation, a class header — is consumed as whitespace and never reaches
+ * the AST, so the writer re-emits the construct without it.
+ *
+ * Each seam below is one such site. The contract is the same for all of
+ * them: the round trip REFUSES (`CommentLossException`) rather than
+ * returning bytes that delete the comment, so the file `apq fmt` and every
+ * canonicalising op leave behind still holds it. `HxInlineBlockCommentGapTest`
+ * pins which seams the writer itself preserves and which fall to this guard.
+ */
+class HxInlineBlockCommentWriteTest extends Test {
+
+	public function testIfConditionLeadingBlockComment(): Void {
+		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\tif (/* c */ x) {\n\t\t\trun();\n\t\t}\n\t}\n}\n');
+	}
+
+	public function testReturnLeadingBlockComment(): Void {
+		assertRefusesLoss('class Foo {\n\tfunction bar() {\n\t\treturn /* r */ x;\n\t}\n}\n');
+	}
+
+	public function testAssignmentTrailingBlockComment(): Void {
+		// The one named seam the writer itself keeps: the trailing slot of an
+		// expression statement. It moves the comment onto its own line, but no
+		// byte is lost, so the guard stays out of the way.
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tx = 2 /* t */;\n\t}\n}\n';
+		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tx = 2;\n\t\t/* t */\n\t}\n}\n', roundTrip(source));
+	}
+
+	public function testGuardLeavesCapturedCommentsAlone(): Void {
+		// A comment in a slot the parser DOES capture must still round-trip —
+		// the guard must not freeze every file that holds a block comment.
+		final source: String = 'class Foo {\n\n\t/* head */\n\tfunction bar() {\n\t\tf(x /* a */);\n\t}\n\n}\n';
+		Assert.equals('class Foo {\n\n\t/* head */\n\tfunction bar() {\n\t\tf(x /* a */);\n\t}\n\n}\n', roundTrip(source));
+	}
+
+	public function testGuardDoesNotFireOnCommentFreeSource(): Void {
+		final source: String = 'class Foo {\n\n\tfunction bar() {\n\t\trun();\n\t}\n\n}\n';
+		Assert.equals(source, roundTrip(source));
+	}
+
+	/**
+	 * The round trip refuses `source` with a `CommentLossException` naming the
+	 * comment it would have dropped.
+	 */
+	private function assertRefusesLoss(source: String): Void {
+		try {
+			final written: Null<String> = roundTrip(source);
+			Assert.fail('expected a comment-loss refusal, got: $written');
+		} catch (exception: CommentLossException) {
+			Assert.stringContains('/*', exception.comment);
+		}
+	}
+
+	private function roundTrip(source: String): Null<String> return new HaxeQueryPlugin().writeRoundTrip(source);
+
+}
