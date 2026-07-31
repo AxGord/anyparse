@@ -147,6 +147,9 @@ final class RefactorSupport {
 	 * the inner `HxFinalModifierMember.fn`, so it is a member like
 	 * `FnMember` for `this.<name>` purposes.
 	 */
+	/** The doc-comment opener — what distinguishes documentation from a plain `/* … *\/` banner. */
+	private static final DOC_OPEN: String = '/**';
+
 	/** The grammar kind a `typedef` projects as — the only member host whose members sit under an `Anon`. */
 	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
 
@@ -1120,6 +1123,41 @@ final class RefactorSupport {
 			case StringLit | RegexLit:
 		}
 		return out;
+	}
+
+	/**
+	 * Whether `tok` is a DOC block — opened with the doc marker and carrying a
+	 * non-blank body. A line comment, a plain `/* … *\/` banner (a license header, a
+	 * section label) and the empty `/**` `*\/` form are all NOT docs, which is the
+	 * discrimination `docExtendedSpan` makes and every doc-aware check needs.
+	 */
+	public static function isDocBlock(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+		return !tok.isLine && source.substring(tok.from, tok.from + DOC_OPEN.length) == DOC_OPEN && !blockCommentIsBlank(source, tok);
+	}
+
+	/**
+	 * Whether a CLOSED block comment's interior holds no content — only whitespace and the
+	 * `*` gutter characters a doc lays its lines out with, so `/**` `*\/`, `/***\/` and a
+	 * marker-only multi-line block all qualify. An unclosed block is never blank: its
+	 * interior is whatever runs to end of file.
+	 */
+	public static function blockCommentIsBlank(source: String, tok: { from: Int, to: Int, isLine: Bool }): Bool {
+		if (tok.isLine) return false;
+		final closed: Bool = tok.from + 2 <= tok.to - 2 && StringTools.fastCodeAt(source, tok.to - 2) == '*'.code // noqa: magic-number
+			&& StringTools.fastCodeAt(source, tok.to - 1) == '/'.code;
+		if (!closed) return false;
+		for (i in tok.from + 2...tok.to - 2) { // noqa: magic-number
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (!isSpace(c) && c != '*'.code) return false;
+		}
+		return true;
+	}
+
+	/** The offset of the start of the line `at` sits on. */
+	public static function startOfLine(source: String, at: Int): Int {
+		var from: Int = at;
+		while (from > 0 && StringTools.fastCodeAt(source, from - 1) != '\n'.code) from--;
+		return from;
 	}
 
 	/**

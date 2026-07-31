@@ -30,6 +30,13 @@ final class Linter {
 	 */
 	public static function builtins(): Array<Check> {
 		return [
+			// Ahead of the import rules by convention — this check lifts a stranded doc off the
+			// header region they own, so it reads (and runs) first: `Cli.computeFileLintEdits`
+			// walks this list in order and defers a later check whose edits overlap an accepted
+			// one. Not load-bearing today — `ImportBlockOrder`'s movable import chunk stops at a
+			// block comment, so its reorder never covers this check's edits — but the order keeps
+			// that true if either side's chunking widens.
+			new MisplacedTypeDoc(),
 			new UnusedImport(),
 			new UnusedLocal(),
 			new DuplicateImport(),
