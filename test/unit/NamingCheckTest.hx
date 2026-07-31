@@ -520,30 +520,30 @@ class NamingCheckTest extends Test {
 		// De-prefixing `_adjust` to `adjust` collides with a sibling local `adjust` - skip.
 		final src: String =
 			'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar adjust = 2;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixSkipsLocalCollidingWithParam(): Void {
 		// De-prefixing `_adjust` to `adjust` collides with a parameter `adjust` - skip.
 		final src: String =
 			'package pkg;\nclass C {\n\tpublic function f(adjust:Int) {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust + adjust);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixSkipsLocalCollidingWithOwnMember(): Void {
 		// De-prefixing `_adjust` to `adjust` collides with an own field `adjust` - skip.
 		final src: String =
 			'package pkg;\nclass C {\n\tpublic var adjust:Int = 0;\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\ttrace(_adjust);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 
 	public function testFixSkipsLocalDeprefixingToKeyword(): Void {
 		// De-prefixing `_new` to `new` yields a Haxe keyword - not a usable identifier - skip.
 		final src: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _new = 1;\n\t\ttrace(_new);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 		final superSrc: String = 'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _super = 1;\n\t\ttrace(_super);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: superSrc }], 'pkg/C.hx', superSrc);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: superSrc }], 'pkg/C.hx', superSrc);
 	}
 
 	public function testFixSkipsLocalReferencedBehindConditional(): Void {
@@ -552,7 +552,7 @@ class NamingCheckTest extends Test {
 		// completeness guard bails - skip.
 		final src: String =
 			'package pkg;\nclass C {\n\tpublic function f() {\n\t\tvar _adjust = 1;\n\t\tvar x = _adjust #if cpp + _adjust #end;\n\t\ttrace(x);\n\t}\n}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	private function violations(src: String, ?policy: NamingPolicy): Array<Violation> {
@@ -597,7 +597,8 @@ class NamingCheckTest extends Test {
 		assertCanonicalized(src, check.fix(src, vs, new HaxeQueryPlugin(), index), present, absent);
 	}
 
-	private function assertLocalSkipped(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
+	/** Assert the naming autofix emits NO edit for `targetFile`, which must still carry at least one finding. */
+	private function assertFixSkipped(files: Array<{ file: String, source: String }>, targetFile: String, targetSrc: String): Void {
 		final index: SymbolIndex = SymbolIndex.build(files, new HaxeQueryPlugin());
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin()).filter(v -> v.file == targetFile);
@@ -1030,7 +1031,7 @@ class NamingCheckTest extends Test {
 		// (scope-awareness exempts only UNRELATED functions, never the binding's own scope chain).
 		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function f() {\n' + '\t\tvar adjust = 1;\n'
 			+ '\t\tif (adjust > 0) {\n' + '\t\t\tvar _adjust = 2;\n' + '\t\t\ttrace(_adjust + adjust);\n' + '\t\t}\n' + '\t}\n' + '}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixBlocksFieldWithUnresolvableOccurrence(): Void {
@@ -1039,7 +1040,7 @@ class NamingCheckTest extends Test {
 		// occurrence still fails the completeness gate closed, so the field rename is skipped.
 		final src: String = 'package pkg;\n' + 'class C {\n' + '\tprivate var __id:Int = 0;\n' + '\tpublic function f():Int {\n'
 			+ '\t\treturn __id #if cpp + __id #end;\n' + '\t}\n' + '}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 
@@ -1051,7 +1052,7 @@ class NamingCheckTest extends Test {
 		final src: String = 'package pkg;\n' + 'class C {\n' + '\tpublic function f(__items:Array<Int>):Void {\n'
 			+ '\t\tfunction finish():Void {\n' + '\t\t\tfinal items:Int = 1;\n' + '\t\t\t__items.push(items);\n' + '\t\t}\n'
 			+ '\t\tfinish();\n' + '\t}\n' + '}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixRenamesParamDespiteSameNameLocalInUnrelatedFunction(): Void {
@@ -1075,7 +1076,7 @@ class NamingCheckTest extends Test {
 			+ '\t\t\tcase 0:\n' + '\t\t\t\tfinal logo:Sprite = new Sprite();\n' + '\t\t\t\tlogo;\n' + '\t\t\tcase _:\n'
 			+ '\t\t\t\tfinal logo:Sprite = new Sprite();\n' + '\t\t\t\tlogo;\n' + '\t\t};\n' + '\t\taddChild(logo);\n' + '\t}\n'
 			+ '\tfunction removeChild(o:Sprite):Void {}\n' + '\tfunction addChild(o:Sprite):Void {}\n' + '}';
-		assertLocalSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 	public function testFixRenamesFieldWithSameNamedParamInAnotherMethod(): Void {
@@ -1389,6 +1390,109 @@ class NamingCheckTest extends Test {
 		final check: Naming = new Naming();
 		final vs: Array<Violation> = check.run(files, new HaxeQueryPlugin());
 		Assert.equals(0, check.crossFileFix(files, vs, new HaxeQueryPlugin(), index).length);
+	}
+
+
+	/**
+	 * A private METHOD confined to its file de-prefixes like a private field: the resolver
+	 * binds its declaration and every in-file call, so `__startCycle` -> `startCycle` is a
+	 * complete rename. The autofix used to refuse the whole Method category, leaving the
+	 * `__`-prefix findings report-only forever.
+	 */
+	public function testFixRenamesConfinedPrivateMethod(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function new() { __startCycle(); }\n'
+			+ '\tprivate function __startCycle():Void { trace(1); }\n}';
+		assertFixCanonicalWithIndex(src, 'startCycle', '__startCycle');
+	}
+
+
+	/**
+	 * The callback-value shape: the method is never CALLED, only passed by name to a
+	 * subscribe / unsubscribe pair. Both value reads resolve to the declaration, so the
+	 * completeness gate is satisfied and all three occurrences rename together.
+	 */
+	public function testFixRenamesPrivateMethodUsedAsCallbackValue(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function new() { add(__onHover); }\n'
+			+ '\tpublic function dispose():Void { remove(__onHover); }\n' + '\tprivate function __onHover(e:Int):Void { trace(e); }\n'
+			+ '\tprivate function add(f:Int -> Void):Void {}\n' + '\tprivate function remove(f:Int -> Void):Void {}\n}';
+		assertFixCanonicalWithIndex(src, 'add(onHover)', '__onHover');
+	}
+
+
+	/**
+	 * An `override` binds the name to the SUPERTYPE's declaration - renaming the override
+	 * alone orphans it ("Field ... is declared 'override' but ... does not override"). The
+	 * member is still confined and its target name still free, so only the override gate
+	 * can refuse it.
+	 */
+	public function testFixSkipsOverridePrivateMethod(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function __render():Void {}\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\toverride private function __render():Void { trace(1); }\n}';
+		assertFixSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
+	}
+
+
+	/**
+	 * A subclass can call the inherited private method, so the member is NOT confined and a
+	 * single-file rename would leave the subclass calling a name that no longer exists. The
+	 * cross-file rename path stays field/constant-only, so this is report-only.
+	 */
+	public function testFixSkipsPrivateMethodWithSubclass(): Void {
+		final cSrc: String = 'package pkg;\nclass C {\n\tprivate function __tick():Void {}\n\tpublic function f() { __tick(); }\n}';
+		final dSrc: String = 'package pkg;\nclass D extends C {\n\tpublic function g() { __tick(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: cSrc }, { file: 'pkg/D.hx', source: dSrc }], 'pkg/C.hx', cSrc);
+	}
+
+
+	/**
+	 * Renaming `__tick` -> `tick` where a supertype already declares `tick` is a Haxe compile
+	 * error ("Field tick should be declared with 'override' since it is inherited from
+	 * superclass"). The inherited-member gate - previously field-only - must cover a method too.
+	 */
+	public function testFixSkipsMethodRedefiningInheritedName(): Void {
+		final baseSrc: String = 'package pkg;\nclass Base {\n\tprivate function tick():Void {}\n}';
+		final cSrc: String = 'package pkg;\nclass C extends Base {\n\tprivate function __tick():Void { trace(1); }\n'
+			+ '\tpublic function f() { __tick(); }\n}';
+		assertFixSkipped([{ file: 'pkg/Base.hx', source: baseSrc }, { file: 'pkg/C.hx', source: cSrc }], 'pkg/C.hx', cSrc);
+	}
+
+
+	/** A PUBLIC method is reachable from anywhere - outside the single-file rename's proof - so it stays report-only. */
+	public function testFixSkipsPublicMethod(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tpublic function __run():Void {}\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+
+	/**
+	 * An annotated method is `implicitlyReachable`: a macro / `@:keep` / framework can reach it
+	 * by NAME through a channel no identifier-level completeness proof sees. Report-only.
+	 */
+	public function testFixSkipsAnnotatedPrivateMethod(): Void {
+		final src: String = 'package pkg;\nclass C {\n\t@:keep private function __boot():Void {}\n\tpublic function f() { __boot(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+
+	/**
+	 * `_new` de-prefixes to `new` - the CONSTRUCTOR name, not a usable method identifier. The
+	 * de-prefix normalizer must refuse a keyword result, as the local / param one already does.
+	 */
+	public function testFixSkipsMethodDeprefixingToKeyword(): Void {
+		final src: String = 'package pkg;\nclass C {\n\tprivate function _new():Void {}\n\tpublic function f() { _new(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+
+	/**
+	 * A method of a `@:rtti` class is reflected on by NAME - report-only. Held by TWO independent
+	 * gates (verified: ablating either alone leaves this green, ablating both flips it) - the
+	 * projection's `renameUnsafe` marking of every member of a directly-`@:rtti` type, and the
+	 * transitive-rtti gate now extended to the Method category.
+	 */
+	public function testFixSkipsMethodInRttiClass(): Void {
+		final src: String = 'package pkg;\n@:rtti\nclass C {\n\tprivate function __load():Void {}\n\tpublic function f() { __load(); }\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
 	}
 
 }

@@ -175,7 +175,8 @@ final class HaxeNamingSupport implements NamingSupport {
 				requireMods: [],
 				forbidMods: [],
 				format: new EReg("^[a-z][a-zA-Z0-9_]*$", ''),
-				label: 'camelCase method'
+				label: 'camelCase method',
+				normalize: stripUnderscorePrefix
 			},
 			{
 				category: NamingCategory.Local,
@@ -323,15 +324,15 @@ final class HaxeNamingSupport implements NamingSupport {
 	 * rule's format is decided by the caller (`Naming.renameEditsFor` gates on
 	 * `rule.format.match`), so both camelCase and UPPER_SNAKE pass here while a name
 	 * matching neither (`_FORCE_build` → `FORCE_build`) is filtered there. A strip that
-	 * leaves an invalid identifier → null. Not `inline` — passed as a
-	 * `NamingRule.normalize` function value.
+	 * leaves an invalid identifier, or one that lands on a Haxe keyword (`_new` → `new`, the
+	 * CONSTRUCTOR name), → null. Not `inline` — passed as a `NamingRule.normalize` function value.
 	 */
 	private static function stripUnderscorePrefix(name: String): Null<String> {
 		var i: Int = 0;
 		while (i < name.length && StringTools.fastCodeAt(name, i) == '_'.code) i++;
 		if (i == 0) return null;
 		final stripped: String = name.substr(i);
-		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) ? stripped : null;
+		return new EReg("^[a-zA-Z][a-zA-Z0-9_]*$", '').match(stripped) && !KEYWORDS.contains(stripped) ? stripped : null;
 	}
 
 

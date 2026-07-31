@@ -200,10 +200,10 @@ final class Naming implements Check implements CrossFileFix {
 	 * Is the rename of `decl`'s binding provably complete within `source`? A
 	 * declaration the grammar marked `renameUnsafe` (a structural / anon-struct
 	 * field, a property backed by physical accessors) never is. Otherwise a
-	 * function-body-scoped binding always is; a private field or private
-	 * static-final constant is only when the cross-file `index` plus in-file
-	 * checks prove it cannot be referenced from outside its file. Every other
-	 * category (types, public members) is not.
+	 * function-body-scoped binding always is; a private field, private
+	 * static-final constant or private method is only when the cross-file `index`
+	 * plus in-file checks prove it cannot be referenced from outside its file.
+	 * Every other category (types, public members) is not.
 	 */
 	private static function isRenameSafe(
 		decl: NamedDecl, source: String, index: Null<SymbolIndex>, otherSources: Array<String>, confinedMemo: Map<String, Bool>
@@ -215,26 +215,39 @@ final class Naming implements Check implements CrossFileFix {
 		if (decl.renameUnsafe == true) return false;
 		final category: NamingCategory = decl.category;
 		if (category == NamingCategory.Local || category == NamingCategory.Param || category == NamingCategory.CatchVar) return true;
-		if ((category == NamingCategory.Field || category == NamingCategory.Constant) && !decl.mods.contains('public') && index != null) {
-			final owner: Null<String> = decl.enclosingType;
-			if (owner == null) return false;
-			// Cross-file reflection guard: a private member reached from ANOTHER file
-			// by a reflection string (`Reflect.field(x, 'name')`, a string-keyed field
-			// map, `Type.createInstance` field names) breaks silently after a rename —
-			// the identifier-level confinement proof cannot see it. Refuse when the old
-			// name occurs as a quoted string literal in any other indexed file (the
-			// declaring file is already covered by the in-file completeness check).
-			if (referencedAsStringLiteral(decl.name, otherSources)) return false;
-			// Memoize confinement per owner-type within this fix() call: a type with
-			// many flagged private constants would otherwise redo the identical
-			// project-wide subtype / access-grant / `@:allow` scan once per finding.
-			final cached: Null<Bool> = confinedMemo[owner];
-			if (cached != null) return cached;
-			final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index);
-			confinedMemo[owner] = confined;
-			return confined;
-		}
-		return false;
+		if (!isConfinableMemberCategory(category) || decl.mods.contains('public') || index == null) return false;
+		// A METHOD carries two hazards no field has. An `override` binds the name to the
+		// SUPERTYPE's declaration, so renaming the override alone orphans it. And an
+		// `implicitlyReachable` member - one carrying metadata, which a macro / `@:keep` /
+		// framework can reach by NAME - has references no identifier-level completeness proof
+		// sees. Both are refusals; the inherited-member and confinement proofs cover the rest.
+		if (category == NamingCategory.Method && (decl.mods.contains('override') || decl.implicitlyReachable == true)) return false;
+		final owner: Null<String> = decl.enclosingType;
+		if (owner == null) return false;
+		// Cross-file reflection guard: a private member reached from ANOTHER file
+		// by a reflection string (`Reflect.field(x, 'name')`, a string-keyed field
+		// map, `Type.createInstance` field names) breaks silently after a rename —
+		// the identifier-level confinement proof cannot see it. Refuse when the old
+		// name occurs as a quoted string literal in any other indexed file (the
+		// declaring file is already covered by the in-file completeness check).
+		if (referencedAsStringLiteral(decl.name, otherSources)) return false;
+		// Memoize confinement per owner-type within this fix() call: a type with
+		// many flagged private constants would otherwise redo the identical
+		// project-wide subtype / access-grant / `@:allow` scan once per finding.
+		final cached: Null<Bool> = confinedMemo[owner];
+		if (cached != null) return cached;
+		final confined: Bool = RefactorSupport.isPrivateMemberConfined(owner, source, index);
+		confinedMemo[owner] = confined;
+		return confined;
+	}
+
+	/**
+	 * Whether `category` is a type MEMBER whose privacy the cross-file index can turn into a
+	 * confinement proof - a field, a static-final constant or a method. A type or a
+	 * function-body binding is neither (the former is never confinable, the latter always is).
+	 */
+	private static inline function isConfinableMemberCategory(category: NamingCategory): Bool {
+		return category == NamingCategory.Field || category == NamingCategory.Constant || category == NamingCategory.Method;
 	}
 
 	/**
@@ -264,17 +277,19 @@ final class Naming implements Check implements CrossFileFix {
 		if (newName == null || newName == decl.name || !rule.format.match(newName)) return null;
 		// A private INSTANCE field renamed to `_x` must not REDEFINE a field named `_x`
 		// inherited from a supertype - Haxe rejects "Redefinition of variable in subclass"
-		// (verified). A local / param renamed to a bare name only SHADOWS an inherited member,
-		// which Haxe permits (verified) - the whole-file textual collision scan below covers
-		// that case - so the inheritance gate is FIELD-only. The proof walks the FULL supertype
+		// (verified). A METHOD has the same hazard with a different message ("Field f should be
+		// declared with 'override' since it is inherited from superclass"), so both member
+		// categories take this gate. A local / param renamed to a bare name only SHADOWS an
+		// inherited member, which Haxe permits (verified) - the whole-file textual collision scan
+		// below covers that case. The proof walks the FULL supertype
 		// closure through `resolutionIndex` (the RESOLUTION scope — report files UNION the
 		// configured libraries — when the plugin carries one, else the report index): an `openfl`
 		// / `lime` subclass's inherited members are then resolvable rather than unprovable. Skip
 		// when the inherited-`_x` possibility cannot be ruled out (a still-unresolvable supertype
-		// closure), and skip a field of a `@:rtti` / drill-Node hierarchy whose subtype-ward
+		// closure), and skip a member of a `@:rtti` / drill-Node hierarchy whose subtype-ward
 		// `@:rtti` only the index reveals (the direct-`@:rtti` case is already `renameUnsafe`):
-		// such a class serializes by reflecting on field NAMES, so a rename would break saved files.
-		if (decl.category == NamingCategory.Field) {
+		// such a class serializes by reflecting on member NAMES, so a rename would break saved files.
+		if (decl.category == NamingCategory.Field || decl.category == NamingCategory.Method) {
 			final owner: Null<String> = decl.enclosingType;
 			if (owner == null || resolutionIndex == null) return null;
 			final idx: SymbolIndex = resolutionIndex;
