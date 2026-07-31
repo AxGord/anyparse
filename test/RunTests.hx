@@ -409,6 +409,7 @@ import unit.HxFnSigFillLastParamBoundaryTest;
 import unit.HxChainFillBoundaryCallOperandTest;
 import unit.HxCallGroupRestProbeNestedArgTest;
 import unit.HxTernaryCallArgRestAwareTest;
+import unit.HxTernaryDeclInitRestAwareTest;
 import unit.HxExprParenDivOpenBoundaryTest;
 import unit.HxOpAddParenInnerBreakTest;
 import unit.HxCondSpliceChainWrapSliceTest;
@@ -655,6 +656,7 @@ class RunTests {
 		addCase(new HxParenWrapSourceNewlineSliceTest());
 		addCase(new HxParenTernaryOpenWrapSliceTest());
 		addCase(new HxTernaryCallArgRestAwareTest());
+		addCase(new HxTernaryDeclInitRestAwareTest());
 		addCase(new HxExprParenDivOpenBoundaryTest());
 		addCase(new HxOpAddParenInnerBreakTest());
 		addCase(new HxOpAddTrailingParenGlueSliceTest());
