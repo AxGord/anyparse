@@ -291,6 +291,7 @@ import unit.IdenticalOperandsCheckTest;
 import unit.SelfAssignmentCheckTest;
 import unit.DuplicateCaseCheckTest;
 import unit.RedundantParensCheckTest;
+import unit.RedundantParensOperandArmsTest;
 import unit.ConstantConditionCheckTest;
 import unit.EmptyStatementCheckTest;
 import unit.RedundantElseCheckTest;
@@ -942,6 +943,7 @@ class RunTests {
 		addCase(new RedundantBypassAccessorCheckTest());
 		addCase(new DuplicateCaseCheckTest());
 		addCase(new RedundantParensCheckTest());
+		addCase(new RedundantParensOperandArmsTest());
 		addCase(new RedundantThisCheckTest());
 		addCase(new RedundantThisUsingExtensionTest());
 		addCase(new UnnecessaryNullCheckCheckTest());

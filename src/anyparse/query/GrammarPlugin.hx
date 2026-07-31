@@ -1673,6 +1673,73 @@ typedef RefShape = {
 	 * Optional; unset drops the ternary-condition arm.
 	 */
 	@:optional var ternaryConditionUnwrapKinds: Array<String>;
+
+	/**
+	 * Expression kinds that are ATOMIC on their own — SELF-DELIMITING, so no operator
+	 * outside can bind into them and a `parenKind` wrapping one is inert in EVERY
+	 * expression position. Their children, if any, are internal structure rather than
+	 * operands and are NOT re-examined: a Haxe single-quoted string projects its
+	 * segments and its `${…}` interpolations as children, all of them sealed inside the
+	 * quotes. Haxe: `IdentExpr` (`this` included — the grammar spells it as an
+	 * identifier) and the int / float / hex / bool / null / string literals.
+	 *
+	 * `RegexLit` is deliberately ABSENT: it ends in `/`, which welds onto a following
+	 * `/` into a line comment (`(~/x/)/a` -> `~/x//a`). Read by `redundant-parens` for
+	 * its opt-in `atoms` arm, with `atomChainKinds`; optional, unset drops that arm.
+	 */
+	@:optional var atomExprKinds: Array<String>;
+
+	/**
+	 * Expression kinds that are TRANSPARENT LINKS — atomic exactly when every child is
+	 * itself atomic, which is what admits a whole dotted chain (`a.b.c`) as one atom
+	 * while rejecting a chain broken by something that is not (`f().b`, `arr[i].b`).
+	 * Haxe: `FieldAccess`.
+	 *
+	 * Deliberately ABSENT: `Call` / `IndexAccess` (an argument or index subtree is not
+	 * part of the name, and a call is not a pure read) and `SafeFieldAccess` — `(a?.b).c`
+	 * and `a?.b.c` disagree on what the null short-circuit covers, so the pair is
+	 * load-bearing. Read by `redundant-parens` with `atomExprKinds`; optional, unset
+	 * leaves the atom vocabulary to the self-delimiting kinds alone.
+	 */
+	@:optional var atomChainKinds: Array<String>;
+
+	/**
+	 * Groups of binary operator kinds that share ONE precedence tier and associate to
+	 * the LEFT. Within a group the grammar already parses `a OP1 b OP2 c` as
+	 * `(a OP1 b) OP2 c`, so a `parenKind` around the LEFT operand of a group member
+	 * whose content is another member of the SAME group re-parses to the identical
+	 * tree. Haxe: `['Mul', 'Div']` and `['Add', 'Sub']`.
+	 *
+	 * `Mod` is deliberately in NO group: Haxe binds `%` tighter than `*` and `/`
+	 * (`2 * 7 % 4` evaluates to 6, i.e. `2 * (7 % 4)`), while this parser models it at
+	 * the multiplicative tier — so a proof drawn from this tree would license a rewrite
+	 * the compiler reads differently. Read by `redundant-parens` for its opt-in
+	 * `sameOperatorLeft` arm; optional, unset drops that arm. The RIGHT operand is never
+	 * a candidate under any grouping — `a / (b * c)` is a different computation.
+	 */
+	@:optional var leftAssociativeBinaryFamilies: Array<Array<String>>;
+
+	/**
+	 * Host kinds whose DIRECT `parenKind` child keeps its parentheses — either the
+	 * grammar requires the pair there or the project declines to own the idiom. Haxe:
+	 * `CaseBranch` (its direct paren child is the mandatory `case X if (g)` guard — a
+	 * branch BODY arrives wrapped in a statement kind, so it is still reached),
+	 * the `switch` subject kinds (the construct carries its own `(` `)`, so a paren
+	 * child there is a second pair whose presence is a style choice), and the metadata
+	 * kinds (`MetaCall` arguments, a `MetaExpr` annotated expression). Read by
+	 * `redundant-parens` for its opt-in operand arms; optional, unset excludes nothing.
+	 */
+	@:optional var parenRequiredHostKinds: Array<String>;
+
+	/**
+	 * Kinds whose ENTIRE SUBTREE the opt-in `redundant-parens` operand arms leave alone,
+	 * because a parenthesis inside is not merely grouping. Haxe: `MacroExpr` — inside a
+	 * quotation a pair reifies as an `EParenthesis` node, so dropping it rewrites the
+	 * expression the macro builds with nothing rejecting it — and `Plain`, the case
+	 * PATTERN body, whose syntax is matched structurally rather than by expression
+	 * precedence. Optional; unset suppresses nothing.
+	 */
+	@:optional var parenOpaqueSubtreeKinds: Array<String>;
 }
 /**
  * Plugin-declared contract for `apq meta`: `metaKinds` are the `QueryNode.kind` values a metadata annotation carries, and `declHostKinds` the kinds that may host one. The meta walker reads these slots and never inspects grammar-specific node types.

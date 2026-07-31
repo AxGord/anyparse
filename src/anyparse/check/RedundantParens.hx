@@ -1,5 +1,6 @@
 package anyparse.check;
 
+import anyparse.check.Check.ConfigAware;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -88,14 +89,60 @@ import anyparse.runtime.Span;
  * The three arms compose without overlapping: the check flags the OUTERMOST paren of a
  * chain and does not descend into it, so a site yields one finding and one edit, and
  * in a delimited position `((e))` collapses to `e` outright.
+ *
+ * ## The two OPERAND arms (opt-in, off by default)
+ *
+ * Both reach the operand positions the arms above refuse, and both replace a
+ * precedence MODEL with a per-site proof. Each is a separate `apqlint.json` option on
+ * this rule, default false, so a project that declares neither sees byte-identical
+ * behaviour:
+ *
+ * - `"atoms"` — the pair wraps an ATOM: a SELF-DELIMITING expression
+ *   (`RefShape.atomExprKinds` — an identifier, `this`, a literal) or a chain of
+ *   TRANSPARENT LINKS bottoming out in one (`RefShape.atomChainKinds` — a call-free
+ *   dotted access). Nothing outside can bind into an atom, so the pair is inert in
+ *   EVERY position — `(a) + c`, `-(a)`, `arr[(i)]`, `(g)(1)`, `c ? (a) : (b)`. This is
+ *   the arm that reaches the common defensive divisor, `(x - y) / (r.width)`.
+ * - `"sameOperatorLeft"` — the pair is the LEFT operand of a binary operator and its
+ *   content is a binary operator in the SAME left-associative precedence family
+ *   (`RefShape.leftAssociativeBinaryFamilies`). Left-associativity already groups that
+ *   way, so `(a * b) / c` re-parses to the tree it already had. The RIGHT operand is
+ *   never a candidate (`a / (b * c)` is a different computation), families never mix
+ *   (`(a + b) * c` stays), and Haxe's `%` is in no family at all — the language binds
+ *   it tighter than `*` and `/` while this parser does not, so its own tree cannot
+ *   prove the re-association either way.
+ *
+ * Readability parens on a MIXED-operator expression are a human choice, so
+ * `sameOperatorLeft` is restricted to the same-family left operand and nothing else.
+ * Both arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
+ * `macro` quotation, where a pair reifies as data; a case pattern, matched
+ * structurally) and at a direct child of `RefShape.parenRequiredHostKinds` (a `case`
+ * guard, a `switch` subject, metadata).
+ *
+ * ## Trivia
+ *
+ * Every arm refuses a pair whose parentheses do not sit flush against their content:
+ * the fix reproduces the content's source and drops everything else, so a comment
+ * between `(` and the expression would be deleted. The test walks each layer of the
+ * chain, since the intermediate `(` `)` of `((e))` are not trivia.
  */
 @:nullSafety(Strict)
-final class RedundantParens implements Check {
+final class RedundantParens implements Check implements ConfigAware {
+
+	/** The rule id — also the `apqlint.json` key its two opt-in options hang off. */
+	private static final ID: String = 'redundant-parens';
+
+	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
+	private var _resolveConfig: Null<(String) -> LintConfig> = null;
 
 	public function new() {}
 
+	public function setConfigResolver(resolve: Null<(String) -> LintConfig>): Void {
+		_resolveConfig = resolve;
+	}
+
 	public function id(): String {
-		return 'redundant-parens';
+		return ID;
 	}
 
 	public function description(): String {
@@ -103,12 +150,12 @@ final class RedundantParens implements Check {
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
-		final slots: Null<ParenSlots> = slotsOf(plugin);
-		if (slots == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
+			final slots: Null<ParenSlots> = slotsOf(plugin, entry.file);
+			if (slots == null) return [];
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, tree, slots, SlotKind.Plain);
+			if (tree != null) walk(violations, entry.file, entry.source, tree, slots, SlotKind.Plain, false);
 		}
 		return violations;
 	}
@@ -120,13 +167,14 @@ final class RedundantParens implements Check {
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		final slots: Null<ParenSlots> = slotsOf(plugin);
+		if (violations.length == 0) return [];
+		final slots: Null<ParenSlots> = slotsOf(plugin, violations[0].file);
 		if (slots == null) return [];
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final siteByKey: Map<String, ParenSite> = [];
-		indexParens(tree, slots, SlotKind.Plain, siteByKey);
+		indexParens(tree, slots, SlotKind.Plain, false, siteByKey);
 
 		final edits: Array<{ span: Span, text: String }> = [];
 		for (v in violations) {
@@ -149,11 +197,19 @@ final class RedundantParens implements Check {
 		return edits;
 	}
 
-	/** The grammar's paren kind plus its delimited-slot vocabulary, or null when it declares no paren kind. */
-	private static function slotsOf(plugin: GrammarPlugin): Null<ParenSlots> {
+	/**
+	 * The grammar's paren kind plus its delimited-slot vocabulary and this project's
+	 * operand-arm opt-ins, or null when the grammar declares no paren kind. Resolved
+	 * once per file: both arms are `apqlint.json` options on this rule, default false.
+	 */
+	private function slotsOf(plugin: GrammarPlugin, file: String): Null<ParenSlots> {
 		final shape: RefShape = plugin.refShape();
 		final parenKind: Null<String> = shape.parenKind;
-		return parenKind == null ? null : {
+		if (parenKind == null) return null;
+		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
+		final atomArm: Bool = config.boolOption(ID, 'atoms') == true;
+		final familyArm: Bool = config.boolOption(ID, 'sameOperatorLeft') == true;
+		return {
 			parenKind: parenKind,
 			ternaryKind: shape.ternaryKind,
 			ternaryUnwrap: shape.ternaryConditionUnwrapKinds ?? [],
@@ -163,7 +219,12 @@ final class RedundantParens implements Check {
 			condLastChild: shape.conditionLastChildKinds ?? [],
 			greedy: shape.separatorGreedyExprKinds ?? [],
 			splice: shape.spliceSensitiveExprKinds ?? [],
-			spliceHost: [for (k in [shape.callKind, shape.arrayLiteralKind, shape.newExprKind]) if (k != null) k]
+			spliceHost: [for (k in [shape.callKind, shape.arrayLiteralKind, shape.newExprKind]) if (k != null) k],
+			atoms: atomArm ? shape.atomExprKinds ?? [] : [],
+			atomChains: atomArm ? shape.atomChainKinds ?? [] : [],
+			families: familyArm ? shape.leftAssociativeBinaryFamilies ?? [] : [],
+			requiredHost: shape.parenRequiredHostKinds ?? [],
+			opaqueSubtree: shape.parenOpaqueSubtreeKinds ?? []
 		};
 	}
 
@@ -178,45 +239,95 @@ final class RedundantParens implements Check {
 	 * Walk `node`; flag a paren that directly wraps another paren, or one whose `slot`
 	 * lets the pair drop, and STOP — the inner redundant layers are subsumed by the
 	 * single fix, and not descending keeps every edit disjoint. Otherwise descend,
-	 * classifying each child's own slot.
+	 * classifying each child's own slot and carrying whether the walk is inside a
+	 * subtree where a paren is not merely grouping.
 	 */
-	private static function walk(out: Array<Violation>, file: String, node: QueryNode, slots: ParenSlots, slot: SlotKind): Void {
+	private static function walk(
+		out: Array<Violation>, file: String, source: String, node: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool
+	): Void {
 		// `children.length == 1` is defensive: a grammar's paren wraps exactly one
 		// expression, so no fixture can reach the else side in Haxe (`()` does not
 		// parse). It guards a grammar whose paren kind is shaped differently.
 		if (
 			node.kind == slots.parenKind && node.children.length == 1
-			&& (dropsParens(node.children[0], slots, slot) || node.children[0].kind == slots.parenKind)
+			&& (dropsParens(node.children[0], slots, slot, opaque) || node.children[0].kind == slots.parenKind)
+			&& !triviaInsideParens(source, node, slots)
 		) {
 			final span: Null<Span> = node.span;
 			if (span != null) {
 				out.push({
 					file: file,
 					span: span,
-					rule: 'redundant-parens',
+					rule: ID,
 					severity: Severity.Info,
 					message: 'redundant parentheses'
 				});
 				return;
 			}
 		}
-		for (i => c in node.children) walk(out, file, c, slots, slotOf(node, i, slots));
+		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
+		for (i => c in node.children) walk(out, file, source, c, slots, slotOf(node, i, slots), inner);
 	}
 
 	/**
 	 * Whether the paren chain around `inner` can be dropped ENTIRELY: its slot is
 	 * delimited, the content left bare is not separator-greedy, and dropping the parens
-	 * would not turn a splice-sensitive reification loose in a splicing host.
+	 * would not turn a splice-sensitive reification loose in a splicing host — or, under
+	 * the opt-in operand arms, the content is provably inert wherever it sits.
 	 */
-	private static function dropsParens(inner: QueryNode, slots: ParenSlots, slot: SlotKind): Bool {
-		if (slot == SlotKind.Plain) return false;
-		// The fix drops the WHOLE chain, so both tests read the content that would be
+	private static function dropsParens(inner: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool): Bool {
+		// The fix drops the WHOLE chain, so every test reads the content that would be
 		// left bare, not the next paren layer down.
 		final bare: QueryNode = RefactorSupport.unwrapParens(inner, slots.parenKind);
+		if (slot == SlotKind.Required) return false;
+		// The operand arms answer per CONTENT, so they apply in any slot the shipped arms
+		// leave alone — but never inside a subtree where a paren carries meaning.
+		if (!opaque && (isAtom(bare, slots) || slot == SlotKind.SameFamilyLeft)) return true;
+		if (slot == SlotKind.Plain || slot == SlotKind.SameFamilyLeft) return false;
 		// A ternary condition drops its parens only when the bare content binds strictly
 		// tighter than `?:` — otherwise unwrapping lets it absorb the `? … : …` branches.
 		if (slot == SlotKind.TernaryCondition) return slots.ternaryUnwrap.contains(bare.kind);
 		return (slot != SlotKind.DelimitedSplice || !slots.splice.contains(bare.kind)) && !separatorGreedy(bare, slots);
+	}
+
+	/**
+	 * Whether nothing outside `node` can bind into it: either it is SELF-DELIMITING
+	 * (`atoms` — an identifier or a literal, whose children are internal structure
+	 * sealed inside its own delimiters) or a TRANSPARENT LINK whose every child is
+	 * itself an atom (`atomChains` — what makes `a.b.c` one atom and `f().b` none).
+	 * Empty vocabularies — the default, and any grammar that declares none — answer
+	 * uniformly false.
+	 */
+	private static function isAtom(node: QueryNode, slots: ParenSlots): Bool {
+		if (slots.atoms.contains(node.kind)) return true;
+		if (!slots.atomChains.contains(node.kind)) return false;
+		for (c in node.children) if (!isAtom(c, slots)) return false;
+		return true;
+	}
+
+	/**
+	 * Whether anything but whitespace sits between a parenthesis and the expression it
+	 * wraps, at ANY layer of the chain — a comment the fix would delete, since it
+	 * reproduces the content's source and nothing else. Walked layer by layer because
+	 * the intermediate `(` `)` of `((e))` are the chain, not trivia. An unmeasurable
+	 * span answers true, which keeps the parentheses.
+	 */
+	private static function triviaInsideParens(source: String, node: QueryNode, slots: ParenSlots): Bool {
+		var n: QueryNode = node;
+		while (n.kind == slots.parenKind && n.children.length == 1) {
+			final outer: Null<Span> = n.span;
+			final child: QueryNode = n.children[0];
+			final inner: Null<Span> = child.span;
+			if (outer == null || inner == null) return true;
+			if (!isBlank(source, outer.from + 1, inner.from) || !isBlank(source, inner.to, outer.to - 1)) return true;
+			n = child;
+		}
+		return false;
+	}
+
+	/** Whether `[from, to)` of `source` is empty or whitespace only. */
+	private static function isBlank(source: String, from: Int, to: Int): Bool {
+		return StringTools.trim(source.substring(from, to)) == '';
 	}
 
 	/**
@@ -248,12 +359,27 @@ final class RedundantParens implements Check {
 		return c == null || p.to == c.to;
 	}
 
-	/** How `parent`'s child at `i` is bounded: not delimited, delimited, or delimited by a SPLICING host. */
+	/** How `parent`'s child at `i` is bounded — see `SlotKind`. */
 	private static function slotOf(parent: QueryNode, i: Int, slots: ParenSlots): SlotKind {
+		if (slots.requiredHost.contains(parent.kind)) return SlotKind.Required;
 		if (parent.kind == slots.ternaryKind && i == 0) return SlotKind.TernaryCondition;
+		if (i == 0 && sameFamilyLeftOperand(parent, slots)) return SlotKind.SameFamilyLeft;
 		return !childDelimited(parent, i, slots)
 			? SlotKind.Plain
 			: slots.spliceHost.contains(parent.kind) ? SlotKind.DelimitedSplice : SlotKind.Delimited;
+	}
+
+	/**
+	 * Whether `parent` is a member of a left-associative precedence family and its FIRST
+	 * child is a parenthesized member of the SAME family — the shape left-associativity
+	 * already groups, so the pair re-parses away. Only child 0 is asked; the right
+	 * operand of the same operators is a different computation.
+	 */
+	private static function sameFamilyLeftOperand(parent: QueryNode, slots: ParenSlots): Bool {
+		if (parent.children.length == 0 || parent.children[0].kind != slots.parenKind) return false;
+		final bare: String = RefactorSupport.unwrapParens(parent.children[0], slots.parenKind).kind;
+		for (family in slots.families) if (family.contains(parent.kind) && family.contains(bare)) return true;
+		return false;
 	}
 
 	/**
@@ -275,16 +401,19 @@ final class RedundantParens implements Check {
 	}
 
 	/** Index every paren node by its `from:to` span key, recording whether its own pair can be dropped entirely. */
-	private static function indexParens(node: QueryNode, slots: ParenSlots, slot: SlotKind, out: Map<String, ParenSite>): Void {
+	private static function indexParens(
+		node: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool, out: Map<String, ParenSite>
+	): Void {
 		// Same defensive `children.length == 1` as `walk` — see the note there.
 		if (node.kind == slots.parenKind && node.children.length == 1) {
 			final span: Null<Span> = node.span;
 			if (span != null) out['${span.from}:${span.to}'] = {
 				node: node,
-				dropsParens: dropsParens(node.children[0], slots, slot)
+				dropsParens: dropsParens(node.children[0], slots, slot, opaque)
 			};
 		}
-		for (i => c in node.children) indexParens(c, slots, slotOf(node, i, slots), out);
+		final inner: Bool = opaque || slots.opaqueSubtree.contains(node.kind);
+		for (i => c in node.children) indexParens(c, slots, slotOf(node, i, slots), inner, out);
 	}
 
 }
@@ -293,8 +422,13 @@ final class RedundantParens implements Check {
  * The grammar's parenthesis kind, the four host-kind lists that pin a DELIMITED slot
  * — `allChild` (every child), `tailChild` (every child but the first),
  * `condFirstChild` / `condLastChild` (the bracketed condition of a conditional) — and
- * `greedy`, the interior kinds whose parens stay even in a delimited slot. Resolved
- * once per run so the walk never re-reads the shape.
+ * `greedy`, the interior kinds whose parens stay even in a delimited slot.
+ *
+ * `atoms` and `families` carry the two OPERAND arms: each holds the grammar's
+ * vocabulary when this project opted the arm in and an EMPTY array otherwise, so a
+ * default run answers the arm's questions uniformly false with no second flag to read.
+ * `requiredHost` / `opaqueSubtree` bound them. Resolved once per file so the walk
+ * never re-reads the shape or the config.
  */
 private typedef ParenSlots = {
 	var parenKind: String;
@@ -307,6 +441,11 @@ private typedef ParenSlots = {
 	var greedy: Array<String>;
 	var splice: Array<String>;
 	var spliceHost: Array<String>;
+	var atoms: Array<String>;
+	var atomChains: Array<String>;
+	var families: Array<Array<String>>;
+	var requiredHost: Array<String>;
+	var opaqueSubtree: Array<String>;
 }
 
 /**
@@ -325,7 +464,11 @@ private typedef ParenSite = {
  * (`RefShape.spliceSensitiveExprKinds`), where a paren changes ARITY, not syntax.
  * `TernaryCondition` — a ternary's condition child, a precedence-gated slot where the
  * paren drops only when the bare inner binds strictly tighter than `?:`
- * (`RefShape.ternaryConditionUnwrapKinds`).
+ * (`RefShape.ternaryConditionUnwrapKinds`). `SameFamilyLeft` — the LEFT operand of a
+ * binary operator whose parenthesized content is another member of the same
+ * left-associative precedence family, which the opt-in `sameOperatorLeft` arm drops.
+ * `Required` — a direct child of a `RefShape.parenRequiredHostKinds` host, where the
+ * pair is grammar syntax or an idiom this check declines to own.
  */
 private enum abstract SlotKind(Int) {
 
@@ -336,5 +479,9 @@ private enum abstract SlotKind(Int) {
 	final DelimitedSplice = 2;
 
 	final TernaryCondition = 3;
+
+	final SameFamilyLeft = 4;
+
+	final Required = 5;
 
 }
