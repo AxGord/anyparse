@@ -153,8 +153,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * shadows the FIELD name (including the grammar-dropped multi-var and key-value-for
 	 * binding slots), or a case-pattern mention of it, all leave the finding report-only.
 	 * A bare backing-field reference inside a function that binds the PROPERTY name in ANY form
-	 * — parameter, local, loop / comprehension variable, catch variable, pattern capture, lambda
-	 * parameter — is rewritten as `this.<prop>` (`<Class>.<prop>` for a static property or a
+	 * — parameter, local (static local and multi-var continuation included), loop / comprehension
+	 * variable, catch variable, pattern capture, local function, lambda parameter — is rewritten
+	 * as `this.<prop>` (`<Class>.<prop>` for a static property or a
 	 * static method), since a plain `<prop>` would resolve to that binding, not the field —
 	 * silent data loss. NOTE: a null `index` skips the
 	 * subclass-override, backing-field-reference and interface-conformance gates — the production `lint --fix` caller
@@ -559,9 +560,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/**
 	 * Recurse `renameWalk` over `node`'s children, threading the pattern / shadow / qualifier
 	 * context. `mods` accumulates the modifier-sibling kinds preceding a member so a `static`
-	 * child function is recursed with `classQualified` set (reset at each member boundary; a
-	 * static property seeds it for the whole class). Returns false as soon as any descendant
-	 * refuses the fix.
+	 * child function is recursed with `classQualified` set (`mods` resets at each member
+	 * boundary; `classQualified` itself is monotone — a static property seeds it for the whole
+	 * class). Returns false as soon as any descendant refuses the fix.
 	 */
 	private static function renameChildren(
 		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, nowPattern: Bool,
@@ -569,8 +570,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	): Bool {
 		var mods: Array<String> = [];
 		for (c in node.children) {
-			final childStatic: Bool = classQualified || (isFnScope(c) && mods.contains('Static'));
-			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childStatic, out))
+			final childQualified: Bool = classQualified || (isFnScope(c) && mods.contains('Static'));
+			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childQualified, out))
 				return false;
 			mods = switch c.kind {
 				case 'VarMember' | 'FinalMember' | 'FnMember' | 'FinalModifiedMember': [];
@@ -583,7 +584,9 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/** Whether `node` opens a new function scope (method / local fn / lambda) that binds parameters and locals. */
 	private static inline function isFnScope(node: QueryNode): Bool {
 		return switch node.kind {
-			case 'FnMember' | 'FinalModifiedMember' | 'LocalFnStmt' | 'FnExpr' | 'ThinParenLambdaExpr' | 'ParenLambdaExpr' | 'ThinArrow': true;
+			case 'FnMember' | 'FinalModifiedMember' | 'LocalFnStmt' | 'LocalInlineFnStmt' | 'FnExpr' | 'NamedFnExpr' | 'ThinParenLambdaExpr'
+				| 'ParenLambdaExpr'
+				| 'ThinArrow': true;
 			case _: false;
 		}
 	}
@@ -618,29 +621,20 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	private static function bindsNameHere(node: QueryNode, source: String, name: String): Bool {
 		return switch node.kind {
 			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam' | 'VarStmt' | 'FinalStmt' | 'VarExpr' | 'FinalExpr' | 'VarMore'
+				| 'StaticVarStmt'
+				| 'StaticFinalStmt'
 				| 'LocalFnStmt'
-				| 'CatchClause': node.name == name;
+				| 'LocalInlineFnStmt'
+				| 'NamedFnExpr'
+				| 'CatchClause'
+				| 'Capture': node.name == name;
 			case 'ForStmt' | 'ForExpr':
-				node.name == name || forHeaderBinds(node, source, name);
+				node.name == name || RefactorSupport.binderHeaderMentions(source, node, name);
 			case 'ThinArrow':
 				node.children.length > 0 && node.children[0].kind == 'IdentExpr' && node.children[0].name == name;
 			case 'Plain': mentionsField(node, name);
 			case _: false;
 		}
-	}
-
-	/**
-	 * Whether the `for` header of `node` — its span up to the iterable expression — mentions
-	 * `name` as an identifier token. The key-value form `for (k => v in m)` drops the VALUE
-	 * name from the projection entirely, so only the header text can prove that binding. An
-	 * unspanned header answers true: an unprovable header is treated as binding (the
-	 * conservative direction — it only adds a qualifier).
-	 */
-	private static function forHeaderBinds(node: QueryNode, source: String, name: String): Bool {
-		final span: Null<Span> = node.span;
-		if (span == null || node.children.length == 0) return true;
-		final iterSpan: Null<Span> = node.children[0].span;
-		return iterSpan == null || RefactorSupport.identTokenOffset(source, new Span(span.from, iterSpan.from), name) >= 0;
 	}
 
 	/** The `(read, write)` accessor-clause span `[open, close]` of a property (`span.from` at `var`), or null. */
@@ -815,11 +809,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	/**
 	 * Whether `node` can BIND a name the grammar drops from the projection, and that
 	 * hidden slot textually mentions `field` — the two blind spots of the by-name shadow
-	 * refusal in `renameWalk`. A multi-variable local declaration (`var a = 1, _x = 2;`,
-	 * detected by a top-level comma in its source) keeps only the FIRST name; a key-value
-	 * `for (k => _x in m)` header keeps only the KEY name. In both, a shadowing `_x` is
-	 * invisible as a node, so any word-match of `field` in the hidden region refuses the
-	 * fix (conservative: a multi-var INIT reading the real field also refuses).
+	 * refusal in `renameWalk`. A key-value `for (k => _x in m)` / `[for (k => _x in m) …]`
+	 * header keeps only the KEY name, so a shadowing `_x` there is invisible as a node; a
+	 * multi-variable declaration's later bindings DO project (`VarMore`), and its top-level
+	 * comma scan stays as the belt-and-braces guard over the whole declaration. Either way any
+	 * word-match of `field` in the region refuses the fix (conservative: a multi-var INIT
+	 * reading the real field also refuses).
 	 */
 	private static function hidesBindingNamed(node: QueryNode, span: Null<Span>, source: String, field: String): Bool {
 		switch node.kind {
@@ -827,11 +822,8 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				if (span == null) return true;
 				final declSource: String = source.substring(span.from, span.to);
 				return RefactorSupport.hasTopLevelComma(declSource) && RefactorSupport.identTokenOffset(source, span, field) >= 0;
-			case 'ForStmt':
-				if (span == null || node.children.length == 0) return true;
-				final iterSpan: Null<Span> = node.children[0].span;
-				if (iterSpan == null) return true;
-				return RefactorSupport.identTokenOffset(source, new Span(span.from, iterSpan.from), field) >= 0;
+			case 'ForStmt' | 'ForExpr':
+				return span == null || RefactorSupport.binderHeaderMentions(source, node, field);
 			case _:
 				return false;
 		}

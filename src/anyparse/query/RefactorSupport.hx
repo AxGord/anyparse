@@ -1697,6 +1697,79 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The HEADER span of a self-scoped binder node — everything from its own start up to
+	 * its first child, i.e. `for (k => v in ` / `catch (e:T) ` — or null when either span
+	 * is missing. The header is the only place a binder the projection DROPS can still be
+	 * seen: a key-value `for (k => v in m)` surfaces just the KEY on the node, so the
+	 * VALUE binding exists in the source text and nowhere in the tree. Every shadow scan
+	 * that must not miss a binding reads it through `binderHeaderMentions` /
+	 * `binderHeaderIdents`.
+	 */
+	public static function binderHeaderSpan(node: QueryNode): Null<Span> {
+		final span: Null<Span> = node.span;
+		if (span == null || node.children.length == 0) return null;
+		final firstSpan: Null<Span> = node.children[0].span;
+		return firstSpan == null || firstSpan.from < span.from ? null : new Span(span.from, firstSpan.from);
+	}
+
+	/**
+	 * Whether the header of binder node `node` mentions `name` as an identifier token.
+	 * TRUE when the header cannot be located: an unreadable header is treated as binding
+	 * everything, the conservative answer for every caller (one more qualifier, one fewer
+	 * rewrite — never a reference re-bound to a binding nobody saw).
+	 */
+	public static function binderHeaderMentions(source: String, node: QueryNode, name: String): Bool {
+		final header: Null<Span> = binderHeaderSpan(node);
+		return header == null || identTokenOffset(source, header, name) >= 0;
+	}
+
+	/**
+	 * Every identifier token in binder node `node`'s header — the name-collecting form of
+	 * `binderHeaderMentions`, for a scan that gathers bound names instead of testing one.
+	 * Keywords and type names in the header come along; a caller collecting SHADOW names
+	 * only ever loses a report to them, never a soundness gate.
+	 */
+	public static function binderHeaderIdents(source: String, node: QueryNode): Array<String> {
+		final header: Null<Span> = binderHeaderSpan(node);
+		if (header == null) return [];
+		final out: Array<String> = [];
+		var i: Int = header.from;
+		while (i < header.to) {
+			if (!isIdentStartChar(StringTools.fastCodeAt(source, i))) {
+				i++;
+				continue;
+			}
+			final from: Int = i;
+			while (i < header.to && isIdentChar(StringTools.fastCodeAt(source, i))) i++;
+			out.push(source.substring(from, i));
+		}
+		return out;
+	}
+
+	/**
+	 * Every name a case PATTERN binds in `node`'s subtree: each name inside a
+	 * `casePatternKind` subtree (a capture projects as a bare identifier there, so the
+	 * whole pattern is collected — a constructor name coming along only costs the caller a
+	 * report) plus the name of every `binderKinds` node, which carries its binding on the
+	 * node itself (`case var x:`). Deduped, one walk.
+	 */
+	public static function casePatternNames(node: QueryNode, casePatternKind: Null<String>, binderKinds: Array<String>): Array<String> {
+		final out: Array<String> = [];
+		collectCasePatternNames(node, false, casePatternKind, binderKinds, out);
+		return out;
+	}
+
+	/** Recursive worker of `casePatternNames`; `inPattern` marks a subtree already inside a pattern. */
+	private static function collectCasePatternNames(
+		node: QueryNode, inPattern: Bool, casePatternKind: Null<String>, binderKinds: Array<String>, out: Array<String>
+	): Void {
+		final within: Bool = inPattern || (casePatternKind != null && node.kind == casePatternKind);
+		final name: Null<String> = node.name;
+		if (name != null && (within || binderKinds.contains(node.kind)) && !out.contains(name)) out.push(name);
+		for (child in node.children) collectCasePatternNames(child, within, casePatternKind, binderKinds, out);
+	}
+
+	/**
 	 * Whether `text` contains a comma outside any `()`/`[]`/`{}` nesting and outside a
 	 * string literal — the multi-declaration separator of `var i, j = n`. `<>` is
 	 * deliberately not tracked (a generic type-parameter comma reads as top-level,

@@ -461,6 +461,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			localDeclKinds: ['VarStmt', 'FinalStmt', 'VarMore'],
 			localDeclContinuationKinds: ['VarMore'],
 			localDeclExprKinds: ['VarExpr', 'FinalExpr'],
+			staticLocalDeclKinds: ['StaticVarStmt', 'StaticFinalStmt'],
 			mutableLocalDeclKinds: ['VarStmt'],
 			ifStatementKinds: ['IfStmt'],
 			equalityKinds: ['Eq', 'NotEq'],

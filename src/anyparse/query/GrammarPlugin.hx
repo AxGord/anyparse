@@ -400,6 +400,17 @@ typedef RefShape = {
 	@:optional var localDeclExprKinds: Array<String>;
 
 	/**
+	 * STATIC local declaration kinds — a local binding whose storage outlives the call
+	 * (Haxe 4.3: `static var x = …` / `static final x = …` inside a function body,
+	 * `StaticVarStmt` / `StaticFinalStmt`). It binds its name in the enclosing function
+	 * exactly like a plain local, so every SHADOW scan must see it; it is NOT in
+	 * `localDeclKinds` because the consumers of that set reason about per-call storage
+	 * (dead stores, init-at-declaration, type inference on a fresh slot). Optional —
+	 * unset treats the set as empty.
+	 */
+	@:optional var staticLocalDeclKinds: Array<String>;
+
+	/**
 	 * Statement-position `if` kinds — the `redundant-else-after-return` check flags
 	 * an `else` on one of these whose then-branch always exits. Expression-position
 	 * `if` (`var x = if (c) a else b`) is excluded: its `else` is required. Optional;

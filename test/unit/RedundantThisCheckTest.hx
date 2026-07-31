@@ -58,6 +58,38 @@ class RedundantThisCheckTest extends Test {
 		Assert.equals(0, violations('class C { var f:Int; function m() { var g = f -> f + this.f; trace(g(1)); } }').length);
 	}
 
+	public function testCaseVarCaptureShadowNotFlagged(): Void {
+		// `case var x:` binds through a `Capture` node beside the pattern, not inside it.
+		Assert.equals(
+			0, violations('class C { var f:Int; function m(v:Any) { switch v { case var f: trace(Std.string(f) + this.f); } } }').length
+		);
+	}
+
+	public function testLocalInlineFunctionShadowNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { var helper:Int; function m() { inline function helper():Int return 1; trace(helper() + this.helper); } }').length
+		);
+	}
+
+	public function testStaticLocalShadowNotFlagged(): Void {
+		Assert.equals(0, violations('class C { var f:Int; function m() { static var f:Int = 1; trace(f + this.f); } }').length);
+	}
+
+	public function testKeyValueForValueShadowNotFlagged(): Void {
+		// The value slot of a key-value `for` is dropped from the projection — only the header
+		// text proves the binding, and stripping `this.` there rebinds the read to the loop value.
+		Assert.equals(
+			0, violations('class C { var v:Int; function m(mp:Map<Int, Int>) { for (k => v in mp) trace(k + v + this.v); } }').length
+		);
+	}
+
+	public function testZeroParamLambdaBodyIsNotABinding(): Void {
+		// GUARD on the bare-parameter arm: `() -> g` carries its BODY at child 0. Treating that
+		// identifier as a binding would silently suppress every `this.g` report in the member.
+		Assert.equals(1, violations('class C { var g:Int; function m() { var f = () -> g; return this.g; } }').length);
+	}
+
 	public function testMethodCallThisFlagged(): Void {
 		Assert.equals(1, violations('class C { function go() {} function m() { this.go(); } }').length);
 		final out: String = applyFix('class C { function go() {} function m() { this.go(); } }');

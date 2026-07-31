@@ -617,19 +617,10 @@ final class FieldWriteIndex {
 		if (c.casePatternKind == null && c.binderKinds.length == 0) return true;
 		var names: Null<Array<String>> = c.patternNames;
 		if (names == null) {
-			names = [];
-			collectPatternNames(c.tree, false, names, c);
+			names = RefactorSupport.casePatternNames(c.tree, c.casePatternKind, c.binderKinds);
 			c.patternNames = names;
 		}
 		return names.contains(name);
-	}
-
-	/** Collect into `out` every name inside a case-pattern subtree and every pattern-binder node's name. */
-	private static function collectPatternNames(node: QueryNode, inPattern: Bool, out: Array<String>, c: ScanCtx): Void {
-		final within: Bool = inPattern || (c.casePatternKind != null && node.kind == c.casePatternKind);
-		final nm: Null<String> = node.name;
-		if (nm != null && (within || c.binderKinds.contains(node.kind)) && !out.contains(nm)) out.push(nm);
-		for (child in node.children) collectPatternNames(child, within, out, c);
 	}
 
 	/**

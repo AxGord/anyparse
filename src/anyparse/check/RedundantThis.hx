@@ -32,11 +32,14 @@ import anyparse.query.RefactorSupport;
  * The self-qualifier text comes from `RefShape.selfReferenceText` (`this` /
  * `self`; unset → no-op), the access node from `fieldAccessKind`, the receiver
  * ident from `identKind`. Shadowing names are collected from `paramKinds`,
- * `localDeclKinds`, `localDeclExprKinds`, `selfScopeDeclKinds` (loop iterator /
- * catch var) and `localFunctionKinds`, plus the two shapes that bind without a named
- * declaration node — the captures of a `plainCasePatternKind` pattern and the bare
- * single parameter of a `lambdaKinds` lambda — scoped to each enclosing member
- * function. Member names
+ * `localDeclKinds`, `localDeclExprKinds`, `staticLocalDeclKinds`, `selfScopeDeclKinds`
+ * (loop iterator / catch var), `localFunctionKinds` and `inlineFunctionKinds`, plus the
+ * three shapes that bind WITHOUT a named declaration node: a `plainCasePatternKind`
+ * pattern's captures and every `casePatternBinderKinds` node (`RefactorSupport.casePatternNames`),
+ * the bare single parameter of a `lambdaKinds` lambda, and the dropped slots of a
+ * `selfScopeDeclKinds` header (the VALUE of a key-value `for`), recovered from the header
+ * text by `RefactorSupport.binderHeaderIdents`. All of it is scoped to each enclosing
+ * member function. Member names
  * come from `memberDeclKinds` hosts inside a `visibilityContainerKinds` type; a
  * grammar supplying neither leaves the membership gate inert (shadow-only test).
  * A compile-time abstract's `this.field` (where `this` is the underlying value
@@ -67,7 +70,7 @@ final class RedundantThis implements Check {
 		final resolveSymbols: () -> Null<SymbolIndex> = RefactorSupport.lazySymbolIndex(files, plugin);
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walkMembers(violations, entry.file, tree, ctx, null, [], resolveSymbols);
+			if (tree != null) walkMembers(violations, entry.file, tree, entry.source, ctx, null, [], resolveSymbols);
 		}
 		return violations;
 	}
@@ -94,18 +97,16 @@ final class RedundantThis implements Check {
 		final identKind: Null<String> = shape.identKind;
 		final functionKinds: Array<String> = shape.functionKinds ?? [];
 		if (self == null || fieldAccessKind == null || identKind == null || functionKinds.length == 0) return null;
-		final bindingKinds: Array<String> = (shape.paramKinds ?? []).concat(shape.localDeclKinds ?? [])
-			.concat(shape.localDeclExprKinds ?? [])
-			.concat(shape.selfScopeDeclKinds ?? [])
-			.concat(shape.localFunctionKinds ?? []);
-		final patternKind: Null<String> = shape.plainCasePatternKind;
+		final bindingKinds: Array<String> = namedBindingKinds(shape);
 		return {
 			self: self,
 			fieldAccessKind: fieldAccessKind,
 			identKind: identKind,
 			functionKinds: functionKinds,
 			bindingKinds: bindingKinds,
-			patternKinds: patternKind == null ? [] : [patternKind],
+			patternKind: shape.plainCasePatternKind,
+			patternBinderKinds: shape.casePatternBinderKinds ?? [],
+			binderHeaderKinds: shape.selfScopeDeclKinds ?? [],
 			lambdaKinds: shape.lambdaKinds ?? [],
 			underlyingThisKinds: shape.underlyingThisTypeKinds ?? [],
 			containerKinds: shape.visibilityContainerKinds ?? [],
@@ -115,6 +116,21 @@ final class RedundantThis implements Check {
 			// the legacy shadow-only test (no member set to enforce against).
 			membershipGate: (shape.visibilityContainerKinds ?? []).length > 0 && (shape.memberDeclKinds ?? []).length > 0
 		};
+	}
+
+	/**
+	 * Every grammar kind that DECLARES a name into the enclosing function scope and carries it
+	 * on the node: parameters, local `var` / `final` in statement, expression and STATIC form,
+	 * the self-scoped binders (loop iterator, catch variable) and local functions, plain and
+	 * `inline`. The shapes that bind without such a node are recovered in `collectBindingNames`.
+	 */
+	private static function namedBindingKinds(shape: RefShape): Array<String> {
+		return (shape.paramKinds ?? []).concat(shape.localDeclKinds ?? [])
+			.concat(shape.localDeclExprKinds ?? [])
+			.concat(shape.staticLocalDeclKinds ?? [])
+			.concat(shape.selfScopeDeclKinds ?? [])
+			.concat(shape.localFunctionKinds ?? [])
+			.concat(shape.inlineFunctionKinds ?? []);
 	}
 
 	/**
@@ -139,23 +155,23 @@ final class RedundantThis implements Check {
 	 * check stays silent rather than remove a possibly-required `this.`.
 	 */
 	private static function walkMembers(
-		out: Array<Violation>, file: String, node: QueryNode, c: Ctx, typeName: Null<String>, members: Array<String>,
+		out: Array<Violation>, file: String, node: QueryNode, source: String, c: Ctx, typeName: Null<String>, members: Array<String>,
 		symbols: () -> Null<SymbolIndex>
 	): Void {
 		if (c.underlyingThisKinds.contains(node.kind)) return;
 		if (c.containerKinds.contains(node.kind)) {
 			final ownMembers: Array<String> = [];
 			collectMemberNames(node, c, ownMembers);
-			for (child in node.children) walkMembers(out, file, child, c, node.name, ownMembers, symbols);
+			for (child in node.children) walkMembers(out, file, child, source, c, node.name, ownMembers, symbols);
 			return;
 		}
 		if (c.functionKinds.contains(node.kind)) {
-			final names: Array<String> = [];
-			collectBindingNames(node, c, names);
+			final names: Array<String> = RefactorSupport.casePatternNames(node, c.patternKind, c.patternBinderKinds);
+			collectBindingNames(node, source, c, names);
 			flagThisAccess(out, file, node, c, names, typeName, members, symbols);
 			return;
 		}
-		for (child in node.children) walkMembers(out, file, child, c, typeName, members, symbols);
+		for (child in node.children) walkMembers(out, file, child, source, c, typeName, members, symbols);
 	}
 
 	/**
@@ -176,33 +192,36 @@ final class RedundantThis implements Check {
 	}
 
 	/**
-	 * Collect every shadowing binding name in `node`'s subtree. Beyond the named binding
-	 * nodes (`bindingKinds`) two shapes bind WITHOUT carrying the name on a declaration
-	 * node, and missing either strips a load-bearing `this.`: a case PATTERN
-	 * (`patternKinds`) projects its captures as bare identifiers, so every identifier
-	 * inside one counts (a constructor name that happens to match only costs a missed
-	 * report); and a single-parameter lambda (`lambdaKinds`) carries its parameter as the
-	 * child-0 identifier rather than a parameter node.
+	 * Collect every shadowing binding name in `node`'s subtree: the `bindingKinds` nodes,
+	 * which carry the name themselves, plus the two shapes that do not and would otherwise
+	 * cost a load-bearing `this.` — a bare-identifier lambda parameter (`bareLambdaParam`)
+	 * and the slots a self-scoped binder's header drops, which only its source text shows
+	 * (the VALUE of a key-value `for`, invisible as a node). Case-pattern captures are
+	 * collected once per member function by the caller.
 	 */
-	private static function collectBindingNames(node: QueryNode, c: Ctx, names: Array<String>): Void {
+	private static function collectBindingNames(node: QueryNode, source: String, c: Ctx, names: Array<String>): Void {
 		if (c.bindingKinds.contains(node.kind)) {
 			final name: Null<String> = node.name;
 			if (name != null) names.push(name);
 		}
-		if (c.patternKinds.contains(node.kind)) collectIdentNames(node, c, names);
-		if (c.lambdaKinds.contains(node.kind) && node.children.length > 0) {
-			final first: QueryNode = node.children[0];
-			final param: Null<String> = first.name;
-			if (first.kind == c.identKind && param != null) names.push(param);
-		}
-		for (child in node.children) collectBindingNames(child, c, names);
+		if (c.binderHeaderKinds.contains(node.kind)) for (ident in RefactorSupport.binderHeaderIdents(source, node)) names.push(ident);
+		final param: Null<String> = bareLambdaParam(node, c);
+		if (param != null) names.push(param);
+		for (child in node.children) collectBindingNames(child, source, c, names);
 	}
 
-	/** Append the name of every identifier in `node`'s subtree — the capture names of a case pattern. */
-	private static function collectIdentNames(node: QueryNode, c: Ctx, names: Array<String>): Void {
-		final name: Null<String> = node.name;
-		if (node.kind == c.identKind && name != null) names.push(name);
-		for (child in node.children) collectIdentNames(child, c, names);
+	/**
+	 * The parameter name of a lambda that writes it WITHOUT parentheses (`x -> …`), whose
+	 * child-0 is that bare identifier rather than a parameter node — else null. A
+	 * parenthesised lambda carries a parameter node instead, and a ZERO-parameter one carries
+	 * only its body, so both are excluded by the two-child requirement plus the kind test:
+	 * treating a bare-identifier BODY as a binding would silently suppress every report of
+	 * that name in the member.
+	 */
+	private static function bareLambdaParam(node: QueryNode, c: Ctx): Null<String> {
+		if (!c.lambdaKinds.contains(node.kind) || node.children.length < 2) return null;
+		final first: QueryNode = node.children[0];
+		return first.kind == c.identKind ? first.name : null;
 	}
 
 	/**
@@ -273,7 +292,9 @@ private typedef Ctx = {
 	identKind: String,
 	functionKinds: Array<String>,
 	bindingKinds: Array<String>,
-	patternKinds: Array<String>,
+	patternKind: Null<String>,
+	patternBinderKinds: Array<String>,
+	binderHeaderKinds: Array<String>,
 	lambdaKinds: Array<String>,
 	underlyingThisKinds: Array<String>,
 	containerKinds: Array<String>,

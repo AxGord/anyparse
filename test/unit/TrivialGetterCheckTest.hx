@@ -372,6 +372,41 @@ class TrivialGetterCheckTest extends Test {
 		assertFixContains(src, 'count + this.count');
 	}
 
+	public function testFixShadowedStaticLocalUsesThis(): Void {
+		// A Haxe 4.3 `static var` local binds the name in the function like any other local.
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m():Void { static var count:Int = 5; trace(count + _count); }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedLocalInlineFunctionUsesThis(): Void {
+		// `inline function` is a distinct kind from a plain local function, and the project's own
+		// Haxe style mandates it for local helpers.
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m():Void { inline function count():Int return 1; trace(count() + _count); }'
+		);
+		assertFixContains(src, '+ this.count');
+	}
+
+	public function testFixShadowedCaseVarCaptureUsesThis(): Void {
+		// `case var x:` carries its binding on a `Capture` node — a direct child of the branch,
+		// NOT inside the pattern subtree, so the pattern scan alone never sees it.
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m(v:Any):Void { switch v { case var count: trace(Std.string(count) + _count); } }'
+		);
+		assertFixContains(src, '+ this.count');
+	}
+
+	public function testFixRefusesKeyValueComprehensionFieldShadow(): Void {
+		// The FIELD-name side of the same dropped slot: a comprehension whose key-value header
+		// binds the BACKING FIELD name must refuse — renaming its reads would silently retarget
+		// them at the property.
+		final src: String =
+			'class C {\n\tpublic var tag(get, never):Int;\n\tprivate var _tag:Int = 0;\n\tfunction get_tag():Int return _tag;\n\tfunction m(mp:Map<Int, Int>):Array<Int> {\n\t\treturn [for (k => _tag in mp) _tag + k];\n\t}\n}';
+		assertFixRefused(src);
+	}
+
 	public function testFixStaticPropertyShadowUsesClassName(): Void {
 		// A STATIC property cannot be reached through `this` — a shadowed reference must be
 		// qualified with the class name even from an instance method.
