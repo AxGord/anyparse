@@ -3413,6 +3413,23 @@ class WriterLowering {
 	 * width path) by calling `_dinfle` (natural-first-line probe) instead
 	 * of `_difle` (flat first-line probe): the flat probe cannot tell a
 	 * wrappable RHS bracket from a NoWrap-pinned one and over-breaks.
+	 *
+	 * Un-armed fields take the DECL-HEADER arm (ω-N-break-after-eq,
+	 * decl-header increment) — a strictly weaker, last-resort break for the
+	 * shape the natural probe is blind to: the RHS's call args ALREADY wrap
+	 * past `(`, yet the remaining HEADER line (up to that open paren) still
+	 * exceeds `maxLineLength`. The natural probe cannot see it because it
+	 * resolves such a RHS flat and reports the one-line width, which reaches
+	 * the limit for every declaration whose args wrap. This arm measures the
+	 * head statically instead (`DocMeasure.breakableHead`) and drives the
+	 * plain `_diwe` column probe with a shifted threshold, so the break
+	 * fires exactly when no amount of RHS-internal wrapping can bring the
+	 * header back under the limit. `endsAtOpenDelim` keeps it off a head
+	 * that ends at an OPERAND — an operator chain led by a literal or an
+	 * identifier, the shape whose double-break motivated the narrow gates
+	 * above. A chain led by a bracketed construct DOES arm: its head is a
+	 * genuinely over-wide line and the chain's own break points are all
+	 * past it.
 	 */
 	private function breakAfterLeadOnOverflowWrap(leadText: String, writeCall: Expr, typeFieldName: String): Expr {
 		final typeAccess: Expr = { expr: EField(macro value, typeFieldName), pos: Context.currentPos() };
@@ -3430,8 +3447,35 @@ class WriterLowering {
 					_dt($v{leadText}),
 					_dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _rhs])), _dc([_dop(' '), _rhs]))
 				]);
-			else
-				_dc([_dt($v{leadText}), _dop(' '), _rhs]);
+			else {
+				// Decl-header arm (last resort). `_head.width` is what the
+				// glued shape keeps on THIS line once the RHS's own wrap
+				// fires — `= new Foo(` for a call whose args leading-break.
+				// Armed only when that head ENDS at the open delimiter: a
+				// head ending at an OPERAND belongs to an operator chain
+				// that carries its wrap on its own LATER lines, and breaking
+				// the `=` there double-breaks it (fork breaks the chain).
+				final _eqGlued: anyparse.core.Doc = _dc([_dop(' '), _rhs]);
+				final _head: { width: Int, endsAtOpenDelim: Bool } = anyparse.core.DocMeasure.breakableHead(_eqGlued);
+				// `_diwe` probes `col + flatTokenWidth(flatDoc) >= n` at
+				// RENDER time over the very Doc passed as `flatDoc`, so
+				// shifting the threshold by that same flat width makes the
+				// effective test `col + _head.width > opt.lineWidth` — a
+				// header EXACTLY on the limit stays glued (the width+1
+				// convention the other fits-probes share). The cancellation
+				// assumes `_eqGlued`'s flat width is the same at build and at
+				// render: `CollapsePass` descends `IfWidthExceeds`'s flat
+				// side, so a future collapse rule that RESIZES a decl RHS
+				// would skew this threshold by the delta.
+				final _flatW: Int = anyparse.core.DocMeasure.flatTokenWidth(_eqGlued);
+				if (_head.endsAtOpenDelim)
+					_dc([
+						_dt($v{leadText}),
+						_diwe(opt.lineWidth + 1 - _head.width + _flatW, _dn(_cols, _dc([_dhl(), _rhs])), _eqGlued)
+					]);
+				else
+					_dc([_dt($v{leadText}), _dop(' '), _rhs]);
+			}
 		};
 	}
 

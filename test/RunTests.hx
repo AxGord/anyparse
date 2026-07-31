@@ -503,6 +503,7 @@ import unit.ImplicitStdScopeTest;
 import unit.ExtensionMethodsExtractionTest;
 import unit.StdResolverReturnTypeTest;
 import unit.HxVarInitBreakAfterEqOverflowTest;
+import unit.HxDeclHeaderEqBreakOverflowTest;
 import unit.ResolutionLibraryCacheTest;
 import unit.PreferSafeNavComparisonCheckTest;
 import unit.PreferArrowCallbackCheckTest;
@@ -732,6 +733,7 @@ class RunTests {
 		addCase(new HxCondPlainCallLeadingBreakSliceTest());
 		addCase(new HxCompareOperandBreakSliceTest());
 		addCase(new HxVarInitBreakAfterEqOverflowTest());
+		addCase(new HxDeclHeaderEqBreakOverflowTest());
 		addCase(new HxCallGroupRestProbeCasePatternTest());
 		addCase(new HxCallGroupRestProbeChainOperandTest());
 		addCase(new HxCallGroupRestProbeNestedArgTest());
