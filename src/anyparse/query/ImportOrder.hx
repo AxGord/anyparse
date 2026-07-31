@@ -62,8 +62,35 @@ final class ImportOrder {
 
 	/** Whether `paths` is non-decreasing under `order`. */
 	public static function sortedUnder(paths: Array<String>, order: Int): Bool {
-		for (i in 1...paths.length) if (compare(order, paths[i - 1], paths[i]) > 0) return false;
-		return true;
+		return inversions(paths, order) == 0;
+	}
+
+	/** How many ADJACENT pairs of `paths` sit the wrong way round under `order` — 0 exactly when the list is sorted under it. */
+	public static function inversions(paths: Array<String>, order: Int): Int {
+		var count: Int = 0;
+		for (i in 1...paths.length) if (compare(order, paths[i - 1], paths[i]) > 0) count++;
+		return count;
+	}
+
+	/**
+	 * The order that best EXPLAINS `paths` — the one it breaks least often, ties going to the
+	 * earlier (stricter) order. This is the reading to REPAIR a block under: a block ordered
+	 * case-insensitively except for one appended line breaks the folded order once and the
+	 * codepoint order at every upper/lower boundary, so sorting it under the codepoint reading
+	 * would rewrite the whole block to move one line. Never a verdict on whether the block is
+	 * ordered — `orderOf` answers that.
+	 */
+	public static function bestOrder(paths: Array<String>): Int {
+		var best: Int = 0;
+		var fewest: Int = inversions(paths, 0);
+		for (order in 1...ORDER_NAMES.length) {
+			final count: Int = inversions(paths, order);
+			if (count < fewest) {
+				best = order;
+				fewest = count;
+			}
+		}
+		return best;
 	}
 
 	/** The id of the order NAMED `name` (an `import-order` `order` option value), or -1 when it names none. */

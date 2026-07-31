@@ -153,6 +153,14 @@ final class LintConfig {
 		};
 	}
 
+	/** A rule-specific string option (e.g. `import-order` `order`), or null when unset or non-string. */
+	public function stringOption(id: String, key: String): Null<String> {
+		return switch propOf(id, key) {
+			case JString(v): v;
+			case null, _: null;
+		};
+	}
+
 	/**
 	 * A rule-specific list-of-numbers option (e.g. `magic-number` `ignore`),
 	 * or null when unset; a non-array value or non-numeric elements are dropped.

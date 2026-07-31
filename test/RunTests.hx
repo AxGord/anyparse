@@ -502,6 +502,7 @@ import unit.PreferSafeNavComparisonCheckTest;
 import unit.PreferArrowCallbackCheckTest;
 import unit.GuardReturnCheckTest;
 import unit.NoUnderscorePrefixCheckTest;
+import unit.ImportBlockOrderCheckTest;
 import unit.PreferTypedThrowCheckTest;
 import unit.TypeRefPrinterTest;
 import unit.ExplicitLocalTypePrinterTest;
@@ -975,6 +976,7 @@ class RunTests {
 		addCase(new PreferArrayLiteralCheckTest());
 		addCase(new PreferArrowCallbackCheckTest());
 		addCase(new NoUnderscorePrefixCheckTest());
+		addCase(new ImportBlockOrderCheckTest());
 		addCase(new PreferTypedThrowCheckTest());
 		addCase(new ShortenTypeRefCheckTest());
 		addCase(new TypeRefPrinterTest());

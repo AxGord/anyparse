@@ -49,11 +49,11 @@ final class AddImport {
 		for (c in tree.children) switch c.kind {
 			case 'ImportDecl', 'UsingDecl', 'ImportWildDecl', 'ImportAliasDecl', 'ImportAliasInDecl':
 				lastImport = c;
-				final path: Null<String> = c.name;
+				final declPath: Null<String> = c.name;
 				final span: Null<Span> = c.span;
 				// Re-bind: a null-check does not narrow into an anonymous-structure literal.
-				if (c.kind == 'ImportDecl' && path != null) {
-					final named: String = path;
+				if (c.kind == 'ImportDecl' && declPath != null) {
+					final named: String = declPath;
 					block.push({ path: named, from: span == null ? -1 : span.from });
 				}
 				if (c.kind == targetKind && c.name == trimmed) return Err('already imported: $trimmed');
@@ -76,9 +76,10 @@ final class AddImport {
 		// whitespace is the writer's concern — the canonicalize finalize
 		// re-emits the whole file.
 		final orderedSlot: Int = isUsing ? -1 : ImportOrder.insertOffset(block, trimmed);
-		if (orderedSlot >= 0) return RefactorSupport.canonicalize(
-			source, [{ span: new Span(orderedSlot, orderedSlot), text: '$stmt\n' }], reformat, plugin, optsJson
-		);
+		if (orderedSlot >= 0)
+			return RefactorSupport.canonicalize(
+				source, [{ span: new Span(orderedSlot, orderedSlot), text: '$stmt\n' }], reformat, plugin, optsJson
+			);
 		final lastImportTo: Int = spanTo(lastImport);
 		final packageTo: Int = spanTo(packageDecl);
 		final edit: { span: Span, text: String } = if (lastImportTo >= 0)
