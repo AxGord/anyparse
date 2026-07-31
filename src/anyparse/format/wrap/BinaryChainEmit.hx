@@ -111,7 +111,7 @@ final class BinaryChainEmit {
 		// inside the same cond keep their own Nest because their
 		// continuation legitimately wants the +2cols (paren+1 +
 		// callArg+1) layout.
-		final indentUnit: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final indentUnit: Int = indentUnitOf(opt);
 		final cols: Int = nestSuppress ? 0 : indentUnit;
 
 		// Column-aware `LineLengthLargerThan` thresholds — mirror
@@ -225,22 +225,37 @@ final class BinaryChainEmit {
 	 * On a chain of PLAIN operands the constant is byte-inert (measured): the
 	 * break shape's own `Group` re-runs `fitsFlat`, which is Wadler-inclusive,
 	 * at the same column — so a chain that merely REACHES the limit renders
-	 * flat whichever threshold the probe carries. The constant only becomes
-	 * observable where the two gates disagree, i.e. an operand whose inner
-	 * `Group` wraps — exactly the case the natural probe exists to keep glued.
+	 * flat whichever threshold the probe carries. Where the two gates DISAGREE
+	 * — an operand whose inner `Group` wraps, so the `Group` no longer re-glues
+	 * — the constant is observable at exactly one column, and `+ 1` is the
+	 * correct answer there (measured): a prefix landing ON column `lineWidth`
+	 * stays glued, a bare `lineWidth` would break a line that legally fits.
+	 *
+	 * The continuation always nests one indent level: unlike `emit` this
+	 * engine takes no `nestSuppress`, because an assignment is a statement-
+	 * level (or call-argument) construct that never sits directly inside a
+	 * cond paren-wrap whose `Nest` it would compound with.
 	 */
 	public static function emitAssignChain(items: Array<Doc>, opt: WriteOptions): Doc {
-		final last: Int = items.length - 1;
-		var flat: Doc = items[last];
-		var i: Int = last - 1;
+		// The caller only routes a genuine chain here (its own `case Assign`
+		// arm guarantees head + one inner left + terminal), so a shorter list
+		// is a wiring bug, not an input — surface it instead of folding a
+		// degenerate `Doc`. Mirror `MethodChainEmit.shapeOnePerLineAfterFirst`.
+		if (items.length < 3) throw 'BinaryChainEmit.emitAssignChain: caller-side chain guard violated (items=${items.length})';
+		var flat: Doc = items[items.length - 1];
+		var i: Int = items.length - 2;
 		while (i >= 0) {
 			flat = Concat([items[i], Text(' '), Text('='), OptSpace(' '), flat]);
 			i--;
 		}
-		if (items.length < 3) return flat;
 		final ops: Array<String> = [for (_ in 1...items.length) '='];
-		final indentUnit: Int = opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
+		final indentUnit: Int = indentUnitOf(opt);
 		return IfNaturalFirstLineExceeds(opt.lineWidth + 1, shapeFillLine(items, ops, indentUnit, indentUnit, AfterLast), flat);
+	}
+
+	/** One indent level in columns, per the configured indent character. */
+	private static inline function indentUnitOf(opt: WriteOptions): Int {
+		return opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth;
 	}
 
 	/**
@@ -790,7 +805,7 @@ final class BinaryChainEmit {
 			// (`(cond ? a : b)`, `((b - c) * s)`) is content the fork keeps GLUED
 			// (opens the paren, `unwrapAddOps`), so it stays on the glue probe.
 			if (items.length != 2 || !WrapList.isPureOpAddSubChain(items[items.length - 1], true)) return WrapBoundary(glueProbe);
-			final cols: Int = nestSuppress ? 0 : (opt.indentChar == IndentChar.Space ? opt.indentSize : opt.tabWidth);
+			final cols: Int = nestSuppress ? 0 : indentUnitOf(opt);
 			final contWidth: Int = ops[ops.length - 1].length + 1 + DocMeasure.flatTokenWidth(items[items.length - 1]);
 			final forcedBreak: Doc = shapeOnePerLineAfterFirst(items, ops, cols, BeforeLast);
 			return WrapBoundary(IfLineExceeds(

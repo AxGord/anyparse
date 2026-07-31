@@ -48,51 +48,64 @@ final class HxAssignChainWrapSliceTest extends Test {
 	}
 
 	public function testFittingAssignChainStaysFlat(): Void {
-		// Two `=` operators, 50 columns -- comfortably inside the limit. The
-		// probe must not fire: a chain only wraps on overflow.
+		// Two `=` operators, 65 columns -- comfortably inside the limit. The
+		// chain routes through the new emit and must come back untouched.
+		// HONEST SCOPE: measured non-discriminating for the probe threshold --
+		// it stays green even with the probe wired to fire at column 0, because
+		// the break shape's own `Group` re-glues a chain this short. It guards
+		// against an UNCONDITIONAL break shape, not against the constant.
 		final src: String = 'class Sample {\n\n\tfunction run() {\n\t\t_seg1.onDone = _seg2.onDone = _seg3.onDone = pickHandler;\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testAssignChainAtExactlyMaxLineLengthStaysFlat(): Void {
 		// Statement line = exactly 140 columns. Stays flat.
-		// HONEST SCOPE: this fixture does NOT discriminate the probe threshold.
-		// The probe measures the chain EXPRESSION only -- the statement `;` is a
-		// sibling `Text`, outside the measured Doc -- so a 140-column line is a
-		// 139-column measurement and stays flat under `lineWidth` and
-		// `lineWidth + 1` alike. It guards the boundary against a probe that
-		// fires one column EARLY (a `<=`/`>` slip inside the natural walk), not
-		// against the choice of constant.
+		// HONEST SCOPE: same as above -- measured non-discriminating for the
+		// threshold. The probe measures the chain EXPRESSION only (the statement
+		// `;` is a sibling `Text` outside the measured Doc), and the break
+		// shape's `Group` re-glues anything that still fits, so this stays flat
+		// under `lineWidth`, `lineWidth + 1` and a zero threshold alike. It
+		// guards the limit against an unconditional break, not the constant --
+		// `testAssignChainWithWrappingCallStaysUnchanged` is the only fixture
+		// in this class that discriminates the gate.
 		final src: String =
 			'class Sample {\n\n\tfunction run() {\n\t\t_seg1.onFinished = _seg2.onFinished = _seg3.onFinished = _seg4.onFinished = _seg5.onFinished = _seg6.onFinished = terminateSequence;\n\t}\n\n}';
 		Assert.equals(src, triviaWrite(src));
 	}
 
 	public function testSingleAssignWithWrappingCallStaysUnchanged(): Void {
-		// 141 columns flat. The RHS call owns the wrap (leading break after its
-		// open paren), so the natural first line is short and the `=` must NOT
-		// break -- the `IfNaturalFirstLineExceeds` gate over a plain `Group`.
+		// 141 columns flat, ONE `=` -- so it takes the non-chain arm and never
+		// reaches the new emit at all. This is the plain-path regression guard:
+		// a single assignment whose RHS call folds its own arguments must come
+		// out exactly as it did before the slice.
 		assertCallAbsorbsTheOverflow(
-			'class Sample {\n\n\tfunction run() {\n\t\t_target.handlerSlot = buildTheHandlerForSequence(firstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgumentValueXy);\n\t}\n\n}'
+			'class Sample {\n\n\tfunction run() {\n\t\t_target.handlerSlot = buildTheHandlerForSequence(firstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgumentValueXy);\n\t}\n\n}',
+			'class Sample {\n\n\tfunction run() {\n\t\t_target.handlerSlot = buildTheHandlerForSequence(\n\t\t\tfirstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgumentValueXy\n\t\t);\n\t}\n\n}'
 		);
 	}
 
 	public function testAssignChainWithWrappingCallStaysUnchanged(): Void {
-		// Same guard with a genuine 2-operator chain (144 columns flat): the
-		// chain routes through the new emit, the call still absorbs the overflow.
+		// A genuine 2-operator chain (144 columns flat) whose RHS call folds its
+		// OWN arguments: the natural first line ends at the call's open paren,
+		// so the `=` must NOT break and the call absorbs the overflow.
+		// This is the ONE fixture in the class that discriminates the gate --
+		// wiring the probe to fire unconditionally reddens exactly this test --
+		// so it asserts the full expected output, not just substrings.
 		assertCallAbsorbsTheOverflow(
-			'class Sample {\n\n\tfunction run() {\n\t\t_target.slotA = _target.slotB = buildTheHandlerForSequence(firstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgValue);\n\t}\n\n}'
+			'class Sample {\n\n\tfunction run() {\n\t\t_target.slotA = _target.slotB = buildTheHandlerForSequence(firstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgValue);\n\t}\n\n}',
+			'class Sample {\n\n\tfunction run() {\n\t\t_target.slotA = _target.slotB = buildTheHandlerForSequence(\n\t\t\tfirstArgumentValue, secondArgumentValue, thirdArgumentValue, fourthArgValue\n\t\t);\n\t}\n\n}'
 		);
 	}
 
 	/**
-	 * Assert that the RHS call -- not the `=` -- owns the wrap: the call's
-	 * arguments leading-break and no line ends on an assignment operator.
+	 * Assert that the RHS call -- not the `=` -- owns the wrap: byte-exact
+	 * output, no line ending on an assignment operator, and a fixed point.
 	 */
-	private inline function assertCallAbsorbsTheOverflow(src: String): Void {
+	private inline function assertCallAbsorbsTheOverflow(src: String, expected: String): Void {
 		final out: String = triviaWrite(src);
-		Assert.isTrue(out.indexOf('buildTheHandlerForSequence(\n') != -1);
-		Assert.isTrue(out.indexOf('=\n') == -1);
+		Assert.equals(expected, out);
+		Assert.isTrue(out.indexOf('= \n') == -1 && out.indexOf('=\n') == -1);
+		Assert.equals(expected, triviaWrite(expected));
 	}
 
 	private inline function triviaWrite(src: String): String {
