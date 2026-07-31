@@ -756,6 +756,43 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'ArrayExpr',
 				'NewExpr',
 			],
+			// Self-delimiting content: no operator outside can bind into it. `IdentExpr`
+			// covers `this`. `SingleStringExpr` projects its segments and `${…}`
+			// interpolations as children — all sealed inside the quotes, so they are not
+			// re-examined. `RegexLit` is out: its closing `/` welds onto a following `/`.
+			atomExprKinds: [
+				'IdentExpr',
+				'IntLit',
+				'FloatLit',
+				'HexLit',
+				'BoolLit',
+				'NullLit',
+				'SingleStringExpr',
+				'DoubleStringExpr',
+			],
+			// A transparent link: `a.b.c` is one atom, while `f().b` / `arr[i].b` /
+			// `a?.b` are not — their unlisted child stops the chain.
+			atomChainKinds: ['FieldAccess'],
+			// One tier each, left-associative, so `(a * b) / c` and `a * b / c` parse
+			// alike. `Mod` is in NO family: Haxe binds `%` TIGHTER than `*` and `/`
+			// (`2 * 7 % 4` is 6) while this parser puts it at the multiplicative tier, so
+			// its own tree cannot prove a `%` re-association.
+			leftAssociativeBinaryFamilies: [['Mul', 'Div'], ['Add', 'Sub']],
+			// A direct paren child of these is grammar syntax (`case X if (g)`) or an
+			// idiom the project keeps out of scope (a second `switch` subject pair,
+			// metadata arguments).
+			parenRequiredHostKinds: [
+				'CaseBranch',
+				'SwitchStmt',
+				'SwitchStmtBare',
+				'SwitchExpr',
+				'SwitchExprBare',
+				'MetaCall',
+				'MetaExpr',
+			],
+			// Inside a `macro` quotation a paren reifies as `EParenthesis`; inside a case
+			// pattern the syntax is matched structurally, not by expression precedence.
+			parenOpaqueSubtreeKinds: ['MacroExpr', 'Plain'],
 		};
 	}
 
