@@ -705,4 +705,87 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		return multi(files).filter(v -> v.file == 'C.hx');
 	}
 
+
+	/**
+	 * The conditional-default fold: a `(default, null)` property with a declaration
+	 * default whose ONLY other write is one `if (p != null) this.x = p;` constructor
+	 * statement is provably single-assignment once the default moves into the ctor.
+	 */
+	public function testCtorConditionalDefaultPropertyFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C { public var mode(default, null):String = Defaults.MODE; public function new(?mode:String) { if (mode != null) this.mode = mode; } }'
+		);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-final-public-field', vs[0].rule);
+		Assert.equals(Severity.Info, vs[0].severity);
+		Assert.isTrue(vs[0].message.indexOf('null-guarded constructor') >= 0);
+	}
+
+	/** The fold is TWO edits: the declaration loses its property head and default, the ctor gains `??`. */
+	public function testCtorConditionalDefaultPropertyFixed(): Void {
+		final fixed: String = fixedSource(
+			'class C { public var mode(default, null):String = Defaults.MODE; public function new(?mode:String) { if (mode != null) this.mode = mode; } }'
+		);
+		Assert.isTrue(fixed.indexOf('public final mode:String;') >= 0);
+		Assert.equals(-1, fixed.indexOf('(default, null)'));
+		Assert.isTrue(fixed.indexOf('this.mode = mode ?? Defaults.MODE;') >= 0);
+		Assert.equals(-1, fixed.indexOf('if (mode != null)'));
+	}
+
+	/** The same fold on a PLAIN public var, with the unqualified `x = p` write form. */
+	public function testCtorConditionalDefaultPlainPublicFixed(): Void {
+		final fixed: String = fixedSource(
+			'class C { public var mode:Int = 7; public function new(?other:Int) { if (other != null) mode = other; } }'
+		);
+		Assert.isTrue(fixed.indexOf('public final mode:Int;') >= 0);
+		Assert.isTrue(fixed.indexOf('mode = other ?? 7;') >= 0);
+	}
+
+	/** A `Null<T>` (non-optional) constructor parameter is nullable too — the fold applies. */
+	public function testCtorConditionalDefaultNullWrappedParamFlagged(): Void {
+		Assert.equals(
+			1, violations('class C { public var n:Int = 3; public function new(n:Null<Int>) { if (n != null) this.n = n; } }').length
+		);
+	}
+
+	/**
+	 * An ALLOCATING declaration default is not move-safe: `new Point()` would run at a
+	 * different moment and, worse, only when the parameter is null — per-instance
+	 * allocation semantics are preserved only by skipping.
+	 */
+	public function testCtorConditionalDefaultAllocatingDefaultNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { public var p:Point = new Point(); public function new(?p:Point) { if (p != null) this.p = p; } }').length
+		);
+	}
+
+	/** TWO constructor writes are not a single conditional default. */
+	public function testCtorConditionalDefaultTwoCtorWritesNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { public var n:Int = 1; public function new(?n:Int) { if (n != null) this.n = n; this.n = 2; } }').length
+		);
+	}
+
+	/** Any guard other than `<param> != null` is out of shape — skipped. */
+	public function testCtorConditionalDefaultOtherGuardNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var n:Int = 1; public function new(n:Int) { if (n > 0) this.n = n; } }').length);
+	}
+
+	/** A NON-nullable parameter cannot be `??`-defaulted — skipped. */
+	public function testCtorConditionalDefaultNonNullableParamNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var s:String = "a"; public function new(s:String) { if (s != null) this.s = s; } }').length
+		);
+	}
+
+	/** An `else` branch is a second assignment path — skipped. */
+	public function testCtorConditionalDefaultElseNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { public var n:Int = 1; public function new(?n:Int) { if (n != null) this.n = n; else this.n = 9; } }').length
+		);
+	}
+
 }

@@ -69,8 +69,7 @@ import anyparse.runtime.Span;
  * (a) `field-init-at-declaration` moves a context-free constructor init to the
  * declaration, and the declaration-initializer case above then rewrites the `var` to
  * `final`; (b) the no-initializer case here also covers the constructor-argument
- * fields that rule cannot move. Both rules handle `var` and `final`, so any pass
- * ordering converges to the same fixpoint.
+ * fields that rule cannot move. Both rules handle `var` and `final`, so any pass ordering converges to the same fixpoint. (c) A THIRD arm, `RefactorSupport.ctorConditionalDefaultFinalEdits`, folds an INITIALIZED field whose only other write is one top-level `if (p != null) x = p;` constructor statement into `final x:T;` plus `x = p ?? <default>;` — the declaration default moves into the constructor, so the single assignment becomes unconditional. Checked before the initializer case (which that constructor write would bail anyway), and gated by the same confinement and abstract-mutability checks.
  */
 @:nullSafety(Strict)
 final class PreferFinalField implements Check {
@@ -102,15 +101,18 @@ final class PreferFinalField implements Check {
 	}
 
 	/**
-	 * Rewrite each flagged field's `var` keyword to `final`. The candidate is by
-	 * construction assigned only at its declaration, so the swap is always safe; the
-	 * edit fires only when the bytes at the declaration start are literally the
-	 * keyword (`substring` clamps, so an unexpected span simply fails the equality).
+	 * The edits for each flagged field, through the shared `RefactorSupport.finalizeFieldEdits`:
+	 * a `var` -> `final` keyword swap for the initializer and constructor arms, and the
+	 * two-edit conditional-default fold for the third (the declaration loses its property
+	 * head and default, the constructor's guarded assignment becomes `x = p ?? <default>`).
+	 * Every candidate is by construction assigned exactly once after the rewrite, so both
+	 * shapes are safe; each fires only when the declaration's bytes still match what the
+	 * check saw, and a fold's edits are emitted together or not at all.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RefactorSupport.varKeywordToFinalEdits(source, [for (v in violations) v.span]);
+		return RefactorSupport.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
 	}
 
 	/**
@@ -133,6 +135,18 @@ final class PreferFinalField implements Check {
 		// access — `var → final` would break parity ("different property access than in
 		// <Interface>"). Applies to both the init and no-init cases below.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
+		// The conditional-default arm, checked FIRST: an initialized field whose only other
+		// write is one `if (p != null) x = p;` constructor statement folds to `final` plus
+		// `x = p ?? <default>`. It is disjoint from the initializer arm either way (that
+		// constructor write makes `writtenInFile` bail), but only this order lets it fire.
+		final folded: Bool = RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
+		if (folded) {
+			if (!writesConfined(owner, name, source, index, plugin)) return;
+			final foldDeclType: Null<String> = declaredTypes == null ? null : declaredTypes[span.from];
+			if (RefactorSupport.abstractMethodMayMutate(source, name, foldDeclType, span, lazyIndex, abstractKinds)) return;
+			flag(out, file, span, name, 'has a null-guarded constructor default');
+			return;
+		}
 		if (RefactorSupport.isInitializedNonPropertyField(source, field)) {
 			if (!writesConfined(owner, name, source, index, plugin)) return;
 			if (writtenInFile(source, name, span)) return;

@@ -34,7 +34,7 @@ import anyparse.runtime.Span;
  *    must lie inside the declaring file's decl range, bailing too when that range
  *    cannot be pinned for an ambiguous simple name, while the predicate's in-file
  *    text scan covers the declaring file itself. `prefer-read-only-field` cedes
- *    exactly these candidates (same predicate), so the two rules stay disjoint.
+ *    exactly these candidates (same predicate), so the two rules stay disjoint. A THIRD arm, `RefactorSupport.ctorConditionalDefaultFinalEdits`, claims an INITIALIZED field (a `(default, null)` property included) whose only write beyond that initializer is one top-level `if (p != null) x = p;` constructor statement: it is single-assignment once the declaration default moves into the constructor, which is what its TWO-edit fix does (`final x:T;` plus `x = p ?? <default>;`). Its whole single-file proof lives in that predicate, and `prefer-read-only-field` cedes these candidates through the same call.
  * 2. No subtype of it can write the field (`MemberWriteScan.subtypeWriteReaches`). A
  *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
  *    are attributed to the SUBTYPE rather than to this type, so the write index alone
@@ -99,14 +99,18 @@ final class PreferFinalPublicField implements Check {
 	}
 
 	/**
-	 * Rewrite each flagged field's `var` keyword to `final`. The candidate is by
-	 * construction never reassigned, so the swap is always safe; the edit fires only
-	 * when the bytes at the declaration start are literally the keyword.
+	 * The edits for each flagged field, through the shared `RefactorSupport.finalizeFieldEdits`:
+	 * a `var` -> `final` keyword swap for the initializer and constructor arms, and the
+	 * two-edit conditional-default fold for the third (the declaration loses its property
+	 * head and default, the constructor's guarded assignment becomes `x = p ?? <default>`).
+	 * Every candidate is by construction assigned exactly once after the rewrite, so both
+	 * shapes are safe; each fires only when the declaration's bytes still match what the
+	 * check saw, and a fold's edits are emitted together or not at all.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
-		return RefactorSupport.varKeywordToFinalEdits(source, [for (v in violations) v.span]);
+		return RefactorSupport.finalizeFieldEdits(source, [for (v in violations) v.span], plugin);
 	}
 
 	/**
@@ -130,10 +134,15 @@ final class PreferFinalPublicField implements Check {
 		// survives it. The blanket subtype veto used to cover this by accident.
 		if (index.skippedFiles().length > 0) return;
 		final initialized: Bool = RefactorSupport.isInitializedNonPropertyField(source, field);
+		// The conditional-default arm: an initialized field (a `(default, null)` property
+		// included) whose only other write is one `if (p != null) x = p;` constructor
+		// statement, folded to `final` plus `x = p ?? <default>`. Its own proof is entirely
+		// inside the shared predicate, which `prefer-read-only-field` cedes on.
+		final folded: Bool = RefactorSupport.ctorConditionalDefaultFinalEdits(source, span, plugin) != null;
 		// The no-init arm's single-file proof embeds the cheap syntactic no-initializer /
-		// non-property checks, so a field qualifying for NEITHER arm bails here; the parse
+		// non-property checks, so a field qualifying for NO arm bails here; the parse
 		// behind the predicate is memoized by the caching plugin.
-		if (!initialized && !RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
+		if (!folded && !initialized && !RefactorSupport.ctorSoleAssignmentFinalizable(source, field, plugin)) return;
 		if (index.supertypeDeclaresMember(owner, name)) return;
 		// Interface-mutability gate — complements supertypeDeclaresMember (which resolves
 		// a supertype member by name but treats an UNRESOLVABLE interface as absent): an
@@ -141,13 +150,13 @@ final class PreferFinalPublicField implements Check {
 		// `name`, so `var → final` is unsafe and skipped conservatively.
 		if (index.implementsInterfaceDeclaringMember(owner, name)) return;
 		if (writeIndex.hasUnresolvedWriteTargeting(name, owner, file)) return;
-		if (initialized) {
+		if (initialized && !folded) {
 			if (writeIndex.writtenAnywhere(owner, name)) return;
 		} else {
 			// The constructor assignment IS a write, so `writtenAnywhere` cannot gate this
 			// arm; instead every RESOLVED write must lie inside the declaring file's decl
-			// range — the in-file text scan inside `ctorSoleAssignmentFinalizable` already
-			// proved the constructor statement is the only write there.
+			// range — the in-file text scan inside the predicate already proved the
+			// constructor statement is the only write there. Same for the folded arm.
 			if (writeIndex.writtenOutsideDeclaration(owner, name)) return;
 		}
 		// Cheapest gates first: the subtype walk is the only one that scans other files.
@@ -157,9 +166,11 @@ final class PreferFinalPublicField implements Check {
 			span: span,
 			rule: 'prefer-final-public-field',
 			severity: Severity.Info,
-			message: initialized
-				? 'public field \'$name\' is never reassigned; use final'
-				: 'public field \'$name\' is assigned only in the constructor; use final'
+			message: folded
+				? 'public field \'$name\' has a null-guarded constructor default; use final and default with ??'
+				: initialized
+					? 'public field \'$name\' is never reassigned; use final'
+					: 'public field \'$name\' is assigned only in the constructor; use final'
 		});
 	}
 

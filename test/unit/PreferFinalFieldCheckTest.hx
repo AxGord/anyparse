@@ -325,4 +325,35 @@ class PreferFinalFieldCheckTest extends Test {
 		return out;
 	}
 
+
+	/**
+	 * The conditional-default fold on a PRIVATE field: a declaration default whose only
+	 * other write is one `if (p != null) _x = p;` constructor statement folds into
+	 * `final` plus a `??` assignment.
+	 */
+	public function testCtorConditionalDefaultPrivateFlagged(): Void {
+		final vs: Array<Violation> =
+			violations('class C { private var _n:Int = 5; public function new(?n:Int) { if (n != null) _n = n; } }');
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-final-field', vs[0].rule);
+		Assert.isTrue(vs[0].message.indexOf('null-guarded constructor') >= 0);
+	}
+
+	/** The private fold is the same two edits. */
+	public function testCtorConditionalDefaultPrivateFixed(): Void {
+		final fixed: String = fixedSource('class C { private var _n:Int = 5; public function new(?n:Int) { if (n != null) _n = n; } }');
+		Assert.isTrue(fixed.indexOf('private final _n:Int;') >= 0);
+		Assert.isTrue(fixed.indexOf('_n = n ?? 5;') >= 0);
+	}
+
+	/** A second write in a method breaks single-assignment — skipped. */
+	public function testCtorConditionalDefaultPrivateMethodWriteNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { private var _n:Int = 5; public function new(?n:Int) { if (n != null) _n = n; } function s():Void { _n = 1; } }'
+			).length
+		);
+	}
+
 }

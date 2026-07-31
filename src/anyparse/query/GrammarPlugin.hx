@@ -1009,6 +1009,17 @@ typedef RefShape = {
 	@:optional var nullCoalesceKind: String;
 
 	/**
+	 * The null-coalescing operator TEXT (`??`) — the emitter counterpart of
+	 * `nullCoalesceKind`, used by `RefactorSupport.ctorConditionalDefaultFinalEdits`
+	 * to build the `<param> ?? <default>` assignment that folds a null-guarded
+	 * constructor default into a `final` field. Optional; unset makes that fold a
+	 * no-op (and with it the `prefer-final-field` / `prefer-final-public-field`
+	 * conditional-default arm), so a grammar without a coalescing operator is
+	 * byte-inert.
+	 */
+	@:optional var nullCoalesceOperatorText: String;
+
+	/**
 	 * The `is` type-check expression kind (`x is T`) — the `redundant-is-check`
 	 * check flags one whose value operand is a plain identifier of declared type
 	 * `T` (and provably non-null), so the test is always true. The node's
