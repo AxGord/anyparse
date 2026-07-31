@@ -80,7 +80,7 @@ typedef SortPlan = {
 }
 
 /**
- * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A conditional block still moves as ONE atomic unit, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single group whose members sort within their own branch, so the construct is regenerated rather than flattened. Such a block sorts by its CONTENT: when every member of the block carries the same `MemberRank`, the block sorts at that rank among the plain members of its section, trailing them WITHIN the rank - crossing a rank boundary is what content ranking is for, position inside one rank is not - so a guarded `public var` no longer trails the private instance fields it outranks. A block is one `groupKey` bucket (section, condition, branch shape), the same granularity the pinned order already used: a construct declaring both fields and methods under one condition splits into one block per section, and each is ranked on its own. Content ranking is gated three ways, and any doubt pins the block back to its section end (`comparePinned`, the pre-existing shape): (1) all members of the block must share ONE rank, since a mixed-rank block would have to be split and atomicity beats ordering; (2) every byte of the conditional construct must be accounted for by a member slot, an absorbed lead doc, a REGENERABLE directive line, or whitespace, and the `#end` line must end there - anything else (a stray `;`, which projects as `EmptySemiMember` and is no collected member; a note on a directive line, which the regenerated directive would drop; a note after the `#end`, which the rebuild would leave behind for whichever member ends up last) would be lost or re-attached to the wrong member; (3) no field initializer may tie the block to its position, in EITHER direction - a field in the block whose initializer has a side effect or reads another field, or a field outside it whose initializer reads one inside. Those gates are deliberately INDEPENDENT of the `movableArglessNew` option below: `compareOrder` is shared by the REPORT path (`run` -> `walk` -> `firstLayoutIssue`) and the FIX path, and the report path resolves no per-file config, so a rank that depended on an option would make the two disagree and the fix would never converge. A gate on position-sensitive constructs in the CONDITION of the `#if` itself is a documented NO-OP for this grammar: a Haxe conditional-compilation condition is a pure compile-time define expression evaluated before parsing, with no ordered declaration and no `#define`, so nothing in it has a position that could matter - a grammar that grows one must add that gate here. A container whose field initializers make reordering unsafe - or which holds an `#else` shape the branch model refuses (nested, spanning two sections, or with an empty first branch), or a conditional region holding bytes no member slot covers - keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. One residual report-only case is specific to content ranking: the block gates cannot see WHICH members the block will cross (that needs the sorted order the gates feed), so a container where a moved block would flip with a same-phase side-effecting UNCONDITIONAL initializer is flagged and then bails to spacing-only, the same advisory shape the rule already produces for a plain unsafe container. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable - reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A conditional block still moves as ONE atomic unit, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single group whose members sort within their own branch, so the construct is regenerated rather than flattened. Such a block sorts by its CONTENT: when every member of the block carries the same `MemberRank`, the block sorts at that rank among the plain members of its section, trailing them WITHIN the rank - crossing a rank boundary is what content ranking is for, position inside one rank is not - so a guarded `public var` no longer trails the private instance fields it outranks. A block is one `groupKey` bucket (section, condition, branch shape), the same granularity the pinned order already used: a construct declaring both fields and methods under one condition splits into one block per section, and each is ranked on its own. Content ranking is gated three ways, and any doubt pins the block back to its section end (`comparePinned`, the pre-existing shape): (1) all members of the block must share ONE rank, since a mixed-rank block would have to be split and atomicity beats ordering; (2) every byte of the conditional construct must be accounted for by a member slot, an absorbed lead doc, a REGENERABLE directive line, or whitespace, and the `#end` line must end there - anything else (a stray `;`, which projects as `EmptySemiMember` and is no collected member; a note on a directive line, which the regenerated directive has nowhere to put; a note after the `#end`, which the rebuild drops or re-attaches to the wrong member) would be lost or misplaced; (3) no field initializer may tie the block to its position, in EITHER direction - a field in the block whose initializer has a side effect or reads another same-phase field, or a field outside it whose initializer reads one inside. Those gates are deliberately INDEPENDENT of the `movableArglessNew` option below: `compareOrder` is shared by the REPORT path (`run` -> `walk` -> `firstLayoutIssue`) and the FIX path, and the report path resolves no per-file config, so a rank that depended on an option would make the two disagree and the fix would never converge. A gate on position-sensitive constructs in the CONDITION of the `#if` itself is a documented NO-OP for this grammar: a Haxe conditional-compilation condition is a pure compile-time define expression evaluated before parsing, with no ordered declaration and no `#define`, so nothing in it has a position that could matter - a grammar that grows one must add that gate here. A container whose field initializers make reordering unsafe - or which holds an `#else` shape the branch model refuses (nested, spanning two sections, or with an empty first branch), or a conditional region holding bytes no member slot covers - keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. One residual report-only case is specific to content ranking: a moved block that flips with a same-phase side-effecting UNCONDITIONAL initializer is flagged and then bails to spacing-only. Demoting the block and re-sorting would close it, but the sole trigger is `hasSideEffectingFieldFlip` - the one gate the `movableArglessNew` option relaxes - so a retry would reintroduce exactly the report/fix option disagreement the config-independent gates exist to prevent. The finding is the same advisory shape the rule already produces for a plain unsafe container, and neither TM nor this repo holds an instance of it. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable - reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
 final class MemberOrder implements Check implements ConfigAware {
@@ -344,12 +344,14 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * Whether every conditional region holds only member slots, absorbed lead docs, directive
-	 * lines and whitespace - `regionContentCovered` over every conditional member, in the same
-	 * conservative direction the block-ranking gate reads it. `buildConditionalRegion` rebuilds
-	 * `[members[0].regionFrom, last.regionTo]` from member slots plus REGENERATED directives, so
-	 * an uncovered byte inside a conditional region (a stray `;`) would be silently dropped;
-	 * refusing here degrades the container to the spacing-only fallback instead.
+	 * Whether every conditional region holds only member slots, absorbed lead docs, regenerable
+	 * directive lines and whitespace - `regionContentCovered` over every conditional member, in the
+	 * same conservative direction the block-ranking gate reads it. `buildConditionalRegion` rebuilds
+	 * `[members[0].regionFrom, last.regionTo]` from member slots plus REGENERATED directives, so an
+	 * uncovered byte inside a conditional region (a stray `;`) would be silently dropped; refusing
+	 * here degrades the container to the spacing-only fallback instead. Note the gate is SHARED with
+	 * `computePlan`, at a different granularity - tightening it for a block-local reason also widens
+	 * this container-wide bail.
 	 */
 	private static function conditionalRegionsCovered(members: Array<OrderedMember>, source: String): Bool {
 		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
@@ -944,8 +946,10 @@ final class MemberOrder implements Check implements ConfigAware {
 	/**
 	 * Whether `text` holds only blank lines and conditional-compilation directive lines the rebuild
 	 * regenerates. A directive line carrying a COMMENT is refused: `buildConditionalRegion` re-emits
-	 * the directive from the recorded condition and branch shape alone, so `#if X // why` would come
-	 * back as a bare `#if X` and the note would be lost.
+	 * the directive from the recorded condition and branch shape alone, so the note has nowhere to
+	 * go. `hasOrphanComment` already refuses the REBUILD for that shape, so what this clause adds is
+	 * keeping the block pinned - without it the container reads as out of order and reports a finding
+	 * the fixer can never apply.
 	 */
 	private static function isDirectiveOrBlank(text: String): Bool {
 		for (line in text.split('\n')) {
@@ -975,7 +979,7 @@ final class MemberOrder implements Check implements ConfigAware {
 		}
 		for (g in all) {
 			final init: Null<QueryNode> = g.initNode;
-			if (!g.isField || init == null) continue;
+			if (!g.isField || init == null || block.contains(g)) continue;
 			if (readsAnyFieldName(init, block, g, source)) return false;
 		}
 		return true;
@@ -1286,11 +1290,12 @@ final class MemberOrder implements Check implements ConfigAware {
 
 
 	/**
-	 * Whether the rest of the line after `at` is blank. The region a conditional member reports
-	 * ends right after its `#end`, so a comment written on that line (`#end // note`) sits just
-	 * OUTSIDE the region - `uncoveredIsDirectiveOnly` never scans it, and the rebuild, which
-	 * replaces `[first.regionFrom, last.regionTo)`, leaves it behind for whichever member ends
-	 * up last. Refusing here keeps that comment attached to the construct it annotates.
+	 * Whether the rest of the line after `at` is blank. The region a conditional member reports ends
+	 * right after its `#end`, so a comment written on that line (`#end // note`) sits just OUTSIDE
+	 * the region and `uncoveredIsDirectiveOnly` never scans it. The rebuild replaces
+	 * `[first.regionFrom, last.regionTo)`: for the LAST construct the note falls after that span and
+	 * is left behind for whichever member ends up last, for any earlier construct it falls inside and
+	 * is dropped outright. Refusing here keeps the note attached to the construct it annotates.
 	 */
 	private static function tailOfLineBlank(source: String, at: Int): Bool {
 		final nl: Int = source.indexOf('\n', at);
@@ -1299,10 +1304,12 @@ final class MemberOrder implements Check implements ConfigAware {
 
 
 	/**
-	 * Whether `init` (the initializer of field `owner`) textually reads the name of any OTHER
-	 * field in `fields`. The scan is a raw identifier-boundary read, so it over-reports (a
-	 * mention in a comment or a `$name` interpolation counts) - the conservative direction for
-	 * a gate that must refuse anything it cannot prove independent.
+	 * Whether `init` (the initializer of field `owner`) textually reads the name of another
+	 * SAME-PHASE field in `fields` - statics initialise at class-load and instance fields in the
+	 * constructor, so a cross-phase read can never observe declaration order, the same phase gate
+	 * `hasSiblingReadFlip` applies. The scan is a raw identifier-boundary read, so within a phase it
+	 * over-reports (a mention in a comment or a `$name` interpolation counts) - the conservative
+	 * direction for a gate that must refuse anything it cannot prove independent.
 	 */
 	private static function readsAnyFieldName(init: QueryNode, fields: Array<OrderedMember>, owner: OrderedMember, source: String): Bool {
 		final span: Null<Span> = init.span;
@@ -1310,7 +1317,8 @@ final class MemberOrder implements Check implements ConfigAware {
 		for (f in fields) {
 			final name: Null<String> = f.node.name;
 			if (
-				f.isField && f.node != owner.node && name != null && RefactorSupport.referencedInRange(source, name, span.from, span.to, [])
+				f.isField && f.isStatic == owner.isStatic && f.node != owner.node && name != null
+				&& RefactorSupport.referencedInRange(source, name, span.from, span.to, [])
 			)
 				return true;
 		}

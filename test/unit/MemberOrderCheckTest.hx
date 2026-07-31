@@ -848,12 +848,6 @@ class MemberOrderCheckTest extends Test {
 		);
 	}
 
-	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
-	private inline function contentRankedBlockSource(): String {
-		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
-			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
-	}
-
 
 	/**
 	 * A note on the `#end` line pins the block and bails the reorder. The conditional region
@@ -869,8 +863,10 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * A note on a DIRECTIVE line pins the block too: the rebuild re-emits `#if` / `#else` from
-	 * the recorded condition and branch shape alone, so the note would not survive.
+	 * A note on a DIRECTIVE line pins the block too: the rebuild re-emits `#if` / `#else` from the
+	 * recorded condition and branch shape alone, so the note would have nowhere to go. The pin
+	 * (assertion 1) is what this gate buys - the edit assertion is belt-and-braces, held up by
+	 * `hasOrphanComment` even with the gate reverted.
 	 */
 	public function testDirectiveLineCommentPinsBlock(): Void {
 		final src: String = 'class C {\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
@@ -899,14 +895,23 @@ class MemberOrderCheckTest extends Test {
 	}
 
 	/**
-	 * An unconditional initializer that READS a field inside the block pins it: the gate refuses
-	 * in both directions, since moving the block past that initializer changes what it sees.
+	 * An unconditional initializer that READS a field inside the block pins it: the gate refuses in
+	 * both directions, since moving the block past that initializer changes what it sees. The pin
+	 * (assertion 1) is what this gate buys - the edit assertion is belt-and-braces, held up by
+	 * `hasSiblingReadFlip` even with the gate reverted.
 	 */
 	public function testOutsideInitReadingBlockFieldPinsBlock(): Void {
 		final src: String =
 			'class C {\n\tprivate static var uses:Int = guarded;\n\n\t#if X\n\tpublic static var guarded:Int = 5;\n\t#end\n}';
 		Assert.equals(0, violations(src).length, 'the pinned block leaves the container canonical: $src');
 		Assert.equals(0, edits(src).length, 'no edit can reverse the read');
+	}
+
+
+	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
+	private inline function contentRankedBlockSource(): String {
+		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
+			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
 	}
 
 }
