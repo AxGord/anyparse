@@ -152,9 +152,11 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * instance / class the rename could not prove), a local / parameter / capture that
 	 * shadows the FIELD name (including the grammar-dropped multi-var and key-value-for
 	 * binding slots), or a case-pattern mention of it, all leave the finding report-only.
-	 * A bare backing-field reference inside a function that binds a parameter / local of the
-	 * PROPERTY name is rewritten as `this.<prop>` (a plain `<prop>` would resolve to that
-	 * binding, not the field — silent data loss). NOTE: a null `index` skips the
+	 * A bare backing-field reference inside a function that binds the PROPERTY name in ANY form
+	 * — parameter, local, loop / comprehension variable, catch variable, pattern capture, lambda
+	 * parameter — is rewritten as `this.<prop>` (`<Class>.<prop>` for a static property or a
+	 * static method), since a plain `<prop>` would resolve to that binding, not the field —
+	 * silent data loss. NOTE: a null `index` skips the
 	 * subclass-override, backing-field-reference and interface-conformance gates — the production `lint --fix` caller
 	 * always passes one; a direct caller without an index must ensure no subtype overrides or reads
 	 * the getter or its backing field and no implemented interface requires it.
@@ -235,7 +237,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 				final c = classifyProperty(cls, src, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 				if (c == null || c.inlineGetter != null) return null;
 				if (!subtypeIndex.subtypeReferencesField(owner, c.field)) return null;
-				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, c);
+				final ownerEdits: Null<Array<{ span: Span, text: String }>> = buildFix(cls, src, prop.span, prop.name, prop.isStatic, c);
 				if (ownerEdits == null) return null;
 				final oe: Array<{ span: Span, text: String }> = ownerEdits;
 				final subtypeSlices: Null<Array<CrossFileEdits>> = crossFileReadRewrite(
@@ -397,7 +399,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			final c = classifyProperty(cls, source, index, prop, t.getters, t.setters, t.privateFieldNodes, maxBypass);
 			if (c == null) continue;
 			if (subtypeFieldBlocks(index, className, c.field, c.inlineGetter)) continue;
-			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, c);
+			final e: Null<Array<{ span: Span, text: String }>> = buildFix(cls, source, prop.span, prop.name, prop.isStatic, c);
 			if (e != null) for (edit in e) out.push(edit);
 		}
 	}
@@ -413,7 +415,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * Null when a semicolon / span cannot be located or the reference rename is not provably safe.
 	 */
 	private static function buildFix(
-		cls: QueryNode, source: String, propSpan: Span, propName: String, c: {
+		cls: QueryNode, source: String, propSpan: Span, propName: String, propStatic: Bool, c: {
 			field: String,
 			fieldNode: QueryNode,
 			message: String,
@@ -454,7 +456,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			skipSpans.push(cs);
 		}
 		final renames: Null<Array<{ span: Span, text: String }>> = collectRenameEdits(
-			cls, source, c.field, skipSpans, c.fieldNode, propName
+			cls, source, c.field, skipSpans, c.fieldNode, propName, propStatic
 		);
 		if (renames == null) return null;
 		for (e in renames) edits.push(e);
@@ -463,12 +465,16 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			: applyBypassMarks(c.bypassStmts, edits) ? edits : null;
 	}
 
-	/** The rename edits for every backing-field reference in `cls`, or null when any reference is not provably the field. */
+	/**
+	 * The rename edits for every backing-field reference in `cls`, or null when any reference is
+	 * not provably the field. `propStatic` marks a STATIC property: `this` cannot reach it from
+	 * anywhere, so a shadowed reference is class-qualified in every method, not only a static one.
+	 */
 	private static function collectRenameEdits(
-		cls: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String
+		cls: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, propStatic: Bool
 	): Null<Array<{ span: Span, text: String }>> {
 		final edits: Array<{ span: Span, text: String }> = [];
-		return renameWalk(cls, source, field, skipSpans, fieldNode, propName, false, false, cls.name, false, edits) ? edits : null;
+		return renameWalk(cls, source, field, skipSpans, fieldNode, propName, false, false, cls.name, propStatic, edits) ? edits : null;
 	}
 
 	/**
@@ -479,23 +485,25 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * `skipSpans` subtree (each deleted accessor, plus a relocated constructor-init statement)
 	 * are skipped; the KEPT accessor is NOT in `skipSpans`, so its references ARE renamed.
 	 * `inPattern` marks a case-pattern subtree. `shadowsProp` is set once an enclosing function
-	 * binds a parameter / local named `propName`: a bare `field` reference there must rewrite to
-	 * `this.propName` (or to `<ClassName>.propName` inside a static method, where `this` is
-	 * illegal, via `shadowQualifier`), since a plain `propName` would resolve to that binding
-	 * instead of the field (silent data loss).
+	 * binds `propName` in ANY form (`functionBindsName`): a bare `field` reference there must
+	 * rewrite to `this.propName` (or to `<ClassName>.propName` via `shadowQualifier` when
+	 * `classQualified` — inside a static method, where `this` is illegal, or for a static
+	 * property, which `this` never reaches), since a plain `propName` would resolve to that
+	 * binding instead of the field (silent data loss).
 	 */
 	private static function renameWalk(
 		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, inPattern: Bool,
-		shadowsProp: Bool, className: Null<String>, staticCtx: Bool, out: Array<{ span: Span, text: String }>
+		shadowsProp: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		if (node == fieldNode) return true;
 		final span: Null<Span> = node.span;
 		if (span != null && withinAny(skipSpans, span)) return true;
 		if (hidesBindingNamed(node, span, source, field)) return false;
 		final nowPattern: Bool = inPattern || node.kind == 'Plain';
-		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, staticCtx, className, nowPattern, out)) return false;
-		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
-		return renameChildren(node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, staticCtx, out);
+		if (!renameFieldRef(node, span, source, field, propName, shadowsProp, classQualified, className, nowPattern, out)) return false;
+		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, source, propName));
+		return
+			renameChildren(node, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, classQualified, out);
 	}
 
 	/**
@@ -507,14 +515,15 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	 * carrying the field name. A node that does not name the field is left untouched (true).
 	 */
 	private static function renameFieldRef(
-		node: QueryNode, span: Null<Span>, source: String, field: String, propName: String, shadowsProp: Bool, staticCtx: Bool,
+		node: QueryNode, span: Null<Span>, source: String, field: String, propName: String, shadowsProp: Bool, classQualified: Bool,
 		className: Null<String>, nowPattern: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		if (node.name != field) return true;
 		if (nowPattern) return false;
 		switch node.kind {
 			case 'IdentExpr':
-				if (span != null) out.push({ span: span, text: shadowsProp ? shadowQualifier(staticCtx, className) + propName : propName });
+				if (span != null)
+					out.push({ span: span, text: shadowsProp ? shadowQualifier(classQualified, className) + propName : propName });
 			case 'FieldAccess':
 				if (span == null || node.children.length != 1 || node.children[0].kind != 'IdentExpr' || node.children[0].name != 'this')
 					return false;
@@ -548,18 +557,19 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Recurse `renameWalk` over `node`'s children, threading the pattern / shadow / static
+	 * Recurse `renameWalk` over `node`'s children, threading the pattern / shadow / qualifier
 	 * context. `mods` accumulates the modifier-sibling kinds preceding a member so a `static`
-	 * child function is recursed with `staticCtx` set (reset at each member boundary). Returns
-	 * false as soon as any descendant refuses the fix.
+	 * child function is recursed with `classQualified` set (reset at each member boundary; a
+	 * static property seeds it for the whole class). Returns false as soon as any descendant
+	 * refuses the fix.
 	 */
 	private static function renameChildren(
 		node: QueryNode, source: String, field: String, skipSpans: Array<Span>, fieldNode: QueryNode, propName: String, nowPattern: Bool,
-		childShadows: Bool, className: Null<String>, staticCtx: Bool, out: Array<{ span: Span, text: String }>
+		childShadows: Bool, className: Null<String>, classQualified: Bool, out: Array<{ span: Span, text: String }>
 	): Bool {
 		var mods: Array<String> = [];
 		for (c in node.children) {
-			final childStatic: Bool = staticCtx || (isFnScope(c) && mods.contains('Static'));
+			final childStatic: Bool = classQualified || (isFnScope(c) && mods.contains('Static'));
 			if (!renameWalk(c, source, field, skipSpans, fieldNode, propName, nowPattern, childShadows, className, childStatic, out))
 				return false;
 			mods = switch c.kind {
@@ -579,18 +589,58 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Whether the subtree `node` binds a parameter / local / catch var named `name`. Scanned
-	 * subtree-wide from a function scope, so a nested function's binding also trips it —
-	 * over-qualifying a backing-field write with `this.` is always semantically correct.
+	 * Whether the subtree `node` binds `name` in ANY form the language offers (`bindsNameHere`).
+	 * Scanned subtree-wide from a function scope, so a nested function's binding also trips it —
+	 * over-qualifying a backing-field reference with `this.` / `C.` is always semantically
+	 * correct, while MISSING a binder silently re-binds the reference to it (a loop variable
+	 * named like the property turned `if (color == _color)` into the always-true `color == color`).
 	 */
-	private static function functionBindsName(node: QueryNode, name: String): Bool {
-		switch node.kind {
-			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam' | 'VarStmt' | 'FinalStmt' | 'LocalFnStmt' | 'CatchClause':
-				if (node.name == name) return true;
-			case _:
-		}
-		for (c in node.children) if (functionBindsName(c, name)) return true;
+	private static function functionBindsName(node: QueryNode, source: String, name: String): Bool {
+		if (bindsNameHere(node, source, name)) return true;
+		for (c in node.children) if (functionBindsName(c, source, name)) return true;
 		return false;
+	}
+
+	/**
+	 * Whether `node` ITSELF binds `name`. Every binding form the grammar projects as a named
+	 * node: a parameter (`Required` / `Optional` / `Rest` / `LambdaParam`), a local declaration
+	 * (`VarStmt` / `FinalStmt`, their expression twins, and the `VarMore` continuation of a
+	 * multi-var list), a local function, a catch variable, and the self-scoped `for` iterator
+	 * (`ForStmt` / `ForExpr` — the array-comprehension form is a `ForExpr`).
+	 *
+	 * Three shapes carry no named binding node and are recovered here: a key-value
+	 * `for (k => v in m)` header keeps only the KEY on the node (`forHeaderBinds` reads the
+	 * header text); a single-parameter thin arrow `v -> ...` projects its parameter as a bare
+	 * child-0 `IdentExpr`; and a case PATTERN (`Plain`) projects its captures as bare
+	 * identifiers, so ANY mention of `name` inside one counts (a constructor name that happens
+	 * to match only over-qualifies).
+	 */
+	private static function bindsNameHere(node: QueryNode, source: String, name: String): Bool {
+		return switch node.kind {
+			case 'Required' | 'Optional' | 'Rest' | 'LambdaParam' | 'VarStmt' | 'FinalStmt' | 'VarExpr' | 'FinalExpr' | 'VarMore'
+				| 'LocalFnStmt'
+				| 'CatchClause': node.name == name;
+			case 'ForStmt' | 'ForExpr':
+				node.name == name || forHeaderBinds(node, source, name);
+			case 'ThinArrow':
+				node.children.length > 0 && node.children[0].kind == 'IdentExpr' && node.children[0].name == name;
+			case 'Plain': mentionsField(node, name);
+			case _: false;
+		}
+	}
+
+	/**
+	 * Whether the `for` header of `node` — its span up to the iterable expression — mentions
+	 * `name` as an identifier token. The key-value form `for (k => v in m)` drops the VALUE
+	 * name from the projection entirely, so only the header text can prove that binding. An
+	 * unspanned header answers true: an unprovable header is treated as binding (the
+	 * conservative direction — it only adds a qualifier).
+	 */
+	private static function forHeaderBinds(node: QueryNode, source: String, name: String): Bool {
+		final span: Null<Span> = node.span;
+		if (span == null || node.children.length == 0) return true;
+		final iterSpan: Null<Span> = node.children[0].span;
+		return iterSpan == null || RefactorSupport.identTokenOffset(source, new Span(span.from, iterSpan.from), name) >= 0;
 	}
 
 	/** The `(read, write)` accessor-clause span `[open, close]` of a property (`span.from` at `var`), or null. */
@@ -672,6 +722,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			node: QueryNode,
 			span: Span,
 			isPublic: Bool,
+			isStatic: Bool,
 			write: String
 		}>
 	} {
@@ -693,6 +744,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			node: QueryNode,
 			span: Span,
 			isPublic: Bool,
+			isStatic: Bool,
 			write: String
 		}> = [];
 		var mods: Array<String> = [];
@@ -714,6 +766,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 								node: child,
 								span: span,
 								isPublic: isPublic,
+								isStatic: mods.contains('Static'),
 								write: access.write
 							});
 						}
@@ -785,13 +838,14 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * The qualifier prefix for a shadowed backing-field write: the enclosing class name
-	 * (`C.`) inside a static method — where `this` is illegal — else `this.` for an instance
-	 * method. A `(default, null)` property is writable from within its own class, so
-	 * `C.prop = value` is legal in a static method of `C`.
+	 * The qualifier prefix for a shadowed backing-field reference: the enclosing class name
+	 * (`C.`) whenever `this` cannot carry it — inside a static method, where `this` is illegal,
+	 * and for a STATIC property, which `this` never reaches from any method — else `this.` for
+	 * an instance property in an instance method. A `(default, null)` property is writable from
+	 * within its own class, so `C.prop = value` is legal too.
 	 */
-	private static inline function shadowQualifier(staticCtx: Bool, className: Null<String>): String {
-		return staticCtx && className != null ? '$className.' : 'this.';
+	private static inline function shadowQualifier(classQualified: Bool, className: Null<String>): String {
+		return classQualified && className != null ? '$className.' : 'this.';
 	}
 
 	/**
@@ -1467,7 +1521,7 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			)
 		)
 			return false;
-		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, propName));
+		final childShadows: Bool = shadowsProp || (isFnScope(node) && functionBindsName(node, source, propName));
 		final isWrite: Bool = isWriteNodeKind(node.kind);
 		for (i in 0...node.children.length) if (!subtypeRefWalk(
 			node.children[i], field, owner, propName, index, source, ownerFileScan, cls2, isWrite && i == 0, childShadows, renameEdits,

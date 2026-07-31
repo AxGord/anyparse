@@ -299,6 +299,101 @@ class TrivialGetterCheckTest extends Test {
 		assertFixContains(src, 'this.count = count');
 	}
 
+	// --- (b2) the shadow scan must see EVERY binding form, not just parameters and plain
+	// locals: a loop variable, a key-value loop's value slot, a comprehension variable, a
+	// catch variable, a case-pattern capture, a multi-var continuation and a lambda
+	// parameter all bind the PROPERTY name too, so a backing-field reference under them
+	// must be qualified `this.x` (instance) / `C.x` (static) exactly as under a parameter.
+
+	public function testFixShadowedLoopVarUsesThis(): Void {
+		// The live ColorPickerSelector shape: `for (color in _palette) if (color == _color)`
+		// renamed to `color == color` (always true) because the loop variable was invisible
+		// to the shadow scan.
+		final src: String = cls(
+			'public var color(get, set):Int;\n\tprivate var _color:Int = 0;\n\tprivate var _palette:Array<Int> = [];\n\tfunction get_color():Int return _color;\n\tfunction set_color(v:Int):Int return _color = v;\n\tfunction upd():Void { for (color in _palette) if (color == _color) trace(color); }'
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('color == this.color') >= 0, 'loop-var shadow must qualify the field read');
+		Assert.isTrue(fixed.indexOf('color == color') == -1, 'the always-true self-comparison must be gone');
+	}
+
+	public function testFixShadowedKeyValueForVarUsesThis(): Void {
+		// The grammar keeps only the KEY name of a key-value for header, so a value slot named
+		// like the property is invisible as a node — the header text must be scanned for it.
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m(mp:Map<Int, Int>):Void { for (k => count in mp) trace(k + count + _count); }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedComprehensionVarUsesThis(): Void {
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tprivate var _items:Array<Int> = [];\n\tfunction get_count():Int return _count;\n\tfunction m():Void { var xs = [for (count in _items) count + _count]; trace(xs); }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedCatchVarUsesThis(): Void {
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m():Void { try { risky(); } catch (count:Dynamic) { trace(count + _count); } }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedCasePatternCaptureUsesThis(): Void {
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m(v:Any):Void { switch v { case count: trace(count + _count); } }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedMultiVarContinuationUsesThis(): Void {
+		// `var a = 1, count = 2;` — the continuation binding is a `VarMore` node, absent from
+		// the old binder-kind list.
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m():Void { var a = 1, count = 2; trace(a + count + _count); }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedThinArrowParamUsesThis(): Void {
+		// A single-parameter thin arrow projects its parameter as a bare `IdentExpr`, not a
+		// `Required` / `LambdaParam` node.
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m():Void { var f = count -> count + _count; trace(f(1)); }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixShadowedLambdaParamUsesThis(): Void {
+		final src: String = cls(
+			'public var count(get, never):Int;\n\tprivate var _count:Int = 0;\n\tfunction get_count():Int return _count;\n\tfunction m():Void { var f = (count:Int) -> count + _count; trace(f(1)); }'
+		);
+		assertFixContains(src, 'count + this.count');
+	}
+
+	public function testFixStaticPropertyShadowUsesClassName(): Void {
+		// A STATIC property cannot be reached through `this` — a shadowed reference must be
+		// qualified with the class name even from an instance method.
+		final src: String = cls(
+			'public static var total(get, never):Int;\n\tprivate static var _total:Int = 0;\n\tstatic function get_total():Int return _total;\n\tfunction m():Void { for (total in [1, 2]) trace(total + _total); }'
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('total + C.total') >= 0, 'a static property must be class-qualified');
+		Assert.isTrue(fixed.indexOf('this.total') == -1, 'a static property is not reachable through this');
+	}
+
+	public function testFixShapeCShadowedLoopVarUsesThis(): Void {
+		// The sibling arm: a TRIVIAL SETTER collapse to (get, default) renames the backing-field
+		// WRITE, which under a loop-variable shadow would become the self-assignment `x = x`.
+		final src: String = cls(
+			'public var x(get, set):Int;\n\tprivate var _x:Int = 0;\n\tprivate var _items:Array<Int> = [];\n\tfunction get_x():Int { redraw(); return _x; }\n\tfunction set_x(v:Int):Int return _x = v;\n\tfunction m():Void { for (x in _items) _x = x; }'
+		);
+		final fixed: String = fixedText(src);
+		Assert.isTrue(fixed.indexOf('this.x = x') >= 0, 'a shadowed write target must be qualified');
+		Assert.isTrue(fixed.indexOf('x(get, default)') >= 0);
+	}
+
 	public function testShapeATrivialGetterRealSetterFlagged(): Void {
 		final vs: Array<Violation> = violations(
 			cls(
