@@ -69,7 +69,14 @@ import anyparse.runtime.Span;
  * (a) `field-init-at-declaration` moves a context-free constructor init to the
  * declaration, and the declaration-initializer case above then rewrites the `var` to
  * `final`; (b) the no-initializer case here also covers the constructor-argument
- * fields that rule cannot move. Both rules handle `var` and `final`, so any pass ordering converges to the same fixpoint. (c) A THIRD arm, `RefactorSupport.ctorConditionalDefaultFinalEdits`, folds an INITIALIZED field whose only other write is one top-level `if (p != null) x = p;` constructor statement into `final x:T;` plus `x = p ?? <default>;` — the declaration default moves into the constructor, so the single assignment becomes unconditional. Checked before the initializer case (which that constructor write would bail anyway), and gated by the same confinement and abstract-mutability checks.
+ * fields that rule cannot move. Both rules handle `var` and `final`, so any pass
+ * ordering converges to the same fixpoint. (c) A THIRD arm,
+ * `RefactorSupport.ctorConditionalDefaultFinalEdits`, folds an INITIALIZED field whose
+ * only other write is one top-level `if (p != null) x = p;` constructor statement into
+ * `final x:T;` plus `x = p ?? <default>;` — the declaration default moves into the
+ * constructor, so the single assignment becomes unconditional. Checked before the
+ * initializer case (which that constructor write would bail anyway), and gated by the
+ * same confinement and abstract-mutability checks.
  */
 @:nullSafety(Strict)
 final class PreferFinalField implements Check {

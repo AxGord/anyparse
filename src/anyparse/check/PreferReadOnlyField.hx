@@ -49,7 +49,12 @@ import anyparse.runtime.Span;
  * top-level constructor statement is ALSO that check's territory (its constructor
  * arm makes it `final` outright), so it is ceded through the same shared
  * `RefactorSupport.ctorSoleAssignmentFinalizable` predicate — both checks must agree
- * on it, or such a field would get two conflicting fixes (or none). An INITIALIZED field whose only other write is one `if (p != null) x = p;` constructor statement is that check as well (its conditional-default arm folds the default into the constructor), and is ceded through `RefactorSupport.ctorConditionalDefaultFinalEdits` for the same reason. The two checks therefore never emit conflicting fixes for the same field. NOTE: the cession is
+ * on it, or such a field would get two conflicting fixes (or none). An INITIALIZED
+ * field whose only other write is one `if (p != null) x = p;` constructor statement
+ * is that check's as well — its conditional-default arm folds the default into the
+ * constructor — and is ceded through `RefactorSupport.ctorConditionalDefaultFinalEdits`
+ * for the same reason. The two checks therefore never emit conflicting fixes for the
+ * same field. NOTE: the cession is
  * unconditional — it does not check whether `prefer-final-public-field` is enabled,
  * so a config that disables that rule silently drops these findings instead of
  * reporting `(default, null)` for them.

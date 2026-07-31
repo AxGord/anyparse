@@ -122,6 +122,17 @@ private typedef FoldableDecl = {
 	final initSpan: Span;
 	final initDrop: Span;
 };
+/**
+ * The constructor side of a null-guarded constructor-default fold: the whole
+ * `if (p != null) x = p;` statement to replace, the assignment target and the guarded
+ * parameter to rebuild it from, and the bytes the assignment ended with.
+ */
+private typedef GuardedCtorInit = {
+	final stmt: Span;
+	final target: Span;
+	final param: String;
+	final terminator: String;
+};
 @:nullSafety(Strict)
 final class RefactorSupport {
 
@@ -2658,7 +2669,6 @@ final class RefactorSupport {
 		return StringTools.startsWith(head, 'import ') || StringTools.startsWith(head, 'using ');
 	}
 
-
 	/**
 	 * The two-edit fold of a NULL-GUARDED constructor default: a field declared WITH a
 	 * default (`var x:T = D;`, plain or `(default, null)`) whose only write beyond that
@@ -2713,13 +2723,9 @@ final class RefactorSupport {
 		final decl: Null<FoldableDecl> = foldableDeclaration(source, loc, declSpan, shape);
 		final ctor: Null<QueryNode> = soleConstructor(loc.container, shape);
 		if (decl == null || ctor == null) return null;
-		final guarded: Null<{
-			stmt: Span,
-			target: Span,
-			param: String,
-			terminator: String
-		}> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
+		final guarded: Null<GuardedCtorInit> = soleGuardedCtorFieldInit(source, loc.container, ctor, loc.field, shape);
 		if (guarded == null || !ctorParamIsNullable(source, ctor, guarded.param, shape)) return null;
+		if (!guardReachedIntact(source, ctor, decl.name, guarded.stmt.from, shape)) return null;
 		if (
 			MemberWriteScan.writtenInRange(source, decl.name, guarded.target, 0, decl.span.from)
 			|| MemberWriteScan.writtenInRange(source, decl.name, guarded.target, decl.span.to, source.length)
@@ -2761,8 +2767,9 @@ final class RefactorSupport {
 
 	/**
 	 * The declaration's initializer expression node, or null when the field has none.
-	 * The LAST child is the initializer unless it is a type annotation — an anonymous
-	 * structure type (`declTypeChildKinds`) projects as a child of the declaration too.
+	 * The LAST child is the initializer unless it is a type annotation
+	 * (`typeAnnotationKinds`) — an anonymous structure type projects as a child of the
+	 * declaration too.
 	 */
 	private static function declInitializer(field: QueryNode, shape: RefShape): Null<QueryNode> {
 		final typeKinds: Array<String> = shape.typeAnnotationKinds ?? [];
@@ -2792,18 +2799,22 @@ final class RefactorSupport {
 	/**
 	 * Whether the declaration default `node` can be MOVED into constructor position
 	 * unchanged. A positive whitelist, not a list of rejected shapes: a numeric or
-	 * boolean literal, a string literal with no interpolation, a negated numeric
-	 * literal, or a dotted constant chain (`constantChain`). Everything else — an
-	 * allocation, a call, a bare identifier, `this` — fails by construction.
+	 * boolean literal, a plain string literal, a negated numeric literal, or a dotted
+	 * constant chain (`constantChain`). Everything else — an allocation, a call, a bare
+	 * identifier, `this` — fails by construction. A string qualifies only when it carries
+	 * no interpolation at all: `containsInterpolation` catches the shorthand `$name` form,
+	 * and the childless-fragments test catches the `${expr}` form, whose hole projects as
+	 * a nested expression node rather than an interpolation kind.
 	 */
-	private static function moveSafeDefault(source: String, node: QueryNode, shape: RefShape): Bool {
+	private static function defaultIsMoveSafe(source: String, node: QueryNode, shape: RefShape): Bool {
 		final numeric: Array<String> = shape.numericLiteralKinds ?? [];
 		if (numeric.contains(node.kind)) return true;
 		if (node.kind == shape.boolLitKind) return true;
-		if ((shape.stringLiteralKinds ?? []).contains(node.kind)) return !containsInterpolation(node, shape);
-		return node.kind == shape.negationKind
-			? node.children.length == 1 && numeric.contains(node.children[0].kind)
-			: node.kind == shape.fieldAccessKind && constantChain(source, node, shape);
+		return (shape.stringLiteralKinds ?? []).contains(node.kind)
+			? !containsInterpolation(node, shape) && node.children.foreach(c -> c.children.length == 0)
+			: node.kind == shape.negationKind
+				? node.children.length == 1 && numeric.contains(node.children[0].kind)
+				: node.kind == shape.fieldAccessKind && constantChain(source, node, shape);
 	}
 
 	/** Whether `node`'s subtree carries a string-interpolation hole, which reads surrounding bindings. */
@@ -2846,30 +2857,15 @@ final class RefactorSupport {
 	 */
 	private static function soleGuardedCtorFieldInit(
 		source: String, container: QueryNode, ctor: QueryNode, field: QueryNode, shape: RefShape
-	): Null<{
-		stmt: Span,
-		target: Span,
-		param: String,
-		terminator: String
-	}> {
+	): Null<GuardedCtorInit> {
 		final ifKinds: Array<String> = shape.ifStatementKinds ?? [];
 		final fieldSpan: Null<Span> = field.span;
 		final fieldName: Null<String> = field.name;
 		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
 		if (fieldSpan == null || fieldName == null || body == null) return null;
-		var match: Null<{
-			stmt: Span,
-			target: Span,
-			param: String,
-			terminator: String
-		}> = null;
+		var match: Null<GuardedCtorInit> = null;
 		for (stmt in body.children) if (ifKinds.contains(stmt.kind)) {
-			final found: Null<{
-				stmt: Span,
-				target: Span,
-				param: String,
-				terminator: String
-			}> = guardedFieldAssign(source, stmt, fieldSpan.from, fieldName, container, shape);
+			final found: Null<GuardedCtorInit> = guardedFieldAssign(source, stmt, fieldSpan.from, fieldName, container, shape);
 			if (found == null) continue;
 			if (match != null) return null;
 			match = found;
@@ -2885,24 +2881,11 @@ final class RefactorSupport {
 	 */
 	private static function guardedFieldAssign(
 		source: String, stmt: QueryNode, fieldFrom: Int, fieldName: String, container: QueryNode, shape: RefShape
-	): Null<{
-		stmt: Span,
-		target: Span,
-		param: String,
-		terminator: String
-	}> {
+	): Null<GuardedCtorInit> {
 		final stmtSpan: Null<Span> = stmt.span;
-		if (stmtSpan == null || stmt.children.length != 2) return null;
-		final cond: QueryNode = stmt.children[0];
-		if (cond.kind != shape.notEqKind || cond.children.length != 2 || cond.children[1].kind != shape.nullLiteralKind) return null;
-		final guard: QueryNode = cond.children[0];
-		final param: Null<String> = guard.name;
-		if (guard.kind != shape.identKind || param == null) return null;
-		var branch: QueryNode = stmt.children[1];
-		if (branch.kind == shape.blockStmtKind) {
-			if (branch.children.length != 1) return null;
-			branch = branch.children[0];
-		}
+		final param: Null<String> = nullGuardParamName(stmt, shape);
+		final branch: Null<QueryNode> = guardedSoleStatement(stmt, shape);
+		if (stmtSpan == null || param == null || branch == null) return null;
 		final branchSpan: Null<Span> = branch.span;
 		if (branch.kind != shape.exprStatementKind || branch.children.length != 1 || branchSpan == null) return null;
 		final assign: QueryNode = branch.children[0];
@@ -2911,13 +2894,19 @@ final class RefactorSupport {
 		final target: QueryNode = assign.children[0];
 		final targetSpan: Null<Span> = target.span;
 		final value: QueryNode = assign.children[1];
-		if (targetSpan == null || value.kind != shape.identKind || value.name != param) return null;
-		return !ctorTargetIsField(target, fieldFrom, fieldName, container, shape) ? null : {
-			stmt: stmtSpan,
-			target: targetSpan,
-			param: param,
-			terminator: source.substring(assignSpan.to, branchSpan.to)
-		};
+		// The rewrite regenerates everything outside the assignment, so a comment anywhere
+		// in the statement would be dropped silently — the same fail-closed rule the
+		// declaration side applies in `initializerDropSpan`.
+		return targetSpan == null || value.kind != shape.identKind || value.name != param
+			? null
+			: commentInRange(source, stmtSpan.from, assignSpan.from) || commentInRange(source, assignSpan.to, stmtSpan.to)
+				? null
+				: ctorTargetIsField(target, fieldFrom, fieldName, container, shape) ? {
+					stmt: stmtSpan,
+					target: targetSpan,
+					param: param,
+					terminator: source.substring(assignSpan.to, branchSpan.to)
+				} : null;
 	}
 
 	/**
@@ -2944,7 +2933,6 @@ final class RefactorSupport {
 		return false;
 	}
 
-
 	/**
 	 * The edits finalizing a set of flagged field declarations: the two-edit
 	 * conditional-default fold (`ctorConditionalDefaultFinalEdits`) where it applies, a
@@ -2969,7 +2957,6 @@ final class RefactorSupport {
 		return edits;
 	}
 
-
 	/**
 	 * The declaration geometry `ctorConditionalDefaultFinalEdits` needs, or null when the
 	 * declaration cannot host the fold: it must be a NON-STATIC field whose head is plain
@@ -2991,7 +2978,7 @@ final class RefactorSupport {
 		final init: Null<QueryNode> = declInitializer(field, shape);
 		final initSpan: Null<Span> = init == null ? null : init.span;
 		if (head == null || init == null || initSpan == null) return null;
-		if (initSpan.from < head.end || !moveSafeDefault(source, init, shape)) return null;
+		if (initSpan.from < head.end || !defaultIsMoveSafe(source, init, shape)) return null;
 		final initDrop: Null<Span> = initializerDropSpan(source, fieldSpan, initSpan, head.end);
 		return initDrop == null ? null : {
 			name: name,
@@ -3000,6 +2987,66 @@ final class RefactorSupport {
 			initSpan: initSpan,
 			initDrop: initDrop
 		};
+	}
+
+	/**
+	 * Whether the constructor reaches the guarded statement with the field still in the
+	 * state the declaration default put it in. A declaration initializer runs at
+	 * constructor ENTRY on EVERY path, so moving it down to the guard's position is
+	 * behaviour-preserving only when nothing before the guard can leave the constructor
+	 * (the field would then never be assigned at all — Haxe's definite-assignment check
+	 * for a `final` field is not flow-sensitive, so that compiles) and nothing before the
+	 * guard mentions the field (a read there sees the default today and an unset field
+	 * after the fold). Both scans are deliberately coarse: a `return` inside a lambda, or
+	 * the field name in a comment or an unrelated local, refuses the candidate.
+	 *
+	 * Residual: a read reached through a helper CALLED from the constructor before the
+	 * guard is invisible here, the same blind spot `field-init-at-declaration` carries for
+	 * the inverse move.
+	 */
+	private static function guardReachedIntact(source: String, ctor: QueryNode, name: String, guardFrom: Int, shape: RefShape): Bool {
+		final body: Null<QueryNode> = ctor.children.find(c -> c.kind == shape.blockBodyKind);
+		final bodySpan: Null<Span> = body == null ? null : body.span;
+		if (body == null || bodySpan == null) return false;
+		return !referencedInRange(source, name, bodySpan.from, guardFrom, [])
+			&& !kindStartsBefore(body, shape.controlExitKinds ?? [], guardFrom);
+	}
+
+	/** Whether `node`'s subtree holds a node of one of `kinds` that STARTS before `boundary`. */
+	private static function kindStartsBefore(node: QueryNode, kinds: Array<String>, boundary: Int): Bool {
+		final span: Null<Span> = node.span;
+		if (span != null && span.from < boundary && kinds.contains(node.kind)) return true;
+		for (child in node.children) if (kindStartsBefore(child, kinds, boundary)) return true;
+		return false;
+	}
+
+	/** Whether `[from, to)` of `source` opens a comment — bytes a statement rewrite would drop. */
+	private static inline function commentInRange(source: String, from: Int, to: Int): Bool {
+		final text: String = source.substring(from, to);
+		return text.indexOf('//') >= 0 || text.indexOf('/*') >= 0;
+	}
+
+	/**
+	 * The parameter name of a bare `<name> != null` guard on `stmt`, or null when the
+	 * condition has any other shape or an `else` branch follows (a second assignment path
+	 * the `??` rewrite cannot express).
+	 */
+	private static function nullGuardParamName(stmt: QueryNode, shape: RefShape): Null<String> {
+		if (stmt.children.length != 2) return null;
+		final cond: QueryNode = stmt.children[0];
+		if (cond.kind != shape.notEqKind || cond.children.length != 2 || cond.children[1].kind != shape.nullLiteralKind) return null;
+		final guard: QueryNode = cond.children[0];
+		return guard.kind == shape.identKind ? guard.name : null;
+	}
+
+	/**
+	 * `stmt`'s then-branch reduced to its SOLE statement, unwrapping one brace level, or
+	 * null when the branch holds anything but exactly one statement.
+	 */
+	private static function guardedSoleStatement(stmt: QueryNode, shape: RefShape): Null<QueryNode> {
+		if (stmt.children.length != 2) return null;
+		final branch: QueryNode = stmt.children[1];
+		return branch.kind != shape.blockStmtKind ? branch : branch.children.length == 1 ? branch.children[0] : null;
 	}
 
 }

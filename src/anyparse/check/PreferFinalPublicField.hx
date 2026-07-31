@@ -34,7 +34,14 @@ import anyparse.runtime.Span;
  *    must lie inside the declaring file's decl range, bailing too when that range
  *    cannot be pinned for an ambiguous simple name, while the predicate's in-file
  *    text scan covers the declaring file itself. `prefer-read-only-field` cedes
- *    exactly these candidates (same predicate), so the two rules stay disjoint. A THIRD arm, `RefactorSupport.ctorConditionalDefaultFinalEdits`, claims an INITIALIZED field (a `(default, null)` property included) whose only write beyond that initializer is one top-level `if (p != null) x = p;` constructor statement: it is single-assignment once the declaration default moves into the constructor, which is what its TWO-edit fix does (`final x:T;` plus `x = p ?? <default>;`). Its whole single-file proof lives in that predicate, and `prefer-read-only-field` cedes these candidates through the same call.
+ *    exactly these candidates (same predicate), so the two rules stay disjoint. A
+ *    THIRD arm, `RefactorSupport.ctorConditionalDefaultFinalEdits`, claims an
+ *    INITIALIZED field (a `(default, null)` property included) whose only write
+ *    beyond that initializer is one top-level `if (p != null) x = p;` constructor
+ *    statement: it is single-assignment once the declaration default moves into the
+ *    constructor, which is what its TWO-edit fix does (`final x:T;` plus
+ *    `x = p ?? <default>;`). Its whole single-file proof lives in that predicate, and
+ *    `prefer-read-only-field` cedes these candidates through the same call.
  * 2. No subtype of it can write the field (`MemberWriteScan.subtypeWriteReaches`). A
  *    `this.field` write in a subtype, and any write through a subtype-typed receiver,
  *    are attributed to the SUBTYPE rather than to this type, so the write index alone

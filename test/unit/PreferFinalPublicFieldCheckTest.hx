@@ -680,32 +680,6 @@ class PreferFinalPublicFieldCheckTest extends Test {
 		]).length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	private function fixedSource(src: String): String {
-		final check: PreferFinalPublicField = new PreferFinalPublicField();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
-
-	private function multi(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferFinalPublicField().run(files, new HaxeQueryPlugin());
-	}
-
-	/** Only the violations against the owner `C.hx` — a subtype fixture can carry findings of its own. */
-	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return multi(files).filter(v -> v.file == 'C.hx');
-	}
-
-
 	/**
 	 * The conditional-default fold: a `(default, null)` property with a declaration
 	 * default whose ONLY other write is one `if (p != null) this.x = p;` constructor
@@ -786,6 +760,112 @@ class PreferFinalPublicFieldCheckTest extends Test {
 			0,
 			violations('class C { public var n:Int = 1; public function new(?n:Int) { if (n != null) this.n = n; else this.n = 9; } }').length
 		);
+	}
+
+	/** Control for the interpolation gates: a PLAIN string default is move-safe. */
+	public function testCtorConditionalDefaultPlainStringFlagged(): Void {
+		Assert.equals(
+			1,
+			violations("class C { public var s:String = 'plain'; public function new(?s:String) { if (s != null) this.s = s; } }").length
+		);
+	}
+
+	/**
+	 * A `$name` shorthand interpolation reads a surrounding binding, so the default is not
+	 * movable — caught by the interpolation-kind scan.
+	 */
+	public function testCtorConditionalDefaultShorthandInterpolationNotFlagged(): Void {
+		Assert.equals(
+			0, violations("class C { public var s:String = 'a$b'; public function new(?s:String) { if (s != null) this.s = s; } }").length
+		);
+	}
+
+	/**
+	 * A `${expr}` interpolation hole projects as a nested EXPRESSION node, not an
+	 * interpolation kind, so only the childless-fragments test rejects it. Without that
+	 * test the default would move and could read a value mutated earlier in the ctor.
+	 */
+	public function testCtorConditionalDefaultBlockInterpolationNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations("class C { public var s:String = 'a${K.v}'; public function new(?s:String) { if (s != null) this.s = s; } }").length
+		);
+	}
+
+	/**
+	 * A declaration initializer runs at constructor ENTRY on every path; an early `return`
+	 * before the guard would leave the folded field never assigned at all — and Haxe's
+	 * definite-assignment check for a `final` field does not catch it.
+	 */
+	public function testCtorConditionalDefaultEarlyReturnNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var n:Int = 1; public function new(?p:Int) { return; if (p != null) n = p; } }').length
+		);
+	}
+
+	/** A READ of the field before the guard sees the default today and an unset field after the fold. */
+	public function testCtorConditionalDefaultReadBeforeGuardNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var n:Int = 1; public function new(?p:Int) { trace(n); if (p != null) n = p; } }').length
+		);
+	}
+
+	/** The statement rewrite regenerates everything but the assignment, so an interior comment bails. */
+	public function testCtorConditionalDefaultCommentInBranchNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var n:Int = 1; public function new(?p:Int) { if (p != null) /* why */ n = p; } }').length
+		);
+	}
+
+	/** TWO guarded writes of the same field are not a single conditional default. */
+	public function testCtorConditionalDefaultTwoGuardedWritesNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C { public var n:Int = 1; public function new(?p:Int) { if (p != null) n = p; if (p != null) n = p; } }').length
+		);
+	}
+
+	/** A guarded branch doing MORE than the assignment cannot collapse into one `??` statement. */
+	public function testCtorConditionalDefaultMultiStatementBranchNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var n:Int = 1; public function new(?p:Int) { if (p != null) { n = p; trace(p); } } }').length
+		);
+	}
+
+	/** A BARE identifier default could be another instance field, unset at ctor position — skipped. */
+	public function testCtorConditionalDefaultBareIdentifierNotFlagged(): Void {
+		Assert.equals(0, violations('class C { public var n:Int = other; public function new(?p:Int) { if (p != null) n = p; } }').length);
+	}
+
+	/** Only `(default, null)` maps onto `final`; another accessor pair is refused even with the fold shape. */
+	public function testCtorConditionalDefaultOtherAccessorPairNotFlagged(): Void {
+		Assert.equals(
+			0, violations('class C { public var n(get, set):Int = 1; public function new(?p:Int) { if (p != null) n = p; } }').length
+		);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferFinalPublicField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	private function fixedSource(src: String): String {
+		final check: PreferFinalPublicField = new PreferFinalPublicField();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
+	}
+
+	private function multi(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new PreferFinalPublicField().run(files, new HaxeQueryPlugin());
+	}
+
+	/** Only the violations against the owner `C.hx` — a subtype fixture can carry findings of its own. */
+	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return multi(files).filter(v -> v.file == 'C.hx');
 	}
 
 }

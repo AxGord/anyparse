@@ -305,27 +305,6 @@ class PreferFinalFieldCheckTest extends Test {
 		Assert.equals(1, new PreferFinalField().run(files, new HaxeQueryPlugin()).length);
 	}
 
-	private function violations(src: String): Array<Violation> {
-		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
-	}
-
-	/** Only the violations reported against the owner `C.hx` — a subtype fixture can carry findings of its own. */
-	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
-		return new PreferFinalField().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
-	}
-
-	private function fixedSource(src: String): String {
-		final check: PreferFinalField = new PreferFinalField();
-		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
-		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
-		final sorted: Array<{ span: Span, text: String }> = edits.copy();
-		sorted.sort((a, b) -> b.span.from - a.span.from);
-		var out: String = src;
-		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
-		return out;
-	}
-
-
 	/**
 	 * The conditional-default fold on a PRIVATE field: a declaration default whose only
 	 * other write is one `if (p != null) _x = p;` constructor statement folds into
@@ -354,6 +333,26 @@ class PreferFinalFieldCheckTest extends Test {
 				'class C { private var _n:Int = 5; public function new(?n:Int) { if (n != null) _n = n; } function s():Void { _n = 1; } }'
 			).length
 		);
+	}
+
+	private function violations(src: String): Array<Violation> {
+		return new PreferFinalField().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** Only the violations reported against the owner `C.hx` — a subtype fixture can carry findings of its own. */
+	private function ownerViolations(files: Array<{ file: String, source: String }>): Array<Violation> {
+		return new PreferFinalField().run(files, new HaxeQueryPlugin()).filter(v -> v.file == 'C.hx');
+	}
+
+	private function fixedSource(src: String): String {
+		final check: PreferFinalField = new PreferFinalField();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		final sorted: Array<{ span: Span, text: String }> = edits.copy();
+		sorted.sort((a, b) -> b.span.from - a.span.from);
+		var out: String = src;
+		for (e in sorted) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
+		return out;
 	}
 
 }
