@@ -26,17 +26,19 @@ package anyparse.format.comment;
  * identical comments is still data loss.
  *
  * The scan skips string and regex literals so a `"/* not a comment *\/"`
- * payload never counts as a comment on either side. Interpolation blocks
- * inside a single-quoted string are treated as opaque string content; a
- * nested quote there can mis-lex the tail of the file, which can only ever
- * ADD a phantom comment to one side and freeze the file — the safe
- * direction.
+ * payload never counts as a comment on either side, and it follows a
+ * single-quoted string's `${…}` interpolation as CODE — a nested same-quote
+ * literal there would otherwise desynchronise the scan for the rest of the
+ * file, which is the one way a real loss could hide from this check.
  */
 @:nullSafety(Strict)
 final class CommentInventory {
 
 	/** Longest comment head an error message quotes before eliding. */
 	private static inline final MESSAGE_WIDTH: Int = 60;
+
+	/** The quote that opens an INTERPOLATING string literal in Haxe. */
+	private static inline final SINGLE_QUOTE: Int = "'".code;
 
 	private function new() {}
 
@@ -73,60 +75,83 @@ final class CommentInventory {
 	/**
 	 * Every `//` and `/* *\/` comment in `src`, verbatim and in source
 	 * order, with string and regex literals skipped.
+	 *
+	 * A single-quoted string's `${…}` interpolation is scanned as CODE, so a
+	 * nested same-quote literal (`'a ${f(\'b\')} c'`) cannot desynchronise the
+	 * scan — and a comment written inside the interpolation is counted like
+	 * any other. `$$` is the escaped dollar and opens nothing.
 	 */
 	public static function collect(src: String): Array<String> {
 		final out: Array<String> = [];
 		final len: Int = src.length;
+		// One entry per open `${` interpolation, holding the `{` nesting depth
+		// reached inside it; the frame closes on the `}` that meets depth 0.
+		final interpolations: Array<Int> = [];
+		// The open quote character while inside a string literal, 0 in code.
+		var quote: Int = 0;
 		var i: Int = 0;
 		while (i < len) {
 			final c: Int = StringTools.fastCodeAt(src, i);
-			if (c == '/'.code) {
-				final next: Int = i + 1 < len ? StringTools.fastCodeAt(src, i + 1) : 0;
-				if (next == '/'.code) {
-					final start: Int = i;
-					while (i < len && StringTools.fastCodeAt(src, i) != '\n'.code) i++;
-					out.push(src.substring(start, i));
+			final next: Int = i + 1 < len ? StringTools.fastCodeAt(src, i + 1) : 0;
+			if (quote != 0) {
+				if (c == '\\'.code) {
+					i += 2;
 					continue;
 				}
-				if (next == '*'.code) {
-					final start: Int = i;
-					final close: Int = src.indexOf('*/', i + 2);
-					i = close < 0 ? len : close + 2;
-					out.push(src.substring(start, i));
+				if (quote == SINGLE_QUOTE && c == '$'.code && next == '$'.code) {
+					i += 2;
 					continue;
 				}
+				if (quote == SINGLE_QUOTE && c == '$'.code && next == '{'.code) {
+					interpolations.push(0);
+					quote = 0;
+					i += 2;
+					continue;
+				}
+				if (c == quote) quote = 0;
 				i++;
 				continue;
 			}
-			if (c == '"'.code || c == '\''.code) {
-				i = skipQuoted(src, i + 1, c);
+			if (c == '/'.code && next == '/'.code) {
+				final start: Int = i;
+				while (i < len && StringTools.fastCodeAt(src, i) != '\n'.code) i++;
+				out.push(src.substring(start, i));
+				continue;
+			}
+			if (c == '/'.code && next == '*'.code) {
+				final start: Int = i;
+				final close: Int = src.indexOf('*/', i + 2);
+				i = close < 0 ? len : close + 2;
+				out.push(src.substring(start, i));
+				continue;
+			}
+			if (c == '"'.code || c == SINGLE_QUOTE) {
+				quote = c;
+				i++;
 				continue;
 			}
 			// `~/` opens a regex literal; it runs to an unescaped `/` on the
 			// same line (an unterminated one is a syntax error the parser
 			// would have rejected long before the writer ran).
-			if (c == '~'.code && i + 1 < len && StringTools.fastCodeAt(src, i + 1) == '/'.code) {
+			if (c == '~'.code && next == '/'.code) {
 				i = skipRegex(src, i + 2);
+				continue;
+			}
+			if (interpolations.length > 0 && (c == '{'.code || c == '}'.code)) {
+				final last: Int = interpolations.length - 1;
+				if (c == '{'.code)
+					interpolations[last] = interpolations[last] + 1;
+				else if (interpolations[last] == 0) {
+					interpolations.pop();
+					quote = SINGLE_QUOTE;
+				} else
+					interpolations[last] = interpolations[last] - 1;
+				i++;
 				continue;
 			}
 			i++;
 		}
 		return out;
-	}
-
-	private static function skipQuoted(src: String, from: Int, quote: Int): Int {
-		final len: Int = src.length;
-		var i: Int = from;
-		while (i < len) {
-			final c: Int = StringTools.fastCodeAt(src, i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			i++;
-			if (c == quote) break;
-		}
-		return i;
 	}
 
 	private static function skipRegex(src: String, from: Int): Int {
