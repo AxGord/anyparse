@@ -1242,17 +1242,17 @@ class Renderer {
 			case Empty:
 				return { add: 0, aborted: false, delim: null };
 			case Text(s):
-				if (s.length > 0) return { add: s.length, aborted: false, delim: lastCharIsOpenDelim(s) };
+				if (s.length > 0) return { add: s.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(s) };
 				return { add: 0, aborted: false, delim: null };
 			case Line(flat):
 				if (flat.length > 0 && StringTools.fastCodeAt(flat, 0) == '\n'.code) return { add: 0, aborted: true, delim: null };
 				if (node.mode == MBreak) return { add: 0, aborted: true, delim: null };
-				if (flat.length > 0) return { add: flat.length, aborted: false, delim: lastCharIsOpenDelim(flat) };
+				if (flat.length > 0) return { add: flat.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(flat) };
 				return { add: 0, aborted: false, delim: null };
 			case OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline:
 				return { add: 0, aborted: true, delim: null };
 			case OptSpace(s):
-				return { add: s.length, aborted: false, delim: lastCharIsOpenDelim(s) };
+				return { add: s.length, aborted: false, delim: DocMeasure.lastCharIsOpenDelim(s) };
 			case OptSpaceSkipAfterHardline:
 				return { add: 1, aborted: false, delim: null };
 			case _:
@@ -1261,29 +1261,6 @@ class Renderer {
 				naturalGluableStructural(node, stack, width, col);
 				return { add: 0, aborted: false, delim: null };
 		}
-	}
-
-	/**
-	 * The "ends at an open delimiter" verdict for the last non-whitespace char
-	 * of `s`: `true` for `(` / `[` / `{` or an arrow `->`, `false` for any
-	 * other char, and `null` when `s` has no non-whitespace char (all-space or
-	 * empty) — in which case the caller must LEAVE its running glue state
-	 * unchanged (mirrors the original `recordText`, whose `break` — and thus
-	 * its `lastOpenDelim` write — was never reached for an all-whitespace run).
-	 * Drives the leading-break glue state in `naturalFirstLineGluable`.
-	 */
-	private static function lastCharIsOpenDelim(s: String): Null<Bool> {
-		var i: Int = s.length - 1;
-		while (i >= 0) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c == ' '.code || c == '\t'.code) {
-				i--;
-				continue;
-			}
-			final arrow: Bool = c == '>'.code && i > 0 && StringTools.fastCodeAt(s, i - 1) == '-'.code;
-			return c == '('.code || c == '['.code || c == '{'.code || arrow;
-		}
-		return null;
 	}
 
 	/**

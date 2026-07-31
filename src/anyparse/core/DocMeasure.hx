@@ -51,6 +51,85 @@ final class DocMeasure {
 	}
 
 	/**
+	 * The leading token run that precedes `d`'s FIRST break opportunity —
+	 * what the renderer keeps on the CURRENT line once `d`'s own outermost
+	 * wrap fires (`new Foo(` for a call whose arguments leading-break).
+	 * Reports that run's flat `width` and whether it ENDS AT an open
+	 * delimiter (`endsAtOpenDelim`, the same `(`/`[`/`{`/`->` verdict the
+	 * renderer's leading-break glue state reads through
+	 * `lastCharIsOpenDelim`).
+	 *
+	 * PESSIMISTIC by construction: every conditional (`IfBreak` /
+	 * `If*Exceeds`) resolves to its BREAK side, every `Line` (soft or
+	 * forced), `OptHardline*` and deferred `BodyGroup` terminates the run,
+	 * and a `Fill` contributes only its first item (every inter-item
+	 * separator is a break point). `width` is therefore a LOWER bound on the
+	 * rendered head, and a consumer that fires a last-resort break when the
+	 * head STILL overflows can only under-fire, never over-fire. Two
+	 * documented approximations: a `Line` inside a `Flatten` / `HardFlatten`
+	 * region stops the run even though that region never breaks, and a
+	 * branch-asymmetric conditional with no `Line` at all can make `width`
+	 * exceed `flatTokenWidth(d)` — both stay on the conservative side of the
+	 * consumer's "does the head STILL overflow" question.
+	 *
+	 * Consumer: the decl-header arm of `breakAfterLeadOnOverflow`
+	 * (`WriterLowering.breakAfterLeadOnOverflowWrap`) — a `var` / `final`
+	 * whose RHS already wraps its own call arguments but whose remaining
+	 * header line still exceeds `maxLineLength` breaks after the `=`. The
+	 * glued-shape probes (`IfNaturalFirstLineExceeds`) cannot answer that
+	 * question: they resolve such a RHS flat and measure the ONE-LINE width,
+	 * which reaches the limit for every declaration whose call args wrap.
+	 * `endsAtOpenDelim` is what keeps that consumer off a head that ends at
+	 * an OPERAND — an operator chain led by a literal or an identifier
+	 * carries its wrap on its own LATER lines, and breaking the `=` there
+	 * double-breaks it. A chain whose FIRST operand is itself a bracketed
+	 * construct does end at an open delimiter and does arm: its head is a
+	 * real over-wide line that nothing else can shorten (pinned by
+	 * `HxDeclHeaderEqBreakOverflowTest.testCallLedChainHeadBreaksAfterEq`).
+	 *
+	 * Stack-based walk — items pushed in reverse so pop order matches
+	 * left-to-right traversal; the walk stops at the first break point.
+	 */
+	public static function breakableHead(d: Doc): { width: Int, endsAtOpenDelim: Bool } {
+		final stack: Array<Doc> = [d];
+		var total: Int = 0;
+		var delim: Bool = false;
+		while (stack.length > 0) {
+			final node: Doc = stack.pop();
+			final step: { add: Int, stop: Bool, delim: Null<Bool> } = breakableHeadStep(node, stack);
+			total += step.add;
+			if (step.delim != null) delim = step.delim;
+			if (step.stop) break;
+		}
+		return { width: total, endsAtOpenDelim: delim };
+	}
+
+	/**
+	 * The "ends at an open delimiter" verdict for the last non-whitespace char
+	 * of `s`: `true` for `(` / `[` / `{` or an arrow `->`, `false` for any
+	 * other char, and `null` when `s` has no non-whitespace char (all-space or
+	 * empty) — in which case the caller must LEAVE its running glue state
+	 * unchanged (a whitespace-only run is not a verdict). Two consumers read
+	 * it in the SAME direction (`true` = keep the construct on this line /
+	 * arm the head probe), so it stays tightenable in one place:
+	 * `Renderer.naturalFirstLineGluable`'s leading-break glue state and
+	 * `breakableHead`'s `endsAtOpenDelim`.
+	 */
+	public static function lastCharIsOpenDelim(s: String): Null<Bool> {
+		var i: Int = s.length - 1;
+		while (i >= 0) {
+			final c: Int = StringTools.fastCodeAt(s, i);
+			if (c == ' '.code || c == '\t'.code) {
+				i--;
+				continue;
+			}
+			final arrow: Bool = c == '>'.code && i > 0 && StringTools.fastCodeAt(s, i - 1) == '-'.code;
+			return c == '('.code || c == '['.code || c == '{'.code || arrow;
+		}
+		return null;
+	}
+
+	/**
 	 * True when `d`'s flat rendering contains a FORCED hardline — a
 	 * `Line('\n'…)` on the flat path or inside a deferred `BodyGroup`
 	 * (multi-statement lambda body, trivia-bearing object literal). Walks
@@ -418,6 +497,60 @@ final class DocMeasure {
 				return s.length;
 			case OptSpaceSkipAfterHardline:
 				return 1;
+		}
+	}
+
+	/**
+	 * One step of `breakableHead`'s walk: the node's own width plus
+	 * whether it TERMINATES the head run. Split out of the loop to keep both
+	 * halves under the complexity threshold, mirroring `flatTokenWidthStep`.
+	 */
+	private static function breakableHeadStep(node: Doc, stack: Array<Doc>): { add: Int, stop: Bool, delim: Null<Bool> } {
+		switch (node) {
+			case Empty:
+				return { add: 0, stop: false, delim: null };
+			case Text(s) | OptSpace(s):
+				return { add: s.length, stop: false, delim: lastCharIsOpenDelim(s) };
+			case OptSpaceSkipAfterHardline:
+				return { add: 1, stop: false, delim: null };
+			// Every break point ends the head. A soft `Line` counts even
+			// though its Group may render flat — the head is a lower bound.
+			// `BodyGroup` is deferred content that lays itself out on the
+			// lines below, so its `{` (a preceding `Text`) closes the head.
+			case Line(_) | OptHardline | OptHardlineSkipAtOpenDelim | OptHardlineSkipBeforeHardline | BodyGroup(_):
+				return { add: 0, stop: true, delim: null };
+			case Concat(items):
+				var i: Int = items.length;
+				while (--i >= 0) stack.push(items[i]);
+				return { add: 0, stop: false, delim: null };
+			case Fill(items, _, _) | FillWithRestProbe(items, _, _) | FillBreakAfterWrap(items, _, _):
+				// Only the first item can share the head's line; the
+				// separator before every later item is a break point.
+				if (items.length > 1) stack.push(OptHardline);
+				if (items.length > 0) stack.push(items[0]);
+				return { add: 0, stop: false, delim: null };
+			// Break-side descend: the head is measured as if every
+			// conditional took its wrapping branch.
+			case IfBreak(brk, _) | IfWidthExceeds(_, brk, _) | IfFirstLineExceeds(_, brk, _) | IfLineExceeds(_, brk, _) | IfResidualLineExceeds(
+				_, brk, _
+			) | IfFullLineExceeds(_, brk, _) | IfNaturalFirstLineExceeds(_, brk, _) | IfNaturalFirstLineFitsOpenDelim(_, brk, _):
+				stack.push(brk);
+				return { add: 0, stop: false, delim: null };
+			case IfArrowContinuationFits(_, _, _, _, fl):
+				// The ONE probe whose `breakDoc` is the wider shape (the arrow
+				// head GLUED to the open paren, body broken) while `flatDoc`
+				// opens the paren first — descending the break side here would
+				// make `width` an UPPER bound and break the lower-bound
+				// invariant this walk promises.
+				stack.push(fl);
+				return { add: 0, stop: false, delim: null };
+			case Nest(_, inner) | Group(inner) | GroupWithRestProbe(inner) | Flatten(inner) | WrapBoundary(inner) | HardFlatten(inner) | CollapseProbe(
+				inner
+			) | CollapseAddProbe(inner) | CollapseBoolProbe(inner) | CollapseChainProbe(inner) | ConditionalMarkerZero(inner) | ConditionalMarkerDecrease(
+				inner
+			):
+				stack.push(inner);
+				return { add: 0, stop: false, delim: null };
 		}
 	}
 
