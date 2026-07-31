@@ -57,6 +57,8 @@ import anyparse.grammar.haxe.format.HxFormatSingleStatementBracesPolicy;
 import anyparse.grammar.haxe.format.HxFormatSwitchSubjectParensPolicy;
 import anyparse.format.UniformStatementBlanksPolicy;
 import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
+import anyparse.format.CommentStyle;
+import anyparse.grammar.haxe.format.HxFormatCommentsSection;
 
 /**
  * Loads a haxe-formatter `hxformat.json` config and maps the subset of
@@ -487,6 +489,21 @@ import anyparse.grammar.haxe.format.HxFormatUniformStatementBlanksPolicy;
  *   source-captured count is replaced with this value, so `0` strips
  *   the slot and `2` doubles it.
  *
+ * - `comments.blockCommentStyle` (ω-comment-style): enum string mapped
+ *   inline by `applyComments` onto `opt.commentStyle`. Accepted tokens
+ *   are `"verbatim"` (default — block-comment content round-trips
+ *   byte-identical), `"javadoc"` and `"javadocNoStars"`; an
+ *   unrecognised token keeps the default, as with every other
+ *   string-mapped key. Anyparse-only — the fork has no `comments`
+ *   block. The non-default styles reshape MULTI-LINE DOC blocks only
+ *   (content opening `/**` and carrying a physical newline — see
+ *   `CommentStyle`), so no token can turn a plain `/*` block into a
+ *   haxedoc, expand a one-line doc, or DEMOTE a doc to a plain block:
+ *   `CommentStyle.Plain` would do the last of those, so `"plain"` is
+ *   not an accepted token and falls through to `Verbatim`. A reshaped
+ *   doc whose interior is a single content line COLLAPSES to
+ *   `/** … *\/` when it fits `wrapping.maxLineLength` at its indent.
+ *
  * Deliberately NOT supported in this slice (no corresponding
  * `HxModuleWriteOptions` field yet): `wrapping.*` beyond
  * `maxLineLength`, other `lineEnds.*` keys (`rightCurly`, `blockCurly`,
@@ -784,6 +801,7 @@ final class HaxeFormatConfigLoader {
 		result.afterLeftCurly = KeepEmptyLinesPolicy.Remove;
 		result.beforeRightCurly = KeepEmptyLinesPolicy.Remove;
 		if (cfg.emptyLines != null) applyEmptyLines(cfg.emptyLines, result);
+		if (cfg.comments != null) applyComments(cfg.comments, result);
 		return result;
 	}
 
@@ -1126,6 +1144,32 @@ final class HaxeFormatConfigLoader {
 		if (section.uniformStatementBlanks != null)
 			opt.uniformStatementBlanks = uniformStatementBlanksToRuntime(section.uniformStatementBlanks);
 		applyImportAndUsingEmptyLines(section, opt);
+	}
+
+	/**
+	 * ω-comment-style: the `comments` section's sole key, mapped inline —
+	 * one call site, so a `*ToRuntime` sibling would be indirection
+	 * without reuse. An absent or unrecognised `blockCommentStyle` leaves
+	 * `opt.commentStyle` on the byte-preserving `Verbatim` default, the
+	 * same forward-compat behaviour `leftCurlyToRuntime` gives an unknown
+	 * `leftCurly`.
+	 *
+	 * `CommentStyle.Plain` is deliberately NOT reachable from config. The
+	 * canonical path only ever sees a multi-line `/**` doc, and Plain
+	 * re-wraps it as `/* … *\/` — which DELETES the doc as far as the
+	 * compiler and every doc generator are concerned. No config token may
+	 * demote a doc, so `"plain"` falls through to `Verbatim` like any
+	 * unknown value; the enum value stays for direct `WriteOptions`
+	 * callers.
+	 */
+	private static function applyComments(section: HxFormatCommentsSection, opt: HxModuleWriteOptions): Void {
+		final style: Null<String> = section.blockCommentStyle;
+		if (style == null) return;
+		opt.commentStyle = switch style {
+			case 'javadoc': CommentStyle.Javadoc;
+			case 'javadocNoStars': CommentStyle.JavadocNoStars;
+			case _: CommentStyle.Verbatim;
+		};
 	}
 
 	/**

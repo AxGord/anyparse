@@ -18,6 +18,7 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 import anyparse.grammar.haxe.HxModule;
 import anyparse.grammar.haxe.HxModuleWriteOptions;
 import anyparse.grammar.haxe.HxModuleWriter;
+import anyparse.format.CommentStyle;
 
 /**
  * τ₃ — first consumer of the `WriteOptions` infrastructure: parses a
@@ -716,6 +717,49 @@ class HaxeFormatConfigLoaderTest extends Test {
 		Assert.isTrue(out.indexOf('switch (') != -1, 'expected single-space switch in: <$out>');
 		Assert.equals(-1, out.indexOf('while  ('));
 		Assert.isTrue(out.indexOf('while (') != -1, 'expected single-space do-while in: <$out>');
+	}
+
+	/**
+	 * ω-comment-style — `comments.blockCommentStyle` is the only key of the
+	 * `comments` section; `"javadoc"` opts multi-line doc blocks into the
+	 * canonical `/**` … ` *\/` shape.
+	 */
+	public function testCommentsBlockCommentStyleJavadoc(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"comments": {"blockCommentStyle": "javadoc"}}');
+		Assert.equals(CommentStyle.Javadoc, opts.commentStyle);
+	}
+
+	/** The other two accepted tokens, so the whole surface is pinned. */
+	public function testCommentsBlockCommentStyleOtherValues(): Void {
+		Assert.equals(
+			CommentStyle.JavadocNoStars,
+			HaxeFormatConfigLoader.loadHxFormatJson('{"comments": {"blockCommentStyle": "javadocNoStars"}}').commentStyle
+		);
+		Assert.equals(
+			CommentStyle.Verbatim, HaxeFormatConfigLoader.loadHxFormatJson('{"comments": {"blockCommentStyle": "verbatim"}}').commentStyle
+		);
+	}
+
+	/**
+	 * `"plain"` is NOT an accepted token. `CommentStyle.Plain` re-wraps a
+	 * `/**` doc as `/* … *\/` — its only reachable input is a doc, so the
+	 * style is a doc REMOVER, and no formatter config may demote a doc.
+	 * The enum value stays for a caller building `WriteOptions` by hand.
+	 */
+	public function testCommentsBlockCommentStylePlainIsNotAccepted(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"comments": {"blockCommentStyle": "plain"}}');
+		Assert.equals(CommentStyle.Verbatim, opts.commentStyle);
+	}
+
+	/** No `comments` section at all leaves the byte-preserving default in place. */
+	public function testCommentStyleDefaultsToVerbatim(): Void {
+		Assert.equals(CommentStyle.Verbatim, HaxeFormatConfigLoader.loadHxFormatJson('{}').commentStyle);
+	}
+
+	/** An unrecognised token keeps the default, as every other string-mapped key does. */
+	public function testCommentsBlockCommentStyleUnknownKeepsDefault(): Void {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"comments": {"blockCommentStyle": "gutter"}}');
+		Assert.equals(CommentStyle.Verbatim, opts.commentStyle);
 	}
 
 	private function assertWriteContains(src: String, opts: HxModuleWriteOptions, needle: String, message: String): Void {

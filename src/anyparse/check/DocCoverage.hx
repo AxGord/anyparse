@@ -235,14 +235,7 @@ final class DocCoverage implements Check implements ConfigAware {
 		final publicKind: Null<String> = shape.publicModifierKind;
 		var privateKind: Null<String> = null;
 		for (v in visibility) if (v != publicKind) privateKind = v;
-		final modifiers: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
-		for (m in visibility) if (!modifiers.contains(m)) modifiers.push(m);
-		for (k in [
-			shape.externModifierKind,
-			shape.dynamicModifierKind,
-			shape.macroModifierKind,
-			shape.overrideModifierKind
-		]) if (k != null && !modifiers.contains(k)) modifiers.push(k);
+		final modifiers: Array<String> = CheckScan.modifierKinds(shape);
 		return {
 			typeDecls: typeDecls,
 			members: shape.memberDeclKinds ?? [],

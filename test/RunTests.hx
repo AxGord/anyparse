@@ -522,6 +522,7 @@ import unit.CondAssignMergeCheckTest;
 import unit.RedundantPropertyAccessCheckTest;
 import unit.HxGroupTrailCommentWriteTest;
 import unit.HxAssignChainWrapSliceTest;
+import unit.PreferDocCommentCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -941,6 +942,7 @@ class RunTests {
 		addCase(new MemberOrderCheckTest());
 		addCase(new FragmentedDocCommentCheckTest());
 		addCase(new PreferLineCommentCheckTest());
+		addCase(new PreferDocCommentCheckTest());
 		addCase(new ExplicitTypeCheckTest());
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());

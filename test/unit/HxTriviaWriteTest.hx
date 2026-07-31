@@ -4,6 +4,9 @@ import utest.Assert;
 import utest.Test;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
+import anyparse.grammar.haxe.HaxeFormatConfigLoader;
+import anyparse.format.CommentStyle;
+import anyparse.grammar.haxe.HxModuleWriteOptions;
 
 /**
  * ω₅ — end-to-end Trivia-mode write tests. Validates that the writer
@@ -274,33 +277,248 @@ class HxTriviaWriteTest extends Test {
 	}
 
 	/**
-	 * ω-C-commentStyle — explicit `commentStyle: Javadoc` emits
-	 * `/**…**\/` wrap with ` * ` markers on each content line,
-	 * canonical Java / Haxe doc-block appearance. Exercises the
-	 * non-default path.
+	 * ω-C-commentStyle — explicit `commentStyle: Javadoc` emits a
+	 * `/**` … ` *\/` wrap with ` * ` markers on each content line,
+	 * canonical Java / Haxe doc-block appearance. The close carries one
+	 * pad space so its `*` sits in the same column as the interior
+	 * markers. Exercises the non-default path.
 	 */
 	public function testMultiLineBlockCommentJavadocStarsExplicit(): Void {
-		final source: String = 'class Main {\n\t/**\n\t first\n\t second\n\t**/\n\tvar x:Int;\n}';
-		final expected: String = 'class Main {\n\t/**\n\t * first\n\t * second\n\t**/\n\tvar x:Int;\n}\n';
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = withCommentStyle(anyparse.format.CommentStyle.Javadoc);
-		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
-		Assert.equals(expected, out);
+		assertStyled(
+			'class Main {\n\t/**\n\t first\n\t second\n\t**/\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t * first\n\t * second\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
 	}
 
 	/**
-	 * ω-C-commentStyle — explicit `commentStyle: Plain` strips the
-	 * javadoc `*` markers and wraps with plain `/*…*\/` + one
-	 * indent-unit per interior line. Exercises the non-default
-	 * path of the knob.
+	 * ω-doc-only-canonical — `commentStyle: Plain` does not touch a plain
+	 * block either: the doc-only gate declines it, so the Verbatim path
+	 * emits the source bytes. Plain has nothing left to canonicalize that
+	 * would not be a DEMOTION, which is why no config token selects it.
 	 */
-	public function testMultiLineBlockCommentPlainStyle(): Void {
-		final source: String = 'class Main {\n\t/** first\n\t    second */\n\tvar x:Int;\n}';
-		final expected: String = 'class Main {\n\t/*\n\t\tfirst\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n';
-		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = withCommentStyle(anyparse.format.CommentStyle.Plain);
-		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
-		Assert.equals(expected, out);
+	public function testPlainBlockCommentUntouchedUnderPlain(): Void {
+		final source: String = 'class Main {\n\t/*\n\t * first\n\t * second\n\t */\n\tvar x:Int;\n}';
+		assertStyled(source, '$source\n', CommentStyle.Plain);
+	}
+
+	/**
+	 * ω-C-commentStyle — API-LEVEL ONLY, and a deliberate DEMOTION: a
+	 * caller who sets `WriteOptions.commentStyle = Plain` by hand gets a
+	 * `/**` doc re-wrapped as `/* … *\/`, which removes it from what the
+	 * compiler and every doc generator extract. No `hxformat.json` token
+	 * reaches this — see `testCommentsBlockCommentStylePlainIsNotAccepted`
+	 * in `HaxeFormatConfigLoaderTest`. Pinned so the enum value's
+	 * behaviour cannot drift silently.
+	 */
+	public function testMultiLineBlockCommentPlainStyleDemotesDoc(): Void {
+		assertStyled(
+			'class Main {\n\t/** first\n\t    second */\n\tvar x:Int;\n}',
+			'class Main {\n\t/*\n\t\tfirst\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n', CommentStyle.Plain
+		);
+	}
+
+	/**
+	 * ω-C-commentStyle — `JavadocNoStars` keeps the doc wrap but lays the
+	 * body out with one indent unit per line, and closes with the bare
+	 * `*\/` (no pad — there is no marker column to align with).
+	 */
+	public function testMultiLineDocCommentJavadocNoStars(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t first\n\t second\n\t**/\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t\tfirst\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n', CommentStyle.JavadocNoStars
+		);
+	}
+
+	/**
+	 * ω-doc-only-canonical — a tab-indented multi-line DOC canonicalizes to
+	 * the ` * ` marker column with a star-aligned ` *\/` close, regardless
+	 * of the wrap shape the author used (`**\/` here). Two content lines, so
+	 * the one-line collapse does not apply.
+	 */
+	public function testMultiLineDocCommentJavadocTabIndent(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t\tText line\n\t\tSecond line\n\t**/\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t * Text line\n\t * Second line\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/**
+	 * ω-doc-only-canonical — a PLAIN `/* … *\/` block is not a doc, so an
+	 * explicit `commentStyle: Javadoc` leaves it on the Verbatim path.
+	 * Canonicalizing it would mint a haxedoc where the author wrote none,
+	 * changing what the compiler and every doc generator extract.
+	 */
+	public function testPlainBlockCommentUntouchedUnderJavadoc(): Void {
+		final source: String = 'class Main {\n\t/*\n\t * first\n\t * second\n\t */\n\tvar x:Int;\n}';
+		assertStyled(source, '$source\n', CommentStyle.Javadoc);
+	}
+
+	/**
+	 * ω-doc-only-canonical — a doc whose close sits on its OWN line is
+	 * two PHYSICAL lines but parses as ONE (the block parser elides the
+	 * separator before a trailing `*\/`), so a parsed-line-count gate
+	 * would wrongly decline it. Gating on the source newline canonicalizes
+	 * it.
+	 */
+	public function testTwoPhysicalLineDocCanonicalizes(): Void {
+		assertStyled(
+			'class Main {\n\t/** doc\n\t*/\n\tvar x:Int;\n}', 'class Main {\n\t/** doc */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/**
+	 * ω-doc-collapse — a doc whose interior reduces to ONE content line takes the
+	 * one-line form. The user-facing shape of the feature.
+	 */
+	public function testSingleContentLineCollapses(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t * Add an error handler\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/** Add an error handler */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/** ω-doc-collapse — TWO content lines never join into one. */
+	public function testTwoContentLinesNeverCollapse(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t * First line.\n\t * Second line.\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t * First line.\n\t * Second line.\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/** ω-doc-collapse — empty edge lines are dropped, so a padded single line still collapses. */
+	public function testEmptyEdgeLinesCollapse(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t *\n\t * Padded by empty edges\n\t *\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/** Padded by empty edges */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/** ω-doc-collapse — a lone javadoc TAG line collapses like any other single line. */
+	public function testSingleTagLineCollapses(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t * @param x the thing\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/** @param x the thing */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/** ω-doc-collapse — `JavadocNoStars` collapses to the same `/** … *\/` one-line form. */
+	public function testSingleContentLineCollapsesUnderNoStars(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t first\n\t**/\n\tvar x:Int;\n}', 'class Main {\n\t/** first */\n\tvar x:Int;\n}\n',
+			CommentStyle.JavadocNoStars
+		);
+	}
+
+	/**
+	 * ω-doc-collapse — the collapse is WIDTH-GATED at the emission column. The renderer
+	 * resolves `IfLineExceeds` against the real column, so a single line that would overflow
+	 * keeps the multi-line shape. `\t/** abcdefghijkl *\/` is 23 columns at `tabWidth = 4`:
+	 * it fits at 23 and does not at 22, which pins the `lineWidth + 1` threshold (the probe
+	 * asks "reaches n", so an exact-width line must not trip it).
+	 */
+	public function testCollapseIsWidthGatedAtEmissionColumn(): Void {
+		final source: String = 'class Main {\n\t/**\n\t * abcdefghijkl\n\t */\n\tvar x:Int;\n}';
+		assertStyledWidth(source, 'class Main {\n\t/** abcdefghijkl */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc, 23);
+		assertStyledWidth(
+			source, 'class Main {\n\t/**\n\t * abcdefghijkl\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc,
+			22 // noqa: magic-number
+		);
+	}
+
+	/**
+	 * ω-doc-collapse — `Plain` does NOT collapse. Its one-line form would be `/* … *\/`,
+	 * which is the doc demotion the style already gets refused a config token for; the
+	 * collapse is scoped to the two doc styles.
+	 */
+	public function testPlainStyleDoesNotCollapse(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t * only line\n\t */\n\tvar x:Int;\n}', 'class Main {\n\t/*\n\t\tonly line\n\t*/\n\tvar x:Int;\n}\n',
+			CommentStyle.Plain
+		);
+	}
+
+	/** ω-doc-collapse — the collapsed output is a FIXED POINT: it re-parses and re-emits byte-identical. */
+	public function testCollapsedDocIsIdempotent(): Void {
+		final collapsed: String = 'class Main {\n\t/** Add an error handler */\n\tvar x:Int;\n}';
+		assertStyled(collapsed, '$collapsed\n', CommentStyle.Javadoc);
+	}
+
+	/**
+	 * ω-doc-only-canonical — trailing `*` runs are the AUTHOR'S content
+	 * (`**bold**`, a prose `the unused-*`), not wrap decoration. Eating
+	 * them corrupted 8 of anyparse's own doc blocks badly enough to fail
+	 * the writer's round-trip guard.
+	 */
+	public function testContentStarsSurviveJavadoc(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t * makes it **bold**\n\t * and the unused-*\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t * makes it **bold**\n\t * and the unused-*\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/**
+	 * ω-doc-only-canonical — the gutter marker's separator is WHITESPACE, not
+	 * the literal space alone. On a CRLF file the last gutter line before the
+	 * close ends `*\r`, and testing for `' '` classified that marker as content:
+	 * the canonical pass then emitted a spurious ` * *` row after the open.
+	 */
+	public function testCrlfGutterMarkerNotEmittedAsContent(): Void {
+		assertStyled(
+			'class Main {\r\n\t/**\r\n\t * alpha\r\n\t * beta\r\n\t */\r\n\tvar x:Int;\r\n}',
+			'class Main {\n\t/**\n\t * alpha\n\t * beta\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/** ω-doc-only-canonical — a TAB after the gutter star is a marker separator too. */
+	public function testTabAfterGutterStarIsMarker(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t *\ttext\n\t *\tmore\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t * text\n\t * more\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/**
+	 * ω-doc-only-canonical — a gutter-marked line's leading whitespace is
+	 * the MARKER COLUMN, not text depth. Folding those columns into the
+	 * block's common prefix left every marked line with stray residual
+	 * whitespace as soon as one sibling was aligned differently; here the
+	 * second line's tab must not leak into the first line's output.
+	 */
+	public function testMixedMarkerColumnsCanonicalizeUniformly(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t * Flags a thing.\n\t\t * A second arm.\n\t */\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t * Flags a thing.\n\t * A second arm.\n\t */\n\tvar x:Int;\n}\n', CommentStyle.Javadoc
+		);
+	}
+
+	/**
+	 * ω-C-commentStyle — a blank interior line under `JavadocNoStars` emits
+	 * an EMPTY row, not `indentUnit` worth of trailing whitespace (the
+	 * default `trailingWhitespace: false` would otherwise disagree with
+	 * what the style wrote).
+	 */
+	public function testJavadocNoStarsBlankLineHasNoTrailingWhitespace(): Void {
+		assertStyled(
+			'class Main {\n\t/**\n\t first\n\n\t second\n\t**/\n\tvar x:Int;\n}',
+			'class Main {\n\t/**\n\t\tfirst\n\n\t\tsecond\n\t*/\n\tvar x:Int;\n}\n', CommentStyle.JavadocNoStars
+		);
+	}
+
+	/**
+	 * ω-doc-only-canonical — a doc on ONE PHYSICAL LINE keeps its shape
+	 * under `commentStyle: Javadoc`; expanding `/** x *\/` into three lines
+	 * is churn, not canonicalization.
+	 *
+	 * NOT a test of `canonicalizable`: this passes on pre-slice code too,
+	 * because the exclusion is owned upstream by
+	 * `WriterCodegen.leadingCommentDocRun`, which returns before calling
+	 * the adapter at all when the content holds no newline. It pins the
+	 * OBSERVABLE contract, and `canonicalizable` restates the same gate
+	 * for grammars that call the adapter seam directly.
+	 */
+	public function testSingleLineDocCommentUntouchedUnderJavadoc(): Void {
+		final source: String = 'class Main {\n\t/** one liner */\n\tvar x:Int;\n}';
+		assertStyled(source, '$source\n', CommentStyle.Javadoc);
 	}
 
 	/**
@@ -377,9 +595,7 @@ class HxTriviaWriteTest extends Test {
 	public function testLeadingLineCommentSpaceCanBeDisabled(): Void {
 		final source: String = '//foo\nclass Main {}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson(
-			'{"whitespace": {"addLineCommentSpace": false}}'
-		);
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{"whitespace": {"addLineCommentSpace": false}}');
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('//foo\nclass Main {}\n', out);
 	}
@@ -420,7 +636,7 @@ class HxTriviaWriteTest extends Test {
 	public function testObjectLitMultiLineRoundTrip(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1,\n\t\t\tb: 2\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
@@ -438,7 +654,7 @@ class HxTriviaWriteTest extends Test {
 	public function testObjectLitTrailingComment(): Void {
 		final source: String = 'class Main {\n\tstatic function main() {\n\t\tvar o = {\n\t\t\ta: 1 // tag\n\t\t};\n\t}\n}';
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.indentObjectLiteral = false;
 		final out: String = HaxeModuleTriviaWriter.write(ast, opts);
 		Assert.equals('${source}\n', out);
@@ -534,8 +750,22 @@ class HxTriviaWriteTest extends Test {
 		Assert.equals(expected ?? ('$source\n'), out);
 	}
 
-	private static function withCommentStyle(style: anyparse.format.CommentStyle): anyparse.grammar.haxe.HxModuleWriteOptions {
-		final opts: anyparse.grammar.haxe.HxModuleWriteOptions = anyparse.grammar.haxe.HaxeFormatConfigLoader.loadHxFormatJson('{}');
+	/** Write `source` under an explicit `commentStyle` and assert the bytes. */
+	private function assertStyled(source: String, expected: String, style: CommentStyle): Void {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		Assert.equals(expected, HaxeModuleTriviaWriter.write(ast, withCommentStyle(style)));
+	}
+
+	/** `assertStyled` with an explicit `lineWidth`, for the width-gated collapse. */
+	private function assertStyledWidth(source: String, expected: String, style: CommentStyle, lineWidth: Int): Void {
+		final opts: HxModuleWriteOptions = withCommentStyle(style);
+		opts.lineWidth = lineWidth;
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		Assert.equals(expected, HaxeModuleTriviaWriter.write(ast, opts));
+	}
+
+	private static function withCommentStyle(style: CommentStyle): HxModuleWriteOptions {
+		final opts: HxModuleWriteOptions = HaxeFormatConfigLoader.loadHxFormatJson('{}');
 		opts.commentStyle = style;
 		return opts;
 	}

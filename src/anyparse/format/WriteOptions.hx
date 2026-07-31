@@ -67,12 +67,26 @@ typedef WriteOptions = {
 	trailingWhitespace: Bool,
 
 	/**
-	 * Output wrap style for multi-line block comments. `Plain` emits
-	 * `/*…*\/` with content-only interior lines; `Javadoc` emits
-	 * `/**…**\/` with ` * ` markers on each content line. The parser
-	 * strips both `*` markers and leading whitespace at capture time,
-	 * so this knob fully drives the output appearance — source style
-	 * is not echoed.
+	 * Output wrap style for multi-line DOC comments — content that opens
+	 * `/**` and carries a physical newline. Everything else (a plain
+	 * `/* … *\/` block, a one-line doc) takes the `Verbatim` path
+	 * whatever this says, so the knob can neither mint a haxedoc where
+	 * the author wrote none nor expand a one-liner.
+	 *
+	 * `Javadoc` emits `/**`, a ` * ` marker on each content line, and a
+	 * star-aligned ` *\/` close; `JavadocNoStars` keeps the doc wrap but
+	 * indents the body and closes flush `*\/`; `Plain` re-wraps as
+	 * `/* … *\/`, which DEMOTES the doc — reachable only by setting this
+	 * field directly, never from an `hxformat.json` token.
+	 *
+	 * Both doc styles COLLAPSE a block whose interior is a single content
+	 * line to `/** <content> *\/`, gated on that line fitting `lineWidth`
+	 * at its emission column (resolved by the renderer, not guessed here).
+	 *
+	 * The knob drives the wrap and the marker column, not every byte:
+	 * whitespace a line carries beyond the block's common prefix is the
+	 * author's indentation and echoes through (a gutter-marked line is
+	 * the exception — its `ws` is the marker column and is dropped).
 	 */
 	commentStyle: CommentStyle,
 

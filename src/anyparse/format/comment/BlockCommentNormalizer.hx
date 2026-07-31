@@ -28,34 +28,38 @@ import anyparse.format.WriteOptions;
  *    single-line / firstInline / Javadoc-bodied shapes where
  *    common-prefix-reduce would mangle author intent.
  *  - Assembly (Plain / Javadoc / JavadocNoStars): `canonicalDoc`
- *    builds Doc directly with custom wrap shape (`/** … **\/`) and
- *    per-line ` * ` markers.
+ *    builds Doc directly with its own wrap shape (`/**` … ` *\/` for
+ *    Javadoc, `/**` … `*\/` for JavadocNoStars, `/*` … `*\/` for
+ *    Plain) and per-line ` * ` markers. Reached only for a MULTI-LINE
+ *    DOC block — see `canonicalizable`; every other captured comment
+ *    takes the Verbatim path whatever `opt.commentStyle` says.
  */
 class BlockCommentNormalizer {
+
+	/** The doc-comment opener the canonical styles are scoped to. */
+	private static inline final DOC_OPEN: String = '/**';
 
 	public static function processCapturedBlockComment(content: String, opt: WriteOptions): Doc {
 		final parsed: Null<BlockComment> = try BlockCommentParser.parse(content) catch (_: haxe.Exception) null;
 		if (parsed == null) return Text(content);
-		if (opt.commentStyle == CommentStyle.Verbatim) {
-			// Parser's `@:sep('\n') @:trail('*/')` Star elides the trailing
-			// separator: source `Xx\n*/` parses as N lines (not N+1 with an
-			// empty trailing line). The writer therefore loses the `\n` that
-			// would have placed `*/` on its own line. Detect the
-			// `<content>\n*/` close-on-own-line shape and append a synthetic
-			// empty line so normalize's `body == '' last line` branch routes
-			// to the canonical ` */` close pad.
-			if (StringTools.endsWith(content, '\n*/') && parsed.lines.length > 0) {
-				final lastBody: String = parsed.lines[parsed.lines.length - 1].body;
-				if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
-			}
-			final lines: Array<BlockCommentLine> = parsed.lines;
-			return lines.length <= 1
-				? Text(content)
-				: isJavadocStyle(lines)
-					? javadocBytePreserveDoc(content, parsed)
-					: isFirstInlineNested(lines) ? firstInlineRebuildDoc(parsed, opt) : BlockCommentWriter.writeDoc(parsed, opt);
+		if (opt.commentStyle != CommentStyle.Verbatim && canonicalizable(content)) return canonicalDoc(parsed, opt);
+		// Parser's `@:sep('\n') @:trail('*/')` Star elides the trailing
+		// separator: source `Xx\n*/` parses as N lines (not N+1 with an
+		// empty trailing line). The writer therefore loses the `\n` that
+		// would have placed `*/` on its own line. Detect the
+		// `<content>\n*/` close-on-own-line shape and append a synthetic
+		// empty line so normalize's `body == '' last line` branch routes
+		// to the canonical ` */` close pad.
+		if (StringTools.endsWith(content, '\n*/') && parsed.lines.length > 0) {
+			final lastBody: String = parsed.lines[parsed.lines.length - 1].body;
+			if (lastBody.length > 0) parsed.lines.push({ ws: '', body: '' });
 		}
-		return canonicalDoc(parsed, opt);
+		final lines: Array<BlockCommentLine> = parsed.lines;
+		return lines.length <= 1
+			? Text(content)
+			: isJavadocStyle(lines)
+				? javadocBytePreserveDoc(content, parsed)
+				: isFirstInlineNested(lines) ? firstInlineRebuildDoc(parsed, opt) : BlockCommentWriter.writeDoc(parsed, opt);
 	}
 
 	/**
@@ -96,8 +100,7 @@ class BlockCommentNormalizer {
 
 		final decoFlags: Array<Bool> = [for (l in lines) isAllStars(l.body)];
 		final last: Int = lines.length - 1;
-		var commonPrefix: String = '';
-		var havePrefix: Bool = false;
+		var commonPrefix: Null<String> = null;
 		for (i in 0...lines.length) {
 			final body: String = lines[i].body;
 			final ws: String = lines[i].ws;
@@ -107,17 +110,9 @@ class BlockCommentNormalizer {
 			// not interior content. Its ws represents the wrap's structural
 			// indent, not the comment body's indent depth.
 			if (i == last) continue;
-			if (havePrefix) {
-				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
-				var j: Int = 0;
-				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
-				commonPrefix = commonPrefix.substr(0, j);
-			} else {
-				commonPrefix = ws;
-				havePrefix = true;
-			}
+			commonPrefix = commonPrefix == null ? ws : commonPrefixOf(commonPrefix, ws);
 		}
-		final commonLen: Int = commonPrefix.length;
+		final commonLen: Int = (commonPrefix ?? '').length;
 		final closingWs: String = lines[last].ws;
 		final closeStructLen: Int = structuralCloseLen(closingWs);
 		final structuralClose: String = closingWs.substr(0, closeStructLen);
@@ -132,13 +127,12 @@ class BlockCommentNormalizer {
 			if (i == 0) {
 				newWs = body.length > 0 ? ws : '';
 			} else if (i == last) {
-				if (decoFlags[i]) {
-					newWs = '';
-				} else if (body.length == 0) {
-					newWs = ' ';
-				} else {
-					newWs = structuralClose;
-				}
+				newWs = if (decoFlags[i])
+					''
+				else if (body.length == 0)
+					' '
+				else
+					structuralClose;
 			} else if (body.length == 0) {
 				newWs = '';
 			} else {
@@ -148,6 +142,37 @@ class BlockCommentNormalizer {
 			newLines.push({ ws: newWs, body: body });
 		}
 		return { lines: newLines };
+	}
+
+	/**
+	 * Whether captured block-comment `content` is eligible for the
+	 * canonical (`Plain` / `Javadoc` / `JavadocNoStars`) rewrite. Two
+	 * gates, both narrowing the styles to what they were meant for —
+	 * re-shaping a doc block that already spans lines:
+	 *
+	 *  - DOC ONLY. The content must open `/**`. Canonicalizing a plain
+	 *    `/* … *\/` would emit `/** … *\/` and mint a haxedoc where the
+	 *    author wrote none, changing what the compiler and every doc
+	 *    generator extract from the declaration below it.
+	 *  - MULTI-LINE ONLY, measured as a PHYSICAL newline in the source
+	 *    text — NOT as a parsed line count. The parser's
+	 *    `@:sep('\n') @:trail('*\/')` Star elides the trailing separator,
+	 *    so `/** doc\n*\/` parses as ONE line while genuinely spanning
+	 *    two; counting parsed lines would decline it. A doc the author
+	 *    fitted on one physical line stays on one line — expanding it
+	 *    into a three-line block is churn, not canonicalization.
+	 *
+	 * The newline gate duplicates `WriterCodegen.leadingCommentDocRun`,
+	 * which already returns before reaching the adapter when the content
+	 * holds no newline (so the degenerate `/**\/` never arrives here).
+	 * It is restated because the adapter is a public engine seam any
+	 * grammar may call directly.
+	 *
+	 * Everything the gates decline falls through to the Verbatim path,
+	 * whose byte behaviour is identical to `commentStyle: Verbatim`.
+	 */
+	private static function canonicalizable(content: String): Bool {
+		return content.indexOf('\n') >= 0 && StringTools.startsWith(content, DOC_OPEN);
 	}
 
 	/**
@@ -350,32 +375,47 @@ class BlockCommentNormalizer {
 	}
 
 	/**
-	 * Build a Doc for canonical (`Plain` / `Javadoc` /
-	 * `JavadocNoStars`) comment output. Picks its own wrap shape
-	 * (`/*`/`*\/` for Plain, `/**`/`**\/` for the other two) and
-	 * per-line markers, so it bypasses the macro writer's line-by-
-	 * line emission. Each interior boundary uses `Line('\n')` so the
-	 * renderer applies the surrounding nest's indent.
+	 * Build a Doc for canonical (`Plain` / `Javadoc` / `JavadocNoStars`)
+	 * comment output. Picks its own wrap shape (`/*`/`*\/` for Plain,
+	 * `/**` plus ` *\/` for Javadoc and `*\/` for JavadocNoStars) and
+	 * per-line markers, so it bypasses the macro writer's line-by-line
+	 * emission. Each interior boundary uses `Line('\n')` so the renderer
+	 * applies the surrounding nest's indent.
+	 *
+	 * A line that carried a ` * ` gutter marker re-emits at the canonical
+	 * column with NO residual whitespace: its source `ws` was the marker's
+	 * own column, not the text's depth. Only unmarked lines — tab-style
+	 * bodies, where the whitespace really is the author's indentation —
+	 * keep what they have beyond the block's common prefix.
+	 *
+	 * A blank interior line emits the bare marker (` *`) under Javadoc and
+	 * NOTHING under the star-less styles: an `indentUnit` on an empty line
+	 * would be trailing whitespace.
+	 *
+	 * A doc whose interior reduces to exactly ONE content line COLLAPSES to
+	 * the one-line form — see `collapsedDoc`.
 	 */
 	private static function canonicalDoc(comment: BlockComment, opt: WriteOptions): Doc {
 		final wantStars: Bool = opt.commentStyle == CommentStyle.Javadoc;
 		final wrapDoc: Bool = opt.commentStyle == CommentStyle.Javadoc || opt.commentStyle == CommentStyle.JavadocNoStars;
 		final indentUnit: String = indentUnitOf(opt);
 
-		final stripped: Array<{ ws: String, content: String }> = stripMarkers(comment.lines);
+		final stripped: Array<StrippedLine> = stripMarkers(comment.lines);
 		final firstInline: Bool = stripped.length > 0 && stripped[0].content.length > 0;
 		final commonLen: Int = commonPrefixLen(stripped, firstInline);
 		final last: Int = stripped.length - 1;
 
 		final interior: Array<String> = [];
+		final contents: Array<String> = [];
 		for (i in 0...stripped.length) {
-			final p = stripped[i];
+			final p: StrippedLine = stripped[i];
 			if ((i == 0 || i == last) && p.content.length == 0) continue;
-			final relWs: String = p.ws.length > commonLen ? p.ws.substr(commonLen) : '';
-			if (wantStars) {
-				interior.push(p.content.length > 0 ? ' * $relWs${p.content}' : ' *');
+			final relWs: String = p.marker || p.ws.length <= commonLen ? '' : p.ws.substr(commonLen);
+			if (p.content.length == 0) {
+				interior.push(wantStars ? ' *' : '');
 			} else {
-				interior.push(indentUnit + relWs + p.content);
+				interior.push(wantStars ? ' * $relWs${p.content}' : indentUnit + relWs + p.content);
+				contents.push(relWs + p.content);
 			}
 		}
 
@@ -385,47 +425,98 @@ class BlockCommentNormalizer {
 			docs.push(Text(s));
 		}
 		docs.push(Line('\n'));
-		docs.push(Text(wrapDoc ? '**/' : '*/'));
-		return Concat(docs);
+		// Javadoc's close carries one pad space so its `*` lands in the
+		// same column as the interior ` * ` markers; the star-less styles
+		// have no marker column to align with, so they close flush.
+		docs.push(Text(wantStars ? ' */' : '*/'));
+		final expanded: Doc = Concat(docs);
+		return wrapDoc && contents.length == 1 ? collapsedDoc(contents[0], expanded, opt) : expanded;
 	}
 
-	private static function stripMarkers(lines: Array<BlockCommentLine>): Array<{ ws: String, content: String }> {
-		final out: Array<{ ws: String, content: String }> = [];
+	/**
+	 * The width-gated one-line form of a doc that carries a single content line:
+	 * `/** <content> *\/` when it fits, the `expanded` multi-line Doc when it does not.
+	 *
+	 * The choice cannot be made here — the adapter is handed a comment, not a column, and
+	 * the same block may be re-emitted at any depth — so it is deferred to the renderer via
+	 * `IfLineExceeds`, whose probe is `col + flatTokenWidth(flat) + rest-of-stack >= n`. The
+	 * threshold is `lineWidth + 1` so a line landing EXACTLY on `lineWidth` still fits (the
+	 * probe asks "reaches n", not "exceeds n").
+	 *
+	 * One-way by design: a multi-line doc collapses, a single-line doc is never expanded.
+	 * The single-line result re-parses as a newline-free comment, which
+	 * `WriterCodegen.leadingCommentDocRun` returns before ever reaching this adapter — so
+	 * the collapse is a fixed point, not a step in a cycle.
+	 *
+	 * Scoped to the doc styles (`wrapDoc`). `Plain`'s one-line form would be `/* … *\/`,
+	 * which is the doc-demotion this pass exists to avoid.
+	 */
+	private static function collapsedDoc(content: String, expanded: Doc, opt: WriteOptions): Doc {
+		return IfLineExceeds(opt.lineWidth + 1, expanded, Text('/** $content */'));
+	}
+
+	private static function stripMarkers(lines: Array<BlockCommentLine>): Array<StrippedLine> {
+		final out: Array<StrippedLine> = [];
 		for (ln in lines) {
-			final ws: String = ln.ws;
-			var rest: String = ln.body;
-			var starEnd: Int = 0;
-			while (starEnd < rest.length && StringTools.fastCodeAt(rest, starEnd) == '*'.code) starEnd++;
-			if (starEnd > 0) {
-				rest = rest.substr(starEnd);
-				if (rest.length > 0 && StringTools.fastCodeAt(rest, 0) == ' '.code) rest = rest.substr(1);
+			final body: String = ln.body;
+			// A body of nothing but stars is WRAP DECORATION — the `**` left by a
+			// `**\/` close, a `***` rule line, the `*` of a bare `/**` open. It
+			// carries no content and no indent information.
+			if (isAllStars(body)) {
+				out.push({ ws: ln.ws, content: '', marker: true });
+				continue;
 			}
-			var trailEnd: Int = rest.length;
-			while (trailEnd > 0 && StringTools.fastCodeAt(rest, trailEnd - 1) == '*'.code) trailEnd--;
-			rest = rest.substring(0, trailEnd);
-			out.push({ ws: ws, content: StringTools.rtrim(rest) });
+			final run: Int = leadingStarRun(body);
+			// A leading star run is the ` * ` GUTTER MARKER only when WHITESPACE
+			// follows it. Without that test a tab-style content line opening
+			// `**bold**` loses its first run and re-emits as `bold**`. The
+			// whitespace is any of space / tab / CR, not the literal space alone:
+			// on a CRLF file the last gutter line of `/**\r\n * a\r\n */` ends
+			// `*\r`, and a `*\ttext` gutter is legal too — testing for `' '` there
+			// classified the marker as content and emitted a spurious ` * *` row.
+			// `isAllStars` already returned for a body of pure stars, so the run is
+			// always shorter than the body here.
+			final marker: Bool = run > 0 && isSpace(StringTools.fastCodeAt(body, run));
+			final rest: String = marker ? body.substr(run + 1) : body;
+			// Trailing stars are the AUTHOR'S — `**bold**`, a backticked `/**`, a
+			// prose `the unused-*` all end in one. Only the all-stars decoration
+			// above is delimiter, and it never reaches here.
+			out.push({ ws: ln.ws, content: StringTools.rtrim(rest), marker: marker });
 		}
 		return out;
 	}
 
-	private static function commonPrefixLen(lines: Array<{ ws: String, content: String }>, excludeFirstInline: Bool): Int {
-		var commonPrefix: String = '';
-		var havePrefix: Bool = false;
-		for (i in 0...lines.length) {
-			if (i == 0 && excludeFirstInline) continue;
-			if (lines[i].content.length == 0) continue;
-			final ws: String = lines[i].ws;
-			if (havePrefix) {
-				final lim: Int = commonPrefix.length < ws.length ? commonPrefix.length : ws.length;
-				var j: Int = 0;
-				while (j < lim && StringTools.fastCodeAt(commonPrefix, j) == StringTools.fastCodeAt(ws, j)) j++;
-				commonPrefix = commonPrefix.substr(0, j);
-			} else {
-				commonPrefix = ws;
-				havePrefix = true;
-			}
+	/** Whether `c` is comment-body whitespace — the separator a ` * ` gutter marker may carry. */
+	private static inline function isSpace(c: Int): Bool {
+		return c == ' '.code || c == '\t'.code || c == '\r'.code;
+	}
+
+	/** The length of `body`'s leading run of `*`. */
+	private static function leadingStarRun(body: String): Int {
+		var i: Int = 0;
+		while (i < body.length && StringTools.fastCodeAt(body, i) == '*'.code) i++;
+		return i;
+	}
+
+	/**
+	 * The length of the leading whitespace shared by the lines whose `ws` actually
+	 * carries CONTENT INDENT — non-blank, and not gutter-marked. A ` * `-marked
+	 * line's `ws` is the marker COLUMN (whatever the author aligned the star to),
+	 * not the depth of the text after it; folding those columns into the common
+	 * prefix left every marked line with stray residual whitespace as soon as one
+	 * line in the block was indented differently from its siblings.
+	 */
+	private static function commonPrefixLen(lines: Array<StrippedLine>, excludeFirstInline: Bool): Int {
+		var commonPrefix: Null<String> = null;
+		for (i in 0...lines.length) if (i != 0 || !excludeFirstInline) {
+			final line: StrippedLine = lines[i];
+			if (line.marker || line.content.length == 0) continue;
+			commonPrefix = commonPrefix == null ? line.ws : commonPrefixOf(commonPrefix, line.ws);
 		}
-		return commonPrefix.length;
+		return (commonPrefix ?? '').length;
 	}
 
 }
+
+/** One comment body line with its wrap markers removed: `marker` records whether it carried a ` * ` gutter. */
+private typedef StrippedLine = { ws: String, content: String, marker: Bool };

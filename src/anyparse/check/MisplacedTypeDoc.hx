@@ -239,14 +239,7 @@ final class MisplacedTypeDoc implements Check implements DefaultOff {
 		final typeDecls: Array<String> = declared.copy();
 		final enumAbstract: Null<String> = shape.enumAbstractDeclKind;
 		if (enumAbstract != null && !typeDecls.contains(enumAbstract)) typeDecls.push(enumAbstract);
-		final modifiers: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
-		for (m in shape.visibilityModifierKinds ?? []) if (!modifiers.contains(m)) modifiers.push(m);
-		for (k in [
-			shape.externModifierKind,
-			shape.dynamicModifierKind,
-			shape.macroModifierKind,
-			shape.overrideModifierKind
-		]) if (k != null && !modifiers.contains(k)) modifiers.push(k);
+		final modifiers: Array<String> = CheckScan.modifierKinds(shape);
 		return {
 			typeDecls: typeDecls,
 			nameHosts: (shape.visibilityContainerKinds ?? []).concat(shape.interfaceDeclKinds ?? []),

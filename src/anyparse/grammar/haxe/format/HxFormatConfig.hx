@@ -24,6 +24,11 @@ package anyparse.grammar.haxe.format;
  *
  * `emptyLines` section added in slice ω-C-empty-lines-doc (feeds
  * `opt.afterFieldsWithDocComments`).
+ *
+ * `comments` section added in slice ω-comment-style (feeds
+ * `opt.commentStyle`). Anyparse-only: the fork has no `comments`
+ * block, so unlike its siblings this section is an additive extension
+ * rather than a modelled subset of the fork's schema.
  */
 @:peg @:schema(anyparse.format.text.JsonFormat) @:ws
 typedef HxFormatConfig = {
@@ -41,4 +46,6 @@ typedef HxFormatConfig = {
 	@:optional var whitespace: HxFormatWhitespaceSection;
 
 	@:optional var emptyLines: HxFormatEmptyLinesSection;
+
+	@:optional var comments: HxFormatCommentsSection;
 };

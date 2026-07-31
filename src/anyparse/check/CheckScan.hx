@@ -617,6 +617,28 @@ final class CheckScan {
 		return '<anonymous>';
 	}
 
+
+	/**
+	 * Every node kind that projects as a leading MODIFIER sibling before a declaration —
+	 * the set `isLeadingAnnotation` tests a decl's preceding run against, so a check can
+	 * find where a declaration's doc anchor starts.
+	 *
+	 * Assembled from `modifierOrderKinds` (the ordered core) plus the seams that sit
+	 * outside it: the visibility pair and the four standalone modifier kinds. Deduped, so
+	 * a grammar that already lists one in `modifierOrderKinds` contributes it once.
+	 */
+	public static function modifierKinds(shape: RefShape): Array<String> {
+		final out: Array<String> = [for (m in shape.modifierOrderKinds ?? []) m];
+		for (m in shape.visibilityModifierKinds ?? []) if (!out.contains(m)) out.push(m);
+		for (kind in [
+			shape.externModifierKind,
+			shape.dynamicModifierKind,
+			shape.macroModifierKind,
+			shape.overrideModifierKind
+		]) if (kind != null && !out.contains(kind)) out.push(kind);
+		return out;
+	}
+
 }
 
 /**

@@ -154,7 +154,8 @@ final class Linter {
 			new CondAssignMerge(),
 			new RedundantPropertyAccess(),
 			new ImportBlockOrder(),
-			new PreferLineComment()
+			new PreferLineComment(),
+			new PreferDocComment()
 		];
 	}
 
