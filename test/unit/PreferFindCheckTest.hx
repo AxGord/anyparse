@@ -132,6 +132,17 @@ class PreferFindCheckTest extends Test {
 		Assert.isTrue(out.indexOf('break') == -1);
 	}
 
+	public function testFixInsertsUsingAboveAnExistingUsing(): Void {
+		// Haxe resolves static extensions in REVERSE declaration order, so the inserted `using`
+		// must sit ABOVE the existing run or it would outrank — and silently re-target — the
+		// extension calls the file already makes through `using Other;`.
+		final source: String =
+			'package p;\n\nusing Other;\n\nclass C {\n\tfunction f(xs:Array<Int>):Null<Int> {\n\t\tfor (x in xs) if (x > 2) return x;\n\t\treturn null;\n\t}\n}';
+		final out: String = fixResult(source);
+		Assert.isTrue(out.indexOf('using Lambda;') != -1, out);
+		Assert.isTrue(out.indexOf('using Lambda;') < out.indexOf('using Other;'), out);
+	}
+
 	public function testFixAlreadyUsingNoDuplicate(): Void {
 		final out: String = fixResult(file('for (x in xs) if (x > 2) return x;\n\t\treturn null;', 'Null<Int>', true));
 		Assert.isTrue(out.indexOf('using Lambda;') != -1);

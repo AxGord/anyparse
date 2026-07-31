@@ -126,6 +126,16 @@ typedef TypeDeclInfo = {
 	var isAnonStruct: Bool;
 
 	/**
+	 * The SIMPLE outer nominal a plain `typedef T = <Target>;` re-points at (`Widget`,
+	 * `pkg.Deep.Thing` -> `Thing`, `Array<Int>` -> `Array`), or null for every other decl AND
+	 * for an alias the builder could not read as a nominal path (a function type, a constraint
+	 * form). Read from source because the projection carries no alias link: a `TypedefDecl`
+	 * naming another type has NO children. Null must be read as "not resolvable", never as
+	 * "aliases nothing" — an alias whose target is unknown hosts unknown members.
+	 */
+	var aliasTargetNominal: Null<String>;
+
+	/**
 	 * True when the type declaration carries `@:rtti` metadata directly. Such a
 	 * class is serialized by reflecting on its runtime field NAMES (e.g. drill
 	 * Node), so a naming autofix must not rename its fields. Feeds
@@ -189,6 +199,8 @@ final class SymbolIndex {
 	private static final CLASS_DECL_KIND: String = 'ClassDecl';
 
 	/** The grammar kind a `typedef` declaration projects as — the only member host whose members sit under an `Anon`. */
+	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
+
 	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
@@ -550,14 +562,20 @@ final class SymbolIndex {
 	}
 
 	/**
-	 * Whether the type `typeName` — together with its ENTIRE supertype closure —
-	 * provably declares no member named `member`. True only when `typeName` resolves
-	 * to exactly one indexed decl, every transitive supertype likewise resolves, and
-	 * none of them declares `member`. Any unresolved / ambiguous type anywhere in the
-	 * closure yields false — the member could be declared out of the lint scope, so its
-	 * absence is not provable. The green-light companion of `supertypeDeclaresMember`,
-	 * used by `trivial-getter` to prove an implemented interface does not require the
+		 * Whether the type `typeName` — together with its ENTIRE supertype closure —
+		 * provably declares no member named `member`. True only when `typeName` resolves
+		 * to exactly one indexed decl, every transitive supertype likewise resolves, and
+		 * none of them declares `member`. Any unresolved / ambiguous type anywhere in the
+		 * closure yields false — the member could be declared out of the lint scope, so its
+		 * absence is not provable. The green-light companion of `supertypeDeclaresMember`,
+		  * used by `trivial-getter` to prove an implemented interface does not require the
 	 * property's `get_` accessor before collapsing it to `(default, null)`.
+	 *
+	 * The walk FOLLOWS a plain `typedef A = C` alias to `C` and refuses a `@:forward` abstract,
+	 * whose underlying's members reach it through a link `supertypes` does not carry — the
+	 * positive companions (`typeDeclaresMember` / `supertypeDeclaresMember`) do NOT, so a caller
+	 * needing the shadow answer on an aliased nominal must read a false here as "unprovable"
+	 * rather than as "declared".
 	 */
 	public function typeProvablyLacksMember(typeName: String, member: String): Bool {
 		return lacksMemberClosure(typeName, member, []);
@@ -807,6 +825,16 @@ final class SymbolIndex {
 		if (ds.length != 1) return false;
 		final t: TypeDeclInfo = ds[0];
 		if (t.members.exists(m -> m.name == member)) return false;
+		// An ALIASING_DECL_KINDS decl reaches members through a link `supertypes` never records, so
+		// its own empty member list proves NOTHING — the same hole `closureExcludes` refuses outright,
+		// resolved here instead of refused: a plain `typedef A = C` continues the proof on `C`, while
+		// an unreadable alias and a `@:forward` abstract (every underlying member is exposed under a
+		// name the index cannot enumerate here) are not provable at all.
+		if (t.kind == TYPEDEF_DECL_KIND && !t.isAnonStruct) {
+			final target: Null<String> = t.aliasTargetNominal;
+			return target == null ? false : lacksMemberClosure(target, member, seen);
+		}
+		if (t.abstractForwardUnderlying != null) return false;
 		for (sup in t.supertypes) if (!lacksMemberClosure(sup, member, seen)) return false;
 		return true;
 	}
@@ -821,7 +849,6 @@ final class SymbolIndex {
 			return true;
 		return false;
 	}
-
 
 	/** The `{file, type}` for the type named `typeName` declared in `file`, or null. */
 	private function findDeclaredType(file: String, typeName: String): Null<ResolvedType> {

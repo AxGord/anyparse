@@ -32,7 +32,7 @@ final class CheckScan {
 	private static inline final STRANDABLE_CHAIN_LENGTH: Int = 3;
 
 	/** The grammar's `using` declaration kind, spelled literally (see `hasUsingModule`). */
-	private static inline final USING_DECL_KIND: String = 'UsingDecl';
+	public static inline final USING_DECL_KIND: String = 'UsingDecl';
 
 	/** The top-level declaration kinds a `using` insert anchors after — the file's package / import / using header. */
 	private static final USING_ANCHOR_KINDS: Array<String> = [
@@ -296,7 +296,13 @@ final class CheckScan {
 	 * since both bring the same module into scope. Shared by `prefer-find` and
 	 * `prefer-static-extension`.
 	 *
-	 * The declaration kind is spelled literally (`UsingDecl`): `RefShape` exposes no
+	 * CAVEAT on that simple-name match: the index models no packages, so a `using
+	 * other.pkg.Lambda` of an UNRELATED project-local module sharing the simple name reads
+	 * as present and suppresses the insert. It errs toward not inserting — a loud compile
+	 * error rather than a silent behaviour change — and a stdlib module (the configured
+	 * default) has no same-named sibling to collide with.
+	 *
+	 * The declaration kind is spelled literally (`USING_DECL_KIND`): `RefShape` exposes no
 	 * using-declaration seam, so a grammar naming it differently reads as having no
 	 * `using` at all — which only ever causes a redundant insert, never a wrong one.
 	 */
@@ -310,22 +316,45 @@ final class CheckScan {
 	}
 
 	/**
-	 * A ZERO-WIDTH edit inserting `using <module>;` after the last package / import /
-	 * using declaration, or at the file head (with a trailing blank line) when the file
-	 * has none. The insert companion of `hasUsingModule`; the caller applies it only
-	 * after it has decided at least one rewrite needs the module in scope.
+	 * A ZERO-WIDTH edit inserting `using <module>;` into `tree`. The insert companion of
+	 * `hasUsingModule`; the caller applies it only after deciding at least one rewrite needs
+	 * the module in scope.
+	 *
+	 * The position is a CORRECTNESS choice, not cosmetics: Haxe resolves static extensions in
+	 * REVERSE declaration order, so the LAST `using` wins. Inserting after an existing `using`
+	 * run would give the new module top priority and silently re-target every same-named
+	 * extension call the file already makes through an earlier `using`. So the insert goes
+	 * ABOVE the FIRST existing `using` — lowest priority, no existing call disturbed — and
+	 * falls back to after the last package / import declaration, or the file head with a
+	 * trailing blank line, only when the file declares no `using` at all.
 	 */
 	public static function usingInsertEdit(tree: QueryNode, module: String): { span: Span, text: String } {
 		var anchor: Null<Span> = null;
-		for (child in tree.children) if (USING_ANCHOR_KINDS.contains(child.kind)) {
-			final span: Null<Span> = child.span;
-			if (span != null) anchor = span;
+		for (child in tree.children) {
+			if (child.kind == USING_DECL_KIND) {
+				final first: Null<Span> = child.span;
+				if (first != null) return { span: new Span(first.from, first.from), text: 'using $module;\n' };
+			}
+			if (USING_ANCHOR_KINDS.contains(child.kind)) {
+				final span: Null<Span> = child.span;
+				if (span != null) anchor = span;
+			}
 		}
 		final at: Null<Span> = anchor;
 		return at == null ? { span: new Span(0, 0), text: 'using $module;\n\n' } : {
 			span: new Span(at.to, at.to),
 			text: '\nusing $module;'
 		};
+	}
+
+	/** The module paths of every top-level `using` declaration in `tree` — the read side of `hasUsingModule`. */
+	public static function usingModules(tree: QueryNode): Array<String> {
+		final out: Array<String> = [];
+		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
+			final name: Null<String> = child.name;
+			if (name != null) out.push(name);
+		}
+		return out;
 	}
 
 	/**

@@ -1474,6 +1474,11 @@ final class Cli {
 			// declaring type reads as unresolvable and a Map get/set finding re-exposed by an earlier
 			// pass (a nested lookup) is re-skipped, so the fixed-point loop never converges on it.
 			'prefer-index-access',
+			// prefer-static-extension's shadow gate resolves the receiver type — and its whole
+			// supertype / alias closure — through the index. On the active SUBSET a declaring type
+			// or a `typedef` target declared elsewhere reads as unresolvable, so a site an earlier
+			// pass exposed degrades to report-only and the loop never converges on it.
+			'prefer-static-extension',
 			// prefer-inline's soundness gates are ALL whole-project: the subtype-override gate
 			// (SymbolIndex.hasSubtype + a strict-subtype member lookup), the value-reference name scan, and
 			// the interface gate. On the active SUBSET a subtype / value-use / interface declared elsewhere

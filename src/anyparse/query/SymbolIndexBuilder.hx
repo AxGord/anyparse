@@ -49,6 +49,9 @@ final class SymbolIndexBuilder {
 	/** The anonymous-structure node a `typedef T = {…}` projects as its body. */
 	private static inline final ANON_KIND: String = 'Anon';
 
+	/** The grammar kind a `typedef` declaration projects as. */
+	private static inline final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
+
 	/** A `> Base,` structural extension written inside an anonymous structure. */
 	private static inline final EXTENDS_FIELD_KIND: String = 'ExtendsField';
 
@@ -147,7 +150,8 @@ final class SymbolIndexBuilder {
 					interfaces: collectImplementsRaw(node).map(simpleName),
 					// A `typedef X = {…}` projects an `Anon` child; its fields can
 					// never be properties, so field access on it is side-effect-free.
-					isAnonStruct: typeDecl.kind == 'TypedefDecl' && node.children.exists(c -> c.kind == ANON_KIND),
+					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
+					aliasTargetNominal: aliasTargetOf(source, typeDecl, node),
 					hasRtti: pendingMeta.contains('@:rtti'),
 					members: collectMembers(
 						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
@@ -610,6 +614,27 @@ final class SymbolIndexBuilder {
 			}
 		});
 		return out;
+	}
+
+	/**
+	 * The SIMPLE outer nominal a plain `typedef T = <Target>;` re-points at, or null for every
+	 * other declaration. The projection carries NO alias link — a `TypedefDecl` aliasing a named
+	 * type has no children at all — so the target is read from the declaration's own source: the
+	 * text after the first `=`, stripped of a trailing `;`, accepted only when
+	 * `RefactorSupport.outerNominalOf` recognises it as a nominal path (`Widget`, `pkg.Deep.Thing`,
+	 * `Array<Int>`). A function type, a structural body or anything else unparseable as a nominal
+	 * yields null, which every consumer must read as "the alias is not resolvable", never as
+	 * "it aliases nothing". An anon-struct typedef is excluded: its fields ARE its members and the
+	 * index already models them.
+	 */
+	private static function aliasTargetOf(source: String, decl: TypeDeclMatch, node: QueryNode): Null<String> {
+		if (decl.kind != TYPEDEF_DECL_KIND || node.children.exists(c -> c.kind == ANON_KIND)) return null;
+		final text: String = source.substring(decl.fullSpan.from, decl.fullSpan.to);
+		final eq: Int = text.indexOf('=');
+		if (eq == -1) return null;
+		final tail: String = StringTools.trim(text.substring(eq + 1));
+		final body: String = StringTools.endsWith(tail, ';') ? tail.substring(0, tail.length - 1) : tail;
+		return RefactorSupport.outerNominalOf(StringTools.trim(body));
 	}
 
 }

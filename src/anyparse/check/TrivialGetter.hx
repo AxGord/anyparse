@@ -1394,11 +1394,6 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 		}
 	}
 
-	/** Whether any indexed type named `typeName` directly declares a member named `member`. */
-	private static function typeDeclaresMember(index: SymbolIndex, typeName: String, member: String): Bool {
-		for (fi in index.allFiles()) for (t in fi.types) if (t.name == typeName && t.members.exists(m -> m.name == member)) return true;
-		return false;
-	}
 
 	/**
 	 * Every report file that may reference `owner`'s backing field through inheritance: the
@@ -1450,12 +1445,12 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 			excludeSpans.push(new Span(off, off + field.length));
 			return true;
 		}
-		if (index.isSubtype(c, owner) && !typeDeclaresMember(index, c, field)) {
+		if (index.isSubtype(c, owner) && !index.typeDeclaresMember(c, field)) {
 			if (writePos) return false;
 			renameEdits.push({ span: new Span(off, off + field.length), text: bareIdent && shadowsProp ? 'this.$propName' : propName });
 			return true;
 		}
-		if (typeDeclaresMember(index, c, field) || index.supertypeDeclaresMember(c, field))
+		if (index.typeDeclaresMember(c, field) || index.supertypeDeclaresMember(c, field))
 			excludeSpans.push(new Span(off, off + field.length));
 		return true;
 	}

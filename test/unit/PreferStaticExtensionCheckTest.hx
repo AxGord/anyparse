@@ -11,6 +11,8 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
+import anyparse.query.CachingGrammarPlugin;
+import anyparse.query.CachingGrammarPlugin.LibrarySources;
 
 /**
  * The `prefer-static-extension` check: a static utility call on a configured
@@ -32,6 +34,12 @@ class PreferStaticExtensionCheckTest extends Test {
 
 	/** The default injected config: `Ext` is the one static-extension module. */
 	private static inline final EXT_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"]}}}';
+
+	/** The `StringTools`-only config, for the known-extension-table gate. */
+	private static inline final STRINGTOOLS_CONFIG: String = '{"rules": {"prefer-static-extension": {"types": ["StringTools"]}}}';
+
+	/** A config declaring no rule options at all — the `types` / `addUsing` defaults then apply. */
+	private static inline final EMPTY_CONFIG: String = '{"rules": {}}';
 
 	public function testFixableRewriteWithUsingPresent(): Void {
 		final vs: Array<Violation> = violationsOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);')));
@@ -86,7 +94,7 @@ class PreferStaticExtensionCheckTest extends Test {
 
 	public function testUnresolvedReceiverReportedOnly(): Void {
 		final source: String =
-			'using Ext;\n\nclass C {\n\tfunction make(): Widget return null;\n\n\tfunction f(): Void {\n\t\tExt.deco(make(), 1);\n\t}\n}\n';
+			'using Ext;\n\nclass C {\n\tfunction make():Widget\n\t\treturn null;\n\n\tfunction f():Void {\n\t\tExt.deco(make(), 1);\n\t}\n}\n';
 		final files: Array<{ file: String, source: String }> = fileSet(source);
 		final vs: Array<Violation> = violationsOf(files);
 		Assert.equals(1, vs.length);
@@ -95,7 +103,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testDynamicReceiverNotFlagged(): Void {
-		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(d: Dynamic): Void {\n\t\tExt.deco(d, 1);\n\t}\n}\n';
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(d:Dynamic):Void {\n\t\tExt.deco(d, 1);\n\t}\n}\n';
 		Assert.equals(0, violationsOf(fileSet(source)).length);
 	}
 
@@ -112,7 +120,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testTypeNameValueShadowedNotFlagged(): Void {
-		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(Ext: Widget, w: Widget): Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n';
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(Ext:Widget, w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n';
 		Assert.equals(0, violationsOf(fileSet(source)).length);
 	}
 
@@ -123,7 +131,7 @@ class PreferStaticExtensionCheckTest extends Test {
 
 	public function testNestedArgumentCompositionRewritesBoth(): Void {
 		final source: String =
-			'using Ext;\n\nclass C {\n\tfunction f(w: Widget, w2: Widget): Void {\n\t\tExt.deco(w, Ext.deco(w2, 1));\n\t}\n}\n';
+			'using Ext;\n\nclass C {\n\tfunction f(w:Widget, w2:Widget):Void {\n\t\tExt.deco(w, Ext.deco(w2, 1));\n\t}\n}\n';
 		Assert.equals(2, violationsOf(fileSet(source)).length);
 		final out: String = fixResultOf(fileSet(source));
 		Assert.isTrue(out.indexOf('w.deco(w2.deco(1));') != -1, out);
@@ -132,7 +140,7 @@ class PreferStaticExtensionCheckTest extends Test {
 	public function testNestedReceiverInnerOnlyRewritten(): Void {
 		// The OUTER receiver is a call — an unresolved receiver type, so it stays report-only
 		// while the inner ident-receiver call rewrites in the same pass.
-		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(w: Widget): Void {\n\t\tExt.deco(Ext.deco(w, 1), 2);\n\t}\n}\n';
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(Ext.deco(w, 1), 2);\n\t}\n}\n';
 		Assert.equals(2, violationsOf(fileSet(source)).length);
 		final out: String = fixResultOf(fileSet(source));
 		Assert.isTrue(out.indexOf('Ext.deco(w.deco(1), 2);') != -1, out);
@@ -163,21 +171,20 @@ class PreferStaticExtensionCheckTest extends Test {
 	}
 
 	public function testKnownExtensionMethodReported(): Void {
-		final config: String = '{"rules": {"prefer-static-extension": {"types": ["StringTools"]}}}';
+		final config: String = STRINGTOOLS_CONFIG;
 		final vs: Array<Violation> = violationsOf([{ file: 'C.hx', source: stringToolsUser('urlEncode') }], config);
 		Assert.equals(1, vs.length);
 		Assert.isTrue(vs[0].message.indexOf('s.urlEncode()') != -1, vs[0].message);
 	}
 
 	public function testUnknownStdMethodNotFlagged(): Void {
-		final config: String = '{"rules": {"prefer-static-extension": {"types": ["StringTools"]}}}';
-		Assert.equals(0, violationsOf([{ file: 'C.hx', source: stringToolsUser('notAMethod') }], config).length);
+		Assert.equals(0, violationsOf([{ file: 'C.hx', source: stringToolsUser('notAMethod') }], STRINGTOOLS_CONFIG).length);
 	}
 
 	public function testDefaultTypesActiveWithoutConfig(): Void {
-		// No resolver injected: the `['Lambda', 'StringTools']` default is what matches here.
-		final check: PreferStaticExtension = new PreferStaticExtension();
-		Assert.equals(1, check.run([{ file: 'C.hx', source: stringToolsUser('urlEncode') }], new HaxeQueryPlugin()).length);
+		// An explicitly EMPTY rule config, so the assertion pins the `types` default rather than
+		// the absence of an `apqlint.json` anywhere above the test's working directory.
+		Assert.equals(1, violationsOf([{ file: 'C.hx', source: stringToolsUser('urlEncode') }], EMPTY_CONFIG).length);
 	}
 
 	public function testSkipParseNoCrash(): Void {
@@ -190,14 +197,123 @@ class PreferStaticExtensionCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-static-extension'));
 	}
 
+	public function testTypedefAliasShadowNotFixable(): Void {
+		// `typedef Alias = Widget` indexes as a MEMBER-LESS decl, so a naive closure proof reads
+		// every name as absent from it — while the alias target's `deco` really would win.
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(a:Alias):Void {\n\t\tExt.deco(a, 1);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(
+			source, 'class Widget {\n\tpublic function deco(n: Int): Widget return this;\n}\n',
+			[{ file: 'Alias.hx', source: 'typedef Alias = Widget;\n' }]
+		);
+		Assert.equals(0, editsOf(files).length);
+		for (violation in violationsOf(files))
+			Assert.isTrue(violation.message.indexOf('verify the receiver type') != -1, violation.message);
+	}
+
+	public function testTypedefAliasWithoutShadowStillFixable(): Void {
+		// The positive control: following the alias must not blanket-refuse every typedef.
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(a:Alias):Void {\n\t\tExt.deco(a, 1);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(
+			source, WIDGET_SOURCE, [{ file: 'Alias.hx', source: 'typedef Alias = Widget;\n' }]
+		);
+		Assert.isTrue(fixResultOf(files).indexOf('a.deco(1);') != -1);
+	}
+
+	public function testForwardAbstractShadowNotFixable(): Void {
+		// A `@:forward` abstract exposes its UNDERLYING's members through a link no `extends`
+		// clause records, so its own empty member list proves nothing.
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(w:Fwd):Void {\n\t\tExt.pad(w, 1, 2);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> =
+			fileSet(source, 'class Widget {\n\tpublic function pad(a: Int, b: Int): Widget return this;\n}\n', [
+				{ file: 'Fwd.hx', source: '@:forward abstract Fwd(Widget) from Widget to Widget {}\n' }
+			]);
+		Assert.equals(0, editsOf(files).length);
+	}
+
+	public function testInsertedUsingLandsAboveExistingUsings(): Void {
+		// Haxe resolves static extensions in REVERSE declaration order, so an insert placed after
+		// the existing run would outrank `using Other;` and hijack its `tag` calls.
+		final source: String =
+			'using Other;\n\nclass C {\n\tfunction f(w:Widget, v:Widget):Void {\n\t\tv.tag();\n\t\tExt.deco(w, 1);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
+			{ file: 'Other.hx', source: 'class Other {\n\tpublic static function tag(w: Widget): Widget return w;\n}\n' }
+		]);
+		final out: String = fixResultOf(files);
+		Assert.isTrue(out.indexOf('using Ext;') != -1, out);
+		Assert.isTrue(out.indexOf('using Ext;') < out.indexOf('using Other;'), out);
+		Assert.isTrue(out.indexOf('v.tag();') != -1, out);
+	}
+
+	public function testFixPrefersResolutionScopeOverPassedIndex(): Void {
+		// `Cli` hands `fix` the REPORT-scoped index; the receiver's type may only be resolvable
+		// through the plugin's wider resolution scope, where `run` already proved the gates.
+		final source: String = 'using Ext;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n';
+		final report: Array<{ file: String, source: String }> = [{ file: 'C.hx', source: source }];
+		final library: Array<{ file: String, source: String }> = [
+			{ file: 'Ext.hx', source: EXT_SOURCE },
+			{ file: 'Widget.hx', source: WIDGET_SOURCE }
+		];
+		final scoped: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		scoped.setResolutionScope({ declared: true, sources: () -> {report: report, library: new LibrarySources(library) } });
+		final check: PreferStaticExtension = new PreferStaticExtension();
+		check.setConfigResolver(_ -> LintConfig.parse(EXT_CONFIG));
+		final violations: Array<Violation> = check.run(report, scoped);
+		Assert.equals(1, violations.length);
+		// The index argument sees the report file ONLY — the wider scope must win.
+		Assert.equals(2, check.fix(source, violations, scoped, SymbolIndex.build(report, scoped)).length);
+	}
+
+	public function testNoAnchorInsertsUsingAtFileHead(): Void {
+		final source: String = 'class C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n';
+		final out: String = fixResultOf(fileSet(source));
+		Assert.isTrue(out.indexOf('using Ext;') == 0, out);
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+	}
+
+	public function testTwoModulesMergeIntoOneInsert(): Void {
+		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext", "Ext2"]}}}';
+		final source: String = 'class C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t\tExt2.tint(w, 2);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
+			{ file: 'Ext2.hx', source: 'class Ext2 {\n\tpublic static function tint(w: Widget, n: Int): Widget return w;\n}\n' }
+		]);
+		Assert.equals(5, editsOf(files, config).length);
+		final out: String = fixResultOf(files, config);
+		Assert.isTrue(out.indexOf('using Ext;') != -1, out);
+		Assert.isTrue(out.indexOf('using Ext2;') != -1, out);
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+		Assert.isTrue(out.indexOf('w.tint(2);') != -1, out);
+	}
+
+	public function testCommentAfterReceiverNotFixed(): Void {
+		final files: Array<{ file: String, source: String }> = fileSet(user('using Ext;\n\n', 'Ext.deco(w /* keep */, 1);'));
+		Assert.equals(1, violationsOf(files).length);
+		Assert.equals(0, editsOf(files).length);
+	}
+
+	public function testCommentInSingleArgTailNotFixed(): Void {
+		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext1"]}}}';
+		final source: String = 'using Ext1;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt1.solo(w /* keep */);\n\t}\n}\n';
+		final files: Array<{ file: String, source: String }> = fileSet(source, WIDGET_SOURCE, [
+			{ file: 'Ext1.hx', source: 'class Ext1 {\n\tpublic static function solo(w: Widget): Widget return w;\n}\n' }
+		]);
+		Assert.equals(1, violationsOf(files, config).length);
+		Assert.equals(0, editsOf(files, config).length);
+	}
+
+	public function testAddUsingFalseWithUsingPresentStillFixes(): Void {
+		final config: String = '{"rules": {"prefer-static-extension": {"types": ["Ext"], "addUsing": false}}}';
+		final out: String = fixResultOf(fileSet(user('using Ext;\n\n', 'Ext.deco(w, 1);')), config);
+		Assert.isTrue(out.indexOf('w.deco(1);') != -1, out);
+	}
+
 	/** A `C.hx` source with `head` before the class and `body` as the sole statement of `f(w: Widget)`. */
 	private function user(head: String, body: String): String {
-		return '${head}class C {\n\tfunction f(w: Widget): Void {\n\t\t$body\n\t}\n}\n';
+		return '${head}class C {\n\tfunction f(w:Widget):Void {\n\t\t$body\n\t}\n}\n';
 	}
 
 	/** A `C.hx` calling `StringTools.<method>` on an UNANNOTATED parameter (an unresolvable receiver). */
 	private function stringToolsUser(method: String): String {
-		return 'class C {\n\tfunction f(s): Void {\n\t\tStringTools.$method(s);\n\t}\n}\n';
+		return 'class C {\n\tfunction f(s):Void {\n\t\tStringTools.$method(s);\n\t}\n}\n';
 	}
 
 	/** The user file plus the `Ext` utility, a `Widget` (overridable) and any `extra` fixture modules. */
@@ -218,7 +334,7 @@ class PreferStaticExtensionCheckTest extends Test {
 		return [
 			{
 				file: 'C.hx',
-				source: 'package top;\n\nimport sub.Widget;\n\nclass C {\n\tfunction f(w: Widget): Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n'
+				source: 'package top;\n\nimport sub.Widget;\n\nclass C {\n\tfunction f(w:Widget):Void {\n\t\tExt.deco(w, 1);\n\t}\n}\n'
 			},
 			{ file: 'Ext.hx', source: EXT_SOURCE },
 			{ file: 'sub/Widget.hx', source: 'package sub;\n\n$WIDGET_SOURCE' }
@@ -243,10 +359,14 @@ class PreferStaticExtensionCheckTest extends Test {
 		return check.fix(files[0].source, own, plugin, SymbolIndex.build(files, plugin));
 	}
 
-	/** `files[0]` after its own findings are fixed and the result canonicalized. */
+	/**
+	 * `files[0]` after its own findings are fixed and the result canonicalized — with
+	 * `reformat` FALSE, exactly as `apq lint --fix` does it, so a fixture that is not already
+	 * writer-canonical fails loudly here instead of being silently reformatted.
+	 */
 	private function fixResultOf(files: Array<{ file: String, source: String }>, ?config: String): String {
 		final source: String = files[0].source;
-		switch RefactorSupport.canonicalize(source, editsOf(files, config), true, new HaxeQueryPlugin()) {
+		switch RefactorSupport.canonicalize(source, editsOf(files, config), false, new HaxeQueryPlugin()) {
 			case Ok(text):
 				return text;
 			case Err(message):

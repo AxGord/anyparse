@@ -46,24 +46,33 @@ import anyparse.runtime.Span;
  * a supertype) declares a member of the same name, `Lambda.map(arr, f)` → `arr.map(f)` stops
  * calling `Lambda.map` and starts calling `Array.map` — which COMPILES, while changing the
  * result type (`List<T>` → `Array<T>`) and sometimes the semantics. No compiler oracle catches
- * that, so such a site is DROPPED entirely (`SymbolIndex.typeDeclaresMember` /
- * `supertypeDeclaresMember`): no finding at all, not even report-only.
+ * that, so such a site is never rewritten. A member the index sees DIRECTLY on the receiver
+ * type or on one of its supertypes (`SymbolIndex.typeDeclaresMember` /
+ * `supertypeDeclaresMember`) DROPS it entirely: no finding at all, not even report-only. A
+ * member reachable only through a link those two do not follow — a `typedef` alias, a
+ * `@:forward` abstract's underlying — is caught one gate later, where
+ * `typeProvablyLacksMember` (which DOES follow both) fails to prove absence: the site degrades
+ * to REPORT-ONLY, still never rewritten but visible to a reader.
  *
  * ## Receiver verdicts
  *
  * The first argument's nominal type is resolved through `RefactorSupport.valueTypeNominal` (a
  * bare identifier via its binding annotation; a plain field path cross-file through a
  * `SymbolIndex`), plus `literalTypeNames` for a `stringLiteralKinds` receiver. Everything else
- * stays UNRESOLVED: a call, a ternary, a numeric literal (`5.trim()` does not even parse), a
- * `?.` chain, a bare `this` (whose meaning differs inside an abstract), and a `Null<…>` / `Any`
- * declared type. Given a resolved nominal `R` and the method `m`:
+ * stays UNRESOLVED: a call, a ternary, a `?.` chain, a bare `this` (whose meaning differs
+ * inside an abstract), a `Null<…>` / `Any` declared type — and a NUMERIC literal, which is a
+ * deliberately skipped FIXABLE class rather than an unresolvable one: `255.hex(2)` compiles
+ * fine under `using StringTools`, but `5.trim()` types as the float `5.` applied to `trim`, so
+ * the safe rewrite depends on the literal's exact spelling. Given a resolved nominal `R` and
+ * the method `m`:
  *
  *  - `R` is the grammar's `rawDynamicTypeName` → DROP. A `Dynamic` receiver dispatches nothing
  *    statically: the rewrite compiles and breaks at RUNTIME, which no oracle sees.
  *  - `R` or a supertype declares `m` → DROP (the shadow gate above).
  *  - `R`'s member closure provably lacks `m` → a FIXABLE finding.
- *  - the closure is unresolvable (a supertype outside the index) → a REPORT-ONLY finding whose
- *    message asks the reader to verify that no same-name member exists.
+ *  - the closure is unresolvable (a supertype outside the index, an unreadable `typedef` alias,
+ *    a `@:forward` abstract) → a REPORT-ONLY finding whose message asks the reader to verify
+ *    that no same-name member exists.
  *  - `R` unresolved, or no index at all → a REPORT-ONLY finding with its own message.
  *
  * ## The conflicting-`using` gate
@@ -73,7 +82,9 @@ import anyparse.runtime.Span;
  * `Other.m`. So every OTHER top-level `using` is tested for the method — by
  * `knownExtensionMethods` when the grammar knows that module, else by
  * `typeProvablyLacksMember` through the index — and any hit, or any doubt, DROPS the site.
- * Conservative by construction: an unresolvable second `using` counts as a conflict.
+ * Conservative by construction: an unresolvable second `using` counts as a conflict. The
+ * verdict depends only on the (module, method) pair, so it is memoised across a file's call
+ * sites.
  *
  * ## The rewrite
  *
@@ -85,23 +96,33 @@ import anyparse.runtime.Span;
  * literal — all postfix-safe — so the spliced receiver never needs parentheses; that is an
  * INVARIANT of the verdict table above, not a test performed here.
  *
+ * `fix` re-derives every gate against the PLUGIN's resolution index
+ * (`RefactorSupport.resolutionIndexOf`) in preference to the report-scoped index it is handed,
+ * because that is the scope `run` proved the verdicts on: the narrower one would silently
+ * degrade every std-typed site to report-only, and could just as easily "prove" — from a name
+ * the report scope happens to see only once — something the wider scope refused.
+ *
  * ## Known limitations
  *
+ * - A FULLY QUALIFIED call site (`haxe.io.Path.withoutExtension(p)`) is invisible: the callee's
+ *   root is a `fieldAccessKind` chain, not a bare `identKind`, so it never matches the shape.
+ *   Import the module and the site becomes a candidate.
  * - An `import.hx`-provided `using` is invisible (anyparse ignores `import.hx` repo-wide):
  *   worst case an inserted `using` that was already implied, or a conservative miss of a
  *   conflicting module. Neither breaks a build.
  * - `#if` bodies project as one opaque node, so a call inside conditional compilation is never
  *   found — the standard walker limitation.
- * - The `using` declaration kind is spelled literally (`UsingDecl`, shared with `prefer-find`
- *   through `CheckScan`): the grammar exposes no seam for it, so a grammar naming it
- *   differently gets no `using`-awareness.
+ * - The `using` declaration kind is spelled literally (`CheckScan.USING_DECL_KIND`, shared with
+ *   `prefer-find`): the grammar exposes no seam for it, so a grammar naming it differently gets
+ *   no `using`-awareness.
  *
  * ## Grammar-agnostic
  *
  * Driven by `identKind`, `callKind`, `fieldAccessKind`, `opaqueKinds`, `stringLiteralKinds`,
  * `literalTypeNames`, `nullableWrapperTypeNames` and `rawDynamicTypeName` (a missing required
- * kind → no-op); the receiver gate additionally requires `plugin is TypeInfoProvider`, without
- * which no receiver would ever resolve.
+ * kind → no-op). The whole CHECK — not merely the receiver gate — also requires `plugin is
+ * TypeInfoProvider`: without declared-type information no receiver could ever resolve, so every
+ * site would be an unactionable report-only finding.
  */
 @:nullSafety(Strict)
 final class PreferStaticExtension implements Check implements ConfigAware {
@@ -117,9 +138,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 
 	/** Cap on the receiver / argument excerpt length in the suggestion message. */
 	private static inline final EXCERPT_MAX: Int = 40;
-
-	/** The grammar's `using` declaration kind, spelled literally (see the class doc's limitations). */
-	private static inline final USING_DECL_KIND: String = 'UsingDecl';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
 	private var _resolveConfig: Null<(String) -> LintConfig> = null;
@@ -183,8 +201,13 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
 		final root: QueryNode = tree;
+		// `Cli` hands `fix` the REPORT-scoped index, but the gates must re-derive on the SAME
+		// scope `run` proved them on — the plugin's resolution index (report files UNION the
+		// libraries and the std). Without this a std-typed receiver reads as unresolvable here,
+		// every finding degrades to report-only, and the autofix silently never fires.
+		final resolution: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final byKey: Map<String, Candidate> = [];
-		for (candidate in candidates(root, source, file, s, options, plugin, () -> index))
+		for (candidate in candidates(root, source, file, s, options, plugin, () -> resolution))
 			byKey['${candidate.callSpan.from}:${candidate.callSpan.to}'] = candidate;
 		final edits: Array<{ span: Span, text: String }> = [];
 		final rewritten: Array<String> = [];
@@ -251,10 +274,15 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		collectCalls(tree, s, calls);
 		if (calls.length == 0) return [];
 		final declaredTypes: Map<Int, String> = s.typed.declaredTypes(source);
-		final usings: Array<String> = usingModules(tree);
+		final usings: Array<String> = CheckScan.usingModules(tree);
+		// The conflict verdict depends only on (module, method), while a file repeats the same
+		// pair across every call site — and each miss costs a whole-index member-closure query.
+		final conflicts: Map<String, Bool> = [];
 		final out: Array<Candidate> = [];
 		for (call in calls) {
-			final candidate: Null<Candidate> = classify(call, tree, source, file, s, options, plugin, symbols, declaredTypes, usings);
+			final candidate: Null<Candidate> = classify(
+				call, tree, source, file, s, options, plugin, symbols, declaredTypes, usings, conflicts
+			);
 			if (candidate != null) out.push(candidate);
 		}
 		return out;
@@ -267,16 +295,6 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		for (child in node.children) collectCalls(child, s, out);
 	}
 
-	/** The module paths of every top-level `using` declaration in `tree`. */
-	private static function usingModules(tree: QueryNode): Array<String> {
-		final out: Array<String> = [];
-		for (child in tree.children) if (child.kind == USING_DECL_KIND) {
-			final name: Null<String> = child.name;
-			if (name != null) out.push(name);
-		}
-		return out;
-	}
-
 	/**
 	 * The candidate `call` describes, or null when ANY gate rejects it — a non-matching shape,
 	 * a value-bound type name, a non-extension method, a conflicting second `using`, a
@@ -285,7 +303,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 */
 	private static function classify(
 		call: QueryNode, root: QueryNode, source: String, file: String, s: Seams, options: Options, plugin: GrammarPlugin,
-		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, usings: Array<String>
+		symbols: () -> Null<SymbolIndex>, declaredTypes: Map<Int, String>, usings: Array<String>, conflicts: Map<String, Bool>
 	): Null<Candidate> {
 		if (call.children.length < MIN_CALL_CHILDREN) return null;
 		final callee: QueryNode = call.children[0];
@@ -304,7 +322,7 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 		final callSpan: Null<Span> = call.span;
 		final recv: QueryNode = call.children[1];
 		if (callSpan == null || recv.span == null) return null;
-		if (conflictingUsing(usings, module, method, plugin, symbols)) return null;
+		if (conflictingUsing(usings, module, method, plugin, symbols, conflicts)) return null;
 		final nominal: Null<String> = receiverNominal(recv, root, s, declaredTypes, symbols, file);
 		// A `Dynamic` receiver dispatches no extension at RUNTIME while the rewrite still compiles.
 		if (nominal != null && nominal == s.dynamicTypeName) return null;
@@ -362,6 +380,19 @@ final class PreferStaticExtension implements Check implements ConfigAware {
 	 * an unknown module with no index, or an unresolvable one — counts as a conflict.
 	 */
 	private static function conflictingUsing(
+		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>,
+		conflicts: Map<String, Bool>
+	): Bool {
+		final key: String = '$module:$method';
+		final memo: Null<Bool> = conflicts[key];
+		if (memo != null) return memo;
+		final verdict: Bool = conflictScan(usings, module, method, plugin, symbols);
+		conflicts[key] = verdict;
+		return verdict;
+	}
+
+	/** The unmemoised body of `conflictingUsing` — one pass over the file's other `using` declarations. */
+	private static function conflictScan(
 		usings: Array<String>, module: String, method: String, plugin: GrammarPlugin, symbols: () -> Null<SymbolIndex>
 	): Bool {
 		final simple: String = simpleNameOf(module);
