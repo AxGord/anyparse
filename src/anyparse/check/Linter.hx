@@ -141,7 +141,8 @@ final class Linter {
 			new ExtractRepeatedExpression(),
 			new TailMerge(),
 			new NoUnderscorePrefix(),
-			new ShortenTypeRef()
+			new ShortenTypeRef(),
+			new CondAssignMerge()
 		];
 	}
 
