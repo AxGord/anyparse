@@ -1,0 +1,14 @@
+# Dedicated CLI compile server variant (opt-in speed path, separate from
+# vshaxe). Start once:
+#   haxe --wait 7822
+# Caches macro-expanded modules between runs. Restart the server if a
+# stale synthesized-type error appears.
+#
+# Only run this file if you know a COMPATIBLE server is listening on
+# 7822 (started from this checkout). A stray or mismatched server on
+# that port answers --connect without error and silently skips the
+# run (exit 0, no output) - use plain test-interp.hxml as the safe
+# default; it never depends on one.
+--connect 7822
+test-common.hxml
+--interp
