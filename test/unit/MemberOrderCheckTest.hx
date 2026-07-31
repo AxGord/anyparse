@@ -758,4 +758,160 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
 	}
 
+	/**
+	 * A conditional block whose members all carry ONE rank sorts AT that rank among the plain
+	 * members of its section instead of trailing everything: the guarded `public var` (rank 7)
+	 * lands after the `public final` (rank 6) and before the `private var` (rank 11) it
+	 * outranks - the `Main.iapStore` shape - still wrapped in its own `#if`.
+	 */
+	public function testSingleRankConditionalBlockSortsByContent(): Void {
+		final src: String = contentRankedBlockSource();
+		Assert.isTrue(violations(src).length > 0, 'the guarded field out of rank order is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var s') < fixed.indexOf('final a'), 'the static var still leads: $fixed');
+		Assert.isTrue(fixed.indexOf('final a') < fixed.indexOf('#if'), 'the public final precedes the guarded block: $fixed');
+		Assert.isTrue(fixed.indexOf('#if') < fixed.indexOf('private var p'), 'the guarded block precedes the private var: $fixed');
+		Assert.isTrue(fixed.indexOf('iap') < fixed.indexOf('#end'), 'the guarded field stays inside its #if: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * A conditional block whose members span MORE than one rank stays PINNED at its section
+	 * end: content ranking never splits a construct, so atomicity wins and the block keeps its
+	 * pre-existing placement behind every unconditional field, sorting only internally.
+	 */
+	public function testMixedRankConditionalBlockStaysPinned(): Void {
+		final src: String = 'class C {\n\tpublic final a:S;\n\n\t#if X\n\tpublic var g:Int = 0;\n\n\tprivate var h:Int = 0;\n'
+			+ '\t#end\n\n\tprivate var p:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'the private var before the guarded block is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('private var p') < fixed.indexOf('#if X'), 'the mixed-rank block stays at the section end: $fixed');
+		Assert.isTrue(fixed.indexOf('var g') < fixed.indexOf('var h'), 'the block still sorts internally: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * A guarded static whose initializer READS a sibling static keeps its block pinned. Without the
+	 * gate the block would earn rank 1 and outrank `base` (rank 3), and the whole container would
+	 * then degrade to spacing-only - `hasSiblingReadFlip` catches the flip the ranking introduced -
+	 * so the unconditional `K` would never reach the top and the finding would never converge. The
+	 * discriminating assertions are therefore the const lift and the convergence, not the pin: with
+	 * the gate reverted `base` still precedes the `#if`, because nothing is reordered at all.
+	 */
+	public function testDependentStaticConditionalBlockStaysPinned(): Void {
+		final src: String = 'class C {\n\tprivate static var base:Int = 1;\n\n\t#if X\n\tpublic static var derived:Int = base;\n'
+			+ '\t#end\n\n\tpublic static final K:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'the static const after the vars is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('static final K') < fixed.indexOf('base:Int'), 'the unconditional const still leads: $fixed');
+		Assert.isTrue(fixed.indexOf('base:Int') < fixed.indexOf('#if X'), 'the dependent block stays pinned: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * Opaque content inside a conditional region - a stray `;`, which projects as
+	 * `EmptySemiMember` and is no collected member - pins the block AND bails the reorder: the
+	 * rebuild regenerates the region from member slots and directives only, so those bytes
+	 * would be dropped. The order finding stays a report-only advisory.
+	 */
+	public function testOpaqueConditionalContentPinsAndBails(): Void {
+		final src: String =
+			'class C {\n\tpublic final a:S;\n\n\t#if X\n\tpublic var g:Int = 0;\n\t;\n\t#end\n\n\tprivate var p:Int = 0;\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		Assert.equals(0, edits(src).length, 'the reorder bails rather than dropping the stray semicolon');
+	}
+
+	/** The content-ranked reorder is a FIXED POINT: its own canonicalized output yields no further edits and no further findings. */
+	public function testContentRankedBlockFixIsIdempotent(): Void {
+		final fixed: String = canonicalizedFix(contentRankedBlockSource());
+		Assert.equals(0, edits(fixed).length, 'second pass emits zero edits: $fixed');
+		Assert.equals(0, violations(fixed).length, 'second pass reports nothing: $fixed');
+	}
+
+	/**
+	 * A block moved into the MIDDLE of a rank region keeps the directive-spacing policy:
+	 * exactly one blank line before its `#if` and exactly one after its `#end`, never two.
+	 */
+	@:access(anyparse.check.MemberOrder)
+	public function testMovedBlockKeepsSingleBlankLines(): Void {
+		final fixed: String = canonicalizedFix(contentRankedBlockSource());
+		Assert.isTrue(fixed.indexOf('\n\n\n') < 0, 'no double blank anywhere: $fixed');
+		Assert.equals(
+			1, MemberOrder.blankLineCount(fixed.substring(fixed.indexOf('final a'), fixed.indexOf('#if'))), 'one blank before #if: $fixed'
+		);
+		Assert.equals(
+			1, MemberOrder.blankLineCount(fixed.substring(fixed.indexOf('#end'), fixed.indexOf('private var p'))),
+			'one blank after #end: $fixed'
+		);
+	}
+
+
+	/**
+	 * A note on the `#end` line pins the block and bails the reorder. The conditional region
+	 * ends right after `#end`, so that comment sits OUTSIDE it: moving the block would leave
+	 * the note where it is and re-attach it to whichever member ends up last - the rebuild
+	 * replaces the whole member region, not the comment after it.
+	 */
+	public function testEndLineCommentPinsAndBails(): Void {
+		final src: String = 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
+			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end // trailing note\n}';
+		Assert.equals(0, violations(src).length, 'the pinned block leaves the container canonical: $src');
+		Assert.equals(0, edits(src).length, 'no edit can strand the note');
+	}
+
+	/**
+	 * A note on a DIRECTIVE line pins the block too: the rebuild re-emits `#if` / `#else` from the
+	 * recorded condition and branch shape alone, so the note would have nowhere to go. The pin
+	 * (assertion 1) is what this gate buys - the edit assertion is belt-and-braces, held up by
+	 * `hasOrphanComment` even with the gate reverted.
+	 */
+	public function testDirectiveLineCommentPinsBlock(): Void {
+		final src: String = 'class C {\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
+			+ '\n\t#if X // why\n\tpublic var g:Int = 0;\n\t#end\n}';
+		Assert.equals(0, violations(src).length, 'the pinned block leaves the container canonical: $src');
+		Assert.equals(0, edits(src).length, 'no edit can drop the note');
+	}
+
+	/**
+	 * One condition guarding BOTH a field and a method splits into one block per section, and
+	 * each is ranked on its own: the guarded field sorts among the instance fields while the
+	 * guarded method sorts among the methods. Keying blocks without the section would merge the
+	 * two into one mixed-rank bucket and pin both - the `#if mobile` fields plus `#if mobile`
+	 * methods shape, which is the common one.
+	 */
+	public function testSameConditionFieldAndMethodBlocksRankSeparately(): Void {
+		final src: String = 'class C {\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n\n\t#if X\n\tpublic var g:Int = 0;\n\t#end\n'
+			+ '\n\tpublic function m():Void {}\n\n\t#if X\n\tpublic function r():Void {}\n\t#end\n}';
+		Assert.isTrue(violations(src).length > 0, 'the guarded field behind the private var is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var g') < fixed.indexOf('private var p'), 'the guarded field outranks the private var: $fixed');
+		Assert.isTrue(fixed.indexOf('private var p') < fixed.indexOf('function m'), 'the fields still precede the methods: $fixed');
+		Assert.isTrue(fixed.indexOf('function m') < fixed.indexOf('function r'), 'the guarded method trails the plain one: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * An unconditional initializer that READS a field inside the block pins it: the gate refuses in
+	 * both directions, since moving the block past that initializer changes what it sees. The pin
+	 * (assertion 1) is what this gate buys - the edit assertion is belt-and-braces, held up by
+	 * `hasSiblingReadFlip` even with the gate reverted.
+	 */
+	public function testOutsideInitReadingBlockFieldPinsBlock(): Void {
+		final src: String =
+			'class C {\n\tprivate static var uses:Int = guarded;\n\n\t#if X\n\tpublic static var guarded:Int = 5;\n\t#end\n}';
+		Assert.equals(0, violations(src).length, 'the pinned block leaves the container canonical: $src');
+		Assert.equals(0, edits(src).length, 'no edit can reverse the read');
+	}
+
+
+	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
+	private inline function contentRankedBlockSource(): String {
+		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
+			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
+	}
+
 }
