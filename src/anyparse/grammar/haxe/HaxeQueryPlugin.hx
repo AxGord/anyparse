@@ -551,7 +551,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			finalModifierMemberKind: 'FinalModifiedMember',
 			finalModifierRankKind: 'Final',
 			fieldDeclKinds: ['VarMember', 'FinalMember'],
-			functionBodyKinds: ['BlockBody', 'ExprBody', 'NoBody'],
+			// Every `HxFnBody` ctor, `UntypedBlockBody` and `CondBody` included: a consumer reads this
+			// to tell a body child from a return-type child, so a missing ctor reads as a return type
+			// (or, for a boundary scan, as no body at all).
+			functionBodyKinds: ['BlockBody', 'UntypedBlockBody', 'ExprBody', 'NoBody', 'CondBody'],
 			enumAbstractDeclKind: 'EnumAbstractDecl',
 			rawDynamicTypeName: 'Dynamic',
 			bareConstructorTypeKinds: ['EnumDecl', 'EnumAbstractDecl'],
