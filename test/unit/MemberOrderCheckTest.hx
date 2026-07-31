@@ -758,4 +758,99 @@ class MemberOrderCheckTest extends Test {
 		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
 	}
 
+	/**
+	 * A conditional block whose members all carry ONE rank sorts AT that rank among the plain
+	 * members of its section instead of trailing everything: the guarded `public var` (rank 7)
+	 * lands after the `public final` (rank 6) and before the `private var` (rank 11) it
+	 * outranks - the `Main.iapStore` shape - still wrapped in its own `#if`.
+	 */
+	public function testSingleRankConditionalBlockSortsByContent(): Void {
+		final src: String = contentRankedBlockSource();
+		Assert.isTrue(violations(src).length > 0, 'the guarded field out of rank order is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('var s') < fixed.indexOf('final a'), 'the static var still leads: $fixed');
+		Assert.isTrue(fixed.indexOf('final a') < fixed.indexOf('#if'), 'the public final precedes the guarded block: $fixed');
+		Assert.isTrue(fixed.indexOf('#if') < fixed.indexOf('private var p'), 'the guarded block precedes the private var: $fixed');
+		Assert.isTrue(fixed.indexOf('iap') < fixed.indexOf('#end'), 'the guarded field stays inside its #if: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * A conditional block whose members span MORE than one rank stays PINNED at its section
+	 * end: content ranking never splits a construct, so atomicity wins and the block keeps its
+	 * pre-existing placement behind every unconditional field, sorting only internally.
+	 */
+	public function testMixedRankConditionalBlockStaysPinned(): Void {
+		final src: String = 'class C {\n\tpublic final a:S;\n\n\t#if X\n\tpublic var g:Int = 0;\n\n\tprivate var h:Int = 0;\n'
+			+ '\t#end\n\n\tprivate var p:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'the private var before the guarded block is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('private var p') < fixed.indexOf('#if X'), 'the mixed-rank block stays at the section end: $fixed');
+		Assert.isTrue(fixed.indexOf('var g') < fixed.indexOf('var h'), 'the block still sorts internally: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * A guarded static whose initializer READS a sibling static keeps its block pinned - the
+	 * init-order hazard: `derived` (rank 1) would otherwise outrank `base` (rank 3) and be
+	 * initialised ahead of the sibling it reads. The two assertions discriminate the gate
+	 * together: the unconditional reorder still lifts `K` above `base`, and only the gate
+	 * keeps `base` ahead of the `#if`.
+	 */
+	public function testDependentStaticConditionalBlockStaysPinned(): Void {
+		final src: String = 'class C {\n\tprivate static var base:Int = 1;\n\n\t#if X\n\tpublic static var derived:Int = base;\n'
+			+ '\t#end\n\n\tpublic static final K:Int = 0;\n}';
+		Assert.isTrue(violations(src).length > 0, 'the static const after the vars is flagged');
+		final fixed: String = fixedSource(src);
+		Assert.isTrue(fixed.indexOf('static final K') < fixed.indexOf('base:Int'), 'the unconditional const still leads: $fixed');
+		Assert.isTrue(fixed.indexOf('base:Int') < fixed.indexOf('#if X'), 'the dependent block stays pinned behind it: $fixed');
+		Assert.isTrue(parses(fixed), 'rebuilt output parses: $fixed');
+		Assert.equals(0, violations(canonicalizedFix(src)).length, 'converges: $fixed');
+	}
+
+	/**
+	 * Opaque content inside a conditional region - a stray `;`, which projects as
+	 * `EmptySemiMember` and is no collected member - pins the block AND bails the reorder: the
+	 * rebuild regenerates the region from member slots and directives only, so those bytes
+	 * would be dropped. The order finding stays a report-only advisory.
+	 */
+	public function testOpaqueConditionalContentPinsAndBails(): Void {
+		final src: String =
+			'class C {\n\tpublic final a:S;\n\n\t#if X\n\tpublic var g:Int = 0;\n\t;\n\t#end\n\n\tprivate var p:Int = 0;\n}';
+		assertOrderAdvisoryOnly(violations(src));
+		Assert.equals(0, edits(src).length, 'the reorder bails rather than dropping the stray semicolon');
+	}
+
+	/** The content-ranked reorder is a FIXED POINT: its own canonicalized output yields no further edits and no further findings. */
+	public function testContentRankedBlockFixIsIdempotent(): Void {
+		final fixed: String = canonicalizedFix(contentRankedBlockSource());
+		Assert.equals(0, edits(fixed).length, 'second pass emits zero edits: $fixed');
+		Assert.equals(0, violations(fixed).length, 'second pass reports nothing: $fixed');
+	}
+
+	/**
+	 * A block moved into the MIDDLE of a rank region keeps the directive-spacing policy:
+	 * exactly one blank line before its `#if` and exactly one after its `#end`, never two.
+	 */
+	public function testMovedBlockKeepsSingleBlankLines(): Void {
+		final fixed: String = canonicalizedFix(contentRankedBlockSource());
+		inline function blanksIn(gap: String): Int {
+			final lines: Array<String> = gap.split('\n');
+			var count: Int = 0;
+			for (i in 1...lines.length - 1) if (StringTools.trim(lines[i]) == '') count++;
+			return count;
+		}
+		Assert.isTrue(fixed.indexOf('\n\n\n') < 0, 'no double blank anywhere: $fixed');
+		Assert.equals(1, blanksIn(fixed.substring(fixed.indexOf('final a'), fixed.indexOf('#if'))), 'one blank before #if: $fixed');
+		Assert.equals(1, blanksIn(fixed.substring(fixed.indexOf('#end'), fixed.indexOf('private var p'))), 'one blank after #end: $fixed');
+	}
+
+	/** The `Main.iapStore` shape: a single-rank guarded `public var` written behind the private instance field it outranks. */
+	private function contentRankedBlockSource(): String {
+		return 'class C {\n\tpublic static var s:Int = 0;\n\n\tpublic final a:S;\n\n\tprivate var p:Int = 0;\n'
+			+ '\n\t#if (mobile || APPSTORE)\n\tpublic var iap:I;\n\t#end\n}';
+	}
+
 }

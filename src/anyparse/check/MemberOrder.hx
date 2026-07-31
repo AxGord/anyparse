@@ -66,8 +66,27 @@ typedef DirectiveGap = {
 	var ifEdit: Null<{ span: Span, text: String }>;
 	var endEdit: Null<{ span: Span, text: String }>;
 }
+
 /**
- * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A conditional block moves as one unit to the end of its section, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single group whose members sort within their own branch, so the construct is regenerated rather than flattened. A container whose field initializers make reordering unsafe - or which holds an `#else` shape the branch model refuses (nested, spanning two sections, or with an empty first branch) - keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable - reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
+ * A conditional block that sorts by its own content: the single rank all its members
+ * share, and the source index of its first member.
+ */
+typedef RankedBlock = {
+	var rank: MemberRank;
+	var ordinal: Int;
+}
+
+/**
+ * One container's sort context. `groupFirst` orders the PINNED conditional blocks at their
+ * section end (the pre-existing shape); `blocks` holds every conditional block that qualified
+ * to sort by its content instead, keyed by `blockKey`.
+ */
+typedef SortPlan = {
+	var groupFirst: Map<String, Int>;
+	var blocks: Map<String, RankedBlock>;
+}
+/**
+ * The `member-order` check and its reordering autofix: verifies a types members follow the canonical rank order (constants, fields, constructor, methods; public before private) with rank groups blank-line separated, and rewrites them into that order when fixing. A conditional block still moves as ONE atomic unit, branches and all: `#if` / `#elseif` / `#else` / `#end` is a single group whose members sort within their own branch, so the construct is regenerated rather than flattened. Such a block sorts by its CONTENT: when every member of the block carries the same `MemberRank`, the block sorts at that rank among the plain members of its section, trailing them WITHIN the rank - crossing a rank boundary is what content ranking is for, position inside one rank is not - so a guarded `public var` no longer trails the private instance fields it outranks. Content ranking is gated three ways, and any doubt pins the block back to its section end (`comparePinned`, the pre-existing shape): (1) all members of the block must share ONE rank, since a mixed-rank block would have to be split and atomicity beats ordering; (2) every byte of the conditional construct must be accounted for by a member slot, an absorbed lead doc, a directive line or whitespace, because anything else - a stray `;`, which projects as `EmptySemiMember` and is no collected member, or opaque region text - would be dropped or duplicated by the rebuild; (3) no field in the block may carry an initialization-order-sensitive initializer (a call, an allocation, an assignment, or a textual read of a sibling field). Those gates are deliberately INDEPENDENT of the `movableArglessNew` option below: `compareOrder` is shared by the REPORT path (`run` -> `walk` -> `firstLayoutIssue`) and the FIX path, and the report path resolves no per-file config, so a rank that depended on an option would make the two disagree and the fix would never converge. A gate on position-sensitive constructs in the CONDITION of the `#if` itself is a documented NO-OP for this grammar: a Haxe conditional-compilation condition is a pure compile-time define expression evaluated before parsing, with no ordered declaration and no `#define`, so nothing in it has a position that could matter - a grammar that grows one must add that gate here. A container whose field initializers make reordering unsafe - or which holds an `#else` shape the branch model refuses (nested, spanning two sections, or with an empty first branch), or a conditional region holding bytes no member slot covers - keeps its order (the finding stays report-only) but still gets its rank-group spacing normalised, including the blank lines that set each member-level `#if`/`#end` block off from its neighbours. The opt-in `movableArglessNew` option (apqlint.json rule options, default OFF) relaxes that unsafe bail for a pure argless-`new` initializer (`x = new T()`), which the project accepts as order-movable - reordering two independent allocations only changes their relative construction order, unobservable without cross-init data flow.
  */
 @:nullSafety(Strict)
 final class MemberOrder implements Check implements ConfigAware {
@@ -90,7 +109,7 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	public function description(): String {
 		return
-			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block per condition and branch shape at the end of their section) or rank groups and conditional blocks not separated by blank lines';
+			'type members not in canonical order (constants, properties, fields, constructor, methods; public before private; conditional members grouped into one #if block per condition and branch shape, sorted at the rank their members share - or pinned to the end of their section when they span several ranks) or rank groups and conditional blocks not separated by blank lines';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -148,7 +167,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	): Void {
 		if ((shape.visibilityContainerKinds ?? []).contains(node.kind)) {
 			final members: Array<OrderedMember> = collectMembers(node, source, shape, accessors);
-			final issue: Null<LayoutIssue> = firstLayoutIssue(members, source);
+			final issue: Null<LayoutIssue> = firstLayoutIssue(members, source, computePlan(members, source, shape));
 			if (issue != null) out.push({
 				file: file,
 				span: issue.member.span,
@@ -190,11 +209,11 @@ final class MemberOrder implements Check implements ConfigAware {
 	): Void {
 		final members: Array<OrderedMember> = collectMembers(container, source, shape, accessors);
 		if (members.length < 2) return;
-		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source);
+		final plan: SortPlan = computePlan(members, source, shape);
+		final bad: Null<LayoutIssue> = firstLayoutIssue(members, source, plan);
 		if (bad == null || !flagged.contains(bad.member.span.from)) return;
-		final groupFirst: Map<String, Int> = computeGroupFirst(members);
 		final sorted: Array<OrderedMember> = members.copy();
-		sorted.sort((a, b) -> compareOrder(a, b, groupFirst));
+		sorted.sort((a, b) -> compareOrder(a, b, plan));
 		if (!reorderSafe(members, sorted, source, shape, movableArglessNew)) {
 			emitSpacingOnly(edits, members, source);
 			return;
@@ -292,22 +311,21 @@ final class MemberOrder implements Check implements ConfigAware {
 
 	/**
 	 * The first member that sorts before its predecessor under `compareOrder` (a lower
-	 * section, an unconditional member after a conditional one, a lower rank), or null when
-	 * the sequence is canonical. Crossing a `#else` / `#elseif` directive RESETS the
+	 * section, an unconditional member after a PINNED conditional one, a lower sort rank), or
+	 * null when the sequence is canonical. Crossing a `#else` / `#elseif` directive RESETS the
 	 * comparison: an alternative conditional-compilation branch is a sibling sequence, not a
 	 * successor of the branch before it - comparing across the boundary false-flags a
 	 * container whose every branch is itself canonical. The directive is detected in the
 	 * inter-member gap only (never inside a member's own source, so fixture strings
 	 * mentioning `#else` cannot trip it).
 	 */
-	private static function firstOutOfOrder(members: Array<OrderedMember>, source: String): Null<OrderedMember> {
-		final groupFirst: Map<String, Int> = computeGroupFirst(members);
+	private static function firstOutOfOrder(members: Array<OrderedMember>, source: String, plan: SortPlan): Null<OrderedMember> {
 		final elseExempt: Bool = hasUnmodelledElse(members, source);
 		var prev: Null<OrderedMember> = null;
 		var prevTo: Int = -1;
 		for (m in members) {
 			if (prevTo >= 0 && prevTo <= m.span.from && hasBranchDirective(source, prevTo, m.span.from)) prev = null;
-			if (prev != null && (elseExempt ? m.rank < prev.rank : compareOrder(m, prev, groupFirst) < 0)) return m;
+			if (prev != null && (elseExempt ? m.rank < prev.rank : compareOrder(m, prev, plan) < 0)) return m;
 			prev = m;
 			prevTo = m.span.to;
 		}
@@ -318,17 +336,30 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * Whether reordering `members` cannot change behaviour. Reordering changes behaviour
 	 * only via FIELD initializers (they run in declaration order; statics at class-load,
 	 * instance fields in the constructor - independent phases). Bails on stranded trivia
-	 * (an `#else` the branch model could not absorb, an orphan comment) or a field-init
-	 * order flip a text scan cannot prove safe. `movableArglessNew` (the opt-in option)
-	 * exempts a pure argless-`new` allocation from the side-effecting-flip bail - see
-	 * `isMovableAllocation`.
+	 * (an `#else` the branch model could not absorb, an orphan comment), on a conditional
+	 * region holding bytes no member slot covers, or on a field-init order flip a text scan
+	 * cannot prove safe. `movableArglessNew` (the opt-in option) exempts a pure argless-`new`
+	 * allocation from the side-effecting-flip bail - see `isMovableAllocation`.
 	 */
 	private static function reorderSafe(
 		members: Array<OrderedMember>, sorted: Array<OrderedMember>, source: String, shape: RefShape, movableArglessNew: Bool
 	): Bool {
 		return !hasUnmodelledElse(members, source) && !hasOrphanComment(members, source)
 			&& !hasSideEffectingFieldFlip(members, sorted, shape, source, movableArglessNew)
-			&& !hasSiblingReadFlip(members, sorted, source);
+			&& !hasSiblingReadFlip(members, sorted, source) && conditionalRegionsCovered(members, source);
+	}
+
+	/**
+	 * Whether every conditional region holds only member slots, absorbed lead docs, directive
+	 * lines and whitespace - `regionContentCovered` over every conditional member, in the same
+	 * conservative direction the block-ranking gate reads it. `buildConditionalRegion` rebuilds
+	 * `[members[0].regionFrom, last.regionTo]` from member slots plus REGENERATED directives, so
+	 * an uncovered byte inside a conditional region (a stray `;`) would be silently dropped;
+	 * refusing here degrades the container to the spacing-only fallback instead.
+	 */
+	private static function conditionalRegionsCovered(members: Array<OrderedMember>, source: String): Bool {
+		final conditional: Array<OrderedMember> = [for (m in members) if (m.condition != null) m];
+		return conditional.length == 0 || regionContentCovered(conditional, members, source);
 	}
 
 	/** Whether `a` and `b`'s relative order differs between source (`index`) and `sorted`. */
@@ -633,9 +664,7 @@ final class MemberOrder implements Check implements ConfigAware {
 	private static function hasSideEffectingFieldFlip(
 		members: Array<OrderedMember>, sorted: Array<OrderedMember>, shape: RefShape, source: String, movableArglessNew: Bool
 	): Bool {
-		final unsafe: Array<String> = shape.writeParentKinds.copy();
-		if (shape.callKind != null) unsafe.push(shape.callKind);
-		if (shape.newExprKind != null) unsafe.push(shape.newExprKind);
+		final unsafe: Array<String> = unsafeInitKinds(shape);
 		final fields: Array<OrderedMember> = [for (m in members) if (m.isField) m];
 		for (f in fields) if (sideEffecting(f, unsafe, shape, source, movableArglessNew)) for (g in fields) if (
 			g.node != f.node && f.isStatic == g.isStatic && orderFlips(f, g, sorted)
@@ -704,8 +733,8 @@ final class MemberOrder implements Check implements ConfigAware {
 	 * when the order is canonical - the first spacing offender. Shared by the check
 	 * and the fix so both agree on which member is flagged, and with which message.
 	 */
-	private static function firstLayoutIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		return firstOrderIssue(members, source) ?? firstSpacingIssue(members, source) ?? firstDirectiveSpacingIssue(members, source);
+	private static function firstLayoutIssue(members: Array<OrderedMember>, source: String, plan: SortPlan): Null<LayoutIssue> {
+		return firstOrderIssue(members, source, plan) ?? firstSpacingIssue(members, source) ?? firstDirectiveSpacingIssue(members, source);
 	}
 
 	/**
@@ -805,8 +834,8 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/** The first out-of-order member wrapped as a `LayoutIssue`, or null when the sequence is canonical. */
-	private static function firstOrderIssue(members: Array<OrderedMember>, source: String): Null<LayoutIssue> {
-		final bad: Null<OrderedMember> = firstOutOfOrder(members, source);
+	private static function firstOrderIssue(members: Array<OrderedMember>, source: String, plan: SortPlan): Null<LayoutIssue> {
+		final bad: Null<OrderedMember> = firstOutOfOrder(members, source, plan);
 		return bad == null ? null : {
 			member: bad,
 			message: 'type members are not in canonical order (constants, fields, constructor, methods; public before private)'
@@ -826,48 +855,219 @@ final class MemberOrder implements Check implements ConfigAware {
 	}
 
 	/**
-	 * First-occurrence source index of each conditional `#if` block, keyed by `groupKey`
-	 * (section, condition and branch shape). Within a section the merged condition blocks are
-	 * ordered by this index, so a block keeps the position of its earliest member - and every
-	 * branch of one construct shares the key, which is what holds the branches together.
+	 * One container's sort context: the pinned-block order map plus every conditional block
+	 * that earned a content rank.
+	 *
+	 * `groupFirst` keeps its historical meaning exactly - first-occurrence source index of each
+	 * conditional `#if` block, keyed by `groupKey` (section, condition and branch shape) - so a
+	 * PINNED block still keeps the position of its earliest member, and every branch of one
+	 * construct shares the key that holds the branches together.
+	 *
+	 * `blocks` holds the buckets that earned a `RankedBlock`: one bucket per `blockKey`
+	 * (condition and branch shape), admitted only when all three gates hold - uniform rank,
+	 * `regionContentCovered`, `blockInitInert`. Failing any of them simply leaves the bucket
+	 * out, which is exactly the pre-existing pinned behaviour.
 	 */
-	private static function computeGroupFirst(members: Array<OrderedMember>): Map<String, Int> {
-		final firstOf: Map<String, Int> = [];
+	private static function computePlan(members: Array<OrderedMember>, source: String, shape: RefShape): SortPlan {
+		final groupFirst: Map<String, Int> = [];
+		final buckets: Map<String, Array<OrderedMember>> = [];
+		final order: Array<String> = [];
 		for (m in members) {
 			final cond: Null<String> = m.condition;
 			if (cond == null) continue;
-			final key: String = groupKey(sectionOf(m.rank), cond, branchSignatureOf(m));
-			if (!firstOf.exists(key)) firstOf[key] = m.index;
+			final signature: String = branchSignatureOf(m);
+			final key: String = groupKey(sectionOf(m.rank), cond, signature);
+			if (!groupFirst.exists(key)) groupFirst[key] = m.index;
+			final bucketKey: String = blockKey(cond, signature);
+			final bucket: Null<Array<OrderedMember>> = buckets[bucketKey];
+			if (bucket == null) {
+				buckets[bucketKey] = [m];
+				order.push(bucketKey);
+			} else
+				bucket.push(m);
 		}
-		return firstOf;
+		final blocks: Map<String, RankedBlock> = [];
+		for (key in order) {
+			final bucket: Array<OrderedMember> = buckets[key] ?? [];
+			if (bucket.length == 0 || !uniformRank(bucket)) continue;
+			if (!regionContentCovered(bucket, members, source)) continue;
+			if (!blockInitInert(bucket, members, shape, source)) continue;
+			blocks[key] = { rank: bucket[0].rank, ordinal: bucket[0].index };
+		}
+		return { groupFirst: groupFirst, blocks: blocks };
+	}
+
+	/** Whether every member of `bucket` carries the same rank - the first gate a conditional block passes to sort by its content. A mixed-rank bucket stays pinned: the block moves as one unit or not at all, and atomicity beats ordering. */
+	private static function uniformRank(bucket: Array<OrderedMember>): Bool {
+		for (m in bucket) if (m.rank != bucket[0].rank) return false;
+		return true;
 	}
 
 	/**
-	 * Compare two members by the canonical order: section (fields, constructor, methods)
-	 * first; within a section unconditional members precede conditional ones; conditional
-	 * members group by `#if` block (ordered by first occurrence), then by branch within that
-	 * block, then by rank; ties break on source index. Branch outranks rank so a construct's
-	 * branches keep their source order and each sorts internally, instead of interleaving.
-	 * `groupFirst` is `computeGroupFirst`'s block-order map.
+	 * Whether every byte of the conditional construct(s) `block` occupies is accounted for by a
+	 * member slot, a member's absorbed lead doc, a conditional-compilation directive line, or
+	 * whitespace. Anything else - a member the projection does not model (a stray `;` projects as
+	 * `EmptySemiMember`, which is no collected member) or opaque region text - would be dropped or
+	 * duplicated when `buildConditionalRegion` regenerates the region from member slots and
+	 * directives alone, so the block must not move.
+	 *
+	 * Coverage is collected from EVERY member in `all`, not just from `block`: a nested,
+	 * differently-conditioned member shares the outer construct's region and covers its own bytes
+	 * there.
 	 */
-	private static function compareOrder(a: OrderedMember, b: OrderedMember, groupFirst: Map<String, Int>): Int {
-		final sa: Int = sectionOf(a.rank);
-		final sb: Int = sectionOf(b.rank);
+	private static function regionContentCovered(block: Array<OrderedMember>, all: Array<OrderedMember>, source: String): Bool {
+		final covered: Array<Span> = [];
+		for (m in all) {
+			covered.push(m.span);
+			if (m.leadTrivia.length > 0) covered.push(new Span(m.leadFrom, m.leadFrom + m.leadTrivia.length));
+		}
+		covered.sort((x, y) -> x.from - y.from);
+		final seen: Array<String> = [];
+		for (m in block) {
+			final key: String = '${m.regionFrom} ${m.regionTo}';
+			if (seen.contains(key)) continue;
+			seen.push(key);
+			if (!uncoveredIsDirectiveOnly(source, m.regionFrom, m.regionTo, covered)) return false;
+		}
+		return true;
+	}
+
+	/** Whether every maximal chunk of `[from, to)` left uncovered by the from-sorted `covered` spans holds only blank or directive lines. */
+	private static function uncoveredIsDirectiveOnly(source: String, from: Int, to: Int, covered: Array<Span>): Bool {
+		var cursor: Int = from;
+		for (c in covered) {
+			if (c.from >= to) break;
+			if (c.to <= cursor) continue;
+			if (c.from > cursor && !isDirectiveOrBlank(source.substring(cursor, c.from))) return false;
+			cursor = c.to;
+			if (cursor >= to) return true;
+		}
+		return isDirectiveOrBlank(source.substring(cursor, to));
+	}
+
+	/** Whether every line of `text` is blank or opens (after indentation) with a conditional-compilation directive. */
+	private static function isDirectiveOrBlank(text: String): Bool {
+		for (line in text.split('\n')) {
+			final trimmed: String = StringTools.ltrim(line);
+			if (trimmed != '' && !StringTools.startsWith(trimmed, '#')) return false;
+		}
+		return true;
+	}
+
+	/**
+	 * Whether no field in `block` carries an initialization-order-sensitive initializer, so the
+	 * block can cross a rank boundary without changing what its fields observe. A field-init that
+	 * calls, allocates or assigns (`unsafeInitKinds`), or that textually names ANOTHER field of the
+	 * container, pins the block. Deliberately WIDER than the flip-based bails
+	 * (`hasSideEffectingFieldFlip` / `hasSiblingReadFlip`): a block's rank is decided before any
+	 * concrete sort exists to compare a flip against, so the only safe question is whether the
+	 * initializer is inert at all.
+	 *
+	 * Deliberately INDEPENDENT of the `movableArglessNew` option: `compareOrder` is shared by the
+	 * REPORT path (`run` -> `walk` -> `firstLayoutIssue`) and the FIX path, and the report path
+	 * resolves no per-file config - a rank that depended on an option would make the two disagree
+	 * and the fix would never converge.
+	 */
+	private static function blockInitInert(block: Array<OrderedMember>, all: Array<OrderedMember>, shape: RefShape, source: String): Bool {
+		final unsafe: Array<String> = unsafeInitKinds(shape);
+		for (m in block) {
+			final init: Null<QueryNode> = m.initNode;
+			if (!m.isField || init == null) continue;
+			if (subtreeContainsAny(init, unsafe)) return false;
+			final span: Null<Span> = init.span;
+			if (span == null) continue;
+			for (g in all) {
+				final name: Null<String> = g.node.name;
+				if (
+					g.isField && g.node != m.node && name != null && RefactorSupport.referencedInRange(source, name, span.from, span.to, [])
+				)
+					return false;
+			}
+		}
+		return true;
+	}
+
+	/** The node kinds whose presence in a field initializer makes its position observable - an assignment, a call, an allocation. One list, two consumers (`hasSideEffectingFieldFlip` and `blockInitInert`), so the flip bail and the block gate cannot drift apart. */
+	private static function unsafeInitKinds(shape: RefShape): Array<String> {
+		final kinds: Array<String> = shape.writeParentKinds.copy();
+		if (shape.callKind != null) kinds.push(shape.callKind);
+		if (shape.newExprKind != null) kinds.push(shape.newExprKind);
+		return kinds;
+	}
+
+	/**
+	 * Compare two members by the canonical order: section (fields, constructor, methods) first;
+	 * within a section every PINNED conditional member sinks behind the rest (`comparePinned`
+	 * orders those among themselves); the remaining members sort by their SORT rank, which for a
+	 * member of a content-ranked block is that block's rank; ties break on source index.
+	 *
+	 * Within one rank a content-ranked block trails the plain members of that rank (the `ca` / `cb`
+	 * step). That is the minimal-motion choice: crossing a rank boundary is what content ranking
+	 * exists for, position inside one rank is not, so every pre-existing expectation about a
+	 * conditional block trailing its same-rank peers survives untouched.
+	 *
+	 * Every member of one ranked block shares that block's ordinal, which is what keeps the block
+	 * atomic and contiguous; branch index then keeps a construct's branches in source order, each
+	 * sorting internally.
+	 */
+	private static function compareOrder(a: OrderedMember, b: OrderedMember, plan: SortPlan): Int {
+		final ra: MemberRank = sortRankOf(a, plan);
+		final rb: MemberRank = sortRankOf(b, plan);
+		final sa: Int = sectionOf(ra);
+		final sb: Int = sectionOf(rb);
 		if (sa != sb) return sa - sb;
-		final condA: Null<String> = a.condition;
-		final condB: Null<String> = b.condition;
-		final ca: Int = condA == null ? 0 : 1;
-		final cb: Int = condB == null ? 0 : 1;
+		final blockA: Null<RankedBlock> = rankedBlockOf(a, plan);
+		final blockB: Null<RankedBlock> = rankedBlockOf(b, plan);
+		final pa: Int = a.condition != null && blockA == null ? 1 : 0;
+		final pb: Int = b.condition != null && blockB == null ? 1 : 0;
+		if (pa != pb) return pa - pb;
+		if (pa == 1) return comparePinned(a, b, plan.groupFirst, sa);
+		if (ra != rb) return ra - rb;
+		final ca: Int = blockA == null ? 0 : 1;
+		final cb: Int = blockB == null ? 0 : 1;
 		if (ca != cb) return ca - cb;
-		if (condA != null && condB != null) {
-			final ga: Int = groupFirst[groupKey(sa, condA, branchSignatureOf(a))] ?? a.index;
-			final gb: Int = groupFirst[groupKey(sb, condB, branchSignatureOf(b))] ?? b.index;
-			if (ga != gb) return ga - gb;
+		if (blockA != null && blockB != null) {
+			if (blockA.ordinal != blockB.ordinal) return blockA.ordinal - blockB.ordinal;
 			final ba: Int = branchIndexOf(a);
 			final bb: Int = branchIndexOf(b);
 			if (ba != bb) return ba - bb;
 		}
+		return a.index - b.index;
+	}
+
+	/**
+	 * The pre-content-ranking comparison, unchanged: two PINNED conditional members order by their
+	 * `#if` block's first occurrence, then by branch within that block, then by rank, then by
+	 * source index. `section` is the section both sort into - a pinned member's sort rank IS its
+	 * own rank, so it equals `sectionOf(a.rank)`.
+	 */
+	private static function comparePinned(a: OrderedMember, b: OrderedMember, groupFirst: Map<String, Int>, section: Int): Int {
+		final condA: Null<String> = a.condition;
+		final condB: Null<String> = b.condition;
+		final ga: Int = condA == null ? a.index : (groupFirst[groupKey(section, condA, branchSignatureOf(a))] ?? a.index);
+		final gb: Int = condB == null ? b.index : (groupFirst[groupKey(section, condB, branchSignatureOf(b))] ?? b.index);
+		if (ga != gb) return ga - gb;
+		final ba: Int = branchIndexOf(a);
+		final bb: Int = branchIndexOf(b);
+		if (ba != bb) return ba - bb;
 		return a.rank != b.rank ? a.rank - b.rank : a.index - b.index;
+	}
+
+	/** The `RankedBlock` a member's conditional block earned, or null when the member is unconditional or its block stayed pinned. */
+	private static inline function rankedBlockOf(m: OrderedMember, plan: SortPlan): Null<RankedBlock> {
+		final cond: Null<String> = m.condition;
+		return cond == null ? null : plan.blocks[blockKey(cond, branchSignatureOf(m))];
+	}
+
+	/**
+	 * The rank a member sorts at: its block's content rank when the block earned one, its own rank
+	 * otherwise. The two coincide today by construction (`uniformRank` admits a block only when
+	 * every member already carries that rank) - this is the seam that keeps the comparator honest
+	 * should the derivation ever loosen.
+	 */
+	private static inline function sortRankOf(m: OrderedMember, plan: SortPlan): MemberRank {
+		final block: Null<RankedBlock> = rankedBlockOf(m, plan);
+		return block == null ? m.rank : block.rank;
 	}
 
 	/**
@@ -897,6 +1097,15 @@ final class MemberOrder implements Check implements ConfigAware {
 	 */
 	private static inline function groupKey(section: Int, cond: String, signature: String): String {
 		return '$section $cond $signature';
+	}
+
+	/**
+	 * The `computePlan` bucket key of a conditional block: condition and branch shape - `groupKey`'s
+	 * granularity MINUS the section. Dropping the section costs nothing: a block whose members land
+	 * in two sections necessarily spans two ranks, so `uniformRank` pins it anyway.
+	 */
+	private static inline function blockKey(cond: String, signature: String): String {
+		return '$cond $signature';
 	}
 
 	/**
