@@ -775,9 +775,11 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `a?.b` are not — their unlisted child stops the chain.
 			atomChainKinds: ['FieldAccess'],
 			// One tier each, left-associative, so `(a * b) / c` and `a * b / c` parse
-			// alike. `Mod` is in NO family: Haxe binds `%` TIGHTER than `*` and `/`
-			// (`2 * 7 % 4` is 6) while this parser puts it at the multiplicative tier, so
-			// its own tree cannot prove a `%` re-association.
+			// alike. `Mod` is deliberately in NO family: Haxe binds `%` TIGHTER
+			// than `*` and `/` (`2 * 7 % 4` is 6), and the grammar models that as its own
+			// prec-10 tier, so `%` never shares a tier with another operator. A single-member
+			// `['Mod']` family would be sound (`(a % b) % c` re-parses to the tree it already
+			// had) but stays out of scope here.
 			leftAssociativeBinaryFamilies: [['Mul', 'Div'], ['Add', 'Sub']],
 			// A direct paren child of these is grammar syntax (`case X if (g)`) or an
 			// idiom the project keeps out of scope (a second `switch` subject pair,

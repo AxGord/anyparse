@@ -11,11 +11,11 @@ import anyparse.runtime.ParseError;
  * Haxe parser.
  *
  * Covers the nine binary-infix operators added alongside the
- * baseline `+ - * /` set: `%` at prec 9 (multiplicative), the six
- * comparison operators (`== != <= >= < >`) at prec 5, `&&` at prec
- * 4, and `||` at prec 3. Also guards the longest-match sort inside
- * `Lowering.lowerPrattLoop` that disambiguates `<=` vs `<` and
- * `>=` vs `>` at dispatch time.
+ * baseline `+ - * /` set: `%` at prec 10 (a tier of its own, tighter
+ * than `*` and `/`), the six comparison operators (`== != <= >= < >`)
+ * at prec 5, `&&` at prec 4, and `||` at prec 3. Also guards the
+ * longest-match sort inside `Lowering.lowerPrattLoop` that
+ * disambiguates `<=` vs `<` and `>=` vs `>` at dispatch time.
  *
  * The baseline `+ - * /` set stays covered by `HxPrattSliceTest`;
  * that file doubles as the regression suite for the original Pratt
@@ -28,7 +28,7 @@ import anyparse.runtime.ParseError;
  *  - cross-level precedence between comparison, logical, additive,
  *    and multiplicative
  *  - left-associative chains at the new precedence levels
- *  - `%` binds at the multiplicative level (parity with `*` and `/`)
+ *  - `%` binds TIGHTER than `*` and `/`, on a prec-10 tier of its own
  *  - rejections for malformed input
  */
 class HxPrattOpsTest extends HxTestHelpers {
@@ -290,11 +290,11 @@ class HxPrattOpsTest extends HxTestHelpers {
 		}
 	}
 
-	// -------- `%` parity with `*` / `/` --------
+	// -------- `%` binds tighter than `+` / `-` --------
 
 	public function testModTighterThanAdd(): Void {
-		// 10 % 3 + 1 → Add(Mod(10, 3), 1). `%` sits at prec 9 along
-		// with `*` and `/`, so it binds tighter than `+`.
+		// 10 % 3 + 1 → Add(Mod(10, 3), 1). `%` sits at prec 10, above
+		// both the `*` / `/` tier and additive, so it binds tighter than `+`.
 		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = 10 % 3 + 1; }');
 		switch decl.init {
 			case Add(Mod(IntLit(a), IntLit(b)), IntLit(c)):
@@ -318,6 +318,153 @@ class HxPrattOpsTest extends HxTestHelpers {
 			case null, _:
 				Assert.fail('expected Add(10, Mod(3, 2)), got ${decl.init}');
 		}
+	}
+
+	// -------- `%` binds TIGHTER than `*` / `/` --------
+	// Runtime-verified against Haxe 4.3.7 (`haxe --interp`):
+	//   2 * 7 % 4  == 6    => 2 * (7 % 4)     (not (2 * 7) % 4 == 2)
+	//   8 / 4 % 3  == 8    => 8 / (4 % 3)     (not (8 / 4) % 3 == 2)
+	//   100 % 7 * 3 % 4 == 6 => (100 % 7) * (3 % 4)
+	//   20 % 12 % 7 == 1   => (20 % 12) % 7   (`%` stays left-assoc)
+	// so `%` owns a tier ABOVE the `*` / `/` tier, which keeps its own
+	// mutual left-associative level.
+
+	public function testMulThenModBindsModTighter(): Void {
+		// a * b % c -> Mul(a, Mod(b, c)).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a * b % c; }');
+		switch decl.init {
+			case Mul(IdentExpr(a), Mod(IdentExpr(b), IdentExpr(c))):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Mul(a, Mod(b, c)), got ${decl.init}');
+		}
+	}
+
+	public function testModThenMulKeepsLeftOperandGrouped(): Void {
+		// a % b * c -> Mul(Mod(a, b), c).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a % b * c; }');
+		switch decl.init {
+			case Mul(Mod(IdentExpr(a), IdentExpr(b)), IdentExpr(c)):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Mul(Mod(a, b), c), got ${decl.init}');
+		}
+	}
+
+	public function testDivThenModBindsModTighter(): Void {
+		// a / b % c -> Div(a, Mod(b, c)).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a / b % c; }');
+		switch decl.init {
+			case Div(IdentExpr(a), Mod(IdentExpr(b), IdentExpr(c))):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Div(a, Mod(b, c)), got ${decl.init}');
+		}
+	}
+
+	public function testModThenDivKeepsLeftOperandGrouped(): Void {
+		// a % b / c -> Div(Mod(a, b), c).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a % b / c; }');
+		switch decl.init {
+			case Div(Mod(IdentExpr(a), IdentExpr(b)), IdentExpr(c)):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Div(Mod(a, b), c), got ${decl.init}');
+		}
+	}
+
+	public function testModChainLeftAssociative(): Void {
+		// a % b % c -> Mod(Mod(a, b), c).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a % b % c; }');
+		switch decl.init {
+			case Mod(Mod(IdentExpr(a), IdentExpr(b)), IdentExpr(c)):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Mod(Mod(a, b), c), got ${decl.init}');
+		}
+	}
+
+	public function testModInterleavedWithMul(): Void {
+		// a % b * c % d -> Mul(Mod(a, b), Mod(c, d)).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a % b * c % d; }');
+		switch decl.init {
+			case Mul(Mod(IdentExpr(a), IdentExpr(b)), Mod(IdentExpr(c), IdentExpr(d))):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+				Assert.equals('d', (d: String));
+			case null, _:
+				Assert.fail('expected Mul(Mod(a, b), Mod(c, d)), got ${decl.init}');
+		}
+	}
+
+	public function testMulDivStayOnOneMutualTier(): Void {
+		// a * b / c -> Div(Mul(a, b), c). The `*` / `/` tier is unchanged.
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a * b / c; }');
+		switch decl.init {
+			case Div(Mul(IdentExpr(a), IdentExpr(b)), IdentExpr(c)):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Div(Mul(a, b), c), got ${decl.init}');
+		}
+	}
+
+	public function testParenthesizedMulThenMod(): Void {
+		// (a * b) % c -> Mod(ParenExpr(Mul(a, b)), c) - explicit parens
+		// still regroup, and the writer keeps them.
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = (a * b) % c; }');
+		switch decl.init {
+			case Mod(ParenExpr(Mul(IdentExpr(a), IdentExpr(b))), IdentExpr(c)):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Mod(ParenExpr(Mul(a, b)), c), got ${decl.init}');
+		}
+	}
+
+	public function testParenthesizedModThenMul(): Void {
+		// a * (b % c) -> Mul(a, ParenExpr(Mod(b, c))).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = a * (b % c); }');
+		switch decl.init {
+			case Mul(IdentExpr(a), ParenExpr(Mod(IdentExpr(b), IdentExpr(c)))):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+				Assert.equals('c', (c: String));
+			case null, _:
+				Assert.fail('expected Mul(a, ParenExpr(Mod(b, c))), got ${decl.init}');
+		}
+	}
+
+	public function testUnaryBindsTighterThanMod(): Void {
+		// ~a % b -> Mod(BitNot(a), b). Prefix stays above the `%` tier
+		// (runtime-verified: `~3 % 4 == 0 == (~3) % 4`).
+		final decl: HxVarDecl = parseSingleVarDecl('class Foo { var x:Int = ~a % b; }');
+		switch decl.init {
+			case Mod(BitNot(IdentExpr(a)), IdentExpr(b)):
+				Assert.equals('a', (a: String));
+				Assert.equals('b', (b: String));
+			case null, _:
+				Assert.fail('expected Mod(BitNot(a), b), got ${decl.init}');
+		}
+	}
+
+	public function testModWriterRoundTripUnchanged(): Void {
+		// Byte-exact: a tier change must not reflow the operator gaps.
+		final src: String = 'class Foo {\n\tvar x:Int = a * b % c / d;\n}\n';
+		writerEquals(src, src, 'mixed multiplicative chain');
 	}
 
 	// -------- interval `...` --------
@@ -377,9 +524,7 @@ class HxPrattOpsTest extends HxTestHelpers {
 		// Use var-init position (no body-policy wrapping) to isolate the
 		// tight-infix output from downstream layout defaults.
 		final src: String = 'class Foo {\n\tvar x:Int = 0...n;\n}\n';
-		final module: anyparse.grammar.haxe.HxModule = anyparse.grammar.haxe.HaxeModuleParser.parse(src);
-		final out: String = anyparse.grammar.haxe.HxModuleWriter.write(module);
-		Assert.equals(src, out);
+		writerEquals(src, src, 'tight interval');
 	}
 
 	// -------- in operator --------

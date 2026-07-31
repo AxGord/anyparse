@@ -109,8 +109,9 @@ import anyparse.runtime.Span;
  *   way, so `(a * b) / c` re-parses to the tree it already had. The RIGHT operand is
  *   never a candidate (`a / (b * c)` is a different computation), families never mix
  *   (`(a + b) * c` stays), and Haxe's `%` is in no family at all — the language binds
- *   it tighter than `*` and `/` while this parser does not, so its own tree cannot
- *   prove the re-association either way.
+ *   it tighter than `*` and `/`, and the grammar models that as a prec-10 tier of its
+ *   own for `%`, so `%` shares a tier with no other operator. A single-member `['Mod']`
+ *   (`(a % b) % c`) would now be provable; admitting it is deliberate future work.
  *
  * Readability parens on a MIXED-operator expression are a human choice, so
  * `sameOperatorLeft` is restricted to the same-family left operand and nothing else —

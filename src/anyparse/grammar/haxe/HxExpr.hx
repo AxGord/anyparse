@@ -9,7 +9,7 @@ package anyparse.grammar.haxe;
  * (field access, index access, call, `++`/`--` post-increment/decrement)
  * plus one
  * ternary operator plus thirty-five binary-operator constructors
- * across ten precedence levels. Atoms, prefix and postfix are all
+ * across eleven precedence levels. Atoms, prefix and postfix are all
  * reached through a single `parseHxExprAtom` call — internally split
  * into `parseHxExprAtom` (the wrapper) and `parseHxExprAtomCore` (the
  * pure leaf + prefix dispatcher) when postfix branches are present.
@@ -258,11 +258,24 @@ package anyparse.grammar.haxe;
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
  * binds tighter. The optional third argument `'Left'` / `'Right'`
- * selects associativity (default is left). Ten precedence levels
- * are populated (0-9, with ternary at 1 and null-coalescing at 2),
+ * selects associativity (default is left). Eleven precedence levels
+ * are populated (0-10, with ternary at 1 and null-coalescing at 2),
  * following the Haxe reference table:
  *
- *  - prec 9 — `*` `/` `%` (multiplicative, left-assoc)
+ *  - prec 10 — `%` (modulo, left-assoc). Haxe binds `%` TIGHTER than
+ *    `*` and `/`, so it owns a tier of its own ABOVE the multiplicative
+ *    one. Runtime-verified on Haxe 4.3.7 (`haxe --interp`):
+ *    `2 * 7 % 4` is 6 (`2 * (7 % 4)`, not `(2 * 7) % 4` = 2),
+ *    `8 / 4 % 3` is 8 (`8 / (4 % 3)`, not `(8 / 4) % 3` = 2), and
+ *    `100 % 7 * 3 % 4` is 6 (`(100 % 7) * (3 % 4)`, not the same-tier
+ *    left-assoc reading `((100 % 7) * 3) % 4` = 2). Left-associative
+ *    within its own tier: `20 % 12 % 7` is 1 (`(20 % 12) % 7`, not
+ *    `20 % (12 % 7)` = 0). Prefix `-` / `~` / `!` still bind tighter
+ *    (`~3 % 4` is 0 = `(~3) % 4`, not `~(3 % 4)` = -4), and every
+ *    looser tier below is unchanged (`1 + 7 % 4` is 4, `1 << 3 % 2`
+ *    is 2).
+ *  - prec 9 — `*` `/` (multiplicative, left-assoc). One mutual tier, so
+ *    `8 / 4 * 2` is `(8 / 4) * 2` = 4.
  *  - prec 8 — `+` `-` (additive, left-assoc)
  *  - prec 7 — `<<` `>>` `>>>` (shift, left-assoc)
  *  - prec 6 — `|` `&` `^` (bitwise, left-assoc)
@@ -270,7 +283,7 @@ package anyparse.grammar.haxe;
  *    `...` (interval / range), and `is` (runtime type-check, left-assoc).
  *    The interval branch is tight-spaced in the writer via `@:fmt(tight)`
  *    on the ctor so `0...n` stays compact; arithmetic (`+`, `-`, `*`,
- *    `/`) at prec 8-9 binds tighter, so `0...n + 1` parses as `0...(n + 1)`
+ *    `/`, `%`) at prec 8-10 binds tighter, so `0...n + 1` parses as `0...(n + 1)`
  *    matching Haxe's convention. The `is` operator is **asymmetric**:
  *    its right operand is `HxType`, not `HxExpr`. Lowering detects the
  *    cross-type Ref and routes the right operand through `parseHxType`
@@ -535,7 +548,11 @@ enum HxExpr {
 	@:infix('/', 9) @:fmt(captureRhsTrail)
 	Div(left: HxExpr, right: HxExpr);
 
-	@:infix('%', 9) @:fmt(captureRhsTrail)
+	// Prec 10, above `*` / `/` — Haxe binds `%` tighter than both
+	// (`2 * 7 % 4` is 6). Declared here to keep the arithmetic ctors
+	// adjacent; declaration order carries no meaning for the generated
+	// dispatch, which sorts by operator-literal length.
+	@:infix('%', 10) @:fmt(captureRhsTrail)
 	Mod(left: HxExpr, right: HxExpr);
 
 	@:infix('+', 8) @:fmt(captureChainNewline)

@@ -1731,9 +1731,10 @@ typedef RefShape = {
 	 * tree. Haxe: `['Mul', 'Div']` and `['Add', 'Sub']`.
 	 *
 	 * `Mod` is deliberately in NO group: Haxe binds `%` tighter than `*` and `/`
-	 * (`2 * 7 % 4` evaluates to 6, i.e. `2 * (7 % 4)`), while this parser models it at
-	 * the multiplicative tier — so a proof drawn from this tree would license a rewrite
-	 * the compiler reads differently. Read by `redundant-parens` for its opt-in
+	 * (`2 * 7 % 4` evaluates to 6, i.e. `2 * (7 % 4)`), and the Haxe grammar models that
+	 * as a prec-10 tier of its own for `%` — so `%` shares a tier with no other operator
+	 * and no group can hold it. A single-member `['Mod']` group would be sound but is not
+	 * admitted. Read by `redundant-parens` for its opt-in
 	 * `sameOperatorLeft` arm; optional, unset drops that arm. The RIGHT operand is never
 	 * a candidate under any grouping — `a / (b * c)` is a different computation.
 	 */
