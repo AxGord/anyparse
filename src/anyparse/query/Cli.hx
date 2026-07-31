@@ -6365,7 +6365,10 @@ final class Cli {
 		if (o.write)
 			stderr('apq fmt: formatted $changed file(s)' + (failed > 0 ? ', $failed failed' : '') + '\n');
 		else if (listMode && failed > 0)
-			stderr('apq fmt: $failed file(s) failed to parse\n');
+			// Not always a parse failure any more — a file whose re-emission
+			// would drop a comment is refused too (each one already printed
+			// its own reason above).
+			stderr('apq fmt: $failed file(s) failed\n');
 		return failed > 0 ? EXIT_RUNTIME : EXIT_OK;
 	}
 
