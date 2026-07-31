@@ -145,7 +145,8 @@ final class Linter {
 			new NoUnderscorePrefix(),
 			new ShortenTypeRef(),
 			new CondAssignMerge(),
-			new ImportBlockOrder()
+			new ImportBlockOrder(),
+			new PreferLineComment()
 		];
 	}
 

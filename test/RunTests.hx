@@ -331,6 +331,7 @@ import unit.PreferFinalPublicFieldCheckTest;
 import unit.PreferReadOnlyFieldCheckTest;
 import unit.MemberOrderCheckTest;
 import unit.FragmentedDocCommentCheckTest;
+import unit.PreferLineCommentCheckTest;
 import unit.UnnecessaryNullCheckCheckTest;
 import unit.RedundantCastCheckTest;
 import unit.RedundantNullCoalescingCheckTest;
@@ -931,6 +932,7 @@ class RunTests {
 		addCase(new ModifierOrderCheckTest());
 		addCase(new MemberOrderCheckTest());
 		addCase(new FragmentedDocCommentCheckTest());
+		addCase(new PreferLineCommentCheckTest());
 		addCase(new ExplicitTypeCheckTest());
 		addCase(new RedundantVoidReturnCheckTest());
 		addCase(new UnnecessaryBlockCheckTest());
