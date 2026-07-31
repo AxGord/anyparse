@@ -772,6 +772,20 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * The offset just past the whitespace run starting at `from`, bounded by `stop`.
+	 * Whitespace ONLY — a comment stops the scan, which is what a caller reading tokens
+	 * out of source text wants: `skipForwardTrivia` swallows comments and so hides them
+	 * from a comment guard. The canonical home for the hand-scan of a declaration head;
+	 * `redundant-property-access` is its first caller, and the private copies still in
+	 * `trivial-getter` / `redundant-map-iter-key` / `map-keys-lookup` belong here too.
+	 */
+	public static function skipSpaces(source: String, from: Int, stop: Int): Int {
+		var i: Int = from;
+		while (i < stop && isSpace(StringTools.fastCodeAt(source, i))) i++;
+		return i;
+	}
+
+	/**
 	 * Parse a non-negative decimal integer, returning null when the string
 	 * has any non-digit character — so a coordinate like `3:1x` or a
 	 * permutation index `2x` is rejected rather than silently resolving to

@@ -515,6 +515,7 @@ import unit.ExplicitLocalTypePrinterTest;
 import unit.HxLineCommentIndentSliceTest;
 import unit.ShortenTypeRefCheckTest;
 import unit.CondAssignMergeCheckTest;
+import unit.RedundantPropertyAccessCheckTest;
 import unit.HxGroupTrailCommentWriteTest;
 
 /**
@@ -992,6 +993,7 @@ class RunTests {
 		addCase(new PreferTypedThrowCheckTest());
 		addCase(new ShortenTypeRefCheckTest());
 		addCase(new CondAssignMergeCheckTest());
+		addCase(new RedundantPropertyAccessCheckTest());
 		addCase(new TypeRefPrinterTest());
 		addCase(new ExplicitLocalTypePrinterTest());
 		addCase(new PreferMapLiteralCheckTest());
