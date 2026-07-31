@@ -229,18 +229,8 @@ final class JoinReturn implements Check {
 	 * return type is the child immediately before the body (`functionBodyKinds`) when that
 	 * child is not a parameter (`paramKinds`).
 	 */
-	private static function functionReturnTypeSource(fn: QueryNode, s: Seams, source: String): Null<String> {
-		final kids: Array<QueryNode> = fn.children;
-		var bodyIdx: Int = -1;
-		for (i in 0...kids.length) if (s.bodyKinds.contains(kids[i].kind)) {
-			bodyIdx = i;
-			break;
-		}
-		if (bodyIdx <= 0) return null;
-		final candidate: QueryNode = kids[bodyIdx - 1];
-		if (s.paramKinds.contains(candidate.kind)) return null;
-		final span: Null<Span> = candidate.span;
-		return span == null ? null : source.substring(span.from, span.to);
+	private static inline function functionReturnTypeSource(fn: QueryNode, s: Seams, source: String): Null<String> {
+		return TypeResolver.functionReturnTypeSource(fn, source, s.bodyKinds, s.paramKinds);
 	}
 
 	/**

@@ -315,6 +315,32 @@ final class TypeResolver {
 	 * Lets a check restrict a declared-type nullable source to locals / params, since a
 	 * bare field never narrows and is out of the flow engine's scope.
 	 */
+	/**
+	 * The verbatim source of `fn`'s EXPLICIT return type, or null when it declares none (an
+	 * inferred return type, or a node that is not a function at all). The return type is the
+	 * child immediately before the body (`bodyKinds`) when that child is not a parameter
+	 * (`paramKinds`) -- the shape every function-like grammar node shares.
+	 *
+	 * Consumers use it as a proof that the `return` position carries an EXPECTED TYPE: a rewrite
+	 * that moves an expression out of an assignment (where the l-value typed it) into a `return`
+	 * is only type-safe when the function states what it returns.
+	 */
+	public static function functionReturnTypeSource(
+		fn: QueryNode, source: String, bodyKinds: Array<String>, paramKinds: Array<String>
+	): Null<String> {
+		final kids: Array<QueryNode> = fn.children;
+		var bodyIdx: Int = -1;
+		for (i in 0...kids.length) if (bodyKinds.contains(kids[i].kind)) {
+			bodyIdx = i;
+			break;
+		}
+		if (bodyIdx <= 0) return null;
+		final candidate: QueryNode = kids[bodyIdx - 1];
+		if (paramKinds.contains(candidate.kind)) return null;
+		final span: Null<Span> = candidate.span;
+		return span == null ? null : source.substring(span.from, span.to);
+	}
+
 	public static function bindingIsLocalOrParam(
 		tree: QueryNode, bindingFrom: Int, localDeclKinds: Array<String>, paramKinds: Array<String>
 	): Bool {

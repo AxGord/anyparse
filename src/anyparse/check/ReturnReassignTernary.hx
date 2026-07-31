@@ -46,12 +46,23 @@ import anyparse.runtime.Span;
  * - `x` resolves to a LOCAL or PARAM (`TypeResolver.bindingIsLocalOrParam`), NEVER a
  *   field: a bare field write can run a property setter, whose side effect the collapse
  *   would drop;
- * - NO reference to `x`'s binding sits inside a lambda (`lambdaKinds`) -- a closure could
- *   observe the dropped store after the function returns, so any capture refuses;
+ * - NO reference to `x`'s binding is CAPTURED by a NESTED FUNCTION -- a lambda, a named
+ *   `function g() {}` or an `inline function` (`lambdaKinds` + `localFunctionKinds` +
+ *   `inlineFunctionKinds`). Captured means the reference sits inside a nested function that
+ *   does NOT enclose the declaration: such a closure could observe the dropped store after
+ *   the return. A reference in the nested function that OWNS the binding is not a capture, so
+ *   a pair entirely local to a lambda still fires;
  * - the ONLY write to `x` inside the collapsed region is the l-value itself. The r-value
  *   may READ `x` (`x = x + 1` -- it evaluates before the conceptual write, exactly as the
  *   ternary's then-branch does), but a write to `x` in the CONDITION or inside `e` makes
- *   the ordering argument non-obvious and is refused.
+ *   the ordering argument non-obvious and is refused;
+ * - the enclosing function declares an EXPLICIT RETURN TYPE
+ *   (`TypeResolver.functionReturnTypeSource`). In `x = e` the r-value is typed with `x`'s
+ *   declared type as the EXPECTED type; in the ternary that expected type comes from the
+ *   `return` position instead, so an INFERRED return type loses it -- and
+ *   `var x:Map<String, Int> = null; if (c) x = [];` would emit a `return c ? [] : x;` that
+ *   does NOT typecheck. A local `function` / lambda without a return annotation is the
+ *   common case, so this gate also keeps the rule out of most closure bodies.
  *
  * An R-VALUE that already spans LINES -- an object or array literal -- is NOT flagged at all:
  * it keeps its own brace layout inside the ternary and pushes the `: x` else-tail past the
@@ -96,10 +107,12 @@ import anyparse.runtime.Span;
  * `src/api/API.hx`): a `+=` in a preceding loop keeps `x` a `var`, so only the tail
  * merges and `prefer-final` correctly does not follow.
  *
- * Needs `ifStatementKinds`, `returnStatementKind`, `exprStatementKind`, `assignKind` and
+ * Needs `ifStatementKinds`, `returnStatementKind`, `exprStatementKind`, `assignKind`,
+ * `functionBodyKinds` and
  * `controlFlowSupport` (any unset makes the check a no-op); the braced-body form
- * additionally reads `blockStmtKind`, and the local/param + capture gates read
- * `localDeclKinds` / `paramKinds` / `lambdaKinds`.
+ * additionally reads `blockStmtKind`; the local/param gate reads `localDeclKinds` /
+ * `paramKinds`; the capture gate reads `lambdaKinds` / `localFunctionKinds` /
+ * `inlineFunctionKinds`; and the return-type gate reads `functionKinds` / `lambdaKinds`.
  */
 @:nullSafety(Strict)
 final class ReturnReassignTernary implements Check implements DefaultOff {
@@ -177,10 +190,10 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		if (tree == null) return [];
 		final root: QueryNode = tree;
 		final comments: Array<{ from: Int, to: Int, isLine: Bool }> = RefactorSupport.collectCommentTokens(source);
-		final lambdaSpans: Array<Span> = [];
-		collectLambdaSpans(root, s.lambdaKinds, lambdaSpans);
+		final nestedFnSpans: Array<Span> = [];
+		collectNestedFnSpans(root, s.nestedFnKinds, nestedFnSpans);
 		final out: Array<Match> = [];
-		collectMatches(root, source, comments, s, root, lambdaSpans, out);
+		collectMatches(root, source, comments, s, root, nestedFnSpans, false, out);
 		return out;
 	}
 
@@ -203,7 +216,12 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 			blockStmtKind: shape.blockStmtKind,
 			localDeclKinds: shape.localDeclKinds ?? [],
 			paramKinds: shape.paramKinds ?? [],
-			lambdaKinds: shape.lambdaKinds ?? [],
+			bodyKinds: shape.functionBodyKinds ?? [],
+			// EVERY nested-function kind, not just the arrow lambdas: a named `function g() {}`
+			// (`localFunctionKinds`) and an `inline function` (`inlineFunctionKinds`) capture a
+			// binding exactly as a lambda does, and omitting them opens the capture gate.
+			nestedFnKinds: (shape.lambdaKinds ?? []).concat(shape.localFunctionKinds ?? []).concat(shape.inlineFunctionKinds ?? []),
+			fnKinds: (shape.functionKinds ?? []).concat(shape.lambdaKinds ?? []),
 			blockKinds: support.blockKinds(),
 			shape: shape
 		};
@@ -212,16 +230,19 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	/** Walk `node`; at each statement list collect the collapsible `if`/`return` pairs. */
 	private static function collectMatches(
 		node: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: Seams, tree: QueryNode,
-		lambdaSpans: Array<Span>, out: Array<Match>
+		nestedFnSpans: Array<Span>, retTyped: Bool, out: Array<Match>
 	): Void {
-		if (s.blockKinds.contains(node.kind)) {
+		if (retTyped && s.blockKinds.contains(node.kind)) {
 			final kids: Array<QueryNode> = node.children;
 			for (i in 0...kids.length - 1) {
-				final m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, s, tree, lambdaSpans);
+				final m: Null<Match> = matchPair(kids[i], kids[i + 1], source, comments, s, tree, nestedFnSpans);
 				if (m != null) out.push(m);
 			}
 		}
-		for (c in node.children) collectMatches(c, source, comments, s, tree, lambdaSpans, out);
+		final childRetTyped: Bool = s.fnKinds.contains(node.kind)
+			? TypeResolver.functionReturnTypeSource(node, source, s.bodyKinds, s.paramKinds) != null
+			: retTyped;
+		for (c in node.children) collectMatches(c, source, comments, s, tree, nestedFnSpans, childRetTyped, out);
 	}
 
 	/**
@@ -297,7 +318,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	 * a capture, or a second write (in the condition or inside the r-value) all refuse.
 	 */
 	private static function bindingIsSafeLocal(
-		name: String, lhsSpan: Span, ifSpan: Span, retSpan: Span, tree: QueryNode, s: Seams, lambdaSpans: Array<Span>
+		name: String, lhsSpan: Span, ifSpan: Span, retSpan: Span, tree: QueryNode, s: Seams, nestedFnSpans: Array<Span>
 	): Bool {
 		final hits: Array<RefHit> = Refs.find(name, tree, s.shape);
 		var binding: Null<Span> = null;
@@ -311,7 +332,7 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 		for (h in hits) {
 			final bs: Null<Span> = h.bindingSpan;
 			if (bs == null || bs.from != b.from || bs.to != b.to) continue;
-			if (h.kind != RefKind.Decl && inAnyLambda(h.span, lambdaSpans)) return false;
+			if (h.kind != RefKind.Decl && capturedByNestedFn(h.span, b, nestedFnSpans)) return false;
 			if (h.kind != RefKind.Write) continue;
 			final isLvalue: Bool = h.span.from == lhsSpan.from && h.span.to == lhsSpan.to;
 			if (!isLvalue && h.span.from >= ifSpan.from && h.span.to <= retSpan.to) return false;
@@ -357,18 +378,18 @@ final class ReturnReassignTernary implements Check implements DefaultOff {
 	}
 
 	/** Whether `span` is nested inside any lambda span in `lambdaSpans` -- i.e. a captured reference. */
-	private static function inAnyLambda(span: Span, lambdaSpans: Array<Span>): Bool {
-		for (ls in lambdaSpans) if (ls.from <= span.from && span.to <= ls.to) return true;
+	private static function capturedByNestedFn(span: Span, binding: Span, fnSpans: Array<Span>): Bool {
+		for (fs in fnSpans) if (fs.from <= span.from && span.to <= fs.to && !(fs.from <= binding.from && binding.to <= fs.to)) return true;
 		return false;
 	}
 
 	/** Collect the span of every lambda (`RefShape.lambdaKinds`) reachable under `node`. */
-	private static function collectLambdaSpans(node: QueryNode, lambdaKinds: Array<String>, out: Array<Span>): Void {
-		if (lambdaKinds.contains(node.kind)) {
+	private static function collectNestedFnSpans(node: QueryNode, fnKinds: Array<String>, out: Array<Span>): Void {
+		if (fnKinds.contains(node.kind)) {
 			final sp: Null<Span> = node.span;
 			if (sp != null) out.push(sp);
 		}
-		for (c in node.children) collectLambdaSpans(c, lambdaKinds, out);
+		for (c in node.children) collectNestedFnSpans(c, fnKinds, out);
 	}
 
 }
@@ -383,7 +404,9 @@ private typedef Seams = {
 	var blockStmtKind: Null<String>;
 	var localDeclKinds: Array<String>;
 	var paramKinds: Array<String>;
-	var lambdaKinds: Array<String>;
+	var bodyKinds: Array<String>;
+	var nestedFnKinds: Array<String>;
+	var fnKinds: Array<String>;
 	var blockKinds: Array<String>;
 	var shape: RefShape;
 }

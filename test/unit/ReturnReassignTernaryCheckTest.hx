@@ -48,7 +48,8 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	public function testParamTargetFixed(): Void {
-		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f(x:Int) {\n\t\tif (a) x = 2;\n\t\treturn x;\n\t}\n}');
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(x:Int):Int {\n\t\tif (a) x = 2;\n\t\treturn x;\n\t}\n}');
 		Assert.equals(1, es.length);
 		Assert.equals('return a ? 2 : x;', es[0].text);
 	}
@@ -61,11 +62,12 @@ class ReturnReassignTernaryCheckTest extends Test {
 
 	/** A FIELD write may run a property setter -- never merged. */
 	public function testFieldTargetNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tvar x:Int = 0;\n\tfunction f() {\n\t\tif (a) x = 2;\n\t\treturn x;\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tvar x:Int = 0;\n\tfunction f():Int {\n\t\tif (a) x = 2;\n\t\treturn x;\n\t}\n}').length);
 	}
 
 	public function testMemberPathTargetNotFlagged(): Void {
-		Assert.equals(0, violations(fn('if (a) o.x = 2;\n\t\treturn o.x;')).length);
+		// The RETURN is a bare identifier, so only the l-value kind gate can reject this.
+		Assert.equals(0, violations(fn('var x = 1;\n\t\tif (a) o.x = 2;\n\t\treturn x;')).length);
 	}
 
 	public function testCompoundAssignNotFlagged(): Void {
@@ -77,7 +79,9 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	public function testElseBranchNotFlagged(): Void {
-		Assert.equals(0, violations(fn('var x = 1;\n\t\tif (a) x = 2;\n\t\telse x = 3;\n\t\treturn x;')).length);
+		// The else branch must NOT write `x`, or the second-write gate rejects the fixture
+		// first and this one proves nothing. `g()` is the real hazard: the merge drops it.
+		Assert.equals(0, violations(fn('var x = 1;\n\t\tif (a) x = 2;\n\t\telse g();\n\t\treturn x;')).length);
 	}
 
 	public function testStatementBetweenNotFlagged(): Void {
@@ -89,7 +93,9 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	public function testMultiStatementBodyNotFlagged(): Void {
-		Assert.equals(0, violations(fn('var x = 1;\n\t\tif (a) {\n\t\t\tg();\n\t\t\tx = 2;\n\t\t}\n\t\treturn x;')).length);
+		// The assignment comes FIRST, so `children[0]` is the assignment and only the
+		// one-statement gate can reject this -- the merge would drop the trailing `g()`.
+		Assert.equals(0, violations(fn('var x = 1;\n\t\tif (a) {\n\t\t\tx = 2;\n\t\t\tg();\n\t\t}\n\t\treturn x;')).length);
 	}
 
 	/** A write to `x` inside the CONDITION runs before the conceptual store -- fail closed. */
@@ -111,6 +117,61 @@ class ReturnReassignTernaryCheckTest extends Test {
 	/** A closure could observe the dropped store after the return -- any capture refuses. */
 	public function testLambdaCaptureNotFlagged(): Void {
 		Assert.equals(0, violations(fn('var x = 1;\n\t\tg(() -> x);\n\t\tif (a) x = 2;\n\t\treturn x;')).length);
+	}
+
+	/** A NAMED local function captures exactly as a lambda does -- `lambdaKinds` alone misses it. */
+	public function testNamedLocalFunctionCaptureNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				fn('var x = 1;\n\t\tfunction inner():Int {\n\t\t\tif (a) x = 2;\n\t\t\treturn x;\n\t\t}\n\t\tinner();\n\t\treturn x;')
+			).length
+		);
+	}
+
+	public function testInlineLocalFunctionCaptureNotFlagged(): Void {
+		Assert.equals(0, violations(fn('var x = 1;\n\t\tinline function g2():Int return x;\n\t\tif (a) x = 2;\n\t\treturn x;')).length);
+	}
+
+	/** The capture gate is SCOPE-aware: a binding declared INSIDE the nested function is not captured. */
+	public function testBindingLocalToNestedFunctionFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			fn('var h = function():Int {\n\t\t\tvar x = 1;\n\t\t\tif (a) x = 2;\n\t\t\treturn x;\n\t\t};\n\t\treturn h();')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return a ? 2 : x;', es[0].text);
+	}
+
+	/**
+	 * An INFERRED enclosing return type drops the expected type the assignment gave the r-value,
+	 * so `var x:Map<String, Int> = null; if (c) x = [];` would emit a `return c ? [] : x;` that
+	 * does not typecheck -- refused wholesale.
+	 */
+	public function testInferredReturnTypeNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f() {\n\t\tvar x = 1;\n\t\tif (a) x = 2;\n\t\treturn x;\n\t}\n}').length);
+	}
+
+	/** The direct-block-child restriction: the trailing `return` is the OUTER statement's sibling. */
+	public function testInlineNestedIfNotFlagged(): Void {
+		Assert.equals(0, violations(fn('var x = 1;\n\t\tif (b) if (a) x = 2;\n\t\treturn x;')).length);
+	}
+
+	/** The `writeParentKinds` arm of the condition wrap -- an assignment binds looser than `?:`. */
+	public function testAssignmentConditionWrapped(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(fn('var x = 1;\n\t\tif (y = g()) x = 2;\n\t\treturn x;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (y = g()) ? 2 : x;', es[0].text);
+	}
+
+	/** Two independent pairs in one file -- the `run` -> `fix` span-key round trip with N > 1. */
+	public function testTwoPairsInOneFileFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Int {\n\t\tvar x = 1;\n\t\tif (a) x = 2;\n\t\treturn x;\n\t}\n'
+			+ '\n\tfunction g():Int {\n\t\tvar y = 1;\n\t\tif (b) y = 3;\n\t\treturn y;\n\t}\n}'
+		);
+		Assert.equals(2, es.length);
+		Assert.equals('return a ? 2 : x;', es[0].text);
+		Assert.equals('return b ? 3 : y;', es[1].text);
 	}
 
 	/** A MULTI-LINE r-value (the TM `CrashDumper` object literal) strands the `: x` tail after its closing brace -- not flagged. */
@@ -162,7 +223,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 	/** The merged ternary is emitted on ONE line and the WRITER lays it out -- no over-long line survives. */
 	public function testLongMergedTernaryWrapsThroughWriter(): Void {
 		final src: String = canon(
-			'class C {\n\tfunction f() {\n\t\tvar someRatherLongLocalNameHere = computeDefault(alphaValue);\n'
+			'class C {\n\tfunction f():Int {\n\t\tvar someRatherLongLocalNameHere = computeDefault(alphaValue);\n'
 			+ '\t\tif (conditionHolds(alphaValue, betaValue, gammaValue)) someRatherLongLocalNameHere = '
 			+ 'computeAlternateValue(alphaValue, betaValue, gammaValue, deltaValue, epsilonValue);\n'
 			+ '\t\treturn someRatherLongLocalNameHere;\n\t}\n}'
@@ -195,7 +256,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 	public function testAccumulatorStaysVar(): Void {
 		final merged: String = applyFixOnce(
 			canon(
-				'class C {\n\tfunction f(ms:Array<String>) {\n\t\tvar x = \'\';\n\t\tfor (m in ms) x += m;\n'
+				'class C {\n\tfunction f(ms:Array<String>):String {\n\t\tvar x = \'\';\n\t\tfor (m in ms) x += m;\n'
 				+ '\t\tif (x.length == 0) x = \'none\';\n\t\treturn x;\n\t}\n}'
 			)
 		);
@@ -215,7 +276,7 @@ class ReturnReassignTernaryCheckTest extends Test {
 	}
 
 	private function fn(body: String): String {
-		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';
+		return 'class C {\n\tfunction f():Int {\n\t\t$body\n\t}\n}';
 	}
 
 	private function violations(src: String): Array<Violation> {
