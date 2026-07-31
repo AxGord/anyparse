@@ -194,6 +194,26 @@ class ClassifyOccurrencesTest extends Test {
 	}
 
 	/**
+	 * Every binding form a MEMBER rename could land on counts, so the collision gate
+	 * declines instead of producing a reference that silently re-binds to it (the
+	 * `trivial-getter` loop-variable hole, on the rename side).
+	 */
+	public function testNameBoundCountsEveryBindingForm(): Void {
+		Assert.isTrue(nameBound('class C {\n\tfunction m(xs:Array<Int>) {\n\t\tfor (items in xs) {}\n\t}\n}', 'items'), 'loop variable');
+		Assert.isTrue(
+			nameBound('class C {\n\tfunction m(mp:Map<Int, Int>) {\n\t\tfor (k => items in mp) {}\n\t}\n}', 'items'),
+			'key-value loop value'
+		);
+		Assert.isTrue(
+			nameBound('class C {\n\tfunction m(v:Any) {\n\t\tswitch v {\n\t\t\tcase items: trace(items);\n\t\t}\n\t}\n}', 'items'),
+			'case-pattern capture'
+		);
+		Assert.isTrue(nameBound('class C {\n\tfunction m() {\n\t\ttry {} catch (items:Dynamic) {}\n\t}\n}', 'items'), 'catch variable');
+		Assert.isTrue(nameBound('class C {\n\tfunction m() {\n\t\tvar a = 1, items = 2;\n\t}\n}', 'items'), 'multi-var continuation');
+		Assert.isTrue(nameBound('class C {\n\tfunction m() {\n\t\tvar f = items -> items;\n\t}\n}', 'items'), 'thin-arrow parameter');
+	}
+
+	/**
 	 * The LAST segment of an `import` / `using` path binds a name in the file's
 	 * scope, so it is the one dotted position that must still count - a rename onto
 	 * it would shadow the imported type.

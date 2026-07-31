@@ -1378,6 +1378,18 @@ class NamingCheckTest extends Test {
 	}
 
 	/**
+	 * The member-rename path DECLINES on a bound target name — it never qualifies the
+	 * rewritten references (`this.x`) the way the `trivial-getter` collapse does. Kept as
+	 * a contract test: the sibling audit of the loop-variable shadow hole turned on this
+	 * difference, and the decline is what makes the naming fix immune to it.
+	 */
+	public function testMemberRenameDeclinesOnBoundTargetName(): Void {
+		final src: String =
+			'class C {\n\tprivate var __count:Int = 0;\n\tprivate var _count:Int = 1;\n\tpublic function sum():Int return __count + _count;\n}';
+		assertFixSkipped([{ file: 'pkg/C.hx', source: src }], 'pkg/C.hx', src);
+	}
+
+	/**
 	 * GUARD: a REAL binding of the target name in an affected file still refuses the
 	 * whole cross-file rename.
 	 */
