@@ -317,13 +317,13 @@ class Renderer {
 					// frame pushes. Delegated to the static `pushStructural` (reads
 					// `col`/`width`/`f`, writes `stack`). See that helper for each
 					// per-ctor semantic.
-					pushStructural(f, stack, ctx.col, width);
+					pushStructural(f, stack, ctx.col, pendingSpaceWidth(ctx), width);
 				case IfBreak(_, _) | IfWidthExceeds(_, _, _) | IfFirstLineExceeds(_, _, _) | IfLineExceeds(_, _, _) | IfResidualLineExceeds(
 					_, _, _
 				) | IfFullLineExceeds(_, _, _) | IfNaturalFirstLineExceeds(_, _, _) | IfNaturalFirstLineFitsOpenDelim(_, _, _) | IfArrowContinuationFits(
 					_, _, _, _, _
 				):
-					pushExceedsBranch(f, stack, ctx.col, ctx.pendingOptSpace != null ? ctx.pendingOptSpace.length : 0, width, decisions);
+					pushExceedsBranch(f, stack, ctx.col, pendingSpaceWidth(ctx), width, decisions);
 				case Fill(_, _, _) | FillWithRestProbe(_, _, _) | FillBreakAfterWrap(_, _, _):
 					// Fill family — per-item / all-flat layout, no scalar layout
 					// mutation (reads `lineCount` for the break-after-wrap snapshot,
@@ -1877,8 +1877,13 @@ class Renderer {
 	 * only pushing the next frame(s) onto `stack` (reading `col`/`width`/`f`).
 	 * Extracted verbatim from `render` — see each arm comment for the per-ctor
 	 * semantic. Mutates no scalar accumulator (invariant #1).
+	 *
+	 * `pendingSpace` is the width of an un-flushed `OptSpace` sitting before this
+	 * frame (see `RenderCtx.pendingOptSpace`) — it is NOT yet in `col` but lands
+	 * on the same physical line. Consumed only by the `GroupWithRestProbe` arm;
+	 * every other arm here is column-agnostic or keeps the plain `Group` budget.
 	 */
-	private static function pushStructural(f: Frame, stack: Array<Frame>, col: Int, width: Int): Void {
+	private static function pushStructural(f: Frame, stack: Array<Frame>, col: Int, pendingSpace: Int, width: Int): Void {
 		switch (f.doc) {
 			case Nest(n, inner):
 				// Indent only matters when observed (i.e. on a hardline
@@ -1920,11 +1925,33 @@ class Renderer {
 				// trailing content has room. Sister to `IfLineExceeds`
 				// rest-of-stack lookahead — same walker, different
 				// consumer (Group-style fit instead of explicit branch).
+				// ω-ternary-decl-init-pending-space: `pendingSpace` restores an
+				// un-flushed `OptSpace` that PRECEDES this Group (the ` ` after
+				// `=` in `final x:T = cond ? a : b;`, emitted by the
+				// declaration's assign glue). It is not yet in `col` but lands
+				// on the flat line before the Group, so without it the probe
+				// under-counts the physical line by one and a declaration whose
+				// initializer ternary sits at exactly maxLineLength + 1 stays
+				// glued while the fork wraps it. Same convention as
+				// `pushExceedsBranch`'s `effPending`.
+				// UNGATED, unlike that sister: `IfFullLineExceeds` carries two
+				// calibrations (`n == width` vs the paren-open `n == width + 1`)
+				// and only the latter wants the pending space, so it needs the
+				// `n > width` discriminator. This ctor has no such split — every
+				// producer (`BinaryChainEmit`'s ternary-rest-aware pivot and
+				// `WrapList.groupOrRestProbe`, i.e. every `@:fmt(groupRestProbe)`
+				// Star: type-param lists, fn signatures, `Call` args, …) probes
+				// against the same `width` and is by definition calibrated to the
+				// FULL physical line — it already subtracts the trailing `;` / `,`,
+				// so the leading pending space belongs to the same measurement.
+				// Verified no output flip beyond the target shape: `fmt --list`
+				// over anyparse `src`+`test` and over the whole TM tree moves only
+				// the two `maxLineLength + 1` ternary declarations.
 				if (f.forceFlat) {
 					stack.push(new Frame(f.indent, MFlat, inner, true, f.hardFlat));
 				} else {
 					final restW: Int = flatTokenWidthOfRestStack(stack);
-					if (fitsFlat(width - col - restW, f.indent, inner)) {
+					if (fitsFlat(width - col - pendingSpace - restW, f.indent, inner)) {
 						stack.push(new Frame(f.indent, MFlat, inner));
 					} else {
 						stack.push(new Frame(f.indent, MBreak, inner));
@@ -2186,6 +2213,16 @@ class Renderer {
 	 */
 	private static inline function lastEmitFromText(s: String): LastEmit {
 		return endsWithOpenDelim(s) ? OpenDelim : Other;
+	}
+
+	/**
+	 * Width of the `OptSpace` still pending at the current pen — content that is
+	 * NOT yet in `ctx.col` but lands on the same physical line as whatever is
+	 * emitted next. Fed to the column-aware push helpers so their fit probes
+	 * measure the full line (see `pushStructural` / `pushExceedsBranch`).
+	 */
+	private static inline function pendingSpaceWidth(ctx: RenderCtx): Int {
+		return ctx.pendingOptSpace != null ? ctx.pendingOptSpace.length : 0;
 	}
 
 	/**
