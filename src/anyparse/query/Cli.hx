@@ -14651,13 +14651,18 @@ final class Cli {
 		if (display == null) return { tail: ', oracle-assisted skipped (display server unavailable)', appliedCount: 0 };
 		for (check in oracleChecks) if (check is ConfigAware) (cast check: ConfigAware).setConfigResolver(resolveConfig);
 		final candidates: Array<{ file: String, before: String, after: String }> = [];
+		// One WHOLE-SET run per check, findings grouped per file — the same scope contract
+		// as `FixVerifier.verify` and the safe loop's `fullScopeIds`: a per-file run
+		// starves any cross-file resolution the check's gates or classifiers lean on.
+		final findingsByCheck: Array<{ check: Check, all: Array<Violation> }> = [
+			for (check in oracleChecks) { check: check, all: check.run(files, plugin).filter(v -> v.rule == check.id()) }
+		];
 		for (entry in files) {
 			final allEdits: Array<{ span: Span, text: String }> = [];
-			for (check in oracleChecks) {
-				final own: Array<Violation> = check.run([{ file: entry.file, source: entry.source }], plugin)
-					.filter(v -> v.rule == check.id());
+			for (byCheck in findingsByCheck) {
+				final own: Array<Violation> = byCheck.all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;
-				for (e in (cast check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) allEdits.push(e);
+				for (e in (cast byCheck.check: OracleAssisted).fixWithOracle(entry.source, own, plugin, display)) allEdits.push(e);
 			}
 			if (allEdits.length == 0) continue;
 			switch RefactorSupport.canonicalize(entry.source, allEdits, false, plugin, optsByFile[entry.file]) {

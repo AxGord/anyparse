@@ -524,6 +524,7 @@ import unit.HxGroupTrailCommentWriteTest;
 import unit.HxAssignChainWrapSliceTest;
 import unit.PreferDocCommentCheckTest;
 import unit.PreferStaticExtensionCheckTest;
+import unit.FixVerifierScopeE2ETest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -935,6 +936,7 @@ class RunTests {
 		addCase(new AvoidDynamicCheckTest());
 		addCase(new AvoidDynamicNarrowFixTest());
 		addCase(new AvoidDynamicRiskyFixE2ETest());
+		addCase(new FixVerifierScopeE2ETest());
 		addCase(new AvoidDynamicBagCheckTest());
 		addCase(new AvoidDynamicBagFixTest());
 		addCase(new AvoidDynamicBagOracleE2ETest());

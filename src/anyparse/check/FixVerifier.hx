@@ -101,30 +101,41 @@ final class FixVerifier {
 				};
 		}
 		final index: SymbolIndex = SymbolIndex.build(files, plugin);
-		for (check in riskyChecks) for (entry in files) {
-			final own: Array<Violation> = check.run([{ file: entry.file, source: entry.source }], plugin).filter(v -> v.rule == check.id());
-			if (own.length == 0) continue;
-			final edits: Array<{ span: Span, text: String }> = check.fix(entry.source, own, plugin, index);
-			if (edits.length == 0) continue;
-			final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
-			switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write) {
-				case NoChange:
-				case Applied:
-					applied.push(entry.file);
-				case Reverted:
-					reverted.push(entry.file);
-				case Partial(keptEdits, revertedEdits, probes):
-					if (keptEdits > 0)
-						applied.push(entry.file)
-					else
+		// One WHOLE-SET run per check, findings then grouped per file: a risky check's
+		// soundness gates can be whole-project (prefer-inline's subtype-override /
+		// value-reference scans), and a per-file run starves them — the safe loop routes
+		// such rules through `fullScopeIds` (`Cli.applyLintFixes`), and the oracle cannot
+		// compensate when the vetoing declaration (a test-tree subtype, in the motivating
+		// incident) is outside the hxml's compiled set. A finding for entry k is computed
+		// before entries < k had their fixes applied — harmless while risky fixes are
+		// same-file insertions.
+		for (check in riskyChecks) {
+			final all: Array<Violation> = check.run(files, plugin).filter(v -> v.rule == check.id());
+			for (entry in files) {
+				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
+				if (own.length == 0) continue;
+				final edits: Array<{ span: Span, text: String }> = check.fix(entry.source, own, plugin, index);
+				if (edits.length == 0) continue;
+				final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
+				switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write) {
+					case NoChange:
+					case Applied:
+						applied.push(entry.file);
+					case Reverted:
 						reverted.push(entry.file);
-					partials.push({
-						file: entry.file,
-						rule: check.id(),
-						appliedEdits: keptEdits,
-						revertedEdits: revertedEdits,
-						oracleInvocations: probes
-					});
+					case Partial(keptEdits, revertedEdits, probes):
+						if (keptEdits > 0)
+							applied.push(entry.file)
+						else
+							reverted.push(entry.file);
+						partials.push({
+							file: entry.file,
+							rule: check.id(),
+							appliedEdits: keptEdits,
+							revertedEdits: revertedEdits,
+							oracleInvocations: probes
+						});
+				}
 			}
 		}
 		return {
