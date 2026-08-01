@@ -10,14 +10,17 @@ import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
 
 /**
- * The `optional-param-shorthand` check: a parameter written `name:Null<T> = null` is
- * flagged `Info` and rewritten to the `?name:T` shorthand — one `Null<>` layer
- * unwrapped, the ` = null` dropped, and a `?` prepended. A non-null default, a plain
- * `T = null`, an already-`?` parameter, and a `Null<T>` with no default are safe
- * misses. Covers class methods, constructors, and local functions; generic, nested
- * `Null<Null<T>>` (one layer only), and function-type inner types unwrap correctly.
- * Note: parameter metadata is not representable — the grammar does not parse `@:m` on a
- * parameter — so there is no metadata-preservation case to assert here.
+ * The `optional-param-shorthand` check: a parameter written `name:Null<T> = null` or
+ * `name:T = null` is flagged `Info` and rewritten to the `?name:T` shorthand — one
+ * `Null<>` layer unwrapped when present (else the type text kept as-is), the ` = null`
+ * dropped, and a `?` prepended. A non-null default, an already-`?` parameter, an
+ * untyped `a = null` (no type annotation), and a decorated `Null<T>` the unwrapper
+ * rejects (a comment between the type and the `=`) are safe misses. Covers class
+ * methods, constructors, and local functions; generic, nested `Null<Null<T>>` (one
+ * layer only), and function-type inner types unwrap correctly for both the
+ * `Null<T>`-wrapped and bare-type forms. Note: parameter metadata is not representable
+ * — the grammar does not parse `@:m` on a parameter — so there is no
+ * metadata-preservation case to assert here.
  */
 class OptionalParamShorthandCheckTest extends Test {
 
@@ -39,8 +42,36 @@ class OptionalParamShorthandCheckTest extends Test {
 		Assert.equals(0, violations(fn('a:Null<Int> = 3')).length);
 	}
 
-	public function testPlainTypeNullDefaultNotFlagged(): Void {
-		Assert.equals(0, violations(fn('a:String = null')).length);
+	public function testPlainTypeNullDefaultFlagged(): Void {
+		final source: String = fn('a:String = null');
+		final vs: Array<Violation> = violations(source);
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer ?a:String over a:String = null', vs[0].message);
+		Assert.equals(fn('?a:String'), applyFix(source));
+	}
+
+	public function testBareTypeGenericFix(): Void {
+		Assert.equals(fn('?a:Map<String, Int>'), applyFix(fn('a:Map<String, Int> = null')));
+	}
+
+	public function testBareTypeFunctionTypeFix(): Void {
+		Assert.equals(fn('?cb:Int->Void'), applyFix(fn('cb:Int->Void = null')));
+	}
+
+	public function testNoTypeAnnotationNotFlagged(): Void {
+		Assert.equals(0, violations(fn('a = null')).length);
+	}
+
+	public function testDecoratedNullTypeNotFlagged(): Void {
+		// A `Null<T>` the unwrapper rejects (a comment between the type and the `=`) must
+		// stay a safe miss, not fall through to the bare-type arm without unwrapping.
+		Assert.equals(0, violations(fn('a:Null<Int> /* note */ = null')).length);
+	}
+
+	public function testMultipleParamsBareTypeFixedCommasIntact(): Void {
+		final source: String = fn('a:String = null, ?b:Int, c:Int = 5');
+		Assert.equals(1, violations(source).length);
+		Assert.equals(fn('?a:String, ?b:Int, c:Int = 5'), applyFix(source));
 	}
 
 	public function testAlreadyOptionalNotFlagged(): Void {
