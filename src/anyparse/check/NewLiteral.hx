@@ -153,8 +153,12 @@ final class NewLiteral {
 	 * and stay a finding — conservative by construction: a context the annotation cannot prove
 	 * safe is never rewritten.
 	 *
+	 * PUBLIC because the same question — does an annotation pin the constructed type? — gates
+	 * `prefer-map-type`'s bare `new IntMap()` arm, which rewrites the constructed NAME rather
+	 * than collapsing to `[]`. The predicate is about the declaration head alone, so it carries
+	 * over unchanged; only the caller's use of the answer differs.
 	 */
-	private static function pinnedByTypeHint(source: String, declStart: Int, newStart: Int): Bool {
+	public static function pinnedByTypeHint(source: String, declStart: Int, newStart: Int): Bool {
 		final head: String = StringTools.rtrim(source.substring(declStart, newStart));
 		final len: Int = head.length;
 		if (len == 0 || StringTools.fastCodeAt(head, len - 1) != '='.code) return false;

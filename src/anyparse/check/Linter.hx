@@ -63,6 +63,7 @@ final class Linter {
 			new PreferNullCoalescing(),
 			new PreferArrayLiteral(),
 			new PreferMapLiteral(),
+			new PreferMapType(),
 			new PreferInterpolation(),
 			new PreferFinal(),
 			new SimplifyBooleanReturnChain(),

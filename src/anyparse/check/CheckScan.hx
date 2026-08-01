@@ -56,6 +56,15 @@ final class CheckScan {
 	}
 
 	/**
+	 * `parseOrNull` over the TYPE-REFERENCE projection (`GrammarPlugin.parseFileTypeRefs`) — the
+	 * parallel tree that surfaces the annotation positions the default projection drops into trivia.
+	 * Same tolerance contract; a check reads one or the other, never both from one parse.
+	 */
+	public static function parseTypeRefsOrNull(plugin: GrammarPlugin, source: String): Null<QueryNode> {
+		return try plugin.parseFileTypeRefs(source) catch (exception: ParseError) null catch (exception: Exception) null;
+	}
+
+	/**
 	 * The autofix skeleton shared by every span-indexed `fix`: parse `source`,
 	 * index its `indexKinds` nodes by `from:to`, then for each violation with a
 	 * span re-find the flagged node and let `produce` build its edit (null to
@@ -771,6 +780,29 @@ final class CheckScan {
 			shape.overrideModifierKind
 		]) if (kind != null && !out.contains(kind)) out.push(kind);
 		return out;
+	}
+
+
+	/**
+	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
+	 * conditional-compilation region, whatever kind the grammar happens to project it as.
+	 *
+	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
+	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
+	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
+	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
+	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
+	 * because every region opens with it by definition. The `#` first-char test keeps it to one
+	 * comparison per node before any substring is taken.
+	 */
+	public static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
+		final span: Null<Span> = node.span;
+		if (condIf == null || span == null) return false;
+		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
+		// a later `||` operand only from the chain's FIRST operand.
+		final from: Int = span.from;
+		if (from >= source.length || StringTools.fastCodeAt(source, from) != '#'.code) return false;
+		return source.substring(from, from + condIf.length) == condIf;
 	}
 
 }

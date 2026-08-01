@@ -167,24 +167,20 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	): Array<{ span: Span, text: String }> {
 		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 		if (tree == null) return [];
-		final wanted: Map<String, Bool> = [];
-		var anyFixable: Bool = false;
+		final wanted: Array<String> = [];
 		for (violation in violations) {
 			final span: Null<Span> = violation.span;
-			if (span != null && violation.message == MSG_FIXABLE) {
-				wanted['${span.from}:${span.to}'] = true;
-				anyFixable = true;
-			}
+			if (span != null && violation.message == MSG_FIXABLE) wanted.push('${span.from}:${span.to}');
 		}
-		if (!anyFixable) return [];
+		if (wanted.length == 0) return [];
 		// The resolution index (report UNION libraries) is the wider proof. The `?? index` fallback
 		// is defensive only: through `run` a null resolution index makes EVERY finding unproven, so
-		// `anyFixable` has already returned above — it exists for a caller that hands in violations
+		// the empty `wanted` has already returned above — it exists for a caller that hands in violations
 		// it built itself.
 		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		return [
 			for (candidate in candidatesOf(source, tree, plugin, scope))
-				if (candidate.proven && wanted.exists('${candidate.span.from}:${candidate.span.to}'))
+				if (candidate.proven && wanted.contains('${candidate.span.from}:${candidate.span.to}'))
 					{ span: candidate.span, text: candidate.text }
 		];
 	}
@@ -222,32 +218,11 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	private static function walkLocals(
 		node: QueryNode, source: String, locals: Array<String>, opaque: Array<String>, condIf: Null<String>, found: (QueryNode) -> Void
 	): Void {
-		if (opaque.contains(node.kind) || opensConditionalRegion(node, source, condIf)) return;
+		if (opaque.contains(node.kind) || CheckScan.opensConditionalRegion(node, source, condIf)) return;
 		if (locals.contains(node.kind)) found(node);
 		for (c in node.children) walkLocals(c, source, locals, opaque, condIf, found);
 	}
 
-	/**
-	 * Whether `node`'s source STARTS with the grammar's `#if` directive — i.e. it is a
-	 * conditional-compilation region, whatever kind the grammar happens to project it as.
-	 *
-	 * A kind test cannot do this job. The Haxe grammar carries a dozen conditional ctors, one per
-	 * host position (`Conditional` for members and statements, `ConditionalExpr` in expression
-	 * position, `ConditionalArgs` in an argument list, five `CondSplice*` forms for a region that
-	 * straddles a block or switch boundary, ...), and `RefShape` names only the member one. An
-	 * enumerated list would go stale the next time a position is added; the DIRECTIVE cannot,
-	 * because every region opens with it by definition. The `#` first-char test keeps it to one
-	 * comparison per node before any substring is taken.
-	 */
-	private static function opensConditionalRegion(node: QueryNode, source: String, condIf: Null<String>): Bool {
-		final span: Null<Span> = node.span;
-		if (condIf == null || span == null) return false;
-		// The null checks stay in their own guard: strict null-safety carries a narrowing fact into
-		// a later `||` operand only from the chain's FIRST operand.
-		final from: Int = span.from;
-		if (from >= source.length || StringTools.fastCodeAt(source, from) != '#'.code) return false;
-		return source.substring(from, from + condIf.length) == condIf;
-	}
 
 	/**
 	 * The span of a local declaration's `:Type` payload — after the `:`, before the initializer's

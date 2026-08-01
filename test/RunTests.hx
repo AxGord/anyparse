@@ -525,6 +525,7 @@ import unit.HxAssignChainWrapSliceTest;
 import unit.PreferDocCommentCheckTest;
 import unit.PreferStaticExtensionCheckTest;
 import unit.FixVerifierScopeE2ETest;
+import unit.PreferMapTypeCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1013,6 +1014,7 @@ class RunTests {
 		addCase(new TypeRefPrinterTest());
 		addCase(new ExplicitLocalTypePrinterTest());
 		addCase(new PreferMapLiteralCheckTest());
+		addCase(new PreferMapTypeCheckTest());
 		addCase(new PreferInterpolationCheckTest());
 		addCase(new PreferFinalCheckTest());
 		addCase(new PreferTernaryReturnCheckTest());
