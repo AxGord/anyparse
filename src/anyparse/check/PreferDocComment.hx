@@ -10,8 +10,6 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
-using Lambda;
-
 /**
  * Flags a `//` comment that documents a TYPE or MEMBER declaration — prose in the one
  * comment form no doc extractor reads. `Info`; `--fix` turns it into a doc comment at the
@@ -63,13 +61,14 @@ using Lambda;
  *  5. NO TOOLING DIRECTIVE. A run containing `noqa`, `CHECKSTYLE:`, `@formatter:` or a
  *     `#region` / `#endregion` marker is skipped WHOLE — those lines are machine
  *     instructions, and burying one in a doc block both silences it and documents
- *     nothing. The list is `DIRECTIVE_MARKERS`.
+ *     nothing. The list is `CommentProse.DIRECTIVE_MARKERS`.
  *  6. NO TASK MARKER. `TODO` / `FIXME` / `HACK` / `XXX` anywhere in the run (case-
  *     insensitive) — a reminder to change the code is not a description of it.
  *  7. READS AS PROSE. Every line must satisfy `readsAsProse`, a POSITIVE criterion:
  *     English, not code. Stated the other way round — as a list of the commented-out
  *     shapes to dodge — it leaks, because every shape left off the list converts
- *     silently. See `readsAsProse` for the definition.
+ *     silently. Punctuation inside a BALANCED quoted span is exempt: a quoted sample is
+ *     material the prose embeds, not punctuation of the line itself. See `CommentProse.readsAsProse` for the definition.
  *  8. NOT A `///` RUN. Triple-slash is a section-label convention, not a per-declaration
  *     doc; such a run is skipped entirely.
  *  9. NOT SECTION DECORATION. A rule (`//----`) or a DECORATED label
@@ -132,77 +131,11 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 	private static inline final RULE_ID: String = 'prefer-doc-comment';
 
-	/** The line-comment opener, stripped from each body line. */
-	private static inline final LINE_MARKER: String = '//';
-
 	/** The triple-slash section-label opener of gate 8. */
 	private static inline final LABEL_MARKER: String = '///';
 
 	/** The block-comment closer, which a converted body must not contain. */
 	private static inline final BLOCK_CLOSE: String = '*/';
-
-	/**
-	 * Tooling directives (gate 5), lower-cased and matched as a LINE PREFIX. `noqa` and
-	 * `CHECKSTYLE:` are this project's own suppression markers (`Suppression`); the
-	 * `@formatter:` and `#region` pairs are the two conventions foreign formatters and
-	 * IDEs read out of Haxe line comments.
-	 */
-	private static final DIRECTIVE_MARKERS: Array<String> = ['noqa', 'checkstyle:', '@formatter:', '#region', '#endregion'];
-
-	/** Task markers (gate 6), lower-cased and matched ANYWHERE in a line. */
-	private static final TASK_MARKERS: Array<String> = ['todo', 'fixme', 'hack', 'xxx'];
-
-	/** The characters a section rule is drawn from (gate 9) — `//----`, `// === `, `// --- Mobile touch ---`. */
-	private static inline final SEPARATOR_CHARS: String = '-=*_#';
-
-	/** The longest a DECORATED phrase can be and still read as a section label rather than a sentence (gate 9). */
-	private static inline final DECORATED_LABEL_WORDS: Int = 4;
-
-	/**
-	 * Declaration and statement HEADS (gate 7): the Haxe keywords that open a line of code
-	 * and never open an English sentence in lower case. Matched CASE-SENSITIVELY, which is
-	 * what lets `If unset, the default applies` stay prose while `if (b) {` does not.
-	 */
-	private static final CODE_HEAD_KEYWORDS: Array<String> = [
-		'abstract',
-		'break',
-		'case',
-		'cast',
-		'catch',
-		'class',
-		'continue',
-		'dynamic',
-		'else',
-		'enum',
-		'extern',
-		'final',
-		'function',
-		'import',
-		'inline',
-		'interface',
-		'macro',
-		'new',
-		'override',
-		'package',
-		'private',
-		'public',
-		'return',
-		'static',
-		'throw',
-		'try',
-		'typedef',
-		'untyped',
-		'using',
-		'var'
-	];
-
-	/**
-	 * Control-flow heads (gate 7). Unlike the declaration heads these DO open English
-	 * sentences — `for internal use only`, `while loading`, `do not call this directly` —
-	 * so they read as code only when the parenthesised or braced head of the construct
-	 * follows.
-	 */
-	private static final CONTROL_HEAD_KEYWORDS: Array<String> = ['do', 'for', 'if', 'switch', 'while'];
 
 	public function new() {}
 
@@ -289,7 +222,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 *    colon, a statement inside a body: none of those reaches here, because none of those lines carries an anchor;
 	 *  - the declaration must carry no doc already, and no `//` run directly above it — that run is the other
 	 *    mechanism's, and stacking the two would emit two docs;
-	 *  - the content gates are the run's own (`///`, `*\/`, directives, task markers, decoration and `readsAsProse`),
+	 *  - the content gates are the run's own (`///`, `*\/`, directives, task markers, decoration and `CommentProse.readsAsProse`),
 	 *    applied to the single line.
 	 *
 	 * The fix RELOCATES rather than rewrites in place: the tail is cut back to the code's last token and the doc is
@@ -310,7 +243,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 		final text: Null<String> = gatedText(source, tok);
 		if (text == null) return null;
 		final lines: Array<String> = [text];
-		if (carriesNoDocumentation(lines)) return null;
+		if (CommentProse.carriesNoDocumentation(lines)) return null;
 		final editEnd: Int = editEndOf(source, tok);
 		final newline: String = editEnd == tok.to ? '\n' : '\r\n';
 		return {
@@ -417,7 +350,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 			if (text == null) return null;
 			lines.push(text);
 		}
-		if (carriesNoDocumentation(lines)) return null;
+		if (CommentProse.carriesNoDocumentation(lines)) return null;
 		final newline: String = editEndOf(source, last) == last.to ? '\n' : '\r\n';
 		return {
 			comment: new Span(first.from, last.to),
@@ -541,65 +474,13 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 * A comment token's text — the body past `//`, one following space removed — or null
 	 * when a per-line content gate declines it: a `///` section label (gate 8), a body
 	 * carrying the block-comment closer (which would end the doc mid-text and leave the
-	 * tail as code), or anything `declines` rejects (gates 5-7). Shared by the two comment
+	 * tail as code), or anything `CommentProse.declines` rejects (gates 5-7). Shared by the two comment
 	 * sources, which apply the same per-line gates to a run's lines and to a trailing tail.
 	 */
 	private static function gatedText(source: String, tok: CommentTok): Null<String> {
 		if (source.substring(tok.from, tok.from + LABEL_MARKER.length) == LABEL_MARKER) return null;
 		final text: String = commentText(source, tok);
-		return text.indexOf(BLOCK_CLOSE) >= 0 || declines(StringTools.trim(text)) ? null : text;
-	}
-
-	/**
-	 * GATES 9 and the content-free cession — whether the run carries no documentation at
-	 * all. Three shapes: nothing but whitespace after the `//`, and two decorations:
-	 *
-	 *  - a pure rule (`//----`, `// === `): nothing but `SEPARATOR_CHARS` and whitespace;
-	 *  - a DECORATED LABEL (`// --- Mobile touch ---`): rule characters on both ends around a
-	 *    short phrase. The decoration is what makes it a divider — the same words without it
-	 *    (`// Mobile touch`) are judged by the label gates like any other run, and a sentence
-	 *    long enough to be documentation is not turned into one by a leading dash.
-	 */
-	private static function carriesNoDocumentation(lines: Array<String>): Bool {
-		if (ruleCharsOnly(lines)) return true;
-		// Every line empty after the `//` — `empty-comment`'s shape, not this rule's; its
-		// fix DELETES the run, where converting would emit an empty doc block.
-		if (!lines.exists(line -> line != '')) return true;
-		if (lines.length != 1) return false;
-		final text: String = StringTools.trim(lines[0]);
-		return text.length > 0 && isRuleChar(StringTools.fastCodeAt(text, 0)) && isRuleChar(StringTools.fastCodeAt(text, text.length - 1))
-			&& wordCount(stripRuleChars(text)) <= DECORATED_LABEL_WORDS;
-	}
-
-	/** Whether every line is drawn only from rule characters and whitespace. */
-	private static function ruleCharsOnly(lines: Array<String>): Bool {
-		for (line in lines) for (i in 0...line.length) {
-			final c: Int = StringTools.fastCodeAt(line, i);
-			if (c != ' '.code && c != '\t'.code && !isRuleChar(c)) return false;
-		}
-		return true;
-	}
-
-	/** Whether `c` is one of the characters a section rule is drawn from. */
-	private static inline function isRuleChar(c: Int): Bool {
-		return SEPARATOR_CHARS.indexOf(String.fromCharCode(c)) >= 0;
-	}
-
-	/** `text` with every rule character replaced by a space. */
-	private static function stripRuleChars(text: String): String {
-		final buf: StringBuf = new StringBuf();
-		for (i in 0...text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			buf.addChar(isRuleChar(c) ? ' '.code : c);
-		}
-		return buf.toString();
-	}
-
-	/** The number of whitespace-separated words in `text`. */
-	private static function wordCount(text: String): Int {
-		var words: Int = 0;
-		for (part in StringTools.trim(text).split(' ')) if (StringTools.trim(part) != '') words++;
-		return words;
+		return text.indexOf(BLOCK_CLOSE) >= 0 || CommentProse.declines(StringTools.trim(text)) ? null : text;
 	}
 
 	/**
@@ -610,110 +491,6 @@ final class PreferDocComment implements Check implements DefaultOff {
 	 */
 	private static inline function editEndOf(source: String, last: CommentTok): Int {
 		return last.to > last.from && StringTools.fastCodeAt(source, last.to - 1) == '\r'.code ? last.to - 1 : last.to;
-	}
-
-	/**
-	 * Gates 5-7 over one trimmed body line: a tooling directive, a task marker, or anything
-	 * that does not READ AS PROSE.
-	 */
-	private static function declines(text: String): Bool {
-		final lower: String = text.toLowerCase();
-		for (marker in DIRECTIVE_MARKERS) if (StringTools.startsWith(lower, marker)) return true;
-		for (marker in TASK_MARKERS) if (lower.indexOf(marker) >= 0) return true;
-		return !readsAsProse(text);
-	}
-
-	/**
-	 * Gate 7, stated POSITIVELY: whether `text` reads as prose. The rule converts what it can
-	 * recognise as English, rather than dodging a list of code shapes — a blacklist of
-	 * commented-out forms leaks, because every shape omitted from it converts silently and the
-	 * list can only grow after the fact.
-	 *
-	 * Prose is a line that opens with something other than a code head and carries no
-	 * punctuation English does not use:
-	 *
-	 *  - its first word is not a declaration / statement keyword (`CODE_HEAD_KEYWORDS`), and
-	 *    not a control keyword followed by the construct's `(` or `{`
-	 *    (`CONTROL_HEAD_KEYWORDS`) — the keyword sets are the LANGUAGE's, a closed fact, not a
-	 *    catalogue of observed mistakes;
-	 *  - it holds no `;`, `{`, `}`, `=` or `@`;
-	 *  - no identifier is glued to a `(` (a CALL — prose puts a space before a bracket, as in
-	 *    `… width and height (center align)`);
-	 *  - no identifier is glued to a `:` that a further identifier follows (a TYPE ANNOTATION
-	 *    — a prose colon is followed by a space or ends the line, and a URL's `://` is neither).
-	 *
-	 * An empty line is prose: it is the paragraph break of a multi-line run.
-	 */
-	private static function readsAsProse(text: String): Bool {
-		final head: String = firstWord(text);
-		return !CODE_HEAD_KEYWORDS.contains(head) && !(CONTROL_HEAD_KEYWORDS.contains(head) && opensBracket(text.substr(head.length)))
-			&& !hasCodePunctuation(text);
-	}
-
-	/** `text`'s leading run of identifier characters. */
-	private static function firstWord(text: String): String {
-		var i: Int = 0;
-		while (i < text.length && isIdentChar(StringTools.fastCodeAt(text, i))) i++;
-		return text.substr(0, i);
-	}
-
-	/** Whether `rest`, past any spaces, opens a `(` or `{` — the head of a control construct. */
-	private static function opensBracket(rest: String): Bool {
-		var i: Int = 0;
-		while (i < rest.length && StringTools.fastCodeAt(rest, i) == ' '.code) i++;
-		if (i >= rest.length) return false;
-		final c: Int = StringTools.fastCodeAt(rest, i);
-		return c == '('.code || c == '{'.code;
-	}
-
-	/**
-	 * Whether `text` carries punctuation in a position English does not use but Haxe does.
-	 *
-	 * `=` and `@` are unconditional — neither has an English role. The rest are judged by
-	 * POSITION, because the characters themselves are ordinary prose:
-	 *
-	 *  - `;` reads as a STATEMENT TERMINATOR only when nothing but a trailing `//` comment
-	 *    follows it. A prose semicolon joins two clauses and has more sentence behind it
-	 *    (`… return filenames in NFD; servers and Windows use NFC.`).
-	 *  - `{` reads as a BLOCK OPENER only at the line end, `}` as a closer only at the line
-	 *    start or end. Braces inside a sentence are describing a value
-	 *    (`Returns {x, y} in stage space.`).
-	 *  - `(` is a CALL only when glued to an identifier; prose puts a space before a bracket
-	 *    (`… width and height (center align)`).
-	 *  - `:` is a TYPE ANNOTATION only between two identifiers; a prose colon is followed by
-	 *    a space or ends the line, and a URL's `://` is neither.
-	 */
-	private static function hasCodePunctuation(text: String): Bool {
-		for (i in 0...text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			if (c == '='.code || c == '@'.code) return true;
-			if (c == ';'.code && terminatesLine(text, i + 1)) return true;
-			if (c == '{'.code && terminatesLine(text, i + 1)) return true;
-			if (c == '}'.code && (terminatesLine(text, i + 1) || StringTools.trim(text.substring(0, i)) == '')) return true;
-			if (c == '('.code && i > 0 && isIdentChar(StringTools.fastCodeAt(text, i - 1))) return true;
-			if (
-				c == ':'.code && i > 0 && i + 1 < text.length && isIdentChar(StringTools.fastCodeAt(text, i - 1))
-				&& isIdentStart(StringTools.fastCodeAt(text, i + 1))
-			)
-				return true;
-		}
-		return false;
-	}
-
-	/** Whether nothing but whitespace, or a trailing `//` comment, follows `from` — the line-terminator position. */
-	private static function terminatesLine(text: String, from: Int): Bool {
-		final rest: String = StringTools.trim(text.substr(from));
-		return rest.length == 0 || StringTools.startsWith(rest, LINE_MARKER);
-	}
-
-	/** Whether `c` may appear inside a Haxe identifier. */
-	private static inline function isIdentChar(c: Int): Bool {
-		return isIdentStart(c) || (c >= '0'.code && c <= '9'.code);
-	}
-
-	/** Whether `c` may START a Haxe identifier. */
-	private static inline function isIdentStart(c: Int): Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || c == '_'.code || c == '$'.code;
 	}
 
 	/**
@@ -730,7 +507,7 @@ final class PreferDocComment implements Check implements DefaultOff {
 
 	/** A line comment's text: the body past `//`, right-trimmed, with ONE following space removed. */
 	private static function commentText(source: String, tok: CommentTok): String {
-		final body: String = StringTools.rtrim(source.substring(tok.from + LINE_MARKER.length, tok.to));
+		final body: String = StringTools.rtrim(source.substring(tok.from + CommentProse.LINE_MARKER.length, tok.to));
 		return body.length > 0 && StringTools.fastCodeAt(body, 0) == ' '.code ? body.substr(1) : body;
 	}
 

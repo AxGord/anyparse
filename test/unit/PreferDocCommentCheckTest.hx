@@ -310,6 +310,61 @@ class PreferDocCommentCheckTest extends Test {
 	}
 
 	/**
+	 * GATE 7 — punctuation inside a BALANCED quoted span is QUOTED MATERIAL, not the line's
+	 * own: quoting is how prose embeds a foreign shape, so the sample value's `@` and its
+	 * identifier-glued `(` say nothing about the line. The trailing mechanism, on the shape
+	 * that motivated the exemption.
+	 */
+	public function testTrailingQuotedSampleValueHoisted(): Void {
+		Assert.equals(
+			'class C {\n\t/** the cpu model, -- "Vendor(R) Core(TM)2 CPU @ 2.80GHz" */\n\tpublic var cpuName(default, null):String;\n}',
+			applyFix('class C {\n\tpublic var cpuName(default, null):String; // the cpu model, -- "Vendor(R) Core(TM)2 CPU @ 2.80GHz"\n}')
+		);
+	}
+
+	/**
+	 * GATE 7 — the quoted material a sentence may carry, in both mechanisms' shared content
+	 * gate. The last four rows are the SPLIT's own fixtures: blanking the span would put the
+	 * `;` or `{` at the line end, or the `}` at the line start or end, so each converts only
+	 * because one structural far-side read is judged on the RAW line — in row order the
+	 * `;`-terminator, the `}`-prefix, the `{`-terminator and the `}`-terminator read.
+	 */
+	public function testQuotedMaterialFlagged(): Void {
+		for (line in [
+			'prints "a = b" when verbose',
+			'use `dispose()` to release',
+			'empty span "" here',
+			'stop; "really"',
+			'"note" } tail',
+			'open { "brace"',
+			'end } "note"'
+		]) Assert.equals(1, violations('class C {\n\t// $line\n\tvar x:Int;\n}').length, 'declined quoted prose: $line');
+	}
+
+	/**
+	 * GATE 7 — code punctuation OUTSIDE the quotes is the line's own and still declines. Four
+	 * rows pin a masking decision rather than the gate: `set "flag = 1` has an opener with no
+	 * closer and must mask NOTHING (where the span ends is unknowable); the apostrophe row
+	 * pins that SINGLE quotes never pair, since pairing them would blank the `=` between
+	 * `don't` and `here's`; `set "a" to x = "b"` pins that a span's CLOSING delimiter is
+	 * consumed, since reading it as the next opener would blank the `=` between the two spans;
+	 * and `for "x" (i)` pins that the DELIMITERS are blanked with the interior — a surviving
+	 * `"` would abort the control-head bracket check, which reads through spaces only.
+	 */
+	public function testCodePunctuationOutsideQuotesKept(): Void {
+		for (line in [
+			's = "a"',
+			'trace("x @ y");',
+			'set "flag = 1',
+			'"a";',
+			'"key" => 1,',
+			"don't set the user = null here's why",
+			'set "a" to x = "b"',
+			'for "x" (i)'
+		]) Assert.equals(0, violations('class C {\n\t// $line\n\tvar x:Int;\n}').length, 'converted code: $line');
+	}
+
+	/**
 	 * GATE 7 — `;` `{` `}` are ordinary English punctuation, so they read as code only in a
 	 * STRUCTURAL position: a `;` with nothing but a trailing comment behind it, a `{` at the
 	 * line end, a `}` opening or ending the line. These four are the real commented-out
