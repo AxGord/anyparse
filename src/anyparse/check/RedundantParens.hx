@@ -90,11 +90,11 @@ import anyparse.runtime.Span;
  * chain and does not descend into it, so a site yields one finding and one edit, and
  * in a delimited position `((e))` collapses to `e` outright.
  *
- * ## The two OPERAND arms (opt-in, off by default)
+ * ## The three OPERAND arms (opt-in, off by default)
  *
- * Both reach the operand positions the arms above refuse, and both replace a
+ * All three reach the operand positions the arms above refuse, and all three replace a
  * precedence MODEL with a per-site proof. Each is a separate `apqlint.json` option on
- * this rule, default false, so a project that declares neither sees byte-identical
+ * this rule, default false, so a project that declares none sees byte-identical
  * behaviour:
  *
  * - `"atoms"` — the pair wraps an ATOM: a SELF-DELIMITING expression
@@ -112,6 +112,24 @@ import anyparse.runtime.Span;
  *   it tighter than `*` and `/`, and the grammar models that as a prec-10 tier of its
  *   own for `%`, so `%` shares a tier with no other operator. A single-member `['Mod']`
  *   (`(a % b) % c`) would now be provable; admitting it is deliberate future work.
+ * - `"comparisonOperands"` — the pair is an operand of a COMPARISON-tier binary operator
+ *   (`RefShape.comparisonOperandHostKinds`) and its bare content is purely ARITHMETIC
+ *   (`RefShape.comparisonOperandUnwrapKinds`), a fail-closed whitelist of kinds that bind
+ *   strictly tighter than a comparison HERE and in every C-family language — so
+ *   `(px - x - w) > (py - y - h + r)` re-parses to the tree it already had on either
+ *   reading. EITHER side is a candidate, and the two are judged TOGETHER: unlike
+ *   `sameOperatorLeft`, a parenthesized sibling is no blanket veto — one that is itself
+ *   provable (same whitelist, or an ATOM when that arm is on too) takes the slot with it,
+ *   so BOTH pairs drop in the same pass. The veto fires only when the sibling pair is NOT
+ *   provable, which is what keeps this arm from ever leaving a comparison lopsided.
+ *   The BITWISE tier is off the whitelist for a CORRECTNESS reason: Haxe binds `&` / `|` /
+ *   `^` tighter than a comparison but C binds them LOOSER than `==` / `!=`, so
+ *   `(x & m) != 0` reads differently there once the pair is gone, and that pair is
+ *   cross-language insurance an author wrote on purpose. The SHIFT tier is off it for a
+ *   READABILITY reason only — C binds shifts tighter than a comparison exactly as Haxe
+ *   does, so `(a << b) > c` would be provable on both readings, but a shift operand is
+ *   habitually parenthesized and this arm declines to take that away. Atom content is off
+ *   it too — the `atoms` arm owns atoms, and the two converge over `lint --fix` passes.
  *
  * Readability parens on a MIXED-operator expression are a human choice, so
  * `sameOperatorLeft` is restricted to the same-family left operand and nothing else —
@@ -121,7 +139,7 @@ import anyparse.runtime.Span;
  * worse to read than either keeping or dropping both. Measured on a 798-file corpus,
  * that veto is what separates the clean drops from the disfiguring ones.
  *
- * Both arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
+ * All three arms are additionally suppressed inside `RefShape.parenOpaqueSubtreeKinds` (a
  * `macro` quotation, where a pair reifies as data; a case pattern, matched
  * structurally) and at a direct child of `RefShape.parenRequiredHostKinds` (a `case`
  * guard, a `switch` subject, metadata).
@@ -136,7 +154,7 @@ import anyparse.runtime.Span;
 @:nullSafety(Strict)
 final class RedundantParens implements Check implements ConfigAware {
 
-	/** The rule id — also the `apqlint.json` key its two opt-in options hang off. */
+	/** The rule id — also the `apqlint.json` key its three opt-in options hang off. */
 	private static final ID: String = 'redundant-parens';
 
 	/** The linter's memoised per-file config resolver; null when run outside it (falls back to `LintConfig.discover`). */
@@ -215,7 +233,7 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * operand-arm opt-ins. `shape.parenKind` must be non-null — the caller bails on a
 	 * grammar that declares none, once per run rather than once per file.
 	 *
-	 * EVERY vocabulary the operand arms read is emptied when neither arm is on, the
+	 * EVERY vocabulary the operand arms read is emptied when no arm is on, the
 	 * suppression lists (`requiredHost` / `opaqueSubtree`) included: those two answer
 	 * only for the operand arms, and leaving them populated would let a future grammar
 	 * that lists a host BOTH as required and as delimited change the shipped arms'
@@ -225,7 +243,8 @@ final class RedundantParens implements Check implements ConfigAware {
 		final config: LintConfig = LintConfig.resolveWith(_resolveConfig, file);
 		final atomArm: Bool = config.boolOption(ID, 'atoms') == true;
 		final familyArm: Bool = config.boolOption(ID, 'sameOperatorLeft') == true;
-		final operandArm: Bool = atomArm || familyArm;
+		final comparisonArm: Bool = config.boolOption(ID, 'comparisonOperands') == true;
+		final operandArm: Bool = atomArm || familyArm || comparisonArm;
 		return {
 			parenKind: shape.parenKind ?? '',
 			ternaryKind: shape.ternaryKind,
@@ -240,6 +259,8 @@ final class RedundantParens implements Check implements ConfigAware {
 			atoms: armVocabulary(shape.atomExprKinds, atomArm),
 			atomChains: armVocabulary(shape.atomChainKinds, atomArm),
 			families: armVocabulary(shape.leftAssociativeBinaryFamilies, familyArm),
+			comparisonHost: armVocabulary(shape.comparisonOperandHostKinds, comparisonArm),
+			comparisonUnwrap: armVocabulary(shape.comparisonOperandUnwrapKinds, comparisonArm),
 			requiredHost: armVocabulary(shape.parenRequiredHostKinds, operandArm),
 			opaqueSubtree: armVocabulary(shape.parenOpaqueSubtreeKinds, operandArm)
 		};
@@ -299,7 +320,9 @@ final class RedundantParens implements Check implements ConfigAware {
 	 * Whether the paren chain around `inner` can be dropped ENTIRELY: its slot is
 	 * delimited, the content left bare is not separator-greedy, and dropping the parens
 	 * would not turn a splice-sensitive reification loose in a splicing host — or, under
-	 * the opt-in operand arms, the content is provably inert wherever it sits.
+	 * the opt-in operand arms, the content is provably inert wherever it sits (`atoms`)
+	 * or provably re-parses to the tree it already had in this operand slot
+	 * (`sameOperatorLeft`, `comparisonOperands`).
 	 */
 	private static function dropsParens(inner: QueryNode, slots: ParenSlots, slot: SlotKind, opaque: Bool): Bool {
 		// The fix drops the WHOLE chain, so every test reads the content that would be
@@ -308,8 +331,9 @@ final class RedundantParens implements Check implements ConfigAware {
 		if (slot == SlotKind.Required) return false;
 		// The operand arms answer per CONTENT, so they apply in any slot the shipped arms
 		// leave alone — but never inside a subtree where a paren carries meaning.
-		if (!opaque && (isAtom(bare, slots) || slot == SlotKind.SameFamilyLeft)) return true;
-		if (slot == SlotKind.Plain || slot == SlotKind.SameFamilyLeft) return false;
+		final comparisonProvable: Bool = slot == SlotKind.ComparisonOperand && slots.comparisonUnwrap.contains(bare.kind);
+		if (!opaque && (isAtom(bare, slots) || slot == SlotKind.SameFamilyLeft || comparisonProvable)) return true;
+		if (slot == SlotKind.Plain || slot == SlotKind.SameFamilyLeft || slot == SlotKind.ComparisonOperand) return false;
 		// A ternary condition drops its parens only when the bare content binds strictly
 		// tighter than `?:` — otherwise unwrapping lets it absorb the `? … : …` branches.
 		if (slot == SlotKind.TernaryCondition) return slots.ternaryUnwrap.contains(bare.kind);
@@ -394,6 +418,7 @@ final class RedundantParens implements Check implements ConfigAware {
 		// parenthesized child 1, and a child that is not a paren never reaches
 		// `dropsParens`. It pins the slot as the LEFT operand's for a reader.
 		if (i == 0 && sameFamilyLeftOperand(parent, slots)) return SlotKind.SameFamilyLeft;
+		if (comparisonOperand(parent, i, slots)) return SlotKind.ComparisonOperand;
 		return !childDelimited(parent, i, slots)
 			? SlotKind.Plain
 			: slots.spliceHost.contains(parent.kind) ? SlotKind.DelimitedSplice : SlotKind.Delimited;
@@ -417,6 +442,30 @@ final class RedundantParens implements Check implements ConfigAware {
 		final bare: String = RefactorSupport.unwrapParens(parent.children[0], slots.parenKind).kind;
 		for (family in slots.families) if (family.contains(parent.kind) && family.contains(bare)) return true;
 		return false;
+	}
+
+	/**
+	 * Whether `parent`'s child at `i` is a parenthesized operand of a COMPARISON-tier
+	 * operator, on either side — the slot the opt-in `comparisonOperands` arm drops when
+	 * the content left bare is on `comparisonUnwrap`. Every kind of that whitelist binds
+	 * strictly tighter than a comparison in this language AND in the C family, so the
+	 * drop holds on both readings.
+	 *
+	 * The sibling test is a SYMMETRY rule rather than the hard veto `sameFamilyLeftOperand`
+	 * applies. A parenthesized sibling that is itself PROVABLE — its bare content is on the
+	 * same whitelist, or it is an ATOM the opt-in `atoms` arm would drop anyway — takes the
+	 * slot with it: both pairs go in the SAME pass, so the comparison is never left
+	 * lopsided. Only a sibling pair that is not provable refuses the slot, which keeps the
+	 * two exactly as the author wrote them. The atom half is inert unless `atoms` is on as
+	 * well, since `slots.atoms` is empty otherwise.
+	 */
+	private static function comparisonOperand(parent: QueryNode, i: Int, slots: ParenSlots): Bool {
+		if (!slots.comparisonHost.contains(parent.kind) || parent.children.length != 2) return false;
+		if (parent.children[i].kind != slots.parenKind) return false;
+		final sibling: QueryNode = parent.children[1 - i];
+		if (sibling.kind != slots.parenKind) return true;
+		final bare: QueryNode = RefactorSupport.unwrapParens(sibling, slots.parenKind);
+		return slots.comparisonUnwrap.contains(bare.kind) || isAtom(bare, slots);
 	}
 
 	/**
@@ -462,11 +511,13 @@ final class RedundantParens implements Check implements ConfigAware {
  * `greedy`, the interior kinds whose parens stay even in a delimited slot.
  *
  * `atoms` (self-delimiting kinds), `atomChains` (transparent links, atomic only when
- * every child is) and `families` carry the two OPERAND arms, with `requiredHost` /
- * `opaqueSubtree` bounding them. Each holds the grammar's vocabulary when this project
- * opted the owning arm in and an EMPTY array otherwise, so a default run answers every
- * operand question uniformly false with no second flag to read. Resolved once per file
- * so the walk never re-reads the shape or the config.
+ * every child is), `families`, and `comparisonHost` / `comparisonUnwrap` (the
+ * comparison-tier hosts and the arithmetic content provable in their operand slots)
+ * carry the three OPERAND arms, with `requiredHost` / `opaqueSubtree` bounding them.
+ * Each holds the grammar's vocabulary when this project opted the owning arm in and an
+ * EMPTY array otherwise, so a default run answers every operand question uniformly
+ * false with no second flag to read. Resolved once per file so the walk never re-reads
+ * the shape or the config.
  */
 private typedef ParenSlots = {
 	var parenKind: String;
@@ -482,6 +533,8 @@ private typedef ParenSlots = {
 	var atoms: Array<String>;
 	var atomChains: Array<String>;
 	var families: Array<Array<String>>;
+	var comparisonHost: Array<String>;
+	var comparisonUnwrap: Array<String>;
 	var requiredHost: Array<String>;
 	var opaqueSubtree: Array<String>;
 }
@@ -506,7 +559,12 @@ private typedef ParenSite = {
  * binary operator whose parenthesized content is another member of the same
  * left-associative precedence family, which the opt-in `sameOperatorLeft` arm drops.
  * `Required` — a direct child of a `RefShape.parenRequiredHostKinds` host, where the
- * pair is grammar syntax or an idiom this check declines to own.
+ * pair is grammar syntax or an idiom this check declines to own. `ComparisonOperand` —
+ * either operand of a `RefShape.comparisonOperandHostKinds` operator, a second
+ * precedence-gated slot where the paren drops only for the arithmetic content on
+ * `RefShape.comparisonOperandUnwrapKinds`, and only when a parenthesized sibling is
+ * itself provable (on that same whitelist, or as an atom when the `atoms` arm is
+ * on) — the opt-in `comparisonOperands` arm.
  */
 private enum abstract SlotKind(Int) {
 
@@ -521,5 +579,7 @@ private enum abstract SlotKind(Int) {
 	final SameFamilyLeft = 4;
 
 	final Required = 5;
+
+	final ComparisonOperand = 6;
 
 }

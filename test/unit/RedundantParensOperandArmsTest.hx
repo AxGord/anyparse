@@ -11,7 +11,7 @@ import anyparse.query.RefactorSupport;
 import anyparse.query.format.Text;
 
 /**
- * The two OPERAND arms of `redundant-parens`, both opt-in per project and both
+ * The three OPERAND arms of `redundant-parens`, each opt-in per project and each
  * proof-based rather than precedence-modelled.
  *
  * `atoms` — a pair wrapping a single ATOMIC expression (identifier, `this`,
@@ -25,6 +25,18 @@ import anyparse.query.format.Text;
  * re-parses to the identical tree. The RIGHT operand is never touched, the families
  * never mix, and a pair on the right VETOES the left one — both together are a
  * symmetry, and dropping only the removable half reads worse than either extreme.
+ *
+ * `comparisonOperands` — a pair on EITHER side of a comparison-tier operator
+ * (`==` `!=` `<` `<=` `>` `>=`) whose bare content is purely arithmetic (`+` `-`
+ * `*` `/` `%`, unary minus), all of which bind strictly tighter than a comparison
+ * in Haxe AND in every C-family language. Unlike `sameOperatorLeft` a sibling pair
+ * is not a blanket veto — one that is itself provable (same whitelist, or an atom
+ * when `atoms` is on too) is taken along, so both drop in a single pass; the veto
+ * fires only when the sibling's content is NOT provable, which would leave the
+ * comparison lopsided. The BITWISE tier is off the whitelist for CORRECTNESS — C
+ * binds `&` `|` `^` LOOSER than equality, unlike Haxe — while the SHIFT tier binds
+ * tighter than a comparison in C exactly as in Haxe and is left out purely on
+ * READABILITY: a shift operand is habitually parenthesized.
  *
  * Every drop asserted here is checked against a TREE-EQUIVALENCE oracle: both the
  * before and after source are parsed, every paren node is spliced out of each, and
@@ -250,15 +262,107 @@ class RedundantParensOperandArmsTest extends Test {
 		Assert.equals(0, violations(inFn('var v = (p % q) % r;'), sameOperatorLeft()).length);
 	}
 
-	/** The two arms are independent: neither opt-in reaches the other's candidates. */
+	public function testComparisonOperandArmIsOffByDefault(): Void {
+		Assert.equals(0, violations(inFn('var v = (a - b) > c;'), none()).length);
+		Assert.equals(0, violations(inFn('var v = (a - b) > c;'), atoms()).length);
+		Assert.equals(0, violations(inFn('var v = (a - b) > c;'), sameOperatorLeft()).length);
+	}
+
+	/**
+	 * The shape this arm was built for: a comparison of two parenthesized arithmetic
+	 * operands. Both pairs are provable, so BOTH drop in one pass — the arm never leaves
+	 * a comparison lopsided.
+	 */
+	public function testComparisonBothOperandsDropInOnePass(): Void {
+		assertDrop(inFn('var v = (px - x - w) > (py - y - h + r);'), inFn('var v = px - x - w > py - y - h + r;'), comparisonOperands());
+	}
+
+	/** Either side alone is a candidate, over the whole arithmetic whitelist. */
+	public function testComparisonSingleOperandDrops(): Void {
+		assertDrop(inFn('var v = (a - b) > c;'), inFn('var v = a - b > c;'), comparisonOperands());
+		assertDrop(inFn('var v = a > (b - c);'), inFn('var v = a > b - c;'), comparisonOperands());
+		assertDrop(inFn('var v = (a * b) < c;'), inFn('var v = a * b < c;'), comparisonOperands());
+		assertDrop(inFn('var v = (a % b) == c;'), inFn('var v = a % b == c;'), comparisonOperands());
+		assertDrop(inFn('var v = (-a) > b;'), inFn('var v = -a > b;'), comparisonOperands());
+	}
+
+	/**
+	 * A parenthesized sibling whose own content is NOT provable vetoes the drop: firing
+	 * on the provable half alone would leave the expression lopsided, the same reason
+	 * `sameOperatorLeft` declines a symmetric pair. The bare fixture pins that the
+	 * sibling is what rejects this one.
+	 */
+	public function testComparisonSiblingPairVetoesTheDrop(): Void {
+		Assert.equals(0, violations(inFn('var v = (a - b) > (c ?? d);'), comparisonOperands()).length);
+		Assert.equals(1, violations(inFn('var v = (a - b) > c;'), comparisonOperands()).length);
+	}
+
+	/**
+	 * Only arithmetic content is whitelisted. A nested comparison would re-associate, and
+	 * the looser tiers (`&&`, `??`) obviously would. The BITWISE pair is kept for
+	 * CORRECTNESS — Haxe binds `&` tighter than `!=` but C binds it LOOSER, so the pair is
+	 * what makes `(x & m) != 0` read alike in both. The SHIFT pair is kept on READABILITY
+	 * alone: C agrees with Haxe there, so `(a << b) > c` would be provable, but a shift
+	 * operand is habitually parenthesized and this arm declines to take that away.
+	 */
+	public function testComparisonNonWhitelistedContentStays(): Void {
+		Assert.equals(0, violations(inFn('var v = (a > b) == c;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (x & m) != 0;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a << b) > c;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a && b) == c;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (a ?? b) != c;'), comparisonOperands()).length);
+	}
+
+	/** An additive operator is not a comparison tier, so this arm never reaches its operands. */
+	public function testComparisonArmDoesNotReachANonComparisonHost(): Void {
+		Assert.equals(0, violations(inFn('var v = (a - b) + c;'), comparisonOperands()).length);
+	}
+
+	/** Inside a `macro` quotation a paren reifies as data, so no operand arm drops one. */
+	public function testComparisonArmIsSuppressedInAMacroQuotation(): Void {
+		Assert.equals(0, violations(inFn('var e = macro (a - b) > c;'), comparisonOperands()).length);
+		Assert.equals(1, violations(inFn('var e = (a - b) > c;'), comparisonOperands()).length);
+	}
+
+	/**
+	 * With `atoms` on as well an atomic sibling counts as PROVABLE, so `(a - b) > (x)`
+	 * settles in ONE pass rather than leaving the arithmetic pair waiting a round — the
+	 * "never lopsided" rule holds within the pass, not merely across passes.
+	 */
+	public function testComparisonConvergesWithTheAtomArm(): Void {
+		final out: String = fixed(inFn('var v = (a - b) > (x);'), comparisonAndAtoms());
+		Assert.equals(inFn('var v = a - b > x;'), out);
+		Assert.equals(out, converged(inFn('var v = (a - b) > (x);'), comparisonAndAtoms()));
+		Assert.equals(out, fixed(out, comparisonAndAtoms()));
+		Assert.equals(bareTree(inFn('var v = (a - b) > (x);')), bareTree(out), 'paren drop preserved the tree shape');
+	}
+
+	/** The double-paren arm and this one compose: the whole chain goes in one edit. */
+	public function testComparisonDoubleParensCollapseFully(): Void {
+		assertDrop(inFn('var v = ((a - b)) > c;'), inFn('var v = a - b > c;'), comparisonOperands());
+	}
+
+	/**
+	 * A non-provable sibling stays vetoed while the double-paren arm still collapses its
+	 * chain: `((c))` loses its redundant layer, `(a - b)` keeps its pair, and the pair
+	 * that survives is the symmetry the author wrote.
+	 */
+	public function testComparisonVetoSurvivesASiblingChainCollapse(): Void {
+		Assert.equals(1, violations(inFn('var v = (a - b) > ((c));'), comparisonOperands()).length);
+		Assert.equals(inFn('var v = (a - b) > (c);'), converged(inFn('var v = (a - b) > ((c));'), comparisonOperands()));
+	}
+
+	/** The three arms are independent: no opt-in reaches another's candidates. */
 	public function testArmsAreIndependentlyGated(): Void {
 		Assert.equals(0, violations(inFn('var b = (a) + c;'), sameOperatorLeft()).length);
 		Assert.equals(0, violations(inFn('var v = (p * q) / r;'), atoms()).length);
+		Assert.equals(0, violations(inFn('var b = (a) + c;'), comparisonOperands()).length);
+		Assert.equals(0, violations(inFn('var v = (p * q) / r;'), comparisonOperands()).length);
 	}
 
 	public function testFixIsIdempotent(): Void {
-		final stable: String = converged(inFn('var b = (a) + (p * q) / (r.w);'), both());
-		Assert.equals(stable, fixed(stable, both()));
+		final stable: String = converged(inFn('var b = (a) + (p * q) / (r.w);'), atomsAndSameOperatorLeft());
+		Assert.equals(stable, fixed(stable, atomsAndSameOperatorLeft()));
 	}
 
 	/**
@@ -266,8 +370,8 @@ class RedundantParensOperandArmsTest extends Test {
 	 * frees `(p * q)` — so the arms converge over passes, as `lint --fix` runs them.
 	 */
 	public function testFixConvergesOverPasses(): Void {
-		Assert.equals(inFn('var b = a + (p * q) / r.w;'), fixed(inFn('var b = (a) + (p * q) / (r.w);'), both()));
-		final out: String = converged(inFn('var b = (a) + (p * q) / (r.w);'), both());
+		Assert.equals(inFn('var b = a + (p * q) / r.w;'), fixed(inFn('var b = (a) + (p * q) / (r.w);'), atomsAndSameOperatorLeft()));
+		final out: String = converged(inFn('var b = (a) + (p * q) / (r.w);'), atomsAndSameOperatorLeft());
 		Assert.equals(inFn('var b = a + p * q / r.w;'), out);
 		Assert.notNull(new HaxeQueryPlugin().parseFile(out));
 	}
@@ -342,13 +446,21 @@ class RedundantParensOperandArmsTest extends Test {
 		return configured('{"rules": {"redundant-parens": {"sameOperatorLeft": true}}}');
 	}
 
+	private static inline function comparisonOperands(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"comparisonOperands": true}}}');
+	}
+
 	/** An explicit EMPTY project config — hermetic, unlike falling through to a discovered `apqlint.json`. */
 	private static inline function none(): (String) -> LintConfig {
 		return configured('{}');
 	}
 
-	private static inline function both(): (String) -> LintConfig {
+	private static inline function atomsAndSameOperatorLeft(): (String) -> LintConfig {
 		return configured('{"rules": {"redundant-parens": {"atoms": true, "sameOperatorLeft": true}}}');
+	}
+
+	private static inline function comparisonAndAtoms(): (String) -> LintConfig {
+		return configured('{"rules": {"redundant-parens": {"atoms": true, "comparisonOperands": true}}}');
 	}
 
 	private static function configured(json: String): (String) -> LintConfig {

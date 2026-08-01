@@ -1759,6 +1759,54 @@ typedef RefShape = {
 	@:optional var leftAssociativeBinaryFamilies: Array<Array<String>>;
 
 	/**
+	 * Binary operator kinds of the COMPARISON tier — the hosts whose parenthesized
+	 * operands the opt-in `redundant-parens` arm `comparisonOperands` may unwrap. Haxe:
+	 * `Eq`, `NotEq`, `Lt`, `LtEq`, `Gt`, `GtEq` — the six `@:infix(…, 5)` ctors that
+	 * compare two VALUES.
+	 *
+	 * NOT the same list as `comparisonKinds` above, and not interchangeable with it:
+	 * that one names the operators for which IDENTICAL OPERANDS are suspicious
+	 * (`identical-operands`) and therefore includes the boolean `&&` / `||`, which are a
+	 * looser tier and would be wrong hosts here. This one is a PRECEDENCE fact
+	 * confined to one tier's value comparisons.
+	 *
+	 * The tier's two other members are deliberately ABSENT. `Is` takes a TYPE on its
+	 * right, so its operand slots are not symmetric and a paren on that side is not an
+	 * expression pair at all; `Interval` spells its operator `...`, which abuts the `.`
+	 * lexing of a numeric literal or a field access on either side, an edge this check
+	 * has no reason to walk into. Both cost a missed cleanup, never a wrong rewrite.
+	 * Read by `redundant-parens` with `comparisonOperandUnwrapKinds`; optional, unset
+	 * drops that arm.
+	 */
+	@:optional var comparisonOperandHostKinds: Array<String>;
+
+	/**
+	 * The ARITHMETIC CORE of the kinds that bind strictly tighter than the comparison
+	 * tier: those that also parse identically across the C-family languages, so a
+	 * `parenKind` wrapping one as an operand of a `comparisonOperandHostKinds` operator
+	 * is redundant on every reading. A fail-closed WHITELIST in the manner of
+	 * `ternaryConditionUnwrapKinds`: a kind absent from it keeps its parentheses. Haxe:
+	 * the arithmetic `Add` / `Sub` (tier 8), `Mul` / `Div` (tier 9) and `Mod` (tier 10),
+	 * plus the unary `Neg`.
+	 *
+	 * A DELIBERATE SUBSET, not an exhaustive one — the tighter-binding kinds left out are
+	 * choices, each for its own reason. The BITWISE kinds (`BitAnd` / `BitOr` / `BitXor`,
+	 * tier 6) are out for CORRECTNESS: Haxe binds them tighter than a comparison but C
+	 * binds `&` / `|` / `^` LOOSER than `==` and `!=`, so `(x & m) != 0` reads
+	 * differently there once the pair is gone, and that pair is cross-language insurance
+	 * an author writes on purpose. The SHIFT kinds (`Shl` / `Shr` / `UShr`, tier 7) bind
+	 * tighter than a comparison in C exactly as they do here and WOULD be provable on
+	 * both readings; they are out on READABILITY alone, since a shift operand is
+	 * habitually parenthesized. The remaining unary and primary kinds
+	 * (`Not` / `BitNot` / the in/decrements, and the atoms) are out because this arm has
+	 * no need of them: `atoms` owns the atomic content and the two arms converge over
+	 * `lint --fix` passes, while the rest buy a rarity. Admitting any of them later is
+	 * additive and breaks nothing. Read by `redundant-parens` with
+	 * `comparisonOperandHostKinds`; optional, unset drops that arm.
+	 */
+	@:optional var comparisonOperandUnwrapKinds: Array<String>;
+
+	/**
 	 * Host kinds whose DIRECT `parenKind` child keeps its parentheses — either the
 	 * grammar requires the pair there or the project declines to own the idiom. Haxe:
 	 * `CaseBranch` (its direct paren child is the mandatory `case X if (g)` guard — a

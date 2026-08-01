@@ -805,6 +805,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			// `['Mod']` family would be sound (`(a % b) % c` re-parses to the tree it already
 			// had) but stays out of scope here.
 			leftAssociativeBinaryFamilies: [['Mul', 'Div'], ['Add', 'Sub']],
+			// The prec-5 tier's two VALUE comparisons apiece. `Is` (a type on the right)
+			// and `Interval` (a `...` that abuts numeric-literal / field-access `.`
+			// lexing) share the tier but are deliberately not hosts.
+			comparisonOperandHostKinds: ['Eq', 'NotEq', 'Lt', 'LtEq', 'Gt', 'GtEq'],
+			// The arithmetic core: tiers 8-10 plus unary minus, strictly tighter than a
+			// comparison here AND in every C-family language, so the drop is right on
+			// both readings. The BITWISE tier (6) is out for CORRECTNESS — C binds
+			// `& | ^` LOOSER than `==`, so `(x & m) != 0` reads differently there once
+			// the pair is gone. The SHIFT tier (7) binds tighter than a comparison in C
+			// exactly as it does here and WOULD be provable; it is out on READABILITY
+			// alone, since a shift operand is habitually parenthesized. Atoms are the
+			// `atoms` arm's; the two converge over `lint --fix` passes.
+			comparisonOperandUnwrapKinds: ['Add', 'Sub', 'Mul', 'Div', 'Mod', 'Neg'],
 			// A direct paren child of these is grammar syntax (`case X if (g)`) or an
 			// idiom the project keeps out of scope (a second `switch` subject pair,
 			// metadata arguments).
