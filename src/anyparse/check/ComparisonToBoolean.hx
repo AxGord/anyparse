@@ -18,6 +18,14 @@ import anyparse.query.TypeInfoProvider;
  * provably non-null Bool: a boolean-operator result, or a bare identifier whose declared
  * type proves it. See the null-safety caveat below.
  *
+ * ## Constant fold
+ *
+ * A comparison where BOTH operands are boolean literals (`true == true`) is a separate
+ * case: it is always reported (no type gate needed — both sides are literals, provably
+ * non-null), and `fix` folds the whole comparison to its constant value —
+ * `true == true` → `true`, `true != true` → `false`. Like the rest of `fix`, the fold
+ * needs `eqKind` to tell `==` from `!=`; without it the case stays report-only.
+ *
  * ## Null-safety caveat
  *
  * Under strict null-safety `expr == true` on a `Null<Bool>` is REQUIRED — `if (x)` on a
@@ -54,14 +62,16 @@ import anyparse.query.TypeInfoProvider;
 @:nullSafety(Strict)
 final class ComparisonToBoolean implements Check {
 
+	private static inline final RULE_ID: String = 'comparison-to-boolean';
+
 	public function new() {}
 
 	public function id(): String {
-		return 'comparison-to-boolean';
+		return RULE_ID;
 	}
 
 	public function description(): String {
-		return 'a comparison against a boolean literal (x == true / x != false)';
+		return 'a comparison against a boolean literal (x == true / x != false / true == true)';
 	}
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
@@ -93,6 +103,12 @@ final class ComparisonToBoolean implements Check {
 	 * types — is left to the report, since its `== true` may be load-bearing under strict
 	 * null-safety. `eqKind` tells `==` from `!=` — it is required HERE only (unset →
 	 * report-only), not in `run`'s gate.
+	 *
+	 * When both operands are boolean literals (`true == true`), the whole comparison is
+	 * folded to its constant value instead — `true == true` → `true`, `true != true` →
+	 * `false` — via `comparisonEdit`'s dedicated branch; no type gate applies, since two
+	 * literal operands are provably non-null. Like the single-literal path, the fold needs
+	 * `eqKind`, so it stays report-only when `eqKind` is unset.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
@@ -122,6 +138,10 @@ final class ComparisonToBoolean implements Check {
 	 * unresolvable / unannotated identifier cannot be verified, so both stay silent. Without
 	 * a `TypeInfoProvider` the identifier falls back to being reported for a human to judge.
 	 * Macro reification subtrees (`opaqueKinds`) are not descended into.
+	 *
+	 * A comparison where BOTH operands are boolean literals (`true == true`) is flagged
+	 * unconditionally in a separate branch — no provably-Bool gate applies, since two literal
+	 * operands are provably non-null.
 	 */
 	private static function walk(
 		out: Array<Violation>, file: String, node: QueryNode, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
@@ -133,14 +153,22 @@ final class ComparisonToBoolean implements Check {
 		if (span != null && node.children.length == 2 && equalityKinds.contains(node.kind)) {
 			final leftIsBool: Bool = node.children[0].kind == boolLitKind;
 			final rightIsBool: Bool = node.children[1].kind == boolLitKind;
-			if (leftIsBool != rightIsBool) {
+			if (leftIsBool && rightIsBool) {
+				out.push({
+					file: file,
+					span: span,
+					rule: RULE_ID,
+					severity: Severity.Info,
+					message: 'constant boolean comparison'
+				});
+			} else if (leftIsBool != rightIsBool) {
 				final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
 				if (
 					operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds, true) && !operandIsNullable(other, nullableKinds)
 				) out.push({
 					file: file,
 					span: span,
-					rule: 'comparison-to-boolean',
+					rule: RULE_ID,
 					severity: Severity.Info,
 					message: 'comparison against a boolean literal'
 				});
@@ -186,15 +214,17 @@ final class ComparisonToBoolean implements Check {
 		return operand.kind == identKind || operand.kind == parenKind ? '!$src' : '!($src)';
 	}
 
-
 	/**
-	 * The replacement edit for one flagged comparison, or null when it cannot be
-	 * rewritten: not a two-operand comparison, not exactly one boolean-literal
-	 * operand, or the other operand not provably non-null Bool (`operandProvablyBool`
+	 * The replacement edit for one flagged comparison, or null when it cannot be rewritten:
+	 * not a two-operand comparison, no boolean-literal operand at all, or — for a single
+	 * literal operand — the other operand not provably non-null Bool (`operandProvablyBool`
 	 * with the no-proof fallback OFF — an unprovable bare identifier is left alone).
-	 * When rewritable, an `x == true` / `x != false` collapses to `x`, and an
-	 * `x == false` / `x != true` to its negation (`negate` parenthesises unless the
-	 * operand is an ident / paren).
+	 *
+	 * When BOTH operands are boolean literals, the whole comparison folds to its constant
+	 * value — `true == true` → `true`, `true != true` → `false` — no type gate needed, since
+	 * both operands are literals and therefore provably non-null. Otherwise, when rewritable,
+	 * an `x == true` / `x != false` collapses to `x`, and an `x == false` / `x != true` to its
+	 * negation (`negate` parenthesises unless the operand is an ident / paren).
 	 */
 	private static function comparisonEdit(
 		node: QueryNode, span: Span, source: String, root: QueryNode, shape: RefShape, declaredTypes: Null<Map<Int, String>>,
@@ -203,19 +233,28 @@ final class ComparisonToBoolean implements Check {
 		if (node.children.length != 2) return null;
 		final leftIsBool: Bool = node.children[0].kind == boolLitKind;
 		final rightIsBool: Bool = node.children[1].kind == boolLitKind;
-		if (leftIsBool == rightIsBool) return null;
+		if (!leftIsBool && !rightIsBool) return null;
+		if (leftIsBool && rightIsBool) {
+			final leftSpan: Null<Span> = node.children[0].span;
+			final rightSpan: Null<Span> = node.children[1].span;
+			if (leftSpan == null || rightSpan == null) return null;
+			final leftText: String = spanText(leftSpan, source);
+			final rightText: String = spanText(rightSpan, source);
+			final equal: Bool = leftText == rightText;
+			final isEq: Bool = node.kind == eqKind;
+			return { span: span, text: isEq == equal ? 'true' : 'false' };
+		}
 		final lit: QueryNode = leftIsBool ? node.children[0] : node.children[1];
 		final other: QueryNode = leftIsBool ? node.children[1] : node.children[0];
 		if (!operandProvablyBool(other, root, shape, declaredTypes, boolOpKinds, false)) return null;
 		final litSpan: Null<Span> = lit.span;
 		final otherSpan: Null<Span> = other.span;
 		if (litSpan == null || otherSpan == null) return null;
-		final litIsTrue: Bool = StringTools.trim(source.substring(litSpan.from, litSpan.to)) == 'true';
+		final litIsTrue: Bool = spanText(litSpan, source) == 'true';
 		final isEq: Bool = node.kind == eqKind;
-		final otherSrc: String = StringTools.trim(source.substring(otherSpan.from, otherSpan.to));
+		final otherSrc: String = spanText(otherSpan, source);
 		return { span: span, text: isEq == litIsTrue ? otherSrc : negate(other, otherSrc, shape.identKind, shape.parenKind) };
 	}
-
 
 	/** Resolve the equality / bool-literal / paren seam kinds, or null when any required kind is unset. */
 	private static function resolveSeams(plugin: GrammarPlugin): Null<Seams> {
@@ -240,6 +279,11 @@ final class ComparisonToBoolean implements Check {
 			parenKind: shape.parenKind,
 			boolOpKinds: boolOpKinds
 		};
+	}
+
+	/** The trimmed source text under `span`. */
+	private static inline function spanText(span: Span, source: String): String {
+		return StringTools.trim(source.substring(span.from, span.to));
 	}
 
 }

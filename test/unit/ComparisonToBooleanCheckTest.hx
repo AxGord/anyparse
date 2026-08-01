@@ -79,8 +79,11 @@ class ComparisonToBooleanCheckTest extends Test {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = x == c;\n\t}\n}').length);
 	}
 
-	public function testBothBooleanLiteralsNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = true == true;\n\t}\n}').length);
+	public function testBothBooleanLiteralsFlagged(): Void {
+		final vs: Array<Violation> = violations('class C {\n\tfunction f():Void {\n\t\tvar b = true == true;\n\t}\n}');
+		Assert.equals(1, vs.length);
+		Assert.equals('comparison-to-boolean', vs[0].rule);
+		Assert.equals('constant boolean comparison', vs[0].message);
 	}
 
 	public function testFixRewritesComparisonOperand(): Void {
@@ -193,6 +196,23 @@ class ComparisonToBooleanCheckTest extends Test {
 		var out: String = src;
 		for (e in edits) out = out.substring(0, e.span.from) + e.text + out.substring(e.span.to);
 		return out;
+	}
+
+	/** The motivating TM shape: `while (true == true) {}` folds to `while (true) {}`. */
+	public function testFixFoldsConstantEqTrueTrue(): Void {
+		Assert.equals(wrap('while (true) {}'), applyFix(wrap('while (true == true) {}')));
+	}
+
+	public function testFixFoldsConstantNeqTrueTrue(): Void {
+		Assert.equals(wrap('var b = false;'), applyFix(wrap('var b = true != true;')));
+	}
+
+	public function testFixFoldsConstantEqFalseTrue(): Void {
+		Assert.equals(wrap('var b = false;'), applyFix(wrap('var b = false == true;')));
+	}
+
+	public function testFixFoldsConstantNeqFalseTrue(): Void {
+		Assert.equals(wrap('var b = true;'), applyFix(wrap('var b = false != true;')));
 	}
 
 }
