@@ -47,7 +47,7 @@ import anyparse.runtime.Span;
  * in the same scope. That set is accumulated down the tree (`collectDeNests`): the enclosing
  * function's parameters, plus, for the INNERMOST enclosing scope (`RefShape.scopeKinds` — a real
  * `{ … }` block, a function body, a `for`, a `catch`), every local declared anywhere in that
- * scope's subtree down to the next scope boundary (`frameLocalNames`). A conditional region is not
+ * scope's subtree down to the next scope boundary (`ScopeFrames.frameLocalNames`). A conditional region is not
  * a boundary, so a local inside ANY `#if` region of that scope counts wherever it sits relative to
  * the flagged `if`; a real `{ … }` block IS one, so a de-nest inside it may legally shadow an
  * outer name and only that block's own frame applies. The one subtraction: a branch never sees
@@ -206,88 +206,24 @@ final class RedundantElse implements Check {
 	/**
 	 * Mirror `walk`: collect a de-nest edit for each direct-child flagged `if`, threading the
 	 * bindings a de-nested local would land beside. `inherited` are the names already bound where
-	 * `node` sits — the enclosing function's parameters, plus the frame of every enclosing statement
-	 * list the de-nest cannot shadow; a statement list unions its OWN frame (`frameLocalNames`, its
-	 * whole subtree down to the next scope boundary) onto them to form the collision scope.
-	 *
-	 * Whether a child RESETS that set is decided by the grammar's own scope seam
-	 * (`RefShape.scopeKinds`), not by the block seam. Everything in `scopeKinds` — a real `{ … }`
-	 * block, a function body, a `for`, a `catch` clause — resets it, so a name de-nested inside one
-	 * legally SHADOWS an outer binding; everything NOT in it passes the set through, which is how a
-	 * `#if` branch keeps seeing the enclosing function's parameters and the innermost real block's
-	 * locals.
-	 *
-	 * A conditional REGION is the one child treated specially: it receives the block's frame MINUS
-	 * its own subtree, so each of its branches starts from what the region inherited and adds only
-	 * its own locals. Sibling branches therefore never see each other's — mutually exclusive
-	 * configurations can never coexist.
+	 * `node` sits; `ScopeFrames` owns the visibility model itself — this walker only threads what
+	 * it returns, so `RedundantElse` and `GuardReturn` gate on one shared notion of "already
+	 * bound here".
 	 */
 	private static function collectDeNests(
 		node: QueryNode, source: String, seams: Seams, inherited: Array<String>, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
 		flagged: Array<String>, edits: Array<{ span: Span, text: String }>
 	): Void {
-		final isBlock: Bool = seams.support.blockKinds().contains(node.kind);
-		final scopeNames: Array<String> = isBlock ? inherited.concat(frameLocalNames(node, seams, null)) : inherited;
-		if (isBlock) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
+		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, seams, inherited);
+		if (seams.blockKinds.contains(node.kind)) for (stmt in node.children) if (seams.ifKinds.contains(stmt.kind))
 			deNest(stmt, source, seams, scopeNames, comments, flagged, edits);
-		// A function hands its OWN parameters to every child, which is how its body block gets
-		// them; otherwise a scope-opening child starts fresh and anything else continues here.
-		final ownParams: Null<Array<String>> = seams.functionKinds.contains(node.kind) ? paramNamesOf(node, seams.support) : null;
-		for (c in node.children) {
-			final childNames: Array<String> = if (ownParams != null)
-				ownParams;
-			else if (seams.scopeKinds.contains(c.kind))
-				[];
-			else if (isBlock && c.kind == seams.condKind)
-				inherited.concat(frameLocalNames(node, seams, c));
-			else
-				scopeNames;
-			collectDeNests(c, source, seams, childNames, comments, flagged, edits);
-		}
+		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, seams);
+		for (c in node.children)
+			collectDeNests(
+				c, source, seams, ScopeFrames.childScopeNames(node, c, seams, inherited, scopeNames, ownParams), comments, flagged, edits
+			);
 	}
 
-	/**
-	 * The parameter names of a function node: its direct children that carry a name and are
-	 * not blocks (that excludes the body block; the return-type node's name is harmless — a
-	 * local can never share a type's name, so it never causes a false collision).
-	 */
-	private static function paramNamesOf(fn: QueryNode, support: ControlFlowSupport): Array<String> {
-		final names: Array<String> = [];
-		for (c in fn.children) {
-			final nm: Null<String> = c.name;
-			if (nm != null && !support.blockKinds().contains(c.kind)) names.push(nm);
-		}
-		return names;
-	}
-
-	/**
-	 * The local-declaration names bound in `block`'s own frame: every `localDeclKinds` node in its
-	 * subtree down to the next scope boundary (`RefShape.scopeKinds`) — the model
-	 * `UnusedLocal` / `SelfAssignment` / `TypeResolver` resolve names with. A conditional region
-	 * and its `CondBranch`es are not boundaries, so a local declared inside one binds HERE, which
-	 * is what makes a local in a DIFFERENT `#if` region of the same block visible to the gate.
-	 *
-	 * `skip`'s subtree is left out. The only caller passes the region a child is about to descend
-	 * into, so a branch never inherits what a SIBLING branch of its own region binds: the two are
-	 * mutually exclusive configurations and can never coexist.
-	 *
-	 * An un-braced `if (c) var n;` body is collected too — Haxe scopes that binding to the branch,
-	 * so counting it can only REFUSE a de-nest that would have been legal, never allow a wrong one.
-	 */
-	private static function frameLocalNames(block: QueryNode, seams: Seams, skip: Null<QueryNode>): Array<String> {
-		final names: Array<String> = [];
-		collectFrameNames(block, seams, skip, names);
-		return names;
-	}
-
-	/** Append every local-decl name under `node` to `out`, descending through anything that is not `skip` or a scope. */
-	private static function collectFrameNames(node: QueryNode, seams: Seams, skip: Null<QueryNode>, out: Array<String>): Void {
-		for (c in node.children) if (c != skip && !seams.scopeKinds.contains(c.kind)) {
-			final nm: Null<String> = c.name;
-			if (nm != null && seams.localDeclKinds.contains(c.kind)) out.push(nm);
-			collectFrameNames(c, seams, skip, out);
-		}
-	}
 
 	/**
 	 * Replace the flagged `if`'s whole span with the else-less `if` plus the
@@ -351,6 +287,7 @@ final class RedundantElse implements Check {
 		return support == null ? null : {
 			ifKinds: ifKinds,
 			support: support,
+			blockKinds: support.blockKinds(),
 			localDeclKinds: shape.localDeclKinds ?? [],
 			functionKinds: shape.functionKinds ?? [],
 			scopeKinds: shape.scopeKinds,
@@ -367,6 +304,7 @@ final class RedundantElse implements Check {
 private typedef Seams = {
 	final ifKinds: Array<String>;
 	final support: ControlFlowSupport;
+	final blockKinds: Array<String>;
 	final localDeclKinds: Array<String>;
 	final functionKinds: Array<String>;
 	final scopeKinds: Array<String>;

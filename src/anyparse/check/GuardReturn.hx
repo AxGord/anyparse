@@ -21,6 +21,14 @@ import anyparse.runtime.Span;
  * two-level `if (p) { if (q) { … return 1; } return 2; } return 3;` flattens over two
  * `--fix` passes.
  *
+ * The check reads the BRANCH-AWARE projection (`CheckScan.parseBranchAwareOrNull`), so one
+ * conditional-compilation branch is a statement list of its own and a trailing `if` + `return`
+ * guarded by `#if` inverts like any other. Only statements of the SAME branch are ever
+ * siblings, so the rewritten span can never splice across a `#else` / `#end` directive. No
+ * tail-position gate is needed on top: the then-branch is TERMINAL by gate and the inverted
+ * guard either returns or falls into that terminal run, so BOTH forms exit unconditionally and
+ * whatever follows the `#end` is exactly as unreachable after the fix as it was before it.
+ *
  * ## The `if (!cond)` inversion - De Morgan when possible, NaN-safe
  *
  * `cond` is negated by `CheckScan.negateConditionText`, the engine `loop-guard` and
@@ -76,18 +84,26 @@ import anyparse.runtime.Span;
  *
  *  - a conditional-compilation region (`RefactorSupport.isConditionalKind`) anywhere in the
  *    rewritten span, or a `#` directive in the gap between the `if` and the `return`: the
- *    de-nested run changes indentation level, and a `#if` interior is preserved raw;
+ *    de-nested run changes indentation level, and a `#if` interior is preserved raw. A
+ *    `CondBranch` is not such a region - it is the statement list the pair sits IN, and the
+ *    splitter guarantees no directive falls between the statements of one run;
  *  - a comment in the dropped `if (` or `) {` glue, or in the gap between the `if` and the
  *    trailing `return`, or trailing the `return` on its own line - each would move away
  *    from what it documents. A comment INSIDE the condition, INSIDE the then-branch or
  *    INSIDE the returned expression rides along verbatim and does NOT refuse;
- *  - a top-level then-branch local whose name a PRECEDING sibling of the `if` already
- *    declares: de-nesting would turn a nested shadow into a same-scope re-declaration (a
- *    `-D no-shadowing` hazard). Unlike `guard-continue` this check refuses rather than
+ *  - a top-level then-branch local whose name is already bound where the de-nested run would
+ *    land: de-nesting would turn a nested shadow into a same-scope re-declaration (a
+ *    `-D no-shadowing` hazard). `ScopeFrames` supplies that set - the enclosing function's
+ *    parameters plus the frame of every enclosing statement list the de-nest cannot shadow -
+ *    so inside a `#if` branch the enclosing block's locals and a local declared in a
+ *    DIFFERENT `#if` region of the same block both count, while a SIBLING branch's never do
+ *    (mutually exclusive configurations). The `if`'s own preceding siblings are unioned on
+ *    separately, through `declaredNode`, which also sees an expression-position declaration
+ *    under a metadata wrapper. Unlike `guard-continue` this check refuses rather than
  *    auto-renaming - the shape has no tail to hoist and the collision is rare here.
  *
  * Every OTHER binding stays where it was: the de-nested statements land at the END of the
- * enclosing block, so nothing after them can bind to a widened local, and the moved
+ * enclosing statement list, so nothing after them can bind to a widened local, and the moved
  * `return TAIL` sits AHEAD of every then-branch declaration, so it still reads the outer
  * binding it read before.
  *
@@ -96,8 +112,9 @@ import anyparse.runtime.Span;
  * Driven by `ifStatementKinds`, the return kinds (`returnStatementKind` /
  * `valueReturnKinds` / `voidReturnKind`) and `ControlFlowSupport` (any unset -> no-op),
  * plus `localDeclKinds` / `localDeclExprKinds` and `MetaShape.metaKinds` (the collision
- * gate), `opaqueKinds` (skip macro reification), `logicalAndKind` / `logicalOrKind` (the
- * stranded-narrowing gate), and the `notKind` / `eqKind` / `notEqKind` / `parenKind` and
+ * gate), `scopeKinds` / `functionKinds` / `conditionalMemberKind` (the `ScopeFrames` set it
+ * gates against), `opaqueKinds` (skip macro reification), `logicalAndKind` / `logicalOrKind`
+ * (the stranded-narrowing gate), and the `notKind` / `eqKind` / `notEqKind` / `parenKind` and
  * atomic-expression kinds that shape the inversion.
  */
 @:nullSafety(Strict)
@@ -131,10 +148,10 @@ final class GuardReturn implements Check {
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree != null)
 				walk(
-					tree, violations, entry.file, entry.source, seams,
+					tree, violations, entry.file, entry.source, seams, [],
 					CheckScan.typeNominalResolver(entry.source, plugin, tree, entry.file)
 				);
 		}
@@ -147,10 +164,10 @@ final class GuardReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = readSeams(plugin);
 		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 		final byIf: Map<String, Candidate> = [];
-		indexCandidates(tree, source, seams, byIf);
+		indexCandidates(tree, source, seams, [], byIf);
 		final types: Null<(QueryNode) -> Null<String>> = violations.length == 0
 			? null
 			: CheckScan.typeNominalResolver(source, plugin, tree, violations[0].file, index);
@@ -189,6 +206,9 @@ final class GuardReturn implements Check {
 			localDeclExprKinds: shape.localDeclExprKinds ?? [],
 			metaKinds: plugin.metaShape().metaKinds,
 			opaqueKinds: shape.opaqueKinds ?? [],
+			scopeKinds: shape.scopeKinds,
+			functionKinds: shape.functionKinds ?? [],
+			condKind: shape.conditionalMemberKind,
 			negation: CheckScan.negationSeams(shape),
 			logic: plugin.booleanLogicSupport()
 		};
@@ -196,11 +216,13 @@ final class GuardReturn implements Check {
 
 	/** Walk `node`, flagging each block whose trailing `if` + `return` pair inverts into a guard. */
 	private static function walk(
-		node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, ?types: (QueryNode) -> Null<String>
+		node: QueryNode, out: Array<Violation>, file: String, source: String, s: Seams, inherited: Array<String>,
+		?types: (QueryNode) -> Null<String>
 	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
+		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, s, inherited);
 		if (s.blockKinds.contains(node.kind)) {
-			final m: Null<Candidate> = match(node, source, s);
+			final m: Null<Candidate> = match(node, source, s, scopeNames);
 			// An inversion that cannot shed its `!( … )` wrap reads worse than the positive
 			// branch it replaces — the whole point of the guard form is lost, so skip the site.
 			if (m != null && CheckScan.negationIsClean(m.cond, source, s.negation, s.logic, types)) {
@@ -214,20 +236,27 @@ final class GuardReturn implements Check {
 				});
 			}
 		}
-		for (c in node.children) walk(c, out, file, source, s, types);
+		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, s);
+		for (c in node.children)
+			walk(c, out, file, source, s, ScopeFrames.childScopeNames(node, c, s, inherited, scopeNames, ownParams), types);
 	}
 
 	/** Index every invertible block's candidate by its `if`'s `from:to` span key (for `fix` to re-find it). */
-	private static function indexCandidates(node: QueryNode, source: String, s: Seams, out: Map<String, Candidate>): Void {
+	private static function indexCandidates(
+		node: QueryNode, source: String, s: Seams, inherited: Array<String>, out: Map<String, Candidate>
+	): Void {
 		if (s.opaqueKinds.contains(node.kind)) return;
+		final scopeNames: Array<String> = ScopeFrames.ownScopeNames(node, s, inherited);
 		if (s.blockKinds.contains(node.kind)) {
-			final m: Null<Candidate> = match(node, source, s);
+			final m: Null<Candidate> = match(node, source, s, scopeNames);
 			if (m != null) {
 				final span: Null<Span> = m.ifNode.span;
 				if (span != null) out['${span.from}:${span.to}'] = m;
 			}
 		}
-		for (c in node.children) indexCandidates(c, source, s, out);
+		final ownParams: Null<Array<String>> = ScopeFrames.ownParamNames(node, s);
+		for (c in node.children)
+			indexCandidates(c, source, s, ScopeFrames.childScopeNames(node, c, s, inherited, scopeNames, ownParams), out);
 	}
 
 	/**
@@ -235,7 +264,7 @@ final class GuardReturn implements Check {
 	 * terminal, ≥2 statements) and a lone trailing `return`, and every gate holds
 	 * (conditional-compilation, comment, collision), return the pair; else null.
 	 */
-	private static function match(block: QueryNode, source: String, s: Seams): Null<Candidate> {
+	private static function match(block: QueryNode, source: String, s: Seams, scopeNames: Array<String>): Null<Candidate> {
 		final stmts: Array<QueryNode> = block.children;
 		if (stmts.length < MIN_BLOCK_STATEMENTS) return null;
 		final tail: QueryNode = stmts[stmts.length - 1];
@@ -252,7 +281,8 @@ final class GuardReturn implements Check {
 		// than the branch it would replace. Only that path is affected; a De-Morganed
 		// multi-line condition still de-nests.
 		if (CheckScan.narrowingStranded(cond, s.negation) && spansLines(source, cond)) return null;
-		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail) || redeclaresSibling(block, ifNode, thenBlock, s);
+		final blocked: Bool = spanCommentBlocked(source, ifNode, cond, thenBlock, tail)
+			|| redeclaresSibling(block, ifNode, thenBlock, s, scopeNames);
 		return blocked ? null : {
 			ifNode: ifNode,
 			thenBlock: thenBlock,
@@ -291,22 +321,30 @@ final class GuardReturn implements Check {
 	}
 
 	/**
-	 * Whether a top-level then-branch local re-declares a name a PRECEDING sibling of the
-	 * `if` already binds in the enclosing block — de-nesting would widen the nested shadow
-	 * into a same-scope re-declaration. Both sides resolve through `declaredNode`, so an
-	 * expression-position declaration under a metadata wrapper counts too.
+	 * Whether a top-level then-branch local re-declares a name already bound where the de-nested
+	 * run would land - de-nesting would widen the nested shadow into a same-scope re-declaration.
+	 *
+	 * `scopeNames` is what `ScopeFrames` threaded down to this statement list: the enclosing
+	 * function's parameters plus the frame of every enclosing list the de-nest cannot shadow. In
+	 * the branch-aware tree that is what lets a `CondBranch` see the enclosing block's locals and
+	 * a local declared in a DIFFERENT `#if` region of the same block, neither of which is a
+	 * sibling of the flagged `if`. The `if`'s own PRECEDING siblings are unioned on separately
+	 * because they resolve through `declaredNode`, which also sees an expression-position
+	 * declaration under a metadata wrapper that the frame scan does not.
 	 */
-	private static function redeclaresSibling(block: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, s: Seams): Bool {
-		final scopeNames: Array<String> = [];
+	private static function redeclaresSibling(
+		block: QueryNode, ifNode: QueryNode, thenBlock: QueryNode, s: Seams, scopeNames: Array<String>
+	): Bool {
+		final names: Array<String> = scopeNames.copy();
 		for (stmt in block.children) {
 			if (stmt == ifNode) break;
 			final n: Null<String> = declaredNode(stmt, s)?.name;
-			if (n != null && n != '') scopeNames.push(n);
+			if (n != null && n != '' && !names.contains(n)) names.push(n);
 		}
-		if (scopeNames.length == 0) return false;
+		if (names.length == 0) return false;
 		for (stmt in thenBlock.children) {
 			final n: Null<String> = declaredNode(stmt, s)?.name;
-			if (n != null && scopeNames.contains(n)) return true;
+			if (n != null && names.contains(n)) return true;
 		}
 		return false;
 	}
@@ -344,16 +382,19 @@ final class GuardReturn implements Check {
 
 /** The `RefShape` kinds `GuardReturn` reads, bundled once so the walkers take one argument. */
 private typedef Seams = {
-	var ifKinds: Array<String>;
-	var returnKinds: Array<String>;
-	var blockKinds: Array<String>;
-	var flow: ControlFlowSupport;
-	var localDeclKinds: Array<String>;
-	var localDeclExprKinds: Array<String>;
-	var metaKinds: Array<String>;
-	var opaqueKinds: Array<String>;
-	var negation: NegationSeams;
-	var logic: Null<BooleanLogicSupport>;
+	final ifKinds: Array<String>;
+	final returnKinds: Array<String>;
+	final blockKinds: Array<String>;
+	final flow: ControlFlowSupport;
+	final localDeclKinds: Array<String>;
+	final localDeclExprKinds: Array<String>;
+	final metaKinds: Array<String>;
+	final opaqueKinds: Array<String>;
+	final scopeKinds: Array<String>;
+	final functionKinds: Array<String>;
+	final condKind: Null<String>;
+	final negation: NegationSeams;
+	final logic: Null<BooleanLogicSupport>;
 }
 
 /**

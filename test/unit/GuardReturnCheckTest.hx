@@ -240,8 +240,9 @@ class GuardReturnCheckTest extends Test {
 	}
 
 	public function testConditionalRegionWrappingIfNotFlagged(): Void {
-		// The region folds the `if` into a `Conditional` statement, so the block's
-		// second-to-last slot is not an `if` at all.
+		// Branch-aware or not, a run never reaches across `#end`: the trailing `return` is
+		// outside the region, so the branch holds ONE statement and the block's
+		// second-to-last slot is a `Conditional`, not an `if`.
 		Assert.equals(0, v('#if debug\n\t\tif (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\t#end\n\t\treturn false;').length);
 	}
 
@@ -418,6 +419,74 @@ class GuardReturnCheckTest extends Test {
 			case Ok(text): text;
 			case Err(message): throw message;
 		};
+	}
+
+
+	/** A trailing `if` + `return` inside a `#if` branch inverts like any other, directives intact. */
+	public function testConditionalBranchTrailingIfFlaggedAndFixed(): Void {
+		final code: String =
+			'#if debug\n\t\tif (ok) {\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
+		Assert.equals(1, v(code).length);
+		Assert.equals(
+			canon(wrap('#if debug\n\t\tif (!ok) return false;\n\t\tlog(a);\n\t\treturn true;\n\t\t#end\n\t\treturn true;')), fx(code)
+		);
+	}
+
+
+	/** A SIBLING branch's local never refuses — the two configurations are mutually exclusive. */
+	public function testSiblingBranchLocalDoesNotRefuse(): Void {
+		final code: String = '#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (ok) {\n\t\t\tfinal n = other();'
+			+ '\n\t\t\tlog(n);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;\n\t\t#end\n\t\treturn true;';
+		Assert.equals(1, v(code).length);
+		Assert.equals(
+			canon(
+				wrap(
+					'#if x\n\t\tfinal n = pre();\n\t\treturn n > 0;\n\t\t#elseif y\n\t\tif (!ok) return false;\n\t\tfinal n = other();'
+					+ '\n\t\tlog(n);\n\t\treturn true;\n\t\t#end\n\t\treturn true;'
+				)
+			),
+			fx(code)
+		);
+	}
+
+
+	/**
+	 * A local in a DIFFERENT `#if` region of the same block IS visible to the collision gate:
+	 * it is not a sibling of the flagged `if`, but under `-D x -D y` both regions are live and
+	 * the de-nest would re-declare the name — and re-bind the `return n` that follows it.
+	 */
+	public function testOtherConditionalRegionLocalRefuses(): Void {
+		Assert.equals(
+			0,
+			v(
+				'#if x\n\t\tfinal n = pre();\n\t\t#end\n\t\t#if y\n\t\tif (ok) {\n\t\t\tfinal n = other();\n\t\t\tlog(n);'
+				+ '\n\t\t\treturn true;\n\t\t}\n\t\treturn n > 1;\n\t\t#end\n\t\treturn true;'
+			).length
+		);
+	}
+
+
+	/** The enclosing function's parameters are part of the collision set (`ScopeFrames.ownParamNames`). */
+	public function testParamCollisionNotFlagged(): Void {
+		Assert.equals(0, v('if (ok) {\n\t\t\tfinal a = other();\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
+	}
+
+
+	/** The control for `testParamCollisionNotFlagged`: the same shape with a free name IS flagged. */
+	public function testNonParamNameFlagged(): Void {
+		Assert.equals(1, v('if (ok) {\n\t\t\tfinal z = other();\n\t\t\tlog(z);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;').length);
+	}
+
+
+	/** A `#if` branch still sees the enclosing function's parameters — it is not a scope boundary. */
+	public function testParamCollisionInsideBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			v(
+				'#if x\n\t\tif (ok) {\n\t\t\tfinal a = other();\n\t\t\tlog(a);\n\t\t\treturn true;\n\t\t}\n\t\treturn false;'
+				+ '\n\t\t#end\n\t\treturn true;'
+			).length
+		);
 	}
 
 }
