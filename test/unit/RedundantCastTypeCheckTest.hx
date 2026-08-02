@@ -13,15 +13,19 @@ import anyparse.runtime.Span;
 /**
  * The `redundant-cast-type` check: a runtime-checked `cast(e, T)` whose POSITION is already
  * annotated exactly `T` — an annotated declaration initializer, a `return` under an explicit
- * return annotation, or a call-argument slot whose parameter is written `T`. Everything else
- * fails closed: no annotation, a differing type, a non-token-identical generic, the unchecked
- * `cast e` / the `(e : T)` ascription, a sub-expression position, a `Dynamic` target, and a
- * comment in either deleted region. Three families of near-miss carry their own fixtures, each
- * proven to fail when its gate is removed: a type-parameter CONSTRAINT read as a return type
- * (plain, structural, and behind a header comment); a nested function form resolving against the
- * OUTER annotation (lambda, `inline function`, `NamedFnExpr`, `untyped` body); and a call slot
- * whose positional mapping is unproven (a field-access callee, a generic callee, an optional or
- * defaulted parameter AHEAD of the slot — while one behind it still fires).
+ * return annotation, a call-argument slot whose parameter is written `T`, or a plain `=`
+ * assignment whose whole right-hand side is the cast and whose lvalue carries a written `T`.
+ * Everything else fails closed: no annotation, a differing type, a non-token-identical generic,
+ * the unchecked `cast e` / the `(e : T)` ascription, a sub-expression position, a `Dynamic`
+ * target, and a comment in either deleted region. Four families of near-miss carry their own
+ * fixtures, each proven to fail when its gate is removed: a type-parameter CONSTRAINT read as a
+ * return type (plain, structural, and behind a header comment); a nested function form resolving
+ * against the OUTER annotation (lambda, `inline function`, `NamedFnExpr`, `untyped` body); a call
+ * slot whose positional mapping is unproven (a field-access callee, a generic callee, an optional
+ * or defaulted parameter AHEAD of the slot — while one behind it still fires); and an assignment
+ * whose lvalue is not provably annotated (an inference-typed local, a `Null<Foo>` annotation, a
+ * compound `+=`, a non-self receiver, an optional parameter, a re-shadowed name, a `#if`-guarded
+ * or INHERITED `this.f`, and a cast that is not the whole right-hand side).
  */
 class RedundantCastTypeCheckTest extends Test {
 
@@ -260,6 +264,89 @@ class RedundantCastTypeCheckTest extends Test {
 
 	public function testDynamicTargetNotFlagged(): Void {
 		Assert.equals(0, violations('class C { function f(v:Dynamic) { final a:Dynamic = cast(v, Dynamic); } }').length);
+	}
+
+	public function testAssignmentToAnnotatedLocalFlagged(): Void {
+		Assert.equals(1, violations('class Foo {} class C { function f(v:Dynamic) { var a:Foo; a = cast(v, Foo); } }').length);
+	}
+
+	public function testAssignmentToAnnotatedInstanceFieldFlagged(): Void {
+		Assert.equals(1, violations('class Foo {} class C { var _cp:Foo; function f(v:Dynamic) { _cp = cast(v, Foo); } }').length);
+	}
+
+	public function testAssignmentToAnnotatedStaticFieldFlagged(): Void {
+		Assert.equals(1, violations('class Foo {} class C { static var _s:Foo; function f(v:Dynamic) { _s = cast(v, Foo); } }').length);
+	}
+
+	public function testAssignmentToSelfQualifiedFieldFlagged(): Void {
+		// `this.g` resolves against the enclosing container's OWN direct members.
+		Assert.equals(1, violations('class Foo {} class C { var g:Foo; function f(v:Dynamic) { this.g = cast(v, Foo); } }').length);
+	}
+
+	public function testFixRewritesAssignment(): Void {
+		final out: String = applyFix('class Foo {} class C { var _cp:Foo; function f(v:Dynamic) { _cp = cast(v, Foo); } }');
+		Assert.isTrue(out.indexOf('_cp = cast v;') != -1, 'expected `_cp = cast v;`, got: $out');
+		Assert.isTrue(out.indexOf('cast(') == -1, 'checked cast should be gone, got: $out');
+	}
+
+	public function testAssignmentToUnannotatedLocalNotFlagged(): Void {
+		// An inference-typed binding has no `declaredTypeSources` entry to compare against.
+		Assert.equals(0, violations('class Foo {} class C { function f(v:Dynamic) { var a = null; a = cast(v, Foo); } }').length);
+	}
+
+	public function testAssignmentToNullableAnnotationNotFlagged(): Void {
+		// `Null<Foo>` is not the written form `Foo` - `sameTypeSource` compares the two spellings.
+		Assert.equals(0, violations('class Foo {} class C { function f(v:Dynamic) { var a:Null<Foo>; a = cast(v, Foo); } }').length);
+	}
+
+	public function testCompoundAssignmentNotFlagged(): Void {
+		// `+=` projects as `AddAssign`, a different kind - the expected type there is the operator's.
+		Assert.equals(0, violations('class C { function f(v:Dynamic) { var a:Int = 0; a += cast(v, Int); } }').length);
+	}
+
+	public function testAssignmentToOtherReceiverFieldNotFlagged(): Void {
+		// A non-self receiver would need `o`'s own type resolved first, so the arm refuses outright.
+		Assert.equals(0, violations('class Foo {} class C { var a:Foo; function f(o:C, v:Dynamic) { o.a = cast(v, Foo); } }').length);
+	}
+
+	public function testAssignmentToOptionalParamNotFlagged(): Void {
+		// An optional parameter's BODY type is `Null<Foo>`, which does not pin `Foo`.
+		Assert.equals(0, violations('class Foo {} class C { function f(?a:Foo, v:Dynamic) { a = cast(v, Foo); } }').length);
+	}
+
+	public function testAssignmentToReshadowedLocalNotFlagged(): Void {
+		// Two visible declarations of `a` - the resolved binding is untrustworthy. BOTH are written
+		// `Foo`, so a type mismatch cannot be what rejects this: only the re-shadowing bail can.
+		Assert.equals(0, violations('class Foo {} class C { function f(v:Dynamic) { var a:Foo; var a:Foo; a = cast(v, Foo); } }').length);
+	}
+
+	public function testSelfQualifiedConditionalMemberNotFlagged(): Void {
+		// A `#if`-guarded member is nested in a `Conditional`, never a direct container child.
+		Assert.equals(
+			0, violations('class Foo {} class C { #if debug var g:Foo; #end function f(v:Dynamic) { this.g = cast(v, Foo); } }').length
+		);
+	}
+
+	public function testSelfQualifiedInheritedFieldNotFlagged(): Void {
+		// An inherited field is not a member of THIS container, so the direct-children scan misses it.
+		Assert.equals(
+			0,
+			violations('class Foo {} class B { public var g:Foo; } class C extends B { function f(v:Dynamic) { this.g = cast(v, Foo); } }').length
+		);
+	}
+
+	public function testAssignmentTernaryBranchNotFlagged(): Void {
+		// The cast's parent is the TERNARY, so the assignment arm is never reached - the same
+		// direct-child rule positions (a)-(c) enforce.
+		Assert.equals(
+			0, violations('class Foo {} class C { var a:Foo; function f(c:Bool, v:Dynamic, o:Foo) { a = c ? cast(v, Foo) : o; } }').length
+		);
+	}
+
+	public function testAssignmentCastNotWholeRhsNotFlagged(): Void {
+		// The cast's parent is the FIELD ACCESS, not the assignment - the direct-child rule again.
+		// The annotation matches the cast target, so ONLY the trailing `.x` can reject this.
+		Assert.equals(0, violations('class Foo {} class C { var a:Foo; function f(v:Dynamic) { a = cast(v, Foo).x; } }').length);
 	}
 
 	public function testFlaggedAsInfo(): Void {

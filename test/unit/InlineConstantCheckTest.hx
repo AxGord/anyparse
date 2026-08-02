@@ -11,10 +11,14 @@ import anyparse.runtime.Span;
 
 /**
  * The `inline-constant` check: a `static final` constant of a basic scalar type (Int /
- * Float / Bool, NOT String) whose initializer is a compile-time literal is flagged `Info`
- * and rewritten to `static inline final` (the `:Type` annotation kept). PUBLIC constants are
- * included, gated by the reflection-name and macro-consumption checks. A String constant, a
- * non-static / already-inline / `var` field, a non-literal initializer, a reflected name, a
+ * Float / Bool, NOT String) whose initializer is a compile-time constant is flagged `Info`
+ * and rewritten to `static inline final` (the `:Type` annotation kept). The initializer may be
+ * a literal OR a reference — bare or `Other.A`-qualified — that provably resolves to an
+ * already-`static inline` constant of such a literal; declaration order is irrelevant. PUBLIC
+ * constants are included, gated by the reflection-name and macro-consumption checks. A String
+ * constant, a non-static / already-inline / `var` field, a non-literal initializer, constant
+ * arithmetic over a proven reference (Phase 2, deferred), a reference to a non-inline / String /
+ * `#if`-guarded / unresolvable target, a deeper `pkg.Other.A` chain, a reflected name, a
  * macro-consumed module, a `@:keep` / `@:rtti` field or class, and an enum-abstract / `#if`
  * member are all left alone.
  */
@@ -307,6 +311,103 @@ class InlineConstantCheckTest extends Test {
 	/** A plain `final class` with no pin meta still has its public constant flagged (scanning reaches the wrapped container). */
 	public function testFinalClassPublicFlagged(): Void {
 		Assert.equals(1, violations('final class C { public static final A:Int = 5; }').length);
+	}
+
+	/** A bare reference to a same-class `static inline final` scalar folds, so the referencing constant is inlinable too. */
+	public function testSameClassInlineRefFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { static inline final A:Int = 1; static final B:Int = A; }');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'B'") >= 0, 'expected B flagged, got: ${vs[0].message}');
+	}
+
+	/** Declaration ORDER is irrelevant - a forward reference compiles and folds (verified live). */
+	public function testForwardInlineRefFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { static final B:Int = A; static inline final A:Int = 1; }');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'B'") >= 0, 'expected B flagged, got: ${vs[0].message}');
+	}
+
+	/**
+	 * A `static inline var` is a valid fold target too. `@:keep` pins the target so its own
+	 * var -> final finding cannot blur the count; the reference to it is still proven.
+	 */
+	public function testInlineVarTargetRefFlagged(): Void {
+		final vs: Array<Violation> = violations('class C { @:keep static inline var A:Int = 1; static final B:Int = A; }');
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'B'") >= 0, 'expected B flagged, got: ${vs[0].message}');
+	}
+
+	/** A qualified `Other.A` resolves through the SymbolIndex against this file's import scope. */
+	public function testCrossClassQualifiedRefFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'Other.hx', source: 'class Other { public static inline final A:Int = 1; }' },
+			{ file: 'C.hx', source: 'class C { static final B:Int = Other.A; }' }
+		];
+		final vs: Array<Violation> = new InlineConstant().run(files, new HaxeQueryPlugin());
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf("'B'") >= 0, 'expected B flagged, got: ${vs[0].message}');
+	}
+
+	/** The fix inserts `inline` on a reference-initialized constant, preserving the initializer. */
+	public function testFixInsertsInlineForRefInitializer(): Void {
+		final fixed: String = fixedSource('class C { static inline final A:Int = 1; static final B:Int = A; }');
+		Assert.isTrue(fixed.indexOf('static inline final B:Int = A') >= 0, 'got: $fixed');
+	}
+
+	/**
+	 * A NON-inline `static final` target is a COMPILE ERROR to reference from an inline
+	 * initializer ("Inline variable initialization must be a constant value" - measured), so the
+	 * reference proves nothing. `@:keep` on the target makes the fixture's expected total 0.
+	 */
+	public function testRefToNonInlineTargetNotFlagged(): Void {
+		Assert.equals(0, violations('class C { @:keep static final A:Int = 1; static final B:Int = A; }').length);
+	}
+
+	/** The String exclusion applies transitively: the TARGET fails the literal-kinds policy seam. */
+	public function testRefToStringConstantNotFlagged(): Void {
+		Assert.equals(0, violations('class C { static inline final A:String = "x"; static final B:String = A; }').length);
+	}
+
+	/** A `#if`-guarded target is nested in a `Conditional`, never a direct container child - unprovable. */
+	public function testRefToConditionalTargetNotFlagged(): Void {
+		Assert.equals(0, violations('class C { #if debug static inline final A:Int = 1; #end static final B:Int = A; }').length);
+	}
+
+	/** A bare reference that names no member of the owning container proves nothing. */
+	public function testUnresolvedBareRefNotFlagged(): Void {
+		Assert.equals(0, violations('class C { static final B:Int = A; }').length);
+	}
+
+	/** A qualified reference whose type the index does not declare proves nothing. */
+	public function testUnresolvedQualifiedRefNotFlagged(): Void {
+		Assert.equals(0, violations('class C { static final B:Int = Other.A; }').length);
+	}
+
+	/** Constant arithmetic over a proven reference compiles too, but is deliberately out of scope (Phase 2). */
+	public function testArithmeticOverInlineRefNotFlagged(): Void {
+		Assert.equals(0, violations('class C { static inline final A:Int = 1; static final B:Int = A * 2; }').length);
+	}
+
+	/**
+	 * A deeper `pkg.Other.A` chain (whose receiver is itself a field access) is not attempted. The
+	 * import makes `Other` resolvable from `C.hx`, so ONLY the bare-receiver gate can reject this.
+	 */
+	public function testDeepQualifiedChainNotFlagged(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'Other.hx', source: 'package pkg;\nclass Other { public static inline final A:Int = 1; }' },
+			{ file: 'C.hx', source: 'import pkg.Other;\nclass C { static final B:Int = pkg.Other.A; }' }
+		];
+		Assert.equals(0, new InlineConstant().run(files, new HaxeQueryPlugin()).length);
+	}
+
+	/** The reflection-name gate runs BEFORE the initializer test, so it covers a reference-initialized constant unchanged. */
+	public function testRefInitializedReflectedNameNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C { static inline final A:Int = 1; static final MYCONST:Int = A; function f():Void { Reflect.field(C, "MYCONST"); } }'
+			).length
+		);
 	}
 
 }
