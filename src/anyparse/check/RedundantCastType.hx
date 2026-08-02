@@ -65,7 +65,10 @@ import anyparse.runtime.Span;
  * a `Conditional` rather than being a direct child, so it is invisible and the position is
  * skipped; and an INHERITED field is not a member of this container at all, so a superclass's
  * annotation is never read for a subclass's `this.f`. A field access on any OTHER receiver
- * (`o.a = …`) would need `o`'s own type resolved first and is refused outright.
+ * (`o.a = …`) would need `o`'s own type resolved first and is refused outright. So is a container
+ * whose `this` is the UNDERLYING value rather than an instance (`underlyingThisTypeKinds` - an
+ * `abstract` / `enum abstract`): `this.f` there reads the UNDERLYING type's field, never a member of
+ * the container at all, so its annotation may not stand in for the discarded runtime check.
  *
  * The (c) GENERICS veto does NOT apply to (d), for the same reason it does not apply to (a) or
  * (b): the lvalue's annotation FIXES the type rather than being driven by the value assigned.
@@ -192,17 +195,17 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final bodyKinds: Array<String> = shape.functionBodyKinds ?? [];
 		final containerKinds: Array<String> = shape.visibilityContainerKinds ?? [];
 		function walk(
-			node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>, enclosingType: Null<QueryNode>
+			node: QueryNode, parent: Null<QueryNode>, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>
 		): Void {
 			if (opaqueKinds.contains(node.kind)) return;
 			final nextFn: Null<QueryNode> = lambdaKinds.contains(node.kind)
 				? null
 				: ownsFunctionBody(node, functionKinds, bodyKinds) ? node : enclosingFn;
-			final nextType: Null<QueryNode> = containerKinds.contains(node.kind) ? node : enclosingType;
+			final nextContainer: Null<QueryNode> = containerKinds.contains(node.kind) ? node : enclosingContainer;
 			final span: Null<Span> = node.span;
 			if (node.kind == castKind && span != null && parent != null) {
 				final targetSource: Null<String> = redundantTargetSource(
-					node, span, parent, enclosingFn, enclosingType, root, types, resolutionIndex
+					node, span, parent, enclosingFn, enclosingContainer, root, types, resolutionIndex
 				);
 				if (targetSource != null) violations.push({
 					file: entry.file,
@@ -212,7 +215,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 					message: 'redundant cast type - the position is already typed $targetSource'
 				});
 			}
-			for (c in node.children) walk(c, node, nextFn, nextType);
+			for (c in node.children) walk(c, node, nextFn, nextContainer);
 		}
 		walk(root, null, null, null);
 	}
@@ -227,7 +230,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * ("Cast type parameters must be Dynamic").
 	 */
 	private static function redundantTargetSource(
-		castNode: QueryNode, castSpan: Span, parent: QueryNode, enclosingFn: Null<QueryNode>, enclosingType: Null<QueryNode>,
+		castNode: QueryNode, castSpan: Span, parent: QueryNode, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>,
 		root: QueryNode, types: FileTypes, resolutionIndex: () -> SymbolIndex
 	): Null<String> {
 		if (castNode.children.length != 1) return null;
@@ -237,7 +240,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final targetSource: String = rawTarget;
 		if (isNullableWrapper(targetSource, types.wrapperNames)) return null;
 		if (deletedRegionHasComment(types.source, castSpan, operandSpan)) return null;
-		final expected: Null<String> = expectedTypeSource(castNode, parent, enclosingFn, enclosingType, root, types, resolutionIndex);
+		final expected: Null<String> = expectedTypeSource(castNode, parent, enclosingFn, enclosingContainer, root, types, resolutionIndex);
 		return expected != null && TypeResolver.sameTypeSource(expected, targetSource, types.importMap) ? targetSource : null;
 	}
 
@@ -248,7 +251,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 * WHOLE right-hand side is the cast, or a call-argument slot.
 	 */
 	private static function expectedTypeSource(
-		castNode: QueryNode, parent: QueryNode, enclosingFn: Null<QueryNode>, enclosingType: Null<QueryNode>, root: QueryNode,
+		castNode: QueryNode, parent: QueryNode, enclosingFn: Null<QueryNode>, enclosingContainer: Null<QueryNode>, root: QueryNode,
 		types: FileTypes, resolutionIndex: () -> SymbolIndex
 	): Null<String> {
 		final shape: RefShape = types.shape;
@@ -258,7 +261,7 @@ final class RedundantCastType implements Check implements DefaultOff {
 		if ((shape.valueReturnKinds ?? []).contains(parent.kind) && isFirstChild)
 			return enclosingFn == null ? null : returnAnnotation(enclosingFn, shape, types.source);
 		if (parent.kind == shape.assignKind && parent.children.length == 2 && parent.children[1] == castNode)
-			return assignTargetAnnotation(parent.children[0], enclosingType, root, types);
+			return assignTargetAnnotation(parent.children[0], enclosingContainer, root, types);
 		return parent.kind == shape.callKind ? paramAnnotation(castNode, parent, root, types, resolutionIndex) : null;
 	}
 
@@ -445,10 +448,13 @@ final class RedundantCastType implements Check implements DefaultOff {
 	 *
 	 * The second shape is an EXPLICITLY self-qualified `this.f` - a `fieldAccessKind` node whose single
 	 * child is the `selfReferenceText` identifier - resolved against the enclosing container's OWN members.
-	 * Any other receiver (`o.a = ...`) would need `o`'s own type resolved first and is refused.
+	 * Any other receiver (`o.a = ...`) would need `o`'s own type resolved first and is refused. So is a
+	 * container listed in `underlyingThisTypeKinds`: inside an `abstract` / `enum abstract` `this` IS the
+	 * underlying value, so `this.f` reads the UNDERLYING type's field and the container's own member of
+	 * that name - if it happens to declare one - is a DIFFERENT slot whose annotation proves nothing.
 	 */
 	private static function assignTargetAnnotation(
-		target: QueryNode, enclosingType: Null<QueryNode>, root: QueryNode, types: FileTypes
+		target: QueryNode, enclosingContainer: Null<QueryNode>, root: QueryNode, types: FileTypes
 	): Null<String> {
 		final shape: RefShape = types.shape;
 		if (target.kind == shape.identKind)
@@ -457,12 +463,13 @@ final class RedundantCastType implements Check implements DefaultOff {
 		final fieldName: Null<String> = target.name;
 		if (
 			target.kind != shape.fieldAccessKind || target.children.length != 1 || self == null || fieldName == null
-			|| enclosingType == null
+			|| enclosingContainer == null
 		)
 			return null;
+		if ((shape.underlyingThisTypeKinds ?? []).contains(enclosingContainer.kind)) return null;
 		final receiver: QueryNode = target.children[0];
 		return receiver.kind == shape.identKind && receiver.name == self
-			? ownFieldAnnotation(enclosingType, fieldName, shape, types.declaredTypeSources)
+			? ownFieldAnnotation(enclosingContainer, fieldName, shape, types.declaredTypeSources)
 			: null;
 	}
 

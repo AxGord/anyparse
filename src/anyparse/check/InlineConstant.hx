@@ -9,6 +9,7 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.StringFold.StringLiteral;
 import anyparse.query.SymbolIndex;
 import anyparse.query.SymbolIndex.FileInfo;
+import anyparse.query.SymbolIndex.ImportKind;
 import anyparse.query.SymbolIndex.TypeDeclInfo;
 import anyparse.runtime.Span;
 
@@ -37,15 +38,10 @@ import anyparse.runtime.Span;
  * `static final A`, the very same line fails to compile with
  * "Inline variable initialization must be a constant value".
  *
- * Two reference shapes resolve (`isInlinableInitializer`). A BARE `identKind` name is proved
- * against the OWNING container's direct children (`declaresInlineConstant`) — direct children
- * only, so a `#if`-guarded target is nested in a `Conditional` and stays invisible, which is the
- * conservative answer wanted when the reference may be compiled in a configuration lacking that
- * member. A QUALIFIED `Other.A` (a `fieldAccessKind` whose single child is a bare `identKind` type
- * name) is resolved with `SymbolIndex.resolveTypeRefsFrom` against THIS file's import scope, and
- * UNANIMITY is required: every candidate declaration must be locatable, parseable and conforming,
- * or the proof fails. A deeper chain (`pkg.Other.A`, whose child is itself a field access) is not
- * attempted. `RefactorSupport.lazySymbolIndex` backs the lookup, so a run with no qualified
+ * `isInlinableInitializer` owns the proof and documents every gate; in outline, a BARE name is
+ * resolved against the owning container's DIRECT children and a QUALIFIED `Other.A` through the
+ * `SymbolIndex` against this file's import scope, both refusing every shape whose binding is not
+ * certain. `RefactorSupport.lazySymbolIndex` backs the qualified arm, so a run with no qualified
  * reference never builds — nor asks the plugin host for — an index.
  *
  * The String exclusion applies TRANSITIVELY for free: `inlineConstantLiteralKinds` omits the
@@ -56,6 +52,11 @@ import anyparse.runtime.Span;
  *
  * Constant ARITHMETIC over references (`static inline final C:Int = A * 2;`, which also compiles)
  * is deliberately OUT OF SCOPE — a known conservative miss, deferred rather than half-proven.
+ *
+ * A CHAIN reaches its fixpoint over successive `--fix` passes rather than within one: given
+ * `static final A = 1; static final B = A;`, pass one inlines only `A` (the proof reads the SOURCE,
+ * where `A` is not yet inline), and pass two then inlines `B`. That is deliberate — treating a
+ * fellow candidate as already-inline would stake `B`'s proof on a gate that may still veto `A`.
  *
  * ## Also: `static inline var` -> `static inline final`
  *
@@ -339,9 +340,20 @@ final class InlineConstant implements Check {
 	 * Two shapes resolve. A bare `identKind` name is looked up among the OWNING container's direct
 	 * children (`declaresInlineConstant`). A `fieldAccessKind` whose single child is a bare
 	 * `identKind` TYPE name (`Other.A`) is resolved through `SymbolIndex.resolveTypeRefsFrom`
-	 * against THIS file's import scope, and every candidate must agree — one unresolvable,
-	 * unparseable or non-conforming candidate refuses the whole proof. A deeper chain
-	 * (`pkg.Other.A`, whose child is itself a field access) is not attempted.
+	 * against THIS file's import scope, and every candidate must agree — one unresolvable or
+	 * non-conforming candidate refuses the whole proof. A deeper chain (`pkg.Other.A`, whose child
+	 * is itself a field access) is not attempted.
+	 *
+	 * An ALIAS import binding the receiver name (`import pkg.Other as Alias;` … `Alias.A`) refuses
+	 * outright, and that gate is NOT redundant with unanimity. `SymbolIndex.simpleRefInScope` leaves
+	 * the alias kind unhandled, so an aliased path never enters simple-name scope; for every other
+	 * import kind the candidate set is a SUPERSET of the real binding — which is exactly what makes
+	 * unanimity conservative — but for an alias the true target can be absent entirely, and
+	 * unanimity cannot vet a candidate that was never collected. Haxe binds the alias to the
+	 * imported path, so a same-simple-named local type would be proven in its place. The gate lives
+	 * here rather than in `simpleRefInScope` because that query's other consumers (rename / move /
+	 * unused-import) read a spurious hit as "bail out" — the safe direction for them, the opposite
+	 * of this one (see the shared-predicate note: the conservative direction belongs to the caller).
 	 *
 	 * The String exclusion applies transitively for free: `inlineConstantLiteralKinds` omits the
 	 * string kinds, so a reference to a String constant fails `isInlinableLiteral` ON THE TARGET.
@@ -362,6 +374,7 @@ final class InlineConstant implements Check {
 		final built: Null<SymbolIndex> = index();
 		if (built == null) return false;
 		final resolver: SymbolIndex = built;
+		if (isImportAlias(resolver, file, typeName)) return false;
 		final candidates: Array<{ file: FileInfo, type: TypeDeclInfo }> = resolver.resolveTypeRefsFrom(typeName, file);
 		if (candidates.length == 0) return false;
 		for (candidate in candidates) {
@@ -369,10 +382,26 @@ final class InlineConstant implements Check {
 			if (source == null) return false;
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
 			if (tree == null) return false;
-			final host: Null<QueryNode> = findContainer(tree, candidate.type.name, seams.containers);
+			final host: Null<QueryNode> = soleContainer(tree, candidate.type.name, seams.containers);
 			if (host == null || !declaresInlineConstant(host, name, seams)) return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Whether `file` binds the simple name `name` through an ALIAS import — the one import kind
+	 * `SymbolIndex.simpleRefInScope` does not bring into simple-name scope, so a reference through it
+	 * resolves to a candidate set that may not contain the real target at all. Both `raw` and `alias`
+	 * are tested because the alias kind carries the bound name in `raw`; over-matching only ever
+	 * REFUSES a proof. An unindexed `file` answers false — the candidate lookup below it then finds
+	 * nothing and refuses anyway.
+	 */
+	private static function isImportAlias(index: SymbolIndex, file: String, name: String): Bool {
+		final scope: Null<FileInfo> = index.fileInfo(file);
+		if (scope == null) return false;
+		for (imported in scope.imports) if (imported.kind == ImportKind.Alias && (imported.alias == name || imported.raw == name))
+			return true;
+		return false;
 	}
 
 	/**
@@ -385,6 +414,17 @@ final class InlineConstant implements Check {
 	 * Direct children only, so a `#if`-guarded target is nested in a `Conditional` and stays
 	 * invisible — exactly the conservative answer wanted, since the reference may be compiled in a
 	 * configuration where that member does not exist.
+	 *
+	 * The reset discipline is load-bearing HERE in a way it is not in `scanContainer`, and the two
+	 * copies must not be kept in step by accident: a stale `sawInline` there merely SKIPS a
+	 * candidate, while a stale one here PROVES a non-inline target and emits code that does not
+	 * compile. Every `memberDeclKinds` child resets, so a preceding `static inline function` cannot
+	 * leak its modifiers onto the next member.
+	 *
+	 * `isField` is a shape guard rather than a provable gate: the only `memberDeclKinds` entries it
+	 * excludes are the FUNCTION forms, whose last child is a body node and so never satisfies the
+	 * terminal literal test either. It states the intent (a fold target is a FIELD) and costs
+	 * nothing, but no fixture can isolate it.
 	 */
 	private static function declaresInlineConstant(container: QueryNode, name: String, seams: Seams): Bool {
 		var sawStatic: Bool = false;
@@ -409,17 +449,32 @@ final class InlineConstant implements Check {
 	}
 
 	/**
-	 * The first `visibilityContainerKinds` node named `name` anywhere under `node`, or null when the
-	 * tree declares none. Recursive rather than top-level-only because a `final class` nests its body
-	 * in a `FinalDecl` wrapper, exactly as `walk` has to recurse for the same reason.
+	 * The SOLE `visibilityContainerKinds` node named `name` anywhere under `node`, or null when the
+	 * tree declares none — or more than one. Recursive rather than top-level-only because a
+	 * `final class` nests its body in a `FinalDecl` wrapper, exactly as `walk` has to recurse for the
+	 * same reason.
+	 *
+	 * Refusing ambiguity is what keeps the `#if`-divergence discipline the bare-name arm already has
+	 * at MEMBER level (direct children only) from being lost one level up at TYPE level. A file may
+	 * declare the same type twice only through `#if`, and `SymbolIndex` dedups the two decls to one
+	 * candidate, so taking the FIRST hit would prove a reference from whichever branch happens to be
+	 * written first and emit "Inline variable initialization must be a constant value" in the other
+	 * configuration. A single-branch `#if class Other … #end` still has exactly one node and stays
+	 * provable, so the strictness costs no true positives.
 	 */
-	private static function findContainer(node: QueryNode, name: String, containers: Array<String>): Null<QueryNode> {
-		for (child in node.children) {
-			if (containers.contains(child.kind) && child.name == name) return child;
-			final nested: Null<QueryNode> = findContainer(child, name, containers);
-			if (nested != null) return nested;
+	private static function soleContainer(node: QueryNode, name: String, containers: Array<String>): Null<QueryNode> {
+		var found: Null<QueryNode> = null;
+		function scan(current: QueryNode): Bool {
+			for (child in current.children) {
+				if (containers.contains(child.kind) && child.name == name) {
+					if (found != null) return false;
+					found = child;
+				} else if (!scan(child))
+					return false;
+			}
+			return true;
 		}
-		return null;
+		return scan(node) ? found : null;
 	}
 
 	/** Every plain string literal's raw content across `files` — the names a constant might be reflected by. */
@@ -638,6 +693,7 @@ private typedef Seams = {
 	final negationKind: Null<String>;
 	final stringFold: Null<StringFoldSupport>;
 };
+
 /**
  * The initializer proof `scanContainer` threads down to `consider` — "does this member's
  * initializer make it inlinable, given its owning container and file". Closed over the resolved

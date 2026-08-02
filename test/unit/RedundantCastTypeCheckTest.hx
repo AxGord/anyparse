@@ -24,8 +24,11 @@ import anyparse.runtime.Span;
  * slot whose positional mapping is unproven (a field-access callee, a generic callee, an optional
  * or defaulted parameter AHEAD of the slot — while one behind it still fires); and an assignment
  * whose lvalue is not provably annotated (an inference-typed local, a `Null<Foo>` annotation, a
- * compound `+=`, a non-self receiver, an optional parameter, a re-shadowed name, a `#if`-guarded
- * or INHERITED `this.f`, and a cast that is not the whole right-hand side).
+ * compound `+=`, a non-self receiver, an optional parameter, a re-shadowed name, and a `#if`-guarded,
+ * INHERITED or `abstract`-underlying `this.f`). Two further assignment fixtures - a cast in a ternary
+ * branch and one behind a trailing `.x` - guard against an arm that searched UPWARD for an enclosing
+ * assignment instead of dispatching on the IMMEDIATE parent; no single gate flips them, so they are
+ * shape guards rather than gate proofs.
  */
 class RedundantCastTypeCheckTest extends Test {
 
@@ -332,6 +335,14 @@ class RedundantCastTypeCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations('class Foo {} class B { public var g:Foo; } class C extends B { function f(v:Dynamic) { this.g = cast(v, Foo); } }').length
+		);
+	}
+
+	public function testSelfQualifiedInAbstractNotFlagged(): Void {
+		// Inside an `abstract`, `this` IS the underlying value, so `this.value` reads the UNDERLYING
+		// type's field - never the abstract's OWN `value:Foo`, whose annotation must not stand in.
+		Assert.equals(
+			0, violations('class Foo {} abstract W(H) { static var value:Foo; function a(v:Dynamic) this.value = cast(v, Foo); }').length
 		);
 	}
 
