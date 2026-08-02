@@ -376,7 +376,10 @@ typedef RefShape = {
 
 	/**
 	 * The parenthesized-expression node kind — the `redundant-parens` check flags a
-	 * redundant double wrap (`((e))`). Optional; unset makes the check a no-op.
+	 * redundant double wrap (`((e))`), and `prefer-ternary-expression` counts it as a
+	 * delimited slot (a grouping paren bounds its child on both sides). Optional; unset
+	 * makes `redundant-parens` a no-op and drops that one slot from
+	 * `prefer-ternary-expression`.
 	 */
 	@:optional var parenKind: String;
 
@@ -1697,8 +1700,11 @@ typedef RefShape = {
 	 * object-literal field (`Field` — `:` … `,` or `}`) and `new T(args)`
 	 * (`NewExpr`). A host may also carry non-expression children (a type annotation,
 	 * a type argument); those never project as `parenKind`, so listing the host is
-	 * still exact. Optional; unset leaves `redundant-parens` with only its
-	 * double-paren arm.
+	 * still exact. Read by `redundant-parens` and by `prefer-ternary-expression`, which asks
+	 * the same question from the other side — a bare `?:` may only LAND in such a slot.
+	 * Optional; unset leaves `redundant-parens` with only its double-paren arm and makes
+	 * `prefer-ternary-expression` (with `delimitedTailChildKinds` / `parenKind` also unset)
+	 * accept no slot at all, i.e. inert.
 	 */
 	@:optional var delimitedAllChildKinds: Array<String>;
 
@@ -1711,7 +1717,8 @@ typedef RefShape = {
 	 * right-hand side is not — those operators are the loosest precedence tier AND
 	 * right-associative, so their right operand is parsed as a full expression that
 	 * already reaches the slot's terminator). Read by `redundant-parens` together
-	 * with `delimitedAllChildKinds`. Optional; unset lists no such host.
+	 * with `delimitedAllChildKinds`, and by `prefer-ternary-expression` for the slot a bare
+	 * `?:` may land in (child 0 excluded there too). Optional; unset lists no such host.
 	 */
 	@:optional var delimitedTailChildKinds: Array<String>;
 
@@ -1771,8 +1778,20 @@ typedef RefShape = {
 	 * the unary prefixes and in/decrement, and the primary atoms (identifier, literal,
 	 * call, field / index access, array literal, `new`). Object literals and casts are
 	 * deliberately omitted (a leading `{` is block-ambiguous; a cast condition is rare)
-	 * — both cost only a missed cleanup. Read by `redundant-parens` with `ternaryKind`.
-	 * Optional; unset drops the ternary-condition arm.
+	 * — both cost only a missed cleanup.
+	 *
+	 * TWO consumers, asking two related questions of one list. `redundant-parens` reads it
+	 * with `ternaryKind` for the CONDITION slot (which ends at the `?`);
+	 * `prefer-ternary-expression` reads it for the two ARM slots (which end at the `:` and at
+	 * the enclosing terminator), where the property needed is "no unsealed top-level `:`" and
+	 * "not separator-greedy". Both hold for every kind listed, but the two properties are NOT
+	 * the same: an object literal is a safe ARM (`c ? {k: 1} : {k: 2}` compiles) yet is
+	 * excluded for the condition's leading-`{` ambiguity, and a hypothetical unsealed-`:`
+	 * kind would be a fine condition and a broken arm. Split the list before adding a kind
+	 * that satisfies only one side.
+	 *
+	 * Optional; unset drops `redundant-parens`' ternary-condition arm AND makes
+	 * `prefer-ternary-expression` a no-op (it has no other source of accepted branch kinds).
 	 */
 	@:optional var ternaryConditionUnwrapKinds: Array<String>;
 

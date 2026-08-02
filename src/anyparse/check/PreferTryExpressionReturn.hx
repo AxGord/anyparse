@@ -43,10 +43,7 @@ import anyparse.runtime.Span;
  * - no comment sits in a region the rebuild drops. The `try` keyword, the braces and each
  *   `return` keyword all go away; each `catch (…)` header and each returned expression are
  *   copied verbatim, so only a comment OUTSIDE those survives the guard, and a `try` holding
- *   one is left unflagged rather than silently losing it. A LINE comment refuses the `try`
- *   even INSIDE a copied region (`TryExpressionShape.decompose`): the rebuild joins every
- *   slice onto one line, so a `//` comments out whatever follows it there -- including the
- *   terminating `;`.
+ *   one is left unflagged rather than silently losing it. A DANGLING line comment refuses the `try` even INSIDE a copied region (`TryExpressionShape.danglingLineComment`): a `//` with no newline after it within its slice comments out whatever the rebuild appends next -- the following `catch (…)` header, or the terminating `;`. A `//` EARLIER in a multi-line slice is fine, the slice being copied newlines and all.
  *
  * The reported span is the whole `try` statement. Unlike the assignment sibling this check
  * needs no statement-list walk: a `return`-collapse rewrites the `try` node alone, with no

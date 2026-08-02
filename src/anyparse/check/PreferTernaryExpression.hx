@@ -1,7 +1,6 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
-import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -58,8 +57,7 @@ import anyparse.runtime.Span;
  *   `var v = a || c ? x : y;` -- which groups as `(a || c) ? x : y`, compiles, and returns a
  *   different value. The accepted slots come from the grammar: `delimitedAllChildKinds`,
  *   `delimitedTailChildKinds` for any child after the head, and a plain paren. A chain LINK is
- *   refused by the same gate for free -- its parent is the head `if`-expression, which is no
- *   host's delimited slot;
+ *   refused by the same gate for free -- its parent is the head `if`-expression, which is no host's delimited slot. That subsumption is what replaced an explicit `else if` link check, and it holds only while no `ifExpressionKinds` entry is ALSO a delimited host. The slots the gate is conservative about are known and cost only a missed cleanup: an arrow-lambda body, a `throw` operand, a cast or `(e : T)` check, an index, and a comprehension or map-literal element would all be safe;
  * - no comment in a region the rebuild drops (the `if (` / `)` / `else` glue and the braces
  *   all go away), following the family's fail-closed comment guard.
  *

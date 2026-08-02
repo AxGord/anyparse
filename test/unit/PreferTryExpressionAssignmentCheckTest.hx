@@ -80,7 +80,11 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals('p = try build() catch (msg:String) 1 catch (other:Exception) 2;', es[0].text);
 	}
 
-	/** The bare-body grammar form (`tryStatementKinds` lists it) carries the same shape without the block level. */
+	/**
+	 * Un-braced bodies: the same shape with the block level absent, which `singleBody` normalises
+	 * away. (Haxe still projects this as `TryCatchStmt` -- the bodies are statements; the
+	 * `TryCatchStmtBare` ctor is for bare EXPRESSION bodies, which no assignment shape reaches.)
+	 */
 	public function testBareBodyFixed(): Void {
 		final es: Array<{ span: Span, text: String }> =
 			edits('class C {\n\tfunction f():Void {\n\t\ttry p = build(); catch (msg:String) p = null;\n\t}\n}');
@@ -88,7 +92,11 @@ class PreferTryExpressionAssignmentCheckTest extends Test {
 		Assert.equals('p = try build() catch (msg:String) null;', es[0].text);
 	}
 
-	public function testMultiDeclaratorNotFlagged(): Void {
+	/**
+	 * A multi-declarator `var a = 0, p = 0;` cannot be folded (the `= try …` would attach to the
+	 * whole list), so the decl arm declines and the l-value arm, which folds nothing, takes it.
+	 */
+	public function testMultiDeclaratorFallsBackToLvalueArm(): Void {
 		final vs: Array<Violation> = violations(
 			'class C {\n\tfunction f():Void {\n\t\tvar a:Int = 0, p:Int = 0;\n\t\ttry {\n\t\t\tp = build();\n\t\t} catch (msg:String) {\n\t\t\tp = 1;\n\t\t}\n\t}\n}'
 		);

@@ -55,10 +55,10 @@ class PreferTernaryExpressionCheckTest extends Test {
 
 	/**
 	 * A CHAIN belongs to `prefer-if-expression-*`, and BOTH ends are refused: the head by the
-	 * branch whitelist (its `else` is another `if`-expression, absent from it) and the inner
-	 * `else if` LINK by the slot gate (its parent is that head, which is no delimited slot).
-	 * Before either existed, the fixed point unravelled a chain one level per pass into a
-	 * nested ternary.
+	 * branch gate (its `else` is another `if`-expression) and the inner `else if` LINK by the
+	 * slot gate (its parent is that head, which is no delimited slot). Reverting either flips
+	 * this test. Before either existed, the fixed point unravelled a chain one level per pass
+	 * into a nested ternary.
 	 */
 	public function testChainNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar x = if (a) 1 else if (b) 2 else 3;\n\t}\n}').length);

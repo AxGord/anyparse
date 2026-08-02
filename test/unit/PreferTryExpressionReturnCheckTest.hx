@@ -52,6 +52,34 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		);
 	}
 
+	/** A `//` with more of the slice after it on later lines is copied verbatim, newline and all — safe, so the site fires. */
+	public function testEarlierLineCommentInValueFlagged(): Void {
+		Assert.equals(
+			1,
+			violations(
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(\n\t\t\t\ttext, // raw\n\t\t\t\t2\n\t\t\t);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A `try` sealed behind a closing bracket cannot absorb the following `catch`, so it needs no parentheses. */
+	public function testSealedNestedTryNotParenthesised(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn g(1, try parse(text) catch (e1:String) 4);\n\t\t} catch (e2:Int) {\n\t\t\treturn 5;\n\t\t}\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return try g(1, try parse(text) catch (e1:String) 4) catch (e2:Int) 5;', es[0].text);
+	}
+
+	/** A `try` at the value's right EDGE does absorb it, so it is parenthesised even under an enclosing operator. */
+	public function testTailNestedTryParenthesised(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn 1 + try parse(text) catch (e1:String) 4;\n\t\t} catch (e2:Int) {\n\t\t\treturn 5;\n\t\t}\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return try (1 + try parse(text) catch (e1:String) 4) catch (e2:Int) 5;', es[0].text);
+	}
+
 	public function testRegisteredInBuiltins(): Void {
 		Assert.notNull(Linter.byId('prefer-try-expression-return'));
 		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-try-expression-return'));

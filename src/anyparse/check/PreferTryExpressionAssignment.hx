@@ -90,9 +90,7 @@ import anyparse.runtime.Span;
  * ### Comments and `#if`
  *
  * No comment may sit in a region the rebuild drops -- the `try` keyword, the braces, each
- * `return`-less body's `target =` prefix, and (decl arm) the declaration's `= init`. Each
- * `catch (…)` header and each r-value is copied verbatim, so a comment inside one rides along;
- * anything else leaves the `try` unflagged rather than silently lost.
+ * `return`-less body's `target =` prefix, and (decl arm) the declaration's `= init`. Each `catch (…)` header and each r-value is copied verbatim, so a comment inside one rides along; anything else leaves the `try` unflagged rather than silently lost. One exception to "inside a copied region rides along": a DANGLING line comment, one with no newline after it within its own slice, refuses the site (`TryExpressionShape.danglingLineComment`) -- whatever the rebuild appends after that slice, the next `catch (…)` header or the terminating `;`, would land behind the `//`. Every copied slice is checked, the declaration prefix and the hoisted target included.
  *
  * Both arms read the BRANCH-AWARE projection (`CheckScan.parseBranchAwareOrNull`): a
  * declaration and its `try` inside a `#if sys` region are children of a conditional node, not
@@ -265,6 +263,10 @@ final class PreferTryExpressionAssignment implements Check {
 		final prefix: Null<{ text: String, keptTo: Int }> = declPrefix(declSpan, init, source);
 		final value: Null<String> = TryExpressionShape.buildValue(parts, source, s.tryShape);
 		if (prefix == null || value == null) return null;
+		final prefixSpan: Span = new Span(declSpan.from, declSpan.from + prefix.text.length);
+		// The declaration prefix is copied too, so it needs the same dangling-`//` guard the
+		// `try`'s own slices get — a comment there would sit in front of the whole `= try …;`.
+		if (TryExpressionShape.danglingLineComment(source, prefixSpan, comments)) return null;
 		final kept: Array<Span> = TryExpressionShape.keptSpans(parts);
 		kept.push(new Span(declSpan.from, prefix.keptTo));
 		final region: Span = new Span(declSpan.from, trySpan.to);
@@ -297,6 +299,7 @@ final class PreferTryExpressionAssignment implements Check {
 		final lvalueSpan: Null<Span> = lvalue.span;
 		final value: Null<String> = TryExpressionShape.buildValue(parts, source, s.tryShape);
 		if (lvalueSrc == null || lvalueSpan == null || value == null) return null;
+		if (TryExpressionShape.danglingLineComment(source, lvalueSpan, comments)) return null; // the copied target
 		final kept: Array<Span> = TryExpressionShape.keptSpans(parts);
 		kept.push(lvalueSpan);
 		return IfExpressionChain.droppedComment(trySpan, kept, comments) ? null : {
@@ -389,12 +392,9 @@ final class PreferTryExpressionAssignment implements Check {
 	private static function assignedOnlyByTargets(name: String, tryStmt: QueryNode, targets: Array<Span>, s: Seams): Bool {
 		for (h in Refs.find(name, tryStmt, s.shape)) {
 			if (h.kind != RefKind.Write) return false;
-			var isTarget: Bool = false;
-			for (t in targets) if (h.span.from == t.from && h.span.to == t.to) {
-				isTarget = true;
-				break;
-			}
-			if (!isTarget) return false;
+			// Matched on START offset alone: a node span can carry trailing trivia, which a
+			// `Refs` hit span does not, and a mismatch there would silently decline the arm.
+			if (!Lambda.exists(targets, t -> h.span.from == t.from)) return false;
 		}
 		return true;
 	}

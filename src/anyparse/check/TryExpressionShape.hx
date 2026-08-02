@@ -97,11 +97,10 @@ final class TryExpressionShape {
 	): Null<TryParts> {
 		final trySpan: Null<Span> = tryNode.span;
 		if (s.catchKind == null || trySpan == null || tryNode.children.length < MIN_TRY_CHILD_COUNT) return null;
-		if (holdsLineComment(trySpan, comments)) return null;
 		final body: Null<QueryNode> = singleBody(tryNode.children[0], s.blockStmtKind);
 		if (body == null) return null;
 		final value: Null<QueryNode> = valueOf(body, null);
-		if (value == null) return null;
+		if (value == null || danglingLineComment(source, value.span, comments)) return null;
 		final catches: Array<TryCatchPart> = [];
 		for (i in 1...tryNode.children.length) {
 			final clause: QueryNode = tryNode.children[i];
@@ -115,11 +114,12 @@ final class TryExpressionShape {
 			if (clauseValue == null) return null;
 			// Re-bound to a non-null local: narrowing does not reach the struct literal below.
 			final resolved: QueryNode = clauseValue;
-			catches.push({
-				header: StringTools.rtrim(source.substring(clauseSpan.from, bodySpan.from)),
-				headerSpan: new Span(clauseSpan.from, bodySpan.from),
-				value: resolved
-			});
+			final header: String = StringTools.rtrim(source.substring(clauseSpan.from, bodySpan.from));
+			// The header is emitted RTRIMMED, so its effective end is where the copy stops —
+			// testing against `bodySpan.from` would see the newline the rtrim just removed.
+			final headerSpan: Span = new Span(clauseSpan.from, clauseSpan.from + header.length);
+			if (danglingLineComment(source, headerSpan, comments) || danglingLineComment(source, resolved.span, comments)) return null;
+			catches.push({ header: header, headerSpan: headerSpan, value: resolved });
 		}
 		return { value: value, catches: catches };
 	}
@@ -166,17 +166,28 @@ final class TryExpressionShape {
 	}
 
 	/**
-	 * Whether a LINE comment sits anywhere inside `span`. The collapse joins every copied
-	 * slice onto ONE line, so a `//` comment in any of them — a `catch (e:T) // why` header,
-	 * a trailing note on an r-value — comments out whatever the emitter appends next,
-	 * including the terminating `;`. The dropped-comment guard cannot see this: such a
-	 * comment is INSIDE a kept span, so it is classified as riding along, and the result
-	 * either fails the `--fix` re-parse gate (which then skips the WHOLE file, losing every
-	 * other rule's fixes too) or, worse, still parses. Block comments are inline-safe and
-	 * keep riding along.
+	 * Whether a LINE comment inside `span` has NO newline after it within the span -- i.e. it is
+	 * the last thing on its line in a slice the rebuild copies, so whatever the collapse appends
+	 * next (the following `catch (…)` header, the terminating `;`) lands behind the `//`.
+	 *
+	 * The narrow form matters in both directions. A `//` EARLIER in a multi-line slice is
+	 * harmless: the slice is copied verbatim, newlines included, so the append still starts on a
+	 * fresh line -- refusing those would drop correct sites (a comment inside a multi-line
+	 * argument list). And the guard cannot be delegated to the dropped-comment check, which
+	 * classifies exactly these comments as SAFE: they sit INSIDE a verbatim-copied span, which is
+	 * its definition of riding along.
+	 *
+	 * Each caller passes the spans IT copies -- so a rule that also copies something outside the
+	 * `try` (the assignment rule's declaration prefix) must test that region too.
 	 */
-	private static function holdsLineComment(span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
-		for (tok in comments) if (tok.isLine && tok.from >= span.from && tok.to <= span.to) return true;
+	public static function danglingLineComment(
+		source: String, span: Null<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Bool {
+		if (span == null) return false;
+		for (tok in comments) if (
+			tok.isLine && tok.from >= span.from && tok.to <= span.to && source.substring(tok.to, span.to).indexOf('\n') < 0
+		)
+			return true;
 		return false;
 	}
 
@@ -191,14 +202,33 @@ final class TryExpressionShape {
 	 */
 	private static function operand(source: String, node: QueryNode, s: TrySeams): Null<String> {
 		final src: Null<String> = slice(source, node);
-		return src == null ? null : (holdsKind(node, s.tryKinds) ? '($src)' : src);
+		return src == null ? null : (endsOpen(node, s.tryKinds) ? '($src)' : src);
 	}
 
-	/** Whether `node` or any descendant has one of `kinds`. */
-	private static function holdsKind(node: QueryNode, kinds: Array<String>): Bool {
-		if (kinds.contains(node.kind)) return true;
-		for (c in node.children) if (holdsKind(c, kinds)) return true;
-		return false;
+	/**
+	 * Whether `node`'s RIGHT EDGE is an open `try` -- one of `kinds` reached by walking the last
+	 * child while that child ends exactly where its parent does. A `try` sealed behind a closing
+	 * bracket cannot absorb anything (`g(1, try a catch (e:T) b)` ends at the `)`), so the walk
+	 * stops there; one at the tail can (`x + try a catch (e:T) b`), so the walk reaches it.
+	 *
+	 * The same rightmost-spine test `RefShape.separatorGreedyExprKinds` documents for the mirror
+	 * question in `redundant-parens`. A whole-subtree scan would answer this one too, but by
+	 * over-parenthesising every sealed `try` -- and those parens are permanent, since no delimited
+	 * host encloses a try-expression for `redundant-parens` to strip them from.
+	 */
+	private static function endsOpen(node: QueryNode, kinds: Array<String>): Bool {
+		var current: QueryNode = node;
+		while (true) {
+			if (kinds.contains(current.kind)) return true;
+			final span: Null<Span> = current.span;
+			final last: Null<QueryNode> = current.children.length == 0 ? null : current.children[current.children.length - 1];
+			final lastSpan: Null<Span> = last == null ? null : last.span;
+			// Split, not `||`-chained: strict null-safety carries a narrowing fact into a later
+			// `||` operand from the FIRST operand only.
+			if (last == null || span == null || lastSpan == null) return false;
+			if (lastSpan.to != span.to) return false;
+			current = last;
+		}
 	}
 
 }
