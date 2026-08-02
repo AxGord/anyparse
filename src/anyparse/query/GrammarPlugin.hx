@@ -453,6 +453,18 @@ typedef RefShape = {
 	@:optional var ifStatementKinds: Array<String>;
 
 	/**
+	 * VALUE-position `if` kinds (Haxe `IfExpr`) — an `if` used as an EXPRESSION, whose
+	 * children are `[cond, then, else]` exactly like the statement form. The
+	 * `prefer-switch-expression` check walks a right-nested chain of these (and of
+	 * `ternaryKind`) and rewrites it to a switch expression. Kept apart from
+	 * `ifStatementKinds` because the two positions differ in what a rewrite may emit: a
+	 * value-position chain has to stay exhaustive, a statement chain need not. Optional;
+	 * unset leaves the if-expression shape unmatched (a bare `ternaryKind` chain still
+	 * converts).
+	 */
+	@:optional var ifExpressionKinds: Array<String>;
+
+	/**
 	 * Equality-operator kinds — the `comparison-to-boolean` check flags a comparison
 	 * against a boolean literal (`x == true` / `x != false`). Optional; unset makes the
 	 * check a no-op.
@@ -499,6 +511,19 @@ typedef RefShape = {
 	 * Optional; unset makes the check a no-op.
 	 */
 	@:optional var ternaryKind: String;
+
+	/**
+	 * Parent kinds in which a value-position chain may be rewritten to a switch
+	 * EXPRESSION — the positions where a multi-line `switch { … }` reads at least as
+	 * well as the chain it replaces (Haxe: a `return`, a local / member initializer, an
+	 * assignment r-value). Deliberately a WHITELIST rather than "any expression
+	 * position": a switch spliced into a call argument parses but reads worse than the
+	 * ternary it replaced. The `prefer-switch-expression` check requires a chain head's
+	 * PARENT kind to be one of these. Optional; unset makes that check a no-op. Two Haxe
+	 * hosts are deliberately NOT listed yet and are follow-ups: a static member
+	 * initializer (`StaticVarStmt`) and a compound-assignment r-value.
+	 */
+	@:optional var switchExpressionHostKinds: Array<String>;
 
 	/**
 	 * The null-literal node kind (`null`) — lets `prefer-null-coalescing`
@@ -683,6 +708,17 @@ typedef RefShape = {
 	 * an arbitrary expression. Optional; unset makes the check a no-op.
 	 */
 	@:optional var caseLiteralKinds: Array<String>;
+
+	/**
+	 * The delimiters a switch over a TUPLE of discriminants writes around its subject
+	 * and around each `case` pattern (Haxe `[` / `]` — `switch [a, b] { case [X, Y]: … }`).
+	 * Both switch checks read them to convert a rung condition that is a
+	 * `logicalAndKind` conjunction of equalities over SEVERAL discriminants; with one
+	 * discriminant no delimiter is written and the field is not consulted. Optional;
+	 * unset means the grammar offers no tuple form and both checks stay on the
+	 * single-discriminant shape.
+	 */
+	@:optional var tuplePatternDelimiters: { open: String, close: String };
 
 	/**
 	 * Declaration kinds whose members require an explicit visibility modifier — a

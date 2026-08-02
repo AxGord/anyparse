@@ -492,6 +492,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			staticLocalDeclKinds: ['StaticVarStmt', 'StaticFinalStmt'],
 			mutableLocalDeclKinds: ['VarStmt'],
 			ifStatementKinds: ['IfStmt'],
+			ifExpressionKinds: ['IfExpr'],
 			equalityKinds: ['Eq', 'NotEq'],
 			optionalParamKind: 'Optional',
 			restParamKind: 'Rest',
@@ -539,6 +540,15 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 			],
 			andOperatorText: '&&',
 			ternaryKind: 'Ternary',
+			switchExpressionHostKinds: [
+				'ReturnStmt',
+				'ReturnExpr',
+				'VarStmt',
+				'FinalStmt',
+				'VarMember',
+				'FinalMember',
+				'Assign'
+			],
 			nullLiteralKind: 'NullLit',
 			nullCoalesceKind: 'NullCoal',
 			nullCoalesceOperatorText: '??',
@@ -574,6 +584,7 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 				'VoidReturnExpr'
 			],
 			caseLiteralKinds: ['IntLit', 'FloatLit', 'BoolLit', 'NullLit'],
+			tuplePatternDelimiters: { open: '[', close: ']' },
 			visibilityContainerKinds: ['ClassDecl', 'ClassForm', 'AbstractClassDecl', 'AbstractDecl'],
 			memberDeclKinds: ['VarMember', 'FinalMember', 'FnMember', 'FinalModifiedMember'],
 			visibilityModifierKinds: ['Public', 'Private'],

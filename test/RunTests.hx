@@ -528,6 +528,7 @@ import unit.FixVerifierScopeE2ETest;
 import unit.PreferMapTypeCheckTest;
 import unit.EmptyDocTagCheckTest;
 import unit.CondBranchSplitTest;
+import unit.PreferSwitchExpressionCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -944,6 +945,7 @@ class RunTests {
 		addCase(new AvoidDynamicBagFixTest());
 		addCase(new AvoidDynamicBagOracleE2ETest());
 		addCase(new PreferSwitchCheckTest());
+		addCase(new PreferSwitchExpressionCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
 		addCase(new MemberOrderCheckTest());

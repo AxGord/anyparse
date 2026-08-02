@@ -86,6 +86,7 @@ final class Linter {
 			new UnusedParameter(),
 			new SwallowedException(),
 			new PreferSwitch(),
+			new PreferSwitchExpression(),
 			new MissingVisibility(),
 			new ModifierOrder(),
 			new MemberOrder(),

@@ -25,6 +25,20 @@ private typedef GuardedNode = {
 };
 
 /**
+ * The grammar kinds `collectMembers` reads while walking a type body: the modifier
+ * siblings whose run it tracks (`visibilityKinds` / `overrideKind` / `staticKind` /
+ * `inlineKind`) and the conditional-compilation host kind that marks a member `guarded`.
+ * Passed as ONE value so a seam added later needs no new parameter.
+ */
+private typedef MemberSeams = {
+	final visibilityKinds: Array<String>;
+	final overrideKind: Null<String>;
+	final staticKind: Null<String>;
+	final inlineKind: Null<String>;
+	final conditionalKind: Null<String>;
+};
+
+/**
  * The EXTRACTION half of `SymbolIndex`: it parses each `(file, source)` entry with the
  * grammar plugin and walks the resulting trees into the per-file `FileInfo` records the
  * index is built from. Split out of `SymbolIndex` so the cross-file QUERY surface and the
@@ -76,9 +90,8 @@ final class SymbolIndexBuilder {
 		final sources: Map<String, String> = [];
 		final provider: Null<TypeInfoProvider> = (plugin is TypeInfoProvider) ? cast plugin : null;
 		final shape: RefShape = plugin.refShape();
-		final visibilityKinds: Array<String> = shape.visibilityModifierKinds ?? [];
-		final overrideKind: Null<String> = shape.overrideModifierKind;
 		final abstractKinds: Array<String> = shape.underlyingThisTypeKinds ?? [];
+		final memberSeams: MemberSeams = memberSeamsOf(shape);
 		for (entry in files) {
 			final tree: Null<QueryNode> = try plugin.parseFile(entry.source) catch (_: Exception) null;
 			if (tree == null) {
@@ -91,8 +104,7 @@ final class SymbolIndexBuilder {
 			final returnTypes: Map<Int, String> = provider != null ? provider.returnTypes(entry.source) : [];
 			final typeSources: Map<Int, String> = provider != null ? provider.declaredTypeSources(entry.source) : [];
 			infos.push(extractFileInfo(
-				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind, shape,
-				abstractKinds
+				entry.file, entry.source, tree, accessors, writeAccessors, returnTypes, typeSources, shape, memberSeams, abstractKinds
 			));
 		}
 		return { files: infos, skipped: skipped, sources: sources };
@@ -124,8 +136,8 @@ final class SymbolIndexBuilder {
 	 */
 	private static function extractFileInfo(
 		file: String, source: String, tree: QueryNode, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>,
-		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>,
-		shape: RefShape, abstractKinds: Array<String>
+		returnTypes: Map<Int, String>, typeSources: Map<Int, String>, shape: RefShape, memberSeams: MemberSeams,
+		abstractKinds: Array<String>
 	): FileInfo {
 		final basename: String = RefactorSupport.baseNameOf(file);
 		var pkg: String = '';
@@ -153,9 +165,7 @@ final class SymbolIndexBuilder {
 					isAnonStruct: typeDecl.kind == TYPEDEF_DECL_KIND && node.children.exists(c -> c.kind == ANON_KIND),
 					aliasTargetNominal: aliasTargetOf(source, typeDecl, node, gn.guarded),
 					hasRtti: pendingMeta.contains('@:rtti'),
-					members: collectMembers(
-						node, source, accessors, writeAccessors, returnTypes, typeSources, visibilityKinds, overrideKind
-					),
+					members: collectMembers(node, source, accessors, writeAccessors, returnTypes, typeSources, memberSeams),
 					abstractSelfRebind: isAbstract && abstractRebindsThisScan(node, shape, pendingMeta),
 					abstractForwardUnderlying: isAbstract ? forwardUnderlyingOf(node, pendingMeta) : null
 				});
@@ -309,18 +319,26 @@ final class SymbolIndexBuilder {
 	 * field-member-kind descendant (a type body's own `var`/`final`/`fn` members;
 	 * a method's LOCAL vars are `VarStmt`, a different kind, so excluded) — paired
 	 * with its getter-property flag from the `accessors` span map (absent = plain)
-	 * and its modifier-run visibility / override info. Modifier siblings precede
-	 * the member they attach to inside the same parent, so each visited node scans
-	 * its CHILDREN with a running modifier state, reset at every member.
+	 * and its modifier-run visibility / override / static / inline info. Modifier
+	 * siblings precede the member they attach to inside the same parent, so each
+	 * visited node scans its CHILDREN with a running modifier state, reset at every
+	 * member. The kind seams arrive pre-resolved as `seams`, so nothing here reads
+	 * `RefShape` directly.
 	 */
 	private static function collectMembers(
 		node: QueryNode, source: String, accessors: Map<Int, Bool>, writeAccessors: Map<Int, Bool>, returnTypes: Map<Int, String>,
-		typeSources: Map<Int, String>, visibilityKinds: Array<String>, overrideKind: Null<String>
+		typeSources: Map<Int, String>, seams: MemberSeams
 	): Array<MemberInfo> {
 		final out: Array<MemberInfo> = [];
 		RefactorSupport.eachMemberHost(node, n -> {
+			// `guarded` is a property of the HOST, not of the member's own modifier run:
+			// `eachMemberHost` descends INTO a conditional-compilation region, so a member
+			// written under `#if` is visited with that region as its host node.
+			final guarded: Bool = seams.conditionalKind != null && n.kind == seams.conditionalKind;
 			var runVisibility: Null<String> = null;
 			var runOverride: Bool = false;
+			var runStatic: Bool = false;
+			var runInline: Bool = false;
 			for (child in n.children) {
 				final sp: Null<Span> = child.span;
 				// Enum constructors (`SimpleCtor` / `ParamCtor`) are captured as members too, so a bare
@@ -339,18 +357,43 @@ final class SymbolIndexBuilder {
 							returnNominal: returnTypes[sp.from],
 							typeSource: typeSources[sp.from],
 							visibility: runVisibility,
-							isOverride: runOverride
+							isOverride: runOverride,
+							kind: child.kind,
+							isStatic: runStatic,
+							isInline: runInline,
+							guarded: guarded
 						});
 					}
 					runVisibility = null;
 					runOverride = false;
-				} else if (sp != null && visibilityKinds.contains(child.kind))
+					runStatic = false;
+					runInline = false;
+				} else if (sp != null && seams.visibilityKinds.contains(child.kind))
 					runVisibility = source.substring(sp.from, sp.to);
-				else if (overrideKind != null && child.kind == overrideKind)
+				else if (child.kind == seams.overrideKind)
 					runOverride = true;
+				else if (child.kind == seams.staticKind)
+					runStatic = true;
+				else if (child.kind == seams.inlineKind)
+					runInline = true;
 			}
 		});
 		return out;
+	}
+
+	/**
+	 * The `RefShape` kinds `collectMembers` reads, resolved ONCE per run rather than per
+	 * type: the modifier siblings it recognises and the conditional-compilation host kind
+	 * that marks a member `guarded`.
+	 */
+	private static function memberSeamsOf(shape: RefShape): MemberSeams {
+		return {
+			visibilityKinds: shape.visibilityModifierKinds ?? [],
+			overrideKind: shape.overrideModifierKind,
+			staticKind: shape.staticModifierKind,
+			inlineKind: shape.inlineModifierKind,
+			conditionalKind: shape.conditionalMemberKind
+		};
 	}
 
 	/** Whether `kind` is a metadata node — a bare `@:x` (`Meta`) or an argument-bearing `@:x(...)` (`MetaCall`). */
