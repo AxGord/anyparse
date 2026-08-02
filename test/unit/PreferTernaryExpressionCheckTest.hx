@@ -7,6 +7,7 @@ import anyparse.check.PreferTernaryExpression;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.check.Linter;
 
 /**
  * The `prefer-ternary-expression` check: a 2-branch `if`-EXPRESSION in value position is
@@ -53,10 +54,11 @@ class PreferTernaryExpressionCheckTest extends Test {
 	}
 
 	/**
-	 * A CHAIN is `prefer-if-expression-*`'s. BOTH halves of the chain gate are exercised here:
-	 * the head is refused because its `else` is an `if`-expression, and the inner `else if` LINK
-	 * — itself a perfectly legal 2-branch `if`-expression — because it is a link. Without the
-	 * link half the fixed point unravelled the chain one level per pass into a nested ternary.
+	 * A CHAIN belongs to `prefer-if-expression-*`, and BOTH ends are refused: the head by the
+	 * branch whitelist (its `else` is another `if`-expression, absent from it) and the inner
+	 * `else if` LINK by the slot gate (its parent is that head, which is no delimited slot).
+	 * Before either existed, the fixed point unravelled a chain one level per pass into a
+	 * nested ternary.
 	 */
 	public function testChainNotFlagged(): Void {
 		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar x = if (a) 1 else if (b) 2 else 3;\n\t}\n}').length);
@@ -113,6 +115,78 @@ class PreferTernaryExpressionCheckTest extends Test {
 			edits('class C {\n\tfunction f():Void {\n\t\tvar x = if (a > 1 && b) 1 else 2;\n\t}\n}');
 		Assert.equals(1, es.length);
 		Assert.equals('a > 1 && b ? 1 : 2', es[0].text);
+	}
+
+	/**
+	 * The SLOT gate. An `if`-expression is self-delimiting, a ternary is not: `a || if (c) x
+	 * else y` groups as `a || (…)`, `a || c ? x : y` as `(a || c) ? x : y` — same tokens, a
+	 * different value, and no compile error to catch it.
+	 */
+	public function testOperandPositionNotFlagged(): Void {
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar v = a || if (c) x else y;\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar n = 1 + if (c) 2 else 3;\n\t}\n}').length);
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\tvar b = !if (c) x else y;\n\t}\n}').length);
+	}
+
+	/** An assignment r-value IS a delimited tail slot, so it is accepted (child 0, the target, is not). */
+	public function testAssignmentRvalueFixed(): Void {
+		final es: Array<{ span: Span, text: String }> = edits('class C {\n\tfunction f():Void {\n\t\tbtn.x = if (c) 1 else 2;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('c ? 1 : 2', es[0].text);
+	}
+
+	/**
+	 * A nested `if`-expression in the THEN branch is refused BOTH ways — as a branch (absent
+	 * from the whitelist) and as a node whose parent is no delimited slot. Rewriting the inner
+	 * one used to splice away the trivia its span runs through, welding `q` onto the outer
+	 * `else` into the identifier `qelse` — which still PARSES, so the `--fix` gate waved it on.
+	 */
+	public function testNestedThenBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():String {\n\t\tfinal x:String = if (a)\n\t\t\tif (b)\n\t\t\t\tp\n\t\t\telse\n\t\t\t\tq\n\t\telse\n\t\t\tr;\n\t\treturn x;\n\t}\n}'
+			).length
+		);
+	}
+
+	/** A reification subtree is spliced code a consumer may pattern-match, not source anyone reads. */
+	public function testMacroSubtreeNotFlagged(): Void {
+		// The `if`-expression sits in a DELIMITED slot (`macro var q = …`), so only the
+		// opaque-subtree skip can refuse it — a bare `macro if (…)` would already be
+		// refused by the slot gate and would prove nothing about this one.
+		Assert.equals(0, violations('class C {\n\tfunction f():Void {\n\t\treturn macro var q = if (c) 1 else 2;\n\t}\n}').length);
+	}
+
+	/** Identifier branch values, not integers — the one lexical case where a bad splice does not re-space itself. */
+	public function testFixIdentifierBranches(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():String {\n\t\tfinal x:String = if (a)\n\t\t\tp\n\t\telse\n\t\t\tq;\n\t\treturn x;\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('a ? p : q', es[0].text);
+	}
+
+	/**
+	 * The replaced region stops at the else-branch: an `if`-expression span runs on through
+	 * the trivia after its last token, and consuming that would splice away spacing the
+	 * author wrote. (The weld this was found through — `q` + a following `else` fusing into
+	 * `qelse` — is refused one gate earlier now, by the slot gate.)
+	 */
+	public function testEditSpanStopsAtElseBranch(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\tg(if (c) a else b , 1);\n\t}\n}';
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals(src.indexOf('b ,') + 1, es[0].span.to);
+	}
+
+	public function testRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('prefer-ternary-expression'));
+		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-ternary-expression'));
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
 	private function violations(src: String): Array<Violation> {

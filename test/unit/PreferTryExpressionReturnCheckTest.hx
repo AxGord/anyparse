@@ -7,6 +7,7 @@ import anyparse.check.PreferTryExpressionReturn;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.check.Linter;
 
 /**
  * The `prefer-try-expression-return` check: a statement-position `try` whose body and EVERY
@@ -19,6 +20,46 @@ class PreferTryExpressionReturnCheckTest extends Test {
 
 	private static final BASIC: String =
 		'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}';
+
+	/**
+	 * Haxe binds a trailing `catch` to the INNERMOST open `try`, so a nested try-expression
+	 * value must be parenthesised: unwrapped, `catch (e2:Int)` re-parents onto the inner
+	 * `try` and an exception raised inside the inner CATCH stops being handled. The rule's
+	 * own fixed point manufactures this shape (pass 1 collapses the inner `try`, pass 2 sees
+	 * a single-valued-return body).
+	 */
+	public function testNestedTryValueParenthesised(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn try parse(text) catch (e1:String) boom();\n\t\t} catch (e2:Int) {\n\t\t\treturn 2;\n\t\t}\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return try (try parse(text) catch (e1:String) boom()) catch (e2:Int) 2;', es[0].text);
+	}
+
+	/**
+	 * A LINE comment anywhere in the `try` comments out whatever the one-line rebuild appends
+	 * after it — here the value AND the terminating `;`. The dropped-comment guard cannot see
+	 * it (the comment is INSIDE the verbatim-copied catch header, so it counts as riding
+	 * along); the result then fails the `--fix` re-parse gate, which skips the WHOLE file and
+	 * loses every other rule's fixes with it.
+	 */
+	public function testLineCommentInCatchHeaderNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\treturn parse(text);\n\t\t} catch (e:String) // why\n\t\t{\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+			).length
+		);
+	}
+
+	public function testRegisteredInBuiltins(): Void {
+		Assert.notNull(Linter.byId('prefer-try-expression-return'));
+		Assert.isTrue([for (c in Linter.builtins()) c.id()].contains('prefer-try-expression-return'));
+	}
+
+	public function testSkipParseNoCrash(): Void {
+		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
 
 	public function testBasicFlagged(): Void {
 		final vs: Array<Violation> = violations(BASIC);
@@ -45,7 +86,7 @@ class PreferTryExpressionReturnCheckTest extends Test {
 
 	/** An un-braced body is the same shape with the block level absent. */
 	public function testUnbracedBodiesFlagged(): Void {
-		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\ttry return a; catch (e:String) return 0;\n\t}\n}').length);
+		Assert.equals(1, violations('class C {\n\tfunction f():Int {\n\t\ttry return a catch (e:String) return 0;\n\t}\n}').length);
 	}
 
 	/** The rewrite touches only the `try` node, so no statement-list walk gates it inside a `#if`. */
@@ -93,7 +134,9 @@ class PreferTryExpressionReturnCheckTest extends Test {
 	}
 
 	/**
-	 * A deliberately grouped body is never collapsed. The `return` comes FIRST (the trailing statement is unreachable, which is the only way to reach this gate at all -- anything BEFORE a valued return is rejected one gate earlier, by the return check itself).
+	 * A deliberately grouped body is never collapsed. The `return` comes FIRST (the trailing
+	 * statement is unreachable, which is the only way to reach this gate at all -- anything
+	 * BEFORE a valued return is rejected one gate earlier, by the return check itself).
 	 */
 	public function testMultiStatementBodyNotFlagged(): Void {
 		Assert.equals(
@@ -109,7 +152,7 @@ class PreferTryExpressionReturnCheckTest extends Test {
 		Assert.equals(
 			0,
 			violations(
-				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\t// fast path\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
+				'class C {\n\tfunction f():Int {\n\t\ttry {\n\t\t\t/* fast path */\n\t\t\treturn parse(text);\n\t\t} catch (e:String) {\n\t\t\treturn 0;\n\t\t}\n\t}\n}'
 			).length
 		);
 	}

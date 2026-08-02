@@ -455,10 +455,14 @@ typedef RefShape = {
 	/**
 	 * EXPRESSION-position `if` kinds (Haxe `IfExpr`) — the same `if` when it parses as a
 	 * VALUE rather than a statement (`var x = if (c) a else b`, `return if (c) a else b`,
-	 * `f(if (c) a else b)`). Value position is a property of the KIND here, so a check that
-	 * rewrites the node itself (`prefer-ternary-expression`) needs no position analysis.
-	 * Disjoint from `ifStatementKinds` by construction. Optional; unset makes that check a
-	 * no-op.
+	 * `f(if (c) a else b)`). Disjoint from `ifStatementKinds` by construction.
+	 *
+	 * The kind proves the node YIELDS a value; it does NOT prove the surrounding slot
+	 * tolerates an expression of `?:` precedence. An `if`-expression is self-delimiting —
+	 * `a || if (c) x else y` groups as `a || (…)` — so a check that rewrites one INTO a
+	 * ternary (`prefer-ternary-expression`) must still gate on the parent slot
+	 * (`delimitedAllChildKinds` / `delimitedTailChildKinds`), or it silently re-associates.
+	 * Optional; unset makes that check a no-op.
 	 */
 	@:optional var ifExpressionKinds: Array<String>;
 
@@ -467,15 +471,23 @@ typedef RefShape = {
 	 * `TryCatchStmtBare`) — `children[0]` is the try body, every following child a
 	 * `catchClauseKind`. The `prefer-try-expression-assignment` / `-return` checks collapse
 	 * one whose body and every catch body is a single assignment / valued `return` into a
-	 * try-EXPRESSION. Optional; unset makes both checks a no-op.
+	 * try-EXPRESSION; `prefer-try-expression-assignment` additionally reads it (with
+	 * `tryExpressionKinds`) to know when it is INSIDE a handled region. Optional; unset
+	 * makes both checks a no-op.
 	 */
 	@:optional var tryStatementKinds: Array<String>;
 
 	/**
 	 * EXPRESSION-position `try` kinds (Haxe `TryExpr`) — the value form the
-	 * `prefer-try-expression-*` checks PRODUCE, and one of the bodied constructs
-	 * `prefer-ternary-expression` refuses as a ternary branch. Optional; unset drops it
-	 * from that refusal set (and is otherwise inert).
+	 * `prefer-try-expression-*` checks PRODUCE.
+	 *
+	 * NOT inert when unset: `prefer-try-expression-assignment` folds it into the ancestor
+	 * set that tells it whether a declaration + `try` pair sits inside an enclosing handled
+	 * region, which is what licenses dropping the declaration's initializer. Leaving it
+	 * unset for a grammar that HAS a try-expression silently weakens that soundness gate;
+	 * `TryExpressionShape` also reads it to know which emitted value needs parentheses so a
+	 * following `catch` cannot re-parent onto it. Optional only for a grammar with no
+	 * expression-position `try` at all.
 	 */
 	@:optional var tryExpressionKinds: Array<String>;
 

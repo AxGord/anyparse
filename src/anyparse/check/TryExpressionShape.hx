@@ -13,8 +13,26 @@ typedef TryParts = {
 	/** The try body's value expression -- the r-value / returned expression the collapse hoists. */
 	var value: QueryNode;
 
-	/** Per catch clause, in source order: the verbatim header text, its span, and the clause's value. */
-	var catches: Array<{ header: String, headerSpan: Span, value: QueryNode }>;
+	/** Per catch clause, in source order. */
+	var catches: Array<TryCatchPart>;
+}
+
+/** One decomposed catch clause: its verbatim `catch (…)` header, that header's span, and the clause's value. */
+typedef TryCatchPart = {
+	var header: String;
+	var headerSpan: Span;
+	var value: QueryNode;
+}
+
+/**
+ * The kinds `TryExpressionShape` reads, bundled so both consumers pass one argument:
+ * the catch-clause kind, the optional statement-block kind (unset -> only bare bodies are
+ * recognised) and the `try` kinds a value must be parenthesised for (`operand`).
+ */
+typedef TrySeams = {
+	var catchKind: Null<String>;
+	var blockStmtKind: Null<String>;
+	var tryKinds: Array<String>;
 }
 
 /**
@@ -22,11 +40,25 @@ typedef TryParts = {
  * decomposing a statement-position `try` / `catch` into per-clause bodies, and assembling the
  * `try <value> catch (…) <value> …` expression text. The rules differ only in what each body
  * must be (a plain `=` assignment to one target vs a valued `return`); everything structural
- * lives here.
+ * lives here, including the two hazards of turning a multi-line statement into ONE expression:
+ *
+ * - a LINE comment anywhere inside the `try` refuses it. The rebuild joins every copied slice
+ *   onto one line, so a `//` -- in a `catch (e:T) // why` header, trailing an r-value --
+ *   comments out whatever the emitter appends after it, up to and including the terminating
+ *   `;`. The dropped-comment guard cannot catch this: such a comment sits INSIDE a
+ *   verbatim-copied span, so it is classified as riding along;
+ * - a value whose subtree holds a `try` is PARENTHESISED. Haxe binds a trailing `catch` to the
+ *   innermost open `try`, so an unwrapped nested one re-parents every clause that follows it
+ *   -- changing which handler sees an exception, with no compile error unless the clause types
+ *   collide. Both rules' own fixed points manufacture the shape by re-reading what they wrote.
  *
  * The grammar surfaces THREE body shapes behind one kind pair -- a braced `{ stmt }`, a bare
  * statement, and (in the bare-body `try e catch (…) e;` form) a raw expression -- so every
  * consumer goes through `singleBody`, which normalises all three to the one node inside.
+ *
+ * `decompose` hands each clause to the caller's `valueOf` alongside the clause NODE, so a rule
+ * that cares about the exception variable it binds (the assignment rule's shadowed-target
+ * gate) can see it.
  */
 @:nullSafety(Strict)
 final class TryExpressionShape {
@@ -60,28 +92,33 @@ final class TryExpressionShape {
 	 * the rebuild exactly as written.
 	 */
 	public static function decompose(
-		tryNode: QueryNode, source: String, catchKind: Null<String>, blockStmtKind: Null<String>, valueOf: (QueryNode) -> Null<QueryNode>
+		tryNode: QueryNode, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>, s: TrySeams,
+		valueOf: (QueryNode, Null<QueryNode>) -> Null<QueryNode>
 	): Null<TryParts> {
-		if (catchKind == null || tryNode.children.length < MIN_TRY_CHILD_COUNT) return null;
-		final body: Null<QueryNode> = singleBody(tryNode.children[0], blockStmtKind);
+		final trySpan: Null<Span> = tryNode.span;
+		if (s.catchKind == null || trySpan == null || tryNode.children.length < MIN_TRY_CHILD_COUNT) return null;
+		if (holdsLineComment(trySpan, comments)) return null;
+		final body: Null<QueryNode> = singleBody(tryNode.children[0], s.blockStmtKind);
 		if (body == null) return null;
-		final value: Null<QueryNode> = valueOf(body);
+		final value: Null<QueryNode> = valueOf(body, null);
 		if (value == null) return null;
-		final catches: Array<{ header: String, headerSpan: Span, value: QueryNode }> = [];
+		final catches: Array<TryCatchPart> = [];
 		for (i in 1...tryNode.children.length) {
 			final clause: QueryNode = tryNode.children[i];
-			if (clause.kind != catchKind || clause.children.length != 1) return null;
+			if (clause.kind != s.catchKind || clause.children.length != 1) return null;
 			final clauseSpan: Null<Span> = clause.span;
 			final bodySpan: Null<Span> = clause.children[0].span;
 			if (clauseSpan == null || bodySpan == null) return null;
-			final clauseBody: Null<QueryNode> = singleBody(clause.children[0], blockStmtKind);
+			final clauseBody: Null<QueryNode> = singleBody(clause.children[0], s.blockStmtKind);
 			if (clauseBody == null) return null;
-			final clauseValue: Null<QueryNode> = valueOf(clauseBody);
+			final clauseValue: Null<QueryNode> = valueOf(clauseBody, clause);
 			if (clauseValue == null) return null;
+			// Re-bound to a non-null local: narrowing does not reach the struct literal below.
+			final resolved: QueryNode = clauseValue;
 			catches.push({
 				header: StringTools.rtrim(source.substring(clauseSpan.from, bodySpan.from)),
 				headerSpan: new Span(clauseSpan.from, bodySpan.from),
-				value: clauseValue
+				value: resolved
 			});
 		}
 		return { value: value, catches: catches };
@@ -92,14 +129,14 @@ final class TryExpressionShape {
 	 * is emitted rather than copied (the region it occupies also holds the dropped braces), so a
 	 * comment there is caught by the caller's comment guard instead of riding along.
 	 */
-	public static function buildValue(parts: TryParts, source: String): Null<String> {
-		final valueSrc: Null<String> = slice(source, parts.value);
+	public static function buildValue(parts: TryParts, source: String, s: TrySeams): Null<String> {
+		final valueSrc: Null<String> = operand(source, parts.value, s);
 		if (valueSrc == null) return null;
 		final buf: StringBuf = new StringBuf();
 		buf.add('try ');
 		buf.add(valueSrc);
 		for (c in parts.catches) {
-			final clauseSrc: Null<String> = slice(source, c.value);
+			final clauseSrc: Null<String> = operand(source, c.value, s);
 			if (clauseSrc == null) return null;
 			buf.add(' ');
 			buf.add(c.header);
@@ -126,6 +163,42 @@ final class TryExpressionShape {
 	public static function slice(source: String, node: QueryNode): Null<String> {
 		final span: Null<Span> = node.span;
 		return span == null ? null : source.substring(span.from, span.to);
+	}
+
+	/**
+	 * Whether a LINE comment sits anywhere inside `span`. The collapse joins every copied
+	 * slice onto ONE line, so a `//` comment in any of them — a `catch (e:T) // why` header,
+	 * a trailing note on an r-value — comments out whatever the emitter appends next,
+	 * including the terminating `;`. The dropped-comment guard cannot see this: such a
+	 * comment is INSIDE a kept span, so it is classified as riding along, and the result
+	 * either fails the `--fix` re-parse gate (which then skips the WHOLE file, losing every
+	 * other rule's fixes too) or, worse, still parses. Block comments are inline-safe and
+	 * keep riding along.
+	 */
+	private static function holdsLineComment(span: Span, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
+		for (tok in comments) if (tok.isLine && tok.from >= span.from && tok.to <= span.to) return true;
+		return false;
+	}
+
+	/**
+	 * One value slice as it is emitted: verbatim, PARENTHESISED when its subtree holds a
+	 * `try`. Haxe binds a trailing `catch` to the INNERMOST open `try`, so an unwrapped
+	 * nested one re-parents the clauses that follow it —
+	 * `try try a catch (e:E) b catch (f:F) c` hands `f:F` to the inner `try`, silently
+	 * moving which handler sees an exception raised in `b` (and, when the two clause types
+	 * collide, failing to compile). Both this rule family's own output and hand-written
+	 * try-expressions reach the shape, since the fixed point re-reads what it just wrote.
+	 */
+	private static function operand(source: String, node: QueryNode, s: TrySeams): Null<String> {
+		final src: Null<String> = slice(source, node);
+		return src == null ? null : (holdsKind(node, s.tryKinds) ? '($src)' : src);
+	}
+
+	/** Whether `node` or any descendant has one of `kinds`. */
+	private static function holdsKind(node: QueryNode, kinds: Array<String>): Bool {
+		if (kinds.contains(node.kind)) return true;
+		for (c in node.children) if (holdsKind(c, kinds)) return true;
+		return false;
 	}
 
 }

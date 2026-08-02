@@ -3,6 +3,7 @@ package anyparse.check;
 import anyparse.check.AssignmentTreeHoist.LvalueRef;
 import anyparse.check.Check.Violation;
 import anyparse.check.TryExpressionShape.TryParts;
+import anyparse.check.TryExpressionShape.TrySeams;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -189,18 +190,20 @@ final class PreferTryExpressionAssignment implements Check {
 		final mutableKinds: Null<Array<String>> = shape.mutableLocalDeclKinds;
 		if (mutableKinds == null || mutableKinds.length == 0) return null;
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
+		// A `try` nested in a try-EXPRESSION is inside a handled region just as much as one
+		// nested in a try STATEMENT — both make an escaping exception observable — and both
+		// are also what an emitted value must be parenthesised for.
+		final allTryKinds: Array<String> = tryKinds.concat(shape.tryExpressionKinds ?? []);
 		return support == null ? null : {
 			tryKinds: tryKinds,
-			// A `try` nested in a try-EXPRESSION is inside a handled region just as much as one
-			// nested in a try STATEMENT — both make an escaping exception observable.
-			nestingKinds: tryKinds.concat(shape.tryExpressionKinds ?? []),
-			catchKind: catchKind,
+			nestingKinds: allTryKinds,
+			tryShape: { catchKind: catchKind, blockStmtKind: shape.blockStmtKind, tryKinds: allTryKinds },
 			assignKind: assignKind,
 			exprStmtKind: exprStmtKind,
 			mutableKinds: mutableKinds,
-			blockStmtKind: shape.blockStmtKind,
 			fieldAccessKind: shape.fieldAccessKind,
 			identKind: shape.identKind,
+			stringInterpKind: shape.stringInterpIdentKind,
 			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			blockKinds: support.blockKinds(),
 			shape: shape
@@ -251,14 +254,16 @@ final class PreferTryExpressionAssignment implements Check {
 		if (init != null && !RefactorSupport.isSideEffectFree(init)) return null; // an impure init cannot be dropped
 
 		final ref: LvalueRef = { lvalue: null };
-		final parts: Null<TryParts> = decompose(tryStmt, ref, source, s);
+		final targets: Array<Span> = [];
+		final parts: Null<TryParts> = decompose(tryStmt, ref, targets, source, comments, s);
 		final lvalue: Null<QueryNode> = ref.lvalue;
 		if (parts == null || lvalue == null) return null;
 		if (lvalue.kind != s.identKind || lvalue.name != name) return null;
-		if (readsName(name, tryStmt, s)) return null; // a self-reference in the folded initializer
+		// Any occurrence beyond the assignments' own l-values self-references the folded initializer.
+		if (!assignedOnlyByTargets(name, tryStmt, targets, s)) return null;
 
 		final prefix: Null<{ text: String, keptTo: Int }> = declPrefix(declSpan, init, source);
-		final value: Null<String> = TryExpressionShape.buildValue(parts, source);
+		final value: Null<String> = TryExpressionShape.buildValue(parts, source, s.tryShape);
 		if (prefix == null || value == null) return null;
 		final kept: Array<Span> = TryExpressionShape.keptSpans(parts);
 		kept.push(new Span(declSpan.from, prefix.keptTo));
@@ -282,7 +287,7 @@ final class PreferTryExpressionAssignment implements Check {
 		final trySpan: Null<Span> = tryStmt.span;
 		if (trySpan == null) return null;
 		final ref: LvalueRef = { lvalue: null };
-		final parts: Null<TryParts> = decompose(tryStmt, ref, source, s);
+		final parts: Null<TryParts> = decompose(tryStmt, ref, [], source, comments, s);
 		final lvalue: Null<QueryNode> = ref.lvalue;
 		// Split, not `||`-chained: Haxe strict null-safety carries a narrowing fact into a
 		// later `||` operand from the FIRST operand only, so `lvalue` is still nullable there.
@@ -290,7 +295,7 @@ final class PreferTryExpressionAssignment implements Check {
 		if (!lvalueAccepted(lvalue, s)) return null;
 		final lvalueSrc: Null<String> = TryExpressionShape.slice(source, lvalue);
 		final lvalueSpan: Null<Span> = lvalue.span;
-		final value: Null<String> = TryExpressionShape.buildValue(parts, source);
+		final value: Null<String> = TryExpressionShape.buildValue(parts, source, s.tryShape);
 		if (lvalueSrc == null || lvalueSpan == null || value == null) return null;
 		final kept: Array<Span> = TryExpressionShape.keptSpans(parts);
 		kept.push(lvalueSpan);
@@ -308,18 +313,48 @@ final class PreferTryExpressionAssignment implements Check {
 	 * identical whitespace-normalized source — the first one seen (the try body's) becomes the
 	 * target every later one is compared against.
 	 */
-	private static function decompose(tryStmt: QueryNode, ref: LvalueRef, source: String, s: Seams): Null<TryParts> {
-		return TryExpressionShape.decompose(tryStmt, source, s.catchKind, s.blockStmtKind, body -> {
+	private static function decompose(
+		tryStmt: QueryNode, ref: LvalueRef, targets: Array<Span>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>,
+		s: Seams
+	): Null<TryParts> {
+		return TryExpressionShape.decompose(tryStmt, source, comments, s.tryShape, (body, clause) -> {
 			final assign: Null<QueryNode> = plainAssignment(body, s);
 			if (assign == null) return null;
 			final lvalue: QueryNode = assign.children[0];
+			// The target is unified by SOURCE TEXT, so a catch whose exception variable shadows
+			// the target reads as "the same target" while writing the shadow — a write the
+			// original DISCARDS and the collapse would promote to the outer assignment's value
+			// (`try { m = f(); } catch (m:String) { m = 'e'; }` keeps `m` as `f()`'s value or
+			// the declaration's, never `'e'`). Refuse any clause that binds a name the target
+			// path mentions.
+			if (clause != null && shadowsTarget(clause, lvalue, s)) return null;
 			final seen: Null<QueryNode> = ref.lvalue;
 			if (seen == null)
 				ref.lvalue = lvalue
 			else if (!IfExpressionChain.sameSource(seen, lvalue, source))
 				return null;
+			final lvalueSpan: Null<Span> = lvalue.span;
+			if (lvalueSpan == null) return null;
+			targets.push(lvalueSpan);
 			return assign.children[1];
 		});
+	}
+
+	/** Whether `clause`'s exception variable is a name the l-value path references (a shadowed target). */
+	private static function shadowsTarget(clause: QueryNode, lvalue: QueryNode, s: Seams): Bool {
+		final bound: Null<String> = clause.name;
+		return bound != null && referencesName(lvalue, bound, s);
+	}
+
+	/**
+	 * Whether any descendant of `node` (or `node` itself) is an occurrence of `name` — a plain
+	 * `identKind` reference or a `stringInterpKind` one (a braceless `$name` inside a
+	 * single-quoted string, which projects as a distinct kind).
+	 */
+	private static function referencesName(node: QueryNode, name: String, s: Seams): Bool {
+		if ((node.kind == s.identKind || node.kind == s.stringInterpKind) && node.name == name) return true;
+		for (c in node.children) if (referencesName(c, name, s)) return true;
+		return false;
 	}
 
 	/** The plain `=` assignment a body holds — bare, or wrapped in an expression statement. Null for anything else. */
@@ -342,13 +377,26 @@ final class PreferTryExpressionAssignment implements Check {
 	}
 
 	/**
-	 * Whether `name` is READ anywhere in `node` — any `Refs` occurrence that is not a `Write`.
-	 * A read inside the `try` becomes a self-reference in `name`'s own initializer after the
-	 * decl-pairing fold, so it disqualifies the pair.
+	 * Whether EVERY occurrence of `name` inside `tryStmt` is one of the decomposed assignments'
+	 * OWN l-values (`targets`, by span). After the decl-pairing fold the whole `try` becomes
+	 * `name`'s initializer, so any other occurrence is a self-reference the compiler rejects --
+	 * and "other" has to mean any occurrence, not just any READ: a write nested somewhere else
+	 * (`p = go(() -> p = 5)`) is equally a use of a not-yet-initialized `p`. An earlier version
+	 * asked only "is it a read", which let exactly that shape through and emitted code that did
+	 * not compile. `Refs` is scope-correct, so a same-named binding introduced inside the `try`
+	 * projects as a `[decl]` occurrence and is refused here too -- conservative, never unsound.
 	 */
-	private static function readsName(name: String, node: QueryNode, s: Seams): Bool {
-		for (h in Refs.find(name, node, s.shape)) if (h.kind != RefKind.Write) return true;
-		return false;
+	private static function assignedOnlyByTargets(name: String, tryStmt: QueryNode, targets: Array<Span>, s: Seams): Bool {
+		for (h in Refs.find(name, tryStmt, s.shape)) {
+			if (h.kind != RefKind.Write) return false;
+			var isTarget: Bool = false;
+			for (t in targets) if (h.span.from == t.from && h.span.to == t.to) {
+				isTarget = true;
+				break;
+			}
+			if (!isTarget) return false;
+		}
+		return true;
 	}
 
 	/**
@@ -377,13 +425,13 @@ final class PreferTryExpressionAssignment implements Check {
 private typedef Seams = {
 	var tryKinds: Array<String>;
 	var nestingKinds: Array<String>;
-	var catchKind: String;
+	var tryShape: TrySeams;
 	var assignKind: String;
 	var exprStmtKind: String;
 	var mutableKinds: Array<String>;
-	var blockStmtKind: Null<String>;
 	var fieldAccessKind: Null<String>;
 	var identKind: String;
+	var stringInterpKind: Null<String>;
 	var localDeclContinuationKinds: Array<String>;
 	var blockKinds: Array<String>;
 	var shape: RefShape;
