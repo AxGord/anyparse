@@ -88,14 +88,6 @@ class PreferFinalCheckTest extends Test {
 		Assert.equals(1, violations(wrap('var x = g(1, 2);\n\t\ttrace(x);')).length);
 	}
 
-	/**
-	 * Conservative limitation: a generic type-parameter comma (`Map<Int, String>`)
-	 * reads as top-level because `<>` is not tracked, so the var is skipped rather
-	 * than risk a wrong fix. Pinned so the trade-off is intentional, not accidental.
-	 */
-	public function testGenericTypedVarConservativelySkipped(): Void {
-		Assert.equals(0, violations(wrap('var x:Map<Int, String> = m;\n\t\ttrace(x);')).length);
-	}
 
 	public function testFixVarToFinal(): Void {
 		final fixed: String = fixedSource(wrap('var x = 0;\n\t\ttrace(x);'));
@@ -111,6 +103,26 @@ class PreferFinalCheckTest extends Test {
 
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
+	}
+
+	/**
+	 * A local whose annotation carries a generic comma (`Map<K, V>`) is a single binding and, never
+	 * reassigned, must be flagged. This was once PINNED as a conservative limitation — the text comma
+	 * scan read the annotation's comma as a declarator separator and skipped the candidate. The gate
+	 * now asks the tree for a continuation node, so the limitation is gone.
+	 */
+	public function testCommaGenericAnnotationFlagged(): Void {
+		final vs: Array<Violation> = violations(wrap('var m:Map<Int, Int> = [];\n\t\ttrace(m);'));
+		Assert.equals(1, vs.length);
+		Assert.equals('prefer-final', vs[0].rule);
+		Assert.equals('local \'m\' is never reassigned; use final', vs[0].message);
+	}
+
+	/**
+	 * A real multi-declarator list is still skipped — one `final` cannot be applied to a single binding of it.
+	 */
+	public function testMultiDeclaratorNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('var a = 1, b = 2;\n\t\ttrace(a + b);')).length);
 	}
 
 	private function wrap(body: String): String {

@@ -125,6 +125,7 @@ class JoinDeclarationAssignmentCheckTest extends Test {
 		Assert.isTrue(ids.contains('join-declaration-assignment'));
 	}
 
+
 	/** Wrap a statement body in a minimal parseable class + method. */
 	private function wrap(body: String): String {
 		return 'class C {\n\tfunction f() {\n\t\t$body\n\t}\n}';

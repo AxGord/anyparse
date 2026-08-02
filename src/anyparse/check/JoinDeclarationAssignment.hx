@@ -123,6 +123,7 @@ final class JoinDeclarationAssignment implements Check {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		return support == null ? null : {
 			localDeclKinds: localDeclKinds,
+			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			exprStmtKind: exprStmtKind,
 			assignKind: assignKind,
 			identKind: shape.identKind,
@@ -160,7 +161,7 @@ final class JoinDeclarationAssignment implements Check {
 		// The decl span includes its trailing `;`; a bare single-var decl ends in one.
 		if (declSpan.to <= declSpan.from || source.charAt(declSpan.to - 1) != ';') return null;
 		final declText: String = StringTools.rtrim(source.substring(declSpan.from, declSpan.to - 1));
-		if (hasTopLevelComma(declText)) return null; // `var a, b;` — multi-declarator, never joined
+		if (RefactorSupport.isMultiDeclarator(decl, s.localDeclContinuationKinds)) return null; // never joined
 
 		if (assign.kind != s.exprStmtKind || assign.children.length != 1) return null;
 		final binary: QueryNode = assign.children[0];
@@ -184,31 +185,6 @@ final class JoinDeclarationAssignment implements Check {
 		return droppedComment(keySpan, rhsSpan, assignSpan.to, comments) ? null : m;
 	}
 
-	/**
-	 * Whether the declaration text carries a top-level `,` -- a second declarator (`var a, b;`).
-	 * A comma nested in a `<…>` / `(…)` / `[…]` / `{…}` type is not one; `->` is skipped so a
-	 * function-type arrow does not close a `<…>`.
-	 */
-	private static function hasTopLevelComma(text: String): Bool {
-		var depth: Int = 0;
-		var i: Int = 0;
-		while (i < text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			switch c {
-				case '('.code | '['.code | '{'.code | '<'.code:
-					depth++;
-				case '>'.code if (i > 0 && StringTools.fastCodeAt(text, i - 1) == '-'.code):
-					// the `>` of `->` is not a bracket close
-				case ')'.code | ']'.code | '}'.code | '>'.code:
-					if (depth > 0) depth--;
-				case ','.code if (depth == 0):
-					return true;
-				case _:
-			}
-			i++;
-		}
-		return false;
-	}
 
 	/**
 	 * Whether any descendant of `node` is an occurrence of the local `name` -- either a plain
@@ -243,6 +219,7 @@ final class JoinDeclarationAssignment implements Check {
 /** The kinds `JoinDeclarationAssignment` reads. */
 private typedef Seams = {
 	var localDeclKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
 	var exprStmtKind: String;
 	var assignKind: String;
 	var identKind: String;

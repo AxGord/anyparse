@@ -28,6 +28,7 @@ private typedef LiveCtx = {
 	var localDeclKinds: Array<String>;
 	var mutableLocalDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
 	var exitClearKinds: Array<String>;
 	var exitTopKinds: Array<String>;
 	var opaqueKinds: Array<String>;
@@ -280,6 +281,7 @@ final class DeadStore implements Check {
 			localDeclKinds: localDeclKinds,
 			mutableLocalDeclKinds: shape.mutableLocalDeclKinds ?? [],
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
+			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			exitClearKinds: returnKinds,
 			exitTopKinds: [for (k in controlExitKinds) if (!returnKinds.contains(k)) k],
 			opaqueKinds: shape.opaqueKinds ?? [],
@@ -420,7 +422,8 @@ final class DeadStore implements Check {
 			final init: Null<QueryNode> = NullFlow.declInit(node, ctx.declTypeChildKinds);
 			if (
 				init != null && span != null && ctx.mutableLocalDeclKinds.contains(node.kind) && !live.contains(name)
-				&& !NullFlow.isMultiBinding(node, ctx.source, ctx.declTypeChildKinds) && referencedOutsideDecl(ctx, name, scope, span)
+				&& !NullFlow.isMultiBinding(node, ctx.localDeclContinuationKinds, ctx.declTypeChildKinds)
+				&& referencedOutsideDecl(ctx, name, scope, span)
 			) ctx.out.push({
 				file: ctx.file,
 				span: span,

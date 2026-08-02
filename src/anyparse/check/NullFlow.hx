@@ -65,6 +65,7 @@ private typedef FlowCtx = {
 	var writeKinds: Array<String>;
 	var localDeclKinds: Array<String>;
 	var declTypeChildKinds: Array<String>;
+	var localDeclContinuationKinds: Array<String>;
 	var ifKinds: Array<String>;
 	var loopKinds: Array<String>;
 	var switchKinds: Array<String>;
@@ -333,13 +334,12 @@ final class NullFlow {
 	 * `Map<Int, String>` also trips it, which only drops a fact — a safe miss).
 	 * A node with no span reports multi (conservative).
 	 */
-	public static function isMultiBinding(node: QueryNode, source: String, declTypeChildKinds: Array<String>): Bool {
+	public static function isMultiBinding(node: QueryNode, continuationKinds: Array<String>, declTypeChildKinds: Array<String>): Bool {
 		var exprChildren: Int = 0;
 		for (c in node.children) if (!declTypeChildKinds.contains(c.kind)) exprChildren++;
 		if (exprChildren > 1) return true;
-		final span: Null<Span> = node.span;
-		if (span == null) return true;
-		return hasTopLevelComma(source, span.from, span.to);
+		if (node.span == null) return true;
+		return RefactorSupport.isMultiDeclarator(node, continuationKinds);
 	}
 
 	/**
@@ -365,6 +365,7 @@ final class NullFlow {
 			writeKinds: shape.writeParentKinds ?? [],
 			localDeclKinds: localDeclKinds,
 			declTypeChildKinds: shape.declTypeChildKinds ?? [],
+			localDeclContinuationKinds: shape.localDeclContinuationKinds ?? [],
 			ifKinds: IF_KINDS,
 			loopKinds: LOOP_KINDS,
 			switchKinds: SWITCH_KINDS,
@@ -561,7 +562,7 @@ final class NullFlow {
 		if (name == null) return;
 		// A fresh binding shadows any same-named outer aux fact.
 		killAuxFacts(state, name);
-		if (isMultiBinding(node, ctx.source, ctx.declTypeChildKinds)) {
+		if (isMultiBinding(node, ctx.localDeclContinuationKinds, ctx.declTypeChildKinds)) {
 			clearName(state, name);
 			return;
 		}
@@ -1069,32 +1070,6 @@ final class NullFlow {
 		for (e in next.present) state.present.push(e);
 	}
 
-	/** Whether `source[from..to)` contains a comma outside every bracket pair and string literal. */
-	private static function hasTopLevelComma(source: String, from: Int, to: Int): Bool {
-		var depth: Int = 0;
-		var quote: Int = 0;
-		var i: Int = from;
-		final end: Int = to <= source.length ? to : source.length;
-		while (i < end) {
-			final c: Int = StringTools.fastCodeAt(source, i);
-			if (quote != 0) {
-				if (c == '\\'.code)
-					i++;
-				else if (c == quote)
-					quote = 0;
-			} else if (c == "'".code || c == '"'.code) {
-				quote = c;
-			} else if (c == '('.code || c == '['.code || c == '{'.code) {
-				depth++;
-			} else if (c == ')'.code || c == ']'.code || c == '}'.code) {
-				depth--;
-			} else if (c == ','.code && depth == 0) {
-				return true;
-			}
-			i++;
-		}
-		return false;
-	}
 
 	/** A fresh all-`Unknown` flow state — every fact set empty. */
 	private static inline function emptyState(): FlowState {

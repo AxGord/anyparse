@@ -311,8 +311,7 @@ final class PreferRangeLoop implements Check {
 		final name: Null<String> = decl.name;
 		final span: Null<Span> = decl.span;
 		if (name == null || span == null) return null;
-		final declSource: String = source.substring(span.from, span.to);
-		return RefactorSupport.hasTopLevelComma(declSource) ? null : name;
+		return RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? []) ? null : name;
 	}
 
 	/**

@@ -1834,27 +1834,20 @@ final class RefactorSupport {
 	 * deliberately not tracked (a generic type-parameter comma reads as top-level,
 	 * which consumers treat conservatively).
 	 */
-	public static function hasTopLevelComma(text: String): Bool {
-		var depth: Int = 0;
-		var i: Int = 0;
-		final n: Int = text.length;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			switch c {
-				case '('.code | '['.code | '{'.code:
-					depth++;
-				case ')'.code | ']'.code | '}'.code:
-					if (depth > 0) depth--;
-				case '"'.code | "'".code:
-					i = skipStringLiteral(text, i, c);
-				case ','.code:
-					if (depth == 0) return true;
-				case _:
-			}
-			i++;
-		}
+	/**
+	 * Whether `decl` is a MULTI-declarator list (`var a = 1, b = 2` / `var a, b`) rather than a
+	 * single binding — every binding after the first projects as a continuation node, so the
+	 * question the grammar already answers is asked of the TREE. `continuationKinds` is the
+	 * plugin's `localDeclContinuationKinds` (Haxe: `VarMore`). Supersedes scanning the
+	 * declaration's source text for a separator comma: no character-level scan can tell
+	 * `var a = 1, b = 2` from the comma inside a `Map<K, V>` annotation, and reading the latter
+	 * as a separator makes a rewrite refuse a shape it handles perfectly.
+	 */
+	public static function isMultiDeclarator(decl: QueryNode, continuationKinds: Array<String>): Bool {
+		for (child in decl.children) if (continuationKinds.contains(child.kind)) return true;
 		return false;
 	}
+
 
 	/**
 	 * `lines` without its leading / trailing whitespace-only entries — the shared

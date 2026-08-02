@@ -1033,4 +1033,36 @@ class TrivialGetterCheckTest extends Test {
 		);
 	}
 
+
+	/**
+	 * A local annotated with a comma-carrying generic (`Map<K, V>`) whose initializer reads the
+	 * backing field: the comma sits INSIDE `<>`, so the declaration is not a multi-var list and
+	 * the collapse must proceed. The AST already says so — only a text-level comma scan can
+	 * mistake it.
+	 */
+	public function testCommaGenericAnnotationStillCollapses(): Void {
+		assertFixContains(
+			cls(
+				'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
+				+ '\tprivate final _frames:Map<Int, Int> = [];\n' + '\tprivate inline function get_frame():Int return _currentFrame;\n'
+				+ '\tpublic function touch():Void { final row:Null<Map<Int, Int>> = _frames[_currentFrame]; }'
+			),
+			'_frames[frame]'
+		);
+	}
+
+	/**
+	 * The genuine multi-var list the comma scan was guarding against: a later binding projects as
+	 * `VarMore`, and an initializer reading the backing field keeps the collapse refused.
+	 */
+	public function testMultiVarDeclStillRefusesFix(): Void {
+		assertFixRefused(
+			cls(
+				'public var frame(get, never):Int;\n' + '\tprivate var _currentFrame:Int = 0;\n'
+				+ '\tprivate inline function get_frame():Int return _currentFrame;\n'
+				+ '\tpublic function touch():Void { var a = _currentFrame, frame = 2; trace(a + frame); }'
+			)
+		);
+	}
+
 }

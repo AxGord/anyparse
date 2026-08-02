@@ -251,7 +251,7 @@ final class JoinReturn implements Check {
 		final init: QueryNode = decl.children[0];
 		final initSpan: Null<Span> = init.span;
 		if (initSpan == null) return null;
-		if (hasTopLevelComma(source.substring(declSpan.from, initSpan.from))) return null; // multi-declarator
+		if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // multi-declarator
 
 		if (ret.kind != s.returnKind || ret.children.length != RETURN_VALUE_CHILD_COUNT) return null;
 		final retIdent: QueryNode = ret.children[0];
@@ -310,31 +310,6 @@ final class JoinReturn implements Check {
 		return 'return ($initSource : $ann);';
 	}
 
-	/**
-	 * Whether the pre-initializer text carries a top-level `,` -- a second declarator
-	 * (`var a, b = …`). A comma nested in a `<…>` / `(…)` / `[…]` / `{…}` type is not one; `->`
-	 * is skipped so a function-type arrow does not close a `<…>`.
-	 */
-	private static function hasTopLevelComma(text: String): Bool {
-		var depth: Int = 0;
-		var i: Int = 0;
-		while (i < text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			switch c {
-				case '('.code | '['.code | '{'.code | '<'.code:
-					depth++;
-				case '>'.code if (i > 0 && StringTools.fastCodeAt(text, i - 1) == '-'.code):
-					// the `>` of `->` is not a bracket close
-				case ')'.code | ']'.code | '}'.code | '>'.code:
-					if (depth > 0) depth--;
-				case ','.code if (depth == 0):
-					return true;
-				case _:
-			}
-			i++;
-		}
-		return false;
-	}
 
 	/**
 	 * Whether a comment sits inside the joined region `[declSpan.from, retTo)` but outside the

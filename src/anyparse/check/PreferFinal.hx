@@ -136,7 +136,7 @@ final class PreferFinal implements Check {
 		abstractKinds: Array<String>
 	): Void {
 		final candidates: Array<{ name: String, span: Span, scope: Span }> = [];
-		collect(candidates, source, tree, null, scopeKinds, opaqueKinds, mutableKinds);
+		collect(candidates, source, tree, null, scopeKinds, opaqueKinds, mutableKinds, shape.localDeclContinuationKinds ?? []);
 		final writesByName: Map<String, Array<Span>> = [];
 		for (c in candidates) {
 			if (!writesByName.exists(c.name)) writesByName[c.name] = writeSpans(c.name, tree, shape);
@@ -161,12 +161,12 @@ final class PreferFinal implements Check {
 	 */
 	private static function collect(
 		out: Array<{ name: String, span: Span, scope: Span }>, source: String, node: QueryNode, enclosingScope: Null<QueryNode>,
-		scopeKinds: Array<String>, opaqueKinds: Array<String>, mutableKinds: Array<String>
+		scopeKinds: Array<String>, opaqueKinds: Array<String>, mutableKinds: Array<String>, continuationKinds: Array<String>
 	): Void {
 		if (opaqueKinds.contains(node.kind)) return;
-		if (mutableKinds.contains(node.kind)) consider(out, source, node, enclosingScope);
+		if (mutableKinds.contains(node.kind)) consider(out, source, node, enclosingScope, continuationKinds);
 		final childScope: Null<QueryNode> = scopeKinds.contains(node.kind) ? node : enclosingScope;
-		for (c in node.children) collect(out, source, c, childScope, scopeKinds, opaqueKinds, mutableKinds);
+		for (c in node.children) collect(out, source, c, childScope, scopeKinds, opaqueKinds, mutableKinds, continuationKinds);
 	}
 
 	/**
@@ -176,7 +176,8 @@ final class PreferFinal implements Check {
 	 * attributed by position. Bails on any missing coordinate.
 	 */
 	private static function consider(
-		out: Array<{ name: String, span: Span, scope: Span }>, source: String, decl: QueryNode, enclosingScope: Null<QueryNode>
+		out: Array<{ name: String, span: Span, scope: Span }>, source: String, decl: QueryNode, enclosingScope: Null<QueryNode>,
+		continuationKinds: Array<String>
 	): Void {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
@@ -184,7 +185,7 @@ final class PreferFinal implements Check {
 		final scopeSpan: Null<Span> = enclosingScope.span;
 		if (scopeSpan == null) return;
 		if (decl.children.length != 1) return;
-		if (hasTopLevelComma(source.substring(declSpan.from, declSpan.to))) return;
+		if (RefactorSupport.isMultiDeclarator(decl, continuationKinds)) return;
 		if (!RefactorSupport.referencedInRange(source, name, scopeSpan.from, scopeSpan.to, [declSpan])) return;
 		out.push({ name: name, span: declSpan, scope: scopeSpan });
 	}
@@ -203,57 +204,6 @@ final class PreferFinal implements Check {
 	private static function reassignedInScope(writes: Array<Span>, scope: Span): Bool {
 		for (w in writes) if (w.from >= scope.from && w.from < scope.to) return true;
 		return false;
-	}
-
-	/**
-	 * Whether `s` contains a comma outside any `()`/`[]`/`{}` nesting and
-	 * outside a string literal — the multi-declaration separator of
-	 * `var a = 1, b = 2`. `<>` is deliberately not tracked (a generic type
-	 * parameter's comma reads as top-level, conservatively skipping the var),
-	 * because `<` is ambiguous with the less-than operator and over-counting
-	 * depth could hide a real separator.
-	 */
-	private static function hasTopLevelComma(s: String): Bool {
-		var depth: Int = 0;
-		var i: Int = 0;
-		final n: Int = s.length;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			switch c {
-				case '('.code | '['.code | '{'.code:
-					depth++;
-				case ')'.code | ']'.code | '}'.code:
-					if (depth > 0) depth--;
-				case '"'.code | "'".code:
-					i = skipString(s, i, c);
-				case ','.code:
-					if (depth == 0) return true;
-				case _:
-			}
-			i++;
-		}
-		return false;
-	}
-
-	/**
-	 * Index of the closing `quote` of the string opened at `open`, honouring
-	 * `\`-escapes; the source length minus one if unterminated (the caller's
-	 * `i++` then ends the scan). Lets `hasTopLevelComma` skip commas inside a
-	 * string initializer.
-	 */
-	private static function skipString(s: String, open: Int, quote: Int): Int {
-		final n: Int = s.length;
-		var i: Int = open + 1;
-		while (i < n) {
-			final c: Int = StringTools.fastCodeAt(s, i);
-			if (c == '\\'.code) {
-				i += 2;
-				continue;
-			}
-			if (c == quote) return i;
-			i++;
-		}
-		return n - 1;
 	}
 
 }

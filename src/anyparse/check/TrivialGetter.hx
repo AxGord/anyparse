@@ -48,7 +48,7 @@ import anyparse.query.RefactorSupport.OccurrenceClass;
  * 3. The backing field is private and declared in the SAME class. Interfaces (no accessor bodies) are skipped wholesale:
  * every class body — plain / `final` / `abstract class` (`CheckScan.isClassBodyKind`) — is inspected.
  * 4. No (transitive) subtype overrides the property accessor or redeclares it
- *    (`SymbolIndex.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SymbolIndex.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an unresolvable subtype hierarchy is kept conservatively.
+ *    (`SymbolIndex.subtypeOverridesProperty`) AND no subtype references the private backing field directly (`SymbolIndex.subtypeReferencesField`) — the collapse deletes the field, and a subclass reading it (private members are subclass-visible) would break; both queries run over report + resolution scope. A subclass merely extending the class without touching the property no longer blocks; an override is attributed to the type declaring the member it overrides, so only an unattributable one keeps an unresolvable subtype hierarchy blocked conservatively.
  * 5. When the class `implements` anything and the property is PUBLIC, an implemented interface
  *    may declare it and so require a physical accessor; a COLLAPSING shape is skipped unless every
  *    implemented interface is resolvable in the index and provably lacks it
@@ -807,21 +807,20 @@ final class TrivialGetter implements Check implements ConfigAware implements Cro
 	}
 
 	/**
-	 * Whether `node` can BIND a name the grammar drops from the projection, and that
-	 * hidden slot textually mentions `field` — the two blind spots of the by-name shadow
-	 * refusal in `renameWalk`. A key-value `for (k => _x in m)` / `[for (k => _x in m) …]`
-	 * header keeps only the KEY name, so a shadowing `_x` there is invisible as a node; a
-	 * multi-variable declaration's later bindings DO project (`VarMore`), and its top-level
-	 * comma scan stays as the belt-and-braces guard over the whole declaration. Either way any
-	 * word-match of `field` in the region refuses the fix (conservative: a multi-var INIT
-	 * reading the real field also refuses).
+	 * Whether `node` can BIND a name the grammar drops from the projection, and that hidden slot
+	 * textually mentions `field` — the blind spot of the by-name shadow refusal in `renameWalk`. A
+	 * key-value `for (k => _x in m)` / `[for (k => _x in m) …]` header keeps only the KEY name, so a
+	 * shadowing `_x` there is invisible as a node. A multi-variable declaration's later bindings DO
+	 * project (`VarMore`), so the multi-var arm ASKS THE TREE for one: a text-level comma scan cannot
+	 * tell `var a = 1, b = 2` from the comma inside a `Map<K, V>` annotation, and refused the latter.
+	 * Either way any word-match of `field` in the region refuses the fix (conservative: a multi-var
+	 * INIT reading the real field also refuses).
 	 */
 	private static function hidesBindingNamed(node: QueryNode, span: Null<Span>, source: String, field: String): Bool {
 		switch node.kind {
 			case 'VarStmt' | 'FinalStmt':
 				if (span == null) return true;
-				final declSource: String = source.substring(span.from, span.to);
-				return RefactorSupport.hasTopLevelComma(declSource) && RefactorSupport.identTokenOffset(source, span, field) >= 0;
+				return node.children.exists(c -> c.kind == 'VarMore') && RefactorSupport.identTokenOffset(source, span, field) >= 0;
 			case 'ForStmt' | 'ForExpr':
 				return span == null || RefactorSupport.binderHeaderMentions(source, node, field);
 			case _:

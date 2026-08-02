@@ -236,7 +236,7 @@ final class PreferSwitchExpressionAssignment implements Check {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (name == null || declSpan == null) return null;
-		if (hasTopLevelComma(source.substring(declSpan.from, declSpan.to))) return null; // `var a, b;`
+		if (RefactorSupport.isMultiDeclarator(decl, s.shape.localDeclContinuationKinds ?? [])) return null; // `var a, b;`
 		final init: Null<QueryNode> = decl.children.length == 1 ? decl.children[0] : null;
 		if (init != null && !RefactorSupport.isSideEffectFree(init)) return null; // impure init cannot move to a default path
 
@@ -371,33 +371,6 @@ final class PreferSwitchExpressionAssignment implements Check {
 		}
 		final raw: String = StringTools.rtrim(source.substring(declSpan.from, prefixEnd));
 		return { text: (~/^var\b/).replace(raw, 'final'), keptTo: prefixEnd };
-	}
-
-
-	/**
-	 * Whether `s` contains a comma outside any `()`/`[]`/`{}`/`<>` nesting and outside a string
-	 * literal — the multi-declaration separator of `var a = 1, b = 2`. `->` is skipped so a
-	 * function-type arrow does not close a `<…>`. Mirrors `JoinDeclarationAssignment.hasTopLevelComma`.
-	 */
-	private static function hasTopLevelComma(text: String): Bool {
-		var depth: Int = 0;
-		var i: Int = 0;
-		while (i < text.length) {
-			final c: Int = StringTools.fastCodeAt(text, i);
-			switch c {
-				case '('.code | '['.code | '{'.code | '<'.code:
-					depth++;
-				case '>'.code if (i > 0 && StringTools.fastCodeAt(text, i - 1) == '-'.code):
-					// the `>` of `->` is not a bracket close
-				case ')'.code | ']'.code | '}'.code | '>'.code:
-					if (depth > 0) depth--;
-				case ','.code if (depth == 0):
-					return true;
-				case _:
-			}
-			i++;
-		}
-		return false;
 	}
 
 
