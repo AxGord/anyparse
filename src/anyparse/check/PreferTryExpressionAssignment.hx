@@ -14,6 +14,8 @@ import anyparse.query.Refs.RefKind;
 import anyparse.query.SymbolIndex;
 import anyparse.runtime.Span;
 
+using Lambda;
+
 /**
  * Flags a statement-position `try` / `catch` whose body AND every catch clause is a single
  * plain `=` assignment to the SAME target, collapsing it into one assignment of a
@@ -394,7 +396,7 @@ final class PreferTryExpressionAssignment implements Check {
 			if (h.kind != RefKind.Write) return false;
 			// Matched on START offset alone: a node span can carry trailing trivia, which a
 			// `Refs` hit span does not, and a mismatch there would silently decline the arm.
-			if (!Lambda.exists(targets, t -> h.span.from == t.from)) return false;
+			if (!targets.exists(t -> h.span.from == t.from)) return false;
 		}
 		return true;
 	}
