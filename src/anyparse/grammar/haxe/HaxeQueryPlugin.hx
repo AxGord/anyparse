@@ -17,6 +17,7 @@ import anyparse.query.GrammarPlugin.CheckOverrides;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
+import anyparse.query.CondBranchProjection;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -249,6 +250,10 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 
 	public function parseFileTypeRefs(source: String): QueryNode {
 		return buildTree(source, true);
+	}
+
+	public function projectBranchAware(tree: QueryNode, source: String): QueryNode {
+		return CondBranchProjection.branchAwareTree(tree, source, refShape(), controlFlowSupport());
 	}
 
 	/**

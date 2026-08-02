@@ -55,7 +55,7 @@ final class DeadCode implements Check {
 		if (support == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, tree, support);
 		}
 		return violations;
@@ -72,7 +72,7 @@ final class DeadCode implements Check {
 	): Array<{ span: Span, text: String }> {
 		final support: Null<ControlFlowSupport> = plugin.controlFlowSupport();
 		if (support == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final flagged: Array<String> = [];

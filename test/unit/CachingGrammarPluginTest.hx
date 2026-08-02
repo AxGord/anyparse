@@ -34,6 +34,13 @@ class CachingGrammarPluginTest extends Test {
 		Assert.isTrue(cached.parseFileTypeRefs(src) == cached.parseFileTypeRefs(src));
 	}
 
+	public function testProjectBranchAwareCached(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if A\n\t\ta();\n\t\t#else\n\t\tb();\n\t\t#end\n\t}\n}';
+		final tree: QueryNode = cached.parseFile(src);
+		Assert.isTrue(cached.projectBranchAware(tree, src) == cached.projectBranchAware(tree, src));
+	}
+
 	public function testDelegatesUncachedMethods(): Void {
 		final inner: HaxeQueryPlugin = new HaxeQueryPlugin();
 		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(inner);

@@ -527,6 +527,7 @@ import unit.PreferStaticExtensionCheckTest;
 import unit.FixVerifierScopeE2ETest;
 import unit.PreferMapTypeCheckTest;
 import unit.EmptyDocTagCheckTest;
+import unit.CondBranchSplitTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1087,6 +1088,7 @@ class RunTests {
 		addCase(new ThreadSafetyCheckTest());
 		addCase(new HxCondDeclPrefixKeywordSliceTest());
 		addCase(new HxPpCondDottedSliceTest());
+		addCase(new CondBranchSplitTest());
 		utest.ui.Report.create(runner);
 		runner.run();
 	}

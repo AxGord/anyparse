@@ -66,7 +66,7 @@ final class PreferTernaryReturn implements Check {
 		if (seams == null) return [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
-			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
+			final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, entry.source);
 			if (tree != null) walk(violations, entry.file, tree, seams.support, seams.shape, seams.ifKinds, seams.returnKind);
 		}
 		return violations;
@@ -77,7 +77,7 @@ final class PreferTernaryReturn implements Check {
 	): Array<{ span: Span, text: String }> {
 		final seams: Null<Seams> = resolveSeams(plugin);
 		if (seams == null) return [];
-		final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, source);
+		final tree: Null<QueryNode> = CheckScan.parseBranchAwareOrNull(plugin, source);
 		if (tree == null) return [];
 
 		final flagged: Array<String> = [];

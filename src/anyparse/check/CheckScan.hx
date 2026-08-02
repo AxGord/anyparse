@@ -65,6 +65,24 @@ final class CheckScan {
 	}
 
 	/**
+	 * `parseOrNull` over the BRANCH-AWARE projection (`GrammarPlugin.projectBranchAware`) — the
+	 * plain tree with every statement-position conditional-compilation region regrouped into one
+	 * `CondBranch` statement list per branch, so a statement-list check reads N lists instead of
+	 * one flat run of every branch's statements. Same tolerance contract as `parseOrNull`; a
+	 * check reads one projection or the other, never both from one parse.
+	 *
+	 * The plain parse and the projection are two calls on purpose: the plugin's own caching
+	 * decorator memoizes each, so the pair costs ONE parse plus one projection per source no
+	 * matter how many checks opt in.
+	 */
+	public static function parseBranchAwareOrNull(plugin: GrammarPlugin, source: String): Null<QueryNode> {
+		return try {
+			final tree: QueryNode = plugin.parseFile(source);
+			plugin.projectBranchAware(tree, source);
+		} catch (exception: ParseError) null catch (exception: Exception) null;
+	}
+
+	/**
 	 * The autofix skeleton shared by every span-indexed `fix`: parse `source`,
 	 * index its `indexKinds` nodes by `from:to`, then for each violation with a
 	 * span re-find the flagged node and let `produce` build its edit (null to

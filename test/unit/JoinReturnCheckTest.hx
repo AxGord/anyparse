@@ -250,6 +250,18 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals(-1, out.indexOf('str = g(str);'));
 	}
 
+	/** A declaration and its return wholly inside one `#if` branch join — the branch is its own statement list. */
+	public function testPairInsideConditionalBranchFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('#if A\n\t\tfinal x = g();\n\t\treturn x;\n\t\t#end'));
+		Assert.equals(1, es.length);
+		Assert.equals('return g();', es[0].text);
+	}
+
+	/** The declaration ends one branch and the return opens the next — not one statement list, no join. */
+	public function testPairStraddlingTwoBranchesNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('#if A\n\t\tfinal x = g();\n\t\t#else\n\t\treturn x;\n\t\t#end')).length);
+	}
+
 	/** Wrap an assignment-arm body in a method with a pre-existing `str` param and an inferred return type. */
 	private function wrapAssign(body: String): String {
 		return 'class C {\n\tfunction f(str:String) {\n\t\t$body\n\t}\n}';

@@ -92,6 +92,7 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	private final _sharedSpanCache: Map<String, SpanTypeInfo>;
 	private final _parseCache: Map<String, QueryNode> = [];
 	private final _typeRefCache: Map<String, QueryNode> = [];
+	private final _branchAwareCache: Map<String, QueryNode> = [];
 
 	// One combined span-parse cache replacing five per-map caches: the five
 	// TypeInfoProvider accessors below are exact slices of this bundle, so a file's
@@ -226,6 +227,28 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 		final tree: QueryNode = _inner.parseFileTypeRefs(source);
 		_typeRefCache[source] = tree;
 		return tree;
+	}
+
+	/**
+	 * `GrammarPlugin`: the branch-aware projection, memoized by source next to `_typeRefCache`
+	 * and DELEGATED to `_inner` — the decorator owns the cache, the wrapped grammar owns the
+	 * projection, exactly as for `parseFileTypeRefs`.
+	 *
+	 * Memoization here is CORRECTNESS-adjacent, not a nicety: `RefsCache` keys its per-file
+	 * `Refs.findMulti` index by TREE IDENTITY, so handing each opted-in check a freshly built
+	 * tree would re-index the whole file once per check. One tree per source keeps that at one
+	 * index, exactly as the plain `parseFile` tree does.
+	 *
+	 * The seam takes an already-parsed tree, so there is no second parse to avoid and nothing to
+	 * reimplement here: callers pair it with this wrapper's memoized `parseFile`. A source that
+	 * does not parse throws out of THAT call and never reaches this cache.
+	 */
+	public function projectBranchAware(tree: QueryNode, source: String): QueryNode {
+		final cached: Null<QueryNode> = _branchAwareCache[source];
+		if (cached != null) return cached;
+		final projected: QueryNode = _inner.projectBranchAware(tree, source);
+		_branchAwareCache[source] = projected;
+		return projected;
 	}
 
 	public function langName(): String return _inner.langName();

@@ -96,6 +96,31 @@ interface GrammarPlugin {
 	public function parseFileTypeRefs(source: String): QueryNode;
 
 	/**
+	 * The branch-aware projection of an ALREADY-PARSED `tree` of `source`: every
+	 * conditional-compilation region that sits in a STATEMENT list is regrouped into one
+	 * synthetic `CondBranch` node per branch.
+	 *
+	 * `parseFile` projects a `#if A … #elseif B … #else … #end` region as ONE node with
+	 * every branch's statements flattened as siblings, which is not a statement list but N
+	 * of them — so the checks that walk a statement list
+	 * (`ControlFlowSupport.blockKinds`) deliberately skip it. This parallel projection
+	 * recovers the branch boundaries from the directive text in the gaps between child
+	 * spans and gives each branch its own list. Consumed ONLY by the checks that opt in via
+	 * `CheckScan.parseBranchAwareOrNull`, so every other consumer stays byte-identical to
+	 * `parseFile` by construction.
+	 *
+	 * A projection over a tree, not a parse, so a decorator can memoize it without parsing
+	 * twice and a grammar can supply its own without owning the cache. The caller passes the
+	 * tree it already has — `CheckScan.parseBranchAwareOrNull` pairs it with `parseFile`.
+	 *
+	 * A plugin whose grammar exposes no conditional seams — or whose
+	 * `ControlFlowSupport.blockKinds()` does not name `CondBranch` — returns `tree` itself.
+	 * Pure: `tree` is never mutated, and any subtree the rewrite does not touch is SHARED
+	 * with it rather than copied.
+	 */
+	public function projectBranchAware(tree: QueryNode, source: String): QueryNode;
+
+	/**
 	 * Declare which `QueryNode.kind` values the `Uses` walker should
 	 * treat as type references. Plugin-supplied so the walker stays
 	 * language-agnostic. Only meaningful on a tree produced by

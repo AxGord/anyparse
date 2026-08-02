@@ -82,6 +82,43 @@ class DeadCodeCheckTest extends Test {
 		Assert.equals('class C {\n\tfunction f():Void {\n\t\treturn;\n\t}\n}', applyFix(src));
 	}
 
+	/** A dead run INSIDE one `#if` branch is a real dead run — the branch is its own statement list. */
+	public function testDeadCodeInsideConditionalBranchFlagged(): Void {
+		Assert.equals(1, violations('class C {\n\tfunction f():Void {\n\t\t#if A\n\t\treturn;\n\t\ta();\n\t\t#end\n\t}\n}').length);
+	}
+
+	/**
+	 * A `return` ending one branch does NOT kill the next branch's first statement: the two are
+	 * mutually exclusive configurations, not siblings in one statement list.
+	 */
+	public function testTerminalDoesNotReachTheNextBranch(): Void {
+		Assert.equals(
+			0, violations('class C {\n\tfunction f():Void {\n\t\t#if A\n\t\treturn;\n\t\t#else\n\t\ta();\n\t\t#end\n\t}\n}').length
+		);
+	}
+
+	/** A dead run in the LAST branch of a multi-branch region is reached too. */
+	public function testDeadCodeInLastBranchFlagged(): Void {
+		Assert.equals(
+			1,
+			violations('class C {\n\tfunction f():Void {\n\t\t#if A\n\t\ta();\n\t\t#else\n\t\treturn;\n\t\tb();\n\t\t#end\n\t}\n}').length
+		);
+	}
+
+	public function testFixDeletesDeadRunInsideConditionalBranch(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if A\n\t\treturn;\n\t\ta();\n\t\tb();\n\t\t#end\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\t#if A\n\t\treturn;\n\t\t#end\n\t}\n}', applyFix(src));
+	}
+
+	/**
+	 * `lineExtendedSpan` widens to whole lines only when the run is alone on them, so an `#end`
+	 * sharing the last dead statement's line survives the deletion.
+	 */
+	public function testFixDeadRunSharingALineWithEndKeepsTheDirective(): Void {
+		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if A\n\t\treturn;\n\t\ta(); #end\n\t}\n}';
+		Assert.equals('class C {\n\tfunction f():Void {\n\t\t#if A\n\t\treturn;\n\t\t #end\n\t}\n}', applyFix(src));
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new DeadCode().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

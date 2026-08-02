@@ -123,6 +123,140 @@ class RedundantElseCheckTest extends Test {
 		Assert.equals('if (a) {\n\t\t\treturn 1;\n\t\t}\nvar n = 1;\n\t\t\treturn b(n);', es[0].text);
 	}
 
+	/** An `else` after an exiting `if` inside one `#if` branch is flagged — the branch is its own statement list. */
+	public function testElseInsideConditionalBranchFlagged(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tif (a) return 1;\n\t\telse b();\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) return 1;\nb();', es[0].text);
+	}
+
+	/**
+	 * The collision gate must see the enclosing FUNCTION's parameters through the `CondBranch`:
+	 * `x` is a parameter, so de-nesting the else-body `var x` would redeclare it. Report-only.
+	 *
+	 * No compiler oracle covers this — the file compiles under `!A` and breaks only under `-D A`.
+	 */
+	public function testConditionalBranchSeesFunctionParams(): Void {
+		final src: String =
+			'class C {\n\tfunction f(x:Int):Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\telse { var x = 2; g(x); }\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** The gate must also see the enclosing block's own locals, declared BEFORE the `#if`. */
+	public function testConditionalBranchSeesBlockLocalBeforeTheRegion(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\tvar n = 0;\n\t\t#if A\n\t\tif (c) return n;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** … and the ones declared AFTER the `#end`, which are siblings of the region all the same. */
+	public function testConditionalBranchSeesBlockLocalAfterTheRegion(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n\t\tvar n = 0;\n\t\treturn n;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** An INTERMEDIATE real block between the function and the region contributes its locals too. */
+	public function testConditionalBranchSeesIntermediateBlockLocal(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\t{\n\t\t\tvar n = 0;\n\t\t\t#if A\n\t\t\tif (c) return n;\n\t\t\telse { var n = 1; b(n); }\n\t\t\t#end\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A SIBLING branch's local is not a collision — the two branches are mutually exclusive
+	 * configurations and never coexist, so the de-nest goes ahead.
+	 */
+	public function testSiblingBranchLocalIsNotACollision(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#else\n\t\tif (c) return 1;\n\t\telse { var n = 1; b(n); }\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/** A branch-local name that clashes with nothing de-nests normally. */
+	public function testConditionalBranchLocalNoCollisionDeNested(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\telse { var n = 1; return b(n); }\n\t\t#end\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/**
+	 * A local declared in a DIFFERENT `#if` region of the same block is bound in that block's own
+	 * frame, so de-nesting a same-named else-body local would shadow it wherever both regions are
+	 * active. Report-only.
+	 *
+	 * No compiler oracle covers this — the file compiles under every single define, and only
+	 * `-D A -D B` together changes the returned value.
+	 */
+	public function testSiblingRegionLocalIsACollision(): Void {
+		final src: String =
+			'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\t#if B\n\t\tif (c) return 1;\n\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\t#end\n\t\t#if A\n\t\treturn n;\n\t\t#end\n\t\treturn 0;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** The same collision with no `#if` around the flagged `if` at all — the region-local still binds to the block. */
+	public function testRegionLocalCollidesWithAPlainElseBody(): Void {
+		final src: String =
+			'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tvar n = 0;\n\t\t#end\n\t\tif (c) return 1;\n\t\telse {\n\t\t\tvar n = 1;\n\t\t\tb(n);\n\t\t}\n\t\treturn 0;\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/**
+	 * A real `{ … }` block RESETS the inherited names, so an else-body local inside it may legally
+	 * shadow the enclosing function's parameter — the de-nest goes ahead. Pins the `scopeKinds`
+	 * reset in `collectDeNests`: without it `n` reads as a collision and the fix is withheld.
+	 */
+	public function testNestedBlockResetsInheritedScope(): Void {
+		final src: String =
+			'class C {\n\tfunction f(n:Int):Int {\n\t\t{\n\t\t\tif (c) return 1;\n\t\t\telse {\n\t\t\t\tvar n = 1;\n\t\t\t\treturn b(n);\n\t\t\t}\n\t\t}\n\t}\n}';
+		Assert.equals(1, violations(src).length);
+		Assert.equals(1, edits(src).length);
+	}
+
+	/**
+	 * A comment-only else body carries nothing the de-nest could rebuild from statement spans, so
+	 * the fix is withheld and the finding says why.
+	 */
+	public function testCommentOnlyElseBodyWithheld(): Void {
+		final src: String = 'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\t// keep me\n\t\t}\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('comment in the else body') != -1);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A comment LEADING the else body sits outside the rebuilt statement run, so the fix is withheld too. */
+	public function testLeadingCommentInElseBodyWithheld(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\t// TODO: later\n\t\t\tb();\n\t\t}\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.indexOf('comment in the else body') != -1);
+		Assert.equals(0, edits(src).length);
+	}
+
+	/** A comment BETWEEN two de-nested statements is inside the verbatim run, so it survives and the fix still applies. */
+	public function testCommentBetweenDeNestedStatementsIsKept(): Void {
+		final src: String =
+			'class C {\n\tfunction f():Int {\n\t\tif (a) {\n\t\t\treturn 1;\n\t\t} else {\n\t\t\tb();\n\t\t\t// still here\n\t\t\tc();\n\t\t}\n\t}\n}';
+		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, vs.length);
+		Assert.isFalse(vs[0].message.indexOf('comment in the else body') != -1);
+		final es: Array<{ span: Span, text: String }> = edits(src);
+		Assert.equals(1, es.length);
+		Assert.isTrue(es[0].text.indexOf('// still here') != -1);
+	}
+
 	public function testSkipParseNoCrash(): Void {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}

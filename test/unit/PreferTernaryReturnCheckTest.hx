@@ -175,6 +175,26 @@ class PreferTernaryReturnCheckTest extends Test {
 		Assert.equals(1, violations('class C {\n\tfunction f(c:Bool):Bool {\n\t\tif (c) return true;\n\t\treturn false;\n\t}\n}').length);
 	}
 
+	/** An `if`/`return` pair wholly inside one `#if` branch collapses — the branch is its own statement list. */
+	public function testPairInsideConditionalBranchFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\treturn 2;\n\t\t#end\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return c ? 1 : 2;', es[0].text);
+	}
+
+	/**
+	 * The `if` ends one branch and the `return` opens the next: collapsing them would splice
+	 * across `#else` and delete the directive. The two are not siblings in one statement list.
+	 */
+	public function testPairStraddlingTwoBranchesNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations('class C {\n\tfunction f(c:Bool):Int {\n\t\t#if A\n\t\tif (c) return 1;\n\t\t#else\n\t\treturn 2;\n\t\t#end\n\t}\n}').length
+		);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
