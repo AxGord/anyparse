@@ -201,18 +201,23 @@ final class SymbolIndex {
 	/** The grammar kind a `typedef` declaration projects as — the only member host whose members sit under an `Anon`. */
 	private static final TYPEDEF_DECL_KIND: String = 'TypedefDecl';
 
+	/** The grammar kind an `abstract` declaration projects as. */
+	private static final ABSTRACT_DECL_KIND: String = 'AbstractDecl';
+
 	/** The grammar kind an anonymous structure projects as, in BOTH a typedef body and a type expression. */
 	/** The decl kinds free of implicit-conversion / aliasing semantics — see `resolvesToPlainNominal`. */
 	private static final PLAIN_NOMINAL_KINDS: Array<String> = [CLASS_DECL_KIND, 'InterfaceDecl', 'EnumDecl'];
 
 	/**
 	 * The decl kinds whose `supertypes` is NOT their complete set of inheritance edges: a `typedef`
-	 * ALIAS (`typedef A = C`) and an abstract (`abstract W(C)` with `@:forward` / `@:from` / `@:to`)
-	 * each reach another type through a link no `extends` / `implements` clause records, and both
-	 * are legal in an `extends` position. Their closure therefore looks EMPTY, which a
-	 * negative-reachability proof would read as "excludes everything" — so `closureExcludes` refuses
-	 * them outright. A POSITIVE proof (`closureContains`) needs no such guard: an unseen edge only
-	 * makes it miss, which is its safe direction.
+	 * ALIAS (`typedef A = C`, legal in an `extends` position) and an abstract (`abstract W(C)` with
+	 * `@:forward` / `@:from` / `@:to`) each reach another type through a link no `extends` /
+	 * `implements` clause records. Their closure therefore looks EMPTY, which a negative-reachability
+	 * proof would read as "excludes everything" — so `closureExcludes` refuses them at its ROOT. As a
+	 * supertype LINK an abstract is a different matter: Haxe rejects one in either inheritance clause,
+	 * so a link resolving to it is no edge at all and is stepped over (`supertypeLinkIsAbstract`). A
+	 * POSITIVE proof (`closureContains`) needs no guard either way: an unseen edge only makes it miss,
+	 * which is its safe direction.
 	 */
 	private static final ALIASING_DECL_KINDS: Array<String> = ['TypedefDecl', 'AbstractDecl'];
 
@@ -671,16 +676,19 @@ final class SymbolIndex {
 
 	/**
 	 * Whether collapsing `owner`'s property `prop` could break a subtype — the precise,
-	 * per-property replacement for the blanket `hasSubtype` gate the accessor-collapse checks
-	 * use. True when any indexed type declaring `get_<prop>` / `set_<prop>` / `<prop>` is a PROVEN
+	 * per-property replacement for the blanket `hasSubtype` gate the accessor-collapse checks use.
+	 * True when any indexed type declaring `get_<prop>` / `set_<prop>` / `<prop>` is a PROVEN
 	 * transitive subtype of `owner` (its accessor override / property redeclaration would be
-	 * stranded by the collapse), OR is an OVERRIDE of the accessor whose supertype chain cannot be
-	 * resolved to rule `owner` out — an unresolvable hierarchy could hide the override, so it is
-	 * kept conservatively. A type whose chain is fully resolved and EXCLUDES `owner`, or a FRESH
-	 * (non-override) same-named member on an unresolvable type, never blocks: an unrelated class
-	 * merely sharing the property name leaves the collapse alone. False when no subtype touches the
-	 * property (or `owner` has none). Names are SIMPLE, so a same-named unrelated type is the
-	 * residual soundness boundary, as in `isSubtype`.
+	 * stranded by the collapse), or OVERRIDES an accessor that cannot be attributed away from
+	 * `owner`. An override is attributed by resolving the declaration it overrides
+	 * (`overriddenDeclarer`) — a type overriding some OTHER hierarchy's same-named property never
+	 * blocks, however unresolvable its own ancestry is above that declaration, and the declaring
+	 * type is itself visited by this same loop, so a real override of `owner` still blocks through
+	 * it. Only when no declaration resolves does the walk fall back to `provablyNotSubtype`, which
+	 * keeps an unresolvable hierarchy blocked conservatively. A FRESH (non-override) same-named
+	 * member never blocks: an unrelated class merely sharing the property name leaves the collapse
+	 * alone. False when no subtype touches the property (or `owner` has none). Names are SIMPLE, so
+	 * a same-named unrelated type is the residual soundness boundary, as in `isSubtype`.
 	 */
 	public function subtypeOverridesProperty(owner: String, prop: String): Bool {
 		final names: Array<String> = ['get_$prop', 'set_$prop', prop];
@@ -688,7 +696,13 @@ final class SymbolIndex {
 			final matches: Array<MemberInfo> = t.members.filter(m -> names.contains(m.name));
 			if (matches.length == 0) continue;
 			if (isSubtype(t.name, owner)) return true;
-			if (!provablyNotSubtype(t.name, owner) && matches.exists(m -> m.isOverride)) return true;
+			if (!matches.exists(m -> m.isOverride)) continue;
+			final declarer: Null<String> = overriddenDeclarer({ file: fi, type: t }, names, owner);
+			if (declarer != null) {
+				if (declarer == owner) return true;
+				continue;
+			}
+			if (!provablyNotSubtype(t.name, owner)) return true;
 		}
 		return false;
 	}
@@ -1078,8 +1092,10 @@ final class SymbolIndex {
 	 * Whether `name`'s transitive supertype closure is FULLY index-resolved AND excludes
 	 * `target`. A supertype name absent or ambiguous in the index (an external type, or a
 	 * project file not in the set) makes the relation unknown → false, as does reaching
-	 * `target` itself, as does an ALIASING decl anywhere in the walk (see
-	 * `ALIASING_DECL_KINDS` — its empty `supertypes` would "exclude" the target vacuously).
+	 * `target` itself, as does an ALIASING decl at the walk's ROOT (see `ALIASING_DECL_KINDS`
+	 * — its empty `supertypes` would "exclude" the target vacuously). A supertype LINK that
+	 * resolves to an abstract is stepped over rather than doubted (`supertypeLinkIsAbstract`):
+	 * no `extends` / `implements` clause can name one, so it is not an inheritance edge.
 	 * `seen` guards cycles. Read only as a NEGATIVE proof: every doubt yields false.
 	 */
 	private function closureExcludes(name: String, target: String, seen: Array<String>): Bool {
@@ -1089,6 +1105,7 @@ final class SymbolIndex {
 			if (sup == target) return false;
 			if (seen.contains(sup)) continue;
 			seen.push(sup);
+			if (supertypeLinkIsAbstract(sup)) continue;
 			if (!closureExcludes(sup, target, seen)) return false;
 		}
 		return true;
@@ -1105,6 +1122,56 @@ final class SymbolIndex {
 			if (closureContains(sup, target, seen)) return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Whether the supertype link `name` resolves to an abstract — NOT an inheritance edge. Haxe
+	 * refuses an abstract in an `extends` clause ("Should extend by using a class") and in an
+	 * `implements` clause, so the only way one reaches `supertypes` is the `implements Dynamic<T>`
+	 * field-access directive (openfl's `DisplayObject` carries one inside a dead `#if` branch, which
+	 * the branch-blind supertype scan records like any other). Nothing is reachable through such a
+	 * link, so `closureExcludes` steps over it instead of doubting the whole closure. Only the LINK is
+	 * stepped over — an abstract at the walk's ROOT keeps the `ALIASING_DECL_KINDS` refusal, whose
+	 * `@:forward` / `@:to` edges a caller attributing member occurrences must not lose.
+	 */
+	private function supertypeLinkIsAbstract(name: String): Bool {
+		final ds: Array<TypeDeclInfo> = declsNamed(name);
+		return ds.length == 1 && ds[0].kind == ABSTRACT_DECL_KIND;
+	}
+
+	/**
+	 * The nearest ancestor of `start` declaring any of `names` — the type whose member an `override`
+	 * on `start` actually overrides — or null when no ancestor declares one (an ancestor outside the
+	 * index ends its branch silently, so null means "unknown", never "none"). Only `extends` edges are
+	 * walked: Haxe grants `override` against a SUPERCLASS member, never against an interface's, so
+	 * attributing an override to an interface that merely names the same member would drop a real
+	 * superclass link the index could not resolve. Resolution is import-aware (`supertypesRaw` +
+	 * `resolveTypeRef`), so it answers for the SINGLE written supertype rather than unioning every
+	 * same-simple-name decl, and it needs only the chain up to the declaring type — an unindexed
+	 * ancestor ABOVE that one cannot make it fail. When several ancestors at the same distance declare
+	 * a name, `owner` wins: the caller reads a match against `owner` as "blocked", the conservative side.
+	 */
+	private function overriddenDeclarer(start: ResolvedType, names: Array<String>, owner: String): Null<String> {
+		final seen: Array<String> = [];
+		var level: Array<ResolvedType> = [start];
+		while (level.length > 0) {
+			final next: Array<ResolvedType> = [];
+			for (cur in level) {
+				final key: String = '${cur.file.file}#${cur.type.name}';
+				if (seen.contains(key)) continue;
+				seen.push(key);
+				for (i in 0...cur.type.supertypesRaw.length) {
+					if (i < cur.type.supertypes.length && cur.type.interfaces.contains(cur.type.supertypes[i])) continue;
+					final anc: Null<ResolvedType> = resolveTypeRef(cur.type.supertypesRaw[i], cur.file);
+					if (anc != null) next.push(anc);
+				}
+			}
+			final declarers: Array<ResolvedType> = next.filter(a -> a.type.members.exists(m -> names.contains(m.name)));
+			if (declarers.exists(a -> a.type.name == owner)) return owner;
+			if (declarers.length > 0) return declarers[0].type.name;
+			level = next;
+		}
+		return null;
 	}
 
 	/**

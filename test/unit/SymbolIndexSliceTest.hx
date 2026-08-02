@@ -753,4 +753,90 @@ class SymbolIndexSliceTest extends Test {
 		Assert.equals('Int', index.resolvePathFinalMemberTypeSource('src/app/Use.hx', 'Sub', ['items', 'length']));
 	}
 
+
+	/**
+	 * `Leaf` overrides `set_tag`, but the member it overrides is declared by `Mid`, NOT by the
+	 * owner `Root` — two unrelated hierarchies that merely share a property name. `Mid`'s own
+	 * ancestry runs through an UNINDEXED `Ext` (the openfl-through-`Sprite` shape), so the negative
+	 * `provablyNotSubtype` proof cannot succeed; resolving the overridden declaration answers
+	 * directly and keeps `Root`'s collapse safe.
+	 */
+	public function testSubtypeOverridesPropertyForeignDeclarer(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Root.hx',
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n\tfunction set_tag(v:Int):Int return v;\n}'
+			},
+			{
+				file: 'pkg/Mid.hx',
+				source: 'package pkg;\nclass Mid extends Ext {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 1;\n\tfunction set_tag(v:Int):Int return v;\n}'
+			},
+			{
+				file: 'pkg/Leaf.hx',
+				source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function set_tag(v:Int):Int return v;\n}'
+			}
+		];
+		Assert.isFalse(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
+	}
+
+	/**
+	 * The same resolution, pointing the other way: `Leaf` reaches `Root` through an intermediate
+	 * that declares nothing, so the overridden declaration IS the owner's and the collapse must
+	 * stay blocked.
+	 */
+	public function testSubtypeOverridesPropertyOwnDeclarerBlocks(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Root.hx',
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n\tfunction set_tag(v:Int):Int return v;\n}'
+			},
+			{ file: 'pkg/Mid.hx', source: 'package pkg;\nclass Mid extends Root {\n\tpublic function ping():Void {}\n}' },
+			{
+				file: 'pkg/Leaf.hx',
+				source: 'package pkg;\nclass Leaf extends Mid {\n\toverride function set_tag(v:Int):Int return v;\n}'
+			}
+		];
+		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
+	}
+
+	/**
+	 * An `abstract` can never be a class's supertype — an `implements Dynamic<T>` link (openfl's
+	 * `DisplayObject` carries one inside a dead `#if` branch) is not an inheritance edge and must
+	 * not end the negative proof. Without this, every openfl-derived type is unprovable.
+	 */
+	public function testProvablyNotSubtypeIgnoresAbstractSupertypeLink(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{ file: 'pkg/Root.hx', source: 'package pkg;\nclass Root {\n\tpublic function ping():Void {}\n}' },
+			{ file: 'pkg/Plain.hx', source: 'package pkg;\nclass Plain {\n\tpublic function ping():Void {}\n}' },
+			{ file: 'pkg/Dyn.hx', source: 'package pkg;\nabstract Dyn(Int) {\n\tpublic function new(v:Int) this = v;\n}' },
+			{
+				file: 'pkg/Leaf.hx',
+				source: 'package pkg;\nclass Leaf extends Plain implements Dyn {\n\tpublic function ping2():Void {}\n}'
+			}
+		];
+		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).provablyNotSubtype('Leaf', 'Root'));
+	}
+
+
+	/**
+	 * `Leaf`'s superclass is UNINDEXED and the only resolvable link is an interface that happens to
+	 * name `tag`. Haxe grants `override` against a superclass member, never an interface's, so the
+	 * interface must not be read as the overridden declaration — the unresolvable superclass keeps
+	 * `Root`'s collapse blocked.
+	 */
+	public function testSubtypeOverridesPropertyIgnoresInterfaceDeclarer(): Void {
+		final files: Array<{ file: String, source: String }> = [
+			{
+				file: 'pkg/Root.hx',
+				source: 'package pkg;\nclass Root {\n\tpublic var tag(get, set):Int;\n\tfunction get_tag():Int return 0;\n\tfunction set_tag(v:Int):Int return v;\n}'
+			},
+			{ file: 'pkg/ITagged.hx', source: 'package pkg;\ninterface ITagged {\n\tpublic var tag(get, set):Int;\n}' },
+			{
+				file: 'pkg/Leaf.hx',
+				source: 'package pkg;\nclass Leaf extends Ext implements ITagged {\n\toverride function set_tag(v:Int):Int return v;\n}'
+			}
+		];
+		Assert.isTrue(SymbolIndex.build(files, new HaxeQueryPlugin()).subtypeOverridesProperty('Root', 'tag'));
+	}
+
 }
