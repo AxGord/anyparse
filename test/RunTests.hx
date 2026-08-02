@@ -529,6 +529,7 @@ import unit.FixVerifierScopeE2ETest;
 import unit.PreferMapTypeCheckTest;
 import unit.EmptyDocTagCheckTest;
 import unit.CondBranchSplitTest;
+import unit.PreferSwitchExpressionCheckTest;
 import unit.PreferTernaryExpressionCheckTest;
 import unit.PreferTryExpressionAssignmentCheckTest;
 import unit.PreferTryExpressionReturnCheckTest;
@@ -949,6 +950,7 @@ class RunTests {
 		addCase(new AvoidDynamicBagFixTest());
 		addCase(new AvoidDynamicBagOracleE2ETest());
 		addCase(new PreferSwitchCheckTest());
+		addCase(new PreferSwitchExpressionCheckTest());
 		addCase(new MissingVisibilityCheckTest());
 		addCase(new ModifierOrderCheckTest());
 		addCase(new MemberOrderCheckTest());

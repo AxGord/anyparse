@@ -11,6 +11,8 @@ import anyparse.query.SymbolIndex.TypeDeclInfo;
 
 using Lambda;
 
+import anyparse.query.SymbolIndex.MemberInfo;
+
 /**
  * `SymbolIndex` — the pure cross-file symbol resolver that underpins a
  * planned move-symbol op. Each test builds the index from an IN-MEMORY
@@ -595,6 +597,97 @@ class SymbolIndexSliceTest extends Test {
 		Assert.isFalse(index.subtypeDeclaresMember('Base', 'only'));
 		// A leaf type has no subtype at all.
 		Assert.isFalse(index.subtypeDeclaresMember('Leaf', 'over'));
+	}
+
+	/**
+	 * The modifier-run flags a member carries: `kind` / `isStatic` / `isInline`, reset at
+	 * every member so one member's modifiers never leak onto the next. `kind` is the
+	 * member's own projected declaration kind, which is how a consumer tells a `final`
+	 * field from a `var` or from a method without re-walking the tree.
+	 */
+	public function testMemberModifierFlags(): Void {
+		final source: String = 'package pkg;\nclass M {\n' + "\tpublic static inline final A:String = 'a';\n"
+			+ "\tpublic static final B:String = 'b';\n" + "\tpublic static inline var C:String = 'c';\n"
+			+ "\tpublic static var D:String = 'd';\n" + "\tprivate final e:String = 'e';\n" + '\tpublic function f():Void {}\n' + '}\n';
+		final m: TypeDeclInfo = fileInfoOf(
+			SymbolIndex.build([{ file: 'src/pkg/M.hx', source: source }], plugin()), 'src/pkg/M.hx'
+		).types[0];
+
+		assertFlags(memberOf(m, 'A'), 'FinalMember', true, true, false);
+		assertFlags(memberOf(m, 'B'), 'FinalMember', true, false, false);
+		assertFlags(memberOf(m, 'C'), 'VarMember', true, true, false);
+		assertFlags(memberOf(m, 'D'), 'VarMember', true, false, false);
+		// A non-static `final` field: its own kind still projects, but no modifier is set.
+		assertFlags(memberOf(m, 'e'), 'FinalMember', false, false, false);
+		assertFlags(memberOf(m, 'f'), 'FnMember', false, false, false);
+	}
+
+	/**
+	 * A member declared inside a `#if` region is `guarded` — the declaration exists but
+	 * its presence and value are branch-dependent, while the index is branch-blind. Its
+	 * modifier flags are still read correctly: the conditional region is the member HOST,
+	 * and the modifier siblings sit inside it.
+	 */
+	public function testGuardedMemberFlag(): Void {
+		final source: String = 'package pkg;\nclass G {\n' + "\tpublic static inline final PLAIN:String = 'p';\n" + '\t#if js\n'
+			+ "\tpublic static inline final GUARDED:String = 'g';\n" + '\t#end\n' + '}\n';
+		final g: TypeDeclInfo = fileInfoOf(
+			SymbolIndex.build([{ file: 'src/pkg/G.hx', source: source }], plugin()), 'src/pkg/G.hx'
+		).types[0];
+
+		assertFlags(memberOf(g, 'PLAIN'), 'FinalMember', true, true, false);
+		assertFlags(memberOf(g, 'GUARDED'), 'FinalMember', true, true, true);
+	}
+
+	/**
+	 * An enum-abstract VALUE carries no `static` modifier — the enum-abstract kind is what
+	 * makes it a constant, which is why a consumer must ask the hosting type's kind and not
+	 * only the member's flags.
+	 */
+	public function testEnumAbstractValueFlags(): Void {
+		final source: String = 'package pkg;\nenum abstract Ea(Int) {\n\tfinal P = 0;\n\tvar Q = 1;\n}\n';
+		final ea: TypeDeclInfo = fileInfoOf(
+			SymbolIndex.build([{ file: 'src/pkg/Ea.hx', source: source }], plugin()), 'src/pkg/Ea.hx'
+		).types[0];
+
+		Assert.equals('EnumAbstractDecl', ea.kind);
+		assertFlags(memberOf(ea, 'P'), 'FinalMember', false, false, false);
+		assertFlags(memberOf(ea, 'Q'), 'VarMember', false, false, false);
+	}
+
+	/**
+	 * `memberDeclarationsOf` returns EVERY indexed declaration of a member paired with its
+	 * hosting type — one per same-simple-name type — and an empty array for an unknown
+	 * type / member, which a consumer must read as "unknown", never as "absent".
+	 */
+	public function testMemberDeclarationsOf(): Void {
+		final index: SymbolIndex = SymbolIndex.build([
+			{ file: 'src/A.hx', source: "class Dup { public static inline final K:String = 'a'; }" },
+			{ file: 'src/B.hx', source: "class Dup { public static var K:String = 'b'; }" }
+		], plugin());
+
+		final decls: Array<{ type: TypeDeclInfo, member: MemberInfo }> = index.memberDeclarationsOf('Dup', 'K');
+		Assert.equals(2, decls.length);
+		Assert.isTrue(decls.exists(d -> d.member.isInline));
+		Assert.isTrue(decls.exists(d -> !d.member.isInline));
+		for (d in decls) Assert.equals('Dup', d.type.name);
+		Assert.equals(0, index.memberDeclarationsOf('Dup', 'missing').length);
+		Assert.equals(0, index.memberDeclarationsOf('Missing', 'K').length);
+	}
+
+	/** The named member of `type` — the fixtures all declare each name exactly once. */
+	private function memberOf(type: TypeDeclInfo, name: String): MemberInfo {
+		final found: Null<MemberInfo> = type.members.find(m -> m.name == name);
+		Assert.notNull(found);
+		return (found: MemberInfo);
+	}
+
+	/** Assert a member's kind and its three modifier-derived flags in one line per member. */
+	private function assertFlags(member: MemberInfo, kind: String, isStatic: Bool, isInline: Bool, guarded: Bool): Void {
+		Assert.equals(kind, member.kind, 'kind of ${member.name}');
+		Assert.equals(isStatic, member.isStatic, 'isStatic of ${member.name}');
+		Assert.equals(isInline, member.isInline, 'isInline of ${member.name}');
+		Assert.equals(guarded, member.guarded, 'guarded of ${member.name}');
 	}
 
 	/** The `FileInfo` `index` holds for `file`, asserted present. */

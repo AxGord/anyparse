@@ -458,14 +458,22 @@ typedef RefShape = {
 	/**
 	 * EXPRESSION-position `if` kinds (Haxe `IfExpr`) — the same `if` when it parses as a
 	 * VALUE rather than a statement (`var x = if (c) a else b`, `return if (c) a else b`,
-	 * `f(if (c) a else b)`). Disjoint from `ifStatementKinds` by construction.
+	 * `f(if (c) a else b)`), children `[cond, then, else]` exactly like the statement
+	 * form. Disjoint from `ifStatementKinds` by construction, and kept apart because the
+	 * two positions differ in what a rewrite may emit: a value-position chain has to stay
+	 * exhaustive, a statement chain need not.
+	 *
+	 * Consumers: `prefer-ternary-expression` rewrites a 2-branch one into a ternary;
+	 * `prefer-switch-expression` walks a right-nested chain of these (and of
+	 * `ternaryKind`) and rewrites it to a switch expression.
 	 *
 	 * The kind proves the node YIELDS a value; it does NOT prove the surrounding slot
 	 * tolerates an expression of `?:` precedence. An `if`-expression is self-delimiting —
 	 * `a || if (c) x else y` groups as `a || (…)` — so a check that rewrites one INTO a
 	 * ternary (`prefer-ternary-expression`) must still gate on the parent slot
 	 * (`delimitedAllChildKinds` / `delimitedTailChildKinds`), or it silently re-associates.
-	 * Optional; unset makes that check a no-op.
+	 * Optional; unset leaves the if-expression shape unmatched for those checks (a bare
+	 * `ternaryKind` chain still converts to a switch).
 	 */
 	@:optional var ifExpressionKinds: Array<String>;
 
@@ -541,6 +549,19 @@ typedef RefShape = {
 	 * Optional; unset makes the check a no-op.
 	 */
 	@:optional var ternaryKind: String;
+
+	/**
+	 * Parent kinds in which a value-position chain may be rewritten to a switch
+	 * EXPRESSION — the positions where a multi-line `switch { … }` reads at least as
+	 * well as the chain it replaces (Haxe: a `return`, a local / member initializer, an
+	 * assignment r-value). Deliberately a WHITELIST rather than "any expression
+	 * position": a switch spliced into a call argument parses but reads worse than the
+	 * ternary it replaced. The `prefer-switch-expression` check requires a chain head's
+	 * PARENT kind to be one of these. Optional; unset makes that check a no-op. Two Haxe
+	 * hosts are deliberately NOT listed yet and are follow-ups: a static member
+	 * initializer (`StaticVarStmt`) and a compound-assignment r-value.
+	 */
+	@:optional var switchExpressionHostKinds: Array<String>;
 
 	/**
 	 * The null-literal node kind (`null`) — lets `prefer-null-coalescing`
@@ -725,6 +746,17 @@ typedef RefShape = {
 	 * an arbitrary expression. Optional; unset makes the check a no-op.
 	 */
 	@:optional var caseLiteralKinds: Array<String>;
+
+	/**
+	 * The delimiters a switch over a TUPLE of discriminants writes around its subject
+	 * and around each `case` pattern (Haxe `[` / `]` — `switch [a, b] { case [X, Y]: … }`).
+	 * Both switch checks read them to convert a rung condition that is a
+	 * `logicalAndKind` conjunction of equalities over SEVERAL discriminants; with one
+	 * discriminant no delimiter is written and the field is not consulted. Optional;
+	 * unset means the grammar offers no tuple form and both checks stay on the
+	 * single-discriminant shape.
+	 */
+	@:optional var tuplePatternDelimiters: { open: String, close: String };
 
 	/**
 	 * Declaration kinds whose members require an explicit visibility modifier — a

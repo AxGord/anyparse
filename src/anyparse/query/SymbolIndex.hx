@@ -78,6 +78,32 @@ typedef MemberInfo = {
 
 	/** True when the member's modifier run carries the grammar's override modifier — an unmarked override's effective visibility comes from the supertype, not the container default. */
 	var isOverride: Bool;
+
+	/** The grammar member-decl kind the member projected as (`VarMember` / `FinalMember` / `FnMember` / `SimpleCtor` / …) — lets a consumer tell a FIELD from a method or an enum constructor without re-walking the tree. */
+	var kind: String;
+
+	/**
+	 * True when the member's modifier run carries the grammar's `static` modifier. A
+	 * type-qualified `Type.member` reference normally resolves only to a static member —
+	 * with one exception a consumer must handle itself: an enum-abstract VALUE is written
+	 * without `static`, yet `Ea.VALUE` is exactly how it is referenced.
+	 */
+	var isStatic: Bool;
+
+	/** True when the member's modifier run carries the grammar's `inline` modifier — an inlined field's value is a compile-time constant at every use site. */
+	var isInline: Bool;
+
+	/**
+	 * True when the member's DECLARATION sits under a `conditionalMemberKind` host — the
+	 * member is written inside a `#if` region rather than at plain type-body level.
+	 * Mirrors `ImportInfo.guarded`: the declaration genuinely exists, but its presence is
+	 * branch-dependent while the index is branch-blind, so a consumer that reasons about
+	 * the member (a constant-folding rewrite) must bail on it. It does NOT cover a
+	 * branch-dependent VALUE on an unconditional declaration
+	 * (`static inline final A:Int = #if js 1 #else 2 #end;`): that member is a direct
+	 * child of the type body, so `guarded` is false.
+	 */
+	var guarded: Bool;
 };
 
 /**
@@ -437,6 +463,28 @@ final class SymbolIndex {
 			count++;
 		}
 		return found;
+	}
+
+	/**
+	 * Every indexed declaration of type `typeName`'s member `memberName`, each paired
+	 * with the type declaration that hosts it — one entry per same-simple-name type
+	 * across the index (the index models no packages, so resolution is by SIMPLE name)
+	 * and one per `#if` branch that declares the member. DIRECT members only, like
+	 * `memberTypeSourceOf`: a supertype's member is a different declaration and is not
+	 * folded in here.
+	 *
+	 * Unlike the unanimity-collapsing queries next to it, this one hands the caller the
+	 * raw set and takes no verdict of its own — a consumer needing a property of the
+	 * member must require it of EVERY entry. An EMPTY result means the member is not
+	 * resolvable in the indexed scope and must be read as "unknown", never as "absent":
+	 * the index skips unparseable files and models neither packages nor macro-generated
+	 * members.
+	 */
+	public function memberDeclarationsOf(typeName: String, memberName: String): Array<{ type: TypeDeclInfo, member: MemberInfo }> {
+		return [
+			for (fi in _files) for (t in fi.types) if (t.name == typeName) for (m in t.members) if (m.name == memberName)
+				{ type: t, member: m }
+		];
 	}
 
 	/**
