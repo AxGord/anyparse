@@ -529,6 +529,9 @@ import unit.FixVerifierScopeE2ETest;
 import unit.PreferMapTypeCheckTest;
 import unit.EmptyDocTagCheckTest;
 import unit.CondBranchSplitTest;
+import unit.PreferTernaryExpressionCheckTest;
+import unit.PreferTryExpressionAssignmentCheckTest;
+import unit.PreferTryExpressionReturnCheckTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1028,6 +1031,9 @@ class RunTests {
 		addCase(new PreferIfExpressionReturnCheckTest());
 		addCase(new PreferIfExpressionAssignmentCheckTest());
 		addCase(new PreferSwitchExpressionAssignmentCheckTest());
+		addCase(new PreferTernaryExpressionCheckTest());
+		addCase(new PreferTryExpressionAssignmentCheckTest());
+		addCase(new PreferTryExpressionReturnCheckTest());
 		addCase(new JoinDeclarationAssignmentCheckTest());
 		addCase(new JoinReturnCheckTest());
 		addCase(new PreferSingleQuotesCheckTest());

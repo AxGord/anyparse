@@ -453,6 +453,33 @@ typedef RefShape = {
 	@:optional var ifStatementKinds: Array<String>;
 
 	/**
+	 * EXPRESSION-position `if` kinds (Haxe `IfExpr`) — the same `if` when it parses as a
+	 * VALUE rather than a statement (`var x = if (c) a else b`, `return if (c) a else b`,
+	 * `f(if (c) a else b)`). Value position is a property of the KIND here, so a check that
+	 * rewrites the node itself (`prefer-ternary-expression`) needs no position analysis.
+	 * Disjoint from `ifStatementKinds` by construction. Optional; unset makes that check a
+	 * no-op.
+	 */
+	@:optional var ifExpressionKinds: Array<String>;
+
+	/**
+	 * STATEMENT-position `try` / `catch` kinds (Haxe `TryCatchStmt`, plus the bare-body
+	 * `TryCatchStmtBare`) — `children[0]` is the try body, every following child a
+	 * `catchClauseKind`. The `prefer-try-expression-assignment` / `-return` checks collapse
+	 * one whose body and every catch body is a single assignment / valued `return` into a
+	 * try-EXPRESSION. Optional; unset makes both checks a no-op.
+	 */
+	@:optional var tryStatementKinds: Array<String>;
+
+	/**
+	 * EXPRESSION-position `try` kinds (Haxe `TryExpr`) — the value form the
+	 * `prefer-try-expression-*` checks PRODUCE, and one of the bodied constructs
+	 * `prefer-ternary-expression` refuses as a ternary branch. Optional; unset drops it
+	 * from that refusal set (and is otherwise inert).
+	 */
+	@:optional var tryExpressionKinds: Array<String>;
+
+	/**
 	 * Equality-operator kinds — the `comparison-to-boolean` check flags a comparison
 	 * against a boolean literal (`x == true` / `x != false`). Optional; unset makes the
 	 * check a no-op.
