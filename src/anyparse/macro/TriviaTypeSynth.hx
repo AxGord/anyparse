@@ -408,6 +408,18 @@ class TriviaTypeSynth {
 	public static inline final OP_AFTER_COMMENT_ARG_NAME: String = 'opAfterComment';
 	public static inline final OP_RHS_TRAIL_COMMENT_ARG_NAME: String = 'opRhsTrailComment';
 
+	/**
+	 * ω-keep-ternary-operand-comment — positional arg names appended to a
+	 * `@:ternary` ctor carrying `@:fmt(captureTernaryTrail)`
+	 * (`HxExpr.Ternary`). `condTrailComment` holds the verbatim same-line
+	 * comment trailing the CONDITION (`a // c` before `?`), `thenTrailComment`
+	 * the one trailing the THEN branch (`? b // c` before `:`). Both null when
+	 * the source had no such comment.
+	 */
+	public static inline final TERNARY_COND_TRAIL_ARG_NAME: String = 'condTrailComment';
+
+	public static inline final TERNARY_THEN_TRAIL_ARG_NAME: String = 'thenTrailComment';
+
 	private static inline final PAIRED_SUFFIX: String = 'T';
 	private static inline final SYNTH_SUBPACK: String = 'trivia';
 	private static inline final SYNTH_MODULE_LEAF: String = 'Pairs';
@@ -693,6 +705,23 @@ class TriviaTypeSynth {
 	}
 
 	/**
+	 * ω-keep-ternary-operand-comment — true for a `@:ternary(op, sep, prec)`
+	 * mixfix ctor carrying `@:fmt(captureTernaryTrail)` (`HxExpr.Ternary`).
+	 * Such a branch grows TWO positional `Null<String>` slots holding the
+	 * verbatim same-line comments trailing its first two operands: the
+	 * condition (before `?`) and the then-branch (before `:`). Three operand
+	 * children by construction, so it is disjoint from every two-child chain
+	 * predicate above — the slots append after the whole chain family.
+	 *
+	 * The else-branch needs no slot: its trailing comment sits at the end of
+	 * the enclosing construct and is already captured by that construct's own
+	 * trailing slot (statement `;`, call-arg sep, …).
+	 */
+	public static function isTernaryTrailBranch(branch: ShapeNode): Bool {
+		return branch.children.length == 3 && branch.hasMeta(':ternary') && branch.fmtHasFlag('captureTernaryTrail');
+	}
+
+	/**
 	 * ω-keep-chain-receiver-comment — true when the branch is the
 	 * `@:postfix('.')` method-chain ctor (`HxExpr.FieldAccess`): a postfix
 	 * branch carrying `@:fmt(captureChainNewline)`. Such a branch grows a
@@ -741,9 +770,10 @@ class TriviaTypeSynth {
 	 *    slots at once (open-trailing brings THREE — `openTrailing` +
 	 *    `trailingBlankBefore` + `trailingLeading`; postfix-close the
 	 *    five call-trivia positionals).
-	 *  - `isInfixChainBranch` / `isRhsTrailBranch` have push blocks with
-	 *    no dedicated `has*` local — they contribute directly in the
-	 *    return expression.
+	 *  - `isInfixChainBranch` / `isRhsTrailBranch` / `isTernaryTrailBranch`
+	 *    have push blocks with no dedicated `has*` local — they contribute
+	 *    directly in the return expression. `isTernaryTrailBranch` reserves
+	 *    TWO (`condTrailComment` + `thenTrailComment`).
 	 */
 	public static function extraAltArgs(branch: ShapeNode): Int {
 		final hasCloseTrailing: Bool = isAltCloseTrailingBranch(branch);
@@ -767,7 +797,7 @@ class TriviaTypeSynth {
 		return ((hasCloseTrailing || hasTrailOptFlag || hasCaptureSource) ? 1 : 0) + (hasOpenTrailing ? 3 : 0)
 			+ (hasArrayLitTrailPresent ? 1 : 0) + (hasBodyPolicyKw ? 1 : 0) + (hasWrapOpenNewline ? 1 : 0) + (hasKwNewline ? 1 : 0)
 			+ (hasChainNewline ? 1 : 0) + (hasChainLeadComment ? 1 : 0) + (hasPostfixOpSpace ? 1 : 0) + (hasPostfixCloseTrailing ? 5 : 0)
-			+ (isInfixChainBranch(branch) ? 1 : 0) + (isRhsTrailBranch(branch) ? 1 : 0);
+			+ (isInfixChainBranch(branch) ? 1 : 0) + (isRhsTrailBranch(branch) ? 1 : 0) + (isTernaryTrailBranch(branch) ? 2 : 0);
 		// CHECKSTYLE:ON
 	}
 
@@ -967,6 +997,7 @@ class TriviaTypeSynth {
 		if (isAltChainNewlineBranch(branch)) n++; // chainLeadComment (chain receiver/operand comment)
 		if (isInfixChainBranch(branch)) n++; // opAfterComment (infix post-operator comment)
 		if (isRhsTrailBranch(branch)) n++; // opRhsTrailComment (infix right-operand trailing comment)
+		if (isTernaryTrailBranch(branch)) n += 2; // condTrailComment + thenTrailComment (ω-keep-ternary-operand-comment)
 		if (isPostfixOpSpaceBranch(branch)) n++; // opSpaceBefore (ω-postfix-op-space)
 		// ω-D9A-keep-callargs-v2 + siblings: the postfix close-trailing gate adds
 		// FIVE slots in `buildEnumCtor` — closeTrailing, argsOpenNewline,
@@ -1150,6 +1181,10 @@ class TriviaTypeSynth {
 		if (isAltChainNewlineBranch(branch)) defaults.push(macro (null: Null<String>)); // chainLeadComment (chain receiver/operand comment)
 		if (isInfixChainBranch(branch)) defaults.push(macro (null: Null<String>)); // opAfterComment (infix post-operator comment)
 		if (isRhsTrailBranch(branch)) defaults.push(macro (null: Null<String>)); // opRhsTrailComment (infix right-operand trailing comment)
+		if (isTernaryTrailBranch(branch)) {
+			defaults.push(macro (null: Null<String>)); // condTrailComment (ω-keep-ternary-operand-comment)
+			defaults.push(macro (null: Null<String>)); // thenTrailComment
+		}
 		if (isPostfixOpSpaceBranch(branch)) defaults.push(macro true); // opSpaceBefore (spaced fallback)
 		if (isPostfixCloseTrailingBranch(branch)) {
 			defaults.push(macro (null: Null<String>)); // closeTrailing
@@ -1939,6 +1974,16 @@ class TriviaTypeSynth {
 			final strCT3: ComplexType = TPath({ pack: [], name: 'String', params: [] });
 			final nullStrCT3: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT3)] });
 			args.push({ name: OP_RHS_TRAIL_COMMENT_ARG_NAME, type: nullStrCT3 });
+		}
+		// ω-keep-ternary-operand-comment: the `@:ternary` mixfix ctor grows TWO
+		// operand-trailing slots (cond before `?`, then-branch before `:`).
+		// Three operand children, so this gate is disjoint from every two-child
+		// chain gate above and the pair appends after the whole chain family.
+		if (isTernaryTrailBranch(branch)) {
+			final strCT4: ComplexType = TPath({ pack: [], name: 'String', params: [] });
+			final nullStrCT4: ComplexType = TPath({ pack: [], name: 'Null', params: [TPType(strCT4)] });
+			args.push({ name: TERNARY_COND_TRAIL_ARG_NAME, type: nullStrCT4 });
+			args.push({ name: TERNARY_THEN_TRAIL_ARG_NAME, type: nullStrCT4 });
 		}
 		// ω-postfix-op-space: word-op postfix ctors opting into source-faithful
 		// operator spacing grow `opSpaceBefore:Bool` as the LAST appended slot

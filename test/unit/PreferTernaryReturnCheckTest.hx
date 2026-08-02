@@ -195,6 +195,47 @@ class PreferTernaryReturnCheckTest extends Test {
 		);
 	}
 
+	/**
+	 * A comment still on the guard's own line describes THAT guard's value, so it
+	 * rides the then-branch of the rebuilt ternary. Hoisting it above the merged
+	 * `return` (the pre-slice behaviour) re-reads it as a description of the whole
+	 * collapsed chain. The break is mandatory for a `//` — glued before the `:` it
+	 * would comment the else-branch out.
+	 */
+	public function testGuardLineTrailingCommentRidesItsBranch(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1; // already linked\n\t\treturn 0;\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return a\n? 1 // already linked\n: 0;', es[0].text);
+	}
+
+	/** An OWN-LINE comment between the two statements is not about either value — it keeps the leading-block hoist. */
+	public function testOwnLineCommentBetweenStatementsStillHoists(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1;\n\t\t// why zero\n\t\treturn 0;\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('// why zero\nreturn a ? 1 : 0;', es[0].text);
+	}
+
+	/** Both kinds at once: the guard-line one attaches, the own-line one hoists — neither is dropped. */
+	public function testBothPositionsSplitCorrectly(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			'class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1; // linked\n\t\t// why zero\n\t\treturn 0;\n\t}\n}'
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('// why zero\nreturn a\n? 1 // linked\n: 0;', es[0].text);
+	}
+
+	/** A block comment on the guard line rides the branch too — inline-safe, so the writer may re-flatten it. */
+	public function testGuardLineBlockCommentRidesItsBranch(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f(a:Bool):Int {\n\t\tif (a) return 1; /* linked */\n\t\treturn 0;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('return a\n? 1 /* linked */\n: 0;', es[0].text);
+	}
+
 	private function violations(src: String): Array<Violation> {
 		return new PreferTernaryReturn().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}

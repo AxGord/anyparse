@@ -254,6 +254,10 @@ package anyparse.grammar.haxe;
  * right-associativity is inherent: `a ? b : c ? d : e` yields
  * `Ternary(a, b, Ternary(c, d, e))`. Assignments are accepted in
  * ternary branches: `a ? b : c = d` yields `Ternary(a, b, Assign(c, d))`.
+ * `@:fmt(captureTernaryTrail)` grows two trivia-mode slots holding the
+ * same-line comments trailing the first two operands (before `?` and
+ * before `:`) — the else-branch's is already owned by the enclosing
+ * construct's trailing slot.
  *
  * **Operator branches** — all binary infix. Each `@:infix(op, prec)`
  * carries the operator literal and its precedence; higher precedence
@@ -612,7 +616,7 @@ enum HxExpr {
 	@:infix('??', 2, 'Right') @:fmt(captureChainNewline)
 	NullCoal(left: HxExpr, right: HxExpr);
 
-	@:ternary('?', ':', 1)
+	@:ternary('?', ':', 1) @:fmt(captureTernaryTrail)
 	Ternary(cond: HxExpr, thenExpr: HxExpr, elseExpr: HxExpr);
 
 	@:infix('in', 0)

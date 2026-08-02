@@ -77,7 +77,19 @@ final class BinaryChainEmit {
 	public static function emit(
 		items: Array<Doc>, ops: Array<String>, opt: WriteOptions, rules: WrapRules, nestSuppress: Bool = false,
 		condWrapForced: Bool = false, ?sourceBreakBefore: Array<Bool>, headBreak: Bool = false, forceKeep: Bool = false,
-		?afterComments: Array<Null<Doc>>, ternaryRestAware: Bool = false
+		?afterComments: Array<Null<Doc>>, ternaryRestAware: Bool = false,
+		// ω-keep-ternary-operand-comment: the wrapping location the `forceKeep`
+		// shape must use, overriding the cascade's own answer. A caller that
+		// forces `Keep` because an operand carries a LINE comment has exactly one
+		// legal location: `BeforeLast` puts the break BEFORE the operator
+		// (`a // c` then `? b`), while `AfterLast` emits ` op` first and the
+		// comment swallows it. The cascade's fallback is `AfterLast`, so a config
+		// whose rules do not fire at `exceeds = true` would otherwise produce
+		// `a // c ?` — output the comment-loss guard then refuses, leaving `fmt`
+		// a no-op on exactly the file the capture existed to fix. Null (every
+		// other caller, including the infix chain whose forced comments may be
+		// inline blocks) keeps the cascade's location — byte-inert.
+		?forceKeepLocation: Null<WrappingLocation>
 	): Doc {
 		if (items.length == 0) return WrapBoundary(Empty);
 		if (items.length == 1) return WrapBoundary(items[0]);
@@ -168,7 +180,7 @@ final class BinaryChainEmit {
 		// break — WHEN that head fits (`IfFirstLineExceeds` picks the flat
 		// `shapeNoWrap` hug), else fall through to the leading-break-all shape.
 		return forceKeep
-			? WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: evalAt(true, []).location }))
+			? WrapBoundary(shapeAt({ mode: WrapMode.Keep, location: forceKeepLocation ?? evalAt(true, []).location }))
 			: anyHardline
 				? WrapBoundary(
 					extraThresholds.length == 0 && ternaryHugCollectionBranchIndex(items, ops) >= 0

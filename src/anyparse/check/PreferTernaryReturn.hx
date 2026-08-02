@@ -41,12 +41,23 @@ import anyparse.runtime.Span;
  * binds no tighter than `?:` (a ternary, or an assignment) so precedence is
  * preserved; every tighter-binding condition (comparison, `&&` / `||`, `??`,
  * call, identifier) is emitted bare, per the user's no-redundant-parens
- * preference. The return values are copied verbatim. Like the relocating
- * `redundant-else-after-return` fix, a comment sitting between the two
- * statements is dropped — the replacement is rebuilt from expression spans only.
+ * preference. The return values are copied verbatim.
  * `RefactorSupport.dropContainedEdits` keeps edits non-overlapping. Needs
  * `ControlFlowSupport` and `RefShape.returnStatementKind`; either unset makes
  * the check report-only / a no-op.
+ *
+ * ## Comments
+ *
+ * The replacement is rebuilt from expression spans, so every comment in the
+ * folded region has to be re-placed explicitly — and WHERE decides what it now
+ * says. `preservedComments` splits them by position: a comment still on the
+ * guard's own line rides that guard's value into the rebuilt ternary's
+ * then-branch (`? a // still about a`), everything else is hoisted as a leading
+ * block above the merged `return`. Nothing is dropped. This differs from the
+ * fail-closed siblings (`redundant-else`, `prefer-ternary-assignment`,
+ * `prefer-if-expression-return`, `join-return`) which REFUSE to fire rather than
+ * re-place a comment; this rule folds a fixed two-statement shape whose comment
+ * positions are enumerable, so it can carry them instead of bailing.
  */
 @:nullSafety(Strict)
 final class PreferTernaryReturn implements Check {
@@ -190,8 +201,16 @@ final class PreferTernaryReturn implements Check {
 		final condition: String = wrapCondition(source.substring(condSpan.from, condSpan.to), match.condition.kind, shape);
 		final thenSource: String = source.substring(thenSpan.from, thenSpan.to);
 		final elseSource: String = source.substring(elseSpan.from, elseSpan.to);
-		final preserved: String = preservedComments(source, ifSpan, nextSpan, [condSpan, thenSpan, elseSpan]);
-		final text: String = '${preserved}return $condition ? $thenSource : $elseSource;';
+		final split: PreservedComments = preservedComments(source, ifSpan, thenSpan, nextSpan, [condSpan, thenSpan, elseSpan]);
+		// The guard's own trailing comment rides its branch; every other comment
+		// keeps the leading-block hoist. The broken layout is what makes the
+		// line-style case legal (a `//` glued before the `:` would comment the
+		// rest of the ternary out) — actual indentation and re-flow are the
+		// writer's job, since `RefactorSupport.canonicalize` re-emits the whole
+		// spliced file.
+		final text: String = split.branchTrailing == null
+			? '${split.hoisted}return $condition ? $thenSource : $elseSource;'
+			: '${split.hoisted}return $condition\n? $thenSource ${split.branchTrailing}\n: $elseSource;';
 		return { span: new Span(ifSpan.from, nextSpan.to), text: text };
 	}
 
@@ -226,16 +245,33 @@ final class PreferTernaryReturn implements Check {
 	}
 
 	/**
-	 * Verbatim source of every comment inside the replaced `[ifSpan.from, nextSpan.to)`
-	 * region that is NOT already carried inside a copied expression span
-	 * (`condSpan` / `thenSpan` / `elseSpan`), joined as a newline-terminated leading
-	 * block. Prepending it to the ternary-return replacement PRESERVES — rather than
-	 * drops — the explanatory comments that sat on the collapsed guard (e.g. a comment
-	 * between the two statements, or one inside the then-block before its `return`).
-	 * Empty when the folded region held no such comment.
+	 * Split every comment inside the replaced `[ifSpan.from, nextSpan.to)` region
+	 * that is NOT already carried inside a copied expression span (`condSpan` /
+	 * `thenSpan` / `elseSpan`) by its POSITION, because position is what the
+	 * author's comment is about:
+	 *
+	 *  - a comment still on the guard's own line — it starts after the then-value
+	 *    and no newline separates the two — describes THAT branch
+	 *    (`if (a == b) return NoChange; // already correctly linked`). It becomes
+	 *    `branchTrailing` and the caller re-attaches it to the rebuilt ternary's
+	 *    then-branch. Hoisting it above the merged `return` (the pre-slice
+	 *    behaviour) re-reads it as a description of the WHOLE collapsed chain,
+	 *    which is a different — and wrong — statement.
+	 *  - everything else (own-line comments between the two statements, a comment
+	 *    inside the then-block before its `return`) keeps the leading-block hoist.
+	 *
+	 * Only the FIRST same-line comment is re-attached, and only when it has no
+	 * internal newline: the writer's ternary operand slot holds one comment
+	 * captured by a same-line scan, so a second one — or a newline-bearing block —
+	 * has nowhere to land and is hoisted with the rest.
+	 *
+	 * `hoisted` is a newline-terminated block, empty when nothing hoists.
 	 */
-	private static function preservedComments(source: String, ifSpan: Span, nextSpan: Span, kept: Array<Span>): String {
+	private static function preservedComments(
+		source: String, ifSpan: Span, thenSpan: Span, nextSpan: Span, kept: Array<Span>
+	): PreservedComments {
 		final out: StringBuf = new StringBuf();
+		var branchTrailing: Null<String> = null;
 		for (tok in RefactorSupport.collectCommentTokens(source)) if (!(tok.from < ifSpan.from || tok.to > nextSpan.to)) {
 			var insideKept: Bool = false;
 			for (k in kept) if (tok.from >= k.from && tok.to <= k.to) {
@@ -243,10 +279,16 @@ final class PreferTernaryReturn implements Check {
 				break;
 			}
 			if (insideKept) continue;
-			out.add(StringTools.trim(source.substring(tok.from, tok.to)));
+			final text: String = StringTools.trim(source.substring(tok.from, tok.to));
+			final onGuardLine: Bool = tok.from >= thenSpan.to && source.substring(thenSpan.to, tok.from).indexOf('\n') < 0;
+			if (branchTrailing == null && onGuardLine && text.indexOf('\n') < 0) {
+				branchTrailing = text;
+				continue;
+			}
+			out.add(text);
 			out.add('\n');
 		}
-		return out.toString();
+		return { hoisted: out.toString(), branchTrailing: branchTrailing };
 	}
 
 
@@ -274,6 +316,12 @@ private typedef Seams = {
 	final returnKind: String;
 	final support: ControlFlowSupport;
 	final shape: RefShape;
+};
+
+/** `preservedComments`' position-split result: the hoisted block plus the one branch-attached comment. */
+private typedef PreservedComments = {
+	final hoisted: String;
+	final branchTrailing: Null<String>;
 };
 
 private typedef TernaryMatch = {

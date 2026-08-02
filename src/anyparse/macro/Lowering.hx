@@ -2364,10 +2364,29 @@ class Lowering {
 				expr: ECall(macro $i{loopFnName}, [macro ctx, macro $v{0}]),
 				pos: Context.currentPos(),
 			};
+			// ω-keep-ternary-operand-comment: `@:fmt(captureTernaryTrail)` grows
+			// two operand-trailing slots. The CONDITION's comment is already in
+			// scope as the Pratt loop's `_opTrailComment` (collected before the
+			// `?` matched, and restored by the no-match rewind when this branch
+			// declines); the THEN branch's is collected right after its operand
+			// parse, before `$skipCall` stashes it into `pendingTrivia` where it
+			// would leak out and be re-emitted below the whole statement.
+			// Both styles are accepted: unlike the infix RHS slot there is no
+			// enclosing chain that could own the comment — the mandatory `:` /
+			// the ternary's own end bound it.
+			final captureTernaryTrail: Bool = _ctx.trivia && branch.fmtHasFlag('captureTernaryTrail');
+			final ctorArgs: Array<Expr> = [macro left, macro _middle, macro _right];
+			if (captureTernaryTrail) {
+				ctorArgs.push(macro _opTrailComment);
+				ctorArgs.push(macro _thenTrailComment);
+			}
 			final ctorCall: Expr = {
-				expr: ECall(ctorRef, [macro left, macro _middle, macro _right]),
+				expr: ECall(ctorRef, ctorArgs),
 				pos: Context.currentPos(),
 			};
+			final thenTrailCapture: Expr = captureTernaryTrail
+				? macro final _thenTrailComment: Null<String> = collectTrailingFull(ctx)
+				: macro {};
 			macro {
 				if ($v{precValue} < minPrec) {
 					ctx.pos = _savedPos;
@@ -2375,6 +2394,7 @@ class Lowering {
 				} else {
 					$skipCall;
 					final _middle: $returnCT = $fullExprCall;
+					$thenTrailCapture;
 					$skipCall;
 					expectLit(ctx, $v{sepText});
 					$skipCall;
@@ -3347,6 +3367,22 @@ class Lowering {
 				// sep on a different line than the arg
 				// (`arg\n,bar`) — fork-supported pattern.
 				final _sepAfter: Bool = matchLit(ctx, $v{sepText});
+				// ω-callarg-after-sep-comment: a same-line comment sitting AFTER
+				// the separator (`arg, // note`) belongs to THIS argument's line,
+				// not to the next argument it would otherwise reach as a leading
+				// comment. Restricted to LINE style: a `//` in a leading slot is
+				// unemittable inline (it would swallow the argument that follows)
+				// and was silently DROPPED, so claiming it here is pure recovery.
+				// A block comment after the separator already round-trips through
+				// the next element's leading slot (`f(a, /* c */ b)`) — leaving it
+				// there keeps every existing layout byte-identical.
+				final _postSepPos: Int = ctx.pos;
+				final _afterSepRaw: Null<String> = _sepAfter && _trailing == null ? collectTrailingFull(ctx) : null;
+				final _afterSep: Null<String> = _afterSepRaw != null && StringTools.startsWith(_afterSepRaw, '//') ? _afterSepRaw : null;
+				if (_afterSep == null)
+					ctx.pos = _postSepPos
+				else
+					_trailing = _afterSep;
 				_args.push({
 					blankBefore: _lead.blankBefore,
 					blankBefore2: _lead.blankBefore2,
@@ -3354,7 +3390,7 @@ class Lowering {
 					newlineBefore: _lead.newlineBefore,
 					leadingComments: _lead.leadingComments,
 					trailingComment: _trailing,
-					trailingBeforeSep: false,
+					trailingBeforeSep: _afterSep == null,
 					sepAfter: _sepAfter,
 					node: _node,
 				});

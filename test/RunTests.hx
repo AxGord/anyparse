@@ -382,6 +382,7 @@ import unit.HxInfixCommentWriteTest;
 import unit.HxCaseCommentWriteTest;
 import unit.HxHeadCommentSeamWriteTest;
 import unit.HxRhsCommentWriteTest;
+import unit.HxTernaryCommentWriteTest;
 import unit.HxInlineBlockCommentWriteTest;
 import unit.HxInlineBlockCommentGapTest;
 import unit.CommentInventoryTest;
@@ -810,6 +811,7 @@ class RunTests {
 		addCase(new HxParamCommentWriteTest());
 		addCase(new HxInfixCommentWriteTest());
 		addCase(new HxRhsCommentWriteTest());
+		addCase(new HxTernaryCommentWriteTest());
 		addCase(new HxInlineBlockCommentWriteTest());
 		addCase(new HxInlineBlockCommentGapTest());
 		addCase(new CommentInventoryTest());

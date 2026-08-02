@@ -2,6 +2,7 @@ package unit;
 
 import utest.Assert;
 import utest.Test;
+import anyparse.format.comment.CommentLossException;
 import anyparse.grammar.haxe.HaxeModuleTriviaParser;
 import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
 
@@ -11,6 +12,11 @@ import anyparse.grammar.haxe.HaxeModuleTriviaWriter;
  * the first argument (`f(/* c *\/ x)`), and before a later argument
  * (`f(a, /* c *\/ b)`). These were previously dropped by the writer /
  * eaten by the parser's pre-loop whitespace skip.
+ *
+ * The second half covers LINE-style comments in the same positions: they have
+ * no inline emission (a `//` swallows whatever follows on its line), so before
+ * the after-sep capture they were dropped outright and the round trip refused
+ * the whole file.
  */
 class HxCallArgCommentWriteTest extends Test {
 
@@ -89,6 +95,93 @@ class HxCallArgCommentWriteTest extends Test {
 		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
 		final out: String = HaxeModuleTriviaWriter.write(ast);
 		Assert.equals('class Foo {\n\tfunction bar() {\n\t\tx = /* keep */ g(arg);\n\t}\n}\n', out);
+	}
+
+
+	/**
+	 * A LINE comment after an argument's separator (`arg, // note`) belongs to
+	 * THAT argument's line. It used to land in the NEXT argument's leading slot,
+	 * which the writer could only emit inline — impossible for `//` — so it was
+	 * DROPPED and the round trip refused the file. Now the parser routes it to
+	 * the previous argument's trailing slot (`trailingBeforeSep == false`) and
+	 * the force-multi shape, which owns the separator, cuddles it after the comma.
+	 */
+	public function testArgTrailingLineCommentAfterSepRoundTrip(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\taaa, // note\n\t\t\tbbb\n\t\t);\n\t}\n}';
+		Assert.equals('$source\n', roundTrip(source));
+	}
+
+	/** An OWN-LINE line comment before an argument is emitted above it, on its own line of the force-multi list. */
+	public function testArgOwnLineLeadingLineCommentRoundTrip(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\taaa,\n\t\t\t// note\n\t\t\tbbb\n\t\t);\n\t}\n}';
+		Assert.equals('$source\n', roundTrip(source));
+	}
+
+	/**
+	 * A BEFORE-separator trailing comment (the last argument's, or one written
+	 * ahead of the comma) is NOT a force-multi trigger: the render-time guard in
+	 * `trailingCommentDocGuarded` already keeps the next token off its line under
+	 * every cascade shape. Pinned so the after-sep work above cannot widen into
+	 * re-wrapping every `arg // noqa` call in a tree.
+	 */
+	public function testLastArgTrailingLineCommentKeepsCascadeShape(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(aaa,\n\t\t\tbbb // note\n\t\t\t);\n\t}\n}';
+		Assert.equals('$source\n', roundTrip(source));
+	}
+
+	/**
+	 * An after-separator comment forces the one-argument-per-line shape whatever
+	 * the wrap cascade would have picked — the source below fits on one line and
+	 * still breaks, because a `//` cannot have the next argument after it.
+	 */
+	public function testAfterSepCommentForcesOneArgPerLine(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(aaa, // note\n\t\t\tbbb);\n\t}\n}';
+		final expected: String = 'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\taaa, // note\n\t\t\tbbb\n\t\t);\n\t}\n}\n';
+		Assert.equals(expected, roundTrip(source));
+	}
+
+	/**
+	 * The spec's refusal repro: a comment after the first argument's comma made
+	 * the whole round trip throw `CommentLossException`, so `fmt` left the file
+	 * alone. It must survive instead.
+	 */
+	public function testArgLineCommentNoLongerRefusesTheRoundTrip(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\tone, // first arg note\n\t\t\ttwo\n\t\t);\n\t}\n}';
+		try
+			Assert.equals('$source\n', new anyparse.grammar.haxe.HaxeQueryPlugin().writeRoundTrip(source))
+		catch (exception: CommentLossException)
+			Assert.fail('round trip still refuses: ${exception.comment}');
+	}
+
+	/** A comment-free arg list is untouched — every new branch is gated on a captured comment. */
+	public function testNoCommentArgsUnaffected(): Void {
+		final source: String = 'class Foo {\n\tfunction bar() {\n\t\tg(aaa, bbb);\n\t}\n}';
+		Assert.equals('$source\n', roundTrip(source));
+	}
+
+	/** A MULTI-LINE block comment leading an argument had nowhere to go either — same own-line treatment. */
+	public function testArgMultiLineBlockLeadingCommentRoundTrip(): Void {
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\taaa,\n\t\t\t/* one\n\t\t\t * two\n\t\t\t */\n\t\t\tbbb\n\t\t);\n\t}\n}';
+		Assert.equals('$source\n', roundTrip(source));
+	}
+
+	/**
+	 * The force-multi shape emits the separator from `Trivial.sepAfter`, not from
+	 * the element's position. A conditional group that absorbed the comma
+	 * (`#if F, false #end`) elided the source one at that gap; emitting one anyway
+	 * yields `g(true, , true)` with the branch off — unparseable output the
+	 * comment-loss guard cannot see, since every comment survived it.
+	 */
+	public function testForceMultiHonoursSourceElidedSeparator(): Void {
+		final source: String =
+			'class Foo {\n\tfunction bar() {\n\t\tg(\n\t\t\ttrue\n\t\t\t#if FSE, false #end,\n\t\t\t// lead\n\t\t\ttrue\n\t\t);\n\t}\n}';
+		Assert.equals('$source\n', roundTrip(source));
+	}
+
+	private function roundTrip(source: String): String {
+		final ast: anyparse.grammar.haxe.trivia.Pairs.HxModuleT = HaxeModuleTriviaParser.parse(source);
+		return HaxeModuleTriviaWriter.write(ast);
 	}
 
 }

@@ -562,6 +562,13 @@ class WriterLowering {
 		// `g(true #if FSE, true #end)` — no comma between the plain arg and
 		// the following conditional group; it lives INSIDE the group).
 		final sepFlagsInit: Expr = c.isTriviaStar ? macro _sepBeforeFlags.push(_i != 0 && !_args[_i - 1].sepAfter) : macro {};
+		// ω-callarg-own-line-comment: set by the element loop when any argument
+		// carries a LINE-style comment. Such a list has exactly one legal layout —
+		// one argument per line — so it bypasses the wrap cascade entirely
+		// (`lowerPostfixForceMultiDoc`), the way a sep-Star routes to its own
+		// force-multi branch for the same reason. Trivia-only: plain-mode elements
+		// carry no comment slots, so the local would be dead in that writer.
+		final forceMultiDecl: Expr = c.isTriviaStar ? macro var _forceArgMulti: Bool = false : macro {};
 		// ω-callarg-empty-inner-comment: for an empty argument list carrying a
 		// captured inner comment (`f(/* c */)`), push the comment Doc into
 		// `_docs` before the sep-list renders `()` so it emits `(/* c */)`.
@@ -591,6 +598,7 @@ class WriterLowering {
 			final _args = $argsAccess;
 			final _docs: Array<anyparse.core.Doc> = [];
 			final _sepBeforeFlags: Array<Bool> = [];
+			$forceMultiDecl;
 			var _i: Int = 0;
 			while (_i < _args.length) {
 				$sepFlagsInit;
@@ -5944,6 +5952,17 @@ class WriterLowering {
 	 * `fillList` (`@:fmt(fill)`), and the default `sepList`. Instance method because `optFieldAccess` reads `ctx`.
 	 */
 	private function lowerPostfixSepListCall(c: PostfixStarCtx): Expr {
+		// ω-callarg-own-line-comment: a LINE comment anywhere in the list pre-empts
+		// the cascade (see `lowerPostfixForceMultiDoc`). Trivia-only — plain mode's
+		// `_args` carry no comment slots and `_forceArgMulti` is a constant false.
+		final cascade: Expr = lowerPostfixCascadeCall(c);
+		if (!c.isTriviaStar) return cascade;
+		final forceMulti: Expr = lowerPostfixForceMultiDoc(c);
+		return macro _forceArgMulti ? $forceMulti : $cascade;
+	}
+
+	/** The wrap-cascade arm of `lowerPostfixSepListCall` (`WrapList.emit` / `fillList` / `sepList`). */
+	private function lowerPostfixCascadeCall(c: PostfixStarCtx): Expr {
 		final postfixOp: String = c.postfixOp;
 		final postfixClose: String = c.postfixClose;
 		final elemSep: String = c.elemSep;
@@ -6612,9 +6631,35 @@ class WriterLowering {
 		// Collapsing nested ternaries into a single chain is a future
 		// slice (no current fixture demands it).
 		final rulesExpr: Expr = optFieldAccess('ternaryWrap');
+		// ω-keep-ternary-operand-comment: the two operand-trailing slots grown by
+		// `@:fmt(captureTernaryTrail)`. Each attaches to its operand's Doc so the
+		// comment travels with the operand under EVERY shape the cascade can pick.
+		// A LINE comment additionally forces the source-faithful `Keep` shape with
+		// every gap broken — a `//` runs to the newline, so leaving `? then` or
+		// `: else` glued after it would comment the rest of the ternary out. A
+		// BLOCK comment is inline-safe: it rides along and the cascade still
+		// decides the layout (`a /* c */ ? b : c` stays flat when it fits).
+		final condTrailAccess: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryCondTrail) : null;
+		final thenTrailAccess: Null<Expr> = _ctx.trivia ? altSlotAccess(branch, branch.children.length, argNames, TernaryThenTrail) : null;
+		final trailDecl: Expr = condTrailAccess != null && thenTrailAccess != null
+			? macro {
+				final _condTrail: Null<String> = ${condTrailAccess};
+				final _thenTrail: Null<String> = ${thenTrailAccess};
+				if (_condTrail != null) {
+					_items[0] = _dc([_items[0], trailingCommentDocVerbatim(_condTrail, opt)]);
+					if (StringTools.startsWith(_condTrail, '//')) _forceKeep = true;
+				}
+				if (_thenTrail != null) {
+					_items[1] = _dc([_items[1], trailingCommentDocVerbatim(_thenTrail, opt)]);
+					if (StringTools.startsWith(_thenTrail, '//')) _forceKeep = true;
+				}
+			}
+			: macro {};
 		return macro {
 			final _items: Array<anyparse.core.Doc> = [$condCall, $middleCall, $rightCall];
 			final _ops: Array<String> = [$v{ternaryOp}, $v{sep}];
+			var _forceKeep: Bool = false;
+			$trailDecl;
 			// ternary-rest-aware: measure the ternary's trailing rest-of-stack
 			// (the statement `;`, an enclosing argument `,`, ...) so a ternary whose
 			// flat body ends AT the line limit but whose physical line overflows
@@ -6629,9 +6674,20 @@ class WriterLowering {
 			// `${...}` body - the fork never wraps an interpolation) and a ternary
 			// kept inside an explicit expression paren (`_keepChainInParen` - that
 			// paren owns the wrap and opens itself, `return a + (cond ? b : c)`).
+			// ω-keep-ternary-operand-comment: a line comment on an operand breaks
+			// EVERY gap (`_ternaryBreaks` all-true under `Keep`) at `BeforeLast`,
+			// which is both the only safe shape and the canonical broken ternary
+			// the cascade itself emits (`cond\n\t? then\n\t: else`) — so the round
+			// trip is byte-stable from the second pass on. The location is PINNED
+			// rather than taken from the cascade: `AfterLast` emits ` ?` before the
+			// break, which the comment would swallow.
+			final _ternaryBreaks: Null<Array<Bool>> = _forceKeep ? [for (_ in _ops) true] : null;
+			final _ternaryKeepLoc: Null<anyparse.format.wrap.WrappingLocation> = _forceKeep
+				? anyparse.format.wrap.WrappingLocation.BeforeLast
+				: null;
 			final _inner: anyparse.core.Doc = anyparse.format.wrap.BinaryChainEmit.emit(
-				_items, _ops, opt, $rulesExpr, false, false, null, false, false, null,
-				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen
+				_items, _ops, opt, $rulesExpr, false, false, _ternaryBreaks, false, _forceKeep, null,
+				opt._chainModeOverride != anyparse.format.wrap.WrapMode.NoWrap && !opt._keepChainInParen, _ternaryKeepLoc
 			);
 			if ($v{tPrec} < ctxPrec)
 				_dc([_dt('('), _inner, _dt(')')])
@@ -12370,6 +12426,10 @@ class WriterLowering {
 		if (TriviaTypeSynth.isInfixChainBranch(branch)) idx++;
 		if (slot == ChainRhsTrail) return macro $i{argNames[idx]};
 		if (TriviaTypeSynth.isRhsTrailBranch(branch)) idx++;
+		if (slot == TernaryCondTrail) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isTernaryTrailBranch(branch)) idx++;
+		if (slot == TernaryThenTrail) return macro $i{argNames[idx]};
+		if (TriviaTypeSynth.isTernaryTrailBranch(branch)) idx++;
 		return macro $i{argNames[idx]};
 	}
 
@@ -12663,6 +12723,7 @@ class WriterLowering {
 			case PostfixOpSpace: TriviaTypeSynth.isPostfixOpSpaceBranch(branch);
 			case ChainAfterComment: TriviaTypeSynth.isInfixChainBranch(branch);
 			case ChainRhsTrail: TriviaTypeSynth.isRhsTrailBranch(branch);
+			case TernaryCondTrail | TernaryThenTrail: TriviaTypeSynth.isTernaryTrailBranch(branch);
 		};
 	}
 
@@ -12800,6 +12861,56 @@ class WriterLowering {
 	}
 
 	/**
+	 * ω-callarg-own-line-comment: the postfix Star's force-multi shape — one
+	 * argument per indented line, each followed by its separator, with an
+	 * after-separator trailing comment cuddled onto that separator
+	 * (`arg, // note`) and the next hardline terminating it.
+	 *
+	 * The wrap cascade cannot produce this. Its shapes own the separator, and
+	 * `FillLineWithLeadingBreak` builds ONE shared separator Doc reused at every
+	 * gap — there is no seam to move a single comma across, and no per-gap flag
+	 * (`sepBeforeFlags`) reaches that shape. So a list holding a LINE comment
+	 * bypasses the cascade the same way a sep-Star's force-multi branch does: a
+	 * `//` runs to the newline, which leaves exactly one legal layout anyway.
+	 *
+	 * Structurally `lowerPostfixKeepDoc` with an unconditional hardline per
+	 * element instead of the source-newline probe. Reads the trailing slots
+	 * directly (not `_docs`) because the element loop deliberately leaves an
+	 * after-separator comment out of the element's own Doc — its position is a
+	 * property of the gap, not of the element.
+	 *
+	 * The separator is SOURCE-faithful, not positional: `Trivial.sepAfter` says
+	 * whether the source actually wrote one. A conditional group that absorbed
+	 * the comma (`g(true #if F, false #end, x)`) elides it at that gap, and
+	 * emitting one anyway produces `g(true, , x)` once the branch is off — code
+	 * that no longer parses, and that the comment-loss guard cannot see because
+	 * every comment survived. Same signal the cascade path threads to
+	 * `WrapList.emit` as `sepBeforeFlags`.
+	 */
+	private static function lowerPostfixForceMultiDoc(c: PostfixStarCtx): Expr {
+		final tcExpr: Expr = c.tcExpr;
+		return macro {
+			final _mInner: Array<anyparse.core.Doc> = [];
+			var _mj: Int = 0;
+			while (_mj < _docs.length) {
+				_mInner.push(_dhl());
+				_mInner.push(_docs[_mj]);
+				final _mTc: Null<String> = _args[_mj].trailingComment;
+				final _mAfterSep: Null<String> = _args[_mj].trailingBeforeSep ? null : _mTc;
+				// Between elements only when the source wrote a separator there; on the
+				// last element when the config asks for a trailing one OR the source
+				// itself put one (which is what an after-separator comment proves).
+				final _mLast: Bool = _mj == _docs.length - 1;
+				if ((!_mLast && _args[_mj].sepAfter) || (_mLast && $tcExpr) || _mAfterSep != null) _mInner.push(_dt($v{c.elemSep}));
+				if (_mAfterSep != null) _mInner.push(trailingCommentDocVerbatim(_mAfterSep, opt));
+				_mj++;
+			}
+			final _mCols: Int = opt.indentChar == anyparse.format.IndentChar.Space ? opt.indentSize : opt.tabWidth;
+			_dwb(_dc([_dt($v{c.postfixOp}), _dn(_mCols, _dc(_mInner)), _dhl(), _dt($v{c.postfixClose})]));
+		};
+	}
+
+	/**
 	 * Build the source-faithful `Keep`-mode args-list Doc for a trivia
 	 * postfix Star. The `ω-D9A-keep-callargs` per-arg hand-built layout (`_dhl()` where source
 	 * had a newline before the next arg, `_dt(' ')` otherwise) plus the
@@ -12879,6 +12990,26 @@ class WriterLowering {
 			? macro {
 				final _elem: anyparse.core.Doc = $elemCall;
 				final _tc: Null<String> = _args[_i].trailingComment;
+				// ω-callarg-after-sep-comment: the parser routes a same-line LINE
+				// comment that followed the separator into THIS element's trailing
+				// slot with `trailingBeforeSep == false`. The separator itself belongs
+				// to the layout engine — and one of its shapes
+				// (`FillLineWithLeadingBreak`) builds ONE shared separator Doc for
+				// every gap, so it cannot be told to move or skip a single one. Such a
+				// comment therefore does not go into this element's Doc at all: it is
+				// read straight from the slot by `lowerPostfixForceMultiDoc`, which
+				// owns both the separator and the line break around it.
+				//
+				// Scope: this Doc feeds the plain-call path. A call that is a
+				// METHOD-CHAIN segment is re-assembled by `wrapWithChainDispatch`'s
+				// own per-argument builder, which appends the trailing slot
+				// unconditionally and never consults `_forceArgMulti` — so a chained
+				// call keeps the pre-separator placement (`m(1 // c\n, 2).n()`).
+				// Parseable, idempotent, and strictly better than the refusal it
+				// replaces, but not the same shape; moving the chain emitter onto this
+				// rule is its own slice.
+				final _tcAfterSep: Bool = _tc != null && !_args[_i].trailingBeforeSep;
+				if (_tcAfterSep) _forceArgMulti = true;
 				// `trailingCommentDocGuarded` already prepends ' ' to
 				// the captured content, so the per-arg Doc is just
 				// `_elem ++ trailingDoc` — no extra `_dt(' ')`.
@@ -12896,23 +13027,33 @@ class WriterLowering {
 				// guard-bearing body - the two halves together keep the `)` off
 				// the comment's line under ANY wrap cascade. Every sound seam
 				// stays byte-identical, and a block comment keeps its legal glue.
-				var _elemDoc: anyparse.core.Doc = _tc != null ? _dc([_elem, trailingCommentDocGuarded(_tc, opt)]) : _elem;
+				// A BEFORE-separator trailing comment is NOT a force-multi trigger:
+				// `trailingCommentDocGuarded`'s render-time break already keeps the
+				// following token off its line, whatever shape the cascade picked.
+				// Widening the trigger to it would re-wrap every `arg // noqa` call
+				// in the tree for no correctness gain.
+				var _elemDoc: anyparse.core.Doc = _tc != null && !_tcAfterSep ? _dc([_elem, trailingCommentDocGuarded(_tc, opt)]) : _elem;
 				// ω-callarg-leading-comment: glue a captured inline block leading
-				// comment before the argument (`/* c */ arg`). Only block comments
-				// with no internal newline are emitted inline; line comments and
-				// multi-line blocks (which need a hardline layout) are deferred to a
-				// dedicated slice.
+				// comment before the argument (`/* c */ arg`).
+				// ω-callarg-own-line-comment: a LINE comment (or a multi-line block)
+				// cannot share the argument's line — it is emitted above the argument
+				// with a hardline between, and the list goes force-multi so the open
+				// delimiter can never end up glued in front of it. Before this it had
+				// nowhere to go and was DROPPED.
 				final _lc: Array<String> = _args[_i].leadingComments;
 				if (_lc.length > 0) {
 					final _leadParts: Array<anyparse.core.Doc> = [];
-					for (_c in _lc) if (StringTools.startsWith(_c, '/*') && _c.indexOf('\n') < 0) {
-						_leadParts.push(leadingCommentDoc(_c, opt));
-						_leadParts.push(_dt(' '));
+					// Index-based: `leadingCommentDocRun` is run-aware (it needs the
+					// entry's neighbours to compute a run-wide common indent).
+					for (_ci in 0..._lc.length) {
+						final _c: String = _lc[_ci];
+						final _inlineBlock: Bool = StringTools.startsWith(_c, '/*') && _c.indexOf('\n') < 0;
+						if (!_inlineBlock) _forceArgMulti = true;
+						_leadParts.push(leadingCommentDocRun(_lc, _ci, opt));
+						_leadParts.push(_inlineBlock ? _dt(' ') : _dhl());
 					}
-					if (_leadParts.length > 0) {
-						_leadParts.push(_elemDoc);
-						_elemDoc = _dc(_leadParts);
-					}
+					_leadParts.push(_elemDoc);
+					_elemDoc = _dc(_leadParts);
 				}
 				_docs.push(_elemDoc);
 			}
@@ -17995,6 +18136,8 @@ enum abstract AltSlot(Int) {
 	final PostfixOpSpace = 8;
 	final ChainAfterComment = 9;
 	final ChainRhsTrail = 10;
+	final TernaryCondTrail = 11;
+	final TernaryThenTrail = 12;
 
 }
 #end
