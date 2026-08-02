@@ -533,6 +533,8 @@ import unit.PreferSwitchExpressionCheckTest;
 import unit.PreferTernaryExpressionCheckTest;
 import unit.PreferTryExpressionAssignmentCheckTest;
 import unit.PreferTryExpressionReturnCheckTest;
+import unit.RedundantCondCompParensCheckTest;
+import unit.ApqLitDirectivesCliTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1003,6 +1005,8 @@ class RunTests {
 		addCase(new EmptyStatementCheckTest());
 		addCase(new EmptyCommentCheckTest());
 		addCase(new EmptyDocTagCheckTest());
+		addCase(new RedundantCondCompParensCheckTest());
+		addCase(new ApqLitDirectivesCliTest());
 		addCase(new RedundantElseCheckTest());
 		addCase(new TailMergeCheckTest());
 		addCase(new ComparisonToBooleanCheckTest());

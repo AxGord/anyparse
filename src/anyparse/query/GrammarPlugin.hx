@@ -1028,9 +1028,18 @@ typedef RefShape = {
 	/**
 	 * The `#else` / `#elseif` directive keywords. The `member-order` reorder cannot yet
 	 * split a conditional's then-body from its else-body (both project as flat
-	 * children), so it bails a container whose member gaps contain one. Optional.
+	 * children), so it bails a container whose member gaps contain one; `CondDirectives`
+	 * reads them as the branch half of its keyword vocabulary. Optional.
 	 */
 	@:optional var conditionalElseKeywords: Array<String>;
+
+	/**
+	 * The `#end` directive keyword (Haxe `#end`) closing a conditional region. Read by
+	 * `CondDirectives` so a directive scan reports a region's closer alongside its opener,
+	 * and so the closer is never mistaken for a condition-bearing keyword; unset leaves the
+	 * closer out of the scanned set. Optional.
+	 */
+	@:optional var conditionalEndKeyword: String;
 
 	/**
 	 * Type names that are provably non-nullable on static targets — Haxe value

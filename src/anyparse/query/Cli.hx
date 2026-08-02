@@ -3476,6 +3476,11 @@ final class Cli {
 		// default would flood doc-comment-heavy queries with noise.
 		final scanComments: Bool = o.includeComments || (kindFilter != null && kindFilter.length == 0)
 			|| effectiveKindFilter.contains('Comment');
+		// Directive scan is OPT-IN ONLY: `--include-directives`, or `Directive` named in an
+		// explicit `--kind`. Unlike the comment scan it deliberately does NOT ride `--any-kind` —
+		// directive lines are hit surface no `lit` query has ever returned, and widening a flag
+		// that already ships would change what an existing query prints.
+		final scanDirectives: Bool = o.includeDirectives || (kindFilter != null && kindFilter.contains('Directive'));
 		// `lit` matches DECODED literal values; the raw file holds the
 		// ESCAPED form, so a raw-substring pre-filter can false-negative
 		// when the searched key carries a backslash. Opt the pre-filter OUT
@@ -3501,6 +3506,7 @@ final class Cli {
 			kinds: effectiveKindFilter,
 			kindWasDefault: kindFilter == null,
 			scanComments: scanComments,
+			scanDirectives: scanDirectives,
 			prefilterKey: litPrefilterKey
 		});
 		if (collected == null) return EXIT_RUNTIME;
@@ -3563,6 +3569,30 @@ final class Cli {
 			final body: String = source.substring(bodySpan.from, bodySpan.to);
 			final match: Bool = exact ? body == target : body.indexOf(target) >= 0;
 			if (match) out.push(new LitHit('Comment', body, new Span(tok.from, tok.to)));
+		}
+	}
+
+	/**
+	 * Directive lexer — appends every conditional-compilation directive of `source` whose text
+	 * matches `target` as a `Directive`-kind `LitHit`. Captured text is the directive itself
+	 * (`#if (sys)`, `#elseif js`, `#end`) and never the code that follows it on an inline
+	 * region's line; the span starts at the `#`, so the rendered `line:col` is the directive's
+	 * own. Substring match by default; `exact=true` requires the whole directive text.
+	 *
+	 * The condition is neither a captured leaf nor a node — it survives only as trivia on the
+	 * directive line — so before this scan `apq lit` could not reach it at all and the documented
+	 * route was `# HXQ_OK:prose`-escaped grep. The scan shares `CondDirectives` with the
+	 * `redundant-condcomp-parens` check (one directive reader, two consumers), so the keyword
+	 * vocabulary comes from the grammar and a `#if` written inside a comment, a string or a regex
+	 * is not a hit.
+	 */
+	private static function appendDirectiveHits(
+		target: String, source: String, exact: Bool, plugin: GrammarPlugin, out: Array<LitHit>
+	): Void {
+		for (directive in CondDirectives.scan(source, plugin.refShape())) {
+			final text: String = CondDirectives.text(source, directive);
+			final match: Bool = exact ? text == target : text.indexOf(target) >= 0;
+			if (match) out.push(new LitHit('Directive', text, directive.span));
 		}
 	}
 
@@ -5348,6 +5378,13 @@ final class Cli {
 		sysPrint('                       hunts, doc-keyword cross-checks). Comments are\n');
 		sysPrint('                       string-literal-aware: `//` inside `"…"`/`\'…\'` is\n');
 		sysPrint('                       not a comment.\n');
+		sysPrint('  --include-directives Scan conditional-compilation DIRECTIVES alongside the AST\n');
+		sysPrint('                       walk — `#if (sys)`, `#elseif js`, `#end`. The condition is\n');
+		sysPrint('                       neither a literal leaf nor a node, so no other kind filter\n');
+		sysPrint('                       reaches it. OPT-IN ONLY: unlike --include-comments it does\n');
+		sysPrint('                       NOT ride --any-kind, so every existing query keeps exactly\n');
+		sysPrint('                       the hits it returns today. The synthetic kind `Directive`\n');
+		sysPrint('                       in --kind scans directives ONLY.\n');
 		sysPrint('  --flat               Legacy flat `file:line:col:` format (default: grouped-by-file)\n');
 		sysPrint('  --limit <n>          Stop after n hits total (default: no limit)\n');
 		sysPrint('  --lang <name>        Grammar plugin (default: haxe)\n');
@@ -5362,6 +5399,9 @@ final class Cli {
 		sysPrint('--any-kind. AST kinds skip comments and string interpolation by routing\n');
 		sysPrint('through the parser; `--include-comments` / `--kind Comment` re-enables\n');
 		sysPrint('them via a separate string-literal-aware scan over the raw source.\n');
+		sysPrint('Directive lines need `--include-directives` / `--kind Directive`; the\n');
+		sysPrint('matched text is the directive itself (keyword plus condition), never the\n');
+		sysPrint('code that follows it on a single-line `#if … #end` region.\n');
 	}
 
 	private static function printBlastUsage(): Void {
@@ -8338,6 +8378,7 @@ final class Cli {
 			limit: -1,
 			kindFilter: null,
 			includeComments: false,
+			includeDirectives: false,
 			target: null,
 			inputSpecs: [],
 			errExit: code
@@ -8351,6 +8392,7 @@ final class Cli {
 		var limit: Int = -1;
 		var kindFilter: Null<Array<String>> = null;
 		var includeComments: Bool = false;
+		var includeDirectives: Bool = false;
 		var target: Null<String> = null;
 		final inputSpecs: Array<String> = [];
 
@@ -8368,6 +8410,8 @@ final class Cli {
 					kindFilter = [];
 				case '--include-comments':
 					includeComments = true;
+				case '--include-directives':
+					includeDirectives = true;
 				case '--flat':
 					flat = true;
 				case '--limit':
@@ -8397,6 +8441,7 @@ final class Cli {
 			limit: limit,
 			kindFilter: kindFilter,
 			includeComments: includeComments,
+			includeDirectives: includeDirectives,
 			target: target,
 			inputSpecs: inputSpecs,
 			errExit: null
@@ -8410,6 +8455,7 @@ final class Cli {
 			kinds: Array<String>,
 			kindWasDefault: Bool,
 			scanComments: Bool,
+			scanDirectives: Bool,
 			prefilterKey: Null<String>
 		}
 	): Null<{ entries: Array<{ file: String, source: String, hits: Array<LitHit> }>, autoWidened: Bool }> {
@@ -8428,11 +8474,12 @@ final class Cli {
 			trees.push({ path: path, source: source, tree: tree });
 			final hits: Array<LitHit> = Lit.find(query.target, tree, query.exact, query.kinds);
 			if (query.scanComments) appendCommentHits(query.target, source, query.exact, hits);
+			if (query.scanDirectives) appendDirectiveHits(query.target, source, query.exact, plugin, hits);
 			if (hits.length == 0) continue;
-			// AST walk emits in depth-first source order; comment hits are
-			// appended after. Sort by span.from so the rendered file group
-			// stays in source order regardless of which pass produced the hit.
-			if (query.scanComments) hits.sort((a, b) -> a.span.from - b.span.from);
+			// AST walk emits in depth-first source order; comment and directive
+			// hits are appended after. Sort by span.from so the rendered file
+			// group stays in source order regardless of which pass produced the hit.
+			if (query.scanComments || query.scanDirectives) hits.sort((a, b) -> a.span.from - b.span.from);
 			allEntries.push({ file: path, source: source, hits: hits });
 		}
 
@@ -14869,7 +14916,7 @@ typedef BlastOpts = {
 	var errExit: Null<Int>;
 };
 /**
- * Parsed options for `apq lit` — `lang`, the `exact` / `kindFilter` / `includeComments` match controls, the `target` literal, `flat`, `limit`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
+ * Parsed options for `apq lit` — `lang`, the `exact` / `kindFilter` / `includeComments` / `includeDirectives` match controls, the `target` literal, `flat`, `limit`, and `inputSpecs`. `errExit` non-null means arg parsing hit a terminal case the caller returns immediately.
  */
 @:nullSafety(Strict)
 typedef LitOpts = {
@@ -14879,6 +14926,7 @@ typedef LitOpts = {
 	var limit: Int;
 	var kindFilter: Null<Array<String>>;
 	var includeComments: Bool;
+	var includeDirectives: Bool;
 	var target: Null<String>;
 	var inputSpecs: Array<String>;
 	// Non-null = parsing hit a terminal case (`-h` -> EXIT_OK, a bad flag -> EXIT_USAGE);

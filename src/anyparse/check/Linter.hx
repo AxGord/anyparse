@@ -51,6 +51,7 @@ final class Linter {
 			new SelfAssignment(),
 			new DuplicateCase(),
 			new RedundantParens(),
+			new RedundantCondCompParens(),
 			new ConstantCondition(),
 			new EmptyStatement(),
 			new EmptyComment(),

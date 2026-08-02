@@ -1126,6 +1126,16 @@ final class RefactorSupport {
 	}
 
 	/**
+	 * Every NON-CODE region of `source` — comment, string literal or regex literal — as `[from, to)`
+	 * spans in source order. The sibling of `collectCommentTokens` over the same single lexer, for a
+	 * caller that only needs to answer "is this offset real code?" (the conditional-compilation
+	 * directive reader) and must not grow a lexer of its own. Not memoised: each call re-lexes.
+	 */
+	public static function collectNonCodeRegions(source: String): Array<Span> {
+		return [for (region in scanLexicalRegions(source)) new Span(region.from, region.to)];
+	}
+
+	/**
 	 * Whether `tok` is a DOC block — opened with the doc marker and carrying a
 	 * non-blank body. A line comment, a plain `/* … *\/` banner (a license header, a
 	 * section label) and the empty `/**` `*\/` form are all NOT docs, which is the
