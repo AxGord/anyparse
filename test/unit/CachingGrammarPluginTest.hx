@@ -5,6 +5,7 @@ import utest.Test;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.query.CachingGrammarPlugin;
 import anyparse.query.QueryNode;
+import anyparse.query.GrammarPlugin.LayoutMetrics;
 
 /**
  * `CachingGrammarPlugin` memoizes `parseFile` / `parseFileTypeRefs` by source
@@ -39,6 +40,41 @@ class CachingGrammarPluginTest extends Test {
 		final src: String = 'class C {\n\tfunction f():Void {\n\t\t#if A\n\t\ta();\n\t\t#else\n\t\tb();\n\t\t#end\n\t}\n}';
 		final tree: QueryNode = cached.parseFile(src);
 		Assert.isTrue(cached.projectBranchAware(tree, src) == cached.projectBranchAware(tree, src));
+	}
+
+	public function testLayoutMetricsCachedByConfig(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final json: String = '{"wrapping": {"maxLineLength": 100}}';
+		Assert.isTrue(cached.layoutMetrics(json) == cached.layoutMetrics(json));
+	}
+
+	public function testLayoutMetricsDifferentConfigNotShared(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		final wide: Null<LayoutMetrics> = cached.layoutMetrics('{"wrapping": {"maxLineLength": 100}}');
+		final narrow: Null<LayoutMetrics> = cached.layoutMetrics('{"wrapping": {"maxLineLength": 80}}');
+		// The OBSERVABLE difference, not reference inequality: two anon structs are
+		// never the same instance, so `wide != narrow` holds with no cache at all.
+		Assert.equals(100, wide == null ? -1 : wide.lineWidth);
+		Assert.equals(80, narrow == null ? -1 : narrow.lineWidth);
+	}
+
+	/**
+	 * A BLANK config text — what a 0-byte `hxformat.json` reads as — states no
+	 * settings, so it keys as NO config rather than as a config of its own. Reference
+	 * identity is the assertion because sharing the ENTRY is the claim: keeping the two
+	 * apart is what let `layoutMetrics` answer `''` while `writeRoundTrip` raised on it,
+	 * and a width-aware rule then reported findings it could never apply.
+	 */
+	public function testLayoutMetricsBlankConfigKeysAsNoConfig(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		Assert.isTrue(cached.layoutMetrics('') == cached.layoutMetrics(null));
+		Assert.isTrue(cached.layoutMetrics('  \n\t') == cached.layoutMetrics(null));
+	}
+
+	/** The WRITE half of that agreement: a blank config resolves to the defaults instead of reaching the JSON parser. */
+	public function testWriteRoundTripAcceptsBlankConfig(): Void {
+		final cached: CachingGrammarPlugin = new CachingGrammarPlugin(new HaxeQueryPlugin());
+		Assert.equals(cached.writeRoundTrip('class C {}\n', null), cached.writeRoundTrip('class C {}\n', ''));
 	}
 
 	public function testDelegatesUncachedMethods(): Void {

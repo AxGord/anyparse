@@ -160,6 +160,19 @@ interface GrammarPlugin {
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String>;
 
 	/**
+	 * Optional: the layout numbers the writer would use for `optsJson` — the
+	 * target line width and the column width of one indent character. Lets a check
+	 * reason about how wide a construct may be BEFORE paying for a
+	 * `writeRoundTrip`, using the same configuration the writer itself would.
+	 *
+	 * `optsJson` follows the `writeRoundTrip` convention: a language-defined JSON
+	 * config string (an `hxformat.json` payload for the Haxe plugin) or `null` for
+	 * the plugin's built-in defaults. Return `null` when the grammar has no writer
+	 * / no width concept — a width-aware check then no-ops for it.
+	 */
+	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics>;
+
+	/**
 	 * Optional: parse `source` with the plain (non-trivia) parser and
 	 * emit via the plain writer. Drops comments and source-layout
 	 * newlines — flattens to the writer's canonical form. Used by `apq
@@ -1860,6 +1873,19 @@ typedef RefShape = {
 typedef MetaShape = {
 	var metaKinds: Array<String>;
 	var declHostKinds: Array<String>;
+}
+
+/**
+ * The writer's layout numbers for one config (`GrammarPlugin.layoutMetrics`).
+ * `lineWidth` is the target column a rendered line should not exceed;
+ * `indentWidth` is how many columns ONE indent character occupies (a tab's
+ * `tabWidth`, or the space-indent size), so a caller can convert a source
+ * position into a column without knowing the grammar's indent style.
+ */
+@:nullSafety(Strict)
+typedef LayoutMetrics = {
+	final lineWidth: Int;
+	final indentWidth: Int;
 }
 
 /**

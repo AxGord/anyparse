@@ -14,10 +14,13 @@ import anyparse.query.StringFold.StringFoldSupport;
 import anyparse.query.ControlFlow.ControlFlowSupport;
 import anyparse.query.BooleanLogic.BooleanLogicSupport;
 import anyparse.query.GrammarPlugin.CheckOverrides;
+import anyparse.query.GrammarPlugin.LayoutMetrics;
+import anyparse.format.IndentChar;
 import anyparse.query.TypeInfoProvider;
 import anyparse.query.SpanTypeInfoProvider;
 import anyparse.query.StdResolver;
 import anyparse.query.CondBranchProjection;
+import anyparse.query.FormatConfigDiscovery;
 
 /**
  * Haxe grammar binding for the `apq` query engine.
@@ -287,14 +290,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 */
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> {
 		final tree: Dynamic = HaxeModuleTriviaParser.parse(source);
-		final opts: HxModuleWriteOptions = optsJson == null
-			? HaxeFormat.instance.defaultWriteOptions
-			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
-		final written: Null<String> = HaxeModuleTriviaWriter.write(tree, opts);
+		final written: Null<String> = HaxeModuleTriviaWriter.write(tree, writeOptionsOf(optsJson));
 		if (written == null || written == source || CommentInventory.guardDeclined()) return written;
 		final lost: Null<String> = CommentInventory.firstMissing(source, written);
 		if (lost != null) throw new CommentLossException(lost);
 		return written;
+	}
+
+	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics> {
+		final opts: HxModuleWriteOptions = writeOptionsOf(optsJson);
+		return {
+			lineWidth: opts.lineWidth,
+			indentWidth: opts.indentChar == Tab ? opts.tabWidth : opts.indentSize
+		};
 	}
 
 	/**
@@ -308,17 +316,13 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 	 * input (anon-struct flattens, terminators differ); always probe
 	 * the pipeline that matches the test entry being constructed.
 	 *
-	 * `optsJson` follows the same convention as `writeRoundTrip` — a
-	 * non-null `hxformat.json`-shaped payload routes through
-	 * `HaxeFormatConfigLoader.loadHxFormatJson`; `null` keeps the
-	 * defaults.
+	 * `optsJson` follows the same convention as `writeRoundTrip`
+	 * (`writeOptionsOf`) — an `hxformat.json`-shaped payload routes
+	 * through `HaxeFormatConfigLoader.loadHxFormatJson`; `null`, and
+	 * equally a BLANK payload, keeps the defaults.
 	 */
 	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String> {
-		final tree: Dynamic = HaxeModuleParser.parse(source);
-		final opts: HxModuleWriteOptions = optsJson == null
-			? HaxeFormat.instance.defaultWriteOptions
-			: HaxeFormatConfigLoader.loadHxFormatJson(optsJson);
-		return HxModuleWriter.write(tree, opts);
+		return HxModuleWriter.write(HaxeModuleParser.parse(source), writeOptionsOf(optsJson));
 	}
 
 	/**
@@ -1087,6 +1091,19 @@ final class HaxeQueryPlugin implements GrammarPlugin implements TypeInfoProvider
 		return new QueryNode('module', null, HaxeQueryWalker.walk(source, withTypeRefs));
 	}
 
+	/**
+	 * The write options `optsJson` names: the writer's own defaults for `null` (no
+	 * config discovered) and equally for a BLANK payload, which is what a 0-byte
+	 * `hxformat.json` reads as — settings the project did not state. Handing that to
+	 * the config parser instead raises `unexpected input (expected {)`. The three
+	 * entries that read it (`writeRoundTrip`, `layoutMetrics`, `writeRoundTripPlain`)
+	 * must agree on that, or a width-aware check MEASURES through one and WRITES
+	 * through another and reports findings it can never apply.
+	 */
+	private static function writeOptionsOf(optsJson: Null<String>): HxModuleWriteOptions {
+		final stated: Null<String> = FormatConfigDiscovery.normalize(optsJson);
+		return stated == null ? HaxeFormat.instance.defaultWriteOptions : HaxeFormatConfigLoader.loadHxFormatJson(stated);
+	}
 
 	/** Read `<dir>/<modulePath-as-path>.hx`, or null when it does not exist / is unreadable (a non-std module then falls back to the table). */
 	private static function readStdModule(dir: String, modulePath: String): Null<String> {
