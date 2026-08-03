@@ -11,6 +11,7 @@ import anyparse.runtime.Span;
 import anyparse.check.AssignmentTreeHoist.TreeSeams;
 import anyparse.check.AssignmentTreeHoist.LvalueRef;
 import anyparse.check.AssignmentTreeHoist.UnitValue;
+import anyparse.check.IfExpressionChain.Carried;
 
 /**
  * Flags an `if / else if / … / else` CHAIN, or a 2-branch `if`/`else` carrying a nested
@@ -77,11 +78,20 @@ import anyparse.check.AssignmentTreeHoist.UnitValue;
  *   becomes emitted text, so it covers this rule and `prefer-switch-expression-assignment` at once.
  *   ROOT-only: `x = g(if (q) 2)` cannot swallow the terminator and stays claimable.
  *
- * A comment inside a DROPPED region of the collapse (a header keyword, the braces, a non-head
- * l-value) would be lost, so such a chain is left unflagged. Unlike the ternary sibling NO
- * null-narrowing guard is needed -- the collapsed `if (…)` conditions are verbatim, so each
- * branch keeps exactly the narrowing it had (see `IfExpressionChain`). The reported span is
- * the whole head `if`.
+ * ## Comments
+ *
+ * A comment between a branch's condition and its r-value, or after that r-value with nothing
+ * but the branch's own `;` / `}` in between, rides that branch's slot in the rebuilt chain and
+ * keeps its position (`IfExpressionChain.carriedComments`; the seats come from
+ * `AssignmentTreeHoist.ifChainValue`, so a NESTED chain's branches open slots too). Every other
+ * comment inside the folded region -- past the `else` that opens the next branch, a header
+ * keyword, the braces, a non-head l-value, or the interior of a branch whose value is a nested
+ * `switch` / `if` construct rather than one copied r-value -- still leaves the chain unflagged,
+ * because there is no slot that would keep it saying what it said.
+ *
+ * Unlike the ternary sibling NO null-narrowing guard is needed -- the collapsed `if (…)`
+ * conditions are verbatim, so each branch keeps exactly the narrowing it had (see
+ * `IfExpressionChain`). The reported span is the whole head `if`.
  *
  * ## Autofix
  *
@@ -89,9 +99,12 @@ import anyparse.check.AssignmentTreeHoist.UnitValue;
  * the recursive hoist of its branch (a plain r-value, or a nested switch- / if-expression). The
  * l-value is copied from the leftmost leaf and the conditions / values from their spans, so the
  * one surviving l-value evaluation (down from N textual occurrences -- the safe direction)
- * matches the original exactly. Needs `ifStatementKinds`, `exprStatementKind`, `blockStmtKind`,
- * `assignKind` and the switch-machinery kinds (`AssignmentTreeHoist`; any unset makes it a
- * no-op or disables that nesting).
+ * matches the original exactly. The hoist runs TWICE: the first pass reports which spans are
+ * copied and where the comment slots sit, the second re-emits with the classified comments
+ * welded in -- pure text assembly over the same tree, byte-identical to the first when nothing
+ * is carried. Needs `ifStatementKinds`, `exprStatementKind`, `blockStmtKind`, `assignKind` and
+ * the switch-machinery kinds (`AssignmentTreeHoist`; any unset makes it a no-op or disables
+ * that nesting).
  */
 @:nullSafety(Strict)
 final class PreferIfExpressionAssignment implements Check {
@@ -178,15 +191,22 @@ final class PreferIfExpressionAssignment implements Check {
 		// leaves) is the ternary rule's; claim a 2-branch only when a branch is a nested construct.
 		if (chain.branches.length < MIN_CHAIN_BRANCHES && !AssignmentTreeHoist.chainHasConstruct(chain, s.tree)) return null;
 		final ref: LvalueRef = { lvalue: null };
-		final unit: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree);
-		if (unit == null) return null;
+		final probe: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree);
+		if (probe == null) return null;
 		final lvalue: Null<QueryNode> = ref.lvalue;
 		final headSpan: Null<Span> = head.span;
 		if (lvalue == null || headSpan == null) return null;
-		final kept: Array<Span> = unit.kept.copy();
+		final kept: Array<Span> = probe.kept.copy();
 		final lvalueSpan: Null<Span> = lvalue.span;
 		if (lvalueSpan != null) kept.push(lvalueSpan);
-		return IfExpressionChain.droppedComment(headSpan, kept, comments) ? null : { lvalue: lvalue, value: unit.text };
+		// Two passes over the SAME chain: the first reports which spans the rebuild copies and
+		// where its comment slots sit, the second re-emits with the classified comments welded in.
+		// The recursion is pure text assembly over one tree, so the second pass cannot see a
+		// different chain -- and with an empty carry the two are byte-identical.
+		final carried: Null<Carried> = IfExpressionChain.carriedComments(headSpan, kept, probe.gaps, source, comments);
+		if (carried == null) return null;
+		final unit: Null<UnitValue> = AssignmentTreeHoist.ifChainValue(chain, ref, source, s.tree, carried);
+		return unit == null ? null : { lvalue: lvalue, value: unit.text };
 	}
 
 

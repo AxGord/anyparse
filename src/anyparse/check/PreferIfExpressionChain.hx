@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.IfExpressionChain.Carried;
+import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -85,13 +87,17 @@ import anyparse.runtime.Span;
  *   `prefer-if-expression-return` and `prefer-if-expression-assignment`: those collapse an
  *   `if` CHAIN rather than a ternary one, but emit the same ` else ` and so carry the same
  *   hazard.
- * - **No comment in a dropped region.** The `?` / `:` glue goes away, so a comment sitting
- *   between the copied conditions and values would be lost; the finding is skipped instead,
- *   per the family's fail-closed guard. Each copied span is first cut back to its last TOKEN
- *   (`IfExpressionChain.tokenSpan`, shared with the two statement-side collapse rules for the
- *   same reason), so a comment the parser folded into a node's TRAILING trivia —
- *   `a < b // why` before the `?` — counts as dropped and skips the chain, instead of being
- *   welded in front of the emitted ` else `, which it would comment out.
+ * - **No comment the rewrite cannot place.** The `?` / `:` glue goes away. A comment between
+ *   a rung's condition and its value (where the `?` sat), or directly after a rung value with
+ *   nothing at all in between, rides the matching slot of the rebuilt branch
+ *   (`IfExpressionChain.carriedComments`) and keeps its position; any OTHER comment between
+ *   the copied pieces — anything past the `:`, which opens the NEXT rung — still skips the
+ *   chain, per the family's fail-closed guard. Each copied span is first cut back to its last
+ *   TOKEN (`IfExpressionChain.tokenSpan`, shared with the two statement-side collapse rules
+ *   for the same reason), so a comment the parser folded into a node's TRAILING trivia —
+ *   `a < b // why` before the `?` — is seen by the slot machinery at all, instead of being
+ *   welded into the copied condition where it would comment out everything the rebuild puts
+ *   after it.
  *
  * A reification subtree (`RefShape.opaqueKinds`, Haxe's `macro { … }`) is skipped wholesale,
  * as in the sibling rewrite rules: its interior is spliced code a consumer may pattern-match
@@ -102,11 +108,11 @@ import anyparse.runtime.Span;
  * `fix` replaces the chain with `if (c1) v1 else if (c2) v2 … else vN`, assembled by the
  * shared `IfExpressionChain.buildValue` so this check and the statement-side collapse rules
  * emit byte-identical text. Conditions and values are copied verbatim from their spans, each
- * cut back to its last token; every condition's redundant outer parentheses are stripped
- * first, the `if (` … `)` syntax supplying its own — leaving them would only draw a
- * `redundant-parens` finding on the result. No parentheses are ADDED: every piece already
- * sat in a `?:` operand slot, and both the `if` condition and its branches accept an
- * expression of any precedence.
+ * cut back to its last token, with any carried comment welded into the branch slot it came
+ * from; every condition's redundant outer parentheses are stripped first, the `if (` … `)`
+ * syntax supplying its own — leaving them would only draw a `redundant-parens` finding on
+ * the result. No parentheses are ADDED: every piece already sat in a `?:` operand slot, and
+ * both the `if` condition and its branches accept an expression of any precedence.
  *
  * The replaced region stops at the TERMINAL VALUE's last TOKEN — not at the chain head's own
  * end, and not at the terminal's raw span end either: an expression node's span runs on
@@ -266,7 +272,7 @@ final class PreferIfExpressionChain implements Check {
 		if (PreferSwitchExpression.claims(source, head, parentKind, plugin, resolveIndex)) return null;
 		final terminalSpan: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
 		final kept: Array<Span> = [terminalSpan];
-		final pairs: Array<{ cond: String, value: String }> = [];
+		final spans: Array<{ cond: Span, value: Span }> = [];
 		for (rung in rungs) {
 			final rawCond: Null<Span> = rung.cond.span;
 			final rawValue: Null<Span> = rung.value.span;
@@ -280,9 +286,24 @@ final class PreferIfExpressionChain implements Check {
 			final valueSpan: Span = IfExpressionChain.tokenSpan(rawValue, source, comments);
 			kept.push(condSpan);
 			kept.push(valueSpan);
-			pairs.push({ cond: source.substring(condSpan.from, condSpan.to), value: source.substring(valueSpan.from, valueSpan.to) });
+			spans.push({ cond: condSpan, value: valueSpan });
 		}
-		if (IfExpressionChain.droppedComment(headSpan, kept, comments)) return null;
+		final seats: Array<CarrySeat> = [
+			for (i in 0...spans.length)
+				{
+					condEnd: spans[i].cond.to,
+					value: spans[i].value,
+					nextStart: i + 1 < spans.length ? spans[i + 1].cond.from : terminalSpan.from
+				}
+		];
+		final carried: Null<Carried> = IfExpressionChain.carriedComments(
+			headSpan, kept, IfExpressionChain.carryGaps(seats), source, comments
+		);
+		if (carried == null) return null;
+		final pairs: Array<{ cond: String, value: String }> = [
+			for (p in spans)
+				{ cond: source.substring(p.cond.from, p.cond.to), value: IfExpressionChain.spanText(source, p.value, carried) }
+		];
 		return {
 			span: headSpan,
 			editSpan: new Span(headSpan.from, terminalSpan.to),

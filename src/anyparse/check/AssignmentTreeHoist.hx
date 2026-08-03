@@ -1,5 +1,8 @@
 package anyparse.check;
 
+import anyparse.check.IfExpressionChain.Carried;
+import anyparse.check.IfExpressionChain.CarryGap;
+import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.QueryNode;
@@ -17,6 +20,18 @@ import anyparse.runtime.Span;
  * receiver purity, decl priority, initializer synthesis). Everything structural -- recognising a
  * unit, threading the common l-value, and building the compact value text (a switch-expression or
  * an if-expression) -- lives here. The emitted text is re-formatted by the canonical writer.
+ *
+ * ## Comment carry
+ *
+ * A unit reports two things the caller needs to place comments: `atom`, the ONE copied span a
+ * plain-assign leaf becomes (null for a nested construct, which is several pieces and therefore
+ * no single slot), and `gaps`, the comment slots opened around those atoms. Only `ifChainValue`
+ * opens slots — a `;`-terminated switch arm has no ` else ` a comment could swallow — but the
+ * recursion carries a nested chain's slots up through a switch arm, so the rule that owns the
+ * whole collapsed region classifies all of them at once. `carried`, threaded back down on the
+ * second pass, is what welds each classified comment onto its atom
+ * (`IfExpressionChain.spanText`); with none passed, every emitter yields the plain verbatim
+ * slice and the built text is byte-identical to the first pass.
  */
 @:nullSafety(Strict)
 final class AssignmentTreeHoist {
@@ -70,7 +85,7 @@ final class AssignmentTreeHoist {
 	 * (leftmost) leaf sets it, every later leaf must textually match it. Null when `node` is not a
 	 * single hoistable unit.
 	 */
-	public static function unitValue(node: QueryNode, ref: LvalueRef, source: String, s: TreeSeams): Null<UnitValue> {
+	public static function unitValue(node: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried): Null<UnitValue> {
 		final stmt: QueryNode = node.kind == s.blockStmtKind && node.children.length == 1 ? node.children[0] : node;
 		final assign: Null<QueryNode> = plainAssign(stmt, s);
 		if (assign != null) {
@@ -85,15 +100,22 @@ final class AssignmentTreeHoist {
 			// A NON-terminal chain branch is already refused one level up by the whole-subtree
 			// scan, which this neither widens nor replaces.
 			if (IfExpressionChain.isElseLessConditional(rhs, s.conditionalKinds)) return null;
-			final rhsSrc: Null<String> = slice(source, rhs);
-			if (rhsSrc == null) return null;
+			// The ONE r-value slice in the recursion, so the ONE place a carried comment can ride a
+			// leaf: `atom` hands that span up to `ifChainValue`, which is where the branch seats —
+			// and with them the comment slots around this value — are opened.
 			final rhsSpan: Null<Span> = rhs.span;
-			return { text: rhsSrc, kept: rhsSpan == null ? [] : [rhsSpan], leafCount: 1 };
+			return rhsSpan == null ? null : {
+				text: IfExpressionChain.spanText(source, rhsSpan, carried),
+				kept: [rhsSpan],
+				gaps: [],
+				atom: rhsSpan,
+				leafCount: 1
+			};
 		}
 		final switchKinds: Null<Array<String>> = s.switchKinds;
-		if (switchKinds != null && switchKinds.contains(stmt.kind)) return switchValue(stmt, ref, source, s);
+		if (switchKinds != null && switchKinds.contains(stmt.kind)) return switchValue(stmt, ref, source, s, carried);
 		final ifKinds: Null<Array<String>> = s.ifKinds;
-		if (ifKinds != null && ifKinds.contains(stmt.kind)) return ifValue(stmt, ref, source, s);
+		if (ifKinds != null && ifKinds.contains(stmt.kind)) return ifValue(stmt, ref, source, s, carried);
 		return null;
 	}
 
@@ -102,15 +124,25 @@ final class AssignmentTreeHoist {
 	 * arm is not a hoistable unit or the switch has no source default arm (a nested switch has no
 	 * initializer to synthesize one, so it must already be exhaustive).
 	 */
-	public static function switchValue(switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams): Null<UnitValue> {
-		final sa: Null<SwitchArms> = switchArms(switchNode, ref, source, s);
+	public static function switchValue(
+		switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried
+	): Null<UnitValue> {
+		final sa: Null<SwitchArms> = switchArms(switchNode, ref, source, s, carried);
 		if (sa == null || !sa.hasDefault) return null;
 		final subjectSrc: Null<String> = slice(source, sa.subject);
 		if (subjectSrc == null) return null;
 		final kept: Array<Span> = sa.kept.copy();
 		final subjectSpan: Null<Span> = sa.subject.span;
 		if (subjectSpan != null) kept.push(subjectSpan);
-		return { text: 'switch $subjectSrc {${sa.armsText} }', kept: kept, leafCount: sa.leafCount };
+		// No `atom`: a switch value is several copied pieces, not one, so no branch seat opens
+		// around it and a comment in its own gaps keeps failing the site closed.
+		return {
+			text: 'switch $subjectSrc {${sa.armsText} }',
+			kept: kept,
+			gaps: sa.gaps,
+			atom: null,
+			leafCount: sa.leafCount
+		};
 	}
 
 	/**
@@ -121,11 +153,14 @@ final class AssignmentTreeHoist {
 	 * require a default -- the caller decides (a nested switch and the l-value arm require one; the
 	 * decl arm may synthesize it).
 	 */
-	public static function switchArms(switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams): Null<SwitchArms> {
+	public static function switchArms(
+		switchNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried
+	): Null<SwitchArms> {
 		if (!switchReady(s) || switchNode.children.length < 2) return null;
 		final subject: QueryNode = switchNode.children[0];
 		final buf: StringBuf = new StringBuf();
 		final kept: Array<Span> = [];
+		final gaps: Array<CarryGap> = [];
 		var hasDefault: Bool = false;
 		var leafCount: Int = 0;
 		for (i in 1...switchNode.children.length) {
@@ -133,7 +168,7 @@ final class AssignmentTreeHoist {
 			if (branch.kind != s.caseBranchKind && branch.kind != s.defaultBranchKind) return null;
 			final body: Null<QueryNode> = armBody(branch, s);
 			if (body == null) return null;
-			final unit: Null<UnitValue> = unitValue(body, ref, source, s);
+			final unit: Null<UnitValue> = unitValue(body, ref, source, s, carried);
 			if (unit == null) return null;
 			final header: Null<String> = armHeader(branch, source, s);
 			if (header == null) return null;
@@ -145,12 +180,17 @@ final class AssignmentTreeHoist {
 			final hs: Null<Span> = headerKeptSpan(branch, s);
 			if (hs != null) kept.push(hs);
 			for (k in unit.kept) kept.push(k);
+			// An arm opens no seat of its own — a `;`-terminated arm value has no ` else ` to be
+			// commented out — but a chain NESTED in one does, and its gaps ride up to the top-level
+			// classification that owns the whole collapsed region.
+			for (g in unit.gaps) gaps.push(g);
 			leafCount += unit.leafCount;
 			if (isDefaultArm(branch, s)) hasDefault = true;
 		}
 		return {
 			armsText: buf.toString(),
 			kept: kept,
+			gaps: gaps,
 			hasDefault: hasDefault,
 			leafCount: leafCount,
 			subject: subject
@@ -163,11 +203,11 @@ final class AssignmentTreeHoist {
 	 * 2-branch `if`/`else` counts here (`minBranches` 1) -- as a nested VALUE it is unambiguous;
 	 * only the TOP-level if-rule keeps the ternary-disjointness gate.
 	 */
-	public static function ifValue(ifNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams): Null<UnitValue> {
+	public static function ifValue(ifNode: QueryNode, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried): Null<UnitValue> {
 		final ifKinds: Null<Array<String>> = s.ifKinds;
 		if (ifKinds == null) return null;
 		final chain: Null<IfChain> = IfExpressionChain.collect(ifNode, ifKinds, s.blockStmtKind, 1);
-		return chain == null ? null : ifChainValue(chain, ref, source, s);
+		return chain == null ? null : ifChainValue(chain, ref, source, s, carried);
 	}
 
 	/**
@@ -193,13 +233,15 @@ final class AssignmentTreeHoist {
 	 * else-less `if` there could absorb nothing -- consistent with the family's stance that proving
 	 * which is which costs more than the rare cleanup it buys.
 	 */
-	public static function ifChainValue(chain: IfChain, ref: LvalueRef, source: String, s: TreeSeams): Null<UnitValue> {
+	public static function ifChainValue(chain: IfChain, ref: LvalueRef, source: String, s: TreeSeams, ?carried: Carried): Null<UnitValue> {
 		final kept: Array<Span> = [];
+		final gaps: Array<CarryGap> = [];
 		final built: Array<{ cond: String, value: String }> = [];
+		final seatParts: Array<{ cond: Null<Span>, atom: Null<Span> }> = [];
 		var leafCount: Int = 0;
 		for (b in chain.branches) {
 			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
-			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s);
+			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s, carried);
 			if (unit == null) return null;
 			final condSrc: Null<String> = slice(source, b.cond);
 			if (condSrc == null) return null;
@@ -207,13 +249,48 @@ final class AssignmentTreeHoist {
 			final condSpan: Null<Span> = b.cond.span;
 			if (condSpan != null) kept.push(condSpan);
 			for (k in unit.kept) kept.push(k);
+			for (g in unit.gaps) gaps.push(g);
+			seatParts.push({ cond: condSpan, atom: unit.atom });
 			leafCount += unit.leafCount;
 		}
-		final term: Null<UnitValue> = unitValue(chain.terminal, ref, source, s);
+		final term: Null<UnitValue> = unitValue(chain.terminal, ref, source, s, carried);
 		if (term == null) return null;
 		for (k in term.kept) kept.push(k);
+		for (g in term.gaps) gaps.push(g);
 		leafCount += term.leafCount;
-		return { text: IfExpressionChain.buildValue(built, term.text), kept: kept, leafCount: leafCount };
+		for (g in seatGaps(seatParts, chain.terminal)) gaps.push(g);
+		return {
+			text: IfExpressionChain.buildValue(built, term.text),
+			kept: kept,
+			gaps: gaps,
+			atom: null,
+			leafCount: leafCount
+		};
+	}
+
+	/**
+	 * The comment slots of a chain's branches: one seat per branch whose value is ONE copied span
+	 * (a plain-assign leaf), running from that branch's condition end to where the NEXT copied
+	 * piece starts — the following branch's condition, or the terminal statement. A branch whose
+	 * value is a nested construct opens no seat: its text is several pieces, so there is no single
+	 * slot a comment could ride, and the site keeps failing closed. The TERMINAL branch opens none
+	 * either — the gap in front of it is the previous branch's trailing gap, and the region behind
+	 * it belongs to whatever the enclosing rule welds on (a `;` a line comment would swallow).
+	 */
+	private static function seatGaps(parts: Array<{ cond: Null<Span>, atom: Null<Span> }>, terminal: QueryNode): Array<CarryGap> {
+		final terminalSpan: Null<Span> = terminal.span;
+		if (terminalSpan == null) return [];
+		final seats: Array<CarrySeat> = [];
+		for (i in 0...parts.length) {
+			final cond: Null<Span> = parts[i].cond;
+			final atom: Null<Span> = parts[i].atom;
+			final next: Null<Span> = i + 1 < parts.length ? parts[i + 1].cond : terminalSpan;
+			if (cond == null || atom == null || next == null) continue;
+			// Re-bind: a narrowed Null<T> does not carry its narrowing into a struct literal.
+			final value: Span = atom;
+			seats.push({ condEnd: cond.to, value: value, nextStart: next.from });
+		}
+		return IfExpressionChain.carryGaps(seats);
 	}
 
 	/** Whether any branch / terminal of `chain` is a nested switch / if construct (not a plain-assign leaf) -- the if-rule's 2-branch disjointness gate. */
@@ -360,6 +437,8 @@ typedef LvalueRef = {
 typedef UnitValue = {
 	var text: String;
 	var kept: Array<Span>;
+	var gaps: Array<CarryGap>;
+	var atom: Null<Span>;
 	var leafCount: Int;
 }
 
@@ -367,6 +446,7 @@ typedef UnitValue = {
 typedef SwitchArms = {
 	var armsText: String;
 	var kept: Array<Span>;
+	var gaps: Array<CarryGap>;
 	var hasDefault: Bool;
 	var leafCount: Int;
 	var subject: QueryNode;

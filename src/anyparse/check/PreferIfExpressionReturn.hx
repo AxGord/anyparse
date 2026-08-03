@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.Violation;
+import anyparse.check.IfExpressionChain.Carried;
+import anyparse.check.IfExpressionChain.CarrySeat;
 import anyparse.check.IfExpressionChain.IfChain;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -24,8 +26,7 @@ import anyparse.runtime.Span;
  * Purely structural, so it holds without a type-checker. `Info` -- the code is correct,
  * this is a readability simplification. The `return` sibling of
  * `prefer-if-expression-assignment`; see it and `IfExpressionChain` for the chain shape,
- * the single-statement rule, the dropped-comment guard and why no null-narrowing guard is
- * needed.
+ * the single-statement rule, the comment slots and why no null-narrowing guard is needed.
  *
  * ## Boundary with `prefer-ternary-return`
  *
@@ -61,24 +62,29 @@ import anyparse.runtime.Span;
  *   the `--fix` gate passes it, but Haxe rejects it (`Expected }` on 4.3.7) -- and the input IS
  *   legal Haxe whenever the carrier is `Void`-typed, so the fix turns working code into code that
  *   does not compile. ROOT-only on purpose: a delimited-interior conditional (`return g(if (q) 3)`)
- *   cannot swallow the terminator, and stays claimable. `prefer-if-expression-chain` needs neither
- *   check on its terminal -- a ternary rung is an expression with no statement terminator to fold.
- * - **No comment in a dropped region.** The header keywords, the braces and every non-head
- *   `return ` go away, so a comment sitting there would be lost and the finding is skipped
- *   instead, per the family's fail-closed guard. Each copied span is first cut back to its
- *   last TOKEN (`IfExpressionChain.tokenSpan`) -- a node's span runs on through the trivia
- *   after it, so `return u + v // why` hands back a value span that SWALLOWS the comment.
- *   Trimming both moves the comment out of the copied text and makes the guard see it as
- *   dropped, which is the only reason it fires there at all.
+ *   cannot swallow the terminator, and stays claimable.
+ * - **No comment the rebuild cannot place.** The header keywords, the braces and every
+ *   non-head `return ` go away. A comment sitting between a branch's condition and its
+ *   returned value, or after that value with nothing but the branch's own `;` / `}` in
+ *   between, rides the matching slot of the rebuilt branch
+ *   (`IfExpressionChain.carriedComments`) and keeps its position; any OTHER comment in the
+ *   folded region -- past the `else` that opens the next branch, above the head, inside the
+ *   condition -- still fails the site closed, per the family's stance that a comment is never
+ *   dropped nor moved somewhere that changes what it says. Each copied span is first cut back
+ *   to its last TOKEN (`IfExpressionChain.tokenSpan`) -- a node's span runs on through the
+ *   trivia after it, so `return u + v // why` hands back a value span that SWALLOWS the
+ *   comment; trimming both moves it out of the copied text and into the slot machinery's view,
+ *   which is the only reason either the carry or the refusal sees it.
  *
  * ## Autofix
  *
  * `fix` replaces the head `if` with `return if (c1) a else if (c2) b … else n;` -- the
  * `return ` prefix copied from the head, the conditions and returned values from their
- * spans, each cut back to its last token. `Match` carries those TRIMMED SPANS rather than
- * nodes, so the text `buildEdit` copies and the region `droppedComment` reports as kept
- * cannot drift apart. Needs `ifStatementKinds`, `returnStatementKind`, `blockStmtKind` (any
- * unset makes it a no-op).
+ * spans, each cut back to its last token, with any carried comment welded into the branch
+ * slot it came from. `Match` carries those TRIMMED SPANS rather than nodes, so the text
+ * `buildEdit` copies and the region the comment classification reports as kept cannot drift
+ * apart. Needs `ifStatementKinds`, `returnStatementKind`, `blockStmtKind` (any unset makes
+ * it a no-op).
  */
 @:nullSafety(Strict)
 final class PreferIfExpressionReturn implements Check {
@@ -199,12 +205,28 @@ final class PreferIfExpressionReturn implements Check {
 		// rebuild's `;` writes `…3;;` — which anyparse re-parses but Haxe rejects. Root-ONLY: a
 		// delimited-interior one (`g(if (q) 3)`) cannot swallow the terminator and stays claimable.
 		if (IfExpressionChain.isElseLessConditional(terminal, s.conditionalKinds)) return null;
-		final m: Match = {
-			prefix: new Span(headReturnSpan.from, pairs[0].value.from),
+		final terminalValue: Span = IfExpressionChain.tokenSpan(rawTerminal, source, comments);
+		final prefix: Span = new Span(headReturnSpan.from, pairs[0].value.from);
+		final kept: Array<Span> = [prefix, terminalValue];
+		final seats: Array<CarrySeat> = [];
+		for (i in 0...pairs.length) {
+			kept.push(pairs[i].cond);
+			kept.push(pairs[i].value);
+			seats.push({
+				condEnd: pairs[i].cond.to,
+				value: pairs[i].value,
+				nextStart: i + 1 < pairs.length ? pairs[i + 1].cond.from : terminalValue.from
+			});
+		}
+		final carried: Null<Carried> = IfExpressionChain.carriedComments(
+			headSpan, kept, IfExpressionChain.carryGaps(seats), source, comments
+		);
+		return carried == null ? null : {
+			prefix: prefix,
 			pairs: pairs,
-			terminalValue: IfExpressionChain.tokenSpan(rawTerminal, source, comments)
+			terminalValue: terminalValue,
+			carried: carried
 		};
-		return droppedComment(headSpan, m, comments) ? null : m;
 	}
 
 	/** The returned expression of `stmt` when it is a valued `return`; null for a bare `return;` or any other statement. */
@@ -215,24 +237,11 @@ final class PreferIfExpressionReturn implements Check {
 	/** Build the `return if (c1) a else if (c2) b … else n;` edit replacing the whole head-`if` span. */
 	private static function buildEdit(m: Match, source: String, span: Span): { span: Span, text: String } {
 		final built: Array<{ cond: String, value: String }> = [
-			for (p in m.pairs) { cond: text(source, p.cond), value: text(source, p.value) }
+			for (p in m.pairs) { cond: text(source, p.cond), value: IfExpressionChain.spanText(source, p.value, m.carried) }
 		];
 		return { span: span, text: IfExpressionChain.buildText(text(source, m.prefix), built, text(source, m.terminalValue)) };
 	}
 
-	/**
-	 * Whether a comment sits in a region the collapse drops. The kept spans are exactly the
-	 * TRIMMED ones `buildEdit` copies, which is what makes a comment the parser folded into a
-	 * value's trailing trivia count as dropped and fail the site closed.
-	 */
-	private static function droppedComment(headSpan: Span, m: Match, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
-		final kept: Array<Span> = [m.prefix, m.terminalValue];
-		for (p in m.pairs) {
-			kept.push(p.cond);
-			kept.push(p.value);
-		}
-		return IfExpressionChain.droppedComment(headSpan, kept, comments);
-	}
 
 	/** The source text `span` covers. */
 	private static inline function text(source: String, span: Span): String {
@@ -260,4 +269,5 @@ private typedef Match = {
 	var prefix: Span;
 	var pairs: Array<{ cond: Span, value: Span }>;
 	var terminalValue: Span;
+	var carried: Carried;
 }

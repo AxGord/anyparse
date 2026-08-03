@@ -25,6 +25,10 @@ class PreferIfExpressionChainCheckTest extends Test {
 	private static inline final TM_TERNARY_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\titems.sort((a:SortedPairEntryDetail, b:SortedPairEntryDetail) -> a.nodeName < b.nodeName ? -1 : a.nodeName > b.nodeName ? 1 : 0);\n\t}\n}';
 
+	/** TM `SharedRelink.decide` after `prefer-ternary-return` folded its guard ladder (anonymized) — the carry flagship. */
+	private static inline final TM_RELINK_DECISION: String =
+		'class C {\n\tfunction f():RebindDecision {\n\t\treturn !visible || remoteHostTag < 0\n\t\t\t? KeepLink\n\t\t\t: dbLocalTag == remoteHostTag\n\t\t\t\t? KeepLink // already correctly paired\n\t\t\t\t: groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING ? RebindAsEdit : RebindAsSteady;\n\t}\n}';
+
 	/** The TM `FileSystemBase` cloud-queue comparator — already canonical, so a 0-finding fixed point (anonymized). */
 	private static inline final TM_IF_CHAIN_COMPARATOR: String =
 		'class C {\n\tfunction f():Void {\n\t\tstack.sort((a:StoredEntryRecord, b:StoredEntryRecord) ->\n\t\t\tif (a.nested && !b.nested)\n\t\t\t\t-1\n\t\t\telse if (!a.nested && b.nested)\n\t\t\t\t1\n\t\t\telse\n\t\t\t\tSortHelper.orderTextValuesForKey(a.nodeName, b.nodeName)\n\t\t);\n\t}\n}';
@@ -203,12 +207,42 @@ class PreferIfExpressionChainCheckTest extends Test {
 	}
 
 	/**
-	 * A comment the parser folded into a rung's TRAILING trivia is cut out of the kept span
-	 * by `tokenSpan`, so the guard sees it as dropped. Emitting it would have welded
-	 * `// why` in front of the ` else `, commenting the rest of the chain out.
+	 * A comment the parser folded into a rung CONDITION's trailing trivia is cut out of the kept
+	 * span by `tokenSpan` — which is what lets the carry see it and ride it into the leading slot
+	 * of that rung's value, where the `?` used to sit. Emitting it verbatim inside the copied
+	 * condition would have welded `// why` in front of the ` else `, commenting the rest out.
 	 */
-	public function testTrailingLineCommentInsideRungSpanNotFlagged(): Void {
-		Assert.equals(0, violations('class C {\n\tfunction f():Int {\n\t\treturn a < b // why\n\t\t\t? 1 : c ? 2 : 3;\n\t}\n}').length);
+	public function testTrailingLineCommentInsideRungSpanCarried(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a < b // why\n\t\t\t? 1 : c ? 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a < b) // why\n1 else if (c) 2 else 3', es[0].text);
+	}
+
+	/** A comment at the end of a RUNG VALUE's own line rides that value; the `:` it sat after is dropped, and the ` else ` moves to the next line. */
+	public function testTrailingLineCommentOnRungValueCarried(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits('class C {\n\tfunction f():Int {\n\t\treturn a ? 1 // one\n\t\t\t: b ? 2 : 3;\n\t}\n}');
+		Assert.equals(1, es.length);
+		Assert.equals('if (a) 1 // one\nelse if (b) 2 else 3', es[0].text);
+	}
+
+	/**
+	 * The flagship: TM `SharedRelink.decide` as `prefer-ternary-return` leaves it (anonymized) —
+	 * a guard ladder already folded into a nested ternary, one arm still carrying the trailing
+	 * comment that used to sit after its `return`. Before the carry that comment refused the whole
+	 * chain, so the fixed point of the pipeline was the ternary form; now it converges to the
+	 * if-expression chain with the comment still on the arm it describes.
+	 */
+	public function testTmRelinkChainCarriesArmComment(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(TM_RELINK_DECISION);
+		Assert.equals(1, es.length);
+		Assert.equals(
+			'if (!visible || remoteHostTag < 0) KeepLink else if (dbLocalTag == remoteHostTag) KeepLink // already correctly paired\n'
+			+ 'else if (groupAllowEdit && pendingAction == QUEUED_STATE_LOCAL_PENDING) RebindAsEdit else RebindAsSteady',
+			es[0].text
+		);
+		Assert.equals(0, violations(RefactorSupport.applyEdits(TM_RELINK_DECISION, es)).length);
 	}
 
 	/** Every copied piece is cut back to its last token — a non-leaf span runs on through the trivia after it. */
