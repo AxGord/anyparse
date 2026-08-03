@@ -1201,9 +1201,11 @@ final class RefactorSupport {
 	 *
 	 * STRING literals are deliberately NOT included, and the distinction is load-bearing rather
 	 * than cosmetic: a single-quoted Haxe string INTERPOLATES, so `'${Foo.x}'` is a genuine
-	 * reference to `Foo`, and masking it would let a name-freeness scan conclude the name is
-	 * unbound when it is read right there. A comment carries no such risk. Not memoised: each
-	 * call re-lexes, so a per-file caller should hoist it.
+	 * reference to `Foo`, and masking the literal WHOLE would let a name-freeness scan conclude
+	 * the name is unbound when it is read right there. A comment carries no such risk. A caller
+	 * that wants the inert TEXT of a literal masked too cannot get it from a lexer at all — which
+	 * bytes of a literal are text is a question only the parse answers, and `InertRegions` answers
+	 * it off the tree. Not memoised: each call re-lexes, so a per-file caller should hoist it.
 	 */
 	public static function collectCommentRegions(source: String): Array<Span> {
 		return [for (token in collectCommentTokens(source)) new Span(token.from, token.to)];

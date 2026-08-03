@@ -201,6 +201,30 @@ class ShortenTypeRefCheckTest extends Test {
 		Assert.equals(once, applyFix(once));
 	}
 
+	/**
+	 * The real shape the arm was losing: a test file whose assertion messages happen to spell the
+	 * simple name. The message is inert TEXT — it binds nothing — so it must not close the arm,
+	 * and the fix must leave its bytes exactly as written.
+	 */
+	public function testAnAssertionMessageMentionDoesNotCloseTheImportArm(): Void {
+		final body: String = "\t\tg(pkg.deep.Foo.a(), 'Foo should exist');\n\t\tg(pkg.deep.Foo.b(), \"Foo content should match\");\n";
+		final out: String = applyFix(inClass('', body));
+		Assert.isTrue(out.indexOf('import pkg.deep.Foo;') != -1, 'import added, got: $out');
+		Assert.isTrue(out.indexOf("g(Foo.a(), 'Foo should exist');") != -1, 'first shortened, message intact, got: $out');
+		Assert.isTrue(out.indexOf('g(Foo.b(), "Foo content should match");') != -1, 'second shortened, message intact, got: $out');
+	}
+
+	/**
+	 * The other half of the same gate: an INTERPOLATED mention is a read of `Foo`, so the arm
+	 * stays closed and every occurrence keeps its qualified spelling.
+	 */
+	public function testAnInterpolatedMentionStillClosesTheImportArm(): Void {
+		final body: String = "\t\tg(pkg.deep.Foo.a(), 'at ${Foo.tag}');\n\t\tg(pkg.deep.Foo.b());\n";
+		final src: String = inClass('', body);
+		Assert.equals(0, violations(src).length);
+		Assert.equals(src, applyFix(src));
+	}
+
 	// --- conditional compilation ---
 
 	public function testConditionalRegionIsNotRewritten(): Void {

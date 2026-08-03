@@ -98,9 +98,10 @@ private typedef ScanContext = {
  * `print`'s `owned` parameter is the exemption — the occurrences of the path ITSELF, which are
  * bound to it by the qualification. Every OTHER occurrence of the simple name in CODE still
  * refuses the import, so a local type declaration, a second import, a type parameter or a
- * `#if`-guarded import of the same name all keep the path long; a mention inside a COMMENT does
- * not, since a comment binds nothing (`collectCommentRegions` — string literals deliberately
- * stay unmasked, a single-quoted Haxe string interpolates and `'${Name.x}'` IS a reference).
+ * `#if`-guarded import of the same name all keep the path long; a mention in INERT text does
+ * not, since neither a comment nor a literal TEXT binds anything (`TypeRefPrinter.inertRegions`).
+ * Only the TEXT of a literal is inert: a single-quoted Haxe string interpolates, so a name
+ * read through one is a reference and keeps the path long.
  *
  * ## What counts as an occurrence
  *

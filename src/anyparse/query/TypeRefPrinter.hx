@@ -101,9 +101,9 @@ private typedef ImportAnchor = {
  * was strictly worse — it emitted the hybrid VERBATIM, which typechecks while the import that
  * props it up survives and breaks silently later.
  *
- * The printer is per-file and stateful only in its pending-import set and a lazy
- * comment-region memo; every resolution input is immutable. `importsOnly` builds the degenerate form for a caller with no parsed
- * file — a pure shorten-or-qualify that never inserts an import.
+ * The printer is per-file and stateful only in its pending-import set and a lazy inert-region
+ * memo; every resolution input is immutable. `importsOnly` builds the degenerate form for a
+ * caller with no parsed file — a pure shorten-or-qualify that never inserts an import.
  */
 @:nullSafety(Strict)
 final class TypeRefPrinter {
@@ -340,16 +340,17 @@ final class TypeRefPrinter {
 	}
 
 	/**
-	 * The file's COMMENT regions, lexed on FIRST use and cached for the rest of this printer's
-	 * life. Lazy rather than ctor-hoisted because only `canAddImport` needs them, and only after
-	 * the shadowing and pending-collision gates have already let a path through — most printed
-	 * references never reach it, and the lex is a whole-file pass.
+	 * The file's INERT regions — every byte that cannot bind or read a name (`InertRegions`),
+	 * computed on FIRST use and cached for the rest of this printer's life. Lazy rather than
+	 * ctor-hoisted because only `canAddImport` needs them, and only after the shadowing and
+	 * pending-collision gates have already let a path through — most printed references never
+	 * reach it, and the computation is two whole-file passes.
 	 */
-	private function commentRegions(source: String): Array<Span> {
-		final cached: Null<Array<Span>> = _commentRegions;
+	private function inertRegions(source: String): Array<Span> {
+		final cached: Null<Array<Span>> = _inertRegions;
 		if (cached != null) return cached;
-		final regions: Array<Span> = RefactorSupport.collectCommentRegions(source);
-		_commentRegions = regions;
+		final regions: Array<Span> = InertRegions.of(source, _root);
+		_inertRegions = regions;
 		return regions;
 	}
 
@@ -407,12 +408,13 @@ final class TypeRefPrinter {
 		if (source == null || _root == null || !_canAnchorImports) return false;
 		if (shadowedLocally(canonical, simple)) return false;
 		if (_pendingImports.exists(p -> p != canonical && lastSegment(p) == simple)) return false;
-		// A COMMENT mention of the simple name is masked out: the scan asks whether anything in
-		// this file BINDS the name, and a comment binds nothing — while the T15 reading refused
-		// the import on the strength of a word in a doc-comment or an assertion message. String
-		// literals stay unmasked on purpose (`collectCommentRegions`): a single-quoted Haxe string
-		// interpolates, so `'${Foo.x}'` is a real reference.
-		final exempt: Array<Span> = (owned ?? []).concat(commentRegions(source));
+		// A mention in INERT text — a comment, or the literal text of a string / regex — is masked
+		// out: the scan asks whether anything in this file BINDS the name, and neither binds
+		// anything, while the T15 reading refused the import on the strength of a word in a
+		// doc-comment or an assertion message. Only the TEXT is masked: a single-quoted Haxe string
+		// interpolates, so the `Foo` of `'${Foo.x}'` or `'$Foo'` is a real reference and still
+		// vetoes (`inertRegions`).
+		final exempt: Array<Span> = (owned ?? []).concat(inertRegions(source));
 		return !RefactorSupport.referencedInRange(source, simple, 0, source.length, exempt);
 	}
 
@@ -848,7 +850,7 @@ final class TypeRefPrinter {
 	/** The file's BULK import statements, guarded ones included — the `shadowedByBulkImport` input; empty with no tree. */
 	private final _bulkImports: Array<QueryNode>;
 
-	/** The file's COMMENT regions, lexed on FIRST use and cached — see `commentRegions`. */
-	private var _commentRegions: Null<Array<Span>> = null;
+	/** The file's inert (comment + literal-text) regions, computed on FIRST use and cached — see `inertRegions`. */
+	private var _inertRegions: Null<Array<Span>> = null;
 
 }
