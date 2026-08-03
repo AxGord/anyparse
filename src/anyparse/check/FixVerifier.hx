@@ -293,17 +293,18 @@ final class FixVerifier {
 	private static function editsOfUnits(
 		edits: Array<GroupedEdit>, units: Array<Array<Int>>, unitIndices: Array<Int>
 	): Array<{ span: Span, text: String }> {
-		final flat: Array<Int> = [];
-		for (u in unitIndices) for (i in units[u]) flat.push(i);
+		final flat: Array<Int> = [for (u in unitIndices) for (i in units[u]) i];
 		flat.sort((a, b) -> a - b);
 		return [for (i in flat) { span: edits[i].span, text: edits[i].text }];
 	}
 
 	/**
-	 * Isolate the failing edit indices among `[0, count)` by binary-split group
-	 * testing. `probe(indices)` is true when that SUBSET (canonicalised from the
-	 * ORIGINAL source with exactly those edits) typechecks. Precondition: the FULL
-	 * set is known to fail, so no probe re-establishes it. Returns the sorted failer
+	 * Isolate the failing UNIT indices among `[0, count)` by binary-split group
+	 * testing. A unit is one edit, or one `GroupedFix` group — the search is
+	 * index-agnostic either way, `verifyEntry` owns the mapping (`unitsOf`).
+	 * `probe(indices)` is true when that SUBSET (canonicalised from the ORIGINAL
+	 * source with exactly those units' edits) typechecks. Precondition: the FULL set
+	 * is known to fail, so no probe re-establishes it. Returns the sorted failer
 	 * indices whose removal makes the complement pass, or null when the probe budget
 	 * is exhausted (the caller falls back to a whole-file revert). `spent[0]` receives
 	 * the probe count.
