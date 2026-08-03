@@ -19,6 +19,10 @@ import anyparse.runtime.Span;
  */
 class TypeRefPrinterTest extends Test {
 
+	/** Two runs split by a `using`, each sorted, their CONCATENATION not — the shape a whole-list reading called unordered. */
+	private static inline final SPLIT_RUNS: String = 'package app;\n\nimport a.Alpha;\nimport m.Mid;\nimport z.Zeta;\n'
+		+ '\nusing ext.Tools;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
+
 	// --- route 1: already visible -> short name ---
 
 	public function testImportedMainTypePrintsShort(): Void {
@@ -358,10 +362,6 @@ class TypeRefPrinterTest extends Test {
 
 	// --- contiguous RUNS: a `using` / `#if` splits the list, and each run is placed into on its own ---
 
-	/** Two runs split by a `using`, each sorted, their CONCATENATION not — the shape a whole-list reading called unordered. */
-	private static inline final SPLIT_RUNS: String = 'package app;\n\nimport a.Alpha;\nimport m.Mid;\nimport z.Zeta;\n'
-		+ '\nusing ext.Tools;\n\nimport b.Bee;\nimport c.Cee;\n\nclass C {}\n';
-
 	public function testPathSortingIntoTheEarlierRunLandsThere(): Void {
 		// A whole-list reading sees `z.Zeta` before `b.Bee` and calls the file unordered, so the
 		// fresh import was appended past the LAST import — into the run after the `using`,
@@ -410,6 +410,35 @@ class TypeRefPrinterTest extends Test {
 		p.print('a.Zulu');
 		Assert.equals(
 			'package app;\n\nimport a.Alpha;\nimport a.Zulu;\n#if js\nimport js.Browser;\n#end\nimport z.Zeta;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testTiedRunsGrowTheEARLIESTOne(): Void {
+		// Both runs are ordered, share nothing with `x.Xray`, and would both merely APPEND it — the
+		// rank the other three criteria leave undecided. Growing the file's FAR end is exactly the
+		// last-run-blind append the run model exists to stop, so the earliest run wins.
+		final src: String =
+			'package app;\n\nimport a.Alpha;\nimport b.Beta;\n\nusing ext.Tools;\n\nimport c.Cee;\nimport d.Dee;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('x.Xray');
+		Assert.equals(
+			'package app;\n\nimport a.Alpha;\nimport b.Beta;\nimport x.Xray;\n'
+			+ '\nusing ext.Tools;\n\nimport c.Cee;\nimport d.Dee;\n\nclass C {}\n',
+			applyImports(p, src)
+		);
+	}
+
+	public function testAnOrderedRunOutranksACloserUnorderedOne(): Void {
+		// Rank 1 beats rank 2: the first run SHARES `b.Bravo`'s package but no order explains it, so
+		// appending there would say nothing about where the line belongs; the lone import past the
+		// `using` is ordered (`orderOf` calls a one-import run ordered) and takes it in order. Note
+		// what that is not: joining a run the file already had, never opening one past the `using`.
+		final src: String = 'package app;\n\nimport b.Zulu;\nimport b.Alpha;\n\nusing ext.Tools;\n\nimport q.Quebec;\n\nclass C {}\n';
+		final p: TypeRefPrinter = printer(src);
+		p.print('b.Bravo');
+		Assert.equals(
+			'package app;\n\nimport b.Zulu;\nimport b.Alpha;\n\nusing ext.Tools;\n\nimport b.Bravo;\nimport q.Quebec;\n\nclass C {}\n',
 			applyImports(p, src)
 		);
 	}

@@ -221,7 +221,7 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 */
 	private static function boundNames(path: String, moduleTypes: Map<String, Array<String>>): Array<String> {
 		final types: Null<Array<String>> = moduleTypes[path];
-		return types == null || types.length == 0 ? [lastSegment(path)] : types;
+		return types == null || types.length == 0 ? [ImportOrder.lastSegment(path)] : types;
 	}
 
 	/**
@@ -230,12 +230,6 @@ final class ImportBlockOrder implements Check implements DefaultOff implements C
 	 */
 	private static function blocksOf(source: String, tree: QueryNode): Array<Array<ImportLine>> {
 		return ImportOrder.runsOf(source, ImportOrder.slotsOf(tree)).filter(run -> run.length > 1);
-	}
-
-	/** The last dotted segment of `dotted` — the simple name an import binds. */
-	private static function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot == -1 ? dotted : dotted.substring(dot + 1);
 	}
 
 }

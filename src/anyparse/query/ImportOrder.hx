@@ -20,14 +20,25 @@ typedef ImportSlot = {
  * `import-order` autofix permutes. `chunkFrom` … `chunkTo` is the region that MOVES with the
  * statement: it reaches backward over the whole-line `//` comments written directly above it and
  * forward over the rest of its own line, that line's newline included. `declFrom` is the
- * statement's own start — the anchor an INSERT uses, so a fresh line lands below such a comment
- * together with the import it was written for, never between the two.
+ * statement's own start — the anchor an INSERT uses, so a fresh line landing on a statement that
+ * carries a whole-line comment SPLITS the two, taking the slot between the comment and its
+ * import. Callers whose runs carry such comments should expect it; the alternative — anchoring on
+ * `chunkFrom` — puts the fresh import above the comment instead, which is the same misattribution
+ * seen from the other side.
  */
 typedef ImportLine = {
 	final path: String;
 	final declFrom: Int;
 	final chunkFrom: Int;
 	final chunkTo: Int;
+}
+
+/** One run weighed as a host for a fresh import: the run, whether an order explains it, its dotted-prefix affinity, and the index the path sorts before (-1 = append at the run's end). */
+private typedef RunChoice = {
+	final run: Array<ImportLine>;
+	final ordered: Bool;
+	final affinity: Int;
+	final slot: Int;
 }
 
 /**
@@ -73,27 +84,29 @@ typedef ImportLine = {
  *
  * ## Which run a fresh path joins
  *
- * The ORDERED runs are the candidates, ranked by:
+ * Every run is a candidate; they are ranked by:
  *
- *  1. AFFINITY — the longest leading dotted prefix any of the run's imports shares with `path`.
+ *  1. ORDERED over not. A run whose order is preserved by the insert is always the better host
+ *     than one already explained by neither reading.
+ *  2. AFFINITY — the longest leading dotted prefix any of the run's imports shares with `path`.
  *     A fresh `app.C` belongs with the `app.*` imports even when a later run would also take it
  *     in order.
- *  2. A slot INSIDE the run over one the path could only be appended to. This is the whole-list
+ *  3. A slot INSIDE the run over one the path could only be appended to. This is the whole-list
  *     reading of a blank-line-grouped block, kept: a path sorting past every member of the first
  *     group and before the second's opens that second group rather than closing the first.
- *  3. EARLIEST — a file whose runs say nothing about the path has no reason to grow at its far
+ *  4. EARLIEST — a file whose runs say nothing about the path has no reason to grow at its far
  *     end, which is the last-run-blind append this class exists to stop.
  *
  * Inside the chosen run the slot is the start of the first import that sorts AFTER `path`, or —
  * when `path` sorts after all of them — the offset just past the run's last line, which appends
- * WITHIN the run instead of past the file's whole import block.
+ * WITHIN the run instead of past the file's whole import block. An UNORDERED run has no position
+ * to compute, so it is only ever appended to: guessing a slot inside a chaotic run buys nothing.
  *
- * With NO run explained by any order, the same affinity choice picks the run to APPEND to. This
- * is the documented fallback and it is deliberately not -1: a caller's own append anchor is the
- * file's last import statement, which for a file whose imports are followed by a `using` sits
- * PAST that `using` — and a plain import spliced after the `using` group opens a stray third run
- * that every later insert then extends. Guessing an ordered slot inside a chaotic run still buys
- * nothing, so the fallback only chooses the run, never a position inside it.
+ * Rank 1 reaches further than it reads, because `orderOf` calls a ONE-import run ordered. A file
+ * whose imports are followed by a `using` and a single import past it therefore offers that lone
+ * import as an ordered candidate, and a fresh path joins it rather than the larger unordered run
+ * before the `using` — even a path that shares that run's package. It is order-preserving and it
+ * EXTENDS a run the file already had; opening one past the `using` is the incident this closes.
  *
  * -1 — "the caller must append past everything" — is left for the two cases where no run may be
  * joined at all: a file with no plain import runs, and a path whose SIMPLE NAME an existing
@@ -108,6 +121,12 @@ typedef ImportLine = {
  * sliding a fresh one into the middle of a sorted `using` group would silently rank it below
  * extensions declared after it. Every caller therefore appends a `using` after the last one, and
  * the `import-order` rule never reorders the group.
+ *
+ * LIMIT — this seat is config-blind while the rule is config-aware. Under a non-default
+ * `"import-order": { "order": … }` a run the seat reads as ordered (the first order that explains
+ * it) may not be ordered under the REQUESTED one, and an insert preserving the former can still
+ * be flagged by the latter. The two agree on the run SHAPE, which is what closed the incident;
+ * agreeing on the ORDER would mean plumbing the lint config into every inserting fixer.
  */
 @:nullSafety(Strict)
 final class ImportOrder {
@@ -227,38 +246,25 @@ final class ImportOrder {
 	public static function insertOffset(source: String, block: Array<ImportSlot>, path: String): Int {
 		final simple: String = lastSegment(path);
 		if (block.exists(slot -> lastSegment(slot.path) == simple)) return -1;
-		final runs: Array<Array<ImportLine>> = runsOf(source, block);
-		var chosen: Null<Array<ImportLine>> = null;
-		var chosenSlot: Int = -1;
-		var chosenAffinity: Int = -1;
-		for (run in runs) {
-			final order: Int = orderOf(pathsOf(run));
-			if (order < 0) continue;
-			final affinity: Int = affinityOf(run, path);
-			final slot: Int = slotIn(run, order, path);
-			if (chosen != null && !beats(affinity, slot, chosenAffinity, chosenSlot)) continue;
-			chosen = run;
-			chosenSlot = slot;
-			chosenAffinity = affinity;
-		}
-		if (chosen != null) return chosenSlot < 0 ? chosen[chosen.length - 1].chunkTo : chosen[chosenSlot].declFrom;
-		// No run carries an order at all: the fallback only chooses WHICH run to append to.
-		final fallback: Null<Array<ImportLine>> = closestRun(runs, path);
-		return fallback == null ? -1 : fallback[fallback.length - 1].chunkTo;
+		final chosen: Null<RunChoice> = chooseRun(runsOf(source, block), path);
+		if (chosen == null) return -1;
+		final run: Array<ImportLine> = chosen.run;
+		return chosen.slot < 0 ? run[run.length - 1].chunkTo : RefactorSupport.startOfLine(source, run[chosen.slot].declFrom);
 	}
 
 	/**
 	 * The order carried by the run the offset `at` anchors into — the reading several fresh lines
 	 * sharing one anchor must be sorted under, so they do not leave that run explained by neither
-	 * order. -1 when `at` is no run's anchor (a caller's own append fallback), which `compare`
-	 * reads as the deterministic codepoint default.
+	 * order. -1 when `at` anchors no run, which `compare` reads as the deterministic codepoint
+	 * default; every offset `insertOffset` returns does anchor one.
 	 *
-	 * Two paths that produced the same anchor are in the same run by construction: distinct runs
-	 * occupy disjoint offset ranges.
+	 * Two paths that produced the same anchor are in the same run by construction: runs occupy
+	 * disjoint offset ranges, since a run's own end is what separates it from the next.
 	 */
 	public static function orderAt(source: String, block: Array<ImportSlot>, at: Int): Int {
 		for (run in runsOf(source, block)) {
-			final anchored: Bool = run[run.length - 1].chunkTo == at || run.exists(line -> line.declFrom == at);
+			final anchored: Bool = run[run.length - 1].chunkTo == at
+				|| run.exists(line -> RefactorSupport.startOfLine(source, line.declFrom) == at);
 			if (anchored) return orderOf(pathsOf(run));
 		}
 		return -1;
@@ -267,8 +273,8 @@ final class ImportOrder {
 	/**
 	 * Every PLAIN `import` statement of `root`'s top level as a slot, in source order — the block
 	 * shape `runsOf` and `insertOffset` read. A statement the grammar recorded no span for carries
-	 * negative offsets, so it is never anchored on and ends the run it sits in: a run must not be
-	 * read as ordered on the strength of a line the machinery cannot see.
+	 * negative offsets: it cannot be placed on a line, so it ENDS the run it sits in rather than
+	 * joining it — the run around a line the machinery cannot see must not be read as one block.
 	 */
 	public static function slotsOf(root: QueryNode): Array<ImportSlot> {
 		return [
@@ -286,17 +292,39 @@ final class ImportOrder {
 		return [for (line in run) line.path];
 	}
 
+	/** The last dotted segment of `dotted` — the simple name a plain import binds. */
+	public static inline function lastSegment(dotted: String): String {
+		final dot: Int = dotted.lastIndexOf('.');
+		return dot == -1 ? dotted : dotted.substring(dot + 1);
+	}
+
 	/**
-	 * Whether a run scoring `(affinity, slot)` should displace the incumbent scoring
-	 * `(bestAffinity, bestSlot)`. Affinity decides first — a fresh `app.C` belongs with the
-	 * `app.*` imports even when a later run would also take it in order. A tie goes to the run
-	 * that has a real slot INSIDE it over one the path could only be appended to, which is the
-	 * whole-list reading of a blank-line-grouped block: a path sorting past every member of the
-	 * first group and before the second's opens that second group. Everything still tied leaves
-	 * the incumbent standing, so the EARLIEST such run wins.
+	 * The run of `runs` that hosts `path`, with the index inside it the path sorts before (-1 to
+	 * append at the run's end), or null when there is no run at all. Ranks every run by the class
+	 * doc's four criteria in one pass; a candidate that ties on all of them leaves the incumbent
+	 * standing, which is what makes the EARLIEST run win.
 	 */
-	private static inline function beats(affinity: Int, slot: Int, bestAffinity: Int, bestSlot: Int): Bool {
-		return affinity != bestAffinity ? affinity > bestAffinity : slot >= 0 && bestSlot < 0;
+	private static function chooseRun(runs: Array<Array<ImportLine>>, path: String): Null<RunChoice> {
+		var best: Null<RunChoice> = null;
+		for (run in runs) {
+			final order: Int = orderOf(pathsOf(run));
+			// An unordered run has no position to compute — it can only ever be appended to.
+			final candidate: RunChoice = {
+				run: run,
+				ordered: order >= 0,
+				affinity: affinityOf(run, path),
+				slot: order < 0 ? -1 : slotIn(run, order, path)
+			};
+			if (best == null || beats(candidate, best)) best = candidate;
+		}
+		return best;
+	}
+
+	/** Whether `candidate` outranks `incumbent` under the class doc's ordered / affinity / slot-inside criteria. */
+	private static function beats(candidate: RunChoice, incumbent: RunChoice): Bool {
+		if (candidate.ordered != incumbent.ordered) return candidate.ordered;
+		if (candidate.affinity != incumbent.affinity) return candidate.affinity > incumbent.affinity;
+		return candidate.slot >= 0 && incumbent.slot < 0;
 	}
 
 	/** The index in `run` of the first import that sorts AFTER `path` under `order`, or -1 when `path` sorts past them all. */
@@ -313,23 +341,6 @@ final class ImportOrder {
 			if (shared > affinity) affinity = shared;
 		}
 		return affinity;
-	}
-
-	/**
-	 * The run of `runs` whose imports `path` is most closely related to (`affinityOf`), ties going
-	 * to the earliest. Null for an empty list.
-	 */
-	private static function closestRun(runs: Array<Array<ImportLine>>, path: String): Null<Array<ImportLine>> {
-		var best: Null<Array<ImportLine>> = null;
-		var bestAffinity: Int = -1;
-		for (run in runs) {
-			final affinity: Int = affinityOf(run, path);
-			if (affinity > bestAffinity) {
-				best = run;
-				bestAffinity = affinity;
-			}
-		}
-		return best;
 	}
 
 	/** How many leading dotted SEGMENTS `a` and `b` share — `pkg.a.T` and `pkg.a.U` share two. */
@@ -383,12 +394,6 @@ final class ImportOrder {
 			from = previousStart;
 		}
 		return from;
-	}
-
-	/** The last dotted segment of `dotted` — the simple name a plain import binds. */
-	private static inline function lastSegment(dotted: String): String {
-		final dot: Int = dotted.lastIndexOf('.');
-		return dot == -1 ? dotted : dotted.substring(dot + 1);
 	}
 
 }
