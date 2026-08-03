@@ -17,28 +17,56 @@ import anyparse.grammar.haxe.HxModuleWriteOptions;
  * the runtime `_flatCase` gate answered a BOOLEAN "flatten now?", so
  * `FitLine` matched no arm and degenerated to `Next` — every body broke,
  * including bodies that trivially fit. The slice adds the sibling
- * `_fitCase` gate, which emits `BodyGroup(Nest(cols, [Line, body]))` —
- * the same Doc shape `WriterLowering.buildBodyFitExpr` builds for a
- * bare-Ref `FitLine` body (`return` / `if` / `for`). The renderer's own
- * `fitsFlat` then decides: it sees the live column (the `case
- * <patterns>:` header is already emitted) plus the flat width of
- * ` <body>` including the body's `;` and any folded trailing comment.
+ * `_fitCase` gate, which hands the body to
+ * `anyparse.format.BodyFit.fitLineLayout` — the one emitter that also
+ * serves `WriterLowering.buildBodyFitExpr`'s bare-Ref `FitLine` bodies
+ * (`return` / `if` / `for`).
  *
- * Boundary contract (pinned below): a case line of EXACTLY
- * `maxLineLength` columns stays inline; one column more breaks. No
- * `width + 1` calibration here — `Group` fit is `<= lineWidth`.
+ * TWO OUTCOMES, and which one applies is NOT a width question:
  *
- * Composition contract:
+ *  - The body can render on one line (`WrapList.flatLength >= 0`, i.e. no
+ *    hardline anywhere in its Doc) → `BodyGroup(Nest(cols, [Line, body]))`,
+ *    and the renderer's `fitsFlat` decides from the live column (the
+ *    `case <patterns>:` header is already emitted) plus the flat width of
+ *    ` <body>` including its `;` and any folded trailing comment.
+ *  - The body cannot (a block, a wrap cascade that refuses one line, a
+ *    source-multi-line literal the emitter keeps broken) → it GLUES to the
+ *    label, the same shape `Same` gives, with no measurement at all.
+ *
+ * The flat-length question is asked FIRST, and that ordering is the whole
+ * idempotence story: `Renderer.fitsFlat` DEFERS a nested `BodyGroup` while
+ * `WrapList.flatLength` DESCENDS one, and the writer wraps
+ * source-multi-line literals in a `BodyGroup` and single-line ones not — so
+ * measuring first answered differently for the two source shapes of ONE
+ * AST, and `fmt` needed a second pass to settle (pinned below by the
+ * 3-pass and two-source-shapes tests).
+ *
+ * BOUNDARY CONTRACT, and its scope: on the MEASURED outcome a case line of
+ * exactly `maxLineLength` columns stays inline and one column more breaks
+ * (`Group` fit is `<= lineWidth`; no `width + 1` calibration here). The
+ * GLUE outcome is placed without measurement, so its case line may exceed
+ * `maxLineLength` and keeps growing with the header — measured:
+ * `case 1: if (<114 c's>) {` renders at 141 columns under
+ * `maxLineLength: 140`. That is not a fit bug; it is the same
+ * unconditional glue `Same` / `Keep` give, and the same one a block body
+ * gets from `sameLine.ifBody` / `forBody` / `whileBody`.
+ *
+ * COMPOSITION:
  *  - `refuseFlatOnComplexExpr` wins over the fit measurement — an
  *    `A && B` body breaks even when it fits.
- *  - `alignInlineSwitchCaseBody` is a no-op under `FitLine`: its purpose
- *    is to avoid a second indent level on a COMMITTED-inline body that
- *    wraps internally, and `FitLine` never produces that state (a body
- *    that cannot render flat makes the group break instead).
- *  - Comments keep their existing behaviour: a case-label trailing
- *    comment and an own-line comment before the body both force the
- *    break; a comment trailing the body itself rides inline and counts
- *    toward the fit measure.
+ *  - `alignInlineSwitchCaseBody` reaches the fit path as `BodyFit`'s
+ *    `nestGluedBody`: LIVE on the glue outcome (whose body has inner lines
+ *    that may want the `+1` continuation indent), and provably inert on the
+ *    measured outcome — a body that reaches it holds no hardline at all, so
+ *    there is no inner line for a `Nest` to move.
+ *  - Comments: a case-label trailing comment refuses the fit path outright
+ *    (it would land on the wrong side of the emitter-owned separator, and
+ *    it forces a physical break regardless) and an own-line comment before
+ *    the body keeps the break; a comment trailing the BODY rides inline and
+ *    counts toward the fit measure.
+ *  - `flatChildOpt`'s child-policy fanout stays gated on the COMMITTED
+ *    `_flatCase` only — pinned, because the fit path's own placement is
+ *    still undecided at that point.
  *
  * Per `feedback_unit_test_trivia_writer.md`: the knobs are visible only
  * through `HaxeModuleTriviaParser` / `HaxeModuleTriviaWriter`.
@@ -66,6 +94,16 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		+ 'LineTint(current ? cast(node, RectangleShape).lineTint : tint);\n'
 		+ '\t\t\tcase [KindData.KIND_OVAL_SHAPE, KindData.KIND_OVAL_STROKE]: LineTint(current ? cast(node, OvalShape).lineTint : tint);\n'
 		+ '\t\t\tcase _: Tint(current ? node.tint : tint);\n' + '\t\t};\n' + '\t}\n' + '}\n';
+
+	/**
+	 * ω-case-body-fitline-idempotence — a case body whose value is an
+	 * object literal the object-literal cascade refuses to keep on one line.
+	 * The FIRST format pass sees a single-line source literal, the SECOND
+	 * sees the broken one; the case-body placement must not notice the
+	 * difference.
+	 */
+	private static final FORCED_MULTILINE_BODY_SRC: String =
+		'class R {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 4: obj = {a: 1, b: 2, c: 3, d: 4, e: 5};\n\t\t}\n\t}\n}\n';
 
 	public function new(): Void {
 		super();
@@ -103,7 +141,6 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 			'one column past maxLineLength must move the whole body to the next line: <$over>'
 		);
 	}
-
 
 	public function testCaseBodyFitLineRejoinsSourceBrokenBodyThatFits(): Void {
 		// FitLine is a WIDTH decision, not a source-shape one (that is
@@ -195,25 +232,37 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 		);
 	}
 
-	public function testAlignInlineSwitchCaseBodyIsInertUnderFitLine(): Void {
-		final on: String = write(
-			EXPR_SWITCH_SRC,
-			'{"wrapping": {"maxLineLength": 140}, "indentation": {"alignInlineSwitchCaseBody": true},'
-			+ ' "sameLine": {"expressionCase": "fitLine"}}'
-		);
-		final off: String = write(
-			EXPR_SWITCH_SRC,
-			'{"wrapping": {"maxLineLength": 140}, "indentation": {"alignInlineSwitchCaseBody": false},'
-			+ ' "sameLine": {"expressionCase": "fitLine"}}'
-		);
+	public function testAlignInlineSwitchCaseBodyIsInertOnTheMeasuredFitOutcome(): Void {
+		// The measured outcome reaches `BodyFit` only when the body holds NO
+		// hardline, so its `Nest` has no inner line to move — the knob cannot
+		// change a byte. Exercised on BOTH halves of the same fixture: the
+		// over-wide case (break) and its sibling that fits (flat).
+		final on: String = write(EXPR_SWITCH_SRC, exprFitJson(true));
+		final off: String = write(EXPR_SWITCH_SRC, exprFitJson(false));
 		Assert.equals(on, off);
-		// Discriminator: equality alone also holds on the pre-slice engine
-		// (both sides degrade to Next). Pin that the compared output really
-		// took the fit path.
+		// Discriminators: equality alone also holds on the pre-slice engine
+		// (both sides degraded to Next). Pin that the compared output really
+		// took BOTH fit outcomes.
 		Assert.isTrue(
-			on.indexOf('KindData.KIND_OVAL_STROKE]: LineTint(') != -1,
-			'the compared output must be the fit layout, not the all-broken one: <$on>'
+			on.indexOf('KindData.KIND_OVAL_STROKE]: LineTint(') != -1, 'the flat fit outcome must be present in the compared output: <$on>'
 		);
+		Assert.isTrue(
+			on.indexOf('KindData.KIND_RECTANGLE_STROKE]:\n\t\t\t\tLineTint(') != -1,
+			'the break fit outcome must be present in the compared output: <$on>'
+		);
+	}
+
+	public function testAlignInlineSwitchCaseBodyIsHonouredOnTheGluedFitOutcome(): Void {
+		// The glue outcome DOES have inner lines, so the knob is live there —
+		// it is the same "does the body's container already indent relative
+		// to the case line" question the committed-flat path asks, and
+		// `BodyFit`'s `nestGluedBody` is how the fit path asks it.
+		final src: String =
+			'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: if (a) {\n\t\t\t\tfoo();\n\t\t\t}\n\t\t}\n\t}\n}\n';
+		final off: String = write(src, caseFitJson(false));
+		Assert.isTrue(off.indexOf('case 1: if (a) {\n\t\t\t\t\tfoo();') != -1, 'knob off must keep the +1 continuation indent: <$off>');
+		final on: String = write(src, caseFitJson(true));
+		Assert.isTrue(on.indexOf('case 1: if (a) {\n\t\t\t\tfoo();') != -1, 'knob on must drop the +1 continuation indent: <$on>');
 	}
 
 	public function testTrailingBodyCommentCountsTowardTheFitMeasure(): Void {
@@ -259,15 +308,111 @@ final class HxCaseBodyFitLineSliceTest extends Test {
 	}
 
 	public function testKnobOffKeepsSourceShapeOnTheSameFixtures(): Void {
-		// Byte-inertness of the slice: with the shipped defaults the two
-		// gates both stay false and `Keep` still drives placement off the
-		// source shape.
+		// Byte-inertness of the slice: `Keep` is the shipped default for both
+		// knobs, and under it neither gate fires — placement still comes off
+		// the source shape. Spelled explicitly rather than relying on the
+		// default so the fixture keeps testing `Keep` if a default ever moves;
+		// `HxCaseBodyPolicySliceTest.testDefaultsCaseBodyKeepExpressionCaseKeep`
+		// owns the defaults themselves.
 		final broken: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1:\n\t\t\t\tfoo();\n\t\t}\n\t}\n}\n';
 		final brokenOut: String = write(broken, '{"sameLine": {"caseBody": "keep"}}');
 		Assert.isTrue(brokenOut.indexOf('case 1: foo();') == -1, 'Keep must still preserve a source-broken body: <$brokenOut>');
 		final inlineSrc: String = 'class M { function f():Void { switch (x) { case 1: foo(); } } }';
 		final inlineOut: String = write(inlineSrc, '{"sameLine": {"caseBody": "keep"}}');
 		Assert.isTrue(inlineOut.indexOf('case 1: foo();') != -1, 'Keep must still preserve a source-inline body: <$inlineOut>');
+	}
+
+	public function testFitLineIsIdempotentOnForcedMultilineBody(): Void {
+		// BLOCKER regression: pass 1 broke the body to the next line, pass 2
+		// re-joined it as `case 4: obj = {`. One `fmt --write` then left
+		// `fmt --list` still reporting drift, which breaks the
+		// `writeRoundTrip(s) == s` canonical gate every writer-emit op needs.
+		final json: String = '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine"}}';
+		final pass1: String = write(FORCED_MULTILINE_BODY_SRC, json);
+		final pass2: String = write(pass1, json);
+		final pass3: String = write(pass2, json);
+		Assert.equals(pass1, pass2, 'fitLine must reach its fixed point in ONE pass');
+		Assert.equals(pass2, pass3);
+	}
+
+	public function testFitLineOutputIsIndependentOfSourceLineShape(): Void {
+		// The same AST written from a single-line source and from an
+		// already-broken source must produce identical bytes: `fitsFlat`
+		// DEFERS a nested `BodyGroup` (so a source-broken literal measured as
+		// if it were empty), while `WrapList.flatLength` descends it. The
+		// placement decision must use the descending measure.
+		final json: String = '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine"}}';
+		final fromInline: String = write(FORCED_MULTILINE_BODY_SRC, json);
+		final broken: String = 'class R {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 4:\n\t\t\t\tobj = {\n'
+			+ '\t\t\t\t\ta: 1,\n\t\t\t\t\tb: 2,\n\t\t\t\t\tc: 3,\n\t\t\t\t\td: 4,\n\t\t\t\t\te: 5\n\t\t\t\t};\n\t\t}\n\t}\n}\n';
+		final fromBroken: String = write(broken, json);
+		Assert.equals(fromInline, fromBroken, 'fitLine placement must not depend on the source line shape');
+	}
+
+	public function testFitLineGluesABodyThatCannotRenderFlat(): Void {
+		// The resolution of the two passes above: a body whose Doc commits to
+		// a hardline can never render on the case line, so measuring it is
+		// meaningless. It glues — the same answer `bodyPolicyWrap`'s FitLine
+		// gives a multi-line `return` / `if` body, and the same shape
+		// `caseBody: same` produces.
+		final json: String = '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine"}}';
+		final out: String = write(FORCED_MULTILINE_BODY_SRC, json);
+		Assert.isTrue(out.indexOf('case 4: obj = {') != -1, 'a body that cannot render flat glues to the label: <$out>');
+		final same: String = write(FORCED_MULTILINE_BODY_SRC, '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "same"}}');
+		Assert.equals(same, out, 'the glue outcome must match what caseBody=same produces for the same body');
+	}
+
+	public function testWidthDrivenBreakIsAlsoIdempotent(): Void {
+		// The other half: a body with NO committed hardline is measured, and
+		// re-measuring it from its own broken output must reach the same
+		// verdict (the body then sits one indent deeper, still over budget).
+		final json: String = '{"wrapping": {"maxLineLength": 140}, "indentation": {"alignInlineSwitchCaseBody": true},'
+			+ ' "sameLine": {"expressionCase": "fitLine"}}';
+		final pass1: String = write(EXPR_SWITCH_SRC, json);
+		final pass2: String = write(pass1, json);
+		Assert.equals(pass1, pass2, 'the width-driven break must be a fixed point too');
+		Assert.isTrue(
+			pass1.indexOf('KindData.KIND_RECTANGLE_STROKE]:\n\t\t\t\tLineTint(') != -1, 'the over-wide case must still break: <$pass1>'
+		);
+	}
+
+	public function testFlatChildOptDoesNotFanOutOnTheFitPath(): Void {
+		// `flatChildOpt('ifBody=expressionCase', …)` swaps the child policies
+		// only when the body is COMMITTED to the label line (`_flatCase`).
+		// The fit path leaves them alone: its own placement is decided by the
+		// renderer, so forcing a child's shape from an undecided outcome
+		// would be the blind propagation the expressionIf fanout warns about.
+		// Reaching the fanout needs `expressionIf: next` — it sets
+		// `expressionIfBody` to `Next`, which arms the case-tail barrier
+		// (`tailStmtReadsExprPosition`) so a tail `if` in a statement-position
+		// switch reads `ifBody` instead of `expressionIfBody`. Only then is
+		// the swapped `ifBody` observable at all.
+		final src: String = 'class M {\n\tfunction f():Void {\n\t\tswitch (x) {\n\t\t\tcase 1: if (a) foo();\n\t\t}\n\t}\n}\n';
+		final base: String = '"expressionCase": "same", "ifBody": "next", "expressionIf": "next"';
+		final same: String = write(src, '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "same", $base}}');
+		Assert.isTrue(
+			same.indexOf('case 1: if (a) foo();') != -1, 'the committed-flat path DOES fan out `ifBody` to `expressionCase`: <$same>'
+		);
+		final fit: String = write(src, '{"wrapping": {"maxLineLength": 140}, "sameLine": {"caseBody": "fitLine", $base}}');
+		Assert.isTrue(
+			fit.indexOf('case 1: if (a)\n') != -1, 'the fit path must NOT fan out `ifBody`, so the inner body still breaks: <$fit>'
+		);
+		Assert.isTrue(fit.indexOf('foo();') != -1, 'the inner body must survive the break: <$fit>');
+	}
+
+	/** `maxLineLength: 140` + `alignInlineSwitchCaseBody: <flag>` + expression-position fitLine. */
+	private inline function exprFitJson(alignInline: Bool): String {
+		return fitJson('expressionCase', alignInline);
+	}
+
+	/** Statement-position sibling of `exprFitJson`. */
+	private inline function caseFitJson(alignInline: Bool): String {
+		return fitJson('caseBody', alignInline);
+	}
+
+	private inline function fitJson(knob: String, alignInline: Bool): String {
+		return '{"wrapping": {"maxLineLength": 140}, "indentation": {"alignInlineSwitchCaseBody": $alignInline}, "sameLine": {"$knob'
+			+ '": "fitLine"}}';
 	}
 
 	private inline function write(src: String, json: String): String {

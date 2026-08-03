@@ -67,8 +67,11 @@ package anyparse.grammar.haxe.format;
  * mech-a) rather than OR-ed: `Same` flattens a single-stmt body
  * unconditionally, `Keep` flattens only when the source had it on the
  * case line, and `FitLine` (ω-case-body-fitline) defers the choice to
- * the renderer — the body stays inline while `case <patterns>: <body>`
- * fits `maxLineLength` and moves one indent deeper otherwise.
+ * the renderer — a body that can render on one line stays inline while
+ * `case <patterns>: <body>` fits `maxLineLength` and moves one indent
+ * deeper past it, while a body that cannot render on one line at all
+ * (block, refusing wrap cascade, kept multi-line literal) glues to the
+ * label as `same` does. See `anyparse.format.BodyFit`.
  *
  * `functionBody` (ω-functionBody-policy) is the same three-way body-
  * placement knob shape as `ifBody`, gating the separator between the
