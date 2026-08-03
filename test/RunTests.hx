@@ -535,6 +535,7 @@ import unit.PreferTryExpressionAssignmentCheckTest;
 import unit.PreferTryExpressionReturnCheckTest;
 import unit.RedundantCondCompParensCheckTest;
 import unit.ApqLitDirectivesCliTest;
+import unit.FormatConfigDiscoveryTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -829,6 +830,7 @@ class RunTests {
 		addCase(new HxGroupTrailCommentWriteTest());
 		addCase(new HxAssignChainWrapSliceTest());
 		addCase(new HaxeFormatConfigLoaderTest());
+		addCase(new FormatConfigDiscoveryTest());
 		addCase(new HaxeWriterRoundTripTest());
 		addCase(new HxFormatterCorpusTest());
 		addCase(new JsonTypedParserTest());

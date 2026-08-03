@@ -4995,28 +4995,12 @@ final class Cli {
 	}
 
 	/**
-	 * Walk up from `filePath`'s directory to the filesystem root and return
-	 * the content of the first `hxformat.json` found — the project's writer
-	 * style config (haxe-formatter JSON schema), loaded by the plugin via
-	 * `HaxeFormatConfigLoader`. Returns `null` when no config exists on the
-	 * path, leaving the writer on its compiled defaults. Mirrors how
-	 * haxe-formatter / `.editorconfig` discover a per-project config, so a
-	 * file outside any configured project still formats with the defaults.
+	 * The nearest ancestor `hxformat.json` content for `filePath`, or null. Thin alias
+	 * for `FormatConfigDiscovery.discover` — the CLI keeps the short local name its
+	 * ~20 call sites use.
 	 */
-	private static function discoverFormatConfig(filePath: String): Null<String> {
-		#if (sys || nodejs)
-		var dir: String = haxe.io.Path.directory(FileSystem.absolutePath(filePath));
-		while (dir != '') {
-			final candidate: String = '$dir/hxformat.json';
-			if (FileSystem.exists(candidate) && !FileSystem.isDirectory(candidate)) return File.getContent(candidate);
-			final parent: String = haxe.io.Path.directory(dir);
-			if (parent == dir) break;
-			dir = parent;
-		}
-		return null;
-		#else
-		return null;
-		#end
+	private static inline function discoverFormatConfig(filePath: String): Null<String> {
+		return FormatConfigDiscovery.discover(filePath);
 	}
 
 	private static function expectValue(args: Array<String>, idx: Int, flag: String): String {

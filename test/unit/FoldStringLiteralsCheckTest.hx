@@ -7,20 +7,47 @@ import anyparse.check.FoldStringLiterals;
 import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
+import anyparse.query.FormatConfigDiscovery;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
 
 using StringTools;
 
 /**
- * The `fold-adjacent-string-literals` check: a `+` chain of adjacent plain
- * string literals of the same quote is flagged (`Info`) and folded into one
- * literal; interpolated, mixed-quote, and non-literal operands are left alone. A
- * chain folds in a single pass; a partially-foldable chain folds its inner pair.
- * The fix's merged text is asserted directly, plus one applied round-trip
- * through `RefactorSupport.canonicalize`.
+ * The `fold-adjacent-string-literals` check: a string concatenation whose
+ * segmentation does not match the file's line width is flagged (`Info`) and
+ * re-segmented — literals and expression operands MERGE into one interpolated
+ * literal, an over-long literal SPLITS back out at its `${ … }` seams.
+ *
+ * Width comes from the file's own `hxformat.json`, and every fixture here names its
+ * path `C.hx`: the suite runs from the repository root, so that resolves to the
+ * repository's OWN config (`maxLineLength` 140, tab width 4) — the constants the
+ * boundary fixtures below are written against.
+ *
+ * Both the fix's emitted text and the finding count are asserted; the two must
+ * agree, since `run` and `fix` share one planner.
  */
 class FoldStringLiteralsCheckTest extends Test {
+
+	/**
+	 * `140` / tab `4` — the values in the repository's OWN `hxformat.json`, which is
+	 * what `FormatConfigDiscovery` resolves for the `C.hx` path these fixtures use
+	 * (the suite runs from the repository root). Spelled out here so the boundary
+	 * fixtures below read as arithmetic rather than as magic.
+	 */
+	private static inline final LINE_WIDTH: Int = 140;
+
+	/** The tab width in that same config — what a tab counts as when a fixture measures a rendered line. */
+	private static inline final TAB_WIDTH: Int = 4;
+
+	/** Columns of indent the width fixtures put their statement at (two tabs). */
+	private static inline final FIXTURE_INDENT: Int = 8;
+
+	/** Columns between the fixture indent and the chain: the `g(` call head. */
+	private static inline final CALL_HEAD: Int = 2;
+
+	/** The planner's own budget for a `widthSource` fixture: line width less the start column and the `+ ` glue. */
+	private static inline final FIXTURE_BUDGET: Int = LINE_WIDTH - FIXTURE_INDENT - CALL_HEAD - 2;
 
 	public function testDoubleLiteralPairFlagged(): Void {
 		final vs: Array<Violation> = violations('class C { function f() { final a = "a" + "b"; } }');
@@ -45,35 +72,47 @@ class FoldStringLiteralsCheckTest extends Test {
 		Assert.equals("'pq'", foldOf(src));
 	}
 
-	public function testInterpolatedNotFolded(): Void {
-		Assert.equals(0, violations("class C { function f(name:String) { final a = 'lead $name' + 'tail'; } }").length);
+	/** An interpolated operand is no longer a blocker: its fragments join the segment list. */
+	public function testInterpolatedOperandMerges(): Void {
+		Assert.equals("'lead ${name}tail'", foldOf("class C { function f(name:String) { final a = 'lead $name' + 'tail'; } }"));
 	}
 
-	public function testMixedQuotesNotFolded(): Void {
-		Assert.equals(0, violations("class C { function f() { final a = \"m\" + 'n'; } }").length);
+	/** Mixed quotes merge into ONE single-quoted literal, each side re-escaped for that context. */
+	public function testMixedQuotesMergeToSingleQuoted(): Void {
+		Assert.equals("'mn'", foldOf("class C { function f() { final a = \"m\" + 'n'; } }"));
 	}
 
-	public function testNonLiteralOperandNotFolded(): Void {
-		Assert.equals(0, violations('class C { function f(name:String) { final a = "a" + name + "b"; } }').length);
-		Assert.equals(0, violations('class C { function f() { final a = "z" + 1; } }').length);
+	public function testNonLiteralOperandMerges(): Void {
+		Assert.equals("'a${name}b'", foldOf('class C { function f(name:String) { final a = "a" + name + "b"; } }'));
 	}
 
-	public function testPartialChainFoldsInnerPair(): Void {
+	public function testNumericOperandMerges(): Void {
+		Assert.equals("'z${1}'", foldOf('class C { function f() { final a = "z" + 1; } }'));
+	}
+
+	/** The WHOLE chain is one candidate now — the trailing identifier merges in with the literal pair. */
+	public function testWholeChainFoldsWithTrailingIdent(): Void {
 		final src: String = 'class C { function f(name:String) { final a = "a" + "b" + name; } }';
 		Assert.equals(1, violations(src).length);
-		Assert.equals('"ab"', foldOf(src));
+		Assert.equals("'ab$name'", foldOf(src));
 	}
 
-	public function testFixAppliedResult(): Void {
-		final src: String = 'class C {\n\tfunction f() {\n\t\tfinal a = "a" + "b";\n\t}\n}';
+	/**
+	 * The whole pipeline over one construct: `run` -> `fix` -> canonicalize -> re-lint.
+	 * The canonicalized FILE is asserted verbatim and then fed straight back through
+	 * `run`, which must find nothing — the canonical form is a fixed point of the RULE,
+	 * not merely of its own rendered fragment.
+	 */
+	public function testFixAppliedResultIsCanonicalAndIdempotent(): Void {
+		final src: String = 'class C {\n\tfunction f(name:String) {\n\t\tfinal a = "a" + name + "b";\n\t}\n}';
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		switch RefactorSupport.canonicalize(src, edits, true, new HaxeQueryPlugin()) {
 			case Ok(text):
-				Assert.isTrue(text.contains('"ab"'));
-				Assert.isFalse(text.contains('"a" + "b"'));
+				Assert.equals("class C {\n\tfunction f(name:String) {\n\t\tfinal a = 'a${name}b';\n\t}\n}\n", text);
+				Assert.equals(0, violations(text).length);
 			case Err(message):
 				Assert.fail('canonicalize Err: $message');
 		}
@@ -95,32 +134,433 @@ class FoldStringLiteralsCheckTest extends Test {
 	}
 
 	/**
-	 * A foldable chain formatted ACROSS source lines is deliberate width layout —
-	 * silent; its same-line inner prefix (left-assoc subtree) still folds.
+	 * A lone `$` literal is ONE segment: nothing to re-cut, so the normalisation to
+	 * the escaped `$$` form never fires on its own. It DOES fire when the literal
+	 * joins a merge — the plain form would otherwise interpolate whatever follows.
 	 */
-	public function testCrossLineChainSkipped(): Void {
-		Assert.equals(0, violations('class C { function f() { final a = "long message "\n\t\t+ "split for width"; } }').length);
+	public function testLoneDollarLiteralNormalisedOnlyWhenMerged(): Void {
+		Assert.equals(0, violations("class C { function f() { final a = '$'; } }").length);
+		Assert.equals("'$$a'", foldOf("class C { function f() { final a = '$' + 'a'; } }"));
 	}
 
-	/** The same-line prefix of a cross-line chain is flagged and folds on its own. */
-	public function testSameLinePrefixOfCrossLineChainFolds(): Void {
+	/**
+	 * The old rule refused a chain laid out ACROSS lines as "deliberate width
+	 * layout". Width is now measured, so a cross-line chain that fits when merged
+	 * merges.
+	 */
+	public function testCrossLineChainNowMerges(): Void {
+		final src: String = 'class C { function f() { final a = "long message "\n\t\t+ "split for width"; } }';
+		Assert.equals(1, violations(src).length);
+		Assert.equals('"long message split for width"', foldOf(src));
+	}
+
+	/** A cross-line chain is ONE candidate — the whole thing folds, not just its same-line prefix. */
+	public function testCrossLinePrefixChainMergesWhole(): Void {
 		final src: String = 'class C { function f() { final a = "a" + "b"\n\t\t+ "tail"; } }';
-		final vs: Array<Violation> = violations(src);
+		Assert.equals(1, violations(src).length);
+		Assert.equals('"abtail"', foldOf(src));
+	}
+
+	public function testConcatHtmlViewRepro(): Void {
+		Assert.equals(1, violations(wrap("'<xml>' + xhtml + '</xml>'")).length);
+		Assert.equals("'<xml>$xhtml</xml>'", foldOf(wrap("'<xml>' + xhtml + '</xml>'")));
+	}
+
+	/** Operands before the first literal are arithmetic — they collapse into ONE `${ … }`, never `$a$b`. */
+	public function testConcatEvalOrderPreserved(): Void {
+		Assert.equals("'${a + b}x'", foldOf(wrap("a + b + 'x'")));
+	}
+
+	public function testConcatIdentBeforeIdentCharBraced(): Void {
+		Assert.equals("'a${xhtml}more'", foldOf(wrap("'a' + xhtml + 'more'")));
+	}
+
+	public function testConcatNumericOperands(): Void {
+		Assert.equals("'s${3}${4}'", foldOf(wrap("'s' + 3 + 4")));
+	}
+
+	public function testConcatSingleIdentPrefixBeforeIdentChar(): Void {
+		Assert.equals("'${a}x'", foldOf(wrap("a + 'x'")));
+	}
+
+	public function testConcatSingleIdentPrefixBeforeNonIdent(): Void {
+		Assert.equals("'$a.b'", foldOf(wrap("a + '.b'")));
+	}
+
+	public function testConcatDollarInSingleLiteral(): Void {
+		Assert.equals("'$$$v'", foldOf(wrap("'$' + v")));
+	}
+
+	public function testConcatDoubleQuotedDollar(): Void {
+		Assert.equals("'a$$b$x'", foldOf(wrap("\"a$b\" + x")));
+	}
+
+	public function testConcatDoubleQuotedEscapedQuote(): Void {
+		Assert.equals("'a\"b$x'", foldOf(wrap('\"a\\\"b\" + x')));
+	}
+
+	public function testConcatParenSubChain(): Void {
+		Assert.equals("'a${(b + 'c')}'", foldOf(wrap("'a' + (b + 'c')")));
+	}
+
+	public function testConcatStdStringOperand(): Void {
+		Assert.equals("'a${x}b'", foldOf(wrap("'a' + Std.string(x) + 'b'")));
+	}
+
+	/** A pure-literal pair is the ORIGINAL fold and still folds — to a plain literal in its own quote. */
+	public function testConcatPureLiteralFolds(): Void {
+		Assert.equals("'ab'", foldOf(wrap("'a' + 'b'")));
+	}
+
+	public function testConcatNumericOnlyNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('a + b')).length);
+	}
+
+	public function testConcatInterpolatedOperandMerges(): Void {
+		Assert.equals("'x$y$z'", foldOf(wrap("'x${y}' + z")));
+	}
+
+	public function testConcatCommentBetweenOperandsSkipped(): Void {
+		Assert.equals(0, violations(wrap("'a' + /* c */ b")).length);
+	}
+
+	public function testConcatOperandWithBackslashStringNotFolded(): Void {
+		// `'\\'` nested inside a `${}` block mis-lexes in the REAL Haxe compiler
+		// ("Unterminated string" - escapes in nested same-quote strings are not
+		// processed by the interp-block scanner), even though anyparse's own
+		// parser accepts it. An operand whose source carries a backslash cannot
+		// enter a `${}` block, so it stays a BARE operand of its own.
+		final src: String = "class C { function f(a:String, b:String):String { return a + '/' + b.replace('\\\\', '/'); } }";
+		Assert.equals("'$a/' + b.replace('\\\\', '/')", foldOf(src));
+	}
+
+	public function testConcatInsideInterpolationBlockNotFolded(): Void {
+		// A `+` chain that itself sits INSIDE a `${...}` interpolation block must
+		// not fold - the result would nest an interpolated string inside an
+		// interpolation block (fragile in the real compiler's interp scanner).
+		final src: String = "class C { function f(t:String):String { return 'x${t.split('a').join(q() + \"n\")}y'; } }";
+		Assert.equals(0, violations(src).length);
+	}
+
+	/** A string literal in an ANNOTATION argument is parsed as an expression — moving a `$` into it changes the annotation. */
+	public function testMetadataStringArgumentNotTouched(): Void {
+		Assert.equals(0, violations("@:native('a' + 'b') class C { function f() {} }").length);
+	}
+
+
+	/** A merge whose rendered line lands EXACTLY on `maxLineLength` is accepted (the fits-probe boundary). */
+	public function testWidthBoundaryAtLimitMerges(): Void {
+		final vs: Array<Violation> = violations(widthSource(FIXTURE_BUDGET));
 		Assert.equals(1, vs.length);
-		Assert.equals('"ab"', foldOf(src));
+		Assert.equals(FIXTURE_BUDGET, foldOf(widthSource(FIXTURE_BUDGET)).length);
+	}
+
+	/** One column inside the limit merges too. */
+	public function testWidthBoundaryBelowLimitMerges(): Void {
+		Assert.equals(1, violations(widthSource(FIXTURE_BUDGET - 1)).length);
+	}
+
+	/**
+	 * One column past the limit does NOT merge — the pair stays two operands. The
+	 * at-limit case is asserted alongside so the fixture discriminates: a rule that
+	 * ignored width would flag both.
+	 */
+	public function testWidthBoundaryAboveLimitNotMerged(): Void {
+		Assert.equals(0, violations(widthSource(FIXTURE_BUDGET + 1)).length);
+		Assert.equals(1, violations(widthSource(FIXTURE_BUDGET)).length);
+	}
+
+	/**
+	 * A literal whose line already fits is never re-cut, however many `${ … }`
+	 * seams it has; the same literal on an over-long line is. Both halves are
+	 * asserted together so the fixture pins the gate rather than the absence of a
+	 * split arm.
+	 */
+	public function testLiteralSplitOnlyWhenOverLong(): Void {
+		final seams: String = "${a.b()}y${c.d()}";
+		Assert.equals(0, violations("class C { function f() { g('x" + seams + "z'); } }").length);
+		Assert.equals(1, violations("class C {\n\tfunction f() {\n\t\tg('" + ''.rpad('x', 130) + seams + "');\n\t}\n}").length);
+	}
+
+	/** An over-long literal is cut at a `${ … }` seam until the lines fit. */
+	public function testOverLongLiteralSplitAtSeam(): Void {
+		final head: String = ''.rpad('h', 100);
+		final tail: String = ''.rpad('t', 60);
+		final src: String = "class C {\n\tfunction f() {\n\t\tg('" + head + "${a.b()}" + tail + "');\n\t}\n}";
+		Assert.equals(1, violations(src).length);
+		Assert.equals("'" + head + "${a.b()}' + '" + tail + "'", foldOf(src));
+	}
+
+	/**
+	 * The numeric-head trap read in the SPLIT direction: two leading expression
+	 * segments may never become two bare operands (`1 + 2 + ' items'` is
+	 * `"3 items"`), so the planner merges across that seam even though neither
+	 * segment fits the budget on its own.
+	 */
+	public function testSplitNeverEmitsTwoLeadingBareOperands(): Void {
+		final one: String = ''.rpad('n', 130);
+		final two: String = ''.rpad('m', 130);
+		final src: String = "class C {\n\tfunction f() {\n\t\tg('${" + one + "}${" + two + "} items');\n\t}\n}";
+		Assert.equals("'$" + one + "$" + two + "' + ' items'", foldOf(src));
+	}
+
+	/** MERGE fixture, shaped after a real query builder: a literal / ternary / literal / call / literal chain at three tabs. */
+	public function testMergeQueryChainFixture(): Void {
+		final src: String = [
+			'class C {',
+			'\tpublic function getEntry(grouped:Bool, keyId:Int, batch:Bool = false):Null<String> {',
+			'\t\treturn runPathRequest(',
+			"\t\t\t'SELECT rowpath FROM records WHERE grouped = ' + (grouped ? '1 AND group_key_id = $keyId' : '0 AND key_id = $keyId')",
+			"\t\t\t+ ' AND status = ' + _linkChannel.quote(statusLabelOfRecord(STATUS_REMOTE_UPDATED_LOCAL_SYNCED_FETCHED)) + ' LIMIT 1',",
+			"\t\t\tbatch, 'getEntry'",
+			'\t\t);',
+			'\t}',
+			'}'
+		].join('\n');
+		Assert.equals(
+			"'SELECT rowpath FROM records WHERE grouped = ' + (grouped ? '1 AND group_key_id = $keyId' : '0 AND key_id = $keyId')"
+			+ " + ' AND status = ${_linkChannel.quote(statusLabelOfRecord(STATUS_REMOTE_UPDATED_LOCAL_SYNCED_FETCHED))} LIMIT 1'",
+			foldOf(src)
+		);
+	}
+
+	/** SPLIT fixture: ONE over-long interpolated literal, cut at the seam between its two `${ … }` blocks. */
+	public function testSplitQueryLiteralFixture(): Void {
+		final src: String = [
+			'class C {',
+			'\tpublic function getMovedEntry(grouped:Bool, rowPath:String, batch:Bool = false):Null<String> {',
+			'\t\treturn runPathRequest(',
+			"\t\t\t'SELECT rowpath FROM records WHERE grouped = ${(grouped ? '1 AND rowpath_movedfromroot = ' :"
+				+ " '0 AND rowpath_movedfromroot = ')}${_linkChannel.quote(rowPath)}',",
+			"\t\t\tbatch, 'getMovedEntry'",
+			'\t\t);',
+			'\t}',
+			'}'
+		].join('\n');
+		Assert.equals(
+			"'SELECT rowpath FROM records WHERE grouped = '"
+			+ " + '${(grouped ? '1 AND rowpath_movedfromroot = ' : '0 AND rowpath_movedfromroot = ')}${_linkChannel.quote(rowPath)}'",
+			foldOf(src)
+		);
+	}
+
+	/** MERGE fixture 3: the over-wide header literal keeps a segment of its own; the rest packs into as few as fit. */
+	public function testMultiLineLiteralChainFixture(): Void {
+		final src: String = [
+			'class C {',
+			'\tfunction f() {',
+			'\t\tlink.request(',
+			"\t\t\t'INSERT OR IGNORE INTO records (rowpath, grouped, key_id, group_key_id, status, stamp, rowpath_movedfrom,"
+				+ " rowpath_movedfromroot) VALUES ('",
+			"\t\t\t+ '${link.quote(r.newRowpath)}, ' + '${r.grouped}, ' + '${r.key_id}, ' + '${r.group_key_id}, '",
+			"\t\t\t+ '${link.quote(Std.string(r.status))}, ' + '${r.stamp}, ' + '$movedFromSql, ' + '$movedFromRootSql'",
+			"\t\t\t+ ')'",
+			'\t\t);',
+			'\t}',
+			'}'
+		].join('\n');
+		final folded: String = foldOf(src);
+		Assert.isTrue(folded.startsWith("'INSERT OR IGNORE INTO records (rowpath, grouped, key_id, group_key_id, status, stamp,"));
+		Assert.isTrue(folded.contains("VALUES (' + '${link.quote(r.newRowpath)}, ${r.grouped}, "));
+		Assert.isTrue(folded.endsWith("$movedFromRootSql)'"));
+	}
+
+	/**
+	 * The equal-count RE-CUT direction, which no other fixture reaches: an OVER-LONG
+	 * chain whose canonical segmentation keeps the source's operand COUNT and moves
+	 * only the boundary between them.
+	 */
+	public function testEqualCountRecutOverLongFlagged(): Void {
+		final vs: Array<Violation> = violations(recutSource(90));
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains('re-cut'));
+	}
+
+	/**
+	 * The same chain with its second line INSIDE the limit is left alone: only a
+	 * strict MERGE runs unconditionally, and an equal-count re-cut of an
+	 * already-fitting construct would trade the author's phrasing for the greedy
+	 * fill's. Which of `plan`'s two group-count gates refuses it is NOT pinned here:
+	 * they guard the same shape at two stages, and either one alone still refuses
+	 * this fixture. What it does pin, paired with `testEqualCountRecutOverLongFlagged`,
+	 * is the over-long PRECONDITION both of them share.
+	 */
+	public function testEqualCountRecutWithinLimitNotFlagged(): Void {
+		Assert.equals(0, violations(recutSource(60)).length);
+	}
+
+	/**
+	 * A trailing comment on the construct's LAST LINE counts toward the width the
+	 * planner verifies against. The fixture already fits at 113 columns; a
+	 * measurement that reads the member's SPAN instead of the LINES it occupies
+	 * cannot see the comment's 40 columns, so the merged single-literal plan
+	 * measures 138 — apparently inside the limit — and the file lands at 178.
+	 */
+	public function testTrailingCommentCountsTowardMeasuredWidth(): Void {
+		final src: String = trailingCommentSource();
+		Assert.equals(113, widestLine(src));
+		Assert.equals(113, widestAfterFix(src));
+	}
+
+	/**
+	 * A `\x24` decodes to `$` BEFORE Haxe scans a single-quoted literal for
+	 * interpolation, so a text carrying one may not be re-emitted into one: merging
+	 * `"a\x24b" + 'c'` to `'a\x24bc'` would print the value of the local `bc` instead
+	 * of the text `a$bc`. Verified against Haxe 4.3.7.
+	 */
+	public function testHexEscapeNotMergedIntoSingleQuoted(): Void {
+		Assert.equals(0, violations(wrap('"a\\x24b" + \'c\'')).length);
+		Assert.equals(0, violations(wrap('"\\x24" + name')).length);
+		Assert.equals(0, violations(wrap("'a\\x24b' + 'c'")).length);
+	}
+
+	/** `$` is the same trap spelled the other way. */
+	public function testUnicodeEscapeNotMergedIntoSingleQuoted(): Void {
+		Assert.equals(0, violations(wrap('"a\\u0024b" + \'c\'')).length);
+	}
+
+	/**
+	 * The real compiler finds a `${ … }` block's closing brace by counting `{` / `}`
+	 * NAIVELY, without lexing nested strings, so a brace inside one still counts:
+	 * `'a${q("}")}z'` is `Unterminated string` and `'a${q("{")}z'` is `Unclosed brace`
+	 * on Haxe 4.3.7 — while anyparse's own re-parse validation accepts both, which is
+	 * why the fixer cannot lean on it here. Such an operand stays BARE, so the chain
+	 * is already canonical and nothing is flagged.
+	 */
+	public function testUnbalancedBraceOperandNotMerged(): Void {
+		Assert.equals(0, violations(wrap("'a' + q(\"}\") + 'z'")).length);
+		Assert.equals(0, violations(wrap("'a' + q(\"{\") + 'z'")).length);
+	}
+
+	/** A BALANCED brace closes where that scanner expects it to, so it merges. */
+	public function testBalancedBraceOperandMerges(): Void {
+		Assert.equals("'v=${{x: 1}.x}'", foldOf("class C { function f() { g('v=' + {x: 1}.x); } }"));
+	}
+
+	/**
+	 * A single-fragment INTERPOLATED literal head is NOT a bare operand: `'${a + b}'`
+	 * is a string, so the plan may not open with a bare `(a + b)`. The segment list
+	 * cannot tell the two apart — both are one non-text segment in the first group —
+	 * so `Decomposition.startsBare` carries the fact from the decomposition, which
+	 * knows whether it emitted a head segment at all.
+	 */
+	public function testInterpolatedHeadNeverBecomesBareOperand(): Void {
+		final tail: String = ''.rpad('B', 5);
+		Assert.equals("'${a + b}" + ''.rpad('A', 117) + "' + '" + tail + "'", foldOf(bareHeadSource("'${a + b}'", 117, 5)));
+		Assert.equals("'${nnn}" + ''.rpad('A', 119) + "' + '" + tail + "'", foldOf(bareHeadSource("'$nnn'", 119, 5)));
+	}
+
+	/**
+	 * A `g('…' + '…')` at three tabs whose FIRST operand is 40 characters of text and
+	 * whose second is 40 more, an interpolated `$x` and `tailLen` trailing characters.
+	 * The greedy fill packs the first three segments into one group and leaves the
+	 * trailing run in a second — the SAME two operands the source has, cut elsewhere.
+	 * `tailLen` alone decides whether the source's second line clears `LINE_WIDTH`.
+	 */
+	private function recutSource(tailLen: Int): String {
+		return [
+			'class C {',
+			'\tfunction f(x:String) {',
+			'\t\tg(',
+			"\t\t\t'" + ''.rpad('a', 40) + "'",
+			"\t\t\t+ '" + ''.rpad('b', 40) + "${x}" + ''.rpad('c', tailLen) + "'",
+			'\t\t);',
+			'\t}',
+			'}'
+		].join('\n');
+	}
+
+	/**
+	 * A `g(<head> + '<aLen a>' + '<bLen b>');` at three tabs, sized so the greedy fill
+	 * cannot join `head` to the first text but CAN join the two texts — the shape whose
+	 * first group is a lone non-text segment, and so the only one where the leading-bare
+	 * gate decides anything.
+	 */
+	private function bareHeadSource(head: String, aLen: Int, bLen: Int): String {
+		return [
+			'class C {',
+			'\tfunction f(a:Int, b:Int, nnn:String) {',
+			'\t\tg(',
+			'\t\t\t' + head,
+			"\t\t\t+ '" + ''.rpad('A', aLen) + "'",
+			"\t\t\t+ '" + ''.rpad('B', bLen) + "'",
+			'\t\t);',
+			'\t}',
+			'}'
+		].join('\n');
+	}
+
+	/**
+	 * A `var` at one indent whose chain the writer already wraps INSIDE the limit and
+	 * whose last line ends in a trailing comment — columns that sit PAST the
+	 * declaration's own span.
+	 */
+	private function trailingCommentSource(): String {
+		return [
+			'class C {',
+			"\tvar xxxxx = '" + ''.rpad('A', 60) + "' + name",
+			"\t\t+ '" + ''.rpad('B', 60) + "'; // " + ''.rpad('z', 36),
+			'}'
+		].join('\n');
+	}
+
+	/**
+	 * The widest line of `src` once the rule's fix is applied and the result
+	 * canonicalised through the writer — with the SAME `hxformat.json` the check
+	 * measured against, so the assertion sees the layout the rule was planning for.
+	 */
+	private function widestAfterFix(src: String): Int {
+		final check: FoldStringLiterals = new FoldStringLiterals();
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final edits: Array<{ span: Span, text: String }> = check.fix(src, check.run([{ file: 'C.hx', source: src }], plugin), plugin);
+		switch RefactorSupport.canonicalize(src, edits, true, plugin, FormatConfigDiscovery.discover('C.hx')) {
+			case Ok(text):
+				return widestLine(text);
+			case Err(message):
+				Assert.fail('canonicalize Err: $message');
+				return -1;
+		}
+	}
+
+	/**
+	 * A `g('…' + b);` statement at two tabs whose MERGED literal is exactly
+	 * `mergedLen` characters. The chain starts at column `FIXTURE_INDENT +
+	 * CALL_HEAD`, so the planner's budget is `FIXTURE_BUDGET` and the merged
+	 * rendered line is `mergedLen + FIXTURE_INDENT + CALL_HEAD + 2` columns —
+	 * landing exactly on `LINE_WIDTH` at `mergedLen == FIXTURE_BUDGET`. The second
+	 * operand is an IDENTIFIER, not a literal, so only the width-aware rule can
+	 * merge this pair at all.
+	 */
+	private function widthSource(mergedLen: Int): String {
+		return "class C {\n\tfunction f() {\n\t\tg('" + ''.rpad('a', mergedLen - 4) + "' + b);\n\t}\n}";
+	}
+
+	private function wrap(expr: String): String {
+		return 'class C {\n\tfunction f():Void {\n\t\tvar x = $expr;\n\t}\n}';
 	}
 
 	private function violations(src: String): Array<Violation> {
 		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
-	/** The merged-literal text the fix emits for `src`'s foldable concat (empty if none). */
+	/** The canonical text the fix emits for `src`'s first flagged construct (empty if none). */
 	private function foldOf(src: String): String {
 		final check: FoldStringLiterals = new FoldStringLiterals();
 		final edits: Array<{ span: Span, text: String }> = check.fix(
 			src, check.run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin()), new HaxeQueryPlugin()
 		);
 		return edits.length > 0 ? edits[0].text : '';
+	}
+
+	/** `text`'s widest line in columns, a tab counting as `TAB_WIDTH`. */
+	private static function widestLine(text: String): Int {
+		var widest: Int = 0;
+		for (line in text.split('\n')) {
+			var cols: Int = 0;
+			for (i in 0...line.length) cols += line.fastCodeAt(i) == '\t'.code ? TAB_WIDTH : 1;
+			if (cols > widest) widest = cols;
+		}
+		return widest;
 	}
 
 }

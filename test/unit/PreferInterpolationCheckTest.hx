@@ -8,6 +8,7 @@ import anyparse.check.Linter;
 import anyparse.check.Severity;
 import anyparse.grammar.haxe.HaxeQueryPlugin;
 import anyparse.runtime.Span;
+import anyparse.check.FoldStringLiterals;
 
 /**
  * The `prefer-interpolation` check: a single-argument `Std.string(x)` is flagged `Info`
@@ -122,86 +123,48 @@ class PreferInterpolationCheckTest extends Test {
 		Assert.equals(0, violations('class Bad { function f() { ').length);
 	}
 
-	public function testConcatHtmlViewRepro(): Void {
-		Assert.equals(1, violations(wrap("'<xml>' + xhtml + '</xml>'")).length);
-		Assert.equals("'<xml>$xhtml</xml>'", fixText(wrap("'<xml>' + xhtml + '</xml>'")));
-	}
-
-	public function testConcatEvalOrderPreserved(): Void {
-		Assert.equals("'${a + b}x'", fixText(wrap("a + b + 'x'")));
-	}
-
-	public function testConcatIdentBeforeIdentCharBraced(): Void {
-		Assert.equals("'a${xhtml}more'", fixText(wrap("'a' + xhtml + 'more'")));
-	}
-
-	public function testConcatNumericOperands(): Void {
-		Assert.equals("'s${3}${4}'", fixText(wrap("'s' + 3 + 4")));
-	}
-
-	public function testConcatSingleIdentPrefixBeforeIdentChar(): Void {
-		Assert.equals("'${a}x'", fixText(wrap("a + 'x'")));
-	}
-
-	public function testConcatSingleIdentPrefixBeforeNonIdent(): Void {
-		Assert.equals("'$a.b'", fixText(wrap("a + '.b'")));
-	}
-
-	public function testConcatDollarInSingleLiteral(): Void {
-		Assert.equals("'$$$v'", fixText(wrap("'$' + v")));
-	}
-
-	public function testConcatDoubleQuotedDollar(): Void {
-		Assert.equals("'a$$b$x'", fixText(wrap("\"a$b\" + x")));
-	}
-
-	public function testConcatDoubleQuotedEscapedQuote(): Void {
-		Assert.equals("'a\"b$x'", fixText(wrap('\"a\\\"b\" + x')));
-	}
-
-	public function testConcatParenSubChain(): Void {
-		Assert.equals("'a${(b + 'c')}'", fixText(wrap("'a' + (b + 'c')")));
-	}
-
-	public function testConcatStdStringOperand(): Void {
-		Assert.equals("'a${x}b'", fixText(wrap("'a' + Std.string(x) + 'b'")));
-	}
-
-	public function testConcatPureLiteralNotFlagged(): Void {
-		Assert.equals(0, violations(wrap("'a' + 'b'")).length);
-	}
-
-	public function testConcatNumericOnlyNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('a + b')).length);
-	}
-
-	public function testConcatInterpolatedOperandSkipped(): Void {
-		Assert.equals(0, violations(wrap("'x${y}' + z")).length);
-	}
-
-	public function testConcatCommentBetweenOperandsSkipped(): Void {
-		Assert.equals(0, violations(wrap("'a' + /* c */ b")).length);
-	}
-
-	public function testConcatOperandWithBackslashStringNotFolded(): Void {
-		// `'\\'` nested inside a `${}` block mis-lexes in the REAL Haxe compiler
-		// ("Unterminated string" - escapes in nested same-quote strings are not
-		// processed by the interp-block scanner), even though anyparse's own
-		// parser accepts it. Any operand whose source carries a backslash is a
-		// safe miss.
-		final src: String = "class C { function f(a:String, b:String):String { return a + '/' + b.replace('\\\\', '/'); } }";
-		// The backslash-carrying operand must never enter a `${}` - the surviving
-		// legal rewrite folds only the clean leading sub-chain (`a + '/'`), leaving
-		// `+ b.replace('\\', '/')` outside the string.
-		Assert.equals("'$a/'", fixText(src));
-	}
-
-	public function testConcatInsideInterpolationBlockNotFolded(): Void {
-		// A `+` chain that itself sits INSIDE a `${...}` interpolation block must
-		// not fold - the result would nest an interpolated string inside an
-		// interpolation block (fragile in the real compiler's interp scanner).
-		final src: String = "class C { function f(t:String):String { return 'x${t.split('a').join(q() + \"n\")}y'; } }";
+	/**
+	 * A `Std.string(x)` that is a DIRECT operand of a string concatenation belongs to
+	 * `fold-adjacent-string-literals`, which owns the whole chain and peels the wrapper
+	 * off itself. Exactly ONE rule reports the site: this one stays silent, and the
+	 * fold rule's single finding is asserted alongside so the fixture pins the
+	 * hand-off rather than the absence of any finding at all.
+	 */
+	public function testStdStringDirectConcatOperandLeftToFold(): Void {
+		final src: String = "class C {\n\tfunction f(x:Int):Void {\n\t\tvar y = 'a' + Std.string(x) + 'b';\n\t}\n}";
 		Assert.equals(0, violations(src).length);
+		Assert.equals(1, foldViolations(src).length);
+	}
+
+	/**
+	 * A `+` chain with NO string literal in it is not one `fold-adjacent-string-literals`
+	 * reports — merging it would turn arithmetic into text — so the hand-off must not
+	 * defer to it there. Both shapes were flagged by NOBODY while the gate read the
+	 * parent node's KIND instead of asking that rule what it claims.
+	 */
+	public function testStdStringInLiteralFreeChainStillFlagged(): Void {
+		final pair: String = 'class C {\n\tfunction f(a:Int, b:Int):Void {\n\t\tvar y = Std.string(a) + Std.string(b);\n\t}\n}';
+		Assert.equals(2, violations(pair).length);
+		Assert.equals(0, foldViolations(pair).length);
+		final numeric: String = 'class C {\n\tfunction f(a:Int):Void {\n\t\tvar z = Std.string(a) + 1;\n\t}\n}';
+		Assert.equals(1, violations(numeric).length);
+		Assert.equals(0, foldViolations(numeric).length);
+	}
+
+	/**
+	 * An ANNOTATION argument is the same hole spelled differently: the fold rule skips
+	 * `metaKinds` wholesale, so it claims no chain inside one however many literals
+	 * that chain carries.
+	 */
+	public function testStdStringInMetadataChainStillFlagged(): Void {
+		final src: String = "class C {\n\t@:meta('a' + Std.string(g()) + 'b')\n\tvar y:Int = 0;\n}";
+		Assert.equals(1, violations(src).length);
+		Assert.equals(0, foldViolations(src).length);
+	}
+
+	/** Outside a concatenation the call is still this rule's. */
+	public function testStdStringOutsideConcatStillFlagged(): Void {
+		Assert.equals(1, violations(body('var x: Int = 1;\n\t\tvar y = Std.string(x);')).length);
 	}
 
 	private function wrap(expr: String): String {
@@ -215,6 +178,11 @@ class PreferInterpolationCheckTest extends Test {
 
 	private function violations(src: String): Array<Violation> {
 		return new PreferInterpolation().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
+	}
+
+	/** What `fold-adjacent-string-literals` reports for `src` — the other half of every hand-off fixture. */
+	private function foldViolations(src: String): Array<Violation> {
+		return new FoldStringLiterals().run([{ file: 'C.hx', source: src }], new HaxeQueryPlugin());
 	}
 
 	private function fixText(src: String): String {

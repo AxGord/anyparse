@@ -1,6 +1,7 @@
 package anyparse.query;
 
 import anyparse.query.ControlFlow.ControlFlowSupport;
+import anyparse.query.GrammarPlugin.LayoutMetrics;
 import anyparse.query.GrammarPlugin.MetaShape;
 import anyparse.query.GrammarPlugin.RefShape;
 import anyparse.query.GrammarPlugin.TypeRefShape;
@@ -99,6 +100,9 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	// type-info costs a single span-parse instead of one per accessor.
 	private final _spanInfoCache: Map<String, SpanTypeInfo> = [];
 	private final _importMapCache: Map<String, Map<String, String>> = [];
+
+	// Layout metrics per config JSON — one entry per distinct `hxformat.json` in a run.
+	private final _layoutMetricsCache: Map<String, Null<LayoutMetrics>> = [];
 
 	// Run-scoped, same lifecycle as the other caches on this class — a fresh
 	// RefsCache per wrapper instance, shared with every RefShape this plugin hands
@@ -275,6 +279,25 @@ final class CachingGrammarPlugin implements GrammarPlugin implements TypeInfoPro
 	public function typeRefShape(): TypeRefShape return _inner.typeRefShape();
 
 	public function writeRoundTrip(source: String, ?optsJson: String): Null<String> return _inner.writeRoundTrip(source, optsJson);
+
+	/**
+	 * Memoised by `optsJson` — a width-aware check asks per FILE, and a lint run
+	 * over one project resolves the same `hxformat.json` for every file in it, so
+	 * without the memo the config JSON would be re-parsed into full write options
+	 * once per candidate.
+	 */
+	public function layoutMetrics(?optsJson: String): Null<LayoutMetrics> {
+		// A BLANK payload keys as NO CONFIG — the reading every hop agrees on
+		// (`FormatConfigDiscovery.normalize`), since a 0-byte `hxformat.json` states no
+		// settings. Normalising here rather than only inside the grammar keeps the two
+		// spellings on ONE entry. The prefix keeps a JSON payload off the no-config key.
+		final stated: Null<String> = FormatConfigDiscovery.normalize(optsJson);
+		final key: String = stated == null ? 'none' : 'json:$stated';
+		if (_layoutMetricsCache.exists(key)) return _layoutMetricsCache[key];
+		final metrics: Null<LayoutMetrics> = _inner.layoutMetrics(stated);
+		_layoutMetricsCache[key] = metrics;
+		return metrics;
+	}
 
 	public function writeRoundTripPlain(source: String, ?optsJson: String): Null<String>
 		return _inner.writeRoundTripPlain(source, optsJson);
