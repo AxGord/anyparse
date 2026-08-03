@@ -350,6 +350,33 @@ enum Doc {
 	 * `f.indent + extraIndent + flatWidth < n`.
 	 */
 	IfArrowContinuationFits(extraIndent: Int, flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
+
+	/**
+	 * Sibling-coordinated placement decision (ω-case-sibling-symmetry).
+	 * Renders `breakDoc` when `f.indent + flatWidth` EXCEEDS `n`, else
+	 * `flatDoc` — the `<= n` fits convention the `Group` family uses.
+	 *
+	 * The point is `flatWidth`: it is a build-time constant the EMITTER
+	 * supplies, not a measurement of `flatDoc`. That is what lets a set of
+	 * siblings reach ONE verdict. Every sibling of a group (e.g. every
+	 * `case` clause of a switch) renders at the SAME indent, so handing all
+	 * of them the same `flatWidth` — the widest sibling's flat width —
+	 * makes every one of them answer identically, without the renderer
+	 * needing to see the set. A sibling narrower than the widest still
+	 * breaks, which is the "if one spreads, all spread" semantic.
+	 *
+	 * Column-independent by construction: the probe reads `f.indent`, not
+	 * the live pen column, and `flatWidth` comes from a static walk
+	 * (`WrapList.flatLength`, which DESCENDS `BodyGroup`), so the verdict
+	 * cannot depend on the source's line shape and a single format pass
+	 * reaches the `writeRoundTrip(s) == s` fixed point.
+	 *
+	 * Sister to `IfArrowContinuationFits`, which shares the
+	 * precomputed-width idea but re-bases to a continuation indent and
+	 * uses a strict `<` fits test. Pure render-time decision — every
+	 * static Doc walker forwards to `flatDoc`.
+	 */
+	IfIndentWidthExceeds(flatWidth: Int, n: Int, breakDoc: Doc, flatDoc: Doc);
 	Fill(items: Array<Doc>, sep: Doc, ?tailReserve: Int);
 
 	/**

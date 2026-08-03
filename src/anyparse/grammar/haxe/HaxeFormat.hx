@@ -817,6 +817,7 @@ final class HaxeFormat implements TextFormat {
 		formatStringInterpolation: true,
 		metadataFunctionLineEnd: MetadataLineEndPolicy.None,
 		_inExprPosition: false,
+		_caseSiblingFlatWidth: -1,
 		_inElseIfBranch: false,
 		_inValueIfBranch: false,
 		_inArrowLambdaBody: false,
