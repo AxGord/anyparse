@@ -545,6 +545,7 @@ import unit.HxArrowBlockBodyOpenSliceTest;
 import unit.DocMeasureFirstVisibleTextTest;
 import unit.HxCaseBodyFitLineSliceTest;
 import unit.HxCaseBodySymmetrySliceTest;
+import unit.UnusedLocalShadowTest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -939,6 +940,7 @@ class RunTests {
 		addCase(new IfFalseDeadCodeCheckTest());
 		addCase(new EmptyBlockCheckTest());
 		addCase(new UnusedParameterCheckTest());
+		addCase(new UnusedLocalShadowTest());
 		addCase(new SwallowedExceptionCheckTest());
 		addCase(new CatchDynamicCheckTest());
 		addCase(new PreferCaseWildcardCheckTest());

@@ -11,6 +11,27 @@ import anyparse.query.TypeResolver;
 import anyparse.query.TypeInfoProvider;
 
 /**
+ * Per-file scan seams for `UnusedLocal`: the grammar-derived kind sets the walk and
+ * the shadowed-region model read, plus the file coordinates and the reporting sink.
+ * Built once per analyzed file so the recursive walk threads one value rather than
+ * six positional arguments.
+ *
+ * `conditionalKind` is `RefShape.conditionalMemberKind`: the grammar projects a `#if`
+ * region under that one kind in STATEMENT position too, which is where this check
+ * meets it.
+ */
+private typedef ScanCtx = {
+	var out: Array<Violation>;
+	var file: String;
+	var source: String;
+	var scopeKinds: Array<String>;
+	var opaqueKinds: Array<String>;
+	var localDeclKinds: Array<String>;
+	var selfScopeDeclKinds: Array<String>;
+	var conditionalKind: Null<String>;
+}
+
+/**
  * Flags local `var` / `final` declarations whose bound name is never
  * referenced within its lexical scope — dead bindings the formatter cannot
  * remove. Statement-position locals only (`VarStmt` / `FinalStmt`); function
@@ -34,6 +55,30 @@ import anyparse.query.TypeInfoProvider;
  * yields a missed finding (a kept binding), never a wrong deletion. Bounding
  * the scan to the enclosing scope (not the whole file) is what stops a
  * same-named local in a different function from masking this one.
+ *
+ * ## Occurrences a shadowing binding owns
+ *
+ * That scan also counts occurrences that CANNOT be a reference to this
+ * binding, because an inner construct re-binds the name over the region they
+ * sit in — the AS3-heritage `var item; for (item in xs) use(item);`, where the
+ * `for` iterator is a fresh binding scoped to the loop and the outer
+ * declaration is dead in every compile. So a scan that reports a reference is
+ * run a SECOND time with those regions excluded as well, and the declaration
+ * is flagged only when nothing textual survives outside them. The regions come
+ * from the grammar's own self-scoped declarations (`RefShape.selfScopeDeclKinds`
+ * — the `for` iterator, the `catch` exception), never from a second resolver:
+ * each contributes its binder token and its body, and only when the construct's
+ * shape is verified (see `appendShadowedRegion`). The head is NOT covered — a
+ * `for` loop's iterated expression is evaluated in the enclosing scope, so
+ * `for (item in item)` reads the outer `item`, which keeps the declaration
+ * live. Everything else the scan still counts: a mention in a comment, a
+ * string, an interpolation or a nested re-declaration outside those regions
+ * keeps the binding exactly as conservatively as before.
+ *
+ * Conditional compilation suspends the refinement on both sides — a
+ * declaration inside a `#if` region, or a shadowing construct inside one —
+ * since the region's branches project as flat siblings and no state of that
+ * tree is the source a single compile sees.
  *
  * ## Reification is opaque
  *
@@ -68,13 +113,21 @@ final class UnusedLocal implements Check {
 
 	public function run(files: Array<{ file: String, source: String }>, plugin: GrammarPlugin): Array<Violation> {
 		final shape: RefShape = plugin.refShape();
-		final scopeKinds: Array<String> = shape.scopeKinds;
-		final opaqueKinds: Array<String> = shape.opaqueKinds ?? [];
-		final localDeclKinds: Array<String> = shape.localDeclKinds ?? [];
 		final violations: Array<Violation> = [];
 		for (entry in files) {
 			final tree: Null<QueryNode> = CheckScan.parseOrNull(plugin, entry.source);
-			if (tree != null) walk(violations, entry.file, entry.source, tree, null, scopeKinds, opaqueKinds, localDeclKinds);
+			if (tree == null) continue;
+			final ctx: ScanCtx = {
+				out: violations,
+				file: entry.file,
+				source: entry.source,
+				scopeKinds: shape.scopeKinds,
+				opaqueKinds: shape.opaqueKinds ?? [],
+				localDeclKinds: shape.localDeclKinds ?? [],
+				selfScopeDeclKinds: shape.selfScopeDeclKinds,
+				conditionalKind: shape.conditionalMemberKind
+			};
+			walk(ctx, tree, null);
 		}
 		return violations;
 	}
@@ -144,14 +197,11 @@ final class UnusedLocal implements Check {
 	 * descendants; a local declaration is tested against the scope it was
 	 * passed (its parent scope), never one it might open itself.
 	 */
-	private static function walk(
-		out: Array<Violation>, file: String, source: String, node: QueryNode, enclosingScope: Null<QueryNode>, scopeKinds: Array<String>,
-		opaqueKinds: Array<String>, localDeclKinds: Array<String>
-	): Void {
-		if (opaqueKinds.contains(node.kind)) return;
-		if (localDeclKinds.contains(node.kind)) checkDecl(out, file, source, node, enclosingScope);
-		final childScope: Null<QueryNode> = scopeKinds.contains(node.kind) ? node : enclosingScope;
-		for (c in node.children) walk(out, file, source, c, childScope, scopeKinds, opaqueKinds, localDeclKinds);
+	private static function walk(ctx: ScanCtx, node: QueryNode, enclosingScope: Null<QueryNode>): Void {
+		if (ctx.opaqueKinds.contains(node.kind)) return;
+		if (ctx.localDeclKinds.contains(node.kind)) checkDecl(ctx, node, enclosingScope);
+		final childScope: Null<QueryNode> = ctx.scopeKinds.contains(node.kind) ? node : enclosingScope;
+		for (c in node.children) walk(ctx, c, childScope);
 	}
 
 	/**
@@ -159,23 +209,121 @@ final class UnusedLocal implements Check {
 	 * Bails (no finding) when any coordinate the test needs is missing — a null
 	 * name, declaration span, or scope span — so an unspanned node is never
 	 * flagged.
+	 *
+	 * A scan that DOES find a reference is re-run once with the regions an inner
+	 * self-scoped binding of the same name owns excluded as well
+	 * (`shadowedRegions`): every occurrence of `var item; for (item in xs)
+	 * use(item);` belongs to the loop, and the declaration is dead. The second
+	 * scan is the same predicate over a WIDER exclusion set, so it can only turn a
+	 * silence into a finding, never a finding into a silence.
 	 */
-	private static function checkDecl(
-		out: Array<Violation>, file: String, source: String, decl: QueryNode, enclosingScope: Null<QueryNode>
-	): Void {
+	private static function checkDecl(ctx: ScanCtx, decl: QueryNode, enclosingScope: Null<QueryNode>): Void {
 		final name: Null<String> = decl.name;
 		final declSpan: Null<Span> = decl.span;
 		if (name == null || declSpan == null || enclosingScope == null) return;
 		final scopeSpan: Null<Span> = enclosingScope.span;
 		if (scopeSpan == null) return;
-		if (RefactorSupport.referencedInRange(source, name, scopeSpan.from, scopeSpan.to, [declSpan])) return;
-		out.push({
-			file: file,
+		final excluded: Array<Span> = [declSpan];
+		if (RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) {
+			final shadowed: Array<Span> = shadowedRegions(ctx, enclosingScope, name, declSpan);
+			if (shadowed.length == 0) return;
+			for (region in shadowed) excluded.push(region);
+			if (RefactorSupport.referencedInRange(ctx.source, name, scopeSpan.from, scopeSpan.to, excluded)) return;
+		}
+		ctx.out.push({
+			file: ctx.file,
 			span: declSpan,
 			rule: 'unused-local',
 			severity: Severity.Warning,
 			message: 'unused local \'$name\''
 		});
+	}
+
+	/**
+	 * The regions of `scope` in which an occurrence of `name` belongs to an INNER binding
+	 * rather than to the declaration at `declSpan` — one self-scoped declaration of the same
+	 * name (`RefShape.selfScopeDeclKinds`: the `for` iterator, the `catch` exception) per
+	 * pair of spans, its binder token and its body.
+	 *
+	 * Empty — no refinement, the declaration stays silent — when the grammar declares no
+	 * self-scoped kind, when the declaration itself sits inside a conditional-compilation
+	 * region, or when no construct passes the shape check.
+	 */
+	private static function shadowedRegions(ctx: ScanCtx, scope: QueryNode, name: String, declSpan: Span): Array<Span> {
+		final out: Array<Span> = [];
+		if (ctx.selfScopeDeclKinds.length == 0 || withinConditional(ctx, scope, declSpan.from)) return out;
+		collectShadowedRegions(ctx, scope, name, out);
+		return out;
+	}
+
+	/**
+	 * Collect the shadowed regions of every self-scoped declaration of `name` in `node`'s
+	 * subtree. Reification (`opaqueKinds`) and conditional-compilation subtrees are not
+	 * descended: a binding whose uses a splice may inject, and a branch the tree flattens
+	 * into its siblings, are both regions this model cannot claim.
+	 */
+	private static function collectShadowedRegions(ctx: ScanCtx, node: QueryNode, name: String, out: Array<Span>): Void {
+		final kind: String = node.kind;
+		if (ctx.opaqueKinds.contains(kind) || kind == ctx.conditionalKind) return;
+		if (ctx.selfScopeDeclKinds.contains(kind) && node.name == name) appendShadowedRegion(ctx, node, name, out);
+		for (c in node.children) collectShadowedRegions(ctx, c, name, out);
+	}
+
+	/**
+	 * Append the binder token and the body of the self-scoped declaration `node` — the two
+	 * regions in which an occurrence of `name` cannot be a reference to an outer binding.
+	 *
+	 * The construct's shape is VERIFIED, not assumed: the body is its trailing child, and
+	 * only when that child closes the construct; the binder must sit ahead of the body.
+	 * Anything else is a shape this model does not describe, and nothing is claimed. The
+	 * head BETWEEN the two is deliberately not claimed either — a `for` loop's iterated
+	 * expression is evaluated in the ENCLOSING scope, so `for (item in item)` reads the
+	 * outer `item` and the declaration is live.
+	 */
+	private static function appendShadowedRegion(ctx: ScanCtx, node: QueryNode, name: String, out: Array<Span>): Void {
+		final span: Null<Span> = node.span;
+		final children: Array<QueryNode> = node.children;
+		if (span == null || children.length == 0) return;
+		final body: Null<Span> = children[children.length - 1].span;
+		if (body == null || body.to != span.to || body.from <= span.from) return;
+		final binder: Null<Span> = binderSpan(ctx.source, span.from, body.from, name);
+		if (binder == null) return;
+		out.push(binder);
+		out.push(body);
+	}
+
+	/**
+	 * The span of the first standalone `name` token of `source` within `[from, stop)` — a
+	 * self-scoped construct's binder, the first thing its head spells. A `$` prefix
+	 * disqualifies a match: that is an interpolation read, never a binder.
+	 */
+	private static function binderSpan(source: String, from: Int, stop: Int, name: String): Null<Span> {
+		final length: Int = name.length;
+		var at: Int = source.indexOf(name, from);
+		while (at >= 0 && at + length <= stop) {
+			final before: Int = at > 0 ? StringTools.fastCodeAt(source, at - 1) : 0;
+			final after: Int = at + length < source.length ? StringTools.fastCodeAt(source, at + length) : 0;
+			if (before != '$'.code && !RefactorSupport.isIdentChar(before) && !RefactorSupport.isIdentChar(after))
+				return new Span(at, at + length);
+			at = source.indexOf(name, at + 1);
+		}
+		return null;
+	}
+
+	/**
+	 * Whether `offset` sits inside a conditional-compilation region of `node`'s subtree. A
+	 * `#if` region projects as ONE node whose branches are flattened into flat siblings, so
+	 * no state of that tree is the text a single compile sees: a declaration inside one
+	 * cannot be weighed against a shadowing construct, and the refinement is suspended.
+	 */
+	private static function withinConditional(ctx: ScanCtx, node: QueryNode, offset: Int): Bool {
+		final kind: Null<String> = ctx.conditionalKind;
+		if (kind == null) return false;
+		final span: Null<Span> = node.span;
+		if (span != null && (offset < span.from || offset >= span.to)) return false;
+		if (node.kind == kind) return true;
+		for (c in node.children) if (withinConditional(ctx, c, offset)) return true;
+		return false;
 	}
 
 	/**
