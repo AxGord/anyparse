@@ -116,7 +116,30 @@ class WrapList {
 		// a single-line list preserves its source `,` while the knob still only
 		// drives break-mode. Default `false` → every other caller stays byte-
 		// identical.
-		flatTrailingComma: Bool = false
+		flatTrailingComma: Bool = false,
+		// ω-comprehension-fit-measure: this list is a `for`/`while` array
+		// comprehension resolved through the fit cascade
+		// (`HaxeFormat.defaultComprehensionWrap`), whose ONLY rule is
+		// `exceedsMaxLineLength` — a pure WIDTH question, so anything a static
+		// measure cannot see is a wrong answer rather than a rounding error.
+		// Set by `WriterLowering`'s sep-Star emit when `_comprehensionFit`
+		// holds. TWO consumers, both about that width:
+		//
+		//  - the `groupifyInlineBodies` pass below — a generator body parked
+		//    behind a `BodyGroup` (a filter `if`'s then-branch under
+		//    `sameLine.ifBody: fitLine`) is deferred to width 0, so the item
+		//    under-measures and the bracket never opens;
+		//  - the `groupRestProbe` argument of `emitZeroThreshold` — the fit
+		//    decision must also charge the same-line tail after `]` (the `;`
+		//    of `= [ … ];`), or the bracket holds one column past the limit.
+		//
+		// Honoured on the zero-threshold path ONLY. `emitOneThreshold`,
+		// `buildThresholdTree` and the `anyHardline || forceExceeds` path
+		// ignore it — unreachable today because `defaultComprehensionWrap`
+		// carries no `LineLengthLargerThan` rule, so `extraThresholds` is
+		// always empty; a cascade rule added there would silently drop the
+		// rest probe.
+		comprehensionFitMeasure: Bool = false
 	): Doc {
 		// `Line('\n')` is not a Haxe-constant default — unwrap a null
 		// sentinel into the legacy hardcoded hardline here.
@@ -132,8 +155,26 @@ class WrapList {
 		// measure differs) so the true width is visible and the call opens on
 		// the overflowing line, matching the fork's full-arrow-line measure.
 		// Copy-on-write: untouched when no such arg is present.
+		//
+		// ω-comprehension-fit-measure: `comprehensionFitMeasure` extends the
+		// SAME re-tag to each item of a fit-cascade comprehension — identical
+		// defect (a `BodyGroup`-parked body hiding its width from a width-only
+		// cascade), identical remedy, one mechanism. No per-item Doc sniff: the
+		// caller already proved the list IS a comprehension from the AST.
+		//
+		// `flatLength(item) >= 0` is the load-bearing half of that gate. The
+		// re-tag exists to let a hardline-FREE item reveal the width the
+		// cascade must weigh; an item that ALREADY forces a break has nothing
+		// to reveal — `defaultComprehensionWrap` answers `OnePerLine` on the
+		// exceeds side and `measureItems` reports `anyHardline`, so the array
+		// is committed to break either way — and re-tagging it only leaks the
+		// newly-visible width OUT through the returned Doc into an enclosing
+		// construct's measure, flipping e.g. a `callParameter`
+		// `totalItemLength <= n` rule and opening a call paren that used to hug
+		// the bracket. Host positions are out of this slice's remit, so the
+		// gate keeps the re-tag where it decides something.
 		var groupified: Null<Array<Doc>> = null;
-		for (i in 0...items.length) if (isArrowPlainIfBody(items[i])) {
+		for (i in 0...items.length) if ((comprehensionFitMeasure && flatLength(items[i]) >= 0) || isArrowPlainIfBody(items[i])) {
 			if (groupified == null) groupified = items.copy();
 			groupified[i] = groupifyInlineBodies(items[i]);
 		}
@@ -201,12 +242,17 @@ class WrapList {
 		// `buildThresholdTree` helper handles 0/1/N thresholds via
 		// recursion (1-threshold optimization with impossibility
 		// filtering inlined for the common case below).
+		//
+		// ω-comprehension-fit-measure: a fit-cascade comprehension joins the
+		// `groupRestProbe` consumers for the zero-threshold call — its bracket
+		// shares its line with the statement's `;` (or a call's `);`), and the
+		// plain-`Group` fit is blind to that tail. See the param doc above.
 		return anyHardline || forceExceeds
 			? WrapBoundary(buildThresholdTree(extraThresholds, [], true, leadFlat, leadBreak, evalAt, shapeAt, leadFor))
 			: extraThresholds.length == 0
 				? emitZeroThreshold(
-					rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe, leadFlat, leadBreak, evalAt,
-					shapeAt, leadFor
+					rules, items, opt, cols, open, close, openInside, closeInside, forceMode, groupRestProbe || comprehensionFitMeasure,
+					leadFlat, leadBreak, evalAt, shapeAt, leadFor
 				)
 				: extraThresholds.length == 1
 					? emitOneThreshold(extraThresholds[0], opt, evalAt, shapeAt, leadFor)
@@ -1004,12 +1050,14 @@ class WrapList {
 		// `flatTokenWidthOfRestStack` (the trailing `):Void {}` after a
 		// wrapped anon param type, etc.) — matching fork's `lengthAfter`
 		// bias at the cascade-Group layer. Sister to the agree-path
-		// `groupOrRestProbe` in `shapeFillLine`. Every current
-		// `groupRestProbe` consumer (functionSignatureWrap empty-rules /
-		// typeParameterWrap exceeds-independent rules) resolves both
-		// states identically and never reaches this branch, so the only
-		// behavioural change is for cascades whose NoWrap rule is gated
-		// on `ExceedsMaxLineLength` (anonTypeWrap) — byte-inert elsewhere.
+		// `groupOrRestProbe` in `shapeFillLine`. The `@:fmt(groupRestProbe)`
+		// Stars (functionSignatureWrap empty-rules / typeParameterWrap
+		// exceeds-independent rules) resolve both states identically and
+		// never reach this branch. The cascades that DO reach it are the
+		// ones whose mode is gated on `ExceedsMaxLineLength`: anonTypeWrap,
+		// and — since ω-comprehension-fit-measure — every fit-cascade
+		// comprehension, whose SOLE rule is exactly that, so it arrives
+		// here on every render rather than never.
 		return WrapBoundary(groupOrRestProbe(IfBreak(breakWithLead, flatWithLead), groupRestProbe));
 	}
 

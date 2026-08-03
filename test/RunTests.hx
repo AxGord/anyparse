@@ -394,6 +394,7 @@ import unit.HxCondElseifChainBlankTest;
 import unit.HxComprehensionChainIdempotencyTest;
 import unit.HxComprehensionFitLineNoBreakTest;
 import unit.HxComprehensionCuddledOpenTest;
+import unit.HxComprehensionDeclRhsBracketWrapTest;
 import unit.HxTypeParamFieldNoWrapSliceTest;
 import unit.HxFnSigExceedsBoundaryWrapTest;
 import unit.HxFnSigSingleParamWrapIndentTest;
@@ -741,6 +742,7 @@ class RunTests {
 		addCase(new HxComprehensionChainIdempotencyTest());
 		addCase(new HxComprehensionFitLineNoBreakTest());
 		addCase(new HxComprehensionCuddledOpenTest());
+		addCase(new HxComprehensionDeclRhsBracketWrapTest());
 		addCase(new HxTypeParamFieldNoWrapSliceTest());
 		addCase(new HxCallParamObjectLiteralSliceTest());
 		addCase(new HxCallParamFunctionLambdaSliceTest());

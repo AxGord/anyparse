@@ -3450,7 +3450,37 @@ class WriterLowering {
 				_p != null && (_p: Array<Dynamic>).length > 0;
 			};
 			final _rhsCtor: String = Type.enumConstructor(cast _optVal);
-			if (_lhsHasTypeParam || _rhsCtor == 'SingleStringExpr' || _rhsCtor == 'DoubleStringExpr')
+			// ω-comprehension-fit-measure: a `for`/`while` array comprehension
+			// DISARMS gate 1. Gate 1 exists for a RHS the writer cannot wrap
+			// internally; a comprehension's `[` IS its wrap point, and the fork
+			// wraps the RHS bracket rather than the `=` (see the natural-probe
+			// paragraph above). The probe is meant to notice that on its own,
+			// but it resolves the bracket's Group one column EARLIER than the
+			// renderer does — the renderer holds the post-`=` `OptSpace` pending
+			// while the probe spends it — so at exactly `maxLineLength + 1` the
+			// probe still sees the comprehension flat and breaks the `=`, while
+			// the renderer would have opened the bracket.
+			//
+			// This DEFERS that column skew, it does not remove it: every other
+			// gate-1 RHS (a `new`, a NoWrap-pinned call under a type-param LHS)
+			// still carries the same ±1. Fixing it at the source means teaching
+			// `Renderer.fitsFlat`'s plain-`Group` arm to charge
+			// `RenderCtx.pendingOptSpace` the way its `GroupWithRestProbe` arm
+			// already does — a renderer-wide change, not a comprehension one.
+			//
+			// Evaluated only when gate 1 would otherwise fire; a comprehension
+			// RHS under a param-less LHS reaches the same decl-header arm either
+			// way, so the probe would be pure cost there. Element classification
+			// is the shared `HaxeFormat.isComprehensionGenerator` seam (it also
+			// absorbs the trivia-synth `{node: …}` wrapper and any non-enum
+			// element), so a new generator ctor is taught in ONE place.
+			// `Type.enumParameters` slot 0 is `ArrayExpr.elems` in both the plain
+			// and the trivia writer — `TriviaTypeSynth` APPENDS its synth args.
+			final _rhsIsComprehension: Bool = _lhsHasTypeParam && _rhsCtor == 'ArrayExpr' && {
+				final _elems: Null<Array<Dynamic>> = cast Type.enumParameters(cast _optVal)[0];
+				_elems != null && _elems.length > 0 && anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_elems[0]);
+			};
+			if ((_lhsHasTypeParam && !_rhsIsComprehension) || _rhsCtor == 'SingleStringExpr' || _rhsCtor == 'DoubleStringExpr')
 				_dc([
 					_dt($v{leadText}),
 					_dinfle(opt.lineWidth, _dn(_cols, _dc([_dhl(), _rhs])), _dc([_dop(' '), _rhs]))
@@ -15476,8 +15506,12 @@ class WriterLowering {
 				// sole for-expr item past ~80 chars regardless of maxLineLength), AND drop
 				// source-multiline-keep so an already-wrapped but fitting comprehension
 				// reflows flat (fork parity) rather than staying pinned open.
+				// ω-comprehension-fit-measure: the same flag also rides into
+				// `WrapList.emit` as `comprehensionFitMeasure`, which re-tags the sole
+				// item's hardline-free `BodyGroup`s as `Group` so the fit cascade's
+				// width question sees the generator body it would otherwise defer to 0.
 				final _isComprehension: Bool = $v{c.reflowSourceMultiline} && _arr.length > 0
-					&& (Type.enumConstructor(cast _arr[0].node) == 'ForExpr' || Type.enumConstructor(cast _arr[0].node) == 'WhileExpr');
+					&& anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_arr[0]);
 				final _comprehensionFit: Bool = _isComprehension && opt.comprehensionBracketsOpen == anyparse.format.WhitespacePolicy.After;
 				final _effRules: anyparse.format.wrap.WrapRules = _comprehensionFit
 					? anyparse.grammar.haxe.HaxeFormat.defaultComprehensionWrap()
@@ -15486,7 +15520,8 @@ class WriterLowering {
 				final _wlResult: anyparse.core.Doc = anyparse.format.wrap.WrapList.emit(
 					$v{openText}, $v{closeText}, $v{sepText}, _docs, opt, $openInsideDoc, $closeInsideDoc, false, _effRules,
 					$appendTrailingCommaExpr, $wrapLeadFlatDoc, $wrapLeadBreakDoc, $forceExceedsExpr, $wrapTrailBreakDoc, $forceModeExpr,
-					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _effSmlKeep, null, false, $flatTrailingCommaExpr
+					$compactContExpr, $v{c.groupRestProbe}, _sepBeforeFlags, _effSmlKeep, null, false, $flatTrailingCommaExpr,
+					_comprehensionFit
 				);
 				// ω-comprehension-count idempotence: a `for`/`while` array comprehension
 				// self-lays-out (the writer re-emits a wide one as `[` then a newline then `for…`). The non-
@@ -15551,20 +15586,21 @@ class WriterLowering {
 				// newlines, so they are always counted.
 				if (
 					_t.newlineBefore && !_ignoreEmit && !_matrixOff && !(
-						$v{reflowSourceMultiline} && _ti == 0 && !_keepEmit && Type.enumConstructor(cast _t.node) != 'ForExpr'
-						&& Type.enumConstructor(cast _t.node) != 'WhileExpr'
+						$v{reflowSourceMultiline} && _ti == 0 && !_keepEmit
+						&& !anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t)
 					)
 				)
 					_hasSourceNewlines = true;
-				if (_noWrapFlat) {
-					// `Type.enumConstructor` returns null for a non-enum
-					// payload (e.g. an object-literal field struct) — the
-					// `==` comparisons then simply miss. Typed `Null<String>`
-					// so the null path is explicit.
-					final _itemCtor: Null<String> = Type.enumConstructor(cast _t.node);
-					if (_itemCtor == 'ForExpr' || _itemCtor == 'WhileExpr' || anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0)
-						_anyMultilineItem = true;
-				}
+				// A non-enum payload (e.g. an object-literal field struct) answers
+				// `false` inside the shared classifier, so the non-array Star case
+				// needs no guard of its own.
+				if (
+					_noWrapFlat && (
+						anyparse.grammar.haxe.HaxeFormat.isComprehensionGenerator(_t)
+						|| anyparse.format.wrap.WrapList.flatLength($triviaElemCall) < 0
+					)
+				)
+					_anyMultilineItem = true;
 				_ti++;
 			}
 		};
