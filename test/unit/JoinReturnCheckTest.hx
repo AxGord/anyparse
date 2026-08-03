@@ -262,6 +262,102 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals(0, violations(wrap('#if A\n\t\tfinal x = g();\n\t\t#else\n\t\treturn x;\n\t\t#end')).length);
 	}
 
+	// --- conditional-compilation branch scoping ---
+
+	/**
+	 * Two sibling `#if` branches, each declaring the SAME name and returning it: BOTH join. The
+	 * branches are mutually exclusive, so the declaration in one is not a second reference to the
+	 * declaration in the other. Before `Refs` kept a branch-local frame, the enclosing block's
+	 * first-wins binding pointed every branch's read at branch 1's declaration, so branch 1 read
+	 * as twice-referenced and branch 2 as unreferenced -- and the sole-reference gate silenced
+	 * both.
+	 */
+	public function testSiblingBranchSameNameBothFlagged(): Void {
+		Assert.equals(2, violations(wrapRet('Int', branchPair())).length);
+	}
+
+	/** Each branch's join is built from its OWN initializer -- the fix must not cross the branch boundary. */
+	public function testSiblingBranchSameNameFixTexts(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrapRet('Int', branchPair()));
+		Assert.equals(2, es.length);
+		Assert.equals('return g();', es[0].text);
+		Assert.equals('return h();', es[1].text);
+	}
+
+	/** Exclusivity is per branch, not two-way: a third `#elseif` branch reusing the name joins as well. */
+	public function testThreeSiblingBranchesSameNameAllFlagged(): Void {
+		final body: String =
+			'#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#elseif B\n\t\tvar x:Int = h();\n\t\treturn x;\n\t\t#else\n\t\tvar x:Int = k();\n\t\treturn x;\n\t\t#end';
+		Assert.equals(3, violations(wrapRet('Int', body)).length);
+	}
+
+	/**
+	 * A REdeclaration inside ONE branch is a genuine same-scope collision and stays vetoed: the
+	 * first declaration carries two references and the second none, so neither is sole-referenced.
+	 * The branch-local frame must not turn a within-branch shadow into a join.
+	 *
+	 * CONTROL, not a discrimination: it holds with the branch frame reverted too. It pins that
+	 * relaxing the SIBLING-branch case did not relax the same-branch one.
+	 */
+	public function testSameBranchRedeclarationNotFlagged(): Void {
+		final body: String = '#if A\n\t\tvar x:Int = g();\n\t\tuse(x);\n\t\tvar x:Int = h();\n\t\treturn x;\n\t\t#end';
+		Assert.equals(0, violations(wrapRet('Int', body)).length);
+	}
+
+	/**
+	 * A declaration written inside a branch stays visible AFTER `#end` -- the branch frame is a
+	 * resolution preference, not a scope. The trailing read is therefore a second reference and
+	 * the pair does not join.
+	 *
+	 * CONTROL, not a discrimination: it holds with the branch frame reverted too. What it guards
+	 * is the other direction -- making `CondBranch` a real `scopeKinds` member would stop the
+	 * enclosing frame from pre-collecting the branch declaration, `use(x)` would resolve to
+	 * nothing, and this pair WOULD join.
+	 */
+	public function testBranchDeclReadAfterRegionNotFlagged(): Void {
+		final body: String = '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#end\n\t\tuse(x);';
+		Assert.equals(0, violations(wrapRet('Int', body)).length);
+	}
+
+	// --- the annotation is only dropped when the function return type re-states it ---
+	// PINS of the pre-existing `buildReturn` gate, not new behaviour: they pass with the branch
+	// slice reverted. They exist because collapsing a `var b:T = cast e; return b;` pair hands the
+	// unchecked cast to whatever types the return position, so the "annotation survives unless the
+	// return type re-states it" rule is what keeps that retype from changing meaning.
+
+	/**
+	 * An UNCHECKED cast initializer under an annotation the function's return type re-states
+	 * collapses plainly: the cast is then typed by the return annotation, which is byte-identical
+	 * to the dropped one, so the retype is a no-op.
+	 */
+	public function testCastAnnotationEqualReturnTypeCollapsesPlain(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrapRet('Bytes', 'var b:Bytes = cast x;\n\t\treturn b;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return cast x;', es[0].text);
+	}
+
+	/**
+	 * The hazard case: a DIFFERING function return type would retype the unchecked cast, so the
+	 * annotation survives as an ascription and the cast keeps its written target type.
+	 */
+	public function testCastAnnotationDifferingReturnTypeAscribes(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrapRet('Dynamic', 'var b:Bytes = cast x;\n\t\treturn b;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (cast x : Bytes);', es[0].text);
+	}
+
+	/** An INFERRED function return type states nothing, so an annotated cast keeps its ascription too. */
+	public function testCastAnnotationInferredReturnTypeAscribes(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('var b:Bytes = cast x;\n\t\treturn b;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return (cast x : Bytes);', es[0].text);
+	}
+
+	/** Two sibling `#if` branches declaring the same name, each returning it. */
+	private function branchPair(): String {
+		return '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#else\n\t\tfinal x:Int = h();\n\t\treturn x;\n\t\t#end';
+	}
+
 	/** Wrap an assignment-arm body in a method with a pre-existing `str` param and an inferred return type. */
 	private function wrapAssign(body: String): String {
 		return 'class C {\n\tfunction f(str:String) {\n\t\t$body\n\t}\n}';

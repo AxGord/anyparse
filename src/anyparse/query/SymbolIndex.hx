@@ -400,8 +400,19 @@ final class SymbolIndex {
 	 * resolves only to declarations that provably cannot rebind (a non-abstract class, or an abstract
 	 * whose only `this`-writes are in its constructor and whose `@:forward` — if any — reaches a
 	 * non-rebinding underlying), `true` when a matching abstract may rebind. Conservative under a
-	 * simple-name collision (a rebinding match wins) and under an unresolved `@:forward` underlying (a
-	 * call it forwards could rebind). Resolution is by SIMPLE name (the index models no packages).
+	 * simple-name collision (a rebinding match wins). Resolution is by SIMPLE name (the index
+	 * models no packages).
+	 *
+	 * An UNRESOLVED `@:forward` underlying yields `null`, not `true`. The underlying is stored as
+	 * the abstract's own source spelling, which is an import ALIAS whenever its file wrote
+	 * `import pkg.T as U` (lime's `@:forward abstract Bytes(HaxeBytes)` is the live case), and a
+	 * simple-name index can never resolve an alias — so "underlying not found" carries no evidence
+	 * either way. Answering `true` there made ADDING a library to the resolution scope turn a
+	 * previously-flagged binding silent: with no library the name was unknown and the caller's own
+	 * unknown policy (`RefactorSupport.abstractMethodMayMutate`'s stdlib whitelist) called it safe,
+	 * while with the library it resolved to an abstract with an unresolvable underlying and was
+	 * hard-vetoed. `null` hands the decision back to that one policy, so more resolution scope can
+	 * only ever add information.
 	 */
 	public function abstractRebindsThis(typeName: String, abstractKinds: Array<String>): Null<Bool> {
 		return abstractRebindsWalk(typeName, abstractKinds, []);
@@ -853,6 +864,7 @@ final class SymbolIndex {
 		if (seen.contains(typeName)) return true;
 		seen.push(typeName);
 		var found: Bool = false;
+		var unknown: Bool = false;
 		for (fi in _files) for (t in fi.types) if (t.name == typeName) {
 			if (!abstractKinds.contains(t.kind)) {
 				found = true;
@@ -865,10 +877,13 @@ final class SymbolIndex {
 				continue;
 			}
 			final rec: Null<Bool> = abstractRebindsWalk(underlying, abstractKinds, seen);
-			if (rec == null || rec == true) return true;
-			found = true;
+			if (rec == true) return true;
+			if (rec == null)
+				unknown = true;
+			else
+				found = true;
 		}
-		return found ? false : null;
+		return found && !unknown ? false : null;
 	}
 
 	/**

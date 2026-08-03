@@ -8,6 +8,8 @@ import anyparse.query.CondBranchProjection.CondBranchRun;
 import anyparse.query.QueryNode;
 import anyparse.query.RefactorSupport;
 import anyparse.runtime.Span;
+import anyparse.query.Refs;
+import anyparse.query.Refs.RefKind;
 
 /**
  * `CondBranchProjection`'s conditional-region splitter (`conditionalBranchRuns`) and the
@@ -199,6 +201,66 @@ class CondBranchSplitTest extends Test {
 		Assert.isFalse(plain == projected);
 		Assert.notNull(namedClass(plain, 'B'));
 		Assert.isTrue(namedClass(plain, 'B') == namedClass(projected, 'B'));
+	}
+
+	// --- branch-local reference resolution (`Refs` reads the projection) ---
+
+	/**
+	 * A reference inside a branch binds to THAT branch's declaration. `CondBranch` is deliberately
+	 * NOT a `scopeKinds` member, so the enclosing block frame pre-collects every branch's
+	 * declaration first-wins; `Refs` therefore pushes a branch-local frame of its own, else both
+	 * reads below resolve to the branch-1 declaration and branch 2 looks unreferenced.
+	 */
+	public function testReadBindsToItsOwnBranchDecl(): Void {
+		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\tuse(v);\n\t\t#else\n\t\tvar v = 2;\n\t\tuse(v);\n\t\t#end');
+		final decls: Array<Int> = declOffsets(src, 'v');
+		Assert.equals(2, decls.length);
+		Assert.same(decls, readBindings(src, 'v'));
+	}
+
+	/**
+	 * The plain projection has no `CondBranch` node, so it keeps the enclosing frame's first-wins
+	 * binding: both reads point at the FIRST declaration. Pins that the preference rides on the
+	 * projection and no plain-tree consumer changed.
+	 */
+	public function testPlainTreeKeepsFirstWinsBinding(): Void {
+		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\tuse(v);\n\t\t#else\n\t\tvar v = 2;\n\t\tuse(v);\n\t\t#end');
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		final first: Int = declOffsets(src, 'v')[0];
+		for (b in bindingsOf(plugin.parseFile(src), src, 'v')) Assert.equals(first, b);
+	}
+
+	/**
+	 * A declaration written inside a branch is still visible AFTER `#end` — a preference, not a
+	 * scope. CONTROL: holds with the branch frame reverted too; it guards the opposite mistake,
+	 * naming `CondBranch` in `RefShape.scopeKinds`, which would leave this read unresolved.
+	 */
+	public function testBranchDeclResolvesFromAfterTheRegion(): Void {
+		final src: String = fn('#if A\n\t\tvar v = 1;\n\t\t#end\n\t\tuse(v);');
+		Assert.same(declOffsets(src, 'v'), readBindings(src, 'v'));
+	}
+
+	/** A read inside a branch of a name declared only OUTSIDE it still resolves outward. CONTROL: the branch frame must fall through. */
+	public function testOuterDeclResolvesInsideBranch(): Void {
+		final src: String = fn('var v = 1;\n\t\t#if A\n\t\tuse(v);\n\t\t#end');
+		Assert.same(declOffsets(src, 'v'), readBindings(src, 'v'));
+	}
+
+	/** Every `Decl` hit offset for `name` in the branch-aware tree, in source order. */
+	private static function declOffsets(src: String, name: String): Array<Int> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return [for (h in Refs.find(name, branchTree(src), plugin.refShape())) if (h.kind == RefKind.Decl) h.span.from];
+	}
+
+	/** The binding offset each non-`Decl` hit for `name` resolves to in the branch-aware tree, in source order. */
+	private static function readBindings(src: String, name: String): Array<Int> {
+		return bindingsOf(branchTree(src), src, name);
+	}
+
+	/** The binding offset each non-`Decl` hit for `name` resolves to in `tree` (-1 when unresolved). */
+	private static function bindingsOf(tree: QueryNode, src: String, name: String): Array<Int> {
+		final plugin: HaxeQueryPlugin = new HaxeQueryPlugin();
+		return [for (h in Refs.find(name, tree, plugin.refShape())) if (h.kind != RefKind.Decl) h.bindingSpan?.from ?? -1];
 	}
 
 	/** The statements of `body` inside a class + function, so a region lands in a `BlockBody`. */

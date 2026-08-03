@@ -136,12 +136,22 @@ final class Refs {
 		// `$v{…}`) re-opens normal resolution for its own subtree, where an
 		// identifier IS a genuine compile-time reference.
 		final isScope: Bool = !macroEmit && shape.scopeKinds.contains(node.kind);
-		if (isScope) {
+		// A `CondBranch` — the branch-aware projection's synthetic per-branch statement list — is
+		// NOT a lexical scope (a decl written inside `#if` stays visible after `#end`, and the
+		// enclosing frame's pre-collect already holds it). It is a resolution PREFERENCE: a
+		// reference inside a branch binds to that branch's own declaration before any same-name
+		// declaration of a MUTUALLY EXCLUSIVE sibling branch. Without the frame the enclosing
+		// block's first-wins rule binds EVERY branch's reads to the FIRST branch's declaration,
+		// so a name declared in two sibling branches reads as twice-referenced in one branch and
+		// unreferenced in the other. Only the branch-aware projection carries the kind, so a
+		// plain parse resolves byte-identically to before.
+		final isBranch: Bool = !macroEmit && !isScope && node.kind == CondBranchProjection.COND_BRANCH_KIND;
+		if (isScope || isBranch) {
 			final frame: ScopeFrame = new ScopeFrame(node);
 			collectDeclsMulti(node, shape, frame, out);
 			final selfSpan: Null<Span> = node.span;
 			final selfName: Null<String> = node.name;
-			if (selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
+			if (isScope && selfSpan != null && selfName != null && out.exists(selfName) && shape.selfScopeDeclKinds.contains(node.kind))
 				frame.declare(selfName, selfSpan);
 			scopes.push(frame);
 		}
@@ -168,7 +178,7 @@ final class Refs {
 		final isWriteParent: Bool = shape.writeParentKinds.contains(node.kind);
 		final children: Array<QueryNode> = node.children;
 		for (i in 0...children.length) walkMulti(children[i], shape, scopes, out, isWriteParent && i == 0, childMacroEmit, skipped);
-		if (isScope) scopes.pop();
+		if (isScope || isBranch) scopes.pop();
 	}
 
 	private static function collectDeclsMulti(
