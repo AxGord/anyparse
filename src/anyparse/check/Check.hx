@@ -220,3 +220,52 @@ interface CrossFileFix {
 	): Array<Array<CrossFileEdits>>;
 
 }
+
+/**
+ * One fix edit plus the ATOMIC GROUP it belongs to. `span` / `text` are the raw edit
+ * `Check.fix` returns (`text` replaces `[span.from, span.to)`, empty = a deletion);
+ * `group` names the unit the edit may only be kept or dropped WITH. A null `group` is
+ * the default and means independently revertible — exactly what every edit is today.
+ * Ids are opaque and scoped to ONE `fixGrouped` call: equal non-null ids mean one
+ * indivisible unit, and nothing more.
+ */
+typedef GroupedEdit = {
+	var span: Span;
+	var text: String;
+	var group: Null<Int>;
+}
+
+/**
+ * Opt-in capability of a `Check` whose autofix edits are NOT all independently
+ * revertible — some of them only make sense together. The motivating class is the
+ * ORPHAN IMPORT: a rewrite that shortens a qualified type reference also inserts the
+ * `import` the short name needs, and dropping the rewrites while KEEPING the import
+ * leaves a file that still compiles, so a verifier probing subsets has no way to tell
+ * that subset is wrong. The flat `Array<{span, text}>` of `Check.fix` carries no slot
+ * to say so; this seam adds one.
+ *
+ * The ONLY consumer is `FixVerifier`'s bisect — the one place an edit set is ever
+ * SPLIT. The safe (non-risky) fix loop and `Cli`'s oracle-assisted batch are whole-file
+ * all-or-nothing: they keep or revert a file's entire edit set, so no group can be
+ * broken there and they go on calling `fix`. A check that does NOT implement this
+ * interface is bisected per edit exactly as before, byte for byte.
+ *
+ * CONTRACT: a `GroupedFix`'s `Check.fix` MUST be the pure projection of `fixGrouped`
+ * (`[for (e in fixGrouped(...)) { span: e.span, text: e.text }]`), so the flat and the
+ * grouped view can never disagree about WHICH edits a fix produces — only about how
+ * they may be split.
+ */
+@:nullSafety(Strict)
+interface GroupedFix {
+
+	/**
+	 * The same edits `Check.fix` returns for `violations` (this check's OWN, for ONE
+	 * `source`), each carrying the atomic group it belongs to. A null `group` is an
+	 * independently revertible edit; edits sharing a non-null id are kept or dropped
+	 * together by the verifier's bisect. An empty array = nothing to fix.
+	 */
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit>;
+
+}

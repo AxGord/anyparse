@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.RiskyFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
@@ -204,7 +206,7 @@ private typedef Site = {
  * `import haxe.ds.IntMap;` — each on its own evidence, at its own fixed-point pass.
  */
 @:nullSafety(Strict)
-final class PreferMapType implements Check implements RiskyFix {
+final class PreferMapType implements Check implements RiskyFix implements GroupedFix {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'prefer-map-type';
@@ -320,24 +322,47 @@ final class PreferMapType implements Check implements RiskyFix {
 	}
 
 	/**
-	 * The edits for the fixable subset of `violations`. The verdict is RE-DERIVED here rather than
-	 * carried on the violation — a finding the report left report-only yields no edit, whatever
-	 * the caller hands back.
+	 * The flat projection of `fixGrouped` — the `Check.fix` contract, for the callers that never
+	 * split an edit set. Grouping is the ONLY thing dropped here, which is the obligation
+	 * `GroupedFix` states: the two views can never disagree about WHICH edits a fix produces.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		return [
+			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
+		];
+	}
+
+	/**
+	 * The edits for the fixable subset of `violations`, one GROUP per candidate. The verdict is
+	 * RE-DERIVED here rather than carried on the violation — a finding the report left report-only
+	 * yields no edit, whatever the caller hands back.
+	 *
+	 * The group exists because one candidate is ONE rewrite that happens to need two edits: the name
+	 * token becomes `Map`, and an implied key type is spelled out by replacing the following `<`. Half
+	 * of that is `Map<V>` or `IntMap<Int, V>` — neither compiles, so a bisect splitting the pair would
+	 * name one half a failer, keep the other, and then see its own complement confirm fail: a spurious
+	 * WHOLE-FILE revert of every candidate in the file. A candidate whose key type is already written
+	 * needs one edit and becomes a group of one, which is indistinguishable from ungrouped.
+	 */
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
 		final wanted: Array<String> = [];
 		for (violation in violations) {
 			final span: Null<Span> = violation.span;
 			if (span != null && violation.message == MSG_FIXABLE) wanted.push('${span.from}:${span.to}');
 		}
 		if (wanted.length == 0) return [];
-		final edits: Array<{ span: Span, text: String }> = [];
+		final edits: Array<GroupedEdit> = [];
+		var group: Int = 0;
 		for (candidate in candidatesOf(source, plugin)) if (
 			candidate.message == MSG_FIXABLE && wanted.contains('${candidate.span.from}:${candidate.span.to}')
-		)
-			for (edit in candidate.edits) edits.push(edit);
+		) {
+			for (edit in candidate.edits) edits.push({ span: edit.span, text: edit.text, group: group });
+			group++;
+		}
 		return edits;
 	}
 
