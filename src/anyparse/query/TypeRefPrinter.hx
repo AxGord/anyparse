@@ -21,6 +21,19 @@ typedef PrintedTypeRef = {
 	var importPath: Null<String>;
 }
 
+/**
+ * One pending `import <path>;` insert: the zero-width `span` to splice at, the statement `text`
+ * already carrying its own newline, and `paths` — the canonical import paths this ONE edit
+ * materialises. `pendingImportEdits` merges every path landing on the same anchor offset into a
+ * single edit, so `paths` is what tells a caller which use sites the edit is inseparable from
+ * (see `anyparse.check.Check.GroupedFix`); a caller that only splices the edit ignores it.
+ */
+typedef PendingImportEdit = {
+	var span: Span;
+	var text: String;
+	var paths: Array<String>;
+}
+
 /** One import insert: the byte offset to splice at, and the statement text already carrying its own newline. */
 private typedef ImportAnchor = {
 	var offset: Int;
@@ -285,6 +298,12 @@ final class TypeRefPrinter {
 	 * zero-width edits at one offset would be an overlapping pair the batching splice cannot
 	 * order. Call once, after every `print` for the file.
 	 *
+	 * `paths` names the canonical import paths a merged edit carries, in the order its lines
+	 * are emitted. A caller needs it because the merge makes the edit ATOMIC with the
+	 * use-site rewrites of EVERY path in it, not of one: dropping a path's rewrites while
+	 * keeping this edit leaves an orphan import, which still compiles, so nothing downstream
+	 * can detect it — see `Check.GroupedFix`, which is how a fixer states that dependency.
+	 *
 	 * A merged bucket is sorted under the order the anchored RUN carries, not under a fixed
 	 * codepoint one: several fresh lines written in codepoint order into a case-folded run would
 	 * leave that run explained by NEITHER order, and every later insert would then fall back to
@@ -293,7 +312,7 @@ final class TypeRefPrinter {
 	 * ranges), so the bucket's order is well defined; with no run to read the codepoint reading
 	 * is the deterministic default.
 	 */
-	public function pendingImportEdits(): Array<{ span: Span, text: String }> {
+	public function pendingImportEdits(): Array<PendingImportEdit> {
 		final buckets: Array<{ offset: Int, order: Int, lines: Array<{ path: String, text: String }> }> = [];
 		for (path in _pendingImports) {
 			final anchor: ImportAnchor = anchorFor(path);
@@ -309,7 +328,11 @@ final class TypeRefPrinter {
 		return [
 			for (bucket in buckets) {
 				bucket.lines.sort((a, b) -> ImportOrder.compare(bucket.order, a.path, b.path));
-				{ span: new Span(bucket.offset, bucket.offset), text: [for (line in bucket.lines) line.text].join('') };
+				{
+					span: new Span(bucket.offset, bucket.offset),
+					text: [for (line in bucket.lines) line.text].join(''),
+					paths: [for (line in bucket.lines) line.path]
+				};
 			}
 		];
 	}

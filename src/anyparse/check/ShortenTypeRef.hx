@@ -1,6 +1,8 @@
 package anyparse.check;
 
 import anyparse.check.Check.DefaultOff;
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
 import anyparse.query.GrammarPlugin;
 import anyparse.query.GrammarPlugin.RefShape;
@@ -13,6 +15,7 @@ import anyparse.runtime.Span;
 import anyparse.check.Check.RiskyFix;
 import anyparse.query.TypeRefPrinter.PrintedTypeRef;
 import anyparse.query.TypeResolver;
+import anyparse.query.TypeRefPrinter.PendingImportEdit;
 
 /**
  * One written occurrence of a qualified type path: the exact byte range of the path ITSELF
@@ -174,7 +177,7 @@ private typedef ScanContext = {
  * style decision; only the hybrid arm is universal, and it is not separable from the print.
  */
 @:nullSafety(Strict)
-final class ShortenTypeRef implements Check implements DefaultOff implements RiskyFix {
+final class ShortenTypeRef implements Check implements DefaultOff implements RiskyFix implements GroupedFix {
 
 	/** The rule's stable identifier — the `apqlint.json` key and the `--rule` selector. */
 	private static inline final RULE_ID: String = 'shorten-type-ref';
@@ -225,22 +228,49 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 	}
 
 	/**
-	 * Rewrite each proven occurrence and splice the imports the short forms rely on. The decision is
-	 * RE-DERIVED here rather than carried on the violation — `run`'s verdict travels only as the
-	 * message, so a finding the report left unproven yields no edit even if this call sees a wider
-	 * index.
-	 *
-	 * ATOMICITY — a gap this contract cannot close. `FixVerifier` calls `fix` ONCE per file with the
-	 * whole rule-filtered finding set and then bisects the returned EDIT ARRAY by index, so a probe
-	 * that drops a path's shortening edits while keeping its `import` line is expressible: the result
-	 * is an orphan import, which COMPILES, so the confirming typecheck accepts it. Grouping an import
-	 * with the occurrences that depend on it is the verifier's concern — a `Check` cannot say it
-	 * through the flat `{span, text}` return. Nothing here can detect or prevent it; the alternative
-	 * of withholding imports on a partial input would need a caller that passes one, and none does.
+	 * The flat projection of `fixGrouped` — the `Check.fix` contract, for the callers that never
+	 * split an edit set. Grouping is the ONLY thing dropped here, which is the obligation
+	 * `GroupedFix` states: the two views can never disagree about WHICH edits a fix produces.
 	 */
 	public function fix(
 		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
 	): Array<{ span: Span, text: String }> {
+		return [
+			for (edit in fixGrouped(source, violations, plugin, index)) { span: edit.span, text: edit.text }
+		];
+	}
+
+	/**
+	 * Rewrite each proven occurrence and splice the imports the short forms rely on, one atomic
+	 * GROUP per import bucket. The decision is RE-DERIVED here rather than carried on the violation —
+	 * `run`'s verdict travels only as the message, so a finding the report left unproven yields no edit
+	 * even if this call sees a wider index.
+	 *
+	 * ATOMICITY. An import edit and every use-site rewrite that depends on it form ONE group, so
+	 * `FixVerifier`'s bisect keeps or drops them together and can no longer strand an orphan import —
+	 * which compiles, so the confirming typecheck would have accepted it. The printer MERGES paths
+	 * landing on one anchor offset into a single edit, so the group is the whole BUCKET: every path in
+	 * it binds its rewrites to the same unit, and no probe can split two shortenings that share an
+	 * import line either.
+	 *
+	 * The cost is COARSENESS, and how coarse depends on the anchoring `ImportOrder.insertOffset`
+	 * picks. Fresh paths that interleave into a sorted import run get distinct offsets and therefore
+	 * independent buckets; paths that all sort past the run's end, and every path in a file whose block
+	 * is unsorted (the fallback anchors them all after the last import), collapse into ONE bucket — and
+	 * then a single failing path drags every import-driven shortening in the file back with it.
+	 * Splitting a bucket is not available: `RefactorSupport.applyEdits` gives no defined relative order
+	 * to several zero-width edits at one offset, which is exactly why the printer merges them.
+	 *
+	 * The residual is a caller that hands in a strict SUBSET of the file's findings. The plan — and
+	 * with it the promised imports — is re-derived from the whole file, so an import can still be
+	 * promised for a path whose rewrites this call was not asked for. It is then applied either alone
+	 * in a bucket of its own, or, when it merged with a bucket a wanted path also uses, INSIDE that
+	 * path's group, riding along with rewrites it has nothing to do with. No caller does that today
+	 * (`FixVerifier` passes the whole rule-filtered set for the file), and nothing here can detect it.
+	 */
+	public function fixGrouped(
+		source: String, violations: Array<Violation>, plugin: GrammarPlugin, ?index: SymbolIndex
+	): Array<GroupedEdit> {
 		final wanted: Array<String> = [];
 		for (violation in violations) {
 			final span: Null<Span> = violation.span;
@@ -254,17 +284,34 @@ final class ShortenTypeRef implements Check implements DefaultOff implements Ris
 		final scope: Null<SymbolIndex> = RefactorSupport.resolutionIndexOf(plugin) ?? index;
 		final plan: Null<FilePlan> = planFor(source, plugin, scope);
 		if (plan == null) return [];
-		final edits: Array<{ span: Span, text: String }> = [
+		// One bucket can serve SEVERAL paths (the printer merges imports landing on one anchor), so
+		// the group is the bucket and every path in it binds its own rewrites to that same unit.
+		final importEdits: Array<PendingImportEdit> = plan.printer.pendingImportEdits();
+		final byPath: Map<String, Int> = [];
+		for (group => importEdit in importEdits) for (importPath in importEdit.paths) byPath[importPath] = group;
+		final edits: Array<GroupedEdit> = [
 			for (path in plan.plans) if (path.proven) for (target in path.targets) if (wanted.contains(spanKey(target)))
-				{ span: target, text: path.text }
+				{ span: target, text: path.text, group: groupOf(byPath, path.importPath) }
 		];
 		if (edits.length == 0) return edits;
 		// The PLANNING printer's pending set is already exactly right: `print` is handed the
 		// freeness exemption only for a path that cleared both the threshold and the index proof,
 		// and such a path always comes back with a changed spelling, so every promised import
 		// belongs to a plan that contributed edits above.
-		for (importEdit in plan.printer.pendingImportEdits()) edits.push(importEdit);
+		for (group => importEdit in importEdits) edits.push({ span: importEdit.span, text: importEdit.text, group: group });
 		return edits;
+	}
+
+	/**
+	 * The atomic group a use-site rewrite joins: the bucket of the import edit its short spelling
+	 * needs, or null when the spelling needs no import and the rewrite stands alone. The map-miss arm
+	 * is unreachable for a `planFor` plan — a non-null `importPath` is by construction the canonical
+	 * `print` pushed onto the printer's pending set, and every pending path lands in some bucket — so
+	 * it exists only for a caller that builds a plan itself, and it degrades to the pre-grouping
+	 * per-edit behaviour rather than to anything less safe.
+	 */
+	private static inline function groupOf(byPath: Map<String, Int>, importPath: Null<String>): Null<Int> {
+		return importPath == null ? null : byPath[importPath];
 	}
 
 	/** Which of the three messages `plan` earns — unproven first, then the import-free arm, then the add-import one. */

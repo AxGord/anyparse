@@ -1,5 +1,7 @@
 package anyparse.check;
 
+import anyparse.check.Check.GroupedEdit;
+import anyparse.check.Check.GroupedFix;
 import anyparse.check.Check.Violation;
 import anyparse.check.CompilerOracle.OracleOutcome;
 import anyparse.query.GrammarPlugin;
@@ -27,11 +29,14 @@ typedef FixVerifyResult = {
 /**
  * Per (risky-check, file) detail for a file whose full edit set failed the oracle
  * and was BISECTED: `appliedEdits` survived (the safe complement was written),
- * `revertedEdits` were isolated as the failer(s) — or all of them on a budget /
- * confirm fallback (`appliedEdits == 0`). `oracleInvocations` is the total
- * compiler spawns spent verifying this file: the initial full-set typecheck, the
- * bisect probes, and the complement confirm. Emitted only for the bisect path; a
- * fully-applied file or a single-edit file carries no entry.
+ * `revertedEdits` were reverted — the isolated failer(s) plus, for a `GroupedFix`
+ * check, every edit sharing their group — or all of them on a budget / confirm
+ * fallback (`appliedEdits == 0`). Both stay EDIT counts even when the bisect worked
+ * in GROUPS, so a reader never has to know whether the rule grouped anything.
+ * `oracleInvocations` is the total compiler spawns spent verifying this file: the
+ * initial full-set typecheck, the bisect probes, and the complement confirm. Emitted
+ * only for the bisect path; a fully-applied file or a single-unit file carries no
+ * entry.
  */
 typedef FixVerifyPartial = {
 	var file: String;
@@ -63,10 +68,16 @@ private enum EntryVerdict {
  * candidate, runs the compiler oracle, and KEEPS it on `Confirmed` or reconciles
  * otherwise — the report-only fallback.
  *
- * Rollback granularity is PER-EDIT within a (check, file) set: when the full set
- * fails, the edits are bisected (`isolateFailers` — binary-split group testing) so
- * one unsafe edit among N no longer reverts the safe others. Each probe
- * re-canonicalises from the ORIGINAL source with a subset (spans are
+ * Rollback granularity is PER-EDIT by default, and per-GROUP for a check that opts
+ * into `GroupedFix`: when the full set fails, the edits are bisected
+ * (`isolateFailers` — binary-split group testing) so one unsafe edit among N no
+ * longer reverts the safe others. The bisect walks UNITS rather than raw edits —
+ * one unit per ungrouped edit, one per group — so edits a check declared
+ * inseparable (an `import` and the rewrites that need it) are kept or dropped
+ * WHOLE, and a probe can no longer strand half of them. `N` in the budget below is
+ * therefore the UNIT count; with no grouping every unit is a singleton, and the
+ * arithmetic, the probe sequence and the reported counts are what they always were.
+ * Each probe re-canonicalises from the ORIGINAL source with a subset (spans are
  * original-source-relative, never stacked onto already-edited text); the isolated
  * safe complement is confirm-typechecked and written, only the failer(s) revert.
  * Oracle spawns per file are capped at `2*ceil(log2(N)) + 2` (the initial
@@ -114,7 +125,14 @@ final class FixVerifier {
 			for (entry in files) {
 				final own: Array<Violation> = all.filter(v -> v.file == entry.file);
 				if (own.length == 0) continue;
-				final edits: Array<{ span: Span, text: String }> = check.fix(entry.source, own, plugin, index);
+				// A GROUPED check names which of its edits are inseparable — an `import` and the
+				// rewrites that need it. Every other check keeps the flat contract, and the
+				// all-null group array it yields bisects per edit exactly as it did before.
+				final edits: Array<GroupedEdit> = check is GroupedFix
+					? (cast check: GroupedFix).fixGrouped(entry.source, own, plugin, index)
+					: [
+						for (e in check.fix(entry.source, own, plugin, index)) { span: e.span, text: e.text, group: null }
+					];
 				if (edits.length == 0) continue;
 				final opts: Null<String> = optsByFile == null ? null : optsByFile[entry.file];
 				switch verifyEntry(entry, edits, plugin, opts, oracleHxml, oracleDir, write) {
@@ -149,21 +167,29 @@ final class FixVerifier {
 	/**
 	 * Speculatively apply `edits` to one file and reconcile with the oracle. The
 	 * full set is written and typechecked first: `Confirmed` keeps it (`Applied`);
-	 * `Unavailable` (the oracle cannot run) or a single-edit `Rejected` reverts the
-	 * whole file (`Reverted`). A multi-edit `Rejected` is BISECTED — `isolateFailers`
-	 * isolates the failing edits by binary search (each probe re-canonicalises from
-	 * the ORIGINAL `before` with a subset), the safe complement is confirm-typechecked
-	 * and written, and only the failers revert (`Partial`). A budget overrun or an
-	 * unexpectedly-failing complement falls back to a whole-file revert, still reported
-	 * as `Partial` with `appliedEdits == 0`. Mutates `entry.source` and the disk
-	 * (`write`) to the final decided text.
+	 * `Unavailable` (the oracle cannot run) or a `Rejected` with fewer than two
+	 * UNITS reverts the whole file (`Reverted`). A multi-unit `Rejected` is
+	 * BISECTED — `isolateFailers` isolates the failing UNITS by binary search (each
+	 * probe re-canonicalises from the ORIGINAL `before` with that subset's edits),
+	 * the safe complement is confirm-typechecked and written, and only the failing
+	 * units revert (`Partial`).
+	 *
+	 * A UNIT is one edit, unless the check implements `GroupedFix` and tied several
+	 * edits into one group — `unitsOf` is the whole of the difference, and an
+	 * ungrouped edit set makes every unit a singleton, i.e. exactly the per-edit
+	 * bisect this always did. The `Partial` counts stay EDIT counts either way.
+	 *
+	 * A budget overrun or an unexpectedly-failing complement falls back to a
+	 * whole-file revert, still reported as `Partial` with `appliedEdits == 0`.
+	 * Mutates `entry.source` and the disk (`write`) to the final decided text.
 	 */
 	private static function verifyEntry(
-		entry: { file: String, source: String }, edits: Array<{ span: Span, text: String }>, plugin: GrammarPlugin, opts: Null<String>,
-		oracleHxml: String, oracleDir: Null<String>, write: (String, String) -> Void
+		entry: { file: String, source: String }, edits: Array<GroupedEdit>, plugin: GrammarPlugin, opts: Null<String>, oracleHxml: String,
+		oracleDir: Null<String>, write: (String, String) -> Void
 	): EntryVerdict {
 		final before: String = entry.source;
-		final fullText: String = switch RefactorSupport.canonicalize(before, edits, false, plugin, opts) {
+		final full: Array<{ span: Span, text: String }> = [for (e in edits) { span: e.span, text: e.text }];
+		final fullText: String = switch RefactorSupport.canonicalize(before, full, false, plugin, opts) {
 			case Ok(text) if (text != before): text;
 			case _: return NoChange;
 		};
@@ -178,20 +204,21 @@ final class FixVerifier {
 				return Reverted;
 			case Rejected(_):
 		}
-		final n: Int = edits.length;
+		final units: Array<Array<Int>> = unitsOf(edits);
+		final n: Int = units.length;
 		if (n < 2) {
 			entry.source = before;
 			write(entry.file, before);
 			return Reverted;
 		}
-		// Cap all oracle spawns for this file at 2*ceil(log2(n)) + 2: the initial
-		// full-set typecheck (already spent) + the bisect search + the confirm. The
-		// search gets the middle 2*ceil(log2(n)) probes; a single failer needs at most
-		// that, so it never spuriously falls back.
+		// Cap all oracle spawns for this file at 2*ceil(log2(n)) + 2: the initial full-set
+		// typecheck (already spent) + the bisect search + the confirm. The search gets the
+		// middle 2*ceil(log2(n)) probes; a single failing UNIT needs at most that, so it
+		// never spuriously falls back.
 		final searchBudget: Int = 2 * ceilLog2(n);
 		final spent: Array<Int> = [0];
 		function probe(indices: Array<Int>): Bool {
-			final subset: Array<{ span: Span, text: String }> = [for (i in indices) edits[i]];
+			final subset: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, indices);
 			return switch RefactorSupport.canonicalize(before, subset, false, plugin, opts) {
 				case Ok(text):
 					write(entry.file, text);
@@ -206,10 +233,11 @@ final class FixVerifier {
 		if (failers == null || failers.length >= n) {
 			entry.source = before;
 			write(entry.file, before);
-			return Partial(0, n, 1 + spent[0]);
+			return Partial(0, edits.length, 1 + spent[0]);
 		}
-		final failerIndices: Array<Int> = failers;
-		final safe: Array<{ span: Span, text: String }> = [for (i in 0...n) if (!failerIndices.contains(i)) edits[i]];
+		final failerUnits: Array<Int> = failers;
+		final keptUnits: Array<Int> = [for (u in 0...n) if (!failerUnits.contains(u)) u];
+		final safe: Array<{ span: Span, text: String }> = editsOfUnits(edits, units, keptUnits);
 		final invocations: Int = 1 + spent[0] + 1;
 		return switch RefactorSupport.canonicalize(before, safe, false, plugin, opts) {
 			case Ok(safeText) if (safeText != before):
@@ -217,24 +245,69 @@ final class FixVerifier {
 				switch CompilerOracle.typecheck(oracleHxml, oracleDir) {
 					case Confirmed:
 						entry.source = safeText;
-						Partial(safe.length, failerIndices.length, invocations);
+						Partial(safe.length, edits.length - safe.length, invocations);
 					case _:
 						entry.source = before;
 						write(entry.file, before);
-						Partial(0, n, invocations);
+						Partial(0, edits.length, invocations);
 				}
 			case _:
 				entry.source = before;
 				write(entry.file, before);
-				Partial(0, n, 1 + spent[0]);
+				Partial(0, edits.length, 1 + spent[0]);
 		};
 	}
 
 	/**
-	 * Isolate the failing edit indices among `[0, count)` by binary-split group
-	 * testing. `probe(indices)` is true when that SUBSET (canonicalised from the
-	 * ORIGINAL source with exactly those edits) typechecks. Precondition: the FULL
-	 * set is known to fail, so no probe re-establishes it. Returns the sorted failer
+	 * The bisect's UNITS: one per distinct non-null `group`, in FIRST-APPEARANCE order,
+	 * plus a singleton for every ungrouped edit at its own position. Each unit is the
+	 * ascending edit indices it holds, and the bisect keeps or drops a unit WHOLE — which
+	 * is what makes an `import` and the rewrites depending on it inseparable. An all-null
+	 * input yields `[[0], [1], ...]`, so a check that does not implement `GroupedFix` is
+	 * bisected per edit byte-for-byte as before.
+	 */
+	private static function unitsOf(edits: Array<GroupedEdit>): Array<Array<Int>> {
+		final units: Array<Array<Int>> = [];
+		final byGroup: Map<Int, Array<Int>> = [];
+		for (i in 0...edits.length) {
+			final group: Null<Int> = edits[i].group;
+			if (group == null) {
+				units.push([i]);
+				continue;
+			}
+			final unit: Null<Array<Int>> = byGroup[group];
+			if (unit == null) {
+				final fresh: Array<Int> = [i];
+				byGroup[group] = fresh;
+				units.push(fresh);
+			} else
+				unit.push(i);
+		}
+		return units;
+	}
+
+	/**
+	 * The plain `{span, text}` edits held by the UNITS `unitIndices` names, in ascending
+	 * EDIT order — which is exactly what the ungrouped path produced before, and what keeps
+	 * the splice reproducible: `RefactorSupport.applyEdits` orders by DESCENDING
+	 * `span.from`, so two edits sharing a `from` (two zero-width insertions at one anchor)
+	 * still resolve by input order.
+	 */
+	private static function editsOfUnits(
+		edits: Array<GroupedEdit>, units: Array<Array<Int>>, unitIndices: Array<Int>
+	): Array<{ span: Span, text: String }> {
+		final flat: Array<Int> = [for (u in unitIndices) for (i in units[u]) i];
+		flat.sort((a, b) -> a - b);
+		return [for (i in flat) { span: edits[i].span, text: edits[i].text }];
+	}
+
+	/**
+	 * Isolate the failing UNIT indices among `[0, count)` by binary-split group
+	 * testing. A unit is one edit, or one `GroupedFix` group — the search is
+	 * index-agnostic either way, `verifyEntry` owns the mapping (`unitsOf`).
+	 * `probe(indices)` is true when that SUBSET (canonicalised from the ORIGINAL
+	 * source with exactly those units' edits) typechecks. Precondition: the FULL set
+	 * is known to fail, so no probe re-establishes it. Returns the sorted failer
 	 * indices whose removal makes the complement pass, or null when the probe budget
 	 * is exhausted (the caller falls back to a whole-file revert). `spent[0]` receives
 	 * the probe count.

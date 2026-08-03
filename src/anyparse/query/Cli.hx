@@ -12385,9 +12385,10 @@ final class Cli {
 	}
 
 	/**
-	 * One-line summary of the per-edit bisect activity for the `lint --fix` tail:
-	 * how many files had their failing edit set split, and the aggregate edits
-	 * kept / reverted and oracle spawns spent. Empty when no file was bisected.
+	 * One-line summary of the per-edit (per-group, for a `GroupedFix` check) bisect activity
+	 * across every partially-applied file, appended to the risky-fix tail. Empty when nothing
+	 * was bisected. The counts are EDIT counts either way — `FixVerifyPartial` normalises the
+	 * grouped case, so this line never has to say whether a rule grouped anything.
 	 */
 	private static function bisectTail(partials: Array<FixVerifyPartial>): String {
 		if (partials.length == 0) return '';

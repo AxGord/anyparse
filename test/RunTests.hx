@@ -549,6 +549,8 @@ import unit.HxCaseBodyFitLineSliceTest;
 import unit.HxCaseBodySymmetrySliceTest;
 import unit.UnusedLocalShadowTest;
 import unit.HxCallParamOuterFirstWrapSliceTest;
+import unit.FixVerifierGroupTest;
+import unit.FixVerifierGroupE2ETest;
 
 /**
 	Entry point for the test suite. Adds every test case to the utest
@@ -1000,6 +1002,8 @@ class RunTests {
 		addCase(new ExtractRepeatedExpressionTest());
 		addCase(new CompilerOracleE2ETest());
 		addCase(new FixVerifierBisectTest());
+		addCase(new FixVerifierGroupTest());
+		addCase(new FixVerifierGroupE2ETest());
 		addCase(new DocCoverageCheckTest());
 		addCase(new UnguardedNullableDerefTest());
 		addCase(new SelfAssignmentCheckTest());
