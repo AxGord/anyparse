@@ -71,6 +71,85 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	/**
+	 * The EXPRESSION-position loop (`ForExpr`, a comprehension) is a self-scoped
+	 * declaration exactly like the statement form, and the grammar projects it under its
+	 * own kind — so it needs its own fixture rather than inheriting the `ForStmt` one.
+	 */
+	public function testForExprComprehensionShadowFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\treturn [for (item in xs) item];\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+		Assert.isTrue(vs[0].message.contains("'item'"));
+	}
+
+	/**
+	 * The same comprehension written with spaced brackets. A construct's span absorbs the
+	 * trailing whitespace before its closing delimiter, so an exact `body.to == span.to`
+	 * shape test made the finding a property of FORMATTING — flagged unspaced, silent
+	 * spaced. The gap is trivia and must not decide coverage.
+	 */
+	public function testForExprSpacedComprehensionShadowFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\treturn [ for (item in xs) item ];\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/**
+	 * Same class, different absorbed token: a stray `;` after a block-terminated loop is
+	 * folded into the loop's own span (it projects no node of its own), which likewise must
+	 * not decide whether the shadowed declaration is seen.
+	 */
+	public function testAbsorbedSemicolonAfterBodyShadowFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tfor (item in xs) { trace(item); };\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/** A trailing line comment after the body is trivia too — it never reached the loop's span, and must not start to. */
+	public function testTrailingCommentAfterBodyShadowFlagged(): Void {
+		final vs: Array<Violation> = violations(
+			'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tfor (item in xs) trace(item); // loop\n\t}\n}'
+		);
+		Assert.equals(1, vs.length);
+	}
+
+	/**
+	 * The conditional-compilation refusal is a DIRECTIVE test, not a kind test: an
+	 * expression-position `#if` projects under a different kind than the statement-position
+	 * one, and a gate naming a single kind covers only whichever position the grammar
+	 * happens to spell that way.
+	 *
+	 * The refusal here is conservatism, not a correctness requirement — the scan reads every
+	 * branch of the region at once, so no wrong finding is constructible from this shape
+	 * today. What the fixture pins is that both positions are treated ALIKE.
+	 */
+	public function testExpressionPositionConditionalRefused(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(xs:Array<String>) {\n\t\tvar item:String;\n\t\tfinal ys = #if debug [for (item in xs) item] #else [] #end;\n\t\treturn ys;\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
+	 * A documented miss, pinned so a future widening is a deliberate act: `for (k => item in
+	 * m)` surfaces only the KEY on the loop node, so the value binder's shadow is invisible
+	 * to a model keyed on the construct's name and the declaration stays silent.
+	 */
+	public function testKeyValueValueBinderNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				'class C {\n\tfunction f(m:Map<String, String>) {\n\t\tvar item:String;\n\t\tfor (k => item in m) trace(k + item);\n\t}\n}'
+			).length
+		);
+	}
+
+	/**
 	 * A `for` iterator is scoped to the loop BODY, so a read after the loop resolves to
 	 * the outer declaration again — live, and the region model must not swallow it.
 	 */
@@ -145,9 +224,13 @@ class UnusedLocalShadowTest extends Test {
 	}
 
 	/**
-	 * A lambda parameter shadows its name over the lambda BODY, which no span of the
-	 * parameter node describes — the class is deliberately not widened past the
-	 * grammar's self-scoped declarations, so the declaration stays silent.
+	 * An INTENT pin, not a gate test: the class is deliberately not widened past the
+	 * grammar's self-scoped declarations, so a declaration shadowed by a lambda parameter
+	 * stays silent. Nothing in the shadow model would have to be defeated for this to
+	 * flag — the lambda projects as a `ThinArrow` carrying NO name, so the model's
+	 * `node.name == name` test never even reaches its region check. Widening the class to
+	 * lambda parameters means giving them a binder/body region of their own, and this
+	 * fixture is what makes that a deliberate act.
 	 */
 	public function testLambdaParameterShadowNotFlagged(): Void {
 		Assert.equals(

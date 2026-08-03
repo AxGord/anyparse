@@ -16,9 +16,11 @@ import anyparse.query.TypeInfoProvider;
  * Built once per analyzed file so the recursive walk threads one value rather than
  * six positional arguments.
  *
- * `conditionalKind` is `RefShape.conditionalMemberKind`: the grammar projects a `#if`
- * region under that one kind in STATEMENT position too, which is where this check
- * meets it.
+ * `conditionalIfKeyword` is `RefShape.conditionalIfKeyword`, and the conditional gates
+ * test the DIRECTIVE that opens a region (`CheckScan.opensConditionalRegion`) rather
+ * than a node kind: the grammar projects a statement-position `#if` and an
+ * expression-position one under different kinds, so a kind test covers only whichever
+ * position it happens to name.
  */
 private typedef ScanCtx = {
 	var out: Array<Violation>;
@@ -28,7 +30,7 @@ private typedef ScanCtx = {
 	var opaqueKinds: Array<String>;
 	var localDeclKinds: Array<String>;
 	var selfScopeDeclKinds: Array<String>;
-	var conditionalKind: Null<String>;
+	var conditionalIfKeyword: Null<String>;
 }
 
 /**
@@ -66,19 +68,23 @@ private typedef ScanCtx = {
  * run a SECOND time with those regions excluded as well, and the declaration
  * is flagged only when nothing textual survives outside them. The regions come
  * from the grammar's own self-scoped declarations (`RefShape.selfScopeDeclKinds`
- * — the `for` iterator, the `catch` exception), never from a second resolver:
- * each contributes its binder token and its body, and only when the construct's
- * shape is verified (see `appendShadowedRegion`). The head is NOT covered — a
- * `for` loop's iterated expression is evaluated in the enclosing scope, so
- * `for (item in item)` reads the outer `item`, which keeps the declaration
- * live. Everything else the scan still counts: a mention in a comment, a
- * string, an interpolation or a nested re-declaration outside those regions
- * keeps the binding exactly as conservatively as before.
+ * — the `for` iterator in both its statement and comprehension positions, the
+ * `catch` exception), never from a second resolver: each contributes its binder
+ * token and its body, and only when the construct's shape is verified (see
+ * `appendShadowedRegion`). The head is NOT covered — a `for` loop's iterated
+ * expression is evaluated in the enclosing scope, so `for (item in item)` reads
+ * the outer `item`, which keeps the declaration live. Everything else the scan
+ * still counts: a mention in a comment, a string, an interpolation or a nested
+ * re-declaration outside those regions keeps the binding exactly as
+ * conservatively as before.
  *
  * Conditional compilation suspends the refinement on both sides — a
  * declaration inside a `#if` region, or a shadowing construct inside one —
  * since the region's branches project as flat siblings and no state of that
- * tree is the source a single compile sees.
+ * tree is the source a single compile sees. Both gates test the opening
+ * DIRECTIVE (`CheckScan.opensConditionalRegion`), not a node kind:
+ * statement- and expression-position regions project under different kinds,
+ * and a refusal naming one of them silently covers only that position.
  *
  * ## Reification is opaque
  *
@@ -125,7 +131,7 @@ final class UnusedLocal implements Check {
 				opaqueKinds: shape.opaqueKinds ?? [],
 				localDeclKinds: shape.localDeclKinds ?? [],
 				selfScopeDeclKinds: shape.selfScopeDeclKinds,
-				conditionalKind: shape.conditionalMemberKind
+				conditionalIfKeyword: shape.conditionalIfKeyword
 			};
 			walk(ctx, tree, null);
 		}
@@ -264,9 +270,33 @@ final class UnusedLocal implements Check {
 	 */
 	private static function collectShadowedRegions(ctx: ScanCtx, node: QueryNode, name: String, out: Array<Span>): Void {
 		final kind: String = node.kind;
-		if (ctx.opaqueKinds.contains(kind) || kind == ctx.conditionalKind) return;
+		if (ctx.opaqueKinds.contains(kind) || CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return;
 		if (ctx.selfScopeDeclKinds.contains(kind) && node.name == name) appendShadowedRegion(ctx, node, name, out);
 		for (c in node.children) collectShadowedRegions(ctx, c, name, out);
+	}
+
+	/**
+	 * Whether `[from, to)` of `source` holds nothing but trivia — whitespace, comments, and
+	 * a statement terminator the parser folded into the enclosing construct's span rather
+	 * than projecting as its own node.
+	 *
+	 * A construct's span reaches past its last child by however much the FORMATTING put
+	 * there (the space before a comprehension's `]`, a stray `;` after a block-terminated
+	 * loop), so an exact end-offset comparison would make a finding a property of layout.
+	 * Only text that could BIND or REFERENCE something disqualifies the shape.
+	 */
+	private static function onlyTrivia(source: String, from: Int, to: Int): Bool {
+		var at: Int = from;
+		while (at < to) {
+			final next: Int = RefactorSupport.skipForwardTrivia(source, at);
+			if (next > at) {
+				at = next;
+				continue;
+			}
+			if (StringTools.fastCodeAt(source, at) != ';'.code) return false;
+			at++;
+		}
+		return true;
 	}
 
 	/**
@@ -274,8 +304,11 @@ final class UnusedLocal implements Check {
 	 * regions in which an occurrence of `name` cannot be a reference to an outer binding.
 	 *
 	 * The construct's shape is VERIFIED, not assumed: the body is its trailing child, and
-	 * only when that child closes the construct; the binder must sit ahead of the body.
-	 * Anything else is a shape this model does not describe, and nothing is claimed. The
+	 * only when nothing but trivia separates that child's end from the construct's own
+	 * (`onlyTrivia` — an exact end-offset match would hand the verdict to the formatter,
+	 * whose spacing and stray terminators the span absorbs); the binder must sit ahead of
+	 * the body. Anything else is a shape this model does not describe, and nothing is
+	 * claimed. The
 	 * head BETWEEN the two is deliberately not claimed either — a `for` loop's iterated
 	 * expression is evaluated in the ENCLOSING scope, so `for (item in item)` reads the
 	 * outer `item` and the declaration is live.
@@ -285,7 +318,7 @@ final class UnusedLocal implements Check {
 		final children: Array<QueryNode> = node.children;
 		if (span == null || children.length == 0) return;
 		final body: Null<Span> = children[children.length - 1].span;
-		if (body == null || body.to != span.to || body.from <= span.from) return;
+		if (body == null || body.to > span.to || body.from <= span.from || !onlyTrivia(ctx.source, body.to, span.to)) return;
 		final binder: Null<Span> = binderSpan(ctx.source, span.from, body.from, name);
 		if (binder == null) return;
 		out.push(binder);
@@ -317,11 +350,10 @@ final class UnusedLocal implements Check {
 	 * cannot be weighed against a shadowing construct, and the refinement is suspended.
 	 */
 	private static function withinConditional(ctx: ScanCtx, node: QueryNode, offset: Int): Bool {
-		final kind: Null<String> = ctx.conditionalKind;
-		if (kind == null) return false;
+		if (ctx.conditionalIfKeyword == null) return false;
 		final span: Null<Span> = node.span;
 		if (span != null && (offset < span.from || offset >= span.to)) return false;
-		if (node.kind == kind) return true;
+		if (CheckScan.opensConditionalRegion(node, ctx.source, ctx.conditionalIfKeyword)) return true;
 		for (c in node.children) if (withinConditional(ctx, c, offset)) return true;
 		return false;
 	}
