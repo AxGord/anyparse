@@ -19,6 +19,38 @@ typedef IfChain = {
 }
 
 /**
+ * One branch's carry seat, as the rule that owns the rebuild sees it: where that branch's
+ * CONDITION text ends, the value span the rebuild copies, and where the next copied piece starts
+ * (the following branch's condition, or the terminal value). `IfExpressionChain.carryGaps` turns
+ * a seat into the two comment slots around that value. A branch whose value is not ONE copied
+ * span — a nested `switch` / `if` construct in the assignment hoist — opens no seat, and its
+ * comments keep failing the site closed.
+ */
+typedef CarrySeat = {
+	var condEnd: Int;
+	var value: Span;
+	var nextStart: Int;
+}
+
+/**
+ * A region between two verbatim-copied pieces whose comments the collapse CARRIES instead of
+ * refusing: `key` names the copied piece they ride (`IfExpressionChain.spanKey`) and `before`
+ * whether they are emitted in front of its text or behind it.
+ */
+typedef CarryGap = {
+	var from: Int;
+	var to: Int;
+	var key: String;
+	var before: Bool;
+}
+
+/** Carried comment text per copied span (`IfExpressionChain.spanKey`), one map per slot. */
+typedef Carried = {
+	var before: Map<String, String>;
+	var after: Map<String, String>;
+}
+
+/**
  * Machinery shared by `prefer-if-expression-assignment` and
  * `prefer-if-expression-return`: recognising an `if`-chain of single-statement branches
  * and assembling the collapsed `if (c1) v1 else if (c2) v2 … else vN` text. The rules
@@ -37,6 +69,37 @@ typedef IfChain = {
  * value that would ABSORB the emitted ` else `) and `tokenSpan` (a copied span that would
  * SWALLOW the trailing comment after its last token) therefore live here too, and all three
  * rules share them.
+ *
+ * ## Comments
+ *
+ * The rebuild copies conditions and values and drops everything between them, so a comment
+ * in the dropped text has to be accounted for. Two answers live here, and each rule picks
+ * per comment:
+ *
+ * - `droppedComment` — the family's original fail-closed guard: any comment outside every
+ *   copied span refuses the site. Still the whole answer for the sibling rules that carry
+ *   nothing (`prefer-ternary-expression`, `prefer-try-expression-*`, …).
+ * - `carriedComments` — the same scan with SLOTS. A branch seat (`CarrySeat`) opens two
+ *   gaps around that branch's value: the condition-to-value gap, whose comments are emitted
+ *   between the rebuilt `if (…)` and the value, and the value-to-next-piece gap, whose
+ *   comments are emitted after the value and before the ` else `. Both keep the comment in
+ *   the position the author gave it, so the carry is faithful reproduction rather than
+ *   re-attribution. Anything outside a slot still refuses, so nothing is ever dropped or
+ *   moved to a place that would change what it says.
+ *
+ * The trailing gap is the narrower of the two because its region runs on THROUGH the `else`
+ * (or the ternary `:`) that opens the next branch, and the parser projects NO node for
+ * either: a comment written past one describes the branch that FOLLOWS, and emitting it in
+ * front of the rebuilt ` else ` would re-read it as being about the branch before. So the
+ * gate is what SEPARATES the comment from the value — only a statement's own punctuation
+ * (whitespace, the `;` that ended it, the `}` that closed its block) may stand there, and
+ * every other character IS that separator (`unseparated`). LAYOUT decides nothing here; it
+ * only decides whether the carried comment keeps its own line. The TERMINAL value opens no
+ * seat at all: the region behind it belongs to whatever the enclosing rule welds on, and a
+ * `//` comment there would swallow the `;`.
+ *
+ * `buildValue` joins the pieces with one space EXCEPT across a line break a carried comment
+ * introduced, so the emitted text is byte-unchanged whenever nothing is carried.
  */
 @:nullSafety(Strict)
 final class IfExpressionChain {
@@ -124,13 +187,22 @@ final class IfExpressionChain {
 	 * enclosing assignment-tree hoist.
 	 */
 	public static function buildValue(pairs: Array<{ cond: String, value: String }>, terminalValue: String): String {
-		final buf: StringBuf = new StringBuf();
+		final parts: Array<String> = [];
 		for (i in 0...pairs.length) {
-			if (i > 0) buf.add(' else ');
-			buf.add('if (${pairs[i].cond}) ${pairs[i].value}');
+			if (i > 0) parts.push('else');
+			parts.push('if (${pairs[i].cond})');
+			parts.push(pairs[i].value);
 		}
-		buf.add(' else $terminalValue');
-		return buf.toString();
+		parts.push('else');
+		parts.push(terminalValue);
+		var out: String = parts[0];
+		// One space between pieces, EXCEPT across a line break a carried comment put there: a
+		// value ending in a `//` comment must be followed by the next piece on a new line, and a
+		// value whose leading comment kept its own line must not be pulled back onto the `if (…)`
+		// one. Without a carry every boundary takes the space, so the text is byte-unchanged.
+		for (i in 1...parts.length)
+			out += StringTools.endsWith(out, '\n') || StringTools.startsWith(parts[i], '\n') ? parts[i] : ' ${parts[i]}';
+		return out;
 	}
 
 	/**
@@ -141,15 +213,140 @@ final class IfExpressionChain {
 	 * rather than silently losing it.
 	 */
 	public static function droppedComment(headSpan: Span, kept: Array<Span>, comments: Array<{ from: Int, to: Int, isLine: Bool }>): Bool {
-		for (tok in comments) if (tok.from >= headSpan.from && tok.to <= headSpan.to) {
-			var inside: Bool = false;
-			for (k in kept) if (tok.from >= k.from && tok.to <= k.to) {
-				inside = true;
-				break;
-			}
-			if (!inside) return true;
-		}
+		for (tok in comments) if (tok.from >= headSpan.from && tok.to <= headSpan.to && !contained(tok, kept)) return true;
 		return false;
+	}
+
+	/** Whether some span in `spans` fully holds `tok` — the "already inside verbatim-copied text" test both comment guards run. */
+	private static function contained(tok: { from: Int, to: Int }, spans: Array<Span>): Bool {
+		for (s in spans) if (tok.from >= s.from && tok.to <= s.to) return true;
+		return false;
+	}
+
+	/** `span`'s `from:to` key — how a carried comment finds the copied piece it rides. */
+	public static inline function spanKey(span: Span): String {
+		return '${span.from}:${span.to}';
+	}
+
+	/** An empty carry — what the phase-one build reads, before the comments have been classified. */
+	public static function noCarry(): Carried {
+		return { before: [], after: [] };
+	}
+
+	/**
+	 * The source `span` covers with its carried comments welded on — `before` text in front,
+	 * `after` text behind. A null `carried` (or one holding no entry for the span) yields the
+	 * plain verbatim slice, so EVERY emitter of a copied piece can go through this one function
+	 * and none of them needs to know whether the chain carries anything.
+	 */
+	public static function spanText(source: String, span: Span, carried: Null<Carried>): String {
+		final body: String = source.substring(span.from, span.to);
+		if (carried == null) return body;
+		final key: String = spanKey(span);
+		return '${carried.before[key] ?? ''}$body${carried.after[key] ?? ''}';
+	}
+
+	/**
+	 * The two carry gaps each branch seat opens: the condition-to-value gap, whose comments are
+	 * emitted between the rebuilt `if (…)` and the branch value (a LEADING slot), and the
+	 * value-to-next-piece gap, whose comments are emitted after that value and before the
+	 * ` else ` (a TRAILING slot). Both keep the comment in the SAME relative position it held in
+	 * the source, which is what makes the carry faithful rather than a re-attribution.
+	 */
+	public static function carryGaps(seats: Array<CarrySeat>): Array<CarryGap> {
+		final gaps: Array<CarryGap> = [];
+		for (seat in seats) {
+			final key: String = spanKey(seat.value);
+			gaps.push({
+				from: seat.condEnd,
+				to: seat.value.from,
+				key: key,
+				before: true
+			});
+			gaps.push({
+				from: seat.value.to,
+				to: seat.nextStart,
+				key: key,
+				before: false
+			});
+		}
+		return gaps;
+	}
+
+	/**
+	 * Classify every comment the rebuild would otherwise DROP — one inside the collapsed region
+	 * `[headSpan.from, headSpan.to)` and outside every verbatim-copied span (`kept`) — into the
+	 * slot of `gaps` that holds it. Returns the per-span carry, or null when ANY such comment has
+	 * no slot: fail-closed exactly as `droppedComment` is, so the family never drops or misplaces
+	 * one. `droppedComment` is this function with no gaps, and stays the entry point for the
+	 * sibling rules that carry nothing.
+	 */
+	public static function carriedComments(
+		headSpan: Span, kept: Array<Span>, gaps: Array<CarryGap>, source: String, comments: Array<{ from: Int, to: Int, isLine: Bool }>
+	): Null<Carried> {
+		final carried: Carried = noCarry();
+		for (tok in comments) if (tok.from >= headSpan.from && tok.to <= headSpan.to && !contained(tok, kept)) {
+			final gap: Null<CarryGap> = carrier(tok, gaps, source);
+			if (gap == null) return null;
+			final map: Map<String, String> = gap.before ? carried.before : carried.after;
+			final text: String = StringTools.trim(source.substring(tok.from, tok.to));
+			final prev: String = map[gap.key] ?? '';
+			// A comment the author put on its OWN line keeps one — pulled up it would re-read as
+			// being about the CONDITION (leading slot) or as trailing the value (trailing slot), both
+			// different statements from the one it makes where it stands. Otherwise the single space
+			// `buildValue` does not supply goes on the side the slot needs it.
+			final own: Bool = crossesLine(source, gap.from, tok.from) && !StringTools.endsWith(prev, '\n');
+			final head: String = own ? '\n' : (gap.before ? '' : ' ');
+			// A LINE comment runs to the end of its line, so whatever the rebuild welds after it has
+			// to start on the next one — that newline is the only legal layout, and the writer
+			// re-flows the spliced file anyway. A block comment rides inline.
+			final tail: String = tok.isLine ? '\n' : (gap.before ? ' ' : '');
+			map[gap.key] = '$prev$head$text$tail';
+		}
+		return carried;
+	}
+
+	/**
+	 * The gap that carries `tok`, or null when none does and the site must fail closed.
+	 *
+	 * A LEADING gap takes the comment whatever its layout: it sits between a branch's condition
+	 * and that branch's value, a region holding nothing but the closing `)`, an opening `{` and
+	 * the dropped `return ` / l-value — no keyword that could make it belong to a NEIGHBOUR.
+	 *
+	 * A TRAILING gap is narrower, because its region spans the `else` that opens the next branch
+	 * and the parser projects no node for that keyword: a comment written AFTER it describes the
+	 * branch that follows, and emitting it in front of the rebuilt ` else ` would re-read it as
+	 * being about the branch before. Only the unambiguous shape is taken — the comment starts on
+	 * the value's own line and the next copied piece starts on a later one, so the `else` cannot
+	 * have preceded it.
+	 */
+	private static function carrier(tok: { from: Int, to: Int }, gaps: Array<CarryGap>, source: String): Null<CarryGap> {
+		for (gap in gaps) if (tok.from >= gap.from && tok.to <= gap.to)
+			return gap.before || unseparated(source, gap.from, tok.from) ? gap : null;
+		return null;
+	}
+
+	/**
+	 * Whether `source[from…to)` holds nothing but a statement's own punctuation — whitespace, the
+	 * `;` that ended it, the `}` that closed its block. This IS the trailing slot's gate. The
+	 * region it scans runs on past those, through the `else` / `:` that opens the NEXT branch, and
+	 * the parser projects no node for either keyword; a comment written AFTER one describes the
+	 * branch that FOLLOWS, so emitting it in front of the rebuilt ` else ` would re-read it as
+	 * being about the branch before. Every character beyond the three IS that separator (or
+	 * something else the rebuild does not model), and the site fails closed.
+	 */
+	private static function unseparated(source: String, from: Int, to: Int): Bool {
+		for (i in from ... to) {
+			final c: Int = StringTools.fastCodeAt(source, i);
+			if (c != ' '.code && c != '\t'.code && c != '\n'.code && c != '\r'.code && c != ';'.code && c != '}'.code) return false;
+		}
+		return true;
+	}
+
+
+	/** Whether `source[from…to)` breaks a line — the one line-boundary question the carry asks. */
+	private static inline function crossesLine(source: String, from: Int, to: Int): Bool {
+		return source.substring(from, to).indexOf('\n') >= 0;
 	}
 
 

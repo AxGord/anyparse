@@ -67,8 +67,64 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (a) {\n\t\t\tg();\n\t\t\treturn 1;\n\t\t} else if (b) return 2;\n\t\telse return 3;')).length);
 	}
 
-	public function testCommentInDroppedRegionNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('if (a) return 1;\n\t\telse if (b) /* keep */ return 2;\n\t\telse return 3;')).length);
+	/**
+	 * A comment between a branch's condition and its value sits in a region holding nothing but
+	 * the closing `)`, an opening `{` and the dropped `return ` — no keyword that could make it
+	 * belong to a neighbouring branch — so the collapse CARRIES it into that branch's leading
+	 * slot, where it keeps the position the author gave it.
+	 */
+	public function testCommentBetweenConditionAndValueCarried(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) return 1;\n\t\telse if (b) /* keep */ return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1 else if (b) /* keep */ 2 else 3;', es[0].text);
+	}
+
+	/** A leading comment the author put on its OWN line keeps it — welded onto the `if (…)` line it would re-read as being about the CONDITION. */
+	public function testOwnLineLeadingCommentKeepsItsLine(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a)\n\t\t\t// why one\n\t\t\treturn 1;\n\t\telse if (b) return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a)\n// why one\n1 else if (b) 2 else 3;', es[0].text);
+	}
+
+	/** A comment at the END of a branch's own line rides that branch's value, and the ` else ` moves to the next line — the only legal layout after a `//`. */
+	public function testTrailingLineCommentRidesItsBranch(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) return 1; // why one\n\t\telse if (b) return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1 // why one\nelse if (b) 2 else 3;', es[0].text);
+	}
+
+	/** A comment sitting on its own line BEFORE the `else` still describes the branch that ends there — it rides the trailing slot and keeps its line. */
+	public function testOwnLineCommentBeforeElseCarried(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) return 1;\n\t\t// which branch?\n\t\telse if (b) return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1\n// which branch?\nelse if (b) 2 else 3;', es[0].text);
+	}
+
+	/** Layout does not decide the trailing slot — only what PRECEDES the comment does, so a same-line block comment before the `else` rides it too. */
+	public function testSameLineCommentBeforeElseCarried(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) return 1; /* x */ else if (b) return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1 /* x */ else if (b) 2 else 3;', es[0].text);
+	}
+
+	/**
+	 * The trailing slot's region runs on THROUGH the `else` that opens the next branch, and the
+	 * parser projects no node for that keyword — so a comment written after it describes the
+	 * branch that FOLLOWS, and emitting it in front of the rebuilt ` else ` would re-read it as
+	 * being about the branch before. The gate is what SEPARATES the comment from the value
+	 * (whitespace / `;` / `}` only), never how the author broke the lines.
+	 */
+	public function testCommentAfterElseNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) return 1; else // about the b branch\n\t\tif (b) return 2;\n\t\telse return 3;')).length);
+	}
+
+	/** A comment outside every branch seat — here in front of the head condition — has no slot and still fails the site closed. */
+	public function testCommentBeforeHeadConditionNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (/* x */ a) return 1;\n\t\telse if (b) return 2;\n\t\telse return 3;')).length);
 	}
 
 	/** End-to-end through the canonical writer: the emitted file holds the collapsed return, valid Haxe (canonicalize re-parses it). */
@@ -127,12 +183,16 @@ class PreferIfExpressionReturnCheckTest extends Test {
 
 	/**
 	 * A comment the parser folded into a returned value's TRAILING trivia is cut out of the kept
-	 * span by `IfExpressionChain.tokenSpan`, so the dropped-comment guard sees it and skips the
-	 * chain. Without the trim the raw value span SWALLOWS `// why`, the guard reads it as kept,
-	 * and the emitted text welds it in front of the ` else `, commenting the rest of the chain out.
+	 * span by `IfExpressionChain.tokenSpan` — which is exactly what lets the carry SEE it and ride
+	 * it into the branch slot. Without the trim the raw value span SWALLOWS `// why`, the guard
+	 * reads it as kept, and the emitted text welds it in front of the ` else `, commenting the
+	 * rest of the chain out.
 	 */
-	public function testTrailingLineCommentInsideValueSpanNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('if (a) return u + v // why\n\t\t\t;\n\t\telse if (b) return 2;\n\t\telse return 3;')).length);
+	public function testTrailingLineCommentInsideValueSpanCarried(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) return u + v // why\n\t\t\t;\n\t\telse if (b) return 2;\n\t\telse return 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) u + v // why\nelse if (b) 2 else 3;', es[0].text);
 	}
 
 	/**

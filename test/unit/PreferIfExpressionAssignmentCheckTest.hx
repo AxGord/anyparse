@@ -92,9 +92,71 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\telse if (b) g();\n\t\telse x = 3;')).length);
 	}
 
-	/** A comment in a dropped region (a non-head l-value) would be lost, so the chain is left unflagged. */
-	public function testCommentInDroppedRegionNotFlagged(): Void {
-		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\telse if (b) /* keep */ x = 2;\n\t\telse x = 3;')).length);
+	/**
+	 * A comment between a branch's condition and its r-value sits where only the `)`, a `{` and
+	 * the dropped l-value are, so the collapse CARRIES it into that branch's leading slot instead
+	 * of failing closed — it keeps the position the author gave it.
+	 */
+	public function testCommentBetweenConditionAndValueCarried(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) x = 1;\n\t\telse if (b) /* keep */ x = 2;\n\t\telse x = 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1 else if (b) /* keep */ 2 else 3;', es[0].text);
+	}
+
+	/**
+	 * The TM `PitchAreaX.addPlayerToPitchX` shape (anonymized): a braced branch whose own-line
+	 * comment precedes its single assignment. It rides the branch's leading slot and KEEPS its
+	 * line — pulled onto the `else if (…)` line it would re-read as being about the condition.
+	 */
+	public function testOwnLineCommentInBracedBranchCarried(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap(
+			'if (isFirstGroup) {\n\t\t\tx = new AlphaEntry(info);\n\t\t} else if (isOtherGroup) {\n\t\t\t// TODO: handle info later when it arrives from an open item\n\t\t\tx = new BetaEntry(info, true, true);\n\t\t} else {\n\t\t\tx = new BetaEntry(info, true, false);\n\t\t}'
+		));
+		Assert.equals(1, es.length);
+		Assert.equals(
+			'x = if (isFirstGroup) new AlphaEntry(info) else if (isOtherGroup)\n'
+			+ '// TODO: handle info later when it arrives from an open item\n'
+			+ 'new BetaEntry(info, true, true) else new BetaEntry(info, true, false);',
+			es[0].text
+		);
+	}
+
+	/** A comment at the END of a branch's own line rides that branch's r-value, and the ` else ` moves to the next line. */
+	public function testTrailingLineCommentRidesItsBranch(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(wrap('if (a) x = 1; // one\n\t\telse if (b) x = 2;\n\t\telse x = 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1 // one\nelse if (b) 2 else 3;', es[0].text);
+	}
+
+	/** A comment on its own line BEFORE the `else` still describes the branch that ends there — it rides the trailing slot and keeps its line. */
+	public function testOwnLineCommentBeforeElseCarried(): Void {
+		final es: Array<{ span: Span, text: String }> =
+			edits(wrap('if (a) x = 1;\n\t\t// which branch?\n\t\telse if (b) x = 2;\n\t\telse x = 3;'));
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1\n// which branch?\nelse if (b) 2 else 3;', es[0].text);
+	}
+
+	/**
+	 * Past the `else` the comment describes the branch that FOLLOWS, and the parser projects no
+	 * node for that keyword — so the trailing slot is gated on what SEPARATES the comment from
+	 * the value (whitespace / `;` / `}` only), and this site keeps failing closed.
+	 */
+	public function testCommentAfterElseNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) x = 1; else // about the b branch\n\t\tif (b) x = 2;\n\t\telse x = 3;')).length);
+	}
+
+	/**
+	 * A branch whose value is a NESTED construct is several copied pieces, not one, so it opens
+	 * no seat and a comment in front of it has nowhere to ride — the site stays refused. The
+	 * carry is a slot around a single copied r-value, never a guess at a construct's interior.
+	 */
+	public function testCommentBeforeNestedConstructBranchNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap(
+				'if (a) x = 1;\n\t\telse if (b) /* keep */ switch s {\n\t\t\tcase 1: x = 2;\n\t\t\tcase _: x = 3;\n\t\t}\n\t\telse x = 4;'
+			)).length
+		);
 	}
 
 	/**
