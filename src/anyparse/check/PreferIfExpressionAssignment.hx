@@ -59,7 +59,23 @@ import anyparse.check.AssignmentTreeHoist.UnitValue;
  *   ordinary compound (`+=`, …) whose branch values do not unify to one type (`s += anInt` vs
  *   `s += "text"`) compiles per-branch but not as one if-expression. Plain `=` flows the
  *   l-value's type into every branch, sidestepping both;
- * - all l-values are TEXTUALLY IDENTICAL (whitespace-normalized source).
+ * - all l-values are TEXTUALLY IDENTICAL (whitespace-normalized source);
+ * - no NON-TERMINAL branch holds an else-less conditional. The collapse emits a ` else ` after
+ *   every branch value but the last, and an `if` without its own `else` ends an expression OPEN,
+ *   so it ABSORBS that ` else ` and the rest of the chain silently becomes its else branch --
+ *   output that still parses, so the `--fix` re-parse gate would wave it through. The gate lives
+ *   in `AssignmentTreeHoist.ifChainValue` (the single ` else `-emitting point, so it covers the
+ *   top-level chain, every nested chain, and the switch rule's nested chains too) and scans via
+ *   the shared `IfExpressionChain.holdsElseLessConditional`. It scans the branch STATEMENT, which
+ *   subsumes every value the recursion copies; the TERMINAL branch is EXEMPT from THAT scan, since
+ *   nothing the rebuild emits follows it;
+ * - no leaf r-value is an else-less conditional at its ROOT. A narrower refusal with a span cause
+ *   rather than a re-parenting one, and it applies to the terminal and to a nested switch arm too:
+ *   the parser folds a statement's own `;` INTO such a conditional, so copying `x = if (q) 2;`'s
+ *   r-value into a chain terminal or a ` case h: <v>;` arm writes `…;;` -- which anyparse re-parses
+ *   but Haxe rejects. It lives in `AssignmentTreeHoist.unitValue`, the single point a leaf r-value
+ *   becomes emitted text, so it covers this rule and `prefer-switch-expression-assignment` at once.
+ *   ROOT-only: `x = g(if (q) 2)` cannot swallow the terminator and stays claimable.
  *
  * A comment inside a DROPPED region of the collapse (a header keyword, the braces, a non-head
  * l-value) would be lost, so such a chain is left unflagged. Unlike the ternary sibling NO

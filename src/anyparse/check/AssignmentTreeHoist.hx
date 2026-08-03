@@ -58,7 +58,8 @@ final class AssignmentTreeHoist {
 			wildcardPatternName: wildcardPatternName,
 			parenKind: parenKind,
 			ifKinds: shape.ifStatementKinds,
-			switchKinds: shape.switchKinds
+			switchKinds: shape.switchKinds,
+			conditionalKinds: IfExpressionChain.conditionalKinds(shape)
 		};
 	}
 
@@ -76,6 +77,14 @@ final class AssignmentTreeHoist {
 			final lhs: QueryNode = assign.children[0];
 			if (!establishOrMatch(ref, lhs, source)) return null;
 			final rhs: QueryNode = assign.children[1];
+			// The ONE point a leaf r-value becomes emitted text, so the ONE place the terminator
+			// swallow can be refused for every consumer: an else-less conditional at the r-value's
+			// ROOT has the statement's own `;` folded INTO its span by the parser, so copying it
+			// into a ` case h: <v>;` arm or a chain terminal writes `…;;` — which anyparse
+			// re-parses but Haxe rejects. Root-ONLY: `g(if (q) 2)` cannot swallow the terminator.
+			// A NON-terminal chain branch is already refused one level up by the whole-subtree
+			// scan, which this neither widens nor replaces.
+			if (IfExpressionChain.isElseLessConditional(rhs, s.conditionalKinds)) return null;
 			final rhsSrc: Null<String> = slice(source, rhs);
 			if (rhsSrc == null) return null;
 			final rhsSpan: Null<Span> = rhs.span;
@@ -161,12 +170,35 @@ final class AssignmentTreeHoist {
 		return chain == null ? null : ifChainValue(chain, ref, source, s);
 	}
 
-	/** Build the if-expression value from an already-collected chain (the top if-rule collects it once for its disjointness gate, then reuses it). */
+	/**
+	 * Build the if-expression value from an already-collected chain (the top if-rule collects it once
+	 * for its disjointness gate, then reuses it). This is the ONE place a ` else ` is emitted for an
+	 * if-chain value, so it is also where the else-less gate sits: it covers the top-level assignment
+	 * chain, every chain nested inside it, and the nested if-chains `prefer-switch-expression-assignment`
+	 * builds through the same recursion.
+	 *
+	 * A NON-terminal branch whose statement subtree holds an else-less conditional is refused
+	 * (`IfExpressionChain.holdsElseLessConditional`): that construct ends an expression OPEN, so the
+	 * ` else ` emitted after its value re-parents onto it and the rest of the chain silently becomes
+	 * that `if`'s else branch -- output that still parses, so the `--fix` re-parse gate waves it
+	 * through. The BRANCH STATEMENT is scanned, not just the built value: the value is composed
+	 * RECURSIVELY, so the statement subtree is the granularity that subsumes every leaf and nested
+	 * value the recursion copies -- including a nested chain's own terminal, which is exempt at ITS
+	 * level but sits in a non-terminal position at THIS one. `chain.terminal` is EXEMPT from THIS
+	 * scan: nothing the rebuild emits follows it, so nothing can re-parent onto it. It stays subject
+	 * to the narrower ROOT-only terminator check in `unitValue`, for the unrelated span reason
+	 * documented there.
+	 *
+	 * The scan is conservative for a nested `switch` branch -- its arm values are `;`-terminated, so an
+	 * else-less `if` there could absorb nothing -- consistent with the family's stance that proving
+	 * which is which costs more than the rare cleanup it buys.
+	 */
 	public static function ifChainValue(chain: IfChain, ref: LvalueRef, source: String, s: TreeSeams): Null<UnitValue> {
 		final kept: Array<Span> = [];
 		final built: Array<{ cond: String, value: String }> = [];
 		var leafCount: Int = 0;
 		for (b in chain.branches) {
+			if (IfExpressionChain.holdsElseLessConditional(b.stmt, s.conditionalKinds)) return null;
 			final unit: Null<UnitValue> = unitValue(b.stmt, ref, source, s);
 			if (unit == null) return null;
 			final condSrc: Null<String> = slice(source, b.cond);
@@ -299,7 +331,11 @@ final class AssignmentTreeHoist {
 
 }
 
-/** The AST kinds the recursive assignment-tree hoist reads (`ifKinds` / `switchKinds` nullable -- unset disables that nesting). */
+/**
+ * The AST kinds the recursive assignment-tree hoist reads (`ifKinds` / `switchKinds` nullable --
+ * unset disables that nesting; `conditionalKinds` is every `if` form, statement and expression, for
+ * `ifChainValue`'s else-less gate).
+ */
 typedef TreeSeams = {
 	var identKind: String;
 	var exprStmtKind: String;
@@ -312,6 +348,7 @@ typedef TreeSeams = {
 	var parenKind: String;
 	var ifKinds: Null<Array<String>>;
 	var switchKinds: Null<Array<String>>;
+	var conditionalKinds: Array<String>;
 }
 
 /** A mutable holder threading the common l-value through the recursion (set by the leftmost leaf). */

@@ -87,6 +87,67 @@ class PreferIfExpressionReturnCheckTest extends Test {
 		Assert.isTrue(ids.contains('prefer-if-expression-return'));
 	}
 
+	/**
+	 * A NON-terminal branch value ending in an else-less `if` would ABSORB the emitted ` else `:
+	 * the collapse of this chain reads `return if (a) if (q) 1 else if (b) 2 else 3;`, where the
+	 * outer condition has LOST its else and `else if (b) 2 else 3` has become `if (q)`'s else
+	 * branch. The braces are what let the source `else` bind outward; the single-statement
+	 * unwrap re-exposes the else-less tail, and the result re-parses, so only this gate catches it.
+	 */
+	public function testElseLessConditionalInBranchValueNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('if (a) {\n\t\t\treturn if (q) 1;\n\t\t} else if (b) {\n\t\t\treturn 2;\n\t\t} else {\n\t\t\treturn 3;\n\t\t}')).length
+		);
+	}
+
+	/** An `if` WITH its else cannot absorb another one, so the branch is accepted — the gate is arity, not kind. */
+	public function testCompleteConditionalInBranchValueFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('if (a) {\n\t\t\treturn if (q) 1 else 9;\n\t\t} else if (b) {\n\t\t\treturn 2;\n\t\t} else {\n\t\t\treturn 3;\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) if (q) 1 else 9 else if (b) 2 else 3;', es[0].text);
+	}
+
+	/**
+	 * The TERMINAL value is exempt from the else-less gate: nothing the rebuild emits follows it
+	 * but the closing `;`, so there is no ` else ` for it to absorb. The else-less `if` sits in a
+	 * delimited interior here, which is the shape the whole-subtree scan would otherwise refuse —
+	 * a bare `if (q) 3` terminal hits a SEPARATE pre-existing defect (its span swallows the
+	 * statement's own `;`, so the rebuild emits `;;`, which Haxe rejects).
+	 */
+	public function testElseLessConditionalInTerminalFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('if (a) {\n\t\t\treturn 1;\n\t\t} else if (b) {\n\t\t\treturn 2;\n\t\t} else {\n\t\t\treturn g(if (q) 3);\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('return if (a) 1 else if (b) 2 else g(if (q) 3);', es[0].text);
+	}
+
+	/**
+	 * A comment the parser folded into a returned value's TRAILING trivia is cut out of the kept
+	 * span by `IfExpressionChain.tokenSpan`, so the dropped-comment guard sees it and skips the
+	 * chain. Without the trim the raw value span SWALLOWS `// why`, the guard reads it as kept,
+	 * and the emitted text welds it in front of the ` else `, commenting the rest of the chain out.
+	 */
+	public function testTrailingLineCommentInsideValueSpanNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) return u + v // why\n\t\t\t;\n\t\telse if (b) return 2;\n\t\telse return 3;')).length);
+	}
+
+	/**
+	 * An else-less conditional at the TERMINAL value's ROOT is refused for a SPAN reason, not a
+	 * re-parenting one: the parser folds the statement's own `;` into it, so the copied text is
+	 * `if (q) k();` and the rebuild appends another, writing `return … else if (q) k();;`. That
+	 * re-parses under anyparse, so the `--fix` gate passes it, but `haxe --interp` 4.3.7 rejects
+	 * it with `Expected }` — while the INPUT compiles and runs whenever the carrier is
+	 * `Void`-typed (verified). So without this gate the fix turns working code into code that
+	 * does not compile.
+	 */
+	public function testElseLessConditionalAtTerminalRootNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) return g();\n\t\telse if (b) return h();\n\t\telse return if (q) k();')).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {

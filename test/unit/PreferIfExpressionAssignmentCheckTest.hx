@@ -169,6 +169,63 @@ class PreferIfExpressionAssignmentCheckTest extends Test {
 		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\t#if foo\n\t\telse switch v {\n\t\t\tcase _: x = 2;\n\t\t}\n\t\t#end')).length);
 	}
 
+	/**
+	 * A NON-terminal branch value ending in an else-less `if` would ABSORB the emitted ` else `:
+	 * the collapse reads `x = if (a) if (q) 1 else if (b) 2 else 3;`, where the outer condition
+	 * has LOST its else and `else if (b) 2 else 3` has become `if (q)`'s else branch. The result
+	 * re-parses, so only this gate catches it.
+	 */
+	public function testElseLessConditionalInBranchValueNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(wrap('if (a) {\n\t\t\tx = if (q) 1;\n\t\t} else if (b) {\n\t\t\tx = 2;\n\t\t} else {\n\t\t\tx = 3;\n\t\t}')).length
+		);
+	}
+
+	/**
+	 * The TERMINAL branch is exempt from the else-less gate: nothing the rebuild emits follows it
+	 * but the closing `;`, so there is no ` else ` for it to absorb. The else-less `if` sits in a
+	 * delimited interior here, which is the shape the whole-subtree scan would otherwise refuse —
+	 * a bare `x = if (q) 3;` terminal hits a SEPARATE pre-existing defect (the r-value span
+	 * swallows the statement's own `;`, so the rebuild emits `;;`, which Haxe rejects).
+	 */
+	public function testElseLessConditionalInTerminalFlagged(): Void {
+		final es: Array<{ span: Span, text: String }> = edits(
+			wrap('if (a) {\n\t\t\tx = 1;\n\t\t} else if (b) {\n\t\t\tx = 2;\n\t\t} else {\n\t\t\tx = g(if (q) 3);\n\t\t}')
+		);
+		Assert.equals(1, es.length);
+		Assert.equals('x = if (a) 1 else if (b) 2 else g(if (q) 3);', es[0].text);
+	}
+
+	/**
+	 * The composition case: a NESTED chain's terminal is exempt at ITS level, but the nested chain
+	 * sits in a NON-terminal branch of the outer one, so the outer ` else ` re-parents onto it
+	 * (`x = if (a) if (e) 1 else if (q) 2; else if (b) 3 else 4;`). The gate scans each branch's
+	 * whole STATEMENT subtree, which subsumes the inner chain's exempted terminal — that is what
+	 * makes the per-level exemption safe under nesting.
+	 */
+	public function testNestedChainElseLessTerminalNotFlagged(): Void {
+		Assert.equals(
+			0,
+			violations(
+				wrap(
+					'if (a) {\n\t\t\tif (e) {\n\t\t\t\tx = 1;\n\t\t\t} else {\n\t\t\t\tx = if (q) 2;\n\t\t\t}\n\t\t} else if (b) {\n\t\t\tx = 3;\n\t\t} else {\n\t\t\tx = 4;\n\t\t}'
+				)
+			).length
+		);
+	}
+
+	/**
+	 * An else-less conditional at the terminal r-value's ROOT is refused for a SPAN reason, not a
+	 * re-parenting one: the parser folds the statement's own `;` into it, so the copied r-value is
+	 * `if (q) 3;` and the rebuild appends another, writing `x = … else if (q) 3;;` — which
+	 * anyparse re-parses but Haxe rejects. The gate is ROOT-only, which is why the
+	 * delimited-interior terminal above stays claimable.
+	 */
+	public function testElseLessConditionalAtTerminalRootNotFlagged(): Void {
+		Assert.equals(0, violations(wrap('if (a) x = 1;\n\t\telse if (b) x = 2;\n\t\telse x = if (q) 3;')).length);
+	}
+
 	/** Run `fix` and re-emit through the canonical writer — the `lint --fix` path in one pass. */
 	private function applyFixOnce(src: String): String {
 		return switch RefactorSupport.canonicalize(src, edits(src), true, new HaxeQueryPlugin(), null) {
