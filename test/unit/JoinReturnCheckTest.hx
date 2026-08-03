@@ -319,6 +319,25 @@ class JoinReturnCheckTest extends Test {
 		Assert.equals(0, violations(wrapRet('Int', body)).length);
 	}
 
+	/**
+	 * The name is declared in TWO sibling branches AND read after `#end`. That read refers to
+	 * whichever branch the configuration activates, so it references BOTH declarations and neither
+	 * is sole-referenced -- joining either one away would leave the read unbound in that branch's
+	 * configuration, `--fix` output that does not compile. The branch-local resolution frame is
+	 * exact only INSIDE a region; `escapesConditionalRegion` restores the conservative verdict for
+	 * exactly this shape.
+	 */
+	public function testSiblingBranchDeclsReadAfterRegionNotFlagged(): Void {
+		final body: String =
+			'#if A\n\t\tvar x:Int = g();\n\t\tuse(x);\n\t\t#else\n\t\tvar x:Int = h();\n\t\treturn x;\n\t\t#end\n\t\treturn x;';
+		Assert.equals(0, violations(wrapRet('Int', body)).length);
+	}
+
+	/** Control for the escape gate: the same two-branch shape with NO reference past `#end` still joins in both branches. */
+	public function testSiblingBranchDeclsWithoutEscapeStillFlagged(): Void {
+		Assert.equals(2, violations(wrapRet('Int', branchPair())).length);
+	}
+
 	// --- the annotation is only dropped when the function return type re-states it ---
 	// PINS of the pre-existing `buildReturn` gate, not new behaviour: they pass with the branch
 	// slice reverted. They exist because collapsing a `var b:T = cast e; return b;` pair hands the
@@ -354,7 +373,7 @@ class JoinReturnCheckTest extends Test {
 	}
 
 	/** Two sibling `#if` branches declaring the same name, each returning it. */
-	private function branchPair(): String {
+	private inline function branchPair(): String {
 		return '#if A\n\t\tvar x:Int = g();\n\t\treturn x;\n\t\t#else\n\t\tfinal x:Int = h();\n\t\treturn x;\n\t\t#end';
 	}
 

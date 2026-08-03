@@ -469,6 +469,94 @@ class ExplicitTypeCheckTest extends Test {
 		Assert.equals(0, check.fix(src, vs, new HaxeQueryPlugin()).length);
 	}
 
+	/**
+	 * A GENERIC interface states its members with its OWN type parameter, which the implementation
+	 * binds to anything — copying `T` verbatim emits a name that resolves to nothing. Refused on
+	 * the declaring type's `typeParamArity`, because a type parameter scans exactly like a nominal
+	 * and no name-level gate can tell them apart.
+	 */
+	public function testFixSkipsGenericDeclaringType(): Void {
+		final out: String = scopedFix('class Impl implements Gen { public function f(v):Void {} }', [
+			{ file: 'Gen.hx', source: 'interface Gen<T> {\n\tpublic function f(v:T):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('f(v:'), 'got: $out');
+	}
+
+	/**
+	 * The nominal resolves on BOTH sides but to DIFFERENT declarations (`a.Payload` in the
+	 * interface, `b.Payload` here). Copying it produces an override Haxe rejects with a type
+	 * mismatch, so "the name resolves here" is not on its own a sufficient gate.
+	 */
+	public function testFixSkipsSameNameDifferentPackages(): Void {
+		final out: String = scopedFix('import b.Payload;\n\nclass Impl implements Dp { public function take(p):Void {} }', [
+			{ file: 'a/Payload.hx', source: 'package a;\n\nclass Payload {\n\tpublic function new() {}\n}' },
+			{ file: 'b/Payload.hx', source: 'package b;\n\nclass Payload {\n\tpublic function new() {}\n}' },
+			{ file: 'Dp.hx', source: 'import a.Payload;\n\ninterface Dp {\n\tpublic function take(p:Payload):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
+	}
+
+	/**
+	 * A LOCAL function in an earlier member carries the same name slot and is reached first in
+	 * pre-order, so the declaring-method lookup must test the member KIND — copying the local's
+	 * parameter type would annotate the override with an unrelated one.
+	 */
+	public function testFixIgnoresLocalFunctionOfTheSameName(): Void {
+		final out: String = scopedFix('class Impl extends Lb { override public function f(v):Void {} }', [
+			{
+				file: 'Lb.hx',
+				source: 'class Lb {\n\tpublic function new() {}\n\tpublic function a():Void { function f(v:String) { trace(v); } f("x"); }\n\tpublic function f(v:Float):Void {}\n}'
+			}
+		]);
+		Assert.isTrue(out.indexOf('f(v:Float)') != -1, 'got: $out');
+	}
+
+	/**
+	 * The only import bringing the type into THIS file sits inside `#if` — `ImportInfo.guarded`.
+	 * The reference index is branch-blind, so it reads as unconditional; copying a type that rests
+	 * on it emits a name that does not resolve in the other configuration.
+	 */
+	public function testFixSkipsGuardedImport(): Void {
+		final out: String = scopedFix(
+			'#if js\nimport pkg.Payload;\n#end\n\nclass Impl implements Pk { public function take(p):Void {} }', packaged()
+		);
+		Assert.equals(-1, out.indexOf('take(p:'), 'got: $out');
+	}
+
+	/**
+	 * Neither side's index models the type (a standard-library one, and the standard library is
+	 * normally outside the resolution scope), but both files carry the IDENTICAL plain import path
+	 * — the one shape where an un-indexed name still provably means the same thing on both sides.
+	 * PIN of preserved behaviour across the `typeUsableFrom` rewrite, not a gate revert.
+	 */
+	public function testFixCopiesUnindexedTypeImportedIdenticallyOnBothSides(): Void {
+		final out: String = scopedFix('import haxe.io.Bytes;\n\nclass Impl implements By { public function w(b):Void {} }', [
+			{ file: 'By.hx', source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}' }
+		]);
+		Assert.isTrue(out.indexOf('w(b:Bytes)') != -1, 'got: $out');
+	}
+
+	/**
+	 * The same un-indexed type imported by the DECLARING file only: nothing proves it resolves here,
+	 * so it is skipped. PIN of preserved behaviour across the `typeUsableFrom` rewrite.
+	 */
+	public function testFixSkipsUnindexedTypeImportedOnOneSide(): Void {
+		final out: String = scopedFix('class Impl implements By { public function w(b):Void {} }', [
+			{ file: 'By.hx', source: 'import haxe.io.Bytes;\n\ninterface By {\n\tpublic function w(b:Bytes):Void;\n}' }
+		]);
+		Assert.equals(-1, out.indexOf('w(b:'), 'got: $out');
+	}
+
+	/**
+	 * `String` needs no import in any module, so it copies with nothing indexed at all — the
+	 * motivating case, and what `AMBIENT_TYPES` exists for. PIN: it must survive every tightening
+	 * of `typeUsableFrom`, since no index models the standard library.
+	 */
+	public function testFixCopiesAmbientTypeWithNothingIndexed(): Void {
+		final out: String = scopedFix('class Impl implements I { public function grab(str):Int return 0; }');
+		Assert.isTrue(out.indexOf('grab(str:String)') != -1, 'got: $out');
+	}
+
 	/** A `pkg.Payload` the interface imports and the implementation does not. */
 	private function packaged(): Array<{ file: String, source: String }> {
 		return [
